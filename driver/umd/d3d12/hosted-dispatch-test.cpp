@@ -12,6 +12,7 @@ static HANDLE const context_handle=reinterpret_cast<HANDLE>(UINT64_C(0x34567890a
 static UINT64 fence=10;
 static char mapped[4096];
 static unsigned allocations=0,deallocations=0,context_creates=0,context_destroys=0,native_queue_calls=0,submitted=0,errors=0;
+static unsigned frees=0,evictions=0;
 static bool fail_destroy=false,fail_free=false,bad_fence=false;
 static bool immediate_resident=false,fail_sync_create=false,fail_sync_destroy=false;
 static unsigned sync_destroys=0;
@@ -35,7 +36,9 @@ static HRESULT APIENTRY deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DE
 static HRESULT APIENTRY paging_create(HANDLE device,D3DDDICB_CREATEPAGINGQUEUE* a){assert(device==device_handle);a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&fence;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE device,const D3DDDI_DESTROYPAGINGQUEUE* a){assert(device==device_handle && a->hPagingQueue==9);return S_OK;}
 static HRESULT APIENTRY map_va(HANDLE device,D3DDDI_MAPGPUVIRTUALADDRESS* a){assert(device==device_handle && a->hPagingQueue==9 && a->hAllocation==77);a->VirtualAddress=UINT64_C(0x400000000);a->PagingFenceValue=bad_fence?0:4;return E_PENDING;}
-static HRESULT APIENTRY free_va(HANDLE device,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){assert(device==device_handle && a->BaseAddress==UINT64_C(0x400000000) && a->Size==4096);return fail_free?E_FAIL:S_OK;}
+static HRESULT APIENTRY free_va(HANDLE device,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){assert(device==device_handle && a->BaseAddress==UINT64_C(0x400000000) && a->Size==4096);++frees;return fail_free?E_FAIL:S_OK;}
+// Counted only to show that the R1 destroy path makes neither call (BD-201): the ICD asks for an Evict.
+static HRESULT APIENTRY evict(HANDLE device,D3DDDICB_EVICT* a){assert(device==device_handle && a->NumAllocations);++evictions;return S_OK;}
 static HRESULT APIENTRY resident(HANDLE device,D3DDDI_MAKERESIDENT* a){assert(device==device_handle && a->hPagingQueue==9 && a->AllocationList[0]==77);a->PagingFenceValue=immediate_resident?UINT64_MAX:6;return immediate_resident?S_OK:E_PENDING;}
 static HRESULT APIENTRY lock_memory(HANDLE device,D3DDDICB_LOCK2* a){assert(device==device_handle && a->hAllocation==77);a->pData=mapped;return S_OK;}
 static HRESULT APIENTRY unlock_memory(HANDLE device,const D3DDDICB_UNLOCK2* a){assert(device==device_handle && a->hAllocation==77);return S_OK;}
@@ -50,17 +53,25 @@ static VOID APIENTRY removed(D3D12DDI_HRTDEVICE device,HRESULT result){assert(de
 // during_free runs on a thread of its own inside that window, as a second recording thread of the game does.
 static constexpr UINT64 reused_va=UINT64_C(0x500000000);
 static D3DKMT_HANDLE next_reused_handle=200;
-static unsigned reuse_errors=0,reuse_frees=0;
-static std::function<void()> during_free;
+static unsigned reuse_errors=0,reuse_frees=0,reuse_reserves=0,reuse_deallocations=0;
+static std::function<void()> during_free,during_deallocate;
+static bool fail_reuse_deallocate=false;
 static HRESULT APIENTRY reuse_allocate(D3D12DDI_HRTDEVICE device,D3D12DDICB_ALLOCATE_0022* a){
  assert(device.handle==device_handle && a->NumAllocations==1);a->pAllocationInfo->hAllocation=next_reused_handle++;return S_OK;
 }
-static HRESULT APIENTRY reuse_deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DEALLOCATE_0022*){assert(device.handle==device_handle);return S_OK;}
+// BD-201: the API-allocated range of an ordinary allocation is freed by the destruction, so the runtime
+// releases it somewhere inside this callback. during_deallocate runs in that window on a thread of its own.
+static HRESULT APIENTRY reuse_deallocate(D3D12DDI_HRTDEVICE device,const D3D12DDICB_DEALLOCATE_0022* a){
+ assert(device.handle==device_handle && !a->hResource && a->NumAllocations==1 && !a->Flags);
+ ++reuse_deallocations;if(fail_reuse_deallocate)return E_FAIL;
+ if(auto other=std::exchange(during_deallocate,nullptr)){std::thread worker(other);worker.join();}
+ return S_OK;
+}
 static HRESULT APIENTRY reuse_map(HANDLE device,D3DDDI_MAPGPUVIRTUALADDRESS* a){
  assert(device==device_handle);a->VirtualAddress=a->BaseAddress?a->BaseAddress:reused_va;a->PagingFenceValue=4;return E_PENDING;
 }
 static HRESULT APIENTRY reuse_reserve(HANDLE device,D3DDDI_RESERVEGPUVIRTUALADDRESS* a){
- assert(device==device_handle);a->VirtualAddress=a->BaseAddress?a->BaseAddress:reused_va;a->PagingFenceValue=0;return S_OK;
+ assert(device==device_handle);++reuse_reserves;a->VirtualAddress=a->BaseAddress?a->BaseAddress:reused_va;a->PagingFenceValue=0;return S_OK;
 }
 static HRESULT APIENTRY reuse_free(HANDLE device,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){
  assert(device==device_handle && a->BaseAddress==reused_va);++reuse_frees;
@@ -73,7 +84,7 @@ int main(){
  static_assert(BC250_HOST_VERSION==5 && sizeof(bc250_host)==(sizeof(void*)==8?56:40));
  D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 um{};um.pfnAllocateCb=allocate;um.pfnDeallocateCb=deallocate;um.pfnCreateContextVirtualCb=wrong_native_queue;um.pfnSetErrorCb=removed;
  D3DDDI_DEVICECALLBACKS kt{};kt.pfnCreatePagingQueueCb=paging_create;kt.pfnDestroyPagingQueueCb=paging_destroy;kt.pfnMapGpuVirtualAddressCb=map_va;kt.pfnFreeGpuVirtualAddressCb=free_va;
- kt.pfnMakeResidentCb=resident;kt.pfnLock2Cb=lock_memory;kt.pfnUnlock2Cb=unlock_memory;kt.pfnCreateContextVirtualCb=create_context;kt.pfnDestroyContextCb=destroy_context;
+ kt.pfnMakeResidentCb=resident;kt.pfnEvictCb=evict;kt.pfnLock2Cb=lock_memory;kt.pfnUnlock2Cb=unlock_memory;kt.pfnCreateContextVirtualCb=create_context;kt.pfnDestroyContextCb=destroy_context;
  kt.pfnCreateSynchronizationObject2Cb=create_sync;kt.pfnDestroySynchronizationObjectCb=destroy_sync;
  kt.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu;kt.pfnSubmitCommandCb=submit;
  bc250::umd::RuntimeDomain domain;HostedDispatch bridge(domain,{device_handle},um,kt);
@@ -126,13 +137,33 @@ int main(){
  context={};wrapper.arguments=&context;assert(call(BC250_HOST_CREATE_QUEUE_CONTEXT,&wrapper)==0 && context.hContext!=old_token);
  destroy.hContext=context.hContext;wrapper.arguments=&destroy;assert(call(BC250_HOST_DESTROY_QUEUE_CONTEXT,&wrapper)==0);
  D3DKMT_DESTROYALLOCATION2 release{};release.AllocationCount=1;release.phAllocationList=&info.hAllocation;
- assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
  D3DKMT_FREEGPUVIRTUALADDRESS free{};free.BaseAddress=mapping.VirtualAddress;free.Size=4096;
- fail_free=true;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && call(BC250_HOST_DestroyAllocation2,&release)<0);
- fail_free=false;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)==0);
+ // The flags, the resource and the count stay refused whatever the mapping is (BD-201 keeps them).
+ release.Flags.AssumeNotInUse=1;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
+ release.Flags.Value=0;release.AllocationCount=2;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
+ release.AllocationCount=1;release.hResource=5;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
+ release.hResource=0;
+ // BD-045: a locked record refuses its destroy and stays whole, its mapping included.
+ assert(call(BC250_HOST_Lock2,&lock)==0 && lock.pData==mapped);
+ assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
+ assert(call(BC250_HOST_Unlock2,&unlock)==0);
+ // BD-201: a refused deallocate keeps the record owned and usable, mapping and all, and the retry
+ // succeeds. Nothing else releases the range: no Evict, no FreeGpuVirtualAddress on the way.
+ const unsigned freed=frees;
  fail_destroy=true;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==1);
+ assert(call(BC250_HOST_Lock2,&lock)==0 && call(BC250_HOST_Unlock2,&unlock)==0);
  fail_destroy=false;assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==2);
+ assert(frees==freed && !evictions);
  assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==2);
+ // The range went with the deferred destruction: it is no longer the bridge's to free.
+ assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed);
+ // The order of the explicit free then the destroy stays admitted: an R2 or replayable BO uses it.
+ info.hAllocation=0;assert(call(BC250_HOST_CreateAllocation2,&create)==0 && info.hAllocation==77);
+ assert(call(BC250_HOST_MapGpuVirtualAddress,&mapping)==0x103 && mapping.VirtualAddress==UINT64_C(0x400000000));
+ fail_free=true;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed+1);
+ fail_free=false;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)==0 && frees==freed+2);
+ assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed+2);
+ assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==3 && !evictions);
  assert(call(BC250_HOST_DESTROY_PAGING,&paging)==0);
  assert(bridge.discard_metadata()==0 && call(BC250_HOST_CHECK_STATUS)<0);
  HostedDispatch lost(domain,{device_handle},um,kt);assert(HostedDispatch::dispatch(&lost,BC250_HOST_REPORT_LOST,nullptr)<0);
@@ -193,6 +224,63 @@ int main(){
   // The check itself stays: an answer inside a live extent (the fixed reservation) still removes the device.
   assert(map_one(y.hAllocation,y_map)<0 && reuse.lost() && reuse_errors==1);
   assert(reuse.discard_metadata()==4);
+ }
+ {
+  // BD-201: the same window on the destroy path. A mapped, unlocked internal allocation is destroyed with
+  // its mapping live; the runtime releases the API-allocated range inside the deallocate callback and hands
+  // it to another thread's map (A) or reservation (B) before that callback returns. A refused deallocate
+  // keeps the record whole, so the range is owned again and the retry succeeds (C).
+  auto rum=um;rum.pfnAllocateCb=reuse_allocate;rum.pfnDeallocateCb=reuse_deallocate;rum.pfnSetErrorCb=reuse_removed;
+  auto rkt=kt;rkt.pfnMapGpuVirtualAddressCb=reuse_map;rkt.pfnReserveGpuVirtualAddressCb=reuse_reserve;rkt.pfnFreeGpuVirtualAddressCb=reuse_free;
+  HostedDispatch destroying(domain,{device_handle},rum,rkt);
+  auto on=[&](uint32_t op,void* a){return HostedDispatch::dispatch(&destroying,op,a);};
+  const unsigned noted=reuse_errors;   // the block above removed one device on purpose
+  bc250_host_paging pages{};assert(on(BC250_HOST_CREATE_PAGING,&pages)==0);
+  constexpr UINT64 bytes=65536;
+  // One internal allocation with its own ordinary mapping at the shared address.
+  auto mapped_one=[&](D3DDDI_ALLOCATIONINFO2& out,D3DDDI_MAPGPUVIRTUALADDRESS& view){
+   out={};D3DKMT_CREATEALLOCATION request{};request.NumAllocations=1;request.pAllocationInfo2=&out;
+   const bool made=on(BC250_HOST_CreateAllocation2,&request)==0;
+   view={};view.hPagingQueue=pages.queue;view.hAllocation=out.hAllocation;view.SizeInPages=bytes/4096;
+   return made && on(BC250_HOST_MapGpuVirtualAddress,&view)==0x103 && view.VirtualAddress==reused_va;};
+  D3DDDI_ALLOCATIONINFO2 a{},b{},c{};D3DDDI_MAPGPUVIRTUALADDRESS a_map{},b_map{},c_map{};
+  D3DKMT_DESTROYALLOCATION2 gone{};gone.AllocationCount=1;
+  D3DKMT_FREEGPUVIRTUALADDRESS range{};range.BaseAddress=reused_va;range.Size=bytes;
+  // A. The map of another allocation inside the callback: no false overlap, no removal.
+  assert(mapped_one(a,a_map));
+  gone.phAllocationList=&a.hAllocation;
+  int32_t taken=-1;
+  during_deallocate=[&]{bc250::umd::RuntimeDomain::Scope entered(domain);taken=mapped_one(b,b_map)?0:-1;};
+  unsigned released=reuse_deallocations;
+  assert(on(BC250_HOST_DestroyAllocation2,&gone)==0 && reuse_deallocations==released+1);
+  assert(!taken && !destroying.lost() && reuse_errors==noted);
+  // The record went with its mapping: neither a second destroy nor a free of its range finds it.
+  assert(on(BC250_HOST_DestroyAllocation2,&gone)<0);
+  // B. A reservation inside the callback takes the address of the allocation being destroyed.
+  gone.phAllocationList=&b.hAllocation;
+  D3DDDI_RESERVEGPUVIRTUALADDRESS held{};held.BaseAddress=reused_va;held.Size=bytes;int32_t reserved=-1;
+  during_deallocate=[&]{bc250::umd::RuntimeDomain::Scope entered(domain);reserved=on(BC250_HOST_ReserveGpuVirtualAddress,&held);};
+  released=reuse_deallocations;
+  assert(on(BC250_HOST_DestroyAllocation2,&gone)==0 && reuse_deallocations==released+1);
+  assert(!reserved && held.VirtualAddress==reused_va && !destroying.lost() && reuse_errors==noted);
+  unsigned va_frees=reuse_frees;
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)==0 && reuse_frees==va_frees+1);
+  // C. A refused deallocate: the handle is findable and the range is owned again, so a fixed reservation
+  //    over it is refused before the runtime sees it. The retry succeeds, and then the same reservation is
+  //    admitted, which is what proves the range left owned() only when the destroy was accepted.
+  assert(mapped_one(c,c_map));
+  gone.phAllocationList=&c.hAllocation;
+  fail_reuse_deallocate=true;released=reuse_deallocations;
+  const unsigned asked=reuse_reserves;
+  assert(on(BC250_HOST_DestroyAllocation2,&gone)<0 && reuse_deallocations==released+1);
+  assert(on(BC250_HOST_ReserveGpuVirtualAddress,&held)<0 && reuse_reserves==asked && !destroying.lost());
+  fail_reuse_deallocate=false;
+  assert(on(BC250_HOST_DestroyAllocation2,&gone)==0 && reuse_deallocations==released+2);
+  assert(on(BC250_HOST_ReserveGpuVirtualAddress,&held)==0 && held.VirtualAddress==reused_va && reuse_reserves==asked+1);
+  va_frees=reuse_frees;
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)==0 && reuse_frees==va_frees+1);
+  assert(on(BC250_HOST_DESTROY_PAGING,&pages)==0);
+  assert(!destroying.lost() && reuse_errors==noted && destroying.discard_metadata()==0);
  }
  // 4. A deferred-replay worker of engine-ddi (WorkerScope inside the device's domain) reaches the memory and CPU-side
  //    sync operations only; a removal it finds marks the device lost at once and reaches the runtime's error callback
@@ -257,5 +345,7 @@ int main(){
   assert(healthy.complete_operation(BC250_HOST_Unlock2,E_FAIL)==static_cast<int32_t>(0xc0000001u));
   assert(!healthy.lost() && errors==reported);
  }
- std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, cleanup retries, scope, loss, address reuse inside a free, replay worker scope, imported-heap error propagation");
+ std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, "
+           "cleanup retries, destroy of a mapped allocation with its retry, scope, loss, address reuse inside a free and "
+           "inside a destroy, replay worker scope, imported-heap error propagation");
 }

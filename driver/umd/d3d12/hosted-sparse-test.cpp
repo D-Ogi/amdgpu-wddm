@@ -217,10 +217,14 @@ int main(){
  free_result=S_OK;assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)==0 && frees==2);
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)<0 && frees==2);
  zero.BaseAddress=kLow+65536;assert(call(BC250_HOST_MapGpuVirtualAddress,&zero)<0); // the range is gone
- // The shared backing still has its own mapping: destroy waits for that Free.
- destroy.phAllocationList=&shared;assert(call(BC250_HOST_DestroyAllocation2,&destroy)<0 && deallocations==1);
- release.BaseAddress=own_va;release.Size=8*4096;assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)==0 && frees==3);
- assert(call(BC250_HOST_DestroyAllocation2,&destroy)==0 && deallocations==2);
+ // BD-201: the shared backing still has its own mapping, and the destroy takes it. The API-allocated range
+ // goes with the deferred destruction, so the ICD no longer frees it first; the free-then-destroy order of
+ // a reserved range stays admitted and is checked in hosted-dispatch-test.cpp.
+ destroy.phAllocationList=&shared;assert(call(BC250_HOST_DestroyAllocation2,&destroy)==0 && deallocations==2);
+ // That range is not the bridge's to free any more. The views of this backing inside the surviving
+ // reservation are not unmapped by the destroy either: those PTEs live in a range the ICD reserved, which no
+ // allocation destroy frees, and Vulkan requires the application to unbind sparse memory first.
+ release.BaseAddress=own_va;release.Size=8*4096;assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)<0 && frees==2);
  destroy.phAllocationList=&loose;assert(call(BC250_HOST_DestroyAllocation2,&destroy)==0 && deallocations==3);
  // One reservation is left: it is counted at the end.
  assert(call(BC250_HOST_DESTROY_PAGING,&paging)<0 && !bridge.lost() && !errors);

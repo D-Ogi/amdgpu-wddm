@@ -38,6 +38,24 @@ static HRESULT APIENTRY update_va(HANDLE device, const D3DDDICB_UPDATEGPUVIRTUAL
 static HRESULT APIENTRY resident(HANDLE device, D3DDDI_MAKERESIDENT *) {
     require(device==&identity); return E_PENDING;
 }
+// BD-201: the ICD destroys an ordinary allocation with its mapping live and lets the API-allocated range go
+// with the deferred destruction. This bridge keeps no address bookkeeping of its own, so the only question is
+// whether the forwarding still reaches Deallocate and releases nothing else on the way.
+static unsigned deallocated, freed_ranges, evicted;
+static HRESULT APIENTRY deallocate(HANDLE device, CONST D3DDDICB_DEALLOCATE *a) {
+    require(device==&identity && !a->hResource && a->NumAllocations==1 && a->HandleList && a->HandleList[0]==37);
+    ++deallocated; return S_OK;
+}
+static HRESULT APIENTRY map_range(HANDLE device, D3DDDI_MAPGPUVIRTUALADDRESS *a) {
+    require(device==&identity && a->hAllocation==37);
+    a->VirtualAddress=UINT64_C(0x600000000); a->PagingFenceValue=3; return E_PENDING;
+}
+static HRESULT APIENTRY free_range(HANDLE device, CONST D3DDDICB_FREEGPUVIRTUALADDRESS *) {
+    require(device==&identity); ++freed_ranges; return S_OK;
+}
+static HRESULT APIENTRY evict_range(HANDLE device, D3DDDICB_EVICT *) {
+    require(device==&identity); ++evicted; return S_OK;
+}
 void test_present_bridge();
 void test_runtime_present();
 int main() {
@@ -52,6 +70,10 @@ int main() {
     device.KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu;
     device.KTCallbacks.pfnMakeResidentCb=resident;
     device.KTCallbacks.pfnUpdateGpuVirtualAddressCb=update_va;
+    device.KTCallbacks.pfnDeallocateCb=deallocate;
+    device.KTCallbacks.pfnMapGpuVirtualAddressCb=map_range;
+    device.KTCallbacks.pfnFreeGpuVirtualAddressCb=free_range;
+    device.KTCallbacks.pfnEvictCb=evict_range;
     HostBridge bridge{}; bridge.device=&device;
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)<0);
     const auto host=host_descriptor(bridge, 123);
@@ -91,6 +113,23 @@ int main() {
     require(updated==1 && bridge.submission_failed); bridge.submission_failed=false;
     D3DDDI_MAKERESIDENT residency{};
     require(host_dispatch(&bridge, BC250_HOST_MakeResident, &residency)==0x103);
+    // BD-201: DestroyAllocation2 with a mapped range reaches the plain Deallocate callback, whose default
+    // behaviour is VidMm's deferral (allocation-usage-tracking.md), and nothing else releases the range on
+    // the way. Non-zero flags stay refused, so the ICD can never ask for the immediate destroy.
+    D3DDDI_MAPGPUVIRTUALADDRESS mapping{};
+    mapping.hAllocation=info.hAllocation; mapping.SizeInPages=1;
+    require(host_dispatch(&bridge, BC250_HOST_MapGpuVirtualAddress, &mapping)==0x103);
+    require(mapping.VirtualAddress==UINT64_C(0x600000000));
+    D3DKMT_DESTROYALLOCATION2 release{};
+    release.AllocationCount=1; release.phAllocationList=&info.hAllocation;
+    release.Flags.AssumeNotInUse=1;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    release.Flags.Value=0; release.hResource=91;
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==static_cast<int32_t>(0xc00000bbu));
+    release.hResource=0;
+    require(deallocated==0);
+    require(host_dispatch(&bridge, BC250_HOST_DestroyAllocation2, &release)==0);
+    require(deallocated==1 && !freed_ranges && !evicted);
     command.BroadcastContext[0]=2;
     require(host_dispatch(&bridge, BC250_HOST_SubmitCommand, &command)<0 && submitted==3);
     D3DKMT_DESTROYCONTEXT destroy{}; destroy.hContext=create.hContext;
@@ -124,7 +163,7 @@ int main() {
         require(host_dispatch(&reporting, BC250_HOST_CHECK_STATUS, nullptr)<0);
         require(hostReports==1); // One report per loss, whatever follows.
     }
-    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, worker denial, host-lost class, teardown\n";
+    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, teardown\n";
 }
 
 

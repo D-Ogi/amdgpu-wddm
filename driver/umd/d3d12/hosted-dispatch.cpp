@@ -70,7 +70,8 @@ struct HostedDispatch::Allocation {
     UINT64 va{},bytes{};
     unsigned borrowed{};                        // runtime callbacks in flight that name it
     bool busy{},locked{};
-    bool freeing{};                             // the free callback of va is in flight: no longer owned (owned())
+    bool freeing{};                             // the free callback of va, or this record's own destroy callback,
+                                                // is in flight: va is no longer owned (owned())
     Allocation(D3D12DDI_HRTDEVICE runtime,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb)
         :owner(runtime,cb) {}
 };
@@ -114,10 +115,11 @@ HostedDispatch::Reservation* HostedDispatch::containing(UINT64 base,UINT64 bytes
         if(range->base && base>=range->base && bytes<=range->bytes && base-range->base<=range->bytes-bytes)return range;
     return nullptr;
 }
-// An extent whose free callback is in flight is not owned any more. The runtime releases it somewhere
-// inside that callback and may hand it out again at once, to a map or reservation on another thread,
-// before the freeing thread takes lock_ again (trial 172 removed the device at the map check below).
-// The runtime cannot hand out an extent it has not released, so a free that fails loses nothing.
+// An extent whose release is in flight is not owned any more: its own free callback, or (for an
+// allocation's ordinary mapping) the destroy callback that the API-allocated range goes with. The runtime
+// releases it somewhere inside that callback and may hand it out again at once, to a map or reservation on
+// another thread, before the freeing thread takes lock_ again (trial 172 removed the device at the map check
+// below). The runtime cannot hand out an extent it has not released, so a release that fails loses nothing.
 bool HostedDispatch::owned(UINT64 base,UINT64 bytes,const void* except) const noexcept {
     for(auto range=reservations_;range;range=range->next)
         if(range!=except && range->base && !range->freeing && overlap(base,bytes,range->base,range->bytes))return true;
@@ -566,11 +568,28 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(a.hResource || a.Flags.Value || a.AllocationCount!=1 || !a.phAllocationList)return E_INVALIDARG;
         Held held(lock_);
         auto record=find(a.phAllocationList[0]);
-        if(!record || record->busy || record->borrowed || record->locked || record->va)return E_INVALIDARG;
-        record->busy=true;held.release();
+        if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
+        // BD-201: a live mapping no longer refuses the destroy. An ordinary allocation's range is
+        // "allocated by the API" and "is freed when the allocation ... is destroyed" (d3dkmthk.md:13809-13810,
+        // MapGpuVirtualAddress remarks), so the ICD hands the range to the deferred destruction instead of
+        // freeing it first. freeing takes the extent out of owned() before the lock goes, because the runtime
+        // releases the range somewhere inside the callback and may hand it to a map or a reservation on
+        // another thread before this thread takes lock_ again (trial 172 removed the device at the map check).
+        // Flags stay 0 above, so VidMm keeps deferring the destruction until the commands queued on this
+        // device before the request have finished (d3dukmdt.md:3398-3402).
+        // What the destroy does not do: unmap a reservation's MAP_PROTECT views of this allocation. Those PTEs
+        // live in a UMD reservation, which no allocation destroy frees; Vulkan requires the application to
+        // unbind sparse memory before it frees the memory.
+        record->busy=record->freeing=true;held.release();
         HRESULT hr=record->owner.close();
         held.acquire();record->busy=false;
-        if(SUCCEEDED(hr)){unlink(record);held.release();delete record;}
+        // Success means the request was accepted, not that the memory came back.
+        if(SUCCEEDED(hr)){unlink(record);held.release();delete record;return hr;}
+        // Refused: the record keeps its handle, its mapping and its bytes, owned and usable, and a later
+        // destroy can retry it. The device is never removed over this. The site names the one state the ICD
+        // must account for: an allocation it still owns with a live mapping it may no longer free by itself.
+        record->freeing=false;held.release();
+        ddi_chain_failure("hosted-destroy-kept",hr,BC250_HOST_DestroyAllocation2);
         return hr;
     }
     case BC250_HOST_MapGpuVirtualAddress:{
