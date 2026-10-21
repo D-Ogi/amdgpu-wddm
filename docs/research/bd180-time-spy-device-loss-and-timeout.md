@@ -159,8 +159,8 @@ itself.
 
 The null control-point hull change of our vkd3d-proton fork, commit `00a80eef`, is held out of the release
 line. The diagnostics half of the same branch landed, and the pinned engine of the release carries it. The
-change itself works: with it, round A6 compiled every hull shader of the benchmark and refused none. The
-lead held it because the same round then hit the GPU timeout.
+change itself works: with it, round A6 compiled every hull shader of the benchmark and refused none. It was
+held because the same round then hit the GPU timeout.
 
 The arm of 2026-10-20 weakens the reason to hold it. That arm reproduces the timeout with no file of ours in
 the D3D12 layer, so the timeout is not this commit's. The planned step is to run `00a80eef` again in the
