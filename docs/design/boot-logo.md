@@ -3,7 +3,7 @@
 While Windows starts, this board draws a spinning ring on black and nothing else. The firmware does publish an
 ACPI BGRT table, so it claims that it drew a logo, but no logo reaches the screen. This page describes how the
 kernel-mode driver draws the project mascot there instead, what the Windows contract allows, and where this
-design stands against that contract.
+design follows that contract. The startup blank hides the drawing until Windows requests a visible source.
 
 Code: `driver/kmd/boot_logo.h`, `driver/kmd/boot_logo.c`, `driver/kmd/boot_logo_asset.inc` (generated),
 `DisplayDrawBootLogo` in `driver/kmd/display.c`, the call in `driver/kmd/pnp.c`. Host test:
@@ -21,33 +21,40 @@ as `boot-logo`. Setting: `BootLogo`, in the control application on the Display p
    `DxgkCbAcquirePostDisplayOwnership` and is told the exact geometry of the buffer the firmware left:
    `DXGK_DISPLAY_INFORMATION` with `Width`, `Height`, `Pitch`, `ColorFormat` and `PhysicAddress`
    (`ref/ddi-display/d3dkmdt.md`, `d3dkmdt.h` line 1474, WDK 10.0.26100).
-4. The first present puts the compositor's own image in the surface, and from then on every pixel is the
-   compositor's.
+4. The driver keeps the output black while it owns startup. Windows renders the first frame, then requests source visibility.
 
-Step 3 to step 4 is the window this feature draws in. The driver already maps that buffer there
+Step 3 to step 4 is the window this feature draws in, behind the hardware blank. The driver already maps that buffer there
 (`DisplayMapFramebuffer`) and already writes to it on two other paths: `Bc250PresentDisplayOnly` for the
 display-only desktop, and `Bc250SystemDisplayWrite` for the bug check screen.
 
 ## Where this design stands against the contract
 
-`display/plug-and-play--pnp--start-and-stop-cases.md`, "PnP start operation", says that during
-`DxgkDdiStartDevice` a WDDM 1.2 or later driver
+The [PnP start contract](https://learn.microsoft.com/windows-hardware/drivers/display/plug-and-play--pnp--start-and-stop-cases)
+requires black output during `DxgkDdiStartDevice`, regardless of the surface contents. Sync signals must remain active.
+Windows later requests source visibility after it renders the first frame. Local reference: windows-driver-docs revision `110f60ea`, with WDK 10.0.26100.
 
-> must set source visibility to false (`DXGKARG_SETVIDPNSOURCEVISIBILITY.Visible` = FALSE) for all active VidPN
-> targets. In this case the display pipeline hardware must maintain sync signals with the monitor, but the
-> pipeline must continue to send black pixel data to the monitor no matter what pixel data is present in the
-> surface that's currently being scanned out.
+The start now checks that OTG0 is active and OTG1 is inactive before it writes display state.
+It blanks the pipe after BAR mapping and checks the blank again after connector admission.
+`StartVisibilityPending` keeps internal surface restoration or connector changes from exposing pixels before the OS visibility request.
+The hardware blank applies to CPU presentation too. A framebuffer clear alone does not satisfy the contract.
+An OS request for TRUE releases the pending state only after hardware confirmation succeeds.
+A flip, timer or logo draw cannot release it. A failed start restores display ownership before BAR5 is unmapped.
 
-Read strictly, that sentence makes this feature invisible: a driver that blanks its pipe at start draws nothing
-until the first frame, whatever the surface holds. This driver does not blank at start. `SetVisibilityCore`
-(`driver/kmd/display.c`) acts only on a change, and nothing in the start path asks for a blank. The seven lab
-boots of 2026-10-14 check that against the hardware: the first `SetVidPnSourceVisibility` of every boot asks for
-`visible 1`, not FALSE, it arrives together with the first flip, and it reads `hardware 1 blanked 0` before it
-and `blanked 0` after it. The driver's own blank happens at calls 5 and 6, about 14 s into the boot, long after
-the desktop is up. So nothing this driver does blanks the pipe in the window the picture lives in, and the
-picture reaching the panel depends on a behaviour the documentation does not promise.
+The blank color follows the active output encoding, including RGB with limited range and the supported YCbCr matrices.
+The driver reads the formatter and the standard AMD CSC matrix. Two frame-counter increments separate the bank selection read from coefficient inspection.
+An unknown matrix, changing format, held update lock or stalled timing refuses blanking.
+A refusal before any display write releases MMIO without changing the inherited pipe.
+Once a display write succeeds, failed startup keeps MMIO mapped through display restoration.
+The color selection and blank acknowledgement share a 100 ms polling budget. Host models do not establish the color or timing on a physical monitor.
 
-It does reach the panel, in both modes, and the camera caught it in each of the three boots that drew with a
+`BootLogo` remains on by default. The driver draws behind the blank, so a visible mascot before the first OS frame is no longer promised.
+HLK tests must use the shipped default. Disabling the logo only for certification would not test this behavior.
+
+The earlier seven lab boots measured the behavior before this change. Their first visibility callback requested TRUE and found the pipe already visible.
+The earlier hardware path did not require a change in `SourceVisible` to write blanking. The missing operation was the blank during startup.
+Those boots do not establish the behavior of the new startup sequence.
+
+The earlier logo reached the panel in both modes, and the camera caught it in each of the three boots that drew with a
 camera running (M901). The mascot stands above the ring of dots, as a white silhouette on the dark screen, in
 the frames between the boot screen and the black that follows it:
 
@@ -65,11 +72,10 @@ against the first present: the `anchor` window from the draw to the first flip i
 frames, and she is in one of them. The scanout line below is what answers this, by saying what the display was
 fetching while the picture was in the surface.
 
-Two consequences, both of them for whoever decides to ship this:
+Two related requirements apply:
 
 - **Device.Graphics.WDDM12.Display.PnpStopStartSupport** in the Hardware Lab Kit tests the requirement above.
-  A certification pass should run with `BootLogo` set to 0, or the question should be settled before a
-  submission that includes this feature.
+  Host tests check startup ordering and failure cleanup. Native and inherited scaled modes still need lab validation with the shipped default.
 - A driver that starts as an upgrade of another WDDM driver is handed a running desktop, not a start screen.
   A documented signal, not a behaviour, excludes that case: `DxgkCbAcquirePostDisplayOwnership`
   says that an uninitialized `TargetId` "typically occurs after a system boot", and that "in the case of a
@@ -186,18 +192,16 @@ window. The handoff refusal fired on a device restart, with
 `TargetId` 2424833 (`0x250001`), the child this driver owns, against `D3DDDI_ID_UNINITIALIZED` on every cold
 boot: the discriminator works on the hardware and not only in the documentation.
 
-Two leads for **BD-173**, the ownership-boundary gap:
+Historical observations for **BD-173**, the ownership-boundary gap:
 
 - The first `SetVidPnSourceVisibility` of a boot arrives **with the first flip**, not during `StartDevice`:
   2.283 to 2.774 s after the driver loaded, against a draw at 1.321 to 1.348 s. There is no visibility call at
-  all in the draw window, so the start does not blank, as the section above says. A BD-173 fix that forces a
-  blank at the boundary closes that window and makes this feature invisible unless the fix leaves the inherited
-  plane alone until the first flip.
+  all in the draw window on that measured build. The startup blank now closes that visibility window.
+  The first OS visibility request releases it. Leaving the inherited image visible until a flip would violate the startup contract.
 - That first call reports `previous 1` in three of the native boots and `previous 0` in the fourth and in the
   scaled boot. The value does not follow the mode, the connector route (both `previous` values occur on the full
   route) or what the camera saw, and both values leave `blanked 0` before and after the call, so neither changed
-  what reached the panel. It is an unexplained one-bit difference between otherwise identical starts, worth
-  settling while BD-173 is in that code.
+  what reached the panel. Startup and connector admission now keep `SourceVisible` FALSE until the OS requests otherwise.
 
 How to read the **camera**, because the first reading of these same frames was wrong. It delivers about 3.3
 frames a second during a boot screen, so one frame is about 290 to 306 ms against a window of about 1 s, and it

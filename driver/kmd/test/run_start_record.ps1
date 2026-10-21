@@ -15,11 +15,16 @@
 #   -RecordAtAnyIrql   the PASSIVE_LEVEL check dropped: requirement 4 (the IRQL).
 #   -LogAfterCleanup   the failure point ignored, so the kept lines are the teardown's and not the failing step's:
 #                      requirement 1 (the log lines that lead up to the failure).
+#   -NoInitialBlank / -NoFinalBlank  omit one hardware blank while keeping the
+#                      rest of StartDevice intact: the sequencing cases must fail.
+#   -KeepStopVisibilityHold  leave the startup hold set during stop: the rollback
+#                      cases must fail before the modeled display handoff.
 param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
       [string]$Out="$Root\scratch\build\startrecord",
       [string]$Repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path,
       [switch]$GateOnKeepLog,[switch]$NoAttemptRecord,[switch]$RecordBeforeCleanup,[switch]$RecordAtAnyIrql,
-      [switch]$LogAfterCleanup)
+      [switch]$LogAfterCleanup,[switch]$NoInitialBlank,[switch]$NoFinalBlank,
+      [switch]$KeepStopVisibilityHold)
 $ErrorActionPreference='Stop'
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
@@ -68,6 +73,17 @@ $first=$source.IndexOf('NTSTATUS Bc250StartDevice(')
 $last=$source.IndexOf('NTSTATUS Bc250StopDevice(',$first)
 if ($first -lt 0 -or $last -lt $first) { throw 'pnp.c has no Bc250StartDevice' }
 $pnp=$source.Substring($first,$last-$first)
+foreach($mutation in @(@{Enabled=$NoInitialBlank;Step='StartDisplayBlank';Call='DcnBeginStartVisibility\(device,\s*&displayBlankOwned\)'},
+                       @{Enabled=$NoFinalBlank;Step='StartDisplayBlankConfirm';Call='DcnSetVisibility\(device,\s*FALSE\)'})) {
+    if(!$mutation.Enabled){continue}
+    $step='GuardStartStep(L"'+$mutation.Step+'");'
+    $at=$pnp.IndexOf($step)
+    if($at -lt 0){throw "pnp.c has no $step for the blanking control"}
+    $call=[regex]::Match($pnp.Substring($at),'status\s*=\s*'+$mutation.Call+';')
+    if(!$call.Success){throw "pnp.c has no visibility call after $step"}
+    $at+=$call.Index
+    $pnp=$pnp.Remove($at,$call.Length).Insert($at,'status=STATUS_SUCCESS; /* negative control */')
+}
 if ($NoAttemptRecord) {
     if ($pnp -notmatch '(?m)^\s*GuardRecordStartAttempt\(\);') { throw 'pnp.c has no GuardRecordStartAttempt call to drop' }
     $pnp=$pnp -replace '(?m)^\s*GuardRecordStartAttempt\(\);',''
@@ -79,6 +95,21 @@ if ($RecordBeforeCleanup) {
     $pnp=$pnp.Replace("failed:`r`n","failed:`r`n    GuardRecordStartFailed(status);`r`n")
 }
 [IO.File]::WriteAllText((Join-Path $Out 'pnp_actual.inc'),$pnp)
+# Execute the real stop admission and startup-hold release before the modeled
+# hardware teardown. This catches a missing release without copying that policy
+# into the mock. The remainder of StopDevice has separate teardown tests.
+$stopFirst=$source.IndexOf('NTSTATUS Bc250StopDevice(')
+$stopLast=$source.IndexOf('    wasStarted=device->Started;',$stopFirst)
+if($stopFirst -lt 0 -or $stopLast -lt $stopFirst){throw 'pnp.c has no stop visibility prelude'}
+$stop=$source.Substring($stopFirst,$stopLast-$stopFirst).Replace('NTSTATUS Bc250StopDevice(',
+    'static NTSTATUS StartTestStopPrelude(')
+if($KeepStopVisibilityHold){
+    $release='InterlockedExchange(&device->StartVisibilityPending,0);'
+    if(!$stop.Contains($release)){throw 'pnp.c has no startup visibility release in stop'}
+    $stop=$stop.Replace($release,'/* negative control: startup hold kept */')
+}
+$stop+="    (void)wasStarted; (void)connectorStatus; return STATUS_SUCCESS;`n}`n"
+[IO.File]::WriteAllText((Join-Path $Out 'stop_visibility_actual.inc'),$stop)
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'start_record_test.c') -Destination (Join-Path $Out 'test.c') -Force
 
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath

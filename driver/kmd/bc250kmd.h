@@ -232,6 +232,9 @@ typedef struct _BC250_DEVICE {
     // failed-restore quarantine until a new device start.
     volatile LONG WaveRegisterAccess;
     BOOLEAN SourceVisible;
+    // StartDevice owns black output until the OS explicitly requests visible.
+    // Internal surface/mode restoration must not lift this startup hold.
+    volatile LONG StartVisibilityPending;
     BOOLEAN ModeActive;         // a commit has validated that the source surface is exactly the firmware's mode
     BOOLEAN PresentSeen;
     BOOLEAN CommitSeen;
@@ -790,6 +793,8 @@ void DcnFlipEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_DC
 // it unconditionally rather than reach into dcn.c's state.
 NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device);
 NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
+NTSTATUS DcnSetSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
+NTSTATUS DcnBeginStartVisibility(_Inout_ BC250_DEVICE* Device, _Out_ BOOLEAN* Touched);
 NTSTATUS DcnRestorePostDisplay(_Inout_ BC250_DEVICE* Device); // any IRQL; no allocation/log/lock
 NTSTATUS DcnRuntimeSurface(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);
 NTSTATUS DcnRestorePostDisplaySerialized(_Inout_ BC250_DEVICE* Device);

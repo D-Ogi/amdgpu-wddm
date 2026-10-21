@@ -893,6 +893,21 @@
         "host"
       ]
     },
+    "start-visibility-no-initial-blank": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-visibility-no-final-blank": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "start-visibility-stop-keeps-hold": {
+      "inputs": [
+        "host"
+      ]
+    },
     "guard-start-not-durable": {
       "inputs": [
         "host"

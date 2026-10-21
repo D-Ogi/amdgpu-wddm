@@ -35,7 +35,10 @@ try {
     }
     # Preserve every production statement up to the first admitted hardware path.
     # The remainder has hardware dependencies and is deliberately not executed.
-    $prefix+="`n    (void)DxgkStartInfo;(void)DxgkInterface;return HardwareBoundary();`n}`n"
+    # BD-179: the startup display-blank ownership local belongs to that remainder, so this slice declares
+    # it and never reads it. run_start_record.ps1 executes the whole StartDevice, including that path.
+    $blankUse=if($prefix -match '\bdisplayBlankOwned\b'){'(void)displayBlankOwned;'}else{''}
+    $prefix+="`n    (void)DxgkStartInfo;(void)DxgkInterface;$blankUse return HardwareBoundary();`n}`n"
     if($Mutation -eq 'activate-during-validation'){
         $pattern='(?s)NTSTATUS DriverStateValidateDevice\(PDEVICE_OBJECT device\)\s*\{.*?\n\}'
         if([regex]::Matches($device,$pattern).Count -ne 1){throw 'Unique validation function mutation target missing'}

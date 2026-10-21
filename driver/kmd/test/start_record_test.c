@@ -48,6 +48,8 @@ typedef long long LONGLONG;
 #define STATUS_GRAPHICS_NO_VIDEO_MEMORY (-9L)
 #define STATUS_UNSUCCESSFUL (-10L)
 #define STATUS_DEVICE_NOT_READY (-11L)
+#define STATUS_GRAPHICS_STALE_MODESET (-12L)
+#define STATUS_NOT_SUPPORTED (-13L)
 #define NT_SUCCESS(s) ((s)>=0)
 #define PASSIVE_LEVEL 0
 #define DISPATCH_LEVEL 2
@@ -305,12 +307,47 @@ typedef struct {
     LONG RetainedPowerPhase;
     unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;
     LONG RuntimePostValid,RuntimeDisplayChanged,RuntimePlaneBlank;
+    BOOLEAN SourceVisible, DcnWriteEnabled, PostDisplayStopAttempted;
+    LONG StartVisibilityPending;
+    NTSTATUS PostDisplayStopStatus;
 } BC250_DEVICE;
 #define PDXGK_START_INFO ULONG*
 #define PDXGKRNL_INTERFACE FAKE_IF*
 
 static int ownedPdo;
 static void* ownerIdentity;
+// The inherited output starts visible even when the software cache says FALSE.
+// This model is separate from the visibility implementation: this fixture owns
+// StartDevice's sequencing, result and unwind, while the DCN gate tests MMIO.
+enum START_EVENT { EVENT_MMIO = 1, EVENT_BLANK, EVENT_LOGO, EVENT_GPU,
+                   EVENT_CONNECTOR, EVENT_READY, EVENT_STOP };
+static enum START_EVENT startEvents[32];
+static unsigned startEventCount;
+static unsigned blankCalls, logoCalls, gpuCalls, pendingAtStop, blankWithoutHold;
+static unsigned originalCauseAtStop;
+static unsigned admissionCalls, mmioStops;
+static BOOLEAN mmioAvailable, hardwareVisible, connectorUnblanks;
+static BOOLEAN blankChangesBeforeError, restoreAttempt, restoreWithMmio;
+static BOOLEAN forceRestoreAttempt;
+static BOOLEAN visibleAtLogo, visibleAtGpu, visibleAtReady, firstSoftwareVisible;
+static NTSTATUS blankStatus[2], restoreStatus;
+static NTSTATUS admissionStatus;
+static void StartEvent(enum START_EVENT event)
+{
+    if (startEventCount < RTL_NUMBER_OF(startEvents)) startEvents[startEventCount++] = event;
+}
+static int EventBefore(enum START_EVENT first, enum START_EVENT last)
+{
+    unsigned i;
+    for (i = 0; i < startEventCount; ++i) {
+        if (startEvents[i] == last) return 0;
+        if (startEvents[i] == first) {
+            for (++i; i < startEventCount; ++i) if (startEvents[i] == last) return 1;
+            return 0;
+        }
+    }
+    return 0;
+}
 static int AdapterOwnerIs(void* id) { return id && id == ownerIdentity; }
 // State activation failures are covered by the actual state-device fixture.
 static NTSTATUS DriverStateActivateDevice(void* id) { return id ? STATUS_SUCCESS : STATUS_DEVICE_BUSY; }
@@ -328,14 +365,15 @@ static NTSTATUS GuardCheckAndCountStart(BOOLEAN durableNeeded) { (void)durableNe
 static void StartHealthBegin(BC250_DEVICE* d, BOOLEAN f) { (void)d; (void)f; }
 static void StartHealthClose(BC250_DEVICE* d) { (void)d; Trace("hclose"); }
 static unsigned readyCalls;
-static void StartHealthReady(BC250_DEVICE* d, BOOLEAN r) { (void)d; (void)r;readyCalls++; }
+static void StartHealthReady(BC250_DEVICE* d, BOOLEAN r)
+{ (void)d; (void)r; readyCalls++; visibleAtReady = hardwareVisible; StartEvent(EVENT_READY); }
 static void CuModeBegin(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryIdentityClear(BC250_DEVICE* d) { (void)d; if (lastStage) Trace("bmclear"); }
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryStart(BC250_DEVICE* d) { (void)d; }
 static void BoardMemoryStop(BC250_DEVICE* d) { (void)d; Trace("bmstop"); }
 static void BoardProviderBind(BC250_DEVICE* d) { (void)d; }
-static NTSTATUS fbStatus, wddmStatus, timingStatus, smuStatus, connectorStatus;
+static NTSTATUS fbStatus, wddmStatus, timingStatus, smuStatus, connectorStartStatus;
 static unsigned connectorPrepares,connectorStarts,connectorDirty;
 static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
     connectorPrepares++;
@@ -343,7 +381,12 @@ static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
        d->RuntimeDisplayChanged || d->RuntimePlaneBlank) connectorDirty++;
     return STATUS_SUCCESS;
 }
-static NTSTATUS ConnectorStart(BC250_DEVICE* d) { (void)d;connectorStarts++;return connectorStatus; }
+static NTSTATUS ConnectorStart(BC250_DEVICE* d)
+{
+    (void)d; connectorStarts++; StartEvent(EVENT_CONNECTOR);
+    if (connectorUnblanks) hardwareVisible = TRUE;
+    return connectorStartStatus;
+}
 // BD-169: whether a connector refusal leaves the static inherited path with a
 // display. The real predicate is connector.c's; the display-timing host test
 // owns its decision, and this test owns what the start does with it.
@@ -371,7 +414,8 @@ static NTSTATUS DisplayMapFramebuffer(BC250_DEVICE* d)
 }
 static void DisplayUnmapFramebuffer(BC250_DEVICE* d) { (void)d; }
 static void DisplayLogFramebufferSample(BC250_DEVICE* d) { (void)d; }
-static void DisplayDrawBootLogo(BC250_DEVICE* d) { (void)d; }   /* the boot-screen mascot: never fails a start */
+static void DisplayDrawBootLogo(BC250_DEVICE* d)
+{ (void)d; logoCalls++; visibleAtLogo = hardwareVisible; StartEvent(EVENT_LOGO); }
 // GitHub #38: the real step names its registers through GuardStartDetail when it refuses (display_timing_refused.h).
 // BD-169: the inherited pipe's own refusal is written by this step even when the step succeeds, because an
 // equal-size pipe this driver cannot classify passes it and the start fails later, in ConnectorStart. The text is
@@ -387,8 +431,31 @@ static NTSTATUS DisplayPrepareInheritedTiming(BC250_DEVICE* d)
     return timingStatus;
 }
 static void NoteInterruptResource(BC250_DEVICE* d) { (void)d; }
-static void MmioStart(BC250_DEVICE* d) { (void)d; }
-static void MmioStop(BC250_DEVICE* d) { (void)d; }
+static void MmioStart(BC250_DEVICE* d)
+{ d->Mmio = mmioAvailable ? d : NULL; StartEvent(EVENT_MMIO); }
+static void MmioStop(BC250_DEVICE* d) { d->Mmio = NULL; mmioStops++; }
+static NTSTATUS DcnSetVisibility(BC250_DEVICE* d, BOOLEAN visible)
+{
+    NTSTATUS status = blankStatus[blankCalls ? 1 : 0];
+    if (!blankCalls) firstSoftwareVisible = d->SourceVisible;
+    blankCalls++;
+    if (!d->StartVisibilityPending) blankWithoutHold++;
+    StartEvent(EVENT_BLANK);
+    if (d->Mmio == NULL || !d->DcnWriteEnabled) return STATUS_DEVICE_NOT_READY;
+    if (NT_SUCCESS(status) || blankChangesBeforeError) hardwareVisible = visible;
+    return status;
+}
+static NTSTATUS DcnBeginStartVisibility(BC250_DEVICE* d, BOOLEAN* touched)
+{
+    NTSTATUS status;
+    admissionCalls++; *touched = FALSE;
+    firstSoftwareVisible = d->SourceVisible;
+    if (d->Mmio == NULL || !d->DcnWriteEnabled) return STATUS_DEVICE_NOT_READY;
+    if (!NT_SUCCESS(admissionStatus)) return admissionStatus;
+    status = DcnSetVisibility(d, FALSE);
+    *touched = NT_SUCCESS(status) || blankChangesBeforeError;
+    return status;
+}
 static void HwmonStart(BC250_DEVICE* d) { (void)d; }
 static NTSTATUS SmuOwnerStart(ULONG* s, void* mmio) { (void)s; (void)mmio; return smuStatus; }
 static void VramStart(BC250_DEVICE* d) { (void)d; }
@@ -399,7 +466,12 @@ static void GfxStart(BC250_DEVICE* d) { (void)d; }
 static void IhStart(BC250_DEVICE* d) { (void)d; }
 // WddmStart and GpuStartupInitialize name sub-steps of their own; here one stands in for the phase that failed.
 static PCWSTR wddmSubStep;
-static NTSTATUS WddmStart(BC250_DEVICE* d) { (void)d; if (wddmSubStep) GuardStartSubStep(wddmSubStep); return wddmStatus; }
+static NTSTATUS WddmStart(BC250_DEVICE* d)
+{
+    (void)d; gpuCalls++; visibleAtGpu = hardwareVisible; StartEvent(EVENT_GPU);
+    if (wddmSubStep) GuardStartSubStep(wddmSubStep);
+    return wddmStatus;
+}
 static void ModesetStart(BC250_DEVICE* d) { (void)d; }
 static void HdmiLinkStartAudio(BC250_DEVICE* d, BOOLEAN resume) { (void)d; (void)resume; }
 static BOOLEAN GfxStartupResources(BC250_DEVICE* d, BOOLEAN live) { (void)d; (void)live; return TRUE; }
@@ -410,10 +482,22 @@ static void DpmStart(BC250_DEVICE* d) { (void)d; }
 static void CpuStart(BC250_DEVICE* d) { (void)d; }
 static void InterlockedExchange(LONG* t, LONG v) { *t = v; }
 static unsigned stops;
+#include "stop_visibility_actual.inc"
 // The real teardown logs through its own subsystems: the ring grows while it runs, which is why the record marks
 // the failure point before the cleanup rather than taking the newest lines when it writes.
 static NTSTATUS Bc250StopDevice(PVOID context)
-{ (void)context; stops++; ringTotal += ringGrowOnStop; Trace("stop"); return STATUS_SUCCESS; }
+{
+    BC250_DEVICE* d = (BC250_DEVICE*)context;
+    (void)StartTestStopPrelude(context);
+    if (LoggedTimes("start: failing step status ")) originalCauseAtStop++;
+    if (d->StartVisibilityPending) pendingAtStop++;
+    d->PostDisplayStopAttempted = restoreAttempt && (blankCalls != 0 || forceRestoreAttempt);
+    d->PostDisplayStopStatus = restoreStatus;
+    restoreWithMmio = d->Mmio != NULL;
+    if (d->PostDisplayStopAttempted && NT_SUCCESS(restoreStatus)) hardwareVisible = TRUE;
+    stops++; ringTotal += ringGrowOnStop; Trace("stop"); StartEvent(EVENT_STOP);
+    return STATUS_SUCCESS;
+}
 
 #include "pnp_actual.inc"
 
@@ -435,6 +519,7 @@ static NTSTATUS AcquirePostEmpty(void* h, FAKE_POST* p) { (void)h; memset(p, 0, 
 static BC250_DEVICE dev;
 static FAKE_IF iface;
 static ULONG startInfo;
+static ULONG outputSources, outputChildren;
 
 static void Reset(void)
 {
@@ -442,11 +527,21 @@ static void Reset(void)
     memset(&dev, 0, sizeof(dev));
     dev.DisplayReservationEnd=1;dev.RuntimeFramebufferLength=1;
     dev.RuntimePostValid=dev.RuntimeDisplayChanged=dev.RuntimePlaneBlank=1;
+    dev.DcnWriteEnabled = TRUE;
     memset(&iface, 0, sizeof(iface));
     trace[0] = 0; logCount = 0; lastStage = 0; durable = 0;
     opens = creates = closes = flushes = writeOps = stops = readyCalls = 0;
     failAt = 0; openStatus = createStatus = writeStatus = flushStatus = STATUS_SUCCESS;
-    fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStatus = STATUS_SUCCESS;
+    fbStatus = wddmStatus = timingStatus = smuStatus = guardStatus = connectorStartStatus = STATUS_SUCCESS;
+    startEventCount = blankCalls = logoCalls = gpuCalls = pendingAtStop = blankWithoutHold = 0;
+    originalCauseAtStop = 0;
+    admissionCalls = mmioStops = 0;
+    blankStatus[0] = blankStatus[1] = restoreStatus = STATUS_SUCCESS;
+    admissionStatus = STATUS_SUCCESS;
+    mmioAvailable = hardwareVisible = restoreAttempt = TRUE;
+    connectorUnblanks = blankChangesBeforeError = restoreWithMmio = FALSE;
+    forceRestoreAttempt = FALSE;
+    visibleAtLogo = visibleAtGpu = visibleAtReady = firstSoftwareVisible = FALSE;
     connectorRefusalKeeps = 0; inheritedGateDetail = 0;
     unconfirmed = 1; keepLog = 0; enableNativeSmu = 0; poolRefused = 0;
     ringTotal = 12; ringLongLines = 0; ringEmptyAt = -1; ringGrowOnStop = 0;
@@ -462,8 +557,8 @@ static void Reset(void)
 }
 static NTSTATUS Start(void)
 {
-    ULONG sources = 99, children = 99;
-    return Bc250StartDevice(&dev, &startInfo, &iface, &sources, &children);
+    outputSources = outputChildren = 99;
+    return Bc250StartDevice(&dev, &startInfo, &iface, &outputSources, &outputChildren);
 }
 // The lines of the Log value, as a reader walks a REG_MULTI_SZ.
 static ULONG LogLines(SIZE_T* widest)
@@ -503,6 +598,148 @@ static int RecordIs(PCWSTR result, PCWSTR step, PCWSTR sub, ULONG status, ULONG 
 
 int main(void)
 {
+    // StartDevice must return with each source invisible. The inherited output
+    // is visible here and SourceVisible initially says FALSE: trusting that
+    // cache would let startup drawing reach the screen before the OS permits it.
+    {
+        unsigned full;
+        for (full = 0; full < 2; ++full) {
+            Reset(); dev.FullWddm = (BOOLEAN)full;
+            CHECK(hardwareVisible && !dev.SourceVisible);
+            CHECK(Start() == STATUS_SUCCESS);
+            CHECK(admissionCalls == 1 && blankCalls == 2 && blankWithoutHold == 0);
+            CHECK(!hardwareVisible && !dev.SourceVisible && dev.StartVisibilityPending == 1);
+            CHECK(!firstSoftwareVisible && !visibleAtLogo && !visibleAtGpu && !visibleAtReady);
+            CHECK(EventBefore(EVENT_MMIO, EVENT_BLANK) && EventBefore(EVENT_BLANK, EVENT_LOGO));
+            CHECK(EventBefore(EVENT_BLANK, EVENT_GPU) && EventBefore(EVENT_CONNECTOR, EVENT_READY));
+            CHECK(logoCalls == 1 && gpuCalls == 1 && readyCalls == 1 && stops == 0);
+            CHECK(outputSources == 1 && outputChildren == 1);
+        }
+    }
+    // Reusing a device context must clear the previous OS visibility request.
+    Reset(); dev.SourceVisible = TRUE;
+    CHECK(Start() == STATUS_SUCCESS);
+    CHECK(!firstSoftwareVisible && !dev.SourceVisible && dev.StartVisibilityPending == 1);
+
+    // A startup callback can change the hardware after the initial blank. Both
+    // connector success and the static-inherited fallback need final readback
+    // before health readiness and success are published.
+    {
+        unsigned fallback;
+        for (fallback = 0; fallback < 2; ++fallback) {
+            Reset(); connectorUnblanks = TRUE;
+            if (fallback) { connectorStartStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1; }
+            CHECK(Start() == STATUS_SUCCESS);
+            CHECK(blankCalls == 2 && !hardwareVisible && !visibleAtReady);
+            CHECK(startEventCount >= 3 && startEvents[startEventCount - 3] == EVENT_CONNECTOR &&
+                  startEvents[startEventCount - 2] == EVENT_BLANK &&
+                  startEvents[startEventCount - 1] == EVENT_READY);
+            CHECK(dev.StartVisibilityPending == 1 && outputSources == 1 && outputChildren == 1);
+        }
+    }
+    // A missing MMIO mapping, a closed write gate, or a failed initial blank
+    // cannot be treated as a successful start. No boot-logo or GPU work runs.
+    {
+        unsigned mode;
+        for (mode = 0; mode < 3; ++mode) {
+            NTSTATUS expected = mode == 2 ? STATUS_ACCESS_DENIED : STATUS_DEVICE_NOT_READY;
+            Reset();
+            if (mode == 0) mmioAvailable = FALSE;
+            if (mode == 1) dev.DcnWriteEnabled = FALSE;
+            if (mode == 2) { blankStatus[0] = expected; blankChangesBeforeError = TRUE; }
+            CHECK(Start() == expected);
+            CHECK(RecordIs(L"failed", L"StartDisplayBlank", L"-", (ULONG)expected, StageStartFailed));
+            CHECK(admissionCalls == 1 && blankCalls == (mode == 2 ? 1u : 0u) &&
+                  logoCalls == 0 && gpuCalls == 0 && readyCalls == 0);
+            CHECK(mmioStops == (mode == 2 ? 0u : 1u));
+            CHECK(stops == 1 && pendingAtStop == 0 && dev.StartVisibilityPending == 0);
+            CHECK(outputSources == 0 && outputChildren == 0);
+        }
+    }
+    // Read-only admission refuses inactive or unsupported pipes and unreadable
+    // state. No hardware blank was attempted. Detach MMIO before common cleanup
+    // so stop cannot write into an output that this start never owned.
+    {
+        NTSTATUS refused[] = { STATUS_DEVICE_NOT_READY, STATUS_NOT_SUPPORTED, STATUS_ACCESS_DENIED };
+        unsigned i;
+        for (i = 0; i < RTL_NUMBER_OF(refused); ++i) {
+            Reset(); admissionStatus = refused[i]; restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+            forceRestoreAttempt = TRUE;
+            CHECK(Start() == refused[i]);
+            CHECK(RecordIs(L"failed", L"StartDisplayBlank", L"-", (ULONG)refused[i], StageStartFailed));
+            CHECK(admissionCalls == 1 && blankCalls == 0 && logoCalls == 0 && gpuCalls == 0 && readyCalls == 0);
+            CHECK(mmioStops == 1 && !restoreWithMmio && dev.Mmio == NULL);
+            CHECK(dev.PostDisplayStopAttempted && dev.PostDisplayStopStatus == STATUS_DEVICE_HARDWARE_ERROR);
+            CHECK(dev.StartVisibilityPending == 0 && pendingAtStop == 0 && outputSources == 0 && outputChildren == 0);
+        }
+    }
+    // An admitted pipe can refuse its first write without touching hardware.
+    // That is also an ordinary start refusal, even if cleanup reports failure.
+    Reset(); blankStatus[0] = STATUS_ACCESS_DENIED; restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_ACCESS_DENIED);
+    CHECK(blankCalls == 1 && mmioStops == 1 && !restoreWithMmio && dev.Mmio == NULL);
+    // The last blank can fail even though the first one succeeded. It must not
+    // publish source/child counts or health readiness, and must restore with
+    // MMIO still mapped after releasing the startup-only visibility hold.
+    Reset(); connectorUnblanks = TRUE; blankStatus[1] = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_DEVICE_HARDWARE_ERROR);
+    CHECK(RecordIs(L"failed", L"StartDisplayBlankConfirm", L"-",
+                   (ULONG)STATUS_DEVICE_HARDWARE_ERROR, StageStartFailed));
+    CHECK(blankCalls == 2 && readyCalls == 0 && stops == 1 && restoreWithMmio);
+    CHECK(pendingAtStop == 0 && dev.StartVisibilityPending == 0);
+    CHECK(outputSources == 0 && outputChildren == 0);
+
+    // Failure after the initial blank uses the common cleanup while BAR5 still
+    // exists. In particular, an SMU refusal must not unmap it before restoring
+    // the output. Check the other exits that used to stop the device early too.
+    {
+        unsigned step;
+        for (step = 0; step < 4; ++step) {
+            Reset();
+            if (step == 0) { enableNativeSmu = 1; smuStatus = STATUS_ACCESS_DENIED; }
+            if (step == 1) wddmStatus = STATUS_ACCESS_DENIED;
+            if (step == 2) timingStatus = STATUS_ACCESS_DENIED;
+            if (step == 3) connectorStartStatus = STATUS_ACCESS_DENIED;
+            CHECK(Start() == STATUS_ACCESS_DENIED);
+            CHECK(blankCalls == 1 && stops >= 1 && restoreWithMmio && hardwareVisible);
+            CHECK(originalCauseAtStop == 1);
+            CHECK(pendingAtStop == 0 && dev.StartVisibilityPending == 0 && readyCalls == 0);
+            CHECK(outputSources == 0 && outputChildren == 0);
+        }
+    }
+    // If rollback cannot restore a changed display, the caller needs the stale
+    // modeset status. The start record retains the original failing step and
+    // reports the status that the caller receives; the kept log has the cause.
+    Reset(); connectorStartStatus = STATUS_ACCESS_DENIED; restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_GRAPHICS_STALE_MODESET);
+    CHECK(RecordIs(L"failed", L"ConnectorStart", L"-", (ULONG)STATUS_GRAPHICS_STALE_MODESET, StageStartFailed));
+    CHECK(originalCauseAtStop == 1 &&
+          LoggedTimes("start: failing step status 0xFFFFFFFF before display handoff") == 1);
+    CHECK(dev.PostDisplayStopAttempted && dev.PostDisplayStopStatus == STATUS_DEVICE_HARDWARE_ERROR);
+    CHECK(pendingAtStop == 0 && dev.StartVisibilityPending == 0 && outputSources == 0 && outputChildren == 0);
+    // A partial initial blank has the same rollback requirement.
+    Reset(); blankStatus[0] = STATUS_ACCESS_DENIED; blankChangesBeforeError = TRUE;
+    restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_GRAPHICS_STALE_MODESET);
+    CHECK(RecordIs(L"failed", L"StartDisplayBlank", L"-", (ULONG)STATUS_GRAPHICS_STALE_MODESET, StageStartFailed));
+    CHECK(!hardwareVisible && dev.StartVisibilityPending == 0 && pendingAtStop == 0);
+    CHECK(mmioStops == 0 && restoreWithMmio);
+    // Without an attempted restore, an unrelated stale saved status is not
+    // enough to change the caller's failure classification.
+    Reset(); connectorStartStatus = STATUS_ACCESS_DENIED; restoreAttempt = FALSE;
+    restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_ACCESS_DENIED && !dev.PostDisplayStopAttempted);
+    Reset(); fbStatus = STATUS_ACCESS_DENIED; restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_ACCESS_DENIED && blankCalls == 0 && !dev.PostDisplayStopAttempted);
+    // A blank refusal without MMIO ownership does not make a stale stop-status
+    // field a display transition owned by this start.
+    Reset(); mmioAvailable = FALSE; restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_DEVICE_NOT_READY);
+    CHECK(dev.StartVisibilityPending == 0 && outputSources == 0 && outputChildren == 0);
+    Reset(); dev.DcnWriteEnabled = FALSE; restoreStatus = STATUS_DEVICE_HARDWARE_ERROR;
+    CHECK(Start() == STATUS_DEVICE_NOT_READY);
+    CHECK(dev.StartVisibilityPending == 0 && outputSources == 0 && outputChildren == 0);
+
     // ---- requirement 1: every failing step names itself, with no gate ----------------------------------------
     // The step table of Bc250StartDevice: what makes it fail, and the step the record must name.
     {
@@ -526,12 +763,13 @@ int main(void)
             if (i == 4) { enableNativeSmu = 1; dev.Mmio = &dev; smuStatus = STATUS_ACCESS_DENIED; }
             if (i == 5) wddmStatus = STATUS_DEVICE_NOT_READY;
             if (i == 6) timingStatus = STATUS_UNSUCCESSFUL;
-            if (i == 7) connectorStatus = STATUS_DEVICE_NOT_READY;
+            if (i == 7) connectorStartStatus = STATUS_DEVICE_NOT_READY;
             CHECK((ULONG)Start() == table[i].status);
             // KeepLog is 0, the release value: the record is written all the same. That is the defect.
             CHECK(RecordIs(L"failed", table[i].step, L"-", table[i].status, StageStartFailed));
             CHECK(durable == 1);
             CHECK(readyCalls == 0);
+            CHECK(outputSources == 0 && outputChildren == 0 && dev.StartVisibilityPending == 0);
             CHECK(LogLines(NULL) == 12);
             if (failures) { printf("  (step case: %s)\n", table[i].what); break; }
         }
@@ -542,7 +780,7 @@ int main(void)
     // presented the step still fails and names itself (#38's scaled tuple).
     {
         unsigned starts;
-        Reset(); connectorStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
+        Reset(); connectorStartStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
         starts = connectorStarts;                       // Reset() does not clear this counter
         CHECK(Start() == STATUS_SUCCESS);
         CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
@@ -554,14 +792,14 @@ int main(void)
     // measured it, so the later failure must still carry the gate number, its name and the word it read.
     {
         PCWSTR detail;
-        Reset(); inheritedGateDetail = 1; connectorStatus = STATUS_DEVICE_NOT_READY;
+        Reset(); inheritedGateDetail = 1; connectorStartStatus = STATUS_DEVICE_NOT_READY;
         CHECK((ULONG)Start() == (ULONG)STATUS_DEVICE_NOT_READY);
         CHECK(RecordIs(L"failed", L"ConnectorStart", L"-", (ULONG)STATUS_DEVICE_NOT_READY, StageStartFailed));
         detail = Str(L"Detail");
         CHECK(detail != NULL && wcsstr(detail, L"gate 14 tiling word 00000080") != NULL);
         CHECK(detail != NULL && wcsstr(detail, L"support 00000000") != NULL);
         // A start that keeps the display is not a failure, so no record carries that line as a reason.
-        Reset(); inheritedGateDetail = 1; connectorStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
+        Reset(); inheritedGateDetail = 1; connectorStartStatus = STATUS_DEVICE_NOT_READY; connectorRefusalKeeps = 1;
         CHECK(Start() == STATUS_SUCCESS);
         CHECK(RecordIs(L"started", L"-", L"-", 0, StageStartDone));
         CHECK(Find(2, L"Detail") < 0);
@@ -616,7 +854,7 @@ int main(void)
     // of its own: without the failure mark the 64 kept lines would be the unwind, which names no step.
     Reset(); timingStatus = STATUS_UNSUCCESSFUL; ringTotal = 500; ringGrowOnStop = 120;
     CHECK(Start() == STATUS_UNSUCCESSFUL);
-    CHECK(stops == 2 && ringTotal == 740);              // the explicit stop and the one at the failed: label
+    CHECK(stops == 1 && ringTotal == 620);              // the common failed: unwind runs once
     CHECK(LogLines(NULL) == 64);
     CHECK(LogLineAt(0) != NULL && !wcscmp(LogLineAt(0), L"ring line 436"));
     CHECK(LogLineAt(63) != NULL && !wcscmp(LogLineAt(63), L"ring line 499"));   // the last line before the teardown

@@ -47,6 +47,7 @@ typedef struct {
 typedef struct _BC250_DEVICE {
     ULONG* Mmio;
     BOOLEAN DcnWriteEnabled, SourceVisible, ModeActive, InheritedSignalValid;
+    volatile LONG StartVisibilityPending;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
     void* ConnectorLink;
     NTSTATUS ConnectorLinkCleanup;
@@ -159,6 +160,7 @@ static NTSTATUS WddmPrimaryExclusiveEnd(BC250_DEVICE* d,ULONG g,BOOLEAN changed)
     return STATUS_SUCCESS;
 }
 static LONG InterlockedExchange(volatile LONG* p,LONG v) { LONG old=*p;*p=v;return old; }
+static LONG InterlockedCompareExchange(volatile LONG* p,LONG v,LONG expected) { LONG old=*p;if(old==expected)*p=v;return old; }
 static void KeAcquireSpinLock(unsigned* p,KIRQL* old)
 {
     CHECK((p==&device.DpAudio.Lock || p==&device.Connector.Lock) && !spin_locks);
@@ -471,7 +473,8 @@ long Bc250OptcEnable(BC250_DISP_IO* io)
 static NTSTATUS DcnRuntimeSurface(BC250_DEVICE* d,BOOLEAN unblank)
 { long s=boundary_step(d->ConnectorLink,unblank?"surface":"suspend-surface",0);CHECK(primary_locks);if(unblank)CHECK(crtc_enabled && d->RuntimePostValid);
   CHECK(pipe_plans==pipe_programs);if(unblank)CHECK(pipe_programs);   /* BD-197: the plan before every surface write */
-  if(!s) {scanned_surface=2;plane_blank=0;d->RuntimePlaneBlank=0;if(unblank)otg_blank=0;}return s; }
+  /* BD-179: an internal unblank cannot lift the startup hold (DcnSetVisibilityCore). */
+  if(!s) {scanned_surface=2;plane_blank=0;d->RuntimePlaneBlank=0;if(unblank && !d->StartVisibilityPending)otg_blank=0;}return s; }
 static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE* d)
 {
     long status=boundary_step(d->ConnectorLink,"original-surface",0);
@@ -1192,6 +1195,14 @@ static void keep_breadcrumbs(void)
 int main(void)
 {
     end_failure_propagation();
+    // First mode commit is allowed to program a running pipe and surface, but
+    // it neither grants OS visibility nor leaves a second DPG blank behind.
+    {unsigned kind;for(kind=BC250_SINK_DP;kind<=BC250_SINK_DVI;++kind) {
+        reset(kind);device.StartVisibilityPending=1;device.SourceVisible=FALSE;otg_blank=1;
+        CHECK(commit()==STATUS_SUCCESS);balanced();
+        CHECK(device.StartVisibilityPending && !device.SourceVisible && otg_blank);
+        CHECK(link.Active && device.ModeActive && !plane_blank && !output_black);
+    }}
     prepare_cleanup_preserved();
     programmed_clock_bound();
     psp_session_controls();

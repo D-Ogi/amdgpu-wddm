@@ -29,7 +29,7 @@ typedef const wchar_t* PCWSTR;
 #define StageStartGuardPassed 31u
 #define StageRefusedByGuard 90u
 #define StageStartFailed 91u    /* BD-122: an unconfirmed previous stop fails the start and leaves this stage */
-typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone;void* PhysicalDeviceObject;unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;long RuntimePostValid,RuntimeDisplayChanged,RuntimePlaneBlank;} BC250_DEVICE;
+typedef struct {BOOLEAN InheritedSignalValid,GpuStopUnconfirmed,StopDone,SourceVisible;void* PhysicalDeviceObject;unsigned long long DisplayReservationEnd,RuntimeFramebufferLength;long RuntimePostValid,RuntimeDisplayChanged,RuntimePlaneBlank,StartVisibilityPending;} BC250_DEVICE;
 typedef void* PDXGK_START_INFO;
 typedef void* PDXGKRNL_INTERFACE;
 static ULONG settingGate,cached,durable;
@@ -92,6 +92,7 @@ static void BoardMemoryIdentityClear(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryIdentityCapture(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryStart(BC250_DEVICE* d){(void)d;}
 static void BoardMemoryStop(BC250_DEVICE* d){(void)d;}
+static long InterlockedExchange(long* target,long value){long old=*target;*target=value;return old;}
 #include "pnp_actual.inc"
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)
@@ -101,7 +102,7 @@ static void Reset(void)
 /* The confirmation GuardConfirmStartDurable performs after its durable zero (start_health.c's CONFIRM). */
 static void Confirm(void){cached=durable=0;GuardStartConfirmed();}
 /* One episode per start, also for the BD-090 cases that start twice in one scenario without a Reset. */
-static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;unsigned before=episodes;NTSTATUS s;d.PhysicalDeviceObject=&ownedPdo;s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);CHECK(episodes==before+1);return s;}
+static NTSTATUS Start(void){BC250_DEVICE d={0};ULONG src=99,children=99;unsigned before=episodes;NTSTATUS s;d.PhysicalDeviceObject=&ownedPdo;d.SourceVisible=TRUE;s=Bc250StartDevice(&d,NULL,NULL,&src,&children);CHECK(src==0&&children==0);CHECK(episodes==before+1);if(NT_SUCCESS(s)){CHECK(!d.SourceVisible&&d.StartVisibilityPending==1);}return s;}
 int main(void)
 {
     unsigned before;

@@ -18,7 +18,11 @@ $first=$source.IndexOf('BOOLEAN WddmGateOpen(');$last=$source.IndexOf('// ---- t
 [IO.File]::WriteAllText((Join-Path $Out 'gate_actual.inc'),$source.Substring($first,$last-$first))
 $source=Get-Content (Join-Path $repo 'driver\kmd\pnp.c') -Raw
 $first=$source.IndexOf('NTSTATUS Bc250StartDevice(');$last=$source.IndexOf('    device->StartInfo =',$first)
-[IO.File]::WriteAllText((Join-Path $Out 'pnp_actual.inc'),$source.Substring($first,$last-$first)+"    (void)DxgkStartInfo; (void)DxgkInterface;`n    return STATUS_SUCCESS;`n}`n")
+$pnp=$source.Substring($first,$last-$first)
+# This gate ends at admission. The whole StartDevice/blank/unwind behavior is
+# executed by run_start_record.ps1; its later-only local is unused in this slice.
+$blankUse=if($pnp -match '\bdisplayBlankOwned\b'){'    (void)displayBlankOwned;'}else{''}
+[IO.File]::WriteAllText((Join-Path $Out 'pnp_actual.inc'),$pnp+"    (void)DxgkStartInfo; (void)DxgkInterface;`n$blankUse`n    return STATUS_SUCCESS;`n}`n")
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'guard_start_test.c') -Destination (Join-Path $Out 'test.c') -Force
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1

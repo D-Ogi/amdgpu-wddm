@@ -325,6 +325,7 @@ void FbdumpEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_FBDUMP* 
 #define BC250_DCNFLIP_BORDER 64ul
 #define BC250_DCNFLIP_POLL_STEP_US 100ul
 #define BC250_DCNFLIP_POLL_MAX_US 50000ul                                              // 50 ms
+#define BC250_DCN_VISIBILITY_POLL_MAX_US 100000ul // two frame edges at >=23Hz, including blank acknowledgement
 
 // BD-167: Refuse, FillSurface and the PollFlipPending/DcnFlipCore/DcnFlipEscape block below belong only to the
 // lab RUN_DCNFLIP escape; the shared flip helpers (AddressAllowed, CaptureFirmwareSurface, DcnFlipWriteSequence,
@@ -967,21 +968,130 @@ static NTSTATUS DcnCheckPostSurface(_In_ const BC250_DEVICE* Device)
     return STATUS_SUCCESS;
 }
 
-// PROVENANCE: Linux AMD display (MIT), dcn201_tg_funcs uses optc1_set_blank
-// and optc1_set_blank_data_double_buffer. Keep the inherited blank color and
-// timing running. This affects output pixels, never framebuffer contents.
-// Quiet, allocation/lock-free and bounded so restore can also use it at bugcheck.
-NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
+// PROVENANCE: Linux AMD display (MIT), v6.18 7d0a66e4: dc_hw_sequencer.c
+// output_csc_matrix/black_color_format, mpc2_set_output_csc, opp1_program_fmt.
+// CSC_MODE selects a bank at a frame boundary. The DCN201 offset header has no
+// indexed debug-data port, so witness a frame with the same selected mode before
+// inspecting that bank. Two counter transitions enclose a complete frame even
+// when the first sample falls immediately before a latch boundary. Refuse an
+// inherited held update lock. Never borrow DCN2.0 debug-port addresses.
+static NTSTATUS DcnReadBlackColor(BC250_DEVICE* Device, ULONG* Color, ULONG* Waited)
 {
-    ULONG value, waited=0;
+    static const ULONG banks[2][6]={
+        {BC250_REG_DMU_MPC_OUT0_CSC_C11_C12_A,BC250_REG_DMU_MPC_OUT0_CSC_C13_C14_A,
+         BC250_REG_DMU_MPC_OUT0_CSC_C21_C22_A,BC250_REG_DMU_MPC_OUT0_CSC_C23_C24_A,
+         BC250_REG_DMU_MPC_OUT0_CSC_C31_C32_A,BC250_REG_DMU_MPC_OUT0_CSC_C33_C34_A},
+        {BC250_REG_DMU_MPC_OUT0_CSC_C11_C12_B,BC250_REG_DMU_MPC_OUT0_CSC_C13_C14_B,
+         BC250_REG_DMU_MPC_OUT0_CSC_C21_C22_B,BC250_REG_DMU_MPC_OUT0_CSC_C23_C24_B,
+         BC250_REG_DMU_MPC_OUT0_CSC_C31_C32_B,BC250_REG_DMU_MPC_OUT0_CSC_C33_C34_B}};
+    static const unsigned short matrices[8][12]={
+        {0x2000,0,0,0,0,0x2000,0,0,0,0,0x2000,0},
+        {0x1b67,0,0,0x201,0,0x1b67,0,0x201,0,0,0x1b67,0x201},
+        {0xe04,0xf444,0xfdb9,0x1004,0x831,0x1016,0x320,0x201,0xfb45,0xf6b7,0xe04,0x1004},
+        {0xe04,0xf345,0xfeb7,0x1004,0x5d3,0x1399,0x1fa,0x201,0xfcca,0xf533,0xe04,0x1004},
+        {0xe00,0xf447,0xfdb9,0x1000,0x991,0x12c9,0x3a6,0x200,0xfb47,0xf6b9,0xe00,0x1000},
+        {0xe00,0xf349,0xfeb7,0x1000,0x6ce,0x16e3,0x24f,0x200,0xfccb,0xf535,0xe00,0x1000},
+        {0x1000,0xf149,0xfeb7,0x1004,0x868,0x15b2,0x1e6,0x201,0xfb88,0xf478,0x1000,0x1004},
+        {0,0,0,0x1000,0,0,0,0x200,0,0,0,0x1000}};
+    ULONG fmt,mode,frame,value,after,i,j,kind=0,words[6],b,g,r;
     NTSTATUS status;
+    status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,&value);
+    if(!NT_SUCCESS(status))return status;
+    if(value&(OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+              OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK))return STATUS_DEVICE_BUSY;
+    status=MmioDcnRead(Device,BC250_REG_DMU_FMT0_FMT_CONTROL,&fmt);
+    if(NT_SUCCESS(status))status=MmioDcnRead(Device,BC250_REG_DMU_MPC_OUT0_CSC_MODE,&mode);
+    if(!NT_SUCCESS(status))return status;
+    fmt=(fmt&FMT0_FMT_CONTROL__FMT_PIXEL_ENCODING_MASK)>>FMT0_FMT_CONTROL__FMT_PIXEL_ENCODING__SHIFT;
+    mode&=MPC_OUT0_CSC_MODE__MPC_OCSC_MODE_MASK;
+    if(fmt>2 || mode>2)return STATUS_NOT_SUPPORTED;
+    status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT,&frame);
+    if(!NT_SUCCESS(status))return status;
+    frame&=OTG0_OTG_STATUS_FRAME_COUNT__OTG_FRAME_COUNT_MASK;
+    for(;;) {
+        status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT,&value);
+        if(!NT_SUCCESS(status))return status;
+        if(((value-frame)&OTG0_OTG_STATUS_FRAME_COUNT__OTG_FRAME_COUNT_MASK)>=2)break;
+        if(*Waited>=BC250_DCN_VISIBILITY_POLL_MAX_US)return STATUS_IO_TIMEOUT;
+        KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
+        *Waited+=BC250_DCNFLIP_POLL_STEP_US;
+    }
+    status=MmioDcnRead(Device,BC250_REG_DMU_MPC_OUT0_CSC_MODE,&after);
+    if(!NT_SUCCESS(status))return status;
+    if((after&MPC_OUT0_CSC_MODE__MPC_OCSC_MODE_MASK)!=mode)return STATUS_DEVICE_BUSY;
+    if(mode) {
+        status=MmioDcnRead(Device,BC250_REG_DMU_MPC_OUT_CSC_COEF_FORMAT,&value);
+        if(!NT_SUCCESS(status))return status;
+        if(value&MPC_OUT_CSC_COEF_FORMAT__MPC_OCSC0_COEF_FORMAT_MASK)return STATUS_NOT_SUPPORTED;
+        for(i=0;i<6;i++) {
+            status=MmioDcnRead(Device,banks[mode-1][i],&words[i]);
+            if(!NT_SUCCESS(status))return status;
+        }
+        for(kind=0;kind<8;kind++) {
+            for(j=0;j<6;j++) {
+                value=(ULONG)matrices[kind][2*j] | ((ULONG)matrices[kind][2*j+1]<<16);
+                if(words[j]!=value)break;
+            }
+            if(j==6)break;
+        }
+        if(kind==8)return STATUS_NOT_SUPPORTED;
+    }
+    status=MmioDcnRead(Device,BC250_REG_DMU_MPC_OUT0_CSC_MODE,&after);
+    if(NT_SUCCESS(status))status=MmioDcnRead(Device,BC250_REG_DMU_FMT0_FMT_CONTROL,&value);
+    if(!NT_SUCCESS(status))return status;
+    if((after&MPC_OUT0_CSC_MODE__MPC_OCSC_MODE_MASK)!=mode ||
+       ((value&FMT0_FMT_CONTROL__FMT_PIXEL_ENCODING_MASK)>>FMT0_FMT_CONTROL__FMT_PIXEL_ENCODING__SHIFT)!=fmt)
+        return STATUS_DEVICE_BUSY;
+    status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,&value);
+    if(!NT_SUCCESS(status))return status;
+    if(value&(OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+              OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK))return STATUS_DEVICE_BUSY;
+    // 0=RGB/444, 1=422, 2=420 (opp1_program_fmt). RGB matrices require 444.
+    if(kind<2 && fmt)return STATUS_NOT_SUPPORTED;
+    b=g=r=kind==1?0x40:0;
+    if(kind>=2) {b=r=0x1f4;g=0x40;if(fmt==2)r=g;}
+    *Color=(b<<OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_B_CB__SHIFT) |
+        (g<<OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_G_Y__SHIFT) |
+        (r<<OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_R_CR__SHIFT);
+    return STATUS_SUCCESS;
+}
+
+// PROVENANCE: Linux AMD display (MIT), optc1_program_blank_color,
+// optc1_set_blank and optc1_set_blank_data_double_buffer. Hardware black keeps
+// sync/timing and source pixels intact. Known black stays programmed while
+// visible, where the color is unused; the next blank revalidates its encoding.
+// Quiet, allocation/lock-free and bounded so restore can also use it at bugcheck.
+static NTSTATUS DcnSetVisibilityCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN OsRequest, BOOLEAN* Touched)
+{
+    ULONG value, waited=0, color, wanted;
+    NTSTATUS status;
+    // A mode commit can restore a surface before the OS grants visibility.
+    // Keep the startup hold through those internal restore calls. The OS DDI
+    // bypasses it without publishing an early release to another caller.
+    if (!OsRequest && InterlockedCompareExchange(&Device->StartVisibilityPending,0,0)) Visible=FALSE;
     // A display-only profile has no hardware ownership to restore. Once MMIO
     // writes are owned, software DcnBlanked is not proof that inherited/live
     // hardware is visible (for example after adapter reinitialization).
     if (Device->Mmio==NULL || !Device->DcnWriteEnabled)
-        return Visible && !Device->DcnBlanked ? STATUS_SUCCESS : STATUS_DEVICE_NOT_READY;
+        return Visible && !Device->DcnBlanked &&
+            !InterlockedCompareExchange(&Device->StartVisibilityPending,0,0) ?
+            STATUS_SUCCESS : STATUS_DEVICE_NOT_READY;
     status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&value);
     if (!NT_SUCCESS(status)) return status;
+    if (!Visible) {
+        const ULONG mask=OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_B_CB_MASK |
+            OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_G_Y_MASK | OTG0_OTG_BLACK_COLOR__OTG_BLACK_COLOR_R_CR_MASK;
+        status=DcnReadBlackColor(Device,&color,&waited);
+        if(NT_SUCCESS(status))status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLACK_COLOR,&wanted);
+        if(!NT_SUCCESS(status))return status;
+        wanted=(wanted&~mask)|color;
+        status=MmioDcnWriteEx(Device,BC250_REG_DMU_OTG0_OTG_BLACK_COLOR,wanted,TRUE);
+        if(!NT_SUCCESS(status))return status;
+        if(Touched)*Touched=TRUE;
+        status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLACK_COLOR,&color);
+        if(!NT_SUCCESS(status))return status;
+        if((color&mask)!=(wanted&mask))return STATUS_DEVICE_DATA_ERROR;
+    }
     if (Visible && !(value & (OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK |
                               OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DE_MODE_MASK |
                               OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)))
@@ -994,6 +1104,7 @@ NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
     if (!Visible) value|=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK;
     status=MmioDcnWriteEx(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,value,TRUE);
     if (!NT_SUCCESS(status)) return status;
+    if(Touched)*Touched=TRUE;
     if (!Visible)
     {
         Device->DcnBlanked=TRUE; // undo remains required even if confirmation fails
@@ -1008,12 +1119,41 @@ NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
         status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL,&value);
         if (!NT_SUCCESS(status)) return status;
         if (((value&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK)!=0)==(!Visible)) break;
-        if (waited>=BC250_DCNFLIP_POLL_MAX_US) return STATUS_IO_TIMEOUT;
+        if (waited>=(Visible?BC250_DCNFLIP_POLL_MAX_US:BC250_DCN_VISIBILITY_POLL_MAX_US)) return STATUS_IO_TIMEOUT;
         KeStallExecutionProcessor(BC250_DCNFLIP_POLL_STEP_US);
         waited+=BC250_DCNFLIP_POLL_STEP_US;
     }
     Device->DcnBlanked=!Visible;
     return STATUS_SUCCESS;
+}
+
+NTSTATUS DcnSetVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
+{
+    return DcnSetVisibilityCore(Device,Visible,FALSE,NULL);
+}
+
+NTSTATUS DcnBeginStartVisibility(_Inout_ BC250_DEVICE* Device, _Out_ BOOLEAN* Touched)
+{
+    ULONG active=0,peer=0;
+    NTSTATUS status;
+    *Touched=FALSE;
+    if(!Device->Mmio || !Device->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
+    status=MmioDcnRead(Device,BC250_REG_DMU_OTG0_OTG_CONTROL,&active);
+    if(NT_SUCCESS(status))status=MmioDcnRead(Device,BC250_REG_DMU_OTG1_OTG_CONTROL,&peer);
+    if(!NT_SUCCESS(status))return status;
+    // This driver owns only OTG0. Do not mutate an inactive or additional pipe.
+    if(!(active&OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK) || (peer&OTG1_OTG_CONTROL__OTG_MASTER_EN_MASK))
+        return STATUS_NOT_SUPPORTED;
+    return DcnSetVisibilityCore(Device,FALSE,FALSE,Touched);
+}
+
+// The PASSIVE_LEVEL visibility DDI owns StartHealth and Connector.Operation.
+// Only a confirmed OS TRUE ends startup blanking; a flip is not that request.
+NTSTATUS DcnSetSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible)
+{
+    NTSTATUS status=DcnSetVisibilityCore(Device,Visible,TRUE,NULL);
+    if (NT_SUCCESS(status) && Visible) InterlockedExchange(&Device->StartVisibilityPending,0);
+    return status;
 }
 
 static NTSTATUS DcnRuntimeSurfaceAuthorized(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible, BOOLEAN Serialized);

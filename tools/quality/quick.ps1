@@ -501,6 +501,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='start-record-before-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordBeforeCleanup');Fails=$true}
   @{n='start-record-any-irql';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-RecordAtAnyIrql');Fails=$true}
   @{n='start-record-log-after-cleanup';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-LogAfterCleanup');Fails=$true}
+  @{n='start-visibility-no-initial-blank';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoInitialBlank');Fails=$true}
+  @{n='start-visibility-no-final-blank';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-NoFinalBlank');Fails=$true}
+  @{n='start-visibility-stop-keeps-hold';s='driver\kmd\test\run_start_record.ps1';a=@('-Root',$Workspace,'-KeepStopVisibilityHold');Fails=$true}
   @{n='guard-start-not-durable';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace,'-IgnoreDurability');Fails=$true}
   @{n='start-health';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace)}
   @{n='start-health-no-flush';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-IgnoreFlush');Fails=$true}

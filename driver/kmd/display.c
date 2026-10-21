@@ -1742,8 +1742,18 @@ static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG
     if (call<=32) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
         call,Visibility->VidPnSourceId,Visibility->Visible,device->SourceVisible,device->VidPnFlipEnabled,device->DcnBlanked);
     if (Visibility->VidPnSourceId != 0) status=STATUS_INVALID_PARAMETER;
-    else if (device->VidPnFlipEnabled) status=DcnSetVisibility(device,Visibility->Visible);
-    else if (!Visibility->Visible && device->SourceVisible && device->Framebuffer != NULL)
+    else if (device->DcnWriteEnabled || device->VidPnFlipEnabled ||
+             InterlockedCompareExchange(&device->StartVisibilityPending,0,0)) {
+        // BD-179: a confirmed OS TRUE is the only release of the startup hold, so the hardware request is
+        // serialized against the HPD worker's restore, which holds only Connector.Operation. The order is
+        // the one CommitVidPn uses: StartHealth, then Connector.Operation. The section covers the hardware
+        // request alone: the BD-195 diagnostic below calls ConnectorLinkNeedsPowerOn, whose contract is
+        // Connector.Operation not held (connector.h), and the publication below needs no hardware.
+        ConnectorOperationAcquire(device);
+        status=DcnSetSourceVisibility(device,Visibility->Visible);
+        ConnectorOperationRelease(device);
+    }
+    else if (!Visibility->Visible && device->Framebuffer != NULL)
         RtlZeroMemory(device->Framebuffer, device->FramebufferLength); // legacy no-MMIO display-only fallback
     if (NT_SUCCESS(status))
     {
@@ -2106,6 +2116,11 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
         (ULONGLONG)post->Width*4>post->Pitch ||
         (ULONGLONG)post->Pitch*post->Height>length)
         return STATUS_DEVICE_NOT_READY;
+    // BD-179: the system display is a distinct owner. A bugcheck during StartDevice
+    // must be able to show its validated handoff surface without an OS TRUE.
+    InterlockedExchange(&device->StartVisibilityPending,0);
+    // The serialized restore entry stays as on main: this callback is one of the OS's
+    // serialized bugcheck/reset entries and must not take the normal writer protocol.
     status=DcnRestorePostDisplaySerialized(device);
     if (!NT_SUCCESS(status)) return status;
     if (!runtime) ModesetRestoreQuiet(device);

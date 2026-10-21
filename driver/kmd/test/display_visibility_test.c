@@ -25,6 +25,7 @@ typedef struct {
     BC250_WDDM* Wddm;
     void *Mmio,*Framebuffer;size_t FramebufferLength;
     BOOLEAN DcnWriteEnabled,DcnBlanked,SourceVisible,VidPnFlipEnabled;
+    volatile LONG StartVisibilityPending;
     volatile LONG VisibilityCalls,CommitPowerCalls,VisibilityLinkOff;
     ULONG VisibilityLastSource;
     BOOLEAN VisibilityLastRequested,CommitLastPowerTransition,CommitLastPoweredOff;
@@ -53,7 +54,10 @@ typedef struct {
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
 #define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
-#define BC250_DCNFLIP_POLL_MAX_US 50000
+#define STATUS_DEVICE_BUSY ((NTSTATUS)0x80000011u)
+#define STATUS_DEVICE_DATA_ERROR ((NTSTATUS)0xC000009Cu)
+#define BC250_DCNFLIP_POLL_MAX_US 50000ul
+#define BC250_DCN_VISIBILITY_POLL_MAX_US 100000ul
 #define BC250_DCNFLIP_POLL_STEP_US 100
 #define RtlZeroMemory(p,n) memset(p,0,n)
 #define ALL_CLEAR (OTG0_OTG_GLOBAL_SYNC_STATUS__VSTARTUP_EVENT_CLEAR_MASK | OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_EVENT_CLEAR_MASK | OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_CLEAR_MASK | OTG0_OTG_GLOBAL_SYNC_STATUS__VREADY_EVENT_CLEAR_MASK)
@@ -62,7 +66,14 @@ static unsigned checks,failures;
 static struct {ULONG sync,blank,dbuf,last_sync;unsigned irq,sync_calls,queues,arms,writes,stalls,hold_blank,ddi_calls;NTSTATUS sync_status;} model;
 static LONGLONG TestQpc;
 static LONG64 TestInterruptTime;
-static int TestReadFail;
+static int TestReadFail, TestWriteFail;
+static int ConnectorHeld;
+static struct {
+    ULONG mode,format,coefficient_format,words[2][6],black,otg0,otg1,frame,update_lock;
+    unsigned freeze_frame,change_mode,mode_reads,readback_bad,fail_after_color,frame_wait,refuse_blank,lock_after_edge,lock_reads;
+} color_model;
+static void ConnectorOperationAcquire(BC250_DEVICE*d){(void)d;CHECK(!ConnectorHeld);ConnectorHeld=1;}
+static void ConnectorOperationRelease(BC250_DEVICE*d){(void)d;CHECK(ConnectorHeld);ConnectorHeld=0;}
 static LONG64 KeQueryInterruptTime(void){return ++TestInterruptTime;}
 static LONG64 InterlockedExchange64(volatile LONG64*p,LONG64 v){LONG64 old=*p;CHECK(model.irq);*p=v;return old;}
 static LONG64 InterlockedCompareExchange64(volatile LONG64*p,LONG64 v,LONG64 c){LONG64 old=*p;if(old==c)*p=v;return old;}
@@ -73,7 +84,8 @@ static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER*frequency)
     value.QuadPart=++TestQpc;return value;
 }
 static NTSTATUS DcnVsyncEnable(BC250_DEVICE*,BOOLEAN);
-static long InterlockedExchange(volatile long*p,long v){long old=*p;CHECK(model.irq);*p=v;return old;}
+static long InterlockedExchange(volatile long*p,long v){long old=*p;*p=v;return old;}
+static long InterlockedCompareExchange(volatile long*p,long v,long expected){long old=*p;if(old==expected)*p=v;return old;}
 static long InterlockedIncrement(volatile long*p){return ++*p;}
 static NTSTATUS MockSync(void*h,BOOLEAN(*f)(void*),void*c,ULONG message,BOOLEAN*out)
 {
@@ -93,13 +105,35 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
     if(reg==BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS){CHECK(model.irq);*out=model.sync;}
     else if(reg==BC250_REG_DMU_OTG0_OTG_BLANK_CONTROL)*out=model.blank;
     else if(reg==BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL)*out=model.dbuf;
+    else if(reg==BC250_REG_DMU_OTG0_OTG_BLACK_COLOR)*out=color_model.black^(color_model.readback_bad?1u:0u);
+    else if(reg==BC250_REG_DMU_OTG0_OTG_CONTROL)*out=color_model.otg0;
+    else if(reg==BC250_REG_DMU_OTG1_OTG_CONTROL)*out=color_model.otg1;
+    else if(reg==BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK){
+        *out=color_model.update_lock;
+        if(color_model.lock_after_edge && ++color_model.lock_reads>1)*out|=OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+    }
+    else if(reg==BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT){
+        if(!color_model.freeze_frame && (!color_model.frame_wait || model.stalls>=color_model.frame_wait))++color_model.frame;
+        *out=color_model.frame;
+    }
+    else if(reg==BC250_REG_DMU_FMT0_FMT_CONTROL)*out=color_model.format;
+    else if(reg==BC250_REG_DMU_MPC_OUT0_CSC_MODE){
+        *out=color_model.mode;
+        if(color_model.change_mode && ++color_model.mode_reads>1)*out^=1;
+    }
+    else if(reg==BC250_REG_DMU_MPC_OUT_CSC_COEF_FORMAT)*out=color_model.coefficient_format;
+    else if(reg>=BC250_REG_DMU_MPC_OUT0_CSC_C11_C12_A && reg<=BC250_REG_DMU_MPC_OUT0_CSC_C33_C34_A)
+        *out=color_model.words[0][(reg-BC250_REG_DMU_MPC_OUT0_CSC_C11_C12_A)/4];
+    else if(reg>=BC250_REG_DMU_MPC_OUT0_CSC_C11_C12_B && reg<=BC250_REG_DMU_MPC_OUT0_CSC_C33_C34_B)
+        *out=color_model.words[1][(reg-BC250_REG_DMU_MPC_OUT0_CSC_C11_C12_B)/4];
     else {CHECK(0);return STATUS_INVALID_PARAMETER;}
     return STATUS_SUCCESS;
 }
 static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEAN quiet)
 {
     CHECK(quiet);
-    if(!d->DcnWriteEnabled)return STATUS_DEVICE_NOT_READY;
+    if(!d->DcnWriteEnabled || TestWriteFail ||
+       (color_model.fail_after_color && reg!=BC250_REG_DMU_OTG0_OTG_BLACK_COLOR))return STATUS_DEVICE_NOT_READY;
     model.writes++;
     if(reg==BC250_REG_DMU_OTG0_OTG_GLOBAL_SYNC_STATUS){
         CHECK(model.irq);CHECK((value&ALL_CLEAR)==OTG0_OTG_GLOBAL_SYNC_STATUS__VUPDATE_NO_LOCK_EVENT_CLEAR_MASK);
@@ -111,7 +145,9 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
         if(value&OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK)
             model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
         if(model.hold_blank)model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
+        if(color_model.refuse_blank)model.blank&=~OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
     } else if(reg==BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL)model.dbuf=value;
+    else if(reg==BC250_REG_DMU_OTG0_OTG_BLACK_COLOR)color_model.black=value;
     else {CHECK(0);return STATUS_INVALID_PARAMETER;}
     return STATUS_SUCCESS;
 }
@@ -134,7 +170,8 @@ static BOOLEAN connectorEnabled,linkNeedsPowerOn;
 static unsigned linkQueries;
 static BOOLEAN ConnectorIsEnabled(BC250_DEVICE*d){(void)d;return connectorEnabled;}
 static BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE*d,BOOLEAN*active,BOOLEAN*connected)
-{(void)d;CHECK(!model.irq);linkQueries++;*active=!linkNeedsPowerOn;*connected=TRUE;return linkNeedsPowerOn;}
+/* connector.h: the production helper takes Connector.Operation itself, so the caller must not hold it. */
+{(void)d;CHECK(!model.irq);CHECK(!ConnectorHeld);linkQueries++;*active=!linkNeedsPowerOn;*connected=TRUE;return linkNeedsPowerOn;}
 /* ACTUAL_SOURCE */
 int main(void)
 {
@@ -232,7 +269,7 @@ int main(void)
         else if(sequence+1==(ULONG)d.VisibilityCalls)CHECK(e->Source==3 && e->Status==STATUS_INVALID_PARAMETER);
         else CHECK(e->Requested==TRUE && e->Status==STATUS_SUCCESS);
     }
-    CHECK(model.stalls==0); // immediate model latch is the positive control, no busy polling required
+    CHECK(model.stalls==5); // two frame reads per hide enclose a complete frame; one model poll each
     // The diagnostic must retain TRUE timeout even after the next FALSE succeeds.
     d.Mmio=&model;d.DcnWriteEnabled=TRUE;d.DcnBlanked=TRUE;d.SourceVisible=FALSE;
     model.blank=OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK|OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
@@ -276,5 +313,94 @@ int main(void)
     CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,TRUE)==STATUS_SUCCESS && w.VSyncEnabled);
     CHECK(Bc250WddmControlInterrupt(&d,DXGK_INTERRUPT_CRTC_VSYNC,FALSE)==STATUS_SUCCESS && !w.VSyncEnabled);
     CHECK(controlNotes==5);
+    // Startup is a hardware hold even when the presenting path uses CPU copy.
+    // An internal surface restore or flip is not an OS visibility request.
+    d.VidPnFlipEnabled=FALSE;d.Mmio=&model;d.DcnWriteEnabled=TRUE;
+    d.StartVisibilityPending=1;d.SourceVisible=FALSE;d.DcnBlanked=FALSE;
+    memcpy(fb,before,sizeof(fb));
+    model.blank=0;model.hold_blank=0;
+    CHECK(DcnSetVisibility(&d,FALSE)==STATUS_SUCCESS);
+    CHECK(d.DcnBlanked && d.StartVisibilityPending && !d.SourceVisible);
+    CHECK(DcnSetVisibility(&d,TRUE)==STATUS_SUCCESS);
+    CHECK(d.DcnBlanked && d.StartVisibilityPending && !d.SourceVisible);
+    CHECK(memcmp(fb,before,sizeof(fb))==0);
+    visible.Visible=TRUE;
+    TestReadFail=1;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_DEVICE_NOT_READY);
+    CHECK(d.StartVisibilityPending && !d.SourceVisible && d.DcnBlanked && !ConnectorHeld);
+    TestReadFail=0;TestWriteFail=1;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_DEVICE_NOT_READY);
+    CHECK(d.StartVisibilityPending && !d.SourceVisible && d.DcnBlanked);
+    TestWriteFail=0;model.hold_blank=1;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_IO_TIMEOUT);
+    CHECK(d.StartVisibilityPending && !d.SourceVisible && d.DcnBlanked);
+    model.hold_blank=0;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_SUCCESS);
+    CHECK(!d.StartVisibilityPending && d.SourceVisible && !d.DcnBlanked && !ConnectorHeld);
+    // No first-flip requirement: explicit OS TRUE released the CPU path.
+    // Missing write ownership cannot release an admitted startup hold.
+    d.StartVisibilityPending=1;d.SourceVisible=FALSE;d.DcnWriteEnabled=FALSE;d.Mmio=NULL;
+    CHECK(Bc250SetVidPnSourceVisibility(&d,&visible)==STATUS_DEVICE_NOT_READY);
+    CHECK(d.StartVisibilityPending && !d.SourceVisible && !ConnectorHeld);
+    // The initial ownership precheck is read-only on unsupported pipes. No
+    // inferred RGB from the framebuffer, and no ignored second active target.
+    {
+        BOOLEAN touched=TRUE;
+        static const ULONG limited[6]={0x00001b67u,0x02010000u,0x1b670000u,0x02010000u,0,0x02011b67u};
+        static const ULONG ycbcr601[6]={0xf4440e04u,0x1004fdb9u,0x10160831u,0x02010320u,0xf6b7fb45u,0x10040e04u};
+        d.Mmio=&model;d.DcnWriteEnabled=TRUE;model.hold_blank=0;
+        memset(&color_model,0,sizeof(color_model));writes=model.writes;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_NOT_SUPPORTED && !touched && model.writes==writes);
+        color_model.otg0=OTG0_OTG_CONTROL__OTG_MASTER_EN_MASK;color_model.otg1=OTG1_OTG_CONTROL__OTG_MASTER_EN_MASK;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_NOT_SUPPORTED && !touched && model.writes==writes);
+        color_model.otg1=0;color_model.black=0xffffffffu;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_SUCCESS && touched);
+        CHECK(color_model.black==0xc0000000u && memcmp(fb,before,sizeof(fb))==0);
+        // RGB limited black is 64/64/64 in the 10-bit OTG fields. The stale
+        // inactive bank must not cause refusal of a recognized active bank.
+        color_model.mode=1;memcpy(color_model.words[0],limited,sizeof(limited));
+        memset(color_model.words[1],0xff,sizeof(limited));
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_SUCCESS && touched);
+        CHECK(color_model.black==0xc4010040u);
+        color_model.mode=2;memcpy(color_model.words[1],ycbcr601,sizeof(ycbcr601));
+        memset(color_model.words[0],0xff,sizeof(limited));
+        // AMD YCbCr CV black is B/R=0x1f4,Y=0x40; the 420 packing has two Ys.
+        for(i=0;i<3;i++) {
+            color_model.format=i<<FMT0_FMT_CONTROL__FMT_PIXEL_ENCODING__SHIFT;
+            CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_SUCCESS && touched);
+            CHECK(color_model.black==(i==2?0xc40101f4u:0xdf4101f4u));
+        }
+        writes=model.writes;color_model.words[1][0]^=1;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_NOT_SUPPORTED && !touched && model.writes==writes);
+        color_model.words[1][0]^=1;color_model.coefficient_format=MPC_OUT_CSC_COEF_FORMAT__MPC_OCSC0_COEF_FORMAT_MASK;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_NOT_SUPPORTED && !touched && model.writes==writes);
+        color_model.coefficient_format=0;color_model.change_mode=1;color_model.mode_reads=0;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_BUSY && !touched && model.writes==writes);
+        color_model.change_mode=0;color_model.mode=3;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_NOT_SUPPORTED && !touched && model.writes==writes);
+        color_model.mode=0;color_model.format=1u<<FMT0_FMT_CONTROL__FMT_PIXEL_ENCODING__SHIFT;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_NOT_SUPPORTED && !touched && model.writes==writes);
+        color_model.format=0;color_model.freeze_frame=1;model.stalls=0;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_IO_TIMEOUT && !touched && model.writes==writes);
+        CHECK(model.stalls==BC250_DCN_VISIBILITY_POLL_MAX_US/BC250_DCNFLIP_POLL_STEP_US);
+        color_model.freeze_frame=0;TestWriteFail=1;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_NOT_READY && !touched && model.writes==writes);
+        TestWriteFail=0;color_model.readback_bad=1;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_DATA_ERROR && touched && model.writes==writes+1);
+        color_model.readback_bad=0;color_model.fail_after_color=1;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_NOT_READY && touched);
+        color_model.fail_after_color=0;color_model.refuse_blank=1;color_model.frame_wait=800;model.stalls=0;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_IO_TIMEOUT && touched);
+        CHECK(model.stalls==1000); // one 100ms budget, including the 80ms color witness
+        color_model.refuse_blank=0;color_model.frame_wait=0;color_model.update_lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+        writes=model.writes;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_BUSY && !touched && model.writes==writes);
+        color_model.update_lock=OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_BUSY && !touched && model.writes==writes);
+        color_model.update_lock=0;color_model.lock_after_edge=1;color_model.lock_reads=0;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_DEVICE_BUSY && !touched && model.writes==writes);
+        color_model.lock_after_edge=0;color_model.frame=OTG0_OTG_STATUS_FRAME_COUNT__OTG_FRAME_COUNT_MASK-1;
+        CHECK(DcnBeginStartVisibility(&d,&touched)==STATUS_SUCCESS && touched); // counter wrap
+    }
     printf("display visibility/sync: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

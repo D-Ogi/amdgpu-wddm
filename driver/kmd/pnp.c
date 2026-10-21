@@ -80,6 +80,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 {
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
     NTSTATUS status;
+    BOOLEAN displayBlankOwned = FALSE;
 
     *NumberOfVideoPresentSources = 0;
     *NumberOfChildren = 0;
@@ -119,6 +120,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     }
     GuardStage(StageStartGuardPassed);
     device->StopDone=FALSE; // Only an admitted start may require hardware unwind.
+    device->SourceVisible=FALSE;
+    InterlockedExchange(&device->StartVisibilityPending,1);
     device->DisplayReservationEnd=0;
     device->RuntimeFramebufferLength=0;
     device->RuntimePostValid=0;
@@ -163,6 +166,16 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
     NoteInterruptResource(device);
     MmioStart(device);      // maps nothing unless the registry gate is open; never fails the start
+    // WDDM 1.2 PnP start: keep sync, but send black regardless of the firmware surface's pixels.
+    // A framebuffer clear cannot enforce that while another owner can still draw into it.
+    GuardStartStep(L"StartDisplayBlank");
+    status=DcnBeginStartVisibility(device,&displayBlankOwned);
+    if (!NT_SUCCESS(status)) {
+        // A read-only admission refusal must not make stop write to an unsupported firmware pipe.
+        // No SMU/GPU/connector owner has started yet. Once a display write succeeds, keep BAR5 for unwind.
+        if (!displayBlankOwned) MmioStop(device);
+        goto failed;
+    }
     HwmonStart(device);     // the board's hardware monitor, read only; same rule, and gated to off
     // Set only after removing the legacy bc250rd mailbox writer. No implicit
     // fallback: full-WDDM startup requires this owner through SmuPrepareClock.
@@ -180,8 +193,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
             GuardLog("smu: native owner start status 0x%08X",status);
             if (!NT_SUCCESS(status)) {
                 GuardStartFailureMark();        // BD-122: the record's log lines end here, not after the cleanup
-                MmioStop(device);
-                DisplayUnmapFramebuffer(device);
+                // The common stop must restore visibility before it unmaps BAR5.
                 goto failed;
             }
         }
@@ -190,8 +202,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     status=ConnectorBufferPrepare(device);
     GuardLog("connector: handoff reservation status %08lX",(ULONG)status);
     DisplayLogFramebufferSample(device);   // after VramStart, so the carve-out view exists when that gate is open
-    // After the sample, so the sample keeps reading what the firmware left, and before WddmStart, so the picture
-    // is on the screen for the whole of the start that follows. Never fails the start (display.c).
+    // The sample keeps what firmware left. The logo keeps its default, but is drawn behind the startup blank;
+    // only the later OS visibility request may expose a frame. Never fails the start (display.c).
     DisplayDrawBootLogo(device);
     GartStart(device);      // same rule
     PspStart(device);       // same rule
@@ -205,9 +217,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         // BD-122: the failure point, before the whole device is torn down below. The stop of a GPU that got this
         // far writes dozens of its own log lines, and the record keeps the 64 that lead up to here.
         GuardStartFailureMark();
-        // Full WDDM may have attempted hardware initialization. Preserve dependency
-        // ordering and retained/quarantined ownership during remaining cleanup.
-        (void)Bc250StopDevice(device);
+        // The common failure path preserves teardown ordering and retained/quarantined ownership.
         goto failed;
     }
     // Capture once before dxgkrnl can enumerate modes or describe a primary.
@@ -216,7 +226,6 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     status=DisplayPrepareInheritedTiming(device);
     if (!NT_SUCCESS(status)) {
         GuardStartFailureMark();        // BD-122: before the teardown of a GPU that started, as above
-        (void)Bc250StopDevice(device);
         goto failed;
     }
     // Display modes (modeset.c): the EDID over DP AUX, the monitor descriptor, the source mode list. After the
@@ -228,11 +237,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     HdmiLinkStartAudio(device,FALSE);
     GuardStage(StageStartMmioDone);
 
-    device->Started = TRUE;
-    *NumberOfVideoPresentSources = 1;
-    *NumberOfChildren = 1;
     InterlockedExchange(&device->RetainedPowerPhase,0);
-    // The initial admission keeps the inherited image. Subsequent HPD events
+    // The initial admission keeps the inherited timing, with visibility held false. Subsequent HPD events
     // go through the passive owner and an OS-selected VidPN transaction.
     GuardStartStep(L"ConnectorStart");
     status=ConnectorStart(device);
@@ -246,6 +252,13 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         status=STATUS_SUCCESS;
     }
     if (!NT_SUCCESS(status)) goto failed;
+    // Connector setup may replace the pipe. Recheck the final output before publishing a successful start.
+    GuardStartStep(L"StartDisplayBlankConfirm");
+    status=DcnSetVisibility(device,FALSE);
+    if (!NT_SUCCESS(status)) goto failed;
+    device->Started = TRUE;
+    *NumberOfVideoPresentSources = 1;
+    *NumberOfChildren = 1;
     StartHealthReady(device,device->FullWddm && GfxStartupResources(device,TRUE));
     // Last: it watches a started device, and it never fails the start (EnableHangBugcheck, hang.c).
     HangDetectorStart(device);
@@ -265,8 +278,15 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
 
 failed:
     // BD-122, first of all and before the cleanup: the failure point of every step that did not mark one itself.
+    GuardLog("start: failing step status 0x%08X before display handoff", status);
     GuardStartFailureMark();
     if (!device->StopDone) (void)Bc250StopDevice(device);
+    // The PnP start contract requires a usable GOP mode on failure. Do not report an ordinary refusal when
+    // we touched display state but failed to return it to the next display driver.
+    if (displayBlankOwned && device->PostDisplayStopAttempted && !NT_SUCCESS(device->PostDisplayStopStatus)) {
+        GuardLog("start: display handoff failed 0x%08X after start failure 0x%08X",device->PostDisplayStopStatus,status);
+        status=STATUS_GRAPHICS_STALE_MODESET;
+    }
     BoardMemoryStop(device);
     BoardMemoryIdentityClear(device);
     StartHealthClose(device);
@@ -295,6 +315,8 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
         GuardLog("stop: teardown already done by the post-display release");
         return STATUS_SUCCESS;
     }
+    // The next display owner needs a visible handoff. This also unwinds a failed start before the first OS TRUE.
+    InterlockedExchange(&device->StartVisibilityPending,0);
     wasStarted=device->Started;
     HangDetectorStop();     // first: a stop may legitimately wait, and the detector must not judge it
     GuardRecordStopBegin(device); // closes health and saves the pre-teardown log without KeepLog

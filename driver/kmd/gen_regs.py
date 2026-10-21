@@ -185,7 +185,7 @@ DCN_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG0_OTG_MASTER_UPD
                        "mmHUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS", "mmOTG0_OTG_TRIGA_MANUAL_TRIG",
                        "mmOTG0_OTG_GLOBAL_SYNC_STATUS",
                        # BD-013: AMD optc1_set_blank, used by dcn201_tg_funcs.
-                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL",
+                       "mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL", "mmOTG0_OTG_BLACK_COLOR",
                        # M15.14 (0.7.216.20): the plane's pixel format per flip (plane_format.h). AMD writes the same
                        # three for a format change: hubp1_program_pixel_format (SURFACE_PIXEL_FORMAT, crossbar),
                        # dpp201_cnv_setup (CNVC_SURFACE_PIXEL_FORMAT). The firmware's values with those fields
@@ -226,6 +226,12 @@ DCN_TIMING_READ_REGISTERS = ["mmOTG0_OTG_H_BLANK_START_END", "mmDP_DTO0_PHASE", 
 DCN_TIMING_READ_REGISTERS += [f"mmDIG{n}_{r}" for n in range(2)
     for r in ("DIG_FE_CNTL", "DIG_BE_CNTL", "DIG_BE_EN_CNTL")]
 DCN_PRIVATE_READ_REGISTERS += DCN_TIMING_READ_REGISTERS + ["mmOTG0_OTG_BLANK_CONTROL", "mmOTG0_OTG_DOUBLE_BUFFER_CONTROL"]
+# Startup black uses the active standard output CSC, never an assumed RGB wire encoding.
+# AMD DC mpc2_set_output_csc / color_space_to_black_color / optc1_program_blank_color (MIT).
+DCN_PRIVATE_READ_REGISTERS += ["mmOTG0_OTG_BLACK_COLOR", "mmFMT0_FMT_CONTROL",
+    "mmMPC_OUT0_CSC_MODE", "mmMPC_OUT_CSC_COEF_FORMAT"] + [
+    f"mmMPC_OUT0_CSC_{pair}_{bank}" for bank in ("A", "B")
+    for pair in ("C11_C12", "C13_C14", "C21_C22", "C23_C24", "C31_C32", "C33_C34")]
 # M15.14 (0.7.216.20): the plane's pixel format registers (plane_format.h), read at start to decode the firmware's
 # format and on restore to verify it; MPCC0_MPCC_CONTROL, CNVC_CFG0_FORMAT_CONTROL and CNVC_CFG0_ALPHA_2BIT_LUT
 # for the start log only (the blend mode, ALPHA_EN and the 2-bit alpha table decide whether a surface's alpha

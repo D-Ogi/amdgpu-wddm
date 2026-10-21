@@ -27,6 +27,7 @@ typedef struct {
  int Rotation,Smu,Hwmon,GartLock,GfxPagingLock,GfxAccessLock,GfxAccessDrained,GfxRetireEvent,GfxAccessClosed,PspSessionLock;
  BOOLEAN StopDone,GpuStopUnconfirmed,Started,InheritedSignalValid,SystemDisplayReady,PostDisplayStopAttempted;
  LONG PostDisplayStopStatus;
+ volatile LONG StartVisibilityPending;
  int ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm;
  int ConnectorInitialized,ConnectorDrained,ConnectorBufferFreed,ConnectorDestroyed;
 } BC250_DEVICE;
@@ -100,6 +101,7 @@ static void ConnectorInitialize(BC250_DEVICE* device) {
 }
 static NTSTATUS ConnectorStop(BC250_DEVICE* device) {
  CHECK(device->ConnectorInitialized && !device->ConnectorDestroyed);
+ CHECK(!device->StartVisibilityPending);
  device->ConnectorDrained=1; touch(); return connectorStopResult;
 }
 static void ConnectorBufferRelease(BC250_DEVICE* device) {
@@ -130,14 +132,17 @@ int main(void) {
  failAllocation=1; CHECK(Bc250AddDevice(&pdoA,&a)==STATUS_INSUFFICIENT_RESOURCES); CHECK(!a && !touches);
  failAllocation=0; CHECK(Bc250AddDevice(&pdoA,&a)==0); before=touches;
  CHECK(Bc250AddDevice(&pdoB,&b)==STATUS_DEVICE_BUSY); CHECK(!b && touches==before);
- unknown.PhysicalDeviceObject=&pdoB;
+ unknown.PhysicalDeviceObject=&pdoB;unknown.StartVisibilityPending=1;
  CHECK(Bc250StopDevice(&unknown)==0); CHECK(touches==before); CHECK(Bc250RemoveDevice(&unknown)==0); CHECK(touches==before);
+ CHECK(unknown.StartVisibilityPending==1);
  // Simulate a failed start after partial initialization: real Stop and Remove unwind it.
  ((BC250_DEVICE*)a)->StopDone=FALSE; ((BC250_DEVICE*)a)->Started=FALSE;
+ ((BC250_DEVICE*)a)->StartVisibilityPending=1;
  CHECK(Bc250StopDevice(a)==0); CHECK(AdapterOwnerIs(&pdoA)); before=touches;
  CHECK(Bc250AddDevice(&pdoB,&b)==STATUS_DEVICE_BUSY); CHECK(touches==before);
  // Same context restarts; retained power does not release ownership.
  ((BC250_DEVICE*)a)->StopDone=FALSE; ((BC250_DEVICE*)a)->Started=TRUE;
+ ((BC250_DEVICE*)a)->StartVisibilityPending=1;
  CHECK(AdapterOwnerIs(&pdoA)); CHECK(Bc250StopDevice(a)==0); CHECK(Bc250RemoveDevice(a)==0);
  CHECK(!AdapterOwnerIs(&pdoA));
  // Add followed directly by Remove must not attempt hardware teardown.

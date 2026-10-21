@@ -30,6 +30,7 @@ typedef struct _BC250_DEVICE {
     SIZE_T RuntimeFramebufferLength;
     PHYSICAL_ADDRESS RuntimeFramebufferPhysical;
     volatile long RuntimeDisplayChanged,RuntimePostValid,RuntimePlaneBlank;
+    volatile long StartVisibilityPending;
     BOOLEAN DcnWriteEnabled,DcnFirmwareKnown,DcnDiverged,SystemDisplayReady,DcnBlanked;
     ULONG DcnFirmwarePitch,DcnCurrentPitch;
     ULONGLONG DcnFirmwareAddress,DcnCurrentAddress;
@@ -51,13 +52,15 @@ typedef struct _BC250_DEVICE {
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
 #define STATUS_IO_TIMEOUT ((NTSTATUS)0xC00000B5u)
 #define STATUS_NOT_SUPPORTED ((NTSTATUS)0xC00000BBu)
+#define STATUS_DEVICE_DATA_ERROR ((NTSTATUS)0xC000009Cu)
 #define NT_SUCCESS(s) ((s)>=0)
 #define BC250_CHILD_UID 0x250001
 #define D3DDDI_ID_UNINITIALIZED 0xffffffffu
 #define D3DDDIFMT_UNKNOWN 0
 #define D3DDDIFMT_X8R8G8B8 22
 #define D3DDDIFMT_A8R8G8B8 21
-#define BC250_DCNFLIP_POLL_MAX_US 50000
+#define BC250_DCNFLIP_POLL_MAX_US 50000ul
+#define BC250_DCN_VISIBILITY_POLL_MAX_US 100000ul
 #define BC250_DCNFLIP_POLL_STEP_US 100
 #define UNREFERENCED_PARAMETER(x) ((void)(x))
 #define min(a,b) ((a)<(b)?(a):(b))
@@ -66,7 +69,7 @@ typedef struct _BC250_DEVICE {
 static unsigned checks,failures;
 #define CHECK(x) do {++checks;if(!(x)){++failures;printf("FAIL %d: %s\n",__LINE__,#x);}}while(0)
 static struct {
-    ULONG pitch,flip,surface,high,blank,dbuf,hubp;
+    ULONG pitch,flip,surface,high,blank,dbuf,hubp,black,frame;
     unsigned blank_reads,unstable_blank;
     ULONG config,crossbar,cnvc;unsigned format_reads,format_writes;   /* M15.14: the plane format registers */
     ULONGLONG requested,scanned;
@@ -87,6 +90,10 @@ static NTSTATUS MmioDcnRead(const BC250_DEVICE*d,ULONG reg,ULONG*out)
         break;
     case BC250_REG_DMU_HUBP0_DCHUBP_CNTL:*out=model.hubp;break;
     case BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL:*out=model.dbuf;break;
+    case BC250_REG_DMU_OTG0_OTG_BLACK_COLOR:*out=model.black;break;
+    case BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT:*out=++model.frame;break;
+    case BC250_REG_DMU_FMT0_FMT_CONTROL:*out=0;break;
+    case BC250_REG_DMU_MPC_OUT0_CSC_MODE:*out=0;break;
     case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:*out=model.locked?OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK:0;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:*out=model.flip;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL:*out=model.surface;break;
@@ -113,6 +120,7 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE*d,ULONG reg,ULONG value,BOOLEA
         if(value&OTG0_OTG_BLANK_CONTROL__OTG_BLANK_DATA_EN_MASK)model.blank|=OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK;
         break;
     case BC250_REG_DMU_OTG0_OTG_DOUBLE_BUFFER_CONTROL:model.dbuf=value;break;
+    case BC250_REG_DMU_OTG0_OTG_BLACK_COLOR:model.black=value;break;
     case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:model.locked=value!=0;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:model.flip=value;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL:model.surface=value;break;
@@ -285,7 +293,9 @@ int main(void)
     CHECK(!d.DcnBlanked && !model.blank && !plane_is_blank);
     model.never_latch=1;model.elapsed=0;model.scanned=0;
     CHECK(DcnRuntimeSurface(&d,TRUE)==STATUS_IO_TIMEOUT);
-    CHECK(d.RuntimePlaneBlank && plane_is_blank && plane_unblanks==4 && model.elapsed==50000);
+    // The surface poll has its original 50 ms bound; initial and cleanup black
+    // each observe a full model frame with one 100 us counter poll.
+    CHECK(d.RuntimePlaneBlank && plane_is_blank && plane_unblanks==4 && model.elapsed==50200);
     CHECK(d.DcnBlanked && (model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
     {
         BC250_LINK_SURFACE saved,refused;
@@ -387,5 +397,14 @@ int main(void)
             CHECK(writer.resumes==(serialized?0u:1u));   /* only the serialized OS callbacks skip the writer gate */
         }
     }
+    // Ordinary restore cannot bypass startup blanking, but a validated crash
+    // display is an explicit ownership transfer and must remain available.
+    init(&d,fb);plane_is_blank=0;d.StartVisibilityPending=1;
+    CHECK(DcnRestorePostDisplay(&d)==STATUS_SUCCESS);
+    CHECK(d.StartVisibilityPending && d.DcnBlanked);
+    CHECK(Bc250SystemDisplayEnable(&d,3,NULL,&width,&height,&fmt)==STATUS_NOT_SUPPORTED);
+    CHECK(d.StartVisibilityPending && d.DcnBlanked);
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
+    CHECK(!d.StartVisibilityPending && !d.DcnBlanked && d.SystemDisplayReady);
     printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

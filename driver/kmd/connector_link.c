@@ -745,7 +745,7 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
         LINK_CALL(c,BC250_LINK_UNBLANK,Bc250DpStreamUnblank(&c->Io,m->Timing.PixelClockKhz,m->Rate));
     }
     LINK_CALL(c,BC250_LINK_UNBLANK,Bc250Dcn201OutputBlank(&c->Io,m->Timing.HActive,m->Timing.VActive,
-        Restore && !Restore->Visible));
+        Restore && !Restore->Visible && !InterlockedCompareExchange(&d->StartVisibilityPending,0,0)));
     if(m->Protocol==BC250_LINK_HDMI) {
         LINK_CALL(c,BC250_LINK_HDMI_MUTE,Bc250HdmiStreamMute(&c->Hdmi,0)?STATUS_IO_DEVICE_ERROR:STATUS_SUCCESS);
     }
@@ -755,7 +755,9 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
     InterlockedExchange(&d->Modeset.SourceWidth,(LONG)m->Timing.HActive);
     InterlockedExchange(&d->Modeset.SourceHeight,(LONG)m->Timing.VActive);
     d->Modeset.Scaling=BC250_SCALING_IDENTITY;
-    d->SourceVisible=Restore?c->RecoveryVisible:TRUE;d->ModeActive=Restore?c->RecoveryModeActive:TRUE;
+    d->SourceVisible=InterlockedCompareExchange(&d->StartVisibilityPending,0,0)?FALSE:
+        (Restore?c->RecoveryVisible:TRUE);
+    d->ModeActive=Restore?c->RecoveryModeActive:TRUE;
     GuardLog("connector-link: enabled generation %lu protocol %lu %lux%lu pitch %lu pixel %lu kHz lanes %lu rate %lu",
         c->Generation,m->Protocol,m->Timing.HActive,m->Timing.VActive,m->Pitch,m->Timing.PixelClockKhz,
         m->Lanes,m->Rate);

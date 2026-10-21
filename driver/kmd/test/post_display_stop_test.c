@@ -28,6 +28,7 @@ typedef struct {
     BOARD_BLOCK Smu,Hwmon;
     int Started,ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm,SystemDisplayReady;
     volatile long DcnVsyncArmed;
+    volatile long StartVisibilityPending;
     BOOLEAN InheritedSignalValid;
     BOOLEAN PostDisplayStopAttempted;
     NTSTATUS PostDisplayStopStatus;
@@ -77,7 +78,7 @@ static void InterlockedExchangePointer(BC250_WDDM**p,void*v){*p=v;}
 static NTSTATUS DcnVsyncEnable(BC250_DEVICE*d,BOOLEAN on){(void)d;CHECK(!on);return STATUS_SUCCESS;}
 static void KeFlushQueuedDpcs(void){model.joined++;}
 static NTSTATUS DcnStop(BC250_DEVICE*d)
-{ CHECK(model.smu && d->Framebuffer);CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);CHECK(model.objects==0 && model.vidmm==0);model.restores++;return model.result; }
+{ CHECK(d->StartVisibilityPending==0);CHECK(model.smu && d->Framebuffer);CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);CHECK(model.objects==0 && model.vidmm==0);model.restores++;return model.result; }
 static void VidMmStop(void){CHECK(model.joined && model.restores==1);model.vidmm++;}
 static void WddmSummaryOf(BC250_WDDM*w){(void)w;}
 static int IsListEmpty(LIST_ENTRY*h){return h->Flink==h;}
@@ -92,7 +93,7 @@ static void GuardRecordStopDone(void){CHECK(model.unmaps==1);}
 /* board_memory_service.c, board_memory_identity.c: the stop path ends the board memory operation and
    drops the captured identity. Neither one is what this test is about. */
 static void BoardMemoryStop(BC250_DEVICE*d){(void)d;}
-static NTSTATUS ConnectorStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.unmaps==0);return STATUS_SUCCESS;}
+static NTSTATUS ConnectorStop(BC250_DEVICE*d){CHECK(d->StartVisibilityPending==0);CHECK(model.smu==0 && model.unmaps==0);return STATUS_SUCCESS;}
 static void ConnectorBufferRelease(BC250_DEVICE*d){CHECK(model.restores==1);d->RuntimeFramebuffer=NULL;}
 static void BoardMemoryIdentityClear(BC250_DEVICE*d){CHECK(!d->Smu.BoardAllowed && !d->Hwmon.BoardAllowed);}
 static void GuardStage(int s){(void)s;}
@@ -161,6 +162,7 @@ static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
     memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;cpuStopped=0;
     memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;releases=0;memset(post,0xab,sizeof(post));
     d->Wddm=w;d->Framebuffer=post;d->FramebufferLength=sizeof(post);d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;d->Started=1;
+    d->StartVisibilityPending=1;
     ownerIdentity=&ownedPdo;d->PhysicalDeviceObject=&ownedPdo;d->Smu.BoardAllowed=d->Hwmon.BoardAllowed=TRUE;
     d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress=0x470000000ull;
     w->Objects.Flink=w->Objects.Blink=&o->Link;o->Link.Flink=o->Link.Blink=&w->Objects;
@@ -216,7 +218,7 @@ int main(void)
         memset(&info,0xcc,sizeof(info));
         CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(i==3?NULL:&d,BC250_CHILD_UID,&info)==STATUS_DEVICE_NOT_READY);
         CHECK(model.smu==0 && model.joined==0 && model.restores==0 && model.unmaps==0 && model.objects==0 && model.hdmiStops==0);
-        CHECK(d.Started && !d.StopDone && d.Smu.BoardAllowed && d.Hwmon.BoardAllowed && postIs(0xab));
+        CHECK(d.Started && !d.StopDone && d.StartVisibilityPending==1 && d.Smu.BoardAllowed && d.Hwmon.BoardAllowed && postIs(0xab));
         CHECK(info.Width==0 && info.Height==0 && info.Pitch==0 && info.PhysicAddress==0 && stopEpisodes==5);
     }}
     // A final failed encoder restore cannot be reported as a successful handoff.
