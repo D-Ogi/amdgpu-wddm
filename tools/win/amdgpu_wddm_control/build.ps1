@@ -84,7 +84,7 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
     'GameLog.cs', 'HangRecord.cs',
     'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs', 'DriverState.cs',
-    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs' |
+    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs', 'ClosureNotice.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 # The start of the window: the order of the loading window and the guard against a second window (Launch.cs).
 $pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
@@ -336,6 +336,11 @@ if (-not $NoSmoke) {
     $params = 'HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters'
     $expect = [ordered]@{
         'reopen-gpu-path' = @(0, "set $params EnableGpuPresentBlit = 1 (DWord)", "delete $params InteropClosedReason")
+        # BD-181: the same unclean end closed the clock as well, so the one action puts both back and removes the
+        # record of the close. This snapshot has no DpmClosedReason (a driver before 0.7.208.1), so the legacy
+        # record DpmLastReason 4 names the closure and nothing deletes it: that record belongs to the last start.
+        'reopen-closed'   = @(0, "set $params EnableGpuPresentBlit = 1 (DWord)", "set $params EnableCddDwmInterop = 1 (DWord)",
+                              "set $params DpmMode = 1 (DWord)", "delete $params InteropClosedReason", 'at the next restart of Windows')
         'desktop-gpu'     = @(3, 'refused: The GPU desktop path is closed for this start')
         'desktop-cpu'     = @(3, 'refused: The desktop already runs on the CPU route')
         'confirm-start'   = @(0, 'confirm this driver start', 'undo: no')
@@ -725,6 +730,17 @@ if (-not $NoSmoke) {
     $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
     $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
     $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
+    # BD-181: the notice card of Home, in the four languages. This fixture is the state unit A was left in after the
+    # 0x116 of 2026-10-15 01:05Z: the driver closed the GPU desktop path and the automatic clock at the 01:12:22Z
+    # start and left the durable record of each (InteropClosedReason 4, DpmClosedReason 4), so later starts read the
+    # zeros as "not requested" and the desktop stayed on the processor. The BD-059 runs above draw the same card from
+    # the legacy record (DpmLastReason), which is how a driver before 0.7.208.1 leaves the clock.
+    $closed = Join-Path $here 'test\snapshot-bd181.json'
+    foreach ($lang in 'en', 'pl', 'ja', 'ko') {
+        $runs += , @("$lang-1-closed", '1', '--lang', $lang, '--fixture', "`"$closed`"")
+    }
+    $runs += , @('ja-1.5-closed-text150', '1.5', '--lang', 'ja', '--text-scale', '1.5', '--fixture', "`"$closed`"")
+    $runs += , @('en-1-closed-work800x600', '1', '--work-area', '800x600', '--fixture', "`"$closed`"")
     # G-SMALL, the owner's rule of 2026-10-12: the five working areas of a tester's screen, in logical units. The
     # four small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the
     # page width are checked in every one of them, which is what an 800x600 screen needed (GitHub #38).

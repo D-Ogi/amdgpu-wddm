@@ -57,12 +57,32 @@ namespace AmdgpuWddmControl
         {
             var p = Frame("home", width);
             if (_status == null) ComputeStatus();
+            // BD-181: after an unclean end the driver closes the faster desktop and the automatic clock by itself,
+            // and before this card nothing said so: the desktop was slower at every start and the way back was two
+            // actions on two pages. The notice is the first thing on Home, in ordinary words, with one button.
+            if (_status.Notice != null)
+            {
+                var notice = new CardPanel(_status.Notice.Title, width);
+                notice.Body.Controls[0].ForeColor = SeverityColor("attention");
+                Mark("home.notice", notice);
+                notice.Add(Ui.Label(_status.Notice.What, null, null, notice.Inner));
+                foreach (var line in _status.Notice.Items) notice.Add(Ui.Label("-  " + line, Theme.Bold, null, notice.Inner));
+                notice.Add(Ui.Label(_status.Notice.Cost, null, null, notice.Inner));
+                notice.Add(Ui.Dim(_status.Notice.Effect, notice.Inner));
+                var act = _status.Notice.Action;
+                notice.Add(Ui.Button(_status.Notice.ActionLabel, (s, e) => StatusAction(act), true));
+                p.Controls.Add(notice);
+            }
             var status = new CardPanel(_status.Title, width);
             status.Body.Controls[0].ForeColor = SeverityColor(_status.Severity);
             Mark("home.status", status);
             if (_status.Items.Count == 0) status.Add(Ui.Label(Strings.T("status.ok-detail"), null, null, status.Inner));
+            // Every line of this card is in the notice above it (BD-181): the card keeps the verdict and points up,
+            // instead of repeating the sentences or standing empty.
+            else if (_status.Items.All(i => i.Hidden)) status.Add(Ui.Label(Strings.T("status.see-notice"), null, null, status.Inner));
             foreach (var item in _status.Items)
             {
+                if (item.Hidden) continue;
                 status.Add(Ui.Label(item.Text, Theme.Bold, SeverityColor(item.Severity), status.Inner));
                 if (item.Next != null) status.Add(Ui.Dim(item.Next, status.Inner));
                 if (item.Action != null)

@@ -139,6 +139,9 @@ status.cu-not-saved|mt|037918da|40 コアの確認を保存できませんでし
 status.cu-not-saved.next|mt|6f88d8db|次回の起動で使用される設定は、グラフィックス ページに表示されます。
 status.gpu-desktop-closed|mt|28c255e8|予期しないシャットダウンの後、デスクトップは安全で低速な方法を使用しています。
 status.gpu-desktop-closed.next|mt|532da758|高速なデスクトップを再びオンにしてください。次回 Windows を再起動した後に適用されます。
+status.clock-closed|mt|9e869628|予期しないシャットダウンの後、グラフィックチップは基本の速度のままです。
+status.clock-closed.next|mt|4d22397b|フルスピードを再びオンにしてください。次回 Windows を再起動した後に適用されます。
+status.see-notice|mt|695ddac6|上の通知に、何が起きたのか、どう元に戻すのかが書かれています。
 status.desktop-replaced|mt|9db01528|このセッションで Windows がデスクトップを再起動しました。Windows を再起動するまで、一部のアプリがマウス クリックに反応しない場合があります。
 status.desktop-replaced.next|mt|1cabfb01|作業内容を保存して、Windows を再起動してください。
 status.pending-restart|mt|4453aecf|Windows の再起動を待っています：{0}。
@@ -155,6 +158,7 @@ status.update-available|mt|2d79e5cb|新しいドライバー リリースが利�
 status.action.restart|mt-safe|32c8ac84|Windows を再起動...
 status.action.confirm-start|mt-safe|e9d08826|今回の起動を確認
 status.action.reopen-gpu-path|mt|05dc8cea|高速なデスクトップを再びオンにする...
+status.action.reopen-closed|mt|c425247d|すべて元に戻す...
 status.action.cu-confirm|mt-safe|429c630b|40 コアを確認
 status.action.repair|mt-safe|c5ec5fc0|修復...
 status.action.graphics|mt-safe|4d922cbd|グラフィックスを開く
@@ -210,6 +214,7 @@ game.origin.game|mt-safe|0d27941d|このゲーム用に設定
 game.state.partial|mt-safe|b2524367|一部オン (カスタム)
 # ---- confirmation dialogs (WU-053) ----
 plan.title.reopen-gpu-path|mt|b10076e7|高速なデスクトップを再びオンにする
+plan.title.reopen-closed|mt|eb783672|オフになったものを元に戻す
 plan.title.desktop-gpu|mt-safe|b1b92ad5|グラフィックス チップでデスクトップを表示
 plan.title.desktop-cpu|mt-safe|85985462|安全な方法でデスクトップを表示
 plan.title.confirm-start|mt-safe|e9d08826|今回の起動を確認
@@ -403,6 +408,12 @@ home.start.2|mt|c551f885|ゲームに問題がある場合は、ゲーム ペー
 home.start.3|mt|fec0203b|ヘルプには、よくある問題の解決手順があります。
 home.start.dismiss|mt-safe|0a82387a|了解、非表示にする
 home.recent.title|mt-safe|6c30b7fc|最近のゲーム
+home.closed.title|mt|e56fe58e|グラフィックは安全な設定で動作しています
+home.closed.what|mt|cf1397fd|グラフィックがデスクトップを描いている間に Windows が予期せず停止しました。このコンピューターを安全に復帰させるため、ドライバーが次の項目を自動で安全な設定に戻しました:
+home.closed.desktop|mt|bf712fa9|デスクトップはグラフィックチップではなくプロセッサーが描いています。
+home.closed.clock|mt|a1bf73f2|グラフィックチップは基本の速度のままです。
+home.closed.cost|mt|26723ef9|すべて動作しますが、デスクトップは遅く感じられ、ウィンドウを動かすと縞が出ることがあり、ゲームのフレーム数も下がります。元に戻すまで、コンピューターを起動するたびにこの状態が続きます。
+home.closed.effect|mt|0271d4d0|クリック一回ですべて元に戻ります。次回 Windows を再起動した後に適用されます。
 home.recent.none|mt|73f0a6d1|まだゲームはありません。起動したゲームがここに表示されます。
 home.recent.off|mt|965bacdf|起動したゲームの記憶はオフになっています (設定)。
 home.recent.settings|mt-safe|74a883a0|設定

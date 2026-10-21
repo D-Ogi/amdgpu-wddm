@@ -141,6 +141,9 @@ status.cu-not-saved|rev|037918da|Nie udało się zapisać potwierdzenia 40 rdzen
 status.cu-not-saved.next|rev|6f88d8db|Strona Grafika pokazuje, czego użyje następne uruchomienie.
 status.gpu-desktop-closed|rev|28c255e8|Po nieoczekiwanym wyłączeniu pulpit działa w bezpieczny i wolniejszy sposób.
 status.gpu-desktop-closed.next|rev|532da758|Włącz z powrotem szybszy pulpit. Zmiana zacznie działać po następnym ponownym uruchomieniu systemu Windows.
+status.clock-closed|mt|9e869628|Po nieoczekiwanym wyłączeniu układ graficzny pozostaje na podstawowej szybkości.
+status.clock-closed.next|mt|4d22397b|Włącz z powrotem pełną szybkość. Zmiana zacznie działać po następnym ponownym uruchomieniu systemu Windows.
+status.see-notice|mt|695ddac6|Powyższa informacja wyjaśnia, co się stało i jak to przywrócić.
 status.desktop-replaced|rev|9db01528|Windows ponownie uruchomił pulpit w tej sesji. Niektóre aplikacje mogą nie reagować na kliknięcia myszą do czasu ponownego uruchomienia systemu Windows.
 status.desktop-replaced.next|rev|1cabfb01|Zapisz swoją pracę i uruchom ponownie system Windows.
 status.pending-restart|rev|4453aecf|Czeka na ponowne uruchomienie systemu Windows: {0}.
@@ -157,6 +160,7 @@ status.update-available|rev|2d79e5cb|Dostępne jest nowsze wydanie sterownika.
 status.action.restart|rev|32c8ac84|Uruchom ponownie system Windows...
 status.action.confirm-start|rev|e9d08826|Potwierdź to uruchomienie
 status.action.reopen-gpu-path|rev|05dc8cea|Włącz z powrotem szybszy pulpit...
+status.action.reopen-closed|mt|c425247d|Włącz wszystko z powrotem...
 status.action.cu-confirm|rev|429c630b|Potwierdź 40 rdzeni
 status.action.repair|rev|c5ec5fc0|Napraw...
 status.action.graphics|rev|4d922cbd|Otwórz stronę Grafika
@@ -212,6 +216,7 @@ game.origin.game|rev|0d27941d|Ustawione dla tej gry
 game.state.partial|rev|b2524367|Częściowo włączone (niestandardowe)
 # ---- confirmation dialogs (WU-053) ----
 plan.title.reopen-gpu-path|rev|b10076e7|Włącz z powrotem szybszy pulpit
+plan.title.reopen-closed|mt|eb783672|Przywróć to, co zostało wyłączone
 plan.title.desktop-gpu|rev|b1b92ad5|Pulpit na układzie graficznym
 plan.title.desktop-cpu|rev|85985462|Pulpit w bezpieczny sposób
 plan.title.confirm-start|rev|e9d08826|Potwierdź to uruchomienie
@@ -405,6 +410,12 @@ home.start.2|rev|c551f885|Jeśli gra sprawia problemy, otwórz stronę Gry i spr
 home.start.3|rev|fec0203b|Na stronie Pomoc znajdziesz instrukcje krok po kroku dotyczące typowych problemów.
 home.start.dismiss|rev|0a82387a|Rozumiem, ukryj
 home.recent.title|rev|6c30b7fc|Ostatnie gry
+home.closed.title|mt|e56fe58e|Grafika działa w bezpiecznych ustawieniach
+home.closed.what|mt|cf1397fd|System Windows zatrzymał się nieoczekiwanie, gdy grafika rysowała pulpit. Aby bezpiecznie przywrócić ten komputer, sterownik sam przełączył te rzeczy na bezpieczne ustawienia:
+home.closed.desktop|mt|bf712fa9|Pulpit rysuje procesor, a nie układ graficzny.
+home.closed.clock|mt|a1bf73f2|Układ graficzny pozostaje na podstawowej szybkości.
+home.closed.cost|mt|26723ef9|Wszystko działa, ale pulpit jest wolniejszy, w przesuwanych oknach mogą pojawiać się pasy, a gry mają mniej klatek. Tak będzie przy każdym uruchomieniu komputera, dopóki nie włączysz tego z powrotem.
+home.closed.effect|mt|0271d4d0|Jedno kliknięcie włącza wszystko z powrotem. Zmiana zacznie działać po następnym ponownym uruchomieniu systemu Windows.
 home.recent.none|rev|73f0a6d1|Nie ma jeszcze gier. Uruchamiane gry pojawią się tutaj.
 home.recent.off|rev|965bacdf|Zapamiętywanie uruchomionych gier jest wyłączone (Ustawienia).
 home.recent.settings|rev|74a883a0|Ustawienia

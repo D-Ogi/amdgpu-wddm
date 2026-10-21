@@ -1334,6 +1334,7 @@ static partial class UnitTests
         NoDwmRestart(args[0]);
         RecoveryRules(args[0], header, args.Length == 2 ? args[1] : null);
         PlanAdditions(args[0]);
+        ClosureTests(args[0]);
         StartNoticeTests(args[0]);
         StartWindowHostTests();
         LaunchTests(args[0]);

@@ -408,6 +408,11 @@ namespace AmdgpuWddmControl
 
         // The only values an action or an undo may write. Never: the temperature limits, firmware paths, the other
         // KMD service values, BIOS or firmware settings, test signing.
+        // InteropClosedReason is a driver record that an administrator may delete and nobody but the driver writes
+        // (driver/state/catalog.json, access admin_clear); a plan only ever deletes it. DpmClosedReason is not here:
+        // its access is "driver", the state client refuses a delete from user mode, and the driver deletes it by
+        // itself at the next start that reads a DpmMode other than 0 (driver/kmd/dpm.c, clear_closed). The catalog
+        // test (ClosureTests) holds this list to the catalog's access rules.
         public static readonly string[] ParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost", BootLogoSetting.ValueName };
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
@@ -424,6 +429,9 @@ namespace AmdgpuWddmControl
         public const string OperatorEscape = "restart-compositor";
 
         public static readonly string[] Actions = { "reopen-gpu-path", "desktop-gpu", "desktop-cpu", "confirm-start", "enable-dpm", "set-clocks", "reset-defaults", "undo",
+            // The one click back from everything the driver closed by itself after an unclean end (BD-181): the same
+            // set a repair install reopens, in one action. The single actions above stay as they are.
+            ClosureNotice.ActionName,
             // The one click back from Microsoft Basic Display after the driver's guard refused a start: the count of
             // unconfirmed starts to zero, then the graphics device started again (RecoveryActions.EnableDriver).
             "enable-driver",
@@ -1284,6 +1292,43 @@ namespace AmdgpuWddmControl
                     else
                         p.Notes.Add((bd059 == false ? "Known issue BD-059" : "Known issue BD-059 of drivers before 0.7.198") +
                             ": a restart while the desktop runs on the GPU route can close the path again. The desktop stays on the route set under Desktop composition.");
+                    break;
+
+                case ClosureNotice.ActionName:
+                    // BD-181: everything the driver closed by itself after an unclean end, in one action. The set
+                    // and the rule are the repair install's (ClosureNotice.cs): only a value with the driver's own
+                    // record next to it, only a value the installed release names a default for, and nothing more.
+                    p.Title = "Reopen what the driver closed";
+                    p.Effect = "at the next restart of Windows";
+                    if (s.DefaultParameters == null)
+                        return Refuse(p, "The installed release has no list of default settings" + (s.DefaultsError != null ? " (" + s.DefaultsError + ")" : "") +
+                            ". Run the release installer again to reopen them.");
+                    var shut = ClosureNotice.Find(s);
+                    if (shut.Count == 0) return Refuse(p, "The driver has closed nothing by itself: there is nothing to reopen.");
+                    var marks = new List<string>();
+                    foreach (var c in shut)
+                    {
+                        if (!p.Writes.Any(w => string.Equals(w.Name, c.Name, StringComparison.Ordinal)))
+                            p.Writes.Add(RegWrite.Dword(ParametersPath, c.Name, c.Default));
+                        foreach (var m in c.Clear)
+                            if (s.P(m) != null && !marks.Contains(m)) marks.Add(m);
+                    }
+                    // Every value first, then the records: a write that fails leaves its record where it is, so the
+                    // closure is still readable afterwards and the next install still offers the repair (BD-069).
+                    foreach (var m in marks) p.Writes.Add(RegWrite.Remove(ParametersPath, m));
+                    p.Change = "Puts back " + string.Join(", ", shut.Select(c => c.Name + " " + c.Default)) +
+                        (marks.Count > 0 ? ", and removes the driver's close " + (marks.Count == 1 ? "mark " : "marks ") + string.Join(", ", marks) : "") +
+                        ". Closed by the driver: " + ClosureNotice.Text(shut) + ".";
+                    if (shut.Any(c => c.Subject == ClosureNotice.Desktop))
+                    {
+                        var closedBd059 = Bd059Fixed(s);
+                        if (closedBd059 == true)
+                            p.Notes.Add("If a normal restart closes the path again, create a bug report on the Diagnostics page.");
+                        else
+                            p.Notes.Add((closedBd059 == false ? "Known issue BD-059" : "Known issue BD-059 of drivers before 0.7.198") +
+                                ": a restart while the desktop runs on the GPU route can close the path again. The desktop stays on the route set under Desktop composition.");
+                    }
+                    p.OfferRestart = true;
                     break;
 
                 case "desktop-gpu":

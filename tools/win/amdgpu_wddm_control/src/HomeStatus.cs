@@ -24,6 +24,10 @@ namespace AmdgpuWddmControl
         public string Action;                       // null, restart, confirm-start, reopen-gpu-path, cu-confirm, repair, page:<name>
         public string ActionLabel;
         public string Severity;                     // problem, attention, pending, info, ok
+        // The notice card above the status card says this in more words and carries the button (BD-181), so Home
+        // does not draw the line twice. The item stays in the card: it is what makes the closure a cause of the
+        // verdict, and the support report lists it as before.
+        public bool Hidden;
     }
 
     public sealed class StatusCard
@@ -31,6 +35,9 @@ namespace AmdgpuWddmControl
         public string Title, Severity;
         public readonly List<StatusItem> Items = new List<StatusItem>();
         public readonly List<string> Pending = new List<string>();     // what waits for the restart, in plain words
+        // What the driver closed by itself after an unclean end, in plain words, with the one button that reverts
+        // all of it (BD-181). Null: it closed nothing, or the installed release names no defaults to go back to.
+        public ClosureCard Notice;
         public bool StatusRead;                     // false: nothing could be read, so no verdict claims anything
         public bool Healthy;                        // read, and nothing of rank 1-3: the explicit "all good" cause (497.4)
         public IEnumerable<GuideCause> Causes { get { return Items.Where(i => i.Cause != null).Select(i => i.Cause.Value); } }
@@ -87,6 +94,7 @@ namespace AmdgpuWddmControl
             if (d != null && d.Verification == VerifyKind.EarlierBootFailed) Item(c, null, "verification-earlier-boot", "attention");
 
             if (!c.StatusRead) s = null;      // the rest reads the snapshot only when it was read
+            c.Notice = ClosureNotice.Card(s);
             CuView cu = null;
             if (s != null && s.DriverInstalled)
             {
@@ -102,7 +110,11 @@ namespace AmdgpuWddmControl
                 else if (cu.Class == CuClass.Waiting && cu.OfferConfirm) Item(c, null, "cu-waiting", "attention", "cu-confirm");
                 if (cu.Class == CuClass.NotSaved) Item(c, GuideCause.CuNotSaved, "cu-not-saved", "attention", "page:graphics");
             }
-            if (s != null && s.DriverInstalled && s.P("InteropClosedReason") != null) Item(c, GuideCause.GpuDesktopClosed, "gpu-desktop-closed", "attention", "reopen-gpu-path");
+            // BD-181: one line for everything the driver closed after an unclean end, hidden because the notice
+            // card above says it in more words and its button reverts every closure at once. Where the notice
+            // cannot be formed (no defaults in the installed release) the old single line stays, with its own button.
+            if (c.Notice != null) Item(c, GuideCause.GpuDesktopClosed, c.Notice.StatusId, "attention", ClosureNotice.ActionName).Hidden = true;
+            else if (s != null && s.DriverInstalled && s.P("InteropClosedReason") != null) Item(c, GuideCause.GpuDesktopClosed, "gpu-desktop-closed", "attention", "reopen-gpu-path");
             if (s != null && Recovery.DwmVerdict(s) == "observed") Item(c, GuideCause.DesktopReplaced, "desktop-replaced", "attention", "restart");
 
             c.Pending.AddRange(PendingRestart(s, d));

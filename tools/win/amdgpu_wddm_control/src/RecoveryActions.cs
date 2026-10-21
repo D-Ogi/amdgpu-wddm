@@ -1578,26 +1578,36 @@ namespace AmdgpuWddmControl
             }
         }
 
+        // Each write is read back before the next one goes, and a failure stops there. The plans put the delete of a
+        // driver record after the values it describes, and a record can be deleted but never written back (catalog
+        // access admin_clear), so a failure has to stop before the delete and leave the record where it is. The
+        // rollback then touches only what this run changed: a value that still reads as its backup is left alone.
+        // (BD-181, lab 2026-10-21: writing everything before reading anything back deleted InteropClosedReason before
+        // a refused delete stopped the action, and the rollback could not write the record again.)
         static bool Apply(List<RegWrite> writes, BackupRecord backup, DriverStateBatch batch)
         {
+            var touched = new List<RegWrite>();
             try
             {
                 RouteRecordBefore(writes);
-                foreach (var w in writes) { Write(w, batch); Log("wrote: " + w); }
-                bool ok = true;
                 foreach (var w in writes)
                 {
+                    touched.Add(w);
+                    Write(w, batch);
+                    Log("wrote: " + w);
                     bool back = ReadsBack(w, batch);
                     Log((back ? "read back OK: " : "read back MISMATCH: ") + w);
-                    ok &= back;
+                    if (!back) throw new InvalidOperationException("stopped before the remaining writes");
                 }
-                if (ok) { RouteRecordAfter(writes); return true; }
+                RouteRecordAfter(writes);
+                return true;
             }
             catch (Exception e) { Log("write failed: " + e.Message); }
-            foreach (var v in backup.Values.Where(v => writes.Any(w => w.Path == v.Path && w.Name == v.Name)))
+            foreach (var v in backup.Values.Where(v => touched.Any(w => w.Path == v.Path && w.Name == v.Name)))
                 try
                 {
                     var r = v.Existed ? new RegWrite { Path = v.Path, Name = v.Name, Kind = v.Kind, Number = v.Number, Text = v.Text } : RegWrite.Remove(v.Path, v.Name);
+                    if (ReadsBack(r, batch)) { Log("unchanged, nothing to restore: " + r); continue; }
                     Write(r, batch);
                     if (!ReadsBack(r, batch)) throw new InvalidOperationException("rollback did not read back");
                     Log("restored and read back: " + r);

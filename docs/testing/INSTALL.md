@@ -389,7 +389,9 @@ the whole description.
 
 - Desktop composition (DWM) runs on the GPU (`DwmForceCpu` 0 in `HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter`). When the
   driver has closed the GPU desktop path (for example after a start that ended in a crash or a power loss), DWM uses
-  the CPU route by itself. "Reopen the GPU desktop path" on the Recovery page of Nagi Control App opens it again.
+  the CPU route by itself. The home page of Nagi Control App then opens with a notice that says so in plain words,
+  and its one button, "Turn it all back on", opens everything the driver closed that way: the GPU desktop path and
+  the automatic clock together. "Reopen the GPU desktop path" on the Recovery page opens the path alone.
   `DwmForceCpu` 1 keeps the
   desktop on the CPU route. An upgrade keeps the value you set.
 - Direct3D 12 applications run on the GPU through the Windows Direct3D 12 runtime, at feature level 12_1.
@@ -474,8 +476,11 @@ the whole description.
   graphics device. Nothing is sent by itself.
 - After an installation, `verify.cmd` fails `GPU desktop path` with `closed by the driver` or `last boot died in a
   session`, and the desktop runs on the CPU route: run `install.cmd -Repair`. It sets the switches of the release back
-  and restarts Windows. You can also open Nagi Control App, select "Reopen the GPU desktop path" on its Recovery
-  page and restart Windows. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
+  and restarts Windows. You can also open Nagi Control App: its home page shows the notice about this state, and
+  "Turn it all back on" there opens the same things as the repair (the GPU desktop path and the automatic clock;
+  the driver removes its own record of the clock at the next start). "Reopen the GPU desktop path" in "Support: actions" on the Recovery page opens
+  the path alone, and "Reopen what the driver closed" there is the same action as the button on the home page.
+  Restart Windows afterwards. A normal installation, an upgrade and a plain re-run of `install.cmd` keep the closed path
   and name it in the report, because the driver closed it for a reason. If the driver closes the path again, make a
   bug report instead of repairing a second time.
 - The Graphics page shows 24 graphics cores and you selected more: the driver went back to 24 after a start with the

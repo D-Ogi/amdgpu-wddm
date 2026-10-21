@@ -139,6 +139,9 @@ status.cu-not-saved|src|-|The 40-core confirmation could not be saved.
 status.cu-not-saved.next|src|-|The Graphics page shows what the next start uses.
 status.gpu-desktop-closed|src|-|After an unexpected shutdown, the desktop uses the safe and slower way.
 status.gpu-desktop-closed.next|src|-|Turn the faster desktop back on. It applies after the next restart of Windows.
+status.clock-closed|src|-|After an unexpected shutdown, the graphics chip stays at its base speed.
+status.clock-closed.next|src|-|Turn the full speed back on. It applies after the next restart of Windows.
+status.see-notice|src|-|The notice above says what happened and how to put it back.
 status.desktop-replaced|src|-|Windows restarted its desktop in this session. Some apps may ignore mouse clicks until Windows restarts.
 status.desktop-replaced.next|src|-|Save your work and restart Windows.
 status.pending-restart|src|-|Waiting for a restart of Windows: {0}.
@@ -155,6 +158,7 @@ status.update-available|src|-|A newer driver release is available.
 status.action.restart|src|-|Restart Windows...
 status.action.confirm-start|src|-|Confirm this start
 status.action.reopen-gpu-path|src|-|Turn the faster desktop back on...
+status.action.reopen-closed|src|-|Turn it all back on...
 status.action.cu-confirm|src|-|Confirm 40 cores
 status.action.repair|src|-|Repair...
 status.action.graphics|src|-|Open Graphics
@@ -215,6 +219,7 @@ game.state.partial|src|-|Partly on (custom)
 
 # ---- confirmation dialogs (WU-053) ----
 plan.title.reopen-gpu-path|src|-|Turn the faster desktop back on
+plan.title.reopen-closed|src|-|Turn back what was switched off
 plan.title.desktop-gpu|src|-|Desktop on the graphics chip
 plan.title.desktop-cpu|src|-|Desktop the safe way
 plan.title.confirm-start|src|-|Confirm this start
@@ -412,6 +417,12 @@ home.start.2|src|-|If a game has problems, open Games and look at its settings.
 home.start.3|src|-|Help has step-by-step guides for common problems.
 home.start.dismiss|src|-|Got it, hide this
 home.recent.title|src|-|Recent games
+home.closed.title|src|-|The graphics are in their safe settings
+home.closed.what|src|-|Windows stopped unexpectedly while the graphics were drawing your desktop. To bring this computer back safely, the driver switched these back to their safe settings by itself:
+home.closed.desktop|src|-|The desktop is drawn by the processor, not by the graphics chip.
+home.closed.clock|src|-|The graphics chip stays at its base speed.
+home.closed.cost|src|-|Everything works, but the desktop feels slower, moving windows can show stripes, and games get fewer frames. It stays this way every time this computer starts, until you turn it back on.
+home.closed.effect|src|-|One click turns all of it back on. It applies after the next restart of Windows.
 home.recent.none|src|-|No games yet. Games you start appear here.
 home.recent.off|src|-|Remembering launched games is off (Settings).
 home.recent.settings|src|-|Settings

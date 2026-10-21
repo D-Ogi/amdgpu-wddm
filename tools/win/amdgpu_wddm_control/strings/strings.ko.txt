@@ -139,6 +139,9 @@ status.cu-not-saved|mt|037918da|40코어 확인을 저장할 수 없습니다.
 status.cu-not-saved.next|mt|6f88d8db|다음 시작에 사용할 설정은 그래픽 페이지에 표시됩니다.
 status.gpu-desktop-closed|mt|28c255e8|예기치 않은 종료 후 데스크톱이 안전하지만 느린 방식을 사용합니다.
 status.gpu-desktop-closed.next|mt|532da758|빠른 데스크톱을 다시 켜세요. 다음에 Windows를 다시 시작한 후 적용됩니다.
+status.clock-closed|mt|9e869628|예기치 않은 종료 후 그래픽 칩이 기본 속도로 유지됩니다.
+status.clock-closed.next|mt|4d22397b|최대 속도를 다시 켜세요. 다음에 Windows를 다시 시작한 후 적용됩니다.
+status.see-notice|mt|695ddac6|위의 알림에 무슨 일이 있었는지와 되돌리는 방법이 있습니다.
 status.desktop-replaced|mt|9db01528|이 세션에서 Windows가 데스크톱을 다시 시작했습니다. Windows를 다시 시작할 때까지 일부 앱이 마우스 클릭에 반응하지 않을 수 있습니다.
 status.desktop-replaced.next|mt|1cabfb01|작업을 저장하고 Windows를 다시 시작하세요.
 status.pending-restart|mt|4453aecf|Windows 다시 시작 대기 중: {0}.
@@ -155,6 +158,7 @@ status.update-available|mt|2d79e5cb|새 드라이버 릴리스를 사용할 수 
 status.action.restart|mt-safe|32c8ac84|Windows 다시 시작...
 status.action.confirm-start|mt-safe|e9d08826|이번 시작 확인
 status.action.reopen-gpu-path|mt|05dc8cea|빠른 데스크톱 다시 켜기...
+status.action.reopen-closed|mt|c425247d|모두 다시 켜기...
 status.action.cu-confirm|mt-safe|429c630b|40코어 확인
 status.action.repair|mt-safe|c5ec5fc0|복구...
 status.action.graphics|mt-safe|4d922cbd|그래픽 열기
@@ -210,6 +214,7 @@ game.origin.game|mt-safe|0d27941d|이 게임용 설정
 game.state.partial|mt-safe|b2524367|일부 켜짐(사용자 지정)
 # ---- confirmation dialogs (WU-053) ----
 plan.title.reopen-gpu-path|mt|b10076e7|빠른 데스크톱 다시 켜기
+plan.title.reopen-closed|mt|eb783672|꺼진 항목 되돌리기
 plan.title.desktop-gpu|mt|b1b92ad5|그래픽 칩에서 데스크톱 실행
 plan.title.desktop-cpu|mt|85985462|안전한 방식으로 데스크톱 실행
 plan.title.confirm-start|mt-safe|e9d08826|이번 시작 확인
@@ -403,6 +408,12 @@ home.start.2|mt|c551f885|게임에 문제가 있으면 게임 페이지를 열�
 home.start.3|mt|fec0203b|도움말에 일반적인 문제에 대한 단계별 안내가 있습니다.
 home.start.dismiss|mt-safe|0a82387a|확인, 숨기기
 home.recent.title|mt-safe|6c30b7fc|최근 게임
+home.closed.title|mt|e56fe58e|그래픽이 안전 설정으로 동작하고 있습니다
+home.closed.what|mt|cf1397fd|그래픽이 데스크톱을 그리는 중에 Windows가 예기치 않게 중단되었습니다. 이 컴퓨터를 안전하게 복구하기 위해 드라이버가 다음 항목을 스스로 안전 설정으로 되돌렸습니다:
+home.closed.desktop|mt|bf712fa9|데스크톱을 그래픽 칩이 아니라 프로세서가 그립니다.
+home.closed.clock|mt|a1bf73f2|그래픽 칩이 기본 속도로 유지됩니다.
+home.closed.cost|mt|26723ef9|모두 동작하지만 데스크톱이 느리게 느껴지고, 창을 움직일 때 줄무늬가 보일 수 있으며, 게임의 프레임도 줄어듭니다. 다시 켜기 전까지 컴퓨터를 시작할 때마다 이 상태가 유지됩니다.
+home.closed.effect|mt|0271d4d0|한 번의 클릭으로 모두 되돌립니다. 다음에 Windows를 다시 시작한 후 적용됩니다.
 home.recent.none|mt|73f0a6d1|아직 게임이 없습니다. 시작한 게임이 여기에 표시됩니다.
 home.recent.off|mt|965bacdf|실행한 게임 기억이 꺼져 있습니다(설정).
 home.recent.settings|mt-safe|74a883a0|설정

@@ -753,9 +753,13 @@ namespace AmdgpuWddmControl
             _fan = Kmd.Hwmon().Value;
             TickTuning();
             TickFan();
-            var before = _status == null ? "" : string.Join("|", _status.Items.Select(i => i.Text));
+            // The notice card of Home is part of the status (BD-181), so its text decides a redraw as well: a
+            // closure the driver made or an action reverted must not wait for another item to change.
+            Func<StatusCard, string> shown = c => c == null ? "" : string.Join("|", c.Items.Select(i => i.Text))
+                + "|" + (c.Notice == null ? "" : string.Join("|", c.Notice.Texts));
+            var before = shown(_status);
             ComputeStatus();
-            var after = string.Join("|", _status.Items.Select(i => i.Text));
+            var after = shown(_status);
             if (before != after && _page == "home" && !Dirty(_page)) ShowPage(_page, null, false);
             else { RefreshLiveLabels(); UpdateGuide(); }
         }

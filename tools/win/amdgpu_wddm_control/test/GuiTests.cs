@@ -664,8 +664,14 @@ static partial class UnitTests
         Check(pending.Items.Any(i => i.Cause == GuideCause.PendingRestart && i.Action == "restart"), "Home: pending restart offers the restart");
         var later = HomeStatus.Compute(new StatusInputs { Snapshot = s, LaterRestart = true });
         Check(later.Items.Any(i => i.Text.StartsWith(Strings.T("status.pending-later", "").Split(':')[0], StringComparison.Ordinal)), "Home: Later keeps it pending");
-        s = WithDefaults(); s.Parameters["InteropClosedReason"] = 2;
-        Check(HomeStatus.Compute(new StatusInputs { Snapshot = s }).Items.Any(i => i.Action == "reopen-gpu-path"), "Home: a closed GPU desktop path offers to reopen it");
+        // BD-181: a path the driver closed is now the notice card at the top of Home, whose one button reverts every
+        // closure (ClosureTests). Where the notice cannot be formed, the single line with its own button stays.
+        s = WithDefaults(); s.Parameters["EnableGpuPresentBlit"] = 0; s.Parameters["EnableCddDwmInterop"] = 0; s.Parameters["InteropClosedReason"] = 2;
+        var shut = HomeStatus.Compute(new StatusInputs { Snapshot = s });
+        Check(shut.Notice != null && shut.Items.Any(i => i.Action == ClosureNotice.ActionName), "Home: a closed GPU desktop path offers to reopen it");
+        s.DefaultParameters = null;
+        Check(HomeStatus.Compute(new StatusInputs { Snapshot = s }).Items.Any(i => i.Action == "reopen-gpu-path" && !i.Hidden),
+            "Home: without the release defaults the single reopen stays");
         var upd = HomeStatus.Compute(new StatusInputs { Snapshot = WithDefaults(), UpdateAvailable = true, Work = GuideCause.CreatingReport });
         Check(upd.Items.Any(i => i.Action == "page:driver") && upd.Items.Any(i => i.Cause == GuideCause.CreatingReport), "Home: update and work items");
         var unread = HomeStatus.Compute(new StatusInputs { Snapshot = new RecoverySnapshot { DriverError = "unreadable", ReadFailed = true } });

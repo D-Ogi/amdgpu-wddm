@@ -224,6 +224,16 @@ the modules the running DWM loaded), clock
 control (`DpmMode`, `DpmPending`, `DpmConfirmed`, the running mode and the reason of a fallback), the start
 confirmation task, and the desktop compositor (below).
 
+After an unclean end the driver closes the GPU desktop path and the automatic clock at its next start, and keeps
+them closed at every later start: the desktop is then drawn by the processor at the base clock, and before BD-181
+nothing said so. `src/ClosureNotice.cs` reads those closures with the release installer's own rule and `HomeStatus`
+puts them on the home page as the first card, in plain words: what the driver switched back, what it costs, and one
+button, the `reopen-closed` action, that reverts every closure at once and then offers the restart. The line of the
+status card below it is kept as the cause of the verdict and not drawn a second time (`StatusItem.Hidden`). A value a
+person set by hand has no record of the driver next to it, so it is a choice and the notice never mentions it. Where
+the installed release names no defaults the notice cannot be formed. The single `reopen-gpu-path` line then stays as
+before. The same action is in "Support: actions" as "Reopen what the driver closed".
+
 No action restarts, stops or signals DWM (BD-060): on this Windows 11 build a forced DWM restart in a session leaves
 WinUI 3 content (the Explorer command bar, Task Manager) without mouse input until a new boot, and restarting Explorer
 does not help. Every change is written and takes effect at the next restart of Windows; the window then offers
@@ -252,6 +262,7 @@ observed in this session while the GPU route is selected.
 | Action (`--action`) | Writes | Takes effect | Refused when |
 |---|---|---|---|
 | `reopen-gpu-path` | `EnableGpuPresentBlit` 1, `EnableCddDwmInterop` 1, delete `InteropClosedReason` | next restart (offered) | open already, or reopened and waiting for the restart |
+| `reopen-closed` | every value the driver closed by itself, back to the installed release's default, then the desktop record the driver left. The values are `EnableGpuPresentBlit` and `EnableCddDwmInterop`, whose record `InteropClosedReason` is deleted after them, and `DpmMode`. Its record `DpmClosedReason` stays: the state catalog lets only the driver write or delete it, and the driver deletes it at the next start that reads a `DpmMode` other than 0. The rule is `Get-DriverClosure` of the release installer, value for value (`ClosureNotice.cs`). The value must be the one the driver writes when it closes (0). The installed release must name a default for it that is in range and is not that value. A record of the driver's own must sit next to it. That is the durable record with any reason, or `DpmLastReason` with 3, 4 or 8 for a driver before 0.7.208.1. The legacy record belongs to the last start and is not deleted. A 0 that a person wrote by hand has no such record. Such a value is never touched. The graphics cores are not here. Their release default is 24. That is also the value the driver closes with, so a repair install reopens nothing there either (`CuMode` in `common.ps1`) | next restart (offered) | the driver closed nothing by itself. The installed release has no list of defaults |
 | `desktop-gpu` | `DwmForceCpu` 0 | next restart (offered) | the driver is not running; the effective switches (escape and `InteropLastState` & 3) are not both on (points to `reopen-gpu-path`); the GPU desktop files are missing; DWM is on the GPU route already; the GPU route is selected already (restart Windows) |
 | `desktop-cpu` | `DwmForceCpu` 1 | next restart (offered) | DWM is on the CPU route already; the CPU route is selected already (restart Windows) |
 | `confirm-start` | start-health CONFIRM (clears `UnconfirmedStarts` and `DpmPending` in the KMD); not undoable | at once | the driver is not running; confirmed already; not eligible by `Test-StartConfirmEligible` of the installer's `start-confirm-core.ps1` (flags 7, completions, ready >= 60 s, last completion <= 5 s; the helper retries the reading for 10 s) |

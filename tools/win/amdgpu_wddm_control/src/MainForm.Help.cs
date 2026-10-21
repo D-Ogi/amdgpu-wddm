@@ -280,6 +280,9 @@ namespace AmdgpuWddmControl
             Func<string, string, Button> act = (label, action) => Ui.Button(label, (s, e) => RunAction(action));
             actions.Add(Ui.WrapRow(actions.Inner, act("Desktop on the CPU route", "desktop-cpu"), act("Desktop on the GPU route", "desktop-gpu"), act("Reopen the GPU desktop path", "reopen-gpu-path")));
             actions.Add(Ui.WrapRow(actions.Inner, act("Confirm this start", "confirm-start"), act("Re-enable automatic clocks", "enable-dpm"), act("Undo last action", "undo")));
+            // BD-181: everything the driver closed after an unclean end, in one action. The single actions above
+            // stay; this one is the same set a repair install reopens, and the Home notice carries it in plain words.
+            actions.Add(Ui.WrapRow(actions.Inner, act("Reopen what the driver closed", ClosureNotice.ActionName)));
             // The way back from Microsoft Basic Display after the driver's own guard refused a start. The state
             // line above recommends it and INSTALL.md sends the person to this card for it, so the button has to be
             // here; it refuses itself through Recovery.Plan on a machine the refusal does not fit, like the rest.
