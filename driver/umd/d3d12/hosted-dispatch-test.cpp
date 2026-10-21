@@ -147,13 +147,19 @@ int main(){
  assert(call(BC250_HOST_Lock2,&lock)==0 && lock.pData==mapped);
  assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && !deallocations);
  assert(call(BC250_HOST_Unlock2,&unlock)==0);
- // BD-201: a refused deallocate keeps the record owned and usable, mapping and all, and the retry
- // succeeds. Nothing else releases the range: no Evict, no FreeGpuVirtualAddress on the way.
+ // BD-201: a refused deallocate keeps the record and its handle, so the retry succeeds, but its range is
+ // lost and counted: the bridge never frees it or asks for it again. Nothing else releases the range on
+ // the way: no Evict, no FreeGpuVirtualAddress.
  const unsigned freed=frees;
  fail_destroy=true;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==1);
+ assert(bridge.lost_va_ranges()==1 && bridge.lost_va_bytes()==4096);
  assert(call(BC250_HOST_Lock2,&lock)==0 && call(BC250_HOST_Unlock2,&unlock)==0);
+ // The lost range is not the bridge's to free. (What it asks the runtime for at that address is proved in
+ // the reuse block below, where the reservation callback counts its calls.)
+ assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed);
  fail_destroy=false;assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==2);
- assert(frees==freed && !evictions);
+ // Once the destroy is accepted the range goes with it; the count of the loss stays.
+ assert(frees==freed && !evictions && bridge.lost_va_ranges()==1);
  assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==2);
  // The range went with the deferred destruction: it is no longer the bridge's to free.
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed);
@@ -164,6 +170,13 @@ int main(){
  fail_free=false;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)==0 && frees==freed+2);
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed+2);
  assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==3 && !evictions);
+ // BD-201 R4: no hosted shell answers BC250_HOST_GetDeviceState yet, although worker_admits lists the
+ // opcode. This pins the rule of the class comment, that an unsupported operation gets a refusal and never
+ // a fabricated success, and it marks the gap: a device-state answer is what a loss test that does not read
+ // UINT64_MAX out of a fence value would need (D3DKMT_DEVICEEXECUTION, d3dkmthk.md:39800-39815; the only
+ // documented UINT64_MAX is a MonitoredValue with no waiters, native-gpu-fence-objects.md:46).
+ // (An argument is needed to pass the common null check and reach the switch itself.)
+ UINT64 state=0;assert(call(BC250_HOST_GetDeviceState,&state)==static_cast<int32_t>(0xc00000bbu) && !state);
  assert(call(BC250_HOST_DESTROY_PAGING,&paging)==0);
  assert(bridge.discard_metadata()==0 && call(BC250_HOST_CHECK_STATUS)<0);
  HostedDispatch lost(domain,{device_handle},um,kt);assert(HostedDispatch::dispatch(&lost,BC250_HOST_REPORT_LOST,nullptr)<0);
@@ -229,7 +242,7 @@ int main(){
   // BD-201: the same window on the destroy path. A mapped, unlocked internal allocation is destroyed with
   // its mapping live; the runtime releases the API-allocated range inside the deallocate callback and hands
   // it to another thread's map (A) or reservation (B) before that callback returns. A refused deallocate
-  // keeps the record whole, so the range is owned again and the retry succeeds (C).
+  // keeps the record and its handle, but loses its range for good (C).
   auto rum=um;rum.pfnAllocateCb=reuse_allocate;rum.pfnDeallocateCb=reuse_deallocate;rum.pfnSetErrorCb=reuse_removed;
   auto rkt=kt;rkt.pfnMapGpuVirtualAddressCb=reuse_map;rkt.pfnReserveGpuVirtualAddressCb=reuse_reserve;rkt.pfnFreeGpuVirtualAddressCb=reuse_free;
   HostedDispatch destroying(domain,{device_handle},rum,rkt);
@@ -265,17 +278,30 @@ int main(){
   assert(!reserved && held.VirtualAddress==reused_va && !destroying.lost() && reuse_errors==noted);
   unsigned va_frees=reuse_frees;
   assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)==0 && reuse_frees==va_frees+1);
-  // C. A refused deallocate: the handle is findable and the range is owned again, so a fixed reservation
-  //    over it is refused before the runtime sees it. The retry succeeds, and then the same reservation is
-  //    admitted, which is what proves the range left owned() only when the destroy was accepted.
+  // C. A refused deallocate: the handle stays findable and destroyable, but the range is lost, not owned
+  //    again. The runtime may have released it inside the callback that then failed, so the bridge asks for
+  //    nothing at that address itself (the fixed reservation is refused before the runtime sees it), while
+  //    owned() ignores the range, so another thread's map of it is admitted with no false overlap. The
+  //    retried destroy succeeds, and the refusal goes with the record, not with the address.
   assert(mapped_one(c,c_map));
   gone.phAllocationList=&c.hAllocation;
   fail_reuse_deallocate=true;released=reuse_deallocations;
   const unsigned asked=reuse_reserves;
   assert(on(BC250_HOST_DestroyAllocation2,&gone)<0 && reuse_deallocations==released+1);
+  assert(destroying.lost_va_ranges()==1 && destroying.lost_va_bytes()==bytes);
   assert(on(BC250_HOST_ReserveGpuVirtualAddress,&held)<0 && reuse_reserves==asked && !destroying.lost());
+  // The lost range is free for the runtime to hand out: a map of it from another thread is admitted.
+  D3DDDI_ALLOCATIONINFO2 d{};D3DDDI_MAPGPUVIRTUALADDRESS d_map{};int32_t again=-1;
+  std::thread elsewhere([&]{bc250::umd::RuntimeDomain::Scope entered(domain);again=mapped_one(d,d_map)?0:-1;});
+  elsewhere.join();
+  assert(!again && d_map.VirtualAddress==reused_va && !destroying.lost() && reuse_errors==noted);
   fail_reuse_deallocate=false;
   assert(on(BC250_HOST_DestroyAllocation2,&gone)==0 && reuse_deallocations==released+2);
+  assert(destroying.lost_va_ranges()==1 && destroying.lost_va_bytes()==bytes);
+  // With both records gone the address is the runtime's to give again, which is what proves the refusal
+  // above belonged to the lost record.
+  gone.phAllocationList=&d.hAllocation;
+  assert(on(BC250_HOST_DestroyAllocation2,&gone)==0 && reuse_deallocations==released+3);
   assert(on(BC250_HOST_ReserveGpuVirtualAddress,&held)==0 && held.VirtualAddress==reused_va && reuse_reserves==asked+1);
   va_frees=reuse_frees;
   assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)==0 && reuse_frees==va_frees+1);
@@ -346,6 +372,6 @@ int main(){
   assert(!healthy.lost() && errors==reported);
  }
  std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, "
-           "cleanup retries, destroy of a mapped allocation with its retry, scope, loss, address reuse inside a free and "
-           "inside a destroy, replay worker scope, imported-heap error propagation");
+           "cleanup retries, destroy of a mapped allocation with its retry and the lost range of a refused one, scope, "
+           "loss, address reuse inside a free and inside a destroy, replay worker scope, imported-heap error propagation");
 }

@@ -43,8 +43,10 @@ struct HostedDispatchHooks {
 // belongs to both. An extent stops being owned when its release starts, because the runtime may hand it
 // out again before that callback returns: its own free callback, or, for an allocation's ordinary mapping,
 // the destroy callback the API-allocated range goes with (BD-201; d3dkmthk.md:13809-13810). A destroy
-// therefore admits a record whose mapping is still live, and a refused destroy keeps the record whole,
-// mapping included. What is mapped inside a reservation is not
+// therefore admits a record whose mapping is still live. A refused destroy keeps the record and its handle,
+// so the destroy can be retried, but its range stays lost: the runtime may have released and handed it out
+// before the failure, so the bridge never owns, frees or asks for that range again, and counts it
+// (lost_va_ranges). What is mapped inside a reservation is not
 // recorded: the bridge checks extents and handles when a call is admitted and holds them only for the length of the runtime callback.
 // Update admits MAP, MAP_PROTECT and UNMAP of one reservation per call; COPY and DoNotWait refuse.
 class HostedDispatch final {
@@ -76,12 +78,18 @@ class HostedDispatch final {
     HRESULT internal_queue(uint32_t op,void* argument) noexcept;
     std::atomic<bool> lost_{false};
     std::atomic<bool> active_{true};
+    // BD-201: VA ranges a refused DestroyAllocation2 left behind, written under lock_ and read without it.
+    // Cumulative, never decremented: once the runtime may have handed a range out, the bridge cannot know
+    // it back, and a later successful retry of that destroy does not undo the event.
+    std::atomic<unsigned> lost_ranges_{0};
+    std::atomic<UINT64> lost_bytes_{0};
     // The replay worker of this thread (WorkerScope), and a removal it found, which a DDI thread reports.
     inline static thread_local const HostedDispatch* worker_{};
     std::atomic<bool> removal_deferred_{false};
     Allocation* find(D3DKMT_HANDLE handle) noexcept;
     Reservation* containing(UINT64 base,UINT64 bytes) noexcept;
     bool owned(UINT64 base,UINT64 bytes,const void* except) const noexcept;
+    bool lost_range(UINT64 base,UINT64 bytes) const noexcept;
     // Under lock_. An internal allocation is held by its record; another owner's by hooks_.
     bool borrow(D3DKMT_HANDLE handle) noexcept;
     void give_back(D3DKMT_HANDLE handle) noexcept;
@@ -114,6 +122,10 @@ public:
     // unresolved allocation/reservation/context/paging/sync count; does not claim OS allocation reclamation.
     unsigned discard_metadata() noexcept;
     bool lost() const noexcept {return lost_.load();}
+    // BD-201 accounting of the VA the bridge stopped owning because a DestroyAllocation2 was refused. The
+    // allocation handles behind them are still counted by discard_metadata at teardown.
+    unsigned lost_va_ranges() const noexcept {return lost_ranges_.load(std::memory_order_relaxed);}
+    UINT64 lost_va_bytes() const noexcept {return lost_bytes_.load(std::memory_order_relaxed);}
     // A deferred-replay worker of engine-ddi (set_replay_policy) on this thread, inside its device's runtime domain:
     // the engine's recording may allocate, map, lock and wait on the CPU through this dispatch, as a DDI thread's
     // does, while every context, submission, GPU-side sync and queue operation refuses with a failure note

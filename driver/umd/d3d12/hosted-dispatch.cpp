@@ -72,6 +72,11 @@ struct HostedDispatch::Allocation {
     bool busy{},locked{};
     bool freeing{};                             // the free callback of va, or this record's own destroy callback,
                                                 // is in flight: va is no longer owned (owned())
+    // BD-201: the destroy callback refused the record while va was mapped. The runtime may already have
+    // released that range inside the callback and handed it to another thread, so the bridge never claims
+    // it again (owned() ignores it) and never asks the runtime to place anything there itself
+    // (lost_range()). The handle stays, so the destroy can be retried and teardown counts the record.
+    bool lost{};
     Allocation(D3D12DDI_HRTDEVICE runtime,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb)
         :owner(runtime,cb) {}
 };
@@ -119,12 +124,22 @@ HostedDispatch::Reservation* HostedDispatch::containing(UINT64 base,UINT64 bytes
 // allocation's ordinary mapping) the destroy callback that the API-allocated range goes with. The runtime
 // releases it somewhere inside that callback and may hand it out again at once, to a map or reservation on
 // another thread, before the freeing thread takes lock_ again (trial 172 removed the device at the map check
-// below). The runtime cannot hand out an extent it has not released, so a release that fails loses nothing.
+// below). A release that fails tells us nothing about the range: the runtime may have released it before the
+// failure, so an allocation whose destroy was refused keeps lost set and is ignored here for good (BD-201).
 bool HostedDispatch::owned(UINT64 base,UINT64 bytes,const void* except) const noexcept {
     for(auto range=reservations_;range;range=range->next)
         if(range!=except && range->base && !range->freeing && overlap(base,bytes,range->base,range->bytes))return true;
     for(auto record=allocations_;record;record=record->next)
-        if(record!=except && record->va && !record->freeing && overlap(base,bytes,record->va,record->bytes))return true;
+        if(record!=except && record->va && !record->freeing && !record->lost &&
+           overlap(base,bytes,record->va,record->bytes))return true;
+    return false;
+}
+// The bridge asks for nothing at a fixed address that a lost range covers: it does not own the range, so it
+// cannot know that the runtime is free to place anything there. Non-fixed requests are the runtime's choice
+// and are admitted (owned() ignores a lost range), which is how a lost range comes back into use.
+bool HostedDispatch::lost_range(UINT64 base,UINT64 bytes) const noexcept {
+    for(auto record=allocations_;record;record=record->next)
+        if(record->lost && record->va && overlap(base,bytes,record->va,record->bytes))return true;
     return false;
 }
 bool HostedDispatch::borrow(D3DKMT_HANDLE handle) noexcept {
@@ -519,7 +534,9 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
                   a.MaximumAddress-a.MinimumAddress<a.Size)))return E_INVALIDARG;
         auto range=new(std::nothrow) Reservation;if(!range)return E_OUTOFMEMORY;
         {Held held(lock_);
-         if(fixed && owned(a.BaseAddress,a.Size,nullptr)){held.release();delete range;return E_INVALIDARG;}
+         // A lost range is refused as well: the bridge does not own it, so it never reserves it (BD-201).
+         if(fixed && (owned(a.BaseAddress,a.Size,nullptr) || lost_range(a.BaseAddress,a.Size))){
+             held.release();delete range;return E_INVALIDARG;}
          // Tracking storage exists before the runtime may reserve anything.
          range->busy=true;range->next=reservations_;reservations_=range;}
         D3DDDI_RESERVEGPUVIRTUALADDRESS b{};b.BaseAddress=a.BaseAddress;b.MinimumAddress=a.MinimumAddress;
@@ -585,11 +602,16 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         held.acquire();record->busy=false;
         // Success means the request was accepted, not that the memory came back.
         if(SUCCEEDED(hr)){unlink(record);held.release();delete record;return hr;}
-        // Refused: the record keeps its handle, its mapping and its bytes, owned and usable, and a later
-        // destroy can retry it. The device is never removed over this. The site names the one state the ICD
-        // must account for: an allocation it still owns with a live mapping it may no longer free by itself.
-        record->freeing=false;held.release();
-        ddi_chain_failure("hosted-destroy-kept",hr,BC250_HOST_DestroyAllocation2);
+        // Refused: the record keeps its handle, so a later destroy can retry it and teardown counts it. Its
+        // range is lost, not owned again (review of design R v2): the runtime may have released the range
+        // before it failed, and handed it to a map on another thread while this thread was outside the lock,
+        // so the bridge cannot claim it back. lost keeps it out of owned() and out of the free below for good,
+        // and counts it. The device is never removed over this.
+        record->lost=true;record->freeing=false;
+        const UINT64 lost=record->bytes;held.release();
+        lost_ranges_.fetch_add(1,std::memory_order_relaxed);
+        lost_bytes_.fetch_add(lost,std::memory_order_relaxed);
+        ddi_chain_failure("hosted-destroy-lost-va",hr,BC250_HOST_DestroyAllocation2);
         return hr;
     }
     case BC250_HOST_MapGpuVirtualAddress:{
@@ -602,8 +624,9 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         if(a.BaseAddress){
             if(!extent(a.BaseAddress,bytes))return E_INVALIDARG;
             range=containing(a.BaseAddress,bytes);
-            // An extent that leaves its reservation, or enters one from outside, has no owner.
-            if(!range && owned(a.BaseAddress,bytes,nullptr))return E_INVALIDARG;
+            // An extent that leaves its reservation, or enters one from outside, has no owner. A lost range
+            // is refused here too: it is not ours to place anything in (lost_range()).
+            if(!range && (owned(a.BaseAddress,bytes,nullptr) || lost_range(a.BaseAddress,bytes)))return E_INVALIDARG;
         }
         if(range){
             // A view inside a reservation: zero pages, or an allocation whose own ordinary
@@ -654,7 +677,9 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
             if(hr==S_OK){unlink(range);held.release();delete range;}
             return hr;
         }
-        for(auto r=allocations_;r;r=r->next)if(r->va && !r->freeing && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
+        // A lost range is skipped as well: the bridge no longer owns it, so it never frees it (BD-201).
+        for(auto r=allocations_;r;r=r->next)
+            if(r->va && !r->freeing && !r->lost && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
         if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
         record->busy=record->freeing=true;held.release();
         HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
