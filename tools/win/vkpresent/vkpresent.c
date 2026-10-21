@@ -22,20 +22,20 @@
  * readback is compared with the colour that was asked for, so a driver that drops the clear, presents a
  * stale image or hands out an image of another frame fails the case instead of passing it quietly.
  *
- * The route is not set here. The switch belongs to the machine: the REG_SZ value WsiRoute under
- * HKLM\SOFTWARE\amdgpu-wddm\Vulkan ("gdi", "dxgi", "dxgi-composition"), read from the 64-bit view, which is
- * where the ICD reads it from as well, also in a 32-bit process. This program reads that value (read-only,
- * never written) and reports it as the route that was asked for, so the arm that sets it and the client that
- * runs under it cannot disagree about what was asked. The environment switch AMDGPU_WDDM_VK_WSI is not used:
- * the release ICD has no environment overrides (BD-167), and an arm built on the registry runs against both
- * flavours unchanged.
+ * The route is not set here. The switch belongs to the arm and to the machine: AMDGPU_WDDM_VK_WSI in the
+ * environment, else the REG_SZ value WsiRoute under HKLM\SOFTWARE\amdgpu-wddm\Vulkan ("gdi", "dxgi",
+ * "dxgi-composition"), read from the 64-bit view, which is where the ICD reads it from as well, also in a
+ * 32-bit process, else the ICD's default (dxgi since BD-197). This program reads both the way the ICD does
+ * (read-only, never written) and reports the result as the route that was asked for, so the arm that sets
+ * them and the client that runs under them cannot disagree about what was asked. Both ICD flavours read the
+ * variable: BD-167 took the shader overrides out of the release flavour, not this switch.
  *
- * The route the ICD actually took is measured in this process, not assumed: the DXGI routes bind System32
- * dxgi.dll and d3d12.dll by full path, and the composition route adds DComp.dll, while the GDI route loads
- * none of them (docs/design/vulkan-wsi-dxgi.md, "Application-local runtime modules do not change the
- * route"). The module list of this process before the instance and after the first present therefore says
- * which route ran. An ICD that was asked for dxgi and fell back to GDI is a failure of the arm, not a
- * detail: that fallback is exactly what the route work is about.
+ * The route the ICD actually took is measured in this process, not assumed: a DXGI route binds System32
+ * d3d12.dll by full path for its presenter device, and the GDI route never loads it. dxgi.dll and DComp.dll
+ * are no witness, because the ICD's instance set-up loads both on every route (route_from_modules). The
+ * module list of this process after the first present therefore says whether a DXGI route or GDI ran, and
+ * cannot tell dxgi from dxgi-composition. An ICD that was asked for dxgi and fell back to GDI is a failure
+ * of the arm, not a detail: that fallback is exactly what the route work is about.
  *
  * This program's own folder must hold no dxgi.dll, d3d12.dll or d3d12core.dll. The ICD's module gate refuses
  * the DXGI route to a process that has an application-local copy of one of them, by design, and the check
@@ -74,8 +74,13 @@ static const char *const ROUTE_NAMES[] = {"gdi", "dxgi", "dxgi-composition", "un
 #define ROUTE_DXGI 1
 #define ROUTE_DXGI_COMPOSITION 2
 #define ROUTE_UNKNOWN 3                 /* a foreign ICD: the modules say nothing about our WSI route */
-#define ROUTE_DEFAULT ROUTE_GDI
+#define ROUTE_DEFAULT ROUTE_DXGI
 #define ROUTE_COUNT 3                   /* the routes a caller may ask for; "unknown" is a result only */
+/* Where the asked route came from, as radv_wddm2_wsi_route_source_name spells it. */
+static const char *const SOURCE_NAMES[] = {"default", "env", "registry"};
+#define SOURCE_DEFAULT 0
+#define SOURCE_ENV 1
+#define SOURCE_REGISTRY 2
 
 struct options {
    unsigned frames;
@@ -90,6 +95,10 @@ struct options {
    unsigned deadline_s;
    const char *json;
    int expect_route;        /* -1: whatever the registry says */
+   VkFormat format;         /* VK_FORMAT_UNDEFINED: the first 8-bit BGRA or RGBA format the surface lists */
+   int present_mode;        /* -1: FIFO */
+   int solid;               /* every frame is cleared to colour instead of a colour per frame */
+   uint32_t colour;         /* 0xRRGGBB */
 };
 
 struct vk_api {
@@ -170,38 +179,57 @@ static void fail_line(const char *what, VkResult r)
 
 /* ---- the route the machine asks for ------------------------------------------------------------------- */
 
-/* The ICD's own order: the environment first, then this value, then its compiled default. This client reads
- * the registry only, and from the 64-bit view, because a 32-bit image must see the same value the ICD sees
- * (the system line reads WsiRoute through KEY_WOW64_64KEY for exactly that reason). */
-static int route_from_registry(int *found)
+/* A route name as the ICD parses it. A value that is not one ("unknown" too) selects gdi there, not the
+ * default, and its log calls the value invalid. */
+static int route_by_name(const char *text, const char *where)
 {
+   unsigned i;
+
+   for (i = 0; i < ROUTE_COUNT; i++) {
+      if (_stricmp(text, ROUTE_NAMES[i]) == 0)
+         return (int)i;
+   }
+   printf("vkpresent note: %s is '%s', which is not a route name; the ICD takes gdi\n", where, text);
+   return ROUTE_GDI;
+}
+
+/* The ICD's own order (radv_wddm2_wsi_route_choose): the environment first, then this value, then its
+ * compiled default; an empty value counts as absent. The registry is read from the 64-bit view, because a
+ * 32-bit image must see the same value the ICD sees (the system line reads WsiRoute through
+ * KEY_WOW64_64KEY for exactly that reason). */
+static int route_wanted(int *source)
+{
+   const char *env = getenv("AMDGPU_WDDM_VK_WSI");
    HKEY key;
    char text[64];
    DWORD size = sizeof(text);
    DWORD type = 0;
-   unsigned i;
+   LONG status;
 
-   *found = 0;
+   if (env && env[0]) {
+      *source = SOURCE_ENV;
+      return route_by_name(env, "AMDGPU_WDDM_VK_WSI");
+   }
+   *source = SOURCE_DEFAULT;
    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "SOFTWARE\\amdgpu-wddm\\Vulkan", 0,
                      KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key) != ERROR_SUCCESS)
       return ROUTE_DEFAULT;
    memset(text, 0, sizeof(text));
-   if (RegQueryValueExA(key, "WsiRoute", NULL, &type, (LPBYTE)text, &size) != ERROR_SUCCESS ||
-       type != REG_SZ) {
-      RegCloseKey(key);
-      return ROUTE_DEFAULT;
-   }
+   status = RegQueryValueExA(key, "WsiRoute", NULL, &type, (LPBYTE)text, &size);
    RegCloseKey(key);
-   text[sizeof(text) - 1] = '\0';
-   for (i = 0; i < ROUTE_COUNT; i++) {   /* a stored "unknown" is not a route: the default stands */
-      if (_stricmp(text, ROUTE_NAMES[i]) == 0) {
-         *found = 1;
-         return (int)i;
-      }
+   if (status == ERROR_FILE_NOT_FOUND)
+      return ROUTE_DEFAULT;
+   if (status != ERROR_SUCCESS || type != REG_SZ) {
+      /* The ICD never guesses a route from a value that is present but not a short REG_SZ: gdi. */
+      *source = SOURCE_REGISTRY;
+      printf("vkpresent note: WsiRoute is not a short REG_SZ; the ICD takes gdi\n");
+      return ROUTE_GDI;
    }
-   /* A value the ICD does not know is its own finding: report it as not found, so the arm sees the default. */
-   printf("vkpresent note: WsiRoute is '%s', which is not a route name; the ICD takes its default\n", text);
-   return ROUTE_DEFAULT;
+   text[sizeof(text) - 1] = '\0';
+   if (!text[0])
+      return ROUTE_DEFAULT;
+   *source = SOURCE_REGISTRY;
+   return route_by_name(text, "WsiRoute");
 }
 
 /* ---- what this process has loaded ---------------------------------------------------------------------- */
@@ -293,15 +321,19 @@ static void read_modules(struct modules *m)
    }
 }
 
-/* Which route the modules of this process say ran. The DXGI routes take System32 dxgi.dll and d3d12.dll by
- * full path; the composition route adds DComp.dll. The GDI route takes none of them. */
+/* Which route the modules of this process say ran. The ICD's instance set-up (wsi_win32_init_wsi) makes the
+ * DXGI factory and the DComp device on every route, so dxgi.dll and DComp.dll say nothing: BD-197 block E
+ * read both in GDI runs whose present log says path gdi. d3d12.dll comes in only when a DXGI route makes its
+ * presenter device. The modules therefore tell a DXGI route from GDI, and not dxgi from dxgi-composition. */
 static int route_from_modules(const struct modules *m)
 {
-   if (m->dcomp && m->dxgi)
-      return ROUTE_DXGI_COMPOSITION;
-   if (m->dxgi && m->d3d12)
-      return ROUTE_DXGI;
-   return ROUTE_GDI;
+   return m->d3d12 ? ROUTE_DXGI : ROUTE_GDI;
+}
+
+/* What the module witness can tell apart: GDI, or one of the DXGI routes. */
+static int route_family(int route)
+{
+   return route == ROUTE_DXGI_COMPOSITION ? ROUTE_DXGI : route;
 }
 
 /* ---- the window ---------------------------------------------------------------------------------------- */
@@ -375,14 +407,22 @@ struct rgba8 {
    uint8_t r, g, b, a;
 };
 
-static struct rgba8 frame_colour(unsigned frame, int negative)
+static struct rgba8 frame_colour(unsigned frame, int negative, const struct options *o)
 {
    /* Three channels that move at different rates, so no two frames of a run share a colour and a stale
-    * image shows up as the wrong frame rather than as a colour that is merely close. */
+    * image shows up as the wrong frame rather than as a colour that is merely close. --colour gives one
+    * colour to every frame instead, for a run whose screen is checked by eye or by a screenshot: a GDI
+    * copy that leaves R and B in the wrong place shows pure red as pure blue. */
    struct rgba8 c;
-   c.r = (uint8_t)(16u + (frame * 7u) % 224u);
-   c.g = (uint8_t)(32u + (frame * 11u) % 192u);
-   c.b = (uint8_t)(64u + (frame * 13u) % 160u);
+   if (o->solid) {
+      c.r = (uint8_t)(o->colour >> 16);
+      c.g = (uint8_t)(o->colour >> 8);
+      c.b = (uint8_t)o->colour;
+   } else {
+      c.r = (uint8_t)(16u + (frame * 7u) % 224u);
+      c.g = (uint8_t)(32u + (frame * 11u) % 192u);
+      c.b = (uint8_t)(64u + (frame * 13u) % 160u);
+   }
    c.a = 255u;
    if (negative) {
       /* The negative control asks for one colour and expects another: every frame must fail. */
@@ -432,8 +472,13 @@ static void usage(void)
       "  --list-devices     print the devices and exit\n"
       "  --no-present       enumerate and report, create no window (safe on any PC)\n"
       "  --expect-route R   require this route: gdi, dxgi or dxgi-composition\n"
-      "                     (the default is whatever HKLM\\SOFTWARE\\amdgpu-wddm\\Vulkan WsiRoute says)\n"
+      "                     (the default is the route the ICD chooses: AMDGPU_WDDM_VK_WSI, else\n"
+      "                     HKLM\\SOFTWARE\\amdgpu-wddm\\Vulkan WsiRoute, else dxgi)\n"
       "  --negative-control ask for one colour and expect another: every frame must fail\n"
+      "  --format F         bgra8 or rgba8 (the UNORM format; the surface must list it)\n"
+      "                     (the default is the first 8-bit BGRA or RGBA format the surface lists)\n"
+      "  --present-mode M   fifo, immediate or mailbox (the surface must list it; the default is fifo)\n"
+      "  --colour RRGGBB    clear every frame to this colour instead of a colour per frame\n"
       "  --deadline S       give up after S seconds (default 60)\n"
       "  --json PATH        write the result as JSON as well\n"
       "\n"
@@ -463,6 +508,8 @@ static int parse_options(int argc, char **argv, struct options *o)
    o->device_index = -1;
    o->deadline_s = 60;
    o->expect_route = -1;
+   o->format = VK_FORMAT_UNDEFINED;
+   o->present_mode = -1;
 
    for (i = 1; i < argc; i++) {
       const char *a = argv[i];
@@ -500,6 +547,32 @@ static int parse_options(int argc, char **argv, struct options *o)
             return 0;
       } else if (strcmp(a, "--json") == 0 && i + 1 < argc) {
          o->json = argv[++i];
+      } else if (strcmp(a, "--format") == 0 && i + 1 < argc) {
+         const char *f = argv[++i];
+         if (_stricmp(f, "bgra8") == 0)
+            o->format = VK_FORMAT_B8G8R8A8_UNORM;
+         else if (_stricmp(f, "rgba8") == 0)
+            o->format = VK_FORMAT_R8G8B8A8_UNORM;
+         else
+            return 0;
+      } else if (strcmp(a, "--present-mode") == 0 && i + 1 < argc) {
+         const char *m = argv[++i];
+         if (_stricmp(m, "fifo") == 0)
+            o->present_mode = VK_PRESENT_MODE_FIFO_KHR;
+         else if (_stricmp(m, "immediate") == 0)
+            o->present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+         else if (_stricmp(m, "mailbox") == 0)
+            o->present_mode = VK_PRESENT_MODE_MAILBOX_KHR;
+         else
+            return 0;
+      } else if (strcmp(a, "--colour") == 0 && i + 1 < argc) {
+         const char *c = argv[++i];
+         char *end = NULL;
+         unsigned long v = strtoul(c, &end, 16);
+         if (strlen(c) != 6 || !end || *end != '\0' || v > 0xFFFFFFul)
+            return 0;
+         o->solid = 1;
+         o->colour = (uint32_t)v;
       } else if (strcmp(a, "--any-device") == 0) {
          o->any_device = 1;
       } else if (strcmp(a, "--list-devices") == 0) {
@@ -639,7 +712,7 @@ struct run_result {
    double total_s;
    int route_asked;
    int route_taken;
-   int route_from_registry;
+   int route_source;           /* SOURCE_DEFAULT, SOURCE_ENV or SOURCE_REGISTRY */
    char device[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
    uint32_t api_version;
    uint32_t driver_version;
@@ -694,8 +767,8 @@ static int present_loop(struct vk_api *api, VkDevice dev, VkQueue queue, VkSwapc
    for (frame = 0; frame < o->frames && !g_quit; frame++) {
       uint32_t index = 0;
       unsigned slot = frame % image_count;
-      struct rgba8 asked = frame_colour(frame, 0);
-      struct rgba8 expect = frame_colour(frame, o->negative_control);
+      struct rgba8 asked = frame_colour(frame, 0, o);
+      struct rgba8 expect = frame_colour(frame, o->negative_control, o);
       VkClearValue clear;
       VkCommandBufferBeginInfo begin;
       VkRenderPassBeginInfo rp;
@@ -917,7 +990,7 @@ static void write_json(const struct options *o, const struct run_result *r, int 
    fprintf(f, "  \"exit\": %d,\n", rc);
    fprintf(f, "  \"route_asked\": \"%s\",\n", ROUTE_NAMES[r->route_asked]);
    fprintf(f, "  \"route_taken\": \"%s\",\n", ROUTE_NAMES[r->route_taken]);
-   fprintf(f, "  \"route_from_registry\": %s,\n", r->route_from_registry ? "true" : "false");
+   fprintf(f, "  \"route_source\": \"%s\",\n", SOURCE_NAMES[r->route_source]);
    fprintf(f, "  \"icd\": \"");
    {
       const char *p;
@@ -937,6 +1010,8 @@ static void write_json(const struct options *o, const struct run_result *r, int 
    fprintf(f, "  \"driver_version\": %u,\n", r->driver_version);
    fprintf(f, "  \"format\": %d,\n", (int)r->format);
    fprintf(f, "  \"present_mode\": %d,\n", (int)r->present_mode);
+   if (o->solid)
+      fprintf(f, "  \"colour\": \"%06X\",\n", (unsigned)o->colour);
    fprintf(f, "  \"surface_usage\": %u,\n", r->surface_usage);
    fprintf(f, "  \"frames\": %u,\n", r->frames);
    fprintf(f, "  \"presented\": %u,\n", r->presented);
@@ -970,7 +1045,6 @@ int main(int argc, char **argv)
    VkResult r;
    uint32_t i;
    int rc;
-   int found;
 
    QueryPerformanceFrequency(&g_freq);
    QueryPerformanceCounter(&g_start);
@@ -997,8 +1071,7 @@ int main(int argc, char **argv)
    }
    memset(&res, 0, sizeof(res));
    res.frames = o.frames;
-   res.route_asked = route_from_registry(&found);
-   res.route_from_registry = found;
+   res.route_asked = route_wanted(&res.route_source);
    if (o.expect_route >= 0)
       res.route_asked = o.expect_route;
 
@@ -1187,11 +1260,36 @@ int main(int argc, char **argv)
             break;
          }
       }
+      /* A format that was asked for and is not listed fails the run: on the GDI route the WSI lists
+       * R8G8B8A8_UNORM, whose CPU copy changes R and B, and the run that measures that copy must not
+       * measure the BGRA8 copy instead. */
+      if (o.format != VK_FORMAT_UNDEFINED) {
+         res.format = VK_FORMAT_UNDEFINED;
+         for (i = 0; i < format_count; i++) {
+            if (formats[i].format == o.format && formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+               res.format = o.format;
+         }
+         if (res.format == VK_FORMAT_UNDEFINED) {
+            printf("vkpresent FAIL the surface does not list format %d in the sRGB colour space (%u formats)\n",
+                   (int)o.format, format_count);
+            return EXIT_FAIL;
+         }
+      }
       res.present_mode = VK_PRESENT_MODE_FIFO_KHR;
       if (api.GetPhysicalDeviceSurfacePresentModesKHR(phys, surface, &mode_count, modes) != VK_SUCCESS ||
           mode_count == 0) {
          printf("vkpresent ERROR the surface offers no present mode\n");
          return EXIT_ERROR;
+      }
+      if (o.present_mode >= 0) {
+         int listed = 0;
+         for (i = 0; i < mode_count; i++)
+            listed |= modes[i] == (VkPresentModeKHR)o.present_mode;
+         if (!listed) {
+            printf("vkpresent FAIL the surface does not list present mode %d\n", o.present_mode);
+            return EXIT_FAIL;
+         }
+         res.present_mode = (VkPresentModeKHR)o.present_mode;
       }
 
       /* The readback needs the images as a transfer source, which the surface has to allow. The clear is the
@@ -1410,7 +1508,7 @@ int main(int argc, char **argv)
              after.dxgi ? (after.dxgi == 1 ? "System32" : "app-local") : "no",
              after.d3d12 ? (after.d3d12 == 1 ? "System32" : "app-local") : "no",
              after.dcomp ? (after.dcomp == 1 ? "System32" : "app-local") : "no");
-   } else if (res.route_taken != res.route_asked) {
+   } else if (route_family(res.route_taken) != route_family(res.route_asked)) {
       printf("vkpresent ROUTE asked %s, took %s (dxgi.dll %s, d3d12 %s, DComp %s)\n",
              ROUTE_NAMES[res.route_asked], ROUTE_NAMES[res.route_taken],
              after.dxgi ? (after.dxgi == 1 ? "System32" : "app-local") : "no",
@@ -1436,7 +1534,7 @@ int main(int argc, char **argv)
           "format=%d usage=0x%X frames=%u presented=%u lost=%u readback=%s maxms=%.3f total=%.3fs\n",
           rc == EXIT_PASS ? "PASS" : "FAIL", sizeof(void *) == 8 ? "x64" : "x86",
           ROUTE_NAMES[res.route_asked], ROUTE_NAMES[res.route_taken],
-          res.route_from_registry ? "registry" : "default",
+          SOURCE_NAMES[res.route_source],
           res.icd_path[0] ? res.icd_path : "unknown", res.device,
           VK_API_VERSION_MAJOR(res.api_version), VK_API_VERSION_MINOR(res.api_version),
           VK_API_VERSION_PATCH(res.api_version), res.driver_version, (int)res.format, res.surface_usage,
