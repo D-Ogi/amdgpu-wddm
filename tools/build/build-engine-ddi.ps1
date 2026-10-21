@@ -140,7 +140,7 @@ try {
         # Native build. /analyze runs with the same /WX, so a finding fails the build.
         # MSVC is a static-analysis control; its objects are never linked into the shipped library.
         Invoke-Step 'native library MSVC static-analysis control' { & cl.exe @flags /analyze /analyze:external- /c /Fo:analysis\ /Fd:analysis\engine-ddi.pdb @libSources }
-        Invoke-Step 'native library explicit compiler' { & $compilerExe @nativeFlags /c /Fo:native\ /Fd:native\engine-ddi.pdb @libSources }
+        Invoke-Step 'native library explicit compiler' { Invoke-Bc250UmdCompiler $compilerExe @nativeFlags /c /Fo:native\ /Fd:native\engine-ddi.pdb @libSources }
         $nativeObjs = @($libSources | ForEach-Object { Join-Path 'native' ([IO.Path]::ChangeExtension((Split-Path -Leaf $_), '.obj')) })
         Invoke-Step 'native library link' { & lib.exe /nologo /Brepro /OUT:engine-ddi.lib @nativeObjs }
         $symbols = & dumpbin.exe /nologo /symbols engine-ddi.lib

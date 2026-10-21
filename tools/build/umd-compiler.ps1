@@ -21,7 +21,8 @@ function Resolve-Bc250UmdCompiler([string]$Root,[string]$Compiler,[string]$MsvcR
 function ConvertTo-Bc250ClangFlags([string[]]$Flags,[string]$Arch,[string[]]$Roots) {
     $result=@($Flags | Where-Object { $_ -ne '/GL' -and $_ -ne '/FC' -and $_ -notlike '/d1trimfile:*' })
     $target=if($Arch -eq 'x86'){'i686-pc-windows-msvc'}else{'x86_64-pc-windows-msvc'}
-    $result+=@("--target=$target","/FI$PSScriptRoot\clang-windows.h",'/clang:-march=x86-64-v3','/clang:-mtune=znver2')
+    $result+=@("--target=$target","/FI$PSScriptRoot\clang-windows.h",'/clang:-march=x86-64-v3','/clang:-mtune=znver2',
+        '/clang:-Werror=ignored-attributes','/clang:-Werror=ignored-qualifiers')
     # Mark SDK/CRT roots as system headers. /W4 must still diagnose project code;
     # LLVM otherwise emits MSVC-only SDK diagnostics under the recipe's /WX.
     $result+=@(($env:INCLUDE -split ';' | Where-Object { $_ }) |
@@ -34,13 +35,27 @@ function ConvertTo-Bc250ClangFlags([string[]]$Flags,[string]$Arch,[string[]]$Roo
     return $result
 }
 
+function Invoke-Bc250UmdCompiler {
+    # _CL_ is appended after /link by clang-cl and reaches the linker as input
+    # files. Pass the Clang policy explicitly; leave MSVC's own controls intact.
+    $exe=$args[0]
+    $compilerArguments=@($args | Select-Object -Skip 1)
+    $previousCl=$env:CL
+    $previousTrailingCl=$env:_CL_
+    try {
+        if([IO.Path]::GetFileName($exe) -ieq 'clang-cl.exe'){$env:CL=$null;$env:_CL_=$null}
+        & $exe @compilerArguments
+        $global:LASTEXITCODE=$LASTEXITCODE
+    } finally {$env:CL=$previousCl;$env:_CL_=$previousTrailingCl}
+}
+
 function Test-Bc250ClangSdk([string]$CompilerExe,[string[]]$Flags,[string]$Out) {
     $probe=Join-Path $PSScriptRoot 'umd-compiler-sdk-test.cpp'
     $obj=Join-Path $Out 'clang-sdk-probe.obj'
-    & $CompilerExe @Flags /c "/Fo$obj" $probe
+    Invoke-Bc250UmdCompiler $CompilerExe @Flags /c "/Fo$obj" $probe
     if($LASTEXITCODE){throw 'Clang SDK probe compile failed'}
     $exe=Join-Path $Out 'clang-sdk-test.exe'
-    $includes=@($Flags | Where-Object { $_ -like '/external:I*' -or $_ -like '/I*' })
+    $includes=@($Flags | Where-Object { $_ -like '/external:I*' -or $_ -cmatch '^/I' })
     & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /O2 /MT /external:W0 @includes /DBC250_COMPILER_CALLER /DNOMINMAX "/Fe$exe" $probe $obj
     if($LASTEXITCODE){throw 'MSVC/Clang SDK boundary control build failed'}
     & $exe
@@ -54,10 +69,18 @@ function Test-Bc250ClangSdk([string]$CompilerExe,[string[]]$Flags,[string]$Out) 
     $negative=Join-Path $Out 'clang-sdk-bad-pack.cpp'
     "#pragma pack(push,1)`nstruct BadPacking { char byte; unsigned long long wide; };" |
         Set-Content -LiteralPath $negative
-    $rejected=& $CompilerExe @Flags /c "/Fo$(Join-Path $Out 'clang-sdk-bad-pack.obj')" $negative 2>&1 | Out-String
+    $rejected=Invoke-Bc250UmdCompiler $CompilerExe @Flags /c "/Fo$(Join-Path $Out 'clang-sdk-bad-pack.obj')" $negative 2>&1 | Out-String
     $rejected | Set-Content -LiteralPath (Join-Path $Out 'clang-sdk-bad-pack.log')
     if($LASTEXITCODE -eq 0 -or $rejected -notmatch '-Wpragma-pack') {
         throw 'Project packing negative control did not fail for the expected diagnostic'
     }
     Write-Host 'PASS: project packing warnings remain fatal'
+    $negativeAttribute=Join-Path $Out 'clang-sdk-bad-attribute.cpp'
+    'int __stdcall invalid_data_calling_convention;' | Set-Content -LiteralPath $negativeAttribute
+    $rejected=Invoke-Bc250UmdCompiler $CompilerExe @Flags /c "/Fo$(Join-Path $Out 'clang-sdk-bad-attribute.obj')" $negativeAttribute 2>&1 | Out-String
+    $rejected | Set-Content -LiteralPath (Join-Path $Out 'clang-sdk-bad-attribute.log')
+    if($LASTEXITCODE -eq 0 -or $rejected -notmatch '-Wignored-attributes') {
+        throw 'Project calling-convention negative control did not fail for the expected diagnostic'
+    }
+    Write-Host 'PASS: project calling-convention warnings remain fatal'
 }
