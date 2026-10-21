@@ -1,13 +1,23 @@
 {
   "schema": 1,
-  "about": "Meson option sets of the lab's Mesa builds, copied from the 'Build Options:' line of each recorded build's meson-logs/meson-log.txt, in that order. 'glslang' says whether the recorded build had glslangValidator on PATH ('required' by the configuration, 'on-path', 'not-on-path'). build-mesa.ps1 passes them verbatim and fails if the new log's line differs. docs/build.md quotes them; change both together. 'ships' names, per target, the file names the release ships that target as: the build writes one copy per name next to the target and stamps each with its own version resource (BD-166, tools/build/versionstamp.py), because the resource names the file it belongs to and one Mesa vulkan_radeon.dll ships both as vulkan_radeon.dll and as amdgpu_wddm_radv.dll. A target that no release ships has no entry and is not stamped.",
+  "about": "Meson option sets of the Mesa builds. Until 2026-10-21 each set was the 'Build Options:' line of its recorded build (recorded_script), with -Dbuildtype=debugoptimized. Since then every set builds at the maximum optimisation of the owner's rule of 2026-10-10: -Dbuildtype=release with -Ddebug=true (optimisation 3 and the PDB), NDEBUG in the release flavour, whole-program optimisation (-Db_lto=true -Db_lto_mode=default: /GL and /LTCG, with -Dallow-broken-lto=true, without which Mesa's meson.build refuses LTO; it also appends -lto to the Mesa version string) and /arch:AVX2 in c_args and cpp_args; the rest of each set is the recorded set, in its order. 'glslang' says whether the recorded build had glslangValidator on PATH ('required' by the configuration, 'on-path', 'not-on-path'). build-mesa.ps1 passes them verbatim and fails if the new log's line differs. docs/build.md quotes them; change both together. 'release_options' and 'lab_options' come after 'options' in the release and the lab flavour only. 'compilers' says how build-mesa.ps1 -Compiler changes a set for a compiler other than MSVC. 'ships' names, per target, the file names the release ships that target as: the build writes one copy per name next to the target and stamps each with its own version resource (BD-166, tools/build/versionstamp.py), because the resource names the file it belongs to and one Mesa vulkan_radeon.dll ships both as vulkan_radeon.dll and as amdgpu_wddm_radv.dll. A target that no release ships has no entry and is not stamped.",
+  "compilers": {
+    "msvc": {
+      "description": "cl.exe, link.exe and lib.exe of the Visual Studio developer environment. The option sets are written for it"
+    },
+    "clang-cl": {
+      "description": "clang-cl.exe, lld-link.exe and llvm-lib.exe of an LLVM Windows toolchain (build-mesa.ps1 -ClangToolchain), in the same Visual Studio environment for headers, libraries and rc.exe. ThinLTO in place of /GL and /LTCG, which only link.exe reads. In place of /arch:AVX2: the x86-64-v3 level (AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE), tuned for Zen 2; not -march=znver2, which adds SSE4a and other AMD-only instructions that Intel CPUs do not have. -ffp-contract=off: a multiply and an add round separately, as in the MSVC build. Without it clang fuses them into one FMA, which rounds once, and NIR constant folding can then give other values than the MSVC build. -gline-tables-only: the PDB has functions and lines but no types. With full CodeView types, LLVM 23.1.2 writes a self-referencing LF_FIELDLIST for an enum whose field list needs a continuation record (VkStructureType) when ThinLTO import puts a second copy of the enum into a module, and the PDB step of lld-link then does not end (docs/build.md)",
+      "option_replacements": {"-Db_lto_mode=default": "-Db_lto_mode=thin"},
+      "argument_replacements": {"/arch:AVX2": "-march=x86-64-v3 -mtune=znver2 /clang:-ffp-contract=off -gline-tables-only"}
+    }
+  },
   "configs": {
     "radv": {
       "description": "RADV Vulkan ICD with the WDDM2 winsys, ACO only (no LLVM)",
       "needs_llvm": false,
       "glslang": "required",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
         "-Db_ndebug=true",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
@@ -19,7 +29,13 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=disabled",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["amdgpu_wddm_radv.dll"]},
@@ -30,7 +46,7 @@
       "needs_llvm": false,
       "glslang": "required",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
         "-Db_ndebug=true",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
@@ -43,7 +59,13 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=disabled",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["amdgpu_wddm_radv.dll", "vulkan_radeon.dll"]},
@@ -54,7 +76,7 @@
       "needs_llvm": false,
       "glslang": "required",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
         "-Db_ndebug=true",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
@@ -67,7 +89,13 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=disabled",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["vulkan_radeon.dll"]},
@@ -78,7 +106,7 @@
       "needs_llvm": true,
       "glslang": "not-on-path",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=enabled",
         "-Dshared-llvm=disabled",
@@ -94,9 +122,16 @@
         "-Degl=disabled",
         "-Dglx=disabled",
         "-Dzstd=disabled",
-        "-Dgallium-d3d10-dll-name=bc250d3d"
+        "-Dgallium-d3d10-dll-name=bc250d3d",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "release_options": ["-Db_ndebug=true"],
+      "lab_options": ["-Db_ndebug=false"],
       "targets": [
         "src/gallium/targets/d3d10umd/bc250d3d.dll",
         "src/gallium/targets/d3d10umd/bc250_ttn_control.exe",
@@ -110,7 +145,7 @@
       "needs_llvm": false,
       "glslang": "on-path",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
         "-Damd-use-llvm=false",
@@ -123,9 +158,16 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=disabled",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "release_options": ["-Db_ndebug=true"],
+      "lab_options": ["-Db_ndebug=false"],
       "targets": ["src/gallium/targets/d3d10umd/bc250d3d_zink.dll"],
       "ships": {"src/gallium/targets/d3d10umd/bc250d3d_zink.dll": ["bc250d3d_zink.dll"]},
       "recorded_script": "experiments/E34-native-d3d-zink/build.cmd"
@@ -135,7 +177,8 @@
       "needs_llvm": false,
       "glslang": "on-path",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
+        "-Db_ndebug=true",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
         "-Damd-use-llvm=false",
@@ -146,7 +189,13 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=disabled",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "targets": [
         "src/gallium/targets/wgl/libgallium_wgl.dll",
@@ -155,11 +204,11 @@
       "recorded_script": null
     },
     "zink-gl-icd": {
-      "description": "System OpenGL ICD on Zink (WGL): the gallium wgl target DLL renamed amdgpu_wddm_gl.dll, which the display adapter's driver key names in OpenGLDriverName and OpenGLDriverNameWow, no LLVM. The zink-gl set plus -Db_ndebug=true (no live assert in a DLL that loads into every OpenGL application), -Db_vscrt=mt (the same reason the radv-mt set takes it: an application that ships its own msvcp140.dll hands it to every DLL that imports that name) and -Dgallium-wgl-dll-name=amdgpu_wddm_gl. buildtype stays debugoptimized, as in every shipped Mesa component of this project: /O2 with NDEBUG and a PDB",
+      "description": "System OpenGL ICD on Zink (WGL): the gallium wgl target DLL renamed amdgpu_wddm_gl.dll, which the display adapter's driver key names in OpenGLDriverName and OpenGLDriverNameWow, no LLVM. The zink-gl set plus -Db_ndebug=true (no live assert in a DLL that loads into every OpenGL application), -Db_vscrt=mt (the same reason the radv-mt set takes it: an application that ships its own msvcp140.dll hands it to every DLL that imports that name) and -Dgallium-wgl-dll-name=amdgpu_wddm_gl. buildtype is release with debug info, as in every shipped Mesa component of this project: /O2 /Gw with NDEBUG, /GL and /LTCG, /arch:AVX2 and a PDB",
       "needs_llvm": false,
       "glslang": "on-path",
       "options": [
-        "-Dbuildtype=debugoptimized",
+        "-Dbuildtype=release",
         "-Db_ndebug=true",
         "-Dforce_fallback_for=zlib",
         "-Dllvm=disabled",
@@ -173,7 +222,13 @@
         "-Degl=disabled",
         "-Dglx=disabled",
         "-Dzstd=disabled",
-        "-Dgallium-wgl-dll-name=amdgpu_wddm_gl"
+        "-Dgallium-wgl-dll-name=amdgpu_wddm_gl",
+        "-Db_lto=true",
+        "-Dallow-broken-lto=true",
+        "-Db_lto_mode=default",
+        "-Dc_args=/arch:AVX2",
+        "-Dcpp_args=/arch:AVX2",
+        "-Ddebug=true"
       ],
       "targets": [
         "src/gallium/targets/wgl/amdgpu_wddm_gl.dll",

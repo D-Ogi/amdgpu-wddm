@@ -13,7 +13,8 @@
 #
 #   resolve  runs each recipe script's own option resolution, the script's text from its first line through the
 #            statement that calls Add-ReproducibleMesonOptions, for every config of its -Config set and of its
-#            configs JSON, in the release flavour and with -Lab. Only $PSScriptRoot is replaced, by the script's
+#            configs JSON, in the release flavour and with -Lab, and with each value of the script's -Compiler set
+#            when it has one (build-mesa.ps1: msvc and clang-cl). Only $PSScriptRoot is replaced, by the script's
 #            directory. The source tree is a directory whose meson_options.txt declares amdgpu-wddm-lab-flavour,
 #            so the release flavour takes its release path; the run stops before the script checks the source
 #            tree, so nothing is configured or compiled.
@@ -158,6 +159,20 @@ foreach ($file in @(Get-ChildItem -LiteralPath $buildDir -Filter '*.ps1' -File |
     }
     $all = @(@($configNames) + @($validateSet) | Sort-Object -Unique)
     $configsSeen += $configNames.Count
+    # The -Compiler set of a script that has one: every config resolves with each compiler. The record of the default
+    # compiler keeps its name ('<script> <config> <flavour>'); the record of another one adds the compiler's name.
+    $compilers = @('')
+    if ($ast.ParamBlock) {
+        foreach ($p in $ast.ParamBlock.Parameters) {
+            if ($p.Name.VariablePath.UserPath -ne 'Compiler') { continue }
+            $default = if ($p.DefaultValue) { $p.DefaultValue.Extent.Text.Trim("'", '"') } else { '' }
+            foreach ($a in $p.Attributes) {
+                if ($a -is [System.Management.Automation.Language.AttributeAst] -and $a.TypeName.Name -eq 'ValidateSet') {
+                    $compilers = @('') + @($a.PositionalArguments | ForEach-Object { $_.Value } | Where-Object { $_ -ne $default })
+                }
+            }
+        }
+    }
 
     # resolve: the script's own text up to the end of its option resolution.
     $anchor = $null
@@ -185,37 +200,41 @@ foreach ($file in @(Get-ChildItem -LiteralPath $buildDir -Filter '*.ps1' -File |
         $prefix = Join-Path $Out ($file.BaseName + '.resolve.ps1')
         Set-Content -LiteralPath $prefix -Encoding utf8 -Value ($text + [Environment]::NewLine + $emit)
         foreach ($config in $all) {
-            foreach ($flavour in 'release', 'lab') {
-                $resolutions++
-                $arguments = @{ Config = $config; Source = $source; Build = $build }
-                if ($flavour -eq 'lab') { $arguments.Lab = $true }
-                try {
-                    $result = @(& $prefix @arguments)
-                    $last = if ($result.Count) { $result[-1] } else { $null }
-                    if (-not $last -or -not ($last.PSObject.Properties.Name -contains 'options')) {
-                        Add-Problem "${name}: -Config $config ($flavour) resolved to nothing"
-                        continue
+            foreach ($compiler in $compilers) {
+                foreach ($flavour in 'release', 'lab') {
+                    $resolutions++
+                    $arguments = @{ Config = $config; Source = $source; Build = $build }
+                    if ($flavour -eq 'lab') { $arguments.Lab = $true }
+                    if ($compiler) { $arguments.Compiler = $compiler }
+                    $label = if ($compiler) { "$flavour, $compiler" } else { $flavour }
+                    try {
+                        $result = @(& $prefix @arguments)
+                        $last = if ($result.Count) { $result[-1] } else { $null }
+                        if (-not $last -or -not ($last.PSObject.Properties.Name -contains 'options')) {
+                            Add-Problem "${name}: -Config $config ($label) resolved to nothing"
+                            continue
+                        }
+                        if ($flavourVariable -and $last.flavour -ne $flavour) {
+                            Add-Problem "${name}: -Config $config ($label) resolved the $($last.flavour) flavour instead"
+                            continue
+                        }
+                        $resolved[("$name $config $flavour" + $(if ($compiler) { " $compiler" } else { '' }))] = @($last.options)
+                    } catch {
+                        # A line of the script or of common.ps1 is named; a parameter the script refuses is the script's.
+                        # The record the catch receives is positioned at the call above; the exception's own record
+                        # is positioned where the script failed.
+                        $info = $_.InvocationInfo
+                        if ($_.Exception -is [System.Management.Automation.RuntimeException] -and $_.Exception.ErrorRecord -and
+                            $_.Exception.ErrorRecord.InvocationInfo) { $info = $_.Exception.ErrorRecord.InvocationInfo }
+                        $where = if ($info) { $info.ScriptName } else { '' }
+                        $line = if ($info) { $info.ScriptLineNumber } else { 0 }
+                        $problem = "-Config $config ($label) does not resolve"
+                        if ($where -eq $prefix -and $line -gt 0) { $problem = "${name}:${line}: $problem" }
+                        elseif ($where -and $where -ne $prefix -and $where -ne $PSCommandPath) {
+                            $problem = "${name}: $problem in $(Split-Path -Leaf $where):$line"
+                        } else { $problem = "${name}: $problem" }
+                        Add-Problem "${problem}: $($_.Exception.Message)"
                     }
-                    if ($flavourVariable -and $last.flavour -ne $flavour) {
-                        Add-Problem "${name}: -Config $config ($flavour) resolved the $($last.flavour) flavour instead"
-                        continue
-                    }
-                    $resolved["$name $config $flavour"] = @($last.options)
-                } catch {
-                    # A line of the script or of common.ps1 is named; a parameter the script refuses is the script's.
-                    # The record the catch receives is positioned at the call above; the exception's own record
-                    # is positioned where the script failed.
-                    $info = $_.InvocationInfo
-                    if ($_.Exception -is [System.Management.Automation.RuntimeException] -and $_.Exception.ErrorRecord -and
-                        $_.Exception.ErrorRecord.InvocationInfo) { $info = $_.Exception.ErrorRecord.InvocationInfo }
-                    $where = if ($info) { $info.ScriptName } else { '' }
-                    $line = if ($info) { $info.ScriptLineNumber } else { 0 }
-                    $problem = "-Config $config ($flavour) does not resolve"
-                    if ($where -eq $prefix -and $line -gt 0) { $problem = "${name}:${line}: $problem" }
-                    elseif ($where -and $where -ne $prefix -and $where -ne $PSCommandPath) {
-                        $problem = "${name}: $problem in $(Split-Path -Leaf $where):$line"
-                    } else { $problem = "${name}: $problem" }
-                    Add-Problem "${problem}: $($_.Exception.Message)"
                 }
             }
         }

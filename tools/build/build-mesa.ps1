@@ -21,6 +21,16 @@ script compares the new log's "Build Options:" line with the option set and stop
 The set the script passes is the configured set plus the reproducible-build switches of
 Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
 
+-Compiler clang-cl builds the same set with clang-cl, lld-link and llvm-lib from -ClangToolchain, in the same
+Visual Studio environment. The 'compilers' entry of mesa-configs.json changes the set for it: ThinLTO in place of
+/GL and /LTCG, and -march=x86-64-v3 -mtune=znver2 -ffp-contract=off -gline-tables-only in place of /arch:AVX2
+(docs/build.md says why the clang-cl PDB has no types). The reproducible-build switches are /Brepro,
+-fmacro-prefix-map and -fdebug-prefix-map in place of /FC and /d1trimfile, and the link switches /Brepro,
+-pdbaltpath:%_PDB% and -pdbsourcepath (Add-ReproducibleMesonOptions).
+
+A config with -Db_vscrt=mt links the static C runtime: after the build, each target that imports a C or C++
+runtime DLL (msvcp*, vcruntime*, concrt*, ucrtbase, api-ms-win-crt-*) stops the script.
+
 The source tree must already carry the component's patches (the companion Mesa repository branch, or an
 upstream checkout with the experiment's patch applied); this script does not patch anything.
 
@@ -29,6 +39,9 @@ pwsh tools\build\build-mesa.ps1 -Config radv -Source P:\BC-250\mesa-wddm -Build 
 
 .EXAMPLE
 pwsh tools\build\build-mesa.ps1 -Config llvmpipe-umd -Source <tree> -Build <dir> -Llvm P:\BC-250\scratch\llvm2312-build
+
+.EXAMPLE
+pwsh tools\build\build-mesa.ps1 -Config radv-system -Source <tree> -Build <dir> -Compiler clang-cl
 #>
 [CmdletBinding()]
 param(
@@ -68,7 +81,12 @@ param(
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     # BD-167: the lab flavour (-Damdgpu-wddm-lab-flavour=true). Without it the fork builds its release flavour,
     # which has no lookup of the override variables; the fork's own host test describes them.
-    [switch]$Lab
+    [switch]$Lab,
+    # The C and C++ compiler: msvc (cl, link, lib) or clang-cl (clang-cl, lld-link, llvm-lib of -ClangToolchain).
+    [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc',
+    # -Compiler clang-cl: the LLVM Windows toolchain whose bin\ holds clang-cl.exe, lld-link.exe and llvm-lib.exe
+    # (default <BC250_ROOT>\toolchain\llvm-23.1.2-win64).
+    [string]$ClangToolchain
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -78,7 +96,8 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $configsPath = Join-Path $PSScriptRoot 'mesa-configs.json'
-$recipeConfig = (Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json).configs.$Config
+$configsFile = Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json
+$recipeConfig = $configsFile.configs.$Config
 $options = @($recipeConfig.options)
 if ($Lab) { $options += '-Damdgpu-wddm-lab-flavour=true' }
 $targets = @($recipeConfig.targets)
@@ -94,15 +113,21 @@ $Source = [IO.Path]::GetFullPath($Source)
 $Build = [IO.Path]::GetFullPath($Build)
 # BD-167: the release flavour of a fork that declares the flavour also takes the config's release_options:
 # -Db_ndebug=true for llvmpipe-umd and zink-umd, so that no assert and no debug-only parser is live in the shipped
-# DLL. Their lab flavour keeps the asserts. A tree without the flavour option builds exactly the recorded set.
+# DLL. Their lab flavour keeps the asserts: it takes lab_options, -Db_ndebug=false, because meson's default
+# b_ndebug=if-release defines NDEBUG in a release buildtype. A tree without the flavour option builds the set alone.
 $forkFlavour = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
-# A config without a release_options key is normal (nothing extra in its release flavour), but
+# A config without a release_options or lab_options key is normal (nothing extra in that flavour), but
 # common.ps1 sets Set-StrictMode -Version 3.0, under which reading an absent property is an error,
 # not $null - so the key is looked up before it is read.
 if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_options']) {
   $options += @($recipeConfig.release_options | Where-Object { $_ })
 }
-$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
+if ($forkFlavour -eq 'lab' -and $recipeConfig.PSObject.Properties['lab_options']) {
+  $options += @($recipeConfig.lab_options | Where-Object { $_ })
+}
+# The option sets are written for MSVC; another compiler takes the replacements of its 'compilers' entry.
+if ($Compiler -ne 'msvc') { $options = Convert-MesonOptionsForCompiler $options $configsFile.compilers.$Compiler }
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'meson.build'))) { throw "$Source is not a Mesa source tree (no meson.build)" }
 $llvmConfig = $null
@@ -114,6 +139,20 @@ if ($Llvm) {
 } elseif ($recipeConfig.needs_llvm) {
     throw "-Config $Config links LLVM: pass -Llvm <LLVM build directory> (build-llvm.ps1 -Build)"
 }
+$clangTools = $null
+if ($Compiler -eq 'clang-cl') {
+    if (-not $ClangToolchain) { $ClangToolchain = Join-Path $root 'toolchain\llvm-23.1.2-win64' }
+    $ClangToolchain = [IO.Path]::GetFullPath($ClangToolchain)
+    if ($ClangToolchain -match '\s') { throw "-ClangToolchain $ClangToolchain contains white space: meson splits CC at white space" }
+    $clangTools = [ordered]@{}
+    foreach ($t in 'clang-cl', 'lld-link', 'llvm-lib') {
+        $exe = Join-Path $ClangToolchain "bin\$t.exe"
+        if (-not (Test-Path -LiteralPath $exe)) { throw "$exe does not exist: -ClangToolchain takes an LLVM Windows toolchain directory" }
+        $clangTools[$t] = $exe
+    }
+}
+# A static C runtime build must import no C or C++ runtime DLL (docs/build.md, radv-system).
+$staticCrt = $options -contains '-Db_vscrt=mt'
 $wdkInclude = Join-Path $Kits "microsoft.windows.wdk.x64\c\Include\$KitVersion"
 foreach ($d in (Join-Path $wdkInclude 'um'), (Join-Path $wdkInclude 'shared'), $FlexBison) {
     if (-not (Test-Path -LiteralPath $d)) { throw "$d does not exist (see docs/build.md, Prerequisites)" }
@@ -160,6 +199,16 @@ try {
     $env:INCLUDE = ($includeFront + @($env:INCLUDE)) -join ';'
     $env:PYTHONPATH = $PythonPath
     if ($llvmConfig) { $env:LLVM_CONFIG = $llvmConfig }
+    # -Compiler clang-cl: meson takes the compilers, their linker and the static linker from these variables, inside
+    # the Visual Studio environment above, whose INCLUDE and LIB clang-cl and lld-link read. llvm-lib and not lib.exe,
+    # because the objects of a ThinLTO build are LLVM bitcode. x64 only (Add-ReproducibleMesonOptions).
+    if ($clangTools) {
+        $env:CC = $clangTools['clang-cl']
+        $env:CXX = $clangTools['clang-cl']
+        $env:CC_LD = $clangTools['lld-link']
+        $env:CXX_LD = $clangTools['lld-link']
+        $env:AR = $clangTools['llvm-lib']
+    }
 
     $pythonExe = Resolve-Tool $Python 'python'
     if (-not $pythonExe) { throw 'python not found: put it on PATH or pass -Python' }
@@ -191,6 +240,7 @@ try {
         source          = Get-SourceIdentity $Source
         build_dir       = $Build
         meson_options   = $options
+        compiler        = $Compiler
         flavour         = $forkFlavour
         ninja_targets   = $targets
         environment     = [ordered]@{
@@ -214,11 +264,19 @@ try {
             win_bison       = Get-ToolVersion $bison
             glslangValidator = if ($glslangExe) { [ordered]@{ path = $glslangExe; version = Get-ToolVersion $glslangExe } } else { $null }
             llvm_config     = if ($llvmConfig) { (Invoke-Capture $llvmConfig @('--version')).Out.Trim() } else { $null }
+            clang_cl        = if ($clangTools) { [ordered]@{ path = $clangTools['clang-cl']; version = Get-ToolVersion $clangTools['clang-cl'] } } else { $null }
+            lld_link        = if ($clangTools) { [ordered]@{ path = $clangTools['lld-link']; version = Get-ToolVersion $clangTools['lld-link'] } } else { $null }
+            llvm_lib        = if ($clangTools) { [ordered]@{ path = $clangTools['llvm-lib'] } } else { $null }
         }
         gate            = $null
         probes          = $null
     }
     Write-Recipe $recipePath $recipe
+    if ($clangTools) {
+        Write-Host "compiler: clang-cl $($recipe.tools.clang_cl.version), lld-link $($recipe.tools.lld_link.version) ($ClangToolchain)"
+    } else {
+        Write-Host "compiler: msvc cl $($recipe.tools.cl.version) ($($recipe.tools.cl.path))"
+    }
 
     Invoke-Checked $pythonExe $mesonArgs
 
@@ -246,6 +304,22 @@ try {
     $ninjaArgs = @('-C', $Build)
     if ($Jobs -gt 0) { $ninjaArgs += "-j$Jobs" }
     Invoke-Checked $ninjaExe ($ninjaArgs + $targets)
+
+    # The DLLs each target imports, the delay-loaded ones too. With the static C runtime, an import of a runtime DLL
+    # stops the build before anything is stamped: the ICD runs inside every game, and a game that ships an older
+    # msvcp140.dll beside its exe hands that copy to every DLL that imports the name (docs/build.md, radv-mt).
+    $imports = [ordered]@{}
+    foreach ($t in $targets) {
+        $f = Join-Path $Build ($t -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $f)) { throw "ninja succeeded but $f is missing" }
+        $deps = @(& dumpbin.exe /nologo /dependents $f)
+        if ($LASTEXITCODE -ne 0) { throw "dumpbin /dependents $f failed ($LASTEXITCODE)" }
+        $imports[$t] = @($deps | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object { $_.Trim() })
+        $crt = @($imports[$t] | Where-Object { $_ -match '^(msvcp|vcruntime|concrt|ucrtbase|api-ms-win-crt-)' })
+        if ($staticCrt -and $crt.Count) {
+            throw "$t imports a C or C++ runtime DLL although -Config $Config links the static C runtime: $($crt -join ', ')"
+        }
+    }
 
     # BD-166: every artifact a release ships carries its version resource from this build, its last step before the
     # receipt. mesa-configs.json says which file names a target ships as, and each of those names gets its own
@@ -275,7 +349,7 @@ try {
     foreach ($t in $targets) {
         $f = Join-Path $Build ($t -replace '/', '\')
         if (-not (Test-Path -LiteralPath $f)) { throw "ninja succeeded but $f is missing" }
-        $artifacts[$t] = [ordered]@{ bytes = (Get-Item -LiteralPath $f).Length; sha256 = Get-FileSha256 $f }
+        $artifacts[$t] = [ordered]@{ bytes = (Get-Item -LiteralPath $f).Length; sha256 = Get-FileSha256 $f; imports = $imports[$t] }
     }
     foreach ($rel in $stamped.Keys) {
         $f = $stamped[$rel]

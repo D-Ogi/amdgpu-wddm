@@ -13,10 +13,12 @@ ran. The second is the same trap after the compile, in the version stamp's read 
 build reached only after ninja: the resolve part of the gate cannot reach that line and the reads part must. The
 others are the ways the gate could pass without having checked anything: a config the script's -Config set
 refuses, a -Config name with no config, a release flavour that never took its release path, a script whose option
-resolution has no end the gate knows, and a configs file that no script reads.
+resolution has no end the gate knows, a configs file that no script reads, and a compilers entry whose replacement
+matches no option of the set it changes.
 
-The positive controls are the tree as it is, with the resolved option sets read back, and two other ways to look a
-key up before it is read.
+The positive controls are the tree as it is, with the resolved option sets read back, the maximum-optimisation
+options of every Mesa config for each compiler of build-mesa.ps1, and two other ways to look a key up before it is
+read.
 """
 import json
 import os
@@ -39,7 +41,7 @@ RELEASE_UNGUARDED = "if ($forkFlavour -eq 'release') {"
 RELEASE_READ = "@($recipeConfig.release_options"
 SHIPS_GUARDED = "if ($recipeConfig.PSObject.Properties['ships'] -and"
 SHIPS_UNGUARDED = "if ($recipeConfig.ships -and"
-ANCHOR = "$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch"
+ANCHOR = "$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler"
 FLAVOUR_PROBE = "-SimpleMatch \"'amdgpu-wddm-lab-flavour'\""
 # The stamp's lookup and read of the ships map, as one if; the nested form below must pass as well.
 SHIPS_BLOCK = re.compile(r"if \(\$recipeConfig\.PSObject\.Properties\['ships'\] -and "
@@ -146,6 +148,69 @@ class RecipeConfigs(unittest.TestCase):
                 self.assertIn("-Db_ndebug=true", options, name)
         mesa = json.loads(self.read("mesa-configs.json"))["configs"]
         self.assertEqual(["vulkan_radeon.dll"], mesa["radv-system"]["ships"]["src/amd/vulkan/vulkan_radeon.dll"])
+
+    def test_every_mesa_config_resolves_to_the_maximum_optimisation(self):
+        # Owner 2026-10-10: release, NDEBUG, LTO and AVX2 in every shipped component. With MSVC: /GL and /LTCG and
+        # /arch:AVX2; with clang-cl: ThinLTO and x86-64-v3, and no MSVC-only switch left in the set.
+        code, text, out = self.run_gate()
+        self.assertEqual(0, code, text)
+        with open(os.path.join(out, "resolved.json"), encoding="utf-8") as fh:
+            resolved = json.load(fh)
+
+        def value(options, key):
+            found = [x.split("=", 1)[1] for x in options if x.startswith("-D%s=" % key)]
+            self.assertTrue(found, key)
+            return found[-1]
+
+        for config in json.loads(self.read("mesa-configs.json"))["configs"]:
+            for flavour in ("release", "lab"):
+                msvc = resolved["build-mesa.ps1 %s %s" % (config, flavour)]
+                clang = resolved["build-mesa.ps1 %s %s clang-cl" % (config, flavour)]
+                for options in (msvc, clang):
+                    self.assertEqual("release", value(options, "buildtype"), config)
+                    self.assertEqual("true", value(options, "debug"), config)
+                    self.assertEqual("true", value(options, "b_lto"), config)
+                    # Mesa's meson.build refuses LTO without this switch.
+                    self.assertEqual("true", value(options, "allow-broken-lto"), config)
+                    if flavour == "release":
+                        self.assertEqual("true", value(options, "b_ndebug"), config)
+                self.assertEqual("default", value(msvc, "b_lto_mode"), config)
+                self.assertEqual("thin", value(clang, "b_lto_mode"), config)
+                for key in ("c_args", "cpp_args"):
+                    self.assertIn("/arch:AVX2", value(msvc, key).split(), config)
+                    self.assertIn("/d1trimfile:", value(msvc, key), config)
+                    words = value(clang, key).split()
+                    self.assertNotIn("/arch:AVX2", words, config)
+                    self.assertNotIn("/FC", words, config)
+                    self.assertFalse([w for w in words if w.startswith("/d1trimfile:")], config)
+                    for word in ("-march=x86-64-v3", "-mtune=znver2", "/clang:-ffp-contract=off", "-gline-tables-only",
+                                 "/Brepro"):
+                        self.assertIn(word, words, config)
+                    self.assertTrue([w for w in words if w.startswith("/clang:-fmacro-prefix-map=")], config)
+                    # lld-link hashes the PDB into the GUID: the PDB must not name the build directory
+                    self.assertTrue([w for w in words if w.startswith("/clang:-fdebug-prefix-map=")], config)
+                # meson's sanity check gives the link options to clang-cl as compile options: no unknown /option
+                for key in ("c_link_args", "cpp_link_args"):
+                    self.assertEqual("/Brepro /PDBALTPATH:%_PDB%", value(msvc, key), config)
+                    self.assertEqual("/Brepro -pdbaltpath:%_PDB% -pdbsourcepath:X:\\mesa-build", value(clang, key), config)
+                # the other options are the same in both sets
+                differ = ("-Dc_args=", "-Dcpp_args=", "-Db_lto_mode=", "-Dc_link_args=", "-Dcpp_link_args=")
+                self.assertEqual([x for x in msvc if not x.startswith(differ)],
+                                 [x for x in clang if not x.startswith(differ)])
+        # The lab flavour of the two desktop UMDs keeps its asserts (docs/build.md, BD-167): a release buildtype
+        # alone would define NDEBUG through b_ndebug=if-release.
+        for config in ("llvmpipe-umd", "zink-umd"):
+            self.assertEqual("false", value(resolved["build-mesa.ps1 %s lab" % config], "b_ndebug"), config)
+
+    def test_a_compiler_replacement_that_matches_nothing_fails(self):
+        data = json.loads(self.read("mesa-configs.json"))
+        data["compilers"]["clang-cl"]["argument_replacements"]["/arch:AVX512"] = "-march=x86-64-v4"
+        self.write("mesa-configs.json", json.dumps(data, indent=2))
+        code, text, _ = self.run_gate()
+        self.assertEqual(1, code, text)
+        self.assertIn("-Config radv-system (release, clang-cl) does not resolve in common.ps1:", text)
+        self.assertIn("the compilers entry replaces what the option set does not hold: /arch:AVX512", text)
+        self.assertNotIn("(release) does not resolve", text)
 
     def test_the_same_trap_after_the_compile_fails(self):
         self.edit("build-dxvk.ps1", SHIPS_GUARDED, SHIPS_UNGUARDED)

@@ -204,19 +204,78 @@ function Get-RecipeIdentity([string]$Repo, [string[]]$Files) {
     return [ordered]@{ repository_commit = $commit; files_sha256 = $hashes }
 }
 
+# An option set written for MSVC, for another compiler: the 'compilers' entry of a configs file names whole options
+# to replace (option_replacements) and single compiler arguments inside -Dc_args and -Dcpp_args (argument_replacements,
+# one argument to one or more). A replacement that matches nothing in the set is an error, so that a renamed option
+# cannot leave an MSVC switch in a clang-cl build without a word.
+function Convert-MesonOptionsForCompiler([string[]]$Options, $Entry) {
+    if (-not $Entry) { throw 'no compilers entry for this compiler in the configs file' }
+    $optionMap = @{}
+    $argumentMap = @{}
+    if ($Entry.PSObject.Properties['option_replacements']) {
+        foreach ($p in $Entry.option_replacements.PSObject.Properties) { $optionMap[$p.Name] = [string]$p.Value }
+    }
+    if ($Entry.PSObject.Properties['argument_replacements']) {
+        foreach ($p in $Entry.argument_replacements.PSObject.Properties) { $argumentMap[$p.Name] = [string]$p.Value }
+    }
+    $used = @{}
+    $converted = foreach ($o in $Options) {
+        if ($optionMap.ContainsKey($o)) { $used[$o] = $true; $optionMap[$o]; continue }
+        if ($o -match '^(-Dc(pp)?_args=)(.*)$') {
+            $prefix = $Matches[1]
+            $words = foreach ($w in ($Matches[3] -split '\s+' | Where-Object { $_ })) {
+                if ($argumentMap.ContainsKey($w)) { $used[$w] = $true; $argumentMap[$w] } else { $w }
+            }
+            $prefix + ($words -join ' ')
+            continue
+        }
+        $o
+    }
+    $unused = @(@($optionMap.Keys) + @($argumentMap.Keys) | Where-Object { -not $used.ContainsKey($_) })
+    if ($unused.Count) { throw "the compilers entry replaces what the option set does not hold: $($unused -join ', ')" }
+    return @($converted)
+}
+
 # The MSVC switches that make a meson build give the same bytes from the same commit in another directory
 # (docs/design/reproducible-builds.md). /Brepro: no clock in the objects and the image. /PDBALTPATH:%_PDB%: the
 # CodeView record names the PDB file only. /FC with /d1trimfile: __FILE__ and the hash in the name of an anonymous
 # namespace start below the source or the build directory, not at the drive. The switches go at the end of an option
 # the set already has, because a second -D for the same option replaces the first. The configure gate then compares
 # the Build Options line with the merged set.
-function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build, [ValidateSet('x64', 'x86')][string]$Arch = 'x64') {
+#
+# -Compiler clang-cl: clang-cl ignores /FC and has no /d1trimfile. Its __FILE__ is the path as the compile command
+# spells it, which meson writes relative to the build directory (..\<source>\src\...), or absolute when that is not
+# possible; -fmacro-prefix-map removes each of these prefixes. It changes __FILE__ only. With /Brepro, lld-link
+# makes the PDB GUID, and with it the image time stamp, from a hash of the PDB, so the PDB must not name the build
+# directory either: -fdebug-prefix-map writes it as the token X:\mesa-build, and maps the relative path of the source
+# directory to the absolute one, so the PDB still names the real source files. -pdbsourcepath gives lld-link the same
+# token as the base of the relative paths of the C runtime objects and of the module names. The bytes are the same
+# only at the same relative path from the build to the source directory: ThinLTO hashes the source path of each
+# module, as the compile command spells it, into the names of promoted locals (docs/build.md). There is no x86
+# clang-cl recipe: clang-cl accepts /we4229 and /we4440 but only warns (-Wignored-attributes) where MSVC stops, so
+# the x86 policy below would be lost.
+function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build, [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
+                                      [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc') {
+    $token = 'X:\mesa-build'
     foreach ($dir in $Source, $Build) {
         if ($dir -match '\s') { throw "$dir contains white space: meson splits c_args at white space, so /d1trimfile cannot name it" }
     }
-    $compile = "/Brepro /FC /d1trimfile:$Source /d1trimfile:$Build"
+    if ($Compiler -eq 'clang-cl') {
+        if ($Arch -eq 'x86') { throw '-Compiler clang-cl builds x64 only: the x86 calling-convention policy (/we4229 /we4440) has no clang-cl equivalent yet' }
+        $relative = [IO.Path]::GetRelativePath($Build, $Source)
+        $prefixes = @($Source, $Build, $relative) | Select-Object -Unique
+        $compile = '/Brepro' + (($prefixes | ForEach-Object { " /clang:-fmacro-prefix-map=$_=" }) -join '')
+        $compile += " /clang:-fdebug-prefix-map=$Build=$token"
+        if ($relative -ne $Source) { $compile += " /clang:-fdebug-prefix-map=$relative=$Source" }
+    } else {
+        $compile = "/Brepro /FC /d1trimfile:$Source /d1trimfile:$Build"
+    }
     if ($Arch -eq 'x86') { $compile += ' /external:W1 /we4229 /we4440' }
-    $add = [ordered]@{ c_args = $compile; cpp_args = $compile; c_link_args = '/Brepro /PDBALTPATH:%_PDB%'; cpp_link_args = '/Brepro /PDBALTPATH:%_PDB%' }
+    # meson's compiler sanity check passes c_link_args to the compiler driver without /link. cl.exe ignores an
+    # unknown option with D9002, but clang-cl reads an unknown /option as an input file and stops. lld-link takes
+    # either spelling, and clang-cl only warns on an unknown -option.
+    $link = if ($Compiler -eq 'clang-cl') { "/Brepro -pdbaltpath:%_PDB% -pdbsourcepath:$token" } else { '/Brepro /PDBALTPATH:%_PDB%' }
+    $add = [ordered]@{ c_args = $compile; cpp_args = $compile; c_link_args = $link; cpp_link_args = $link }
     $merged = [Collections.Generic.List[string]]::new()
     foreach ($o in $Options) { $merged.Add($o) }
     foreach ($name in $add.Keys) {
