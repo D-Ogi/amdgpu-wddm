@@ -232,6 +232,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
+  M31["M31<br/>hardware"]
   M33["M33<br/>hardware"]
   M37["M37"]
   M38["M38"]
@@ -251,6 +252,7 @@ flowchart LR
   M112["M112"]
   M113["M113"]
   M114["M114"]
+  M179["M179"]
   M187["M187"]
   M188["M188"]
   M190["M190"]
@@ -287,6 +289,8 @@ flowchart LR
   M767["M767"]
   M835["M835"]
   M836["M836"]
+  M914["M914"]
+  M915["M915"]
   M39 --> M37
   M349 --> M348
   M37 --> M33
@@ -325,11 +329,14 @@ flowchart LR
   M766 --> M765
   M767 --> M766
   M836 --> M835
+  M914 --> M31
+  M914 --> M179
+  M915 --> M914
   M84 --> M73
   M99 --> M77
   M202 --> M190
   M40 --> M38
   classDef other stroke-dasharray:4 3
-  class M33,M39,M40,M84,M99,M202,M349 other
+  class M31,M33,M39,M40,M84,M99,M202,M349 other
 ```
 

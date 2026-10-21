@@ -2132,3 +2132,22 @@ facts:
     edges:
       - {"type": "uses", "to": "M887"}
       - {"type": "supersedes", "to": "M881", "scope": "partial"}
+  - id: M914
+    status: MEASURED
+    date: "2026-10-16"
+    claim: "3DMark Time Spy stops unit A with bugcheck 0x116 once its pipelines compile, and the recovery of the kernel driver cannot drain the stalled work. Rounds A6 (2026-10-15, 55 s into the demo) and A8 (2026-10-16, 81.512 s into the demo) give the same state with kernel driver B0E01A86: one pending job on the graphics engine, its fence page one sequence behind its target (758133 of 758134 in A6, 64437 of 64438 in A8), the paging engine complete, recovery reason 9 of the operating system, `TdrDelay` 10 s, `TdrDdiDelay` 5 s and `TdrLevel` 3. The wave capture before the kills returned 0 records with status 0xC000009C, the kill loop wrote 100 accepted writes in 10460 us (A6) and 99 in 10375 us (A8) without a drain, and `Bc250WddmResetFromTimeout` returned `STATUS_UNSUCCESSFUL` on purpose. At every recovery step the pending job was about 10.0 s to 10.1 s old, against the 12000 ms private watchdog of the kernel driver, so the operating system acted first"
+    status_text: "MEASURED (unit A, 2 runs, one kernel dump each)"
+    detail: "The dumps were read offline with ordinary file readers, the private symbol file of the loaded driver (PDB GUID BBF9F824-FE26-7C12-C9BA-F9E5D192F001, age 1) and byte checks of six function entries. A missing page is refused and never read as zeros. The fence page one sequence behind refutes the narrow claim that the completion was already in the CPU-visible slot and only its notification was lost. The thermal samples of A8 stay between 65 C and 76 C at 1000 MHz, so heat is not the trigger. The wave capture asked for the broadcast value of `mmGRBM_GFX_INDEX` and read back zero, which quarantines later sampling. That failure follows the timeout, so it is not its cause. The 16-DWORD indirect buffer of the pending job could not be read in A6, A8 or A20, because its page-table root is in reserved VRAM and that page frame is outside the page bitmap of a kernel dump (M31). Rounds A10 to A28 repeated the failure with lab diagnostics at 40 CU and at 24 CU, with colour compression off, with depth compression off and with shader synchronization on. None of those switches prevented it, and no round produced a program counter of the stalled work. The analysis is `docs/research/bd180-time-spy-device-loss-and-timeout.md`"
+    evidence: "[BD-180 Time Spy rounds](../evidence/windows/2026-10-21-bd180-time-spy-rounds/README.md)"
+    edges:
+      - {"type": "uses", "to": "M31"}
+      - {"type": "uses", "to": "M179"}
+  - id: M915
+    status: MEASURED
+    date: "2026-10-20"
+    claim: "The Time Spy GPU timeout of M914 is not caused by our D3D12 shell and not caused by our vkd3d-proton fork. With upstream vkd3d-proton 3.0.1 (`d3d12.dll` AED51497, `d3d12core.dll` 68B8BC7B) and the DXVK 3.1.1 `dxgi.dll` (E3C1178E) beside `3DMarkTimeSpy.exe`, D3D12 ran through the system vulkan-1.dll on our Vulkan ICD and loaded no file of our D3D12 layer. On unit A with the 0.7.216.103-tester.31v3 release (kernel driver 22BA3CDB, 22631, 40 CU) the demo loaded with 0 failed pipelines, no entry-point failure and no error line in 33656 log lines, rendering began with the clock at 2000 MHz and 58 C, and about 20 s later the machine stopped with bugcheck 0x116 (Arg3 0xC0000001, Arg4 3), the signature of rounds A6 and A8. So the cause is below the D3D12 layer, in our RADV port, in our kernel driver or in the hardware"
+    status_text: "MEASURED (unit A, one run)"
+    detail: "The route is proved from the running process: the workload loaded the three application-local libraries and vulkan-1.dll, and vkd3d-proton created a swap chain of 1920 x 1200. Our own fork refused 158 hull-shader pipelines in round A5b and this arm refused none, so the upstream compiler path is also a control of M912. The machine rebooted by itself at 21:48:19Z and wrote both dumps. The three staged libraries and the empty pipeline cache were removed by hash afterwards. The open control is the same workload under Linux on unit A with upstream RADV, which separates our Windows RADV port and our kernel driver from gfx1013 itself. The analysis is `docs/research/bd180-time-spy-device-loss-and-timeout.md`"
+    evidence: "[BD-180 Time Spy rounds](../evidence/windows/2026-10-21-bd180-time-spy-rounds/README.md)"
+    edges:
+      - {"type": "uses", "to": "M914"}
