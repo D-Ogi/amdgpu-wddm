@@ -82,10 +82,8 @@ flowchart LR
   M4["M4"]
   M5["M5<br/>linux"]
   M6["M6"]
-  M11["M11"]
   M18["M18"]
   M19["M19"]
-  M20["M20"]
   M24["M24<br/>linux"]
   M25["M25"]
   M30["M30"]
@@ -108,13 +106,11 @@ flowchart LR
   M60["M60"]
   M81["M81<br/>kmd"]
   M85["M85<br/>display"]
-  M117["M117<br/>display"]
   M118["M118<br/>display"]
   M776["M776<br/>games"]
   M785["M785"]
   M787["M787"]
   M789["M789"]
-  M796["M796"]
   M801["M801<br/>d3d"]
   M803["M803"]
   M804["M804"]
@@ -136,6 +132,9 @@ flowchart LR
   M887["M887<br/>kmd"]
   M894["M894<br/>kmd"]
   M896["M896"]
+  M906["M906"]
+  M907["M907"]
+  M908["M908"]
   M2 --> M1
   M3 --> M4
   M18 --> M4
@@ -153,7 +152,6 @@ flowchart LR
   M785 --> M47
   M787 --> M46
   M789 --> M776
-  M796 --> M11
   M803 --> M47
   M804 --> M46
   M804 --> M801
@@ -176,6 +174,8 @@ flowchart LR
   M872 --> M871
   M884 --> M812
   M896 --> M887
+  M907 --> M906
+  M908 --> M906
   M37 --> M33
   M37 --> M39
   M81 --> M30
@@ -183,7 +183,6 @@ flowchart LR
   M81 --> M60
   M894 --> M896
   M85 --> M31
-  M117 --> M20
   M118 --> M31
   M24 --> M25
   M41 --> M25
@@ -191,13 +190,15 @@ flowchart LR
   M55 --> M44
   M805 --> M47
   classDef other stroke-dasharray:4 3
-  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M117,M118,M776,M801,M805,M847,M867,M871,M887,M894 other
+  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M118,M776,M801,M805,M847,M867,M871,M887,M894 other
 ```
 
 ### Part 2
 
 ```mermaid
 flowchart LR
+  M11["M11"]
+  M20["M20"]
   M21["M21"]
   M22["M22"]
   M35["M35"]
@@ -208,12 +209,14 @@ flowchart LR
   M79["M79"]
   M95["M95"]
   M106["M106<br/>display"]
+  M117["M117<br/>display"]
   M333["M333<br/>linux"]
   M348["M348<br/>kmd"]
   M349["M349"]
   M429["M429"]
   M433["M433"]
   M791["M791"]
+  M796["M796"]
   M815["M815"]
   M816["M816<br/>games"]
   M817["M817"]
@@ -226,12 +229,14 @@ flowchart LR
   M349 --> M348
   M433 --> M429
   M791 --> M22
+  M796 --> M11
   M815 --> M21
   M823 --> M822
   M833 --> M817
   M106 --> M79
+  M117 --> M20
   M816 --> M52
   classDef other stroke-dasharray:4 3
-  class M40,M53,M106,M333,M348,M816,M822,M833 other
+  class M40,M53,M106,M117,M333,M348,M816,M822,M833 other
 ```
 

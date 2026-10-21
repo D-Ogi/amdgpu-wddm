@@ -1,0 +1,8 @@
+lab utc 2026-10-21T02:14:16.3227314Z
+exe sha256 1EE412D36F98DFB1BB86A3AA0C890C3B8A1EE8796E9FA95C7A97FE3E56357D11
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0 cmov=1 fxsr=1 cx16=1 lahf=1 movbe=1 xsave=1 osxsave=1
+xcr0 0x7
+x86-64 level v3
+exit 0

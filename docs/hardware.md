@@ -15,6 +15,12 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   ([M865](facts/hardware.md#M865)). VOP2 opcodes 0x0d and 0x0e still hold the SI and CI legacy
   minimum and maximum, which GFX10 leaves empty and GFX10.1 reassigned on paper
   ([M866](facts/hardware.md#M866)).
+- CPU: a Zen 2 core (family 17h, model 47h) with the x86-64-v3 feature set. It has AVX2, FMA3, BMI2, MOVBE and SSE4a,
+  and no AVX-512, VAES or VPCLMULQDQ ([M906](facts/hardware.md#m906)). The floating-point unit is half as wide in
+  issue as desktop Zen 2: FMA, FADD and FMUL each issue once per cycle, at 256 bits as fast as at 128 bits, and
+  `pshufb` twice per cycle ([M907](facts/hardware.md#m907)). One thread copies at 8.7 GB/s, about a third of a
+  current desktop CPU ([M908](facts/hardware.md#m908)). A build for this CPU uses `-march=x86-64-v3 -mtune=znver2`.
+  Do not use `-march=znver2`, because SSE4a is absent on Intel CPUs. `tools/win/cpubench` measures all three.
 - Our unit: board revision TBD, BIOS version TBD, VRAM carve-out TBD.
 
 ## Platform setup (community consensus)

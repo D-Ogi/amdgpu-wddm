@@ -1,0 +1,23 @@
+brand 13th Gen Intel(R) Core(TM) i7-13700KF
+family-model-stepping eax=0x000B0671
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=1 vpclmulqdq=1 rdpid=1 fsrm=1 sse4a=0 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 0.322 ms 28.66 GB/s match
+frame words 1920x1200 0.320 ms 28.76 GB/s match
+frame ssse3 1920x1200 0.352 ms 26.15 GB/s match
+frame avx2 1920x1200 0.342 ms 26.98 GB/s match
+frame memcpy 1920x1200 0.311 ms 29.60 GB/s match
+l1 bytes 0.0045 ns/byte 219.92 GB/s
+l1 words 0.0045 ns/byte 223.22 GB/s
+l1 ssse3 0.0081 ns/byte 122.82 GB/s
+l1 avx2 0.0051 ns/byte 195.28 GB/s
+l1 memcpy 0.0030 ns/byte 329.00 GB/s
+reg shuf128 0.0972 ns/insn
+reg shuf256 0.0961 ns/insn
+reg fma128 0.0957 ns/insn
+reg fma256 0.0962 ns/insn
+reg add128 0.0969 ns/insn
+reg add256 0.0964 ns/insn
+reg mul128 0.0968 ns/insn
+reg mul256 0.0969 ns/insn
+lat fma256 0.7722 ns/insn

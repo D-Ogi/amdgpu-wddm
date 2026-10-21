@@ -1,0 +1,84 @@
+=== cpubench-avx2.exe sha256 43AD563A34DBE088428E418A1F1E1BD5349BE5E8DA2A81FBC50AB49A6C196AC5: the first ymm FMA loop of fma256_ns, lines 1005-1045 of dumpbin /disasm
+  0000000140001E84: 0F 1F 40 00        nop         dword ptr [rax]
+  0000000140001E88: 0F 1F 84 00 00 00  nop         dword ptr [rax+rax+0000000000000000h]
+                    00 00
+  0000000140001E90: C5 FC 10 C3        vmovups     ymm0,ymm3
+  0000000140001E94: C4 E2 6D B8 45 40  vfmadd231ps ymm0,ymm2,ymmword ptr [rbp+40h]
+  0000000140001E9A: C5 FC 11 45 40     vmovups     ymmword ptr [rbp+40h],ymm0
+  0000000140001E9F: C5 FC 10 CB        vmovups     ymm1,ymm3
+  0000000140001EA3: C4 E2 6D B8 4D 20  vfmadd231ps ymm1,ymm2,ymmword ptr [rbp+20h]
+  0000000140001EA9: C5 FC 11 4D 20     vmovups     ymmword ptr [rbp+20h],ymm1
+  0000000140001EAE: C5 FC 10 C3        vmovups     ymm0,ymm3
+  0000000140001EB2: C4 E2 6D B8 45 60  vfmadd231ps ymm0,ymm2,ymmword ptr [rbp+60h]
+  0000000140001EB8: C5 FC 11 45 60     vmovups     ymmword ptr [rbp+60h],ymm0
+  0000000140001EBD: C5 FC 10 CB        vmovups     ymm1,ymm3
+  0000000140001EC1: C4 E2 6D B8 8D 80  vfmadd231ps ymm1,ymm2,ymmword ptr [rbp+0000000000000080h]
+                    00 00 00
+  0000000140001ECA: C5 FC 11 8D 80 00  vmovups     ymmword ptr [rbp+0000000000000080h],ymm1
+                    00 00
+  0000000140001ED2: C5 FC 10 C3        vmovups     ymm0,ymm3
+  0000000140001ED6: C4 E2 6D B8 85 A0  vfmadd231ps ymm0,ymm2,ymmword ptr [rbp+00000000000000A0h]
+                    00 00 00
+  0000000140001EDF: C5 FC 11 85 A0 00  vmovups     ymmword ptr [rbp+00000000000000A0h],ymm0
+                    00 00
+  0000000140001EE7: C5 FC 10 CB        vmovups     ymm1,ymm3
+  0000000140001EEB: C4 E2 6D B8 8D C0  vfmadd231ps ymm1,ymm2,ymmword ptr [rbp+00000000000000C0h]
+                    00 00 00
+  0000000140001EF4: C5 FC 11 8D C0 00  vmovups     ymmword ptr [rbp+00000000000000C0h],ymm1
+                    00 00
+  0000000140001EFC: C5 FC 10 C3        vmovups     ymm0,ymm3
+  0000000140001F00: C4 E2 6D B8 85 E0  vfmadd231ps ymm0,ymm2,ymmword ptr [rbp+00000000000000E0h]
+                    00 00 00
+  0000000140001F09: C5 FC 11 85 E0 00  vmovups     ymmword ptr [rbp+00000000000000E0h],ymm0
+                    00 00
+  0000000140001F11: C5 FC 10 CB        vmovups     ymm1,ymm3
+  0000000140001F15: C4 E2 6D B8 8D 00  vfmadd231ps ymm1,ymm2,ymmword ptr [rbp+0000000000000100h]
+                    01 00 00
+  0000000140001F1E: C5 FC 11 8D 00 01  vmovups     ymmword ptr [rbp+0000000000000100h],ymm1
+                    00 00
+  0000000140001F26: C5 FC 10 C3        vmovups     ymm0,ymm3
+  0000000140001F2A: C4 E2 6D B8 85 20  vfmadd231ps ymm0,ymm2,ymmword ptr [rbp+0000000000000120h]
+                    01 00 00
+  0000000140001F33: C5 FC 10 CB        vmovups     ymm1,ymm3
+=== cpubench-clang.exe sha256 E6639816960C743E3AF841F799A20D308BBAAFB21260FCBEAA5465DDBDA4FA29: the first ymm FMA loop of fma256_ns, lines 1706-1746 of dumpbin /disasm
+                    98 01 00
+  0000000140002A96: C4 E2 7D 18 0D 19  vbroadcastss ymm1,dword ptr [000000014001C2B8h]
+                    98 01 00
+  0000000140002A9F: 90                 nop
+  0000000140002AA0: C4 62 75 A8 D8     vfmadd213ps ymm11,ymm1,ymm0
+  0000000140002AA5: C4 62 75 A8 D0     vfmadd213ps ymm10,ymm1,ymm0
+  0000000140002AAA: C4 62 75 A8 C8     vfmadd213ps ymm9,ymm1,ymm0
+  0000000140002AAF: C4 62 75 A8 C0     vfmadd213ps ymm8,ymm1,ymm0
+  0000000140002AB4: C4 E2 75 A8 F8     vfmadd213ps ymm7,ymm1,ymm0
+  0000000140002AB9: C4 E2 75 A8 F0     vfmadd213ps ymm6,ymm1,ymm0
+  0000000140002ABE: C4 E2 75 A8 E8     vfmadd213ps ymm5,ymm1,ymm0
+  0000000140002AC3: C4 E2 75 A8 E0     vfmadd213ps ymm4,ymm1,ymm0
+  0000000140002AC8: C4 E2 75 A8 D8     vfmadd213ps ymm3,ymm1,ymm0
+  0000000140002ACD: C4 E2 75 A8 D0     vfmadd213ps ymm2,ymm1,ymm0
+  0000000140002AD2: FF C8              dec         eax
+  0000000140002AD4: 75 CA              jne         0000000140002AA0
+  0000000140002AD6: C5 7C 11 9C 24 B0  vmovups     ymmword ptr [rsp+00000000000001B0h],ymm11
+                    01 00 00
+  0000000140002ADF: C5 7C 11 94 24 30  vmovups     ymmword ptr [rsp+0000000000000130h],ymm10
+                    01 00 00
+  0000000140002AE8: C5 7C 11 8C 24 50  vmovups     ymmword ptr [rsp+0000000000000150h],ymm9
+                    01 00 00
+  0000000140002AF1: C5 7C 11 84 24 70  vmovups     ymmword ptr [rsp+0000000000000170h],ymm8
+                    01 00 00
+  0000000140002AFA: C5 FC 11 BC 24 90  vmovups     ymmword ptr [rsp+0000000000000190h],ymm7
+                    01 00 00
+  0000000140002B03: C5 FC 11 B4 24 B0  vmovups     ymmword ptr [rsp+00000000000000B0h],ymm6
+                    00 00 00
+  0000000140002B0C: C5 FC 11 AC 24 D0  vmovups     ymmword ptr [rsp+00000000000000D0h],ymm5
+                    00 00 00
+  0000000140002B15: C5 FC 11 A4 24 F0  vmovups     ymmword ptr [rsp+00000000000000F0h],ymm4
+                    00 00 00
+  0000000140002B1E: C5 FC 11 9C 24 90  vmovups     ymmword ptr [rsp+0000000000000090h],ymm3
+                    00 00 00
+  0000000140002B27: C5 FC 11 54 24 30  vmovups     ymmword ptr [rsp+30h],ymm2
+  0000000140002B2D: 48 83 3D CB 4F 02  cmp         qword ptr [0000000140027B00h],0
+                    00 00
+  0000000140002B35: 75 10              jne         0000000140002B47
+  0000000140002B37: 48 8D 0D C2 4F 02  lea         rcx,[0000000140027B00h]
+                    00
+  0000000140002B3E: C5 F8 77           vzeroupper

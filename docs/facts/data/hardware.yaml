@@ -831,6 +831,31 @@ facts:
     edges:
       - {"type": "uses", "to": "M887"}
       - {"type": "supports", "to": "M880"}
+  - id: M906
+    status: MEASURED
+    date: "2026-10-21"
+    claim: "The BC-250's CPU (CPUID leaf 1 EAX 0x00840F70: family 17h, model 47h, a Zen 2 core) reports the x86-64-v3 feature set and not v4. SSE2 to SSE4.2, SSSE3, SSE4a, POPCNT, LZCNT, CMPXCHG16B, LAHF/SAHF, MOVBE, XSAVE, AVX, FMA3, F16C, AVX2, BMI1, BMI2, ADX, AES-NI, PCLMULQDQ, SHA, RDRAND, RDSEED, CLFLUSHOPT, CLWB and RDPID are present and XCR0 is 0x7. AVX-512, VAES, VPCLMULQDQ, FSRM, FMA4 and XOP are absent"
+    status_text: "MEASURED (unit A, Windows 22631, n = 2 runs)"
+    detail: "Read by `tools/win/cpubench` from CPUID leaves 1, 7 and 0x80000001 and XGETBV(0). Windows names the part \"AMD BC-250\" with 6 cores and 12 logical processors. SSE4a is an AMD extension: an Intel Core i7-13700KF, also x86-64-v3, reports it absent. Code built with `-march=znver2` can therefore use an instruction that an Intel CPU of the same level does not have, and code built with `-march=x86-64-v3 -mtune=znver2` cannot. The throughput of these instructions is M907"
+    evidence: "[BC-250 CPU throughput](../evidence/windows/2026-10-21-bc250-cpu-vector-throughput/README.md)"
+  - id: M907
+    status: MEASURED
+    date: "2026-10-21"
+    claim: "On the BC-250's CPU, 256-bit FMA, FADD and FMUL each issue at the rate of their 128-bit forms, one per cycle, and `pshufb` issues two per cycle at both widths. Ten independent chains take 0.2866 ns per FMA, FADD or FMUL instruction and 0.1433 ns per `pshufb`, and one chain of 256-bit FMA takes 1.4329 ns per instruction, which is an estimated core clock of 3.49 GHz"
+    status_text: "MEASURED (unit A, n = 1 run, best of 15 repeats per line; the clock and the per-cycle rates are estimated from the documented Zen 2 FMA latency of 5 cycles)"
+    detail: "`tools/win/cpubench`, clang-cl build E6639816, the thread pinned to one logical CPU. Only the clang build keeps the ten 256-bit chains in registers; MSVC 19.44 keeps its FMA chains on the stack (disassembly excerpt in the evidence). Positive control: the same binary on an Intel Core i7-13700KF gives two FMA, FADD and FMUL per cycle (0.0957-0.0969 ns, an estimated 5.2 GHz from its 4-cycle FMA latency), so the method can show two per cycle. Ten chains are enough for two per cycle on this part too, because FADD and FMUL need six. AMD's Software Optimization Guide for AMD Family 17h Models 30h and Greater Processors (publication 56305) documents two FMA/FMUL pipes and two FADD pipes for Zen 2, which gives two per cycle each. That comparison is documented and not measured here. The estimated peak FP32 rate is 16 FLOP per cycle per core (one 8-lane FMA). Not measured: whether one FMA and one FADD issue in the same cycle"
+    evidence: "[BC-250 CPU throughput](../evidence/windows/2026-10-21-bc250-cpu-vector-throughput/README.md)"
+    edges:
+      - {"type": "uses", "to": "M906"}
+  - id: M908
+    status: MEASURED
+    date: "2026-10-21"
+    claim: "One CPU thread of the BC-250 copies a 1920x1200 frame of 4-byte pixels (9.2 MB) at 8.7 GB/s with `memcpy`, against 30 GB/s on an Intel Core i7-13700KF. The per-byte RGBA8 to BGRA8 row loop of the Vulkan WSI's GDI route, compiled by MSVC 19.44 `/O2`, runs at 3.35 GB/s both on the frame and in L1: 2.750 ms per frame, against 0.819 ms for an SSSE3 `pshufb` copy and 1.064 ms for `memcpy`"
+    status_text: "MEASURED (unit A, n = 1 run, best of 15 repeats per line)"
+    detail: "`tools/win/cpubench`, with the loop that `wsi_common_win32.cpp` runs in its GDI present for `VK_FORMAT_R8G8B8A8_UNORM`; every output is compared with the loop's own output. A 32-bit word swap takes 0.820-0.879 ms per frame and AVX2 `vpshufb` 0.963-0.973 ms. In L1, AVX2 is faster than SSSE3 (54.4 against 27.6 GB/s); on the frame it is slower, for a reason that is not established. The clang-cl 23.1.2 build of the same C loop takes 1.064 ms per frame, the `memcpy` time. The Mesa components of the driver are MSVC builds (`docs/build.md`), so the MSVC figure is the cost of the loop for an application whose swap chain is RGBA8 on the GDI route"
+    evidence: "[BC-250 CPU throughput](../evidence/windows/2026-10-21-bc250-cpu-vector-throughput/README.md)"
+    edges:
+      - {"type": "uses", "to": "M906"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"

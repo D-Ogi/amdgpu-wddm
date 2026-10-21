@@ -1,0 +1,76 @@
+lab utc 2026-10-21T01:56:22.4728624Z
+exe sha256 F521259E97707065BABB37CCCD5CB8964EA6BA45377B7FE8E80974F00EDB02FD
+cpu AMD BC-250 cores 6 logical 12 max 3194 MHz current 3194 MHz
+=== cpubench.exe sha256 F521259E97707065BABB37CCCD5CB8964EA6BA45377B7FE8E80974F00EDB02FD
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 2.750 ms 3.35 GB/s match
+frame words 1920x1200 0.879 ms 10.48 GB/s match
+frame ssse3 1920x1200 0.819 ms 11.25 GB/s match
+frame avx2 1920x1200 0.973 ms 9.47 GB/s match
+frame memcpy 1920x1200 1.064 ms 8.67 GB/s match
+l1 bytes 0.2971 ns/byte 3.37 GB/s
+l1 words 0.0628 ns/byte 15.91 GB/s
+l1 ssse3 0.0362 ns/byte 27.61 GB/s
+l1 avx2 0.0147 ns/byte 67.97 GB/s
+l1 memcpy 0.0095 ns/byte 105.13 GB/s
+reg shuf128 0.1433 ns/insn
+reg shuf256 0.1432 ns/insn
+reg fma128 0.3726 ns/insn
+reg fma256 0.4013 ns/insn
+reg add128 0.2866 ns/insn
+reg add256 0.2868 ns/insn
+reg mul128 0.2866 ns/insn
+reg mul256 0.2865 ns/insn
+lat fma256 1.4330 ns/insn
+=== cpubench-avx2.exe sha256 43AD563A34DBE088428E418A1F1E1BD5349BE5E8DA2A81FBC50AB49A6C196AC5
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 2.753 ms 3.35 GB/s match
+frame words 1920x1200 0.820 ms 11.24 GB/s match
+frame ssse3 1920x1200 0.819 ms 11.25 GB/s match
+frame avx2 1920x1200 0.963 ms 9.57 GB/s match
+frame memcpy 1920x1200 1.064 ms 8.66 GB/s match
+l1 bytes 0.2973 ns/byte 3.36 GB/s
+l1 words 0.0315 ns/byte 31.73 GB/s
+l1 ssse3 0.0363 ns/byte 27.58 GB/s
+l1 avx2 0.0184 ns/byte 54.40 GB/s
+l1 memcpy 0.0095 ns/byte 105.43 GB/s
+reg shuf128 0.1433 ns/insn
+reg shuf256 0.1433 ns/insn
+reg fma128 0.3726 ns/insn
+reg fma256 0.4012 ns/insn
+reg add128 0.2866 ns/insn
+reg add256 0.2866 ns/insn
+reg mul128 0.2864 ns/insn
+reg mul256 0.2866 ns/insn
+lat fma256 1.4326 ns/insn
+=== cpubench-clang.exe sha256 E6639816960C743E3AF841F799A20D308BBAAFB21260FCBEAA5465DDBDA4FA29
+brand AMD BC-250
+family-model-stepping eax=0x00840F70
+cpuid sse2=1 sse3=1 ssse3=1 sse4.1=1 sse4.2=1 popcnt=1 aes=1 pclmulqdq=1 avx=1 fma3=1 f16c=1 rdrand=1 avx2=1 bmi1=1 bmi2=1 adx=1 sha=1 rdseed=1 clflushopt=1 clwb=1 avx512f=0 vaes=0 vpclmulqdq=0 rdpid=1 fsrm=0 sse4a=1 lzcnt=1 fma4=0 xop=0
+xcr0 0x7
+frame bytes 1920x1200 1.064 ms 8.66 GB/s match
+frame words 1920x1200 1.050 ms 8.78 GB/s match
+frame ssse3 1920x1200 0.822 ms 11.21 GB/s match
+frame avx2 1920x1200 0.922 ms 9.99 GB/s match
+frame memcpy 1920x1200 1.062 ms 8.68 GB/s match
+l1 bytes 0.0095 ns/byte 104.86 GB/s
+l1 words 0.0094 ns/byte 105.87 GB/s
+l1 ssse3 0.0182 ns/byte 54.88 GB/s
+l1 avx2 0.0094 ns/byte 106.29 GB/s
+l1 memcpy 0.0094 ns/byte 106.29 GB/s
+reg shuf128 0.1433 ns/insn
+reg shuf256 0.1433 ns/insn
+reg fma128 0.2866 ns/insn
+reg fma256 0.2866 ns/insn
+reg add128 0.2865 ns/insn
+reg add256 0.2866 ns/insn
+reg mul128 0.2865 ns/insn
+reg mul256 0.2866 ns/insn
+lat fma256 1.4329 ns/insn
+exit 0
