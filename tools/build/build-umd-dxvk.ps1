@@ -61,6 +61,7 @@ try {
     $includes=@("/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$DxvkSource\src", "/external:I$DxvkSource\include\vulkan\include", "/external:I$DxvkSource\include\spirv\include", "/external:I$DxvkSource\subprojects\dxbc-spirv")
     Push-Location $OutputDir
     try {
+        if($Compiler -eq 'clang-cl'){Test-Bc250ClangSdk $compilerExe ($dllFlags+$includes) $OutputDir}
         # /Brepro on both the compiler and the linker. Without it the PE carries a build timestamp, and
         # then the SHA-256 of the shell names a build moment instead of the sources it came from: two
         # builds of one commit differ in four bytes. A release that identifies its payload by hash needs

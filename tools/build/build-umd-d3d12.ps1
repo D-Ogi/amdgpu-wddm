@@ -73,6 +73,7 @@ try {
  $shipped=@(if(-not $Lab){'/DNDEBUG'})
  Push-Location $OutputDir
  try {
+  if($Compiler -eq 'clang-cl'){Test-Bc250ClangSdk $compilerExe $dllFlags $OutputDir}
   if(Test-Path amdgpu_wddm_d3d12.dll){
    $hash=(Get-FileHash amdgpu_wddm_d3d12.dll).Hash
    Copy-Item amdgpu_wddm_d3d12.dll "retained-$hash.dll"

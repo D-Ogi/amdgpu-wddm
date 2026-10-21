@@ -299,11 +299,14 @@ shaders in DDI form. The checks are listed under Validation in
 The D3D11 and D3D12 shell recipes (`build-umd-dxvk.ps1`, `build-umd-d3d12.ps1`) and the D3D12 native
 library recipe (`build-engine-ddi.ps1`) default to `-Compiler clang-cl`. They require LLVM 23.1.4 at
 `toolchain/llvm-23.1.4-win64/bin/clang-cl.exe` and print its version. The shipped objects use the x86-64-v3
-instruction set and tune for Zen 2; `-Arch x86` selects the Windows i686 target. Host ABI tests and the
+instruction set and tune for Zen 2. `-Arch x86` selects the Windows i686 target. Host ABI tests and the
 MSVC static-analysis control stay separate from those objects. Each output directory contains `compiler.json`.
 There is no automatic compiler fallback. `-Compiler msvc -MsvcReason '<concrete compatibility reason>'`
 selects an explicit exception and records its reason. Keep the failing compiler output with the candidate.
-These recipes build and test artifacts; they do not select or install a driver.
+The Clang SDK control compares layouts with MSVC, calls the Clang object from MSVC, and checks prefetch
+instruction encodings. Its negative control must reject a project packing error. `clang-windows.h` scopes
+MSVC-only SDK diagnostics to platform headers and restores LLVM's prefetch hints after SDK 26100 on i686.
+These recipes build and test artifacts. They do not select or install a driver.
 
 ## vkd3d-proton
 

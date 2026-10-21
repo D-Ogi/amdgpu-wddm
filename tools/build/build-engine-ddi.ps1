@@ -131,6 +131,7 @@ try {
 
     Push-Location $OutputDir
     try {
+        if($Compiler -eq 'clang-cl'){Test-Bc250ClangSdk $compilerExe $nativeFlags $OutputDir}
         foreach ($d in @('native', 'harness', 'analysis')) { New-Item -ItemType Directory -Force (Join-Path $OutputDir $d) | Out-Null }
 
         Invoke-Step 'header gate build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:engine-ddi-header-test.exe (Join-Path $src 'engine-ddi-header-test.cpp') }
