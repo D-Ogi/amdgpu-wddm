@@ -61,6 +61,7 @@ typedef struct { volatile long DcnLockTimeouts; int VidPnFlipEnabled;
     volatile LONG DcnFormatRefused, DcnFlipRefused, DcnFormatChanges, DcnFlipsHardware, DcnSurfaceSequence;
     ULONG DcnFirmwareSurfaceConfig, DcnFirmwareHubpretControl, DcnFirmwareCnvcFormat;
     BOOLEAN DcnPlaneFormats; ULONG DcnPlaneFormat;
+    BOOLEAN DcnPipeConnector; ULONG DcnPipeDetPlane1;   /* BD-197: the connector commit's DET plane-1 base */
     volatile LONG DcnImmediateFlips, DcnImmediateSameFrame;
     volatile LONG DcnImmediateOutcomes[BC250_DCN_IMMEDIATE_OUTCOMES];
     volatile LONG DcnImmediateDoneMaxUs, DcnImmediateObserveMaxUs, DcnImmediateOverruns;
@@ -678,33 +679,40 @@ static void SourceAddressNoLog(void)
     CHECK(protected_logs == 0);
     protected_call = 0;
 }
-/* BD-197: the trailer's PLANE_FORMATS answer (DcnPlaneFormatsOpen) is the flip path's, in every state of the three
+/* BD-197: the trailer's PLANE_FORMATS answer (DcnPlaneFormatsOpen) is the flip path's, in every state of the four
    facts it reads: never a promise of a format the flip refuses, never a refusal of one the flip programs. The
-   firmware's format flips in every state, so a refusal of the other one is about the format alone. */
+   firmware's format flips in every state but a runtime mode without a valid surface (bit 8), where nothing flips,
+   so a refusal of the other format is about the format alone. Step 2: a runtime mode (bit 4) is the connector
+   commit's own pipe and takes every format, the fixed inherited pipe (bit 2) under it included. */
+static void PlaneFormatsStates(BC250_DEVICE *d, unsigned state)
+{
+    SourceDevice(d);
+    d->DcnPlaneFormats = (state & 1) ? FALSE : TRUE;
+    if (state & 2) { d->Modeset.InheritedFixed = TRUE; d->Modeset.InheritedSupport = 1; }
+    if (state & 4) { d->RuntimeDisplayChanged = 1; d->RuntimePostValid = (state & 8) ? 0 : 1; }
+}
 static void PlaneFormatsOpenAgrees(void)
 {
     BC250_DEVICE d;
-    BOOLEAN wrote, open;
+    BOOLEAN wrote, open, posted;
     ULONGLONG physical;
     NTSTATUS status;
-    unsigned state;
-    for (state = 0; state < 8; state++) {
-        SourceDevice(&d);
-        d.DcnPlaneFormats = (state & 1) ? FALSE : TRUE;
-        if (state & 2) { d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = 1; }
-        if (state & 4) { d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1; }
-        CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE,
-                                   &physical, &wrote) == STATUS_SUCCESS && wrote);
-        SourceDevice(&d);
-        d.DcnPlaneFormats = (state & 1) ? FALSE : TRUE;
-        if (state & 2) { d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = 1; }
-        if (state & 4) { d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1; }
+    unsigned state, opened = 0;
+    for (state = 0; state < 16; state++) {
+        if ((state & 8) && !(state & 4)) continue;
+        posted = !(state & 8);
+        PlaneFormatsStates(&d, state);
+        status = DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE, &physical, &wrote);
+        CHECK(posted ? (status == STATUS_SUCCESS && wrote) : (status == STATUS_NOT_SUPPORTED && !wrote));
+        PlaneFormatsStates(&d, state);
         open = DcnPlaneFormatsOpen(&d);
-        CHECK(open == (state == 0));
+        CHECK(open == (!(state & 1) && ((state & 4) ? posted : !(state & 2))));
+        opened += open ? 1 : 0;
         status = DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, 4096, FALSE, &physical, &wrote);
         CHECK(open ? (status == STATUS_SUCCESS && wrote && d.DcnFormatChanges == 1) :
                      (status == STATUS_NOT_SUPPORTED && !wrote && model.writes == 0));
     }
+    CHECK(opened == 3);   /* the free inherited pipe, and a posted runtime mode over either inherited pipe */
 }
 static void WitnessQualification(void)
 {
@@ -909,6 +917,80 @@ static void WriterBridgeAfterDetach(void)
     CHECK(protected_logs==0);
     model.bridge=0;model.observing=0;model.irql=0;
 }
+/* BD-197 step 2: an RGBA8 flip on a runtime mode and the plane's way back to ARGB8888, by the desktop's next flip
+   and by the next writer's bridge to the reserved buffer (a connector commit, disable, suspend or resume begins
+   with it). Every format write keeps the pipe owner's other fields: the firmware's, with the commit's DET plane-1
+   base once a commit programmed the pipe. The firmware values carry bits in every field the format leaves. */
+static NTSTATUS RuntimeFlip(BC250_DEVICE *d, ULONGLONG card, ULONG pitch, ULONG format, ULONGLONG *physical,
+    BOOLEAN *wrote)
+{
+    model.address_writes = 0;   /* the model counts one sequence's address halves */
+    return DcnFlipSourceAddress(d, card, pitch, format, (ULONGLONG)pitch * 16, FALSE, physical, wrote);
+}
+static void RuntimeModeFormats(void)
+{
+    const ULONG fwConfig = 0x00000308ul, fwCrossbar = 0x5AE4100Ful, fwCnvc = 0x00000008ul;
+    const ULONG det = HUBPRET0_HUBPRET_CONTROL__DET_BUF_PLANE1_BASE_ADDRESS_MASK;
+    const ULONG formatBits = HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK |
+                             HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R_MASK;
+    BC250_DEVICE d;
+    BC250_DCN_WRITER_BRIDGE bridge;
+    BOOLEAN wrote;
+    ULONGLONG physical;
+    unsigned connector;
+    for (connector = 0; connector <= 1; connector++) {
+        const ULONG ownerDet = connector ? 0x2A5ul : (fwCrossbar & det);
+        BridgeDevice(&d); model.bridge = 0;
+        d.DcnFirmwareSurfaceConfig = fwConfig; d.DcnFirmwareHubpretControl = fwCrossbar; d.DcnFirmwareCnvcFormat = fwCnvc;
+        model.config = fwConfig; model.crossbar = fwCrossbar; model.cnvc = fwCnvc;
+        d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = 1;   /* the commit replaced a scaled pipe */
+        d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1;
+        if (connector) {
+            DcnPipeConnectorPlan(&d, ownerDet);
+            CHECK(d.DcnPipeConnector && d.DcnPipeDetPlane1 == ownerDet && model.writes == 0);
+        }
+        CHECK(DcnPlaneFormatsOpen(&d));
+        /* Only the runtime pitch: the commit's plan is for that surface. */
+        CHECK(RuntimeFlip(&d, 0x101000, 512, BC250_PLANE_FORMAT_ABGR8888, &physical, &wrote) ==
+              STATUS_NOT_SUPPORTED && !wrote && model.writes == 0);
+        CHECK(RuntimeFlip(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, &physical, &wrote) ==
+              STATUS_SUCCESS && wrote && physical == 0x201000 && model.latched == 0x201000);
+        CHECK(model.format_writes == 3 && d.DcnFormatChanges == 1 && d.DcnPlaneFormat == BC250_PLANE_FORMAT_ABGR8888);
+        CHECK(DcnPlaneFormatDecodeRegisters(model.config, model.crossbar, model.cnvc) == BC250_PLANE_FORMAT_ABGR8888);
+        CHECK(model.config == fwConfig && model.cnvc == fwCnvc);
+        CHECK((model.crossbar & det) == ownerDet && (model.crossbar & ~(det | formatBits)) == (fwCrossbar & ~(det | formatBits)));
+        /* A run of RGBA8 frames writes the format once. */
+        CHECK(RuntimeFlip(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, &physical, &wrote) ==
+              STATUS_SUCCESS && wrote && model.format_writes == 3);
+        /* The desktop's next BGRA8 flip writes ARGB8888 back, with the owner's DET. */
+        CHECK(RuntimeFlip(&d, 0x104000, 256, BC250_PLANE_FORMAT_ARGB8888, &physical, &wrote) ==
+              STATUS_SUCCESS && wrote && model.latched == 0x204000);
+        CHECK(model.format_writes == 6 && d.DcnPlaneFormat == BC250_PLANE_FORMAT_ARGB8888);
+        CHECK(model.config == fwConfig && model.cnvc == fwCnvc &&
+              model.crossbar == ((fwCrossbar & ~det) | ownerDet));
+        /* RGBA8 again, then the next writer's Begin: the bridge to the reserved buffer is an ARGB8888 flip. */
+        CHECK(RuntimeFlip(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, &physical, &wrote) ==
+              STATUS_SUCCESS && wrote && model.format_writes == 9);
+        model.bridge = 1; model.writes = 0; model.address_writes = 0;
+        CHECK(BridgeProgram(&d, &wrote, &bridge) == STATUS_SUCCESS);
+        CHECK(wrote && bridge.Physical == 0x202000 && bridge.Pitch == 256 && model.latched == 0x202000);
+        CHECK(model.format_writes == 12 && d.DcnPlaneFormat == BC250_PLANE_FORMAT_ARGB8888);
+        CHECK(model.config == fwConfig && model.cnvc == fwCnvc &&
+              model.crossbar == ((fwCrossbar & ~det) | ownerDet));
+        CHECK(BridgeRetire(&d, &bridge) == STATUS_SUCCESS);
+        /* The next Begin finds its bridge current: ARGB8888 at the reserved buffer, no write. */
+        model.writes = 0; model.observing = 0;
+        CHECK(BridgeProgram(&d, &wrote, &bridge) == STATUS_SUCCESS && !wrote && bridge.Retired && model.writes == 0);
+        model.bridge = 0; model.observing = 0; model.irql = 0;
+    }
+    /* A runtime mode without a valid surface (a commit in progress, a detach) flips nothing and says so. */
+    BridgeDevice(&d); model.bridge = 0;
+    d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 0;
+    CHECK(!DcnPlaneFormatsOpen(&d));
+    CHECK(RuntimeFlip(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, &physical, &wrote) ==
+          STATUS_NOT_SUPPORTED && !wrote && model.writes == 0);
+    CHECK(protected_logs == 0);
+}
 int main(void)
 {
     BC250_DEVICE device = {0};
@@ -1067,6 +1149,7 @@ int main(void)
     WitnessQualification();
     WriterBridge();
     WriterBridgeAfterDetach();
+    RuntimeModeFormats();
     printf("dcn flip: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

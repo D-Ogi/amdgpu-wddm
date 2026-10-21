@@ -305,6 +305,12 @@ typedef struct _BC250_DEVICE {
     BOOLEAN DcnPlaneFormats;
     ULONG DcnPlaneFormat;
     volatile LONG DcnFormatChanges, DcnFormatRefused;
+    // BD-197: HUBPRET0_HUBPRET_CONTROL.DET_BUF_PLANE1_BASE_ADDRESS as the pipe's current owner programmed it. Of the
+    // fields of the three format registers other than the format fields, it is the only one a connector commit
+    // writes (Bc250Dcn201PipeApply, hubp201_program_requestor, from the commit's DML plan). DcnPipeConnector is FALSE
+    // until the first such commit of a start; until then the firmware's capture holds the owner's value.
+    BOOLEAN DcnPipeConnector;
+    ULONG DcnPipeDetPlane1;
 
     // dcn.c's VidPn flip (0.7.24, ADR 0011 point 3 step 3): Device->DcnWriteEnabled && EnableVidPnFlip together
     // (mmio.c's MmioStart), i.e. EnableMmio && EnableDcnWrite && EnableVidPnFlip. Meaningful only under the full
@@ -868,6 +874,9 @@ NTSTATUS DcnWitnessRead(_In_ const BC250_DEVICE* Device, _Out_ BC250_DCN_WITNESS
 void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device);
 // BD-197: whether a flip may program another format now (dcn.c), which the scan-out caps trailer publishes.
 BOOLEAN DcnPlaneFormatsOpen(_In_ BC250_DEVICE* Device);
+// BD-197: a connector commit programmed the pipe with this DET plane-1 base (connector_link.c Apply, right after
+// Bc250Dcn201PipeApply). From then on the format registers keep it (DcnPlaneFormatRegisters). State only.
+void DcnPipeConnectorPlan(_Inout_ BC250_DEVICE* Device, ULONG DetPlane1);
 // Non-blocking hardware observations: pending includes EARLIEST_INUSE mismatch.
 // Scanout returns the actual card address, independently of request publication.
 BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress);

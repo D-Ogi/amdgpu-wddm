@@ -90,8 +90,18 @@ The registers are `HUBP0_DCSURF_SURFACE_CONFIG` (field `SURFACE_PIXEL_FORMAT`), 
 `hubp1_program_pixel_format` (Linux v6.18 `dcn10_hubp.c:236-300`, which `dcn201_hubp.c` calls) and
 `dpp201_cnv_setup` (`dcn201_dpp.c:44-176`). The firmware's own values (`SURFACE_PIXEL_FORMAT` 8,
 `HUBPRET_CONTROL` 0x00E40000) are in E21 and E22. The driver reads the three registers once at start.
-It writes back the firmware's values with only the named fields replaced. It does not write any other
-field of these registers.
+It writes back the values of the pipe's current owner with only the named fields replaced. It does not
+write any other field of these registers.
+
+The owner's values are the firmware's, with one exception (BD-197). A connector commit programs the pipe
+again (`Bc250Dcn201PipeApply` in `driver/kmd/connector_link.c`), and of the fields of these three registers
+it writes only `HUBPRET_CONTROL.DET_BUF_PLANE1_BASE_ADDRESS`, from its DML plan (`hubp201_program_requestor`
+in `driver/shim/pipe_hubp201.inc`). After a commit, the driver therefore writes the plan's value into that
+field (`DcnPipeConnectorPlan`, `DcnPlaneFormatRegisters`). For a 32-bit 444 surface the plan gives 0
+(`extract_rq_regs`, `driver/shim/dml201/dcn20/display_rq_dlg_calc_20.c:231`), which is also the firmware's
+value on unit A. Nothing in the driver writes `ROTATION_ANGLE`, `H_MIRROR_EN`, `PACK_3TO2_ELEMENT_DISABLE`,
+the alpha and Y/G crossbar fields or the spare bits, so for them the firmware's values are the owner's
+values on every pipe.
 
 The write order is in `DcnFlipWriteSequence` (`driver/kmd/dcn.c`). The CNVC, crossbar and surface format
 writes come before the pitch and the address, inside the same `OTG_MASTER_UPDATE_LOCK` window. The driver
@@ -102,11 +112,20 @@ format change is a full update in Linux (`dc.c:2672`), and Linux also writes it 
 The driver restores ARGB8888 on these paths:
 
 - the flip back to the desktop's primary.
-- the restore of the firmware's surface at stop and at D3 (`DcnRestorePostDisplay`).
+- the bridge flip to the reserved buffer at the start of each connector writer: commit, disable, suspend
+  and resume (`DcnWriterBridge`).
+- the surface write of a connector commit and of a suspend (`DcnRuntimeSurface`, `DcnLinkSurfaceRestore`).
+- the restore of the firmware's surface or the runtime surface at stop, reset, bugcheck and D3
+  (`DcnRestorePostDisplay`, `DcnRestorePostDisplaySerialized`). At D3 the connector's suspend
+  (`ConnectorLinkSuspend`) and the D3 of a pipe with a smaller source mode (`ModesetPowerDown`) use these
+  functions or `DcnFlipToFirmwareSurface`, which also runs before the viewport grows.
 - a flip of an allocation that has no plane encoding. The driver refuses this flip with
   `STATUS_NOT_SUPPORTED` and does not change the plane.
 
 The retained power pause sets the current format to "unknown", so the next flip writes the format again.
+Two paths do not write the plane: D3 and `Bc250ResetDevice` (`driver/kmd/pnp.c`) on the inherited pipe at
+its native mode. There the plane keeps the address and the format of its last flip, which agree with each
+other. After D0 the next flip writes both.
 The CPU mapping of the scan-out surface (`DcnScanoutMapping`) is available only while the plane uses
 ARGB8888.
 
@@ -115,10 +134,12 @@ ARGB8888.
 The scan-out caps trailer gets the flag `BC250_SCANOUT_CAPS_PLANE_FORMATS` (0x2). The driver sets it only
 with `BC250_SCANOUT_CAPS_DIRECT_FLIP`, and only when the start read the firmware's format registers and
 found ARGB8888. It also sets it only while the flip path programs the other formats
-(`DcnPlaneFormatsOpen`, BD-197): not with a fixed inherited pipe, and not while a runtime mode of the
-connector is on screen, because those two take ARGB8888 only. An enabled connector that keeps its
-inherited mode gets the flag. The shells ask again for each primary and the router's front for each
-DirectFlip question, so the flag follows a mode change as the geometry does.
+(`DcnPlaneFormatsOpen`, BD-197). A fixed inherited pipe takes ARGB8888 only, so it does not get the flag.
+An enabled connector that keeps its inherited mode gets the flag. A runtime mode of the connector gets the
+flag while its surface is valid: the commit's DML plan is for a 32-bit surface at the mode's pitch, and every
+plane encoding has 4 bytes a pixel. While a commit or a detach has no valid runtime surface, the flip path
+refuses every format, and the flag is clear. The shells ask again for each primary and the router's front
+for each DirectFlip question, so the flag follows a mode change as the geometry does.
 The table gets the policy bit `AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE` for BGRA8 and X8. A
 user-mode reader admits a row without that bit only when the trailer has the flag
 (`bc250_scanout_format_admitted` in `driver/contract/bc250_scanout_caps.h`). A new user-mode driver on an

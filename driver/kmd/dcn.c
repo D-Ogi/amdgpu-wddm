@@ -419,16 +419,28 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
 // CNVC_SURFACE_PIXEL_FORMAT, the fields hubp1_program_pixel_format and dpp201_cnv_setup set for a format. So the
 // value for ARGB8888 is the firmware's value itself, and restoring is a flip to ARGB8888. FALSE when PlaneFormat
 // has no encoding or the firmware's format was not captured.
+// BD-197: the other fields are the pipe owner's. Of all the fields of the three registers, the connector's commit
+// writes one: DET_BUF_PLANE1_BASE_ADDRESS (Bc250Dcn201PipeApply, from its DML plan). Nothing in this driver writes
+// ROTATION_ANGLE, H_MIRROR_EN, PACK_3TO2_ELEMENT_DISABLE, the alpha and Y/G crossbars or the spare bits except this
+// composition, so the firmware's capture is their owner's value on every pipe. After a commit (DcnPipeConnector)
+// the DET field is the commit's, so neither a format change nor a restore writes the firmware's DET base back over
+// the plan's. For the commit's 32-bit 444 surface the plan gives 0 (extract_rq_regs, display_rq_dlg_calc_20.c:231),
+// as the firmware does on unit A (0x00E40000).
 static BOOLEAN DcnPlaneFormatRegisters(_In_ const BC250_DEVICE* Device, ULONG PlaneFormat,
     _Out_ BC250_PLANE_REGISTERS* Out)
 {
     const BC250_PLANE_ENCODING* e = Bc250PlaneEncoding(PlaneFormat);
+    ULONG hubpret = Device->DcnFirmwareHubpretControl;
     Out->SurfaceConfig = Out->HubpretControl = Out->CnvcFormat = 0;
     if (!e || !Device->DcnPlaneFormats) return FALSE;
+    if (Device->DcnPipeConnector)
+        hubpret = (hubpret & ~HUBPRET0_HUBPRET_CONTROL__DET_BUF_PLANE1_BASE_ADDRESS_MASK) |
+            ((Device->DcnPipeDetPlane1 << HUBPRET0_HUBPRET_CONTROL__DET_BUF_PLANE1_BASE_ADDRESS__SHIFT) &
+             HUBPRET0_HUBPRET_CONTROL__DET_BUF_PLANE1_BASE_ADDRESS_MASK);
     Out->SurfaceConfig = (Device->DcnFirmwareSurfaceConfig & ~HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK) |
         ((e->HubpPixelFormat << HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT__SHIFT) &
          HUBP0_DCSURF_SURFACE_CONFIG__SURFACE_PIXEL_FORMAT_MASK);
-    Out->HubpretControl = (Device->DcnFirmwareHubpretControl &
+    Out->HubpretControl = (hubpret &
         ~(HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK | HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R_MASK)) |
         ((e->CrossbarCbB << HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B__SHIFT) &
          HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK) |
@@ -1403,15 +1415,25 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 
 // BD-197: whether DcnFlipSourceAddress programs a plane format other than the firmware's at this moment. wddm.c
 // publishes the answer as BC250_SCANOUT_CAPS_PLANE_FORMATS, and the shells ask again for each primary, so the
-// answer follows a mode change. The three conditions are the flip path's own: the start captured the firmware's
-// format, the inherited pipe is not fixed, and no runtime mode of the connector is on screen (the runtime surface
-// is ARGB8888 only). An enabled connector that still shows its inherited mode takes the other formats. The trailer
-// of 0.7.216.62 refused them for every enabled connector, so on a DP screen an RGBA8 chain was never a scan-out
-// primary and DWM composed it.
+// answer follows a mode change. The conditions are the flip path's own (DcnFlipSourceAddress): the start captured
+// the firmware's format, and either a runtime mode of the connector is on screen with its surface valid, or the
+// pipe is not the fixed inherited one. A runtime mode replaces the inherited pipe with the commit's own, which
+// takes every format, and an enabled connector that still shows its inherited mode does too. While a commit or a
+// detach has no valid runtime surface, the flip path refuses every format, so the answer is no. The trailer of
+// 0.7.216.62 to 0.7.216.103 refused the other formats for every enabled connector, so on a DP screen an RGBA8
+// chain was never a scan-out primary and DWM composed it.
 BOOLEAN DcnPlaneFormatsOpen(_In_ BC250_DEVICE* Device)
 {
-    return Device->DcnPlaneFormats && !Device->Modeset.InheritedFixed &&
-        !InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0);
+    if (!Device->DcnPlaneFormats) return FALSE;
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0))
+        return InterlockedCompareExchange(&Device->RuntimePostValid, 0, 0) != 0;
+    return !Device->Modeset.InheritedFixed;
+}
+
+void DcnPipeConnectorPlan(_Inout_ BC250_DEVICE* Device, ULONG DetPlane1)
+{
+    Device->DcnPipeDetPlane1 = DetPlane1;
+    Device->DcnPipeConnector = TRUE;
 }
 
 // SetVidPnSourceAddress's own flip: the same M87 write sequence DcnFlipCore uses (DcnFlipWriteSequence), never
@@ -1441,9 +1463,13 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
     // The scaled inherited path retains the GOP viewport and surface layout.
     // A new pitch or format needs a separately admitted pipe configuration.
+    // BD-197: a runtime mode's pipe is the connector commit's own. Its DML plan is for a 32-bit 444 surface at
+    // RuntimePost.Pitch (connector_link.c Plan), the source format of every plane encoding (plane_format.h, the
+    // same-size rule), and the format registers keep its DET base (DcnPlaneFormatRegisters). So it takes every
+    // format at that pitch, where 0.7.216.62 to 0.7.216.103 took ARGB8888 only.
     if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) {
         if (!InterlockedCompareExchange(&Device->RuntimePostValid,0,0) ||
-            Pitch!=Device->RuntimePost.Pitch || PlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 ||
+            Pitch!=Device->RuntimePost.Pitch ||
             DisplaySourceWidth(Device)!=Device->RuntimePost.Width ||
             DisplaySourceHeight(Device)!=Device->RuntimePost.Height) return STATUS_NOT_SUPPORTED;
     } else if (Device->Modeset.InheritedFixed && (!Device->Modeset.InheritedSupport ||

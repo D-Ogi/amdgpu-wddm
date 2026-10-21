@@ -686,6 +686,9 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
        clocks.DentistVcoKhz!=m->Clocks.DentistVcoKhz)return STATUS_DEVICE_DATA_ERROR;
     m->Clocks=clocks;
     LINK_CALL(c,BC250_LINK_PIPE,Bc250Dcn201PipeApply(&c->Io,&m->Dml,&m->Clocks));
+    // BD-197: hubp201_program_requestor wrote the plan's DET plane-1 base into HUBPRET_CONTROL; the format
+    // registers of every later surface write keep it.
+    DcnPipeConnectorPlan(d,m->Dml.Rq.plane1_base_address);
     c->Phase=3;
     LINK_ATOM(c,BC250_LINK_PIXEL_CLOCK,Bc250LinkAtomClock(&c->Atom,m->Protocol,m->Timing.PixelClockKhz));
     sync.VReady=m->Dml.VReady;sync.VStartup=m->Dml.VStartup;

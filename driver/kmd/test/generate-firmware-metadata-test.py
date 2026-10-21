@@ -13,6 +13,11 @@ code=function(psp,'static NTSTATUS ReadFirmwareMetadata(')+function(psp,'NTSTATU
 a=psp.index('            psp->Loaded = (result == 0 && Data->CommandsDone')
 b=psp.index('            break;',a)
 code+='static void CompleteLoad(BC250_PSP* psp, int result, unsigned done, unsigned total, struct bc250_umd_firmware firmware) {\n struct counters {unsigned CommandsDone,CommandCount;} counters={done,total};\n struct counters* Data=&counters;\n'+psp[a:b]+'}\n'
+# BD-197: the PLANE_FORMATS rule the branch asks, dcn.c's own, renamed so the fixture can count its questions.
+dcn=(root/'driver/kmd/dcn.c').read_text()
+open_rule=function(dcn,'BOOLEAN DcnPlaneFormatsOpen(')
+assert open_rule.startswith('BOOLEAN DcnPlaneFormatsOpen(')
+code+='static '+open_rule.replace('DcnPlaneFormatsOpen(','DcnPlaneFormatsOpenActual(',1)
 wddm=(root/'driver/kmd/wddm.c').read_text()
 a=wddm.index('    case DXGKQAITYPE_UMDRIVERPRIVATE:');b=wddm.index('    default:',a)
 code+='static NTSTATUS QueryCaps(BC250_DEVICE* device, QUERY* QueryAdapterInfo) {\n NTSTATUS status=STATUS_INVALID_PARAMETER;\n switch(DXGKQAITYPE_UMDRIVERPRIVATE) {\n'+wddm[a:b]+' }\n return status;\n}\n'

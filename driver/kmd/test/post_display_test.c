@@ -38,6 +38,9 @@ typedef struct _BC250_DEVICE {
     ULONG DcnFirmwareSurfaceConfig,DcnFirmwareHubpretControl,DcnFirmwareCnvcFormat;
     BOOLEAN DcnPlaneFormats;
     ULONG DcnPlaneFormat;
+    /* BD-197: the connector commit's DET plane-1 base, which the format registers keep after a commit. */
+    BOOLEAN DcnPipeConnector;
+    ULONG DcnPipeDetPlane1;
 } BC250_DEVICE;
 #include "connector_surface.h"
 #define TRUE 1
@@ -342,6 +345,47 @@ int main(void)
         writer.status=STATUS_SUCCESS;model.elapsed=0;saved.Physical+=4096;writes=model.writes;
         CHECK(DcnLinkSurfaceRestore(&d,&saved)==STATUS_DEVICE_NOT_READY && model.writes==writes);
 
+    }
+    // BD-197 step 2: a runtime mode takes every plane format, so a client flip can leave its plane in R8G8B8A8.
+    // Every exit puts ARGB8888 back in the same locked update as the address: the connector's surface apply
+    // (DcnRuntimeSurface TRUE), suspend (FALSE), stop and reset (serialized) and the bugcheck screen, and the D3
+    // paths: the connector's suspend (ConnectorLinkSuspend: DcnRuntimeSurface FALSE, or DcnRestorePostDisplay on
+    // the inherited pipe) and the inherited pipe's own D3 and viewport grow (modeset.c: DcnFlipToFirmwareSurface).
+    // Each keeps the pipe owner's other fields: the firmware's, and the connector commit's DET plane-1 base. The
+    // inherited pipe after a commit of its own mode (RuntimeDisplayChanged 0) keeps the commit's DET as well.
+    {
+        const ULONG det=HUBPRET0_HUBPRET_CONTROL__DET_BUF_PLANE1_BASE_ADDRESS_MASK;
+        const ULONG cbcr=HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CB_B_MASK|HUBPRET0_HUBPRET_CONTROL__CROSSBAR_SRC_CR_R_MASK;
+        const ULONG fwCrossbar=0x5AE4100Ful;   /* spare bits, the crossbar, PACK_3TO2 and a DET base of 0x00F */
+        const ULONG restored=(fwCrossbar&~det)|0x2A5ul;
+        unsigned exit;
+        for(exit=0;exit<8;exit++){
+            /* 0-3 and 5 on the runtime mode, 4, 6 and 7 on the inherited pipe; 2-4 are the serialized OS callbacks */
+            const int runtime=exit<4 || exit==5,serialized=exit>=2 && exit<=4;
+            NTSTATUS status;
+            init(&d,fb);memset(&writer,0,sizeof(writer));
+            d.RuntimeFramebuffer=(UCHAR*)fb;d.RuntimeFramebufferLength=96;
+            d.RuntimeFramebufferPhysical.QuadPart=0x490000000ll;
+            if(runtime){
+                d.RuntimePost=d.Post;d.RuntimePost.Width=2;d.RuntimePost.Height=2;
+                d.RuntimePost.PhysicAddress=d.RuntimeFramebufferPhysical;d.RuntimePostValid=1;d.RuntimeDisplayChanged=1;
+            }
+            d.DcnPlaneFormats=TRUE;d.DcnPlaneFormat=BC250_PLANE_FORMAT_ABGR8888;
+            d.DcnFirmwareSurfaceConfig=0x308;d.DcnFirmwareHubpretControl=fwCrossbar;d.DcnFirmwareCnvcFormat=8;
+            d.DcnPipeConnector=TRUE;d.DcnPipeDetPlane1=0x2A5;
+            model.config=0x308;model.cnvc=8;model.crossbar=(restored&~cbcr)|0x00B00000ul;   /* ABGR8888 */
+            if(exit==0)status=DcnRuntimeSurface(&d,TRUE);
+            else if(exit==1)status=DcnRuntimeSurface(&d,FALSE);
+            else if(exit==2)status=DcnRestorePostDisplaySerialized(&d);
+            else if(exit<=4)status=Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt);
+            else if(exit<=6)status=DcnFlipToFirmwareSurface(&d);
+            else status=DcnRestorePostDisplay(&d);
+            CHECK(status==STATUS_SUCCESS);
+            CHECK(model.scanned==(runtime?0x490000000ull:d.DcnFirmwareAddress));
+            CHECK(model.config==0x308 && model.cnvc==8 && model.crossbar==restored && model.format_writes==3);
+            CHECK(d.DcnPlaneFormat==BC250_PLANE_FORMAT_ARGB8888);
+            CHECK(writer.resumes==(serialized?0u:1u));   /* only the serialized OS callbacks skip the writer gate */
+        }
     }
     printf("post display restore: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

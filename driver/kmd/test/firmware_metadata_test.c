@@ -43,14 +43,18 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
     // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
     BOOLEAN DcnPlaneFormats;
-    // BD-197: a runtime mode of the connector is on screen (the real one is a volatile LONG of bc250kmd.h).
-    long RuntimeDisplayChanged;
+    // BD-197: a runtime mode of the connector is on screen, and its surface is valid (the real ones are volatile
+    // LONGs of bc250kmd.h).
+    volatile long RuntimeDisplayChanged,RuntimePostValid;
     struct {BOOLEAN InheritedFixed;} Modeset;
 } BC250_DEVICE;
-/* dcn.c's DcnPlaneFormatsOpen over the three fields it reads; dcn_flip_test.c holds the real one to the flip path. */
+/* BD-197 step 2: dcn.c's own DcnPlaneFormatsOpen, extracted as DcnPlaneFormatsOpenActual by the generator;
+   dcn_flip_test.c holds the same function to the flip path. This wrapper counts the branch's questions. */
+#define FALSE 0
+static long InterlockedCompareExchange(volatile long* p,long v,long c){long old=*p;if(old==c)*p=v;return old;}
+static BOOLEAN DcnPlaneFormatsOpenActual(BC250_DEVICE* Device);
 static unsigned planeFormatQuestions;
-static BOOLEAN DcnPlaneFormatsOpen(BC250_DEVICE* d)
-{planeFormatQuestions++;return d->DcnPlaneFormats && !d->Modeset.InheritedFixed && !d->RuntimeDisplayChanged;}
+static BOOLEAN DcnPlaneFormatsOpen(BC250_DEVICE* d){planeFormatQuestions++;return DcnPlaneFormatsOpenActual(d);}
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE* d){return d->SourceHeight?d->SourceHeight:d->Post.Height;}
@@ -222,22 +226,42 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
-        // BD-197: the branch asks DcnPlaneFormatsOpen, the flip path's own rule, once per query. A runtime mode
-        // of the connector on screen is ARGB8888 only and withholds the extended formats. Whether the connector
-        // is enabled is not a question here: one that still shows its inherited mode takes them (0.7.216.62 to
-        // 0.7.216.103 withheld them for every enabled connector, so DWM composed every RGBA8 chain on DP).
+        // BD-197: the branch asks DcnPlaneFormatsOpen, the flip path's own rule (dcn.c's, extracted), once per
+        // query. Whether the connector is enabled is not a question here: one that still shows its inherited mode
+        // takes the extended formats (0.7.216.62 to 0.7.216.103 withheld them for every enabled connector, so DWM
+        // composed every RGBA8 chain on DP). Step 2: a runtime mode of the connector with a valid surface is the
+        // commit's own pipe and takes them too, over a fixed inherited pipe as well; a runtime mode without a valid
+        // surface (a commit in progress, a detach) flips nothing and withholds them.
         planeFormatQuestions=0;
-        d.RuntimeDisplayChanged=1;
+        d.RuntimeDisplayChanged=1;d.RuntimePostValid=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && planeFormatQuestions==1);
-        d.RuntimeDisplayChanged=0;
+        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+              planeFormatQuestions==1);
+        d.Modeset.InheritedFixed=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
               planeFormatQuestions==2);
+        d.RuntimePostValid=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && planeFormatQuestions==3);
+        d.Modeset.InheritedFixed=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        d.RuntimeDisplayChanged=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+              planeFormatQuestions==5);
+        // The fixed inherited pipe alone (a scaled source mode on the inherited timing) is ARGB8888 only.
         d.Modeset.InheritedFixed=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);

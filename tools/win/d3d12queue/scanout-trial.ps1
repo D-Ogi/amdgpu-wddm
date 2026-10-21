@@ -37,6 +37,9 @@ param(
     # are the same executable.
     [ValidateRange(1, 20000)][int]$Frames = 600,
     [ValidateRange(2, 3)][int]$Buffers = 3,
+    # The swap chain's format as its DXGI number (interactive-flip.h, flip_format_from): 28 R8G8B8A8_UNORM, 24
+    # R10G10B10A2_UNORM, 10 R16G16B16A16_FLOAT. Empty keeps the client's default, B8G8R8A8_UNORM (87).
+    [ValidateSet('', '87', '28', '24', '10')][string]$Format = '',
     # The interactive account the client runs as, and the task that carries it.
     [string]$User = 'bc250',
     [string]$TaskName = 'Scanout flip trial',
@@ -398,6 +401,7 @@ $lines = @('@echo off')
 $lines += 'set AMDGPU_WDDM_D3D12_EXPERIMENT='
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_FRAMES=$Frames"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_BUFFERS=$Buffers"
+if ($Format) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_FORMAT=$Format" }
 $lines += "`"$Client`" --interactive `"$root`" --deadline $Seconds > `"$stdout`" 2> `"$stderr`""
 $lines += 'echo client_exit %ERRORLEVEL%>> "' + $stdout + '"'
 Set-Content -LiteralPath $wrapper -Value $lines -Encoding ascii
@@ -497,6 +501,7 @@ $trialResult = [pscustomobject]@{
     seconds      = $Seconds
     frames       = $Frames
     buffers      = $Buffers
+    format       = $(if ($Format) { [int]$Format } else { 87 })
     task_state   = $taskState
     exit_code    = $exit
     session      = if (Test-Path -LiteralPath $session) { Get-Content -LiteralPath $session -Raw | ConvertFrom-Json } else { $null }
