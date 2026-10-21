@@ -282,6 +282,26 @@ public:
         }
         return hr;
     }
+    // BD-201 R v2: the release of a mapping whose GPU retirement is NOT proved, which asks the runtime for
+    // nothing. No Evict: destroying the allocation drops its residency anyway (unmap_after_gpu_retirement).
+    // No FreeGpuVirtualAddress: a free takes effect at once and would make the address reusable while work
+    // may still read it, while the range the map call allocated needs no free at all - "The GPU VA range,
+    // which is allocated by the API, is freed when the allocation (the GPU VA is mapped to) is destroyed"
+    // (d3dkmthk.h, D3DKMTMapGpuVirtualAddress). The caller then destroys the allocation with flags NONE,
+    // which VidMm defers behind the commands queued before the request (d3dukmdt.h,
+    // D3DDDICB_DESTROYALLOCATION2FLAGS, AssumeNotInUse FALSE).
+    // A reservation is this driver's own range and no allocation destroy frees it: its span is handed to the
+    // caller, which counts it as leaked, and it is never freed without the proof. The mapping is forgotten
+    // either way, so the domain's count falls and the paging queue can still close.
+    void release_mapping_to_os(GpuMapping& mapping,UINT64* reservation,UINT64* reservation_bytes) noexcept {
+        if(!mapping.owner_)return;
+        if(mapping.reservation_){
+            if(reservation)*reservation=mapping.reservation_;
+            if(reservation_bytes)*reservation_bytes=mapping.reservation_bytes_;
+        }
+        forget(mapping);
+        --mappings_;
+    }
     HRESULT close() noexcept {
         if(mappings_.load()) return E_PENDING;
         if(!queue_) return S_OK;

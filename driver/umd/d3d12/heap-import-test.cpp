@@ -174,13 +174,16 @@ static HRESULT APIENTRY allocate_cb(D3D12DDI_HRTDEVICE d,D3D12DDICB_ALLOCATE_002
  if(refuse_shareable_create)return E_INVALIDARG;
  a->pAllocationInfo->hAllocation=++next_allocation;return S_OK;
 }
-// D: by handle list. R: by the runtime resource. Both with the resident object's two flags.
+// D: by handle list, with the resident object's two flags. R: by the runtime resource, which has no other
+// form. O: by handle list with flags NONE, which is BD-201 R v2's release through the OS - the destruction
+// the video memory manager defers behind the work queued before the request.
 static HRESULT APIENTRY deallocate_cb(D3D12DDI_HRTDEVICE,const D3D12DDICB_DEALLOCATE_0022* a){
  if(a->hResource){
   assert(a->hResource==handle<void*>(2) && !a->NumAllocations && !a->HandleList && unsigned(a->Flags)==3u);
   events+='R';return fail_deallocate?E_FAIL:S_OK;
  }
- assert(a->NumAllocations==1 && a->HandleList && unsigned(a->Flags)==3u);events+='D';return fail_deallocate?E_FAIL:S_OK;
+ assert(a->NumAllocations==1 && a->HandleList && (unsigned(a->Flags)==3u || !unsigned(a->Flags)));
+ events+=unsigned(a->Flags)?'D':'O';return fail_deallocate?E_FAIL:S_OK;
 }
 static HRESULT APIENTRY paging_create(HANDLE d,D3DDDICB_CREATEPAGINGQUEUE* a){assert(d==handle<void*>(1));++creates;a->hPagingQueue=9;a->hSyncObject=10;a->FenceValueCPUVirtualAddress=&completed;return S_OK;}
 static HRESULT APIENTRY paging_destroy(HANDLE,const D3DDDI_DESTROYPAGINGQUEUE*){events+='P';return S_OK;}
@@ -1164,11 +1167,16 @@ int main(){
    {OwnerScope destroy(&gated,surface.allocation);
     assert(gated.free(&surface)==S_OK && events=="AMZIVEUR" && !gated.held_count());}
    heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
-   // An import whose progress never retires is still released at the device's teardown, and counted.
+   // BD-201 R v2: an import whose progress never retires is still released at the device's teardown, and
+   // counted, but THROUGH THE OS: no Evict (no 'E') and no FreeGpuVirtualAddress (no 'U'), because both take
+   // effect at once, and the deallocate carries flags NONE ('O', not 'D'), which the video memory manager
+   // defers behind the work queued before the request. Its mapping is an ordinary one, whose range the map
+   // call allocated and the destroy frees, so nothing of it is kept: no reservation is counted.
    assert(gated.allocate(&req,&b)==S_OK);
    events.clear();assert(gated.free(&b)==S_OK && events=="V" && gated.held_count()==1);
-   events.clear();assert(gated.close_after_engine_retirement()==S_OK && events=="EUDP" &&
+   events.clear();assert(gated.close_after_engine_retirement()==S_OK && events=="OP" &&
                          gated.forced_releases()==1 && !gated.held_count());
+   assert(!gated.leaked_reservations() && !gated.leaked_reservation_bytes());
    assert(gated.discard_metadata()==0);
   }
   // 6. The driver's defaults, as the switches leave them: the gate is on and holds three releases.
@@ -1217,6 +1225,27 @@ int main(){
   assert(msaa.allocate(&m,&big)==E_UNEXPECTED && events=="ASMUD" && reserves==1);
   map_answer=0;
   assert(msaa.close_after_engine_retirement()==S_OK && msaa.discard_metadata()==0);
+  // BD-201 R v2, the other half of the release through the OS: the same teardown release of an import whose
+  // mapping lives inside a reservation. The reservation is this driver's own range and no allocation destroy
+  // frees it, so it is KEPT and counted instead of freed without the proof ('U' never appears), while the
+  // allocation itself is destroyed with flags NONE ('O').
+  {
+   ImportReleasePolicy gate{};gate.progress_gate=true;
+   RuntimeHeapImports kept(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                           identity,gate);
+   kept.bind_progress({&kept,progress_snapshot_cb,progress_retired_cb});
+   assert(kept.initialize()==S_OK);
+   engine_ddi::ImportedMemory inside{};
+   events.clear();reserves=0;
+   assert(kept.allocate(&m,&inside)==S_OK && events=="ASMZI" && reserves==1);
+   progress_retired_flag=false;
+   events.clear();assert(kept.free(&inside)==S_OK && events=="V" && kept.held_count()==1);
+   events.clear();assert(kept.close_after_engine_retirement()==S_OK && events=="OP" &&
+                         kept.forced_releases()==1 && !kept.held_count());
+   assert(kept.leaked_reservations()==1 && kept.leaked_reservation_bytes()==reserved_span);
+   assert(kept.discard_metadata()==0);
+   progress_retired_flag=true;
+  }
   // Negative control 3, the diagnosability half of BD-101: a 64 KiB request whose address the runtime places
   // on a 4 KiB boundary. No reservation is taken for that alignment, so the check in the import names it -
   // and before this fix that site returned E_INVALIDARG with report_.refusal empty and no line at all.
@@ -1235,7 +1264,7 @@ int main(){
  }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
-  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress with a forced teardown release), "
+  "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted), "
   "BD-075 shared resources (the shareable envelope unchanged, kShareRequired only from the runtime's refusal of a shareable create, the shared surface's "
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
   "callback, no quarantine, no backing to lend, one record per allocation handle), "

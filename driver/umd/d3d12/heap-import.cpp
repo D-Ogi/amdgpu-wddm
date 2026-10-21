@@ -226,7 +226,7 @@ void RuntimeHeapImports::drain(bool all) noexcept {
     }
     unsigned released=0;
     for(;;){
-        Record* front=nullptr;ProgressSnapshot progress{};bool gated=false;
+        Record* front=nullptr;ProgressSnapshot progress{};bool gated=false,proved=true;
         {
             Exclusive held(lock_);
             front=held_;
@@ -253,7 +253,10 @@ void RuntimeHeapImports::drain(bool all) noexcept {
             }
             if(!progress_.retired(progress_.owner,&progress)){
                 if(!all)break;
+                // BD-201 R v2: the proof failed and this is the teardown drain, so the release goes through
+                // the OS instead of being forced: nothing of it takes effect while the GPU may still read.
                 forced_.fetch_add(1,std::memory_order_relaxed);
+                proved=false;
             }
         }
         {
@@ -263,7 +266,7 @@ void RuntimeHeapImports::drain(bool all) noexcept {
             --held_count_;held_bytes_-=front->bytes;
         }
         front->next=nullptr;
-        const HRESULT hr=release_owned(*front);
+        const HRESULT hr=release_owned(*front,proved);
         ++released;
         if(hr!=S_OK){
             // The mapping or the deallocation refused. The record keeps what it holds and is counted by
@@ -327,8 +330,29 @@ HRESULT RuntimeHeapImports::unlock_for_release(Record& record) noexcept {
     record.locked=false;free_report_.unlocked=true;
     return S_OK;
 }
-HRESULT RuntimeHeapImports::release_owned(Record& record) noexcept {
+HRESULT RuntimeHeapImports::release_owned(Record& record,bool proved) noexcept {
     free_report_.stage=FreeStage::Unmap;
+    if(!proved){
+        // BD-201 R v2, the release through the OS. The caller could not prove that the GPU has stopped
+        // reading this import, so nothing here may take effect at once: no Evict, no explicit VA free
+        // (paging.h, release_mapping_to_os), and the allocation is destroyed with flags NONE, which VidMm
+        // defers behind the work handed to it before the request. The kept reservation is counted.
+        // The runtime-resource form is the one release that cannot be deferred: close() refuses it without
+        // a proof of retirement (allocation.h), and the runtime destroys a linear primary's allocation with
+        // its own resource anyway, so such a record is kept and counted instead of released.
+        if(record.surface && !record.driver_surface){free_report_.owner_expired=true;return kOwnerExpired;}
+        free_report_.adopted=record.adopted;free_report_.driver_surface=record.driver_surface;
+        UINT64 reservation=0,reservation_bytes=0;
+        paging_.release_mapping_to_os(record.mapping,&reservation,&reservation_bytes);
+        if(reservation){
+            leaked_reservations_.fetch_add(1,std::memory_order_relaxed);
+            leaked_reservation_bytes_.fetch_add(reservation_bytes,std::memory_order_relaxed);
+        }
+        free_report_.stage=FreeStage::Deallocate;
+        const HRESULT deferred=record.allocation.close(ReleaseForm::Handle,Retirement::Unknown);
+        if(deferred==S_OK)free_report_.stage=FreeStage::Done;
+        return deferred;
+    }
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping,record.adopted);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;

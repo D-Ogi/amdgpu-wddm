@@ -214,7 +214,21 @@ int main(){
  assert(call(BC250_HOST_DESTROY_PAGING,&paging)<0);
  release.BaseAddress=kLow;release.Size=r.Size-65536;assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)<0 && !frees);
  release.Size=r.Size;free_result=E_FAIL;assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)<0 && frees==1);
+ // BD-201: a refused free loses the reservation as it loses an allocation's mapping, and the loss covers
+ // everything the ICD placed inside it. The range is counted once; no view and no update may be placed in it
+ // any more, and neither reaches the runtime; the bridge never reserves that fixed range again either.
+ assert(bridge.lost_va_ranges()==1 && bridge.lost_va_bytes()==r.Size);
+ {const unsigned before=maps;zero.BaseAddress=kLow+65536;
+  assert(call(BC250_HOST_MapGpuVirtualAddress,&zero)<0 && maps==before);}
+ {const unsigned before=updates;u.hContext=context.hContext;u.NumOperations=1;u.Operations=&one;
+  assert(call(BC250_HOST_UpdateGpuVirtualAddress,&u)<0 && updates==before);}
+ {const unsigned before=reserves;D3DDDI_RESERVEGPUVIRTUALADDRESS same{};
+  same.BaseAddress=kLow;same.Size=r.Size;
+  assert(call(BC250_HOST_ReserveGpuVirtualAddress,&same)<0 && reserves==before);}
+ // The retry of exactly that extent is the one way back, and it takes the loss with the range: no destroy
+ // takes a reservation, so that retry is always admitted.
  free_result=S_OK;assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)==0 && frees==2);
+ assert(bridge.lost_va_ranges()==1 && bridge.lost_va_bytes()==r.Size);   // the event stays counted
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&release)<0 && frees==2);
  zero.BaseAddress=kLow+65536;assert(call(BC250_HOST_MapGpuVirtualAddress,&zero)<0); // the range is gone
  // BD-201: the shared backing still has its own mapping, and the destroy takes it. The API-allocated range
@@ -287,5 +301,6 @@ int main(){
   assert(HostedDispatch::dispatch(&b,BC250_HOST_MapGpuVirtualAddress,&a)<0);})); // placed inside a reservation
  for(const UINT64 answer:{UINT64_C(0x500000000),UINT64_C(0x3ffff0000),UINT64_C(0x40000f000)})assert(removed_by_map(answer));
  std::puts("PASS hosted sparse: reserve and its answers, zero and backed views, shared backing with its own mapping, "
-           "free by exact extent with retry, update admission, holds across reentry and failure, queue route, closure count");
+           "free by exact extent with the retry of a lost reservation (no view, update or fixed reserve inside it), "
+           "update admission, holds across reentry and failure, queue route, closure count");
 }

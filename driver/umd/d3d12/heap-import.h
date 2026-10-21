@@ -127,6 +127,10 @@ class RuntimeHeapImports final {
     ScanoutModeList (*mode_list_reader_)(UINT64 luid,unsigned width,unsigned height) noexcept{};
     ProgressSource progress_{};
     std::atomic<uint64_t> forced_{};             // entries released although their progress was unretired
+    // BD-201 R v2: the GPU virtual address reservations of those releases. A reservation is this driver's
+    // own range and no allocation destroy frees it, so without the proof it is kept, not freed. Cumulative
+    // and never decremented: it is a leak, and the count is the only record of it.
+    std::atomic<uint64_t> leaked_reservations_{},leaked_reservation_bytes_{};
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
@@ -145,7 +149,9 @@ class RuntimeHeapImports final {
     HRESULT release(Record&) noexcept;
     HRESULT release_import(Record&,VkDeviceMemory) noexcept;    // the Vulkan import alone
     HRESULT unlock_for_release(Record&) noexcept;               // a CPU lock the ICD left on it
-    HRESULT release_owned(Record&) noexcept;                    // the mapping and the runtime allocation
+    // The mapping and the runtime allocation. proved false is BD-201 R v2's release through the OS, for a
+    // teardown release whose device-wide progress proof failed: see the definition.
+    HRESULT release_owned(Record&,bool proved=true) noexcept;
     void detach(Record*) noexcept;                // out of records_, under lock_
     void deposit(Record*) noexcept;               // into the quarantine, under lock_
     void drain(bool all) noexcept;                // never under lock_
@@ -189,6 +195,9 @@ public:
     uint32_t held_count() const noexcept;
     uint64_t held_bytes() const noexcept;
     uint64_t forced_releases() const noexcept {return forced_.load();}
+    // BD-201 R v2: the reservations kept by a release through the OS, and their bytes. Never decremented.
+    uint64_t leaked_reservations() const noexcept {return leaked_reservations_.load();}
+    uint64_t leaked_reservation_bytes() const noexcept {return leaked_reservation_bytes_.load();}
     // A retirement point of the quarantine outside allocate() and free(): releases what the policy admits.
     void retire_held() noexcept {drain(false);}
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;

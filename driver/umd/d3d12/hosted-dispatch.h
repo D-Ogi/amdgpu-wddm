@@ -88,6 +88,9 @@ class HostedDispatch final {
     std::atomic<bool> removal_deferred_{false};
     Allocation* find(D3DKMT_HANDLE handle) noexcept;
     Reservation* containing(UINT64 base,UINT64 bytes) noexcept;
+    // BD-201: a reservation whose own free was refused, which overlaps this extent. Such a range and
+    // everything inside it is no longer the bridge's (owned(), containing(), lost_range()).
+    const Reservation* lost_reservation(UINT64 base,UINT64 bytes) const noexcept;
     bool owned(UINT64 base,UINT64 bytes,const void* except) const noexcept;
     bool lost_range(UINT64 base,UINT64 bytes) const noexcept;
     // Under lock_. An internal allocation is held by its record; another owner's by hooks_.
