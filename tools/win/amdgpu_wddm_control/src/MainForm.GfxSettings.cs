@@ -18,9 +18,9 @@ namespace AmdgpuWddmControl
         readonly Dictionary<string, string> _smEdits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         static readonly string[] GfxGraphicsNames = { "FrameRateLimit", "VSync", "Anisotropy", "MaxFrameLatency", "PerformanceOverlay", "RenderOnCpu" };
-        // Empty while WsiRoute and MemoryOverflow wait for their ICD (GraphicsSettings.AwaitingIcd); with no name the
-        // Vulkan section is not shown.
-        static readonly string[] GfxVulkanNames = { };
+        // MemoryOverflow waits for its ICD (GraphicsSettings.AwaitingIcd). WsiRoute is for all games only, so a game's
+        // editor has no Vulkan row and shows no Vulkan section.
+        static readonly string[] GfxVulkanNames = { "WsiRoute" };
 
         List<RegWrite> GfxGlobalWrites()
         {
@@ -159,8 +159,9 @@ namespace AmdgpuWddmControl
             c.Add(SectionLabel(Strings.T("games.section.graphics"), c.Inner));
             if (_snap.GfxKeys == null) { c.Add(Ui.Dim(Strings.T("gfx.unreadable"), c.Inner)); return; }
             foreach (var name in GfxGraphicsNames.Where(n => !GraphicsSettings.Find(n).GlobalOnly)) AddGfxRow(c, GraphicsSettings.Find(name), game.Image);
-            if (GfxVulkanNames.Length > 0) c.Add(SectionLabel(Strings.T("gfx.section.vulkan"), c.Inner));
-            foreach (var name in GfxVulkanNames) AddGfxRow(c, GraphicsSettings.Find(name), game.Image);
+            var vulkan = GfxVulkanNames.Where(n => !GraphicsSettings.Find(n).GlobalOnly).ToList();
+            if (vulkan.Count > 0) c.Add(SectionLabel(Strings.T("gfx.section.vulkan"), c.Inner));
+            foreach (var name in vulkan) AddGfxRow(c, GraphicsSettings.Find(name), game.Image);
         }
 
         static Label SectionLabel(string text, int inner)

@@ -40,6 +40,14 @@ channels in. The readback instead reads the memory of the format, so only that s
 first run on the development PC reported every colour reversed (asked `AA327E`, got `7E32AA`) because the
 clear was swapped as well.
 
+Three options choose what the WSI has to copy. `--format bgra8` or `rgba8` asks for that UNORM format, and
+the run fails when the surface does not list it in `SRGB_NONLINEAR`. On the GDI route `rgba8` is the format
+whose CPU copy swaps red and blue, and `bgra8` is the plain copy. Without the option the client takes the
+first 8-bit BGRA or RGBA format the surface lists. `--present-mode fifo`, `immediate` or `mailbox` asks for
+that mode, which the surface must list. The default is `fifo`. `--colour RRGGBB` clears every frame to that
+one colour instead of a colour per frame, so a screen picture can prove that red stays red. A stale image then
+passes the readback, so such a run checks the channel order and not the frame order.
+
 **The readback needs the surface to allow a transfer source.** Nothing here copies into the image, because the
 clear is the render pass's own load operation, so `VK_IMAGE_USAGE_TRANSFER_DST_BIT` is not asked for. On a
 foreign ICD a surface without `VK_IMAGE_USAGE_TRANSFER_SRC_BIT` is no failure: the frames are presented and
@@ -49,26 +57,32 @@ way, so the first lab arm says what our WSI exposes.
 
 ## The route is read, never written
 
-The switch belongs to the machine: the `REG_SZ` value `WsiRoute` under `HKLM\SOFTWARE\amdgpu-wddm\Vulkan`,
-values `gdi`, `dxgi` and `dxgi-composition`. This client reads it, from the 64-bit view, which is where the
-ICD reads it from as well, also in a 32-bit process. It never writes it: the arm that sets the route and the
-client that runs under it cannot then disagree about what was asked. `--expect-route` overrides what the line
-reports as asked, for an arm that wants to state its own expectation.
+The switch belongs to the arm and to the machine, in the ICD's own order: the variable `AMDGPU_WDDM_VK_WSI`,
+else the `REG_SZ` value `WsiRoute` under `HKLM\SOFTWARE\amdgpu-wddm\Vulkan`, else the ICD's default, `dxgi`
+since BD-197. The values are `gdi`, `dxgi` and `dxgi-composition`, an empty value counts as absent, and any
+other value selects `gdi`, not the default. This client reads both the way the ICD does, the registry from
+the 64-bit view, which is where the ICD reads it from as well, also in a 32-bit process. It never writes
+either: the arm that sets the route and the client that runs under it cannot then disagree about what was
+asked. The line names the source (`source=env`, `registry` or `default`). `--expect-route` overrides what the
+line reports as asked, for an arm that wants to state its own expectation.
 
-The environment switch `AMDGPU_WDDM_VK_WSI` is deliberately unused. The release ICD carries no environment
-overrides (BD-167), so an arm built on the registry runs against the release and the lab flavour unchanged.
+Both ICD flavours read the variable. BD-167 took the shader overrides out of the release flavour, not this
+switch.
 
-**The route that actually ran is measured, not assumed.** The DXGI routes bind System32 `dxgi.dll` and
-`d3d12.dll` by full path, and the composition route adds `DComp.dll`, while the GDI route loads none of them
-(`docs/design/vulkan-wsi-dxgi.md`). The module list of the process after the first present therefore names the
-route, and the line says `route=<asked>/<taken>`. An ICD that was asked for `dxgi` and fell back to GDI fails
-the run: that fallback is the subject of the route work, not a detail.
+**The route that actually ran is measured, not assumed.** A DXGI route binds System32 `d3d12.dll` by full
+path for its presenter device, and the GDI route never loads it. `dxgi.dll` and `DComp.dll` are no witness:
+the ICD's instance set-up (`wsi_win32_init_wsi`) loads both on every route. BD-197 block E read both in GDI
+runs whose present log says path `gdi`, and the first client build took them for `dxgi-composition`. The
+module list of the process after the first present therefore tells a DXGI route from GDI, and the line says
+`route=<asked>/<taken>`. It cannot tell `dxgi` from `dxgi-composition`, so `taken` is `dxgi` for both, and the
+run compares GDI with DXGI only. An ICD that was asked for `dxgi` and fell back to GDI fails the run: that
+fallback is the subject of the route work, not a detail.
 
 That witness speaks for our ICD alone, so it is only read on the board. Another vendor's ICD binds the same
 three modules for its own reasons: the first run on the development PC, through the NVIDIA ICD, read
 "took dxgi-composition" from a process where our WSI was never loaded. On any device but `0x1002:0x13FE` the
 line therefore says `route=<asked>/unknown` and the route decides nothing. `unknown` is a result, never a
-value to ask for: the registry and `--expect-route` take the three real routes only.
+value to ask for: the switch and `--expect-route` take the three real routes only.
 
 The program's own folder must hold no `dxgi.dll`, `d3d12.dll` or `d3d12core.dll`. The ICD's module gate refuses
 the DXGI route to a process that has an application-local copy of one of them, by design. `vkpresent` says so
@@ -88,7 +102,8 @@ One line, on one line in the real output. `PASS` needs every frame presented, `l
 on the board. `--json` writes the same facts as JSON for a runner to read.
 
 The two runs on the development PC, through its own ICD, which prove the present and the comparison of this
-program and nothing about our WSI (640 by 360, 60 frames):
+program and nothing about our WSI (640 by 360, 60 frames). They were recorded while the default was `gdi`. The
+same runs now read `route=dxgi/unknown`:
 
 ```
 vkpresent PASS arch=x64 route=gdi/unknown source=default device="NVIDIA GeForce RTX 4090" api=1.4.329

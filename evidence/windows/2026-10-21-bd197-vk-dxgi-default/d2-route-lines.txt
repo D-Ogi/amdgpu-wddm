@@ -1,0 +1,73 @@
+== 01-r2-dxgi-bl-wz q2rtx-10708-20261021T021954Z.log
+BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+BC250 WSI: chain 00000165D2DA1760: first present stage images at 51 ms
+BC250 WSI: chain 0000016602084E50: first present stage images at 21 ms
+BC250 WSI: chain 0000016602084E50: first present stage queue-wait at 633 ms
+BC250 WSI: chain 0000016602084E50: first present stage execute at 634 ms
+BC250 WSI: chain 0000016602084E50: first present stage queue-signal at 636 ms
+BC250 WSI: chain 0000016602084E50: first present stage present1 at 636 ms
+BC250 WSI: chain 0000016602084E50: first present stage present1-returned at 637 ms
+BC250 WSI: chain 0000016602084E50: first present stage acquire-wait at 3536 ms
+BC250 WSI: chain 0000016602084E50: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+== 02-r2-dxgi-bl-ov q2rtx-1952-20261021T022037Z.log
+BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+BC250 WSI: chain 0000020A4BC93780: first present stage images at 21 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage images at 18 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage queue-wait at 485 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage execute at 485 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage queue-signal at 487 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage present1 at 487 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage present1-returned at 488 ms
+BC250 WSI: chain 0000020A840EACB0: first present stage acquire-wait at 3231 ms
+BC250 WSI: chain 0000020A840EACB0: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+== 04-r2lab-dxgi-bl-plog q2rtx-3336-20261021T022209Z.log
+(no route line)
+== 05-r2-dxgi-win-wz q2rtx-3896-20261021T022247Z.log
+BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+BC250 WSI: chain 00000200138DD6F0: first present stage images at 17 ms
+BC250 WSI: chain 0000020014B83010: first present stage images at 13 ms
+BC250 WSI: chain 0000020014B83010: first present stage queue-wait at 383 ms
+BC250 WSI: chain 0000020014B83010: first present stage execute at 383 ms
+BC250 WSI: chain 0000020014B83010: first present stage queue-signal at 385 ms
+BC250 WSI: chain 0000020014B83010: first present stage present1 at 385 ms
+BC250 WSI: chain 0000020014B83010: first present stage present1-returned at 385 ms
+BC250 WSI: chain 0000020014B83010: first present stage acquire-wait at 2468 ms
+BC250 WSI: chain 0000020014B83010: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+== 06-r2-dxgi-cube vkcube-11448-20261021T022317Z.log
+BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+BC250 WSI: chain 0000013124082E50: first present stage images at 26 ms
+BC250 WSI: chain 0000013124082E50: first present stage queue-wait at 34 ms
+BC250 WSI: chain 0000013124082E50: first present stage execute at 34 ms
+BC250 WSI: chain 0000013124082E50: first present stage queue-signal at 36 ms
+BC250 WSI: chain 0000013124082E50: first present stage present1 at 36 ms
+BC250 WSI: chain 0000013124082E50: first present stage present1-returned at 37 ms
+BC250 WSI: chain 0000013124082E50: first present stage acquire-wait at 40 ms
+BC250 WSI: chain 0000013124082E50: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+== 07-r2-def-bl-wz q2rtx-884-20261021T022403Z.log
+BC250 WSI: route=gdi asked=gdi source=default reason=asked hr=0x00000000 app-local=none
+== 08-r2-def-bl-rd-wz q2rtx-8688-20261021T022443Z.log
+BC250 WSI: route=dxgi asked=dxgi source=registry reason=ok hr=0x00000000 app-local=none
+BC250 WSI: chain 000001BA412BE1E0: first present stage images at 26 ms
+BC250 WSI: chain 000001BA82F46400: first present stage images at 18 ms
+BC250 WSI: chain 000001BA82F46400: first present stage queue-wait at 469 ms
+BC250 WSI: chain 000001BA82F46400: first present stage execute at 469 ms
+BC250 WSI: chain 000001BA82F46400: first present stage queue-signal at 473 ms
+BC250 WSI: chain 000001BA82F46400: first present stage present1 at 473 ms
+BC250 WSI: chain 000001BA82F46400: first present stage present1-returned at 474 ms
+BC250 WSI: chain 000001BA82F46400: first present stage acquire-wait at 2816 ms
+BC250 WSI: chain 000001BA82F46400: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+== 09-r2-gdi-bl-rd-wz q2rtx-6256-20261021T022517Z.log
+BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+== 10-r2-def-bl-rg-wz q2rtx-6276-20261021T022557Z.log
+BC250 WSI: route=gdi asked=gdi source=registry reason=asked hr=0x00000000 app-local=none
+== 11-r2-dxgi-bl-wz q2rtx-12312-20261021T022643Z.log
+BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+BC250 WSI: chain 0000024560DAAB00: first present stage images at 24 ms
+BC250 WSI: chain 000002456319B500: first present stage images at 18 ms
+BC250 WSI: chain 000002456319B500: first present stage queue-wait at 449 ms
+BC250 WSI: chain 000002456319B500: first present stage execute at 449 ms
+BC250 WSI: chain 000002456319B500: first present stage queue-signal at 453 ms
+BC250 WSI: chain 000002456319B500: first present stage present1 at 453 ms
+BC250 WSI: chain 000002456319B500: first present stage present1-returned at 454 ms
+BC250 WSI: chain 000002456319B500: first present stage acquire-wait at 2482 ms
+BC250 WSI: chain 000002456319B500: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off

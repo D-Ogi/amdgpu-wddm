@@ -13,12 +13,12 @@
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan                           REG_SZ values for all games
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\<image>      REG_SZ values for one game (MemoryOverflow only)
 //     WsiRoute            for all games only: the system Vulkan ICD reads no WsiRoute of a game's key
-//                         (radv_wddm2_wsi.c). gdi (the default since BD-105) or dxgi; the reader also takes
-//                         dxgi-composition, which this app does not offer, and takes any other value as gdi
+//                         (radv_wddm2_wsi.c). dxgi (the default, BD-197) or gdi, the rollback; the reader also
+//                         takes dxgi-composition, which this app does not offer, and takes any other value as gdi
 //                         (radv_wddm2_wsi_route.h)
 //     MemoryOverflow      allow (the default) or strict; any other value selects allow (radv_wddm2_mem_overflow.h)
 //     Case does not matter and an empty string counts as absent.
-//   The two Vulkan values are not offered in this release (AwaitingIcd below).
+//   MemoryOverflow is not offered in this release (AwaitingIcd below).
 //
 // An absent value is "Application decides" (the driver's default); a game's own value wins over the one for all
 // games. The settings rule (owner, 2026-10-03): nothing is written for "Application decides" or "Same as all games",
@@ -65,6 +65,7 @@ namespace AmdgpuWddmControl
         public string SameAsAbsent;         // the value that does what an absent value does; hidden for all games unless stored
         public string AbsentTextId;         // the text of an absent value for all games
         public string InvalidMeans;         // what the driver does with a value it does not take; null: not known
+        public string DefaultMeans;         // what the driver does with an absent value, for the report; null: the application decides
         public string[] OtherValid;         // values the driver takes that this app does not offer
 
         public string SearchId { get { return (GameFirst ? "games." : "graphics.") + Id; } }
@@ -121,19 +122,20 @@ namespace AmdgpuWddmControl
                 Valid = n => n >= 1 && n <= 3 },
             new GfxSetting { Name = "PerformanceOverlay", Id = "overlay", Root = GraphicsPath, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             new GfxSetting { Name = "RenderOnCpu", Id = "cpu-render", Root = GraphicsPath, GameFirst = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
+            // How Vulkan games present, for all games at once. The system Vulkan ICD (64-bit, and 32-bit from tester.31)
+            // presents through DXGI when the value is absent (BD-197: the owner's decision of 2026-10-07, back once the
+            // route presented on the lab), so "Fast (flip)" is the absent value and "Compatible" (gdi) the rollback a
+            // person stores. A stored gdi stays gdi. A DXGI chain that fails falls back to GDI by itself, per swapchain.
+            new GfxSetting { Name = "WsiRoute", Id = "vk-present", Root = VulkanPath, Text = true, GlobalOnly = true, SameAsAbsent = "dxgi", AbsentTextId = "gfx.choice.flip-default",
+                Presets = new[] { "dxgi", "gdi" }, InvalidMeans = "gdi", DefaultMeans = "dxgi", OtherValid = new[] { "dxgi-composition" } },
         };
 
-        // The Vulkan settings are not offered. The system Vulkan ICD (64-bit, and 32-bit from tester.31) reads WsiRoute
-        // for all games only, and the values it takes beside the default gdi (dxgi, dxgi-composition) select the DXGI
-        // route, which presents no frame on the lab (BD-105). It does not read MemoryOverflow: only the RADV inside the
-        // D3D11 and D3D12 drivers does. The owner's GUI rule is no control that does nothing or works only for some
-        // programs, so they are not in All: no row, no search entry, no write and no --gfx name. The support report
-        // still lists their stored values. Each goes back into All when its ICD makes it a control that works for every
-        // program.
+        // MemoryOverflow is not offered. The system Vulkan ICD does not read it: only the RADV inside the D3D11 and
+        // D3D12 drivers does. The owner's GUI rule is no control that does nothing or works only for some programs, so
+        // it is not in All: no row, no search entry, no write and no --gfx name. The support report still lists its
+        // stored values. It goes back into All when its ICD makes it a control that works for every program.
         public static readonly GfxSetting[] AwaitingIcd =
         {
-            new GfxSetting { Name = "WsiRoute", Id = "vk-present", Root = VulkanPath, Text = true, GlobalOnly = true, SameAsAbsent = "gdi", AbsentTextId = "gfx.choice.compat-default",
-                Presets = new[] { "dxgi", "gdi" }, InvalidMeans = "gdi", OtherValid = new[] { "dxgi-composition" } },
             new GfxSetting { Name = "MemoryOverflow", Id = "vk-memory", Root = VulkanPath, Text = true, SameAsAbsent = "allow", AbsentTextId = "gfx.choice.sysmem-default",
                 Presets = new[] { "allow", "strict" }, InvalidMeans = "allow" },
         };
@@ -244,7 +246,7 @@ namespace AmdgpuWddmControl
                 case "VSync": return Strings.T(value == "1" ? "gfx.choice.always-on" : "gfx.choice.always-off");
                 case "Anisotropy": return value == "1" ? Strings.T("gfx.choice.af-off") : Strings.T("gfx.choice.af", value);
                 case "MaxFrameLatency": return value == "1" ? Strings.T("gfx.choice.latency-1") : Strings.T("gfx.choice.latency", value);
-                case "WsiRoute": return Strings.T(value == "gdi" ? "gfx.choice.compat" : "gfx.choice.modern");
+                case "WsiRoute": return Strings.T(value == "gdi" ? "gfx.choice.compat" : "gfx.choice.flip");
                 case "MemoryOverflow": return Strings.T(value == "strict" ? "gfx.choice.oom" : "gfx.choice.sysmem");
                 default: return Strings.T(value == "1" ? "gfx.choice.on" : "gfx.choice.off");
             }
@@ -507,7 +509,7 @@ namespace AmdgpuWddmControl
 
         static string EffectiveLine(GfxView v)
         {
-            string value = v.Effective ?? (v.Source.EndsWith("-invalid", StringComparison.Ordinal) ? "not known" : "application decides");
+            string value = v.Effective ?? (v.Source.EndsWith("-invalid", StringComparison.Ordinal) ? "not known" : v.Setting.DefaultMeans ?? "application decides");
             var here = v.Image == null ? v.Global : v.Game;
             string invalid = v.Source.EndsWith("-invalid", StringComparison.Ordinal) ? ", stored value not valid" + (here.Raw != null ? " (" + here.Raw + ")" : "") : "";
             if (v.Source == "global-invalid" && v.Global.Raw != null) invalid = ", stored value for all games not valid (" + v.Global.Raw + ")";

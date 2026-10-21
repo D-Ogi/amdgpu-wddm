@@ -1,0 +1,257 @@
+﻿2026-10-21T01:57:55.0304622Z arm mD1 dir C:\BC250\tmp\bd197-a\mD1-20261021T015754Z runs 15: inst-dxgi-bl,r2-dxgi-bl,r2-gdi-bl,r2-dxgi-ex,r2-gdi-ex,inst-dxgi-bl,r2-dxgi-bl,r2-gdi-bl,r2-dxgi-ex,r2-gdi-ex,inst-dxgi-bl,r2-dxgi-bl,r2-gdi-bl,r2-dxgi-ex,r2-gdi-ex game bound 45s cool below 66 C budget 840s hidden console True
+2026-10-21T01:57:55.1694777Z file C:\BC250\tmp\bd197-a\pt-run.ps1 sha256 6ACB249668F5DFCE39738C9E4FBFA40333AEDFFBEE5E6BE145C05EE09897AE1F
+2026-10-21T01:57:55.1918539Z file C:\BC250\tmp\bd197-a\dbwin.ps1 sha256 291E50A29CD8742CAA84A8EF656C5AF5FECDFC51DA03F5F260D71F49C97CEB7E
+2026-10-21T01:57:55.1989824Z file C:\BC250\tmp\bd165\PresentMon-2.6.0-x64.exe sha256 B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF
+2026-10-21T01:57:55.2102190Z file C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe sha256 951E0290722769353AF8285D095B51208CB04ED2A2C8926D5C027E6B45F53812
+2026-10-21T01:57:55.5270399Z file C:\Program Files\amdgpu-wddm\control\amdgpu_wddm_control.exe sha256 A417D6B852192F9DBEC9AB0C66CC590E273801B3A6790C1DF3738B91BF2BE650
+2026-10-21T01:57:55.5529990Z file C:\BC250\tmp\bd197-a\run-vkcube.ps1 sha256 D9361A6639F6F7DC78BF9E45B227B384A101242D760F68FF1342D528B543469A
+2026-10-21T01:57:55.5591168Z file C:\BC250\vkroute\clients\vkcube.exe sha256 87A96AF3A4677C4AE0BC293625B9F18BFE80A41362992BC03CA2AA3CADE37721
+2026-10-21T01:57:55.5942079Z file C:\BC250\tmp\bd197-a\winz.ps1 sha256 EC8468AC323A960627C274CE23CC2F47BBB39415D2A9C2A24BDECC1B57E57E0B
+2026-10-21T01:57:55.6075099Z file C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json sha256 46CB45537A2E11CECB8E955D4F2DCC49AD39C15C09787F77F31AE543BBCD4DF4
+2026-10-21T01:57:55.7600752Z file C:\BC250\tmp\bd197-a\icd-r2\vulkan_radeon.dll sha256 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E
+2026-10-21T01:57:56.2175243Z kmd loaded: service Running image C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_1b4f9ceea378f690\bc250kmd.sys sha256 22BA3CDB898D32D751EF27233AF01C6F81F623A6DF0424AFB7A6AD92C43D1E57
+2026-10-21T01:57:56.9185501Z pnp: BC-250 GPU (amdgpu-wddm) 40.7.216.103 oem4.inf
+2026-10-21T01:57:56.9297672Z WsiRoute before: key absent, value absent
+2026-10-21T01:57:57.0414748Z tctl 51.375 C
+2026-10-21T01:57:57.0730555Z interop: driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 47309353
+2026-10-21T01:57:57.0750858Z interop: settings EnableGpuPresentBlit=1 EnableCddDwmInterop=1
+2026-10-21T01:57:57.0882790Z interop: power callback registered
+2026-10-21T01:57:57.1027794Z interop: session marked, users 1, marks 1, unmarks 0, mark failures 0, last end none, previous end last-user-gone, boot 669, marker found 0
+2026-10-21T01:57:57.1224531Z DesktopRouter: DwmForceCpu=0 RequireKmdSwitches=1 DirectFlipFront=1
+2026-10-21T01:57:57.1338254Z Vulkan key: absent
+2026-10-21T01:57:57.1473007Z machine AMDGPU_WDDM_VK_WSI='' VK_DRIVER_FILES=''
+2026-10-21T01:57:57.2187860Z dwm pid 1936 session 1 start 2026-10-21T01:51:22Z modules D3D10Warp.dll bc250d3d_zink.dll bc250d3d_router.dll amdgpu_wddm_radv.dll
+2026-10-21T01:57:57.2198048Z desktop route gpu
+2026-10-21T01:57:57.2871862Z windows: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T01:57:57.3239682Z adapter: BC-250 GPU (amdgpu-wddm) 40.7.216.103 1920x1200 59 Hz
+2026-10-21T01:57:58.4707930Z game-log-on exit 0
+2026-10-21T01:57:58.4840912Z GameLogUntil 2026-10-21T02:16:58.4069407Z
+2026-10-21T01:57:58.5156999Z === 01-inst-dxgi-bl tctl 52.25 C after 0s
+2026-10-21T01:57:58.5218725Z   env: AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T01:58:35.4161614Z   process q2rtx pid 8252 session 1
+2026-10-21T01:58:35.4182046Z   end: reason exited, elapsed 35.5 s, tctl 62.8 C
+2026-10-21T01:58:35.4323948Z   gate temperature: tctl 51.9 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T01:58:35.4465800Z   desktop route: gpu
+2026-10-21T01:58:35.4600789Z   run directory C:\BC250\pathtrace\runs\20261021T015758Z-q2rtx-timedemo
+2026-10-21T01:58:35.4732449Z   console: conhost --headless
+2026-10-21T01:58:35.5131472Z   hidden console check: fps '98.149010', exitcode.txt 'exit 0': kept
+2026-10-21T01:58:35.9608847Z RESULT 01-inst-dxgi-bl: fps 98.149010; presentmon 638 rows, main chain 638 presents, iflip 0 (0), modes [Composed: Flip=638], median 9.3602 ms; kmd scan-out flips 0 of 0, argb/abgr flips 435/0, vidpn flips 435, gdi blits 0; window->first present 7058.3 ms; stop exited; icd 700A03C5735866CA80AB5EA007D175E713FDF57F42090C009A4ED9D21482A7E0; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T01:58:35.9660223Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T01:58:35.9784765Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T01:58:35.9919862Z   chain_lines: BC250 WSI: chain 000001F1E089B060: window swap chain 1920x1200 format 28 images 3 flags 0x800 color space 0 || BC250 WSI: chain 000001F1E45F3CE0: window swap chain 1920x1200 format 28 images 3 flags 0x800 color space 0
+2026-10-21T01:58:36.0044451Z   iflip_displayable: BC250 WSI: chain 000001F1E089B060: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1 || BC250 WSI: chain 000001F1E45F3CE0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1
+2026-10-21T01:58:36.0189149Z   m15_scanout: M15.14 scanout format switch=default chain=1920x1200 pitch=7680 format=28 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T01:58:36.0334248Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 28, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 160, notifies 2 (qpc 4283990379, 10.6 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 224, notifies 3 (qpc 4290276397, 11.2 s on) || BC250 WSI: ch
+2026-10-21T01:58:36.0459280Z   dbwin_end: dbwin end: 535 texts, self-test True, reason parent exited
+2026-10-21T01:58:36.0799432Z === 02-r2-dxgi-bl tctl 61.875 C after 0s
+2026-10-21T01:58:36.0819710Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T01:59:14.1378941Z   process q2rtx pid 5068 session 1
+2026-10-21T01:59:14.1399358Z   end: reason exited, elapsed 37.3 s, tctl 63 C
+2026-10-21T01:59:14.1551513Z   gate temperature: tctl 62 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T01:59:14.1683227Z   desktop route: gpu
+2026-10-21T01:59:14.1825121Z   run directory C:\BC250\pathtrace\runs\20261021T015836Z-q2rtx-timedemo
+2026-10-21T01:59:14.1966838Z   console: conhost --headless
+2026-10-21T01:59:14.4592204Z RESULT 02-r2-dxgi-bl: fps 101.790604; presentmon 633 rows, main chain 633 presents, iflip 631 (0.9968), modes [Hardware: Independent Flip=631; Composed: Flip=2], median 9.3009 ms; kmd scan-out flips 639 of 639, argb/abgr flips 705/0, vidpn flips 705, gdi blits 0; window->first present 6824.1 ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane bgra8-only; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T01:59:14.4612633Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T01:59:14.4725385Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T01:59:14.4867364Z   chain_lines: BC250 WSI: chain 00000219E7C7CA00: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0 || BC250 WSI: chain 00000219E7D4F200: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T01:59:14.5012266Z   iflip_displayable: BC250 WSI: chain 00000219E7C7CA00: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only || BC250 WSI: chain 00000219E7D4F200: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T01:59:14.5143861Z   first_present_stages: BC250 WSI: chain 00000219E7C7CA00: first present stage images at 23 ms || BC250 WSI: chain 00000219E7D4F200: first present stage images at 21 ms || BC250 WSI: chain 00000219E7D4F200: first present stage queue-wait at 566 ms || BC250 WSI: chain 00000219E7D4F200: first present stage execute at 566 ms || BC250 WSI: chain 00000219E7D4F200: first present stage queue-signal at 568 ms || BC250 WSI: chain 00000219E7D4F200: first present stage present1 at 569 ms || BC250 WSI: chain 00000219E7D4F200: first present stage present1-returned at 569 ms || BC250 WSI: chain 00000219E7D4F200: first present stage acquire-wait at 3564 ms
+2026-10-21T01:59:14.5288685Z   m15_scanout: M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T01:59:14.5430484Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 168, notifies 4 (qpc 4662505482, 11.4 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 232, notifies 4 (qpc 4668735751, 12.0 s on) || engine-ddi: r
+2026-10-21T01:59:14.5572247Z   dbwin_end: dbwin end: 589 texts, self-test True, reason parent exited
+2026-10-21T01:59:14.5887094Z === 03-r2-gdi-bl tctl 62.375 C after 0s
+2026-10-21T01:59:14.5907355Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=gdi
+2026-10-21T01:59:52.3903200Z   process q2rtx pid 2916 session 1
+2026-10-21T01:59:52.3923579Z   end: reason exited, elapsed 37.2 s, tctl 57.1 C
+2026-10-21T01:59:52.4066147Z   gate temperature: tctl 62.4 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T01:59:52.4218493Z   desktop route: gpu
+2026-10-21T01:59:52.4363408Z   run directory C:\BC250\pathtrace\runs\20261021T015914Z-q2rtx-timedemo
+2026-10-21T01:59:52.4498188Z   console: conhost --headless
+2026-10-21T01:59:52.5576655Z RESULT 03-r2-gdi-bl: fps 54.547024; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 695/0, vidpn flips 695, gdi blits 0; window->first present  ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T01:59:52.5597156Z   route_line: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T01:59:52.5730042Z   route_source: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T01:59:52.5865240Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T01:59:52.6194414Z === 04-r2-dxgi-ex tctl 57 C after 0s
+2026-10-21T01:59:52.6214869Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:00:27.1892374Z   process q2rtx pid 7828 session 1
+2026-10-21T02:00:27.1902676Z   end: reason exited, elapsed 33.9 s, tctl 63.4 C
+2026-10-21T02:00:27.2054954Z   gate temperature: tctl 57.1 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:00:27.2196634Z   desktop route: gpu
+2026-10-21T02:00:27.2338358Z   run directory C:\BC250\pathtrace\runs\20261021T015952Z-q2rtx-timedemo
+2026-10-21T02:00:27.2473603Z   console: conhost --headless
+2026-10-21T02:00:27.5010420Z RESULT 04-r2-dxgi-ex: fps 103.868309; presentmon 633 rows, main chain 633 presents, iflip 631 (0.9968), modes [Hardware: Independent Flip=631; Composed: Flip=2], median 9.3082 ms; kmd scan-out flips 639 of 639, argb/abgr flips 705/0, vidpn flips 705, gdi blits 0; window->first present 4638.6 ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane bgra8-only; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:00:27.5020972Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:00:27.5163555Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:00:27.5308495Z   chain_lines: BC250 WSI: chain 00000131DE4FDEB0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0 || BC250 WSI: chain 00000131DE620C00: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T02:00:27.5460437Z   iflip_displayable: BC250 WSI: chain 00000131DE4FDEB0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only || BC250 WSI: chain 00000131DE620C00: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T02:00:27.5582024Z   first_present_stages: BC250 WSI: chain 00000131DE4FDEB0: first present stage images at 50 ms || BC250 WSI: chain 00000131DE620C00: first present stage images at 19 ms || BC250 WSI: chain 00000131DE620C00: first present stage queue-wait at 524 ms || BC250 WSI: chain 00000131DE620C00: first present stage execute at 524 ms || BC250 WSI: chain 00000131DE620C00: first present stage queue-signal at 528 ms || BC250 WSI: chain 00000131DE620C00: first present stage present1 at 528 ms || BC250 WSI: chain 00000131DE620C00: first present stage present1-returned at 528 ms || BC250 WSI: chain 00000131DE620C00: first present stage acquire-wait at 3059 ms
+2026-10-21T02:00:27.5733886Z   m15_scanout: M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:00:27.5875653Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 139, notifies 6 (qpc 5385658124, 8.3 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 203, notifies 6 (qpc 5391864465, 9.0 s on) || engine-ddi: rep
+2026-10-21T02:00:27.6007242Z   dbwin_end: dbwin end: 600 texts, self-test True, reason parent exited
+2026-10-21T02:00:27.6348755Z === 05-r2-gdi-ex tctl 62.875 C after 0s
+2026-10-21T02:00:27.6358947Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=gdi
+2026-10-21T02:01:07.4573143Z   process q2rtx pid 5060 session 1
+2026-10-21T02:01:07.4593410Z   end: reason exited, elapsed 39.2 s, tctl 57.6 C
+2026-10-21T02:01:07.4738550Z   gate temperature: tctl 63.4 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:01:07.4863036Z   desktop route: gpu
+2026-10-21T02:01:07.5007863Z   run directory C:\BC250\pathtrace\runs\20261021T020027Z-q2rtx-timedemo
+2026-10-21T02:01:07.5142677Z   console: conhost --headless
+2026-10-21T02:01:07.6250815Z RESULT 05-r2-gdi-ex: fps 53.078732; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 695/0, vidpn flips 695, gdi blits 0; window->first present  ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:01:07.6271370Z   route_line: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:01:07.6393582Z   route_source: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:01:07.6535604Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T02:01:07.6853786Z === 06-inst-dxgi-bl tctl 57.25 C after 0s
+2026-10-21T02:01:07.6863923Z   env: AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:01:41.6151354Z   process q2rtx pid 6004 session 1
+2026-10-21T02:01:41.6182292Z   end: reason exited, elapsed 33.2 s, tctl 63.4 C
+2026-10-21T02:01:41.6317042Z   gate temperature: tctl 57.4 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:01:41.6451809Z   desktop route: gpu
+2026-10-21T02:01:41.6596696Z   run directory C:\BC250\pathtrace\runs\20261021T020107Z-q2rtx-timedemo
+2026-10-21T02:01:41.6749534Z   console: conhost --headless
+2026-10-21T02:01:41.9320256Z RESULT 06-inst-dxgi-bl: fps 102.919579; presentmon 637 rows, main chain 637 presents, iflip 0 (0), modes [Composed: Flip=637], median 9.382 ms; kmd scan-out flips 0 of 0, argb/abgr flips 434/0, vidpn flips 434, gdi blits 0; window->first present 4546 ms; stop exited; icd 700A03C5735866CA80AB5EA007D175E713FDF57F42090C009A4ED9D21482A7E0; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:01:41.9340703Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:01:41.9483923Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:01:41.9635940Z   chain_lines: BC250 WSI: chain 0000027D414152E0: window swap chain 1920x1200 format 28 images 3 flags 0x800 color space 0 || BC250 WSI: chain 0000027D4158E6D0: window swap chain 1920x1200 format 28 images 3 flags 0x800 color space 0
+2026-10-21T02:01:41.9788164Z   iflip_displayable: BC250 WSI: chain 0000027D414152E0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1 || BC250 WSI: chain 0000027D4158E6D0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1
+2026-10-21T02:01:41.9930126Z   m15_scanout: M15.14 scanout format switch=default chain=1920x1200 pitch=7680 format=28 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:01:42.0072088Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 28, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 139, notifies 4 (qpc 6135579345, 8.3 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 203, notifies 5 (qpc 6141868978, 8.9 s on) || BC250 WSI: chai
+2026-10-21T02:01:42.0234878Z   dbwin_end: dbwin end: 535 texts, self-test True, reason parent exited
+2026-10-21T02:01:42.0560606Z === 07-r2-dxgi-bl tctl 62.875 C after 0s
+2026-10-21T02:01:42.0580997Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:02:20.1072841Z   process q2rtx pid 2992 session 1
+2026-10-21T02:02:20.1093682Z   end: reason exited, elapsed 37.3 s, tctl 58 C
+2026-10-21T02:02:20.1235657Z   gate temperature: tctl 63.4 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:02:20.1387617Z   desktop route: gpu
+2026-10-21T02:02:20.1519273Z   run directory C:\BC250\pathtrace\runs\20261021T020142Z-q2rtx-timedemo
+2026-10-21T02:02:20.1650889Z   console: conhost --headless
+2026-10-21T02:02:20.4015620Z RESULT 07-r2-dxgi-bl: fps 59.343552; presentmon 637 rows, main chain 637 presents, iflip 0 (0), modes [Composed: Flip=637], median 16.6653 ms; kmd scan-out flips 637 of 637, argb/abgr flips 703/0, vidpn flips 703, gdi blits 0; window->first present 4621.1 ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane bgra8-only; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:02:20.4036395Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:02:20.4168827Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:02:20.4310705Z   chain_lines: BC250 WSI: chain 00000113180DF1E0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0 || BC250 WSI: chain 000001131A3F5670: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T02:02:20.4452603Z   iflip_displayable: BC250 WSI: chain 00000113180DF1E0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only || BC250 WSI: chain 000001131A3F5670: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T02:02:20.4594338Z   first_present_stages: BC250 WSI: chain 00000113180DF1E0: first present stage images at 23 ms || BC250 WSI: chain 000001131A3F5670: first present stage images at 22 ms || BC250 WSI: chain 000001131A3F5670: first present stage queue-wait at 539 ms || BC250 WSI: chain 000001131A3F5670: first present stage execute at 539 ms || BC250 WSI: chain 000001131A3F5670: first present stage queue-signal at 541 ms || BC250 WSI: chain 000001131A3F5670: first present stage present1 at 541 ms || BC250 WSI: chain 000001131A3F5670: first present stage present1-returned at 541 ms || BC250 WSI: chain 000001131A3F5670: first present stage acquire-wait at 3242 ms
+2026-10-21T02:02:20.4736289Z   m15_scanout: M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:02:20.4878029Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 142, notifies 4 (qpc 6486842193, 9.0 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 206, notifies 4 (qpc 6497556942, 10.1 s on) || engine-ddi: re
+2026-10-21T02:02:20.5009639Z   dbwin_end: dbwin end: 589 texts, self-test True, reason parent exited
+2026-10-21T02:02:20.5324127Z === 08-r2-gdi-bl tctl 57.875 C after 0s
+2026-10-21T02:02:20.5344495Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=gdi
+2026-10-21T02:02:58.3457465Z   process q2rtx pid 6748 session 1
+2026-10-21T02:02:58.3477729Z   end: reason exited, elapsed 37.2 s, tctl 56.9 C
+2026-10-21T02:02:58.3620177Z   gate temperature: tctl 58 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:02:58.3752567Z   desktop route: gpu
+2026-10-21T02:02:58.3897591Z   run directory C:\BC250\pathtrace\runs\20261021T020220Z-q2rtx-timedemo
+2026-10-21T02:02:58.4032419Z   console: conhost --headless
+2026-10-21T02:02:58.5156607Z RESULT 08-r2-gdi-bl: fps 53.375061; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 698/0, vidpn flips 698, gdi blits 0; window->first present  ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:02:58.5177350Z   route_line: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:02:58.5310465Z   route_source: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:02:58.5452814Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T02:02:58.5768350Z === 09-r2-dxgi-ex tctl 56.625 C after 0s
+2026-10-21T02:02:58.5778492Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:03:36.5899360Z   process q2rtx pid 8692 session 1
+2026-10-21T02:03:36.5920142Z   end: reason exited, elapsed 37.3 s, tctl 58.1 C
+2026-10-21T02:03:36.6065418Z   gate temperature: tctl 56.6 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:03:36.6200043Z   desktop route: gpu
+2026-10-21T02:03:36.6344929Z   run directory C:\BC250\pathtrace\runs\20261021T020258Z-q2rtx-timedemo
+2026-10-21T02:03:36.6480137Z   console: conhost --headless
+2026-10-21T02:03:36.8818255Z RESULT 09-r2-dxgi-ex: fps 59.371471; presentmon 637 rows, main chain 637 presents, iflip 0 (0), modes [Composed: Flip=637], median 16.6683 ms; kmd scan-out flips 636 of 636, argb/abgr flips 704/0, vidpn flips 704, gdi blits 0; window->first present -716156.5 ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane bgra8-only; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:03:36.8838600Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:03:36.8980416Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:03:36.9122401Z   chain_lines: BC250 WSI: chain 0000023B5A800700: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0 || BC250 WSI: chain 0000023B82E9FDD0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T02:03:36.9254049Z   iflip_displayable: BC250 WSI: chain 0000023B5A800700: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only || BC250 WSI: chain 0000023B82E9FDD0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T02:03:36.9395871Z   first_present_stages: BC250 WSI: chain 0000023B5A800700: first present stage images at 27 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage images at 19 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage queue-wait at 509 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage execute at 509 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage queue-signal at 512 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage present1 at 512 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage present1-returned at 513 ms || BC250 WSI: chain 0000023B82E9FDD0: first present stage acquire-wait at 2600 ms
+2026-10-21T02:03:36.9547951Z   m15_scanout: M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:03:36.9679586Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 132, notifies 4 (qpc 7241806586, 8.0 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 196, notifies 7 (qpc 7252516860, 9.0 s on) || engine-ddi: rep
+2026-10-21T02:03:36.9831435Z   dbwin_end: dbwin end: 589 texts, self-test True, reason parent exited
+2026-10-21T02:03:37.0135790Z === 10-r2-gdi-ex tctl 57.75 C after 0s
+2026-10-21T02:03:37.0156052Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=gdi
+2026-10-21T02:04:14.8526454Z   process q2rtx pid 6508 session 1
+2026-10-21T02:04:14.8546747Z   end: reason exited, elapsed 37.2 s, tctl 57.5 C
+2026-10-21T02:04:14.8702585Z   gate temperature: tctl 57.8 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:04:14.8837201Z   desktop route: gpu
+2026-10-21T02:04:14.8971789Z   run directory C:\BC250\pathtrace\runs\20261021T020337Z-q2rtx-timedemo
+2026-10-21T02:04:14.9116750Z   console: conhost --headless
+2026-10-21T02:04:15.0215146Z RESULT 10-r2-gdi-ex: fps 57.704617; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 691/0, vidpn flips 691, gdi blits 0; window->first present  ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:04:15.0235607Z   route_line: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:04:15.0368670Z   route_source: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:04:15.0503157Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T02:04:15.0821145Z === 11-inst-dxgi-bl tctl 57.375 C after 0s
+2026-10-21T02:04:15.0831455Z   env: AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:04:48.9370521Z   process q2rtx pid 5648 session 1
+2026-10-21T02:04:48.9390837Z   end: reason exited, elapsed 33.2 s, tctl 63.5 C
+2026-10-21T02:04:48.9532758Z   gate temperature: tctl 57.5 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:04:48.9678682Z   desktop route: gpu
+2026-10-21T02:04:48.9820459Z   run directory C:\BC250\pathtrace\runs\20261021T020415Z-q2rtx-timedemo
+2026-10-21T02:04:48.9962247Z   console: conhost --headless
+2026-10-21T02:04:49.2422514Z RESULT 11-inst-dxgi-bl: fps 102.919579; presentmon 638 rows, main chain 637 presents, iflip 0 (0), modes [Composed: Flip=637], median 9.3808 ms; kmd scan-out flips 0 of 0, argb/abgr flips 428/0, vidpn flips 428, gdi blits 0; window->first present 4419.3 ms; stop exited; icd 700A03C5735866CA80AB5EA007D175E713FDF57F42090C009A4ED9D21482A7E0; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:04:49.2442934Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:04:49.2588097Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:04:49.2733471Z   chain_lines: BC250 WSI: chain 0000019B728568D0: window swap chain 1920x1200 format 28 images 3 flags 0x800 color space 0
+2026-10-21T02:04:49.2867267Z   iflip_displayable: BC250 WSI: chain 0000019B728568D0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1
+2026-10-21T02:04:49.3012734Z   m15_scanout: M15.14 scanout format switch=default chain=1920x1200 pitch=7680 format=28 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:04:49.3137315Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 28, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 138, notifies 4 (qpc 8008997623, 8.2 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 202, notifies 4 (qpc 8015289133, 8.8 s on) || BC250 WSI: chai
+2026-10-21T02:04:49.3282853Z   dbwin_end: dbwin end: 535 texts, self-test True, reason parent exited
+2026-10-21T02:04:49.3610146Z === 12-r2-dxgi-bl tctl 62.75 C after 0s
+2026-10-21T02:04:49.3630366Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:05:27.3874234Z   process q2rtx pid 7972 session 1
+2026-10-21T02:05:27.3894746Z   end: reason exited, elapsed 37.3 s, tctl 58.2 C
+2026-10-21T02:05:27.4037073Z   gate temperature: tctl 62.9 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:05:27.4179355Z   desktop route: gpu
+2026-10-21T02:05:27.4311684Z   run directory C:\BC250\pathtrace\runs\20261021T020449Z-q2rtx-timedemo
+2026-10-21T02:05:27.4457146Z   console: conhost --headless
+2026-10-21T02:05:27.7249499Z RESULT 12-r2-dxgi-bl: fps 59.298935; presentmon 637 rows, main chain 637 presents, iflip 0 (0), modes [Composed: Flip=637], median 16.6742 ms; kmd scan-out flips 638 of 638, argb/abgr flips 704/0, vidpn flips 704, gdi blits 0; window->first present 4432.1 ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane bgra8-only; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:05:27.7269948Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:05:27.7393058Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:05:27.7538673Z   chain_lines: BC250 WSI: chain 000001F690ECFEC0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0 || BC250 WSI: chain 000001F6873F07E0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T02:05:27.7673861Z   iflip_displayable: BC250 WSI: chain 000001F690ECFEC0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only || BC250 WSI: chain 000001F6873F07E0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T02:05:27.7819080Z   first_present_stages: BC250 WSI: chain 000001F690ECFEC0: first present stage images at 24 ms || BC250 WSI: chain 000001F6873F07E0: first present stage images at 20 ms || BC250 WSI: chain 000001F6873F07E0: first present stage queue-wait at 541 ms || BC250 WSI: chain 000001F6873F07E0: first present stage execute at 541 ms || BC250 WSI: chain 000001F6873F07E0: first present stage queue-signal at 543 ms || BC250 WSI: chain 000001F6873F07E0: first present stage present1 at 543 ms || BC250 WSI: chain 000001F6873F07E0: first present stage present1-returned at 544 ms || BC250 WSI: chain 000001F6873F07E0: first present stage acquire-wait at 3233 ms
+2026-10-21T02:05:27.7954002Z   m15_scanout: M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:05:27.8088856Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 141, notifies 4 (qpc 8358735050, 8.9 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 205, notifies 4 (qpc 8369444219, 9.9 s on) || engine-ddi: rep
+2026-10-21T02:05:27.8224033Z   dbwin_end: dbwin end: 589 texts, self-test True, reason parent exited
+2026-10-21T02:05:27.8532399Z === 13-r2-gdi-bl tctl 58 C after 0s
+2026-10-21T02:05:27.8552826Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=gdi
+2026-10-21T02:06:05.6452890Z   process q2rtx pid 10136 session 1
+2026-10-21T02:06:05.6473309Z   end: reason exited, elapsed 37.2 s, tctl 57.9 C
+2026-10-21T02:06:05.6625182Z   gate temperature: tctl 58.2 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:06:05.6767027Z   desktop route: gpu
+2026-10-21T02:06:05.6908753Z   run directory C:\BC250\pathtrace\runs\20261021T020527Z-q2rtx-timedemo
+2026-10-21T02:06:05.7050738Z   console: conhost --headless
+2026-10-21T02:06:05.8142389Z RESULT 13-r2-gdi-bl: fps 58.966450; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 675/0, vidpn flips 675, gdi blits 0; window->first present  ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:06:05.8152553Z   route_line: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:06:05.8284883Z   route_source: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:06:05.8419937Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T02:06:05.8728443Z === 14-r2-dxgi-ex tctl 57.75 C after 0s
+2026-10-21T02:06:05.8748734Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=dxgi
+2026-10-21T02:06:43.9009739Z   process q2rtx pid 2620 session 1
+2026-10-21T02:06:43.9030214Z   end: reason exited, elapsed 37.3 s, tctl 58.1 C
+2026-10-21T02:06:43.9176250Z   gate temperature: tctl 57.9 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:06:43.9321503Z   desktop route: gpu
+2026-10-21T02:06:43.9466317Z   run directory C:\BC250\pathtrace\runs\20261021T020605Z-q2rtx-timedemo
+2026-10-21T02:06:43.9601239Z   console: conhost --headless
+2026-10-21T02:06:44.2018973Z RESULT 14-r2-dxgi-ex: fps 59.298935; presentmon 637 rows, main chain 637 presents, iflip 0 (0), modes [Composed: Flip=637], median 16.6579 ms; kmd scan-out flips 639 of 639, argb/abgr flips 702/0, vidpn flips 702, gdi blits 0; window->first present 4311.7 ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane bgra8-only; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:06:44.2029222Z   route_line: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:06:44.2184335Z   route_source: BC250 WSI: route=dxgi asked=dxgi source=env reason=ok hr=0x00000000 app-local=none
+2026-10-21T02:06:44.2316496Z   chain_lines: BC250 WSI: chain 000001E4C9307860: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0 || BC250 WSI: chain 000001E502FCCCC0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T02:06:44.2469503Z   iflip_displayable: BC250 WSI: chain 000001E4C9307860: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only || BC250 WSI: chain 000001E502FCCCC0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T02:06:44.2601808Z   first_present_stages: BC250 WSI: chain 000001E4C9307860: first present stage images at 26 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage images at 19 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage queue-wait at 517 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage execute at 517 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage queue-signal at 521 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage present1 at 521 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage present1-returned at 522 ms || BC250 WSI: chain 000001E502FCCCC0: first present stage acquire-wait at 2919 ms
+2026-10-21T02:06:44.2744066Z   m15_scanout: M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1936 modes=not-read
+2026-10-21T02:06:44.2886640Z   warn: engine-ddi: shared surface: the runtime refused the ordinary allocation shape; retrying as a shared linear surface (format 87, 1920x1200, heap of 9895936 bytes aligned to 65536 becomes 9216000 bytes, default alignment, pitch 7680) || engine-ddi: replay at ecl drain 64: 1 rings, 1250 entries (98 KiB, 1250 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 65, sleeps 138, notifies 4 (qpc 9120361733, 8.5 s on) || engine-ddi: replay at ecl drain 128: 1 rings, 2146 entries (170 KiB, 2146 run), oversize 0, fallbacks 0, direct lookups 0, reclaimed 0, ring failures 0, stalls 0, wakes 129, sleeps 202, notifies 4 (qpc 9131077271, 9.6 s on) || engine-ddi: rep
+2026-10-21T02:06:44.3029035Z   dbwin_end: dbwin end: 589 texts, self-test True, reason parent exited
+2026-10-21T02:06:44.3335091Z === 15-r2-gdi-ex tctl 57.875 C after 0s
+2026-10-21T02:06:44.3355535Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2\bd197a-r2.json AMDGPU_WDDM_VK_WSI=gdi
+2026-10-21T02:07:22.2127430Z   process q2rtx pid 1248 session 1
+2026-10-21T02:07:22.2148380Z   end: reason exited, elapsed 37.3 s, tctl 57.8 C
+2026-10-21T02:07:22.2304192Z   gate temperature: tctl 57.9 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T02:07:22.2438724Z   desktop route: gpu
+2026-10-21T02:07:22.2584098Z   run directory C:\BC250\pathtrace\runs\20261021T020644Z-q2rtx-timedemo
+2026-10-21T02:07:22.2719149Z   console: conhost --headless
+2026-10-21T02:07:22.3816048Z RESULT 15-r2-gdi-ex: fps 56.078915; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 696/0, vidpn flips 696, gdi blits 0; window->first present  ms; stop exited; icd 5961EE1E6CD70D28E02C5495A550F0C24D9F3468176D35D7BA5C53F851DCAD9E; plane ; plog  presents path  period/copy/blit/dwmflush /// us
+2026-10-21T02:07:22.3836848Z   route_line: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:07:22.3970102Z   route_source: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T02:07:22.4112492Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T02:07:22.8088706Z game-log-off exit 0
+2026-10-21T02:07:22.8129560Z GameLogUntil after: absent
+2026-10-21T02:07:24.9743469Z system events of display, dxgkrnl, driver or WHEA since the arm began: 0
+2026-10-21T02:07:24.9929065Z live kernel reports since the arm began: 0
+2026-10-21T02:07:25.0092155Z elapsed 570 s, tctl 57.375 C
+2026-10-21T02:07:25.0112753Z evidence C:\BC250\tmp\bd197-a\mD1-20261021T015754Z
