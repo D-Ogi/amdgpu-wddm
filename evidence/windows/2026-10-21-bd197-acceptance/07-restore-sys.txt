@@ -1,0 +1,10 @@
+utc 2026-10-21T04:40:09.0357985Z boot 2026-10-21T04:23:08.5000000Z
+ImagePath \SystemRoot\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_1b4f9ceea378f690\bc250kmd.sys
+resolved C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_1b4f9ceea378f690\bc250kmd.sys
+current CC29A62692ACAD0341956546ACD52225D0B577A29E75681E25B496CDEE28FD46
+keep 22BA3CDB898D32D751EF27233AF01C6F81F623A6DF0424AFB7A6AD92C43D1E57 at C:\BC250\tmp\bd197-b\kmd-orig-lacc\bc250kmd.sys
+testsigning: testsigning             Yes
+pnputil disable exit 0 :: 
+device now CM_PROB_DISABLED, service Stopped
+image now 22BA3CDB898D32D751EF27233AF01C6F81F623A6DF0424AFB7A6AD92C43D1E57
+UnconfirmedStarts 0 (StateV2 <generation id redacted> and legacy)

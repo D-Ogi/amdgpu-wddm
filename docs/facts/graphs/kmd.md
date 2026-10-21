@@ -144,6 +144,7 @@ flowchart LR
   M894["M894"]
   M895["M895"]
   M896["M896<br/>hardware"]
+  M909["M909<br/>display"]
   M896 --> M887
   M63 --> M62
   M63 --> M64
@@ -222,8 +223,9 @@ flowchart LR
   M895 --> M887
   M68 --> M67
   M844 --> M65
+  M909 --> M65
   classDef other stroke-dasharray:4 3
-  class M30,M55,M57,M60,M68,M817,M844,M896 other
+  class M30,M55,M57,M60,M68,M817,M844,M896,M909 other
 ```
 
 ### Part 2

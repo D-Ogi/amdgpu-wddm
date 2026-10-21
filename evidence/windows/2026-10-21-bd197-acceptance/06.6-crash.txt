@@ -1,0 +1,25 @@
+Cannot find an overload for "ToString" and the argument count: "1".
+At C:\BC250\tmp\crashcheck.ps1:19 char:50
++ ... DateTime]::UtcNow.ToString('o')) since $($since.ToString('o')) boot $ ...
++                                              ~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], MethodException
+    + FullyQualifiedErrorId : MethodCountCouldNotFindBest
+ 
+Method invocation failed because [System.String] does not contain a method named 'ToLocalTime'.
+At C:\BC250\tmp\crashcheck.ps1:27 char:1
++ $filter = @{ LogName = 'System'; StartTime = $since.ToLocalTime() }
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidOperation: (:) [], RuntimeException
+    + FullyQualifiedErrorId : MethodNotFound
+ 
+Get-WinEvent : Cannot bind argument to parameter 'FilterHashtable' because it is null.
+At C:\BC250\tmp\crashcheck.ps1:28 char:48
++ foreach ($e in @(Get-WinEvent -FilterHashtable $filter -ErrorAction S ...
++                                                ~~~~~~~
+    + CategoryInfo          : InvalidData: (:) [Get-WinEvent], ParameterBindingValidationExceptio 
+   n
+    + FullyQualifiedErrorId : ParameterArgumentValidationErrorNullNotAllowed,Microsoft.PowerShell 
+   .Commands.GetWinEventCommand
+ 
+utc 2026-10-21T04:33:31.9336766Z since  boot 2026-10-21T04:23:08.5000000Z
+crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0

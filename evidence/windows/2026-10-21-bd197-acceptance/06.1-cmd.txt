@@ -1,0 +1,11 @@
+MATCH 2C2BD4788778B7F5EE0733F39E9580CFDA21FA70ABAD7C6FEB90FBBD28D08921 C:\BC250\tmp\bd197-b\icd-lead-r4\vulkan_radeon.dll
+HASH 361B63BD90BEBB026F877F4BB5660A46BC68A4C747DB0207512C8647D819DB2E C:\BC250\tmp\bd197-b\icd-lead-r4\bd197-lead-r4.json
+  {
+    "file_format_version": "1.0.1",
+    "ICD": {
+      "library_path": "C:\\BC250\\tmp\\bd197-b\\icd-lead-r4\\vulkan_radeon.dll",
+      "api_version": "1.4.363"
+    }
+  }
+KMD service state Running, file CC29A62692ACAD0341956546ACD52225D0B577A29E75681E25B496CDEE28FD46 C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_1b4f9ceea378f690\bc250kmd.sys
+runner exit 0

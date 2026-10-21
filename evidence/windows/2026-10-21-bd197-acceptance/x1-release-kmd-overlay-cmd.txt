@@ -1,0 +1,93 @@
+2026-10-21T04:45:30.9697041Z arm l-r4-ov-rel run C:\BC250\tmp\bd197-b\runs\20261021T044530Z-l-r4-ov-rel
+2026-10-21T04:45:31.0157043Z pt-run sha256 6ACB249668F5DFCE39738C9E4FBFA40333AEDFFBEE5E6BE145C05EE09897AE1F
+2026-10-21T04:45:35.1955072Z desktop 2026-10-21T04:45:33.2610823Z route owner S-1-5-90-0-1 magic 0x52443242 version 1 size 32 route 1 pid 1924 hosted_hr 0x00000000 decisions 4
+2026-10-21T04:45:35.2700920Z counters before: scanout_flips=0 scanout_requests=0 admit_ok=884 admit_no_allocation=0 admit_not_requested=0 hardware_flips=879 refusals=scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+2026-10-21T04:45:35.2854037Z game log on until 2026-10-21T04:48:20.2772474Z (previous: absent)
+2026-10-21T04:45:35.5193282Z overlay shown for the run
+2026-10-21T04:45:37.5622912Z pt-run -Seconds 45 -Width 1920 -SetEnv VK_DRIVER_FILES=C:\BC250\tmp\bd197-b\icd-lead-r4\bd197-lead-r4.json -Cvar pt_num_bounce_rays=0,flt_enable=0 -Height 1200 -PresentMon C:\BC250\tmp\bd165\PresentMon-2.6.0-x64.exe -OverlayTemp True -RtApi query -Fullscreen True -Demo q2rtx-loop
+2026-10-21T04:46:38.1874033Z pt-run returned
+2026-10-21T04:46:38.1935339Z game log value put back
+2026-10-21T04:46:41.4437297Z counters after: scanout_flips=2001 scanout_requests=2001 admit_ok=3160 admit_no_allocation=0 admit_not_requested=0 hardware_flips=3155 refusals=scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+2026-10-21T04:46:41.4540072Z counter delta: scanout_flips=2001,scanout_requests=2001,admit_ok=2276,admit_no_allocation=0,admit_not_requested=0,hardware_flips=2276
+2026-10-21T04:46:41.4653111Z pt-run directory C:\BC250\pathtrace\runs\20261021T044537Z-q2rtx-loop
+2026-10-21T04:46:41.5013164Z game pid 3264
+2026-10-21T04:46:41.5157294Z pt: query +set drs_enable 0 +set flt_fsr_enable 0 +set viewsize 100 +set scr_fps 1 +set vid_vsync 0 
+2026-10-21T04:46:41.5177740Z pt: 2026-10-21T04:45:37.9663042Z desktop route: gpu (dwm modules: D3D10Warp.dll bc250d3d_zink.dll 
+2026-10-21T04:46:41.5302164Z pt: 2026-10-21T04:45:58.4100980Z module vulkan-1.dll 1.4.335.0 C:\Windows\SYSTEM32\vulkan-1.dll
+2026-10-21T04:46:41.5426665Z pt: 2026-10-21T04:45:58.4131638Z module dxgi.dll 10.0.22621.5415 (WinBuild.160101.0800) 
+2026-10-21T04:46:41.5561074Z pt: 2026-10-21T04:45:58.4275736Z module D3D12.DLL 10.0.22621.5415 (WinBuild.160101.0800) 
+2026-10-21T04:46:41.5695537Z pt: 2026-10-21T04:45:58.4420567Z module D3D12Core.dll 10.0.22621.5415 (WinBuild.160101.0800) 
+2026-10-21T04:46:41.5829734Z pt: 2026-10-21T04:45:58.4564674Z module amdgpu_wddm_d3d12.dll 40.7.216.103 C:\Windows\System32\DriverS
+2026-10-21T04:46:41.5974872Z pt: 2026-10-21T04:45:58.4717008Z module amdgpu_wddm_vkd3d.dll 40.7.216.103 C:\Windows\System32\DriverS
+2026-10-21T04:46:41.6099848Z pt: 2026-10-21T04:45:58.4879454Z module amdgpu_wddm_radv_d3d12.dll 40.7.216.103 C:\Windows\System32\Dr
+2026-10-21T04:46:41.6245630Z pt: 2026-10-21T04:46:37.7238988Z end: reason bound, elapsed 59.7 s, tctl 59.2 C
+2026-10-21T04:46:41.6390354Z pt: 2026-10-21T04:46:37.9244212Z presentmon rows: 2000
+2026-10-21T04:46:41.6522172Z pt: 2026-10-21T04:46:37.9666230Z presentmode: DXGI, Composed: Flip = 1999
+2026-10-21T04:46:41.6667590Z pt: 2026-10-21T04:46:37.9686525Z presentmode: DXGI, Hardware: Independent Flip = 1
+2026-10-21T04:46:41.8622622Z pm: rows 2000 modes Composed: Flip:1999;Hardware: Independent Flip:1
+2026-10-21T04:46:41.8633101Z pm: past 30 rows 1970 modes Composed: Flip:1969;Hardware: Independent Flip:1; independent flip 1 = 0.1 %
+2026-10-21T04:46:42.3414227Z pm: medians past 30: MsBetweenPresents=16.668 MsBetweenDisplayChange=16.68 MsGPUBusy=11.51 MsCPUBusy=16.481 MsUntilDisplayed=54.618
+2026-10-21T04:46:42.3538507Z pm: PresentFlags 512:1970
+2026-10-21T04:46:42.3673909Z pm: SyncInterval 0:1970
+2026-10-21T04:46:42.3816889Z pm: AllowsTearing 0:1970
+2026-10-21T04:46:42.4304217Z game log files since start: 3
+2026-10-21T04:46:42.4652464Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: route=dxgi asked=dxgi source=default reason=ok hr=0x00000000 app-local=none
+2026-10-21T04:46:42.4672717Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: D3D12 presenter device created hr=0x00000000 impl=system:D3D12Core.dll (adapter 00000000:000088ef)
+2026-10-21T04:46:42.4808048Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: blit fence 0: D3D12-created, permanently imported, both values zero
+2026-10-21T04:46:42.4973513Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: blit fence 1: D3D12-created, permanently imported, both values zero
+2026-10-21T04:46:42.5117379Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: blit fence 2: D3D12-created, permanently imported, both values zero
+2026-10-21T04:46:42.5273354Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A72D2040: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T04:46:42.5418557Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A72D2040: iflip eligible window style 0x16cf0000/0x00000110 client 1920x1200 at 0,0 output 1920x1200 at 0,0 covers 1
+2026-10-21T04:46:42.5553407Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A72D2040: iflip asked 1920x1200 fmt 87 buffers 3 scaling 1 tearing 1 alpha 3 hook 1; got 1920x1200 fmt 87 buffers 3 scaling 1 flags 0x800
+2026-10-21T04:46:42.5709441Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A72D2040: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T04:46:42.5861807Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A72D2040: first present stage images at 54 ms
+2026-10-21T04:46:42.6007455Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A72D2040: queue drain drained
+2026-10-21T04:46:42.6153597Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: blit fence 0: D3D12-created, permanently imported, both values zero
+2026-10-21T04:46:42.6295476Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: blit fence 1: D3D12-created, permanently imported, both values zero
+2026-10-21T04:46:42.6437361Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: blit fence 2: D3D12-created, permanently imported, both values zero
+2026-10-21T04:46:42.6582930Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: window swap chain 1920x1200 format 87 images 3 flags 0x800 color space 0
+2026-10-21T04:46:42.6728370Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip eligible window style 0x96020000/0x00000010 client 1920x1200 at 0,0 output 1920x1200 at 0,0 covers 1
+2026-10-21T04:46:42.6874055Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip asked 1920x1200 fmt 87 buffers 3 scaling 1 tearing 1 alpha 3 hook 1; got 1920x1200 fmt 87 buffers 3 scaling 1 flags 0x800
+2026-10-21T04:46:42.7028468Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane bgra8-only
+2026-10-21T04:46:42.7163207Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage images at 21 ms
+2026-10-21T04:46:42.7298327Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage queue-wait at 720 ms
+2026-10-21T04:46:42.7440760Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage execute at 720 ms
+2026-10-21T04:46:42.7586159Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage queue-signal at 723 ms
+2026-10-21T04:46:42.7731649Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage present1 at 723 ms
+2026-10-21T04:46:42.7866690Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage present1-returned at 724 ms
+2026-10-21T04:46:42.8019379Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: first present stage acquire-wait at 3392 ms
+2026-10-21T04:46:42.8154171Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+2026-10-21T04:46:42.8306259Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip stats at 300 presents unavailable hr=0x887a000b
+2026-10-21T04:46:42.8441252Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip stats at 600 presents: present 596, present refresh 15902, sync refresh 15902, qpc 2801086524
+2026-10-21T04:46:42.8576462Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip stats at 900 presents: present 896, present refresh 16202, sync refresh 16202, qpc 2851128083
+2026-10-21T04:46:42.8728593Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip stats at 1200 presents: present 1196, present refresh 16502, sync refresh 16502, qpc 2901169988
+2026-10-21T04:46:42.8853602Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip stats at 1500 presents: present 1496, present refresh 16802, sync refresh 16802, qpc 2951211213
+2026-10-21T04:46:42.8998619Z log gamelog-q2rtx-3264-20261021T044540Z.log: BC250 WSI: chain 00000128A93D61D0: iflip stats at 1800 presents: present 1796, present refresh 17102, sync refresh 17102, qpc 3001252767
+2026-10-21T04:46:42.9339369Z dbwin: 2026-10-21T04:45:36.5257539Z dbwin start pid 4944 session 1 images q2rtx,dwm existed False/False/False
+2026-10-21T04:46:42.9380459Z dbwin: 2026-10-21T04:45:40.6640061Z pid 3264 q2rtx   VK_LUNARG_direct_driver_loading
+2026-10-21T04:46:42.9513264Z dbwin: 2026-10-21T04:45:40.7519039Z pid 3264 q2rtx   VK_KHR_copy_memory_indirect
+2026-10-21T04:46:42.9648325Z dbwin: 2026-10-21T04:45:40.7529232Z pid 3264 q2rtx   VK_KHR_draw_indirect_count
+2026-10-21T04:46:42.9810789Z dbwin: 2026-10-21T04:45:40.7569868Z pid 3264 q2rtx   VK_AMD_draw_indirect_count
+2026-10-21T04:46:42.9946162Z dbwin: 2026-10-21T04:45:41.0681368Z pid 3264 q2rtx M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000001 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1924 modes=not-read
+2026-10-21T04:46:43.0078090Z dbwin: 2026-10-21T04:45:47.7682391Z pid 1924 dwm bc250d3d_front check_direct_flip call=1 flags=00000000 answer=1 rule=supported caps_query=00000000 caps_flags=00000001 source=1920x1200 client=000001DCD9F084F0 recorded=1 opened=1 primary=1 shared=1 1920x1200 pitch=7680 fmt=87 record_v=3 record_access=5 compositor=000001DCC6DD93F0 recorded=1 opened=0 primary=1 shared=0 1920x1200 pitch=7680 fmt=87 record_v=3 record_access=1
+2026-10-21T04:46:43.0223997Z dbwin: 2026-10-21T04:46:36.5427283Z dbwin end recorded 586 others 96 counts q2rtx=585 dwm=1
+2026-10-21T04:46:43.0503818Z dbwin caps: admitted chain=1920x1200 format=87 caps=00000001 source=1920x1200
+2026-10-21T04:46:43.0646499Z win: 2026-10-21T04:45:50.6166266Z window 131194 class WindowsForms10.Window.8.app.0.1ca0192_r7_ad1 process bc250mon rect 988,12,1908,1132 style 0x16010000 ex 0x080900A8 cloaked 0 foreground False
+2026-10-21T04:46:43.0667018Z win: 2026-10-21T04:45:50.6361930Z window 132208 class SDL_app process q2rtx rect 0,0,1920,1200 style 0x96020000 ex 0x00000010 cloaked 0 foreground True
+2026-10-21T04:46:43.0812264Z win: 2026-10-21T04:45:50.6503794Z window 131332 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 18,26,1147,661 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:46:43.0947880Z win: 2026-10-21T04:45:50.6627943Z window 131558 class PseudoConsoleWindow process powershell rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:46:43.1093268Z win: 2026-10-21T04:45:50.6760058Z window 197452 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 226,234,1355,869 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:46:43.1238550Z win: 2026-10-21T04:45:50.6902274Z window 131222 class PseudoConsoleWindow process powershell rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:46:43.1373662Z win: 2026-10-21T04:45:50.7054395Z window 197228 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 252,260,1381,895 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:46:43.1528993Z win: 2026-10-21T04:45:50.7196311Z window 131516 class PseudoConsoleWindow process cmd rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:46:43.1671031Z win: 2026-10-21T04:45:50.7349102Z window 66204 class Windows.UI.Core.CoreWindow process ShellExperienceHost rect 0,0,1,1 style 0x94000000 ex 0x00200000 cloaked 2 foreground False
+2026-10-21T04:46:43.1835013Z win: 2026-10-21T04:45:50.7603521Z window 65898 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:46:43.1988698Z win: 2026-10-21T04:45:50.7684897Z window 65860 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:46:43.2151673Z win: 2026-10-21T04:45:50.7828235Z window 65858 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:46:43.2335579Z win: 2026-10-21T04:45:50.7984448Z window 65856 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:46:43.2508871Z win: 2026-10-21T04:45:50.8179325Z window 65854 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:46:43.2733722Z win: 2026-10-21T04:45:50.8323850Z window 65710 class Shell_TrayWnd process explorer rect 0,1152,1920,1200 style 0x96000000 ex 0x00000080 cloaked 0 foreground False
+2026-10-21T04:46:43.2886774Z win: 2026-10-21T04:45:50.8457069Z window 65810 class Progman process explorer rect 0,0,1920,1200 style 0x96000000 ex 0x00000080 cloaked 0 foreground False
+2026-10-21T04:46:43.3029983Z win: 2026-10-21T04:45:50.8519327Z windows done
+2026-10-21T04:46:43.5899704Z arm done C:\BC250\tmp\bd197-b\runs\20261021T044530Z-l-r4-ov-rel
+runner exit 0

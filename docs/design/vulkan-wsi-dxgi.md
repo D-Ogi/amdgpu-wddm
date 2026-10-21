@@ -124,7 +124,7 @@ released and a new one is created. The old chain is then detached: its presents 
 |---|---|---|
 | FIFO | sync interval 1 | One frame per refresh |
 | MAILBOX | sync interval 0 | The newest frame replaces a queued one |
-| IMMEDIATE | sync interval 0, `DXGI_PRESENT_ALLOW_TEARING` | Tearing only when `IDXGIFactory5::CheckFeatureSupport` reports it. The swap chain then carries `ALLOW_TEARING` from creation. Without it, IMMEDIATE acts as MAILBOX. The kernel driver has no immediate flip, so a tearing flip still waits for vertical blank |
+| IMMEDIATE | sync interval 0, `DXGI_PRESENT_ALLOW_TEARING` | Tearing only when `IDXGIFactory5::CheckFeatureSupport` reports it. The swap chain then carries `ALLOW_TEARING` from creation. Without it, IMMEDIATE acts as MAILBOX. The kernel driver declares `FlipImmediateMmIo` since BD-170, so an immediate flip takes effect without a wait for vertical blank ([VidPN flip](vidpn-flip.md), section 7.1) |
 
 Every chain is created with `ALLOW_TEARING` when the system reports it, whatever its mode, so the mode can change
 per present (`set_present_mode`) and a chain that takes over a window's swap chain keeps the flags
@@ -431,6 +431,15 @@ Every DXGI run proved the route (`deadlines off`), and no run wrote `route-deadl
 four of six DXGI runs of the r2 candidate were composed at 59.3 frames per second, while the KMD counted
 scan-out flips for them. The cause is not established. No later run at the output's size composed, except the
 one with the overlay shown over the game.
+
+**The acceptance arm with the fixed kernel driver** (kernel driver `CC29A626`, a lab build of `845c7105`, fact
+M909, evidence
+[`evidence/windows/2026-10-21-bd197-acceptance`](../../evidence/windows/2026-10-21-bd197-acceptance/README.md)).
+The same r4 ICD with no variable: Quake II RTX flips independently with its R8G8B8A8 chain in borderless and
+exclusive fullscreen at 1920x1200, and in borderless at a 1920x1080 desktop mode set at run time, the case that the
+release kernel driver composed. Each run has 99.8-100 % of the last PresentMon rows and 639 of 639 scan-out flips.
+vkcube and a D3D12 flip client in both plane formats flip. A 1280x720 window and the game under the lab overlay
+are composed. The `gdi` rollback runs at 56.2 frames per second against 101.7 on DXGI.
 
 ### What runs offline before the lab
 

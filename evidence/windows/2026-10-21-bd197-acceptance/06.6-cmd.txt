@@ -1,0 +1,89 @@
+2026-10-21T04:32:05.9669815Z arm l-r4-vkcube run C:\BC250\tmp\bd197-b\runs\20261021T043205Z-l-r4-vkcube
+2026-10-21T04:32:05.9794720Z pt-run sha256 6ACB249668F5DFCE39738C9E4FBFA40333AEDFFBEE5E6BE145C05EE09897AE1F
+2026-10-21T04:32:09.8658862Z desktop 2026-10-21T04:32:07.7912157Z route owner S-1-5-90-0-1 magic 0x52443242 version 1 size 32 route 1 pid 1924 hosted_hr 0x00000000 decisions 4
+2026-10-21T04:32:09.9312660Z counters before: scanout_flips=2556 scanout_requests=2556 admit_ok=5191 admit_no_allocation=0 admit_not_requested=0 hardware_flips=5186 refusals=scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+2026-10-21T04:32:09.9466271Z game log on until 2026-10-21T04:35:39.9384564Z (previous: absent)
+2026-10-21T04:32:10.1977653Z overlay hidden for the run, markers made: 2
+2026-10-21T04:32:12.2086994Z vkcube env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-b\icd-lead-r4\bd197-lead-r4.json
+2026-10-21T04:32:14.2372611Z presentmon pid 8344
+2026-10-21T04:32:14.3154038Z vkcube task started for 25 s
+2026-10-21T04:32:52.4295213Z presentmon still runs: stopping it and its session
+2026-10-21T04:32:52.4890442Z vk: 2026-10-21T04:32:14.9472866Z helper start client=C:\BC250\vkroute\clients\vkcube.exe args=--c 1000000 --width 1920 --height 1200 --suppress_popups
+2026-10-21T04:32:52.4931069Z vk: 2026-10-21T04:32:15.0106991Z client pid 10024
+2026-10-21T04:32:52.5034576Z vk: 2026-10-21T04:32:15.2856612Z window handle 0x2056E
+2026-10-21T04:32:52.5159453Z vk: 2026-10-21T04:32:15.2917464Z style before 0x14CF0000
+2026-10-21T04:32:52.5283967Z vk: 2026-10-21T04:32:16.0106151Z style after 0x94000000 rect 0,0 1920x1200
+2026-10-21T04:32:52.5408097Z vk: 2026-10-21T04:32:16.0564459Z window probe session=1 hung=False answers_null_message=True
+2026-10-21T04:32:52.5543416Z vk: 2026-10-21T04:32:21.0777420Z window probe session=1 hung=False answers_null_message=True
+2026-10-21T04:32:52.5667843Z vk: 2026-10-21T04:32:26.0814789Z window probe session=1 hung=False answers_null_message=True
+2026-10-21T04:32:52.5792048Z vk: 2026-10-21T04:32:31.1028669Z window probe session=1 hung=False answers_null_message=True
+2026-10-21T04:32:52.5916222Z vk: 2026-10-21T04:32:36.1231494Z window probe session=1 hung=False answers_null_message=True
+2026-10-21T04:32:52.6040916Z vk: 2026-10-21T04:32:40.2179068Z WM_CLOSE accepted=True closed=True
+2026-10-21T04:32:52.6155289Z vk: 2026-10-21T04:32:40.2199568Z helper end exit 0
+2026-10-21T04:32:52.6300468Z vk: exit 0
+2026-10-21T04:32:52.6476161Z overlay shown again, markers removed: 2
+2026-10-21T04:32:52.6568266Z game log value put back
+2026-10-21T04:33:26.3199041Z counters after: scanout_flips=4033 scanout_requests=4033 admit_ok=7018 admit_no_allocation=0 admit_not_requested=0 hardware_flips=7013 refusals=scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+2026-10-21T04:33:26.3270384Z counter delta: scanout_flips=1477,scanout_requests=1477,admit_ok=1827,admit_no_allocation=0,admit_not_requested=0,hardware_flips=1827
+2026-10-21T04:33:26.4683362Z pm: rows 1483 modes Hardware: Independent Flip:1468;Composed: Flip:15
+2026-10-21T04:33:26.4704195Z pm: past 30 rows 1453 modes Hardware: Independent Flip:1453; independent flip 1453 = 100 %
+2026-10-21T04:33:26.7574596Z pm: medians past 30: MsBetweenPresents=16.678 MsBetweenDisplayChange=16.68 MsGPUBusy=0.851 MsCPUBusy=0.458 MsUntilDisplayed=66.08
+2026-10-21T04:33:26.7668045Z pm: PresentFlags 0:1453
+2026-10-21T04:33:26.7791903Z pm: SyncInterval 1:1453
+2026-10-21T04:33:26.7925172Z pm: AllowsTearing 0:1453
+2026-10-21T04:33:26.8142515Z game log files since start: 2
+2026-10-21T04:33:26.8316271Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: route=dxgi asked=dxgi source=default reason=ok hr=0x00000000 app-local=none
+2026-10-21T04:33:26.8346752Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: D3D12 presenter device created hr=0x00000000 impl=system:D3D12Core.dll (adapter 00000000:000095b8)
+2026-10-21T04:33:26.8472021Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: blit fence 0: D3D12-created, permanently imported, both values zero
+2026-10-21T04:33:26.8606872Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: blit fence 1: D3D12-created, permanently imported, both values zero
+2026-10-21T04:33:26.8731283Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: blit fence 2: D3D12-created, permanently imported, both values zero
+2026-10-21T04:33:26.8865698Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: window swap chain 1920x1181 format 87 images 3 flags 0x0 color space 0
+2026-10-21T04:33:26.9000833Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: iflip not-covered window style 0x14cf0000/0x00000100 client 1920x1181 at 108,131 output 1920x1200 at 0,0 covers 0
+2026-10-21T04:33:26.9143385Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: iflip asked 1920x1181 fmt 87 buffers 3 scaling 1 tearing 0 alpha 3 hook 0; got 1920x1181 fmt 87 buffers 3 scaling 1 flags 0x0
+2026-10-21T04:33:26.9276457Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane all-formats
+2026-10-21T04:33:26.9428907Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage images at 22 ms
+2026-10-21T04:33:26.9550952Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage queue-wait at 43 ms
+2026-10-21T04:33:26.9704695Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage execute at 43 ms
+2026-10-21T04:33:26.9837517Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage queue-signal at 45 ms
+2026-10-21T04:33:26.9980649Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage present1 at 45 ms
+2026-10-21T04:33:27.0124627Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage present1-returned at 46 ms
+2026-10-21T04:33:27.0258334Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: first present stage acquire-wait at 50 ms
+2026-10-21T04:33:27.0382510Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: route presented: blit fence of image 0 reached 2 (wanted 2) and the acquire of that image returned; deadlines off
+2026-10-21T04:33:27.0536909Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: queue drain drained
+2026-10-21T04:33:27.0679838Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: blit fence 0: D3D12-created, permanently imported, both values zero
+2026-10-21T04:33:27.0822678Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: blit fence 1: D3D12-created, permanently imported, both values zero
+2026-10-21T04:33:27.0965538Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: blit fence 2: D3D12-created, permanently imported, both values zero
+2026-10-21T04:33:27.1098732Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: window swap chain 1920x1200 format 87 images 3 flags 0x0 color space 0 (taken over from oldSwapchain)
+2026-10-21T04:33:27.1231369Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip eligible window style 0x94000000/0x00000000 client 1920x1200 at 0,0 output 1920x1200 at 0,0 covers 1
+2026-10-21T04:33:27.1385100Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip asked 1920x1200 fmt 87 buffers 3 scaling 1 tearing 0 alpha 3 hook 1; got 1920x1200 fmt 87 buffers 3 scaling 1 flags 0x0
+2026-10-21T04:33:27.1528834Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip displayable yes (ALLOW_DISPLAY), hardware composition 0x0, switches shape 1 scaling 1 tearing 1 buffers 3 hook 1, plane all-formats
+2026-10-21T04:33:27.1682102Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E854DB15F0: queue drain drained
+2026-10-21T04:33:27.1806453Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip stats at 300 presents unavailable hr=0x887a000b
+2026-10-21T04:33:27.1949964Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip stats at 600 presents: present 608, present refresh 32334, sync refresh 32334, qpc 5573121618
+2026-10-21T04:33:27.2083937Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip stats at 900 presents: present 908, present refresh 32634, sync refresh 32634, qpc 5623163717
+2026-10-21T04:33:27.2216074Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: iflip stats at 1200 presents: present 1208, present refresh 32934, sync refresh 32934, qpc 5673204981
+2026-10-21T04:33:27.2350213Z log gamelog-vkcube-10024-20261021T043215Z.log: BC250 WSI: chain 000001E859816390: queue drain drained
+2026-10-21T04:33:27.2656579Z dbwin: 2026-10-21T04:32:11.1297033Z dbwin start pid 8092 session 1 images vkcube,dwm existed False/False/False
+2026-10-21T04:33:27.2697466Z dbwin: 2026-10-21T04:32:15.2336799Z pid 10024 vkcube M15.14 scanout source-geometry switch=default chain=1920x1181 pitch=7680 format=87 caps=00000003 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1924 modes=not-offered
+2026-10-21T04:33:27.2821179Z dbwin: 2026-10-21T04:32:15.4720659Z pid 10024 vkcube M15.14 scanout admitted switch=default chain=1920x1200 pitch=7680 format=87 caps=00000003 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1924 modes=not-read
+2026-10-21T04:33:27.2946057Z dbwin: 2026-10-21T04:32:15.5524145Z pid 1924 dwm bc250d3d_front check_direct_flip call=5 flags=00000000 answer=1 rule=supported caps_query=00000000 caps_flags=00000003 source=1920x1200 client=0000022E63859330 recorded=1 opened=1 primary=1 shared=1 1920x1200 pitch=7680 fmt=87 record_v=3 record_access=5 compositor=0000022E63859670 recorded=1 opened=0 primary=1 shared=0 1920x1200 pitch=7680 fmt=87 record_v=3 record_access=1
+2026-10-21T04:33:27.3080089Z dbwin: 2026-10-21T04:32:15.5534537Z pid 1924 dwm bc250d3d_front check_direct_flip summary device=0000022E57C4AFD0 at=periodic calls=5 true=5 false=0 immediate=0 lines=4 unchanged=1 suppressed=0 rules=supported:5
+2026-10-21T04:33:27.3274762Z dbwin caps: admitted chain=1920x1200 format=87 caps=00000003 source=1920x1200 | source-geometry chain=1920x1181 format=87 caps=00000003 source=1920x1200
+2026-10-21T04:33:27.3376701Z win: 2026-10-21T04:32:25.2095851Z window 132462 class Vulkan Cube process vkcube rect 0,0,1920,1200 style 0x94000000 ex 0x00000000 cloaked 0 foreground True
+2026-10-21T04:33:27.3498508Z win: 2026-10-21T04:32:25.2279830Z window 132500 class PseudoConsoleWindow process powershell rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:33:27.3622369Z win: 2026-10-21T04:32:25.2412713Z window 524740 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 252,260,1381,895 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:33:27.3767137Z win: 2026-10-21T04:32:25.2534871Z window 393976 class PseudoConsoleWindow process powershell rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:33:27.3901816Z win: 2026-10-21T04:32:25.2657759Z window 459742 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 18,26,1147,661 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:33:27.4036495Z win: 2026-10-21T04:32:25.2821152Z window 460060 class ApplicationFrameWindow process explorer rect 0,0,1920,1152 style 0x94CF0000 ex 0x00200100 cloaked 2 foreground False
+2026-10-21T04:33:27.4161327Z win: 2026-10-21T04:32:25.2944790Z window 66190 class Windows.UI.Core.CoreWindow process ShellExperienceHost rect 1920,1032,1920,1032 style 0x94000000 ex 0x00200000 cloaked 2 foreground False
+2026-10-21T04:33:27.4303448Z win: 2026-10-21T04:32:25.3078856Z window 65894 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:33:27.4455704Z win: 2026-10-21T04:32:25.3213365Z window 65856 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:33:27.4589474Z win: 2026-10-21T04:32:25.3358233Z window 65854 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:33:27.4731918Z win: 2026-10-21T04:32:25.3492808Z window 65852 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:33:27.4865677Z win: 2026-10-21T04:32:25.3635882Z window 65850 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:33:27.5030637Z win: 2026-10-21T04:32:25.3768184Z window 196820 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect -32000,-32000,-31840,-31972 style 0x34CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:33:27.5172590Z win: 2026-10-21T04:32:25.3890361Z window 65708 class Shell_TrayWnd process explorer rect 0,1152,1920,1200 style 0x96000000 ex 0x00000080 cloaked 0 foreground False
+2026-10-21T04:33:27.5307907Z win: 2026-10-21T04:32:25.4033574Z window 65806 class Progman process explorer rect 0,0,1920,1200 style 0x96000000 ex 0x00000080 cloaked 0 foreground False
+2026-10-21T04:33:27.5442124Z win: 2026-10-21T04:32:25.4116446Z windows done
+2026-10-21T04:33:27.8306896Z arm done C:\BC250\tmp\bd197-b\runs\20261021T043205Z-l-r4-vkcube
+runner exit 0

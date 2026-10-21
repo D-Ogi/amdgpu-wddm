@@ -1,0 +1,30 @@
+2026-10-21T04:20:43Z step 01: precheck
+2026-10-21T04:20:47Z step 02: push
+2026-10-21T04:21:14Z step 03: swap-sys
+2026-10-21T04:21:25Z step 04: restart
+2026-10-21T04:24:33Z step 05: read-start
+2026-10-21T04:24:39Z step 05: candidate CC29A62692ACAD0341956546ACD52225D0B577A29E75681E25B496CDEE28FD46 loaded, boot 2026-10-21T04:23:08.5000000Z
+2026-10-21T04:24:44Z step 06.1: hashes: the r4 ICD and its JSON as pushed, the KMD file
+2026-10-21T04:24:57Z step 06.1: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:24:59Z step 06.2: Q2RTX borderless 1920x1200, r4, no variable: independent flip expected
+2026-10-21T04:26:32Z step 06.2: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:26:37Z step 06.3: Q2RTX exclusive 1920x1200, r4, no variable: independent flip expected
+2026-10-21T04:27:59Z step 06.3: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:28:02Z step 06.4: Q2RTX borderless at desktop 1920x1080, r4, no variable, then back: independent flip expected
+2026-10-21T04:29:42Z step 06.4: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:29:45Z step 06.5: Q2RTX borderless 1920x1200 after the revert, r4, no variable: independent flip expected
+2026-10-21T04:31:08Z step 06.5: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:31:10Z step 06.6: vkcube borderless 1920x1200, r4, no variable: flip expected
+2026-10-21T04:32:46Z step 06.6: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:32:48Z step 06.7: D3D12 flip client R8G8B8A8 1920x1200: flip expected
+2026-10-21T04:34:05Z step 06.7: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:34:07Z step 06.8: D3D12 flip client B8G8R8A8 1920x1200: flip expected
+2026-10-21T04:35:23Z step 06.8: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:35:25Z step 06.9: rollback: Q2RTX borderless, r4 with AMDGPU_WDDM_VK_WSI=gdi: runs, composed
+2026-10-21T04:36:22Z step 06.9: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:36:24Z step 06.10: Q2RTX framed window 1280x720, r4, no variable: composed
+2026-10-21T04:37:42Z step 06.10: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:37:44Z step 06.11: Q2RTX borderless 1920x1200 with the overlay shown, r4, no variable: overlay visible on the camera
+2026-10-21T04:39:07Z step 06.11: crash boot-changed 0 bugchecks 0 kernel-power 0 tdr 0 dumps 0 live 0
+2026-10-21T04:39:18Z step 07: restore-sys
+2026-10-21T04:39:28Z step 08: restart

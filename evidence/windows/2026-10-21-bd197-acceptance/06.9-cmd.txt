@@ -1,0 +1,37 @@
+2026-10-21T04:36:19.0260456Z arm l-r4-gdi-bl run C:\BC250\tmp\bd197-b\runs\20261021T043618Z-l-r4-gdi-bl
+2026-10-21T04:36:19.0385641Z pt-run sha256 6ACB249668F5DFCE39738C9E4FBFA40333AEDFFBEE5E6BE145C05EE09897AE1F
+2026-10-21T04:36:23.0640056Z desktop 2026-10-21T04:36:20.7926483Z route owner S-1-5-90-0-1 magic 0x52443242 version 1 size 32 route 1 pid 1924 hosted_hr 0x00000000 decisions 4
+2026-10-21T04:36:23.1334717Z counters before: scanout_flips=5833 scanout_requests=5833 admit_ok=9445 admit_no_allocation=0 admit_not_requested=0 hardware_flips=9440 refusals=scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+2026-10-21T04:36:23.1507389Z game log on until 2026-10-21T04:39:23.1405767Z (previous: absent)
+2026-10-21T04:36:23.2507592Z pt-run -Overlay quiet -Seconds 60 -Width 1920 -SetEnv AMDGPU_WDDM_VK_WSI=gdi,VK_DRIVER_FILES=C:\BC250\tmp\bd197-b\icd-lead-r4\bd197-lead-r4.json -Cvar pt_num_bounce_rays=0,flt_enable=0 -Height 1200 -PresentMon C:\BC250\tmp\bd165\PresentMon-2.6.0-x64.exe -OverlayTemp True -RtApi query -Fullscreen True -Demo q2rtx-timedemo
+2026-10-21T04:37:01.2503585Z pt-run returned
+2026-10-21T04:37:01.2565427Z game log value put back
+2026-10-21T04:37:02.9385670Z counters after: scanout_flips=5833 scanout_requests=5833 admit_ok=10194 admit_no_allocation=0 admit_not_requested=0 hardware_flips=10189 refusals=scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+2026-10-21T04:37:02.9477836Z counter delta: scanout_flips=0,scanout_requests=0,admit_ok=749,admit_no_allocation=0,admit_not_requested=0,hardware_flips=749
+2026-10-21T04:37:02.9621695Z pt-run directory C:\BC250\pathtrace\runs\20261021T043623Z-q2rtx-timedemo
+2026-10-21T04:37:02.9888235Z game pid 9184
+2026-10-21T04:37:02.9918814Z pt: query +set drs_enable 0 +set flt_fsr_enable 0 +set viewsize 100 +set scr_fps 1 +set vid_vsync 0 
+2026-10-21T04:37:03.0042779Z pt: 2026-10-21T04:36:23.5615899Z desktop route: gpu (dwm modules: D3D10Warp.dll bc250d3d_zink.dll 
+2026-10-21T04:37:03.0166653Z pt: 2026-10-21T04:36:43.9559841Z module vulkan-1.dll 1.4.335.0 C:\Windows\SYSTEM32\vulkan-1.dll
+2026-10-21T04:37:03.0309443Z pt: 2026-10-21T04:36:43.9590344Z module dxgi.dll 10.0.22621.5415 (WinBuild.160101.0800) 
+2026-10-21T04:37:03.0454131Z pt: 2026-10-21T04:37:00.9453999Z end: reason exited, elapsed 37.3 s, tctl 56 C
+2026-10-21T04:37:03.0596752Z pt: 56.153774 fps
+2026-10-21T04:37:03.0862930Z game log files since start: 3
+2026-10-21T04:37:03.0986429Z log gamelog-q2rtx-9184-20261021T043626Z.log: BC250 WSI: route=gdi asked=gdi source=env reason=asked hr=0x00000000 app-local=none
+2026-10-21T04:37:03.1109127Z win: 2026-10-21T04:36:38.3427466Z window 328986 class SDL_app process q2rtx rect 0,0,1920,1200 style 0x96020000 ex 0x00000010 cloaked 0 foreground True
+2026-10-21T04:37:03.1181319Z win: 2026-10-21T04:36:38.3602475Z window 460078 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 200,208,1329,843 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:37:03.1313028Z win: 2026-10-21T04:36:38.3725349Z window 525650 class PseudoConsoleWindow process powershell rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:37:03.1456208Z win: 2026-10-21T04:36:38.3868975Z window 590656 class CASCADIA_HOSTING_WINDOW_CLASS process WindowsTerminal rect 174,182,1303,817 style 0x14CF0000 ex 0x00200100 cloaked 0 foreground False
+2026-10-21T04:37:03.1609306Z win: 2026-10-21T04:36:38.4001894Z window 328984 class PseudoConsoleWindow process cmd rect 0,0,0,0 style 0x94000000 ex 0x08000080 cloaked 0 foreground False
+2026-10-21T04:37:03.1743258Z win: 2026-10-21T04:36:38.4125038Z window 460060 class ApplicationFrameWindow process explorer rect 0,0,1920,1152 style 0x94CF0000 ex 0x00200100 cloaked 2 foreground False
+2026-10-21T04:37:03.1897244Z win: 2026-10-21T04:36:38.4268515Z window 66190 class Windows.UI.Core.CoreWindow process ShellExperienceHost rect 1920,1032,1920,1032 style 0x94000000 ex 0x00200000 cloaked 2 foreground False
+2026-10-21T04:37:03.2049952Z win: 2026-10-21T04:36:38.4473630Z window 65894 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:37:03.2194310Z win: 2026-10-21T04:36:38.4617172Z window 65856 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:37:03.2336884Z win: 2026-10-21T04:36:38.4761628Z window 65854 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:37:03.2469038Z win: 2026-10-21T04:36:38.4885514Z window 65852 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:37:03.2621971Z win: 2026-10-21T04:36:38.5027614Z window 65850 class DummyDWMListenerWindow process explorer rect 0,0,0,0 style 0x94000000 ex 0x08200080 cloaked 1 foreground False
+2026-10-21T04:37:03.2757318Z win: 2026-10-21T04:36:38.5171318Z window 65708 class Shell_TrayWnd process explorer rect 0,1152,1920,1200 style 0x96000000 ex 0x00000080 cloaked 0 foreground False
+2026-10-21T04:37:03.2910227Z win: 2026-10-21T04:36:38.5304688Z window 65806 class Progman process explorer rect 0,0,1920,1200 style 0x96000000 ex 0x00000080 cloaked 0 foreground False
+2026-10-21T04:37:03.3053336Z win: 2026-10-21T04:36:38.5376647Z windows done
+2026-10-21T04:37:03.5772902Z arm done C:\BC250\tmp\bd197-b\runs\20261021T043618Z-l-r4-gdi-bl
+runner exit 0

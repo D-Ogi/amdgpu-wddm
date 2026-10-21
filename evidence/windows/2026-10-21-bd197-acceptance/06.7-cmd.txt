@@ -1,0 +1,32 @@
+2026-10-21T04:33:41.4356126Z arm l-d3d12-rgba8 run C:\BC250\tmp\bd197-b\runs\20261021T043341Z-l-d3d12-rgba8 format '28' experiment scanout-flip seconds 40 frames 900
+2026-10-21T04:33:41.4532784Z client sha256 7DEBBFE7E6EC182BAEC21AAB58E519DE3CF01E7BDFCD9FE36AD4C69CB8EAA21A
+2026-10-21T04:33:41.4837476Z scanout-trial sha256 83AC571FC53415B83A596F09F8AC5B4A8A3276A64ED6E05C94125F878D157E70
+2026-10-21T04:33:41.9687453Z overlay hidden for the run, markers made: 2
+2026-10-21T04:33:44.0561838Z counters before: scanout_flips=4033 scanout_requests=4033 admit_ok=7047 admit_no_allocation=0 admit_not_requested=0 hardware_flips=7042
+2026-10-21T04:33:46.0820702Z presentmon pid 8344
+2026-10-21T04:34:08.8158280Z scanout-trial exit 1
+2026-10-21T04:34:23.8256266Z presentmon still runs: stopping it and its session
+2026-10-21T04:34:23.8850443Z overlay shown again, markers removed: 2
+2026-10-21T04:34:45.1402221Z dbwin: 2026-10-21T04:33:47.3797025Z dbwin start pid 9176 session 1 images amdgpu_wddm_d3d12_queue,dwm existed False/False/False
+2026-10-21T04:34:45.1442909Z dbwin: 2026-10-21T04:33:50.5579509Z pid 11672 amdgpu_wddm_d3d12_queue M15.14 scanout admitted switch=named chain=1920x1200 pitch=7680 format=28 caps=00000003 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1924 modes=not-read
+2026-10-21T04:34:45.1557073Z dbwin: 2026-10-21T04:33:50.7094198Z pid 1924 dwm bc250d3d_front check_direct_flip call=6 flags=00000000 answer=1 rule=supported caps_query=00000000 caps_flags=00000003 source=1920x1200 client=0000022E63860270 recorded=1 opened=1 primary=1 shared=1 1920x1200 pitch=7680 fmt=28 record_v=3 record_access=5 compositor=0000022E63859670 recorded=1 opened=0 primary=1 shared=0 1920x1200 pitch=7680 fmt=87 record_v=3 record_access=1
+2026-10-21T04:34:45.1660694Z dbwin: 2026-10-21T04:33:50.7094198Z pid 1924 dwm bc250d3d_front check_direct_flip summary device=0000022E57C4AFD0 at=periodic calls=6 true=6 false=0 immediate=0 lines=5 unchanged=1 suppressed=0 rules=supported:6
+2026-10-21T04:34:45.1795670Z dbwin: 2026-10-21T04:34:42.4820147Z dbwin end recorded 96 others 5 counts amdgpu_wddm_d3d12_queue=94 dwm=2
+2026-10-21T04:34:45.1999507Z dbwin caps: admitted chain=1920x1200 format=28 caps=00000003 source=1920x1200
+2026-10-21T04:34:45.2328488Z counters after: scanout_flips=4933 scanout_requests=4933 admit_ok=8140 admit_no_allocation=0 admit_not_requested=0 hardware_flips=8135
+2026-10-21T04:34:45.2348756Z counter delta: scanout_flips=900,scanout_requests=900,admit_ok=1093,admit_no_allocation=0,admit_not_requested=0,hardware_flips=1093
+2026-10-21T04:34:45.2615583Z trial: presents":0,"directflip_handshake":"on","vidpn_state":"open","hardware_flips":7088,"hardware_refus
+2026-10-21T04:34:45.2636020Z trial: handshake: EnableDirectFlipHandshake 1 (override), driver publishes on
+2026-10-21T04:34:45.2747964Z trial: create-device: success True hr 00000000
+2026-10-21T04:34:45.2882858Z trial: create-queue: success True hr 00000000
+2026-10-21T04:34:45.3004913Z trial: copy: success True hr 00000000
+2026-10-21T04:34:45.3129441Z trial: status: success True hr 00000000
+2026-10-21T04:34:45.3264534Z trial: exit: success True hr 00000000
+2026-10-21T04:34:45.3396901Z trial: resents":0,"directflip_handshake":"on","vidpn_state":"open","hardware_flips":8057,"hardware_refuse
+2026-10-21T04:34:45.3509147Z trial: delta: {"presents":73,"flips":969,"address_calls":969,"above_dispatch":969,"scanout_flips":900,"sc
+2026-10-21T04:34:45.3641311Z trial: report: C:\BC250\tmp\bd197-b\runs\20261021T043341Z-l-d3d12-rgba8\trial.json
+2026-10-21T04:34:45.3773802Z trial: VERDICT scan-out: 900 of 969 flips were an application buffer (900 candidates requested, 969 
+2026-10-21T04:34:45.5183985Z pm: rows 892 modes Hardware: Independent Flip:889;Composed: Flip:3
+2026-10-21T04:34:45.5215453Z pm: past 30 rows 862 modes Hardware: Independent Flip:862; independent flip 862 = 100 %
+2026-10-21T04:34:45.7968575Z arm done C:\BC250\tmp\bd197-b\runs\20261021T043341Z-l-d3d12-rgba8
+runner exit 0
