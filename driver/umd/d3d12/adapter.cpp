@@ -190,7 +190,7 @@ extern "C" BOOL WINAPI DllMain(HINSTANCE,DWORD reason,LPVOID reserved) {
     }
     return TRUE;
 }
-extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter12(D3D12DDIARG_OPENADAPTER* a) {
+extern "C" HRESULT APIENTRY OpenAdapter12(D3D12DDIARG_OPENADAPTER* a) {
     if(!a) return E_INVALIDARG;
     a->hAdapter.pDrvPrivate=nullptr;
     if(!a->pAdapterFuncs) return E_INVALIDARG;

@@ -32,7 +32,7 @@ HRESULT read_record(const std::wstring &path,bc250::umd::AdapterConfigRecord2 &r
     return count==size.QuadPart ? S_OK : E_FAIL;
 }
 }
-extern "C" __declspec(dllexport) HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args) {
+extern "C" HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *args) {
     if(!args)return E_INVALIDARG;
     try {
         std::wstring directory;HRESULT hr=configuration_directory(directory);if(FAILED(hr))return hr;
