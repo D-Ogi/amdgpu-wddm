@@ -90,6 +90,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'compatibility.ps1')
 . (Join-Path $here 'mft-h264.ps1')
 . (Join-Path $here 'system-tuning.ps1')
+. (Join-Path $here 'mesa-temp-cleanup.ps1')
 . (Join-Path $here 'components.ps1')
 . (Join-Path $here 'state-lifecycle.ps1')
 . (Join-Path $here 'state-reader.ps1')
@@ -2242,6 +2243,20 @@ if ($storePlan) {
         } | Out-Null
     }
 }
+# BD-211: the MEMxxxx.TMP files that the user-mode drivers of earlier releases left in the temp folders
+# (mesa-temp-cleanup.ps1). Only files older than a day and not open; a failure here is a warning and changes nothing
+# of this installation.
+try {
+    $mesaRoots = Get-MesaTempRoots
+    $mesaFound = Find-MesaTempLeftovers -Roots $mesaRoots
+    Write-Log "   BD-211 temp files: $($mesaFound.count) older than a day ($($mesaFound.bytes) bytes), $($mesaFound.young) newer, $($mesaFound.unreadable) folder(s) not readable, in $($mesaRoots.Count) temp folder(s)"
+    if ($mesaFound.count) {
+        Invoke-Change "remove $($mesaFound.count) temporary files ($([Math]::Round($mesaFound.bytes / 1MB, 1)) MB) that earlier versions of this driver left in the temp folders (BD-211); a file that is open stays" {
+            $mesaDone = Remove-MesaTempLeftovers -Files $mesaFound.files
+            Write-Info "removed $($mesaDone.removed) temporary files ($([Math]::Round($mesaDone.bytes / 1MB, 1)) MB); $($mesaDone.in_use) in use and $($mesaDone.denied) not permitted stay"
+        } | Out-Null
+    }
+} catch { Write-Warn2 "the temporary files of earlier versions were not removed ($($_.Exception.Message)); this changes nothing of this installation" }
 Invoke-SelectedSystemTuning -Selected ([bool]$ApplySystemTuning) -Action ApplyRecommended -PackageRoot $package
 if($legacyRollback) {
     Invoke-Change 'enable the exact legacy driver only after its complete payload, firmware, settings and tasks are in place' {

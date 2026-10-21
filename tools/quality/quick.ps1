@@ -74,6 +74,8 @@ try {
  # Settings apply/restore runs against a fake system. Never change this PC's services, tasks or registry.
  Check 'system-tuning' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning.ps1" -Out "$Out\system-tuning" }
  Check 'system-tuning-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-system-tuning-installer.ps1" -Out "$Out\system-tuning-installer" }
+ # BD-211: which leaked MEMxxxx.TMP files the installer removes, in a folder under Out only (no real temp folder).
+ Check 'mesa-temp-cleanup-installer' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-mesa-temp-cleanup-installer.ps1" -Out "$Out\mesa-temp-cleanup-installer" }
  # This gate uses real ACL/DPAPI storage below Out, with no service, task or registry changes.
  Check 'system-tuning-journal' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\win\system-tuning\test-system-tuning-journal.ps1" -Out "$Out\system-tuning-journal" }
  Check 'lab-runner-etw' { & pwsh -NoProfile -File "$repo\tools\win\lab-runner\etw\host-checks.ps1" }
