@@ -429,6 +429,22 @@ they hold ARGB8888, the driver can flip RGBA8 and RGB10A2 surfaces as well as BG
 `BC250_SCANOUT_CAPS_PLANE_FORMATS` in the scan-out caps trailer. The encodings are in `plane_format.h`, and
 the design is in [scan-out admission](../../docs/design/scanout-admission.md#plane-pixel-formats-0721620).
 
+The flag follows the flip path at the time of each query (`DcnPlaneFormatsOpen`, BD-197). A fixed inherited
+pipe takes ARGB8888 only, so the flag is clear while it is on screen. An enabled connector that keeps its
+inherited mode takes the other formats, and so does a runtime mode of the connector: its commit programs the
+pipe for a 32-bit surface at the mode's pitch. While a commit or a detach has no valid runtime surface, the
+flag is clear. From 0.7.216.62 to 0.7.216.103 the flag was clear for every enabled connector, so DWM composed
+every RGBA8 and RGB10A2 chain on a DP screen.
+
+The three format registers have more fields than the format. The driver writes them from the values of the
+pipe's current owner. The firmware's capture gives every field, and after a connector commit the
+`DET_BUF_PLANE1_BASE_ADDRESS` field comes from the commit's DML plan, because the commit writes that field
+(`hubp201_program_requestor`). For a 32-bit surface the plan gives 0, as the firmware does on unit A. The
+plane goes back to ARGB8888 at each connector commit, restore, stop, flip to the desktop surface, and
+power-down of a connector or of a pipe with a smaller source mode. The inherited pipe at its native mode
+keeps its last flip at D3 and at reset, address and format together. The CPU blit (`DcnScanoutMapping`) takes
+ARGB8888 only.
+
 At 0 the driver does not read the registers, the flag stays clear, and every flip uses ARGB8888, as in
 0.7.216.18. This is the bisect switch of the feature. The start log says which way it went:
 

@@ -111,6 +111,7 @@ static unsigned log_next,diag_locks;
 static unsigned char diag_snapshot[sizeof(((BC250_DEVICE*)0)->Connector)];
 static unsigned test_irql, acquire_fail, hdmi_stop_fail, save_fail, plan_fail, bad_clocks, clock_reads;
 static unsigned apply_count, tx_enabled, plane_blank, otg_blank, crtc_enabled, output_black, aux_open;
+static unsigned pipe_programs, pipe_plans;   /* BD-197: successful pipe steps, and their recorded plans */
 static unsigned persistent_aux_fail, firmware_frees, pool_frees, audio_debt;
 static unsigned observed_generation, fault_triggered;
 /* 1 = inherited firmware surface; 2 = reserved runtime surface. */
@@ -197,6 +198,7 @@ void DcnLinkSurfaceAdopt(BC250_DEVICE* d)
     d->RuntimePost.PhysicAddress=d->RuntimeFramebufferPhysical;
     d->RuntimePost.ColorFormat=D3DDDIFMT_A8R8G8B8;d->RuntimePost.TargetId=BC250_CHILD_UID;
 }
+void DcnPipeConnectorPlan(BC250_DEVICE* d,ULONG det);   /* BD-197, defined after the pipe step's stub */
 static BOOLEAN ConnectorIsConnected(BC250_DEVICE* d) { CHECK(d==&device && !operation_locks);return sink_connected; }
 static NTSTATUS DcnSetVisibility(BC250_DEVICE*,BOOLEAN);
 static NTSTATUS DcnRuntimeSurface(BC250_DEVICE*,BOOLEAN);
@@ -221,6 +223,7 @@ NTSTATUS DcnLinkSurfaceCapture(BC250_DEVICE* d,ULONG w,ULONG h,BC250_LINK_SURFAC
 NTSTATUS DcnLinkSurfaceRestore(BC250_DEVICE* d,const BC250_LINK_SURFACE* surface) {
     long status=boundary_step(d->ConnectorLink,"restore-surface",0);
     CHECK(primary_locks && crtc_enabled && surface!=NULL);
+    CHECK(pipe_programs && pipe_plans==pipe_programs);   /* BD-197: the format write keeps this pipe's DET */
     CHECK(surface->Physical==(ULONGLONG)d->RuntimeFramebufferPhysical.QuadPart);
     CHECK(surface->Width==link.Previous.Timing.HActive && surface->Height==link.Previous.Timing.VActive);
     CHECK(surface->Pitch==link.Previous.Pitch && surface->Format==BC250_PLANE_FORMAT_ARGB8888);
@@ -346,7 +349,9 @@ int Bc250Dml201Plan(const BC250_DML201_INPUT* in,void* w,size_t size,BC250_DML20
     CHECK(in->CursorWidth==0 && in->AudioSampleRateKhz==192);
     CHECK(in->Output==(unsigned)(snapshot.Sink.Kind==BC250_SINK_DP?BC250_DML201_DP:BC250_DML201_HDMI));
     memset(p,0,sizeof(*p));if(plan_fail)return -1;
-    p->Valid=1;p->VReady=340;p->VStartup=20;p->VUpdateOffset=550;p->VUpdateWidth=255;return 0;
+    p->Valid=1;p->VReady=340;p->VStartup=20;p->VUpdateOffset=550;p->VUpdateWidth=255;
+    p->Rq.plane1_base_address=0x2A5;   /* BD-197: what the pipe step programs and the surface writes keep */
+    return 0;
 }
 int Bc250OptcTimingValid(const BC250_TARGET_TIMING* t,const BC250_OPTC_SYNC* s)
 { CHECK(t!=NULL && s->VStartup==20);return 1; }
@@ -398,7 +403,16 @@ long Bc250OptcReadTiming(BC250_DISP_IO* io,unsigned long pixelKhz,BC250_TARGET_T
 long Bc250OptcDisable(BC250_DISP_IO* io)
 { long s=io_step(io,"otg-off");CHECK(plane_blank);if(!s)crtc_enabled=0;return s; }
 long Bc250Dcn201PipeApply(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* c)
-{ long s=io_step(io,"pipe");CHECK(plane_blank && !crtc_enabled && p->Valid && c->DentistVcoKhz==3000000);++apply_count;return s; }
+{
+    long s=io_step(io,"pipe");CHECK(plane_blank && !crtc_enabled && p->Valid && c->DentistVcoKhz==3000000);++apply_count;
+    if(!s)++pipe_programs;
+    return s;
+}
+/* BD-197: dcn.c's DcnPipeConnectorPlan (dcn_flip_test runs the real one). Once per successful pipe step, right after
+ * it and before any surface write, with the DET plane-1 base of the plan that step programmed. A failed pipe step
+ * records nothing. */
+void DcnPipeConnectorPlan(BC250_DEVICE* d,ULONG det)
+{ CHECK(d==&device && primary_locks && !crtc_enabled && det==0x2A5 && pipe_plans+1==pipe_programs);++pipe_plans; }
 BC250_ATOM_STATUS Bc250LinkAtomClock(BC250_LINK_ATOM* a,unsigned protocol,unsigned khz)
 {
     long status;CHECK(protocol==0 || protocol==2 || protocol==3);CHECK(khz);
@@ -455,7 +469,9 @@ int Bc250HdmiStreamProgram(BC250_HDMI_LINK* h,const BC250_ATOM_CALLBACKS* io,uin
 long Bc250OptcEnable(BC250_DISP_IO* io)
 { long s=io_step(io,"otg-on");CHECK(plane_blank && output_black && tx_enabled);if(!s)crtc_enabled=1;return s; }
 static NTSTATUS DcnRuntimeSurface(BC250_DEVICE* d,BOOLEAN unblank)
-{ long s=boundary_step(d->ConnectorLink,unblank?"surface":"suspend-surface",0);CHECK(primary_locks);if(unblank)CHECK(crtc_enabled && d->RuntimePostValid);if(!s) {scanned_surface=2;plane_blank=0;d->RuntimePlaneBlank=0;if(unblank)otg_blank=0;}return s; }
+{ long s=boundary_step(d->ConnectorLink,unblank?"surface":"suspend-surface",0);CHECK(primary_locks);if(unblank)CHECK(crtc_enabled && d->RuntimePostValid);
+  CHECK(pipe_plans==pipe_programs);if(unblank)CHECK(pipe_programs);   /* BD-197: the plan before every surface write */
+  if(!s) {scanned_surface=2;plane_blank=0;d->RuntimePlaneBlank=0;if(unblank)otg_blank=0;}return s; }
 static NTSTATUS DcnRestorePostDisplay(BC250_DEVICE* d)
 {
     long status=boundary_step(d->ConnectorLink,"original-surface",0);
@@ -504,6 +520,7 @@ static void reset(unsigned kind)
     primary_end_fail=0;
     test_irql=acquire_fail=hdmi_stop_fail=save_fail=plan_fail=bad_clocks=clock_reads=0;
     apply_count=plane_blank=otg_blank=output_black=aux_open=event_count=fault_triggered=0;
+    pipe_programs=pipe_plans=0;
     persistent_aux_fail=firmware_frees=pool_frees=audio_debt=0;
     scanned_surface=1;original_surface_restores=0;
     tx_enabled=crtc_enabled=1;observed_generation=7;clock_us=100;thread=(PKTHREAD)(uintptr_t)1;

@@ -30,16 +30,18 @@
 //
 // The same-size rule. All three admitted formats are 4 bytes a pixel, and AMD's bandwidth model treats them as
 // one source format: dcn20_hubbub.c:148-151 gives 4 bytes an element for all of them and dcn20_fpu.c:1716 maps
-// them to dm_444_32. So the request, deadline and watermark settings the firmware programmed for its ARGB8888
-// plane stay valid, and the flip changes the four fields above and nothing else.
+// them to dm_444_32. So the request, deadline and watermark settings of the pipe's owner stay valid, and the flip
+// changes the four fields above and nothing else. The owner is the firmware, for its ARGB8888 plane, or a
+// connector commit, whose DML plan is for a 32-bit 444 surface (connector_link.c, BD-197).
 //
 // Where FP16 slots in, and why it is not admitted yet. A16B16G16R16F would be BC250_PLANE_FORMAT_ABGR16161616F
 // with SURFACE_PIXEL_FORMAT 24, CNVC 25 and the crossbar swap, at 8 bytes a pixel (the pitch field counts
 // pixels, which DcnFlipWriteSequence already divides by the plane's bytes per pixel). Two things block it, and
 // both are named follow-ups in docs/design/scanout-admission.md:
 //   1. Bandwidth. dcn20_fpu.c:1703 maps it to dm_444_64. DML then gives other request sizes and swath heights
-//      (HUBP0_DCHUBP_REQ_SIZE_CONFIG), other deadlines (HUBPREQ0 DLG/TTU) and other watermarks. This driver does
-//      not run DML; it keeps the firmware's 32-bit values, which do not describe a 64-bit plane.
+//      (HUBP0_DCHUBP_REQ_SIZE_CONFIG), other deadlines (HUBPREQ0 DLG/TTU) and other watermarks. The pipe keeps
+//      the firmware's 32-bit values or a connector commit's plan for a 32-bit surface; neither describes a
+//      64-bit plane.
 //   2. Transfer function. A DXGI FP16 swap chain holds linear scRGB values. The firmware's pipe applies no
 //      degamma and no output gamma to its sRGB-encoded ARGB8888 plane, so linear values would be shown as if
 //      they were sRGB-encoded. An sRGB output gamma (MPCC_OGAM) and a clamp of values above 1.0 are needed.

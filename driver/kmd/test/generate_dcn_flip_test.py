@@ -16,6 +16,11 @@ start = s.index('static BOOLEAN AddressAllowed(')
 body += s[start:s.index('// Fill\'s own pattern:', start)]
 start = s.index('NTSTATUS DcnFlipSourceAddress(')
 body += s[start:s.index('\n}\n', start)+3]
+# BD-197: the scan-out caps trailer's PLANE_FORMATS rule, held to the source-address admission above, and the
+# connector commit's DET base, which the format registers keep.
+for name in ['BOOLEAN DcnPlaneFormatsOpen(', 'void DcnPipeConnectorPlan(']:
+    start = s.index(name)
+    body += s[start:s.index('\n}\n', start)+3]
 # BD-195: the runtime bridge pitch and the link writers' adoption of the reserved buffer (invariant I3).
 for name in ['static NTSTATUS DcnReadScanoutPhysical(', 'static BOOLEAN DcnWriterBridgeCurrent(',
              'static ULONG DcnRuntimeBridgePitch(', 'void DcnLinkSurfaceAdopt(',
