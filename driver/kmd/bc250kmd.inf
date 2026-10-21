@@ -7,7 +7,7 @@ Class       = Display
 ClassGuid   = {4d36e968-e325-11ce-bfc1-08002be10318}
 Provider    = %Provider%
 CatalogFile = bc250kmd.cat
-DriverVer   = 10/13/2026,0.7.216.64
+DriverVer   = 10/22/2026,0.7.216.65
 PnpLockdown = 1
 
 [DestinationDirs]
@@ -181,7 +181,7 @@ HKR,Parameters\DefaultsV2,NotifyDpcInReport,0x00010001,1
 ; END GENERATED STATE DEFAULTS
 
 [Strings]
-PackageProductVersion = "0.7.216.64"
+PackageProductVersion = "0.7.216.65"
 Provider    = "amdgpu-wddm"
 DiskName    = "bc250kmd installation media"
 DeviceName  = "BC-250 GPU (amdgpu-wddm)"
