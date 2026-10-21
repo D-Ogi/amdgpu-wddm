@@ -1,0 +1,230 @@
+﻿2026-10-21T03:19:12.7276533Z arm mE dir C:\BC250\tmp\bd197-a\mE-20261021T031912Z runs 15: r2lab-gdi-vkp-plog,r3lab-gdi-vkp-plog,r2lab-gdi-vkp-plog,r3lab-gdi-vkp-plog,r2lab-gdi-vkp-plog,r3lab-gdi-vkp-plog,r3lab-gdi-vkp-plog-shot,r2lab-gdi-vkpb-plog,r3lab-gdi-vkpb-plog,r2lab-gdi-bl-plog,r3lab-gdi-bl-plog,r2lab-gdi-bl-plog,r3lab-gdi-bl-plog,r2lab-gdi-bl-plog,r3lab-gdi-bl-plog game bound 45s cool below 66 C budget 1080s hidden console True
+2026-10-21T03:19:12.8755214Z file C:\BC250\tmp\bd197-a\pt-run.ps1 sha256 6ACB249668F5DFCE39738C9E4FBFA40333AEDFFBEE5E6BE145C05EE09897AE1F
+2026-10-21T03:19:12.8989979Z file C:\BC250\tmp\bd197-a\dbwin.ps1 sha256 291E50A29CD8742CAA84A8EF656C5AF5FECDFC51DA03F5F260D71F49C97CEB7E
+2026-10-21T03:19:12.9081735Z file C:\BC250\tmp\bd165\PresentMon-2.6.0-x64.exe sha256 B2A706BC6AD475749E3B7E3409263AA1E6906D45BDCF993F6DBC0F660188F1AF
+2026-10-21T03:19:12.9183308Z file C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe sha256 951E0290722769353AF8285D095B51208CB04ED2A2C8926D5C027E6B45F53812
+2026-10-21T03:19:13.2466064Z file C:\Program Files\amdgpu-wddm\control\amdgpu_wddm_control.exe sha256 A417D6B852192F9DBEC9AB0C66CC590E273801B3A6790C1DF3738B91BF2BE650
+2026-10-21T03:19:13.2743613Z file C:\BC250\tmp\bd197-a\run-vkcube.ps1 sha256 D9361A6639F6F7DC78BF9E45B227B384A101242D760F68FF1342D528B543469A
+2026-10-21T03:19:13.2794783Z file C:\BC250\vkroute\clients\vkcube.exe sha256 87A96AF3A4677C4AE0BC293625B9F18BFE80A41362992BC03CA2AA3CADE37721
+2026-10-21T03:19:13.3147391Z file C:\BC250\tmp\bd197-a\winz.ps1 sha256 EC8468AC323A960627C274CE23CC2F47BBB39415D2A9C2A24BDECC1B57E57E0B
+2026-10-21T03:19:13.3572644Z file C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe sha256 2A74E2D796146E764E2810201E87650BDD5D3AE85A409D85E9A458FB1A857CCE
+2026-10-21T03:19:13.3704676Z file C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json sha256 8C89D77B0B102BA5736B40275188C7DA949E8830F60279E35F75D576F8EC38FF
+2026-10-21T03:19:13.4560967Z file C:\BC250\tmp\bd197-a\icd-r2lab\vulkan_radeon.dll sha256 3BCBBF2062ED5D438E33C11E7B316323643B96A68AF6242E8C8755E6E345AF34
+2026-10-21T03:19:13.4683616Z file C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json sha256 F8255E80F406381C65E25C1D710D7851A04C430F5407960A3DF581D8690CDEC8
+2026-10-21T03:19:13.6265310Z file C:\BC250\tmp\bd197-a\icd-r3lab\vulkan_radeon.dll sha256 9245917A3D7B409A7DF52332F68A9944AF0830975F719009820349E963E386E4
+2026-10-21T03:19:14.1033367Z kmd loaded: service Running image C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_1b4f9ceea378f690\bc250kmd.sys sha256 22BA3CDB898D32D751EF27233AF01C6F81F623A6DF0424AFB7A6AD92C43D1E57
+2026-10-21T03:19:14.8011091Z pnp: BC-250 GPU (amdgpu-wddm) 40.7.216.103 oem4.inf
+2026-10-21T03:19:14.8114358Z WsiRoute before: key absent, value absent
+2026-10-21T03:19:14.9440958Z tctl 52.875 C
+2026-10-21T03:19:14.9748296Z interop: driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 47343046
+2026-10-21T03:19:14.9768927Z interop: settings EnableGpuPresentBlit=1 EnableCddDwmInterop=1
+2026-10-21T03:19:14.9903491Z interop: power callback registered
+2026-10-21T03:19:15.0038061Z interop: session marked, users 1, marks 1, unmarks 0, mark failures 0, last end none, previous end last-user-gone, boot 675, marker found 0
+2026-10-21T03:19:15.0234521Z DesktopRouter: DwmForceCpu=0 RequireKmdSwitches=1 DirectFlipFront=1
+2026-10-21T03:19:15.0348242Z Vulkan key: absent
+2026-10-21T03:19:15.0482540Z machine AMDGPU_WDDM_VK_WSI='' VK_DRIVER_FILES=''
+2026-10-21T03:19:15.1203842Z dwm pid 1932 session 1 start 2026-10-21T03:14:53Z modules D3D10Warp.dll bc250d3d_zink.dll bc250d3d_router.dll amdgpu_wddm_radv.dll
+2026-10-21T03:19:15.1224500Z desktop route gpu
+2026-10-21T03:19:15.1681216Z windows: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:19:15.2049329Z adapter: BC-250 GPU (amdgpu-wddm) 40.7.216.103 1920x1200 59 Hz
+2026-10-21T03:19:16.0872963Z game-log-on exit 0
+2026-10-21T03:19:16.0996877Z GameLogUntil 2026-10-21T03:42:16.0138965Z
+2026-10-21T03:19:16.1335922Z === 01-r2lab-gdi-vkp-plog tctl 52.875 C after 0s
+2026-10-21T03:19:16.1397247Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\01-r2lab-gdi-vkp-plog\present-log.csv
+2026-10-21T03:19:16.1591286Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:19:16.2661516Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\01-r2lab-gdi-vkp-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\01-r2lab-gdi-vkp-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\01-r2lab-gdi-vkp-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\01-r2lab-gdi-vkp-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:19:16.2763356Z   overlay.hide ok
+2026-10-21T03:19:18.6998328Z   vkp task started
+2026-10-21T03:19:20.1831415Z   process vkpresent-x64 pid 6764 session 1
+2026-10-21T03:19:44.2566597Z   presentmon stopped with its session
+2026-10-21T03:19:44.2607466Z   overlay.show ok
+2026-10-21T03:19:44.3040814Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r2lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=24.690 total=11.727s
+2026-10-21T03:19:44.3061470Z   client_exit 1
+2026-10-21T03:19:44.3299008Z   end: reason exited
+2026-10-21T03:19:44.8153843Z RESULT 01-r2lab-gdi-vkp-plog: fps 204.7; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 741/0, vidpn flips 741, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 4797/2978/1299/0 us
+2026-10-21T03:19:44.8287780Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 11.727 s
+2026-10-21T03:19:44.8534982Z === 02-r3lab-gdi-vkp-plog tctl 54 C after 0s
+2026-10-21T03:19:44.8545304Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\02-r3lab-gdi-vkp-plog\present-log.csv
+2026-10-21T03:19:44.8762253Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:19:44.9204551Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\02-r3lab-gdi-vkp-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\02-r3lab-gdi-vkp-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\02-r3lab-gdi-vkp-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\02-r3lab-gdi-vkp-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:19:44.9245147Z   overlay.hide ok
+2026-10-21T03:19:47.0307329Z   vkp task started
+2026-10-21T03:19:48.4134860Z   process vkpresent-x64 pid 11916 session 1
+2026-10-21T03:20:08.1384797Z   presentmon stopped with its session
+2026-10-21T03:20:08.1415365Z   overlay.show ok
+2026-10-21T03:20:08.1589759Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r3lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=13.058 total=7.750s
+2026-10-21T03:20:08.1704261Z   client_exit 1
+2026-10-21T03:20:08.1849243Z   end: reason exited
+2026-10-21T03:20:08.4698884Z RESULT 02-r3lab-gdi-vkp-plog: fps 309.7; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 439/0, vidpn flips 439, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 2652/840/1266/0 us
+2026-10-21T03:20:08.4740031Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 7.750 s
+2026-10-21T03:20:08.5058050Z === 03-r2lab-gdi-vkp-plog tctl 53.75 C after 0s
+2026-10-21T03:20:08.5068215Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\03-r2lab-gdi-vkp-plog\present-log.csv
+2026-10-21T03:20:08.5295583Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:20:08.5685891Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\03-r2lab-gdi-vkp-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\03-r2lab-gdi-vkp-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\03-r2lab-gdi-vkp-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\03-r2lab-gdi-vkp-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:20:08.5726608Z   overlay.hide ok
+2026-10-21T03:20:10.6775819Z   vkp task started
+2026-10-21T03:20:12.2836591Z   process vkpresent-x64 pid 11180 session 1
+2026-10-21T03:20:34.5591303Z   presentmon stopped with its session
+2026-10-21T03:20:34.5621924Z   overlay.show ok
+2026-10-21T03:20:34.5786438Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r2lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=18.831 total=11.533s
+2026-10-21T03:20:34.5900475Z   client_exit 1
+2026-10-21T03:20:34.6045957Z   end: reason exited
+2026-10-21T03:20:34.8924369Z RESULT 03-r2lab-gdi-vkp-plog: fps 208.1; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 730/0, vidpn flips 730, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 4717/2896/1266/0 us
+2026-10-21T03:20:34.8944664Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 11.533 s
+2026-10-21T03:20:34.9229432Z === 04-r3lab-gdi-vkp-plog tctl 54.375 C after 0s
+2026-10-21T03:20:34.9249673Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\04-r3lab-gdi-vkp-plog\present-log.csv
+2026-10-21T03:20:34.9466799Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:20:34.9890200Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\04-r3lab-gdi-vkp-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\04-r3lab-gdi-vkp-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\04-r3lab-gdi-vkp-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\04-r3lab-gdi-vkp-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:20:34.9930756Z   overlay.hide ok
+2026-10-21T03:20:37.0986245Z   vkp task started
+2026-10-21T03:20:38.4429531Z   process vkpresent-x64 pid 2080 session 1
+2026-10-21T03:20:56.7478438Z   presentmon stopped with its session
+2026-10-21T03:20:56.7529493Z   overlay.show ok
+2026-10-21T03:20:56.7725712Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r3lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=8.816 total=6.511s
+2026-10-21T03:20:56.7879494Z   client_exit 1
+2026-10-21T03:20:56.8023241Z   end: reason exited
+2026-10-21T03:20:57.0890370Z RESULT 04-r3lab-gdi-vkp-plog: fps 368.6; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 429/0, vidpn flips 429, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 2629/826/1251/0 us
+2026-10-21T03:20:57.0910754Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 6.511 s
+2026-10-21T03:20:57.1239626Z === 05-r2lab-gdi-vkp-plog tctl 53.75 C after 0s
+2026-10-21T03:20:57.1249785Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\05-r2lab-gdi-vkp-plog\present-log.csv
+2026-10-21T03:20:57.1455924Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:20:57.1857045Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\05-r2lab-gdi-vkp-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\05-r2lab-gdi-vkp-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\05-r2lab-gdi-vkp-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\05-r2lab-gdi-vkp-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:20:57.1887621Z   overlay.hide ok
+2026-10-21T03:20:59.2954892Z   vkp task started
+2026-10-21T03:21:00.6369228Z   process vkpresent-x64 pid 13020 session 1
+2026-10-21T03:21:24.3362221Z   presentmon stopped with its session
+2026-10-21T03:21:24.3392806Z   overlay.show ok
+2026-10-21T03:21:24.3557116Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r2lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=11.453 total=11.501s
+2026-10-21T03:21:24.3670527Z   client_exit 1
+2026-10-21T03:21:24.3825467Z   end: reason exited
+2026-10-21T03:21:24.6619722Z RESULT 05-r2lab-gdi-vkp-plog: fps 208.7; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 729/0, vidpn flips 729, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 4705/2895/1249/0 us
+2026-10-21T03:21:24.6640017Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 11.501 s
+2026-10-21T03:21:24.6935271Z === 06-r3lab-gdi-vkp-plog tctl 54.875 C after 0s
+2026-10-21T03:21:24.6955530Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\06-r3lab-gdi-vkp-plog\present-log.csv
+2026-10-21T03:21:24.7171620Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:21:24.7593238Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\06-r3lab-gdi-vkp-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\06-r3lab-gdi-vkp-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\06-r3lab-gdi-vkp-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\06-r3lab-gdi-vkp-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:21:24.7623656Z   overlay.hide ok
+2026-10-21T03:21:26.8775802Z   vkp task started
+2026-10-21T03:21:28.2326412Z   process vkpresent-x64 pid 9940 session 1
+2026-10-21T03:21:46.5869068Z   presentmon stopped with its session
+2026-10-21T03:21:46.5899892Z   overlay.show ok
+2026-10-21T03:21:46.6085094Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r3lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=8.671 total=6.493s
+2026-10-21T03:21:46.6188195Z   client_exit 1
+2026-10-21T03:21:46.6333582Z   end: reason exited
+2026-10-21T03:21:46.9105713Z RESULT 06-r3lab-gdi-vkp-plog: fps 369.6; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 430/0, vidpn flips 430, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 2626/826/1250/0 us
+2026-10-21T03:21:46.9126188Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 6.493 s
+2026-10-21T03:21:46.9442341Z === 07-r3lab-gdi-vkp-plog-shot tctl 53.625 C after 0s
+2026-10-21T03:21:46.9462716Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\07-r3lab-gdi-vkp-plog-shot\present-log.csv
+2026-10-21T03:21:46.9710112Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:21:47.0275334Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\07-r3lab-gdi-vkp-plog-shot\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format rgba8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\07-r3lab-gdi-vkp-plog-shot\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\07-r3lab-gdi-vkp-plog-shot\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\07-r3lab-gdi-vkp-plog-shot\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:21:47.0316171Z   overlay.hide ok
+2026-10-21T03:21:49.1408392Z   vkp task started
+2026-10-21T03:21:50.5147351Z   process vkpresent-x64 pid 10764 session 1
+2026-10-21T03:22:08.9100656Z   presentmon stopped with its session
+2026-10-21T03:22:08.9131222Z   overlay.show ok
+2026-10-21T03:22:08.9350060Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r3lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=37 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=8.526 total=6.514s
+2026-10-21T03:22:08.9484803Z   client_exit 1
+2026-10-21T03:22:08.9640350Z   end: reason exited
+2026-10-21T03:22:09.2518004Z RESULT 07-r3lab-gdi-vkp-plog-shot: fps 368.4; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 432/0, vidpn flips 432, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 2631/825/1251/0 us
+2026-10-21T03:22:09.2538363Z   vkpresent: FAIL route gdi/dxgi-composition format 37 mode 0 presented 2400 mismatched 0 readback ok total 6.514 s
+2026-10-21T03:22:09.2844168Z === 08-r2lab-gdi-vkpb-plog tctl 53.625 C after 0s
+2026-10-21T03:22:09.2864634Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\08-r2lab-gdi-vkpb-plog\present-log.csv
+2026-10-21T03:22:09.3080868Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:22:09.3521794Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\08-r2lab-gdi-vkpb-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format bgra8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\08-r2lab-gdi-vkpb-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\08-r2lab-gdi-vkpb-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\08-r2lab-gdi-vkpb-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:22:09.3552406Z   overlay.hide ok
+2026-10-21T03:22:11.4679026Z   vkp task started
+2026-10-21T03:22:12.8424679Z   process vkpresent-x64 pid 4456 session 1
+2026-10-21T03:22:31.2097509Z   presentmon stopped with its session
+2026-10-21T03:22:31.2138234Z   overlay.show ok
+2026-10-21T03:22:31.2292265Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r2lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=44 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=9.216 total=7.078s
+2026-10-21T03:22:31.2415380Z   client_exit 1
+2026-10-21T03:22:31.2569878Z   end: reason exited
+2026-10-21T03:22:31.5429123Z RESULT 08-r2lab-gdi-vkpb-plog: fps 339.1; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 464/0, vidpn flips 464, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 2889/1087/1252/0 us
+2026-10-21T03:22:31.5449502Z   vkpresent: FAIL route gdi/dxgi-composition format 44 mode 0 presented 2400 mismatched 0 readback ok total 7.078 s
+2026-10-21T03:22:31.5744518Z === 09-r3lab-gdi-vkpb-plog tctl 53.125 C after 0s
+2026-10-21T03:22:31.5765315Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\09-r3lab-gdi-vkpb-plog\present-log.csv
+2026-10-21T03:22:31.5981938Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:22:31.6402362Z   vkp launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json | set AMDGPU_WDDM_VK_WSI=gdi | set BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\09-r3lab-gdi-vkpb-plog\present-log.csv | "C:\BC250\tmp\bd197-a\vkpresent\vkpresent-x64.exe" --borderless --width 1920 --height 1200 --format bgra8 --colour FF0000 --present-mode immediate --frames 2400 --deadline 60 --json "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\09-r3lab-gdi-vkpb-plog\vkpresent.json" --expect-route gdi > "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\09-r3lab-gdi-vkpb-plog\vkpresent.txt" 2>&1 | >> "C:\BC250\tmp\bd197-a\mE-20261021T031912Z\09-r3lab-gdi-vkpb-plog\vkpresent.txt" echo client_exit %ERRORLEVEL%
+2026-10-21T03:22:31.6442893Z   overlay.hide ok
+2026-10-21T03:22:33.7580764Z   vkp task started
+2026-10-21T03:22:35.4542676Z   process vkpresent-x64 pid 8812 session 1
+2026-10-21T03:22:53.4651602Z   presentmon stopped with its session
+2026-10-21T03:22:53.4712986Z   overlay.show ok
+2026-10-21T03:22:53.4847260Z   vkpresent FAIL arch=x64 route=gdi/dxgi-composition source=default icd=C:\BC250\tmp\bd197-a\icd-r3lab\vulkan_radeon.dll device="AMD BC-250 (RADV GFX1013)" api=1.4.363 driver=109060195 format=44 usage=0x8009F frames=2400 presented=2400 lost=0 readback=ok maxms=8.883 total=7.237s
+2026-10-21T03:22:53.4990127Z   client_exit 1
+2026-10-21T03:22:53.5145184Z   end: reason exited
+2026-10-21T03:22:53.8017612Z RESULT 09-r3lab-gdi-vkpb-plog: fps 331.6; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 471/0, vidpn flips 471, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 2400 presents path gdi period/copy/blit/dwmflush 2962/1113/1296/0 us
+2026-10-21T03:22:53.8037998Z   vkpresent: FAIL route gdi/dxgi-composition format 44 mode 0 presented 2400 mismatched 0 readback ok total 7.237 s
+2026-10-21T03:22:53.8343329Z === 10-r2lab-gdi-bl-plog tctl 53.125 C after 0s
+2026-10-21T03:22:53.8363789Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\10-r2lab-gdi-bl-plog\present-log.csv
+2026-10-21T03:22:53.8569527Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:23:36.1113717Z   process q2rtx pid 6024 session 1
+2026-10-21T03:23:36.1134571Z   end: reason exited, elapsed 41.3 s, tctl 55.4 C
+2026-10-21T03:23:36.1280153Z   gate temperature: tctl 53.1 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T03:23:36.1425788Z   desktop route: gpu
+2026-10-21T03:23:36.1550545Z   run directory C:\BC250\pathtrace\runs\20261021T032254Z-q2rtx-timedemo
+2026-10-21T03:23:36.1695524Z   console: conhost --headless
+2026-10-21T03:23:36.2052490Z   hidden console check: fps '47.251755', exitcode.txt 'exit 0': kept
+2026-10-21T03:23:36.3345500Z RESULT 10-r2lab-gdi-bl-plog: fps 47.251755; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 703/0, vidpn flips 703, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 640 presents path gdi period/copy/blit/dwmflush 20674/1352/1706/0 us
+2026-10-21T03:23:36.3396917Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T03:23:36.3682135Z === 11-r3lab-gdi-bl-plog tctl 55.25 C after 0s
+2026-10-21T03:23:36.3692481Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\11-r3lab-gdi-bl-plog\present-log.csv
+2026-10-21T03:23:36.3909463Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:24:18.2300072Z   process q2rtx pid 3640 session 1
+2026-10-21T03:24:18.2320521Z   end: reason exited, elapsed 41.2 s, tctl 56.4 C
+2026-10-21T03:24:18.2487112Z   gate temperature: tctl 55.4 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T03:24:18.2611509Z   desktop route: gpu
+2026-10-21T03:24:18.2756714Z   run directory C:\BC250\pathtrace\runs\20261021T032336Z-q2rtx-timedemo
+2026-10-21T03:24:18.2902235Z   console: conhost --headless
+2026-10-21T03:24:18.4332803Z RESULT 11-r3lab-gdi-bl-plog: fps 54.655693; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 700/0, vidpn flips 700, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 640 presents path gdi period/copy/blit/dwmflush 17434/1320/1816/0 us
+2026-10-21T03:24:18.4353061Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T03:24:18.4660716Z === 12-r2lab-gdi-bl-plog tctl 56.125 C after 0s
+2026-10-21T03:24:18.4681057Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\12-r2lab-gdi-bl-plog\present-log.csv
+2026-10-21T03:24:18.4898320Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:24:58.3436829Z   process q2rtx pid 988 session 1
+2026-10-21T03:24:58.3457265Z   end: reason exited, elapsed 39.2 s, tctl 55.9 C
+2026-10-21T03:24:58.3612605Z   gate temperature: tctl 56.1 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T03:24:58.3747193Z   desktop route: gpu
+2026-10-21T03:24:58.3882494Z   run directory C:\BC250\pathtrace\runs\20261021T032418Z-q2rtx-timedemo
+2026-10-21T03:24:58.4028039Z   console: conhost --headless
+2026-10-21T03:24:58.5491527Z RESULT 12-r2lab-gdi-bl-plog: fps 52.321724; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 700/0, vidpn flips 700, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 640 presents path gdi period/copy/blit/dwmflush 18518/1328/1846/0 us
+2026-10-21T03:24:58.5501775Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T03:24:58.5798827Z === 13-r3lab-gdi-bl-plog tctl 55.75 C after 0s
+2026-10-21T03:24:58.5819102Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\13-r3lab-gdi-bl-plog\present-log.csv
+2026-10-21T03:24:58.6037113Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:25:38.4173228Z   process q2rtx pid 4756 session 1
+2026-10-21T03:25:38.4193507Z   end: reason exited, elapsed 39.2 s, tctl 56.5 C
+2026-10-21T03:25:38.4339270Z   gate temperature: tctl 55.9 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T03:25:38.4474409Z   desktop route: gpu
+2026-10-21T03:25:38.4609859Z   run directory C:\BC250\pathtrace\runs\20261021T032458Z-q2rtx-timedemo
+2026-10-21T03:25:38.4744197Z   console: conhost --headless
+2026-10-21T03:25:38.6259734Z RESULT 13-r3lab-gdi-bl-plog: fps 52.308708; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 704/0, vidpn flips 704, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 640 presents path gdi period/copy/blit/dwmflush 18482/1326/1833/0 us
+2026-10-21T03:25:38.6280295Z   dbwin_end: dbwin end: 495 texts, self-test True, reason parent exited
+2026-10-21T03:25:38.6585350Z === 14-r2lab-gdi-bl-plog tctl 56.5 C after 0s
+2026-10-21T03:25:38.6605776Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r2lab\bd197a-r2lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\14-r2lab-gdi-bl-plog\present-log.csv
+2026-10-21T03:25:38.6808350Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:26:18.4943454Z   process q2rtx pid 12992 session 1
+2026-10-21T03:26:18.4963876Z   end: reason exited, elapsed 39.2 s, tctl 57 C
+2026-10-21T03:26:18.5116316Z   gate temperature: tctl 56.5 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T03:26:18.5240758Z   desktop route: gpu
+2026-10-21T03:26:18.5403601Z   run directory C:\BC250\pathtrace\runs\20261021T032538Z-q2rtx-timedemo
+2026-10-21T03:26:18.5538416Z   console: conhost --headless
+2026-10-21T03:26:18.6948744Z RESULT 14-r2lab-gdi-bl-plog: fps 50.940498; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 703/0, vidpn flips 703, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 640 presents path gdi period/copy/blit/dwmflush 19069/1329/1836/0 us
+2026-10-21T03:26:18.6969141Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T03:26:18.7264304Z === 15-r3lab-gdi-bl-plog tctl 56.875 C after 0s
+2026-10-21T03:26:18.7284576Z   env: VK_DRIVER_FILES=C:\BC250\tmp\bd197-a\icd-r3lab\bd197a-r3lab.json AMDGPU_WDDM_VK_WSI=gdi BC250_WSI_PRESENT_LOG=C:\BC250\tmp\bd197-a\mE-20261021T031912Z\15-r3lab-gdi-bl-plog\present-log.csv
+2026-10-21T03:26:18.7501363Z   windows before: {"handle":"0x0001010e","title":"Program Manager","process":"explorer","x":0,"y":0,"width":1920,"height":1200,"minimized":false}
+2026-10-21T03:26:58.6132859Z   process q2rtx pid 5460 session 1
+2026-10-21T03:26:58.6153324Z   end: reason exited, elapsed 39.2 s, tctl 57.4 C
+2026-10-21T03:26:58.6288358Z   gate temperature: tctl 56.9 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-21T03:26:58.6423211Z   desktop route: gpu
+2026-10-21T03:26:58.6558276Z   run directory C:\BC250\pathtrace\runs\20261021T032618Z-q2rtx-timedemo
+2026-10-21T03:26:58.6703731Z   console: conhost --headless
+2026-10-21T03:26:58.8118102Z RESULT 15-r3lab-gdi-bl-plog: fps 51.899979; presentmon  rows, main chain  presents, iflip  (), modes [], median  ms; kmd scan-out flips 0 of 0, argb/abgr flips 701/0, vidpn flips 701, gdi blits 0; window->first present  ms; stop exited; icd ; plane ; plog 640 presents path gdi period/copy/blit/dwmflush 18707/1326/1827/0 us
+2026-10-21T03:26:58.8138352Z   dbwin_end: dbwin end: 489 texts, self-test True, reason parent exited
+2026-10-21T03:26:59.1852171Z game-log-off exit 0
+2026-10-21T03:26:59.1902998Z GameLogUntil after: absent
+2026-10-21T03:27:01.3346974Z system events of display, dxgkrnl, driver or WHEA since the arm began: 0
+2026-10-21T03:27:01.3551838Z live kernel reports since the arm began: 0
+2026-10-21T03:27:01.3704596Z elapsed 469 s, tctl 57.125 C
+2026-10-21T03:27:01.3725261Z evidence C:\BC250\tmp\bd197-a\mE-20261021T031912Z
