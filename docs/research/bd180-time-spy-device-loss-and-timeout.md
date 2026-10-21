@@ -180,7 +180,8 @@ These are the open points of the workspace defect record, in its own order:
 5. Which of the three remaining layers holds the cause: our RADV port, our kernel driver or the hardware?
 
 The next measurement is the Linux control of point 5: Time Spy, or an equivalent Vulkan workload, under
-upstream RADV and Proton on unit A. A second measurement is the calibration of the A28 occupancy
+upstream RADV and Proton on unit A. It is row L46 of
+[the Linux session wishlist](../linux-session-wishlist.md). A second measurement is the calibration of the A28 occupancy
 instrument, because an occupancy reading of the stalled state is the first reading that could separate a
 stuck command processor from running waves.
 
