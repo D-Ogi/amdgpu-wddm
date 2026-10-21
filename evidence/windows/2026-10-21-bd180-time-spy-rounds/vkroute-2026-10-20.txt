@@ -1,0 +1,36 @@
+BD-180 Vulkan-route arm of 2026-10-20: Time Spy with upstream vkd3d-proton
+Transcribed 2026-10-21 from the round records of the lab. Not raw tool output.
+
+Purpose: run the same benchmark without our D3D12 shell and without our vkd3d-proton fork,
+so that only our RADV port and our kernel driver stay in the path.
+
+Unit A, Windows 11 22631, 40 CU, package 0.7.216.103-tester.31v3 (release flavour).
+  kernel driver        22BA3CDB
+  files placed next to 3DMarkTimeSpy.exe, from upstream releases:
+    d3d12.dll          AED51497 (vkd3d-proton 3.0.1)
+    d3d12core.dll      68B8BC7B (vkd3d-proton 3.0.1)
+    dxgi.dll           E3C1178E (DXVK 3.1.1)
+  the Vulkan ICD is ours, loaded through the system vulkan-1.dll
+
+route proof, read from the running process
+  the workload loaded the three application-local libraries and vulkan-1.dll
+  vkd3d-proton created a swap chain of 1920 x 1200
+  neither our D3D12 shell nor our D3D12 engine was loaded
+
+result
+  the demo loaded with 0 failed pipelines
+    no "Failed to compile" line, no entry-point failure and no err: line in 33656 log lines
+    our own fork refused 158 hull-shader pipelines in round A5b
+  rendering began, and the clock went from 500 MHz to 2000 MHz at 21:47:44Z, at 58 C
+  about 20 s later the machine stopped with bugcheck 0x116
+    Arg3 0xC0000001, Arg4 3, which is the signature of rounds A6, A8 and A9
+  the machine rebooted by itself at 21:48:19Z
+  the kernel dump and the minidump 102026-13843-01.dmp were written
+
+afterwards
+  the three staged libraries and the empty pipeline cache were removed by hash, and the
+  directory holds 3DMarkTimeSpy.exe alone again
+
+what the arm establishes
+  the timeout does not come from our D3D12 shell and does not come from our vkd3d-proton
+  fork, because it happens with the upstream files on our RADV port and our kernel driver

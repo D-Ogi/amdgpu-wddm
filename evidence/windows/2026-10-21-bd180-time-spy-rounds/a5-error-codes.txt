@@ -1,0 +1,46 @@
+BD-180 rounds A1, A3 and A5: the error codes that removed the device
+Transcribed 2026-10-21 from the round records of the lab. Not raw tool output.
+
+Unit A, Windows 11 22631, 40 CU, GPU at the 500 MHz idle clock during the failures.
+
+RUNS OF 2026-10-14 (package tester.31 rc4)
+  kernel driver          B0E01A86
+  D3D12 shell            EC19D9FE
+  runs                   22:05Z, 22:13Z, A1 22:38Z, A3 22:46Z
+  result                 every run: each workload process (demo, graphics test 1) lost its
+                         device while it loaded the scene
+  code to 3DMark         0x887A0005 from IDXGISwapChain::Present (run 1) or from
+                         ID3D12Resource::Map in a worker thread (later runs)
+  kernel driver log      no ResetEngine, 0 timeouts, 0 refused submissions, 0 present errors
+  A1 arm                 Experiment=import-progress-gate-off, identical failure
+  memory                 pagefile 32 GB, commit peak 11 GB of 40.7 GB
+
+ERROR CHAIN OF THE A3 USER-MODE DRIVER LOG
+  1. an asynchronous pipeline compile fails with E_FAIL
+     demo process   59 of 707 compiles fail
+     graphics test 1  57 of 664 compiles fail
+  2. SetPipelineState reports E_FAIL unchanged to the runtime error callback
+  3. the runtime removes the device, so CreateAllocation2 returns 0xC00002B6,
+     RADV returns VK_ERROR_DEVICE_LOST and the engine logs result -4
+  4. the 2000 ms retirement wait reports HRESULT_FROM_WIN32(ERROR_TIMEOUT), and a later
+     step reports 8007051B
+  admitted codes       E_OUTOFMEMORY and D3DDDIERR_DEVICEREMOVED only
+
+A5 OF 2026-10-15 00:15Z (lab files over rc4, restored by hash afterwards)
+  D3D12 shell          74BB2C02
+  D3D12 engine         BBD2D75D (vkd3d-proton c04c4940, warning level compiled in)
+  runs                 A5a without the log sink, A5b with the sink
+  user-mode driver log A5b, SHA-256 cf8d274f
+  result               both runs failed with 0x887A0005
+  clamp                every code that reached the runtime was admitted
+                       raw 80004005 -> 8007000E, 28 times
+                       8007051B -> 8007000E, 4 times
+                       no ERROR_TIMEOUT reported
+  refused pipelines    158 records in two processes, all of them VS+PS+HS+DS sets
+  hull shaders         14 distinct bytecodes, all DXIL, 4548 to 6960 bytes
+                       most frequent fnv1a64 665f749f4a5fba95, 5656 bytes, 70 times
+  compiler message     "Shader entry-point failed", 0 parse-blob failures
+                       the demangled entry-point query of blob 0 fails, result -4
+  synchronous retry    fails the same way, 13 of 13
+  device loss          at the first submit after the first refused pipeline bind
+                       list error, then queue execute result -4, then device marked as removed

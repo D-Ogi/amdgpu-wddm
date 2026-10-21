@@ -1,0 +1,77 @@
+BD-180 rounds A6 and A8: the GPU timeout, its fence state and the failed recovery
+Transcribed 2026-10-21 from the round records of the lab. Not raw tool output.
+
+Unit A, Windows 11 22631. The dumps were read offline with ordinary file readers, with the
+private symbol file of the loaded kernel driver and with byte checks of six function entries.
+
+COMPONENTS OF BOTH ROUNDS
+  kernel driver        B0E01A86 (package tester.31 rc4), source 97b0f39e
+  D3D12 shell          44989A79 or BAEE0731 (commit 8d951053)
+  D3D12 engine         002D32F0 or F45034D8 (vkd3d-proton 00a80eef)
+  Vulkan ICD           the rc4 file
+  symbol identity      PDB GUID BBF9F824-FE26-7C12-C9BA-F9E5D192F001, age 1
+
+A6, 2026-10-15
+  pipeline compiles    0 refused hull shaders, 0 failed pipelines, 0 queue losses,
+                       0 device-removal callbacks
+  the demo ran         55 s, then the machine stopped at 01:05:02.5Z
+  bugcheck             0x116
+    Arg2               bc250kmd!Bc250WddmResetFromTimeout
+    Arg3               0xC0000001 (STATUS_UNSUCCESSFUL)
+    Arg4               3
+  dump files           MEMORY.DMP 804230445 bytes, SHA-256 A972FB4C
+                       minidump 1716700 bytes, SHA-256 5B397754
+  the machine stayed hung until the AC was cycled at 01:11:28Z
+
+A8, 2026-10-16
+  dump file            MEMORY.DMP 737593932 bytes
+  the bugcheck came    81.512 s after the demo began, at 02:13:39.136Z
+  thermal samples      13 samples of the demo, 65 C to 76 C at 1000 MHz
+                       the last sample is 14.654 s before the bugcheck
+
+FENCE STATE, SIDE BY SIDE (node 0 is the graphics engine, node 1 is paging)
+  measurement                             A6                A8
+  recovery reason of the operating system   9                 9
+  TdrLevel / TdrDelay / TdrDdiDelay         3 / 10 s / 5 s    3 / 10 s / 5 s
+  pending jobs on node 0                    1                 1
+  process / VMID of the pending job         10940 / 1         2504 / 14
+  node 0 fence submitted / completed        314856 / 314855   24084 / 24083
+  node 0 hardware sequence / fence page     758134 / 758133   64438 / 64437
+  node 1 hardware sequence / fence page     758141 / 758141   64445 / 64445
+  node 1 fence submitted / completed        443285 / 443285   41276 / 41276
+  wave records captured before the kills    0                 0
+  status of that capture                    0xC000009C        0xC000009C
+  accepted wave kill writes / time          100 / 10460 us    99 / 10375 us
+  drain of the queue                        failed            failed
+  return of the adapter reset               0xC0000001        0xC0000001
+
+  So the graphics engine was one sequence behind its target in both rounds, and paging was
+  complete in both rounds.
+
+AGE OF THE PENDING JOB WHEN EACH RECOVERY STEP RAN
+  step                               A6 lower bound   A8 lower bound
+  preemption queued on node 0        10039.26 ms      10033.57 ms
+  submission gate closed             10075.26 ms      10068.57 ms
+  failed wave snapshot persisted     10079.26 ms      10073.57 ms
+  kill loop did not drain            10089.26 ms      10084.57 ms
+  adapter reset refused              10134.26 ms      10126.57 ms
+
+  The private watchdog of the kernel driver was latched at 12000 ms, so the operating
+  system acted first. The job was about 10 s old, not 55 s or 81 s old.
+
+WAVE CAPTURE DURING RECOVERY
+  the capture asked for the broadcast value 0xE0000000 of mmGRBM_GFX_INDEX
+  the readback of that register returned zero
+  the capture recorded STATUS_DEVICE_DATA_ERROR and quarantined further sampling
+  the broadcast failure happens after the timeout, so it cannot be its cause
+
+THE LAST COMMAND FRAME THAT THE DRIVER WROTE (both rounds, same shape)
+  write of the page-table root of the job's VMID, then its invalidation request and the
+  acknowledge wait, then frame start, then one indirect buffer of 16 DWORDs, then frame end
+  and the release of the sequence number to the fence page, then 204 padding packets.
+  Register names come from tools/regcalc/regcalc.py reverse.
+
+WHAT COULD NOT BE READ
+  the 16-DWORD indirect buffer of the pending job
+  its page-table root is in reserved video memory, and that page frame is outside the
+  page bitmap of a kernel dump (A6 and A8, and again in A20)

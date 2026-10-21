@@ -1,0 +1,151 @@
+BD-180 rounds A9 to A28: what each diagnostic round retained, and the result of each arm
+Transcribed 2026-10-21 from the round records of the lab. Not raw tool output.
+
+Unit A, Windows 11 22631. Every round ran one benchmark pass with a lab-only diagnostic
+build, and every round ended in bugcheck 0x116 unless its line says otherwise. The diagnostic
+code is lab-only. It adds no GPU packet and no wait to the submission that it observes.
+
+A9, kernel driver with the job journal of kit r2b (0D11A47E)
+  8 of 8 journal slots retained, pending capture 7178
+  identity: process 9076, node 0, fence 12626, driver sequence 49786, VMID 11
+  command stream complete: 452 packets over three buffers of 64, 832 and 7488 bytes
+  content: 2 indexed draws, 9 indirect draws, 13 direct dispatches, 11 release and wait
+           pairs on one counter, 3 conditional blocks, none of which holds a draw
+  shader coverage: 7 of 17 program starts have retained bytes in this capture, and the
+           other 10 lie in an arena that this capture did not copy
+  argument values of the 9 indirect draws: not retained
+  proved defect of the diagnostic itself: three buffer priorities share one value, so the
+           producer copied the same object under two labels and omitted others
+
+A10, 40 CU
+  pending job 7774, the same 452-packet shape as A9, all reached buffers complete
+  16 of 17 program starts have their whole requested prefetch extent, and those 16 extents
+           equal the A9 bytes
+  static reading of those extents found no invalid resource descriptor, no unconditional
+           infinite loop and no missing wait before a scalar load
+  9 programs have backward branches, and 14 use image instructions, which are counts and
+           not proofs of non-termination
+
+A11, 24 CU, otherwise the A10 build
+  pending job 7040, the same 452-packet shape, the same failure
+  so the failure does not need the unlocked compute units
+  command processor at the reset snapshot: TA busy, SPI busy, end-of-pipe done busy, and
+           the end-of-pipe FIFO waiting for its done signal
+  both texture-pipe busy bits were clear, so a busy texture pipe is not needed for the stall
+  the one register difference against A10 is the late-allocation field of the geometry
+           stage, 64 against 60, which follows the compute-unit count
+  recovery: 100 wave kills in 10463 us, no drain
+
+A12, the nodcc arm (color compression off)
+  pending job 7645, all three color attachments of the first draw have DCC_ENABLE 0,
+           against 1 in A11
+  the run still ended in 0x116, so this switch is not a workaround
+  depth compression stayed configured in the same packets
+
+A13, kernel driver r4 (31F9683F), raw wave status read
+  pending job 7293, wave snapshot joined to that job
+  960 sampled slots: 411 read zero and 549 read the sentinel 0xBEBEBEEF
+  0 slots returned an admitted valid status and 0 returned a halted status
+  the broadcast value of mmGRBM_GFX_INDEX read back as zero again
+  the three enabled work-group processors each gave 80 samples, and both values appear in
+           every sampled group, so the sentinel is not only the disabled groups
+  positive control of the earlier A7 recovery run: 8 valid wave records on the same board,
+           so a failed restore does not by itself erase wave data
+
+A14
+  complete command stream, and one image descriptor joined to the pending job
+  that descriptor address is below the range of RADV's own allocations, and the hosted
+           import path accepts such an address, so the address alone shows no defect
+
+A15, the syncshaders arm
+  the requested shader synchronization is in the pending job, and the run still ended 0x116
+  the command processor state moves from an end-of-pipe wait to the main engine waiting on
+           a partial flush
+
+A16 and A17, the trace observer
+  the durable trace sample joins the pending job and reports marker 19 of 36, with
+           completed 0 and progress 0, about one second into the fence wait
+  36 strict marker pairs and 24 draw or dispatch packets decode without an issue
+  the interval of marker 19 holds one compute dispatch of 120 x 68 x 1 groups
+
+A18, the pre-submit descriptor capture
+  the capture succeeded in the final submission: 6 compute records and 8 pixel records
+  4642 pixel records and 47 compute records pass the record validator
+  the observed dispatch is 120 x 68 x 1 groups, and its 7072 retained shader bytes hash
+           to 73319e87
+
+A19, the nohiz arm (depth compression off)
+  the capture shows compression off for the first image of that dispatch, R32_FLOAT,
+           1920 x 1080, the same shader hash as A18
+  the run still ended 0x116 at the same marker 19, so this switch is not a workaround
+  the requested constant bytes could not be recovered from the dump by either page route
+
+A20
+  the pending context root again translates to a page frame outside the dump bitmap, so
+           the resource contents stayed unavailable
+
+A21
+  pending job 8182, process 5696, fence 18876, VMID 12
+  trace marker 19 of 36 after a one-second wait budget, completed 0
+  the command processor snapshot has the main engine waiting on a partial flush
+  960 wave reads: 528 zero, 432 sentinel, 0 valid and 0 halted records
+  recovery: 97 wave kills of VMID 12 in 10239 us, no drain, adapter reset refused because
+           the driver could not prove that GPU memory access had stopped
+
+A22
+  pending job 10038, process 3608, fence 21693, VMID 12
+  trace marker 20 of 36, so the run advanced one marker past A21
+  625 decoded events, and the marker follows the completion barrier of the previous
+           dispatch, which the captured stream proves is not predicated
+  the command processor snapshot now has the end-of-pipe FIFO waiting for its done signal
+  the next dispatch is 30 x 17 x 1 groups with local size 16 x 16 x 1
+  its 2112 retained bytes equal the A21 bytes of the same dispatch
+  the two loops of that program have finite bounds under the captured constants: at most
+           9 outer bodies and at most 96 record reads per body
+  6 of 7 resource descriptors of that dispatch were not captured
+
+A23 and A23b
+  A23 did not reach the GPU: the start stalled inside temporary-file creation of the
+           diagnostic disassembly path of the shader compiler, which is a defect of the
+           diagnostic and not another timeout. A private temporary directory removed it
+  A23b reached the GPU and ended 0x116
+  pending job 12943, process 7160, fence 63578, VMID 15
+  9 trace observations over 8.1287 s all report marker 19 of 36, completed 0, progress 0
+  8 of those 9 have a durable flush acknowledgment
+  the producer of the consumed image completed 25.5966 ms before the consumer bound it
+  the barrier packets of that interval request the full cache writeback and invalidation
+           set, so no missing barrier is shown
+
+A24, the shell with a GPU count readback
+  15 trace samples over 14.0841 s, all marker 19 of 36, completed 0, progress 0
+  the intended count readback did not run: the source ownership lookup refused before the
+           copy, refusal reason 6
+  the three producer descriptors equal the three consumer descriptors byte for byte
+  the run ended with device removal 0x88760870
+
+A25, the same readback with the ownership fix
+  the readback succeeded: 192 chunks reconstruct the same three summaries
+  counts per screen tile: 203 to 221, 203 to 204 and 201 to 204 for the three roles
+  summed over all 8160 tiles: 59511, 28127 and 20039 outer bodies
+  so the measured counts do not support a count overflow as the cause
+
+A26, the retained payload of those lists
+  all 107677 selected 16-bit indices retained, with no malformed, missing, duplicate or
+           mixed record
+  no count exceeds the producer count that the CPU records show
+  the run still stopped at marker 19 before the reboot
+
+A27, the live wave read before the kills
+  the escape returned success, and the private record is a live scan, generation 1
+  all 960 slots over the 12 enabled work-group processors were visited in 3.0758 ms
+  528 slots read zero, 432 read the sentinel, and 0 valid program counters were recorded
+  the cleanup write of mmGRBM_GFX_INDEX failed, which quarantines later sampling in that
+           device start, and the command-line tool therefore exited 1
+  an earlier calibration of the same path did obtain 16 valid program counters and also
+           failed its restore, so the failure is in the restore and not in the traversal
+
+A28, the occupancy diagnostic
+  the build adds raw occupancy observations of up to 80 selected groups to the lab
+           snapshot, with the public escape interface unchanged
+  it is a measuring instrument and not a fix, and its calibration on this board was the
+           next step of the round

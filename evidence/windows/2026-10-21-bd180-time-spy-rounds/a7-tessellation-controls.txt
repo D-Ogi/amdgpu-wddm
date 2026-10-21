@@ -1,0 +1,42 @@
+BD-180 round A7: the twelve probe cases of the native D3D12 client
+Transcribed 2026-10-21 from the round records of the lab. Not raw tool output.
+
+Unit A, Windows 11 22631. The client is one x64 executable, 207872 bytes, SHA-256 78A4F8FD.
+It uses the system dxgi.dll and d3d12.dll. It places no replacement library next to itself.
+It makes no window and no swap chain. It selects one case per process.
+The driver files are the A6 pair (shell 44989A79 or BAEE0731, engine 002D32F0 or F45034D8),
+the rc4 Vulkan ICD and kernel driver B0E01A86.
+
+Each case writes its readback as the complement of the expected result first, and each
+iteration changes its seed. Every case checks 4096 integer words of R32_UINT.
+
+case                 factor  draws per iteration  iterations  result  time to PASS
+copy                   1     no draw                  1       PASS    11562 ms
+triangle, DXBC          1     1                        1       PASS      813 ms
+triangle, DXIL          1     1                        1       PASS      781 ms
+tessellation, DXBC      1     1                        1       PASS      766 ms
+tessellation, DXIL      1     1                        1       PASS      796 ms
+tessellation, DXBC     16     1                        1       PASS      766 ms
+tessellation, DXBC      1    64                        1       PASS      750 ms
+tessellation, DXBC      1  1024                        1       PASS      735 ms
+tessellation, DXBC      1     1                       16       PASS      953 ms
+pass-through hull, DXBC 1     1                        1       PASS      766 ms
+pass-through hull, DXIL 1     1                        1       PASS      781 ms
+tessellation, DXIL      1     1                        1       PASS      766 ms
+
+totals
+  27 completed batches, 27 completed fences, 110592 checked words, 0 mismatches
+  1112 recorded draw calls, of which 1110 are tessellation draw calls
+  every case: child exit 0, GetDeviceRemovedReason S_OK, no device loss
+  the first case spent 11.4846 s inside D3D12CreateDevice, and the other eleven cases
+  each reached PASS in 735 ms to 953 ms
+
+what the round did not run
+  native DXIL tessellation at factor 16, any factor-4 case, other domains or partitioning,
+  textures, depth, indirect draws, asynchronous compute, ray tracing, a Present, any
+  shader of the benchmark, any benchmark workload
+
+limit of this control
+  The log does not prove which internal path the compiler took for the pass-through hull
+  shader. The accepting branch of the engine writes no record on success, so zero failures
+  is not a witness of that branch.
