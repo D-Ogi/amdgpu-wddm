@@ -72,11 +72,16 @@ struct HostedDispatch::Allocation {
     bool busy{},locked{};
     bool freeing{};                             // the free callback of va, or this record's own destroy callback,
                                                 // is in flight: va is no longer owned (owned())
-    // BD-201: the destroy callback refused the record while va was mapped. The runtime may already have
-    // released that range inside the callback and handed it to another thread, so the bridge never claims
-    // it again (owned() ignores it) and never asks the runtime to place anything there itself
-    // (lost_range()). The handle stays, so the destroy can be retried and teardown counts the record.
+    // BD-201: a release of va was refused, by the destroy callback with the mapping live or by va's own free
+    // callback. The runtime may already have released that range inside the callback and handed it to
+    // another thread, so the bridge never claims it again (owned() ignores it) and never asks the runtime to
+    // place anything there itself (lost_range()). The handle stays, so the release can be retried and
+    // teardown counts the record.
     bool lost{};
+    // The release that lost it was this record's own FreeGpuVirtualAddress, whose retry is a free of that
+    // same extent. Such a record therefore still answers a free of exactly its base and size, and no other
+    // lost record does: a range lost by a destroy has no free to retry, because the destroy takes the range.
+    bool lost_by_free{};
     Allocation(D3D12DDI_HRTDEVICE runtime,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& cb)
         :owner(runtime,cb) {}
 };
@@ -683,24 +688,37 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
             if(hr==S_OK){unlink(range);held.release();delete range;}
             return hr;
         }
-        // A lost range is skipped as well: the bridge no longer owns it, so it never frees it (BD-201).
+        // A record the bridge still owns comes first. A record that lost its range in its OWN free is
+        // accepted after it, and only for the retry of exactly that extent (BD-201): the ICD's answer to a
+        // failed free is that same free again. A range lost by a destroy is never freed here, because the
+        // destroy takes the range with the allocation. The live record wins when both match, because after a
+        // loss the live one is the extent's real owner.
         for(auto r=allocations_;r;r=r->next)
             if(r->va && !r->freeing && !r->lost && r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
+        if(!record)
+            for(auto r=allocations_;r;r=r->next)
+                if(r->va && !r->freeing && r->lost && r->lost_by_free &&
+                   r->va==a.BaseAddress && r->bytes==a.Size){record=r;break;}
         if(!record || record->busy || record->borrowed || record->locked)return E_INVALIDARG;
         record->busy=record->freeing=true;held.release();
         HRESULT hr=KT_CALL(FreeGpuVirtualAddress,&b);
         held.acquire();record->busy=record->freeing=false;
-        // A failed free keeps the extent owned, which a failed destroy does not (BD-201). The requests are
-        // not alike: this callback does one thing, free this exact extent, so its failure says that the one
-        // thing did not happen, while a destroy releases the allocation and the range goes with it, so its
-        // failure leaves the range in doubt. The answer to a failure here is also a retry of the free of
-        // that same extent, which a lost range would forbid for ever, because the bridge never frees a lost
-        // range; the answer to a failed destroy is a retry of the destroy, which asks for no address.
-        // Nothing is stranded either way: a destroy now releases the range with its allocation. The risk
-        // that remains is recorded in the design: were the runtime to free the range and then report a
-        // failure, a map of that address by another thread would be a false overlap here.
-        // The reservation path above follows the same rule, for the same reason.
-        if(hr==S_OK){record->va=record->bytes=0;}return hr;
+        // A failed free loses the extent, exactly as a failed destroy does: the runtime may have freed the
+        // range before it reported the failure, and handed it to a map on another thread while this thread
+        // was outside the lock, so the bridge stops claiming it (owned() ignores it, lost_range() refuses
+        // every fixed request over it) and counts it. What a lost range keeps, and a destroy-lost one does
+        // not need, is this one way out: the match above accepts it for the retry of exactly its own extent,
+        // which is the ICD's answer to a failed free. The retry clears the loss with the range.
+        // (The reservation branch above is the same case for a reservation and is not changed here: it needs
+        // the lost rule in containing() and in the view route as well, which is more than this fix.)
+        if(hr==S_OK){record->va=record->bytes=0;record->lost=record->lost_by_free=false;return hr;}
+        if(!record->lost){
+            record->lost=record->lost_by_free=true;const UINT64 lost=record->bytes;held.release();
+            lost_ranges_.fetch_add(1,std::memory_order_relaxed);
+            lost_bytes_.fetch_add(lost,std::memory_order_relaxed);
+            ddi_chain_failure("hosted-free-lost-va",hr,BC250_HOST_FreeGpuVirtualAddress);
+        }
+        return hr;
     }
     case BC250_HOST_Lock2:{
         auto& a=*static_cast<D3DKMT_LOCK2*>(argument);

@@ -55,7 +55,7 @@ static constexpr UINT64 reused_va=UINT64_C(0x500000000);
 static D3DKMT_HANDLE next_reused_handle=200;
 static unsigned reuse_errors=0,reuse_frees=0,reuse_reserves=0,reuse_deallocations=0;
 static std::function<void()> during_free,during_deallocate;
-static bool fail_reuse_deallocate=false;
+static bool fail_reuse_deallocate=false,fail_reuse_free=false;
 static HRESULT APIENTRY reuse_allocate(D3D12DDI_HRTDEVICE device,D3D12DDICB_ALLOCATE_0022* a){
  assert(device.handle==device_handle && a->NumAllocations==1);a->pAllocationInfo->hAllocation=next_reused_handle++;return S_OK;
 }
@@ -75,6 +75,7 @@ static HRESULT APIENTRY reuse_reserve(HANDLE device,D3DDDI_RESERVEGPUVIRTUALADDR
 }
 static HRESULT APIENTRY reuse_free(HANDLE device,const D3DDDICB_FREEGPUVIRTUALADDRESS* a){
  assert(device==device_handle && a->BaseAddress==reused_va);++reuse_frees;
+ if(fail_reuse_free)return E_FAIL;
  // From here on the address is free: the other thread's call receives it before this callback returns.
  if(auto other=std::exchange(during_free,nullptr)){std::thread worker(other);worker.join();}
  return S_OK;
@@ -173,8 +174,9 @@ int main(){
  fail_destroy=true;assert(call(BC250_HOST_DestroyAllocation2,&release)<0 && deallocations==1);
  assert(bridge.lost_va_ranges()==1 && bridge.lost_va_bytes()==4096);
  assert(call(BC250_HOST_Lock2,&lock)==0 && call(BC250_HOST_Unlock2,&unlock)==0);
- // The lost range is not the bridge's to free. (What it asks the runtime for at that address is proved in
- // the reuse block below, where the reservation callback counts its calls.)
+ // A range lost by a destroy is not the bridge's to free at all: the destroy takes it. (What the bridge
+ // asks the runtime for at that address is proved in the reuse block below, where the reservation callback
+ // counts its calls, and the free its own range keeps is case D there.)
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed);
  fail_destroy=false;assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==2);
  // Once the destroy is accepted the range goes with it; the count of the loss stays.
@@ -185,9 +187,13 @@ int main(){
  // The order of the explicit free then the destroy stays admitted: an R2 or replayable BO uses it.
  info.hAllocation=0;assert(call(BC250_HOST_CreateAllocation2,&create)==0 && info.hAllocation==77);
  assert(call(BC250_HOST_MapGpuVirtualAddress,&mapping)==0x103 && mapping.VirtualAddress==UINT64_C(0x400000000));
+ // A refused free loses the range as well, and counts it, but its own retry of that exact extent is the one
+ // request a lost range still answers (case D of the reuse block proves the rest of that rule).
  fail_free=true;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed+1);
+ assert(bridge.lost_va_ranges()==2 && bridge.lost_va_bytes()==8192);
  fail_free=false;assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)==0 && frees==freed+2);
  assert(call(BC250_HOST_FreeGpuVirtualAddress,&free)<0 && frees==freed+2);
+ assert(bridge.lost_va_ranges()==2 && bridge.lost_va_bytes()==8192);
  assert(call(BC250_HOST_DestroyAllocation2,&release)==0 && deallocations==3 && !evictions);
  // BD-201 R4: no hosted shell answers BC250_HOST_GetDeviceState yet, although worker_admits lists the
  // opcode. This pins the rule of the class comment, that an unsupported operation gets a refusal and never
@@ -270,10 +276,12 @@ int main(){
   bc250_host_paging pages{};assert(on(BC250_HOST_CREATE_PAGING,&pages)==0);
   constexpr UINT64 bytes=65536;
   // One internal allocation with its own ordinary mapping at the shared address.
-  auto mapped_one=[&](D3DDDI_ALLOCATIONINFO2& out,D3DDDI_MAPGPUVIRTUALADDRESS& view){
+  // page_count 0 is the whole extent; a smaller map is used to overlap a lost range with one page.
+  auto mapped_one=[&](D3DDDI_ALLOCATIONINFO2& out,D3DDDI_MAPGPUVIRTUALADDRESS& view,UINT64 page_count=0){
    out={};D3DKMT_CREATEALLOCATION request{};request.NumAllocations=1;request.pAllocationInfo2=&out;
    const bool made=on(BC250_HOST_CreateAllocation2,&request)==0;
-   view={};view.hPagingQueue=pages.queue;view.hAllocation=out.hAllocation;view.SizeInPages=bytes/4096;
+   view={};view.hPagingQueue=pages.queue;view.hAllocation=out.hAllocation;
+   view.SizeInPages=page_count?page_count:bytes/4096;
    return made && on(BC250_HOST_MapGpuVirtualAddress,&view)==0x103 && view.VirtualAddress==reused_va;};
   D3DDDI_ALLOCATIONINFO2 a{},b{},c{};D3DDDI_MAPGPUVIRTUALADDRESS a_map{},b_map{},c_map{};
   D3DKMT_DESTROYALLOCATION2 gone{};gone.AllocationCount=1;
@@ -324,6 +332,28 @@ int main(){
   assert(on(BC250_HOST_ReserveGpuVirtualAddress,&held)==0 && held.VirtualAddress==reused_va && reuse_reserves==asked+1);
   va_frees=reuse_frees;
   assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)==0 && reuse_frees==va_frees+1);
+  // D. The explicit free follows the same rule: a refused free loses the extent as a refused destroy does,
+  //    and a lost record keeps exactly one way out, the retry of its own extent. Nothing else frees it.
+  D3DDDI_ALLOCATIONINFO2 e{};D3DDDI_MAPGPUVIRTUALADDRESS e_map{};
+  assert(mapped_one(e,e_map));
+  va_frees=reuse_frees;fail_reuse_free=true;
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)<0 && reuse_frees==va_frees+1);
+  assert(destroying.lost_va_ranges()==2 && destroying.lost_va_bytes()==2*bytes);
+  // owned() ignores the lost extent, so an overlapping map from another thread is no false overlap and
+  // removes nothing. One page inside the lost range, so that the retry below can name only the lost record.
+  D3DDDI_ALLOCATIONINFO2 f{};D3DDDI_MAPGPUVIRTUALADDRESS f_map{};int32_t overlapping=-1;
+  std::thread beside([&]{bc250::umd::RuntimeDomain::Scope entered(domain);overlapping=mapped_one(f,f_map,1)?0:-1;});
+  beside.join();
+  assert(!overlapping && f_map.VirtualAddress==reused_va && !destroying.lost() && reuse_errors==noted);
+  // A different extent is refused without reaching the runtime, the lost record's own is accepted, and the
+  // retry clears the loss with the range (the count of the event stays).
+  fail_reuse_free=false;va_frees=reuse_frees;
+  D3DKMT_FREEGPUVIRTUALADDRESS other{};other.BaseAddress=reused_va;other.Size=2*bytes;
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&other)<0 && reuse_frees==va_frees);
+  assert(on(BC250_HOST_FreeGpuVirtualAddress,&range)==0 && reuse_frees==va_frees+1);
+  assert(destroying.lost_va_ranges()==2 && destroying.lost_va_bytes()==2*bytes);
+  gone.phAllocationList=&e.hAllocation;assert(on(BC250_HOST_DestroyAllocation2,&gone)==0);
+  gone.phAllocationList=&f.hAllocation;assert(on(BC250_HOST_DestroyAllocation2,&gone)==0);
   assert(on(BC250_HOST_DESTROY_PAGING,&pages)==0);
   assert(!destroying.lost() && reuse_errors==noted && destroying.discard_metadata()==0);
  }
