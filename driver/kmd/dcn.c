@@ -1401,6 +1401,19 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
 // gate closed none of this runs and the escape path above (DcnFlipCore/DcnFlipEscape) is untouched.
 #define BC250_DCN_LOG_CALLS 8        // how many of DcnFlipSourceAddress's outcomes reach the guard log, each way
 
+// BD-197: whether DcnFlipSourceAddress programs a plane format other than the firmware's at this moment. wddm.c
+// publishes the answer as BC250_SCANOUT_CAPS_PLANE_FORMATS, and the shells ask again for each primary, so the
+// answer follows a mode change. The three conditions are the flip path's own: the start captured the firmware's
+// format, the inherited pipe is not fixed, and no runtime mode of the connector is on screen (the runtime surface
+// is ARGB8888 only). An enabled connector that still shows its inherited mode takes the other formats. The trailer
+// of 0.7.216.62 refused them for every enabled connector, so on a DP screen an RGBA8 chain was never a scan-out
+// primary and DWM composed it.
+BOOLEAN DcnPlaneFormatsOpen(_In_ BC250_DEVICE* Device)
+{
+    return Device->DcnPlaneFormats && !Device->Modeset.InheritedFixed &&
+        !InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0);
+}
+
 // SetVidPnSourceAddress's own flip: the same M87 write sequence DcnFlipCore uses (DcnFlipWriteSequence), never
 // PollFlipPending's 50 ms busy-wait - d3dkmddi.h allows this DDI up to PROFILE_LEVEL - 1, where a busy-wait of
 // that length would stall the DPC that is supposed to report the flip's completion (WddmDcnVsync, wddm.c;

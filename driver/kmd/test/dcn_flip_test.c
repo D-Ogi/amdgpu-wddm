@@ -678,6 +678,34 @@ static void SourceAddressNoLog(void)
     CHECK(protected_logs == 0);
     protected_call = 0;
 }
+/* BD-197: the trailer's PLANE_FORMATS answer (DcnPlaneFormatsOpen) is the flip path's, in every state of the three
+   facts it reads: never a promise of a format the flip refuses, never a refusal of one the flip programs. The
+   firmware's format flips in every state, so a refusal of the other one is about the format alone. */
+static void PlaneFormatsOpenAgrees(void)
+{
+    BC250_DEVICE d;
+    BOOLEAN wrote, open;
+    ULONGLONG physical;
+    NTSTATUS status;
+    unsigned state;
+    for (state = 0; state < 8; state++) {
+        SourceDevice(&d);
+        d.DcnPlaneFormats = (state & 1) ? FALSE : TRUE;
+        if (state & 2) { d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = 1; }
+        if (state & 4) { d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1; }
+        CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE,
+                                   &physical, &wrote) == STATUS_SUCCESS && wrote);
+        SourceDevice(&d);
+        d.DcnPlaneFormats = (state & 1) ? FALSE : TRUE;
+        if (state & 2) { d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = 1; }
+        if (state & 4) { d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1; }
+        open = DcnPlaneFormatsOpen(&d);
+        CHECK(open == (state == 0));
+        status = DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ABGR8888, 4096, FALSE, &physical, &wrote);
+        CHECK(open ? (status == STATUS_SUCCESS && wrote && d.DcnFormatChanges == 1) :
+                     (status == STATUS_NOT_SUPPORTED && !wrote && model.writes == 0));
+    }
+}
 static void WitnessQualification(void)
 {
     BC250_DEVICE d;
@@ -1035,6 +1063,7 @@ int main(void)
     ImmediateObserve();
     ObserveAdmissionBoundary();
     SourceAddressNoLog();
+    PlaneFormatsOpenAgrees();
     WitnessQualification();
     WriterBridge();
     WriterBridgeAfterDetach();

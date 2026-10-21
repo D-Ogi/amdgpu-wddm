@@ -4445,8 +4445,8 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
             // M15.14 (0.7.216.20): the plane takes the table's non-firmware SCANOUT_PRIMARY rows (R8G8B8A8,
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
-            if (device->DcnPlaneFormats && !device->Modeset.InheritedFixed && !ConnectorIsEnabled(device))
-                scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+            // BD-197: and only while the flip path programs them, which is the rule of DcnPlaneFormatsOpen.
+            if (DcnPlaneFormatsOpen(device)) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,

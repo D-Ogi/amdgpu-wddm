@@ -429,6 +429,12 @@ they hold ARGB8888, the driver can flip RGBA8 and RGB10A2 surfaces as well as BG
 `BC250_SCANOUT_CAPS_PLANE_FORMATS` in the scan-out caps trailer. The encodings are in `plane_format.h`, and
 the design is in [scan-out admission](../../docs/design/scanout-admission.md#plane-pixel-formats-0721620).
 
+The flag follows the flip path at the time of each query (`DcnPlaneFormatsOpen`, BD-197). A fixed inherited
+pipe and a runtime mode of the connector take ARGB8888 only, so the flag is clear while one of them is on
+screen. An enabled connector that keeps its inherited mode takes the other formats. From 0.7.216.62 to
+0.7.216.103 the flag was clear for every enabled connector, so DWM composed every RGBA8 and RGB10A2 chain on
+a DP screen.
+
 At 0 the driver does not read the registers, the flag stays clear, and every flip uses ARGB8888, as in
 0.7.216.18. This is the bisect switch of the feature. The start log says which way it went:
 

@@ -114,7 +114,12 @@ ARGB8888.
 
 The scan-out caps trailer gets the flag `BC250_SCANOUT_CAPS_PLANE_FORMATS` (0x2). The driver sets it only
 with `BC250_SCANOUT_CAPS_DIRECT_FLIP`, and only when the start read the firmware's format registers and
-found ARGB8888. The table gets the policy bit `AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE` for BGRA8 and X8. A
+found ARGB8888. It also sets it only while the flip path programs the other formats
+(`DcnPlaneFormatsOpen`, BD-197): not with a fixed inherited pipe, and not while a runtime mode of the
+connector is on screen, because those two take ARGB8888 only. An enabled connector that keeps its
+inherited mode gets the flag. The shells ask again for each primary and the router's front for each
+DirectFlip question, so the flag follows a mode change as the geometry does.
+The table gets the policy bit `AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE` for BGRA8 and X8. A
 user-mode reader admits a row without that bit only when the trailer has the flag
 (`bc250_scanout_format_admitted` in `driver/contract/bc250_scanout_caps.h`). A new user-mode driver on an
 older kernel driver therefore keeps RGBA8 and RGB10A2 composed. This is necessary because a refused flip

@@ -866,6 +866,8 @@ NTSTATUS DcnWitnessRead(_In_ const BC250_DEVICE* Device, _Out_ BC250_DCN_WITNESS
 // M15.14 (0.7.216.20): read the firmware's plane format registers once per start, before any flip can change them
 // (WddmStart). Read-only. Afterwards Device->DcnPlaneFormats says whether a flip may program another format.
 void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device);
+// BD-197: whether a flip may program another format now (dcn.c), which the scan-out caps trailer publishes.
+BOOLEAN DcnPlaneFormatsOpen(_In_ BC250_DEVICE* Device);
 // Non-blocking hardware observations: pending includes EARLIEST_INUSE mismatch.
 // Scanout returns the actual card address, independently of request publication.
 BOOLEAN DcnFlipPending(_In_ const BC250_DEVICE* Device, ULONGLONG RequestedAddress);

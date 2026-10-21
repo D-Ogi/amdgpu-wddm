@@ -43,10 +43,14 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // M15.14 (0.7.216.20): whether this start captured the firmware's plane format (dcn.c), which the
     // trailer publishes as BC250_SCANOUT_CAPS_PLANE_FORMATS.
     BOOLEAN DcnPlaneFormats;
-    BOOLEAN ConnectorEnabled;
+    // BD-197: a runtime mode of the connector is on screen (the real one is a volatile LONG of bc250kmd.h).
+    long RuntimeDisplayChanged;
     struct {BOOLEAN InheritedFixed;} Modeset;
 } BC250_DEVICE;
-static BOOLEAN ConnectorIsEnabled(BC250_DEVICE* d){return d->ConnectorEnabled;}
+/* dcn.c's DcnPlaneFormatsOpen over the three fields it reads; dcn_flip_test.c holds the real one to the flip path. */
+static unsigned planeFormatQuestions;
+static BOOLEAN DcnPlaneFormatsOpen(BC250_DEVICE* d)
+{planeFormatQuestions++;return d->DcnPlaneFormats && !d->Modeset.InheritedFixed && !d->RuntimeDisplayChanged;}
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE* d){return d->SourceHeight?d->SourceHeight:d->Post.Height;}
@@ -218,14 +222,22 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
-        // The runtime connector currently admits RGB8 ARGB only. It must not
-        // advertise the extended formats merely because GOP captured them.
-        d.ConnectorEnabled=1;
+        // BD-197: the branch asks DcnPlaneFormatsOpen, the flip path's own rule, once per query. A runtime mode
+        // of the connector on screen is ARGB8888 only and withholds the extended formats. Whether the connector
+        // is enabled is not a question here: one that still shows its inherited mode takes them (0.7.216.62 to
+        // 0.7.216.103 withheld them for every enabled connector, so DWM composed every RGBA8 chain on DP).
+        planeFormatQuestions=0;
+        d.RuntimeDisplayChanged=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
-        d.ConnectorEnabled=0;
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && planeFormatQuestions==1);
+        d.RuntimeDisplayChanged=0;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+              planeFormatQuestions==2);
         d.Modeset.InheritedFixed=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
