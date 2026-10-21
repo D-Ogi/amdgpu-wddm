@@ -127,6 +127,25 @@ int main(){
  assert(call(BC250_HOST_PUBLISH_PROGRESS,&progress)<0);
  // Removed mappings must never participate in later status scans.
  sync_fence=UINT64_MAX;assert(call(BC250_HOST_CHECK_STATUS)==0);sync_fence=0;
+ // BD-201 R4: the device-wide retirement proof gates a release (heap-import.cpp:253 releases a quarantined
+ // import only once it holds), so a fence value it cannot trust must prove nothing. A reading of UINT64_MAX
+ // keeps its mark and fails the proof, instead of reporting everything retired.
+ sync.hSyncObject=0;assert(call(BC250_HOST_CreateSynchronizationObject2,&sync)==0 && sync.hSyncObject==45);
+ progress.sync=45;progress.value=5;progress.cpu_address=&sync_fence;
+ sync_fence=1;assert(call(BC250_HOST_PUBLISH_PROGRESS,&progress)==0);
+ native12::ProgressSnapshot running{};bridge.progress_snapshot(&running);
+ assert(running.complete && running.count==1 && running.marks[0].value==5 && !bridge.progress_retired(&running));
+ sync_fence=UINT64_MAX;
+ native12::ProgressSnapshot removed{};bridge.progress_snapshot(&removed);
+ assert(removed.complete && removed.count==1 && !bridge.progress_retired(&removed));
+ // And it ends the proof of a snapshot taken while the fence was still running.
+ assert(!bridge.progress_retired(&running));
+ // A fence that truly caught up needs no mark and is retired at once.
+ sync_fence=5;native12::ProgressSnapshot caught{};bridge.progress_snapshot(&caught);
+ assert(caught.complete && !caught.count && bridge.progress_retired(&caught));
+ sync_release.hSyncObject=45;
+ assert(call(BC250_HOST_DestroySynchronizationObject,&sync_release)==0 && sync_destroys==3);
+ sync_fence=0;
  D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait{};wait.hContext=context.hContext;wait.ObjectCount=1;wait.ObjectHandleArray=&paging.sync;wait.MonitoredFenceValueArray=&make.PagingFenceValue;
  assert(call(BC250_HOST_WaitForSynchronizationObjectFromGpu,&wait)==0);
  D3DKMT_SUBMITCOMMAND command{};command.BroadcastContextCount=1;command.BroadcastContext[0]=context.hContext;
@@ -373,5 +392,6 @@ int main(){
  }
  std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, "
            "cleanup retries, destroy of a mapped allocation with its retry and the lost range of a refused one, scope, "
-           "loss, address reuse inside a free and inside a destroy, replay worker scope, imported-heap error propagation");
+           "loss, a fence at UINT64_MAX that proves no retirement, address reuse inside a free and inside a destroy, "
+           "replay worker scope, imported-heap error propagation");
 }

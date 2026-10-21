@@ -243,8 +243,13 @@ void HostedDispatch::progress_snapshot(ProgressSnapshot* out) noexcept {
         if(sync->type!=D3DDDI_MONITORED_FENCE || !sync->published || !sync->id)continue;
         if(!sync->busy && sync->cpu){
             const UINT64 value=*sync->cpu;MemoryBarrier();
-            // A removed device never runs anything again; a fence that caught up needs no mark.
-            if(value==UINT64_MAX || value>=sync->published)continue;
+            // A fence that caught up needs no mark. A fence reading UINT64_MAX keeps one (BD-201 R4): this
+            // proof releases memory (heap-import.cpp:253 gates the quarantine release on it), UINT64_MAX in
+            // a fence value is our own loss convention and no documented value (the documented UINT64_MAX
+            // is a MonitoredValue with no waiters, native-gpu-fence-objects.md:46, another field), and a
+            // device on its way to removal has not promised that the GPU stopped reading. The reading
+            // removes the device through CHECK_STATUS; it never stands for retirement.
+            if(value!=UINT64_MAX && value>=sync->published)continue;
         }
         if(out->count==kMaxProgressMarks){out->complete=false;break;}
         out->marks[out->count++]={sync->id,sync->published};
@@ -260,7 +265,8 @@ bool HostedDispatch::progress_retired(const ProgressSnapshot* snapshot) noexcept
         if(!sync)continue;                       // destroyed after the snapshot: its work retired with it
         if(sync->busy || !sync->cpu){retired=false;continue;}
         const UINT64 value=*sync->cpu;MemoryBarrier();
-        if(value!=UINT64_MAX && value<snapshot->marks[i].value)retired=false;
+        // UINT64_MAX proves nothing (progress_snapshot above), so the mark is not reached.
+        if(value==UINT64_MAX || value<snapshot->marks[i].value)retired=false;
     }
     ReleaseSRWLockShared(&lock_);
     return retired;
