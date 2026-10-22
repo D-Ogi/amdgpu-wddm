@@ -223,8 +223,8 @@ with common watermarks and global clocks. It rejects plans that require a split
 or ODM. It clears failed output so no partial plan becomes available.
 
 This boundary covers linear RGB surfaces with 32-bit storage, including RGB10A2
-storage. The output timing still describes 8-bpc RGB. It does not admit HDR,
-YUV, compression, rotation or mirrors. The caller must check that the format and
+storage, and linear NV12. The output timing still describes 8-bpc RGB. It does
+not admit HDR, compression, rotation or mirrors. The caller must check that the format and
 transaction match these restrictions. Zero enabled planes require the separate
 blank/drain path. AMD's cursor budget is retained on each RGB pipe until the
 hardware placement is established. These are implementation bounds, not a
@@ -235,10 +235,34 @@ It compares one native plane with the existing planner, then adds a second
 plane, both scale directions, AMD and linear filters, a clipped surface with
 a nonzero source origin, and cursors. Invalid bounds, taps, pitch, subsampling,
 workspace and pipe counts clear the output. The raw topology test remains a
-separate control. Neither test establishes measured memory latency, available
+separate control. These tests do not establish measured memory latency, available
 clocks, hardware register acceptance or HLK results. The transaction owner,
 clock/service contract and DDI integration still require implementation and
 hardware tests before application of these plans.
+
+The NV12 mapping follows AMD's progressive video path. It uses separate luma
+and interleaved-UV surface, viewport, pitch, ratio and tap fields. Chroma surface
+dimensions are half the even allocation dimensions. Chroma pitch is measured
+in two-byte UV samples, not bytes. The planner requires 256-byte row alignment
+for each component. The pitches can differ. Original source extents remain in
+luma pixels, while chroma viewports use component pixels. Even at 1:1 luma,
+chroma has a 1:2 ratio, so the scaler stays enabled. AMD disables the cursor
+budget on the video pipe. Cursor placement remains a transaction requirement.
+
+`dml201_nv12_test.c` checks the mapping and runs the real DML computation for
+mixed RGB/NV12, reversed pipe order, a single video plane, both filters, both
+scale directions, odd destination clips and source extents, and separate UV
+padding. Invalid chroma pitches, taps, dimensions and ratios clear the group.
+The exact horizontal 8:1 case retains the luma one-LSB adjustment and exact
+4:1 chroma ratio. A 1920-wide vertical 8:1 fixture exceeds the computed
+line-buffer capacity and remains refused. A representable ratio alone does
+not prove that a complete scaler configuration fits.
+
+The blanked requestor mock also checks that chroma delivery reaches either
+selected HUBP. This does not implement NV12 allocation/address admission,
+colour conversion, chroma siting, atomic latch or the live MPO DDI. Odd source
+origins remain outside the current scaler adapter. None of these host results
+establishes a visible YUV plane or completion of the Microsoft requirements.
 
 ### Blanked requestor setup
 

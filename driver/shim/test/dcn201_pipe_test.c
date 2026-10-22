@@ -77,7 +77,7 @@ static void ready(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
     m->ops=0;m->writes=0;io->Reads=0;io->Writes=0;
 }
 
-static BC250_DML201_GROUP_PLAN groupPlan(void)
+static BC250_DML201_GROUP_PLAN groupPlan(unsigned nv12)
 {
     BC250_DML201_INPUT i={0};BC250_SCALER_REQUEST r={0};
     BC250_SCALER_PREPARED s[2];BC250_DML201_PLANE_INPUT planes[2];
@@ -90,9 +90,14 @@ static BC250_DML201_GROUP_PLAN groupPlan(void)
     r.Geometry.ChromaDivisor=1;
     for(unsigned n=0;n<2;++n) {
         unsigned h=1080*(n+1);
+        r.Geometry.ChromaDivisor=nv12 && n==1?2:1;
         r.Geometry.Vertical=(BC250_SCALER_AXIS_INPUT){h,1080,0,(int)h,0,1080,0,1080,0,0};
         CHECK(Bc250ScalerPrepare(&r,&s[n])==BC250_SCALER_GEOMETRY_OK);
-        planes[n]=(BC250_DML201_PLANE_INPUT){&s[n],1920,h,1920,1920,h,32};
+        planes[n]=(BC250_DML201_PLANE_INPUT){&s[n],1920,h,1920,1920,h,32,BC250_DML201_RGB32,0};
+        if(nv12 && n==1) {
+            planes[n].Format=BC250_DML201_NV12;planes[n].StorageBits=8;
+            planes[n].PitchPixels=2048;planes[n].ChromaPitchSamples=1024;
+        }
     }
     CHECK(Bc250Dml201PlanGroup(&i,planes,2,ws,size,&g)==BC250_DML201_OK);
     free(ws);return g;
@@ -107,7 +112,7 @@ static void groupReady(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
 
 static void groupTest(MOCK* m,BC250_DISP_IO* io)
 {
-    BC250_DCN201_CLOCKS c;BC250_DML201_GROUP_PLAN g=groupPlan(),bad;
+    BC250_DCN201_CLOCKS c;BC250_DML201_GROUP_PLAN g=groupPlan(0),bad;
     unsigned pipes[2]={0,1},reverse[2]={1,0},duplicate[2]={1,1},outside[2]={0,2};
     unsigned total,first,second;
     groupReady(m,io,&c);
@@ -123,6 +128,21 @@ static void groupTest(MOCK* m,BC250_DISP_IO* io)
     CHECK(m->reg[R(DCHUBP_CNTL)/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
     CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
     printf("group program: %u MMIO operations, %u writes, line delivery %u/%u\n",total,m->writes,first,second);
+    /* Mixed RGB/NV12 requestors: chroma delivery must reach the selected HUBP.
+     * This is still blanked setup, without addresses, CSC, latch or scanout. */
+    {
+        BC250_DML201_GROUP_PLAN video=groupPlan(1);
+        groupReady(m,io,&c);
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&video,pipes,&c)==0);
+        CHECK(video.Plane[1].Dlg.refcyc_per_line_delivery_c>0);
+        CHECK(Bc250DispGet(m->reg[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4],
+            M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_C))==video.Plane[1].Dlg.refcyc_per_line_delivery_c);
+        CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+        groupReady(m,io,&c);
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&video,reverse,&c)==0);
+        CHECK(Bc250DispGet(m->reg[R(PER_LINE_DELIVERY)/4],
+            M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_C))==video.Plane[1].Dlg.refcyc_per_line_delivery_c);
+    }
     for(unsigned after=0;after<2;++after) for(unsigned n=1;n<=total;++n) {
         groupReady(m,io,&c);m->fail_at=n;m->fail_after=after;
         CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)<0);

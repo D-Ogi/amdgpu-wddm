@@ -176,14 +176,37 @@ static int groupPipeInput(const BC250_DML201_INPUT *timing,
                           display_e2e_pipe_params_st *p)
 {
     const BC250_SCALER_PREPARED *s=i->Scaler;
-    if (!s || i->StorageBits!=32 || i->PitchPixels<i->SurfaceWidth ||
+    unsigned int nv12=i->Format==BC250_DML201_NV12;
+    if (!s || i->Format>BC250_DML201_NV12 ||
+        i->StorageBits!=(nv12?8u:32u) || i->PitchPixels<i->SurfaceWidth ||
         i->PitchPixels>16384 || (i->PitchPixels&31) ||
         !validAxis(&s->Geometry.LumaH,i->SurfaceWidth,timing->HActive,i->SourceWidth,s->LumaH.Taps) ||
         !validAxis(&s->Geometry.LumaV,i->SurfaceHeight,timing->VActive,i->SourceHeight,s->LumaV.Taps) ||
-        s->Buffer.Config>3 || !s->Buffer.LumaPartitions ||
-        s->Geometry.ChromaH.Ratio19!=s->Geometry.LumaH.Ratio19 ||
-        s->Geometry.ChromaV.Ratio19!=s->Geometry.LumaV.Ratio19)
+        s->Buffer.Config>3 || !s->Buffer.LumaPartitions)
         return 0;
+    if (nv12) {
+        /* DML's linear 256-byte blocks hold 256 Y samples or 128 UV pairs.
+         * Keep allocation geometry separate from destination clipping. */
+        if ((i->SurfaceWidth&1) || (i->SurfaceHeight&1) || (i->PitchPixels&255) ||
+            i->ChromaPitchSamples<i->SurfaceWidth/2 || i->ChromaPitchSamples>16384 ||
+            (i->ChromaPitchSamples&127) || !s->Buffer.ChromaPartitions ||
+            !validAxis(&s->Geometry.ChromaH,i->SurfaceWidth/2,timing->HActive,
+                i->SourceWidth/2,s->ChromaH.Taps) ||
+            !validAxis(&s->Geometry.ChromaV,i->SurfaceHeight/2,timing->VActive,
+                i->SourceHeight/2,s->ChromaV.Taps)) return 0;
+        const BC250_SCALER_AXIS_PLAN *l[2]={&s->Geometry.LumaH,&s->Geometry.LumaV};
+        const BC250_SCALER_AXIS_PLAN *c[2]={&s->Geometry.ChromaH,&s->Geometry.ChromaV};
+        for (unsigned int axis=0;axis<2;++axis) {
+            /* Exact 8:1 is reduced by one luma LSB by dpp201, while chroma
+             * remains exactly 4:1. Otherwise floor(luma/2) is exact. */
+            if ((c[axis]->Ratio19!=l[axis]->Ratio19/2 &&
+                 !(l[axis]->Ratio19==(8u<<19)-1 && c[axis]->Ratio19==(4u<<19))) ||
+                c[axis]->RecoutBegin!=l[axis]->RecoutBegin ||
+                c[axis]->RecoutSize!=l[axis]->RecoutSize) return 0;
+        }
+    } else if (i->ChromaPitchSamples ||
+        s->Geometry.ChromaH.Ratio19!=s->Geometry.LumaH.Ratio19 ||
+        s->Geometry.ChromaV.Ratio19!=s->Geometry.LumaV.Ratio19) return 0;
     pipeInput(timing,p);
     p->pipe.src.surface_width_y=i->SurfaceWidth;
     p->pipe.src.surface_height_y=i->SurfaceHeight;
@@ -194,6 +217,21 @@ static int groupPipeInput(const BC250_DML201_INPUT *timing,
     p->pipe.src.viewport_x_y=s->Geometry.LumaH.ViewportBegin;
     p->pipe.src.viewport_y_y=s->Geometry.LumaV.ViewportBegin;
     p->pipe.src.data_pitch=i->PitchPixels;
+    if (nv12) {
+        /* dcn20_populate_dml_pipes_from_context: progressive 4:2:0 video. */
+        p->pipe.src.source_format=dm_420_8;
+        p->pipe.src.surface_width_c=i->SurfaceWidth/2;
+        p->pipe.src.surface_height_c=i->SurfaceHeight/2;
+        p->pipe.src.viewport_width_c=s->Geometry.ChromaH.ViewportSize;
+        p->pipe.src.viewport_height_c=s->Geometry.ChromaV.ViewportSize;
+        p->pipe.src.viewport_x_c=s->Geometry.ChromaH.ViewportBegin;
+        p->pipe.src.viewport_y_c=s->Geometry.ChromaV.ViewportBegin;
+        p->pipe.src.data_pitch_c=i->ChromaPitchSamples;
+        p->pipe.src.num_cursors=0;
+        p->pipe.src.cur0_src_width=0;
+        p->pipe.scale_taps.htaps_c=s->ChromaH.Taps;
+        p->pipe.scale_taps.vtaps_c=s->ChromaV.Taps;
+    }
     p->pipe.dest.recout_width=p->pipe.dest.full_recout_width=s->Geometry.LumaH.RecoutSize;
     p->pipe.dest.recout_height=p->pipe.dest.full_recout_height=s->Geometry.LumaV.RecoutSize;
     /* Use the same quantized ratios as the hardware geometry/filter plan. */
@@ -202,7 +240,9 @@ static int groupPipeInput(const BC250_DML201_INPUT *timing,
     p->pipe.scale_ratio_depth.hscl_ratio_c=s->Geometry.ChromaH.Ratio19/524288.0;
     p->pipe.scale_ratio_depth.vscl_ratio_c=s->Geometry.ChromaV.Ratio19/524288.0;
     p->pipe.scale_ratio_depth.scl_enable=s->Geometry.LumaH.Ratio19!=(1u<<19) ||
-        s->Geometry.LumaV.Ratio19!=(1u<<19);
+        s->Geometry.LumaV.Ratio19!=(1u<<19) ||
+        (nv12 && (s->Geometry.ChromaH.Ratio19!=(1u<<19) ||
+                  s->Geometry.ChromaV.Ratio19!=(1u<<19)));
     p->pipe.scale_taps.htaps=s->LumaH.Taps;
     p->pipe.scale_taps.vtaps=s->LumaV.Taps;
     return 1;

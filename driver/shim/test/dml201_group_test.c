@@ -35,7 +35,8 @@ static void prepare(const BC250_SCALER_REQUEST *r, BC250_SCALER_PREPARED *s,
     *p=(BC250_DML201_PLANE_INPUT){s,r->Geometry.Horizontal.SurfaceSize,
         r->Geometry.Vertical.SurfaceSize,(r->Geometry.Horizontal.SurfaceSize+31)&~31u,
         (unsigned)(r->Geometry.Horizontal.SourceEnd-r->Geometry.Horizontal.SourceBegin),
-        (unsigned)(r->Geometry.Vertical.SourceEnd-r->Geometry.Vertical.SourceBegin),32};
+        (unsigned)(r->Geometry.Vertical.SourceEnd-r->Geometry.Vertical.SourceBegin),32,
+        BC250_DML201_RGB32,0};
 }
 
 static void shared(const BC250_DML201_GROUP_PLAN *g)

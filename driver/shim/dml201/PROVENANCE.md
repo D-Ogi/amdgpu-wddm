@@ -60,12 +60,26 @@ numerical code. It verifies shared versus separate timing and insufficient DPP/O
 counts. It is separate from the public adapter test, `dml201_group_test.c`.
 The latter binds actual scaler preparation to `Bc250Dml201PlanGroup`. That
 entry keeps per-plane RQ/DLG/TTU and shared watermarks together. It supports
-one or two unsplit linear RGB planes with 32-bit storage and an 8-bpc output.
+one or two unsplit linear RGB32 or NV12 planes and an 8-bpc RGB output.
 Its geometry uses the same quantized ratios and final taps as the scaler plan.
 Format admission, cursor placement, the hardware clock/service contract and
 complete MPO transactions remain the caller's responsibility. Cursors are
-budgeted on each RGB pipe as in AMD's population function. No hardware or
+budgeted on each RGB pipe and disabled on each video pipe as in AMD's population
+function. No hardware or
 capability admission follows from this numerical result.
+
+NV12 uses the separate component fields in `dcn20_fpu.c:1615-1694`. The
+chroma-pitch unit follows `amdgpu_dm/amdgpu_dm_plane.c:889-890`, relative to
+`drivers/gpu/drm/amd/display/`: framebuffer byte pitch divided by component
+bytes per pixel. For NV12 this is a two-byte UV sample. The adapter verifies
+even surface dimensions and separate 256-byte row alignment before numerical
+evaluation. It retains original source extents and actual prepared component
+viewports, quantized ratios and taps. Subsampled chroma enables scaling even
+when luma is 1:1. The numerical AMD files remain unchanged.
+
+`dml201_nv12_test.c` includes the real adapter for mapping controls and tests
+the public group entry with real scaler preparation. It does not establish
+NV12 surface addresses, chroma siting, CSC correctness or hardware admission.
 See the [MPO requirements](../../../docs/design/multiplane-overlay-requirements.md)
 for results and the remaining integration work.
 

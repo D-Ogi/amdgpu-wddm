@@ -52,8 +52,9 @@ size_t Bc250Dml201WorkspaceSize(void);
 int Bc250Dml201Plan(const BC250_DML201_INPUT *input, void *workspace,
                    size_t bytes, BC250_DML201_PLAN *plan);
 
-/* One output, up to two distinct unsplit RGB32-storage planes. RGB8 and
- * RGB10A2 have the same storage bandwidth; this does not admit HDR or YUV.
+enum { BC250_DML201_RGB32 = 0, BC250_DML201_NV12 = 1 };
+/* One output, up to two distinct unsplit RGB32-storage or NV12 planes. RGB8
+ * and RGB10A2 have the same storage bandwidth; this does not admit HDR.
  * Scaler points to the immutable result of Bc250ScalerPrepare for this same
  * surface and output. SourceWidth/Height are the original source rectangle
  * extents, before destination clipping, not the resulting viewport extents.
@@ -62,7 +63,13 @@ typedef struct BC250_DML201_PLANE_INPUT {
     const BC250_SCALER_PREPARED *Scaler;
     unsigned int SurfaceWidth, SurfaceHeight, PitchPixels;
     unsigned int SourceWidth, SourceHeight;
-    unsigned int StorageBits; /* Must be 32. Format admission remains separate. */
+    unsigned int StorageBits; /* RGB: 32 per pixel. NV12: 8 per luma sample. */
+    unsigned int Format;
+    /* NV12: pitch in two-byte interleaved UV samples, not bytes or luma
+     * pixels. Chroma dimensions are half the even surface dimensions.
+     * Y and UV byte pitches must each be a multiple of 256.
+     * RGB requires zero. Allocation/address and color admission are separate. */
+    unsigned int ChromaPitchSamples;
 } BC250_DML201_PLANE_INPUT;
 typedef struct BC250_DML201_GROUP_PLAN {
     unsigned int Valid, Count, Assertions, FirstAssertionLine;
@@ -73,7 +80,8 @@ typedef struct BC250_DML201_GROUP_PLAN {
 } BC250_DML201_GROUP_PLAN;
 
 /* Same workspace/FPU contract as Plan. One OTG, one DPP per plane, no split,
- * ODM, interlace, compression, rotation, mirror or subsampled input. The
+ * ODM, interlace, compression, rotation or mirror. NV12 uses separate Y/UV
+ * fetch geometry and no cursor on that pipe, as in the AMD video path. The
  * caller must establish that those exclusions match the surface transaction.
  * Count is 1 or 2; an all-disabled output uses the owner's blank/drain path.
  * timing.PitchPixels is ignored; each plane supplies its own pitch. Output

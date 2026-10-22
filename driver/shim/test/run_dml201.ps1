@@ -41,3 +41,14 @@ $groupArgs=@('/nologo','/TC','/W4','/WX','/O2','/MT','/fp:precise','-fuse-ld=lld
 if($LASTEXITCODE){throw 'DML group host compilation failed'}
 & "$Out\dml201_group_test.exe"
 if($LASTEXITCODE){throw 'DML group host assertions failed'}
+$nv12Args=@('/nologo','/TC','/W4','/WX','/O2','/MT','/fp:precise','-fuse-ld=lld',
+    '/DBC250_SCALER_GEOMETRY_TEST',
+    "/I$($msvc.FullName)\include","/I$sdk\ucrt","/I$repo\driver\shim\dml201",
+    "/Fo$Out\","/Fe$Out\dml201_nv12_test.exe","$PSScriptRoot\dml201_nv12_test.c",
+    "$repo\driver\shim\bc250_scaler_plan.c","$repo\driver\shim\bc250_scaler_geometry.c",
+    "$repo\driver\shim\bc250_scaler_buffer.c","$repo\driver\shim\bc250_scaler_filter.c",
+    '/link',"/LIBPATH:$($msvc.FullName)\lib\x64","/LIBPATH:$lib\ucrt\x64","/LIBPATH:$lib\um\x64")
+& $cl @nv12Args
+if($LASTEXITCODE){throw 'DML NV12 host compilation failed'}
+& "$Out\dml201_nv12_test.exe"
+if($LASTEXITCODE){throw 'DML NV12 host assertions failed'}
