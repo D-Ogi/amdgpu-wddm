@@ -849,12 +849,9 @@
    "does": "bisect: 0 destroys buffers at once instead of after the GPU is done with them; the release flavour keeps the host policy, else on",
    "lab": {
     "every": [
-     "d3d11/amdgpu_wddm_radv.dll",
-     "d3d12/amdgpu_wddm_radv.dll",
-     "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll"
-    ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_DESTROY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -866,9 +863,10 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "wow64/vulkan/vulkan_radeon.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_WITNESS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (desktop line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_WITNESS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
    }
   },
   {
@@ -877,12 +875,9 @@
    "does": "tuning: the cap of memory held for deferred destruction (512 MB)",
    "lab": {
     "every": [
-     "d3d11/amdgpu_wddm_radv.dll",
-     "d3d12/amdgpu_wddm_radv.dll",
-     "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll"
-    ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_CAP_MB in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -891,12 +886,9 @@
    "does": "writes the log of deferred destruction to that file",
    "lab": {
     "every": [
-     "d3d11/amdgpu_wddm_radv.dll",
-     "d3d12/amdgpu_wddm_radv.dll",
-     "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll"
-    ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_LOG in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
    }
   },
   {
@@ -908,9 +900,26 @@
      "d3d11/amdgpu_wddm_radv.dll",
      "d3d12/amdgpu_wddm_radv.dll",
      "wow64/d3d11/amdgpu_wddm_radv.dll",
-     "wow64/d3d12/amdgpu_wddm_radv.dll"
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "wow64/vulkan/vulkan_radeon.dll"
     ],
-    "note": "desktop/amdgpu_wddm_radv.dll (hosted line), vulkan/vulkan_radeon.dll and wow64/vulkan/vulkan_radeon.dll (system line, x64 and x86) do not hold BC250_DEFERRED_SUMMARY_S in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+    "note": "desktop/amdgpu_wddm_radv.dll (desktop line) and vulkan/vulkan_radeon.dll (system line) do not hold BC250_DEFERRED_SUMMARY_S in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_PREAMBLE_NO_IDLE_WAIT",
+   "where": "mesa-wddm src/amd/vulkan/radv_queue.c (radv_preamble_no_idle_wait, under AMDGPU_WDDM_LAB_FLAVOUR; BD-201 lab arm)",
+   "does": "lab arm: radv_update_preambles skips its idle wait, so the replaced scratch, rings and descriptors are destroyed while the submissions that use them still run",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "desktop/amdgpu_wddm_radv.dll",
+     "wow64/vulkan/vulkan_radeon.dll"
+    ],
+    "note": "vulkan/vulkan_radeon.dll (system line) does not hold BC250_PREAMBLE_NO_IDLE_WAIT in either flavour: its build line has no lookup of it. That is by build line, not by flavour"
    }
   },
   {
