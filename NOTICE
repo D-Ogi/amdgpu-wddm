@@ -5,4 +5,4 @@ Required Notice: Unofficial community project, not affiliated with or endorsed b
 
 Under the license these two lines must travel with every copy of any part of this software, modified or not.
 
-Files under third_party/ are not covered by the license above. They keep their own licenses and copyright notices (see THIRD-PARTY.md).
+Third-party code listed in THIRD-PARTY.md, including imports outside third_party/, is not covered by the project license above. It keeps its own licenses and copyright notices. This includes the AMD MIT sources in driver/amdgpu-import/ and the extracted AMD functions and tables in driver/shim/generated/. Our separate adapters use the project license.
