@@ -403,6 +403,29 @@ acknowledgment. It is not a separate lock for each Windows plane.
 The triple-buffer path adds VUPDATE keepout. It is a different protocol,
 not an automatic solution for independent updates.
 
+The selected DCN201 resource defaults enable triple buffering, and its HUBP
+callback selects `hubp2_enable_triplebuffer`. However, the common commit path
+selects this mode only for FAST, non-immediate updates. Non-FAST updates disable
+it before front-end programming. `get_scaling_info_update_type` promotes a
+position change to MED and size or integer-scaling changes to FULL. Preserving
+the aspect ratio does not keep a resize on the FAST path.
+
+`driver/kmd/test/mpo_update_class_probe.py` compiles that AMD classifier body
+unchanged in a minimal host context. It checks moves, size changes, combined
+changes and the strict video-width threshold for clip growth. Mutations that
+return FAST for MED or FULL must fail. This is a source-behavior control,
+not a complete AMD commit simulation or proof of hardware buffering.
+Run it with `--linux <pinned-linux-tree> --root <workspace> --out <output>`.
+It verifies the reference revision and file contents before compilation.
+
+Thus an address-only triple-buffer test cannot establish atomic scaling or
+color updates. Keep these as separate acceptance arms. The next hardware
+discriminator must compare a previously armed flip across a later master-lock
+interval, with unlocked and lock-before-programming controls. An idle snapshot
+cannot distinguish a lock that blocks scanout latch from one that blocks only
+transfer into a pending bank. The existing model explicitly assumes the former.
+Neither interpretation is established by the function names.
+
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock
 held across a boundary can delay an earlier accepted flip on the other plane.
