@@ -86,7 +86,7 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win c0dbd6a9d12da3d128267b1b3934fd06b5c45aec (KMD 0.7.216.65): the lab.c59bd190 lab KMD, built by the release set at that commit (set scratch/build-train/lab-c59bd190, row kmd-lab); the release flavour row stays at bc3d75d3 until both flavours are rebuilt from main for tester.32. The rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
+    "kmd": "bc250-win d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f (KMD 0.7.216.65): the tester.32 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
     "d3d12_shell": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_engine": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -109,11 +109,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/kmd-rel/bc250kmd.inf",
-      "sha256": "9FB54D846F574D27024C864BFAE2B255433711B6F0F6D0CD3FA1B68FBBDDECAD",
+      "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.inf",
+      "sha256": "E2528296B4383EA9619CF428F631F6719D07B1EC8A87A1533156B255A239DD9B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -136,11 +136,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/kmd-rel/bc250kmd.sys",
-      "sha256": "535881B36886D1394BCEB518188A05DA1CEC72288BBF4663BC94D89B9BCF10A8",
+      "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.sys",
+      "sha256": "6CC177ACB1D558D9641594A2B83F0F111B131EA4DB229B42B035515F8AD8B6AF",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -157,19 +157,19 @@
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1090960,
-      "unsigned_sha256": "58E56257F7EB799AC8268D6E6776CE31E04DDEC6C1BC751BE20EF2BA8A9DE505",
-      "authenticode_sha256": "3127C9DF038E7DEA3BF94D11A13E1FF8EA3BB0CCE0A026EFBE9E43E8043377A9",
+      "size": 1093520,
+      "unsigned_sha256": "B0038F56C82F3E2E82E246CA75862AF1B6C9004A012FB8C5BCD092406D6D8BB5",
+      "authenticode_sha256": "B24A988C974B232EC00648D5F8811ED16B0443A71BE1A9D42F36411AA6D8A078",
       "flavour": "release"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/build-train/lab-c59bd190/artifacts/lab/kmd-lab/bc250kmd.sys",
-      "sha256": "769D8774CFB6C9643B77667EFDCD15D3EE56160751BED5E127DC0AB4B997DD82",
+      "source": "scratch/build-train/tester.32-r4/artifacts/lab/kmd-lab/bc250kmd.sys",
+      "sha256": "E64D9578BD143280B03A89430342B5012149B2552D5412CB2A1B27FF50D11E69",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "c0dbd6a9d12da3d128267b1b3934fd06b5c45aec",
+        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -181,14 +181,14 @@
           "-Flavour",
           "lab",
           "-PackageVersion",
-          "0.7.216.104-lab.c59bd190"
+          "0.7.216.104-tester.32"
         ],
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
       "size": 1118096,
-      "unsigned_sha256": "0FA3241C59E7D512C9E387CF1820AADA39DF5C4DE0AF87C9A4718DB14B89912B",
-      "authenticode_sha256": "6AFEB52EC29A1FB8B95FFD321DF6572928D8D9D4EB931DC2ECBA9C5D159DCEFE",
+      "unsigned_sha256": "6942763531FB5F06DF85DEE98951506A7F358A16BBF3E7AA0E84F3A8C239BCD7",
+      "authenticode_sha256": "5BA5A5F2A406AC8EAD742A5CEC1EA0FF18C9AB11DBE50D8FDB9067491388CFD4",
       "flavour": "lab"
     },
     {
@@ -2651,11 +2651,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/kmd-rel/amdgpu-state.bin",
-      "sha256": "7F5ADC7E197CEFF66ECBC4B336E127551ACBD2B379317EDFF20C2311FEEB4FF7",
+      "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/amdgpu-state.bin",
+      "sha256": "C1211E452C725F82304C079935A7639FE4B545448F1F2AD1A56CB679F10C355A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -2671,7 +2671,7 @@
         ],
         "output": "package/amdgpu-state.bin"
       },
-      "size": 2216,
+      "size": 2264,
       "flavour": "shared"
     },
     {

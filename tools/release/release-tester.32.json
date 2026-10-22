@@ -2,9 +2,9 @@
  "schema": 1,
  "release": "tester.32",
  "version": "0.7.216.104-tester.32",
- "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router and the control application, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them.",
+ "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router and the control application, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them. Round 4: the two kernel driver rows and the recipe tree move to the main commit that carries the large-page mapping behind LargePages and the BD-190 catalog fix; every other row keeps its commit and artifact, since no source of those components changed.",
  "recipe_repository": "amdgpu-wddm",
- "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+ "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
  "repositories": {
   "amdgpu-wddm": {
    "url": "https://github.com/D-Ogi/amdgpu-wddm",
@@ -70,7 +70,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "driver/kmd/build.ps1",
    "args": [
@@ -117,7 +117,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "driver/kmd/build.ps1",
    "args": [
