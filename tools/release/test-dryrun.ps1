@@ -523,7 +523,10 @@ $st.package_version = $pkgVersion
 [IO.File]::WriteAllText((Join-Path $dir 'state.json'), ($st | ConvertTo-Json))
 $env:AMDGPU_WDDM_TEST_STATE_DIR = $dir
 try { $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-Repair') } finally { Remove-Item Env:\AMDGPU_WDDM_TEST_STATE_DIR }
-Check (($r.code -eq 0) -and ($r.text -match ("files of the installed release " + [regex]::Escape($pkgVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 0")) -and ($r.text -notmatch 'would: remove ')) "a repair of the installed version removes nothing (exit $($r.code))"
+# A DriverStore package removes the legacy router paths and Vulkan duplicates at every install, a repair too (da931d14,
+# the walk-through above checks it): those are registry values, not files of the install root, so that one line is
+# not a removal here.
+Check (($r.code -eq 0) -and ($r.text -match ("files of the installed release " + [regex]::Escape($pkgVersion) + " that " + [regex]::Escape($pkgVersion) + " does not install: 0")) -and ($r.text -notmatch 'would: remove (?!legacy router paths and duplicate global Vulkan entries; retain route policy)')) "a repair of the installed version removes nothing (exit $($r.code))"
 Remove-Item -LiteralPath $dir -Recurse -Force
 Remove-Item -LiteralPath $oldRoot -Recurse -Force
 # The invariants of the removal, in the source: the files stage takes the rows of the plan and nothing else, it reads the
