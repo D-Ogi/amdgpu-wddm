@@ -333,6 +333,40 @@ The generic DML fallback to `dm_444_32` is not a checked AYUV bandwidth plan.
 Neither a hardware image witness nor complete Windows format/HLK coverage
 exists for this route. The Microsoft YUV requirement remains open.
 
+### Linear NV12 layout preparation
+
+`Bc250Nv12LayoutPrepare` prepares two component addresses from one trusted
+allocation. Its request and result types are separate from the graphics writer.
+It does not extend that writer's formats or the CNVC adapter's format list.
+
+The dimensions must be even. Each byte pitch must be a multiple of 256.
+The Y pitch counts bytes and the hardware chroma pitch counts two-byte UV samples.
+Both full pitched ranges must fit the allocation and the 48-bit UMA segment.
+Both addresses retain the current 4 KiB scanout alignment policy.
+The checked MC-to-UMA conversion precedes field publication.
+Any failure clears the complete result, including aliased input/output.
+
+The request supplies each component offset explicitly. Gaps and either physical
+order are accepted, but the full ranges, including row padding, cannot overlap.
+The allocator must supply these offsets from its actual GPU layout.
+Microsoft's [NV12 description](https://learn.microsoft.com/en-us/windows/win32/api/dxgiformat/ne-dxgiformat-dxgi_format)
+defines contiguous Y and UV data with equal byte pitches for staging and initial
+data. Do not treat that upload rule as a hardware allocation contract.
+
+The AMD mapping is not apparent from the enum names:
+`amdgpu_dm/amdgpu_dm.c:6068-6073` maps NV12 to
+`SURFACE_PIXEL_FORMAT_VIDEO_420_YCrCb`, which the selected HUBP1 helper encodes
+as 64. NV21 maps to YCbCr and encoding 65. The adapter uses that source mapping.
+The imported helper produces both pitches, the format and crossbar fields.
+The tests check the encoding, independent pitches, exact allocation ends,
+padding overlap, reversed placement, high-word crossings and segment overflow.
+
+This is CPU preparation for a progressive, uncompressed linear surface.
+It does not establish NV12 hardware support. The selected AMD capability remains
+disabled as described above. Video address programming, CNVC/CSC, chroma siting,
+allocation residency, atomic latch and retirement still need integration and
+hardware controls before Windows format admission or HLK execution.
+
 The checked linear layout, locked surface writer and CPU CNVC preparation now
 exist. Complete CSC with explicit matrix-bank ownership and the full transaction.
 Keep rotation, mirroring and unverified YUV formats out of capability admission.

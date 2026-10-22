@@ -36,6 +36,28 @@ struct dcn10_hubp { struct hubp base; unsigned long word[4]; unsigned invalid; }
 #undef ASSERT
 #undef BREAK_TO_DEBUGGER
 
+// B contains trusted allocation/segment bounds. All extent tests precede
+// address addition, including MC and UMA half-open segment endpoints.
+static int SurfaceRange(const BC250_SURFACE_LAYOUT_REQUEST* B,
+                        unsigned long long SurfaceOffset, unsigned long long Bytes,
+                        unsigned long long* Physical)
+{
+    unsigned long long offset;
+    const unsigned long long addressLimit =
+        ((unsigned long long)HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH__PRIMARY_SURFACE_ADDRESS_HIGH_MASK + 1ull) << 32;
+    *Physical = 0;
+    if (!B->VramLength || B->VramPhysical >= addressLimit ||
+        B->VramLength > addressLimit - B->VramPhysical ||
+        B->VramLength > UINT64_MAX - B->McBase || B->AllocationMcAddress < B->McBase) return 0;
+    offset = B->AllocationMcAddress - B->McBase;
+    if (offset >= B->VramLength || !B->AllocationBytes || B->AllocationBytes > B->VramLength - offset ||
+        SurfaceOffset > B->AllocationBytes || !Bytes || Bytes > B->AllocationBytes - SurfaceOffset) return 0;
+    if (!DcnTranslateCardAddress(B->AllocationMcAddress + SurfaceOffset,
+            B->McBase,B->VramPhysical,B->VramLength,Physical) || !*Physical ||
+        !DcnAddressFits(*Physical,B->VramPhysical,B->VramLength,Bytes)) return 0;
+    return 1;
+}
+
 int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
                              BC250_SURFACE_LAYOUT* Plan)
 {
@@ -48,7 +70,7 @@ int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
         SURFACE_PIXEL_FORMAT_GRPH_ABGR2101010, SURFACE_PIXEL_FORMAT_VIDEO_AYCrCb8888,
         SURFACE_PIXEL_FORMAT_GRPH_ARGB8888
     };
-    unsigned long long offset, bytes, physical, addressLimit;
+    unsigned long long bytes, physical;
     unsigned pixels;
     if (!Plan) return 0;
     if (Request) in = *Request;
@@ -61,18 +83,7 @@ int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
     if (!pixels || (pixels - 1) > Bc250DispGet(MASK_PITCH, MASK_PITCH)) return 0;
     if (!DcnLinearSurfaceBytes(in.Width,in.Height,in.PitchBytes,4,&bytes)) return 0;
 
-    // Both half-open segment intervals must be representable. Derive the
-    // physical address width from the named AMD field, not a truncated cast.
-    addressLimit = ((unsigned long long)HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH__PRIMARY_SURFACE_ADDRESS_HIGH_MASK + 1ull) << 32;
-    if (!in.VramLength || in.VramPhysical >= addressLimit ||
-        in.VramLength > addressLimit - in.VramPhysical ||
-        in.VramLength > UINT64_MAX - in.McBase || in.AllocationMcAddress < in.McBase) return 0;
-    offset = in.AllocationMcAddress - in.McBase;
-    if (offset >= in.VramLength || !in.AllocationBytes || in.AllocationBytes > in.VramLength - offset ||
-        in.SurfaceOffset > in.AllocationBytes || bytes > in.AllocationBytes - in.SurfaceOffset) return 0;
-    if (!DcnTranslateCardAddress(in.AllocationMcAddress + in.SurfaceOffset,
-            in.McBase,in.VramPhysical,in.VramLength,&physical) ||
-        !physical || !DcnAddressFits(physical,in.VramPhysical,in.VramLength,bytes)) return 0;
+    if (!SurfaceRange(&in,in.SurfaceOffset,bytes,&physical)) return 0;
 
     size.surface_pitch = (int)pixels;
     // DCC disabled: set neutral inputs before the imported subtraction.
@@ -91,5 +102,58 @@ int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
     Plan->PitchBytes = in.PitchBytes;
     Plan->HasPixelAlpha = in.Format != BC250_LINEAR_BGRX8;
     Plan->Yuv = in.Format == BC250_LINEAR_AMD_AYCRCB8; Plan->Ready = 1;
+    return 1;
+}
+
+int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
+                          BC250_NV12_LAYOUT* Plan)
+{
+    BC250_NV12_LAYOUT_REQUEST in;
+    BC250_SURFACE_LAYOUT_REQUEST bounds = {0};
+    struct dcn10_hubp capture = {0};
+    struct plane_size size = {0};
+    struct dc_plane_dcc_param dcc = {0};
+    unsigned long long bytes, chromaBytes, physical, chromaPhysical;
+    unsigned chromaSamples;
+    _Static_assert(HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH__PRIMARY_SURFACE_ADDRESS_HIGH_MASK ==
+        HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH_C__PRIMARY_SURFACE_ADDRESS_HIGH_C_MASK,
+        "NV12 address widths must agree");
+    if (!Plan) return 0;
+    if (Request) in = *Request;
+    *Plan = (BC250_NV12_LAYOUT){0};
+    if (!Request || !in.Width || in.Width > 16383 || !in.Height || in.Height > 16383 ||
+        (in.Width & 1) || (in.Height & 1) || !in.PitchBytes || !in.ChromaPitchBytes ||
+        (in.PitchBytes & 255) || (in.ChromaPitchBytes & 255)) return 0;
+    chromaSamples = in.ChromaPitchBytes / 2;
+    if (in.PitchBytes - 1 > Bc250DispGet(MASK_PITCH,MASK_PITCH) ||
+        chromaSamples - 1 > Bc250DispGet(MASK_PITCH_C,MASK_PITCH_C)) return 0;
+    // NV12 has Width/2 two-byte UV samples per row: its unpadded byte width
+    // equals luma's Width. Use the byte-row helper, not its unsupported bpp=2.
+    if (!DcnLinearSurfaceBytes(in.Width,in.Height,in.PitchBytes,1,&bytes) ||
+        !DcnLinearSurfaceBytes(in.Width,in.Height/2,in.ChromaPitchBytes,1,&chromaBytes)) return 0;
+    bounds.AllocationMcAddress = in.AllocationMcAddress; bounds.AllocationBytes = in.AllocationBytes;
+    bounds.McBase = in.McBase; bounds.VramPhysical = in.VramPhysical; bounds.VramLength = in.VramLength;
+    if (!SurfaceRange(&bounds,in.SurfaceOffset,bytes,&physical) ||
+        !SurfaceRange(&bounds,in.ChromaOffset,chromaBytes,&chromaPhysical)) return 0;
+    // Range checks made these additions safe. Keep all row padding disjoint.
+    if (in.SurfaceOffset < in.ChromaOffset + chromaBytes && in.ChromaOffset < in.SurfaceOffset + bytes) return 0;
+    size.surface_pitch = (int)in.PitchBytes;
+    size.chroma_pitch = (int)chromaSamples;
+    dcc.meta_pitch = dcc.meta_pitch_c = 1;
+    // AMD amdgpu_dm.c maps DRM_FORMAT_NV12 to VIDEO_420_YCrCb, not YCbCr
+    // (the latter is NV21). The names alone would reverse U/V.
+    hubp1_program_size(&capture.base,SURFACE_PIXEL_FORMAT_VIDEO_420_YCrCb,&size,&dcc);
+    hubp1_program_pixel_format(&capture.base,SURFACE_PIXEL_FORMAT_VIDEO_420_YCrCb);
+    if (capture.invalid) return 0;
+    Plan->Pitch = capture.word[DCSURF_SURFACE_PITCH];
+    Plan->PitchC = capture.word[DCSURF_SURFACE_PITCH_C];
+    Plan->SurfaceConfig = capture.word[DCSURF_SURFACE_CONFIG];
+    Plan->Crossbar = capture.word[HUBPRET_CONTROL];
+    Plan->Physical = physical; Plan->ChromaPhysical = chromaPhysical;
+    Plan->SurfaceBytes = bytes; Plan->ChromaBytes = chromaBytes;
+    Plan->AddressHigh = (unsigned long)(physical >> 32); Plan->AddressLow = (unsigned long)physical;
+    Plan->ChromaAddressHigh = (unsigned long)(chromaPhysical >> 32); Plan->ChromaAddressLow = (unsigned long)chromaPhysical;
+    Plan->Width = in.Width; Plan->Height = in.Height;
+    Plan->PitchBytes = in.PitchBytes; Plan->ChromaPitchBytes = in.ChromaPitchBytes; Plan->Ready = 1;
     return 1;
 }

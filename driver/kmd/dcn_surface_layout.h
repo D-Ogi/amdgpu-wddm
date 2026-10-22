@@ -30,3 +30,28 @@ typedef struct BC250_SURFACE_LAYOUT {
 // Other layout types need explicit implementations, not reinterpretation here.
 int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
                              BC250_SURFACE_LAYOUT* Plan);
+
+// Separate type: the existing graphics-address writer cannot consume this plan.
+// One trusted, resident allocation contains two disjoint pitched component ranges.
+// Offsets and pitches come from its actual GPU layout, not the staging layout.
+typedef struct BC250_NV12_LAYOUT_REQUEST {
+    unsigned Width, Height, PitchBytes, ChromaPitchBytes;
+    unsigned long long AllocationMcAddress, AllocationBytes, SurfaceOffset, ChromaOffset;
+    unsigned long long McBase, VramPhysical, VramLength;
+} BC250_NV12_LAYOUT_REQUEST;
+typedef struct BC250_NV12_LAYOUT {
+    unsigned long Pitch, PitchC, SurfaceConfig, Crossbar;
+    unsigned long AddressHigh, AddressLow, ChromaAddressHigh, ChromaAddressLow;
+    unsigned long long Physical, ChromaPhysical, SurfaceBytes, ChromaBytes;
+    unsigned Width, Height, PitchBytes, ChromaPitchBytes, Ready;
+} BC250_NV12_LAYOUT;
+
+// CPU-only, progressive linear NV12: even dimensions, 256-byte component
+// pitches, existing 4 KiB scanout alignment on both addresses, no DCC.
+// Chroma pitch is in bytes at this boundary, two-byte UV samples in hardware.
+// No inferred chroma offset. Each full pitched range must fit the allocation
+// and 48-bit UMA segment, with no overlap. Gaps and reversed placement work.
+// Input/output can overlap; failure clears all output. This prepares fields
+// only, not the video address sequence, CNVC/CSC, capability or hardware proof.
+int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
+                          BC250_NV12_LAYOUT* Plan);
