@@ -117,7 +117,7 @@ points:
 
 `DcnFlipSourceAddressShaped` checks the shape against the source mode (`DcnPlaneShapeAdmit`) before any write.
 In the acknowledged lock it writes the shape before the address (`DcnPlaneShapeLocked`, which calls
-`Bc250ScalerWriteLocked`). A shape that equals the one on the pipe is not written again, so a run of game frames
+`Bc250ScalerProgramLocked`). A shape that equals the one on the pipe is not written again, so a run of game frames
 writes the scaler once. Every write sequence without a shape puts the 1:1 shape back first, so the next desktop
 flip, a restore or a writer always ends a scaled shape in its own update. A failed shape write counts the pipe as
 scaled with no known shape, so the next flip writes its shape again.
@@ -166,7 +166,7 @@ absence of a regression. It cannot measure the Cyberpunk case.
 
 | Test | What it proves |
 | --- | --- |
-| `dcn_scale_test.c` (run_modeset.ps1) | `Bc250ScalerPlanRecout` and `Bc250ScalerWriteLocked`: the register file equals the one of `Bc250ScalerProgram` for the same plan, and nothing is written outside a held lock |
+| `dcn_scale_test.c` (run_modeset.ps1) | `Bc250ScalerPlanRecout` and `Bc250ScalerProgramLocked`: the register file equals the one of `Bc250ScalerProgram` for the same plan, and nothing is written outside a held lock |
 | `dcn_plane_test.c` (run_modeset.ps1) | Every verdict, the lab case, and the DML verdict against the budget, with DML201 itself |
 | `dcn_flip_test.c` (run_dcn_flip.ps1) | `DcnFlipSourceAddressShaped`: the plane's size, the admission before any write, the shape inside the lock before the address, and the refusals |
 | `vidpn_flip_test.c` (run_vidpn_flip.ps1) | `PlaneShapeFlips` at both levels: the shape as a change, the kept shape of a NULL allocation, the end of a shape, and the refusals. Three negative controls: `shape-not-a-change`, `null-drops-shape`, `shape-without-allocation` |

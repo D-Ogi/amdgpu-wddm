@@ -201,11 +201,15 @@ typedef struct _BC250_SCALER_RESULT {
 } BC250_SCALER_RESULT;
 
 long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
-// BD-223: the same register sequence for a caller that holds OTG0's update lock and has seen UPDATE_LOCK_STATUS
-// (dcn.c's DcnFlipWriteSequence), so that a plane's shape and its surface address latch at the same update. It reads
-// the lock register once and refuses with _MISMATCH, before any write, when the lock is not held and acknowledged.
-// No lock, unlock, trigger or stall here; a failed write leaves the caller's transaction to restore.
-long Bc250ScalerWriteLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
+// BD-223: program a plan from Bc250ScalerPlan inside the caller's existing
+// live OTG0 transaction. The caller serializes all display writers and holds
+// the acknowledged OTG0 update lock, then writes the matching surface address
+// before it unlocks/triggers. This function verifies the selected/held lock;
+// it never acquires, releases or triggers it and never stalls. On a failed
+// write the caller still owns the lock and must restore a coherent previous
+// plane before releasing it. Success is programming, not flip completion.
+long Bc250ScalerProgramLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan,
+                              BC250_SCALER_RESULT* Result);
 // Caller owns the pipe and has completed optc1_disable_crtc. Verify MASTER_EN=0,
 // OTG_BUSY=0 and no held update lock before programming. No lock, stall or
 // manual trigger: the caller programs timing and enables the OTG afterwards.

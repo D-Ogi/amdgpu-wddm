@@ -344,7 +344,7 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE *d, ULONG reg, ULONG value, BO
 }
 /* BD-223: the pipe's shape. DcnPlaneShapeLocked runs inside the acknowledged lock, before either address half,
    and once per write sequence; DcnPlaneShapeAdmit answers as shape_model.admit says. dcn_scale_test.c tests the
-   register writes of the shape itself (Bc250ScalerWriteLocked). */
+   register writes of the shape itself (Bc250ScalerProgramLocked). */
 static struct { unsigned calls, shaped, admits; int admit; NTSTATUS status; const BC250_SCALER_PLAN *last; } shape_model;
 static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape)
 {

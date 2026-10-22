@@ -565,7 +565,7 @@ static void TestWriteLocked(void)
     FirmwareState();
     REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
     IoInit(&io, 100);
-    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
     CHECK(g_f.logCount == 0 && res.LockStatusValid && res.LockStatus == 0);
     // Held but never acknowledged.
     FirmwareState();
@@ -573,7 +573,7 @@ static void TestWriteLocked(void)
     REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
     g_f.lockDelay = -1;
     IoInit(&io, 100);
-    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
     CHECK(g_f.logCount == 0);
     // The lock read fails (the third read: SCL_MODE and OTG_CONTROL come first).
     FirmwareState();
@@ -581,14 +581,14 @@ static void TestWriteLocked(void)
     REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
     g_f.failReadAt = 3;
     IoInit(&io, 100);
-    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) < 0);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) < 0);
     CHECK(g_f.logCount == 0 && !res.LockStatusValid);
     // Held and acknowledged: the pipe registers of the live sequence, and no lock or trigger write.
     FirmwareState();
     REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
     REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
     IoInit(&io, 100);
-    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) == 0);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) == 0);
     CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) == 0);
     CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG) == 0);
     CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) == 0);
@@ -610,6 +610,92 @@ static void TestWriteLocked(void)
     CHECK(differ == 0);
 }
 
+static void LockedState(void)
+{
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) =
+        OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+}
+
+static void CheckCallerOwnsLatch(void)
+{
+    CHECK(REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) ==
+          OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK);
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK));
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG));
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0));
+    CHECK(!g_f.nowUs);
+}
+
+static void TestCallerOwnedTransaction(void)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_PLAN p;
+    BC250_SCALER_RESULT res;
+    unsigned long i, writes, reads;
+    int post;
+    CHECK(Bc250ScalerPlan(1920,1080,1920,1200,BC250_SCALING_STRETCHED,&p)==0);
+    LockedState();IoInit(&io,0);
+    CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==0);
+    CHECK(res.LockStatusValid && !res.LockWaitUs);
+    CheckCallerOwnsLatch();
+    writes=g_f.writeAttempts;
+    // The two final readbacks are diagnostics, not part of admission/programming.
+    reads=g_f.readAttempts-2;
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION)==0x04380780ul);
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE)==0x04B00780ul);
+    // The caller appends the surface pair through its scan-out accessor before
+    // the single unlock/trigger. The scaler's restricted display accessor must
+    // not itself gain permission to select an arbitrary scan-out address.
+    CHECK(FWrite(NULL,BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH,1)==0);
+    CHECK(FWrite(NULL,BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS,0x20000ul)==0);
+    CHECK(Bc250DispWrite(&io,BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,0)==0);
+    CHECK(Bc250DispWrite(&io,BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG,
+        OTG0_OTG_TRIGA_MANUAL_TRIG__OTG_TRIGA_MANUAL_TRIG_MASK)==0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==1);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG)==1);
+    CHECK(IndexOf(BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS)>
+          IndexOf(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION));
+    CHECK(IndexOf(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)>
+          IndexOf(BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS));
+
+    // Every failed write, including a posted write that reached the register,
+    // leaves recovery and the latch with the caller. No partial plan is released.
+    for(post=0;post<2;++post)for(i=1;i<=writes;++i) {
+        LockedState();IoInit(&io,0);g_f.failWriteAt=i;g_f.failAfterWrite=post;
+        CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==(long)0xC0000185L);
+        CHECK(g_f.writeAttempts==i);
+        CheckCallerOwnsLatch();
+    }
+    for(i=1;i<=reads;++i) {
+        LockedState();IoInit(&io,0);g_f.failReadAt=i;
+        CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==(long)0xC0000185L);
+        CheckCallerOwnsLatch();
+        if(i<=4) CHECK(!g_f.writeAttempts);
+    }
+    // Wrong controller, no lock, unacknowledged lock, ACK without a request,
+    // and a stopped controller all refuse before the first write.
+    for(i=0;i<5;++i) {
+        LockedState();IoInit(&io,0);
+        if(i==0)REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0)=
+            Bc250DispField(OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK,1);
+        if(i==1)REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)=0;
+        if(i==2)g_f.lockDelay=-1;
+        if(i==3)REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)=
+            OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+        if(i==4)REG(BC250_REG_DMU_OTG0_OTG_CONTROL)=0;
+        CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==BC250_DISP_STATUS_MISMATCH);
+        CHECK(!g_f.writeAttempts && !g_f.nowUs);
+    }
+    // Native-size restoration uses the same caller-owned latch.
+    CHECK(Bc250ScalerPlan(1920,1200,1920,1200,BC250_SCALING_IDENTITY,&p)==0);
+    LockedState();IoInit(&io,0);
+    CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==0 && !res.CoefWrites);
+    CHECK((res.SclModeAfter&DSCL0_SCL_MODE__DSCL_MODE_MASK)==0);
+    CheckCallerOwnsLatch();
+}
+
 int main(void)
 {
     TestFilterTable();
@@ -623,6 +709,7 @@ int main(void)
     TestProgramRefusals();
     TestStoppedProgram();
     TestLiveAccessFailures();
+    TestCallerOwnedTransaction();
     printf("dcn_scale_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

@@ -1330,7 +1330,7 @@ static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const
     }
     RtlZeroMemory(&io, sizeof(io));
     io.Context = Device; io.Read = RuntimeRead; io.Write = RuntimeWrite; io.Stall = RuntimeStall;
-    status = Bc250ScalerWriteLocked(&io, write, &result);
+    status = Bc250ScalerProgramLocked(&io, write, &result);
     if (status < 0) {
         // Unknown after a failed write: the pipe counts as scaled with no known shape, so the next flip writes its
         // own shape again, and a full-size one writes the 1:1 shape.

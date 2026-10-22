@@ -679,26 +679,32 @@ static void ScalerAfter(BC250_DISP_IO* Io, BC250_SCALER_RESULT* Result)
     (void)Bc250DispRead(Io, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &Result->HubpCntlAfter);
 }
 
-long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
+long Bc250ScalerProgramLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan,
+                              BC250_SCALER_RESULT* Result)
 {
-    long status = ScalerBegin(Io, Plan, Result, 1);
+    unsigned long select;
+    const unsigned long held = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+                               OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+    long status = ScalerBegin(Io, Plan, Result, 0);
     if (status < 0) return status;
+    // AMD dcn20_pipe_control_lock protects scaler, viewport and address updates
+    // with the top pipe's TG lock. Do not create a second latch boundary here.
+    TRY(Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0, &select));
+    if (select & OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK)
+        return BC250_DISP_STATUS_MISMATCH;
+    status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &Result->LockStatus);
+    Result->LockStatusValid = status >= 0;
+    if (status < 0) { Result->LockStatus = 0; return status; }
+    if ((Result->LockStatus & held) != held) return BC250_DISP_STATUS_MISMATCH;
     status = WritePipe(Io, Plan, Result);
     ScalerAfter(Io, Result);
     return status;
 }
 
-long Bc250ScalerWriteLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
+long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
 {
-    const unsigned long held = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
-                               OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
-    long status = ScalerBegin(Io, Plan, Result, 0);
-
+    long status = ScalerBegin(Io, Plan, Result, 1);
     if (status < 0) return status;
-    status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &Result->LockStatus);
-    Result->LockStatusValid = status >= 0;
-    if (status < 0) { Result->LockStatus = 0; return status; }
-    if ((Result->LockStatus & held) != held) return BC250_DISP_STATUS_MISMATCH;
     status = WritePipe(Io, Plan, Result);
     ScalerAfter(Io, Result);
     return status;
