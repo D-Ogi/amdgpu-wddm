@@ -18,7 +18,9 @@ both needed. Neither proves HLK compliance by itself.
 The [MPO hardware requirements](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/multiplane-overlay-hardware-requirements)
 were checked against Microsoft Learn on 2026-10-22. The local conceptual source
 revision is `110f60eaf2ac5836e644d320c1e92c1011f2af5e`. Interface declarations use
-WDK 10.0.26100, with this driver registered as WDDM 2.9.
+WDK 10.0.26100. The compiled interface and full initialization table use WDDM
+2.9. The reported `DXGK_DRIVERCAPS.WDDMVersion` remains WDDM 2.0. These are
+different declarations. Neither enables MPO by itself.
 
 | Requirement | Implementation needed | Acceptance evidence still needed |
 |---|---|---|
@@ -358,6 +360,49 @@ the earlier flip in the model. Windows scheduling, starvation and independent
 plane acceptance still need validation. A retry policy is not an HLK pass.
 Preparation and coefficient staging must not hold the global lock across an
 earlier accepted flip's boundary. All writers must share the ownership record.
+
+#### DDI version and retry boundary
+
+Do not use header membership as proof that Windows enabled a feature.
+`driver/kmd/test/mpo_ddi_contract.py` compiles the actual WDK headers with
+Clang at three interface versions. Each missing-member probe has a matching
+positive control at a later version. The WDK 10.0.26100 result is:
+
+| Member | WDDM 2.8 | WDDM 2.9 | WDDM 3.0 |
+|---|---|---|---|
+| OutputFlags.PrePresentNeeded | Present | Present | Present |
+| TargetFlipTime | Absent | Present | Present |
+| MaxHwQueuedFlips | Absent | Present | Present |
+| OutputFlags.HwFlipQueueDrainNeeded | Absent | Absent | Present |
+| OutputFlags.HwFlipQueueDrainAllPlanes | Absent | Absent | Present |
+| OutputFlags.HwFlipQueueDrainAllSources | Absent | Absent | Present |
+
+All three versions keep the output-flags structure at four bytes. At 2.9,
+the bits after PrePresentNeeded are reserved. Do not set those bits through
+Value to bypass the header boundary. Changing one file's interface macro
+would also violate the driver's single-version ABI contract.
+
+The [hardware flip queue contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/hardware-flip-queue)
+starts at WDDM 3.0. It requires successful OS feature negotiation and an enabled
+result. Microsoft also requires GPU hardware scheduling for this feature in
+released drivers. The presence of TargetFlipTime and MaxHwQueuedFlips at 2.9
+does not establish any of these conditions. The current driver leaves the
+hardware queue capability zero and does not negotiate that feature.
+
+The MPO3 callback documents STATUS_RETRY with PrePresentNeeded for a recall at
+PASSIVE_LEVEL. Even there, long preparation must use background work because
+the callback blocks the GPU scheduler thread. This permits a preparation
+design. It does not prove safe coefficient staging under the global TG lock.
+The newer hardware-queue all-plane drain protocol is not available through
+our current output-flags ABI. The earlier no-write retry policy therefore
+remains a candidate: prove its scheduling and progress behavior under the
+interface actually advertised before using it for independent plane updates.
+Do not claim that a generic retry requests an all-plane drain on WDDM 2.9.
+
+Before MPO3 integration, reconcile the reported WDDM feature level, callback
+table, capabilities, ISR completion data and the corresponding Windows
+requirements together. The host probes prove member availability only.
+They do not raise the driver's advertised feature level or certify MPO.
 
 The owner must retain the last coherent state and all old/new allocation
 references before the first attempted write. A write error may follow a hardware
