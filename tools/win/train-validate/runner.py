@@ -149,6 +149,18 @@ class GateResult:
     raw: str = ""
 
 
+# The start health word of bc250kmd_escape.h: FULL, READY, VISIBLE and CONFIRMED (15) make a healthy start.
+# QUIET (16, KMD 0.7.216.65) says that the presentation path owes nothing; an idle desktop sets it, a busy one
+# need not, so it may stand beside the four and is never required. Any other bit is a word this gate does not
+# know, and fails it.
+HEALTH_START = 15
+HEALTH_QUIET = 16
+
+
+def health_ok(flags) -> bool:
+    return isinstance(flags, int) and flags & HEALTH_START == HEALTH_START and not flags & ~(HEALTH_START | HEALTH_QUIET)
+
+
 def parse_gate(text: str) -> GateResult:
     """Read gate.ps1's output. A section it could not read is a violation, never a silent pass.
 
@@ -188,8 +200,8 @@ def parse_gate(text: str) -> GateResult:
 
     if "gate end" not in text:
         violate("the gate did not finish: its output ends early", "critical")
-    if facts.get("flags") != 15:
-        violate(f"health flags={facts.get('flags', 'unreadable')}, wanted 15", "critical")
+    if not health_ok(facts.get("flags")):
+        violate(f"health flags={facts.get('flags', 'unreadable')}, wanted 15 (31 with QUIET)", "critical")
     for key in ("faults", "fence_timeouts", "id4101", "bugchecks"):
         value = facts.get(key)
         if value is None:
@@ -445,7 +457,8 @@ class Runner:
             text = self._gate_text("after-restart", timeout, count_stalls=False)
             now = re.search(r"^boot (\S+)", text, re.M)
             new_boot = bool("gate end" in text and now and (was is None or now.group(1) != was.group(1)))
-            if new_boot and (not need_health or "flags=15" in text):
+            flags = re.search(r"\bflags=(\d+)", text)
+            if new_boot and (not need_health or (flags and health_ok(int(flags.group(1))))):
                 return True, text, f"the machine is back after {round(self.clock.now() - started)} s"
             if (self._budget(deadline) or 0) <= poll:
                 break

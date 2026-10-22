@@ -894,6 +894,12 @@ class GateParsing(unittest.TestCase):
         gate = runner_module.parse_gate(GATE_OK.replace("state=curve controlling=1", "state=auto controlling=0"))
         self.assertTrue(any("fan line" in v for v in gate.violations))
 
+    def test_quiet_may_stand_beside_the_start_bits_and_nothing_else_may(self):
+        self.assertTrue(runner_module.parse_gate(GATE_OK.replace("flags=15", "flags=31")).ok)
+        for flags in ("7", "47", "63"):
+            gate = runner_module.parse_gate(GATE_OK.replace("flags=15", f"flags={flags}"))
+            self.assertTrue(gate.critical, flags)
+
     def test_a_gate_that_ends_early_is_critical(self):
         gate = runner_module.parse_gate("label x\nhealth: flags=15\n")
         self.assertTrue(gate.critical)
