@@ -109,11 +109,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/train/b35-build/kmd-release/package/bc250kmd.inf",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/kmd-rel/bc250kmd.inf",
       "sha256": "9FB54D846F574D27024C864BFAE2B255433711B6F0F6D0CD3FA1B68FBBDDECAD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -129,19 +129,18 @@
         ],
         "output": "package/bc250kmd.inf"
       },
-      "release_edits": "build-release.ps1 maps product a.b.c.d to DriverVer (a+40).b.c.d, stamps ProductPackageVersion and the image identity comment; no Reboot directive",
       "size": 9495,
-      "role": "INF of KMD 0.7.216.65 (bc250-win train/b35 b0ad6a30), the same bytes in the builds of both flavours. The release writes the package quad and driver_date into the packaged copy. Carried from 0.7.216.103-tester.31v3: Shared bc250kmd.inf from the final tester.31 KMD build. Verified byte-identical between the release and lab builds; the INF and defaults catalog remain one set.",
+      "release_edits": "build-release.ps1 maps product a.b.c.d to DriverVer (a+40).b.c.d, stamps ProductPackageVersion and the image identity comment; no Reboot directive",
       "flavour": "shared"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/train/b35-build/kmd-release/package/bc250kmd.sys",
-      "sha256": "E0D5958DC74E506CDCE4FB0701F81E7B5CA5E8969904B85D4FA55127EADCF9D3",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/kmd-rel/bc250kmd.sys",
+      "sha256": "535881B36886D1394BCEB518188A05DA1CEC72288BBF4663BC94D89B9BCF10A8",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -155,22 +154,22 @@
           "-PackageVersion",
           "0.7.216.104-tester.32"
         ],
-        "output": "package/bc250kmd.sys"
+        "output": "package/bc250kmd.sys",
+        "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1090448,
-      "role": "Kernel driver, release flavour, KMD 0.7.216.65 of bc250-win train/b35 b0ad6a30. New against the 31v3 driver (850514e3): BD-090, the restore of the firmware scan-out without the HUBP write the flip allow list refuses, so a pnputil /restart-device or a start in a scaled firmware mode no longer ends in Code 43 (03bcf254); BD-210, no CPU view for an allocation its creator never maps and for a private GPU-only Present copy, so a 32-bit process keeps its address space (cf8a4a3e, 33b44c4e); BD-179, the startup output held black until Windows makes it visible (8869edf5); BD-197, plane formats published and flipped by the flip path's own rule (7ac28b21, 845c7105); the F-q44 fixes of OpenAllocation, oversized IBs and SubmitCommandVirtual (5df489d1). Built by driver/kmd/build.ps1 from a clean tree with its own gates, the version resource of 0.7.216.104-tester.32, the flavour gate and the build's signature. Carried from 0.7.216.103-tester.31v3: Tester.31v3 release KMD: tester.31v2 with the BD-195 fix (the picture comes back after a monitor re-plug, on DisplayPort and through a passive adapter). Complete KmdPackage and binary flavour gates passed; exact clean source and package bytes are retained in source-manifest.json.",
-      "unsigned_sha256": "CAD97102FA8D6E4223ED36C84A9CF4B21DC6F483DC4C811FEEB07067CD3BCB06",
-      "authenticode_sha256": "7DF7835D8348FD044B08565C32020ADBCC7F78FFB649385C22D9F768D983B76F",
+      "size": 1090960,
+      "unsigned_sha256": "58E56257F7EB799AC8268D6E6776CE31E04DDEC6C1BC751BE20EF2BA8A9DE505",
+      "authenticode_sha256": "3127C9DF038E7DEA3BF94D11A13E1FF8EA3BB0CCE0A026EFBE9E43E8043377A9",
       "flavour": "release"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/train/b35-build/kmd-lab/package/bc250kmd.sys",
-      "sha256": "868226C59EE03D774E8A9B0ECDDBF68A4088EB7E198157C02906C3F8A4437EF8",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/kmd-lab/bc250kmd.sys",
+      "sha256": "D1ED71EB8693CB456527CCC16A7E820712915BAFD6B957F51679C95F39C650DA",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -184,22 +183,22 @@
           "-PackageVersion",
           "0.7.216.104-tester.32"
         ],
-        "output": "package/bc250kmd.sys"
+        "output": "package/bc250kmd.sys",
+        "unsigned_output": "bc250kmd.unsigned.sys"
       },
       "size": 1115536,
-      "role": "Kernel driver, lab flavour, KMD 0.7.216.65 of bc250-win train/b35 b0ad6a30. New against the 31v3 driver (850514e3): BD-090, the restore of the firmware scan-out without the HUBP write the flip allow list refuses, so a pnputil /restart-device or a start in a scaled firmware mode no longer ends in Code 43 (03bcf254); BD-210, no CPU view for an allocation its creator never maps and for a private GPU-only Present copy, so a 32-bit process keeps its address space (cf8a4a3e, 33b44c4e); BD-179, the startup output held black until Windows makes it visible (8869edf5); BD-197, plane formats published and flipped by the flip path's own rule (7ac28b21, 845c7105); the F-q44 fixes of OpenAllocation, oversized IBs and SubmitCommandVirtual (5df489d1). Built by driver/kmd/build.ps1 from a clean tree with its own gates, the version resource of 0.7.216.104-tester.32, the flavour gate and the build's signature. Carried from 0.7.216.103-tester.31v3: Final tester.31 lab KMD with the shared-state root read ACL correction; complete KmdPackage and binary flavour gates passed. Exact clean source and package bytes are retained in source-manifest.json.",
-      "unsigned_sha256": "E72CF936D46426E6C59B09D95AB69CB9B1BE9F2E2945946CB908C6298DBFD39E",
-      "authenticode_sha256": "A9306EEF45B2F4AF198531D5F15696D7C828225709701C856B77B69875408EF6",
+      "unsigned_sha256": "7629623CB08F9D6FA5136F11C0ACD38D773656878C75F1AFD7F20074ED443FAC",
+      "authenticode_sha256": "04E0C94382AFE106DFF74F5DF46F274903FE51FB31C88FB294067AD1165D5D1B",
       "flavour": "lab"
     },
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b35-build/stamped/release/63815f4eac94b2a41577/amdgpu_wddm_d3d12.dll",
-      "sha256": "0A2F905BBFE8FA3017F53F91C69F8507983482A3D97BDAF20D94F59E8878D4B9",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
+      "sha256": "A7AFE29D5C2C10DB776F3F34A8A208AB05F21601A321C76BAA8859EE86CECA8D",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -210,14 +209,15 @@
           "{input:vulkan}/include",
           "-EngineInclude",
           "{input:engine}/libs/ddi",
+          "-Arch",
+          "x64",
           "-Flavour",
           "release",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
-        "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
@@ -240,20 +240,21 @@
               "libs/ddi"
             ]
           }
-        }
+        },
+        "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1233408,
-      "role": "D3D12 shell x64, release flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 (-Compiler clang-cl; the clang-cl shell recipe 798a1635, 87b25fde, 9fb7a477, 8e1f193a). New against 31v3: the BD-201 hosted bridge (71bb1796 to 72d861b5): the bridge destroys an allocation whose mapping is live, a refused destroy or VA free gives up the range instead of keeping it, a fence that reads UINT64_MAX proves no retirement, and an unproved import is released through the OS. The Mesa input is the host bootstrap header of the hosted ICD head 66986af4. Carried from 0.7.216.103-tester.31v3: D3D12 shell x64, release flavour, from main 31abd669, which carries the whole BD-180 error chain of fix/bd180-d3d12-error-report (GH #38). Both runtime callback boundaries report an admitted create-failure code and keep the raw HRESULT in the failure note; the retirement time budget logs and retains its allocation instead of reporting ERROR_TIMEOUT; an asynchronous worker publishes a pipeline only after its shell hook returns, and a create that failed on a pool worker gets one retry on a single elected consumer. Part 2 adds the rest: a failed Close or a failed initialization stops the submission that would follow it, an imported heap's removal survives the D3D12 runtime boundary instead of being flattened into a generic failure, and the trace carries the first failure together with the ones that followed it, so a log says which failure came first. Every failed queued create records the process, device, thread, job, QPC, pipeline kind, raw code, shader stage lengths and FNV-1a64 fingerprints, which join to the engine's own failure record. The release flavour holds none of the nine diagnostic names the declaration demands of its lab copy. Carried from 0.7.216.101-tester.30: D3D12 shell x64 (bc250-win train/b32 0e2e6d21, which carries fix/bd133-d3d12-present-copy 672f0259 through 55a4270d): BD-133, a windowed Blt source that is no linear primary is copied into a driver-owned linear surface on the Present command list and presented on a present context of the shell (no UMD private data), ordered by one completion fence per copy surface; an X8 source is tagged with the A8 LB7A format of the same bytes. These are the bytes of the BD-133 lab round of 2026-10-12 20:41Z (arms B to E PASS on 22631.6199, Poi -force-d3d9 renders), rebuilt here by the release recipe with the same three pinned inputs. Carried from the b32 rows before this repin: D3D12 shell x64 (bc250-win feature/d3d12-view-instancing 491daf98, merged into train/b30): the vi-r2 bytes, built from that commit with /O2 /GL /arch:AVX2 and /LTCG. ViewInstancingTier 2 when the engine answers QueryAdapterCaps feature 0x7f250001 with revision 1 and tier 2 and OPTIONS3 reports tier 2 or 3; any other answer keeps tier 0, and tier 3 is not claimed. The pipeline stream parser takes library references, the render pass table is filled while the engine reports a render pass tier, and the shell refuses an ICD without the host contract, so it ships with the control ICD. Lab, unit A, 2026-10-11: view_instancing 2666/0 with 1 skip, pipeline_library 58/0, WriteBufferImmediate 59/0, render_pass 1629/0, enhanced_barrier 240/0 with 8 skips, DDI and runtime ViewInstancingTier 2, every test on the BC-250 adapter. Replaces 4F0268A7. Carried from 0.7.216.100-tester.27: D3D12 shell x64 (bc250-win train/b29 f73ec8dc): the source of train/b27 349f1236, rebuilt with /O2 /GL /arch:AVX2 and linked /LTCG (decision 2026-10-10, maximum optimisation by default). The trial 171 picture corruption of the earlier /GL /arch:AVX2 D3D12 shell is watched in the b29 lab acceptance. Replaces 29F3CA04. Carried from 0.7.216.100-tester.26: D3D12 shell x64 (bc250-win train/b27 349f1236). Audit finding A2/UMD-1: the MaxFrameLatency gate's wait on the device's one auto-reset timer is bounded at 1 ms, so a second present of the same device cannot be left in a wait that nothing releases; the fence snapshot and the one-second budget of the loop above it stay the authority. This file claims a bit-identical rebuild for the first time: the recipe at this head carries /Brepro, /FC and /d1trimfile, which the b24 recipe of the shipped tester.24 file did not. Carried from 0.7.216.100-tester.24: D3D12 shell (bc250-win 1884b33d, train/b24). New against the tester.21 shell: a heap whose alignment is over 64 KiB reserves its size plus that alignment and maps at the aligned base, so an MSAA placed resource gets its 4 MiB aligned address and a refusal is named in the log (BD-101, GitHub #33); MaxFrameLatency now limits Direct3D 12 as well, by waiting for the fence of frame N-k before Present returns, so the GUI setting works for both APIs; and the scan-out decision moved into the shared contract rule driver/contract/bc250_scanout_primary.h, which the D3D12 shell, the D3D11 shell and the router all call, with the offered display mode as the geometry test and the desktop route record of driver/contract/bc250_desktop_route.h as the stand-down (M15.14 increment 3, C71); the switch scanout-flip-off takes the scan-out primary away without a rebuild. Every earlier behaviour of the tester.21 shell is kept. Built with /Brepro. Carried from 0.7.216.100-tester.21: D3D12 shell (bc250-win 0d6b3299, train/b23). New against the tester.20 shell: a scan-out primary carries the 64-byte E26R v3 record that the compositor opens, and the shell asks for scan-out only when every clause of scanout-mode.h holds (M15.14 increment 2, main b79442ca). A ray tracing state object that imports collections accepts their inherited summary associations, the shell synthesizes the ALLOW_STATE_OBJECT_ADDITIONS configuration that the runtime of unit A drops, and thunk refusals of the state object slots are clamped (BD-095, The Ascent). The adapter reports shader model 6.8, 6.7 with the profile switch shader-model-68-off and 6.6 with shader-model-67-off. The shell applies the per-application graphics settings FrameRateLimit, VSync (the Present override) and Anisotropy (VKD3D_SAMPLER_ANISOTROPY for the engine), and logs MaxFrameLatency and PerformanceOverlay as not applied. Every earlier behaviour of the tester.20 shell is kept. Built with /Brepro, and builds at 9518c976 and 0f71caac gave the same bytes",
+      "size": 1234432,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b35-build/stamped/lab/ad71ea72a2b259dd040b/amdgpu_wddm_d3d12.dll",
-      "sha256": "F9D172EFE3BFD8F2300AB1CF16A31B3958E3A2FD364F7CB8DB6D63C488FB1844",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
+      "sha256": "737C1D8139B176B2FC7AE44D770F90F31ED083CB19878CF0ADA8688D2257A0A7",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -264,14 +265,15 @@
           "{input:vulkan}/include",
           "-EngineInclude",
           "{input:engine}/libs/ddi",
+          "-Arch",
+          "x64",
           "-Flavour",
           "lab",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
-        "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
@@ -294,10 +296,11 @@
               "libs/ddi"
             ]
           }
-        }
+        },
+        "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1275392,
-      "role": "D3D12 shell x64, lab flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 (-Compiler clang-cl; the clang-cl shell recipe 798a1635, 87b25fde, 9fb7a477, 8e1f193a). New against 31v3: the BD-201 hosted bridge (71bb1796 to 72d861b5): the bridge destroys an allocation whose mapping is live, a refused destroy or VA free gives up the range instead of keeping it, a fence that reads UINT64_MAX proves no retirement, and an unproved import is released through the OS. The Mesa input is the host bootstrap header of the hosted ICD head 66986af4. Carried from 0.7.216.103-tester.31v3: D3D12 shell x64, lab flavour, from main 31abd669: the same source and pinned inputs as the release shell, with the diagnostics the declaration demands of a lab shell compiled in (AMDGPU_WDDM_D3D12_EXPERIMENT, AMDGPU_WDDM_DDI_TRACE and the seven BC250_ENTRY_ switches), and the whole BD-180 error chain of the release row. Carried from 0.7.216.101-tester.30: D3D12 shell x64 (bc250-win train/b32 0e2e6d21, which carries fix/bd133-d3d12-present-copy 672f0259 through 55a4270d): BD-133, a windowed Blt source that is no linear primary is copied into a driver-owned linear surface on the Present command list and presented on a present context of the shell (no UMD private data), ordered by one completion fence per copy surface; an X8 source is tagged with the A8 LB7A format of the same bytes. These are the bytes of the BD-133 lab round of 2026-10-12 20:41Z (arms B to E PASS on 22631.6199, Poi -force-d3d9 renders), rebuilt here by the release recipe with the same three pinned inputs. Carried from the b32 rows before this repin: D3D12 shell x64 (bc250-win feature/d3d12-view-instancing 491daf98, merged into train/b30): the vi-r2 bytes, built from that commit with /O2 /GL /arch:AVX2 and /LTCG. ViewInstancingTier 2 when the engine answers QueryAdapterCaps feature 0x7f250001 with revision 1 and tier 2 and OPTIONS3 reports tier 2 or 3; any other answer keeps tier 0, and tier 3 is not claimed. The pipeline stream parser takes library references, the render pass table is filled while the engine reports a render pass tier, and the shell refuses an ICD without the host contract, so it ships with the control ICD. Lab, unit A, 2026-10-11: view_instancing 2666/0 with 1 skip, pipeline_library 58/0, WriteBufferImmediate 59/0, render_pass 1629/0, enhanced_barrier 240/0 with 8 skips, DDI and runtime ViewInstancingTier 2, every test on the BC-250 adapter. Replaces 4F0268A7. Carried from 0.7.216.100-tester.27: D3D12 shell x64 (bc250-win train/b29 f73ec8dc): the source of train/b27 349f1236, rebuilt with /O2 /GL /arch:AVX2 and linked /LTCG (decision 2026-10-10, maximum optimisation by default). The trial 171 picture corruption of the earlier /GL /arch:AVX2 D3D12 shell is watched in the b29 lab acceptance. Replaces 29F3CA04. Carried from 0.7.216.100-tester.26: D3D12 shell x64 (bc250-win train/b27 349f1236). Audit finding A2/UMD-1: the MaxFrameLatency gate's wait on the device's one auto-reset timer is bounded at 1 ms, so a second present of the same device cannot be left in a wait that nothing releases; the fence snapshot and the one-second budget of the loop above it stay the authority. This file claims a bit-identical rebuild for the first time: the recipe at this head carries /Brepro, /FC and /d1trimfile, which the b24 recipe of the shipped tester.24 file did not. Carried from 0.7.216.100-tester.24: D3D12 shell (bc250-win 1884b33d, train/b24). New against the tester.21 shell: a heap whose alignment is over 64 KiB reserves its size plus that alignment and maps at the aligned base, so an MSAA placed resource gets its 4 MiB aligned address and a refusal is named in the log (BD-101, GitHub #33); MaxFrameLatency now limits Direct3D 12 as well, by waiting for the fence of frame N-k before Present returns, so the GUI setting works for both APIs; and the scan-out decision moved into the shared contract rule driver/contract/bc250_scanout_primary.h, which the D3D12 shell, the D3D11 shell and the router all call, with the offered display mode as the geometry test and the desktop route record of driver/contract/bc250_desktop_route.h as the stand-down (M15.14 increment 3, C71); the switch scanout-flip-off takes the scan-out primary away without a rebuild. Every earlier behaviour of the tester.21 shell is kept. Built with /Brepro. Carried from 0.7.216.100-tester.21: D3D12 shell (bc250-win 0d6b3299, train/b23). New against the tester.20 shell: a scan-out primary carries the 64-byte E26R v3 record that the compositor opens, and the shell asks for scan-out only when every clause of scanout-mode.h holds (M15.14 increment 2, main b79442ca). A ray tracing state object that imports collections accepts their inherited summary associations, the shell synthesizes the ALLOW_STATE_OBJECT_ADDITIONS configuration that the runtime of unit A drops, and thunk refusals of the state object slots are clamped (BD-095, The Ascent). The adapter reports shader model 6.8, 6.7 with the profile switch shader-model-68-off and 6.6 with shader-model-67-off. The shell applies the per-application graphics settings FrameRateLimit, VSync (the Present override) and Anisotropy (VKD3D_SAMPLER_ANISOTROPY for the engine), and logs MaxFrameLatency and PerformanceOverlay as not applied. Every earlier behaviour of the tester.20 shell is kept. Built with /Brepro, and builds at 9518c976 and 0f71caac gave the same bytes",
+      "size": 1276928,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
@@ -370,12 +373,12 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/release/bfe73c9246dd099a4d94/amdgpu_wddm_radv.dll",
-      "sha256": "071FFAB19943EDA482F01F7D9D260CCAA0D78875992EB2224ACF43AA75EA8DA3",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "A21FC1BE9EF095F2FC5B7241B6D3777E00615E39623EF6A0AF4953586D77F529",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "72d861b5b7b6ca8b9b9e8ed2d0f1aff2b0934843",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -387,33 +390,35 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "release",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "release",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 18049024,
-      "role": "Hosted Vulkan ICD x64 of the D3D12 and D3D11 slots, release flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4, built by build-mesa.ps1 -Config radv-mt with clang-cl 23.1.4, variants release,isa (-march=x86-64-v3 -mtune=znver2, no LTO), at recipe 72d861b5. New against the 31v3 ICD 2dea401c: the clang-cl build fixes (d4f0c080, a684a2c3), BD-211 (19a6cab3: a memstream no longer leaves a temporary file per stream on Windows), and BD-201 and BD-212 (8b523763, e0c71484, 66986af4): a destroyed BO keeps its range until the work of its queues is proven retired, and a refused FreeGpuVirtualAddress keeps the BO and retries it. The same build serves the D3D12 and D3D11 slots; the host queue tests of this build pass. Carried from 0.7.216.103-tester.31v3: The triplet Vulkan ICD, release flavour, rebuilt at mesa fork amdgpu-wddm/tester31-triplet 2dea401c, the published head of this line: 0715572c with the BD-178 commit on top. BD-178: RADV latches the exact STATUS_DEVICE_REMOVED that a WDDM allocation call returns, leaves the out-of-memory retry path instead of retrying on a device that is gone, and reports the loss through its existing device-status route, so an ordinary out-of-memory stays distinguishable from a lost device. Built by tools/build/build-mesa.ps1 -Config radv-mt -Flavour release from a clean work tree with /Brepro, /FC, /d1trimfile and -Db_ndebug=true. BD-167: the image holds none of the override names the declaration demands of its lab copy, measured on this file. The same build serves the D3D12 and D3D11 slots, and the lab package ships the lab build of this same commit. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D12 ICD x64 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: view_instancing 2666/0 with 1 skip, pipeline_library 58/0, WriteBufferImmediate 59/0, render_pass 1629/0, enhanced_barrier 240/0 with 8 skips, DDI and runtime ViewInstancingTier 2, every test on the BC-250 adapter. Replaces 20A593DC. Carried from 0.7.216.100-tester.27: D3D12 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, radv-mt recipe of b19, static CRT): the file of 0.7.216.100-tester.21, on which the Rise of the Tomb Raider release gate passed in session 499. Train b24 round 3 drops the C70 budget pre-check, because with the pre-check at its release default the overcommit probe read back 352 wrong GPU words after one refusal: an allocation the pre-check had refused was still used, on both shipped ICD lines (BD-103, lab 2026-10-09), so the pre-check line amdgpu-wddm/b24-icd 83f812d6 of rounds 1 and 2 is out of the train and this slot is the tester.21 build again, with its own host tests and gates (below). Rounds 1 and 2 shipped the pre-check build on top of exactly these commits, and Rise of the Tomb Raider passed on the round-2 package as well (2026-10-09, overall 59.11 FPS, no TDR); round 3 takes the pre-check commits away and nothing else. The file reports git-aca2c81b3c as its Mesa version. Carried from 0.7.216.100-tester.21: D3D12 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, radv-mt recipe of b19, static CRT). On top of the b23 ICD line 8c110468: a graphics pipeline whose shaders RADV cannot build is an error, not a read of a shader that is not there, and such an object is refused when it goes into the pipeline cache, when the cache is searched and when an entry comes back from disk, so a poisoned entry of the game's disk cache is dropped (BD-100, 49b517d7 with the five review fixes in aca2c81b). The driver's own allocations keep MakeResident with CantTrimFurther 1 and MustSucceed 1, while an application allocation keeps the BD-096 policy (080fc135). 8c110468 brought the K225 sliced fence wait (154050d5) and the BD-096 flags (7f16adb0): the policy MemoryOverflow (REG_SZ under HKLM\\SOFTWARE\\amdgpu-wddm\\Vulkan, allow by default; strict fails at the current budget) chooses the flags, and VK_EXT_memory_budget reports the process budget of QueryVideoMemoryInfo. The build gates: the bit-field overlay, the radv-mt option set, -DENABLE_SHADER_CACHE in build.ninja, the x64 machine, no C runtime DLL import and no static dxgi/d3d11/d3d12/d3d12core/dcomp import. The host tests of this build, each with a negative control that fails every check: 45 queue cases (972 checks), 5 mem-overflow tests (50 checks) and 5 stage-cover tests (57 checks), on x64 and on x86. The file reports git-aca2c81b3c as its Mesa version",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/lab/a5cb0704933d31a28415/amdgpu_wddm_radv.dll",
-      "sha256": "44ABE9C1A670791DA3C20A4A72BC4D17E6FCCC4A76B99BAEC92222320B6F054B",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "5C1F30C1DF00EA351B3BB0150A2343D6C5E2D59DD9F76F931111581CA6693806",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -425,33 +430,35 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "lab",
+          "-Lab",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "lab",
-          "-Lab",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 18095104,
-      "role": "Hosted Vulkan ICD x64 of the D3D12 and D3D11 slots, lab flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4, built by build-mesa.ps1 -Config radv-mt with clang-cl 23.1.4, variants release,isa (-march=x86-64-v3 -mtune=znver2, no LTO), at recipe b0ad6a30. New against the 31v3 ICD 2dea401c: the clang-cl build fixes (d4f0c080, a684a2c3), BD-211 (19a6cab3: a memstream no longer leaves a temporary file per stream on Windows), and BD-201 and BD-212 (8b523763, e0c71484, 66986af4): a destroyed BO keeps its range until the work of its queues is proven retired, and a refused FreeGpuVirtualAddress keeps the BO and retries it. The same build serves the D3D12 and D3D11 slots; the host queue tests of this build pass. Carried from 0.7.216.103-tester.31v3: The triplet Vulkan ICD, lab flavour, at mesa fork amdgpu-wddm/tester31-triplet 2dea401c: the same source and options as the release ICD with the fork's lab-flavour option, so the declaration's override and counter names are compiled in (BC250_BARRIER_TRACK, BC250_DRAW_STATS, NIR_DEBUG and the rest of its lab set). It carries the same BD-178 allocation-removal fix. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D12 ICD x64 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: view_instancing 2666/0 with 1 skip, pipeline_library 58/0, WriteBufferImmediate 59/0, render_pass 1629/0, enhanced_barrier 240/0 with 8 skips, DDI and runtime ViewInstancingTier 2, every test on the BC-250 adapter. Replaces 20A593DC. Carried from 0.7.216.100-tester.27: D3D12 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, radv-mt recipe of b19, static CRT): the file of 0.7.216.100-tester.21, on which the Rise of the Tomb Raider release gate passed in session 499. Train b24 round 3 drops the C70 budget pre-check, because with the pre-check at its release default the overcommit probe read back 352 wrong GPU words after one refusal: an allocation the pre-check had refused was still used, on both shipped ICD lines (BD-103, lab 2026-10-09), so the pre-check line amdgpu-wddm/b24-icd 83f812d6 of rounds 1 and 2 is out of the train and this slot is the tester.21 build again, with its own host tests and gates (below). Rounds 1 and 2 shipped the pre-check build on top of exactly these commits, and Rise of the Tomb Raider passed on the round-2 package as well (2026-10-09, overall 59.11 FPS, no TDR); round 3 takes the pre-check commits away and nothing else. The file reports git-aca2c81b3c as its Mesa version. Carried from 0.7.216.100-tester.21: D3D12 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, radv-mt recipe of b19, static CRT). On top of the b23 ICD line 8c110468: a graphics pipeline whose shaders RADV cannot build is an error, not a read of a shader that is not there, and such an object is refused when it goes into the pipeline cache, when the cache is searched and when an entry comes back from disk, so a poisoned entry of the game's disk cache is dropped (BD-100, 49b517d7 with the five review fixes in aca2c81b). The driver's own allocations keep MakeResident with CantTrimFurther 1 and MustSucceed 1, while an application allocation keeps the BD-096 policy (080fc135). 8c110468 brought the K225 sliced fence wait (154050d5) and the BD-096 flags (7f16adb0): the policy MemoryOverflow (REG_SZ under HKLM\\SOFTWARE\\amdgpu-wddm\\Vulkan, allow by default; strict fails at the current budget) chooses the flags, and VK_EXT_memory_budget reports the process budget of QueryVideoMemoryInfo. The build gates: the bit-field overlay, the radv-mt option set, -DENABLE_SHADER_CACHE in build.ninja, the x64 machine, no C runtime DLL import and no static dxgi/d3d11/d3d12/d3d12core/dcomp import. The host tests of this build, each with a negative control that fails every check: 45 queue cases (972 checks), 5 mem-overflow tests (50 checks) and 5 stage-cover tests (57 checks), on x64 and on x86. The file reports git-aca2c81b3c as its Mesa version",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b35-build/stamped/release/d1a8c74e70680205bde8/bc250d3d_router.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/router-x64-rel/bc250d3d_router.dll",
       "sha256": "03D649394C7586C4992881104D47069167E0E641FB470F7E39E1200FD9000301",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
@@ -466,18 +473,16 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 108544,
-      "role": "Desktop router x64, release flavour, of bc250-win train/b35 5c8c15cc, by build-umd-router.ps1 (MSVC, /O2 /GL /arch:AVX2, the router recipe has no compiler choice yet). Its source is that of the 31v3 release router eda8551e, with BD-168 (5e3cd5bf: Windows Security on the CPU route), which the 31v3 lab router 154e542b lacked; both flavours now come from one commit. Carried from 0.7.216.103-tester.31v3: bc250d3d_router.dll, release flavour; BD-168 mitigation (Windows Security on the CPU route) at eda8551ef4ef0dfdb274e0f12487ffc37c135098; package version stamped.",
-      "flavour": "release",
-      "authenticode_sha256": "3A48A8F52E50BB29F72E60603555BCA07B7DD015DACDBDEF4A9238A245AB9628"
+      "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b35-build/stamped/lab/1e25e91ea2b40eed476a/bc250d3d_router.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
       "sha256": "0604DAB6217D6C0AAC0577B96B3415BF975991F1AC282AE2F1E2EEAFF9D14E0D",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
@@ -492,9 +497,7 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 108544,
-      "role": "Desktop router x64, lab flavour, of bc250-win train/b35 5c8c15cc, by build-umd-router.ps1 (MSVC, /O2 /GL /arch:AVX2, the router recipe has no compiler choice yet). Its source is that of the 31v3 release router eda8551e, with BD-168 (5e3cd5bf: Windows Security on the CPU route), which the 31v3 lab router 154e542b lacked; both flavours now come from one commit. Carried from 0.7.216.103-tester.31v3: bc250d3d_router.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "lab",
-      "authenticode_sha256": "89F0DDFD64AA939F4D49BB39E3CFDD084DEDCBC739391BD34FE32D7A173DEA47"
+      "flavour": "lab"
     },
     {
       "component": "desktop-umd",
@@ -561,12 +564,12 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/release/4b9bf45bcc182cd9e872/amdgpu_wddm_radv.dll",
-      "sha256": "54F0EE0F0A8933C1C833DA7F5CDDC67332BAB636E0AC64B264175A9AD1F2E66F",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "F0B1F211141A040EE95084467DC037E1145EF3C8CEECB30EE1325F978EE76077",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "a115b714ee6806fa866b7170ae68e8700cd0d3c6",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -578,33 +581,35 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "release",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "release",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 17635840,
-      "role": "Desktop Vulkan ICD of the hosted desktop route, release flavour, mesa fork fix/bd201-destroy-fail-desktop a115b714, built by build-mesa.ps1 -Config radv with clang-cl 23.1.4, variants release,isa (-march=x86-64-v3 -mtune=znver2, no LTO), at recipe b0ad6a30. New against the 31v3 ICD 8c9bf720: BD-211 (b164fa63), the clang-cl build fixes (d929547e, 4d8ad403), BD-201 (6264801c, 11165e3d, a115b714) and BD-213 (242f1dcb: a swapchain's images are released only after the present queue is past them). Carried from 0.7.216.103-tester.31v3: The hosted Vulkan ICD of the desktop route (DWM through zink), release flavour, rebuilt at mesa fork amdgpu-wddm/tester31-hosted 8c9bf720, the published head of this line: d4bdc587 with the BD-178 commit on top. The hosted line keeps its own allocation policy; what BD-178 adds here is the same exact device-removal latch on a failed allocation. Built by tools/build/build-mesa.ps1 -Config radv -Flavour release from a clean work tree with /Brepro, /FC, /d1trimfile and -Db_ndebug=true. BD-167: the image holds none of the override names the declaration demands of its lab copy. Carried from 0.7.216.100-tester.29v2: The hosted Vulkan ICD of the desktop route, rebuilt at mesa fork fix/bd136-hosted 6f050c38 (BD-136 r2), which descends from 76e23455, the b32 hosted line with the BD-074 ACO spill fix 630b3766 cherry-picked (patch-id 1c4a97500951). The shader compiler and the pipeline frames run on a checked compiler stack of the driver (util: reserve a checked compiler stack on Windows callers; radv: enter it before shader and pipeline frames), so DWM 26100, which creates shaders on a thread with a 128 KiB stack, no longer overflows it. Clean build by the release recipe; a second clean build gave the same bytes. Carried from the b32 rows before this repin: The hosted Vulkan ICD of the desktop route, rebuilt at mesa fork amdgpu-wddm/b32-hosted 76e23455, which is the shipped hosted head 9ddfcbe2 with 630b3766 cherry-picked (BD-074): the ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private). The (void *)1 cache key of this line and of the triplet line is unchanged: only the system ICD carries the LUID correction, which is a knowing gap of this train. Carried from 0.7.216.100-tester.29: hosted ICD for zink (mesa amdgpu-wddm/radv-wddm2-hosted-main 9ddfcbe2): a fence wait on a live device waits in 1 s slices up to 120 s and stops early only on a host loss (K225). 16 queue-test cases pass, and the negative control fails",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/lab/de4320257ef0f03caeb8/amdgpu_wddm_radv.dll",
-      "sha256": "12DA016879405992F2B27E335F16C7DF34CBE9258B34A663262EAF9F064D9863",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "50B7F3400843E2F3EDEFF20054306EEBB0DEDB77435F8A7745F6F3492FC8C436",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "a115b714ee6806fa866b7170ae68e8700cd0d3c6",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -616,23 +621,25 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "lab",
+          "-Lab",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "lab",
-          "-Lab",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 17647616,
-      "role": "Desktop Vulkan ICD of the hosted desktop route, lab flavour, mesa fork fix/bd201-destroy-fail-desktop a115b714, built by build-mesa.ps1 -Config radv with clang-cl 23.1.4, variants release,isa (-march=x86-64-v3 -mtune=znver2, no LTO), at recipe b0ad6a30. New against the 31v3 ICD 8c9bf720: BD-211 (b164fa63), the clang-cl build fixes (d929547e, 4d8ad403), BD-201 (6264801c, 11165e3d, a115b714) and BD-213 (242f1dcb: a swapchain's images are released only after the present queue is past them). Carried from 0.7.216.103-tester.31v3: The hosted Vulkan ICD of the desktop route, lab flavour, at mesa fork amdgpu-wddm/tester31-hosted 8c9bf720: the lab-flavour build of the same source, with the declaration's override names compiled in and the BD-178 allocation-removal fix. Carried from 0.7.216.100-tester.29v2: The hosted Vulkan ICD of the desktop route, rebuilt at mesa fork fix/bd136-hosted 6f050c38 (BD-136 r2), which descends from 76e23455, the b32 hosted line with the BD-074 ACO spill fix 630b3766 cherry-picked (patch-id 1c4a97500951). The shader compiler and the pipeline frames run on a checked compiler stack of the driver (util: reserve a checked compiler stack on Windows callers; radv: enter it before shader and pipeline frames), so DWM 26100, which creates shaders on a thread with a 128 KiB stack, no longer overflows it. Clean build by the release recipe; a second clean build gave the same bytes. Carried from the b32 rows before this repin: The hosted Vulkan ICD of the desktop route, rebuilt at mesa fork amdgpu-wddm/b32-hosted 76e23455, which is the shipped hosted head 9ddfcbe2 with 630b3766 cherry-picked (BD-074): the ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private). The (void *)1 cache key of this line and of the triplet line is unchanged: only the system ICD carries the LUID correction, which is a knowing gap of this train. Carried from 0.7.216.100-tester.29: hosted ICD for zink (mesa amdgpu-wddm/radv-wddm2-hosted-main 9ddfcbe2): a fence wait on a live device waits in 1 s slices up to 120 s and stops early only on a host loss (K225). 16 queue-test cases pass, and the negative control fails",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
@@ -718,11 +725,11 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b35-build/stamped/release/77dbb8d977f5534e460c/amdgpu_wddm_d3d11.dll",
-      "sha256": "0232061F8D86BD9BD37B5560F76A83AEF19D9EF419A40C6AD318A412E0078CC4",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
+      "sha256": "F8FD840CFC00D6907B417435173D3A3B95A3DEF05A702F6971A74191C6E43836",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -737,10 +744,10 @@
           "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
           "-IcdPath",
           "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
         "inputs": {
           "dxvk": {
@@ -751,17 +758,16 @@
         "output": "amdgpu_wddm_d3d11.dll"
       },
       "size": 555520,
-      "role": "D3D11 shell x64, release flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 under the recipe's pair admission against the engine and the hosted ICD of this package (both before their version stamp), from the DXVK include tree at c271e0e0. Carried from 0.7.216.103-tester.31v3: D3D11 shell x64 (bc250-win 1750f505, main). First release-flavour build of this shell: the pinned tester.30 and rc1-rc4 files were lab-flavour images that still carried AMDGPU_WDDM_D3D11_EXPERIMENT and AMDGPU_WDDM_D3D11_SCANOUT, which BD-167 forbids in a release package, and this one carries neither (scan-override-strings.py over all four builds, 2026-10-14). Built against the r9 engine of this package under the recipe's pair admission (shell_abi=00010004 engine_abi=00010004, hr=0) together with the triplet ICD this package ships, from the DXVK include tree at b4f080f7, with /Brepro, /FC and /d1trimfile. Reproducible from an empty output directory: three builds of this source gave the same bytes, while a fourth over the output of an earlier one did not, so build-d3d11.ps1 now empties the directory first. Carried from 0.7.216.101-tester.30: D3D11 shell x64 (bc250-win train/b27 349f1236). Audit finding A2/UMD-1: the frame rate limiter of the per-application graphics settings waits on the device's one auto-reset timer for at most 1 ms instead of for ever. Built against the shipped engine D4C4BE86 and the shipped ICD 20A593DC with the recipe's pair admission, so the caps record 1E975948 stands. This file claims a bit-identical rebuild for the first time (the recipe at this head carries /Brepro, /FC and /d1trimfile). Carried from 0.7.216.100-tester.24: GPU D3D11 shell (bc250-win 1884b33d, train/b24). New against tester.21: the shell negotiates the WDDM 2.2 device DDI (0xB0023, CreateDriverInstance version byte 5) with the 174-entry 2.2 device table, AcquireResource and ReleaseResource, the four shader-cache-session entries and the 22-entry DXGI 6.1 base table, so the runtime hands it the full PresentCB and SyncIntervalOverride reaches the driver: VSync Off now works in 32-bit programs and VSync On no longer needs the vertical-blank pacer (BD-099 2.2.2; the switch wddm22-ddi-off goes back to the 2.0 table of tester.21). The shell also calls the shared scan-out rule for the SCANOUT opt-in of M15.14 increment 3, which stays off by default. Everything the tester.21 shell applied is kept (FrameRateLimit, VSync, Anisotropy, MaxFrameLatency and PerformanceOverlay). The 11 host tests of the recipe, the engine-pair admission against the b23 engine and the b24 ICD, the exported-entry test and the machine check pass. Built with /Brepro against DXVK fork 0898891f. Carried from 0.7.216.100-tester.21: GPU D3D11 shell (bc250-win 0d6b3299, train/b23). New against tester.20: it reads the per-application graphics settings of HKLM\\SOFTWARE\\amdgpu-wddm\\Graphics once per process and applies FrameRateLimit, VSync (after each Present a wait for the vertical blanks that the application's interval does not give, and the Present override for VSync 0 only, because the runtime of this interface keeps SyncIntervalOverrideValid but not the value; BD-099, wagon 14; lab 2026-10-08 with the x64 shell 7351B015 of f541778b at 59 Hz: VSync 1 gave 60, 60 and 30/s at the intervals 0, 1 and 2, VSync 0 gave 857-873/s at the intervals 1 and 2), Anisotropy (the DXVK option d3d11.samplerAnisotropy), MaxFrameLatency and PerformanceOverlay (the DXVK HUD of the engine). The 11 host tests of the recipe, the engine-pair admission against the b23 engine and ICD, the exported-entry test and the machine check pass. Built with /Brepro against DXVK fork 0898891f",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b35-build/stamped/lab/746cc2c823b3f210c1bb/amdgpu_wddm_d3d11.dll",
-      "sha256": "FD32AEA7F274BC5824001B4D43142AD20FBCB5B7BAE2B2B20E6F077F73BDC65F",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
+      "sha256": "C8FCD8D239EE94C24976BFBD8AF4FB3FB298773A2B334B690968C09AD503A2A1",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -776,10 +782,10 @@
           "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
           "-IcdPath",
           "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
         "inputs": {
           "dxvk": {
@@ -790,14 +796,13 @@
         "output": "amdgpu_wddm_d3d11.dll"
       },
       "size": 555520,
-      "role": "D3D11 shell x64, lab flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 under the recipe's pair admission against the engine and the hosted ICD of this package (both before their version stamp), from the DXVK include tree at c271e0e0. Carried from 0.7.216.103-tester.31v3: D3D11 shell x64 (bc250-win 1750f505, main). First release-flavour build of this shell: the pinned tester.30 and rc1-rc4 files were lab-flavour images that still carried AMDGPU_WDDM_D3D11_EXPERIMENT and AMDGPU_WDDM_D3D11_SCANOUT, which BD-167 forbids in a release package, and this one carries neither (scan-override-strings.py over all four builds, 2026-10-14). Built against the r9 engine of this package under the recipe's pair admission (shell_abi=00010004 engine_abi=00010004, hr=0) together with the triplet ICD this package ships, from the DXVK include tree at b4f080f7, with /Brepro, /FC and /d1trimfile. Reproducible from an empty output directory: three builds of this source gave the same bytes, while a fourth over the output of an earlier one did not, so build-d3d11.ps1 now empties the directory first. Carried from 0.7.216.101-tester.30: D3D11 shell x64 (bc250-win train/b27 349f1236). Audit finding A2/UMD-1: the frame rate limiter of the per-application graphics settings waits on the device's one auto-reset timer for at most 1 ms instead of for ever. Built against the shipped engine D4C4BE86 and the shipped ICD 20A593DC with the recipe's pair admission, so the caps record 1E975948 stands. This file claims a bit-identical rebuild for the first time (the recipe at this head carries /Brepro, /FC and /d1trimfile). Carried from 0.7.216.100-tester.24: GPU D3D11 shell (bc250-win 1884b33d, train/b24). New against tester.21: the shell negotiates the WDDM 2.2 device DDI (0xB0023, CreateDriverInstance version byte 5) with the 174-entry 2.2 device table, AcquireResource and ReleaseResource, the four shader-cache-session entries and the 22-entry DXGI 6.1 base table, so the runtime hands it the full PresentCB and SyncIntervalOverride reaches the driver: VSync Off now works in 32-bit programs and VSync On no longer needs the vertical-blank pacer (BD-099 2.2.2; the switch wddm22-ddi-off goes back to the 2.0 table of tester.21). The shell also calls the shared scan-out rule for the SCANOUT opt-in of M15.14 increment 3, which stays off by default. Everything the tester.21 shell applied is kept (FrameRateLimit, VSync, Anisotropy, MaxFrameLatency and PerformanceOverlay). The 11 host tests of the recipe, the engine-pair admission against the b23 engine and the b24 ICD, the exported-entry test and the machine check pass. Built with /Brepro against DXVK fork 0898891f. Carried from 0.7.216.100-tester.21: GPU D3D11 shell (bc250-win 0d6b3299, train/b23). New against tester.20: it reads the per-application graphics settings of HKLM\\SOFTWARE\\amdgpu-wddm\\Graphics once per process and applies FrameRateLimit, VSync (after each Present a wait for the vertical blanks that the application's interval does not give, and the Present override for VSync 0 only, because the runtime of this interface keeps SyncIntervalOverrideValid but not the value; BD-099, wagon 14; lab 2026-10-08 with the x64 shell 7351B015 of f541778b at 59 Hz: VSync 1 gave 60, 60 and 30/s at the intervals 0, 1 and 2, VSync 0 gave 857-873/s at the intervals 1 and 2), Anisotropy (the DXVK option d3d11.samplerAnisotropy), MaxFrameLatency and PerformanceOverlay (the DXVK HUD of the engine). The 11 host tests of the recipe, the engine-pair admission against the b23 engine and ICD, the exported-entry test and the machine check pass. Built with /Brepro against DXVK fork 0898891f",
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b35-build/configs/release/x64/amdgpu_wddm_d3d11.config",
-      "sha256": "99128D5B397F6CEA9575A875EF01BFDA322794B8A92854D6207C813902482F15",
+      "source": "scratch/build-train/tester.32-r3/configs/release/x64/amdgpu_wddm_d3d11.config",
+      "sha256": "7F0790A88A1B374F64C1312D5A081195D12E9AC9F75A1952EAA2900E828C42CF",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
@@ -831,24 +836,24 @@
               "tiled_resources_tier": 3,
               "conservative_tier": 3,
               "vp_rt_index_any_shader": 1,
-              "engine_sha256": "61B6ACEA4991CAB6F4765BDB2AD4C4BEBFEE3AEB70D7AA13F17C64F06CBA5194",
-              "icd_sha256": "071FFAB19943EDA482F01F7D9D260CCAA0D78875992EB2224ACF43AA75EA8DA3",
+              "engine_sha256": "D52C242A278C78C5A9605BB5CA9BA8A60763339AF35D9337BD6A6673198A33D0",
+              "icd_sha256": "A21FC1BE9EF095F2FC5B7241B6D3777E00615E39623EF6A0AF4953586D77F529",
               "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
-              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured"
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
             }
           }
         },
         "output": "amdgpu_wddm_d3d11.config"
       },
       "size": 132,
-      "role": "M14C deployment record rebound to the 0.7.216.104-tester.32 engine and ICD after resource-only version stamping. The existing first68 capability/header bytes are unchanged; capabilities were not re-measured.",
+      "role": "M14C deployment record rebound to the 0.7.216.104-tester.32 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b35-build/configs/lab/x64/amdgpu_wddm_d3d11.config",
-      "sha256": "7017D68CA34941811A74328E61BAF7E6AAB095226883FF420C30917644E87999",
+      "source": "scratch/build-train/tester.32-r3/configs/lab/x64/amdgpu_wddm_d3d11.config",
+      "sha256": "1E7697F242AA4302B36FAE7F9687B3A1F5EBBEFE9BE1ED34AF28D62FDB069DD1",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
@@ -882,45 +887,45 @@
               "tiled_resources_tier": 3,
               "conservative_tier": 3,
               "vp_rt_index_any_shader": 1,
-              "engine_sha256": "AADDBE758FCAD0E668C2B7B3B14C431788F369C9732BAAD82EAE9899660D1887",
-              "icd_sha256": "44ABE9C1A670791DA3C20A4A72BC4D17E6FCCC4A76B99BAEC92222320B6F054B",
+              "engine_sha256": "1A73B6971B6FAD841CFA3B054E68691C380C2315F9D342C6E468CD00A0AF4774",
+              "icd_sha256": "5C1F30C1DF00EA351B3BB0150A2343D6C5E2D59DD9F76F931111581CA6693806",
               "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
-              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured"
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
             }
           }
         },
         "output": "amdgpu_wddm_d3d11.config"
       },
       "size": 132,
-      "role": "M14C deployment record rebound to the 0.7.216.104-tester.32 engine and ICD after resource-only version stamping. The existing first68 capability/header bytes are unchanged; capabilities were not re-measured.",
+      "role": "M14C deployment record rebound to the 0.7.216.104-tester.32 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
       "flavour": "lab",
       "note": "M14C record of the lab flavour: pins the lab engine 16BE5F7E and the lab triplet ICD"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b35-build/stamped/release/ae95ecb263f7f4b323df/amdgpu_wddm_dxvk.dll",
-      "sha256": "61B6ACEA4991CAB6F4765BDB2AD4C4BEBFEE3AEB70D7AA13F17C64F06CBA5194",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
+      "sha256": "D52C242A278C78C5A9605BB5CA9BA8A60763339AF35D9337BD6A6673198A33D0",
       "built_from": {
         "repo": "dxvk",
         "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-        "recipe_commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
           "ddi-engine",
+          "-Compiler",
+          "clang-cl",
+          "-Arch",
+          "x64",
           "-Source",
           "{src}",
           "-Build",
           "{out}",
-          "-Arch",
-          "x64",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
           "8",
-          "-Compiler",
-          "clang-cl",
-          "-ClangToolchain",
-          "{root}/toolchain/llvm-23.1.4-win64",
           "-Flavour",
           "release",
           "-Version",
@@ -929,34 +934,33 @@
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
       "size": 5603328,
-      "role": "D3D11 engine x64, release flavour, DXVK fork amdgpu-wddm/bd214-query-getdata c271e0e0 (v3.1.1-119-gc271e0e0), from a clean single-branch clone with every submodule at its pin (dxbc-spirv 28fda04a with its SPIRV-Headers c8ad050f), built by build-dxvk.ps1 -Config ddi-engine with clang-cl 23.1.4 (-ffp-contract=off) at recipe 5c8c15cc. New against the 31v3 engine b4f080f7: BD-214, a synchronization poll in inline mode retires every submission the GPU has completed before it reads the fence, so a GetData loop on an event query ends (GOG Galaxy at login; c6811a82 test, c271e0e0 fix). Its own test on this file: exit 0, no failure. Carried from 0.7.216.103-tester.31v3: GPU D3D11 engine (DXVK fork amdgpu-wddm/tester31-dxvk b4f080f7, published on the project's fork: the r9 persistent shader cache, on by default, with the cache under the per-user shader-cache folder; submodule dxbc-spirv at 28fda04a). Built by tools/build/build-dxvk.ps1 -Config ddi-engine at recipe identity 5f4cfc0f from a clean checkout of that commit (no modified tracked entry, empty worktree diff) with /Brepro, /FC, /d1trimfile and -Db_ndebug=true. Release flavour of BD-167: the image holds no DXVK_SHADER_CACHE, DXVK_SHADER_DUMP_PATH, DXVK_CONFIG_FILE or DXVK_DEBUG lookup, which the lab flavour of the same source does. Its own tests pass on this file: 129 engine checks and 10 cache checks, exit 0.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b35-build/stamped/lab/1e9db549dd8311b7cafe/amdgpu_wddm_dxvk.dll",
-      "sha256": "AADDBE758FCAD0E668C2B7B3B14C431788F369C9732BAAD82EAE9899660D1887",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
+      "sha256": "1A73B6971B6FAD841CFA3B054E68691C380C2315F9D342C6E468CD00A0AF4774",
       "built_from": {
         "repo": "dxvk",
         "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-        "recipe_commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
           "ddi-engine",
+          "-Compiler",
+          "clang-cl",
+          "-Arch",
+          "x64",
           "-Source",
           "{src}",
           "-Build",
           "{out}",
-          "-Arch",
-          "x64",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
           "8",
-          "-Compiler",
-          "clang-cl",
-          "-ClangToolchain",
-          "{root}/toolchain/llvm-23.1.4-win64",
           "-Flavour",
           "lab",
           "-Lab",
@@ -966,18 +970,17 @@
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
       "size": 5861376,
-      "role": "D3D11 engine x64, lab flavour, DXVK fork amdgpu-wddm/bd214-query-getdata c271e0e0 (v3.1.1-119-gc271e0e0), from a clean single-branch clone with every submodule at its pin (dxbc-spirv 28fda04a with its SPIRV-Headers c8ad050f), built by build-dxvk.ps1 -Config ddi-engine with clang-cl 23.1.4 (-ffp-contract=off) at recipe 5c8c15cc. New against the 31v3 engine b4f080f7: BD-214, a synchronization poll in inline mode retires every submission the GPU has completed before it reads the fence, so a GetData loop on an event query ends (GOG Galaxy at login; c6811a82 test, c271e0e0 fix). Its own test on this file: exit 0, no failure. Carried from 0.7.216.103-tester.31v3: GPU D3D11 engine (DXVK fork amdgpu-wddm/tester31-dxvk b4f080f7, published on the project's fork: the r9 persistent shader cache, on by default, with the cache under the per-user shader-cache folder; submodule dxbc-spirv at 28fda04a). Built by tools/build/build-dxvk.ps1 -Config ddi-engine at recipe identity 5f4cfc0f from a clean checkout of that commit (no modified tracked entry, empty worktree diff) with /Brepro, /FC, /d1trimfile and -Db_ndebug=true. Release flavour of BD-167: the image holds no DXVK_SHADER_CACHE, DXVK_SHADER_DUMP_PATH, DXVK_CONFIG_FILE or DXVK_DEBUG lookup, which the lab flavour of the same source does. Its own tests pass on this file: 129 engine checks and 10 cache checks, exit 0.",
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/release/bfe73c9246dd099a4d94/amdgpu_wddm_radv.dll",
-      "sha256": "071FFAB19943EDA482F01F7D9D260CCAA0D78875992EB2224ACF43AA75EA8DA3",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "A21FC1BE9EF095F2FC5B7241B6D3777E00615E39623EF6A0AF4953586D77F529",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "72d861b5b7b6ca8b9b9e8ed2d0f1aff2b0934843",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -989,33 +992,35 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "release",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "release",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 18049024,
-      "role": "Hosted Vulkan ICD x64 of the D3D11 slot: the same build as payload/d3d12/amdgpu_wddm_radv.dll, release flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4, clang-cl 23.1.4, variants release,isa, recipe 72d861b5. Carried from 0.7.216.103-tester.31v3: The triplet Vulkan ICD, release flavour, at mesa fork amdgpu-wddm/tester31-triplet 2dea401c: the same build as the D3D12 slot under the D3D11 name, with the BD-178 allocation-removal fix. The D3D11 shell that loads it is pair-admitted against the r9 engine, and its M14C record pins this ICD by hash, so the config rows move with it. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D11 ICD x64 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: the D3D11 shell loads it with the record of slot 10. Replaces 20A593DC. Carried from 0.7.216.100-tester.27: GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, static CRT), the tester.21 file again in round 3 (BD-103). This is the same build as payload/d3d12/amdgpu_wddm_radv.dll. A process that uses D3D11 and D3D12 therefore loads one RADV build. Carried from 0.7.216.100-tester.21: GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, static CRT). This is the same build as payload/d3d12/amdgpu_wddm_radv.dll. A process that uses D3D11 and D3D12 therefore loads one RADV build",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/lab/a5cb0704933d31a28415/amdgpu_wddm_radv.dll",
-      "sha256": "44ABE9C1A670791DA3C20A4A72BC4D17E6FCCC4A76B99BAEC92222320B6F054B",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "5C1F30C1DF00EA351B3BB0150A2343D6C5E2D59DD9F76F931111581CA6693806",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1027,34 +1032,36 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "lab",
+          "-Lab",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "lab",
-          "-Lab",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 18095104,
-      "role": "Hosted Vulkan ICD x64 of the D3D11 slot: the same build as payload/d3d12/amdgpu_wddm_radv.dll, lab flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4, clang-cl 23.1.4, variants release,isa, recipe b0ad6a30. Carried from 0.7.216.103-tester.31v3: The triplet Vulkan ICD, lab flavour, under the D3D11 name: the same build as the lab D3D12 slot, with the declaration's lab override names compiled in and the BD-178 allocation-removal fix. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D11 ICD x64 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: the D3D11 shell loads it with the record of slot 10. Replaces 20A593DC. Carried from 0.7.216.100-tester.27: GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, static CRT), the tester.21 file again in round 3 (BD-103). This is the same build as payload/d3d12/amdgpu_wddm_radv.dll. A process that uses D3D11 and D3D12 therefore loads one RADV build. Carried from 0.7.216.100-tester.21: GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, static CRT). This is the same build as payload/d3d12/amdgpu_wddm_radv.dll. A process that uses D3D11 and D3D12 therefore loads one RADV build",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b35-build/stamped/release/d3b196f0d409dfe86ade/vulkan_radeon.dll",
-      "sha256": "D51B1D870D922732CB119572C16729E196A6444AA50BA2D6031EB88DD642C3AD",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/system-x64-rel/vulkan_radeon.dll",
+      "sha256": "ED65D4A3DF1ED6A10C5876EE2C4149969E15C2ACF3C9C1E1571F76AD10D3A0BA",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "29d95fd74bce06a764d536b0ad8a0bc60b1dc608",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1066,33 +1073,35 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "release",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "release",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
       "size": 18406912,
-      "role": "System Vulkan ICD x64, release flavour, mesa fork train/b35-radv-system 29d95fd7, built by build-mesa.ps1 -Config radv-system with clang-cl 23.1.4, variants release,isa (-march=x86-64-v3 -mtune=znver2, no LTO), at recipe b0ad6a30. New against the 31v3 ICD 042227dc: BD-197 (e471cb38, d6d5a896, 9c3b6660, daa8f500: DXGI is the default Vulkan present route again, RGBA8 surfaces only where the scan-out plane takes them, the GDI copy of an RGBA8 frame with SSSE3), the clang-cl build fixes (e6211307, 06b8051c), BD-201 (33322c59, e438c5b6, 94faf14f) and BD-211 (29d95fd7). Carried from 0.7.216.103-tester.31v3: The x64 system Vulkan ICD of the loader, release flavour, rebuilt at mesa fork amdgpu-wddm/tester31-system 042227dc, the published head of this line: 1227f22d with the BD-178 commit on top, which latches the exact STATUS_DEVICE_REMOVED of a failed allocation and reports it through the device-status route instead of retrying. BD-178 in the recipe: radv-system now takes -Db_vscrt=mt, so this ICD links the static C runtime and no longer depends on a compatible Visual C++ runtime DLL being present in whatever process loads the Vulkan loader; a check in test_check_recipe_configs.py keeps the option in the recipe. Built from a clean work tree with /Brepro, /FC, /d1trimfile and -Db_ndebug=true, so no assert is live in the shipped ICD. BD-167: the image holds none of the override names the declaration demands of its lab copy. Carried from 0.7.216.101-tester.30: The system Vulkan ICD of the loader, rebuilt at mesa fork fix/bd149-device-stop-system b3e8818e: BD-149 on fix/bd136-system cd7bc5fe, the b32-combo-trial line 83fd9a36 (BD-105, BD-074, the per-LUID winsys cache) with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. Built with the radv-system set (asserts off), /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The system Vulkan ICD of the loader, rebuilt at mesa fork amdgpu-wddm/b32-combo-trial 83fd9a36: the shipped BD-105 line with the BD-074 ACO spill fix (630b3766) and the standalone winsys cache per adapter LUID. A spill of a vector register to local data share carries its own synchronisation, so a ray tracing pipeline under register pressure no longer reads a register it has not written, and two adapters no longer share one cache key. Built with the radv-system set (asserts off), /Brepro, from a clean work tree. Carried from 0.7.216.100-tester.29: system Vulkan ICD (mesa fork amdgpu-wddm/vk-combo-r1 38ee64d4 on b54b820e, radv-system recipe with -Db_ndebug=true). New bytes against release r1 (B53CC31D): BD-105 cell D (D3D12 opens and reads a monitored fence that RADV created), BD-118 (a shared D3D12 texture keeps its linear layout, a disagreeing layout is refused), M15.14 Vulkan (the DXGI-route swap chain in the shape that reaches independent flip). GDI stays the default. Lab, unit A, 2026-10-11: 12 of 12 arms as planned, independent flip 2404 of 2412 packets in the eligible arm. Release r1 of 0.7.216.100-tester.28: system Vulkan ICD (mesa fork amdgpu-wddm/bd105-dxgi-fence b54b820e, radv-system recipe with -Db_ndebug=true). New bytes: the tester.27 file was 90515C36. Named and unnamed Win32 semaphore import, monitored-fence imports with a retry, the DXGI present route behind AMDGPU_WDDM_VK_WSI with deadlines and presenter-owned shared fences, the amdgpu-wddm log stream. The default present route stays GDI. Lab, unit A, 2026-10-11: timeline import PASS, DXGI route 1809 frames with a correct picture, Quake II RTX 61.38 fps (pipeline) and 64.24 fps (ray query). Carried from 0.7.216.100-tester.27: system Vulkan ICD (mesa fork amdgpu-wddm/vram-caps b96cfa1b, radv-system recipe with -Db_ndebug=true). **New bytes: the tester.26 file was 1D4DAD41.** Two commits over the shipped line d85c5a74. The OS shared-memory size is kept across the BC250 caps blob, so the GTT total is the Windows GETSEGMENTSIZE answer and not the frozen free Linux RAM of the capture, while the local and CPU-visible totals come from the kernel driver's patched words; with the kernel wagon of this train the Vulkan heaps therefore follow the board's carve-out instead of the 8 GiB capture. The Win32 semaphore line: an import keeps an owned duplicate instead of taking the application's NT handle, an export applies the access mask, the inherit flag and the name, and a named import maps Global and Local to the BaseNamedObjects paths. No lab measurement stands on these bytes yet: the heap readings at 8192 and 12288 MiB, vkfillcheck, the Quake II RTX ray-tracing gate and the share cells are the b29 lab session's work, and the disk-cache arm is cold again because the PDB identity is new (BD-100). The six unbounded paging waits of bo.c are unchanged and still have no bound, which this wagon does not claim to fix. Carried from 0.7.216.100-tester.26: system Vulkan ICD (mesa fork amdgpu-wddm/b28-system-icd d85c5a74, radv-system recipe with -Db_ndebug=true). **New bytes: the first system ICD since 0.7.216.100-tester.23, which shipped 4E3F393F.** Four commits over the shipped line d3da6d0a: the seg0 paging dependency (RADV keeps the newest outstanding map and residency fence and ignores the undefined synchronous MakeResident fence output), the sliced fence wait of BD-114 item 7.5 (1 s slices to 120 s in place of one 10 s wait), its host gate on this line, and the liveness rule that ends the wait at the next slice when the kernel device is gone or stops answering D3DKMTGetDeviceState three times in a row. Against 4E3F393F the image is 2048 bytes larger and differs only in the sizes and addresses that 2048 bytes of added code move: the same three exports, the same 20 imported DLLs with the same 254 names, and the same PE configuration field for field (scratch/train/b28/pe-compare-r2). Host gates: the fence-wait suite 13 cases, 69 checks, 0 failures against this build's own objects, with three negative controls that each fail (the old single-slice bound, the d3da6d0a source and the pre-liveness aeec4d72 source), and the seg0 paging gate 36 checks, 0 failures where d3da6d0a gives 36 checks with 10 failures. Lab 2026-10-10, under this train's kernel driver: vulkaninfo reads driverInfo Mesa 26.3.0-devel (git-d85c5a748e) on both loader paths, vkfillcheck x64 reads 880 cases with 864 PASS, 0 FAIL, 16 SKIP and result ok, and all three BD-114 arms ran on these bytes. Not measured on them: the Quake II RTX ray-tracing gate and the disk-cache arm, whose shader-cache namespace is new because the PDB identity is new (BD-100). The six unbounded paging waits of bo.c are unchanged and still have no bound, which this wagon does not claim to fix. Carried from 0.7.216.100-tester.25: system Vulkan ICD. **These are the bytes 0.7.216.100-tester.23 shipped, carried into this release unchanged.** The Vulkan flip over DXGI rode the b26 cut in this slot (mesa fork amdgpu-wddm/b26-vk-wsi-dxgi 18e0f56b, 89436E4F). The b26 lab validation of 2026-10-09 found that the route completes no present at all: 0 present rows for vkcube in 60 s and 0 for the Quake II RTX timedemo in 133 s, while the paired gdi arms of the same sessions wrote 640 to 1858 rows, and neither the gdi switch nor the automatic CPU fallback caught it (BD-105). Quake II RTX with ray tracing is a release gate, so the wagon was dropped and this slot returned to the proven file. On these bytes the gate passes on the lab under the b26 kernel driver: 60.40 frames per second with VK_KHR_ray_tracing_pipeline and 60.86 with VK_KHR_ray_query, 631 frames each, exit 0, 0 GPU faults and 0 TDR. The route continues as train b27 (mesa amdgpu-wddm/b27-vk-wsi-dxgi, bc250-win wsi/b27-vk-dxgi), where it is opt-in, and no release carries it. Carried from 0.7.216.100-tester.23: system Vulkan ICD (mesa fork amdgpu-wddm/b25-system-icd d3da6d0a, radv-system recipe with -Db_ndebug=true). New against tester.22: the Windows shader disk cache (GitHub #10), no live RADV assert, the two ray tracing parity ports from the triplet line (prev_hit_attribs after a rejecting any-hit on a procedural AABB, and the BD-100 pipeline-library cache key), the BD-102 review's fence-wait shape (GetDeviceState only after a failed or timed-out wait or a fence that did not advance), and the merged dispatch-table generator prologue. The BD-102 BVH node address fix of tester.22 is in the base and unchanged. Gates of the build: the radv-system option set with its four reproducibility flags (17 meson options), -DENABLE_SHADER_CACHE in build.ninja (the cache gate, new with this wagon), /DNDEBUG in build.ninja (the ndebug gate, new with this wagon), a recipe.json with modified_entries 0, untracked_entries 0 and an empty worktree diff at d3da6d0a, the x64 machine, no static dxgi/d3d11/d3d12/d3d12core/dcomp import, and the embedded git sha equal to the branch head. One warning, the pre-existing C4319 of ac_gpu_info.c. Host tests, each with a negative control that fails every check: 5 stage-cover tests (57 checks); Mesa's own util_tests for the disk cache, 263 tests from 81 suites, 255 passed and 8 skipped with all 13 CacheWin32 tests passing; a 32-vector fence-wait shape check, with the rule read out of the tree first; and the BD-102 node-address check over 80080 tagged-node vectors, likewise source-gated. This line has no mem-overflow source and no src/amd/vulkan/winsys/wddm2/tests, so the queue and sync tests of the triplet line cannot run on it. Quake II RTX loads this file, and the release gate is re-run on these bytes, because every change above is in code it runs. The file reports git-d3da6d0ac5 as its Mesa version. Carried from 0.7.216.100-tester.22: system Vulkan ICD (mesa fork amdgpu-wddm/bd102-system 31d3f390, radv-system recipe without -Db_ndebug=true). New against tester.21: build_node_to_addr sign-extends a reconstructed BVH node address from bit 47 instead of forcing its top sixteen bits to one. The WDDM2 winsys allocates in the bottom half of the address space, where the forced ones left the address non-canonical, so the stackless parent fetch never reached its backtracking exit and the waves spun without a page fault; this is the fix that makes Quake II RTX run its path tracing (BD-102, GitHub #34, cherry-pick of 479d8ee6, which the triplet and hosted lines have carried since 2026-09-30). Two commits ride with it: the diagnostic BC250_BVH_BUILD=lbvh, inert unless set and 6.6 % slower when set, and a GetDeviceState call that the wddm2 fence wait's hang report never made. These are the exact bytes of the Quake II RTX proof of 2026-10-08: a 631-frame timedemo at 59.86 fps, exit 0, no Display 4101 event. Train b24 round 3 drops the C70 budget pre-check, because with the pre-check at its release default the overcommit probe read back 352 wrong GPU words after one refusal: an allocation the pre-check had refused was still used, on both shipped ICD lines (BD-103, lab 2026-10-09), so the pre-check line amdgpu-wddm/b24-system-icd a4de891c of rounds 1 and 2 is out of the train. Rounds 1 and 2 shipped the pre-check build on top of exactly these commits, and the b24 lab validation of 2026-10-09 ran Quake II RTX on that package with both ray tracing APIs and no hang recovery attempt; round 3 takes the pre-check commits away and nothing else. The b23 behaviour is kept: the BD-100 shaderless-pipeline error, the driver's own allocations with CantTrimFurther and MustSucceed, an application allocation with CantTrimFurther only (BD-096), the IMMEDIATE present on the GDI path, host-cached present memory, and no shader disk cache, because this line keeps the upstream Windows guard. Gates: the radv-system option set of the tester.21 recipe with its four reproducibility flags (16 meson options), no -DENABLE_SHADER_CACHE, a recipe.json with modified_entries 0, untracked_entries 0 and an empty worktree diff at 31d3f390, the x64 machine, no static dxgi/d3d11/d3d12/d3d12core/dcomp import. Host test with its negative control: 5 stage-cover tests (57 checks); this line has no mem-overflow source. The file reports git-31d3f39008 as its Mesa version. Carried from 0.7.216.100-tester.21: system Vulkan ICD (mesa fork amdgpu-wddm/rottr486-null-vs-system 468ca20d = 2732f9c8 plus three commits). A graphics pipeline whose shaders RADV cannot build is an error, not a read of a shader that is not there (BD-100, f3c4c6b5 with the five review fixes in 468ca20d); this line has no shader disk cache, so the cache parts of that fix cannot act here. The driver's own allocations keep MakeResident with CantTrimFurther 1 and MustSucceed 1 (25604094). For an application allocation the three MakeResident calls of radv_wddm2_bo.c ask with CantTrimFurther, not MustSucceed, so an allocation over the budget pages other memory out instead of a device loss at the next submit (BD-096, the minimal port of 7f16adb0: the full pick conflicts on this line, and it has no MemoryOverflow reader). The behaviour of the rest is that of the CF3948D6 build of 2732f9c8: the IMMEDIATE present on the GDI path without the DwmFlush wait and host-cached present memory, no shader disk cache. Built with the option set of CF3948D6 (12 meson options), through build-mesa.ps1 of bc250-win 1eb9ddc3 as config radv-system, which adds the four reproducibility flags of that recipe (/Brepro, /FC, /d1trimfile, /PDBALTPATH) and nothing else; round 3c used the same option set at recipe d6176765 without them. The gates: the radv-system option set, no -DENABLE_SHADER_CACHE, the x64 machine, no static dxgi/d3d11/d3d12/d3d12core/dcomp import, and the 19 imports of CF3948D6 and no other (scratch/rottr486/import-gate-r4-system.log). Host test: 5 stage-cover tests (57 checks), whose negative control fails every check. The file reports git-468ca20d05 as its Mesa version",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b35-build/stamped/lab/c9fc69fe9791634b07a7/vulkan_radeon.dll",
-      "sha256": "65A36AC51DBF6863CD086511945DF64135ED765C3F9CDF1914CDEF7695600A1C",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
+      "sha256": "6F73AEA53D551F74DE586B4CF2BB554FAC38B022FAC5414D4D1A3E4C4112B970",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "29d95fd74bce06a764d536b0ad8a0bc60b1dc608",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1104,23 +1113,25 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "clang-cl",
+          "-Temp",
+          "{tmp}",
+          "-Flavour",
+          "lab",
+          "-Lab",
           "-ClangToolchain",
           "{root}/toolchain/llvm-23.1.4-win64",
           "-Variant",
           "release,isa",
-          "-Flavour",
-          "lab",
-          "-Lab",
           "-Version",
           "0.7.216.104-tester.32"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
       "size": 18419200,
-      "role": "System Vulkan ICD x64, lab flavour, mesa fork train/b35-radv-system 29d95fd7, built by build-mesa.ps1 -Config radv-system with clang-cl 23.1.4, variants release,isa (-march=x86-64-v3 -mtune=znver2, no LTO), at recipe b0ad6a30. New against the 31v3 ICD 042227dc: BD-197 (e471cb38, d6d5a896, 9c3b6660, daa8f500: DXGI is the default Vulkan present route again, RGBA8 surfaces only where the scan-out plane takes them, the GDI copy of an RGBA8 frame with SSSE3), the clang-cl build fixes (e6211307, 06b8051c), BD-201 (33322c59, e438c5b6, 94faf14f) and BD-211 (29d95fd7). Carried from 0.7.216.103-tester.31v3: The x64 system Vulkan ICD, lab flavour, at mesa fork amdgpu-wddm/tester31-system 042227dc: the same source, options and static C runtime as the release ICD, with the fork's lab-flavour option, so the RADV_ and BC250_WSI_ names of the declaration are compiled in. It carries the same BD-178 allocation-removal fix. Carried from 0.7.216.101-tester.30: The system Vulkan ICD of the loader, rebuilt at mesa fork fix/bd149-device-stop-system b3e8818e: BD-149 on fix/bd136-system cd7bc5fe, the b32-combo-trial line 83fd9a36 (BD-105, BD-074, the per-LUID winsys cache) with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. Built with the radv-system set (asserts off), /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The system Vulkan ICD of the loader, rebuilt at mesa fork amdgpu-wddm/b32-combo-trial 83fd9a36: the shipped BD-105 line with the BD-074 ACO spill fix (630b3766) and the standalone winsys cache per adapter LUID. A spill of a vector register to local data share carries its own synchronisation, so a ray tracing pipeline under register pressure no longer reads a register it has not written, and two adapters no longer share one cache key. Built with the radv-system set (asserts off), /Brepro, from a clean work tree. Carried from 0.7.216.100-tester.29: system Vulkan ICD (mesa fork amdgpu-wddm/vk-combo-r1 38ee64d4 on b54b820e, radv-system recipe with -Db_ndebug=true). New bytes against release r1 (B53CC31D): BD-105 cell D (D3D12 opens and reads a monitored fence that RADV created), BD-118 (a shared D3D12 texture keeps its linear layout, a disagreeing layout is refused), M15.14 Vulkan (the DXGI-route swap chain in the shape that reaches independent flip). GDI stays the default. Lab, unit A, 2026-10-11: 12 of 12 arms as planned, independent flip 2404 of 2412 packets in the eligible arm. Release r1 of 0.7.216.100-tester.28: system Vulkan ICD (mesa fork amdgpu-wddm/bd105-dxgi-fence b54b820e, radv-system recipe with -Db_ndebug=true). New bytes: the tester.27 file was 90515C36. Named and unnamed Win32 semaphore import, monitored-fence imports with a retry, the DXGI present route behind AMDGPU_WDDM_VK_WSI with deadlines and presenter-owned shared fences, the amdgpu-wddm log stream. The default present route stays GDI. Lab, unit A, 2026-10-11: timeline import PASS, DXGI route 1809 frames with a correct picture, Quake II RTX 61.38 fps (pipeline) and 64.24 fps (ray query). Carried from 0.7.216.100-tester.27: system Vulkan ICD (mesa fork amdgpu-wddm/vram-caps b96cfa1b, radv-system recipe with -Db_ndebug=true). **New bytes: the tester.26 file was 1D4DAD41.** Two commits over the shipped line d85c5a74. The OS shared-memory size is kept across the BC250 caps blob, so the GTT total is the Windows GETSEGMENTSIZE answer and not the frozen free Linux RAM of the capture, while the local and CPU-visible totals come from the kernel driver's patched words; with the kernel wagon of this train the Vulkan heaps therefore follow the board's carve-out instead of the 8 GiB capture. The Win32 semaphore line: an import keeps an owned duplicate instead of taking the application's NT handle, an export applies the access mask, the inherit flag and the name, and a named import maps Global and Local to the BaseNamedObjects paths. No lab measurement stands on these bytes yet: the heap readings at 8192 and 12288 MiB, vkfillcheck, the Quake II RTX ray-tracing gate and the share cells are the b29 lab session's work, and the disk-cache arm is cold again because the PDB identity is new (BD-100). The six unbounded paging waits of bo.c are unchanged and still have no bound, which this wagon does not claim to fix. Carried from 0.7.216.100-tester.26: system Vulkan ICD (mesa fork amdgpu-wddm/b28-system-icd d85c5a74, radv-system recipe with -Db_ndebug=true). **New bytes: the first system ICD since 0.7.216.100-tester.23, which shipped 4E3F393F.** Four commits over the shipped line d3da6d0a: the seg0 paging dependency (RADV keeps the newest outstanding map and residency fence and ignores the undefined synchronous MakeResident fence output), the sliced fence wait of BD-114 item 7.5 (1 s slices to 120 s in place of one 10 s wait), its host gate on this line, and the liveness rule that ends the wait at the next slice when the kernel device is gone or stops answering D3DKMTGetDeviceState three times in a row. Against 4E3F393F the image is 2048 bytes larger and differs only in the sizes and addresses that 2048 bytes of added code move: the same three exports, the same 20 imported DLLs with the same 254 names, and the same PE configuration field for field (scratch/train/b28/pe-compare-r2). Host gates: the fence-wait suite 13 cases, 69 checks, 0 failures against this build's own objects, with three negative controls that each fail (the old single-slice bound, the d3da6d0a source and the pre-liveness aeec4d72 source), and the seg0 paging gate 36 checks, 0 failures where d3da6d0a gives 36 checks with 10 failures. Lab 2026-10-10, under this train's kernel driver: vulkaninfo reads driverInfo Mesa 26.3.0-devel (git-d85c5a748e) on both loader paths, vkfillcheck x64 reads 880 cases with 864 PASS, 0 FAIL, 16 SKIP and result ok, and all three BD-114 arms ran on these bytes. Not measured on them: the Quake II RTX ray-tracing gate and the disk-cache arm, whose shader-cache namespace is new because the PDB identity is new (BD-100). The six unbounded paging waits of bo.c are unchanged and still have no bound, which this wagon does not claim to fix. Carried from 0.7.216.100-tester.25: system Vulkan ICD. **These are the bytes 0.7.216.100-tester.23 shipped, carried into this release unchanged.** The Vulkan flip over DXGI rode the b26 cut in this slot (mesa fork amdgpu-wddm/b26-vk-wsi-dxgi 18e0f56b, 89436E4F). The b26 lab validation of 2026-10-09 found that the route completes no present at all: 0 present rows for vkcube in 60 s and 0 for the Quake II RTX timedemo in 133 s, while the paired gdi arms of the same sessions wrote 640 to 1858 rows, and neither the gdi switch nor the automatic CPU fallback caught it (BD-105). Quake II RTX with ray tracing is a release gate, so the wagon was dropped and this slot returned to the proven file. On these bytes the gate passes on the lab under the b26 kernel driver: 60.40 frames per second with VK_KHR_ray_tracing_pipeline and 60.86 with VK_KHR_ray_query, 631 frames each, exit 0, 0 GPU faults and 0 TDR. The route continues as train b27 (mesa amdgpu-wddm/b27-vk-wsi-dxgi, bc250-win wsi/b27-vk-dxgi), where it is opt-in, and no release carries it. Carried from 0.7.216.100-tester.23: system Vulkan ICD (mesa fork amdgpu-wddm/b25-system-icd d3da6d0a, radv-system recipe with -Db_ndebug=true). New against tester.22: the Windows shader disk cache (GitHub #10), no live RADV assert, the two ray tracing parity ports from the triplet line (prev_hit_attribs after a rejecting any-hit on a procedural AABB, and the BD-100 pipeline-library cache key), the BD-102 review's fence-wait shape (GetDeviceState only after a failed or timed-out wait or a fence that did not advance), and the merged dispatch-table generator prologue. The BD-102 BVH node address fix of tester.22 is in the base and unchanged. Gates of the build: the radv-system option set with its four reproducibility flags (17 meson options), -DENABLE_SHADER_CACHE in build.ninja (the cache gate, new with this wagon), /DNDEBUG in build.ninja (the ndebug gate, new with this wagon), a recipe.json with modified_entries 0, untracked_entries 0 and an empty worktree diff at d3da6d0a, the x64 machine, no static dxgi/d3d11/d3d12/d3d12core/dcomp import, and the embedded git sha equal to the branch head. One warning, the pre-existing C4319 of ac_gpu_info.c. Host tests, each with a negative control that fails every check: 5 stage-cover tests (57 checks); Mesa's own util_tests for the disk cache, 263 tests from 81 suites, 255 passed and 8 skipped with all 13 CacheWin32 tests passing; a 32-vector fence-wait shape check, with the rule read out of the tree first; and the BD-102 node-address check over 80080 tagged-node vectors, likewise source-gated. This line has no mem-overflow source and no src/amd/vulkan/winsys/wddm2/tests, so the queue and sync tests of the triplet line cannot run on it. Quake II RTX loads this file, and the release gate is re-run on these bytes, because every change above is in code it runs. The file reports git-d3da6d0ac5 as its Mesa version. Carried from 0.7.216.100-tester.22: system Vulkan ICD (mesa fork amdgpu-wddm/bd102-system 31d3f390, radv-system recipe without -Db_ndebug=true). New against tester.21: build_node_to_addr sign-extends a reconstructed BVH node address from bit 47 instead of forcing its top sixteen bits to one. The WDDM2 winsys allocates in the bottom half of the address space, where the forced ones left the address non-canonical, so the stackless parent fetch never reached its backtracking exit and the waves spun without a page fault; this is the fix that makes Quake II RTX run its path tracing (BD-102, GitHub #34, cherry-pick of 479d8ee6, which the triplet and hosted lines have carried since 2026-09-30). Two commits ride with it: the diagnostic BC250_BVH_BUILD=lbvh, inert unless set and 6.6 % slower when set, and a GetDeviceState call that the wddm2 fence wait's hang report never made. These are the exact bytes of the Quake II RTX proof of 2026-10-08: a 631-frame timedemo at 59.86 fps, exit 0, no Display 4101 event. Train b24 round 3 drops the C70 budget pre-check, because with the pre-check at its release default the overcommit probe read back 352 wrong GPU words after one refusal: an allocation the pre-check had refused was still used, on both shipped ICD lines (BD-103, lab 2026-10-09), so the pre-check line amdgpu-wddm/b24-system-icd a4de891c of rounds 1 and 2 is out of the train. Rounds 1 and 2 shipped the pre-check build on top of exactly these commits, and the b24 lab validation of 2026-10-09 ran Quake II RTX on that package with both ray tracing APIs and no hang recovery attempt; round 3 takes the pre-check commits away and nothing else. The b23 behaviour is kept: the BD-100 shaderless-pipeline error, the driver's own allocations with CantTrimFurther and MustSucceed, an application allocation with CantTrimFurther only (BD-096), the IMMEDIATE present on the GDI path, host-cached present memory, and no shader disk cache, because this line keeps the upstream Windows guard. Gates: the radv-system option set of the tester.21 recipe with its four reproducibility flags (16 meson options), no -DENABLE_SHADER_CACHE, a recipe.json with modified_entries 0, untracked_entries 0 and an empty worktree diff at 31d3f390, the x64 machine, no static dxgi/d3d11/d3d12/d3d12core/dcomp import. Host test with its negative control: 5 stage-cover tests (57 checks); this line has no mem-overflow source. The file reports git-31d3f39008 as its Mesa version. Carried from 0.7.216.100-tester.21: system Vulkan ICD (mesa fork amdgpu-wddm/rottr486-null-vs-system 468ca20d = 2732f9c8 plus three commits). A graphics pipeline whose shaders RADV cannot build is an error, not a read of a shader that is not there (BD-100, f3c4c6b5 with the five review fixes in 468ca20d); this line has no shader disk cache, so the cache parts of that fix cannot act here. The driver's own allocations keep MakeResident with CantTrimFurther 1 and MustSucceed 1 (25604094). For an application allocation the three MakeResident calls of radv_wddm2_bo.c ask with CantTrimFurther, not MustSucceed, so an allocation over the budget pages other memory out instead of a device loss at the next submit (BD-096, the minimal port of 7f16adb0: the full pick conflicts on this line, and it has no MemoryOverflow reader). The behaviour of the rest is that of the CF3948D6 build of 2732f9c8: the IMMEDIATE present on the GDI path without the DwmFlush wait and host-cached present memory, no shader disk cache. Built with the option set of CF3948D6 (12 meson options), through build-mesa.ps1 of bc250-win 1eb9ddc3 as config radv-system, which adds the four reproducibility flags of that recipe (/Brepro, /FC, /d1trimfile, /PDBALTPATH) and nothing else; round 3c used the same option set at recipe d6176765 without them. The gates: the radv-system option set, no -DENABLE_SHADER_CACHE, the x64 machine, no static dxgi/d3d11/d3d12/d3d12core/dcomp import, and the 19 imports of CF3948D6 and no other (scratch/rottr486/import-gate-r4-system.log). Host test: 5 stage-cover tests (57 checks), whose negative control fails every check. The file reports git-468ca20d05 as its Mesa version",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
@@ -1140,11 +1151,11 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b35-build/stamped/release/97185df43c3d6471b5d9/bc250d3d_router.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/router-x86-rel/bc250d3d_router.dll",
       "sha256": "B5BDB13472985DF06FC8468C1E3CB146A15EB8182C905DDF8912D15CE409C03E",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
@@ -1159,18 +1170,16 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
-      "role": "Desktop router x86, release flavour, of bc250-win train/b35 5c8c15cc, by build-umd-router.ps1 -Arch x86 (MSVC, /MT). Its source is that of the 31v3 release router eda8551e, with BD-168 (5e3cd5bf), which the 31v3 lab router 154e542b lacked. Carried from 0.7.216.103-tester.31v3: bc250d3d_router.dll, release flavour; BD-168 mitigation (Windows Security on the CPU route) at eda8551ef4ef0dfdb274e0f12487ffc37c135098; package version stamped.",
-      "flavour": "release",
-      "authenticode_sha256": "A13B77AF0C73375D865E6B8014B8FEF746A0772623340CFBCE4B48383975A678"
+      "flavour": "release"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/train/b35-build/stamped/lab/fb7a50af18e82ea2b97b/bc250d3d_router.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
       "sha256": "A20AEBABA32D8521B4DFC0EF0C5D12E769325FADE34009F91316231AB29F0DA1",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-OutputDir",
@@ -1185,9 +1194,7 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
-      "role": "Desktop router x86, lab flavour, of bc250-win train/b35 5c8c15cc, by build-umd-router.ps1 -Arch x86 (MSVC, /MT). Its source is that of the 31v3 release router eda8551e, with BD-168 (5e3cd5bf), which the 31v3 lab router 154e542b lacked. Carried from 0.7.216.103-tester.31v3: bc250d3d_router.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "lab",
-      "authenticode_sha256": "BA210830C998AF19BCB0ECB5E12B9D489EED30FEC92B0ABEC3451052AE439FD9"
+      "flavour": "lab"
     },
     {
       "component": "desktop-umd-wow64",
@@ -1276,11 +1283,11 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b35-build/stamped/release/5be2a9ce8c05abe9b3be/amdgpu_wddm_d3d11.dll",
-      "sha256": "3D8AB4AC3CC99D667062AAC82C70F5D89A949974465C0407C8740D65CF386D85",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
+      "sha256": "1A21511AA25E640D8C83625A6333823EA6F9C13BBC9333E59D6223C6270FCDED",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -1295,10 +1302,10 @@
           "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
           "-IcdPath",
           "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
         "inputs": {
           "dxvk": {
@@ -1309,17 +1316,16 @@
         "output": "amdgpu_wddm_d3d11.dll"
       },
       "size": 471040,
-      "role": "D3D11 shell x86, release flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 for x86 under the recipe's pair admission against the x86 engine and the x86 hosted ICD of this package (both before their version stamp), from the DXVK include tree at c271e0e0. Carried from 0.7.216.103-tester.31v3: D3D11 shell x86 (bc250-win 1750f505, main). First release-flavour build of this shell: the pinned tester.30 and rc1-rc4 files were lab-flavour images that still carried AMDGPU_WDDM_D3D11_EXPERIMENT and AMDGPU_WDDM_D3D11_SCANOUT, which BD-167 forbids in a release package, and this one carries neither (scan-override-strings.py over all four builds, 2026-10-14). Built against the r9 engine of this package under the recipe's pair admission (shell_abi=00010004 engine_abi=00010004, hr=0) together with the triplet ICD this package ships, from the DXVK include tree at b4f080f7, with /Brepro, /FC and /d1trimfile. Reproducible from an empty output directory: three builds of this source gave the same bytes, while a fourth over the output of an earlier one did not, so build-d3d11.ps1 now empties the directory first. Carried from 0.7.216.101-tester.30: D3D11 shell x86 (bc250-win train/b27 349f1236). The A2/UMD-1 bounded timer wait, as in the x64 shell. Built against the shipped x86 engine BD1900C7 and the shipped x86 ICD 887A08E5 with the recipe's pair admission, so the caps record A279A6CA stands. This file claims a bit-identical rebuild for the first time (the recipe at this head carries /Brepro, /FC and /d1trimfile). Carried from 0.7.216.100-tester.24: x86 GPU D3D11 shell for 32-bit processes (bc250-win 1884b33d, train/b24, built with the -Arch x86 recipe and the .def export: no patch). It negotiates the same WDDM 2.2 device DDI as the x64 shell, which is what the tester.21 known issue needed: with the 2.2 table the WOW64 D3D11 runtime passes the override fields, so VSync Off removes an interval a 32-bit program sets itself (BD-099 2.2.2). It reads the same graphics settings as the x64 shell, and the x86 engine 0898891f draws the PerformanceOverlay HUD. The 11 host tests, the engine-pair admission against the x86 engine BD1900C7 and the b24 x86 ICD, the exported-entry test and the machine check pass. /Brepro (BD-064 and BD-071). Carried from 0.7.216.100-tester.21: x86 GPU D3D11 shell for 32-bit processes (bc250-win 0d6b3299, train/b23, built with the -Arch x86 recipe and the .def export: no patch). It reads the same graphics settings as the x64 shell, it waits for the VSync vertical blanks as the x64 shell does (BD-099, wagon 14; lab 2026-10-08 with the x86 shell of 2f922aa4: VSync 1 gave 60/s at interval 0 and 1, but the WOW64 D3D11 runtime passes neither override field, so VSync 0 does not remove an interval the program sets itself, a known issue), and the x86 engine 0898891f draws the PerformanceOverlay HUD as the x64 one does (wagon 15). The 11 host tests, the engine-pair admission against the x86 engine BD1900C7 and the x86 ICD (shell_abi and engine_abi 00010004), the exported-entry test and the machine check pass. /Brepro (BD-064 and BD-071)",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/train/b35-build/stamped/lab/015c097e7966ef39cf39/amdgpu_wddm_d3d11.dll",
-      "sha256": "A379471946B6BD4A241DC261A89AC93B4806E80DD71D382A48D2AFC365B61CA3",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
+      "sha256": "ECF6DFAF9133F3A2058940CFAEC1467F67440A28DCDE743C53692512AAAB1A86",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -1334,10 +1340,10 @@
           "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
           "-IcdPath",
           "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
         "inputs": {
           "dxvk": {
@@ -1348,7 +1354,6 @@
         "output": "amdgpu_wddm_d3d11.dll"
       },
       "size": 470528,
-      "role": "D3D11 shell x86, lab flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 for x86 under the recipe's pair admission against the x86 engine and the x86 hosted ICD of this package (both before their version stamp), from the DXVK include tree at c271e0e0. Carried from 0.7.216.103-tester.31v3: D3D11 shell x86 (bc250-win 1750f505, main). First release-flavour build of this shell: the pinned tester.30 and rc1-rc4 files were lab-flavour images that still carried AMDGPU_WDDM_D3D11_EXPERIMENT and AMDGPU_WDDM_D3D11_SCANOUT, which BD-167 forbids in a release package, and this one carries neither (scan-override-strings.py over all four builds, 2026-10-14). Built against the r9 engine of this package under the recipe's pair admission (shell_abi=00010004 engine_abi=00010004, hr=0) together with the triplet ICD this package ships, from the DXVK include tree at b4f080f7, with /Brepro, /FC and /d1trimfile. Reproducible from an empty output directory: three builds of this source gave the same bytes, while a fourth over the output of an earlier one did not, so build-d3d11.ps1 now empties the directory first. Carried from 0.7.216.101-tester.30: D3D11 shell x86 (bc250-win train/b27 349f1236). The A2/UMD-1 bounded timer wait, as in the x64 shell. Built against the shipped x86 engine BD1900C7 and the shipped x86 ICD 887A08E5 with the recipe's pair admission, so the caps record A279A6CA stands. This file claims a bit-identical rebuild for the first time (the recipe at this head carries /Brepro, /FC and /d1trimfile). Carried from 0.7.216.100-tester.24: x86 GPU D3D11 shell for 32-bit processes (bc250-win 1884b33d, train/b24, built with the -Arch x86 recipe and the .def export: no patch). It negotiates the same WDDM 2.2 device DDI as the x64 shell, which is what the tester.21 known issue needed: with the 2.2 table the WOW64 D3D11 runtime passes the override fields, so VSync Off removes an interval a 32-bit program sets itself (BD-099 2.2.2). It reads the same graphics settings as the x64 shell, and the x86 engine 0898891f draws the PerformanceOverlay HUD. The 11 host tests, the engine-pair admission against the x86 engine BD1900C7 and the b24 x86 ICD, the exported-entry test and the machine check pass. /Brepro (BD-064 and BD-071). Carried from 0.7.216.100-tester.21: x86 GPU D3D11 shell for 32-bit processes (bc250-win 0d6b3299, train/b23, built with the -Arch x86 recipe and the .def export: no patch). It reads the same graphics settings as the x64 shell, it waits for the VSync vertical blanks as the x64 shell does (BD-099, wagon 14; lab 2026-10-08 with the x86 shell of 2f922aa4: VSync 1 gave 60/s at interval 0 and 1, but the WOW64 D3D11 runtime passes neither override field, so VSync 0 does not remove an interval the program sets itself, a known issue), and the x86 engine 0898891f draws the PerformanceOverlay HUD as the x64 one does (wagon 15). The 11 host tests, the engine-pair admission against the x86 engine BD1900C7 and the x86 ICD (shell_abi and engine_abi 00010004), the exported-entry test and the machine check pass. /Brepro (BD-064 and BD-071)",
       "flavour": "lab"
     },
     {
@@ -1457,26 +1462,28 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b35-build/stamped/release/6bf9f489267bf1186fed/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
       "sha256": "D9B3F8D851F7006931F03FD31A959DE033FF4E85186BE8EF658763A468CCE06E",
       "built_from": {
         "repo": "dxvk",
         "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-        "recipe_commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
           "ddi-engine",
+          "-Compiler",
+          "msvc",
+          "-Arch",
+          "x86",
           "-Source",
           "{src}",
           "-Build",
           "{out}",
-          "-Arch",
-          "x86",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
           "8",
-          "-Compiler",
-          "msvc",
           "-Flavour",
           "release",
           "-Version",
@@ -1485,32 +1492,33 @@
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
       "size": 3903488,
-      "role": "D3D11 engine x86, release flavour, DXVK fork amdgpu-wddm/bd214-query-getdata c271e0e0, the x86 build of the x64 engine's clean clone, by build-dxvk.ps1 -Config ddi-engine with msvc (the recipe builds clang-cl for x64 only, 24f4d7c0) at recipe 5c8c15cc. New against 31v3: BD-214, as in the x64 engine. Its own test on this file: exit 0, no failure. Carried from 0.7.216.103-tester.31v3: GPU D3D11 engine (DXVK fork amdgpu-wddm/tester31-dxvk b4f080f7, published on the project's fork: the r9 persistent shader cache, on by default, with the cache under the per-user shader-cache folder; submodule dxbc-spirv at 28fda04a). Built by tools/build/build-dxvk.ps1 -Config ddi-engine at recipe identity 5f4cfc0f from a clean checkout of that commit (no modified tracked entry, empty worktree diff) with /Brepro, /FC, /d1trimfile and -Db_ndebug=true. Release flavour of BD-167: the image holds no DXVK_SHADER_CACHE, DXVK_SHADER_DUMP_PATH, DXVK_CONFIG_FILE or DXVK_DEBUG lookup, which the lab flavour of the same source does. Its own tests pass on this file: 129 engine checks and 10 cache checks, exit 0.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/train/b35-build/stamped/lab/25c0efd85bcfc0c89bc1/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
       "sha256": "C0DEF995FB3755BDF3E75984051CC08ECB1330B0CF050D50F61B79801ABA789A",
       "built_from": {
         "repo": "dxvk",
         "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-        "recipe_commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
           "ddi-engine",
+          "-Compiler",
+          "msvc",
+          "-Arch",
+          "x86",
           "-Source",
           "{src}",
           "-Build",
           "{out}",
-          "-Arch",
-          "x86",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
           "8",
-          "-Compiler",
-          "msvc",
           "-Flavour",
           "lab",
           "-Lab",
@@ -1520,18 +1528,17 @@
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
       "size": 4018176,
-      "role": "D3D11 engine x86, lab flavour, DXVK fork amdgpu-wddm/bd214-query-getdata c271e0e0, the x86 build of the x64 engine's clean clone, by build-dxvk.ps1 -Config ddi-engine with msvc (the recipe builds clang-cl for x64 only, 24f4d7c0) at recipe 5c8c15cc. New against 31v3: BD-214, as in the x64 engine. Its own test on this file: exit 0, no failure. Carried from 0.7.216.103-tester.31v3: GPU D3D11 engine (DXVK fork amdgpu-wddm/tester31-dxvk b4f080f7, published on the project's fork: the r9 persistent shader cache, on by default, with the cache under the per-user shader-cache folder; submodule dxbc-spirv at 28fda04a). Built by tools/build/build-dxvk.ps1 -Config ddi-engine at recipe identity 5f4cfc0f from a clean checkout of that commit (no modified tracked entry, empty worktree diff) with /Brepro, /FC, /d1trimfile and -Db_ndebug=true. Release flavour of BD-167: the image holds no DXVK_SHADER_CACHE, DXVK_SHADER_DUMP_PATH, DXVK_CONFIG_FILE or DXVK_DEBUG lookup, which the lab flavour of the same source does. Its own tests pass on this file: 129 engine checks and 10 cache checks, exit 0.",
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/release/d82a2095d520b3aa31ae/amdgpu_wddm_radv.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
       "sha256": "C649AEE96BEAC62821C1636622B326A49637913284ED703838E17EEFB7F47436",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "72d861b5b7b6ca8b9b9e8ed2d0f1aff2b0934843",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1543,9 +1550,11 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "msvc",
+          "-Temp",
+          "{tmp}",
           "-Flavour",
           "release",
           "-Version",
@@ -1554,18 +1563,18 @@
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 20178432,
-      "role": "Hosted Vulkan ICD x86 of the 32-bit D3D11 slot: the same build as payload/wow64/d3d12/amdgpu_wddm_radv.dll, release flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4, msvc, recipe 72d861b5. Carried from 0.7.216.103-tester.31v3: The 32-bit triplet Vulkan ICD, release flavour, under the D3D11 name: the same build as the 32-bit D3D12 slot, with the BD-178 allocation-removal fix. The 32-bit D3D11 shell is pair-admitted against the 32-bit r9 engine and its M14C record pins this ICD by hash. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D11 ICD x86 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: the x86 D3D11 shell loads it with the record of slot 18. Replaces 887A08E5. Carried from 0.7.216.100-tester.27: x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, x86 build, static CRT), the tester.21 file again in round 3 (BD-103): the BD-100 fix, the K225 fence wait and BD-096 of the x64 ICD, no patch applied to the tree (BD-064). 45 queue cases (972 checks), 5 mem-overflow tests (50 checks) and 5 stage-cover tests (57 checks) pass on x86, each with a negative control that fails every check. The file reports git-aca2c81b3c as its Mesa version. Carried from 0.7.216.100-tester.21: x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, x86 build, static CRT): the BD-100 fix, the K225 fence wait and BD-096 of the x64 ICD, no patch applied to the tree (BD-064). 45 queue cases (972 checks), 5 mem-overflow tests (50 checks) and 5 stage-cover tests (57 checks) pass on x86, each with a negative control that fails every check. The file reports git-aca2c81b3c as its Mesa version",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/lab/a1232e3ed9f66b839dfa/amdgpu_wddm_radv.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
       "sha256": "2B8AE94C90FD2E4ABCC0AF31D8D32550AD72EC2E8893DEAE590225452492B108",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1577,9 +1586,11 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "msvc",
+          "-Temp",
+          "{tmp}",
           "-Flavour",
           "lab",
           "-Lab",
@@ -1589,17 +1600,17 @@
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 20195328,
-      "role": "Hosted Vulkan ICD x86 of the 32-bit D3D11 slot: the same build as payload/wow64/d3d12/amdgpu_wddm_radv.dll, lab flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4, msvc, recipe b0ad6a30. Carried from 0.7.216.103-tester.31v3: The 32-bit triplet Vulkan ICD, lab flavour, under the D3D11 name: the same lab build as the 32-bit D3D12 slot, with the BD-178 allocation-removal fix. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D11 ICD x86 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: the x86 D3D11 shell loads it with the record of slot 18. Replaces 887A08E5. Carried from 0.7.216.100-tester.27: x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, x86 build, static CRT), the tester.21 file again in round 3 (BD-103): the BD-100 fix, the K225 fence wait and BD-096 of the x64 ICD, no patch applied to the tree (BD-064). 45 queue cases (972 checks), 5 mem-overflow tests (50 checks) and 5 stage-cover tests (57 checks) pass on x86, each with a negative control that fails every check. The file reports git-aca2c81b3c as its Mesa version. Carried from 0.7.216.100-tester.21: x86 GPU D3D11 ICD (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, x86 build, static CRT): the BD-100 fix, the K225 fence wait and BD-096 of the x64 ICD, no patch applied to the tree (BD-064). 45 queue cases (972 checks), 5 mem-overflow tests (50 checks) and 5 stage-cover tests (57 checks) pass on x86, each with a negative control that fails every check. The file reports git-aca2c81b3c as its Mesa version",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b35-build/stamped/release/baca9cb2e54ece83dee5/amdgpu_wddm_d3d12.dll",
-      "sha256": "9A7670214BDF42AAC77F5D66C9F79E113D6E0868BFE55339F9A1C31B04EE98F4",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
+      "sha256": "8CA13860BA49736694A90216B387F8AB688609240C9928D09A05A793E38E91E3",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -1614,12 +1625,11 @@
           "x86",
           "-Flavour",
           "release",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
-        "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
@@ -1642,20 +1652,21 @@
               "libs/ddi"
             ]
           }
-        }
+        },
+        "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1088512,
-      "role": "D3D12 shell x86, release flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 for x86 (87b25fde: clang-cl WOW64 with the checked SDK compatibility). New against 31v3: the BD-201 hosted bridge (71bb1796 to 72d861b5), as in the x64 shell. The Mesa input is the host bootstrap header of the hosted ICD head 66986af4. Carried from 0.7.216.103-tester.31v3: D3D12 shell x86, release flavour, from main 31abd669: the 32-bit shell of the same source, inputs and options as the x64 release shell, for WoW64 D3D12 applications, with the whole BD-180 error chain including part 2 (submission stops after a failed Close or initialization, imported-heap removal survives the runtime boundary, and the trace keeps the chain of the first failure). The release flavour holds none of the nine diagnostic names the declaration demands of its lab copy. Carried from 0.7.216.101-tester.30: D3D12 shell x86 (bc250-win train/b32 0e2e6d21, which carries fix/bd133-d3d12-present-copy 672f0259 through 55a4270d): BD-133, a windowed Blt source that is no linear primary is copied into a driver-owned linear surface on the Present command list and presented on a present context of the shell (no UMD private data), ordered by one completion fence per copy surface; an X8 source is tagged with the A8 LB7A format of the same bytes. These are the bytes of the BD-133 lab round of 2026-10-12 20:41Z (arms B to E PASS on 22631.6199, Poi -force-d3d9 renders), rebuilt here by the release recipe with the same three pinned inputs. Carried from the b32 rows before this repin: D3D12 shell x86 (bc250-win feature/d3d12-view-instancing 491daf98, merged into train/b30): the vi-r2 bytes, built from that commit with /O2 /GL /arch:AVX2 and /LTCG. ViewInstancingTier 2 when the engine answers QueryAdapterCaps feature 0x7f250001 with revision 1 and tier 2 and OPTIONS3 reports tier 2 or 3; any other answer keeps tier 0, and tier 3 is not claimed. The pipeline stream parser takes library references, the render pass table is filled while the engine reports a render pass tier, and the shell refuses an ICD without the host contract, so it ships with the control ICD. Lab, unit A, 2026-10-11: d3d12caps x86 feature level 12_1 with ViewInstancingTier 2. Replaces 79915D1B. Carried from 0.7.216.100-tester.27: D3D12 shell x86 (bc250-win train/b29 f73ec8dc): the source of train/b27 349f1236, rebuilt with /O2 /GL /arch:AVX2 and linked /LTCG (decision 2026-10-10, maximum optimisation by default). The trial 171 picture corruption of the earlier /GL /arch:AVX2 D3D12 shell is watched in the b29 lab acceptance. Replaces B49A8079. Carried from 0.7.216.100-tester.26: D3D12 shell x86 (bc250-win train/b27 349f1236). The A2/UMD-1 bounded timer wait, as in the x64 shell. No bit-identical rebuild is claimed, and the reason is not the recipe this time: the x86 MesaSource tree is a loose copy and not a checkout. Carried from 0.7.216.100-tester.24: x86 D3D12 shell for 32-bit processes (bc250-win 1884b33d, train/b24, built with the -Arch x86 recipe and the .def export: no patch). It exports exactly OpenAdapter12, links the C runtime statically and reads the 64-bit profile and Graphics keys. It carries the D3D12 work of the x64 shell: BD-101, the frame latency limit and M15.14 increment 3. Its host bootstrap contract is the src/util of Mesa 31844893, which the b24 x86 ICD does not change. The recipe starts its host gates as the invoker (__COMPAT_LAYER RunAsInvoker), and this build ran without the variable from its caller. /Brepro. Carried from 0.7.216.100-tester.21: x86 D3D12 shell for 32-bit processes (bc250-win 0d6b3299, train/b23, built with the -Arch x86 recipe and the .def export: no patch). It exports exactly OpenAdapter12, links the C runtime statically and reads the 64-bit profile and Graphics keys. It carries the D3D12 work of the x64 shell (M15.14 increment 2, BD-095, shader model 6.8, the graphics settings). Its host bootstrap contract is the src/util of Mesa 31844893, which the x86 ICD 8c110468 does not change. The x86 engine b477495e reads VKD3D_SAMPLER_ANISOTROPY as the x64 one does. The recipe starts its host gates as the invoker (__COMPAT_LAYER RunAsInvoker, 2c801991: Windows installer detection asks to elevate hosted-dispatch-test.exe), and this build ran without the variable from its caller. /Brepro, and the build at 0f71caac gave the same bytes",
+      "size": 1090048,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/train/b35-build/stamped/lab/11aad02a70ccff3d6f15/amdgpu_wddm_d3d12.dll",
-      "sha256": "DA8017D36745D97EC0D32BFA99A43D1152FB0FA5287D88FBC0448003A26D41B9",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
+      "sha256": "4E404E3D04F569A3326430A9F50BEDD3DDAADFFEF9C936F7E3E972EE2A506DF1",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -1670,12 +1681,11 @@
           "x86",
           "-Flavour",
           "lab",
-          "-Version",
-          "0.7.216.104-tester.32",
           "-Compiler",
-          "clang-cl"
+          "clang-cl",
+          "-Version",
+          "0.7.216.104-tester.32"
         ],
-        "output": "amdgpu_wddm_d3d12.dll",
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
@@ -1698,10 +1708,11 @@
               "libs/ddi"
             ]
           }
-        }
+        },
+        "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1125888,
-      "role": "D3D12 shell x86, lab flavour, of bc250-win train/b35 b0ad6a30, built with clang-cl 23.1.4 for x86 (87b25fde: clang-cl WOW64 with the checked SDK compatibility). New against 31v3: the BD-201 hosted bridge (71bb1796 to 72d861b5), as in the x64 shell. The Mesa input is the host bootstrap header of the hosted ICD head 66986af4. Carried from 0.7.216.103-tester.31v3: D3D12 shell x86, lab flavour, from main 31abd669: the 32-bit shell with the nine diagnostic names of the declaration compiled in and the whole BD-180 error chain of its release twin. Carried from 0.7.216.101-tester.30: D3D12 shell x86 (bc250-win train/b32 0e2e6d21, which carries fix/bd133-d3d12-present-copy 672f0259 through 55a4270d): BD-133, a windowed Blt source that is no linear primary is copied into a driver-owned linear surface on the Present command list and presented on a present context of the shell (no UMD private data), ordered by one completion fence per copy surface; an X8 source is tagged with the A8 LB7A format of the same bytes. These are the bytes of the BD-133 lab round of 2026-10-12 20:41Z (arms B to E PASS on 22631.6199, Poi -force-d3d9 renders), rebuilt here by the release recipe with the same three pinned inputs. Carried from the b32 rows before this repin: D3D12 shell x86 (bc250-win feature/d3d12-view-instancing 491daf98, merged into train/b30): the vi-r2 bytes, built from that commit with /O2 /GL /arch:AVX2 and /LTCG. ViewInstancingTier 2 when the engine answers QueryAdapterCaps feature 0x7f250001 with revision 1 and tier 2 and OPTIONS3 reports tier 2 or 3; any other answer keeps tier 0, and tier 3 is not claimed. The pipeline stream parser takes library references, the render pass table is filled while the engine reports a render pass tier, and the shell refuses an ICD without the host contract, so it ships with the control ICD. Lab, unit A, 2026-10-11: d3d12caps x86 feature level 12_1 with ViewInstancingTier 2. Replaces 79915D1B. Carried from 0.7.216.100-tester.27: D3D12 shell x86 (bc250-win train/b29 f73ec8dc): the source of train/b27 349f1236, rebuilt with /O2 /GL /arch:AVX2 and linked /LTCG (decision 2026-10-10, maximum optimisation by default). The trial 171 picture corruption of the earlier /GL /arch:AVX2 D3D12 shell is watched in the b29 lab acceptance. Replaces B49A8079. Carried from 0.7.216.100-tester.26: D3D12 shell x86 (bc250-win train/b27 349f1236). The A2/UMD-1 bounded timer wait, as in the x64 shell. No bit-identical rebuild is claimed, and the reason is not the recipe this time: the x86 MesaSource tree is a loose copy and not a checkout. Carried from 0.7.216.100-tester.24: x86 D3D12 shell for 32-bit processes (bc250-win 1884b33d, train/b24, built with the -Arch x86 recipe and the .def export: no patch). It exports exactly OpenAdapter12, links the C runtime statically and reads the 64-bit profile and Graphics keys. It carries the D3D12 work of the x64 shell: BD-101, the frame latency limit and M15.14 increment 3. Its host bootstrap contract is the src/util of Mesa 31844893, which the b24 x86 ICD does not change. The recipe starts its host gates as the invoker (__COMPAT_LAYER RunAsInvoker), and this build ran without the variable from its caller. /Brepro. Carried from 0.7.216.100-tester.21: x86 D3D12 shell for 32-bit processes (bc250-win 0d6b3299, train/b23, built with the -Arch x86 recipe and the .def export: no patch). It exports exactly OpenAdapter12, links the C runtime statically and reads the 64-bit profile and Graphics keys. It carries the D3D12 work of the x64 shell (M15.14 increment 2, BD-095, shader model 6.8, the graphics settings). Its host bootstrap contract is the src/util of Mesa 31844893, which the x86 ICD 8c110468 does not change. The x86 engine b477495e reads VKD3D_SAMPLER_ANISOTROPY as the x64 one does. The recipe starts its host gates as the invoker (__COMPAT_LAYER RunAsInvoker, 2c801991: Windows installer detection asks to elevate hosted-dispatch-test.exe), and this build ran without the variable from its caller. /Brepro, and the build at 0f71caac gave the same bytes",
+      "size": 1127424,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
@@ -1774,12 +1785,12 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/release/d82a2095d520b3aa31ae/amdgpu_wddm_radv.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
       "sha256": "C649AEE96BEAC62821C1636622B326A49637913284ED703838E17EEFB7F47436",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "72d861b5b7b6ca8b9b9e8ed2d0f1aff2b0934843",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1791,9 +1802,11 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "msvc",
+          "-Temp",
+          "{tmp}",
           "-Flavour",
           "release",
           "-Version",
@@ -1802,18 +1815,18 @@
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 20178432,
-      "role": "Hosted Vulkan ICD x86 of the 32-bit D3D12 and D3D11 slots, release flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4 (the x64 hosted head, so the 32-bit slots keep the BD-178 device-removal fix 2dea401c that the wow64 line lacks), built by build-mesa.ps1 -Config radv-mt -Arch x86 with msvc, the recorded set (variants none); clang-cl x86 is refused by the recipe, for the reasons in scratch bd201-fix wow64 FROZEN section 4. Recipe 72d861b5. New against the 31v3 ICD 2dea401c: BD-211 (19a6cab3) and BD-201 and BD-212 (8b523763, e0c71484, 66986af4). Carried from 0.7.216.103-tester.31v3: The 32-bit triplet Vulkan ICD, release flavour, at mesa fork amdgpu-wddm/tester31-triplet 2dea401c, with the BD-178 allocation-removal fix: the ICD of WoW64 D3D12 and D3D11 applications, built from the same source and recipe as the 64-bit one with -Arch x86. BD-167: no override name of the declaration is in this image. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D12 ICD x86 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: d3d12caps x86 feature level 12_1 with ViewInstancingTier 2. Replaces 887A08E5. Carried from 0.7.216.100-tester.27: x86 D3D12 ICD: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, the commit of the x64 D3D12 ICD). The shell loads it from its own folder, so it needs no Vulkan registration. Carried from 0.7.216.100-tester.21: x86 D3D12 ICD: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, the commit of the x64 D3D12 ICD). The shell loads it from its own folder, so it needs no Vulkan registration",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/train/b35-build/stamped/lab/a1232e3ed9f66b839dfa/amdgpu_wddm_radv.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
       "sha256": "2B8AE94C90FD2E4ABCC0AF31D8D32550AD72EC2E8893DEAE590225452492B108",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1825,9 +1838,11 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "msvc",
+          "-Temp",
+          "{tmp}",
           "-Flavour",
           "lab",
           "-Lab",
@@ -1837,18 +1852,18 @@
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
       "size": 20195328,
-      "role": "Hosted Vulkan ICD x86 of the 32-bit D3D12 and D3D11 slots, lab flavour, mesa fork fix/bd201-destroy-fail-hosted 66986af4 (the x64 hosted head, so the 32-bit slots keep the BD-178 device-removal fix 2dea401c that the wow64 line lacks), built by build-mesa.ps1 -Config radv-mt -Arch x86 with msvc, the recorded set (variants none); clang-cl x86 is refused by the recipe, for the reasons in scratch bd201-fix wow64 FROZEN section 4. Recipe b0ad6a30. New against the 31v3 ICD 2dea401c: BD-211 (19a6cab3) and BD-201 and BD-212 (8b523763, e0c71484, 66986af4). Carried from 0.7.216.103-tester.31v3: The 32-bit triplet Vulkan ICD, lab flavour, at mesa fork amdgpu-wddm/tester31-triplet 2dea401c: the lab-flavour build of the same source, with the declaration's override and counter names compiled in and the BD-178 allocation-removal fix. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: D3D12 ICD x86 (mesa fork amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, static CRT): the shipped aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. Lab, unit A, 2026-10-11, with the vi-r2 shell and engine: d3d12caps x86 feature level 12_1 with ViewInstancingTier 2. Replaces 887A08E5. Carried from 0.7.216.100-tester.27: x86 D3D12 ICD: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, the commit of the x64 D3D12 ICD). The shell loads it from its own folder, so it needs no Vulkan registration. Carried from 0.7.216.100-tester.21: x86 D3D12 ICD: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (mesa fork amdgpu-wddm/rottr486-null-vs aca2c81b, the commit of the x64 D3D12 ICD). The shell loads it from its own folder, so it needs no Vulkan registration",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b35-build/stamped/release/f00bb0f56b7944a111c1/vulkan_radeon.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
       "sha256": "95B5FBA5E5E23FDB17ED2C7620C1199C12CA782D9645CB2C8D8A63FBAE7B7D1F",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "771f84136ef41d7403ff05360e27773db6e77d8d",
-        "recipe_commit": "72d861b5b7b6ca8b9b9e8ed2d0f1aff2b0934843",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1860,9 +1875,11 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "msvc",
+          "-Temp",
+          "{tmp}",
           "-Flavour",
           "release",
           "-Version",
@@ -1870,20 +1887,19 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 29d95fd7 (train/b35-radv-system: BD-197, BD-201, BD-211), as in 31v3 two lines (lead decision Q2 for tester.32, 2026-10-21): the BD-197 DXGI present work has no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves.",
       "size": 20177408,
-      "role": "32-bit Vulkan ICD, release flavour, mesa fork fix/bd201-destroy-fail-wow64 771f8413, built by build-mesa.ps1 -Config radv-mt -Arch x86 with msvc, the recorded set (clang-cl x86 is refused by the recipe), at recipe 72d861b5. New against the 31v3 ICD 0715572c: BD-211 (2c7bb4d7) and BD-201 (481c4ffe, 6cf592cd, 771f8413); the clang-cl build fixes of the line (a8183bcf, 11bed334) do not change this msvc build's sources. Carried from 0.7.216.103-tester.31v3: The 32-bit Vulkan ICD of the loader, release flavour: the triplet build at mesa fork amdgpu-wddm/tester31-triplet 0715572c, the same file as the 32-bit D3D11 and D3D12 slots, as in every release so far. Built by tools/build/build-mesa.ps1 -Config radv-mt -Arch x86 -Flavour release at recipe identity 878f2962 from a clean work tree with /Brepro, /FC and /d1trimfile. BD-167: no override name of the declaration is in this image. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064), so it moves with the x86 control ICD to mesa amdgpu-wddm/d3d12-gaps-contract a8853405 (radv-mt, static CRT), the aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. The 64-bit system line (b54b820e) still cannot build x86, so this slot does not get its Win32 semaphore import. Replaces 887A08E5. Carried from 0.7.216.100-tester.27: x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064). The triplet line carries the BD-102 BVH address fix since 2026-09-30, so the 32-bit Vulkan ICD has it too, together with the shader disk cache and the MemoryOverflow reader that the 64-bit system line does not have. The system line still cannot build x86 at all, because its generator emits the not-supported stubs as __cdecl instead of APIENTRY; that parity work is not in this train. Carried from 0.7.216.100-tester.21: x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064), so the 32-bit Vulkan ICD has the BD-100 fix with the shader disk cache parts and the BD-096 MemoryOverflow reader, while the 64-bit one has the BD-100 fix without a disk cache and the minimal BD-096 port",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/train/b35-build/stamped/lab/573767470489f3d53cf8/vulkan_radeon.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
       "sha256": "A6F45649B75CDAF5BBA1D0137B51AF13E6967E206E5BEF15E59EBE0C02459047",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "771f84136ef41d7403ff05360e27773db6e77d8d",
-        "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1895,9 +1911,11 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "5",
+          "8",
           "-Compiler",
           "msvc",
+          "-Temp",
+          "{tmp}",
           "-Flavour",
           "lab",
           "-Lab",
@@ -1906,9 +1924,8 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 29d95fd7 (train/b35-radv-system: BD-197, BD-201, BD-211), as in 31v3 two lines (lead decision Q2 for tester.32, 2026-10-21): the BD-197 DXGI present work has no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves.",
       "size": 20194816,
-      "role": "32-bit Vulkan ICD, lab flavour, mesa fork fix/bd201-destroy-fail-wow64 771f8413, built by build-mesa.ps1 -Config radv-mt -Arch x86 with msvc, the recorded set (clang-cl x86 is refused by the recipe), at recipe b0ad6a30. New against the 31v3 ICD 0715572c: BD-211 (2c7bb4d7) and BD-201 (481c4ffe, 6cf592cd, 771f8413); the clang-cl build fixes of the line (a8183bcf, 11bed334) do not change this msvc build's sources. Carried from 0.7.216.103-tester.31v3: The 32-bit Vulkan ICD of the loader, release flavour: the triplet build at mesa fork amdgpu-wddm/tester31-triplet 0715572c, the same file as the 32-bit D3D11 and D3D12 slots, as in every release so far. Built by tools/build/build-mesa.ps1 -Config radv-mt -Arch x86 -Flavour release at recipe identity 878f2962 from a clean work tree with /Brepro, /FC and /d1trimfile. BD-167: no override name of the declaration is in this image. Carried from 0.7.216.101-tester.30: The triplet Vulkan ICD, rebuilt at mesa fork fix/bd149-device-stop 3dd45d97: BD-149 on fix/bd136-triplet a1e31802, the b32-triplet line 1c0099b9 with the four BD-136 compiler-stack commits. BD-136 in the compiler: a Windows caller that enters shader or pipeline compilation on a small thread stack (DWM 26100 compiles on a 128 KB stack) first switches to a reserved and checked compiler stack, so the large compiler frames no longer overflow the caller's stack. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Built with the radv-mt set, /Brepro, from a clean work tree at that commit. BD-149: the command buffer create initialises every member its destroy walks before the first call that can fail, so a vkAllocateCommandBuffers that fails because the adapter stopped (D3DDDIERR_DEVICEREMOVED from pfnAllocateCb) returns an error instead of an access violation in radv_destroy_msrtss_transients (Explorer on the D3D11 slot, tester.29 field records), and get_new_ib clears the IB it destroyed, so the init error path does not destroy it twice. Carried from 0.7.216.100-tester.29v2: The triplet Vulkan ICD, rebuilt at mesa fork amdgpu-wddm/b32-triplet 1c0099b9, which is the shipped triplet head a8853405 with 630b3766 cherry-picked (BD-074): an ACO spill of a vector register to local data share carries memory_sync_info(storage_vgpr_spill, semantic_private), so the compiler does not move a load of a spill slot across the store that filled it. Ray tracing pipelines and ray queries under register pressure stop reading a register they have not written. The file is the same build in the D3D12, D3D11 and 32-bit Vulkan slots, as before. Carried from 0.7.216.100-tester.29: x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064), so it moves with the x86 control ICD to mesa amdgpu-wddm/d3d12-gaps-contract a8853405 (radv-mt, static CRT), the aca2c81b triplet source plus the answer to the D3D12 shell's host-contract query. The 64-bit system line (b54b820e) still cannot build x86, so this slot does not get its Win32 semaphore import. Replaces 887A08E5. Carried from 0.7.216.100-tester.27: x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064). The triplet line carries the BD-102 BVH address fix since 2026-09-30, so the 32-bit Vulkan ICD has it too, together with the shader disk cache and the MemoryOverflow reader that the 64-bit system line does not have. The system line still cannot build x86 at all, because its generator emits the not-supported stubs as __cdecl instead of APIENTRY; that parity work is not in this train. Carried from 0.7.216.100-tester.21: x86 system Vulkan ICD for 32-bit processes: the same build as payload/wow64/d3d11/amdgpu_wddm_radv.dll (BD-064), so the 32-bit Vulkan ICD has the BD-100 fix with the shader disk cache parts and the BD-096 MemoryOverflow reader, while the 64-bit one has the BD-100 fix without a disk cache and the minimal BD-096 port",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
@@ -1928,11 +1945,11 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b35-build/stamped/release/13456c695f4026a7a92c/bc250kmd_cli.exe",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/control-rel/bc250kmd_cli.exe",
       "sha256": "E4356E6EFCB6A1285F418BB1EC4FFD3EFE9C50E399C595190D7DFA6F3C058450",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -1948,18 +1965,16 @@
         "output": "bc250kmd_cli.exe"
       },
       "size": 305152,
-      "role": "Command-line tool, release flavour, of bc250-win train/b35 5c8c15cc, from the same build folder as the control application and bc250control.dll of this flavour. Carried from 0.7.216.103-tester.31v3: bc250kmd_cli.exe, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "release",
-      "authenticode_sha256": "4F65A9909C5B3A0D2E3B7FBE0FA0BED884D12A73FE00499F35D19AA46C71CBBC"
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/train/b35-build/stamped/lab/6dcbf0ece8104fb0a31d/bc250kmd_cli.exe",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/control-lab/bc250kmd_cli.exe",
       "sha256": "C0892DE277F0FF171E471B9787733E3678091F11A613DE585DF6BF6ECE3CD5A4",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -1975,9 +1990,7 @@
         "output": "bc250kmd_cli.exe"
       },
       "size": 352768,
-      "role": "Command-line tool, lab flavour, of bc250-win train/b35 5c8c15cc, from the same build folder as the control application and bc250control.dll of this flavour. Carried from 0.7.216.103-tester.31v3: bc250kmd_cli.exe, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "lab",
-      "authenticode_sha256": "40D9FF710A0B3D855CAB874F326F7C20F3C7B3FCD9CFD3640FE42F6DBEF1CEE1"
+      "flavour": "lab"
     },
     {
       "component": "tool",
@@ -2033,11 +2046,11 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/train/b35-build/stamped/release/13456c695f4026a7a92c/amdgpu_wddm_control.exe",
-      "sha256": "7C290B6F0FC1856F2EE693C69B90CD20AFAD27D7947D4A2CA3CC59E79B2DE648",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/control-rel/amdgpu_wddm_control.exe",
+      "sha256": "21F3134DB6B075346F958A95AD5035BC7750B9CC06F2A64EB8F2628651B436CE",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2052,19 +2065,17 @@
         ],
         "output": "amdgpu_wddm_control.exe"
       },
-      "size": 2610176,
-      "role": "Control application, release flavour, of bc250-win train/b35 5c8c15cc. New against 31v3 (1750f505): BD-181 (3c76ab11), after the driver closed the GPU desktop path and the automatic clock at an unclean end, the home page says so and offers one button that puts every value the driver closed back to the release default and offers the restart; the Vulkan presentation setting is offered again, with Fast (flip) as its default (9ea0bf82, BD-197). The exe, bc250control.dll and bc250kmd_cli.exe of a flavour come from one build folder. Carried from 0.7.216.103-tester.31v3: The control application, release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree, with the package version stamped (BD-166: file version 40.7.216.102, product 0.7.216.102-tester.31). BD-167: the image reads none of AMDGPU_WDDM_CONTROL_STATE, AMDGPU_WDDM_CONTROL_INSTALLER, AMDGPU_WDDM_CONTROL_NO_DLL and AMDGPU_WDDM_CONTROL_STRINGS, which the lab build of the same checkout reads; rc1 to rc4 pinned a build that read all four, because the recipe ran once and the one file served both flavours. The build carries everything on main since the pinned d73aaedb.",
-      "flavour": "release",
-      "authenticode_sha256": "57145DD6832840B23A64F2D7C473394D52D2EF0F5F62C08EDCEE895E641D071E"
+      "size": 2603008,
+      "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/train/b35-build/stamped/lab/6dcbf0ece8104fb0a31d/amdgpu_wddm_control.exe",
-      "sha256": "77749F4D389974DF28BF68A511AF27C0E873F2FACEB95D72046E3621FE309E19",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
+      "sha256": "FCD31747BB6F11BBF4F2D1DDF5D97D3859E036DB298BB7C99F2BACEF5FB0F309",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2079,19 +2090,17 @@
         ],
         "output": "amdgpu_wddm_control.exe"
       },
-      "size": 2610688,
-      "role": "Control application, lab flavour, of bc250-win train/b35 5c8c15cc. New against 31v3 (1750f505): BD-181 (3c76ab11), after the driver closed the GPU desktop path and the automatic clock at an unclean end, the home page says so and offers one button that puts every value the driver closed back to the release default and offers the restart; the Vulkan presentation setting is offered again, with Fast (flip) as its default (9ea0bf82, BD-197). The exe, bc250control.dll and bc250kmd_cli.exe of a flavour come from one build folder. Carried from 0.7.216.103-tester.31v3: The control application, release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree, with the package version stamped (BD-166: file version 40.7.216.102, product 0.7.216.102-tester.31). BD-167: the image reads none of AMDGPU_WDDM_CONTROL_STATE, AMDGPU_WDDM_CONTROL_INSTALLER, AMDGPU_WDDM_CONTROL_NO_DLL and AMDGPU_WDDM_CONTROL_STRINGS, which the lab build of the same checkout reads; rc1 to rc4 pinned a build that read all four, because the recipe ran once and the one file served both flavours. The build carries everything on main since the pinned d73aaedb.",
-      "flavour": "lab",
-      "authenticode_sha256": "850EE23226E417EB15B27F67CCA436B74A0DB99A377D7E5FB3B33BB3FC0E65ED"
+      "size": 2603520,
+      "flavour": "lab"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b35-build/stamped/release/13456c695f4026a7a92c/bc250control.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/control-rel/bc250control.dll",
       "sha256": "37598F34427E1404AFB4ECCDDFA038AC880CB7BA1AADF25B0E81253EFC4C5DB9",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2107,18 +2116,16 @@
         "output": "bc250control.dll"
       },
       "size": 211968,
-      "role": "Control DLL, release flavour, of bc250-win train/b35 5c8c15cc, from the same build folder as the control application and bc250kmd_cli.exe of this flavour. Carried from 0.7.216.103-tester.31v3: bc250control.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "release",
-      "authenticode_sha256": "00A82CD77CFA297408E828A4BF6E437D880EC4416DA2E3060B063E19FE745EC2"
+      "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/train/b35-build/stamped/lab/6dcbf0ece8104fb0a31d/bc250control.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/control-lab/bc250control.dll",
       "sha256": "7AC86612092AE6B225D63C7B09E4E4B275325DED02D0C671DFF997BCD1CECCEE",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2134,18 +2141,16 @@
         "output": "bc250control.dll"
       },
       "size": 223232,
-      "role": "Control DLL, lab flavour, of bc250-win train/b35 5c8c15cc, from the same build folder as the control application and bc250kmd_cli.exe of this flavour. Carried from 0.7.216.103-tester.31v3: bc250control.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "lab",
-      "authenticode_sha256": "08EFD00F8BBAD26112C09B4895FC1DC1E2251336AD192704D7F645F7B817C046"
+      "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b35-build/stamped/release/13456c695f4026a7a92c/bc250control.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/control-rel/bc250control.dll",
       "sha256": "37598F34427E1404AFB4ECCDDFA038AC880CB7BA1AADF25B0E81253EFC4C5DB9",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2161,18 +2166,16 @@
         "output": "bc250control.dll"
       },
       "size": 211968,
-      "role": "Control DLL of the tools folder, release flavour: the same file as payload/control/bc250control.dll of this flavour (bc250-win train/b35 5c8c15cc). Carried from 0.7.216.103-tester.31v3: bc250control.dll, release flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "release",
-      "authenticode_sha256": "00A82CD77CFA297408E828A4BF6E437D880EC4416DA2E3060B063E19FE745EC2"
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/train/b35-build/stamped/lab/6dcbf0ece8104fb0a31d/bc250control.dll",
+      "source": "scratch/build-train/tester.32-r3/artifacts/lab/control-lab/bc250control.dll",
       "sha256": "7AC86612092AE6B225D63C7B09E4E4B275325DED02D0C671DFF997BCD1CECCEE",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2188,9 +2191,7 @@
         "output": "bc250control.dll"
       },
       "size": 223232,
-      "role": "Control DLL of the tools folder, lab flavour: the same file as payload/control/bc250control.dll of this flavour (bc250-win train/b35 5c8c15cc). Carried from 0.7.216.103-tester.31v3: bc250control.dll, lab flavour; shared service state access correction at 154e542b08e67bcad5897f56104472d8bc005ad5; package version stamped.",
-      "flavour": "lab",
-      "authenticode_sha256": "08EFD00F8BBAD26112C09B4895FC1DC1E2251336AD192704D7F645F7B817C046"
+      "flavour": "lab"
     },
     {
       "component": "tool",
@@ -2636,12 +2637,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/train/b35-build/kmd-release/package/amdgpu-state.bin",
-      "size": 2216,
+      "source": "scratch/build-train/tester.32-r3/artifacts/release/kmd-rel/amdgpu-state.bin",
       "sha256": "7F5ADC7E197CEFF66ECBC4B336E127551ACBD2B379317EDFF20C2311FEEB4FF7",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+        "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -2657,7 +2657,7 @@
         ],
         "output": "package/amdgpu-state.bin"
       },
-      "role": "State catalog of KMD 0.7.216.65 (bc250-win train/b35 b0ad6a30), the same bytes in the builds of both flavours. Carried from 0.7.216.103-tester.31v3: Shared amdgpu-state.bin from the final tester.31 KMD build. Verified byte-identical between the release and lab builds; the INF and defaults catalog remain one set.",
+      "size": 2216,
       "flavour": "shared"
     },
     {
