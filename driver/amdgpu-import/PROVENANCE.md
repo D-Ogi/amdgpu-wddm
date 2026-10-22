@@ -429,6 +429,15 @@ or hardware ownership is established by this source-only preparation.
 
 ## DCN scaler filter (resolution modes, stage A)
 
+PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/dc_resource.c`, `reference/fixed31_32.h` and `reference/fixpt31_32.c`
+are unchanged files from `drivers/gpu/drm/amd/display/dc/core/`, `include/` and
+`dc/basics/`, respectively. `tools/import/extract_scaler_geometry.py --check`
+checks the verbatim viewport/phase and fixed-point functions in
+`driver/shim/generated/dc_scaler_geometry.inc`. The import keeps its MIT notice.
+The checked Windows adapter is project code under PolyForm Noncommercial 1.0.0.
+It takes output-space coordinates and does not perform a second stream transform.
+
 `reference/dce_scl_filters.c` is the unchanged AMD MIT file from Linux v6.18, commit
 `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`, `drivers/gpu/drm/amd/display/dc/dce/`. It is reference only:
 it includes `transform.h` and the DC fixed-point type, so it does not compile here. The one table the

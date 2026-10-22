@@ -47,6 +47,16 @@ coefficient programming. `Bc250ScalerProgramLocked` adds programming within a
 caller-owned OTG0 update lock. The host register model checks access failures
 and that the helper never releases or triggers the caller's transaction.
 
+`Bc250ScalerAxisPlan` now supplies checked source crops, destination clipping,
+negative placement, mirror geometry, and shrink/stretch phase calculations.
+The AMD viewport function and `fixed31_32` helpers are extracted without edits.
+The separate Windows adapter checks dimensions and clears output on refusal.
+Its host tests include exact rational comparisons, sample-position conservation,
+and the DCN201 exact-8:1 ratio adjustment with intermediate 31.32 rounding.
+This helper computes full-resolution components only. It does not yet compute
+subsampled chroma, select taps, check bandwidth, or program a plane.
+Its mathematical mirror support does not enable a mirror capability.
+
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements

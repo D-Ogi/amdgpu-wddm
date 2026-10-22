@@ -63,6 +63,8 @@ $extra = @{
     'dcn_plane_test'  = @('/fp:precise', "/I$repo\driver\shim\dml201")
 }
 $failed = @()
+& (Join-Path $here 'run_scaler_geometry.ps1') -Root $Root -Out (Join-Path $Out 'scaler-geometry') -KitVersion $KitVersion
+if ($LASTEXITCODE -ne 0) { throw 'Scaler geometry checks failed' }
 & python (Join-Path $repo 'tools\import\extract_display.py') --check
 if ($LASTEXITCODE -ne 0) { throw 'AMD display imports are stale' }
 & python (Join-Path $repo 'tools\import\extract_target_modes.py') --check
