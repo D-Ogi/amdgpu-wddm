@@ -1429,6 +1429,11 @@ NTSTATUS WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation,
 // Resume authorizes only reserved-buffer writes. An error prohibits those writes as well. Bugcheck/stop callbacks
 // use a distinct, explicitly OS-serialized entry; IRQL or a failed section never selects that entry implicitly.
 NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+// Probe calls remain inside one OS-synchronized escape. A failure requests
+// display recovery before End, so failed cleanup cannot restore an app buffer.
+NTSTATUS WddmLatchProbeCheck(BC250_DEVICE* Device, ULONG Generation, BOOLEAN Fail);
+#endif
 // pnp.c's Bc250SetPowerState at the start of D3: dxgmms2 flushed the flip queue, so nothing is owed any more.
 void WddmFlipFlushed(_Inout_ BC250_DEVICE* Device);
 // pnp.c's Bc250DpcRoutine: E5's notification (DMA_PAGE_FAULTED) and drain record, a no-op unless E5 queued it.

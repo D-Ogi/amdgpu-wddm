@@ -210,7 +210,7 @@ static int Put(unsigned long* word, unsigned long mask, unsigned long value)
 int Bc250DcnGeometryPrepare(const BC250_SCALER_REQUEST* Request, unsigned Colour,
                             BC250_DCN_GEOMETRY* Plan)
 {
-    BC250_SCALER_REQUEST in;
+    BC250_SCALER_REQUEST in = {0};
     const BC250_SCALER_PLANE_PLAN* g;
     unsigned mode, yUnity, cUnity;
     int status;

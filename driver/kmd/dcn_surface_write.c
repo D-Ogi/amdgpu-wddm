@@ -4,8 +4,7 @@
 #include "dcn_surface_write.h"
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
-#include <stdint.h>
-#include <stdbool.h>
+#include "../shim/bc250_dc_types.h"
 #include "../shim/generated/dc_surface_sequence.inc"
 
 enum { L_PITCH = SURFACE_SEQUENCE_REG_COUNT, L_PITCH_C, L_FORMAT, L_CROSSBAR };
@@ -83,18 +82,23 @@ static void Capture(struct dcn10_hubp* p, unsigned reg, unsigned long mask, unsi
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable:4100 4127) // original parameters and constant capture masks
 #endif
 #define BC250_SURFACE_SEQUENCE_FUNCTIONS
 #include "../shim/generated/dc_surface_sequence.inc"
 #if defined(__clang__)
 #pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 static int PowerOfTwo(unsigned value) { return value && !(value & (value - 1)); }
 int Bc250SurfaceWritePrepare(const BC250_SURFACE_WRITE_REQUEST* Request,
                             BC250_SURFACE_WRITE_PLAN* Plan)
 {
-    BC250_SURFACE_WRITE_REQUEST in;
+    BC250_SURFACE_WRITE_REQUEST in = {0};
     BC250_SURFACE_LAYOUT layout;
     struct dcn10_hubp state = {0};
     struct dc_tiling_info tiling = {0};

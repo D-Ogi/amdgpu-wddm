@@ -153,6 +153,7 @@ typedef enum _BC250_WRITER_KIND {
     BC250_WRITER_HDMI_START,            /* hdmi_link.c HdmiLinkStart */
     BC250_WRITER_HDMI_STOP,             /* hdmi_link.c HdmiLinkStop */
     BC250_WRITER_DESTROY,               /* wddm.c WddmDestroyRestore */
+    BC250_WRITER_LATCH_PROBE,           /* lab-only bounded DCN experiment */
     BC250_WRITER_KINDS
 } BC250_WRITER_KIND;
 

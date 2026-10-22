@@ -4,8 +4,7 @@
 #include "dcn_cnvc_color.h"
 #include "display_io.h"
 #include "dcn_2_0_1_sh_mask.h"
-#include <stdint.h>
-#include <stdbool.h>
+#include "../shim/bc250_dc_types.h"
 #include <stddef.h>
 
 #define __maybe_unused
@@ -83,7 +82,7 @@ static void dpp2_power_on_obuf(struct dpp* base, bool power)
 #pragma clang diagnostic ignored "-Wunused-parameter"
 #elif defined(_MSC_VER)
 #pragma warning(push)
-#pragma warning(disable:4100)
+#pragma warning(disable:4100 4127) // original callback parameters and constant capture masks
 #endif
 #define BC250_CNVC_FUNCTION
 #include "../shim/generated/dc_cnvc_color.inc"
@@ -99,7 +98,7 @@ static void dpp2_power_on_obuf(struct dpp* base, bool power)
 
 int Bc250CnvcPrepare(const BC250_CNVC_REQUEST* Request, BC250_CNVC_PLAN* Plan)
 {
-    BC250_CNVC_REQUEST in;
+    BC250_CNVC_REQUEST in = {0};
     struct dcn201_dpp capture = {0};
     struct dc_csc_transform unused = {0};
     struct cnv_alpha_2bit_lut lut = {0,85,170,255};
@@ -118,9 +117,9 @@ int Bc250CnvcPrepare(const BC250_CNVC_REQUEST* Request, BC250_CNVC_PLAN* Plan)
     *Plan = (BC250_CNVC_PLAN){0};
     if (!Request || in.Format >= BC250_LINEAR_FORMAT_COUNT || in.Color >= BC250_INPUT_COLOR_COUNT) return 0;
     yuv = in.Format == BC250_LINEAR_AMD_AYCRCB8;
-    if (yuv != (in.Color != BC250_INPUT_RGB_FULL)) return 0;
+    if (yuv != (unsigned)(in.Color != BC250_INPUT_RGB_FULL)) return 0;
     dpp201_cnv_setup(&capture.base,formats[in.Format],EXPANSION_MODE_ZERO,unused,colors[in.Color],&lut);
-    if (capture.invalid || capture.cscCalls != 1 || capture.powerCalls != 1 || capture.cscRequired != yuv) return 0;
+    if (capture.invalid || capture.cscCalls != 1 || capture.powerCalls != 1 || (unsigned)capture.cscRequired != yuv) return 0;
     // AMD maps ARGB and XRGB to the same surface encoding. Our XRGB owner
     // explicitly disables pixel alpha; it must also choose matching MPC mode.
     if (in.Format == BC250_LINEAR_BGRX8) capture.word[FORMAT_CONTROL] &= ~MASK_FORMAT_CONTROL__ALPHA_EN;

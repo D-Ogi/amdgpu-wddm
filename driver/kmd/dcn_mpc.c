@@ -8,7 +8,7 @@
 #include "dcn_mpc.h"
 #include "regs.generated.h"
 #include "dcn_2_0_1_sh_mask.h"
-#include <stdbool.h>
+#include "../shim/bc250_dc_types.h"
 #include <stddef.h>
 
 enum { W_MPCC_CONTROL, W_MPCC_TOP_GAIN, W_MPCC_BOT_GAIN_INSIDE, W_MPCC_BOT_GAIN_OUTSIDE, W_MPCC_BG_R_CR, W_MPCC_BG_G_Y, W_MPCC_BG_B_CB, W_MPCC_TOP_SEL, W_MPCC_BOT_SEL, W_MPCC_OPP_ID, W_MPCC_SM_CONTROL, W_COUNT };

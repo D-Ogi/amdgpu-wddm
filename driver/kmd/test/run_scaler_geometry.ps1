@@ -157,3 +157,5 @@ try {
     & python "$repo\driver\kmd\test\scaler_geometry_oracle.py" --exe (Join-Path (Get-Location) 'scaler_geometry_test.exe') --chroma
     if ($LASTEXITCODE) { throw 'Chroma geometry rational oracle failed' }
 } finally { Pop-Location }
+& "$PSScriptRoot\run_latch_probe.ps1" -Root $Root -Out (Join-Path $Out 'latch-probe') -Mutations
+if (-not $?) { throw 'Latch probe controls failed' }

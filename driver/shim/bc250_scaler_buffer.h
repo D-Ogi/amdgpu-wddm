@@ -1,7 +1,7 @@
 // Adapter: PolyForm Noncommercial 1.0.0, see LICENSE.md and NOTICE.
 // PROVENANCE: Linux amdgpu DC, MIT, v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449.
 #pragma once
-#include <stdint.h>
+#include "bc250_dc_types.h"
 
 typedef struct BC250_SCALER_BUFFER_INPUT {
     uint32_t ViewportWidth, ChromaViewportWidth, RecoutWidth;

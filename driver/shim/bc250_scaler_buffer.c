@@ -2,7 +2,7 @@
 // PROVENANCE: imported functions in generated/dc_scaler_buffer.inc remain
 // Linux amdgpu DC, MIT, v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449.
 #include "bc250_scaler_buffer.h"
-#include <stdbool.h>
+#include "bc250_dc_types.h"
 
 // Local views contain only members used by the extracted arithmetic functions.
 // They are not Linux ABI objects and are never passed to other imported code.

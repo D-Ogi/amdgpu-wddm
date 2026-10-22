@@ -18,7 +18,7 @@ static const COEF_REGS registers[2] = {
      BC250_REG_DMU_DSCL1_SCL_MODE, BC250_REG_DMU_DSCL1_DSCL_MEM_PWR_CTRL,
      BC250_REG_DMU_DSCL1_DSCL_MEM_PWR_STATUS}
 };
-#define TRY(x) do { long rc = (x); if (rc < 0) return rc; } while (0)
+#define TRY(x) do { long stepStatus = (x); if (stepStatus < 0) return stepStatus; } while (0)
 // DCN201 fields are shared across pipe instances. Fail compilation on drift.
 #define SAME(reg, field) _Static_assert(DSCL0_##reg##__##field##_MASK == \
     DSCL1_##reg##__##field##_MASK, "DSCL field differs across instances")

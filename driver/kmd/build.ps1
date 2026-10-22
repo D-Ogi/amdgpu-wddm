@@ -138,6 +138,7 @@ $shimSources += @("$repo\driver\shim\bc250_hdmi_link.c")
 $shimSources += @('bc250_hpd.c','bc250_dp_train.c','bc250_dp_phy.c','bc250_sink.c','bc250_optc.c','bc250_link_atom.c') | ForEach-Object { "$repo\driver\shim\$_" }
 $shimSources += @("$repo\driver\shim\bc250_dp_stream.c")
 $shimSources += @("$repo\driver\shim\bc250_scaler_buffer.c")
+$shimSources += @('bc250_scaler_geometry.c','bc250_scaler_filter.c','bc250_scaler_plan.c') | ForEach-Object { "$repo\driver\shim\$_" }
 $shimSources += @("$repo\driver\shim\bc250_link_regs.c", "$repo\driver\shim\bc250_dml201.c",
     "$repo\driver\shim\bc250_dcn201_pipe.c")
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
@@ -147,7 +148,7 @@ $shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_wave.c', 'bc250_sdma.c
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
-$clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
+$clFlags = @('/nologo', '/c', '/std:c11', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/Brepro',                      # no timestamp in the object files: the same sources must give the same bytes
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',

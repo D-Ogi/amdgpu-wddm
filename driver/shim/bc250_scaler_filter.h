@@ -1,6 +1,6 @@
 // Adapter: PolyForm Noncommercial 1.0.0, see LICENSE.md and NOTICE.
 #pragma once
-#include <stdint.h>
+#include "bc250_dc_types.h"
 
 enum BC250_SCALER_FILTER_KIND {
     BC250_SCALER_FILTER_AMD = 0,

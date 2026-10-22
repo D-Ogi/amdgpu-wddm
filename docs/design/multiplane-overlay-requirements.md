@@ -487,7 +487,35 @@ The actual-source `run_vidpn_flip.ps1` controls exercise destroy during a
 writer, failed retirement, failed synchronization and restoration while
 faulting. The DCN flip and observer controls use the same explicit Clang
 toolchain. Their passing results establish tested software behavior only.
-The probe hook, its fault integration and the hardware controls remain open.
+`dcn_latch_probe.c` implements the lab-only core and the fault handoff. It is
+not yet exposed through an escape or a client. No hardware result is claimed.
+Its three arms are an unlocked transition, lock before programming, and lock
+after programming. A late lock returns RETRY with its raw observations.
+The core refuses a foreign lock, a nonzero selector, compressed or triple
+buffered surfaces, unsupported modes and insufficient reserved space.
+Admission is checked again after the primary writer has acquired the plane.
+
+Each frame wait permits at most 2001 samples and 2000 stalls of 20 us, with
+a 40 ms elapsed-time check. Lock and unlock acknowledgements permit 11 reads
+and 10 stalls of 1 us. Samples also check a 500 ms operation budget. Cleanup
+gets a separate budget. These checks do not bound OS scheduling delays.
+The caller must retain OS lifetime exclusion for the complete call.
+
+The result separates measurement, unlock, reserved-buffer restore and End
+statuses. `Restored` means that the reserved A address was observed before
+End. It does not certify the restored desktop. `WritesAttempted` counts a
+production address transaction as one operation and direct writes separately.
+Neither field is an allocation-retirement predicate.
+
+`run_latch_probe.ps1` compiles the actual core with Clang against two explicit
+device models. Both controls agree. Only the lock-after-program arm differs.
+Tests inject failures at each modeled read, write and ownership checkpoint,
+including writes that fail after taking effect. Power withdrawal, stuck
+acknowledgements, failed cleanup and End failures are separate controls.
+Four code mutations must fail at runtime. The power-withdrawal test caught
+and now prevents a manual-trigger write after power changed during unlock.
+These tests establish software behavior under the stated models only.
+The escape admission, client, physical controls and full MPO remain open.
 
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock

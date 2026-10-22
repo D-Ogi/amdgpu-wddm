@@ -2128,6 +2128,35 @@ static void PlaneShapeFlips(int level)
     hardware_result=STATUS_SUCCESS;
     CHECK(!in_lock);
 }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+static void LatchProbeOwner(void)
+{
+    BC250_WDDM w;BC250_DEVICE d;ULONG generation;unsigned before;
+    Setup(&d,&w,0);begin_kind=BC250_WRITER_LATCH_PROBE;
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,0,FALSE)));
+    CHECK(Begin(&d,&generation));
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,generation,FALSE)) && !w.Faulting);
+    CHECK(NT_SUCCESS(Resume(&d)));
+    CHECK(NT_SUCCESS(WddmLatchProbeCheck(&d,generation,FALSE)));
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,generation+2,TRUE)) && !w.Faulting);
+    before=hardware;
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,generation,TRUE)) && w.Faulting);
+    CHECK(!NT_SUCCESS(End(&d,generation,FALSE)) && hardware==before && !w.WriterActive);
+    Setup(&d,&w,0);begin_kind=BC250_WRITER_LATCH_PROBE;
+    CHECK(Begin(&d,&generation));
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,generation,TRUE)) && w.Faulting && !w.WriterResumed);
+    CHECK(!NT_SUCCESS(End(&d,generation,FALSE)) && !w.WriterActive);
+    Setup(&d,&w,0);begin_kind=BC250_WRITER_LATCH_PROBE;
+    CHECK(Begin(&d,&generation) && NT_SUCCESS(Resume(&d)));
+    sync_refusals=1;before=hardware;
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,generation,FALSE)) && w.WriterRecovery);
+    CHECK(!NT_SUCCESS(End(&d,generation,FALSE)) && w.Faulting && hardware==before && !w.WriterActive);
+    Setup(&d,&w,0);
+    CHECK(Begin(&d,&generation) && NT_SUCCESS(Resume(&d)));
+    CHECK(!NT_SUCCESS(WddmLatchProbeCheck(&d,generation,TRUE)) && !w.Faulting);
+    CHECK(NT_SUCCESS(End(&d,generation,FALSE)));
+}
+#endif
 int main(void)
 {
     int level;
@@ -2152,6 +2181,9 @@ int main(void)
     FaultDpcs();
     DestroyWriter();
     WriterSynchronizationRefusals();
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    LatchProbeOwner();
+#endif
     Entries();
     VSyncControlHistory();
     RecordCopies();

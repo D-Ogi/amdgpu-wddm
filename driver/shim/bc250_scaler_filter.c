@@ -3,7 +3,7 @@
 // v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449.
 #include "bc250_scaler_filter.h"
 #include <stddef.h>
-#include <stdbool.h>
+#include "bc250_dc_types.h"
 #include <limits.h>
 #define ASSERT(x) ((void)sizeof(x))
 #define FIXED31_32_BITS_PER_FRACTIONAL_PART 32

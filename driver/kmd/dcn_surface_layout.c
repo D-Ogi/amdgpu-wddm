@@ -5,8 +5,7 @@
 #include "dcn_translate.h"
 #include "display_io.h"
 #include "dcn_2_0_1_sh_mask.h"
-#include <stdint.h>
-#include <stdbool.h>
+#include "../shim/bc250_dc_types.h"
 
 enum { DCSURF_SURFACE_PITCH, DCSURF_SURFACE_PITCH_C, DCSURF_SURFACE_CONFIG, HUBPRET_CONTROL };
 struct hubp { unsigned unused; };
@@ -30,7 +29,14 @@ struct dcn10_hubp { struct hubp base; unsigned long word[4]; unsigned invalid; }
 #define REG_UPDATE_2(reg,f1,v1,f2,v2) do { REG_UPDATE(reg,f1,v1); REG_UPDATE(reg,f2,v2); } while (0)
 #define ASSERT(x) do { if (!(x)) hubp1->invalid = 1; } while (0)
 #define BREAK_TO_DEBUGGER() (hubp1->invalid = 1)
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(push)
+#pragma warning(disable:4127) // constant masks in the capture macros
+#endif
 #include "../shim/generated/dc_surface_layout.inc"
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma warning(pop)
+#endif
 #undef REG_UPDATE
 #undef REG_UPDATE_2
 #undef ASSERT
@@ -61,7 +67,7 @@ static int SurfaceRange(const BC250_SURFACE_LAYOUT_REQUEST* B,
 int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
                              BC250_SURFACE_LAYOUT* Plan)
 {
-    BC250_SURFACE_LAYOUT_REQUEST in;
+    BC250_SURFACE_LAYOUT_REQUEST in = {0};
     struct dcn10_hubp capture = {0};
     struct plane_size size = {0};
     struct dc_plane_dcc_param dcc = {0};
@@ -108,7 +114,7 @@ int Bc250SurfaceLayoutPrepare(const BC250_SURFACE_LAYOUT_REQUEST* Request,
 int Bc250Nv12LayoutPrepare(const BC250_NV12_LAYOUT_REQUEST* Request,
                           BC250_NV12_LAYOUT* Plan)
 {
-    BC250_NV12_LAYOUT_REQUEST in;
+    BC250_NV12_LAYOUT_REQUEST in = {0};
     BC250_SURFACE_LAYOUT_REQUEST bounds = {0};
     struct dcn10_hubp capture = {0};
     struct plane_size size = {0};

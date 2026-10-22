@@ -10750,6 +10750,34 @@ NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device)
     return w.Status;
 }
 
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+static BOOLEAN WddmLatchProbeCheckLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    BC250_WDDM* d = w->Wddm;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    w->Status = STATUS_INVALID_DEVICE_STATE;
+    if (!d->WriterActive || d->WriterKind != BC250_WRITER_LATCH_PROBE ||
+        (ULONG)d->PrimarySequence != w->Generation + 1u) return TRUE;
+    if (w->Invalidate) WddmFlipFault(w->Device,d,BC250_FLIP_FAULT_SECTION,BC250_WDDM_NODE_3D);
+    if (!d->WriterReady || !d->WriterResumed) return TRUE;
+    w->Status = d->Faulting ? STATUS_DEVICE_HARDWARE_ERROR : STATUS_SUCCESS;
+    return TRUE;
+}
+
+NTSTATUS WddmLatchProbeCheck(BC250_DEVICE* Device, ULONG Generation, BOOLEAN Fail)
+{
+    BC250_WDDM_WRITER w;
+    NTSTATUS status;
+    RtlZeroMemory(&w,sizeof(w));
+    w.Device=Device;w.Wddm=WddmOf(Device);w.Generation=Generation;w.Invalidate=Fail;
+    if (!w.Wddm || KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    status=WddmSection(Device,WddmLatchProbeCheckLocked,&w);
+    if (!NT_SUCCESS(status)) { WddmWriterSectionFailure(Device,w.Wddm,status);return status; }
+    return w.Status;
+}
+#endif
+
 // The fields DestroyAllocation and an invalidating End reset when the plane goes back to the firmware surface, the
 // plane format included (M15.14): the firmware surface is ARGB8888 (DcnFlipToFirmwareSurface).
 static void WddmPrimaryInvalidate(_Inout_ BC250_WDDM* Wddm)

@@ -2,7 +2,7 @@
 // PROVENANCE: imported algorithm in generated/dc_scaler_geometry.inc remains
 // Linux amdgpu DC, MIT, v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449.
 #include "bc250_scaler_geometry.h"
-#include <stdbool.h>
+#include "bc250_dc_types.h"
 #include <limits.h>
 
 // Platform adapter for the verbatim fixed-point functions. Only nonnegative,
@@ -38,7 +38,7 @@ int Bc250ScalerComponentAxisPlan(const BC250_SCALER_AXIS_INPUT* Input,
                                 uint32_t ComponentDivisor,
                                 BC250_SCALER_AXIS_PLAN* Plan)
 {
-    BC250_SCALER_AXIS_INPUT in;
+    BC250_SCALER_AXIS_INPUT in = {0};
     struct fixed31_32 ratio, init;
     int64_t source, component_source, destination, begin, end, offset;
     int viewport_begin, viewport_size;
@@ -110,7 +110,7 @@ int Bc250ScalerAxisPlan(const BC250_SCALER_AXIS_INPUT* Input,
 int Bc250ScalerPlaneGeometry(const BC250_SCALER_PLANE_INPUT* Input,
                             BC250_SCALER_PLANE_PLAN* Plan)
 {
-    BC250_SCALER_PLANE_INPUT in;
+    BC250_SCALER_PLANE_INPUT in = {0};
     BC250_SCALER_PLANE_PLAN pending = {0};
     BC250_SCALER_AXIS_INPUT chroma_h, chroma_v;
     int status[4];
