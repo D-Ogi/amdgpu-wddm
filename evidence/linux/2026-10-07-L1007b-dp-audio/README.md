@@ -38,13 +38,13 @@ The `regs2.py` offsets come from `regcalc.py --ip DMU --reg-header dcn_2_0_1_off
    `setup.sh`, when `aplay` was absent and the device string was wrong (`hw:0,device`). A second check: the 60 s
    `/tmp/loud.wav` played from 05:54:19 to 05:55:20 lab clock, which is 61 s at 1 s resolution and includes the
    start of `aplay`. `speaker-test -l 10` ran 60 s by the dev PC clock (03:52:40 to 03:53:40).
-2. **The IEC958 Playback Switch is off by default, and the owner heard the output only with it on.** `amixer -c 0
+2. **The IEC958 Playback Switch is off by default, and the listener heard the output only with it on.** `amixer -c 0
    contents` at 03:54:01 reads `numid=5` ('IEC958 Playback Switch', pcm 3) off and `numid=11` (index 1) off. The
-   owner listened with headphones on the monitor. After the two `speaker-test` runs (03:51:11 to 03:51:41 and
-   03:52:40 to 03:53:40, switch off), the owner reported at 03:53:53 that nothing was audible. `amixer -c 0 cset
-   numid=5 on` ran at 03:54:10. At 03:54:28, during the 60 s tone, the owner reported the tone audible. The two
+   operator listened with headphones on the monitor. After the two `speaker-test` runs (03:51:11 to 03:51:41 and
+   03:52:40 to 03:53:40, switch off), the listener reported at 03:53:53 that nothing was audible. `amixer -c 0 cset
+   numid=5 on` ran at 03:54:10. At 03:54:28, during the 60 s tone, the listener reported the tone audible. The two
    tones are not the same: `speaker-test` uses its default level, `/tmp/loud.wav` is a 660 Hz sine at amplitude
-   26000 of 32767. The owner gave no report for the switch-off playback of 03:55.
+   26000 of 32767. No listening report exists for the switch-off playback of 03:55.
 3. **The switch is the codec's digital converter enable.** `conv.py` reads converter node `0x02` (widget caps
    `0x00000221`):
    - switch on, during playback: `F0D` (digital converter) `0x00000001` (DigEn), `A00` (stream format)

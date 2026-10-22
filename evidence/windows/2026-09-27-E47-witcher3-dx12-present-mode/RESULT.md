@@ -91,7 +91,7 @@ All presents returned `VK_SUCCESS`. The loading spike (one interval of 4.7-4.9 s
   differs from 152's. A matched control is KMD-side (map attribute or segment of the swapchain allocation under
   153, or a rollback to 152 and one more repeat); an ICD-side probe is a vkcube CPU-present run with the present
   log against E46's copy times.
-- For the owner's question: on today's box the loaded scene is limited by the game's own frame time (about 54 ms
+- For the open question: on today's box the loaded scene is limited by the game's own frame time (about 54 ms
   with the compositor wait removed), not by the refresh quantisation; on E43's box the FIFO quantisation to two
   refresh periods was real (33 ms) and IMMEDIATE would have exposed the frame time underneath. The measurement
   has to be repeated once the box's copy speed is back at E43's level, together with a vkcube control.

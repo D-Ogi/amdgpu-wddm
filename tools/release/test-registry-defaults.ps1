@@ -212,7 +212,7 @@ Check (($d.decision -eq 'installer') -and ($d.value -eq 0) -and $d.write) 'Uncon
 $text = Format-RegistryPlan $plan
 Check ($text -match 'DpmMaxMHz=1800 \(command line\)') "plan text: $($text.Substring(0, [Math]::Min(120, $text.Length)))..."
 
-'the number of graphics cores: release default 24, and a number a person chose stays (owner, 2026-10-14)'
+'the number of graphics cores: release default 24, and a number a person chose stays'
 Check ($table.defaults.parameters.CuMode -eq 24) "the release default is the stock 24: $($table.defaults.parameters.CuMode)"
 # tester.30's own default was 40. Its record (Release\AppliedDefaults) holds that 40, so the 'update' rule takes it
 # back to 24 - unless the key says a person asked for it.
@@ -364,7 +364,7 @@ try {
     $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $legacy.parameters -Current $whole -Owned ([ordered]@{ UnconfirmedStarts = 0 }) -After (Read-RegistryValues $k) -Restore $restore
     Write-RegistryPlan $k $plan
     $v = Read-RegistryValues $k
-    # The release default is the stock 24 now (owner, 2026-10-14) and this $Previous is a release that never wrote
+    # The release default is the stock 24 now and this $Previous is a release that never wrote
     # CuMode, so the 40 on the key is the tester's own: kept, and written back over the driver package's reset.
     Check (((Get-Decision $plan 'CuMode').decision -eq 'kept') -and ($v.CuMode -eq 40) -and ($v.CuModeConfirmed -eq 1)) "CuMode $($v.CuMode) and CuModeConfirmed $($v.CuModeConfirmed) back as before the driver package"
     Check ($v.LabNote -eq 'unit A') "a REG_SZ value outside the table back as before: LabNote '$($v.LabNote)'"

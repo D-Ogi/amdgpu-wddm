@@ -4,7 +4,7 @@
 # amdgpu_test_ib, amdgpu_gpu_recover, amdgpu_evict_*, amdgpu_benchmark, amdgpu_preempt_ib or amdgpu_force_sclk.
 #   sh run.sh gpu     apk add alsa-utils python3 if absent, modprobe amdgpu if absent, list the audio cards
 #   sh run.sh rate    regs before; a 10.000 s 48 kHz tone timed with the wall clock (aplay), regs during; regs after
-#   sh run.sh listen  a 1 kHz tone for 30 s at a moderate level, for the owner's headphones
+#   sh run.sh listen  a 1 kHz tone for 30 s at a moderate level, for the headphones on the monitor
 set -u
 B=/media/usb/l1007b
 O=$B/out

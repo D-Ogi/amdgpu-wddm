@@ -90,7 +90,7 @@ bos_checks() { awk '$6 != "-" {printf "--check 0x%s 0x%s ", $2, $6}' "$OUT/hold/
 case "${1:-}" in
 pre)
 	say "kernel"; uname -a; cat /proc/cmdline
-	say "boot history (cold or warm is the owner's to tell); uptime"; uptime
+	say "boot history (cold or warm is the operator's to tell); uptime"; uptime
 	say "amdgpu loaded? (empty is what this phase wants)"; lsmod | grep -i amdgpu
 	say "memory: everything in this session lives here"; head -4 /proc/meminfo; df -h /tmp | tail -1
 	say "lspci"; lspci -nn

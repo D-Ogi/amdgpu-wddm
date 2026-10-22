@@ -2,7 +2,7 @@
 
 Date: 2026-10-14, 11:08:24-11:09:16Z on the development PC clock (the trace times are on the lab clock,
 11:08:43-11:09:22Z). Unit A, KMD rc4 of tester.31 (SYS B0E01A86, native mode, read on the lab at 11:07Z), Windows
-Terminal 1.24.12741.0 installed. The kit did not record the Windows build. Owner's report: a console window came up
+Terminal 1.24.12741.0 installed. The kit did not record the Windows build. Visual report: a console window came up
 with the start window of the logon task. Fact M899 found a Windows Terminal window of the task's `powershell.exe` at
 the close of the start window, in DWM's frames.
 

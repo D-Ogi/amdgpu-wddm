@@ -10,7 +10,7 @@ ADR 0010 point 3 makes the page flip, not the CPU blit, the present path Windows
 picture (M84) still goes through the CPU-copy Blt path. Before `SetVidPnSourceAddress` and a real flip DDI
 can be written, we need the minimal register set a flip actually touches on this DCN 2.0.1 part, in the
 order it is touched, and the interrupt that reports it - all from a driver we can trust, because there is no
-working GPU reset here (M53) and a wrong guess costs the owner a cold start. This is wishlist L20, L21, L23
+working GPU reset here (M53) and a wrong guess costs a cold start by hand. This is wishlist L20, L21, L23
 and L24, plus a check of L10's SMU-message half now that ADR 0010 point 6 has made the power path a
 deliverable.
 

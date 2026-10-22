@@ -23,7 +23,7 @@ Blt shape is therefore unproven; retaining the desktop does not pass that gate.
 GPU primary and screenshot. Eight dynamic BMP/PNG samples pass the bounded
 moving-shape check. Final screen.png passes; final gpu.bmp fails (fill0.9073).
 A concurrently changing primary capture is a possible explanation, not proven.
-No owner visual verdict and no claim that all artifacts are absent.
+No visual verdict and no claim that all artifacts are absent.
 
 Normal finally rollback restored baseline UMD8279AC7F and ICD93B1D1FD, latched
 interop0 by adapter restart, then restored CPU DWM7656. The pending marker was

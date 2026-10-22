@@ -1,5 +1,5 @@
 #!/bin/bash
-# One recorded cold start of unit A (owner consent 2026-10-06 for L1/L12): clean poweroff over SSH,
+# One recorded cold start of unit A (consent 2026-10-06 for L1/L12): clean poweroff over SSH,
 # wait until the plug reads standby power, AC off for 30 s, AC on (the board jumper powers it on).
 # Every step goes to power-log.jsonl next to this script.
 set -u

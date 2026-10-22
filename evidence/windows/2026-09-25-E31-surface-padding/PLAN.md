@@ -4,7 +4,7 @@ Hypothesis: Notepad's imported 1428x33 RGBA surface is backed by 188496 bytes
 rounded to 192512 bytes, while llvmpipe accesses 4x4 stamps and declares a
 205632-byte image stride (5712*36). The failing load reaches unmapped row34.
 
-Evidence: private full Notepad dump, captured once with explicit owner consent,
+Evidence: private full Notepad dump, captured once with explicit consent,
 full-layout.txt and full-surface.txt in ../notepad-crash. Two crash captures agree
 on shade_quads -> lp_rast_linear_rect_fallback and the failed third row load.
 

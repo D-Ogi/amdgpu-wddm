@@ -1,4 +1,4 @@
-# r17 fresh-install check (owner's installer test, 2026-10-06): after the clean uninstall and a fresh install of
+# r17 fresh-install check (clean-slate installer test, 2026-10-06): after the clean uninstall and a fresh install of
 # tester.17 every component must be in place and working: KMD, desktop UMD on the GPU route, Vulkan ICD, D3D11/D3D12
 # UMDs, MFT, control application (GUI), Tuner, start-confirm task, Start menu. Reads only.
 $ErrorActionPreference = 'Continue'

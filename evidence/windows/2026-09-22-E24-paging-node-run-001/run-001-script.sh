@@ -1,5 +1,5 @@
 #!/bin/bash
-# E24 run 001: bc250kmd 0.7.24 (installed display-only already), the paging node in the full table. Owner at the monitor.
+# E24 run 001: bc250kmd 0.7.24 (installed display-only already), the paging node in the full table. Operator at the monitor.
 # Sequence of E19 run 3 / E20 run 8: state, confirm, gate (-Full 1 -GpuVa 1 -Engines 1 -GpuSubmit 1 -Blit 1 -PagingNode 1),
 # engines up by escape (gart, psp, ih, gfx run 8 = SDMA rings included), then about a minute of desktop for VidMm to page,
 # ring log lines, temperature, gate closed. Usage: e24_run1.sh [nopaging]   (nopaging = same run with the node gate shut: H3)

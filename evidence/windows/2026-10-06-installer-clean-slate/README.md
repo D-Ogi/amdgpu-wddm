@@ -1,6 +1,6 @@
 # Installer clean-slate test on unit A (2026-10-06)
 
-The owner's definition of an installer test: remove everything of amdgpu-wddm from the lab with the release's own
+The project's definition of an installer test: remove everything of amdgpu-wddm from the lab with the release's own
 uninstaller, then install the release fresh from its package. The control application, the Tuner and every other
 component must install and work. The lab harness `C:\BC250` stays. Unit A, Windows 11, tester package
 0.7.213.102-tester.17 (KMD 0.7.213.1, INF 0.7.213.102), three builds of the same version:

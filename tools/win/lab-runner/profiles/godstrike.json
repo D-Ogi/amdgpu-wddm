@@ -6,7 +6,7 @@
   "api": "d3d11",
   "apis": {
     "d3d12": {
-      "selection": "game default, no switch (owner 2026-10-04); -force-d3d12 would force it",
+      "selection": "game default, no switch (2026-10-04); -force-d3d12 would force it",
       "arguments": "",
       "router": "unchecked",
       "witness": {
@@ -15,7 +15,7 @@
       }
     },
     "d3d11": {
-      "selection": "game default, no switch (owner 2026-10-04); -force-d3d11 would force it",
+      "selection": "game default, no switch (2026-10-04); -force-d3d11 would force it",
       "arguments": "",
       "router": "allow",
       "witness": {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// flash-watch.exe - what DWM composes over the start window, frame by frame (owner, 2026-10-14: the small blue
+// flash-watch.exe - what DWM composes over the start window, frame by frame (2026-10-14: the small blue
 // window after logon flashes for one or two frames every 6-8 s). It starts the window itself, with the arguments of
 // the logon task "amdgpu-wddm start window" (common.ps1 Get-LogonTaskPlan), finds that process's window, and reads
 // the window's rectangle from every frame that Desktop Duplication delivers. The lab's overlay (bc250mon), when it

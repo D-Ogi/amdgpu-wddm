@@ -9,7 +9,7 @@ scratch/tmp/fwre/work or scratch/tmp/bios. No firmware code is imported here.
 
 | Item | Decision and acceptance remaining |
 |---|---|
-| D1 - update-lock acknowledgement | M430 adds bounded ACK wait; M431 propagates failure without publishing a new scanout address, permits a later identical-address retry, guards vsync snapshots and counts timeouts. M432 live control passes533 flips with0 ACK timeouts, correct D3D content and concurrent GPU workload correctness. Owner confirmed smooth image/movement after M432; timed long-duration observation remains open. |
+| D1 - update-lock acknowledgement | M430 adds bounded ACK wait; M431 propagates failure without publishing a new scanout address, permits a later identical-address retry, guards vsync snapshots and counts timeouts. M432 live control passes533 flips with0 ACK timeouts, correct D3D content and concurrent GPU workload correctness. A visual check at the lab confirmed smooth image/movement after M432; timed long-duration observation remains open. |
 | D2 - control fields | FLIP_CONTROL changes only SURFACE_FLIP_TYPE. M431 also preserves SURFACE_CONTROL except the two graphics TMZ fields. This does not enable DCC or protected surfaces. |
 | D3 - manual trigger | Retain. The report's absence claim was scoped too narrowly: dcn201_tg_funcs selects optc2_program_manual_trigger; core/dc.c and dc_hw_sequencer.c call it after unlocking eligible address updates. Existing M87 hardware trace already observes it. No removal A/B is required to establish that the Linux path exists. |
 | D4 - unused pipes | A modeset/full-display-ownership task. Preserve inherited working single-pipe state until that implementation owns all affected resources. |

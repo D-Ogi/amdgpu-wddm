@@ -133,7 +133,7 @@ puts it back.
   debugfs directory is globbed.
 - Nothing opens `/dev/mem`.
 - Deliberately excluded: `modprobe -r amdgpu` and a second `modprobe` (facts M42, M55),
-  `amdgpu_gpu_recover` (M53 - this part has no working reset, so a hang ends at the owner's power
+  `amdgpu_gpu_recover` (M53 - this part has no working reset, so a hang ends at the power
   button), suspend (M56), any clock change, anything needing a display server.
 - Stop and cool down above 85 C. `temp()` runs at the end of each phase.
 
@@ -147,7 +147,7 @@ Back: `poweroff` and a **cold** start, never `reboot` - a warm restart out of th
 Realtek NIC "Not Present", and the M.2 link is intermittent across restarts (M21). Rename
 `bootx64.efi` to `.off` again before the power-off so the machine falls through to NVMe.
 
-The owner is needed twice: the power button if something hangs, and the cold start at the end.
+An operator at the lab is needed twice: the power button if something hangs, and the cold start at the end.
 
 ## Procedure
 
@@ -163,7 +163,7 @@ lab-specific is written down in this repository.
 | 5 | `./e17_pc.sh run hold` then `pull` | 6 | **the phase this session exists for.** The holder maps twelve buffers; the positive control (H4) must pass before anything else in the phase is believed |
 | 6 | `./e17_pc.sh run extras` then `pull` | 2 | L8's leftovers and a second `ip_discovery` sample |
 | 7 | `./e17_pc.sh run info` then `pull` | 2 | the `AMDGPU_INFO` answers still match facts M46 |
-| 8 | `poweroff`, owner cold-starts into Windows | 3 | Windows is back and the M.2 link is up |
+| 8 | `poweroff`, an operator cold-starts into Windows | 3 | Windows is back and the M.2 link is up |
 
 About twenty minutes of machine time. If step 5's control fails, stop and pull everything: the walk
 is wrong, and a wrong walk is worse than no walk.
@@ -172,10 +172,10 @@ is wrong, and a wrong walk is worse than no walk.
 
 - The witness word does not read back (H4 fails): stop the phase, keep the dumps, decide on the PC.
 - Any `dmesg` line with `VM_L2_PROTECTION_FAULT`, `amdgpu: ring ... timeout`, or a GPU hang: stop
-  everything, pull, and call the owner. There is no working reset on this part (M53).
+  everything, pull, and call for help at the lab. There is no working reset on this part (M53).
 - Edge temperature above 85 C: stop and let it cool.
 - The probe stops answering: the streamed files are what there is (`e17_pc.sh stream`, E13's lesson
-  from facts M42), and the machine needs the owner's power button.
+  from facts M42), and the machine needs the power button pressed by hand.
 
 ## What is in this directory
 

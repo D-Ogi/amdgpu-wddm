@@ -80,7 +80,7 @@
 8	docs/init-sequence.md
 138	docs/linux-session-wishlist.md
 27	docs/m13-accelerated-desktop-roadmap.md
-159	docs/m15-reconciliation.md
+157	docs/m15-reconciliation.md
 28	docs/predecessor-analysis.md
 12	docs/prior-art-vs-hardware.md
 18	docs/prior-art.md

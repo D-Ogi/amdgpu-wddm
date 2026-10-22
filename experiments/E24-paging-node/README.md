@@ -10,8 +10,8 @@ anybody noticing. `DxgkDdiSubmitCommand` is simply not the door a paging buffer 
 opens the other one, and makes a node-1 arrival visible in its own right rather than by subtracting presents
 from submissions. Next: run 007, which is the first run that can prove the hardware half of H2 and H4.
 
-Runs after 005 keep `-VidPnFlip 1` closed unless the run needs it: run 005 had no use for it and left the owner
-looking at M100's unpainted primary for four minutes.
+Runs after 005 keep `-VidPnFlip 1` closed unless the run needs it: run 005 had no use for it and left the lab monitor
+showing M100's unpainted primary for four minutes.
 
 Getting here cost a bugcheck: run 004's first real call blew the kernel stack on a 0x5B00-byte local (M104,
 M105), fixed in 0.7.26 with `tools/win/stackbudget.py` now failing any build whose fixed frames reach 4 KB.

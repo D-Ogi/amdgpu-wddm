@@ -8,7 +8,7 @@ and Direct3D applications still reach the GPU through DXVK and vkd3d-proton firs
 
 ADR 0005 accepted a desktop that composes on WARP for good: without a Direct3D user-mode driver, DWM and
 everything that uses the system's Direct3D render in software, and only applications that bring their own API
-(Vulkan, or DXVK/vkd3d DLLs next to the executable) see the GPU. The owner's decision of 2026-09-21: that is a
+(Vulkan, or DXVK/vkd3d DLLs next to the executable) see the GPU. The decision of 2026-09-21: that is a
 stage, not the end. The end is a BC-250 on which Windows itself is accelerated.
 
 ADR 0005 called a native UMD "far beyond this project" on the strength of a sizing that has since been wrong by
@@ -45,7 +45,7 @@ that the sizing was never a reason.
 
 ## Scheduling amendment, 2026-09-23
 
-The owner requested full WDDM repair immediately after M8 and a desktop sub-roadmap. M13 diagnostic
+Full WDDM repair immediately after M8 and a desktop sub-roadmap were requested. M13 diagnostic
 bring-up and backend feasibility work may therefore proceed before M12 closes. This supersedes the
 ordering restriction in point3 and the timing clause in this ADR's status line. It does not select a
 GPU backend or close M9-M12. The native hardware D3D and accelerated DWM goals remain unchanged;
@@ -59,12 +59,12 @@ with exact pixels (facts M531), reaches a shared WDDM allocation through a secon
 hardware D3D device receives runtime allocations through the runtime callbacks (M534; `hKMResource` zero, cause
 unknown). The route now argued for is one point 2 did not name: a hosted ICD, one Vulkan device per D3D runtime
 device driven through the runtime's callbacks, with DXVK as the engine behind the D3D11 DDI and the
-`d3d10umd`/Zink build as the control. That argument was made in the owner's working notes, outside this
+`d3d10umd`/Zink build as the control. That argument was made in the project's working notes, outside this
 repository. Nothing in this section selects a route.
 
 ## Amendment, 2026-09-26: the hosted ICD is the route under implementation
 
-[ADR 0017](0017-graphics-stack-direction-after-m12.md) records the accepted direction and the owner's decisions
+[ADR 0017](0017-graphics-stack-direction-after-m12.md) records the accepted direction and the decisions
 of the same day. It amends point 2 with the hosted ICD route (one Vulkan device per D3D runtime device, driven
 through the runtime's callbacks; `d3d10umd`/Zink as the bring-up control and native path, llvmpipe as the CPU
 baseline) and satisfies point 3 as far as direction goes: the route is confirmed as M13's route, with evidence,

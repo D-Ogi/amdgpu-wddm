@@ -6,6 +6,6 @@ The bounded no-copy acceptance uses the agreed four-item list: application-windo
 
 [Measured run and limitations](../../evidence/windows/2026-09-28-E34-dwm050-gpu-desktop/RESULT.md). [Completion audit](../../evidence/windows/2026-09-28-E34-g0-completion-audit/RESULT.md).
 
-The trial lasts124.910s and restores CPU170, health15, without reboot. Owner's180-second limit remains. Full M13 lifecycle/30-minute stability/fault/soak gates and permanent GPU promotion are separate; G0 completion does not silently waive them. Startup VSync gaps are recorded separately from the steady render interval, which has no missing VSync reports.
+The trial lasts124.910s and restores CPU170, health15, without reboot. The180-second limit remains. Full M13 lifecycle/30-minute stability/fault/soak gates and permanent GPU promotion are separate; G0 completion does not silently waive them. Startup VSync gaps are recorded separately from the steady render interval, which has no missing VSync reports.
 
 [Adapter-attribution correction](../../evidence/windows/2026-09-28-E34-dwm050-adapter-attribution/RESULT.md) refines the original aggregate; bounded G0 was independently reviewed.

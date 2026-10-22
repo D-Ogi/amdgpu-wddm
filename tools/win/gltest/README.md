@@ -3,7 +3,7 @@
 The project's own OpenGL 4.x client. One C file over Win32 and WGL, no third-party loader, no window on
 screen unless it is asked for. It runs from an SSH session 0 shell.
 
-It exists for two reasons. The first is the owner's rule that multithreading is tested with our own clients
+It exists for two reasons. The first is the project rule that multithreading is tested with our own clients
 before a game is allowed to be the witness (2026-09-29). The second is BD-076: the installed product has no
 `OpenGLDriverName` and ships no OpenGL ICD, so an OpenGL 2 or later application either fails or draws on the
 CPU. When the ICD is registered, somebody must be able to say in one line whether a context came up, **which
@@ -94,7 +94,7 @@ A watchdog thread ends the process with code 1 when the bound passes, after it w
 is flushed as it is written, so the log of a killed run is complete up to the last thing that happened.
 
 The window is created but never shown unless `--show` is given: the development PC must not get a window
-(owner's rule), and the lab does not need one. One consequence is honest in the output: with the
+(a workspace rule), and the lab does not need one. One consequence is honest in the output: with the
 window hidden, the pixel ownership test may legitimately discard fragments, so a wrong back-buffer read is
 counted and printed but does not decide the `present` verdict. With `--show` it does.
 

@@ -91,7 +91,7 @@ function Reset-BitLocker {
 $tokens = $null; $parseErrors = $null
 $installAst = [Management.Automation.Language.Parser]::ParseFile((Join-Path $Installer 'install.ps1'), [ref]$tokens, [ref]$parseErrors)
 Check ($parseErrors.Count -eq 0) 'installer parses'
-# The installer asks the user nothing (owner, 2026-10-12): there is no consent gate any more. One decision,
+# The installer asks the user nothing: there is no consent gate any more. One decision,
 # Get-BitLockerPlan, is taken from the live state before the boot options change, and the block below is the shipped
 # text of install.ps1 from that decision to the state it writes - not a copy of it.
 $planAssign = @($installAst.FindAll({ param($n)

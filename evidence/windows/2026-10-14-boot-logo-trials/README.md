@@ -50,7 +50,7 @@ white silhouette above the ring of dots, in the frames between the boot screen a
 One or two frames each, so her time on the panel is between about 0.3 and 0.9 s, which the frame interval
 alone cannot narrow further. In the `anchor` burst she stands 34 camera rows lower on the panel than in the
 `handoff` one, which is `BootLogoAnchorPermille` 700 against 350 working on the hardware. In the `scaled` burst
-her silhouette stands where the Windows flag is in the three frames before it, which is where the owner saw her.
+her silhouette stands where the Windows flag is in the three frames before it, which is where a visual check saw her.
 
 The `appears` burst is empty because of the camera defect of that morning: the burst ran `bash`, which on this
 PC is WSL and not Git Bash, so ffmpeg never started. The trial itself is unaffected.
@@ -87,7 +87,7 @@ everything saturated in it as the room, and then names the lit shapes of every o
 On these bursts it gives the state of the screen frame by frame, and the mascot frames of the table above are
 its output, confirmed by eye on the frames themselves.
 
-The frames stay in the operator's scratch directory and are not kept here. The camera also sees the owner's
+The frames stay in the operator's scratch directory and are not kept here. The camera also sees a private
 room, so every frame was cropped at capture.
 
 ## Two readouts the trials produced for other work

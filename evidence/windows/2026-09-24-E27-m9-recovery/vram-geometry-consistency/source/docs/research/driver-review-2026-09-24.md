@@ -1,4 +1,4 @@
-# Follow-up to the owner-relayed driver review (2026-09-24)
+# Follow-up to the relayed driver review (2026-09-24)
 
 The numbered items below retain the review's identifiers. A source concern is
 not automatically a demonstrated hardware failure. Current deployment remains
@@ -29,7 +29,7 @@ M432/KMD134; M433-M435 source work has not been deployed.
 The12GiB test task also needs removal of fixed8GiB assumptions from host fixtures
 and qai_bridge, with generated/sample geometries for both sizes. A12G carve-out
 still yields about11.5864GiB application capacity under current reservations;
-it does not meet the owner's12GiB model-residency requirement by itself.
+it does not meet the12GiB model-residency requirement by itself.
 
 IOMMU remapping is a separate DMA-address ownership project covering ring/fence,
 GART and PTE backing and paging checks. Do not enable the firmware option or add

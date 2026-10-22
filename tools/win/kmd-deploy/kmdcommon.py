@@ -52,7 +52,7 @@ FIELD_RE = re.compile(r'0|[1-9][0-9]*')
 # puts this line after each install section header. It re-signs the SYS and makes a new catalog; the code is the
 # build's.
 RELEASE_KMD = 'payload/kmd'
-# The folder that holds the package's own files inside the unpacked release (owner, 2026-10-11).
+# The folder that holds the package's own files inside the unpacked release (2026-10-11).
 RELEASE_FILES_DIR = 'files'
 RELEASE_CER = 'amdgpu-wddm-release.cer'
 RELEASE_REBOOT_LINE = 'Reboot                                          ; release package: the GPU changes driver at the next restart'
@@ -223,7 +223,7 @@ def check_detector(inf, repo, commit, role):
 def release_root(directory):
     """The package root of a release package: the named directory, or `files` under it, else None.
 
-    The unpacked release holds setup.exe in its top folder and everything else in `files` (owner, 2026-10-11), so an
+    The unpacked release holds setup.exe in its top folder and everything else in `files` (2026-10-11), so an
     operator who names the folder the zip made is one level above manifest.json. A release built before that layout
     is flat and the named directory is the root. Without this, --rollback over a tester release read the top folder
     as a build directory and failed with "no source-manifest.json", which names the wrong problem."""
@@ -432,7 +432,7 @@ HEARTBEAT_TASK = 'Lab-Present-Heartbeat'
 
 
 def heartbeat(t, seconds):
-    """Start the present heartbeat (ops/heartbeat.ps1, a small top-most window in the owner's session whose text
+    """Start the present heartbeat (ops/heartbeat.ps1, a small top-most window in the interactive session whose text
     changes every 250 ms, as the interactive user through the one-shot task Lab-Present-Heartbeat; it exits by
     itself after `seconds`). An idle desktop presents about once a minute, so without it the KMD start-health
     witness goes stale (age_ms > 15000) and every confirmation fails (kmd175-deploy002). Its task name must stay

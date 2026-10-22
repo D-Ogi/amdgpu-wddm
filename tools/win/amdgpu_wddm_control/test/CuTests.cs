@@ -108,7 +108,7 @@ static partial class UnitTests
         // release installer as a key it never configured, which it then sets to the release default 40).
         Throws<InvalidOperationException>(() => reg.Delete("CuMode"), "R1 CuMode is never removed");
         Throws<InvalidOperationException>(() => reg.SetDword("CuMode", 32), "R1 only 24 and 40 are written");
-        // The mask and the record of the person's own count (owner, 2026-10-14): only a mask inside the board's
+        // The mask and the record of the person's own count: only a mask inside the board's
         // topology and only a record of a request the driver takes.
         Throws<InvalidOperationException>(() => reg.SetDword("CuDisableWgp", 0x100000), "R1 a mask outside the four shader arrays is never written");
         Throws<InvalidOperationException>(() => reg.SetDword("CuDisableWgp", 0), "R1 an empty mask is removed, never written");
@@ -498,7 +498,7 @@ static partial class UnitTests
         CuCount();
     }
 
-    // The count of cores and the map of pairs (owner, 2026-10-14): the topology the page offers, the documented
+    // The count of cores and the map of pairs: the topology the page offers, the documented
     // default set of every count, a hand-picked map, and the record that makes a count the person's own choice.
     static void CuCount()
     {

@@ -29,7 +29,7 @@ Record SHA256, full WDK build and the M430-M431 actual-source host evidence.
 7. Require no ACK timeouts/refused normal flips/TDR, advancing flips/vsync,
    correct content and preserved OS/DWM. Sample status again after workloads.
    Physical mouse smoothness and uninterrupted long-duration visuals remain
-   owner observations; a screenshot alone cannot establish them.
+   observations at the lab monitor; a screenshot alone cannot establish them.
 
 On failure preserve logs and native status; no unchanged install retry. Check
 SSH/process state independently before recovery. DWM/PnP or authorized plug

@@ -7,5 +7,5 @@
     false
   ],
   "remote_mutation": false,
-  "pending": "Owner AC recovery result; do not infer completion from request."
+  "pending": "Manual AC recovery result; do not infer completion from request."
 }

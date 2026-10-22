@@ -7,7 +7,7 @@ on the input, composition and presentation path.
 
 Before another S4, verify a capture configuration on the current cold boot
 that contains a known stream of mouse movements and a matching visual oracle.
-Prefer physical mouse movement with a timestamped owner interval; an automated
+Prefer physical mouse movement with a timestamped operator interval; an automated
 synthetic input control may distinguish USB/input delivery from DWM, but does
 not replace the physical control. No credential entry or login is needed.
 Do not run input injection on the development PC or silently change desktop.

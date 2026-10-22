@@ -720,12 +720,12 @@ or new paging/performance acceptance.
 
 ## 2026-09-23 candidate0794 live trial (M245)
 
-Distinct signed0.7.94.1 installed with hardware gates closed and unchanged Windows boot. Relevant host regressions pass. The startup-aware one-shot PnP trial was launched; SSH became unavailable before result collection. Automatic readiness and an OS GPU workload remain unverified. See facts M245 and candidate0794 evidence. Owner priority: complete the positive startup-to-workload path before expanding failure-case coverage.
+Distinct signed0.7.94.1 installed with hardware gates closed and unchanged Windows boot. Relevant host regressions pass. The startup-aware one-shot PnP trial was launched; SSH became unavailable before result collection. Automatic readiness and an OS GPU workload remain unverified. See facts M245 and candidate0794 evidence. Priority: complete the positive startup-to-workload path before expanding failure-case coverage.
 
 
 ### M246: recovery and phase visibility
 
-Owner reset restored display-only operation (FullWddm0). No new crash dump or failing-start ring was retained. Candidate0795 adds KeepLog-gated flushed snapshots before each coordinator phase and after readiness, outside subsystem locks at PASSIVE_LEVEL. Host319 and WDK build pass; candidate not installed. Next positive-path trial must inspect these snapshots before retrying initialization. See facts M246.
+A manual reset at the lab restored display-only operation (FullWddm0). No new crash dump or failing-start ring was retained. Candidate0795 adds KeepLog-gated flushed snapshots before each coordinator phase and after readiness, outside subsystem locks at PASSIVE_LEVEL. Host319 and WDK build pass; candidate not installed. Next positive-path trial must inspect these snapshots before retrying initialization. See facts M246.
 
 
 ### M247: prepare OS completion storage
@@ -854,17 +854,17 @@ Windows winsys previously left gem_flags zero, so the M265 gap affects producer 
 
 ### M267: candidate0799 installed, full-start evidence pending
 
-Added system-leaf encoding counters for OS CacheCoherent/noncoherent and AMD SNOOPED disagreement, with host controls.13887routing checks and signed build pass.0.7.99.1 installs under closed gates with matching version/hash,deviceOK,unchanged OS boot. Subsequent PnP disable/enable succeeds at command level but output stops and independent SSH times out before startup status/log capture. No new ICD or GPU application ran. Cause/stage remain unknown; do not infer a cache failure or successful full startup. Owner screen observation requested before reset. See facts M267 and candidate0799-start evidence.
+Added system-leaf encoding counters for OS CacheCoherent/noncoherent and AMD SNOOPED disagreement, with host controls.13887routing checks and signed build pass.0.7.99.1 installs under closed gates with matching version/hash,deviceOK,unchanged OS boot. Subsequent PnP disable/enable succeeds at command level but output stops and independent SSH times out before startup status/log capture. No new ICD or GPU application ran. Cause/stage remain unknown; do not infer a cache failure or successful full startup. A screen observation at the lab was requested before reset. See facts M267 and candidate0799-start evidence.
 
 
 ### M268: actual producer/parser compatibility control
 
-The test now extracts the real BC250 allocation constructor/struct from the Mesa checkout and the actual RADV enum definitions.4096heap/flag/alignment cases pass against the KMD parser and independently expected AMD UAPI bits, in addition to existing v1/v2 controls. Omitting producer GEM assignments only in generated test code produces5120failures and exit1. No production change or additional lab operation. M267 startup remains unresolved after another SSH timeout; owner screen observation is pending. See facts M268 and cache-producer-roundtrip evidence.
+The test now extracts the real BC250 allocation constructor/struct from the Mesa checkout and the actual RADV enum definitions.4096heap/flag/alignment cases pass against the KMD parser and independently expected AMD UAPI bits, in addition to existing v1/v2 controls. Omitting producer GEM assignments only in generated test code produces5120failures and exit1. No production change or additional lab operation. M267 startup remains unresolved after another SSH timeout; a screen observation at the lab is pending. See facts M268 and cache-producer-roundtrip evidence.
 
 
 ## 2026-09-23: M267 cold recovery observation
 
-M267 recovery evidence: `evidence/windows/2026-09-23-E27-m9-inference/candidate0799-cold-recovery/`. Owner reports desktop recovery after AC removal following black screens across reboots. SSH confirms boot 15:39:09, FullWddm=0 and CM_PROB_FAILED_POST_START. Last persisted full-start boundary is GFX stage6 (CP), without a completion record. Root cause and exact failing instruction remain unknown. No new GPU test or restart was issued; cache-intent runtime acceptance remains pending.
+M267 recovery evidence: `evidence/windows/2026-09-23-E27-m9-inference/candidate0799-cold-recovery/`. An operator at the lab reports desktop recovery after AC removal following black screens across reboots. SSH confirms boot 15:39:09, FullWddm=0 and CM_PROB_FAILED_POST_START. Last persisted full-start boundary is GFX stage6 (CP), without a completion record. Root cause and exact failing instruction remain unknown. No new GPU test or restart was issued; cache-intent runtime acceptance remains pending.
 
 
 ### M269: retain requested stop capture during upgrades
@@ -879,7 +879,7 @@ The shim CP sequence now has eight ordered steps shared by its ordinary entry po
 
 ### M271-M272: startup and paired cache-intent runtime acceptance
 
-Candidate0.7.100.1 installs as oem74 and starts full WDDM with every CP checkpoint, SDMA and interrupts successful; persisted log confirms the steps. Initial292paging jobs complete. Boot15:39:09 remains unchanged; the session followed owner AC removal, so warm reentry and0799 cause remain open. Legacy/v2 ICDs each pass96positive shader rounds plus3stale controls on types2/3/5, exact loader witnesses and18expected native exits. FinalGFX204/204,paging16284/16284,zero timeouts/refusals/noTDR. V2 interval adds23058coherent system-leaf encoding attempts with zero snoop mismatches; repeats/backgroundOS included. This does not identify actual CPU PAT/borrowed alias types or prove eviction+shader. Both tasks removed, newICD isolated in cache-intent-v2; globalquietICD unchanged. See factsM271/M272 and linked evidence.
+Candidate0.7.100.1 installs as oem74 and starts full WDDM with every CP checkpoint, SDMA and interrupts successful; persisted log confirms the steps. Initial292paging jobs complete. Boot15:39:09 remains unchanged; the session followed a manual AC removal, so warm reentry and0799 cause remain open. Legacy/v2 ICDs each pass96positive shader rounds plus3stale controls on types2/3/5, exact loader witnesses and18expected native exits. FinalGFX204/204,paging16284/16284,zero timeouts/refusals/noTDR. V2 interval adds23058coherent system-leaf encoding attempts with zero snoop mismatches; repeats/backgroundOS included. This does not identify actual CPU PAT/borrowed alias types or prove eviction+shader. Both tasks removed, newICD isolated in cache-intent-v2; globalquietICD unchanged. See factsM271/M272 and linked evidence.
 
 
 ### M273-M274: v2 inference and performance
@@ -954,10 +954,10 @@ WDK26100 exposes MmGetCacheAttribute with a physical-address input and explicit 
 
 ### M288: candidate07101 installed; full startup unresolved
 
-Candidate0.7.101.1 includes localM278-M287. Exact package passes25checks, installs as oem75 with closed hardware gates, verified hash/version, deviceOK and unchanged Windows boot. One subsequent traced full-WDDM start lost SSH observation; its original host process remains live and independent reads time out. No last-stage evidence is available yet. Do not infer a CP/cache/alias cause or retry the startup. Owner monitor observation and read-only persisted-log recovery are pending. Warm reentry/full M9 remain open. See facts M288 and candidate07101-start evidence.
+Candidate0.7.101.1 includes localM278-M287. Exact package passes25checks, installs as oem75 with closed hardware gates, verified hash/version, deviceOK and unchanged Windows boot. One subsequent traced full-WDDM start lost SSH observation; its original host process remains live and independent reads time out. No last-stage evidence is available yet. Do not infer a CP/cache/alias cause or retry the startup. A monitor observation at the lab and read-only persisted-log recovery are pending. Warm reentry/full M9 remain open. See facts M288 and candidate07101-start evidence.
 
 
-Recovery update for M288: the owner reports a desktop after disconnecting AC power. Remote recovery still times out; independent probes of both configured network routes do not reach TCP22. Local SSH service inspection is requested. No new hardware startup or reset was issued. Persisted checkpoints and installed runtime state remain unverified; cold recovery is not warm-reentry acceptance. See candidate07101-cold-recovery evidence linked in facts M288.
+Recovery update for M288: an operator at the lab reports a desktop after disconnecting AC power. Remote recovery still times out; independent probes of both configured network routes do not reach TCP22. Local SSH service inspection is requested. No new hardware startup or reset was issued. Persisted checkpoints and installed runtime state remain unverified; cold recovery is not warm-reentry acceptance. See candidate07101-cold-recovery evidence linked in facts M288.
 
 
 ### M289: shared graph identity normalization (host only)
@@ -1077,7 +1077,7 @@ Two fixtures now capture through the actual initialized VidMm hierarchy. The fir
 
 ### M313 - Actual07101startup evidence recovered
 
-Owner-supplied changed target address restores pinned SSH access. Read-only acquisition and original file pulls recover successful GART/PSP/IH/GFX1..5 followed by CPstep1entry without persisted completion. Current FullWddm0/stage90/counter2/PnPfailed-post-start; no new hardware action. Prior old-endpoint failures do not prove sshd was down. Next inspect the CPstep1wrapper/KIQ sequence and guard state; exact hang cause remains unproven. See facts M313 and candidate07101-recovered evidence.
+A changed target address, supplied at the lab, restores pinned SSH access. Read-only acquisition and original file pulls recover successful GART/PSP/IH/GFX1..5 followed by CPstep1entry without persisted completion. Current FullWddm0/stage90/counter2/PnPfailed-post-start; no new hardware action. Prior old-endpoint failures do not prove sshd was down. Next inspect the CPstep1wrapper/KIQ sequence and guard state; exact hang cause remains unproven. See facts M313 and candidate07101-recovered evidence.
 
 
 ### M314 - Guard and CP1 boundary review
@@ -1087,7 +1087,7 @@ Current Stage90/counter2 identifies guard refusal by the source mapping. The log
 
 ### M315 - Display-only recovery succeeds
 
-After explicit owner approval, the prepared single closed-gate PnP restart succeeds. Device OK/CM_PROB_NONE, Stage50, info/log exits0 and unchanged Windows boot establish restored diagnostics. All hardware gates remain closed; no new deployment or full GPU start. This supersedes M314 pending approval, not the unresolved CP1 startup finding. See facts M315 and guard-display-recovery/approved-run.log.
+After explicit approval, the prepared single closed-gate PnP restart succeeds. Device OK/CM_PROB_NONE, Stage50, info/log exits0 and unchanged Windows boot establish restored diagnostics. All hardware gates remain closed; no new deployment or full GPU start. This supersedes M314 pending approval, not the unresolved CP1 startup finding. See facts M315 and guard-display-recovery/approved-run.log.
 
 
 ### M316 - CP1 checkpoints prepared and replayed
@@ -1149,8 +1149,8 @@ Candidate0.7.103.1 installs with closed gates, exact SYS/version and deviceOK,
 no Windows reboot. Old07102 stop reaches stage79 with halt-register/PSP/GART
 witnesses; see candidate07103/previous-driver-stop.log. One subsequent full
 start returns PnPenable success then stops producing status; all3configured
-SSH endpoints failTCP. Host session21191 remains live at observation. Owner
-monitor question pending, no reset requested. Do not rerun or infer CP1 failure.
+SSH endpoints failTCP. Host session21191 remains live at observation. Lab(
+)monitor question pending, no reset requested. Do not rerun or infer CP1 failure.
 Recover persisted startup before the next hardware action. Reservation runtime
 acceptance is missing. See facts M325/candidate07103/RESULT-1.md.
 
@@ -1194,7 +1194,7 @@ claiming runtime reservation acceptance. See facts M329.
 
 After M329 workload, one same-binary full PnPstop/start reports enable success
 then loses status/SSH. Full local subnet SSH search finds no pinned lab identity.
-Originalsession55183 still live; owner monitor observation pending, no reset yet.
+Originalsession55183 still live; monitor observation at the lab pending, no reset yet.
 Recover persisted stop/start logs before inferring a failure stage or changing
 hardware sequencing. M328 first startup remains a narrower success, not warm
 acceptance. See facts M330 and warm07104/RESULT-1.md.
@@ -1334,7 +1334,7 @@ The continuous startup recorder captures pending health, advancing primaries,
 automatic confirmation and checked kernel persistence.64MiB readback, eight
 shader hashes and both E14 model outputs pass without manual initialization.
 [Evidence](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md).
-The owner confirms smooth physical output for the new boot
+A visual check at the lab confirms smooth physical output for the new boot
 ([supplement](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)). Power resume, preemption/recovery
 and remaining memory/lifetime contracts are not closed. The attached
 [retained-owner resume review](../../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/power-resume-source-review.md)

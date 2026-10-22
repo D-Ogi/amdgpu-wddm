@@ -28,7 +28,7 @@ ICD file holds the variable's name, i.e. is a lab-flavour build. The registered 
 
 Exit codes: 0 batch complete, only Pass/NotSupported (warnings listed); 1 batch complete with other results;
 2 incomplete, call again with the same arguments to resume; 3 stop the sweep (device lost, a case timed out,
-thermal, owner STOP, ICD/witness/device mismatch, setup error) - inspect the GPU and the logs first; the
+thermal, STOP flag, ICD/witness/device mismatch, setup error) - inspect the GPU and the logs first; the
 same call resumes afterwards (the timed-out or lost case keeps its recorded status and is not rerun).
 A process crash is recorded as Crash for the case it was in and the next call continues after it.
 #>
@@ -77,7 +77,7 @@ function Test-HasName([string]$Path, [string]$Name) {
     return [regex]::IsMatch($text, '(?<![A-Za-z0-9_])' + $Name + '(?![A-Za-z0-9_])')
 }
 function Utc { [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ') }
-# Owner STOP flag of the lab overlay (no overlay = no flag).
+# STOP flag of the lab overlay (no overlay = no flag).
 function Test-OwnerStop {
     if ($NoStopFlag) { return $false }
     try { return [bool](Invoke-RestMethod -Uri 'http://127.0.0.1:2250/flags' -TimeoutSec 1).stop } catch { return $false }

@@ -1,4 +1,4 @@
-"""Builds the Nagi Control App icon from Nagi's smiling bust (owner 2026-10-12: "ikonkę zrób z biustu Nagi").
+"""Builds the Nagi Control App icon from Nagi's smiling bust.
 A round badge: the bust on the page colour of the GUI (#101217), clipped to a circle, with a ring in the accent red
 (#E2263E). Large sizes show head and shoulders; 16-32 px use a tighter crop on the face, so it stays readable.
 Usage: python -I make-icon.py <bust png> <out dir>   (writes nagi.ico and preview PNGs)"""

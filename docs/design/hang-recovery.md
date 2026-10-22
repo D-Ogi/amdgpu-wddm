@@ -23,7 +23,7 @@ that can report a reset only after completion/publication guards pass (verdict 7
 ## The switch
 
 `HangRecoveryMode` is a REG_DWORD under the service's `Parameters` key, read once in `WddmStart`. From 0.7.216.18
-stage 1 is a finished feature and is on by default, as the release-train rule asks (owner, 2026-10-05): absent
+stage 1 is a finished feature and is on by default, as the release-train rule asks: absent
 means 1, and the INF writes 1 with NOCLOBBER, the value of `tools/release/installer/registry-defaults.json`. The
 start logs `wddm: HangRecoveryMode 1: ...`.
 
@@ -410,8 +410,8 @@ decisions are `driver/kmd/submit_watchdog.h` and the host suite is `test/submit_
 Both private timers are diagnostic-only. They never close admission, discard
 deferred work, complete a fence or acknowledge preemption because time elapsed.
 Windows owns the preemption clock and TDR. The KMD does not read the OS
-`TdrDelay` registry value. The GUI still owns that Windows setting, with the
-owner's 10 s default.
+`TdrDelay` registry value. The GUI still owns that Windows setting, with its
+10 s default.
 
 `SubmitWatchdogMs` now sets only the diagnostic threshold. Absence or zero uses
 12000 ms. Values from 1000 through 300000 ms are accepted. Any other value uses

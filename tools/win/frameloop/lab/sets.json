@@ -56,7 +56,7 @@
    ]
   },
   "mt-gpu": {
-   "what": "The owner's multithreading question with GPU work per frame (12 ms, GPU-bound, so the idle that remains is the submitted-to-start latency): record threads 1 and 4, one ExecuteCommandLists per list against all 7 in one call.",
+   "what": "The multithreading question with GPU work per frame (12 ms, GPU-bound, so the idle that remains is the submitted-to-start latency): record threads 1 and 4, one ExecuteCommandLists per list against all 7 in one call.",
    "runs": [
     {
      "name": "smoke",

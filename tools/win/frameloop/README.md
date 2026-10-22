@@ -308,7 +308,7 @@ Files: `runs\host-gpu-*.json`, `runs\host-warp-*.json`, and the two reduced tabl
 
 ## Multithreaded recording and batched submission
 
-The owner's rule is that multithreading is tested with our own clients before a game is trusted to exercise
+The project rule is that multithreading is tested with our own clients before a game is trusted to exercise
 it. Two independent axes:
 
 - `--record-threads N`: N threads record the frame's K lists in parallel. Thread `t` takes lists
@@ -438,7 +438,7 @@ console user, `LogonType Interactive`, started from the SSH session, polled unti
 unregistered. The action is a small `.cmd`, because a task action cannot redirect and the client's text summary
 is worth keeping next to its JSON.
 
-`lab\run-frameloop.py` is the local half: it checks the owner's STOP flag and writes a line on the overlay
+`lab\run-frameloop.py` is the local half: it checks the STOP flag and writes a line on the overlay
 (`mon.py`), pushes the exe and a plan file to `C:\BC250\frameloop`, runs the lab script in **one** SSH call (no
 polling from here, so nothing provokes the lab's sshd penalties), pulls one archive back into
 `lab\runs\<trial>\` and prints one row per configuration. Nothing is swapped: the client goes through the

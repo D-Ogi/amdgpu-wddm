@@ -74,6 +74,6 @@ ETW stacks establish CPU copy cost but not source/destination pointers, primary/
 - direct-analysis.json/txt and full-dwm-analysis.json/txt: unchanged existing analyzer outputs.
 - graphics/input-anchor.json; graphics/input-events.csv; both dump logs.
 - analyze-cpu.py, cpu-excerpt.json/txt; analyze-sample-stacks.py, sample-stacks.json/txt; logging-samples.json; symbols.txt; validation.txt; SHA256SUMS.
-- No loss reported is not proof every potential provider/stack category was enabled. The sampled stacks are statistical evidence, not exact accounting of every millisecond or full causal proof for later owner-observed animations.
+- No loss reported is not proof every potential provider/stack category was enabled. The sampled stacks are statistical evidence, not exact accounting of every millisecond or full causal proof for later visually observed animations.
 - No new S4 transition is contained in this analysis. No assertion of S4 acceptance, physical cursor smoothness, animation correctness or M9 completion follows.
 

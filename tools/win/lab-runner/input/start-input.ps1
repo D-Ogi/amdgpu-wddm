@@ -1,6 +1,6 @@
 # LAB (elevated SSH): starts input-server.ps1 in the lab user's interactive session as a one-shot scheduled task
 # "Lab game input" (the name stays outside the kits' 'BC250|DWM|G0|WSI' competing-task gate), bounded by -Seconds
-# (<= 1200, owner's game-session bound) plus 30 s of task limit. -Stop ends it: a quit command first, then the task.
+# (<= 1200, the game-session bound) plus 30 s of task limit. -Stop ends it: a quit command first, then the task.
 param([string]$Session = '', [int]$Seconds = 900, [switch]$Stop)
 $ErrorActionPreference = 'Stop'
 $task = 'Lab game input'

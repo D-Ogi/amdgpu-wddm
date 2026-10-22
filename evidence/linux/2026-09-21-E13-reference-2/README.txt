@@ -4,10 +4,10 @@ Alpine diagnostic stick, kernel 6.18.52-0-lts, amdgpu as shipped with it. Captur
 session.sh over SSH, copied here through redact.py (MAC addresses and USB serial numbers replaced, the stick's network
 log left out). Nothing here was edited by hand.
 
-boot1-full/        started by the owner out of Windows (cold or warm not recorded), stick mode "full". state.txt and ib.txt
+boot1-full/        started by the operator out of Windows (cold or warm not recorded), stick mode "full". state.txt and ib.txt
                    are the PC-side copies of the phase output. This boot ended in a hang at "modprobe -r amdgpu"; what that
                    step had written to RAM is lost.
-boot2-full-cold/   cold start by the owner's power button, mode "full".
+boot2-full-cold/   cold start by the power button, mode "full".
 boot3-readonly/    warm restart out of boot 2, mode "readonly" (amdgpu not loaded by the stick), then "load" with tracefs
                    armed: amdgpu-events-load.txt is the clean init trace (87778 events, no overrun).
 compare-e03.txt    compare.py: E03's trace against boot 3's.

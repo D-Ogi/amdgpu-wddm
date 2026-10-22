@@ -15,7 +15,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PLACEHOLDER = re.compile(r"\{([a-z_0-9]+)\}")
-# Arms that run a workload on the lab. The owner's three-minute trial bound applies to these.
+# Arms that run a workload on the lab. The three-minute trial bound applies to these.
 TRIAL_KINDS = ("lab", "lab-read", "promote")
 # Arms that run on the development PC, move a file or wait for a restart. They touch no GPU, so the trial
 # bound does not apply; each one still carries a bound of its own.
@@ -122,7 +122,7 @@ class Package:
     # BD-167, which keeps every lookup the lab flavour keeps.
     flavour: str = ""
 
-    # The folder that holds the package's own files inside the unpacked release (owner, 2026-10-11: the top folder
+    # The folder that holds the package's own files inside the unpacked release (2026-10-11: the top folder
     # holds setup.exe and this one folder).
     FILES_DIR = "files"
 

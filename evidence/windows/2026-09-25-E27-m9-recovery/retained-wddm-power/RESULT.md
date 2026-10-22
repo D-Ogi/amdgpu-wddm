@@ -1,7 +1,7 @@
 # M460 - Retained WDDM software suspend/resume boundary
 
 2026-09-25. Source/host work, not wired to SetPowerState and not deployed.
-The accepted lab baseline remains M458 KMD145 with owner-confirmed output.
+The accepted lab baseline remains M458 KMD145 with visually confirmed output.
 
 WddmSuspendRetained joins previously queued notifications, then under the owner
 lock checks execution/paging queues, active submissions, completion/preemption

@@ -12,4 +12,4 @@ Before/after device problem is 0 and version 0.7.166.1. This proves node identit
 
 The application log follow-up returned APP_LOG_ABSENT; lack of that log does not establish the rejection cause. The original M712 device log remains a separate observation.
 
-Raw output and exact script/source snapshots are included; binary and source SHA-256 are in identity.json. No private device instance, secrets or unrelated owner data are present in these selected outputs. The helper was built with /W4 /WX; eight invalid-install-argument controls passed.
+Raw output and exact script/source snapshots are included; binary and source SHA-256 are in identity.json. No private device instance, secrets or unrelated personal data are present in these selected outputs. The helper was built with /W4 /WX; eight invalid-install-argument controls passed.

@@ -170,7 +170,7 @@ static void gate(void)
 
     /* No setting at all. This is every machine that installs 0.7.213: the reader is a finished feature and the
      * release-train rule puts it on, so an absent value starts it and the chip is identified (hwmon.c rule 3).
-     * The window is still shared with whatever third-party monitor the owner runs, which is what the switch
+     * The window is still shared with whatever third-party monitor the user runs, which is what the switch
      * below exists for. */
     Fresh();
     HwmonStart(&device);
@@ -444,8 +444,8 @@ static void sampler(void)
     CHECK(h.AgeMs == 3001 && (h.Flags & BC250_HWMON_FLAG_FRESH) == 0);
     CHECK((h.Flags & BC250_HWMON_FLAG_VALID) != 0 && h.Rpm[1] == 2400);   /* stale, not absent */
 
-    /* A duty output runs and nothing turns: the one case the owner must see at a glance. It is shown in red
-     * and the owner reacts to it, so it needs BC250_HWMON_STOPPED_SAMPLES samples in a row, and the two before
+    /* A duty output runs and nothing turns: the one case an operator must see at a glance. It is shown in red
+     * and an operator reacts to it, so it needs BC250_HWMON_STOPPED_SAMPLES samples in a row, and the two before
      * that must NOT raise it. */
     ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), 0);
     for (i = 0; i < BC250_HWMON_STOPPED_SAMPLES - 1u; i++) {
@@ -463,7 +463,7 @@ static void sampler(void)
     CHECK(native_log_has("(0/5 turn)"));
 
     /* ONE refused tachometer reading is not a stopped fan. The duty read-backs stay at 961, the one turning
-     * channel answers 0xFFFF and is refused, and a red "not turning" row over that would send the owner to the
+     * channel answers 0xFFFF and is refused, and a red "not turning" row over that would send an operator to the
      * case over a collision on a window that has no arbiter - which is the very reason the gate exists. */
     ec_put16(&native_ec, BC250_HWMON_REG_FAN(1), BC250_HWMON_RPM_NONE);
     native_time += 10000ull * BC250_HWMON_PERIOD_MS;

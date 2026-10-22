@@ -8,7 +8,7 @@
 #
 # The build ends with --help, a usage check, --no-present on each artifact (which creates no window, so it is
 # safe on any PC, including this development PC) and a SHA-256 of each artifact, the receipt a lab runner
-# pins. It never presents here: a window on the development PC is the owner's to allow.
+# pins. It never presents here: a window on the development PC needs explicit permission.
 #
 #   pwsh tools\win\vkpresent\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget
 #   pwsh tools\win\vkpresent\build.ps1 -Kits ... -Arch x86        # only the 32-bit program

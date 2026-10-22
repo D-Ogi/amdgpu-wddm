@@ -1,4 +1,4 @@
-# The installed release is the only source of the KMD client (owner, 2026-10-08: the harness must need nothing from
+# The installed release is the only source of the KMD client (2026-10-08: the harness must need nothing from
 # the old lab directories C:\BC250\m8 to m14, which go away). The release installer writes InstallRoot into
 # HKLM\SOFTWARE\amdgpu-wddm\Release, and <InstallRoot>\tools\bc250kmd_cli.exe is the client every query goes through.
 # A missing release, a missing client, or a query form the client's own usage does not list is an error that says

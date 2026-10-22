@@ -1,6 +1,6 @@
-PROVENANCE: the Nagi desktop wallpaper, the owner's image, upscaled 4x with RealESRGAN_x4plus_anime_6B, the small
+PROVENANCE: the Nagi desktop wallpaper, own artwork of the project, upscaled 4x with RealESRGAN_x4plus_anime_6B, the small
 tagline re-set in Inter (the brand text face) because the generated letters merged. It is stored XOR-obfuscated.
-Published here by the owner's decision of 2026-10-13. The repository and the release package hold no plain image of it.
+Published here by its author. The repository and the release package hold no plain image of it.
 
 | File | Bytes | SHA-256 |
 |---|---|---|

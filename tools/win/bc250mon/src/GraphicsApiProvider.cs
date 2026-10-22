@@ -34,7 +34,7 @@ namespace Bc250Mon
             public bool Ours { get { return Apis.Any(a => a.Level == Level.Good); } }
         }
 
-        // Shells, launchers and our own tools draw with D3D11 too; they are not the "3D app" the owner asks about.
+        // Shells, launchers and our own tools draw with D3D11 too; they are not the "3D app" the panel asks about.
         static readonly HashSet<string> Excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "dwm", "explorer", "shellexperiencehost", "startmenuexperiencehost", "searchhost", "searchapp",

@@ -2,7 +2,7 @@
 
 M665, unit A, 2026-09-27 (lab clock 14:05-14:10 local, UTC+2; boot 2026-09-27T12:58:57.5+02:00 unchanged, no
 reset, KMD 164 exact source unchanged, CPU UMD 8279AC7F untouched, DWM 3152 untouched, no registry change,
-GPU Present and CDD interop gates 0 throughout). Owner's decision after E47/E48: the candidate that carries the
+GPU Present and CDD interop gates 0 throughout). Decision after E47/E48: the candidate that carries the
 present-mode work becomes the registered file instead of living as a swap-in candidate.
 
 ## Why

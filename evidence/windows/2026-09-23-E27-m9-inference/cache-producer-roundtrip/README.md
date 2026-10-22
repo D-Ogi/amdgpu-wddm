@@ -4,4 +4,4 @@
 
 run_umd_blob.ps1 -ProducerRoot P:/bc-250/scratch/mesa-wddm2 passes4096 producer cases with0failures and the kernel compile-check. -OmitCacheIntent only modifies generated test code to zero the emitted GEM bits; it exits1 with5120failures. This prevents the original missing producer assignment from escaping consumer-only tests. No production code/binary changed this turn.
 
-Lab state: prior M267 full-start stream remains alive on host with no new remote output. An independent SSH15-second read timed out again. No new start/reset/installation/GPU test was issued. Owner screen observation remains pending. Neither these host tests nor the live waiting SSH process establish a completed GPU start.
+Lab state: prior M267 full-start stream remains alive on host with no new remote output. An independent SSH15-second read timed out again. No new start/reset/installation/GPU test was issued. Visual screen observation remains pending. Neither these host tests nor the live waiting SSH process establish a completed GPU start.

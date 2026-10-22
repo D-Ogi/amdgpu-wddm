@@ -8,4 +8,4 @@ Generated mutation replaces restore's scratch source with unknown source;2434928
 
 Not integrated into virtual/local graph publication yet. Captured physical plans must survive the appropriate OS multipass lifetime when copies modify their own translation tables; re-resolving modified VAs on resume would change the operation. Microsoft local d3dkmddi.md4132/4144 documents opaque progress preservation, not ownership of arbitrary retained pointers. Scope must include successful retirement, cancellation and device stop. System-only M291 captures do not write local table storage; general table/mixed graph acceptance remains open.
 
-No lab mutation or WDK package deployment. Both configured TCP22routes failed again this turn; owner sshd status is pending.
+No lab mutation or WDK package deployment. Both configured TCP22routes failed again this turn; local sshd status is pending.

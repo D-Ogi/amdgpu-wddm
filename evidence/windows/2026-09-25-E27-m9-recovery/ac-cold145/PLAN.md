@@ -16,7 +16,7 @@ not another power cycle. Read startup record and device status before workloads.
 Pass requires exact SYS/UMD/ICD identities, new boot, durable guard increment,
 automatic engines without CLI RUN, same-generation presentation progression and
 checked automatic confirmation, then64MiB full GPU readback, shader hashes and
-both reference model outputs. Physical display/input requires owner feedback.
+both reference model outputs. Physical display/input requires visual feedback.
 A failure retains raw partial logs and closes workload admission. Do not repeat
 an engine test or power cycle merely because observation timed out. No resume,
 recovery or full M9 acceptance is inferred from this single cold entry.

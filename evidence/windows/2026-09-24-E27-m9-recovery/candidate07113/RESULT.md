@@ -28,7 +28,7 @@ so do not claim a specific startuprequest was directly observed causing it.
 Onefailure-recoveryAC restoresboot06:29:13. Persistentlogs collected before
 closed-gate PnPrecovery. Finalindependent113info stage61/48presents,fullgate0,
 resetgate0,CLIconfirm0,UnconfirmedStarts0,SSHhealthy. Total2ACcycles: onebaseline,
-onefailure recovery. NoadditionalOS/DWMrestart ormanualowneraction.
+onefailure recovery. NoadditionalOS/DWMrestart ormanualaction.
 Power samples preserved as auxiliarytelemetry only;unknownage/modelcalibration.
 Hostlogs redacthardwareidentity;rawKMD/probe artifactsunchanged.
 

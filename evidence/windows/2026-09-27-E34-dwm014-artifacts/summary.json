@@ -1,5 +1,5 @@
 {
-  "classification": "VISUAL FAIL: owner observation and captured corruption",
+  "classification": "VISUAL FAIL: visual observation and captured corruption",
   "runner_completion": {
     "gpu_pid": 952,
     "utc": "2026-09-27T01:21:29.6472486Z",

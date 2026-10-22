@@ -157,7 +157,7 @@ class RecipeConfigs(unittest.TestCase):
         self.assertEqual(["vulkan_radeon.dll"], mesa["radv-system"]["ships"]["src/amd/vulkan/vulkan_radeon.dll"])
 
     def test_the_mesa_sets_resolve_as_recorded_and_variants_only_add(self):
-        # Owner 2026-10-21: the shipped sets stay as recorded; -Compiler names the compiler and -Variant adds named
+        # The shipped sets stay as recorded; -Compiler names the compiler and -Variant adds named
         # changes. No variant may touch an option it does not name.
         code, text, out = self.run_gate()
         self.assertEqual(0, code, text)

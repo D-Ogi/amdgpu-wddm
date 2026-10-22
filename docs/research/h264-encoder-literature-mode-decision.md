@@ -814,7 +814,7 @@ favours DC. Covered by item 1.2, listed here because it is chroma-specific.
 
 Unpaywall could not be used at all: its API rejected the project's contact address
 (`research@example.com`) with HTTP 422 on every request, and this workspace's rules forbid substituting a
-real address without the owner's word. OpenAlex and Crossref were used instead; neither needs an address.
+real address without explicit approval. OpenAlex and Crossref were used instead; neither needs an address.
 
 ---
 

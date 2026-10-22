@@ -23,7 +23,7 @@ namespace AmdgpuWddmSetup
     {
         public const int DesignWidth = 1160, DesignHeight = 740, RailWidth = 220, GuideWidth = 300, ChromeHeight = 48, ButtonBarHeight = 76;
 
-        // The countdown of the restart screen, in seconds (owner, 2026-10-12: "automatic after a visible countdown").
+        // The countdown of the restart screen, in seconds.
         public const int RestartCountdownSeconds = InstallFlow.RestartCountdownSeconds;
 
         readonly SetupArgs _args;
@@ -46,7 +46,7 @@ namespace AmdgpuWddmSetup
         EngineResult _planResult, _result;
         ResultView _view;
         bool? _systemTuningChoice;
-        // The two shortcut options of the plan screen (owner, 2026-10-12), both on unless the command line says no.
+        // The two shortcut options of the plan screen, both on unless the command line says no.
         // The two shortcut answers: null until a switch or the person on the plan screen states one. A run with no
         // answer of its own passes no switch, so the answer an earlier run of the same install saved stands.
         bool? _startMenuShortcut, _desktopShortcut;
@@ -64,7 +64,7 @@ namespace AmdgpuWddmSetup
         bool _prepUseFirmware, _prepFromWelcome;
         DateTime? _runStarted;
         Timer _timer, _anim;
-        // The restart this install needs starts by itself after a visible countdown (owner, 2026-10-12): nothing on
+        // The restart this install needs starts by itself after a visible countdown: nothing on
         // the restart screen waits for a click. Restart now takes the countdown's place and Later cancels it.
         Timer _countdown;
         int _restartLeft = RestartCountdownSeconds;
@@ -191,14 +191,14 @@ namespace AmdgpuWddmSetup
 
         const int LargeScreenWidth = 2560, LargeScreenHeight = 1440;
 
-        // The owner's rule of 2026-10-12 (SmallScreen.cs): a small screen gets no guide panel at all.
+        // The rule (SmallScreen.cs): a small screen gets no guide panel at all.
         public bool SmallScreenNow { get { var w = WorkArea(); return SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
 
         // Whether the right-hand panel, with or without the guide character, is in the window at all.
         public bool GuidePanelShown { get { return !_small; } }
 
         // The folder that holds the package, next to the exe. The unpacked release holds setup.exe in its top folder
-        // and the whole package in files\ beside it (owner, 2026-10-11), so that is where this looks first. The kept
+        // and the whole package in files\ beside it, so that is where this looks first. The kept
         // repair set keeps its copy of setup.exe in the package folder itself, so the exe's own folder is the second
         // place. Neither has a manifest when only setup.exe was copied out of the zip: files\ is then the answer, and
         // the welcome screen says to unpack the whole zip (PackageMissing).
@@ -400,7 +400,7 @@ namespace AmdgpuWddmSetup
             _chrome = new ChromeBar(this, Program.ProductName, Theme.S(ChromeHeight), code => Strings.Language = code, languages,
                 Strings.T("ui.minimise"), Strings.T("ui.close-window"));
             _rail = new Panel { Dock = DockStyle.Left, Width = Theme.S(RailWidth), BackColor = Theme.Nav, Padding = Theme.Pad(0, 22, 0, 0) };
-            // The owner's rule of 2026-10-12: on a small screen the guide panel is not in the window at all, and the
+            // The rule: on a small screen the guide panel is not in the window at all, and the
             // width it would have taken goes to the screen's own column. The panel object stays (the tab order and
             // the frame read it), with no width and not visible, so nothing of it is drawn or reached.
             _small = SmallScreenNow;
@@ -543,8 +543,7 @@ namespace AmdgpuWddmSetup
             // button, the value of the strip or a new check row. The window used to build the whole screen again for
             // every batch of events, also for the 'step' event of every change an install makes: the strip, the rows
             // and the rail became new windows several times a minute, and each new window showed the background for a
-            // frame before it drew itself (owner, 2026-10-14: "co 6-8 sekund niebieski pasek od instalatora robi
-            // krótkie mignięcie").
+            // frame before it drew itself.
             if (screen == Current && (screen == Screen.Checking || screen == Screen.Working) && UpdateWorking(screen == Screen.Checking)) return;
             Builds++;
             // A short crossfade over the screen that leaves (200 ms or less). Only when the screen really changes and
@@ -981,7 +980,7 @@ namespace AmdgpuWddmSetup
 
             _planOffersInstall = true;
             // Checks: all passed, or the ones that need attention. Nothing on this screen asks the user for a
-            // permission any more (owner, 2026-10-12): the Install button is enabled from the first moment, and
+            // permission any more: the Install button is enabled from the first moment, and
             // pressing it is the consent for what the card below states.
             var warn = _plan == null ? new List<CheckRow>() : _plan.Checks.Where(c => c.Result != "ok").ToList();
             if (warn.Count == 0) Status(Strings.T("plan.checks.ok"), StatusLine.State.Good);
@@ -1000,13 +999,12 @@ namespace AmdgpuWddmSetup
                 restarts > 2 ? Strings.T("plan.restarts.many", restarts) :
                     Strings.T(restarts <= 0 ? "plan.restarts.0" : restarts == 1 ? "plan.restarts.1" : "plan.restarts.2"),
                 restarts > 0 ? Strings.T("plan.restarts.choice") : null);
-            // What the installation changes about the way Windows starts, as plain information (owner, 2026-10-12:
-            // "Przestan wymagac potwierdzen od uzytkownika"). The engine reads the same two states and acts on them
+            // What the installation changes about the way Windows starts, as plain information. The engine reads the same two states and acts on them
             // by itself: test mode is turned on, and BitLocker protection is paused for the restarts of the install.
             // The window states them here so that nothing happens to the PC that this screen did not say.
             bool testModeOff = _plan != null && _plan.Checks.Any(c => c.Id == "testsigning.inactive");
             // The Microsoft Visual C++ runtime the driver's programs need: when the plan found it missing or too
-            // old, the install brings it (owner, 2026-10-12), and this screen says so before it happens.
+            // old, the install brings it, and this screen says so before it happens.
             bool vcMissing = _plan != null && _plan.Checks.Any(c => c.Id == "vcruntime.missing");
             foreach (var id in InstallFlow.PlanChangeIds(testModeOff, PlanBitLocker(), vcMissing))
             {
@@ -1048,7 +1046,7 @@ namespace AmdgpuWddmSetup
                 sc.Row(Icons.Lock, Theme.Dim, Strings.T("plan.settings.note"), null, false, Theme.Small);
             }
 
-            // Where the control application can be started from afterwards (owner, 2026-10-12). Both options are on
+            // Where the control application can be started from afterwards. Both options are on
             // when the screen opens, and neither holds the install back: a person who turns both off still installs
             // the driver by pressing Install.
             var shortcuts = Card(Strings.T("shortcuts.title"), Icons.Sparkle);
@@ -1061,13 +1059,13 @@ namespace AmdgpuWddmSetup
             desktop.CheckedChanged += (s, e) => { _desktopShortcut = desktop.Checked; };
             shortcuts.Add(desktop);
             shortcuts.Add(Ui.Label(Strings.T("shortcuts.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
-            // The Nagi wallpaper (owner, 2026-10-13): on, in the same group, an option and not a question.
+            // The Nagi wallpaper: on, in the same group, an option and not a question.
             var wallpaper = Ui.Check(Strings.T("shortcuts.wallpaper"), shortcuts.Inner);
             wallpaper.Checked = _wallpaper ?? (d == null || d.Wallpaper);
             wallpaper.CheckedChanged += (s, e) => { _wallpaper = wallpaper.Checked; };
             shortcuts.Add(wallpaper);
             shortcuts.Add(Ui.Label(Strings.T("shortcuts.wallpaper.note"), Theme.Small, Theme.Dim, shortcuts.Inner));
-            // The picture on the start screen (owner, 2026-10-14: on by default in the installer, like the
+            // The picture on the start screen (on by default in the installer, like the
             // wallpaper). The box opens on the answer the engine reports, which for a reinstall or an upgrade is
             // the answer the installed driver already carries.
             var bootLogo = Ui.Check(Strings.T("shortcuts.boot-logo"), shortcuts.Inner);
@@ -1087,8 +1085,7 @@ namespace AmdgpuWddmSetup
             // The bar flows right to left, so the first button added is the rightmost: the primary action takes the
             // place the eye and the mouse go to first, and the dismissive one stands away from it.
             go = AddButton(action == "upgrade" ? "plan.go.upgrade" : action == "repair" ? "plan.go.repair" : action == "resume" ? "plan.go.resume" : "plan.go.install", (s, e) => RunInstall(), true, true);
-            // The primary action is never off: a person who opened this installer wants to install (owner,
-            // 2026-10-12). A machine the installer must not change is refused by the preflight, which fails a check
+            // The primary action is never off: a person who opened this installer wants to install. A machine the installer must not change is refused by the preflight, which fails a check
             // and ends the run; it is not a question on this screen.
             go.Enabled = true;
             CancelButton = AddButton("ui.close", (s, e) => Close());
@@ -1096,7 +1093,7 @@ namespace AmdgpuWddmSetup
         }
 
         // For the render gate: the plan screen has no control that asks the user for a permission, and its primary
-        // action is enabled (owner, 2026-10-12). Both are findings, so neither can come back.
+        // action is enabled. Both are findings, so neither can come back.
         public IEnumerable<string> ConsentFindings()
         {
             if (Current != Screen.Plan) yield break;
@@ -1113,7 +1110,7 @@ namespace AmdgpuWddmSetup
             if (primary != null && !primary.Enabled) yield return "the primary action \"" + primary.Text + "\" is off";
         }
 
-        // G-SHORTCUT (owner, 2026-10-12): the plan screen offers both shortcut options, both of them on when the
+        // G-SHORTCUT: the plan screen offers both shortcut options, both of them on when the
         // screen opens, and the Install button does not depend on either. The render gate reports what is wrong.
         public IEnumerable<string> ShortcutFindings()
         {
@@ -1157,7 +1154,7 @@ namespace AmdgpuWddmSetup
                 return;
             }
             Line(Icons.Info, Theme.Dim, Strings.T("restart.save-work"), Theme.Dim);
-            // The restart happens by itself (owner, 2026-10-12): a visible countdown runs down and Windows restarts
+            // The restart happens by itself: a visible countdown runs down and Windows restarts
             // at its end, whether anybody presses anything or not. The two buttons only shorten it or call it off.
             // A screen that cannot restart Windows at all (no offer in the result view) shows no countdown.
             if (_view.OfferRestart)
@@ -1343,7 +1340,7 @@ namespace AmdgpuWddmSetup
             args.AddRange(InstallFlow.WallpaperArguments(_wallpaper));
             args.AddRange(InstallFlow.BootLogoArguments(_bootLogo));
             if (_flow == "repair") args.Add("-Repair");
-            // Pressing Install is the consent (owner, 2026-10-12), so the switches that used to carry a user's answer
+            // Pressing Install is the consent, so the switches that used to carry a user's answer
             // are given on every run. The engine of this package no longer needs them; an engine of an older release,
             // which a kept repair set may still hold, reads them and asks nothing either.
             args.AddRange(InstallFlow.ConsentArguments(PlanBitLocker()));
@@ -1567,7 +1564,7 @@ namespace AmdgpuWddmSetup
         public bool GuideArtShown { get { return _guideArt != null && HasVisibleFlag(_guideArt) && _guideArt.Image != null; } }
         public bool GuideArtWanted { get { return GuidePanelShown && _showNagi && NagiArt.Has(SetupGuide.Expression(GuideCause), SetupGuide.ArtSize(Theme.Scale)); } }
 
-        // The owner's rule of 2026-10-12, as the render gate reads it: on a small screen the right-hand panel takes no
+        // The rule, as the render gate reads it: on a small screen the right-hand panel takes no
         // width, is not visible and holds nothing; on a larger screen it is there with its card. Both directions are
         // findings, so neither can drift.
         public IEnumerable<string> SmallScreenFindings()

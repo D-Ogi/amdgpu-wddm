@@ -26,7 +26,7 @@ These counters support this bounded regression, not arbitrary paging/lifecycle.
 The runner verifies CPU UMD8279AC7F and registered ICD93B1D1FD restoration,
 DWM4596 unchanged. Final independent check at04:51:27Z verifies those hashes,
 no active test processes and the transition task removed. No GPU desktop trial
-was run on153 and there is no owner visual verdict for this transition.
+was run on153 and there is no visual verdict for this transition.
 
 Follow-up script fixes preserve an installer process handle/code independently
 of stderr, wait for the adapter interface and allow the bounded collector to

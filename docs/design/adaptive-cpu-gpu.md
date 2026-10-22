@@ -1,6 +1,6 @@
 # O2 - Adaptive CPU, SDMA and GPU execution
 
-Status: accepted research direction,2026-09-24, requested by the owner.
+Status: accepted research direction,2026-09-24.
 No implementation or speedup claim. This is optional O2 in the
 [main roadmap](../00-goal-and-roadmap.md), not a new prerequisite for M9.
 

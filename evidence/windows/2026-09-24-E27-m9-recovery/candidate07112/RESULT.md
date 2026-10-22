@@ -29,7 +29,7 @@ Do not label this a TLB timeout or infer a locked reset register.
 
 Final independent112info:stage61,82presents,fullgate0,resetgate0,guardcount0
 after successful CLIconfirm. SSH remains healthy, same06:06:14boot. No additional
-DWM/Windows restart or owner action. Plug telemetry during boot is122.0W using
+DWM/Windows restart or manual action. Plug telemetry during boot is122.0W using
 TinyTuya scaling with unknown sample age/calibration; not a liveness proof.
 Host logs redact hardware identities; raw KMD/probe data unchanged.
 

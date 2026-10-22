@@ -151,7 +151,7 @@ SMM. Sampled stable reads cannot exclude a later firmware change. The multi-byte
 transaction is not atomic against power loss, and a valid read-back is not proof
 of the next POST. The lab operator must still test 12 GiB, restart, compare active
 geometry and Windows RAM, then restore 8 GiB and check again. This hardware
-acceptance has not run. A physical CMOS clear is an owner recovery action. It
+acceptance has not run. A physical CMOS clear is a manual recovery action at the lab. It
 restores board defaults and can reset boot order.
 
 ## Host checks

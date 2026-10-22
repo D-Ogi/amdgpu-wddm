@@ -1,7 +1,7 @@
 # M708 - DWM047 combined-client bugcheck and recovery
 
 Runnerf22ce7f, exact166/UMDd7948d8e/C0CE. Hosted DWM11056 and native GPU
-client5448 ran together. The owner observed correct desktop/animation without
+client5448 ran together. A visual check showed correct desktop/animation without
 glitches. Last retained client log contains successful Present774; DWM process
 sample2 is at22.527s with68.1C. Three checkpoint receipts survive. These are
 last preserved observations, not an exact failure time or a completed trial.

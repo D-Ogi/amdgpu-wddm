@@ -11,7 +11,7 @@ experiments/E13-linux-reference-2/redact.py. Copied through redact.py, nothing e
 Top-level files are the phase script's own output (pre sweep dmupre load state dmupost vmregs extras info
 power, in that order; commands.log and steps.log carry every step's exit code and timing):
 
-pre.txt              kernel, boot cmdline, boot history as the owner reported it, confirms amdgpu unloaded
+pre.txt              kernel, boot cmdline, boot history as the operator reported it, confirms amdgpu unloaded
 sweep-pre.log         6313-item pre-driver BAR5 sweep, streamed (positive control at the end: the two known
                       values of M4/M5)
 dmupre.txt, dmu/dmu-pre.log

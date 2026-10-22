@@ -1,7 +1,7 @@
-# Full-resolution OCR of the lab's screen for the interactive game channel (owner, 2026-10-01: the Jev pilot must
+# Full-resolution OCR of the lab's screen for the interactive game channel (2026-10-01: the Jev pilot must
 # work from general perception, not scenario rules). Windows.Media.Ocr in process, no window. The frame is taken
 # at scale 1 from the lab overlay's screenshot service (overlay hidden), read, and deleted at once: only text and
-# boxes leave the lab, never the image (owner: screenshots resized before transmission).
+# boxes leave the lab, never the image (screenshots are resized before transmission).
 # Dot-sourced by game-runtime.ps1 (action "ocr"); run directly it reads the current screen once and prints the JSON.
 # Output: {"w":W,"h":H,"ms":MS,"lines":[{"t":"text","b":[x0,y0,x1,y1]}...]}, boxes as fractions of the frame,
 # at most 80 lines of at most 120 characters, in the engine's reading order.

@@ -13,7 +13,7 @@
 // there ends the whole run: two copies of Quake II RTX must never trace at once.
 //
 // What the run reads while it waits: the driver's DPM snapshot, the same Level-One read the Performance page polls,
-// every two seconds. It gives the chip temperature for the thermal stop (owner, 2026-10-04: 89 C at once, or 87 C
+// every two seconds. It gives the chip temperature for the thermal stop (89 C at once, or 87 C
 // held for 10 s) and the clock it measured for the run's average. A reading the driver cannot give is never a
 // temperature, and a clock the driver only asked for is never part of the average.
 using System;

@@ -2,7 +2,7 @@
 
 2026-09-25, unit A. No restart or KMD replacement. Automatic full-WDDM
 confirmation remains unimplemented; this run is an explicit confirmation after
-M455 content controls and the owner's physical image/cursor confirmation.
+M455 content controls and the visual physical image/cursor confirmation.
 
 ## Change and controls
 

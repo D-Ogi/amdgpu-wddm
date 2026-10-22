@@ -31,7 +31,7 @@ Two facts about the kill switch, and both matter under pressure:
   application's `desktop-cpu`). The application policy and the desktop route are separate controls.
 
 The rollback ladder, in order of reach: `policy cpu`, then `swap rollback` (the frozen desktop router back at
-its registered path, never refused by the owner STOP flag), then the lab baseline restored by the operator.
+its registered path, never refused by the STOP flag), then the lab baseline restored by the operator.
 
 ## Commands
 
@@ -81,8 +81,8 @@ desktop.
 
 - **The swap acts on the next `OpenAdapter`, not at once.** DWM keeps the router it mapped until its next
   restart. Read `status` before you draw a conclusion from a frame on the screen.
-- **An interactive run puts a window on the owner's screen.** The overlay carries the announcement and the
-  owner STOP flag stops a run. `swap rollback` ignores the STOP flag by design, because a rollback must always
+- **An interactive run puts a window on the lab screen.** The overlay carries the announcement and the
+  STOP flag stops a run. `swap rollback` ignores the STOP flag by design, because a rollback must always
   work.
 - **The package pins exact inputs by SHA-256.** The pinned quartet and the frozen baseline router are those of
   the 2026-10-01 attempt. `package` and `--self-test` therefore refuse today: the lab baseline moved on, and

@@ -5,7 +5,7 @@ Status: implementation started2026-09-25. No M12 acceptance.
 ## Scope and hypothesis
 The M10 ICD can become the system-discovered Vulkan driver and support broader
 application APIs as missing capabilities and contract defects are fixed.
-The owner's attached M12 requirements and docs/00-goal-and-roadmap.md define
+The M12 requirements and docs/00-goal-and-roadmap.md define
 the full scope: Vulkan CTS parity, sparse resources, performance, OpenGL4.6,
 OpenCL and Direct3D9-12. M11 is deferred to final broader load testing.
 

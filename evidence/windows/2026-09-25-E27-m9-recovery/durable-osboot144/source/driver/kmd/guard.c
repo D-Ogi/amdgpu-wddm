@@ -1,5 +1,5 @@
 // Boot-loop guard, breadcrumbs and log (ADR 0006, points 3 and 4). This lab has no kernel debugger and a
-// hang costs the owner a walk to the machine, so the driver leaves its own trail:
+// hang costs a walk to the machine, so the driver leaves its own trail:
 //
 //   <service key>\Parameters
 //     UnconfirmedStarts  REG_DWORD  incremented at every DxgkDdiStartDevice, cleared from user mode

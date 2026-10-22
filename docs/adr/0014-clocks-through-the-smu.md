@@ -1,6 +1,6 @@
 # ADR 0014: clocks through the SMU, measured on Linux first
 
-Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 6 at the owner's suggestion). State on
+Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 6 on request). State on
 2026-09-27: point 1 is done (the kernel driver owns the operating point, the legacy startup task is disabled;
 deployment record in the workspace STATE file); points 2 and 3 are open; point 4 (the 85 C stop enforced in
 the driver) is not implemented: the driver reads the temperature (`driver/kmd/smu.c`) but does not act on it.
@@ -22,7 +22,7 @@ clock does. The limits are in `docs/hardware.md`, and so is the allow-list: only
 3. Every step is preceded by a Linux measurement on the same unit: available operating points, clocks and voltage
    under load and idle, temperatures, the messages amdgpu sends (wishlist). Nothing is extrapolated from other boards.
 4. The 85 C stop rule is enforced in the driver once it owns the clocks, not only in the lab procedure.
-   Amendment, 2026-10-01: the limit moved to 87 C by owner decision (KMD 0.7.184.1, `BC250_CLOCK_HOT_MC`; the DPM
+   Amendment, 2026-10-01: the limit moved to 87 C by decision (KMD 0.7.184.1, `BC250_CLOCK_HOT_MC`; the DPM
    release threshold moved from 80 C to 82 C with it, the 90 C floor is unchanged; `docs/design/dpm.md`).
 
 ## Consequences

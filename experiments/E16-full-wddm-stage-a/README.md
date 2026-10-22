@@ -89,12 +89,12 @@ Added during run 005, with the full adapter up and the screen black, before run 
   nothing reaches the carve-out either).
 - The start budget (`UnconfirmedStarts`) counts the full WDDM start as well; a start that kills the desktop is not
   confirmed, and the third one is refused, which hands the display to Basic Display.
-- The way back while SSH works: `EnableFullWddm = 0`, device disable/enable. If SSH does not work: the owner's power
-  button, and the budget above takes care of the boots after it.
+- The way back while SSH works: `EnableFullWddm = 0`, device disable/enable. If SSH does not work: the power
+  button at the box, and the budget above takes care of the boots after it.
 - The engines stay halted for the whole run: `EnableGart`, `EnablePsp`, `EnableGfx`, `EnableIh` closed.
 - Temperature read before and after; stop above 85 C.
 - Run 005 can hang the machine at the start (see H9, third outcome); unit A has no remote power control, so it is
-  run with the owner at the box.
+  run with an operator at the box.
 
 ## Procedure
 
@@ -203,7 +203,7 @@ Evidence: `evidence/windows/2026-09-21-E16-run-005/` (timeline in `README.txt`, 
   up (first time for the full table). But H3 is refuted: the screen goes black and stays black, `CommitVidPn` is never
   reached, win32k lists no display adapter. H4 holds: no TDR, no bugcheck, no live kernel report. H5 not reached.
 - **H10 is refuted**: `InstalledDisplayDrivers` in the software key changes nothing (run 005c, same log tail).
-- The machine stayed reachable over SSH throughout and the owner asked to go forward rather than back, so the adapter
+- The machine stayed reachable over SSH throughout and the decision was to go forward rather than back, so the adapter
   was left in the full table while 0.7.6 (tracing wrappers on the child and VidPN DDIs) was prepared.
 
 ### Run 006 (2026-09-21, bc250kmd 0.7.6 = 0.7.5 plus tracing wrappers on the child and VidPN DDIs)
@@ -224,7 +224,7 @@ dxgkrnl takes from a display-only driver and, by this run, not from a full one.
 H11's first half holds in the worst way: the frequency refusal is gone and `EnumVidPnCofuncModality` gets as far as
 `pfnUpdatePathSupportInfo`, where dxgkrnl bugchecks the machine: `VIDEO_DXGKRNL_FATAL_ERROR` (0x113), subtype 0x1C,
 in `DMMVIDPNPRESENTPATH::SetRotationSupport`, twice (the gate was still open at the next boot), after which the start
-budget refused the third start (stage 90) exactly as designed and the owner brought the machine up in safe mode.
+budget refused the third start (stage 90) exactly as designed and an operator at the lab brought the machine up in safe mode.
 Read in the kernel dump and in the lab's dxgkrnl: a driver with path independent rotation (WDDM 1.3+) on a
 test-signed system must report `RotationSupport.Offset0` for the primary path and no other offset; ours said
 `Identity` only. Lesson: on a test-signed system dxgkrnl's driver verification is armed, and a wrong answer in the
@@ -233,7 +233,7 @@ VidPN callbacks is a bugcheck, not a status. Co nagle, to po diable - what is do
 - H12 (before run 008). bc250kmd 0.7.8 reports `Identity | Offset0` for the full table. Prediction:
   `EnumVidPnCofuncModality` succeeds and `CommitVidPn` is reached (stage 50). Before the run, the 0x113 sites on the
   display path are read offline (`scratch\tmp\dxgk_bugcheck113_static.md`) and our answers checked against them;
-  the gate is opened with the owner at the box, and it is closed in the registry right after the device reload
+  the gate is opened with an operator at the box, and it is closed in the registry right after the device reload
   so that a bugcheck cannot repeat at the next boot.
 
 ### Run 008 (2026-09-21, bc250kmd 0.7.8)

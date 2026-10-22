@@ -39,7 +39,7 @@ $script:StatePath        = Join-Path $script:StateDir 'state.json'
 $script:ProfileListKey   = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
 $script:ProfilePathsOverride = $null                           # host tests: fixture profile folders
 $script:DryRunMode       = $false
-# The visible countdown before a restart the installer makes (owner, 2026-10-12). The same 15 s as the setup
+# The visible countdown before a restart the installer makes. The same 15 s as the setup
 # window's restart screen (tools\win\amdgpu_wddm_setup\src\InstallFlow.cs, RestartCountdownSeconds).
 $script:RestartCountdownSeconds = 15
 $script:PlannedRestarts  = 0                                   # install.ps1: the restarts the decision counted
@@ -229,7 +229,7 @@ function Test-IsAdmin {
     return (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Nothing here asks the person a question (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika").
+# Nothing here asks the person a question.
 # Starting install.cmd, or pressing Install in the window, IS the answer for everything an installation of this
 # driver needs; uninstall.cmd is the answer for the removal. The function that asked - Read-Confirmation - is gone,
 # so a new question cannot be added by calling it, and the tests of tools\release (test-boot-locale.ps1) refuse a
@@ -488,7 +488,7 @@ function Format-RegistryValue($V) { if ($V -is [array]) { return '[' + (@($V | F
 #       DPM_SETTING_LAST_REASON at every start with the SMU online). After one more start the installer cannot tell
 #       such a driver's guard 0 from a 0 the tester wrote, and the value stays 'kept'. A reopen deletes nothing
 #       there, because the record is the reason of the last start and that start owns it.
-#   CuMode   NOTE: from tester.31 the release default is 24 (owner, 2026-10-14), and Get-DriverClosure returns
+#   CuMode   NOTE: from tester.31 the release default is 24, and Get-DriverClosure returns
 #       nothing where the default equals the closed value, so this entry decides nothing while that default holds:
 #       a fallback 24 is 'same' and no repair is offered for it. The entry stays as it is, so the rule below works
 #       again by itself if a later release goes back to 40. What a release default of 24 needs instead is
@@ -583,7 +583,7 @@ function Get-DriverClosure([string]$Name, $Current, $Default) {
 # A value a person asked for, the mirror of a driver closure (BD-077 with the sign reversed). Release\AppliedDefaults
 # records what the previous installer wrote, not who decided the value, so a 40 the tester chose in the control
 # application and the 40 tester.30 applied as its own release default are the same registry state. With the release
-# default at 24 (owner, 2026-10-14) the 'update' rule would then take a chosen 40, or a chosen map of cores, away at
+# default at 24 the 'update' rule would then take a chosen 40, or a chosen map of cores, away at
 # every upgrade, and nothing else tells the two apart: both end in a confirmed start, so CuModeConfirmed is 40 in
 # both, and tester.30's application never wrote a mask.
 #   CuMode   CuModeChosen holds the encoded request a person asked for (mode | disable << 8, so 24, 40, or
@@ -1322,8 +1322,7 @@ function Test-BitLockerConsentRequired {
     # Only verified unencrypted or suspended protection can skip this boot-change decision.
     return ($State -notin @('off', 'suspended'))
 }
-# What the installer does about BitLocker protection before it changes the start options, without asking anybody
-# (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika"). The install needs test signing, test signing
+# What the installer does about BitLocker protection before it changes the start options, without asking anybody. The install needs test signing, test signing
 # needs a boot-option change, and a boot-option change on a protected volume makes Windows ask for the recovery key
 # at the next start. So the installer suspends protection itself for the restarts it makes, and BitLocker turns
 # itself on again afterwards (Suspend-BitLocker -RebootCount; Microsoft BitLocker PowerShell documentation).
@@ -1356,7 +1355,7 @@ function Get-BitLockerPlan {
     return [pscustomobject]@{ action = 'unknown'; reboots = 0
         message = 'BitLocker: the protection state of this drive could not be read. The installation goes on; keep your recovery key at hand in case Windows asks for it after a restart' }
 }
-# A visible countdown that ends in a restart by itself (owner, 2026-10-12: automatic restarts, never a required
+# A visible countdown that ends in a restart by itself (automatic restarts, never a required
 # click). Enter restarts at once, any other key puts the restart off, and a console that has no key reader (a
 # scheduled run, redirected input) simply waits the countdown out and restarts. Returns 'now' or 'later'.
 function Wait-RestartCountdown {
@@ -1414,8 +1413,7 @@ function Read-SmartAppControlState {
     return (Result 'unknown' "$name holds an unexpected value: $v")
 }
 # ---- the shortcuts of the control application -------------------------------------------------------------------
-# The owner's instruction of 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie (domyslnie i menu start i
-# pulpit)". The setup window offers both, both on by default, and neither of them gates the Install button. On the
+# The setup window offers both, both on by default, and neither of them gates the Install button. On the
 # command line -NoStartMenuShortcut and -NoDesktopShortcut leave one or the other out.
 #
 # One list, used by the install, by the uninstall and by the footprint probe, so a shortcut the install writes
@@ -1429,7 +1427,7 @@ function Read-SmartAppControlState {
 #   arguments  the arguments of the shortcut's target
 #   legacy     $true for a name an older release wrote (below); the install never writes such a row
 #
-# The names (owner, 2026-10-13: "Ikonka na pulpicie i w menu powinna miec nazwe zaczynajaca sie od Nagi"): the
+# The names: the
 # shortcuts carry the product name Nagi. Earlier releases wrote the same three shortcuts as
 # "amdgpu-wddm Control". Those three old names stay in this list as legacy rows, so an install over an older release
 # and the uninstall remove them, and the footprint sees them. A legacy row is removed only when its target is our own
@@ -1549,7 +1547,7 @@ function New-ControlShortcut {
     return $Link
 }
 
-# The Nagi wallpaper (owner, 2026-10-13: after a successful install the wallpaper is set, unless the person cleared
+# The Nagi wallpaper (after a successful install the wallpaper is set, unless the person cleared
 # the box of the installer). The engine runs elevated, for whoever started it, and a picture is a setting of each
 # person's own session, so the engine sets nothing itself: it records the choice for Nagi Control App in
 # <SoftwareKey>\Release, Wallpaper (DWORD 1 or 0) and WallpaperStamp (REG_SZ, one value per install run). The
@@ -1572,7 +1570,7 @@ function Set-WallpaperRecord([bool]$Selected, [string]$Version) {
     } | Out-Null
 }
 
-# The picture on the start screen (owner, 2026-10-14: on by default in the installer, like the wallpaper). This one
+# The picture on the start screen (on by default in the installer, like the wallpaper). This one
 # is a driver setting, not a per-person one: the kernel driver draws it, and Parameters\BootLogo holds the answer.
 # An absent value is the release default, which is on, so the two answers are "remove the value" and "write 0". A
 # removed value also means that no later install writes the default over the person's choice.
@@ -1631,7 +1629,7 @@ function Set-BootLogoChoice($Stated) {
 # ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
 # Our control application, the CLI and the user-mode drivers are built against the Microsoft Visual C++ 2015-2022
 # runtime. Until now a PC without it was refused at the preflight and the tester had to fetch the runtime from
-# Microsoft. The owner's instruction of 2026-10-12 is "powinien byc auto-installer!!!": the package carries
+# Microsoft. Now the package carries
 # Microsoft's own installer (payload\redist\vc_redist.x64.exe, release-sources.json) and the install runs it.
 # Running the installer is the consent for it, like every other change this engine makes.
 $script:VcRuntimeFiles = @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll')
@@ -1766,10 +1764,8 @@ function Invoke-VcRuntimeInstall {
 }
 
 # ---- which Windows this driver is made for ---------------------------------------------------------------------
-# The owner's policy of 2026-10-11 is n-2: "wystarczy nam wsparcie n-2 czyli maks do 23H2 jak obecnie + nowsze ale
-# canary to raczej nie". Supported are Windows 11 23H2 (22631), 24H2 (26100), 25H2 (26200) and the general builds
-# after them. A Windows 11 older than 22631 is a line that says so and advises an update (owner, 2026-10-12: "tylko
-# warning, nie blokada"), never a refusal. An Insider build and an LTSC edition are lines of the same kind. The one
+# The support policy is n-2, without Canary builds. Supported are Windows 11 23H2 (22631), 24H2 (26100), 25H2 (26200) and the general builds
+# after them. A Windows 11 older than 22631 is a line that says so and advises an update, never a refusal. An Insider build and an LTSC edition are lines of the same kind. The one
 # refusal is Windows 10 and older (below build 22000), and 32-bit Windows.
 $script:WindowsSupportedBuilds = @(22631, 26100, 26200)       # 23H2, 24H2, 25H2
 $script:WindowsSupportedNames = '23H2, 24H2, 25H2'
@@ -2659,8 +2655,7 @@ function Get-OurScheduledTasks {
 # starts the sign-in notice of the control application, which shows only when the driver is not running. Up to
 # tester.31 it also showed a small top-most window whose changing text kept DWM presenting, for the KMD's old
 # milestone (a presentation completion within 15 s at the 60 s mark); the KMD's QUIET (0.7.216.104,
-# BC250_START_HEALTH_QUIET in driver\kmd\bc250kmd_escape.h) takes an idle desktop as it is, and that window is gone
-# (owner, 2026-10-22). The task keeps its name. It is registered for the Users group (S-1-5-32-545), which every
+# BC250_START_HEALTH_QUIET in driver\kmd\bc250kmd_escape.h) takes an idle desktop as it is, and that window is gone. The task keeps its name. It is registered for the Users group (S-1-5-32-545), which every
 # interactive account belongs to, at the limited run level, and it touches neither the driver nor the registry.
 #
 # The accounts are named by their SID here, never by a name: a name of a built-in account is translated on a German,
@@ -2672,7 +2667,7 @@ function Get-OurScheduledTasks {
 # The logon type of a group principal is Windows' own ('Group'); the installer states it in this plan and does not
 # pass it to New-ScheduledTaskPrincipal, which takes it with -UserId.
 #
-# What the window task runs (owner, 2026-10-14). powershell.exe is a console program: Windows gives it a console when
+# What the window task runs. powershell.exe is a console program: Windows gives it a console when
 # it creates the process, and -WindowStyle Hidden hides that console only after PowerShell has started. Where Windows
 # Terminal is the default terminal the console is a Terminal window, and on the lab that window was still on the
 # screen when the start window closed (fact M899). The window task therefore runs Nagi Control App, a windows-subsystem
@@ -2885,7 +2880,7 @@ function Get-ReleaseFootprint {
         @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'per-user tuning journals retained for their owners' } else { 'no per-user tuning journal' }) }
     } $true
     # The Nagi wallpaper picture stays: it can be the desktop background of its account, which the uninstall leaves
-    # alone (owner, 2026-10-13).
+    # alone.
     & $probe 'per-user wallpaper' {
         $u = @(Get-OurUserDataDirs | ForEach-Object { Join-Path $_ 'wallpaper' } | Where-Object { Test-Path -LiteralPath $_ })
         @{ present = ($u.Count -gt 0); detail = $(if ($u.Count) { 'the Nagi wallpaper picture stays for the accounts that may show it as their background' } else { 'no per-user wallpaper picture' }) }
@@ -3072,7 +3067,7 @@ public static extern bool MoveFileEx(string existing, string replacement, int fl
 # observations live in %LOCALAPPDATA%\amdgpu-wddm of every user who ran a program on the GPU. One folder per
 # profile in the ProfileList. A host test sets $script:ProfilePathsOverride to fixture profile folders.
 # Two folders in it stay at an uninstall (Remove-UserDataExceptTuning): the user's Windows tuning journal, and the
-# Nagi wallpaper picture, which can be that account's desktop background (owner, 2026-10-13: the uninstall leaves
+# Nagi wallpaper picture, which can be that account's desktop background (the uninstall leaves
 # the person's current wallpaper alone).
 $script:UserDataKept = @('system-tuning', 'wallpaper')
 function Get-OurUserDataDirs {
@@ -3311,7 +3306,7 @@ function Format-CommandLine([Parameter(Mandatory)][string]$Exe, [string[]]$Argum
 # older sets are removed. A prepared offline folder (prepare-offline.ps1) has the same layout. Neither is the
 # unpacked release: both keep the package root as their own folder, with setup.exe in it (Get-PackageSetupExe).
 #
-# Where the setup window is (owner, 2026-10-11): the unpacked release holds setup.exe in its top folder and
+# Where the setup window is: the unpacked release holds setup.exe in its top folder and
 # everything else in files\, so the package root (the folder with manifest.json) is files\ and the exe is one level
 # above it. A kept repair set and a prepared folder are not unpacked by a tester: they keep the package root as
 # their own folder, with the setup copy in it. Get-PackageSetupExe answers both shapes, so nothing else has to know

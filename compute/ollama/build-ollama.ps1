@@ -330,7 +330,7 @@ function Invoke-Hip {
         '-DGGML_HIP_NO_VMM=ON',
         '-DGGML_HIP_GRAPHS=OFF',
         '-DGGML_CUDA_FORCE_MMQ=ON',
-        # Flash attention on, which the owner asked for in every HIP build.
+        # Flash attention on, as every HIP build requires.
         '-DGGML_CUDA_FA=ON',
         # The two measured BC-250 switches the staged llama.cpp patches read.
         '-DCMAKE_CXX_FLAGS=-DBC250_HIP_NO_DEVICE_PRINTF=1 -DBC250_HIP_MAX_ALLOC_BYTES=0xfffc0000ULL'

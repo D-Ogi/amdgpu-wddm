@@ -21,7 +21,7 @@ does. It does not touch MMIO, does not load firmware, does not reset anything.
 MEDIUM RISK. If the shader hangs or faults, amdgpu's job timeout fires (default 10000 ms for compute,
 drivers/gpu/drm/amd/amdgpu/amdgpu_device.c:4294) and the driver starts GPU recovery. On this SoC amdgpu's
 recovery path is untested by us (wishlist L6), and in the E13 session one module operation already hung the
-machine hard enough to need the owner. Assume a failed run can cost a power cycle. Mitigations built in:
+machine hard enough to need the operator. Assume a failed run can cost a power cycle. Mitigations built in:
 one submission, no retries, no loop, a 5 s wait that gives up before the driver's own timeout, and --groups 1
 as the first thing to try.
 

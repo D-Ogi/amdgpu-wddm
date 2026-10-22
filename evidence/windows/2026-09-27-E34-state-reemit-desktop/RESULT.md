@@ -10,7 +10,7 @@ DWM020 runs185.825s,3774 loss-free matched DMA pairs attributed to DWM5112,
 matching submission/completion IDs, no preemption or unmatched/pending/duplicate
 pairs. Static8000-pixel composition ROIs and all sampled cyan-shape checks pass.
 The count is comparable to ordinary batching (M585), far below M589's41943.
-No owner visual verdict was received; sparse samples do not exclude transient
+No visual verdict was received; sparse samples do not exclude transient
 or residual shrink artifacts. G0/BD-043 remain open, no performance acceptance.
 
 Together with019 this motivates isolating individual state/reference updates.

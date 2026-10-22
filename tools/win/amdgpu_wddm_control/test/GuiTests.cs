@@ -44,7 +44,7 @@ static partial class UnitTests
         var p = new AppPrefs(store);
         Check(!p.ShowTipsAutomatically && !p.ReduceAnimations && !p.ShowSupportOptions && !p.GettingStartedDismissed, "R4: off by default");
         Check(p.UpdateCheckAtStart && p.RecordRecentLaunches, "R4: D2 and D3 are on while absent");
-        Check(p.ShowNagi, "R4: the guide character is on while absent (owner, 2026-10-11)");
+        Check(p.ShowNagi, "R4: the guide character is on while absent");
         Equal(0, store.Writes, "R4: reading writes nothing");
         p.ShowNagi = true; p.UpdateCheckAtStart = true; p.RecordRecentLaunches = true; p.HiddenGames = new HashSet<string>();
         Equal(0, store.Writes, "R4: setting a default writes nothing");
@@ -362,7 +362,7 @@ static partial class UnitTests
         Equal(w, none, "WU-036: no screen information: nothing moves");
     }
 
-    // The owner's rule of 2026-10-12: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
+    // The rule: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
     // panel with the character and the whole right-hand panel it sits in do not show (GitHub #38: on the tester's
     // 800x600 screen the panel covered the text of the page). The screen comes in through the rule's arguments, so
     // these cases never read the screen this test runs on; the window's own side of it is a render finding
@@ -389,8 +389,8 @@ static partial class UnitTests
         Check(LayoutRules.SmallScreen.IsDevice(2048, 1536, 2f), "small screen: 2048x1536 at 200 % is 1024x768 logical, which is small");
         Check(!LayoutRules.SmallScreen.IsDevice(2100, 1600, 2f), "small screen: 2100x1600 at 200 % is 1050x800 logical, which is not small");
         Check(!LayoutRules.SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
-        Equal(1024, LayoutRules.SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
-        Equal(768, LayoutRules.SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
+        Equal(1024, LayoutRules.SmallScreen.MaxWidth, "small screen: the width of the rule");
+        Equal(768, LayoutRules.SmallScreen.MaxHeight, "small screen: the height of the rule");
     }
 
     // G-RENDER: the page width rule of --smoke-render. A page is measured against the column it was built at, so that
@@ -586,7 +586,7 @@ static partial class UnitTests
         Equal("1400 MHz", rows.First(r => r.Id == "clock").Value, "sensors: the current clock without the observed flag");
 
         // The fan row, state by state. Anything short of "online and fresh" is "No reading", never a last-known
-        // number: the owner reads this row to decide whether the fan turns right now.
+        // number: a person reads this row to decide whether the fan turns right now.
         Func<HwmonState, SensorRow> fanRow = f => Sensors.Rows(d, null, f).First(r => r.Id == "fan");
         Check(fanRow(Fan(HwmonState.FlagGated, 0, 0)).NoReading, "sensors: the gate is closed by every install");
         Check(fanRow(Fan(HwmonState.FlagValid | HwmonState.FlagDutyProven, 1589, 961)).NoReading, "sensors: stale is not a reading");
@@ -755,7 +755,7 @@ static partial class UnitTests
         Check(PlainWords.Findings(new[] { "The KMD fence 0x1F timed out" }).Any(), "G-NOINT: the check finds internals");
         Check(!PlainWords.Findings(new[] { "Nagi Control App 1.0.0.0-tester.11" }).Any(), "G-NOINT: the product name and a release version are fine");
         Check(!PlainWords.Findings(new[] { Strings.In("en", "help.about.text") }).Any(), "G-NOINT: the technical name Nagi (amdgpu-wddm) on About is fine");
-        // The Nagi naming (owner, 2026-10-13): the window, the About card and the sign-in notice name the app Nagi
+        // The Nagi naming: the window, the About card and the sign-in notice name the app Nagi
         // Control App, and the meaning of the name is one string that the name tip and the About line both read.
         foreach (var lang in Strings.Languages)
         {

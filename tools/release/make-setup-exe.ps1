@@ -1,5 +1,4 @@
-# Builds the single-file installer: ONE exe that carries the whole release inside it (owner, 2026-10-12:
-# "dlaczego setup.exe nie zawiera zipa w sobie? to lepsza metoda!").
+# Builds the single-file installer: ONE exe that carries the whole release inside it.
 #
 #   pwsh -File tools\release\make-setup-exe.ps1 -PackageTop <unpacked release folder> -Out <file.exe> [-Check]
 #
@@ -178,8 +177,7 @@ if ($Check) {
         '  gate: the payload holds the {0} files of {1}, each byte for byte the file of the release' -f $entries.Count, $version
         # -ReleaseZip: the release zip of the same package, entry by entry against the file list of the payload. The loop
         # above compares the payload with the folder the zip was written from, which is the same content; this
-        # compares it with the published archive itself, which is what the owner asked to be proven (2026-10-12,
-        # requirement C of the single file: the payload holds the files of the zip). Compress-Archive writes the
+        # compares it with the published archive itself, which is what has to be proven (requirement C of the single file: the payload holds the files of the zip). Compress-Archive writes the
         # release folder itself, so every entry starts with that folder's name and the first segment comes off.
         if ($ReleaseZip) {
             $relZipPath = (Resolve-Path -LiteralPath $ReleaseZip).Path

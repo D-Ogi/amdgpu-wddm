@@ -11,12 +11,11 @@
 # sign-in notice of Nagi Control App (--start-notice). The control application reads the driver's start itself and
 # shows a window ONLY when the driver is not running: a start the driver's own guard refused, with one button that
 # turns the driver back on, or any other failed start, with the way to the application that explains it. On a
-# healthy machine that process exits in a moment with nothing on the screen. The owner asked for this notice on
-# 2026-10-13 ("Uzytkownik musi byc tego swiadomym od razu").
+# healthy machine that process exits in a moment with nothing on the screen. The user must know at once that the
+# driver is not running.
 #
 # Up to tester.31 this script also showed a small blue window with a countdown for two minutes, to keep DWM
-# presenting while the start confirmation waited for a fresh flip. That window came from the CPU desktop and is gone
-# (owner, 2026-10-22: "Niebieskie okienko jest z czasu pulpitu na CPU przeciez. Nie mozemy go usunac w calosci?").
+# presenting while the start confirmation waited for a fresh flip. That window came from the CPU desktop and is gone.
 # A desktop that DWM draws on the GPU flips whenever anything on it changes, and the confirmation of the same logon
 # (start-confirm.ps1, the task "amdgpu-wddm start confirm", Local System) takes an idle one as it is: the KMD reports
 # QUIET when every flip it was given has completed (driver/kmd/start_health.c). The task keeps its name, so an update

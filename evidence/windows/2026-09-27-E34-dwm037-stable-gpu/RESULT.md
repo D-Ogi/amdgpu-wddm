@@ -16,7 +16,7 @@ freeze. All36,200 selected final pixels are exact in primary and GDI captures:
 8,000 red/overlap pixels and28,200 full cyan client pixels at
 (616,157)-(816,298). Independent host RGB decoding agrees with the lab checker;
 per-region hashes match. Four live primary/GDI pairs are retained privately as
-diagnostics, not treated as atomic frame comparisons. No owner visual verdict.
+diagnostics, not treated as atomic frame comparisons. No visual verdict.
 No whole-desktop or all-animation-frame correctness claim is made.
 
 ## GPU ownership and completion

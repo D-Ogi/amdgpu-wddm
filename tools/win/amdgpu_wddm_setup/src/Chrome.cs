@@ -123,7 +123,7 @@ namespace AmdgpuWddmSetup
         // The message is posted, not sent. Windows answers it with a message loop of its own that lasts until the
         // button is released, and a sent message would run that whole loop inside this handler, with this bar's
         // frame underneath it: the window rebuilds itself when a drag carries it onto a screen of another size
-        // (SetupForm, the owner's rule of 2026-10-12), and a rebuild disposes this bar. A posted message starts the
+        // (SetupForm, the rule), and a rebuild disposes this bar. A posted message starts the
         // drag after this handler has returned, so nothing of this bar is on the stack while it lasts.
         protected override void OnMouseDown(MouseEventArgs e)
         {

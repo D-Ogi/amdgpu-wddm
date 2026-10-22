@@ -4,7 +4,7 @@
 
 A Windows driver that makes the BC-250's GPU do real work: first provably execute commands, then compute, then 3D. "Works" always means demonstrated on hardware with evidence in `evidence/`, never "the code path exists".
 
-Non-goals: modifying AMD firmware, flashing BIOS as a requirement, shipping binaries of unknown origin, supporting hardware other than PCI `1002:13FE` until it works there, production driver signing (the driver is test-signed and the machine runs with test signing on; Microsoft's attestation signing needs an EV certificate and a partner account, which is an organisational matter and stays outside the project by the owner's decision of 2026-09-21).
+Non-goals: modifying AMD firmware, flashing BIOS as a requirement, shipping binaries of unknown origin, supporting hardware other than PCI `1002:13FE` until it works there, production driver signing (the driver is test-signed and the machine runs with test signing on; Microsoft's attestation signing needs an EV certificate and a partner account, which is an organisational matter and stays outside the project by the decision of 2026-09-21).
 
 ## Why this is believed possible
 
@@ -12,7 +12,7 @@ Linux drives the same silicon with an open, MIT-licensed kernel driver, from the
 
 ## Shared validation plan
 
-The owner requested the [BC250 Open Test Pack](design/bc250-open-test-pack.md)
+The [BC250 Open Test Pack](design/bc250-open-test-pack.md) was requested
 on 2026-09-24: canonical compute and selected CTS first, then offscreen/WSI,
 capture/replay, numerical workloads, engines, translators and demonstrations.
 It defines smoke/regression/showcase/soak/forensic profiles, pinned artifacts,
@@ -57,7 +57,7 @@ against AMD's unmodified tables and run in stages inside the miniport, makes the
 made (14 of them carrying our addresses), and all eleven ring tests pass with the rings in system memory behind
 our GART. M6 in progress: Windows assigns the miniport a message interrupt and it is silent with no source enabled (E12 part A, facts M38); a second bring-up in the same boot works (M39). The IH ring runs and the GPU interrupts the CPU: fences on the gfx ring, the compute queues and the KIQ each give one vector, the same as under Linux on this machine (E12 run 002, E13, facts M40, M43). M6 is reached (E15, facts M57, M58): a compute dispatch on a kernel-owned MEC queue writes its pattern under Windows, the SDMA ring tests and fences work, and a second bring-up in one device start no longer meets a live KIQ fetcher. One defect found on the way: the SDMA engines keep their ring pointers across a halt, so a re-init has to adopt them (M59); 0.7.0 does, and three bring-ups in one device start now work end to end (E15 run 002, M60). M7 starts from ADR 0008. Its stage A met dxgkrnl for the first time in E16 run 001: the full table starts, is refused before the first VidPN and unloaded without a reason on record, and the display-only driver comes back unharmed (M61, M62).
 
-M8's criterion was set and M9-M13 were written out on 2026-09-21, at the owner's request, before any of them was
+M8's criterion was set and M9-M13 were written out on 2026-09-21, on request, before any of them was
 started. The order is the order of dependence: M9 needs M8's device, M12 needs M10's swapchain, M11 needs something
 worth soaking, M13 needs M12's Vulkan to stand on. A criterion may be sharpened by an ADR when the milestone before
 it closes; it is never loosened after a run.
@@ -75,7 +75,7 @@ corruption remains open and the lab is returned to display-only after the test.
 
 ## Work order after M8
 
-The owner requested a full-WDDM repair plan, then chose to proceed with M9 inference first.
+A full-WDDM repair plan was requested. The work then proceeded with M9 inference first.
 Current order is M9, M10 and the remaining main-roadmap work, reusing the E26 desktop fixes.
 The accelerated desktop keeps its existing number M13; [M13.1-M13.7](m13-accelerated-desktop-roadmap.md)
 define its acceptance gates. ADR0009 permits earlier desktop experiments, but does not require them to
@@ -89,7 +89,7 @@ precede M9. Current measurements are facts M145-M151; none closes M13.1 or M9.
 
 ## Sparse capability and UMA performance follow-up
 
-Owner review2026-09-24: [M12.1 sparse resources](design/sparse-wddm.md) is an
+Review 2026-09-24: [M12.1 sparse resources](design/sparse-wddm.md) is an
 explicit sub-gate of M12. Current Mesa/WDDM2 ordinary compute is accepted;
 the missing mirrored VA/NULL-PRT policy and zero-page semantics require their
 own implementation and conformance controls. WDDM2 itself is not the blocker.
@@ -106,7 +106,7 @@ visible GPU Vulkan cube, exact image controls, WSI lifecycle/selected CTS, measu
 cadence and hardware VSync. [ADR0015](adr/0015-m10-cpu-wsi.md) documents CPU presentation.
 M9 recovery, M11 soak, M12 broad conformance and M13 accelerated DWM remain open.
 
-## Work order update (owner, 2026-09-25)
+## Work order update (2026-09-25)
 
 Proceed to M12 without waiting for M11 acceptance. M11 is deferred to the final,
 broader load-testing phase after M12 development and validation. Its existing
@@ -123,7 +123,7 @@ identify and validate the actual installed candidate.
 ## Direction after M12 (2026-09-26)
 
 [ADR 0017](adr/0017-graphics-stack-direction-after-m12.md) records the accepted
-direction and the owner's decisions of 2026-09-26: one hardware implementation
+direction and the decisions of 2026-09-26: one hardware implementation
 (our KMD, RADV/ACO, WDDM integration); a hosted ICD as M13's route, one Vulkan
 device per D3D runtime device driven through the runtime's callbacks, with the
 `d3d10umd`/Zink build as the bring-up control and native path (facts M531-M541);
@@ -139,5 +139,5 @@ table only with exit criteria, by a later amendment. The reconciled statement of
 remains in M13, M14 and M15, with the proposed exit criteria M14.1-M14.8 and M15.1-M15.10, is
 [m15-reconciliation.md](m15-reconciliation.md) (2026-09-30). Deployment state stays in
 workspace `STATE.md`, verified results in `facts.md`. The direction is worked out
-in the owner's working notes outside this repository; only accepted content and
-the owner's decisions enter here, through ADRs.
+in the project's working notes outside this repository; only accepted content and
+the decisions enter here, through ADRs.

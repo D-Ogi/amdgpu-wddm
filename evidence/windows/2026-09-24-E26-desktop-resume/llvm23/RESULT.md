@@ -24,7 +24,7 @@ and establishes neither an LLVM23 speedup nor an attributable regression.
 
 LLVM19 and prior UMDs remain available for rollback. CPU JIT drawing remains;
 GPU D3D acceleration, broad shader conformance and30minute desktop acceptance
-remain open. Owner fluid-cursor confirmation applies to M410, not this trial.
+remain open. The visual fluid-cursor confirmation applies to M410, not this trial.
 Text copies redact interface and PCI instance identity only, preserving line
 endings; public scanout crops omit the overlay's private network data.
 

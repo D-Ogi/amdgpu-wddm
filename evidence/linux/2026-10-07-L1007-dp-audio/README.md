@@ -51,7 +51,7 @@ periods, which completed without error) and after:
 | DP0_DP_SEC_AUD_M_READBACK | 0 (also during playback: not a usable positive control as read here) |
 
 amdgpu enables DP audio at mode set and leaves it on; playback changes none of these registers. The monitor is on
-DIG0 / DP0 / Azalia endpoint 0. Whether the tone was audible needs the owner (no microphone, camera suspended).
+DIG0 / DP0 / Azalia endpoint 0. Whether the tone was audible needs a listener at the lab (no microphone, camera suspended).
 
 ## L8 / L7 / L10 cheap reads (`cheap.sh`)
 

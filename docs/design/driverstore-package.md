@@ -76,7 +76,7 @@ The PDB must match the SYS CodeView GUID and age.
 The builder expands the CAB and verifies every file and catalog member.
 The CAB includes the pinned firmware required by the INF.
 The public installer ZIP retains the separate firmware download path.
-The owner signs the CAB with EV before Partner Center submission.
+The licensor signs the CAB with EV before Partner Center submission.
 
 The default mock-attestation step signs each driver PE and regenerates the catalog.
 It verifies unchanged image identities before updating the manifest's whole-file hashes.

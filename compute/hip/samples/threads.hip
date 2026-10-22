@@ -1,7 +1,7 @@
 // threads.hip - a multithreaded HIP program, built with clang against our own hip_runtime.h and
 // our own import library amdhip64.lib.
 //
-// The owner's instruction of 2026-09-29: multithreading is tested with our own clients before a
+// The project rule: multithreading is tested with our own clients before a
 // real application is asked to exercise it. The measurement lives in
 // compute/hip/tests/host/hip_threads_client.h, which the host test test_hip_threads shares with
 // this program: one thread waits for the device while the others launch kernels and allocate

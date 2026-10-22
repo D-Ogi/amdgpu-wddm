@@ -309,9 +309,7 @@
                                             // status "gated" and leaves this start as 0.7.205.1 was.
                                             //
                                             // (b) An idle GPU runs at
-                                            // 500 MHz (owner decision 2026-10-05: "jak lab nie pracuje,
-                                            // to ustawiaj mu zegar gpu na 500 MHz" - when the lab does
-                                            // not work, set its GPU clock to 500 MHz). The clock table
+                                            // 500 MHz while the lab has no work. The clock table
                                             // reaches down to 500 MHz at the lab floor's 820 mV /
                                             // VID 116: 16 levels, index 0 = 500 MHz (the idle point),
                                             // index 3 = 800 MHz (BC250_DPM_THERMAL_FLOOR_LEVEL),
@@ -366,7 +364,7 @@
                                             // has to be 1000 MHz or more.
                                             // 204 (INF 0.7.204.1, on 203): the DPM warm zone
                                             // (no raise) starts at 87 C, the hot limit, instead of
-                                            // 85 C (owner, 2026-10-04). The thermal ramp's interval
+                                            // 85 C. The thermal ramp's interval
                                             // runs from 1 s at 70 C to 4 s at 87 C. At 87 C and above
                                             // the hot cap lowers one level per hot step and the warm
                                             // rule refuses every raise. No escape struct changed.
@@ -837,7 +835,7 @@ typedef struct _BC250_ESCAPE_DPM_TUNE {
 #define BC250_HWMON_FLAG_DUTY_PROVEN 32u     // HwmonDutyProven is 1: a lab trial proved the duty read-back
 // STOPPED: every present tachometer answered, every one of them reads 0, and a duty output is not 0, in
 // BC250_HWMON_STOPPED_SAMPLES samples in a row (driver/kmd/hwmon.h). Three conditions and a repeat, because this flag is shown in
-// red and is what the owner reacts to: one refused tachometer reading is not a stopped fan, and the driver
+// red and is what an operator reacts to: one refused tachometer reading is not a stopped fan, and the driver
 // must not send anybody to the case over a collision on a window that has no arbiter.
 #define BC250_HWMON_FLAG_STOPPED 64u         // the duty is not 0 and no present tachometer turns (see above)
 // Monitor source codes, so that a tool can name a channel without the shim header. Identical definitions live in
@@ -1044,8 +1042,8 @@ typedef struct _BC250_ESCAPE_CPU {
 } BC250_ESCAPE_CPU; // 296 bytes on Windows, ABI 1
 
 // The case fan control (driver/kmd/fan.c, driver/shim/bc250_fan.c, docs/design/fan.md Part B). The driver takes fan 1
-// from the BIOS curve while it runs and gives it back to the chip's own automatic mode on every exit path (owner,
-// 2026-10-06). Software state only: the escape reads the controller's published snapshot, and a write operation
+// from the BIOS curve while it runs and gives it back to the chip's own automatic mode on every exit path.
+// Software state only: the escape reads the controller's published snapshot, and a write operation
 // leaves a request that the governor thread applies at its next hardware-monitor step (at most one second later).
 // No port is touched here, so every operation takes NoAdapterSynchronization=1 and every other D3DDDI_ESCAPEFLAGS bit
 // zero, as RUN_HWMON and RUN_DPM_CURVE.
@@ -1539,7 +1537,7 @@ typedef struct _BC250_ESCAPE_SDMACOPY {
 
 // ---- BC250_ESCAPE_RUN_FBDUMP (dcn.c): a read-only band of the scanned-out surface's pixels ----------------------------
 //
-// The owner's request (2026-09-22): a screenshot that also works under the full WDDM table, where mon.py's GDI
+// The requirement: a screenshot that also works under the full WDDM table, where mon.py's GDI
 // capture shows black (facts M84) because CopyFromScreen reads the CDD's surfaces, not what the display controller
 // scans out. This reads HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS[_HIGH] and _SURFACE_PITCH fresh every call (the
 // same registers BC250_ESCAPE_RUN_DCN already dumps and BC250_ESCAPE_RUN_DCNFLIP already writes) and hands back

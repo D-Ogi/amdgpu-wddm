@@ -6,7 +6,7 @@ in M707. Client uses --lower (y600) to avoid the existing GDI window workload.
 Both processes use separate logs; only DWM reads the existing audit marker.
 The DWM claim remains exclusive to dwm.exe, never consumed by the client.
 
-Render105s, checkpoints130s, watchdog rollback140s, acceptance180s. Owner's
+Render105s, checkpoints130s, watchdog rollback140s, acceptance180s. The
 maximum3-minute test limit applies. Exact-path client is killed before adapter
 transition on all restore paths. No permanent GPU promotion or OS reset.
 

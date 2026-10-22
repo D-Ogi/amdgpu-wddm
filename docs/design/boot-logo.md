@@ -115,7 +115,7 @@ the screen and needs no special case.
 - Down: the centre of the picture sits at `BootLogoAnchorPermille` thousandths of the height, 350 by default, so
   the mascot stands above the ring rather than under it. The driver brings the value inside 100..900. It is a registry
   value and not a constant, so the lab can try other heights against a photograph without a rebuild.
-- **The ring keeps its place** (owner, 2026-10-14: the mascot goes in the logo area above the ring, never over
+- **The ring keeps its place** (2026-10-14: the mascot goes in the logo area above the ring, never over
   it). The whole picture lives in the top `BC250_LOGO_BOTTOM_PERMILLE` thousandths of the surface, 550 today.
   The band wins over the anchor: an anchor that asks for a lower place moves the picture up, never down over the
   ring. The enlargement drops until the picture fits the band, and a picture that cannot fit the band at
@@ -145,7 +145,7 @@ In the control application the switch is on the Display page, in the card "Start
 (`src/BootLogoSetting.cs`, `src/MainForm.Display.cs`), with its search entry and its explanation in the four
 interface languages.
 
-The installer offers the same choice (owner, 2026-10-14): a box on the plan screen of the setup window, checked when
+The installer offers the same choice (2026-10-14): a box on the plan screen of the setup window, checked when
 the screen opens, beside the box for the Nagi wallpaper, and `-BootLogo` or `-NoBootLogo` on the command line.
 A run that states no answer writes nothing, so a reinstall or an upgrade keeps the answer of the installation before
 it, and `uninstall.cmd` removes the value. `Get-BootLogoPlan` in `tools/release/installer/common.ps1` is the whole
@@ -168,7 +168,7 @@ as well: the sample is evidence of what the firmware left in the buffer, and it 
 pixels, not ours.
 
 The **off by setting** line exists because of the `off` trial of 2026-10-14: its log holds no `boot logo:` line
-at all, and a reader cannot tell a driver whose owner turned the picture off from a driver in which this code
+at all, and a reader cannot tell a driver whose user turned the picture off from a driver in which this code
 never ran. Every path now says what it did.
 
 The **scanout** line is read after the draw, from three registers this driver already reads elsewhere

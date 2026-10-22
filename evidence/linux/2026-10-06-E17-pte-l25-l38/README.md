@@ -14,7 +14,7 @@ since boot.
 
 ## How the batch ran
 
-The owner allowed writes to the stick on 2026-10-06. The operator staged the batch on the stick before the boot
+Writes to the stick were allowed from 2026-10-06. The operator staged the batch on the stick before the boot
 (`scripts/stage-b2.ps1` copies it to `\l1006b` on the stick, after an identity check of label, file
 system, bus and size). On Linux, `scripts/run-b2.sh` runs one phase per call and writes every output
 to the stick. After the return to Windows, `scripts/pull-b2.ps1` packed the outputs for the development

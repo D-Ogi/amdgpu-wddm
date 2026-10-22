@@ -4,7 +4,7 @@ Reviewed 2026-09-23 after M311. This is the current acceptance index for the DMA
 
 ## Current hardware and source state
 
-The last verified installation is0.7.101.1/oem75 from M288. Its full start lost SSH observation. The owner subsequently reported a desktop after AC removal, but no persistent startup checkpoint has been recovered. Both configured TCP22 routes still fail during M312. The installed runtime state is unknown; no additional start/reset was attempted.
+The last verified installation is0.7.101.1/oem75 from M288. Its full start lost SSH observation. A later visual check reported a desktop after AC removal, but no persistent startup checkpoint has been recovered. Both configured TCP22 routes still fail during M312. The installed runtime state is unknown; no additional start/reset was attempted.
 
 Development source includes M289-M310; M311 adds actual self-table tests. Latest built development SYS is M310 `AA55F016D6AFCCA7DC4DA07C932266F8E942A48AB38437B9750B21072B0A3AFF`, not deployed. Last default actual-source host routing test is M311,328759checks PASS. This does not establish current Windows behavior.
 

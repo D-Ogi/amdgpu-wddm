@@ -5,7 +5,7 @@
  * remove, out of D0, unload, the watchdog, the bugcheck callback, DxgkDdiResetDevice), the escape and the stored
  * choice.
  *
- * The rule the owner set is checked after every exit path: the chip is back at the board's own values, the mode
+ * The fan rule is checked after every exit path: the chip is back at the board's own values, the mode
  * bit of fan 1 clear and the duty target at the value the board had.
  */
 #define WIN32_NO_STATUS

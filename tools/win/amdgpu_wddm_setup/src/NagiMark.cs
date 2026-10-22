@@ -1,4 +1,4 @@
-// The Nagi logo, the "horizon" mark (the project's Nagi logo, owner's brand sheet, 2026-10-13), drawn from its
+// The Nagi logo, the "horizon" mark (the project's Nagi logo, brand sheet, 2026-10-13), drawn from its
 // geometry: the same drawing as tools/win/amdgpu_wddm_control/src/NagiMark.cs, which lists the geometry. The title
 // bar of the setup window (Chrome.cs) draws it beside the product name. The icon of the exe stays nagi.ico.
 using System;

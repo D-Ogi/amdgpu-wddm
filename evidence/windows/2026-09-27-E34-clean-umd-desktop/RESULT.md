@@ -9,7 +9,7 @@ GDI capture. All five dynamic BMP/PNG pairs, final BMP/GDI and CPU baseline pass
 the cyan-shape diagnostic. These are sampled checks; banded primary capture
 can mix scanout surfaces and cannot be a coherent whole-frame oracle (M593).
 The requested3-second host sound was played after the GPU module witness.
-No owner visual verdict has been received for this run; M595's observation
+No visual verdict has been received for this run; M595's observation
 applies to the earlier49AFB21F binary and is not silently transferred here.
 
 Execution:3634 DWM-owned matched DMA start/stop pairs, zero events/buffers lost,

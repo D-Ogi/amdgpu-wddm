@@ -28,7 +28,7 @@ unspecified display-only timing remains. No force-unblank workaround added.
 - Visibility stops looping: five calls, latest TRUE/SUCCESS, no failures.
   Sixteen raw observations show OTG_BLANK_CONTROL zero. Raster has 1024
   successes (992 active, 32 blank), with no API failures.
-- Owner first confirms visible desktop with stutter, then confirms smooth
+- A visual check first confirms visible desktop with stutter, then smooth
   cursor after the observer has stopped. HardwareAccess observations idle
   graphics scheduling and can perturb presentation. This temporal association
   does not isolate the cause of the transient stutter.

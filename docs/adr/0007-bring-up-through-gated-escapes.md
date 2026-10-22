@@ -52,9 +52,9 @@ it stayed an administrator's in 0.7.211. Points 1, 3, 5 and 6 stand.
 
 ## Consequences
 
-- One binary carries both the owner's working display and experimental hardware code. The gates, the tables
+- One binary carries both the lab's working display and experimental hardware code. The gates, the tables
   and the start budget are what keeps the first from depending on the second.
 - An escape is a synchronous call in the caller's context at PASSIVE_LEVEL: fine for register work and ring
   setup, not a data path. M7 replaces it with the real submission path.
-- A hang during an experiment still needs the owner's hand on the reset button. Experiments therefore keep
+- A hang during an experiment still needs a hand on the reset button at the lab. Experiments therefore keep
   announcing themselves on the overlay and keep the underclock in place.

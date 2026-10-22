@@ -209,7 +209,7 @@ if (-not $SkipTests) {
     # ------------------------------------------------------------------------------------------
     # The multithreaded client, and its negative control.
     #
-    # The owner asks for multithreading to be measured with our own clients (2026-09-29). The
+    # The project requires multithreading to be measured with our own clients. The
     # control build compiles the same runtime with BC250_HIP_WAIT_UNDER_LOCK=1, which restores
     # the process lock over the waits, and the test refuses to run as a control unless the
     # runtime it links really behaves that way. Without the control, a green run of the test

@@ -5,11 +5,11 @@ Date: 2026-10-07. Ported to the b23 release line on 2026-10-08 and to the shippe
 trial, on 2026-10-09, presented no frame (BD-105). From then until BD-197 the route was opt-in, with bounded
 waits, and GDI was the default. On 2026-10-21 BD-197 measured the route on unit A: Quake II RTX and vkcube
 present through it with independent flip, and DWM composes a window that does not cover the output. The
-default is DXGI again, as the owner decided on 2026-10-07 (a route that must be switched on gets forgotten).
+default is DXGI again, as decided on 2026-10-07 (a route that must be switched on gets forgotten).
 GDI is the explicit rollback and the automatic fallback when the DXGI route fails. See "The lab result
 (2026-10-09, b26 validation)" and "The lab result (2026-10-21, BD-197)" below.
 
-This route is how the M15.14 criterion is to be met for Vulkan. The owner put Vulkan into M15.14 on 2026-10-08
+This route is how the M15.14 criterion is to be met for Vulkan. Vulkan was added to M15.14 on 2026-10-08
 (independent flip: the display pipeline scans out a fullscreen or borderless game from the game's own
 swap-chain buffer, and DWM does not compose its frames). The registered system Vulkan ICD presents with `D3DKMTPresent` and a blit, so DWM
 composes every Vulkan frame today. A DXGI flip-model chain on a D3D12 device of our adapter has the shape the
@@ -153,7 +153,7 @@ shared surface (`driver/contract/amdgpu_wddm_surface_format.h`). Nothing in the 
 contract table admits RGB10A2 for composition and for a scan-out primary, and RGBA16F for composition only.
 
 **No lab run covers the four rows below the 8-bit rows.** The lab plan runs vkcube, which takes the first format
-the surface reports, and that is an 8-bit one. These rows are the readiness the owner asked for on 2026-09-29, not
+the surface reports, and that is an 8-bit one. These rows are the readiness that M15.4 asks for, not
 a tested capability, and the release notes must say so until a client asks for a named format.
 
 ## The switch and the fallback
@@ -305,7 +305,7 @@ their own ICD. The kit keeps the tester.23 file by hash and restores it by hash.
 `AMDGPU_WDDM_VK_WSI=gdi` for one process, or the registry value `gdi` for all.
 
 **Steps 1 to 6 are non-game arms of at most 170 s each, which holds the three-minute rule.** Step 7 is the one
-game arm. It runs under the owner's game-session rules of 2026-10-01 and ends within 1200 s. The operator owns
+game arm. It runs under the game-session rules of 2026-10-01 and ends within 1200 s. The operator owns
 the timer and ends the arm when its readings are in hand. No other step starts a game.
 
 **Step 0, the control arm, comes first.** Run step 1 on the installed tester.23 file, with no replacement and no
@@ -376,7 +376,7 @@ read it with `tools/win/etw/etw-present-mode.py`.
    appear before the game picks a device, so an early failure still names which route was chosen.
 
 If a step fails on the DXGI route, the failure gets a GitHub issue, and a failure of step 7 blocks the wagon in
-any case: Quake II RTX is a release gate (owner, 2026-10-08). Step 7 did fail, so the wagon left the train and
+any case: Quake II RTX is a release gate (since 2026-10-08). Step 7 did fail, so the wagon left the train and
 the release notes of 0.7.216.100-tester.24 name neither the route nor its `gdi` workaround: the ICD that ships
 there does not read the switch.
 
@@ -404,7 +404,7 @@ ended any arm. The failure is inside the process.
 
 **What this costs and what it does not.** The wagon was dropped from 0.7.216.100-tester.24 and the system
 Vulkan slot went back to the tester.23 file `4E3F393F`, which has no route code: the Windows shader disk cache
-and the BD-102 fixes are in that file already, so nothing else of the release moved. On the lab both owner
+and the BD-102 fixes are in that file already, so nothing else of the release moved. On the lab both release
 gates then pass, Quake II RTX among them. Nothing of the route is in any release, and the two risks of the
 list above that this result bears on are the two CPU waits of the route and the image creation of a chain.
 The route continues as train b27 (`amdgpu-wddm/b27-vk-wsi-dxgi`, `wsi/b27-vk-dxgi`), where it is opt-in, GDI

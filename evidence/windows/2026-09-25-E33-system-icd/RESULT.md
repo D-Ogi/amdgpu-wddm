@@ -65,4 +65,4 @@ existing registry key instead of recreating it.
 The final comparison corpus is release vulkan-cts-1.4.6.2,
 f6a29701220f34dd1407513bfe80d74ca7b392ce. This81case main-branch control
 does not replace it, full must-pass, sparse, OpenGL/OpenCL/D3D or performance
-acceptance. M11 remains owner-deferred.
+acceptance. M11 remains deferred.

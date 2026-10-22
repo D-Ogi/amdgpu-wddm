@@ -541,7 +541,7 @@ function New-ComponentShortcut {
 }
 
 # Pure: the shortcut names of a component (the install writes them, the uninstaller removes them by these names).
-# The names start with the product name Nagi (common.ps1 $ShortcutBrand, owner 2026-10-13); legacy holds the names an
+# The names start with the product name Nagi (common.ps1 $ShortcutBrand); legacy holds the names an
 # older release gave the same shortcuts ("amdgpu-wddm <title>"), which the install and the uninstall remove only when
 # they point into the component's own folder (Get-ComponentLegacyShortcutCleanup). Without -All a component gets the
 # names of the shortcuts it has (an entry, a server launcher); with -All every name its title can carry, for a record

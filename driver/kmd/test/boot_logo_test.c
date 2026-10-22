@@ -78,7 +78,7 @@ static void Case(const BC250_BOOT_LOGO* logo, unsigned long w, unsigned long h, 
     CHECK(place.DrawWidth == logo->Width * place.Scale && place.DrawHeight == logo->Height * place.Scale);
     CHECK(place.Left + place.DrawWidth <= w && place.Top + place.DrawHeight <= h);
     CHECK(place.Left == (w - place.DrawWidth) / 2);         /* centred across */
-    /* The ring Windows draws lives below the band, and the picture must never reach it (owner, 2026-10-14).
+    /* The ring Windows draws lives below the band, and the picture must never reach it.
      * This holds for every anchor the caller may ask for, including the ones that ask for the bottom. */
     CHECK(place.Top + place.DrawHeight <= h * BC250_LOGO_BOTTOM_PERMILLE / 1000);
 

@@ -9,7 +9,7 @@
 #
 # What this file enforces under responsive OS process/file operations, and what the tests under compute/hip/tests/lab prove without a GPU:
 #   1. One deadline for the whole arm, cleanup inside it. The bound cannot exceed 180 s, which is
-#      the owner's limit for a non-game lab trial, and a cleanup reserve is kept out of the work
+#      the project's limit for a non-game lab trial, and a cleanup reserve is kept out of the work
 #      part of it.
 #   2. Every helper is bounded, and bounded by the time that is left. A helper's own timeout is
 #      clipped to the budget the deadline still has, the worst case of a kill included, and a
@@ -17,7 +17,7 @@
 #      answer is a failed read, not a wait. The review of 2026-10-10 found the first version of
 #      this file short of that: the in-loop read and the read after the arm took their nominal
 #      timeouts whatever the clock said, so the shipped defaults could leave the arm at about
-#      188 s, over the owner's 180 s ceiling, which is the very failure HIP-F2 reported.
+#      188 s, over the 180 s ceiling, which is the very failure HIP-F2 reported.
 #   3. Fail closed on telemetry. No temperature before the arm means the arm does not start. No
 #      fresh temperature during the arm means the arm stops.
 #   4. The thermal rule by the clock: stop at once at or above 89 C, and stop when 87 C or more

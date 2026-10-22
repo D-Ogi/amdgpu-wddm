@@ -176,7 +176,7 @@ runs, the second and the third as policy controls:
 | 2 | `BATCH=0` | 1540.4 ms | 48 (16 / 16 / 16) | 583.8 ms | 591.0 ms | FAIL |
 | 3 | `BATCH=0 BARRIER=full` (build 1) | 69.7 ms | 8 (0 / 8 / 0) | 585.5 ms | 592.1 ms | FAIL |
 
-Phase A answers the question the owner asked on 2026-09-29: a wait of one thread does not hold the
+Phase A answers the question raised on 2026-09-29: a wait of one thread does not hold the
 others off, and 8 to 48 operations of the other threads complete inside it. The length of that
 wait follows the clock, which is why it is 69.7 to 1540.4 ms.
 

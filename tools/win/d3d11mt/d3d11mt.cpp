@@ -1,5 +1,5 @@
-// d3d11mt - a multithreaded D3D11 client with an exact, deterministic result, for the system UMD path (owner
-// 2026-09-29: multithreading is tested with our own clients before a game is trusted to exercise it). Offscreen only,
+// d3d11mt - a multithreaded D3D11 client with an exact, deterministic result, for the system UMD path (project
+// rule: multithreading is tested with our own clients before a game is trusted to exercise it). Offscreen only,
 // so it runs in session 0 as well as on the desktop. README.md has the phases, the output and the exit codes.
 
 #define NOMINMAX

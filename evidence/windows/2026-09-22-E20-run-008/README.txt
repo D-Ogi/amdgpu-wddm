@@ -11,7 +11,7 @@ run 007  bc250kmd 0.7.18 (ab33bffb016437db...), EnablePresentBlit 0: the list re
          size 0x8CA000 at VA 0x8DC000, translated through the context's root to 0x271398000..0x271C61FFF; entry 2
          is the other opened object at VA 0x12000. No blit (gate closed).
 run 008  bc250kmd 0.7.18, EnablePresentBlit 1: every Blt present copied its sub-rectangles into the firmware
-         framebuffer (run-008-console.txt). The owner, at the monitor, saw the whole desktop, correct, for the
+         framebuffer (run-008-console.txt). A visual check at the monitor showed the whole desktop, correct, for the
          minute the full table ran (03:14:50 to 03:15:50). run-008-overlay-screenshot-gdi.png is the overlay's
          GDI CopyFromScreen capture taken at 03:15:01 - black, 3586 bytes: GDI reads the CDD's surfaces, not the
          scanout, so this file shows what the screenshot tool cannot see, not what the monitor showed.

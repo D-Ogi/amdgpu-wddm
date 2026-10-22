@@ -12,7 +12,7 @@ An application compiled by clang for HIP asks for `amdhip64.dll`. Clang's module
 calls `__hipRegisterFatBinary` and `__hipRegisterFunction` before `main()`, and the
 `kernel<<<grid, block, shared, stream>>>` syntax becomes `__hipPushCallConfiguration` and a
 call of `hipLaunchKernel`. This DLL answers those calls. No AMD user-mode component is
-involved, and no part of this work uses PAL (owner decision D015).
+involved, and no part of this work uses PAL (design decision D015).
 
 55 exported names, which [`amdhip64.def`](amdhip64.def) lists: the 38 of step 2, against which a
 plain HIP vector addition links, the 15 that llama.cpp's ggml-hip backend adds in step 3 (design
@@ -273,7 +273,7 @@ against such a copy and against a lost device.
 another thread finishes while a copy waits, and a `hipFree` raced against a copy that has not yet
 submitted returns only after the copy.
 
-The owner asks for multithreading to be measured with our own clients (2026-09-29).
+The project requires multithreading to be measured with our own clients.
 [`tests/host/hip_threads_client.h`](../tests/host/hip_threads_client.h) is that client: one
 thread waits for the device while the others launch and allocate, and it counts the work they
 finish inside that wait. Two programs run it, and both are built and measured by

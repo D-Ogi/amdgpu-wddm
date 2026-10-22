@@ -1,6 +1,6 @@
 # M16 route B: HIP on gfx1013, one design for two builders
 
-Date 2026-10-08. Milestone M16, gate G5. Owner decisions D014 (start M16) and D015 (PAL is excluded
+Date 2026-10-08. Milestone M16, gate G5. Design decisions D014 (start M16) and D015 (PAL is excluded
 for every purpose). Roadmap revision R0006. Route B of the M16 route comparison: our own thin HIP
 runtime on our own Windows driver.
 
@@ -1737,7 +1737,7 @@ Three walls, each already passed and each recorded here so that nobody meets it 
    disassembler and assembler. The linkage matters only for a `-fgpu-rdc` build, which we do not use.
    OPEN and small: write the real tool once a MinGW C++ toolchain or an MSVC build of LLVM exists.
 
-One licence line, as the owner's rule says: the ROCm device library and the ROCm loader carry the
+One licence line, as the project rule says: the ROCm device library and the ROCm loader carry the
 University of Illinois NCSA Open Source License, which is permissive. We build the bitcode from source
 and record the revision.
 
@@ -1825,7 +1825,7 @@ section 5.1). Until then layer 2 moves no byte with the host processor either. I
 copy's error. On a device that layer 1 marked lost, the answer is the loss whatever the fence
 reads, so no host-processor copy or fill goes on after a loss either.
 
-The owner's instruction of 2026-09-29 is that multithreading is measured with our own clients
+The project requires that multithreading is measured with our own clients
 before an application is asked to exercise it. `compute/hip/tests/host/hip_threads_client.h` is
 that client, with a negative control that restores the lock over the wait. Section 5.4 lists what
 each of the two builds must measure.
@@ -2677,6 +2677,6 @@ development machine and on the lab.
 
 It does not design the hipBLAS shim. It does not change any driver component. It does not add a
 hardware queue display driver interface, and it does not need one. It does not plan Strata. It
-evaluates no PAL component, because the owner excluded PAL for every purpose. It makes no claim that
+evaluates no PAL component, because design decision D015 excludes PAL for every purpose. It makes no claim that
 any of this ran on hardware: every statement marked MEASURED was measured on the development machine,
 and the first hardware statement will come from the trial of section 6.

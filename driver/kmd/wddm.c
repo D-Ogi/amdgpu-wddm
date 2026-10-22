@@ -1431,7 +1431,7 @@ static BOOLEAN WddmSubmitProgress(_Inout_ BC250_DEVICE* Device, _Out_ ULONGLONG*
 
 // ---- C48/C49: the two edges of a node's busy state ---------------------------------------------------------
 //
-// The owner's goal is that the GPU must not wait. Offline analysis of RotTR sessions 418-420 found the 3D ring
+// The project's goal is that the GPU must not wait. Offline analysis of RotTR sessions 418-420 found the 3D ring
 // idle for a median 8 ms, 418 to 605 times per 105 s, with a dispatchable packet already queued and the gap
 // ending within 300 us of a display VSync: 0.45 to 0.67 ms of every frame, and 59 to 64 % of all ring idle. It
 // took a 3 GB event-trace dump per session to see that. The driver owns both edges of its own ring, so it can
@@ -2858,7 +2858,7 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              g_WddmHoldBucketNames[6], Wddm->SubmitHeldHistogram[6],
              g_WddmHoldBucketNames[7], Wddm->SubmitHeldHistogram[7],
              g_WddmHoldBucketNames[8], Wddm->SubmitHeldHistogram[8]);
-    // C48/C49, the number the owner's goal is stated in: how long each ring stood idle, and how much of that
+    // C48/C49, the number the project's goal is stated in: how long each ring stood idle, and how much of that
     // idle ended at a display VSync. The trace this instrument was built from (RotTR 418-420) counted 682 gaps
     // >= 4 ms per 105 s on node 0, 418 of them VSync-ended, 0.45 ms a frame - near it, NOT the same object:
     // ring_gap.h says why (the driver cannot see a packet dxgkrnl holds queued, so this is a superset of that
@@ -3550,8 +3550,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         }
     }
     // C50, read once for this start: absent = ON. The DDI text asks for the pairing (d3dkmddi.md:2392) and the
-    // hop it removes is pure latency, so the finished behaviour rides the release, which is the train rule the
-    // owner set on 2026-10-05. The value 0 is 0.7.208.1 behaviour exactly, which is what makes it the bisect
+    // hop it removes is pure latency, so the finished behaviour rides the release, which is the project's release
+    // rule. The value 0 is 0.7.208.1 behaviour exactly, which is what makes it the bisect
     // switch of this feature: one restart with NotifyDpcInReport 0 prices the pairing against the driver that
     // does not have it, in the same session shape.
     // Memory manager stage 1c (0.7.216.8), read once for this start: absent = ON. A VRAM allocation of the UMD that

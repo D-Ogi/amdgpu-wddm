@@ -1,5 +1,4 @@
-# Tests the single-file installer end to end, with nothing installed and nothing outside -Out written (owner,
-# 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie? to lepsza metoda!").
+# Tests the single-file installer end to end, with nothing installed and nothing outside -Out written.
 #
 #   pwsh -File tools\release\test-setup-exe.ps1 -Setup <amdgpu_wddm_setup.exe> -Out <work dir>
 #

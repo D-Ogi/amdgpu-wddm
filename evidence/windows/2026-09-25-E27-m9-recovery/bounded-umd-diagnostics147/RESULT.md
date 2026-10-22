@@ -29,7 +29,7 @@ is not a deterministic pixel-equivalent benchmark. No universal FPS claim.
 New UMD shared2048pixel checks both directions,307200green pixel readback,
 explicit query completion and loaded-DLL hash pass. Present is occluded while
 locked, so this control proves data rather than on-monitor visibility.
-Owner reported animation stutter on the cache-only predecessor; physical
+A visual check showed animation stutter on the cache-only predecessor; physical
 feedback after this logging change remains pending. No stable S4, soak or
 fullM9 acceptance. Primary shadow design was reviewed but not implemented.
 

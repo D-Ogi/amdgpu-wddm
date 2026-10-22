@@ -6,4 +6,4 @@ Command: build with `pwsh driver/shim/test/run_paging.ps1 -KmdRouting -Out P:/bc
 
 Production source unchanged this experiment. Next correction must schedule complete physical dependencies before publishing any virtual alias prefix. System-only graphs can reuse existing graph/band scheduling once captures come from the paging root. Local/table destinations need logical table-shadow publication tied to the accepted copy plan; simply forwarding a virtual graph to the physical publisher would lose those semantics. Mixed residency, unequal offsets and cross-callback endpoint lifetime remain part of the original M9 scope. Do not report this failing requirement as fixed.
 
-No lab mutation. Both configured TCP22routes remain unreachable; local sshd status is pending from owner. Installed candidate07101 runtime/checkpoints remain unobserved after owner-reported cold recovery.
+No lab mutation. Both configured TCP22routes remain unreachable; local sshd status is pending from the lab. Installed candidate07101 runtime/checkpoints remain unobserved after a visually reported cold recovery.

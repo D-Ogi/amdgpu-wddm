@@ -26,7 +26,7 @@ REPO = HERE.parents[3]
 ROOT = Path(os.environ.get('BC250_ROOT') or REPO.parent)
 TARGET = WIN / 'target.py'
 MON = WIN / 'bc250mon/mon.py'
-# Screenshots of the lab screen stay outside the repository (owner: resized, never full resolution).
+# Screenshots of the lab screen stay outside the repository (resized, never full resolution).
 SHOTS = Path(os.environ.get('BC250_SHOTS_DIR') or ROOT / 'scratch/m15/game-runner/shots')
 
 
@@ -46,7 +46,7 @@ def shot(session, overlay=False):
     folder.mkdir(parents=True, exist_ok=True)
     out = folder / time.strftime('shot-%H%M%S.png', time.gmtime())
     # A failed shot is an alarm, not a quiet line: the lab may have crashed (RotTR 0x116, 2026-10-01, seen first
-    # by the owner while this printed "shot" for files that never came).
+    # on the lab monitor while this printed "shot" for files that never came).
     try:
         r = subprocess.run([sys.executable, str(MON), 'screenshot', '--scale', '0.33', '--overlay',
                             '1' if overlay else '0', '--out', str(out)], cwd=str(WIN), capture_output=True,

@@ -18,4 +18,4 @@ ETW: zero lost events/buffers,13 MarkDeviceAsError events (Reason6 once,Reason14
 
 Rollback restores baseline UMD8279AC7F/registered ICD93B1D1FD and switches to CPU3152 at11:57:34Z. No OS reboot or bugcheck observed; original boot retained. Collector13204/start11:57:16.6704586Z completes159 samples at12:00:17.1379545Z, no reader timeout. Archive and cleanup verify original collector absent; all029 tasks removed, including watchdog. Closure12:03:47Z exact164, CPU3152,health15/guard0,gates0,1000MHz/VID116,66.625C,no test process. Durable rollback succeeds on this normal failure path; no destructive crash durability claim.
 
-The copied DWM startup log omits only its LUID-bearing route line; other selected outputs contain no private owner identifiers. No owner visual verdict. G0 remains open: correct BGP1/DWM images, GPU ownership and no full-frame CPU copies still need complete evidence.
+The copied DWM startup log omits only its LUID-bearing route line; other selected outputs contain no private identifiers. No visual verdict. G0 remains open: correct BGP1/DWM images, GPU ownership and no full-frame CPU copies still need complete evidence.

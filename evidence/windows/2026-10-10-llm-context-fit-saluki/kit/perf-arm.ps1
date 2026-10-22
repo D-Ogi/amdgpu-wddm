@@ -29,7 +29,7 @@ param(
 #
 # Read-only on the disk apart from its own output directory under C:\BC250\perf\runs. Nothing is installed.
 # No registry value, clock, fan, BIOS or TDR setting is written. The server binds 127.0.0.1 only.
-# Thermal rule (owner, 2026-10-04): stop at once at Tctl >= 89 C, stop after 10 s held at >= 87 C.
+# Thermal rule (2026-10-04): stop at once at Tctl >= 89 C, stop after 10 s held at >= 87 C.
 $ErrorActionPreference = 'Stop'
 $thermal = @('C:\BC250\seg0\thermal.ps1', (Join-Path $KitDir 'thermal.ps1'),
              (Join-Path $PSScriptRoot 'thermal.ps1')) |
@@ -125,7 +125,7 @@ $busy = Get-ScheduledTask |
 if ($busy) { 'REFUSED competing task(s): ' + (($busy | ForEach-Object TaskName) -join ','); exit 3 }
 
 # Fail closed on missing Tctl. The cool-down wait runs before the stopwatch, so it never eats the deadline
-# and never counts against the owner's llama run-time budget.
+# and never counts against the llama run-time budget.
 $cool = [Diagnostics.Stopwatch]::StartNew()
 $tc0 = $null
 do {

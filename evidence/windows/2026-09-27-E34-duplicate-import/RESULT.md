@@ -35,4 +35,4 @@ Next step is the separately gated GPU Present producer/consumer experiment.
 Output and JSON receipts are copied unchanged. Summary excerpts preserve the
 last45 relevant driver lines, decoded to UTF-8. Complete private archives:
 scratch/g0-hosted/duplicate-runtime001/receipts123.zip and receipts124-125.zip.
-No selected values were redacted. No owner visual observation was requested.
+No selected values were redacted. No visual observation was requested.

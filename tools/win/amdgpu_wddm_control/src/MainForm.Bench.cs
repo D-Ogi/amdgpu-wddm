@@ -1,4 +1,4 @@
-// The ray tracing benchmark card on the Performance page (owner, 2026-10-11). Plain words only: the card says what
+// The ray tracing benchmark card on the Performance page. Plain words only: the card says what
 // the test does, where the game is, what it measured and what our own board reached. The rules are in
 // src/Benchmark.cs and the run is in src/BenchmarkRun.cs, so this file only draws and reports.
 //

@@ -1,6 +1,6 @@
 # d3d11mt
 
-A multithreaded D3D11 client with an exact result. The owner asked (2026-09-29) that multithreading on the system
+A multithreaded D3D11 client with an exact result. The project requires that multithreading on the system
 D3D11 path be tested with our own clients before any game is trusted to exercise it; this is that client. It renders
 offscreen only, so it runs over SSH in session 0 as well as on the desktop, and it creates its device without
 `D3D11_CREATE_DEVICE_SINGLETHREADED`: the runtime's thread-safe device is the subject.

@@ -45,7 +45,7 @@ For the default monitor data directory, create the marker through target.py ps:
 
 Allow the existing in-flight summary (up to five-second subprocess timeout) and
 next provider period to complete. Confirm the overlay graphics panel indicates
-paused counters. This is not the owner STOP flag; the other providers keep running.
+paused counters. This is not the STOP flag; the other providers keep running.
 
 Resume normal summary polling:
 

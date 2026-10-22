@@ -145,7 +145,7 @@ void direct_flip_rule() {
     // The sRGB view of the same storage row is the same scan-out row.
     CHECK(!refuses([](RuntimeSurface &,RuntimeSurface &b) { b.desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; }));
     // The composed-only rows are never candidates, so an FP16 swap chain keeps its copy (HDR-ready
-    // Present architecture, owner 2026-09-29), and so does a format outside the table. RGBA8 and
+    // Present architecture), and so does a format outside the table. RGBA8 and
     // RGB10A2 are SCANOUT_PRIMARY rows from 0.7.216.20, but without the trailer's PLANE_FORMATS flag,
     // which this shell does not read, bc250_scanout_format_admitted refuses them as well.
     for (auto format:{DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -614,7 +614,7 @@ void scanout_primary() {
     primary.ModeDesc={};
     CHECK(composed(&on));
     mip.TexelHeight=1200;
-    // A 10-bit chain keeps its composed primary (HDR-ready Present, owner 2026-09-29), and so does the sRGB
+    // A 10-bit chain keeps its composed primary (HDR-ready Present), and so does the sRGB
     // view, because the front compares the storage column alone and would refuse the pair.
     for (auto format:{DXGI_FORMAT_R10G10B10A2_UNORM,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB}) {
         desc.Format=format;

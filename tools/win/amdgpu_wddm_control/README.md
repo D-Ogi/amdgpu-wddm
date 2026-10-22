@@ -15,7 +15,7 @@ terminology, where one English term keeps one Polish word, so each line carries 
 |---|---|
 | Home | One status card with one recommended action, Getting started, recent games, monitor, driver and graphics summaries |
 | Games | One entry per game file name: recent games, stored profiles, graphics settings, the release's defaults and added games. Per game: the D3D12 application profile as grouped check boxes with origin and cost, and the highest shader model. Also the game's own graphics and Vulkan settings (below), Apply/Discard, Undo/Redo and "Recommended" |
-| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). The number of cores runs from 24 to 40 in twos. Behind "Choose the pairs of cores yourself" sits a map of the four groups of five pairs. There a person turns on the pairs the firmware leaves off, one at a time (owner, 2026-10-14: a board with one or two broken units). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
+| Graphics | Automatic clocks and the ceiling (1000-2000 MHz on the 100 MHz grid) and the compute unit choice (section 7 of the plan). The number of cores runs from 24 to 40 in twos. Behind "Choose the pairs of cores yourself" sits a map of the four groups of five pairs. There a person turns on the pairs the firmware leaves off, one at a time (a board with one or two broken units). "Advanced tuning", closed by default: the graphics voltage curve, the processor's clock limit, undervolt and temperature cap, and the processor core count (`docs/design/tuner.md`). Each tuning change is a trial that the driver takes back by itself unless kept. The settings for all games (below). Restore defaults (keep or reset the games) with undo. Sharpening and anti-aliasing as "Coming later" |
 | Display | The monitors Windows reports. Per monitor: the resolution, refresh rate and GPU scaling from the modes Windows lists. A change stays only when the person keeps it within 15 s (below). Identify and a link to the Windows display settings. HDR and VRR as "Coming later" |
 | Performance | Live load, temperature, clock, video memory, power and fan (every 2 s, only while shown and not minimized), the shader cache sizes. Each row says "No reading" when the driver gives no fresh value: power needs KMD 0.7.215 (the SMU metrics table, RUN_DPM ABI 3), the fan KMD 0.7.213.1. Voltage goes only into the support report. The ray tracing benchmark (below) |
 | Driver | The installed release, whether Windows runs it, the update check (Settings can turn the check at start off) |
@@ -28,7 +28,7 @@ guides, Repair, Restart Windows and the support report.
 
 ## Start
 
-The app shows a small loading window first: Nagi, the name of the app and one line of text (owner, 2026-10-14). The
+The app shows a small loading window first: Nagi, the name of the app and one line of text. The
 loading window reads nothing from the computer. When it is on the screen, the app reads the state of the computer on
 a worker thread (`src/WindowReading.cs`: the device through WMI, the driver's answers, the scheduled task, the cached
 update check, the recent launches and the benchmark's game folder) and builds the main window at the same time. The
@@ -90,7 +90,7 @@ only these names, only under these keys, and only values inside the contract:
 | `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full (DirectX 11 and 12 games only): use system memory, or report out of memory (not shown now, see below) |
 
 The system Vulkan ICD (64-bit, and 32-bit from tester.31) reads `WsiRoute` for all games only. When the value is
-absent, it presents through DXGI (`dxgi`, "Fast (flip)"). That is the owner's decision of 2026-10-07, and it is
+absent, it presents through DXGI (`dxgi`, "Fast (flip)"). That is the design decision, and it is
 the default again since BD-197, after the route presented on the lab (Quake II RTX and vkcube). `gdi`
 ("Compatible") is the rollback that a person stores, and a stored `gdi` stays `gdi`. A DXGI swapchain that fails,
 or that does not present its first frame in time, goes to GDI by itself, for that swapchain only
@@ -128,7 +128,7 @@ action. `src/DisplayModes.cs` is the only file that changes a display setting (G
 
 ## Ray tracing benchmark
 
-The Performance page carries a card that measures how fast the card traces light (owner, 2026-10-11). It measures a
+The Performance page carries a card that measures how fast the card traces light. It measures a
 copy of Quake II RTX that the person already has. The package never holds the game and never downloads it.
 
 Where the game is. The card takes the folder the person chose (`BenchmarkFolder`, section 5 of
@@ -152,7 +152,7 @@ which the game writes with C's `printf`, so the number is read with a dot whatev
 
 What stops a pass. Each pass is bounded to three minutes. The chip's temperature and clock come from the driver
 snapshot the Performance page already polls, every 2 s. A pass stops at 89 C at once, or at 87 C held for 10 s (the
-rule of the lab trials, owner 2026-10-04). The card then says the chip got too hot. "Stop the test" ends it as well.
+rule of the lab trials). The card then says the chip got too hot. "Stop the test" ends it as well.
 Where that snapshot carries no temperature, the card says so instead of promising a stop it cannot make, and the
 three minutes of each pass are the whole bound.
 
@@ -198,7 +198,7 @@ without a game, a driver or a process (`test/BenchmarkTests.cs`). `src/Benchmark
 
 ## Settings rule
 
-Every settings page follows one rule (owner, 2026-10-03). A box is checked only when its value is written; nothing is
+Every settings page follows one rule. A box is checked only when its value is written; nothing is
 written for an unchecked box; unchecking removes the value (all switches of an application unchecked removes its key),
 so no empty value and no implicit default is left behind. A driver's built-in default is described in text ("driver
 default when unchecked: ..."), never shown as a checked box. Values the installer wrote (the `witcher3.exe` profile)
@@ -494,7 +494,7 @@ Her picture lives in the side panel, which the window drops below a client width
 (`MainForm.SideShown`), as the nav bar and the page column need that room. A narrower window therefore has no guide
 panel at all, with her picture and its text, and the pages carry that help in their own cards and dialogs instead.
 
-The panel also goes on a small screen, whatever "Show Nagi" says (owner, 2026-10-12, after GitHub #38 from a tester
+The panel also goes on a small screen, whatever "Show Nagi" says (after GitHub #38 from a tester
 on an 800x600 screen): a working area of at most 1024 logical pixels wide or at most 768 high has no room for a
 300 px column beside the page. The rule is `LayoutRules.SmallScreen`, the measure is the working area of the screen
 the window stands on in logical units, and the window asks it again when it is moved to another monitor and after a

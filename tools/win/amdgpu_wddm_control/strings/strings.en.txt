@@ -1220,7 +1220,7 @@ help.auto.failed|src|-|The automatic support report could not be saved. Open Hel
 drv.verify.earlier-boot|src|-|The last full check failed before a restart. The installed driver is running now.
 status.verification-earlier-boot|src|-|The last full check was before a restart. The installed driver is running now.
 
-# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in ----
 notice.guard.title|src|-|The graphics driver was switched off
 notice.guard.text|src|-|The graphics driver was switched off to keep this computer usable: its last starts did not finish their check.\nWindows is drawing the screen with its basic display now, so games do not run and everything is slower.\nYou can turn the graphics driver back on. Nothing else on this computer changes.
 notice.failed.title|src|-|The graphics driver did not start

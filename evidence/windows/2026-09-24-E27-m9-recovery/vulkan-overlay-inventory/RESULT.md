@@ -51,6 +51,6 @@ Raw report redactions: UUID/LUID identifier lines only. Raw originals, screensho
 and deployment backup remain private. `capture-executed.ps1` is the original
 worker; `source/capture-vulkan-inventory.ps1` is the subsequent telemetry fix.
 
-The owner-proposed Open Test Pack was also saved in
+The proposed Open Test Pack was also saved in
 `docs/design/bc250-open-test-pack.md` and linked from the roadmap. No vkcube,
 CTS or benchmark was run as part of this overlay change.

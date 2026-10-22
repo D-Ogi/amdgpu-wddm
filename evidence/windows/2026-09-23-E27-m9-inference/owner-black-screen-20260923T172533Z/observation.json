@@ -1,6 +1,6 @@
 {
   "observed_at_utc": "20260923T172533Z",
-  "owner_report": "Monitor remains black with backlight; previous report also stated no mouse response. Desktop and local PowerShell unavailable.",
+  "visual_report": "Monitor remains black with backlight; previous report also stated no mouse response. Desktop and local PowerShell unavailable.",
   "tcp22_routes": [
     false,
     false
@@ -8,5 +8,5 @@
   "probe_timeout_seconds_per_route": 3,
   "remote_mutation": false,
   "cause": "Unresolved; no startup checkpoints recovered.",
-  "requested_recovery": "One full AC power removal/reconnect because remote recovery unavailable and owner previously observed recovery after AC removal. Not yet performed or confirmed."
+  "requested_recovery": "One full AC power removal/reconnect because remote recovery unavailable and recovery after AC removal was previously observed. Not yet performed or confirmed."
 }

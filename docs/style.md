@@ -27,7 +27,7 @@ terms and the verbs of our own stack. `docs/glossary.yaml` binds them, one meani
 | Record of a measurement | release notes, experiment write-ups, `RESULT.md` | One claim a sentence. Every number with its unit. The status words of our own legend, never a new one |
 | Safety | thermal limits, AC power rules, firmware bans | The action first, then the risk it holds off. A limit as a number. No hedge |
 | Code comment, commit message | | One topic. Short sentences. No gate reads them |
-| Owner conversation, `agent-discussion` | | Out of scope, and outside this repository |
+| Working conversation and workspace notes | | Out of scope, and outside this repository |
 
 Across every type: no semicolon, no em dash, no Latin abbreviation such as `e.g.` or `i.e.`, and
 no marketing adjective. A list item never ends in `and` or `or`. Write the article and the word

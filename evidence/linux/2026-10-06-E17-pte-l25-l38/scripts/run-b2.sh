@@ -1,5 +1,5 @@
 #!/bin/sh
-# Linux visit 2 of 2026-10-06, staged on the stick (owner: the stick need not be read-only).
+# Linux visit 2 of 2026-10-06, staged on the stick (the stick need not be read-only).
 # Phases, one per call, outputs under /media/usb/l1006b/out:
 #   sh run-b2.sh e17 <phase>   E17 (L27): pre, load, base, hold, extras, info - its own session.sh, unchanged
 #   sh run-b2.sh ref           mount the Windows volume and the Debian build root read-only

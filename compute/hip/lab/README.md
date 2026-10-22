@@ -12,7 +12,7 @@ The offline tests are `../tests/lab/test-arm-bounds.ps1`, and `../build.ps1` run
 
 ## What the supervisor guarantees
 
-1. **One deadline, cleanup inside it.** The bound is at most 180 s, which is the owner's limit for
+1. **One deadline, cleanup inside it.** The bound is at most 180 s, which is the project's limit for
    a non-game lab trial, and a cleanup reserve is kept out of the work part. A caller cannot ask
    for more.
 2. **Every helper is bounded, and bounded by the time that is left.** A clock read that does not
@@ -25,7 +25,7 @@ The offline tests are `../tests/lab/test-arm-bounds.ps1`, and `../build.ps1` run
    process, the write of the report). The review of 2026-10-10 found the first version of this
    file short of that: the in-loop read and the read after the arm took their nominal timeouts
    whatever the clock said, so one hung read put the shipped defaults at about 188 s, over the
-   owner's ceiling. When a cleanup step has to be dropped for want of time, `cleanup_notes` in
+   180 s ceiling. When a cleanup step has to be dropped for want of time, `cleanup_notes` in
    the report says which.
 3. **Fail closed on telemetry.** No trusted temperature before the arm means the arm does not
    start (exit 3). No fresh temperature for 15 s during the arm means the arm stops (exit 4).

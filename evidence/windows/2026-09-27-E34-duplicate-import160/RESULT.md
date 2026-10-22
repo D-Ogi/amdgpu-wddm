@@ -30,4 +30,4 @@ Full G0 and actual CDD/BGP1 admission remain open.
 
 Raw stdout/JSON/scripts are copied unchanged. Selected driver/runtime text
 preserves relevant lines after encoding conversion; full archives stay in
-scratch/g0-hosted/duplicate-runtime002. No owner visual verdict was requested.
+scratch/g0-hosted/duplicate-runtime002. No visual verdict was requested.

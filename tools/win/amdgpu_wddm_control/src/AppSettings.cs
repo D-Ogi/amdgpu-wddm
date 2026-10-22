@@ -91,7 +91,7 @@ namespace AmdgpuWddmControl
         bool OnUnlessZero(string name) { return Dword(name) != 0; }
         void SetOnUnlessZero(string name, bool on) { if (on) { if (_store.Get(name) != null) _store.Delete(name); } else if (Dword(name) != 0) _store.SetDword(name, 0); }
 
-        // On unless the value is 0 (owner, 2026-10-11: the guide character is part of the application a tester
+        // On unless the value is 0 (the guide character is part of the application a tester
         // installs, so a fresh install shows her; the art ships with the exe). Unchecking writes 0.
         public bool ShowNagi { get { return OnUnlessZero("ShowNagi"); } set { SetOnUnlessZero("ShowNagi", value); } }
         public bool ShowTipsAutomatically { get { return Flag("ShowTipsAutomatically"); } set { SetFlag("ShowTipsAutomatically", value); } }

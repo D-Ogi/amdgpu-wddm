@@ -23,7 +23,7 @@ facts:
   - id: M471
     status: MEASURED
     date: "2026-09-25"
-    claim: "On unchanged147, bounded UMD diagnostics reduce same-Winlogon3s render median23.849->1.919ms, present starts84->176 and glitch events83->0; maxrender gap17.064ms, zero trace loss. New UMD shared/pixel completion controls pass. Process/scene recreation limits causality; physical owner feedback, S4 and soak remain pending."
+    claim: "On unchanged147, bounded UMD diagnostics reduce same-Winlogon3s render median23.849->1.919ms, present starts84->176 and glitch events83->0; maxrender gap17.064ms, zero trace loss. New UMD shared/pixel completion controls pass. Process/scene recreation limits causality; physical visual feedback, S4 and soak remain pending."
     status_text: "MEASURED (unit A)"
     evidence: "[quiet renderer controls](../evidence/windows/2026-09-25-E27-m9-recovery/bounded-umd-diagnostics147/RESULT.md)"
   - id: M474

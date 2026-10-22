@@ -1,17 +1,17 @@
-# M595: owner-observed desktop after index DISCARD fix
+# M595: visually observed desktop after index DISCARD fix
 
 DWM022 on unit A ran for 185.856 seconds with UMD49AFB21F and hosted
 ICD3508416F. Exact artifact hashes are in manifest.json. This is the M591
 narrow index-buffer cache invalidation fix, without the diagnostic per-draw
 flush/wait or broad graphics-state re-emission.
 
-The owner observed the animation and reported that the image looked good,
+A visual check of the animation showed that the image looked good,
 without glitches or artifacts. Observation duration was not measured. The
 original report is retained locally; owner-observation.json contains the
-English translation. This is bounded visual acceptance of this trial,
+observation as a plain statement. This is bounded visual acceptance of this trial,
 including the moving/shrinking animation, not a claim covering every workload.
-The owner explicitly did not observe DWM018, DWM019 or DWM021; those runs
-remain without an owner visual verdict.
+Nobody observed DWM018, DWM019 or DWM021; those runs
+remain without a visual verdict.
 
 ETW attributes 3971 matched DMA start/stop pairs to DWM7680, with zero lost
 events/buffers, pending pairs, unmatched stops or duplicate starts. Submission

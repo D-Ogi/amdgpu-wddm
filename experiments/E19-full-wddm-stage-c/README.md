@@ -45,7 +45,7 @@ IH ring, fences, a compute dispatch. The first question is therefore not about p
 
 ## Safety
 
-No GPU reset exists on this part (facts M53): a hung engine costs the owner a trip to the power button. Run 001 uses
+No GPU reset exists on this part (facts M53): a hung engine costs a trip to the power button. Run 001 uses
 only sequences that passed three times in one device start in E15 run 002. Temperature read between steps, stop above
 85 C. The gate is one-shot, AutoReboot is on, STOP flag honoured. Installs only with the gate closed (M74).
 

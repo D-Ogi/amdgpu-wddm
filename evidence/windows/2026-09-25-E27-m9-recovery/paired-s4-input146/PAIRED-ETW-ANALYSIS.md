@@ -18,7 +18,7 @@ remain hypotheses. No claim is made that this trace proves which one changed.
 
 The root reports the same boot 03:57:55 and unchanged 146; DWM 704 spans the cold and
 post-S4 runs. DWM was restarted alone at 04:42:44 to 6076, without a GPU reset.
-The owner reports regular cursor and sign-in-animation stutter after S4, with
+A visual check shows regular cursor and sign-in-animation stutter after S4, with
 only a small improvement after DWM restart. Those observations are independent
 of the ETW counters and are not replaced by them.
 

@@ -59,7 +59,7 @@ The desktop still renders with CPU llvmpipe/LLVM23.1.2 and hardwareDCN flip.
 -This is correctness evidence, not a matched performance comparison.
 
 Physical image/cursor feedback for this new cold boot has been requested but
-not received at archival time. M457's owner feedback belongs to the previous
+not received at archival time. M457's visual feedback belongs to the previous
 warm session. Do not silently apply it to this boot.
 
 ## Scope and next work

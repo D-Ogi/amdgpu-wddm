@@ -702,8 +702,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // is the only signal there is, and it is read only where it can mean that: the first attempt of a create
     // inside the shareable envelope, which has not yet asked the engine for anything. Any other allocation
     // keeps the runtime's status unchanged.
-    // shared-create-retry-off: the bisect switch for this whole behaviour (the owner's release-train rule of
-    // 2026-10-05 is "switches + bisect on failure"). With it the shell never answers kShareRequired, so no create
+    // shared-create-retry-off: the bisect switch for this whole behaviour (the project's release rule is
+    // switches, and a bisect on failure). With it the shell never answers kShareRequired, so no create
     // is ever retried as a shared surface and a shared create fails as it did before BD-075 - without removing the
     // device, which is the fail-fast part and has no switch.
     const bool share_required=hr==E_INVALIDARG && shareable && !surface && !ddi_experiment("shared-create-retry-off");

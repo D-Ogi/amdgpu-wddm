@@ -8,5 +8,5 @@
   "blank": 32,
   "refresh_numerator": 154000000,
   "refresh_denominator": 2568800,
-  "observation_limitation": "HardwareAccess escape idles graphics scheduling. Owner reported stutter during investigation, smooth input after observation stopped; causality not established."
+  "observation_limitation": "HardwareAccess escape idles graphics scheduling. A visual check showed stutter during investigation, smooth input after observation stopped; causality not established."
 }

@@ -1,5 +1,4 @@
-// The order of the window's start (owner, 2026-10-14: "czasem Nagi Control App włącza się dość długo - trzeba dać jak
-// najszybciej ekran ładowania"). Launch.cs does the steps; this class decides when, so a host test can hold the order
+// The order of the window's start. Launch.cs does the steps; this class decides when, so a host test can hold the order
 // without a window.
 //
 // What the start costs, measured without a window on the PC that builds this (2026-10-14, a PC with no BC-250): the

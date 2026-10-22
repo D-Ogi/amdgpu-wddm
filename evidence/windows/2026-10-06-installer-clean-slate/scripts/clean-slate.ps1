@@ -1,4 +1,4 @@
-# Owner's installer test (2026-10-06): remove everything of amdgpu-wddm from the lab, then install the release fresh
+# Clean-slate installer test (2026-10-06): remove everything of amdgpu-wddm from the lab, then install the release fresh
 # from its package. The C:\BC250 harness stays. Steps, each one call (bounded well under 3 minutes):
 #   -Step uninstall  : the r17 package's own uninstaller (-Yes -KeepTestSigning -NoReboot), then the inventory
 #   -Step inventory  : what of ours is still on the machine (files, registry, driver store, tasks, certificates)

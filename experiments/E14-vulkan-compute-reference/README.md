@@ -252,7 +252,7 @@ VM mappings and PTE writes for them, one `amdgpu_cs_ioctl`, one `amdgpu_vm_grab_
 
 ## The inference half (`llama/`): a very simple AI test
 
-Proposed by the owner during the session: something closer to a real workload than eight kernels, again with a result
+Proposed during the session: something closer to a real workload than eight kernels, again with a result
 that can be compared across the two systems. `llama/install.sh` installs Mesa's RADV, the Vulkan tools, a compiler and
 Alpine's `llama.cpp` with its Vulkan backend into the probe's RAM (the stick is not written) and fetches three public
 models; `llama/run.sh` generates greedily (temperature 0, fixed seed) on the GPU and on the CPU, repeats the GPU run three

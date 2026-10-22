@@ -108,8 +108,8 @@ void APIENTRY native_signal(D3D12DDI_HCOMMANDQUEUE h, D3D12DDIARG_FENCE_OPERATIO
 // untraced), so the cross-process case is untested in either direction. Hence fence_slot_seen above: a row that
 // does reach a slot now says so in its own log, with no trace switch.
 //
-// fence-wait-accept-off is the bisect switch for the accept (the owner's release-train rule of 2026-10-05 is
-// "switches + bisect on failure"). The accept is the default because the alternative default is the device loss
+// fence-wait-accept-off is the bisect switch for the accept (the project's release rule is switches, and a
+// bisect on failure). The accept is the default because the alternative default is the device loss
 // 0.7.208.1's shell shipped, and a switch of this shell may only ever subtract from the behaviour the lab
 // validated (ddi_experiment_off, ddi-trace.h). With the switch named, this slot is byte for byte the older
 // shell: the same mask 0 and the same queue_failure, one log line per process later.

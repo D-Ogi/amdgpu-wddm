@@ -1,4 +1,4 @@
-# Dry-run harness for killswitch.ps1 (owner's consent 2026-09-27 for the watched live-KD run).
+# Dry-run harness for killswitch.ps1 (consent of 2026-09-27 for the watched live-KD run).
 # Two passes against a dummy process (hidden `ping -n 40 127.0.0.1`, no window, gone after ~40 s):
 #   pass 1: -DryRun, GrowthLimitMB -1 (limit below the baseline => the trigger fires at once), expects "dry run, nothing killed"
 #   pass 2: real kill with ProcessName 'ping' and the same impossible limit, expects the ping to disappear.

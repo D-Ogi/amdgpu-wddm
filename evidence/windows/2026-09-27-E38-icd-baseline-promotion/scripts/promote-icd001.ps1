@@ -1,6 +1,6 @@
 # Promote the registered Vulkan ICD C:\BC250\m10\wsi-final\vulkan_radeon.dll from 9C40083C (pre-M496) to the
 # KMT-enumeration candidate 93B1D1FD (fork branch amdgpu-wddm/radv-wddm2-kmt-enum, c34ab7cd on 940ab0eb).
-# Owner's decision 2026-09-27 ("okej") after the M546 flip control kmtflip001 passed on this candidate.
+# Decision 2026-09-27 after the M546 flip control kmtflip001 passed on this candidate.
 # - the old file stays next to it as vulkan_radeon.9C40083C.dll (rollback: copy it back over the active file);
 # - the promoted file is also kept as vulkan_radeon.93B1D1FD.dll (restore target for candidate swaps);
 # - no registry change (same manifest and path), no UMD change, no DWM restart, no KMD change;

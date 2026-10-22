@@ -1,4 +1,4 @@
-// The host of the logon window task (owner, 2026-10-14: the console of the hidden PowerShell came up at sign-in).
+// The host of the logon window task (the console of the hidden PowerShell came up at sign-in).
 // The scheduled task "amdgpu-wddm start window" runs `amdgpu_wddm_control.exe --start-window -Seconds N` in the
 // session of the person who signed in, and this file starts the release's start-window.ps1 from there.
 //

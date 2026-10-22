@@ -28,7 +28,7 @@ tables yet, so nothing but the witness reads them: a wrong entry in stage B cost
 
 ## Safety
 
-As E16: one-shot gate, start budget, AutoReboot, the owner's word through the overlay, STOP flag honoured. New in this
+As E16: one-shot gate, start budget, AutoReboot, the announcement through the overlay, STOP flag honoured. New in this
 experiment: CPU writes into VRAM pages that VidMm allocated for page tables (run 002 onwards). They stay inside
 segment 1 by construction (bounds-checked offset, one page per call), never touch the firmware framebuffer below the
 segment or the reserved tail above it, and no register is written.

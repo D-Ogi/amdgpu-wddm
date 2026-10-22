@@ -1,7 +1,7 @@
 # M434: Native SMU owner, concurrent transaction/stop control
 
 Date: 2026-09-24. Source and host validation only. No lab command or deployment.
-Previous turn M433 was progress: tested transport and owner feedback evidence.
+Previous turn M433 was progress: tested transport and visual feedback evidence.
 The full M9 goal remains open.
 
 ## Changes

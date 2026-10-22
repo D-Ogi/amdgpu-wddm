@@ -1,6 +1,6 @@
-# Lab-side bounded ETW CPU profile of a game trial (owner request, review 848: use the collected profilers).
+# Lab-side bounded ETW CPU profile of a game trial (review 848: use the collected profilers).
 # Runs as a one-shot SYSTEM task started by etw-start.ps1 right after the trial's runtime starts. Two windows:
-#   A: $StartA s after the game appears, $Seconds long (owner: DWM misbehaves from the game start). The game is
+#   A: $StartA s after the game appears, $Seconds long (DWM misbehaves from the game start). The game is
 #      -Process (comma-separated Get-Process names, wildcards allowed; default witcher3, game runner profiles).
 #   B: when dwm.exe CPU exceeds $DwmPct % of the machine in two consecutive 2 s samples, or at $LatestB s after
 #      the game appeared, whichever first. From $LatestB on the window waits for the world band of
@@ -13,7 +13,7 @@
 # owned sessions runs in finally, and a failed session query is never taken as absence (review 850). The script
 # exits 1 when any cleanup failed; task exit alone is still not a closure witness: the operator's etw-closure.ps1,
 # run once this task is no longer Running, is the independent receipt.
-# FPS mode (owner, 2026-09-30: Full HD frame-rate tests): -GpuOnly records only the DxgKrnl session (no PerfView
+# FPS mode (2026-09-30: Full HD frame-rate tests): -GpuOnly records only the DxgKrnl session (no PerfView
 # CPU profile, so the measurement does not load the CPU and stops in seconds); -SkipA drops window A; -WorldLog
 # starts window B when the game log carries a verified walk marker ("walk Ns: start (world verified: ...)", the
 # grammar of world-rule.ps1) and B then lasts -SecondsB or what the deadline leaves, whichever is shorter. An
@@ -203,7 +203,7 @@ function Capture([string]$w, [int]$secs = $Seconds) {
             '/BufferSizeMB:64', '/CircularMB:512', "/MaxCollectSec:$secs", '/NoClrRundown', '/NoNGenRundown',
             '/NoNGenPdbs', '/Merge:false', '/Zip:false', 'collect', $etl)
     }
-    # GPU side (owner: what exactly does a frame wait for): DxgKrnl queue packets, DMA packets and VSync/flip in a
+    # GPU side (what exactly does a frame wait for): DxgKrnl queue packets, DMA packets and VSync/flip in a
     # separate logman session, same shape as the G0 DWM trials (all keywords, level 5, 1 MB buffers, 64-256),
     # circular at 256 MB: up to 256 MB of buffers on top of PerfView's 32 MB request (recorded in review 850).
     $gpu = "$session-gpu"

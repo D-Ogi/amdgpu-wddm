@@ -1,6 +1,6 @@
 # Candidate 0.7.99.1 recovery, unit A, 2026-09-23
 
-Owner reported persistent backlit black display after reboots, then desktop recovery after disconnecting AC power. This observation does not establish the hardware root cause.
+A visual check showed a persistent backlit black display after reboots, then desktop recovery after disconnecting AC power. This observation does not establish the hardware root cause.
 
 Read-only Target.run capture is recovery.log; recovery.ps1 is the collector. No new GPU start, device restart or registry mutation was issued during collection. No private adapter instance identifier is included.
 

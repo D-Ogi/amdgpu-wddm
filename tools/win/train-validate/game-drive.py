@@ -6,7 +6,7 @@ control channel, and the menu has always been an operator's action. This wrapper
 as its child and, beside it, does what the operator did:
 
 1. waits until the game runs (`game-control.py <attempt> peek`, one call every `--peek-every` s);
-2. reads the screen (`shot:0.5;ocr`, one call every `--every` s, the owner's 10-15 s rule) until the menu item
+2. reads the screen (`shot:0.5;ocr`, one call every `--every` s, the 10-15 s rule) until the menu item
    shows, moves the menu's highlight onto it with the arrow keys, reads the screen again to see the highlight
    there, and only then presses Enter;
 3. checks itself: a shot and a read `--check-after` s later must show neither the menu nor a submenu (a BACK

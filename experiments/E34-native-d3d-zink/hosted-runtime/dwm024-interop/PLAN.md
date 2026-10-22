@@ -14,7 +14,7 @@ Zero Blts is inconclusive. E26P system-memory refusals are a known limitation;
 stale content does not qualify a successful transport. These CPU copies cannot
 qualify G0. Runtime shapes determine GPU admission work; no BC2A extension is
 assumed. Do not claim mapping lifetime from bounded logs.
-Owner visual acceptance is separate and not inferred from captures.
+Visual acceptance at the lab monitor is separate and not inferred from captures.
 
 Before launch: compile router/control, parse all scripts under target PS5,
 verify staged hashes and exact159 rollback availability. The watchdog handles

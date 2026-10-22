@@ -64,7 +64,7 @@ unsigned int bc250_clock_floor_mv(unsigned int mhz)
 {
     unsigned int line=bc250_clock_min_mv(mhz);
     if(!line)return 0;
-    // The bounded undervolt band of 0.7.210 (owner's direction 2026-10-06). Under the lab floor the line is
+    // The bounded undervolt band of 0.7.210. Under the lab floor the line is
     // already BC250_CLOCK_FLOOR_MV, so the band is empty and this returns the floor.
     return line>BC250_CLOCK_FLOOR_MV+BC250_CURVE_UNDERVOLT_MV ? line-BC250_CURVE_UNDERVOLT_MV
                                                               : BC250_CLOCK_FLOOR_MV;

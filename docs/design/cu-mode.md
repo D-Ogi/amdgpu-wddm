@@ -10,7 +10,7 @@
 - The unlock does not flash the BIOS. It does not write the SPI flash, CMOS or NVRAM, and it does not change a
   clock or a voltage. The only lasting state is one registry value. Remove the value, restart, and the GPU
   has 24 CUs again.
-- The release default is 24, the number the board's firmware switches on (owner, 2026-10-14. tester.30 shipped
+- The release default is 24, the number the board's firmware switches on (since 2026-10-14. tester.30 shipped
   40, BD-077). You choose any even number from 24 to 40, and that choice is written into the key together with
   `CuModeChosen`, the record that every later install reads as your own choice.
 - A count above 24 must reach a healthy desktop. If it does not, the next start goes back to 24 by itself and
@@ -202,7 +202,7 @@ the name, because the INF must not clobber the boot guard's own writes).
 | `CuModeLastApplied`, `CuModeLastReason` | driver | what the last start did, readable without the adapter |
 | `CuModeClosedReason` | driver on fallback | 0.7.216.62: the reason the driver itself wrote `CuMode` 24. `PersistFallback` writes it, a start that reads a `CuMode` other than 24 deletes it, a start that reads 24 (or no value) leaves it alone |
 
-**A count between 24 and 40** (owner, 2026-10-14). The hardware switches CUs on in pairs (one WGP), so the
+**A count between 24 and 40** (2026-10-14). The hardware switches CUs on in pairs (one WGP), so the
 counts are 24 to 40 in twos. Every count above 24 is `CuMode = 40` with a `CuDisableWgp` mask. 24 is the stock
 path with no mask at all. The default set of a count takes the highest free WGP of shader array 0, then of 1, 2
 and 3, then the next one down, so the cores stay as even across the four arrays as the step allows
@@ -233,7 +233,7 @@ absent mask would show all twenty pairs on - 40 cores under a picker that says 2
 pairs off, and the first one a person turns on reads 26 cores. A choice that cannot be read, or one the driver
 would refuse, draws the same stock set, because that is what the next start applies.
 
-**The record of a person's choice** (`CuModeChosen`, owner 2026-10-14). The release default is 24 and tester.30's
+**The record of a person's choice** (`CuModeChosen`, 2026-10-14). The release default is 24 and tester.30's
 was 40, and `Release\AppliedDefaults` records what the previous installer wrote, not who decided it: a 40 a
 person chose in the control application and the 40 tester.30 applied are the same registry state (both end in a
 confirmed start, so `CuModeConfirmed` is 40 in both, and tester.30 never wrote a mask). Nothing else tells them
@@ -289,7 +289,7 @@ the fallback's or the tester's, and the release installer had to tell them apart
   fallback writes its three reasons.
 - The installer's side of the same contract is `$script:DriverClosures` in
   `tools/release/installer/common.ps1`: an install keeps the 24 and names it, `install.cmd -Repair` writes the
-  release default again and deletes the record. With the release default back at 24 (owner, 2026-10-14) that
+  release default again and deletes the record. With the release default back at 24 (2026-10-14) that
   entry is inert: `Get-DriverClosure` returns nothing where the default equals the closed value, because an
   install writes that same 24 anyway. The entry stays for a release whose default is 40 again, and
   `tools/release/test-cu-mode-installer.ps1` holds it to both cases.
@@ -375,7 +375,7 @@ section above.
 - `firmware_metadata_test.c`: the caps patch runs after the template and the firmware section.
 - `start_health_test.c`: a durable confirmation confirms the CU mode outside the spin lock, a failed one does
   not; `StartHealthIsReady` equals the CONFIRM milestone.
-- The host side of the count and the map (owner, 2026-10-14):
+- The host side of the count and the map (2026-10-14):
   - `tools/win/amdgpu_wddm_control/test/CuTests.cs` (`CuCount`): the count-to-mask table above, the stock set
     read from a snapshot and the boards this page cannot map, a hand-picked map and every map the driver would
     refuse, the record `CuModeChosen` and the plan that removes it, and the sentence that names the cores of

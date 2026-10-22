@@ -57,5 +57,5 @@ failure is an open item for the port (external semaphore KMT handles). Fullscree
 the game defaults.
 
 PROVENANCE: Mesa MIT; vkd3d-proton LGPL-2.1 and DXVK zlib as standalone runtime DLLs next to the game, no
-code copied; the game is the owner's licensed copy, screenshots private; scripts original, derived from the
+code copied; the game is a licensed copy, screenshots private; scripts original, derived from the
 recorded DX11 procedure.

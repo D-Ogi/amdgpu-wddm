@@ -28,7 +28,7 @@ read as proof that PSP loading ran. No shader/probe workload runs after refusal.
 Persistent logs were collected before recovery. Closed-gate PnPrestart restores
 110display-only. Independent info:stage61,47presents, same boot. Experimental
 and full gates0; subsequent CLIconfirm succeeds and UnconfirmedStarts0.
-No DWM restart, Windows reboot, AC cycle or manual owner recovery was required.
+No DWM restart, Windows reboot, AC cycle or manual recovery was required.
 Control/recovery logs redact hardware identity fields; raw KMD logs unchanged.
 The boot log bundle includes earlier109logs; only exact110control/warm evidence
 and the supplied timestamps belong to this candidate's measurements.

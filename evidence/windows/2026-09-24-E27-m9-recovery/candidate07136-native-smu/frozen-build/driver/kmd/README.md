@@ -58,7 +58,7 @@ gate in this driver:
 
 | Value | `DriverEntry` calls | Table |
 |---|---|---|
-| 0 (default) | `DxgkInitializeDisplayOnlyDriver` | the display-only table of M3, unchanged, byte for byte the driver that runs the owner's display today |
+| 0 (default) | `DxgkInitializeDisplayOnlyDriver` | the display-only table of M3, unchanged, byte for byte the driver that runs the lab's display today |
 | 1 | `DxgkInitialize` | `wddm.c`: the same 28 pointers plus what a full graphics miniport may not leave out |
 
 The gate is read once, in `DriverEntry`, before the driver object is touched, so at 0 not a line of `wddm.c` runs.

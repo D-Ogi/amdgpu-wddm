@@ -1,5 +1,5 @@
 #!/bin/bash
-# E23 run 001 (draft): the sdmacopy positive control on bc250kmd 0.7.21. Owner present, FRESH BOOT first (M78).
+# E23 run 001 (draft): the sdmacopy positive control on bc250kmd 0.7.21. Operator present, FRESH BOOT first (M78).
 # Prerequisites: bash scratch/tmp/e16_install0721.sh umd   (package + cli in C:\BC250\e16-umd)
 cd /p/BC-250/bc250-win || exit 1
 S="python tools/win/target.py ps experiments/E15-compute-dispatch/e15_target.ps1 -Package C:\\BC250\\e16-umd"

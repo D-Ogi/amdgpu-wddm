@@ -30,7 +30,7 @@ This is not a matched benchmark; newer Mesa/LLVM performance is not established.
 Scope: desktop D3D module only. The separate working Vulkan RADV/WDDM2 ICD
 remains based on the earlier fork. Official main lacks that winsys; updating
 it requires a separate port and compute/model validation. DWM still renders
-on the CPU; GPU D3D acceleration, full shader conformance, owner input feedback
+on the CPU; GPU D3D acceleration, full shader conformance, visual input feedback
 on this build and30minute desktop acceptance remain open. M9 is not closed.
 M411/M410 binaries remain available for rollback.
 

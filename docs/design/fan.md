@@ -1,15 +1,15 @@
 # The case fan
 
 Unit A has one case fan. The board turns it, not our driver. A Nuvoton NCT6686D hardware monitor on the
-board holds the fan curve, and the BIOS "Fan Setting" option selects which curve it uses. The owner keeps
-that option as it is (2026-10-05).
+board holds the fan curve, and the BIOS "Fan Setting" option selects which curve it uses. That option
+stays as it is.
 
 Until KMD 0.7.213.1 nothing in Windows could read that chip. The control application showed "The driver
 cannot read it yet" in its Fan row, and a lab session record held no fan speed. This page is the design of
 the read path, which KMD 0.7.213.1 adds. The path was written as revision 208 on `fan/read-nct6686` and
 train b20 merged it into the lineage that ships, so the released 0.7.208.1 does not have it.
 
-**Part B, the write path, is the last section.** The owner allowed it on 2026-10-06: the driver takes the
+**Part B, the write path, is the last section.** It is allowed since 2026-10-06: the driver takes the
 fan from the BIOS curve while it runs, and gives it back to the chip's automatic mode on every exit path.
 Part B adds one writer, `driver/shim/bc250_fan.c`, and keeps the reader of this page as it is. Its lab write
 path is not yet validated on Windows: see the lab trial at the end.
@@ -75,8 +75,8 @@ writes nothing outside the two latch ports.
    Part B, which goes through `bc250_hwmon_write8()` and an allowlist of three registers.
 2. **The Super I/O configuration ports are never touched.** See above.
 3. **The gate is open from 0.7.213, and it still exists.** The reader is finished, so it rides the release on
-   and `EnableHwmon` 0 is the one switch that takes every port access away again (the release-train rule,
-   owner 2026-10-05). The reason the switch exists is unchanged: the EC window has no arbiter. Windows gives
+   and `EnableHwmon` 0 is the one switch that takes every port access away again (the release-train
+   rule). The reason the switch exists is unchanged: the EC window has no arbiter. Windows gives
    the range to a `PNP0C02` motherboard-resources node that drives nothing, and a third-party monitor drives
    the same window through its own kernel helper. Two readers can interleave the latch writes and read each
    other's register, and no lock of ours can prevent that. So the policy checks every sample for
@@ -209,7 +209,7 @@ The flags:
 | `DUTY_PROVEN` | `HwmonDutyProven` is 1 |
 | `STOPPED` | every present tachometer answered, every one of them reads 0, and a duty output is not 0, in three samples in a row |
 
-`STOPPED` is the one state the owner must see at a glance. The control application shows it in red, the
+`STOPPED` is the one state the operator must see at a glance. The control application shows it in red, the
 overlay panel shows it in red, and it is also what the camera fire watch looks for. That is why it takes three
 conditions and a repeat. The window has no arbiter, so one refused tachometer reading is an ordinary collision,
 not a stopped fan, and a red row over it would send somebody to the case for nothing. The rule needs
@@ -259,7 +259,7 @@ be the only thermometer of a run that heats the board. Two samples in a row with
 
 ## Part B: the write path
 
-Part B lets the driver set the fan duty. The owner allowed it on 2026-10-06 ("TAK"), under three conditions:
+Part B lets the driver set the fan duty. It is allowed since 2026-10-06, under three conditions:
 
 1. The BIOS "Fan Setting" option stays unchanged. The driver never writes it.
 2. The driver owns the fan only while it runs.
@@ -346,10 +346,8 @@ at or below 85 C. The 87 C emergency is the backstop for a quiet custom curve.
 A curve answers late. It reads the heat that the load has already made, so the fan reaches full speed when
 the board is hot already. On 2026-10-10 an LLM benchmark arm on unit A held the GPU at 93 to 100 % busy and
 107 to 122 W of SMU socket power, and Tctl walked from 62.8 C to 76.9 C in 14 s. The Standard curve answered
-with 95 % duty. The owner asked for the obvious: the driver sees the load, so it must blow at full power
-without waiting for the temperature ("Robiąc takie testy sterownik powinien sam ogarnąć, że trzeba wiać z
-maksymalną mocą!", "doing such tests the driver should work out by itself that it has to blow at full
-power").
+with 95 % duty. The requirement is the obvious one: the driver sees the load, so it must blow at full power
+without waiting for the temperature.
 
 The governor hands the fan step a load feed beside the Tctl reading (`BC250_FAN_LOAD` in
 `driver/kmd/fan.h`). It holds the GPU busy share, the GFX clock and the SMU socket power. The busy share is

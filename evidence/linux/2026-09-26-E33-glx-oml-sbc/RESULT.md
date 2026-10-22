@@ -21,7 +21,7 @@ remaining launched as full016, same original binaries/test oracles/settings.
 Its final outcome is not part of this checkpoint. No coverage waiver or full
 M12.1-M13.1 acceptance claim.
 
-Owner asks about black monitor: read-only check shows Xorg21335 live, DP-1
+Black monitor seen at the lab: read-only check shows Xorg21335 live, DP-1
 connected/enabled,1000MHz/64C, same boot. This is the minimal Linux Xorg test
 session, not Windows desktop. Connector state alone is not proof of pixel
 correctness; the separate swapbuffers control supplies rendering evidence.

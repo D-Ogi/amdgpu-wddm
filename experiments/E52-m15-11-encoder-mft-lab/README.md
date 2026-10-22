@@ -36,7 +36,7 @@ interactive stage. It is not a game session, so the 3-minute bound applies to it
 Preparation, on the development PC: build the component
 (`pwsh driver\umd\mft-h264\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget`), record the SHA-256 of
 `amdgpu_wddm_mft_h264.dll`, `mfthost.exe` and `mftreg.exe`, and push the three binaries to
-`C:\BC250\mft-h264\` with `tools\win\target.py push`. Check the overlay and tell the owner what is
+`C:\BC250\mft-h264\` with `tools\win\target.py push`. Check the overlay and announce on it what is
 about to happen (`tools\win\bc250mon\mon.py panel`). Sample Tctl before each stage and cool down above
 87 C.
 

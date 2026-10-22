@@ -30,7 +30,7 @@ The bounded copy control is not a cache-policy or performance comparison.
 
 Original stdout and receipts are unmodified. Driver-log excerpts select the last
 matching counter line from each UTF-16 private raw log; hashes of those raw logs
-are retained. No identifying owner data was included. DDI allocation handling,
+are retained. No identifying personal data was included. DDI allocation handling,
 full-list prevalidation, MultipassOffset integration, producer synchronization,
 CDD/DWM admission and full desktop G0 acceptance remain open. This proves actual
 execution of the new copy primitive, not those remaining integration contracts.

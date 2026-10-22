@@ -1,5 +1,4 @@
-// The start of setup with a window from the first moment (owner, 2026-10-14: "instalator z exe także ładuje się dość
-// długo - także potrzebuje od razu okienka ładowania"). StartSequence.cs decides the order; this file does the steps:
+// The start of setup with a window from the first moment. StartSequence.cs decides the order; this file does the steps:
 //   SetupStart      the application context of every run with a window: the loading window first, then the
 //                   administrator prompt, or the unpacking, and the setup window
 //   LoadingWindow   the small window that is on the screen first: Nagi, the name of the program, one line of text and

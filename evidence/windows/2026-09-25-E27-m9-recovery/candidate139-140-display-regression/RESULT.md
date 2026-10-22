@@ -16,12 +16,12 @@ started full viaPnP with native1000MHz/VID116, retaining Windows/DWM.
  passes; D3Dsharedbidirectional/redblue and307200greenpixels pass.
 
 These passes did NOT establish visible output: physicalmonitorblack confirmed
-byowner. Raw BLANK_CONTROL=0x101 inall16observations. DWM generated heavy paging
+visually. Raw BLANK_CONTROL=0x101 inall16observations. DWM generated heavy paging
 whilehardwareflipcountstayed1. OneDWMrestart23:49:39 producedaGDI desktopimage,
-butownerconfirmedphysicaldisplaystillblack. Do not useGDI/FBDUMPpixelcontents
+butavisualcheckconfirmedphysicaldisplaystillblack. Do not useGDI/FBDUMPpixelcontents
 alone as proofthat theoutputpipeline isunblanked. NoAI/Vulkanworkloadfollowed.
 
-A136rollbackwaslaunchedbeforeownersaidfixcurrent/norollback. Forcedinstallation
+A136rollbackwaslaunchedbeforethedecisionfixcurrent/norollback. Forcedinstallation
 autoenabled136; scriptstoppedatitsunexpectedenablecheck.136Code43followed.
 Currentdirectionisrepair139-derivedcode, notrollback.
 
@@ -39,6 +39,6 @@ onordinaryPresentisjustifiedbecauseMSrequiresPresentwhilemonitorsareoff.
 
 Latestdeployed140isadiagnosticcandidatewithphysicaldisplayfailure,notahealthy
 baseline. Sourcevisibilityfirst32logsareinsufficientundertheringwrap, motivating
-retainedper-devicediagnosticsnext. Theownerreportedblack/backlight/noinputimage.
+retainedper-devicediagnosticsnext. Avisualcheckshowedblack/backlight/noinputimage.
 Rawsource/snapshots/logsretained; instanceidentifierlinesredacted.Screenshots
 remainprivate. FullM9coldstart/resume/cache/lifetime/preemption/performanceopen.

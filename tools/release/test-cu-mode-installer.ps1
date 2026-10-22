@@ -10,7 +10,7 @@
 #      named on the command line takes the record with it. These checks run only while the table's default is 40,
 #      because a default equal to the closed value is no closure; under a default of 24 the test proves instead that
 #      the closure entry is inert.
-#   6. The number of cores a person selected survives an upgrade (owner, 2026-10-14). The release default is the
+#   6. The number of cores a person selected survives an upgrade. The release default is the
 #      stock 24 again, so the 'update' rule would take a 40 of tester.30 away; CuModeChosen is the record that tells
 #      a number a person asked for from a number a release applied, and it has to match the key exactly.
 #   5. The control application's Graphics page writes the stock choice out as CuMode = 24 and never deletes the
@@ -38,7 +38,7 @@ $tableCuMode = $null
 if ($table.defaults.parameters.PSObject.Properties['CuMode']) { $tableCuMode = [int]$table.defaults.parameters.CuMode }
 $expectedCus = 24
 if ($null -ne $tableCuMode) { $expectedCus = $tableCuMode }
-Check ($tableCuMode -eq 24) 'the current release starts with the owner-approved 24 CU default'
+Check ($tableCuMode -eq 24) 'the current release starts with the 24 CU default'
 
 "the table holds $(if ($null -eq $tableCuMode) { 'no CuMode default, so the driver runs 24 compute units' } else { "CuMode $tableCuMode" })"
 
@@ -180,7 +180,7 @@ if ($tableCuMode -eq 40) {
     Check (($d.decision -eq 'set') -and ([int]$d.value -eq 40)) `
         "a key with no CuMode is a machine this installer never configured: $($d.decision) $($d.value)"
 } else {
-    # With the release default back at the stock 24 (owner, 2026-10-14) the driver's own step back to 24 is the
+    # With the release default back at the stock 24 the driver's own step back to 24 is the
     # number this release installs anyway, so there is nothing for a repair to reopen. The closure entry has to be
     # inert, not merely untested: a 'driver-closed' here would hold the install back from writing its own default.
     "the table's default is not 40, so the CuMode closure is not in force"
@@ -194,7 +194,7 @@ if ($tableCuMode -eq 40) {
     Check (($d.decision -eq 'command') -and ([int]$d.value -eq 40)) "-CuMode 40 over that state still writes 40: $($d.decision)"
 }
 
-'a number of cores a person chose stays over an upgrade (owner, 2026-10-14)'
+'a number of cores a person chose stays over an upgrade'
 # The release default is 24 now, so the 'update' rule would take a 40 (or a chosen set of cores) away at every
 # upgrade from tester.30, whose own default was that 40. CuModeChosen is what tells the two apart: the control
 # application and install.cmd -CuMode write it, the driver never does, and it has to match the key exactly.

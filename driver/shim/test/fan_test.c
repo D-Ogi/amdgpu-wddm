@@ -668,7 +668,7 @@ static void emergency(void)
 /* The governor's load feed is what rule 10 is built on. These traces are written so that they also compile
  * against a policy that has no feed: the input fields and the controller's own boost state are then left out,
  * and what stays is the duty the trace must produce. A build without the rule answers those checks with the
- * curve's own duty, which is the point the owner raised on 2026-10-10: the curve alone is late.
+ * curve's own duty, which is the point found on 2026-10-10: the curve alone is late.
  *
  *   (a) the LLM arm of 2026-10-10: 99 % busy for 50 s, Tctl 61 -> 77 C
  *   (b) an idle desktop

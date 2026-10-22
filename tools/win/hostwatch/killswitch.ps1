@@ -1,4 +1,4 @@
-# Kill switch for a watched live kd.exe session on the development PC (owner's consent 2026-09-27).
+# Kill switch for a watched live kd.exe session on the development PC (consent of 2026-09-27).
 # Every second: read the nonpaged pool; if it exceeds -LimitMB, or grows by more than -RateMBps in one second,
 # kill every kd.exe, log why, and keep watching (the 2026-09-21 leak released memory ~2 min after the kill).
 # Run it BEFORE `kd_server.py start`; stop it with Ctrl+C or by deleting the -StopFile.

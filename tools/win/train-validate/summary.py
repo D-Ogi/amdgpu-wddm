@@ -1,11 +1,11 @@
 """The RESULTS.md skeleton of one train validation.
 
-One row per arm with its value, its baseline, its verdict and the path of its raw log, the two owner release
+One row per arm with its value, its baseline, its verdict and the path of its raw log, the two release
 gates stated as met or not met, and, for a failed arm, the known failure class whose symptom shape its logs
 match. A symptom shape is not a diagnosis: the suite names the shape and stops there, so that the reader
 goes to the raw log instead of trusting a label.
 
-The rule the owner's gates stand on: a gate is met only when every arm of it passed **and** its number was
+The rule the release gates stand on: a gate is met only when every arm of it passed **and** its number was
 read and compared with its baseline. An arm that ran, said nothing and exited 0 leaves its gate NOT MET.
 """
 from __future__ import annotations
@@ -18,9 +18,9 @@ from pathlib import Path
 from runner import (BOUND, FAIL, GOOD, OPERATOR, PASS, SKIPPED, THERMAL, UNREAD, WARN, ArmRecord, judge)
 
 GATE_RULES = {
-    "rottr": ("Rise of the Tomb Raider", "owner, 2026-10-04: no tester release without a working Rise of the "
+    "rottr": ("Rise of the Tomb Raider", "release rule of 2026-10-04: no tester release without a working Rise of the "
                                          "Tomb Raider"),
-    "q2rtx": ("Quake II RTX with ray tracing", "owner, 2026-10-08: no package ships until Quake II RTX runs, "
+    "q2rtx": ("Quake II RTX with ray tracing", "release rule of 2026-10-08: no package ships until Quake II RTX runs, "
                                                "and it ships with support for it"),
 }
 # Verdicts whose raw logs are read again for a symptom shape. UNREAD belongs here: an arm that ran and

@@ -24,7 +24,7 @@ there is no evidence here for inference correctness after this attempted reset.
 
 Logs were preserved before closed-gate PnPrecovery. Independent final info:
 111,stage61,43presents,full gate0,reset gate0; CLIconfirm exit0,guard counter0.
-Same boot throughout; no AC cycle, OS restart, DWM reset or owner action.
+Same boot throughout; no AC cycle, OS restart, DWM reset or manual action.
 Host recovery/info logs redact hardware/interface lines and PCI identity;
 raw KMD logs are unchanged. The12snapshot bundle includes prior control/stop
 history; only snapshots containing this reset readback are trial witnesses.

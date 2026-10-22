@@ -15,8 +15,7 @@
 #
 # Up to tester.31 the milestone asked for a completion within 15 s at the 60 s mark, which an idle desktop rarely
 # gives, and a small blue window with a countdown kept DWM presenting for it. That window came from the time of the
-# CPU desktop and is gone (owner, 2026-10-22: "Niebieskie okienko jest z czasu pulpitu na CPU przeciez. Nie mozemy
-# go usunac w calosci?"). An idle GPU desktop flips about once a minute, for the taskbar clock, and QUIET accepts it.
+# CPU desktop and is gone. An idle GPU desktop flips about once a minute, for the taskbar clock, and QUIET accepts it.
 #
 # BD-080: this script only reads and confirms, and shows nothing: the Local System account that confirms at the logon
 # of any user has no desktop in that session. -NoWindow is still taken, because the registered task passes it; it

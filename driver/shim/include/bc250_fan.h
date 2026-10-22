@@ -5,7 +5,7 @@
  * no time source. The miniport (driver/kmd/fan.c) owns the gate, the timers, the escape and the exit paths, and
  * calls in here once a second from the governor thread.
  *
- * The owner's rule (2026-10-06): the driver may take the fan from the BIOS curve while it runs, the BIOS "Fan
+ * The rule: the driver may take the fan from the BIOS curve while it runs, the BIOS "Fan
  * Setting" stays unchanged, and the driver gives the fan back to the chip's automatic mode on every exit path.
  * This module is the one place that decides a duty and the one place that writes the chip, through
  * bc250_hwmon_write8() and its three-register allowlist.
@@ -33,9 +33,8 @@
  *   7. The curve output rises at once and falls only after 10 s below, by 10 points at most every 2 s.
  *   8. A leased mode (a fixed duty, or a curve that was not stored) ends with the fan given back to the board.
  *   9. A sustained heavy load drives the fan to full speed before the curve gets there (the load feed-forward,
- *      rule 10 in docs/design/fan.md, whose list counts a refusal by the chip as a rule of its own,
- *      owner 2026-10-10: "Robiąc takie testy sterownik powinien sam ogarnąć, że trzeba wiać z maksymalną mocą!",
- *      "doing such tests the driver should work out by itself that it has to blow at full power"). The
+ *      rule 10 in docs/design/fan.md, whose list counts a refusal by the chip as a rule of its own: under such
+ *      a load the driver works out by itself that the fan has to run at full power). The
  *      feed-forward only ever RAISES the duty above the curve, it needs the governor's load feed, and the
  *      FanLoadBoost setting switches it off.
  *
@@ -72,7 +71,7 @@
  *
  * The curve alone always answers late: it reads the heat that the load has already made. On 2026-10-10 an LLM
  * benchmark arm on unit A held the GPU at 93 to 100 % busy and 107 to 122 W of SMU socket power, and Tctl walked
- * from 62.8 C to 76.9 C in 14 s. The Standard curve answered with 95 % duty, and the owner asked for the obvious:
+ * from 62.8 C to 76.9 C in 14 s. The Standard curve answered with 95 % duty. The obvious answer:
  * the driver sees the load, so it must blow at full power without waiting for the temperature.
  *
  * A step is HEAVY when the load feed says any of these:

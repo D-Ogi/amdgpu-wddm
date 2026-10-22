@@ -19,7 +19,7 @@ other layout.
 
 ALLOWED lists the findings that are meant, each with its reason. An allowed finding that the scan no longer makes is
 an error too, so the list cannot hold a file that has changed. The start window of 84f35234
-(tools/release/installer/start-window.ps1 and start-confirm.ps1) is gone (owner, 2026-10-22); the controls
+(tools/release/installer/start-window.ps1 and start-confirm.ps1) is gone (2026-10-22); the controls
 (test_winforms_labels.py) check that neither file makes a WinForms window any more.
 
 Exit 0 with no findings outside ALLOWED and no stale entry in it, 1 otherwise.

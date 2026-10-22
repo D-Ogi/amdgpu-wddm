@@ -77,7 +77,7 @@ with the M430-M431 DCN/VidPn changes. One PnP update preserves OS/DWM; D3D pixel
 0 ACK timeouts/refusals, GFX2610/2610, SDMA6051/6051, no TDR. This supersedes the
 source-only deployment status below, not the remaining M9 gates. The diagnostic
 refusal hits the older full-WDDM dispatcher; its script expected the inner guard
-and that failed observation is preserved. The [owner subsequently confirmed correct image and smooth movement](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-owner-feedback/REPORT.md).
+and that failed observation is preserved. A [visual check at the lab later confirmed correct image and smooth movement](../../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-owner-feedback/REPORT.md).
 Timed long-duration acceptance remains open. Native SMU ownership/startup work remains next.
 
 M430-M431 add source-only DCN ACK/field-preservation and correct VidPn failure
@@ -98,7 +98,7 @@ alive/resident together;103set/618individual queries report GPU-memory residency
 and all words pass GPU readback with6144fences. FinalGFX6784/6784,paging16614/16614,
 noTDR,zero captures; OS/DWM unchanged through18:52:02.64MiB set and legacy controls
 also pass. [M428 evidence](../../evidence/windows/2026-09-24-E27-m9-recovery/resident-set-6g/RESULT.md).
-The owner's12GiB target remains open;6GiB is only37.5% of installed16GiB. A single
+The12GiB target remains open;6GiB is only37.5% of installed16GiB. A single
 6GiB allocation failed creation; cause unknown. Budget/pagefile are not physical
 VRAM. No startup or lifetime gate is closed by these content/residency samples.
 
@@ -187,7 +187,7 @@ also restarted the adapter in the same boot without OS/AC recovery.
 Preserve the [M13.1 visible desktop](m13-present-baseline.md) while completing M9.
 M412 leaves Mesa26.3.0-devel/LLVM23.1.2 llvmpipe CPU JIT registered and PresentBlit/DcnWrite/VidPnFlip enabled;
 visible desktop, corrected buffer rotation and fluid mouse motion with the
-overlay were confirmed by the owner on M410. M412 repeats the image/content
+overlay were confirmed by a visual check at the lab on M410. M412 repeats the image/content
 controls; current-build input feedback and30minute acceptance remain open. GPU compute gates
 remain enabled; the final desktop-session64KiB control passes four complete GPU
 readbacks and three residency cycles with graphics4/4,paging829/829,noTDR.
@@ -293,8 +293,8 @@ Candidate0.7.103.1 installs with closed gates, exact SYS/version and deviceOK,
 no Windows reboot. Old07102 stop reaches stage79 with halt-register/PSP/GART
 witnesses; see candidate07103/previous-driver-stop.log. One subsequent full
 start returns PnPenable success then stops producing status; all3configured
-SSH endpoints failTCP. Host session21191 remains live at observation. Owner
-monitor question pending, no reset requested. Do not rerun or infer CP1 failure.
+SSH endpoints failTCP. Host session21191 remains live at observation. Lab(
+)monitor question pending, no reset requested. Do not rerun or infer CP1 failure.
 Recover persisted startup before the next hardware action. Reservation runtime
 acceptance is missing. See facts M325/candidate07103/RESULT-1.md.
 
@@ -305,10 +305,10 @@ acceptance is missing. See facts M325/candidate07103/RESULT-1.md.
 The initial failed start observation and two consecutive follow-ups find all three
 configured SSH endpoints unavailable. Original session21191 remains live without
 new output; it has not been classified terminal and must not be relaunched.
-Owner monitor/mouse response is still pending. Read-only recovery script is ready
+The lab monitor/mouse response is still pending. Read-only recovery script is ready
 and parser-checked. The next hardware diagnosis requires persisted startup logs;
 changing startup based on an assumed failure stage would be unsupported. Full M9
-is unachieved. Goal blocked pending owner observation or restored connectivity.
+is unachieved. Goal blocked pending a lab observation or restored connectivity.
 Evidence: candidate07103/recovery-observation-3.json. No reset performed.
 
 
@@ -350,7 +350,7 @@ claiming runtime reservation acceptance. See facts M329.
 
 After M329 workload, one same-binary full PnPstop/start reports enable success
 then loses status/SSH. Full local subnet SSH search finds no pinned lab identity.
-Originalsession55183 still live; owner monitor observation pending, no reset yet.
+Originalsession55183 still live; monitor observation at the lab pending, no reset yet.
 Recover persisted stop/start logs before inferring a failure stage or changing
 hardware sequencing. M328 first startup remains a narrower success, not warm
 acceptance. See facts M330 and warm07104/RESULT-1.md.
@@ -374,7 +374,7 @@ initial full-subnet discovery also found no pinned lab. Original session55183
 remains live with no new output, not terminal and not eligible for a duplicate
 trial. Monitor response is pending. M331 source/reference review is complete;
 next diagnosis requires recovered stop/start snapshots. Goal blocked pending
-owner observation or restored connectivity, not complete. Prepared read-only
+a lab observation or restored connectivity, not complete. Prepared read-only
 warm07104-recover.ps1 is parser-checked. No reset or further GPU action performed.
 Evidence: warm07104/observation-3.json. On resume recheck original handle and
 endpoint identity, then acquire persistent logs before any initialization.

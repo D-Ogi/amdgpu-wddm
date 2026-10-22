@@ -35,7 +35,7 @@ gpu.bmp shape fails:26676 cyan pixels,bbox696,157,920,288,fill0.9090785169,
 7 small-component pixels. A non-atomic primary capture remains a hypothesis.
 The producer's deadline is270s and its task was running at the last sample;
 window destruction at a180s deadline is not an established explanation.
-No owner visual verdict. Do not infer a clean desktop from runner success=true.
+No visual verdict. Do not infer a clean desktop from runner success=true.
 
 Rollback at09:41:30.4199114Z DWM11008->CPU10856. Runner terminal09:41:32.4655792Z;
 cleanup verifies baseline DLL hashes, registry and latched interop0/GPU Present0,

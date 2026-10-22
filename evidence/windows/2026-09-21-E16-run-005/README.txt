@@ -13,7 +13,7 @@ Timeline (local time, unit A)
             CreateDevice x2, CreateContext, then BuildPagingBuffer operation 11 (UpdatePageTable) and
             SetRootPageTable segment 1 offset 0, 512 entries. After that only QueryAdapterInfo type 25
             (ADAPTERPERFDATA, refused) once a second.
-  21:57     the owner reports a black screen. SSH, the overlay and the desktop session stay alive
+  21:57     a visual check shows a black screen. SSH, the overlay and the desktop session stay alive
             (the overlay still reports a 1920x1200 screen; its screenshots are black).
   21:58:43  ring-open5-b, state-open5-b: unchanged. 0 TDR, 0 bugcheck, 0 live kernel reports.
   21:59     ring-summary5-*: 1028 BuildPagingBuffer calls, all operation 11, the count stable between two

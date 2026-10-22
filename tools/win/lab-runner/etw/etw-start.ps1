@@ -59,7 +59,7 @@ if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { throw "ta
 # trial's game log) for up to N s. etw-capture.ps1 keeps its own deadline and reserve.
 $fps = ''
 if ($FpsSeconds -gt 0) { $fps = " -GpuOnly -SkipA -SecondsB $FpsSeconds -WorldLog `"$stage\game\game-log.txt`"" }
-# -WorldSeconds N (owner 2026-09-30, "40 ms per frame off the GPU"): the same world-triggered window B with the full
+# -WorldSeconds N (2026-09-30, 40 ms per frame off the GPU): the same world-triggered window B with the full
 # PerfView CPU profile (samples, context switches) next to DxgKrnl, for etw-cpu.py.
 elseif ($WorldSeconds -gt 0) {
     # One -ReserveSeconds on the line: a stacked session has more buffers to flush, so the reserve is 35 s

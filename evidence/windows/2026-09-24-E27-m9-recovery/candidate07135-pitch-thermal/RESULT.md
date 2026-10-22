@@ -29,7 +29,7 @@ source snapshots accompany build logs. M435-M437 provide host controls.
   DCN991 flips,0 refused/ACK timeouts,36386 vsync acknowledgements,2 deferred
   reports while flip pending. BD-008 remains open; this trial does not fix it.
   Existing1000MHz/VID116 verified; final temperature66.5C, observed control
-  peak68.2C. Owner physical-input/long-duration acceptance is not inferred.
+  peak68.2C. Visual physical-input/long-duration acceptance is not inferred.
 
 ## Windows thermal positive control
 

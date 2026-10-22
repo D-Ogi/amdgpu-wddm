@@ -1,4 +1,4 @@
-# Automatic diagnostics of a driver start that did not pass (owner, 2026-10-12: the installer collects the logs
+# Automatic diagnostics of a driver start that did not pass (the installer collects the logs
 # itself when the install does not pass). Until now a tester had to be asked for every reading by hand, one mail at a
 # time; the field report 20261011T222253Z is the case this file was written for: the device stood at problem code 43
 # (CM_PROB_FAILED_POST_START) with the start record of that boot already written, and the support file carried the

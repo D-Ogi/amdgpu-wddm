@@ -29,8 +29,8 @@ global KMD counters and readback images independently of the compositor.
 Expected positive: correct composed pixels, continuing GPU completion/Present,
 no unexpected DWM restart, assertion or device loss, and successful rollback.
 Any failure is retained and investigated. A surviving process is insufficient.
-The owner-requested three-minute duration alone does not prove 60 Hz cadence, Start-menu
+The three-minute duration alone does not prove 60 Hz cadence, Start-menu
 correctness, all shared-resource cases or broad M13 lifecycle acceptance.
 
-The owner shortened this diagnostic to three minutes on 2026-09-27; it is not
+This diagnostic was shortened to three minutes on 2026-09-27; it is not
 an execution of the longer historical M13 acceptance duration.

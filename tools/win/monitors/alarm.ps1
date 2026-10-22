@@ -1,4 +1,4 @@
-# Audible signal on the development PC when a game trial starts on the lab (owner request, 2026-09-29).
+# Audible signal on the development PC when a game trial starts on the lab (2026-09-29).
 # Plays one Windows alarm sound of a few seconds. No window and no resident process. Falls back to
 # console beeps when the sound file is missing.
 param(

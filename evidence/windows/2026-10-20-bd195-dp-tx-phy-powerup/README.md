@@ -7,7 +7,7 @@ installed 0.7.216.102-tester.31v2 driver store folder. ROM: the unit A VBIOS fro
 
 ## 1. The refusal on the lab (KMD r3 993CBCBC, 2026-10-20)
 
-The owner unplugged the DP cable and plugged it in again. The sink discovery succeeded on the first try. Each
+The operator unplugged the DP cable and plugged it in again. The sink discovery succeeded on the first try. Each
 link Apply then stopped at step 21 (`BC250_LINK_TX_ENABLE`), in the ATOM call of DIG1TransmitterControl
 ENABLE for DP at 2.7 Gb/s:
 
@@ -69,7 +69,7 @@ message with the argument that the caller states: 0 for SetPixelClock, `symclk_1
 - `link_atom_test`: the scope covers ENABLE only. A PSP argument other than the call's rate is refused, and so
   is `TX_FIFO_START`.
 
-## 4. Lab arms on r4 (2026-10-20, owner re-plugs)
+## 4. Lab arms on r4 (2026-10-20, manual re-plugs)
 
 | Arm | Desktop route | Result |
 |---|---|---|

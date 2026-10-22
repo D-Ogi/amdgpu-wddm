@@ -174,7 +174,7 @@ step_pre() {
 		*bc250.mode=readonly*) say "   mode readonly: no MMIO write will be made by the stick" ;;
 		*) say "   WARNING: this is not the bc250.mode=readonly entry - check grub.cfg" ;;
 	esac
-	say "boot history is the owner's to tell: cold or warm. uptime:"
+	say "boot history is the operator's to tell: cold or warm. uptime:"
 	uptime; note "uptime" $?
 	say "amdgpu loaded? (empty is what this step wants)"
 	lsmod | grep -i amdgpu; note "lsmod amdgpu (1 = absent, which is right here)" $?

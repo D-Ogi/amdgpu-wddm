@@ -4,7 +4,7 @@ Unit A, 2026-09-25. KMD147 unchanged; UMD CB1480EC67DB4DC22193E65AAB158680D00063
 
 ## Cause
 Two startup crashes reached llvmpipe shade_quads through lp_rast_linear_rect_fallback.
-The owner-authorized private full dump confirms a1428x33 RGBA8 shared surface,
+The authorized private full dump confirms a1428x33 RGBA8 shared surface,
 stride5712, CPU map extent192512 (page-rounded188496 logical bytes), versus
 llvmpipe layer/sample stride205632 (36rows). At y32,x256 the third row load accesses
 offset195232, outside that map. The address is16-byte aligned: this is an extent

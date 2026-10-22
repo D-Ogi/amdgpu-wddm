@@ -37,5 +37,5 @@ timeout. Initial cleanup refused while that original process was still alive;
 archive ran after termination and cleanup was then repeated successfully. The
 trial itself was never rerun. All027 tasks removed. Snapshot10:41:43.6061573Z:
 exact162 health15/guard0,1000MHz/VID116,66.75C,no test processes. Gates0, baseline
-UMD8279AC7F/ICD93B1D1FD restored. CPU8936, same OS boot. No owner visual verdict;
+UMD8279AC7F/ICD93B1D1FD restored. CPU8936, same OS boot. No visual verdict;
 this is a failed BGP1 probe with a measured cause, not G0 acceptance.

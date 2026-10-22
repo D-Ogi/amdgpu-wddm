@@ -7,7 +7,7 @@
 //   * TLS: the operating system's choice (SecurityProtocolType.SystemDefault, with the .NET 4.8 target declared in
 //     AssemblyInfo.cs); machine TLS settings are never changed.
 //   * Tags: v?A.B.C.D (stable) or v?A.B.C.D-tester.N, and a second issue of a tester build as v?A.B.C.D-tester.NvR
-//     (R from 2, owner 2026-10-13: 0.7.216.100-tester.29v2); numeric order; for the same A.B.C.D a stable release is
+//     (R from 2: 0.7.216.100-tester.29v2); numeric order; for the same A.B.C.D a stable release is
 //     newer than every tester build; tester.10 > tester.9; tester.29 < tester.29v2 < tester.29v3 < tester.30. A
 //     release counts only with its package asset
 //     (amdgpu-wddm-<version>.zip or amdgpu-wddm-tester-<version>.zip) and not as a draft.

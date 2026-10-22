@@ -35,8 +35,8 @@ Initial standalone harness builds needed the SDK timespec define, /MD and Mesa's
 futex/time objects plus Synchronization.lib. The final successful recipe and log
 are retained here; failed preparation logs remain under private scratch. Existing
 build.cmd records the original17-step build. build-low-memory.cmd is the future
--j2 recipe, prepared after a host-memory concern (the owner later attributed that
-pressure to another agent). No resource-intensive work is running from this control.
+-j2 recipe, prepared after a host-memory concern (that pressure was later attributed
+to another process). No resource-intensive work is running from this control.
 
 Remaining: deploy with a positive copying control, correlate uploader identity and
 capture brackets, inspect persistent mappings and imported-primary CPU access.

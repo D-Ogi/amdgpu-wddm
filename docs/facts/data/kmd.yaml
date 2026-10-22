@@ -923,7 +923,7 @@ facts:
   - id: M246
     status: MEASURED
     date: "2026-09-23"
-    claim: "After the candidate0794 black-screen trial and owner reset, unit A returned in display-only mode with FullWddm0; the failing startup phase was not retained"
+    claim: "After the candidate0794 black-screen trial and manual reset, unit A returned in display-only mode with FullWddm0; the failing startup phase was not retained"
     evidence: "[startup-snapshots](../evidence/windows/2026-09-23-E27-m9-inference/startup-snapshots/): recovery boot12:36:57, stage61, last persisted log only pre-trial display stop, no new minidump. Candidate0795 adds KeepLog-gated flushed phase snapshots,319 host checks and WDK build pass; not installed or runtime-validated"
   - id: M247
     status: MEASURED
@@ -935,7 +935,7 @@ facts:
     status: MEASURED
     date: "2026-09-23"
     claim: "Candidate0796 persisted successful GART/PSP/IH initialization; its last snapshot is before GFX initialization"
-    evidence: "[startup0796-recovery](../evidence/windows/2026-09-23-E27-m9-inference/startup0796-recovery/): owner reset after black screen, recovery boot12:51:41. No both-engines-ready snapshot or new crash dump. This localizes the last observed boundary, not the exact failing operation. Recovery FullWddm0, stage90 guard refusal,UnconfirmedStarts2"
+    evidence: "[startup0796-recovery](../evidence/windows/2026-09-23-E27-m9-inference/startup0796-recovery/): manual reset after black screen, recovery boot12:51:41. No both-engines-ready snapshot or new crash dump. This localizes the last observed boundary, not the exact failing operation. Recovery FullWddm0, stage90 guard refusal,UnconfirmedStarts2"
   - id: M249
     status: CONFIRMED
     date: "2026-09-23"
@@ -1030,7 +1030,7 @@ facts:
     date: "2026-09-23"
     claim: "Candidate0.7.100.1 full WDDM startup completes all eight CP checkpoints and real paging"
     status_text: "MEASURED (unit A)"
-    evidence: "[candidate07100-start](../evidence/windows/2026-09-23-E27-m9-inference/candidate07100-start/): oem74/hash verified, CP1..8/SDMA/interrupt success in persisted log,292/292paging complete,deviceOK,no reboot issued. Session followed owner AC removal; not warm reentry-after-work acceptance or0799 root-cause proof"
+    evidence: "[candidate07100-start](../evidence/windows/2026-09-23-E27-m9-inference/candidate07100-start/): oem74/hash verified, CP1..8/SDMA/interrupt success in persisted log,292/292paging complete,deviceOK,no reboot issued. Session followed a manual AC removal; not warm reentry-after-work acceptance or0799 root-cause proof"
   - id: M275
     status: MEASURED
     date: "2026-09-23"
@@ -1108,9 +1108,9 @@ facts:
   - id: M288
     status: MEASURED
     date: "2026-09-23"
-    claim: "Candidate07101 installs without an OS reboot; subsequent full start loses SSH observation; owner reports desktop after AC removal"
-    status_text: "MEASURED (unit A; startup unresolved, desktop owner-reported)"
-    evidence: "[candidate07101-start](../evidence/windows/2026-09-23-E27-m9-inference/candidate07101-start/): 0.7.101.1/oem75/SYS5E3ACB0F..., pnputil0, deviceOK, exact hash, unchanged boot. [Recovery observation](../evidence/windows/2026-09-23-E27-m9-inference/candidate07101-cold-recovery/): owner reports desktop after AC removal; remote read timed out and both configured TCP22 routes failed. At that time no last stage was recovered; M313 later recovers CPstep1entry and corrects the old-endpoint SSH interpretation. Full-start/cache/alias runtime acceptance remains missing"
+    claim: "Candidate07101 installs without an OS reboot; subsequent full start loses SSH observation; a visual check shows the desktop after AC removal"
+    status_text: "MEASURED (unit A; startup unresolved, desktop seen by eye)"
+    evidence: "[candidate07101-start](../evidence/windows/2026-09-23-E27-m9-inference/candidate07101-start/): 0.7.101.1/oem75/SYS5E3ACB0F..., pnputil0, deviceOK, exact hash, unchanged boot. [Recovery observation](../evidence/windows/2026-09-23-E27-m9-inference/candidate07101-cold-recovery/): a visual check shows the desktop after AC removal; remote read timed out and both configured TCP22 routes failed. At that time no last stage was recovered; M313 later recovers CPstep1entry and corrects the old-endpoint SSH interpretation. Full-start/cache/alias runtime acceptance remains missing"
   - id: M289
     status: MEASURED
     date: "2026-09-23"
@@ -1282,7 +1282,7 @@ facts:
     date: "2026-09-23"
     claim: "Closed-gate display-only diagnostics restored without Windows reboot"
     status_text: "MEASURED (unit A)"
-    evidence: "[approved-run](../evidence/windows/2026-09-23-E27-m9-inference/guard-display-recovery/approved-run.log): owner-approved single PnP restart after closing all gates and guard confirmation; exit0, PnP OK/CM_PROB_NONE, Stage50, info/log success, revision101, boot unchanged19:27:05. Clock1000/VID116,66C; STOP clear. All gates remain closed. No full GPU startup or KIQ acceptance"
+    evidence: "[approved-run](../evidence/windows/2026-09-23-E27-m9-inference/guard-display-recovery/approved-run.log): approved single PnP restart after closing all gates and guard confirmation; exit0, PnP OK/CM_PROB_NONE, Stage50, info/log success, revision101, boot unchanged19:27:05. Clock1000/VID116,66C; STOP clear. All gates remain closed. No full GPU startup or KIQ acceptance"
   - id: M317
     status: MEASURED
     date: "2026-09-23"
@@ -1516,7 +1516,7 @@ facts:
   - id: M405
     status: MEASURED
     date: "2026-09-24"
-    claim: "Unit A on0.7.127.1 completed a second stop/warm pair in the same11:44:14 Windows boot. Post-warm64MiB passed3 residency cycles and4 full GPU readbacks with completed engine fences, no timeout/refusal/TDR. Final info/confirm/log returned0. Third trial deferred for owner-prioritized M13.1 display work."
+    claim: "Unit A on0.7.127.1 completed a second stop/warm pair in the same11:44:14 Windows boot. Post-warm64MiB passed3 residency cycles and4 full GPU readbacks with completed engine fences, no timeout/refusal/TDR. Final info/confirm/log returned0. Third trial deferred for prioritized M13.1 display work."
     evidence: "[result and validation](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07127-repeat/RESULT.md)"
   - id: M416
     status: CONFIRMED
@@ -1605,17 +1605,17 @@ facts:
   - id: M455
     status: MEASURED
     date: "2026-09-25"
-    claim: "Full 144 requires durable start-budget read/write/flush before hardware. After one OS restart, policy2 starts full WDDM automatically with a successful counter flush before POST/MMIO; native1000MHz/VID116 precedes GPU initialization. Postboot64MiB, eight shaders and both E14 model outputs pass; GFX2610/2610,paging6037/6037,noTDR. Budget0 received an unchecked managed flush after controls (checked-persistence correction: M456); owner subsequently confirms correct physical image and cursor. No AC-cold, resume, automatic confirmation or fullM9 acceptance."
-    evidence: "[durable OS start](../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144/RESULT.md), [owner feedback](../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144-owner-feedback/REPORT.md)"
+    claim: "Full 144 requires durable start-budget read/write/flush before hardware. After one OS restart, policy2 starts full WDDM automatically with a successful counter flush before POST/MMIO; native1000MHz/VID116 precedes GPU initialization. Postboot64MiB, eight shaders and both E14 model outputs pass; GFX2610/2610,paging6037/6037,noTDR. Budget0 received an unchecked managed flush after controls (checked-persistence correction: M456); a later visual check confirms correct physical image and cursor. No AC-cold, resume, automatic confirmation or fullM9 acceptance."
+    evidence: "[durable OS start](../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144/RESULT.md), [visual feedback](../evidence/windows/2026-09-25-E27-m9-recovery/durable-osboot144-owner-feedback/REPORT.md)"
   - id: M457
     status: MEASURED
     date: "2026-09-25"
-    claim: "Full145 automatically confirms a genuine warm-PnP start after60s monitor-observed completed-primary progress: generation29824235770/epoch5, guard1->0 and typedconfirmedflags15. OS/DWM retained, owner confirms correct image/input.64MiB full GPU readbacks and three residency cycles pass; GFX256/256,paging1870/1870,noTDR. Hosthealth554,flip129,visibility810,monitor120,client17,timing205 checks pass; negative controls fail as expected. External sampler started late; installer supplies the pending sample for the same generation. No AC-cold, resume, soak or fullM9 acceptance."
+    claim: "Full145 automatically confirms a genuine warm-PnP start after60s monitor-observed completed-primary progress: generation29824235770/epoch5, guard1->0 and typedconfirmedflags15. OS/DWM retained, a visual check confirms correct image/input.64MiB full GPU readbacks and three residency cycles pass; GFX256/256,paging1870/1870,noTDR. Hosthealth554,flip129,visibility810,monitor120,client17,timing205 checks pass; negative controls fail as expected. External sampler started late; installer supplies the pending sample for the same generation. No AC-cold, resume, soak or fullM9 acceptance."
     evidence: "[automatic confirmation145](../evidence/windows/2026-09-25-E27-m9-recovery/automatic-confirmation145/RESULT.md)"
   - id: M458
     status: MEASURED
     date: "2026-09-25"
-    claim: "Unchanged145 passes one AC-cold startup after normal shutdown and31.477s verified relay-off interval. Continuous recorder observes pending guard1/flags7, advancing primaries, automatic60s confirmation and checked kernel flush success, then guard0/flags15. No manual initialization/PnP/DWM restart.64MiB readbacks, eight CPU shader hashes and both E14 model outputs pass; GFX2610/2610,paging6047/6047,noTDR. Owner confirms visible desktop and smooth cursor/overlay after this cold boot; no resume/recovery/soak/fullM9 claim."
+    claim: "Unchanged145 passes one AC-cold startup after normal shutdown and31.477s verified relay-off interval. Continuous recorder observes pending guard1/flags7, advancing primaries, automatic60s confirmation and checked kernel flush success, then guard0/flags15. No manual initialization/PnP/DWM restart.64MiB readbacks, eight CPU shader hashes and both E14 model outputs pass; GFX2610/2610,paging6047/6047,noTDR. A visual check confirms visible desktop and smooth cursor/overlay after this cold boot; no resume/recovery/soak/fullM9 claim."
     status_text: "MEASURED (unit A)"
     evidence: "[cold145](../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145/RESULT.md), [physical feedback](../evidence/windows/2026-09-25-E27-m9-recovery/ac-cold145-owner-feedback/REPORT.md)"
   - id: M460
@@ -1639,7 +1639,7 @@ facts:
   - id: M463
     status: MEASURED
     date: "2026-09-25"
-    claim: "Integrated retained-owner power path on KMD146 passes one real S4: original process/context/allocations and GPU VA survive, two full64MiB GPU readbacks match (fence64->128), and postresume8shaders plus both AI reference outputs pass. Owner later reports sign-in mouse stutter; unlocked-desktop stability and new health confirmation remain open."
+    claim: "Integrated retained-owner power path on KMD146 passes one real S4: original process/context/allocations and GPU VA survive, two full64MiB GPU readbacks match (fence64->128), and postresume8shaders plus both AI reference outputs pass. A later visual check reports sign-in mouse stutter; unlocked-desktop stability and new health confirmation remain open."
     evidence: "[retained S4 control](../evidence/windows/2026-09-25-E27-m9-recovery/retained-s4-146/RESULT.md)"
   - id: M465
     status: CONFIRMED
@@ -1650,7 +1650,7 @@ facts:
   - id: M466
     status: MEASURED
     date: "2026-09-25"
-    claim: "Second actual S4 on unchanged146 retains the same64MiB probe/resources and passes eight shaders plus both model references, but owner reports regular cursor stutter with synchronized summary polling paused. Pausing that poller alone does not remove the symptom; stable interactive resume remains unaccepted."
+    claim: "Second actual S4 on unchanged146 retains the same64MiB probe/resources and passes eight shaders plus both model references, but a visual check shows regular cursor stutter with synchronized summary polling paused. Pausing that poller alone does not remove the symptom; stable interactive resume remains unaccepted."
     evidence: "[second S4 isolation](../evidence/windows/2026-09-25-E27-m9-recovery/s4-isolation146/RESULT.md)"
   - id: M467
     status: CONFIRMED
@@ -1669,7 +1669,7 @@ facts:
   - id: M470
     status: MEASURED
     date: "2026-09-25"
-    claim: "KMD147 E26R v2 cached non-primary shared aperture backing changes matched4MiB CPU read median~156ms to~1.25ms with full content/cleanup pass. Shared D3D pixels,64MiB GPU contents,8shaders and both AI references pass. Owner animation stutter remains; Winlogon ETW identifies52.8% sampled DWM CPU stacks in synchronous DebugPrintf. No S4 cure or fullM9 acceptance."
+    claim: "KMD147 E26R v2 cached non-primary shared aperture backing changes matched4MiB CPU read median~156ms to~1.25ms with full content/cleanup pass. Shared D3D pixels,64MiB GPU contents,8shaders and both AI references pass. Visually observed animation stutter remains; Winlogon ETW identifies52.8% sampled DWM CPU stacks in synchronous DebugPrintf. No S4 cure or fullM9 acceptance."
     status_text: "MEASURED (unit A)"
     evidence: "[cache147 controls and limits](../evidence/windows/2026-09-25-E27-m9-recovery/shared-cpu-cache147/RESULT.md)"
   - id: M472

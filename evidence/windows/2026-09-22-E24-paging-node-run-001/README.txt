@@ -1,4 +1,4 @@
-E24 run 001, 2026-09-22 09:41:54 - 09:48: bc250kmd 0.7.24 (f14c11c) on unit A, owner at the monitor.
+E24 run 001, 2026-09-22 09:41:54 - 09:48: bc250kmd 0.7.24 (f14c11c) on unit A, operator at the monitor.
 run-001-script.sh is the script as run. run-001-console.txt is the console up to the point where it stopped
 producing output; the run was aborted from this side after the target stopped answering.
 
@@ -10,7 +10,7 @@ the ssh session died inside that call, ping stopped answering on both the wired 
 monitor went black. The phase's own output file on the target (C:\BC250\e16\out\gfx-x-094248.txt) is empty:
 the escape hung before the driver wrote the first line of the phase.
 
-Recovery: the owner power-cycled the unit (09:53:43 boot). The one-shot gate meant the driver came back
+Recovery: the operator power-cycled the unit (09:53:43 boot). The one-shot gate meant the driver came back
 display-only at stage 61; the start after the gate-close restart was refused by the UnconfirmedStarts guard
 (CM_PROB_FAILED_POST_START) until the counter was cleared, then the device started normally, 70 C.
 

@@ -1,6 +1,6 @@
 # ADR 0020: operator tuning lives inside the single SMU owner
 
-Date: 2026-10-06. Status: accepted (owner, 2026-10-06: build the Tuner parity the reference Control Center has -
+Date: 2026-10-06. Status: accepted (requirement: build the Tuner parity the reference Control Center has -
 a GPU voltage and frequency curve, a CPU undervolt and a CPU clock - beside the fan control). It reopens two rows
 of [`../design/rejected-options.md`](../design/rejected-options.md) and extends ADR 0014 point 2.
 
@@ -19,14 +19,14 @@ between 500 and 2000 MHz, and the allowlist is five messages (`docs/design/dpm.m
 
 What the driver does not offer is a way for a person to change the operating point. The voltage column of the
 V/F table is a `const` array. The GUI's own page carries a clock ceiling and a CU mode, and two rows that say
-"later": fan control and voltage. The owner's requirement WU-042 asks for the opposite: change clocks or
+"later": fan control and voltage. Requirement WU-042 asks for the opposite: change clocks or
 voltage inside an exposed range, learn the effect on noise, temperature, performance and stability first, and
 restore the standard settings.
 
 The reference operating system for this board ships that control today: a curve chart with draggable knots, a
 25 s trial that keeps the old curve on disk unless the operator presses Keep, a CPU panel with clock, undervolt
 in voltage-identifier steps and a temperature limit, a guided undervolt search, an 8-core unlock and a UMA
-split panel. The owner asked for parity with the parts that our rules allow.
+split panel. The requirement is parity with the parts that our rules allow.
 
 Three findings make this cheaper than it looks, and they are in `scratch/tuner/facts-stack.md` and
 `scratch/tuner/facts-smu-cpu.md`:
@@ -85,7 +85,7 @@ No CPU message has ever been sent on unit A.
 
 7. **The clock control is a limit before it is a raise.** The release control lowers the maximum boost clock
    inside a range whose top is the recorded stock value. A raise above stock is a lab experiment under the
-   owner's hardware pre-approval, and it never runs without an undervolt in force and a voltage readback under
+   standing hardware pre-approval, and it never runs without an undervolt in force and a voltage readback under
    the refusal line. The firmware offers no getter for either, so the driver caches what it wrote and the
    baseline is recorded before the first write.
 
@@ -135,7 +135,7 @@ No CPU message has ever been sent on unit A.
 - The lab plan is seven steps of at most three minutes each, one change per step, the first of them read-only and
   a precondition of the rest, with the plug sampled and the 87 C rules in force (`scratch/tuner/lab-tuner.ps1`,
   local). The safety signals are Tctl, the 87 and 89 C rules and the plug watts; camera checks are suspended by
-  the owner's instruction of 2026-10-06.
+  the lab rules of 2026-10-06.
 - Two things stay open until the lab answers them, and the GUI's words depend on both: whether this part's
   effective CPU clock is near 2.75 GHz or near 3.5 GHz, and whether `SetCoreEnableMask` does anything at all on
   a harvested part.
@@ -178,7 +178,7 @@ code path sends them. They are named in the header and refused by the allowlist.
 - `driver/shim/bc250_clock.c`, `driver/shim/bc250_dpm.c`, `driver/shim/bc250_smu.c`, `driver/kmd/smu.c`,
   `driver/kmd/dpm.c`, `driver/kmd/guard.c`, `driver/kmd/bc250kmd_escape.h`.
 - `driver/amdgpu-import/smu_v11_8_ppsmc.h` (MIT, the names of the queue 0 CPU messages).
-- Owner's requirement WU-042, `ref/gui-requirements-owner-2026-10-04`.
+- Requirement WU-042, the GUI requirements list of 2026-10-04 (workspace, not in this repository).
 - The full design, the facts with their provenance, and the lab plan: `scratch/tuner/DESIGN.md`,
   `scratch/tuner/facts-stack.md`, `scratch/tuner/facts-smu-cpu.md` (local, outside the repository).
 - Community findings, facts only, no code copied: `bc250-collective/bc250_smu_oc` (MIT),

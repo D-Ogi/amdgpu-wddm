@@ -1,6 +1,6 @@
 # M452 - Retained visibility diagnostics on 141 and 142
 
-Unit A, 2026-09-25. The owner reports black backlit output with no visible
+Unit A, 2026-09-25. A visual check shows black backlit output with no visible
 mouse or keyboard response. SSH remains responsive. Neither candidate is a
 healthy display baseline. No OS/AC reset or AI/Vulkan workload was performed.
 

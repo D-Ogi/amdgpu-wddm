@@ -56,7 +56,7 @@ try {
     # /Brepro: a content hash where cl and link write a time. /FC with /d1trimfile: __FILE__ and the name that MSVC
     # gives an anonymous namespace (a hash of the source path) see only the path below the repository.
     $repro = @('/Brepro', '/FC', "/d1trimfile:$repo")
-    # /GL with /LTCG at link and /arch:AVX2 on the router and its host gate: owner decision 2026-10-10 (b29).
+    # /GL with /LTCG at link and /arch:AVX2 on the router and its host gate: design decision of 2026-10-10 (b29).
     # BD-167: the release flavour compiles with NDEBUG, so an assert() added later is gone from the release and
     # live in the lab build.
     $opt = @('/O2', '/GL', '/arch:AVX2') + @(if ($Flavour -ne 'lab') { '/DNDEBUG' })

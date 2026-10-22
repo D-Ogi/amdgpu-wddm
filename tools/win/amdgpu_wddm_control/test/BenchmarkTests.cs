@@ -318,7 +318,7 @@ static partial class UnitTests
         Check(last != null && last.Frames == 120, "benchmark: a log of two timed runs gives the last one");
     }
 
-    // The thermal stop (owner, 2026-10-04): 89 C at once, 87 C held for 10 s, and a reading the driver cannot give
+    // The thermal stop: 89 C at once, 87 C held for 10 s, and a reading the driver cannot give
     // is never a temperature.
     static void BenchThermal()
     {

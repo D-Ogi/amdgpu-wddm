@@ -19,7 +19,7 @@ Order of events (file name suffix is the target's local time, HHMMSS):
   comparison.txt                     compare.py over the three sweeps
   screen-*.jpg                       half-scale captures taken through bc250mon (re-encoded from PNG, quality 70).
                                      A capture shows what the desktop compositor holds, not what the monitor
-                                     shows: the owner, who was using the screen, is the witness for the panel.
+                                     shows: the operator, who was using the screen, is the witness for the panel.
                                      screen-4 shows only a quarter of the desktop: after the rollback Windows
                                      chose 200 % scaling and the already running monitor process was not aware
                                      of the new DPI.

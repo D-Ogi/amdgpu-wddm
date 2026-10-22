@@ -46,7 +46,7 @@ static partial class UnitTests
 
         // ---- the range -----------------------------------------------------------------------------------------
         Check(GameLog.MinMinutes == 1 && GameLog.MaxMinutes == 60, "the range is 1 to 60 minutes");
-        Equal(10u, GameLog.DefaultMinutes, "the button offers 10 minutes, as the owner asked");
+        Equal(10u, GameLog.DefaultMinutes, "the button offers 10 minutes");
         foreach (var n in GameLog.Choices) Check(GameLog.IsValidMinutes(n), "offered recording time " + n + " is inside the range");
         Check(GameLog.Choices.Contains(GameLog.DefaultMinutes), "the list offers the recommended length");
         Check(GameLog.Choices.SequenceEqual(GameLog.Choices.OrderBy(n => n)), "the list is shortest first");

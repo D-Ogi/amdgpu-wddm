@@ -61,7 +61,7 @@ try {
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
  # /O2: the DLL and its host gates are optimised builds (until 2026-09-30 the line had no /O flag, so cl.exe
  # compiled at /Od; trial 164 attributed 4.3 ms/frame to scope bookkeeping alone).
- # /GL and /arch:AVX2 (the DLL links with /LTCG): restored 2026-10-10 by owner decision, trial 171 corruption watched in the b29 lab acceptance.
+ # /GL and /arch:AVX2 (the DLL links with /LTCG): restored 2026-10-10 by design decision, trial 171 corruption watched in the b29 lab acceptance.
  # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
  $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2',("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })),'/MT','/DNOMINMAX','/Brepro','/Zi','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  if($Lab){$flags+='/DAMDGPU_WDDM_LAB_FLAVOUR=1'}

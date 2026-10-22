@@ -1,6 +1,6 @@
 E24 run 006, 2026-09-22 12:01-12:03: bc250kmd 0.7.29 pre-image (0.7.28, commit 2e27f7c) on unit A, first
 bring-up of the 11:59:32 boot (the freshness guard of M78 passed). The VidPn flip gate stayed CLOSED this time:
-the experiment has no use for it, and run 005 left the owner watching M100's unpainted primary for four minutes.
+the experiment has no use for it, and run 005 left the operator watching M100's unpainted primary for four minutes.
 
 The run that tests the pDmaBuffer fix of M108. Same shape as run 005 - eight stages, the `fence gfx x2` control
 for the IH ring, then `kmtprobe` holding 64, then 256, then 512 MB.

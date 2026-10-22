@@ -1,5 +1,5 @@
 // Nagi Control App: the tester's control application for the Nagi graphics driver (amdgpu-wddm) on the ASRock
-// BC-250. The display name is Nagi (owner, 2026-10-13); the file, registry and folder names keep amdgpu-wddm.
+// BC-250. The display name is Nagi; the file, registry and folder names keep amdgpu-wddm.
 //
 //   amdgpu_wddm_control.exe                          the window: the loading window first, then the main window; a
 //                                                    second start brings the open window forward and exits 0
@@ -273,7 +273,7 @@ namespace AmdgpuWddmControl
                 }
                 // A refused start is already decided: the driver wrote its refusal into the registry and nothing
                 // but a start of the device can change it, so there is nothing left to wait for. The person is
-                // told at once (owner, 2026-10-13: "Uzytkownik musi byc tego swiadomym od razu"). Only the other
+                // told at once. Only the other
                 // case waits out the poll, because that is the case a driver still inside its own start looks
                 // like, and a notice from that moment would be false.
                 if (decided == StartNoticeCase.Guard) break;

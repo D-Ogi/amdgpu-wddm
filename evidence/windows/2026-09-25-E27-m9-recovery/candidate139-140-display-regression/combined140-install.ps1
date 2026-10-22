@@ -20,7 +20,7 @@ if($LASTEXITCODE -ne 0 -or $temp -notmatch 'Tctl\s+([0-9]+(?:\.[0-9]+)?)' -or [d
 & pnputil.exe /disable-device $gpu[0].InstanceId
 if($LASTEXITCODE -ne 0){throw 'Disable failed'}
 if((Get-PnpDeviceProperty -InstanceId $gpu[0].InstanceId -KeyName DEVPKEY_Device_ProblemCode).Data -ne 22){throw 'Not disabled'}
-# One diagnostic retry of a known Code43 start, preserved above; owner authorizes lab recovery.
+# One diagnostic retry of a known Code43 start, preserved above; lab recovery is authorized.
 New-ItemProperty $reg UnconfirmedStarts -Value 0 -PropertyType DWord -Force | Out-Null
 foreach($n in @('EnableNativeSmu','EnableMmio','EnableVram','EnableVramWrite','EnableGart','EnablePsp','EnableGfx','EnableIh','EnableGpuVa','EnableGpuSubmit','EnablePagingNode','KeepLog','EnableDcnWrite','EnableVidPnFlip','EnablePresentBlit','EnableSdmaIbControl','EnableSdmaVaControl','EnableFullWddm')){New-ItemProperty $reg $n -Value 1 -PropertyType DWord -Force | Out-Null}
 foreach($n in @('EnableMmioWrite','EnableRlcReloadReset')){New-ItemProperty $reg $n -Value 0 -PropertyType DWord -Force | Out-Null}

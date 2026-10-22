@@ -45,8 +45,8 @@ facts:
   - id: M84
     status: MEASURED
     date: "2026-09-22"
-    claim: "A picture under the full WDDM table: with `EnablePresentBlit` the driver copied each Blt present's sub-rectangles from the source surface (our opened object of M83: 1920 x 1200, `D3DDDIFMT_A8R8G8B8`, pitch 7680, 0x8CA000 bytes, GPU VA 0x8DC000, translated through the GDI context's root page table to one contiguous VRAM range 0x271398000..0x271C61FFF inside segment 1) into the firmware framebuffer by physical address, and the owner at the monitor saw the whole desktop, correct, for the minute the full table ran; no TDR, no bugcheck, gate closed, display-only picture back. The page tables VidMm had the driver write (M73) translate the CDD's surface the way the CPU walk expects. The overlay's GDI screenshot stays the black 3586-byte frame under the full table (it reads the CDD's surfaces, not the scanout) and is not a measure of the picture"
-    status_text: "MEASURED (n = 1 run, 34 presents, owner's observation)"
+    claim: "A picture under the full WDDM table: with `EnablePresentBlit` the driver copied each Blt present's sub-rectangles from the source surface (our opened object of M83: 1920 x 1200, `D3DDDIFMT_A8R8G8B8`, pitch 7680, 0x8CA000 bytes, GPU VA 0x8DC000, translated through the GDI context's root page table to one contiguous VRAM range 0x271398000..0x271C61FFF inside segment 1) into the firmware framebuffer by physical address, and a visual check at the monitor showed the whole desktop, correct, for the minute the full table ran; no TDR, no bugcheck, gate closed, display-only picture back. The page tables VidMm had the driver write (M73) translate the CDD's surface the way the CPU walk expects. The overlay's GDI screenshot stays the black 3586-byte frame under the full table (it reads the CDD's surfaces, not the scanout) and is not a measure of the picture"
+    status_text: "MEASURED (n = 1 run, 34 presents, visual observation)"
     detail: "`evidence/windows/2026-09-22-E20-run-008/run-008-console.txt`, `README.txt`"
     edges:
       - {"type": "uses", "to": "M73", "auto": true, "cue": "...isplay-only picture back. The page tables VidMm had the driver write (M73) translate the CDD's surface the way the CPU walk expects. The overla..."}
@@ -100,7 +100,7 @@ facts:
   - id: M94
     status: MEASURED
     date: "2026-09-22"
-    claim: "The display flip works under Windows with the sequence E21 measured (M87), on HUBP0/OTG0 alone, from the display-only driver: `OTG0_OTG_MASTER_UPDATE_LOCK` 1, `HUBPREQ0_DCSURF_FLIP_CONTROL` 0, `_SURFACE_CONTROL` 0, `_PRIMARY_SURFACE_ADDRESS_HIGH`/`_ADDRESS`, lock 0, `OTG0_OTG_TRIGA_MANUAL_TRIG` 1. The address register moved 0x270000000 -> 0x271000000 -> 0x270000000, `SURFACE_FLIP_PENDING` (0x100) cleared after 16.1 / 12.1 / 13.5 ms (one frame at 59.95 Hz), `OTG0_OTG_STATUS_FRAME_COUNT` kept advancing, `HUBP_UNDERFLOW_STATUS` stayed 0, and the scanout read back through M93's instrument while the address was 0x271000000 was the CPU-filled surface (blue field, white border, diagonal). `DCSURF_SURFACE_INUSE` stayed 0 throughout (as on Linux, M89). `GLOBAL_CONTROL0`, `VUPDATE_KEEPOUT` and `FLIP_CONTROL2` were left at the firmware's values. What the monitor showed during the 8 s is not recorded (owner absent)"
+    claim: "The display flip works under Windows with the sequence E21 measured (M87), on HUBP0/OTG0 alone, from the display-only driver: `OTG0_OTG_MASTER_UPDATE_LOCK` 1, `HUBPREQ0_DCSURF_FLIP_CONTROL` 0, `_SURFACE_CONTROL` 0, `_PRIMARY_SURFACE_ADDRESS_HIGH`/`_ADDRESS`, lock 0, `OTG0_OTG_TRIGA_MANUAL_TRIG` 1. The address register moved 0x270000000 -> 0x271000000 -> 0x270000000, `SURFACE_FLIP_PENDING` (0x100) cleared after 16.1 / 12.1 / 13.5 ms (one frame at 59.95 Hz), `OTG0_OTG_STATUS_FRAME_COUNT` kept advancing, `HUBP_UNDERFLOW_STATUS` stayed 0, and the scanout read back through M93's instrument while the address was 0x271000000 was the CPU-filled surface (blue field, white border, diagonal). `DCSURF_SURFACE_INUSE` stayed 0 throughout (as on Linux, M89). `GLOBAL_CONTROL0`, `VUPDATE_KEEPOUT` and `FLIP_CONTROL2` were left at the firmware's values. What the monitor showed during the 8 s is not recorded (nobody watched the monitor)"
     status_text: "MEASURED (n = 3 flips, 1 run; monitor unobserved)"
     detail: "`evidence/windows/2026-09-22-E22-dcn-flip-run-002/`"
     edges:
@@ -256,29 +256,29 @@ facts:
   - id: M406
     status: MEASURED
     date: "2026-09-24"
-    claim: "Unit A on unchanged KMD0.7.127.1 shows a visible full-WDDM desktop after registering E26 Mesa softpipe and enabling the established hardware VidPn flip path. Blt alone and Mesa with flip closed had black scanout. Owner reported descending overlay redraw bands with the old UMD. No OS/AC restart."
+    claim: "Unit A on unchanged KMD0.7.127.1 shows a visible full-WDDM desktop after registering E26 Mesa softpipe and enabling the established hardware VidPn flip path. Blt alone and Mesa with flip closed had black scanout. A visual check showed descending overlay redraw bands with the old UMD. No OS/AC restart."
     evidence: "[configuration controls and scanout](../evidence/windows/2026-09-24-E26-desktop-resume/RESULT.md)"
   - id: M407
     status: MEASURED
     date: "2026-09-24"
-    claim: "Replacing Mesa's pixel-copy identity rotation with rotation of allocation/backing plus retained and bound views removes the descending overlay bands, confirmed by the owner. Two-device red/blue and green D3D controls pass;64KiB GPU residency passes concurrently with visible desktop. DWM stays alive for about6minutes;3875 hardware flips and no TDR/refusal. CPU softpipe draws remain; menu check is inconclusive and30minute desktop acceptance is open."
+    claim: "Replacing Mesa's pixel-copy identity rotation with rotation of allocation/backing plus retained and bound views removes the descending overlay bands, confirmed by a visual check. Two-device red/blue and green D3D controls pass;64KiB GPU residency passes concurrently with visible desktop. DWM stays alive for about6minutes;3875 hardware flips and no TDR/refusal. CPU softpipe draws remain; menu check is inconclusive and30minute desktop acceptance is open."
     evidence: "[patch, controls and limits](../evidence/windows/2026-09-24-E26-desktop-resume/rotation/RESULT.md), [menu follow-up](../evidence/windows/2026-09-24-E26-desktop-resume/rotation/MENU.md)"
   - id: M408
     status: MEASURED
     date: "2026-09-24"
-    claim: "After M407 the owner reports alternating cursor stalls and skipped overlay seconds. Instrumented softpipe DWM frames spend about380-400ms in two ordinary draws; large draws exceed2seconds. PresentCb usually0.04-0.06ms. Intact image is not responsive-desktop acceptance."
+    claim: "After M407 a visual check shows alternating cursor stalls and skipped overlay seconds. Instrumented softpipe DWM frames spend about380-400ms in two ordinary draws; large draws exceed2seconds. PresentCb usually0.04-0.06ms. Intact image is not responsive-desktop acceptance."
     evidence: "[frame profile and limits](../evidence/windows/2026-09-24-E26-desktop-resume/frame-profile/RESULT.md)"
     edges:
-      - {"type": "uses", "to": "M407", "auto": true, "cue": "After M407 the owner reports alternating cursor stalls and skipped overlay secon..."}
+      - {"type": "uses", "to": "M407", "auto": true, "cue": "After M407 a visual check shows alternating cursor stalls and skipped overlay secon..."}
   - id: M409
     status: MEASURED
     date: "2026-09-24"
-    claim: "Active graphics pipeline overlay deployed on unit A: loaded DWM UMD hash identifies CPU softpipe/TGSI, live KMD full table and separate DCN/Blt/compute/SDMA counts. Windows and DWM unchanged. Owner reports mouse becomes fluid while overlay stopped and stalls again on return; renderer latency remains unresolved."
+    claim: "Active graphics pipeline overlay deployed on unit A: loaded DWM UMD hash identifies CPU softpipe/TGSI, live KMD full table and separate DCN/Blt/compute/SDMA counts. Windows and DWM unchanged. A visual check shows the mouse becomes fluid while overlay stopped and stalls again on return; renderer latency remains unresolved."
     evidence: "[deployment, API and limits](../evidence/windows/2026-09-24-E26-desktop-resume/overlay-pipeline/RESULT.md)"
   - id: M410
     status: MEASURED
     date: "2026-09-24"
-    claim: "llvmpipe LLVM19.1.7 with render-fence wait and separate TGSI texture/sampler lowering restores a visible, responsive CPU-rendered desktop; owner confirms fluid mouse with overlay.56 post-startup two-draw samples have median draw+wait3.9055ms versus380-400ms softpipe.8 translator controls pass/alias mutation fails6; D3D pixel/shared controls and concurrent64KiB GPU residency pass. Initial translator assertion resolved; no OS/AC reset, no TDR. Startup JIT and broader shader/desktop acceptance remain open."
+    claim: "llvmpipe LLVM19.1.7 with render-fence wait and separate TGSI texture/sampler lowering restores a visible, responsive CPU-rendered desktop; a visual check confirms fluid mouse with overlay.56 post-startup two-draw samples have median draw+wait3.9055ms versus380-400ms softpipe.8 translator controls pass/alias mutation fails6; D3D pixel/shared controls and concurrent64KiB GPU residency pass. Initial translator assertion resolved; no OS/AC reset, no TDR. Startup JIT and broader shader/desktop acceptance remain open."
     evidence: "[patches, controls, timings and limits](../evidence/windows/2026-09-24-E26-desktop-resume/llvmpipe/RESULT.md)"
   - id: M411
     status: MEASURED
@@ -309,9 +309,9 @@ facts:
   - id: M432
     status: MEASURED
     date: "2026-09-24"
-    claim: "Candidate0.7.134.1 passes one PnP transition and live DCN/D3D/GPU controls on unit A without OS/DWM restart: 533 hardware flips,0 refused/ACK timeouts, GFX2610/2610, SDMA6051/6051, no TDR. D3D shared/green pixels,64MiB four GPU readbacks,8shader hashes and two E14 model outputs pass. Diagnostic flip is refused by the existing full-WDDM dispatcher before the new inner guard; harness expected the wrong layer and exits1, preserved separately. Owner subsequently reports correct image and smooth movement; duration unspecified. No cold-start, timed long-duration or12GiB acceptance."
-    status_text: "MEASURED (unit A; owner input observation)"
-    evidence: "[candidate134 identity, controls and limitations](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-dcn-publication/RESULT.md), [owner feedback](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-owner-feedback/REPORT.md)"
+    claim: "Candidate0.7.134.1 passes one PnP transition and live DCN/D3D/GPU controls on unit A without OS/DWM restart: 533 hardware flips,0 refused/ACK timeouts, GFX2610/2610, SDMA6051/6051, no TDR. D3D shared/green pixels,64MiB four GPU readbacks,8shader hashes and two E14 model outputs pass. Diagnostic flip is refused by the existing full-WDDM dispatcher before the new inner guard; harness expected the wrong layer and exits1, preserved separately. A later visual check reports correct image and smooth movement; duration unspecified. No cold-start, timed long-duration or12GiB acceptance."
+    status_text: "MEASURED (unit A; visual input observation)"
+    evidence: "[candidate134 identity, controls and limitations](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-dcn-publication/RESULT.md), [visual feedback](../evidence/windows/2026-09-24-E27-m9-recovery/candidate07134-owner-feedback/REPORT.md)"
   - id: M436
     status: CONFIRMED
     date: "2026-09-24"
@@ -345,7 +345,7 @@ facts:
   - id: M451
     status: MEASURED
     date: "2026-09-25"
-    claim: "139 fixes observed raster and supplies154MHz/59.950171Hz timing consistent with independent framecount;64MiB/D3Dcontent pass, but physicaloutput staysblank (raw0x101, ownerconfirmed).140 fixes stale softwarevisibility shortcut and passes hostregression, yet physicalblank persists. GDI desktop afterDWMrestart was not output acceptance."
+    claim: "139 fixes observed raster and supplies154MHz/59.950171Hz timing consistent with independent framecount;64MiB/D3Dcontent pass, but physicaloutput staysblank (raw0x101, visually confirmed).140 fixes stale softwarevisibility shortcut and passes hostregression, yet physicalblank persists. GDI desktop afterDWMrestart was not output acceptance."
     status_text: "MEASURED (unit A; display regression remains open)"
     evidence: "[139/140 controls](../evidence/windows/2026-09-25-E27-m9-recovery/candidate139-140-display-regression/RESULT.md)"
   - id: M452
@@ -356,13 +356,13 @@ facts:
   - id: M453
     status: MEASURED
     date: "2026-09-25"
-    claim: "Shared startup timing makes VidPn and DescribeAllocation agree at 154000000/2568800 Hz. Five-second Direct3D11 captures change from 41 PRESENT_MODE_CHANGED errors on 142 to zero on 143. Sixteen hardware samples are unblanked; owner confirms visible desktop and then smooth input after observation stops. Host controls 205/0; old-60-Hz mutation fails three checks. Windows/DWM retained; no overall M9 acceptance."
-    status_text: "MEASURED (unit A, before/after and owner feedback)"
+    claim: "Shared startup timing makes VidPn and DescribeAllocation agree at 154000000/2568800 Hz. Five-second Direct3D11 captures change from 41 PRESENT_MODE_CHANGED errors on 142 to zero on 143. Sixteen hardware samples are unblanked; a visual check confirms visible desktop and then smooth input after observation stops. Host controls 205/0; old-60-Hz mutation fails three checks. Windows/DWM retained; no overall M9 acceptance."
+    status_text: "MEASURED (unit A, before/after and visual feedback)"
     evidence: "[shared refresh fix](../evidence/windows/2026-09-25-E27-m9-recovery/shared-refresh143/RESULT.md)"
   - id: M468
     status: MEASURED
     date: "2026-09-25"
-    claim: "Matched146 S4/input ETW locates a757.086ms Present almost entirely before DxgKrnl flip (756.687ms), with12llvmpipe shader workers active; following queue packet66us. DWM-only restart does not eliminate long CPU work or owner-observed stutter. Logical cursor controls pass; physical smooth resume does not."
+    claim: "Matched146 S4/input ETW locates a757.086ms Present almost entirely before DxgKrnl flip (756.687ms), with12llvmpipe shader workers active; following queue packet66us. DWM-only restart does not eliminate long CPU work or visually observed stutter. Logical cursor controls pass; physical smooth resume does not."
     evidence: "[paired S4 CPU-render stall](../evidence/windows/2026-09-25-E27-m9-recovery/paired-s4-input146/RESULT.md)"
   - id: M475
     status: MEASURED
@@ -379,7 +379,7 @@ facts:
   - id: M497
     status: MEASURED
     date: "2026-09-25"
-    claim: "Win32 present-wait callbacks and finite WDDM fence deadlines implemented. CandidateA6D11B64 passes all15 release CTS Win32 present-id/wait and7 timeline-wait cases, no skips. D3D11/DXVK Asteroids completes660frames1080x720; capture matches earlier763628F6 run. Owner sees separate3960-frame showcase. Baseline restored without reset; full CTS/Linux image/performance parity remain open."
+    claim: "Win32 present-wait callbacks and finite WDDM fence deadlines implemented. CandidateA6D11B64 passes all15 release CTS Win32 present-id/wait and7 timeline-wait cases, no skips. D3D11/DXVK Asteroids completes660frames1080x720; capture matches earlier763628F6 run. A visual check shows a separate3960-frame showcase. Baseline restored without reset; full CTS/Linux image/performance parity remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[present waits](../evidence/windows/2026-09-25-E33-present-wait/RESULT.md)"
   - id: M505
@@ -421,13 +421,13 @@ facts:
   - id: M568
     status: MEASURED
     date: "2026-09-27"
-    claim: "DWM012 runs185.75s on GPU UMD23F5269C/ICD3508416F with one PID4120,8000 matching static pixels and3818 loss-free matched DWM DMA pairs, but the owner observes trails, flicker and corrupted fragments during window move/resize. Identical CPU control013 on DWM8008 has none of those symptoms per the owner. Visual acceptance fails; cause unknown. CPU baseline and promoted registered ICD93B1D1FD restored. One incomplete map-log row limits the new no-copy audit."
-    status_text: "MEASURED (unit A; dynamic visual comparison owner-reported)"
+    claim: "DWM012 runs185.75s on GPU UMD23F5269C/ICD3508416F with one PID4120,8000 matching static pixels and3818 loss-free matched DWM DMA pairs, but a visual check shows trails, flicker and corrupted fragments during window move/resize. Identical CPU control013 on DWM8008 has none of those symptoms per the visual check. Visual acceptance fails; cause unknown. CPU baseline and promoted registered ICD93B1D1FD restored. One incomplete map-log row limits the new no-copy audit."
+    status_text: "MEASURED (unit A; dynamic visual comparison by eye)"
     evidence: "[GPU dynamic visual failure](../evidence/windows/2026-09-27-E34-dwm012-artifacts/RESULT.md)"
   - id: M576
     status: MEASURED
     date: "2026-09-27"
-    claim: "DWM014 on UMD50491FA3/ICD3508416F runs185.736s with3872 loss-free matched DWM DMA pairs, but owner and primary/GDI captures confirm persistent dynamic corruption. Static primary ROIs pass8000 pixels; final GDI ROI fails8000/8000. M575 does not resolve BD-043. Baselines restored, CPU DWM4400, all test tasks removed; no promotion or complete G0 claim."
+    claim: "DWM014 on UMD50491FA3/ICD3508416F runs185.736s with3872 loss-free matched DWM DMA pairs, but visual observation and primary/GDI captures confirm persistent dynamic corruption. Static primary ROIs pass8000 pixels; final GDI ROI fails8000/8000. M575 does not resolve BD-043. Baselines restored, CPU DWM4400, all test tasks removed; no promotion or complete G0 claim."
     status_text: "MEASURED (unit A)"
     evidence: "[DWM014 visual failure](../evidence/windows/2026-09-27-E34-dwm014-artifacts/RESULT.md)"
     edges:
@@ -435,13 +435,13 @@ facts:
   - id: M585
     status: MEASURED
     date: "2026-09-27"
-    claim: "DWM015/016 on UMD67E4C9F5/ICD3508416F run180.108/62.495s with3635/1267 loss-free matched DWM DMA pairs but fail dynamic image correctness: primary capture, owner report and three private photos show stretched triangles/strips. Static8000-pixel ROIs pass and do not override corruption. Baselines restored; CPU DWM6696, tasks removed, no promotion; BD-043/G0 open."
+    claim: "DWM015/016 on UMD67E4C9F5/ICD3508416F run180.108/62.495s with3635/1267 loss-free matched DWM DMA pairs but fail dynamic image correctness: primary capture, visual report and three private photos show stretched triangles/strips. Static8000-pixel ROIs pass and do not override corruption. Baselines restored; CPU DWM6696, tasks removed, no promotion; BD-043/G0 open."
     status_text: "MEASURED (unit A)"
     evidence: "[DWM015/016 failure](../evidence/windows/2026-09-27-E34-dwm015-016-failure/RESULT.md)"
   - id: M587
     status: MEASURED
     date: "2026-09-27"
-    claim: "Per-draw flush plus GPU completion wait diagnostic UMD7C1554FD passes control108 (56 state images) and DWM017 static/shape samples over185.815s with41826 loss-free matched DWM DMA pairs. Owner reports large corruption absent but a residual exposed-area glitch when shrinking the window: not full visual acceptance. Both flush frequency and retirement timing changed; cause unresolved. Baselines restored, CPU DWM2372, tasks removed; BD-043/G0 open."
+    claim: "Per-draw flush plus GPU completion wait diagnostic UMD7C1554FD passes control108 (56 state images) and DWM017 static/shape samples over185.815s with41826 loss-free matched DWM DMA pairs. A visual check reports large corruption absent but a residual exposed-area glitch when shrinking the window: not full visual acceptance. Both flush frequency and retirement timing changed; cause unresolved. Baselines restored, CPU DWM2372, tasks removed; BD-043/G0 open."
     status_text: "MEASURED (unit A)"
     evidence: "[Draw completion diagnostic](../evidence/windows/2026-09-27-E34-draw-idle-diagnostic/RESULT.md)"
   - id: M588
@@ -453,25 +453,25 @@ facts:
   - id: M589
     status: MEASURED
     date: "2026-09-27"
-    claim: "DWM019 flush-only per-draw diagnostic UMD91345C63/ICD3508416F runs185.783s,41943 loss-free matched DWM DMA pairs, passing static8000-pixel and sampled cyan-shape checks without the added fence_finish. No owner visual verdict recorded; transient artifacts not excluded. Batch/state isolation remains open, no full G0 claim. Baselines restored, CPU DWM3040, tasks removed."
+    claim: "DWM019 flush-only per-draw diagnostic UMD91345C63/ICD3508416F runs185.783s,41943 loss-free matched DWM DMA pairs, passing static8000-pixel and sampled cyan-shape checks without the added fence_finish. No visual verdict recorded; transient artifacts not excluded. Batch/state isolation remains open, no full G0 claim. Baselines restored, CPU DWM3040, tasks removed."
     status_text: "MEASURED (unit A)"
     evidence: "[Flush-only desktop diagnostic](../evidence/windows/2026-09-27-E34-flush-only-desktop/RESULT.md)"
   - id: M590
     status: MEASURED
     date: "2026-09-27"
-    claim: "Re-emitting batch-start graphics state without added per-draw flush/wait (UMDFC7EB75A) passes control110 and DWM020 sampled images over185.825s,3774 loss-free matched DWM DMA pairs. No owner visual verdict; transient artifacts not excluded. State/reference isolation supported, exact cause unproven. Baselines restored, CPU DWM9192, tasks removed; BD-043/G0 open."
+    claim: "Re-emitting batch-start graphics state without added per-draw flush/wait (UMDFC7EB75A) passes control110 and DWM020 sampled images over185.825s,3774 loss-free matched DWM DMA pairs. No visual verdict; transient artifacts not excluded. State/reference isolation supported, exact cause unproven. Baselines restored, CPU DWM9192, tasks removed; BD-043/G0 open."
     status_text: "MEASURED (unit A)"
     evidence: "[State re-emission diagnostic](../evidence/windows/2026-09-27-E34-state-reemit-desktop/RESULT.md)"
   - id: M593
     status: MEASURED
     date: "2026-09-27"
-    claim: "Narrow index-DISCARD fix DWM021 runs185.650s with3792 loss-free matched DWM DMA pairs; static and five dynamic BMP/PNG pairs pass sampled checks. Final primary shape fails on a proven mixed-surface64-row-band capture, final GDI passes; no owner verdict. Map audit has one full-frame WRITE and six READs, KMD blits698 unchanged. Baselines restored, CPU DWM12636, tasks removed. Residual shrink/G0 acceptance open."
+    claim: "Narrow index-DISCARD fix DWM021 runs185.650s with3792 loss-free matched DWM DMA pairs; static and five dynamic BMP/PNG pairs pass sampled checks. Final primary shape fails on a proven mixed-surface64-row-band capture, final GDI passes; no visual verdict. Map audit has one full-frame WRITE and six READs, KMD blits698 unchanged. Baselines restored, CPU DWM12636, tasks removed. Residual shrink/G0 acceptance open."
     status_text: "MEASURED (unit A)"
     evidence: "[Index DISCARD desktop trial](../evidence/windows/2026-09-27-E34-index-discard-desktop/RESULT.md)"
   - id: M595
     status: MEASURED
     date: "2026-09-27"
-    claim: "DWM022 with narrow index-DISCARD fix UMD49AFB21F/ICD3508416F runs 185.856s; owner reports no glitches or artifacts. 3971 loss-free matched DWM7680 DMA pairs and all sampled static/shape checks pass. Map bucket table overflows (8), so complete no-copy evidence is not established; KMD blits706 unchanged. Baselines restored, CPU DWM8116, tasks removed. Bounded visual acceptance; G0 remains open."
+    claim: "DWM022 with narrow index-DISCARD fix UMD49AFB21F/ICD3508416F runs 185.856s; a visual check shows no glitches or artifacts. 3971 loss-free matched DWM7680 DMA pairs and all sampled static/shape checks pass. Map bucket table overflows (8), so complete no-copy evidence is not established; KMD blits706 unchanged. Baselines restored, CPU DWM8116, tasks removed. Bounded visual acceptance; G0 remains open."
     status_text: "MEASURED (unit A)"
     evidence: "[Index DISCARD visual acceptance](../evidence/windows/2026-09-27-E34-index-discard-visual/RESULT.md)"
   - id: M596
@@ -491,7 +491,7 @@ facts:
   - id: M600
     status: MEASURED
     date: "2026-09-27"
-    claim: "Clean-source UMD5C74BF98/ICD3508416F DWM023 completes180.094s with3634 loss-free DWM DMA pairs; all sampled static/shape checks pass.62 fence samples monotonic, last submitted=completed3253.167 map snapshots reconcile without overflow; full-frame WRITE1/READ6, persistent descriptors/uploader only; KMD blits716 unchanged. No owner visual verdict. Baselines restored, CPU DWM4596, tasks removed; full G0 open."
+    claim: "Clean-source UMD5C74BF98/ICD3508416F DWM023 completes180.094s with3634 loss-free DWM DMA pairs; all sampled static/shape checks pass.62 fence samples monotonic, last submitted=completed3253.167 map snapshots reconcile without overflow; full-frame WRITE1/READ6, persistent descriptors/uploader only; KMD blits716 unchanged. No visual verdict. Baselines restored, CPU DWM4596, tasks removed; full G0 open."
     status_text: "MEASURED (unit A)"
     evidence: "[Clean UMD desktop](../evidence/windows/2026-09-27-E34-clean-umd-desktop/RESULT.md)"
   - id: M601
@@ -819,7 +819,7 @@ facts:
   - id: M708
     status: MEASURED
     date: "2026-09-28"
-    claim: "DWM047 combined hosted DWM/native GPU client reached client Present774 but ended in0x116 and automatic OS restart. Owner saw correct animation before the failure. Dump and interrupted trace preserved; explicit recovery restores exact166/CPU baseline, health15. Cause and full G0 remain open."
+    claim: "DWM047 combined hosted DWM/native GPU client reached client Present774 but ended in0x116 and automatic OS restart. A visual check showed correct animation before the failure. Dump and interrupted trace preserved; explicit recovery restores exact166/CPU baseline, health15. Cause and full G0 remain open."
     status_text: "MEASURED (unit A)"
     evidence: "[DWM047 bugcheck](../evidence/windows/2026-09-28-E34-dwm047-bugcheck/RESULT.md)"
   - id: M709
@@ -904,7 +904,7 @@ facts:
     date: "2026-10-07"
     claim: "Under Windows release r19 (KMD 0.7.216.1) the DP audio endpoint of unit A consumes audio at about one third of the rate. A 10.000 s WAV through `SoundPlayer.PlaySync` takes 30.611 s at 48 kHz and 30.633 s at 44.1 kHz. The one render endpoint is `Digital Audio (HDMI) (High Definition Audio Device)`, device format 44100 Hz. Inbox Microsoft drivers own the audio path. `HDAudBus` (`hdaudbus.inf` 10.0.22621.5415) runs on the audio PCI function `1002:13FF`. `HdAudAddService` (`hdaudio.inf` 10.0.22621.2506) runs on the codec function `VEN_1002 DEV_AA01 REV_1007`. During playback the stream registers read `DP0_SEC_CNTL` `0x1111`, `DP0_SEC_AUD_N` `0x8000`, `DP0_SEC_AUD_M_READBACK` `0xAB4` and `DIG0_AFMT_CNTL` `0x101`"
     status_text: "MEASURED (unit A, n = 2 playbacks on r19)"
-    detail: "The same WAV plays in 10 s under Linux on the same unit (M821). The candidate 0.7.216.2 took 26.970 s for the 48 kHz WAV, with register reads running in parallel. The driver list is from candidate 0.7.216.4 (same audio stack, `a6.txt`). The header of `a1-audio-rate.ps1` records the owner's report of no sound under r19. The register comparison with Linux is M825"
+    detail: "The same WAV plays in 10 s under Linux on the same unit (M821). The candidate 0.7.216.2 took 26.970 s for the 48 kHz WAV, with register reads running in parallel. The driver list is from candidate 0.7.216.4 (same audio stack, `a6.txt`). The header of `a1-audio-rate.ps1` records a listening report of no sound under r19. The register comparison with Linux is M825"
     evidence: "[DP audio rate](../evidence/windows/2026-10-07-dp-audio-rate/README.md)"
     edges:
       - {"type": "uses", "to": "M821"}
@@ -955,7 +955,7 @@ facts:
     date: "2026-10-09"
     claim: "DP audio of this driver runs at the right rate on unit A under Windows. On the installed `0.7.216.100-tester.23` package (KMD 0.7.216.24, release defaults, no register written by the operator) a 1 kHz tone played from the interactive session gives device position / `QueryPerformanceCounter` = 1.0000 in exclusive poll mode and 1.0000 in exclusive event mode at 48 000 Hz 16 bit stereo, and 0.9991 over the whole run of the shared 44 100 Hz 32 bit float mix (1.0000 after the first 2 s). The exclusive event arm got 939 notifications, mean gap 10.65 ms, longest 11.1 ms, 0 timeouts; the shared arm 986 events and 0 timeouts. `SoundPlayer.PlaySync` of a generated 10.000 s WAV returned in 10.131 s. Stream initialization took 4.5, 29.7 and 34.3 ms"
     status_text: "MEASURED (unit A, one probe set per mode, about 10 s per arm)"
-    detail: "The bound of the trial was 0.5 %; the device-rate figures are printed to four decimals, so the exclusive arms hold to better than 0.01 %. The probe is `wasapi-probe.cs` of M830 on the same endpoint. `written_s` exceeds `elapsed_s` by one buffer in every arm, which is the pre-filled buffer. The `PlaySync` arm carries the start and the stop of a whole winmm stream inside its 10.131 s; the same call took 30.6 s under release r19 (M824), where initialization took 7.1 to 9.6 s. The whole stream state was read before the tone, twice during it and after it and is identical in all four sets except `AUD_M_READBACK` (M851), `AFMT_AUDIO_FIFO_OVERFLOW` 0 at every sample. The record of the start reads `starts 1 refusals 0 failures 0`, and the KMD log holds no refusal line. Not shown: whether anything was audible (nobody listened in this trial; the owner's report on `tester.20` of 2026-10-07 is what makes BD-092 verified), 32 kHz, more than two channels, HBR, and any stop, resume or path-power transition (`stops 0 resumes 0`) The ID of this fact moved at the b26 round-2 re-cut: it was M845 on `train/b26` until main was merged, where M845 already named a fact of the M16 compute work (icd.yaml), committed first. The b26 DP audio facts M845, M846 and M847 are M850, M851 and M852 from this merge on."
+    detail: "The bound of the trial was 0.5 %; the device-rate figures are printed to four decimals, so the exclusive arms hold to better than 0.01 %. The probe is `wasapi-probe.cs` of M830 on the same endpoint. `written_s` exceeds `elapsed_s` by one buffer in every arm, which is the pre-filled buffer. The `PlaySync` arm carries the start and the stop of a whole winmm stream inside its 10.131 s; the same call took 30.6 s under release r19 (M824), where initialization took 7.1 to 9.6 s. The whole stream state was read before the tone, twice during it and after it and is identical in all four sets except `AUD_M_READBACK` (M851), `AFMT_AUDIO_FIFO_OVERFLOW` 0 at every sample. The record of the start reads `starts 1 refusals 0 failures 0`, and the KMD log holds no refusal line. Not shown: whether anything was audible (nobody listened in this trial; a listening report on `tester.20` of 2026-10-07 is what makes BD-092 verified), 32 kHz, more than two channels, HBR, and any stop, resume or path-power transition (`stops 0 resumes 0`) The ID of this fact moved at the b26 round-2 re-cut: it was M845 on `train/b26` until main was merged, where M845 already named a fact of the M16 compute work (icd.yaml), committed first. The b26 DP audio facts M845, M846 and M847 are M850, M851 and M852 from this merge on."
     evidence: "[DP audio step 3](../evidence/windows/2026-10-09-dp-audio-step3/README.md)"
     edges:
       - {"type": "uses", "to": "M788"}

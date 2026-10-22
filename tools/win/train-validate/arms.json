@@ -16,7 +16,7 @@
     "lab_zip": "C:\\BC250\\tmp\\train-{release}\\{pkg_name}.zip"
   },
   "limits": {
-    "note": "Owner rules. The runner holds them; do not tune them here.",
+    "note": "Project rules. The runner holds them; do not tune them here.",
     "trial_bound_s": 170,
     "game_bound_s": 1200,
     "tctl_start_max_c": 80.0,
@@ -530,7 +530,7 @@
         "preflight"
       ],
       "gate_after": true,
-      "note": "The suite cannot reach this defect either: every installer arm logs on as the lab's administrator account, which the defect never affected. The arm makes a local account that is not in Administrators, arms the automatic logon for two starts, restarts, and then reads what the two logons left: a confirmation line and the window task's line in start-confirm.log, the window task's last result 0, UnconfirmedStarts back at 0, the clock control still on, both scheduled tasks registered, and no Microsoft Basic Display Adapter. The password is generated on the lab and never printed. Windows keeps it in plain text in the registry while the automatic logon is armed, which is why the cleanup step removes the value, the account and its profile, and why the cleanup runs as a post step on every exit path. The boot waits are target.py boot --after-now, as the owner's rule of 2026-10-11 requires. Why it is an operator arm and not a trial: it restarts the machine twice and waits for two logons, so no three-minute bound can hold it.",
+      "note": "The suite cannot reach this defect either: every installer arm logs on as the lab's administrator account, which the defect never affected. The arm makes a local account that is not in Administrators, arms the automatic logon for two starts, restarts, and then reads what the two logons left: a confirmation line and the window task's line in start-confirm.log, the window task's last result 0, UnconfirmedStarts back at 0, the clock control still on, both scheduled tasks registered, and no Microsoft Basic Display Adapter. The password is generated on the lab and never printed. Windows keeps it in plain text in the registry while the automatic logon is armed, which is why the cleanup step removes the value, the account and its profile, and why the cleanup runs as a post step on every exit path. The boot waits are target.py boot --after-now, as the rule of 2026-10-11 requires. Why it is an operator arm and not a trial: it restarts the machine twice and waits for two logons, so no three-minute bound can hold it.",
       "failure_classes": [
         "BD-080"
       ]
@@ -1248,7 +1248,7 @@
       "failure_classes": [
         "BD-114"
       ],
-      "note": "Owner, 2026-10-11: a text check uses the model's chat template. A raw prompt to an instruction model proves nothing: Gemma 12B gives 0111111111111111 on HIP, Vulkan, an RTX 4090 and the CPU alike, and with --jinja -cnv -st the 4090 answers 'The capital of France is Paris.' inside its thought channel (scratch/bd117-4090/RESULT.md). The pass is 'Paris' anywhere in the answer. -n 160 leaves room for a final answer after the thought channel; whether one appears is this arm's value (yes, no, or no thought channel), reported and not a gate. Upstream b11539 llama-completion.exe (FA3FBD92, staged by stage-clients) and model 93567E57, -ngl 99, no -fa argument (Vulkan picks Flash Attention itself). The supervisor kit owns the bound, the thermal rule and the cleanup; the model file is hashed against its pin before and after the run, outside the supervisor's 100 s deadline."
+      "note": "2026-10-11: a text check uses the model's chat template. A raw prompt to an instruction model proves nothing: Gemma 12B gives 0111111111111111 on HIP, Vulkan, an RTX 4090 and the CPU alike, and with --jinja -cnv -st the 4090 answers 'The capital of France is Paris.' inside its thought channel (scratch/bd117-4090/RESULT.md). The pass is 'Paris' anywhere in the answer. -n 160 leaves room for a final answer after the thought channel; whether one appears is this arm's value (yes, no, or no thought channel), reported and not a gate. Upstream b11539 llama-completion.exe (FA3FBD92, staged by stage-clients) and model 93567E57, -ngl 99, no -fa argument (Vulkan picks Flash Attention itself). The supervisor kit owns the bound, the thermal rule and the cleanup; the model file is hashed against its pin before and after the run, outside the supervisor's 100 s deadline."
     },
     {
       "id": "llm-q35",
@@ -1442,7 +1442,7 @@
       "depends_on": [
         "bm-before"
       ],
-      "note": "Writes the board's memory block (extended CMOS) through the driver's RUN_BOARD_MEMORY escape, with the owner's consent of 2026-10-10 for this change. The token is computed by the application's own code. The click and the confirmation dialog of the card are not exercised. Recovery if the board does not start: the owner's CMOS clear, which also resets the boot order.",
+      "note": "Writes the board's memory block (extended CMOS) through the driver's RUN_BOARD_MEMORY escape, with the consent of 2026-10-10 for this change. The token is computed by the application's own code. The click and the confirmation dialog of the card are not exercised. Recovery if the board does not start: a CMOS clear at the lab, which also resets the boot order.",
       "board_memory": "set"
     },
     {
@@ -1647,7 +1647,7 @@
         "BD-114",
         "BD-059"
       ],
-      "note": "The owner gate is not met until the overall score is filled in: `summary --set rottr=<fps>`. The vsync step is load-bearing (a benchmark with vsync on measures the panel); the overlay calls are not, and they fail nothing. The run step wraps the session in game-drive.py: in b29 native-caps548 nothing selected START BENCHMARK and the game sat in its menu for eleven minutes at 84 C. The wrapper selects it, checks that the menu is gone (one retry, then 'menu not left') and ends the session after the result dialog.",
+      "note": "The release gate is not met until the overall score is filled in: `summary --set rottr=<fps>`. The vsync step is load-bearing (a benchmark with vsync on measures the panel); the overlay calls are not, and they fail nothing. The run step wraps the session in game-drive.py: in b29 native-caps548 nothing selected START BENCHMARK and the game sat in its menu for eleven minutes at 84 C. The wrapper selects it, checks that the menu is gone (one retry, then 'menu not left') and ends the session after the result dialog.",
       "operator_line": "{attempt}: game-drive.py selects START BENCHMARK once the menu shows and reads the result dialog; read the score from its '[drive] result:' lines or the shots in scratch/m15/control/{attempt}, then fill it in with summary --set rottr=<fps>"
     },
     {
@@ -1700,7 +1700,7 @@
       "depends_on": [
         "d3d12-promote"
       ],
-      "note": "The runner never starts this one. The owner's rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line. M157_ENGINE and M157_ICD name the package's own files, as SESSION_ENGINE and SESSION_ICD do for the rottr arm's run-game.sh: without them run-m157.sh stages its old defaults, and on a package with a new triplet the session swaps those in (2026-10-11, tester.28)."
+      "note": "The runner never starts this one. The project rule is that the operator drives a Witcher 3 session itself, a shot every 10-15 s, and ends it when its goals are done. The suite writes its plan file and its command line, so the operator runs one line. M157_ENGINE and M157_ICD name the package's own files, as SESSION_ENGINE and SESSION_ICD do for the rottr arm's run-game.sh: without them run-m157.sh stages its old defaults, and on a package with a new triplet the session swaps those in (2026-10-11, tester.28)."
     },
     {
       "id": "bm-restore",

@@ -6,7 +6,7 @@ Rise of the Tomb Raider DirectX 12 benchmark, run to the end twice (56.81 and 49
 No runner thermal stop.
 
 Kernel driver 0.7.205 is the first build with two thermal-only operating points under the lab floor:
-900 MHz and 800 MHz, both at 820 mV (VID 116, owner decision 2026-10-05). The load never asks for
+900 MHz and 800 MHz, both at 820 mV (VID 116, project decision 2026-10-05). The load never asks for
 them. Only the thermal cap goes there. This directory holds what the firmware did when it got there.
 
 ## What the files are

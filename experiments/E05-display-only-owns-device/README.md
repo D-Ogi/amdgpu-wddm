@@ -32,7 +32,7 @@ documented DDI, with this experiment's observations as its acceptance test).
    install.** It needs a keyboard on the BC-250 to pick the entry if it is ever needed for real.
    First proof, 2026-09-21: the entry boots, but safe mode shows no network adapters (the vendor driver of
    the USB Wi-Fi dongle is not on the safe-mode list), so no SSH.
-   Second proof, same day, after the owner connected the wired NIC: safe mode with networking comes up
+   Second proof, same day, after the wired NIC was connected: safe mode with networking comes up
    with the network (through the kernel debugger's virtual adapter, KDNET being on), `sshd` answers,
    `bc250rd` is not loaded (so a broken driver of ours would not be either). **Proven.**
 3. Last resort: NVMe into the USB enclosure, delete the driver from the offline image.
@@ -61,7 +61,7 @@ Run 001, 2026-09-21, kernel debugger attached throughout, no bugcheck, no hang.
 | | Hypothesis | Outcome |
 |---|---|---|
 | H1 | installs with the lab test certificate, starts without a problem code | **holds**: `pnputil /add-driver /install` bound the sample to `PCI\VEN_1002&DEV_13FE`, status OK, service `bc250kmdod` |
-| H2 | post-display ownership hands over the firmware framebuffer, desktop stays at 1920x1200, no reboot | **holds**: mode unchanged in the device state, desktop and overlay present in the captures, the owner kept using the screen. A capture proves the compositor's content, not the panel; the owner is the witness for the panel |
+| H2 | post-display ownership hands over the firmware framebuffer, desktop stays at 1920x1200, no reboot | **holds**: mode unchanged in the device state, desktop and overlay present in the captures, an operator at the lab kept using the screen. A capture proves the compositor's content, not the panel; a visual check on the lab monitor is the witness for the panel |
 | H3 | the switch does not change GPU register state | **holds for the GC block**: 4537 registers, 11 differ from the control sweep, all 11 inside the noise set of 36 that differ between two sweeps with nothing changed (`comparison.txt`) |
 | H4 | survives disable/enable and a reboot; uninstall brings Basic Display back | **holds**, all three. After the rollback Windows picked 200 % scaling for the "new" Basic Display instance: cosmetic, noted |
 

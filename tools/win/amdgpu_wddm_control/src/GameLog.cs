@@ -1,7 +1,7 @@
 // "Record game logs": a switch that turns the driver's diagnostic lines on for a few minutes, so that a person who
 // is asked for a log of a game can hand one over.
 //
-// Why it exists (owner, 2026-10-13): the driver's sink has always been the environment variable AMDGPU_WDDM_LOG
+// Why it exists: the driver's sink has always been the environment variable AMDGPU_WDDM_LOG
 // (driver/umd/d3d12/stdio-log.h), which nobody can set for a game that Steam or Epic starts. The switch replaces
 // it with two clicks: the app writes the instant at which logging stops, and every shell and engine of every game
 // that starts before that instant opens a log file of its own.
@@ -36,7 +36,7 @@ namespace AmdgpuWddmControl
         // What the person can choose. One minute is enough to start a game that crashes at once; an hour of every
         // game's lines is already a lot of disk, and the folder is pruned on top of that.
         public const uint MinMinutes = 1, MaxMinutes = 60;
-        // The one the button offers (owner: "na 10 minut czy coś").
+        // The one the button offers.
         public const uint DefaultMinutes = 10;
 
         // The choices the list offers, shortest first.

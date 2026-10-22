@@ -48,7 +48,7 @@ def main():
         if a.max_calls and calls >= a.max_calls:
             print(f"max calls reached; next index {index}")
             return 0
-        # Lab calls honour the owner's STOP flag on the overlay (and the operator's stop file) before each batch.
+        # Lab calls honour the STOP flag on the overlay (and the operator's stop file) before each batch.
         if not a.local:
             mon = os.path.join(os.path.dirname(TARGET), "bc250mon", "mon.py")
             stop = subprocess.run([sys.executable, mon, "stop?"], capture_output=True, text=True, errors="replace")

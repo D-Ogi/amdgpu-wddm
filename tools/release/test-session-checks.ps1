@@ -7,8 +7,7 @@
 # -Inf: the INF of a built package, which must not carry Reboot. The baseline cases write only files under
 # -WorkRoot. Nothing in the registry is written; this computer's own session and DWM are read only.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$Inf, [string]$WorkRoot)
-# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
-# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder, so one more level up than it used to be; an older flat package keeps the old place.
 if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
     $packageRoot = Split-Path $Installer   # <package>\installer -> <package>
     $packageTop = $(if ((Split-Path $packageRoot -Leaf) -eq 'files') { Split-Path $packageRoot } else { $packageRoot })
@@ -361,8 +360,7 @@ Check ($confirmText -match '(?m)^param\([^\r\n]*\[switch\]\$NoWindow') 'start-co
 Check ((@([regex]::Matches($confirmText, '(?m)^function Invoke-Poll')).Count -eq 1) -and (@([regex]::Matches($confirmText, '\$step = Invoke-Poll')).Count -eq 1)) 'one poll function, called from one place (guard and DPM coupling unchanged)'
 Check (@([regex]::Matches($confirmText, '(?m)^\s+\$step = Invoke-Tick')).Count -eq 1) 'one run, the headless loop, through the tick'
 Check ($confirmText -match 'Confirm-Health' -and $confirmText -match 'Complete-WithFallback' -and $confirmText -match "Invoke-Cli @\('confirm'\)") 'the confirmation keeps the KMD start-health confirm and the boot-loop fallback'
-# The blue start window is gone (owner, 2026-10-22: "Niebieskie okienko jest z czasu pulpitu na CPU przeciez. Nie
-# mozemy go usunac w calosci?"). Neither script makes a window of its own any more: the KMD's QUIET takes an idle GPU
+# The blue start window is gone. Neither script makes a window of its own any more: the KMD's QUIET takes an idle GPU
 # desktop as it is (driver/kmd/start_health.c), and the one window of the logon is the sign-in notice of the control
 # application, which shows only when the driver is not running.
 $windowText = $(if (Test-Path -LiteralPath $windowFile) { [IO.File]::ReadAllText($windowFile) } else { '' })
@@ -375,7 +373,7 @@ Check ($coreText -match '\(\$Reading\.flags -band 16\) -eq 16') 'the confirmatio
 if ($windowText) {
     $kmd = @('bc250control', 'bc250kmd_cli', 'Bc250StartHealth', 'CurrentControlSet', 'New-ItemProperty', 'Set-ItemProperty', 'Microsoft.Win32.Registry', 'HKLM', 'HKCU', 'Add-Type -TypeDefinition') | Where-Object { $windowText -cmatch [regex]::Escape($_) }
     Check ($kmd.Count -eq 0) "the script of the user's session opens no handle to the driver and reads or writes no registry value$(if ($kmd.Count) { ": $($kmd -join ', ')" } else { '' })"
-    # The sign-in notice (owner, 2026-10-13): this task starts it, because it is the task that already runs in the
+    # The sign-in notice: this task starts it, because it is the task that already runs in the
     # session of the person who just signed in. The script never waits for it, so the task completes inside its own
     # time limit and does not stop the notice.
     Check ($windowText -cmatch '--start-notice') 'the script starts the sign-in notice of the control application'

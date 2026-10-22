@@ -114,7 +114,7 @@ struct AppDecision {
     AppReason reason;
 };
 
-// Processes of the logon and secure desktops. A GPU UMD fault there could lock the owner out of the session, so
+// Processes of the logon and secure desktops. A GPU UMD fault there could lock the user out of the session, so
 // no registry value routes them to the application GPU UMD. (dwm.exe never reaches the application decision.)
 inline bool IsProtectedApp(const wchar_t *exe_base)
 {

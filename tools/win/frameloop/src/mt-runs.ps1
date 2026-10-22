@@ -3,7 +3,7 @@ param(
     [string]$Runs = '',
     [switch]$Warp
 )
-# Multithreaded recording and batched submission (owner rule: test multithreading with our own clients first).
+# Multithreaded recording and batched submission (project rule: test multithreading with our own clients first).
 # Three questions, one matrix:
 #   interleaved vs sequential at one thread  - what moving the submit out of the record loop costs by itself
 #   sequential at 1 / 4 / 8 threads          - what parallel recording buys on the frame's wall clock

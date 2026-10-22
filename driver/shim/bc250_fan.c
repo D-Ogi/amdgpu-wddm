@@ -17,7 +17,7 @@
  * 83 C -> 96 % (E01, duty 245). The line below gives 78 %, 84 %, 85 % and 100 % at those four points, 95 % (about
  * 1650 RPM) at 76 C, and 100 % at 80 C. That is under 82 C, the temperature below which the DPM releases a
  * thermal cap, and 7 C under its 87 C warm zone, so the fan is at full speed before the heat starts to cost clock
- * (the curve gave 100 % only at 85 C until 0.7.216, which the owner found late). Below 60 C no measurement exists;
+ * (the curve gave 100 % only at 85 C until 0.7.216, which was found late). Below 60 C no measurement exists;
  * the curve then holds 50 % or more, which is a floor the idle board (55 C and up) never reaches.
  * QUIET is quieter than the board below 80 C and is a user's choice. PERFORMANCE is louder everywhere. */
 #include "bc250_board_fan_profiles.inc"

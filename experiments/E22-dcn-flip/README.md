@@ -1,6 +1,6 @@
 # E22 - the display flip on DCN 2.0.1 under Windows (ADR 0011)
 
-State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for the owner (a repeat of run 002 costs a minute); **step 3 run (runs 003 and 004): the flip works (M97); the interrupt does not arrive at all, IH ring or not (M98, M99); and the flip's surface is not the one the blit paints (M100)** - design in `docs/design/vidpn-flip.md`.
+State: **steps 1 and 2 done** (run 001 M92, run 002 M94); H5's monitor half waits for an operator at the lab (a repeat of run 002 costs a minute); **step 3 run (runs 003 and 004): the flip works (M97); the interrupt does not arrive at all, IH ring or not (M98, M99); and the flip's surface is not the one the blit paints (M100)** - design in `docs/design/vidpn-flip.md`.
 
 ## Why
 
@@ -84,7 +84,7 @@ Hypotheses for the first step 3 run (`EnableVidPnFlip`, not yet run in the lab):
 | Run | Build | What | Result |
 |---|---|---|---|
 | 001 | 0.7.19 (66b8055) | dump twice, EnableMmio only, display-only | all 75 registers read, values = Linux firmware state, frame count moving. `evidence/windows/2026-09-22-E22-dcn-read-run-001/` |
-| 002 | 0.7.22 (4c233e3) | as planned, plus `fbdump` while HUBP0 pointed at the fill and after the restore; owner absent | H4 confirmed (address unchanged, pending cleared in 16 ms, frame count on); H5 confirmed at the registers and by the scanout read-back (blue field, border, diagonal), the monitor unobserved; restore OK, desktop back. M94. `evidence/windows/2026-09-22-E22-dcn-flip-run-002/` |
+| 002 | 0.7.22 (4c233e3) | as planned, plus `fbdump` while HUBP0 pointed at the fill and after the restore; nobody at the monitor | H4 confirmed (address unchanged, pending cleared in 16 ms, frame count on); H5 confirmed at the registers and by the scanout read-back (blue field, border, diagonal), the monitor unobserved; restore OK, desktop back. M94. `evidence/windows/2026-09-22-E22-dcn-flip-run-002/` |
 | 003 | 0.7.24 (f14c11c) | step 3: full table, `-GpuVa 1 -Blit 1 -VidPnFlip 1`, no engines, 40 s of desktop | H6 half: the DDI flip ran and the scanout moved to the CDD's surface (M97), but dxgkrnl flips once and blits the rest, so the desktop picture came from the CDD's own partly painted surface while the blit kept writing the old framebuffer; H7 refuted as written: the interrupt was armed and never fired with the IH ring down (M98); H8 held: no underflow, no TDR, no bugcheck, gates closed clean. `evidence/windows/2026-09-22-E22-dcn-flip-run-003/` |
 | 004 | 0.7.24 (f14c11c) | as run 003 plus `-Engines 1` and the bring-up's gart, psp and `ih init` (no `gfx run`, no paging node) | the IH ring came up ENABLED and still 0 interrupts, 0 vectors in 40 s (M99): the missing piece is the DMU to IH route, not the ring; the scanout read-back shows the flip's primary is uninitialised VRAM (M100). No TDR, no bugcheck; `gart restore` returned 3 at the undo, under investigation. `evidence/windows/2026-09-22-E22-dcn-flip-run-004/` |
 
@@ -99,7 +99,7 @@ Set-ItemProperty $params -Name EnableVramWrite -Value 1 -Type DWord
 # disable/enable the device, as run 001 did, then:
 & $cli dcn                                              # baseline: firmware state, as M92
 & $cli dcnflip <firmware address from the dump above>   # H4: no-op flip
-& $cli dcnflip 0x271000000 fill 0xFF2060C0               # H5: owner should see a blue field, white border, on the monitor
+& $cli dcnflip 0x271000000 fill 0xFF2060C0               # H5: a blue field with a white border should show on the monitor
 & $cli dcnflip restore                                  # back to the firmware's address
 & $cli dcn                                              # confirm: ADDRESS/_HIGH, INUSE back to the firmware values
 Set-ItemProperty $params -Name EnableDcnWrite -Value 0 -Type DWord

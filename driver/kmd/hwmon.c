@@ -1,6 +1,6 @@
 // The board's hardware monitor, read only (docs/design/fan.md). The ASRock BC-250 carries a Nuvoton NCT6686D
 // Super I/O. Its embedded controller turns the case fan from the BIOS "Fan Setting" curve (Standard Mode), and
-// the owner keeps that setting as it is (2026-10-05). Until this file existed nothing in Windows could read the
+// that setting stays as it is. Until this file existed nothing in Windows could read the
 // chip, so the control application said "The driver cannot read it yet" and a session record held no fan speed.
 //
 // What this file is, in one sentence: the fan value travels the road the GPU temperature already travels. The
@@ -28,7 +28,7 @@
 //
 //  3. THE GATE IS OPEN BY DEFAULT FROM 0.7.213, AND IT STILL EXISTS. The reader is a finished feature and the
 //     release-train rule is that a finished feature rides the release on, with one switch to bisect a
-//     regression (owner, 2026-10-05). So EnableHwmon is 1 in the INF and in the release defaults, and
+//     regression. So EnableHwmon is 1 in the INF and in the release defaults, and
 //     EnableHwmon 0 is the switch that takes every port access of this driver away again. The reason the switch
 //     exists is unchanged: the EC window has no arbiter. Windows gives the range to a PNP0C02
 //     motherboard-resources node that drives nothing, and a third-party monitor drives the same window through
@@ -191,7 +191,7 @@ void HwmonWriteIo(BC250_HWMON_PORTS* Ports, BC250_HWMON_OWNER* Owner, struct bc2
 
 // ---- the published snapshot -------------------------------------------------------------------------------
 
-// A duty output runs and NOTHING turns. Three conditions, because this is the state the owner reacts to:
+// A duty output runs and NOTHING turns. Three conditions, because this is the state an operator reacts to:
 //   - every present tachometer answered this sample. One refused value is a collision on a window that has no
 //     arbiter, which is the very reason the gate exists; it is not a stopped fan, and a red "not turning" row
 //     over it would send somebody to the case for nothing.
@@ -256,7 +256,7 @@ static void HwmonPublish(BC250_DEVICE* Device, const struct bc250_hwmon_sample* 
         }
         snap.SampleAt = At;
         // A duty output runs and nothing turns, in enough samples in a row to rule out one collision. That is
-        // the one case the owner must see at a glance, and it is what the camera fire watch looks for as well.
+        // the one case an operator must see at a glance, and it is what the camera fire watch looks for as well.
         if (owner->StoppedInRow >= BC250_HWMON_STOPPED_SAMPLES) snap.Flags |= BC250_HWMON_FLAG_STOPPED;
     }
     KeAcquireSpinLock(&owner->SnapLock, &irql);

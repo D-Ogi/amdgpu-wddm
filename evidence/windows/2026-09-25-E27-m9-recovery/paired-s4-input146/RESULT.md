@@ -10,7 +10,7 @@ shade_quads at the JIT shader call. This measured long call is not a long KMD
 flip or fence wait. Rendering remains on the CPU; no hardware D3D claim.
 
 DWM-only restart704->6076 retains OS boot03:57:55.500 and installed146.
-Long render/Present work persists, and owner reports only slight improvement.
+Long render/Present work persists, and a visual check shows only slight improvement.
 Unmarked screen-content differences remain a limitation; this experiment does
 not prove that every extra shader cost is caused by S4 itself. Raw traces,
 process metadata and the screen capture remain private under scratch/m9.

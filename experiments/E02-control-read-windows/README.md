@@ -27,7 +27,7 @@ State: run 001 done on 2026-09-21. Evidence: `evidence/windows/2026-09-21-E02-ru
 Read-only by construction (read-only mapping, no write IOCTL, allow-list of offsets that were harmless
 under Linux). The state of the GPU under Windows may differ (power gating by the firmware or the basic
 display path), so a hang is possible even on these offsets: that is why the sweep is streamed and run one
-block at a time. Each hang costs the owner a power cycle.
+block at a time. Each hang costs a power cycle by hand.
 
 ## Expected
 

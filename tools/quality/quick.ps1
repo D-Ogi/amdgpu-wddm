@@ -201,7 +201,7 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # BD-122: the consumers of the KMD's start record (start-confirm and the installer's verify), with fixtures in a
  # scratch key of HKCU that it removes again. Windows PowerShell 5.1, the shell a tester's installer runs in.
  Check 'start-record-consumers' { & powershell -NoProfile -File "$repo\tools\release\test-start-record.ps1" }
- # Owner 2026-10-12: the installer's own diagnostics of a start that did not pass (the decision, the readers and
+ # The installer's own diagnostics of a start that did not pass (the decision, the readers and
  # the bounds), with the field case as a fixture. Windows PowerShell 5.1, the shell a tester runs.
  Check 'installer-diagnostics' { & powershell -NoProfile -File "$repo\tools\release\test-diagnostics.ps1" }
  # BD-060 and BD-080: the INF restart directive, the resumed install's inputs, the DWM baseline, and the plan of the

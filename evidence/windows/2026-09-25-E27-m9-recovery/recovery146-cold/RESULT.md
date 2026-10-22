@@ -9,9 +9,9 @@ automatic startup confirmation succeeds. Six light CPU samples show0-8% total,
 0% DPC,0-1% interrupt time and1700-4065 interrupts/s (rounded aggregate counters).
 These are brief cold-start observations, not post-S4 CPU measurements.
 
-Owner states: "Pulpit dzia³a p³ynnie" (desktop is smooth). This contrasts with
+A visual check shows the desktop is smooth. This contrasts with
 reported stutter after S4, but does not identify its cause. One-time login helper
-processes/tasks removed. Remote login cancelled at owner's request. Persistent
+processes/tasks removed. Remote login cancelled on request. Persistent
 monitor and network-watchdog tasks remain; legacy clock writer stays disabled.
 
 Read-only post-S4 source/log review:1819 hardware-vblank acknowledgements and

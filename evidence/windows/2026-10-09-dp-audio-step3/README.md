@@ -93,7 +93,7 @@ plays a 1 kHz sine at -12 dBFS and divides the device position of `IAudioClock::
 
 ## What it does not give
 
-- Nobody listened during these trials. The owner heard DP audio on `tester.20` on 2026-10-07, which is a report,
+- Nobody listened during these trials. A listener heard DP audio on `tester.20` on 2026-10-07, which is a report,
   not a measurement.
 - Only 44.1 and 48 kHz played. The endpoint publishes 32 kHz as well, and more than two channels and HBR are
   untested (`AFMT_AZ_HBR_ENABLE` 0 and `HBR_CAPABLE` 0 by design).

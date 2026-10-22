@@ -2,7 +2,7 @@
 //
 //   <service key>\Parameters
 //     EnableFullWddm  REG_DWORD  0 (default, and what every install writes) = the display-only table of M3,
-//                                DxgkInitializeDisplayOnlyDriver, the driver that runs the owner's display today.
+//                                DxgkInitializeDisplayOnlyDriver, the driver that runs the lab's display today.
 //                                1 = the full WDDM table of M7 stage A, DxgkInitialize (wddm.c).
 //
 // The gate is read before anything else is done with the driver object, so that at 0 not a line of M7's code runs.

@@ -1,4 +1,4 @@
-# r19 DP audio: no sound (owner, headphones on the monitor) and Edge video at ~0.8x. Measure how fast the DP endpoint
+# r19 DP audio: no sound (listening report, headphones on the monitor) and Edge video at ~0.8x. Measure how fast the DP endpoint
 # consumes samples: PlaySync of a 10.000 s WAV takes 10 s at the right rate, 12.5 s at 0.8x. 48 kHz and 44.1 kHz.
 # The stream registers are read once during the 48 kHz playback. Session 0 (SSH) first.
 $ErrorActionPreference = 'Continue'

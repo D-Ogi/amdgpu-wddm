@@ -1,4 +1,4 @@
-# Does the logon window task give the person a console window? (fact M899; owner, 2026-10-14: a console window came
+# Does the logon window task give the person a console window? (fact M899; on 2026-10-14 a console window came
 # up with the start window). Windows PowerShell 5.1, over ssh (elevated, session 0), bounded to three minutes:
 #
 #   python tools\win\target.py push <build>\amdgpu_wddm_control.exe <build>\bc250control.dll tools\release\installer\common.ps1 --to C:\BC250\tmp\console-kit

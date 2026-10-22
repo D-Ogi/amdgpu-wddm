@@ -1,5 +1,5 @@
-// The Nagi logo, the "horizon" mark: a ring, a calm sea line and an amber sun (the project's Nagi logo, owner's
-// brand sheet, 2026-10-13). It is drawn here from its geometry on a 100 x 100 box, so it is sharp at every scale and
+// The Nagi logo, the "horizon" mark: a ring, a calm sea line and an amber sun (the project's Nagi logo,
+// brand sheet of 2026-10-13). It is drawn here from its geometry on a 100 x 100 box, so it is sharp at every scale and
 // the exe carries no picture of it. The application icon stays the guide character's face (art\icon\nagi.ico).
 //   ring  circle (50, 50) r 40, stroke #f2d27a, width 6
 //   sun   circle (61, 36) r 7.5, fill #e39a3b

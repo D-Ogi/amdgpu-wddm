@@ -28,7 +28,7 @@ The project's rules do not ask for this watch. They require it. The reasons are 
   **372 to 628 MB/s** (2026-09-27, four runs, all ended by this kill switch).
 
 So: the kill switch runs **before** `kd_server.py start` or any `kd -z`, and it keeps running while the
-debugger lives. A live `kd` on this PC also needs the owner's consent for that run. Dump analysis is allowed
+debugger lives. A live `kd` on this PC also needs explicit consent for that run. Dump analysis is allowed
 without it, but not without this watch.
 
 After an exit code 255 or an empty debugger result, read `killswitch.log` before you blame the debugger. The

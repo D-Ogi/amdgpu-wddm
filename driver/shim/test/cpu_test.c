@@ -230,7 +230,7 @@ static void test_settings(void)
 	CHECK(bc250_cpu_settings_check(&s, 0) == BC250_CPU_ERROR_CLOCK);
 	s = set(BC250_CPU_MAX_MHZ + 100u, 0, 0);
 	CHECK(bc250_cpu_settings_check(&s, 0) == BC250_CPU_ERROR_CLOCK);
-	/* The lab bound, under the owner's pre-approval: it needs an undervolt already in the same request, which
+	/* The lab bound, for pre-approved lab experiments: it needs an undervolt already in the same request, which
 	 * is the whole point - a higher clock at the firmware's own voltage is the shape that destroyed a board. */
 	s = set(BC250_CPU_MAX_MHZ_LAB, 0, 0);
 	CHECK(bc250_cpu_settings_check(&s, 1) == BC250_CPU_ERROR_CLOCK);

@@ -31,6 +31,6 @@ before cleanup/archive. All three tasks removed. Final independent snapshot
 10:13:25.9121809Z: health15/guard0,1000MHz/VID116,66.875C,no test processes,
 exact161 and baseline UMD8279AC7F/registered ICD93B1D1FD. No OS reboot.
 
-No owner visual verdict and no complete image acceptance claimed. Two dynamic
+No visual verdict and no complete image acceptance claimed. Two dynamic
 captures remain private for further analysis. G0 remains open; zero successful
 BGP1 submissions is sufficient to reject this trial irrespective of those images.

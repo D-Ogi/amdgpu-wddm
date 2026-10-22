@@ -17,6 +17,6 @@ notifier. Gdzie diabeł nie może, tam babę pośle (where the devil cannot go, 
 Windows instead, where E15 brought the engines up three times in one device start (M58).
 
 The reload step had /dev/watchdog (sp5100_tco, 60 s) armed through a feeding shell loop. Whether the watchdog reset
-the machine is NOT known: the lab did not answer for more than six minutes, the owner was asked for OFF then ON, and
+the machine is NOT known: the lab did not answer for more than six minutes, the operator was asked for OFF then ON, and
 the next thing measured is Windows with a boot time of 17:47:57. Wake-on-LAN was armed on eth0 before the hang and
 was not needed.

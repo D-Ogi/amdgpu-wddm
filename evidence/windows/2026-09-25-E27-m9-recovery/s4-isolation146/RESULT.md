@@ -12,7 +12,7 @@ intentionally leaves actual_s4_verified false: its input proves retained
 contents; the separate OS power record proves S4. Eight shaders and
 stories15M/TinyLlama reference outputs pass (control.log).
 
-The owner reports regular cursor stutter despite the summary pause.
+A visual check shows regular cursor stutter despite the summary pause.
 Disabling synchronized LOG_SUMMARY polling alone did not eliminate the symptom.
 343 complete CPU samples were recovered; a139-byte trailing NUL-only tail
 is excluded by the analyzer and the original file is preserved privately.

@@ -299,7 +299,7 @@ int main(int argc, char** argv) {
     };
 
     // The create loop, the part a game runs at load time. One thread by default; with --threads N the same range is
-    // split between N threads, which is the second half of the owner's rule: our own client exercises the driver's
+    // split between N threads, which is the second half of the project rule: our own client exercises the driver's
     // concurrency, both from one caller and from several.
     std::vector<Pipeline> pipelines(o.count);
     for (unsigned i = 0; i < o.count; ++i) {

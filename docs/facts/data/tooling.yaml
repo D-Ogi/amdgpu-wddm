@@ -29,7 +29,7 @@ facts:
     claim: "Explicit user-mode confirmation now checks native RegFlushKey status in CLI and monitor source. Actual-method tests12C/4C# pass; ignored-flush mutations fail. Checked CLI succeeds on unchanged full144 at01:21:57 with budget0/policy2 and retained OS/DWM/overlay. Built monitor not deployed. Corrects M455 zero-budget persistence interpretation: RegistryKey.Flush returning normally did not expose native status; KMD admission flush proof is unaffected. Full-table auto-confirm remains open."
     evidence: "[checked confirmation](../evidence/windows/2026-09-25-E27-m9-recovery/checked-confirmation144/RESULT.md)"
     edges:
-      - {"type": "supersedes", "to": "M455", "scope": "partial", "auto": true, "cue_in": "M455", "cue": "...checked managed flush after controls (checked-persistence correction: M456); owner subsequently confirms correct physical image and cursor. No A..."}
+      - {"type": "supersedes", "to": "M455", "scope": "partial", "auto": true, "cue_in": "M455", "cue": "...checked managed flush after controls (checked-persistence correction: M456); a later visual check confirms correct physical image and cursor. No A..."}
   - id: M464
     status: MEASURED
     date: "2026-09-25"

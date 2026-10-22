@@ -82,7 +82,7 @@ KMD it names, and it supplies the desktop UMD and ICD pins that `preflight`, `Ve
 
 ## The installed release
 
-The lab runs a release install since tester.10 (owner, 2026-10-03), and the kit reads the lab from that install
+The lab runs a release install since tester.10 (2026-10-03), and the kit reads the lab from that install
 alone. The release installer writes `InstallRoot` into `HKLM\SOFTWARE\amdgpu-wddm\Release`.
 
 - The KMD client is `<InstallRoot>\tools\bc250kmd_cli.exe`, and no other copy is used.
@@ -96,7 +96,7 @@ alone. The release installer writes `InstallRoot` into `HKLM\SOFTWARE\amdgpu-wdd
 - `lab-baseline.json` must have its `desktop` block. The release installer registers the desktop router, so a
   baseline without that block cannot describe the lab, and `freeze` refuses it.
 - `check-offline.py` has the check `legacy lab paths`. No file of the kit may name `C:\BC250\m8` to `C:\BC250\m14`,
-  and no file may name a KMD client by its path. Those lab directories go away (owner, 2026-10-08), and a second
+  and no file may name a KMD client by its path. Those lab directories go away (2026-10-08), and a second
   client copy can answer about a driver other than the one on the GPU.
 
 `freeze` writes each attempt's own `kmd-transition/identity.ps1` from these inputs and then runs
@@ -184,7 +184,7 @@ Every confirmation (candidate `Verify`, restore `Verify`, `postflight`) needs a 
 GPU work no older than 15 s. An idle desktop presents about once a minute, so without a presenter the
 confirmation fails and the attempt ends `recovery-required` or `restore-unverified`. That is kmd175-deploy002.
 
-The presenter is `ops\heartbeat.ps1`: a small top-most window in the owner's session whose text changes every
+The presenter is `ops\heartbeat.ps1`: a small top-most window in the interactive session whose text changes every
 250 ms, started as the interactive user by the one-shot task `Lab-Present-Heartbeat`, which exits by itself.
 `dispatch Start` and `postflight` start it themselves. Its task name must stay outside the `BC250|DWM|G0|WSI`
 filter of the competing-task gates, and `kmdcommon.heartbeat` refuses if it does not.

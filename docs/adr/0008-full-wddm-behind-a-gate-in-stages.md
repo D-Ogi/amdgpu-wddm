@@ -54,14 +54,14 @@ accepted state. Points 1, 3 to 5 stand.
 
 ## Consequences
 
-- A closed gate gives the owner the driver that runs the display today, byte for byte in behaviour. Every
+- A closed gate gives the lab the driver that runs the display today, byte for byte in behaviour. Every
   full-WDDM start is an act of an experiment.
 - Stage A can cost a black desktop. The gate, the start budget, `ErrorControl = 0`, the recovery boot entry and
-  the lab's freedom to be rebooted are what it relies on; the owner's own PC is never the target.
+  the lab's freedom to be rebooted are what it relies on; the development PC is never the target.
 - The display path changes once, in stage A: `PresentDisplayOnly` has no place in the full table and is
   replaced by `Present` plus `SetVidPnSourceAddress` onto the inherited framebuffer.
 - RADV on this part uses the gfx ring only (facts M50), so one 3D node covers M8's first needs.
-- A TDR during M7 means a device restart at best and the owner's button at worst. That is accepted for the
+- A TDR during M7 means a device restart at best and a manual press of the reset button at worst. That is accepted for the
   lab and is the reason the stages before C submit nothing.
 
 ## State and deviations (2026-09-22)

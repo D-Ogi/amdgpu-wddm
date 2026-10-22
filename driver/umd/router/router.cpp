@@ -118,7 +118,7 @@ static const DWORD AppListBytes = 16384;
 
 // The DirectFlipFront request. An absent value means Requested from this release: the front is a finished
 // feature and rides the desktop on, with the value 0 as the one switch that puts the shipped router back (the
-// release-train rule, owner 2026-10-05). Off is the router that shipped: no front, no raised DDI, nothing to
+// project's release rule). Off is the router that shipped: no front, no raised DDI, nothing to
 // roll back. A value of another kind is Invalid and is still treated as off, because a desktop that cannot read
 // its own switch must take the route that needs nothing of this release.
 enum class Front { Off, Requested, Invalid };

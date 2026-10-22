@@ -1,6 +1,6 @@
 # LAB (elevated SSH): non-invasive cdb attach (-pv) to one process; loads our own PDBs from -Sym (pushed by the
 # operator) with noisy symbol loading, prints the module records of the shell, engine and ICD and -Samples stacks of
-# the threads in -Tids (decimal), -Gap ms apart. Lab memory/process analysis, owner consent 2026-09-27/28.
+# the threads in -Tids (decimal), -Gap ms apart. Lab memory/process analysis, consent of 2026-09-27/28.
 param([string]$Image = 'ROTTR', [string]$Sym = 'C:\BC250\tmp\sym-rottr4', [string]$Tids = '', [int]$Frames = 40,
       [int]$Samples = 1, [string]$ImagePath = 'C:\BC250\m14\app-route-icdmt\gpu')
 # -pv reads no image headers from the process; -i names where the DLL files are, so the PDB records can be matched.

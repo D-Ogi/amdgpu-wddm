@@ -1,5 +1,4 @@
-PROVENANCE: the application icon of this project, own artwork of the project, owned by the project owner
-and published here by the owner's decision of 2026-10-12 ("ikonke zrob z biustu Nagi").
+PROVENANCE: the application icon of this project, own artwork of the project, published here by its author.
 
 `nagi.ico` is built from `..\nagi\sheet-smile@256.png` of this repository, which `..\nagi\PROVENANCE.md`
 records. `make-icon.py` is the recipe: a round badge, the bust on the page colour of our windows

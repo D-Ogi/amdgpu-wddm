@@ -6,10 +6,10 @@
     python tools/win/train-validate/validate.py summary --out <dir> [--set rottr=55.15]
     python tools/win/train-validate/validate.py arms
 
-`run` works through the arms of `arms.json` in order, with the owner's bounds, the STOP flag, the
+`run` works through the arms of `arms.json` in order, with the project bounds, the STOP flag, the
 temperature gate and a health gate after every arm that touched the GPU, and writes a RESULTS.md skeleton
 at the end. Nothing between the arms needs an operator, so the operator starts the run, drives the one
-interactive game session the owner reserved for a person, and reads one summary.
+interactive game session reserved for a person, and reads one summary.
 
 `--dry-run` prints the whole plan, every command with its bound, and touches nothing.
 """
@@ -67,7 +67,7 @@ def plan_text(plan: manifest.Plan, out_dir: Path, train: str) -> str:
         worst += host_worst
         head = f"{number:2d} {arm.id} [{arm.kind}, bound {arm.bound_s} s, host worst case {host_worst} s]"
         if arm.arm.get("gate"):
-            head += f" OWNER GATE {arm.arm['gate']}"
+            head += f" RELEASE GATE {arm.arm['gate']}"
         lines.append(head)
         lines.append(f"     {arm.arm.get('title', '')}")
         if arm.arm.get("why_not_a_trial"):

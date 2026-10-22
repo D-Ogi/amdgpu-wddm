@@ -1,8 +1,8 @@
 /*
  * gltest - the project's own OpenGL 4.x client.
  *
- * Why it exists: the owner's rule is that multithreading is tested with our own clients before a game is
- * allowed to be the witness (owner, 2026-09-29). BD-076 registers a system OpenGL ICD for our driver,
+ * Why it exists: the project rule is that multithreading is tested with our own clients before a game is
+ * allowed to be the witness. BD-076 registers a system OpenGL ICD for our driver,
  * and the lane needs a client that says, in one line per case, whether a context came up, which DLL served
  * it, whether the pixels are the expected ones, whether two threads with two contexts in one share group
  * work, and whether a compute shader writes what it was told to write.
@@ -23,7 +23,7 @@
  * is reported by name instead of crashing.
  *
  * Nothing is ever shown on screen unless --show is given: the development PC must not get a window
- * (owner's rule). The whole run is bounded by a watchdog thread, 60 s by default.
+ * (a workspace rule). The whole run is bounded by a watchdog thread, 60 s by default.
  *
  *   gltest.exe                                 all cases, hidden, 60 s bound
  *   gltest.exe --case threads --seconds 90

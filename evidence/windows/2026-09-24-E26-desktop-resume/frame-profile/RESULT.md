@@ -1,6 +1,6 @@
 # M408 - CPU drawing dominates visible frame stalls
 
-Owner reports approximately one second of smooth cursor motion followed by
+A visual check shows approximately one second of smooth cursor motion followed by
 one second frozen, and the overlay seconds skipping. This supersedes any
 interpretation of M407's intact image as responsive-desktop acceptance.
 

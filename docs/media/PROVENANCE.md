@@ -1,7 +1,7 @@
-PROVENANCE: the images of the README and of the installation guide, owned by the project owner and published here
-by the owner's decision.
+PROVENANCE: the images of the README and of the installation guide, owned by the licensor named in `NOTICE` and published here
+by the licensor's decision.
 
-- `nagi-banner.webp`: the project banner, supplied by the owner on 2026-10-13. It was stripped of metadata and
+- `nagi-banner.webp`: the project banner, supplied by the licensor on 2026-10-13. It was stripped of metadata and
   converted to WebP at quality 86.
 - `nagi-mark.svg`, `nagi-lockup-dark.svg`, `nagi-lockup-light.svg`: the Nagi logo ("horizon": a ring, a calm sea
   line and an amber sun) and its lockup with the wordmark and the 凪 badge, from the project's brand sheet. The

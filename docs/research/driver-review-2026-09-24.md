@@ -1,6 +1,6 @@
 # Driver review integration (2026-09-24)
 
-The owner's workspace `DEFECTS.md` is the authoritative backlog for the review,
+The workspace `DEFECTS.md` is the authoritative backlog for the review,
 with stable BD identifiers and one status table. It is outside the public repo.
 Update existing matching entries there; do not add issues found and immediately
 fixed during implementation. Older comments remain unchanged. This document is

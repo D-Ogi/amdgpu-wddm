@@ -44,7 +44,7 @@ $console = @(Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-O
 $consoleSession = if ($console.Count) { $console[0].SessionId } else { 0 }
 if ($consoleSession -le 0) { throw 'No explorer in a session above 0: the desktop is not up' }
 
-# Temperature before the set, with the owner's 87 C cap (CLAUDE.md, 2026-10-01). The reader is a diagnostic
+# Temperature before the set, with the 87 C cap (CLAUDE.md, 2026-10-01). The reader is a diagnostic
 # tool that may not be deployed; its absence is noted, not fatal.
 $rd = 'C:\BC250\bc250rd\bc250rd_cli.exe'
 $cap = if ($cfg.temp_cap_c) { [double]$cfg.temp_cap_c } else { 87.0 }

@@ -1,7 +1,7 @@
 # M576: DWM014 still has dynamic visual corruption
 
 Candidate039 UMD50491FA3/ICD3508416F, including the M575 shader-lifetime fix,
-runs GPU DWM952 for185.736 measured seconds. The owner explicitly confirms
+runs GPU DWM952 for185.736 measured seconds. A visual check confirms
 that artifacts persist. The primary capture dynamic-26.bmp independently shows
 large stretched window contents, cyan regions and black blocks. The final GDI
 capture screen.png shows a wide cyan strip and triangle. Visual acceptance FAILS.

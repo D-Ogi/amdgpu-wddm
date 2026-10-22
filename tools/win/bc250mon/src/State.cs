@@ -137,7 +137,7 @@ namespace Bc250Mon
             Log("status", level, text);
         }
 
-        // The stop flag is the owner's brake: test scripts must poll it (HTTP /flags or the STOP file) and end.
+        // The stop flag is the operator's brake: test scripts must poll it (HTTP /flags or the STOP file) and end.
         public bool StopRequested
         {
             get { lock (_lock) return _stop; }

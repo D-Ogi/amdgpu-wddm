@@ -22,8 +22,7 @@
 # the dry-run stand-in AMDGPU_WDDM_TEST_SAC and its negative control, one real read, and the preflight lines.
 # Everything is written under -WorkRoot; nothing in the registry, no driver, no restart.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'), [string]$WorkRoot)
-# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
-# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder, so one more level up than it used to be; an older flat package keeps the old place.
 if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
     $packageRoot = Split-Path $Installer   # <package>\installer -> <package>
     $packageTop = $(if ((Split-Path $packageRoot -Leaf) -eq 'files') { Split-Path $packageRoot } else { $packageRoot })
@@ -837,7 +836,7 @@ Check (@([regex]::Matches($verify, 'if \(-not \$startState\.started\)')).Count -
 Check ($verify -match '\(Test-Path -LiteralPath \$cli\) -and \$startState\.started') 'the driver is not asked for its interop state when it did not start'
 Check ($verify -match 'Write-VerifyReport \$results') 'the report is still written on every path'
 
-'the Microsoft Visual C++ runtime: the installer brings it (owner, 2026-10-12)'
+'the Microsoft Visual C++ runtime: the installer brings it'
 # The decision, over readings of the three System32 files. A reading of $null means the file is not there.
 function New-VcReading([string]$Version) {
     if (-not $Version) { return $null }
@@ -960,12 +959,12 @@ Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf(
 Check (-not (Get-Command Get-VcRuntimeMissing -ErrorAction SilentlyContinue)) 'the reader of the old refusal is gone from common.ps1'
 Check ($installText -notmatch 'VcRuntimeNeeded') 'the preflight keeps no value about the runtime that nothing reads'
 
-'the shortcuts of the control application: Start menu and desktop, both by default (owner, 2026-10-12)'
+'the shortcuts of the control application: Start menu and desktop, both by default'
 $scKnown = @(Get-ControlShortcutPaths)
 $scAll = @($scKnown | Where-Object { -not $_.legacy })
 $scOld = @($scKnown | Where-Object { $_.legacy })
 Check ($scAll.Count -eq 3) "three shortcuts the installer writes ($($scAll.Count))"
-# The Nagi names (owner, 2026-10-13), and the three names of the older releases in the same list.
+# The Nagi names, and the three names of the older releases in the same list.
 Check ((@($scAll | ForEach-Object { Split-Path $_.path -Leaf }) -join '|') -eq 'Nagi Control App.lnk|Nagi Control App (recovery).lnk|Nagi Control App.lnk') "the shortcuts carry the name Nagi Control App ($(@($scAll | ForEach-Object { Split-Path $_.path -Leaf }) -join ', '))"
 Check ($scOld.Count -eq 3 -and (@($scOld | ForEach-Object { Split-Path $_.path -Leaf }) -join '|') -eq 'amdgpu-wddm Control.lnk|amdgpu-wddm Control (recovery).lnk|amdgpu-wddm Control.lnk') 'the list knows the three names an older release wrote'
 Check ((@($scOld | ForEach-Object { "$($_.kind)/$($_.where)/$(Split-Path $_.path)" }) -join '|') -eq (@($scAll | ForEach-Object { "$($_.kind)/$($_.where)/$(Split-Path $_.path)" }) -join '|')) 'each old name is the same shortcut in the same folder as a new one'
@@ -1106,7 +1105,7 @@ foreach ($switch in 'StartMenuShortcut', 'DesktopShortcut') {
     Check (-not ($script:InstallSwitches -contains $switch)) "-$switch is not saved itself: it only clears the saved No switch"
 }
 Check ($installText -match '\$NoStartMenuShortcut = \[switch\]\(@\(\$installInputs\.switches\)') 'the install reads the shortcut answers back from the state'
-# The Nagi wallpaper (owner, 2026-10-13): an answer of the same kind as the shortcuts, carried over the restart and
+# The Nagi wallpaper: an answer of the same kind as the shortcuts, carried over the restart and
 # recorded for the control application, which sets the picture itself (common.ps1, Get-WallpaperRecord).
 $wpState = [pscustomobject]@{ phase = 'testsigning-pending'; package_version = '1.0'; install_switches = @('NoWallpaper') }
 Check (@((Get-InstallInputs -Bound @{} -State $wpState -PackageVersion '1.0').switches) -contains 'NoWallpaper') 'the run after the restart leaves the wallpaper out again'
@@ -1122,7 +1121,7 @@ Check ((Get-WallpaperRecord -Selected $false -Version '1.2.3' -Utc ([DateTime]::
 Check ($installText -match 'Set-WallpaperRecord -Selected \(-not \[bool\]\$NoWallpaper\)') 'the install records the wallpaper answer for the control application'
 Check ($installText -match 'wallpaper = \(-not \[bool\]\$NoWallpaper\)') 'the decision event reports the wallpaper answer to the setup window'
 
-'the picture on the start screen: on by default, off on request, and an earlier choice kept (owner, 2026-10-14)'
+'the picture on the start screen: on by default, off on request, and an earlier choice kept'
 # Get-BootLogoPlan is pure, so the whole rule is tested here: the default is the absent value, which is why a run
 # that states no answer must write nothing instead of writing a default over the person's choice.
 Check (((Get-BootLogoPlan -Stated $true -Current $null).action -eq 'none') -and (Get-BootLogoPlan -Stated $true -Current $null).selected) 'a fresh install with the box on writes nothing: an absent value is the picture'
@@ -1151,7 +1150,7 @@ Check ($installText -match 'boot_logo = \(Get-BootLogoChoice -Stated \$bootLogoS
 Check (-not ([IO.File]::ReadAllText((Join-Path $Installer 'registry-defaults.json'))).Contains('BootLogo')) 'BootLogo is not in registry-defaults.json: its default is the absent value'
 Check (([IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))) -match 'Remove-ItemProperty -LiteralPath \$script:ParametersKey -Name BootLogo') 'the uninstall removes the start-screen choice'
 
-'which Windows this driver is made for: n-2, and a line instead of a refusal (owner, 2026-10-11 and 2026-10-12)'
+'which Windows this driver is made for: n-2, and a line instead of a refusal'
 # Get-WindowsSupportFindings is pure, so every version, channel and edition is tested here and none of them needs a
 # PC of its own. The severities are the whole contract: only 'fail' refuses the install.
 function Get-WinIds($Findings) { return @(@($Findings) | ForEach-Object { $_.id }) }
@@ -1243,7 +1242,7 @@ Check ($installText -notmatch "default \{ Add-Check 'Windows' 'ok' \`$f\.detail 
 Check ($installText -match '\$win = Get-WindowsSupportState -Os \$os') 'the preflight asks the one place that decides'
 Check ($installText -notmatch '\$build -lt 22000') 'no version rule is left in install.ps1 itself'
 
-'the installer and the uninstaller ask nothing (owner, 2026-10-12)'
+'the installer and the uninstaller ask nothing'
 # The function that asked is gone from the engine, so a new question cannot be added by calling it, and no script of
 # the installer calls one.
 $common = [IO.File]::ReadAllText((Join-Path $Installer 'common.ps1'))

@@ -5,7 +5,7 @@
   "new_boot_utc": "2026-09-28T00:35:43.5000000Z",
   "dump_bytes": 922189881,
   "dump_sha256": "95DB5D54B8D2F0A0A7EB775CEA40E92E3DFABBEF8516AEED365C08073FF12B24",
-  "owner_observation": "Desktop looked correct and animations had no glitches during the trial; subsequently bugchecked",
+  "visual_observation": "Desktop looked correct and animations had no glitches during the trial; subsequently bugchecked",
   "client_pid": 5448,
   "last_logged_client_present": 774,
   "dwm_pid": 11056,

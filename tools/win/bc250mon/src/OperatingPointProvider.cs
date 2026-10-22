@@ -2,8 +2,8 @@
 // GPU desktop interop switches. One panel, because an operator reads one glance, and because all four answer
 // the same question: is this machine in the state the measurement assumes?
 //
-// The compute-unit row is the reason this panel exists (owner, 2026-10-05: "make sure our overlay shows how
-// many CUs are really set"). The lab had run 24 CU instead of 40 since the move to tester release installs,
+// The compute-unit row is the reason this panel exists (2026-10-05: the overlay shows how
+// many CUs are really set). The lab had run 24 CU instead of 40 since the move to tester release installs,
 // because `CuMode` is in no INF and in no installer default table, and nothing said so.
 //
 // Cost. Three KMD escapes per poll, all three adapter-owned software snapshots taken with
@@ -299,8 +299,8 @@ namespace Bc250Mon
         /// <summary>
         /// The counted units the lab expects of a start: `expectations.json` when it names `cuMode`, else the
         /// person's own choice (`CuModeChosen`, which the control app and `install.cmd -CuMode` write), else
-        /// `LabExpectations.DefaultCuMode`, the count the release installs by itself (24 since tester.31: the owner
-        /// reversed the 40 of tester.30 on 2026-10-14, docs/design/cu-mode.md). The order matters in both
+        /// `LabExpectations.DefaultCuMode`, the count the release installs by itself (24 since tester.31: the 40 of
+        /// tester.30 was reversed on 2026-10-14, docs/design/cu-mode.md). The order matters in both
         /// directions. A chosen count has to win, or a deliberate 30-core start reads amber against a count nobody
         /// asked for (the control app offers 24 to 40 in twos since 2026-10-14). And a lab that wants more than the
         /// install gives says so in the file or asks for it with `install.cmd -CuMode`, which is the lesson of

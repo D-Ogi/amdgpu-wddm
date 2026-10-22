@@ -40,7 +40,7 @@ disarm() {
 case "${1:-}" in
 pre)
 	say "kernel"; uname -a; cat /proc/cmdline
-	say "uptime (boot history is the owner's to tell: cold or warm)"; uptime
+	say "uptime (boot history is the operator's to tell: cold or warm)"; uptime
 	say "amdgpu loaded? (must be empty)"; lsmod | grep -i amdgpu
 	say "lspci"; lspci -nn
 	say "GPU function"; lspci -vvv -s "$(gpu)"

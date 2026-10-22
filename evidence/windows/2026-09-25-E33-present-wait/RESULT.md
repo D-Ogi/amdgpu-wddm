@@ -34,7 +34,7 @@ CTS release vulkan-cts-1.4.6.2 f6a29701, executableAE7BEFDD, candidateA6D11B64:
   The valid release binary is in C:/BC250/m12/cts-release-tools.
 
 D3D11 run005 on763628F6 completes660frames in32766ms. Showcase001 on that same
-candidate completes3960frames in177892ms, exit0. The owner confirms the live scene
+candidate completes3960frames in177892ms, exit0. A visual check confirms the live scene
 is visible on the physical monitor. This is a separate showcase, not a performance
 baseline. Run006 on finalA6D11B64 also completes660frames with all five expected
 modules. Both660-frame captures are1080x720 and byte-identical SHA2567489F181...

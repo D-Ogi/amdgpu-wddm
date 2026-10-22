@@ -72,7 +72,7 @@ function Get-DriverFlavour{
  $f=try{[string](Get-Content -LiteralPath $m -Raw|ConvertFrom-Json).flavour}catch{''}
  if($f){$f}else{'legacy'}
 }
-# The installed release's bc250kmd_cli.exe is the only KMD client (owner, 2026-10-08: the harness needs nothing
+# The installed release's bc250kmd_cli.exe is the only KMD client (2026-10-08: the harness needs nothing
 # from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
 function Resolve-KmdClient([string]$Release,[string]$Form){
  if(!$Release -or !(Test-Path -LiteralPath $Release)){throw "No release KMD client '$Release' (HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe)"}
@@ -101,7 +101,7 @@ $child=$null;$debugger=$null;$settingsBefore=@{};$gamePids=@()
 $result.launch='direct';$result.launch_chain=@();$result.launch_seconds=0;$result.app_profile=''
 # The profile's settings policy. backup-restore (Witcher 3: the DX12 build reads and rewrites dx12user.settings, 101
 # at its menu; user.settings is the DX11 build's): each file is restored to its before content if the game changed
-# it (keeps the owner's 720p). record: hashes and copies before and after, never written. untouched: not read.
+# it (keeps the lab's 720p). record: hashes and copies before and after, never written. untouched: not read.
 $settingsPolicy=[string]$gp.settings.policy
 $settingsNames=@($gp.settings.files|Where-Object{$_})
 $settingsDir=if($gp.settings.directory){[Environment]::ExpandEnvironmentVariables([string]$gp.settings.directory)}else{''}
@@ -203,7 +203,7 @@ public static uint[] KeyWith(Func<KeyInput[], uint> send, ushort scan) {
     while (u != 1 && retries < 3) { System.Threading.Thread.Sleep(50); retries++; u = send(up); }
     return new uint[] { d, u, retries };
 }
-// World phase (143+, owner: Geralt walks and looks around): a key held for ms then released like Key, and
+// World phase (143+: Geralt walks and looks around): a key held for ms then released like Key, and
 // relative mouse motion (INPUT_MOUSE, MOUSEEVENTF_MOVE) in n steps of (dx, dy) every ms; Look returns the
 // number of accepted steps.
 [StructLayout(LayoutKind.Explicit, Size = 40)] public struct MouseInput { [FieldOffset(0)] public uint type; [FieldOffset(8)] public int dx; [FieldOffset(12)] public int dy; [FieldOffset(16)] public uint data; [FieldOffset(20)] public uint flags; [FieldOffset(24)] public uint time; [FieldOffset(32)] public IntPtr extra; }
@@ -368,7 +368,7 @@ function Intro-Step([int]$t){
  # A key-down without its key-up stays injected after the game ends: no further press, as in the menu pass.
  if($k[0] -eq 1 -and $k[1] -ne 1){Intro-Stop $t 'RELEASE UNRESOLVED'}
 }
-# 143+ (owner, 2026-09-30): once the world is up, Geralt walks and looks around: forward with the key held,
+# 143+ (2026-09-30): once the world is up, Geralt walks and looks around: forward with the key held,
 # a full turn, a look up and down, strafes, backwards; each step at most 3 s so the sampling above goes on.
 # The world is assumed 25 s after the transition candidate (140: loading took ~50 s after it; the game ignores
 # input while loading). Same foreground guard as Press-E; scan codes W 0x11, A 0x1E, S 0x1F, D 0x20.
@@ -396,7 +396,7 @@ function Walk-Step([int]$t){
  $walk.steps++;$walk.inputs+=,@($t,$what,($r -join '/'))
  Note ('walk '+$t+'s: '+$what+' -> '+($r -join '/'))
 }
-# Interactive session (owner, 2026-09-30 16:05Z; config.interactive_game): once the world is up the operator drives
+# Interactive session (2026-09-30 16:05Z; config.interactive_game): once the world is up the operator drives
 # the game from the development PC. Commands arrive as C:\BC250\tmp\control\<attempt>\cmd-NNN.txt written by
 # control-exec.ps1 (one ssh connection per command), actions separated by ';':
 #   tap:SCAN | tapx:SCAN | hold:SCAN:MS | look:DX:DY:N:MS | click:left|right:MS | point:FX:FY | wait:MS |
@@ -755,7 +755,7 @@ try{
  $result.exe_version=[string](Get-Item -LiteralPath $exe).VersionInfo.FileVersion
  if($settingsPolicy -eq 'backup-restore'){Capture-Settings}elseif($settingsPolicy -eq 'record'){Record-Settings 'before'}
  if($saves){$result.saves.before=Save-State}
- # 101 started with 2898 MB available and paged at the menu (616-750 MB); the owner's low-memory pre-step
+ # 101 started with 2898 MB available and paged at the menu (616-750 MB); the low-memory pre-step
  # (Edge closed, Steam lighter) brings it to about 4.2 GB.
  $result.available_mb_before=Get-AvailableMemoryMiB
  Note ('available_mb_before '+$result.available_mb_before)
@@ -893,7 +893,7 @@ try{
    Set-EnvDelivery 'delivered-client-started-by-runner'
    Note ('steam client pid '+$client.Id+' was started by an earlier trial of this runner with the same variables')
   }else{
-   # A client this runner did not start. It is never stopped here: another session or the owner may be using it.
+   # A client this runner did not start. It is never stopped here: another session or a person at the lab may be using it.
    $state=if($marker -and $client -and [int]$marker.pid -eq $client.Id){'not-delivered-value-differs'}else{'not-delivered-foreign-client'}
    Set-EnvDelivery $state
    # The experiment still arrives through the registry profile, which the steam branch reads into app_profile below.
@@ -1052,7 +1052,7 @@ try{
    Note ('t='+$t+' tctl='+$temp+' tsrc='+$script:TempSource+' ws_mb='+$ws+' threads='+$threads+' responding='+$result.responding_last)
   }catch{Note ('sample failed: '+$_.Exception.Message)}
   # The thermal guard outside the sample's try: -1 is unreadable, never cool; two in a row end the session.
-  # Owner rule 2026-10-04: stop when Tctl stays >= 87 C for 10 s, or at once at >= 89 C (scene loads spike for a
+  # Rule of 2026-10-04: stop when Tctl stays >= 87 C for 10 s, or at once at >= 89 C (scene loads spike for a
   # few seconds). An unreadable sample (-1) keeps the hot run: only a readable sample below 87 C ends it.
   $nowUtc=[DateTime]::UtcNow
   if($temp -ge 87){if(!$hotSince){$hotSince=$nowUtc}}elseif($temp -ge 0){$hotSince=$null}

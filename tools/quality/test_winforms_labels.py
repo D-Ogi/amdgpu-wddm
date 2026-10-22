@@ -117,7 +117,7 @@ class Tree(unittest.TestCase):
     def test_repository_passes(self):
         problems, report, winforms = check(REPO)
         self.assertEqual(problems, [])
-        # The start window of 84f35234 is gone (owner, 2026-10-22): neither of its two scripts makes a WinForms
+        # The start window of 84f35234 is gone (2026-10-22): neither of its two scripts makes a WinForms
         # window any more, so the scan finds nothing to read there.
         for rel in ("tools/release/installer/start-window.ps1", "tools/release/installer/start-confirm.ps1"):
             self.assertNotIn(rel, winforms)

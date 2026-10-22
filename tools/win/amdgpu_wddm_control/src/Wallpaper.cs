@@ -1,4 +1,4 @@
-// The Nagi wallpaper (owner, 2026-10-13: after a successful install the wallpaper is set, unless the person cleared
+// The Nagi wallpaper (after a successful install the wallpaper is set, unless the person cleared
 // the box of the installer). The installer only records the choice: HKLM\SOFTWARE\amdgpu-wddm\Release Wallpaper
 // (DWORD 1 or 0) and WallpaperStamp (REG_SZ, one value per install). This application sets the picture, in the
 // session of the person who signed in and with that person's own rights, once per install stamp and only after the

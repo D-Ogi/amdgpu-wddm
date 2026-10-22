@@ -143,7 +143,7 @@ must use the same setting or change it on both sides.
 
 ### Compiler and variants
 
-`-Compiler` has no default: each caller names `msvc` or `clang-cl` (owner, 2026-10-21: no build uses `cl.exe`
+`-Compiler` has no default: each caller names `msvc` or `clang-cl` (since 2026-10-21: no build uses `cl.exe`
 without a word). Every recorded set, and every Mesa file that a release ships, is an MSVC build. The script prints
 the path and the version of the compiler and of the linker, and `recipe.json` records them. If a tool is missing,
 the script stops. The script also sets `CC`, `CXX`, `CC_LD`, `CXX_LD` and `AR` for meson. Thus meson cannot use
@@ -166,7 +166,7 @@ option set.
   `debugoptimized`. In a `release` buildtype, the meson default `b_ndebug=if-release` defines `NDEBUG`.
 - Without `-Dallow-broken-lto=true`, Mesa's `meson.build` refuses `b_lto`. The option also adds `-lto` to the Mesa
   version string.
-- x86-64-v3 is AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT and MOVBE: the CPU requirement of the project (owner,
+- x86-64-v3 is AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT and MOVBE: the CPU requirement of the project (since
   2026-10-21). Do not use `-march=znver2`: it adds SSE4a, which Intel CPUs do not have. Do not use `-march=native`:
   that is the CPU of the build machine.
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# E22 run 003 (step 3): bc250kmd 0.7.24, the VidPn flip and the VUPDATE interrupt in the full table. Owner at the monitor:
+# E22 run 003 (step 3): bc250kmd 0.7.24, the VidPn flip and the VUPDATE interrupt in the full table. Operator at the monitor:
 # the desktop is shown through SetVidPnSourceAddress's own hardware flip, vsync from OTG0's interrupt. No engines are
 # needed (EnableMmio + EnableDcnWrite + EnableVidPnFlip; the CPU blit of E20 stays on). About a minute of desktop, ring
 # log lines, DCN dump, temperature, gate closed. Usage: e22_run3.sh

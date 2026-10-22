@@ -1,7 +1,7 @@
 == kernel
 Linux bc250diag 6.18.52-0-lts #1-Alpine SMP PREEMPT_DYNAMIC 2026-09-15 05:37:48 x86_64 Linux
 BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=readonly
-== uptime (boot history is the owner's to tell: cold or warm)
+== uptime (boot history is the operator's to tell: cold or warm)
  14:50:58 up 0 min,  0 users,  load average: 0.21, 0.07, 0.02
 == amdgpu loaded? (must be empty)
 == lspci

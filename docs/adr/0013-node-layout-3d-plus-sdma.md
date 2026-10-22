@@ -1,6 +1,6 @@
 # ADR 0013: node layout - 3D, and a copy node on SDMA that also pages
 
-Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 5 at the owner's suggestion).
+Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 5 on request).
 
 ## Context
 

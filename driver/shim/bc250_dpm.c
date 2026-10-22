@@ -9,7 +9,7 @@
  * average, so a step down never lands at or above UP (the invariant at bc250_dpm_tune_check; the
  * defaults: 651 x 1.1 = 716.1 <= 900) and the two cannot chase each other. The thermal cap sits on
  * top and wins over everything, the lab floor included: since 0.7.205 it alone may go under it, to 900 or
- * 800 MHz at the floor's own 820 mV (owner decision 2026-10-05). Since 0.7.207 the idle state goes lower
+ * 800 MHz at the floor's own 820 mV. Since 0.7.207 the idle state goes lower
  * still, to 500 MHz, entered after a quiet window and held, since 0.7.216.6, while its own work fits it (a desktop
  * frame no longer leaves it). Since 0.7.213 the cap starts stepping in the soft
  * zone, 86 C, with the reading extrapolated 15 s along its own slope, and the clock stops rising at 83 C
@@ -115,7 +115,7 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 	d->clear_closed = r->closed_present;
 	d->closed_reason = 0u;
 	if (d->requested != BC250_DPM_MODE_DPM) {
-		/* Kept as written: the owner's typo is the owner's to fix, the marks stay for the next try. */
+		/* Kept as written: the typo is the user's to fix, the marks stay for the next try. */
 		d->reason = BC250_DPM_REASON_INVALID_SETTING;
 		return;
 	}
@@ -859,8 +859,8 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 			if (g->hot_ms >= t->hot_step_ms) {
 				g->hot_ms = 0;
 				if (g->thermal_cap > thermal_floor(g)) {
-					/* One level per hot step, down to 800 MHz since 0.7.205 (the owner's decision of
-					 * 2026-10-05: the last two levels are below the lab floor). */
+					/* One level per hot step, down to 800 MHz since 0.7.205 (the last two
+					 * levels are below the lab floor). */
 					g->thermal_cap--;
 					g->cap_ms = 0;
 				}
@@ -1000,7 +1000,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		else g->throttle = BC250_DPM_THROTTLE_MAX_SETTING;
 		target = limit;
 	}
-	/* The idle state (0.7.207, owner decision 2026-10-05: 500 MHz while the lab does not work). It is a
+	/* The idle state (0.7.207: 500 MHz while the lab does not work). It is a
 	 * lowering below the lab floor, so it comes after the limits and replaces the warm zone and the ramp,
 	 * which bound raises only. Three outcomes:
 	 *   in idle          the idle point, whatever the load wanted, and never above the limits

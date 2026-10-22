@@ -49,7 +49,7 @@ desktop is a correct start. An idle GPU desktop flips about once a minute, for
 the taskbar clock (lab, 2026-10-22: three completions in 150 s, each at a
 change of the minute), so the 15 s freshness bound alone left it unconfirmed.
 Up to tester.31 a small window with a countdown kept DWM presenting for that
-bound. That window is gone (owner, 2026-10-22). A flip that is programmed and
+bound. That window is gone (2026-10-22). A flip that is programmed and
 never completes keeps the two sequences different, so a stalled screen is
 still refused. The read follows Device->Wddm under the witness spin lock, and
 only while the witness is open. Every stop closes the witness under that lock
@@ -174,6 +174,6 @@ flush must fail a negative-control test.
 On the lab, leave a genuine newly admitted start at counter1 and observe the
 monitor change it to zero only after the required interval. Record generation,
 completion progress and checked persistence status, plus retained OS/DWM
-identity and the owner's input/display result. Do not manufacture a fresh start
+identity and the operator's input/display result. Do not manufacture a fresh start
 by changing only the registry counter. No repeated OS restart is needed to
 validate the first warm PnP path; AC-cold and power-resume tests remain separate.

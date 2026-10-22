@@ -66,7 +66,7 @@ No kernel debugger was attached (the debugger server had hung the development PC
 
 | | Outcome |
 |---|---|
-| H1 install, no problem code, mode kept | **holds**: `pnputil /add-driver /install`, no reboot, `CM_PROB_NONE`, 1920x1200; the owner confirms the picture fills the panel |
+| H1 install, no problem code, mode kept | **holds**: `pnputil /add-driver /install`, no reboot, `CM_PROB_NONE`, 1920x1200; a visual check on the lab monitor confirms the picture fills the panel |
 | H2 stages | **holds**: `LastStage` 61, history `10 20 30 31 32 33 34 39 50 60 61` after every start |
 | H3 no register change | **holds**: noise floor 9 registers (it was 36 before the side-effect registers left the allow-list), 0 outside it after the install |
 | H4 disable/enable, restart, budget, rollback | **holds**: both come back at stage 61; the restart ran at the edge of the budget (1 -> 2) and `bc250mon` confirmed it to 0 about a minute after the desktop; rollback returned Basic Display; the package was installed again and stays |

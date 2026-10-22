@@ -7,7 +7,7 @@
 #   taskmgr   Task Manager in the interactive session for -Seconds, then ended (screenshots from the host meanwhile)
 #   exe       -Exe <absolute path> in the interactive session for -Seconds, then its process tree ended
 # Interactive runs go through the one-shot task named in app-route.json (user bc250, logged on, highest run level),
-# removed at the end. Refused under the owner STOP flag.
+# removed at the end. Refused under the STOP flag.
 param([Parameter(Mandatory)][ValidateSet('d3d11bench','d3d11mt','d3d11fl12','dxdiag','taskmgr','exe')][string]$Client,
       [string]$Arguments='',[ValidateRange(5,170)][int]$Seconds=120,[switch]$Interactive,[string]$Exe='',
       [string]$Root='C:\BC250\m14\app-route-001')

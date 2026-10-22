@@ -17,7 +17,7 @@ Previous133 remains available for rollback, SHA37A52F95... (M426/M428).
 - D3D control exits0: shared red/blue textures have0/2048 mismatches each;
   green texture0/307200,60 presents, device-removed status0. Actual scanout
   preview shows the green window, desktop and whole overlay. It is not proof
-  of uninterrupted temporal smoothness; owner feedback remains pending.
+  of uninterrupted temporal smoothness; visual feedback remains pending.
 - Original64MiB probe, SHA E9566E49..., exits0: three evict/restore cycles,
   four complete GPU readbacks, all words match, fences64/128/192/256.
 - Eight Vulkan shaders have CPU-matching hashes; stories15M and TinyLlama
@@ -51,7 +51,7 @@ version/INF were advanced to134. Source tests and negative controls are in the
 adjacent dcn-lock-ack-review and vidpn-flip-publication evidence directories.
 The normal path uses no ACK-timeout fallback on this run; actual timeout/error
 handling and generation races are not forced on hardware. No30-minute or
-physical-input acceptance is claimed. Owner observation was requested and was
+physical-input acceptance is claimed. Visual observation was requested and was
 not yet received when this evidence was finalized.
 
 Current deployment is workspace STATE.md. The M9 cold/OS-boot gate, native SMU
@@ -62,6 +62,6 @@ remain in docs/research/bios-analysis-followup.md.
 
 The initial read-only preflight was mistakenly rejected by automatic approval
 review as a PnP mutation. Full script/helper inspection established its read-only
-scope; the same operation was then allowed, and the owner also explicitly
+scope; the same operation was then allowed, and it was also explicitly
 approved it. No rejected action was bypassed. Later PnP was separately reviewed
 and ran within the standing lab authorization.

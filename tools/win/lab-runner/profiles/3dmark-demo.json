@@ -108,7 +108,7 @@
     "default_seconds": 900,
     "entry": "run-game.sh N 3dmark-demo [SECONDS]"
   },
-  "online": "Owner consent of 2026-10-01 (about 18:17Z): the Demo may validate and publish its results online and SystemInfo may upload hardware details and the running-process list. UL says Basic Edition and Demo results are validated online and published and the result cannot be hidden (UL support 44001788186, 44002126271).",
+  "online": "Consent of 2026-10-01 (about 18:17Z): the Demo may validate and publish its results online and SystemInfo may upload hardware details and the running-process list. UL says Basic Edition and Demo results are validated online and published and the result cannot be hidden (UL support 44001788186, 44002126271).",
   "notes": [
     "Workload process names (3DMarkTimeSpy.exe and others under dlc\\) are community knowledge, not UL documentation: the runner matches 3DMark* and records every module it sees.",
     "UL: do not touch the mouse or keyboard and do not change the window focus while a test runs; Esc cancels the test.",
@@ -116,6 +116,6 @@
     "Steam first start (app info of 2026-09-30): no Steam EULA; an install script (extended/installscript installscript.vdf) runs elevated at the first start, without a prompt since the lab's UAC auto-elevation of 2026-10-01T21:36Z (DRY_RUN=lab gate uac elevation).",
     "281: on the CPU UMD (FL 10.0) the UI and SystemInfo refused Time Spy ('You need a DirectX 11 compatible GPU', empty Rendering device list) and read no VRAM (no HardwareInformation values in the driver key): 282+ put 3DMark.exe and slinfo.exe on the router allowlist (GPU UMD root app-route-pf, witness 7E9F1692).",
     "282: 281's closure left 3DMark's bin\\x64\\jre\\bin\\javaw.exe running and Steam refused the next launch ('Game already running'); javaw is ended at cleanup now (the Futuremark SystemInfo service FMSISvc.exe is resident by design and stays).",
-    "2026-10-04: d3d12 router unchecked: package default route (gpu-default), no allowlist change (owner: default options)."
+    "2026-10-04: d3d12 router unchecked: package default route (gpu-default), no allowlist change (default options)."
   ]
 }

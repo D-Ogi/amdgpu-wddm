@@ -170,14 +170,14 @@ Shortcuts of the application (one writer, `Get-ControlShortcutPaths` in `install
 | Start menu (all users) | `Nagi Control App (recovery).lnk` | `--recovery` | `-NoStartMenuShortcut` |
 | Desktop (all users) | `Nagi Control App.lnk` | - | `-NoDesktopShortcut` |
 
-The names carry the product name Nagi (owner, 2026-10-13). Earlier releases wrote the same three shortcuts as
+The names carry the product name Nagi. Earlier releases wrote the same three shortcuts as
 `amdgpu-wddm Control.lnk` and `amdgpu-wddm Control (recovery).lnk`. The same list holds those three old names as
 legacy rows. An install over an older release and the uninstall remove an old name only when its target is our
 control application (`Get-LegacyShortcutCleanup`). A file of that name that points elsewhere stays. The footprint of the uninstall counts an old name by the same rule. The shortcuts of a component
 (`components.ps1`, `Get-ComponentShortcutPaths`) follow the same rule: `Nagi <title>.lnk` and
 `Nagi <title> server.lnk`, and the old `amdgpu-wddm <title>` names go when they point into the component's folder.
 
-**The Nagi wallpaper** (owner, 2026-10-13). The installer writes `HKLM\SOFTWARE\amdgpu-wddm\Release\Wallpaper`
+**The Nagi wallpaper**. The installer writes `HKLM\SOFTWARE\amdgpu-wddm\Release\Wallpaper`
 (REG_DWORD: 1, or 0 after the box of the setup window was cleared or `-NoWallpaper`) and `Release\WallpaperStamp`
 (REG_SZ, `<version> <UTC>`, new at every install run). It sets no picture itself. The application sets the picture
 for the person who signs in when `Wallpaper` is 1, the stamp is not this account's `WallpaperApplied` (section 5),

@@ -1,4 +1,4 @@
-// The screen rule the owner asked for on 2026-10-12: on a 1024x768 or 800x600 screen, and on every smaller one, the
+// The screen rule: on a 1024x768 or 800x600 screen, and on every smaller one, the
 // guide character and the whole right-hand panel she sits in do not show, and the content column takes the width
 // they leave. A screen that small has no room for a 300 px column beside the page: on the tester's 800x600 screen
 // (GitHub #38) the panel covered the text of the screen.

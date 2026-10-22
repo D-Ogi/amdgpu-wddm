@@ -131,7 +131,7 @@ namespace AmdgpuWddmControl
             return value;
         }
 
-        // The settings rule (owner, 2026-10-03): the stored value is exactly the checked names, nothing is written for
+        // The settings rule: the stored value is exactly the checked names, nothing is written for
         // an unchecked switch, and no checked name at all removes the application's key, so no empty value is left.
         // stored: the stored value, null when the key does not exist; chosen: every checked name, catalog or not.
         public static ProfileWrite PlanWrite(string image, string stored, IEnumerable<string> chosen)

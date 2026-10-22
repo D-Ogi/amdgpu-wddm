@@ -8,7 +8,7 @@ try {
  $s=Get-Content -LiteralPath (Join-Path $Run 'spec.json') -Raw | ConvertFrom-Json
  $start=@{FilePath=[string]$s.exe;PassThru=$true;WorkingDirectory=$Run}
  if([string]$s.arguments){$start.ArgumentList=[string]$s.arguments}
- # A console client shares this hidden console: no window appears on the owner's desktop.
+ # A console client shares this hidden console: no window appears on the lab desktop.
  if($s.console){$start.RedirectStandardOutput=(Join-Path $Run 'stdout.txt');$start.RedirectStandardError=(Join-Path $Run 'stderr.txt');$start.NoNewWindow=$true}
  $p=Start-Process @start
  $c.pid=$p.Id;$c.started=[DateTime]::UtcNow.ToString('o')

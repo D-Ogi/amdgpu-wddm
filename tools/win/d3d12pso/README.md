@@ -1,7 +1,7 @@
 # amdgpu_wddm_d3d12pso - our own client for the pipeline-state path
 
 This client does what a game does when it loads, and nothing else: it creates pipeline states in one loop, then
-draws once with each of them and checks every pixel against arithmetic the CPU repeats. It exists for the owner's
+draws once with each of them and checks every pixel against arithmetic the CPU repeats. It exists for the project
 rule that multithreading is tested with our own clients before a game is asked to show it, and it is the measurement
 of the asynchronous pipeline compilation of the D3D12 driver (BD-158).
 
@@ -76,5 +76,5 @@ reg delete "HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\amdgpu_wddm_d3d12pso.ex
 amdgpu_wddm_d3d12pso.exe --adapter bc250 --count 64 --label on
 ```
 
-`--threads 4` after those two is the second half of the owner's rule: the same creates from several application
+`--threads 4` after those two is the second half of the project rule: the same creates from several application
 threads, where the driver's pool and the callers compete for the same cores.

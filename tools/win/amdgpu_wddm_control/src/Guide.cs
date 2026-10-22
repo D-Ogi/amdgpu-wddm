@@ -160,7 +160,7 @@ namespace AmdgpuWddmControl
         // text, asked-for help, results and warnings always show.
         public static bool ShowUnaskedTip(bool showTipsAutomatically) { return showTipsAutomatically; }
 
-        // The name tip (owner, 2026-10-13): what the name Nagi stands for, said once after each install or update for
+        // The name tip: what the name Nagi stands for, said once after each install or update for
         // NameTipSeconds and then never again for that release (AppPrefs.NameTipRelease). It takes the panel's text
         // only over a verdict of rank 4 or lower in importance (rank > 3): a problem, an attention item or a pending
         // restart keeps the panel. The phrase itself is one string, brand.expansion, passed as the argument.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Game-session temperature guard over the emergency channel (HTTP, no held SSH session; BD-051): reads the KMD dpm
-# line every 30 s for SECONDS, ends the game after two readings above 87 C (owner limit). With RESET_FLOOR=1 it
+# line every 30 s for SECONDS, ends the game after two readings above 87 C (lab limit). With RESET_FLOOR=1 it
 # also runs `dpm tune reset` at the end (sessions that set a floor). Usage: guard-http.sh SECONDS [OUT]
 here=$(cd "$(dirname "$0")" && pwd) || exit 1
 emerg="$here/../lab-emerg.py"

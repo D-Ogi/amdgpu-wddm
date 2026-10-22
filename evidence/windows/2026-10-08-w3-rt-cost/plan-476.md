@@ -10,7 +10,7 @@ Knob launch after the in-game sweep 474 (coordinator, 2026-10-08): load, the dri
 ## Result
 2026-10-08: marker written at 01:24:50Z after "package flushed" (run-arm.sh), preflight admitted it, the game ran with
 radv_perftest cswave32 (game log). Start Running 01:24:48Z, the runner's intro skip sent Space x3 at 01:25:54Z, and
-the owner pressed Space by hand at about 01:28Z while the game sat at the intro (development PC clock). World 01:28:11Z,
+an operator pressed Space by hand at about 01:28Z while the game sat at the intro (development PC clock). World 01:28:11Z,
 window B 01:28:52-01:30:23Z lab clock (90.2 s). Game pid 5280: 12.6/s, median 77.42 ms, p95 90.80, p99 96.30,
 1416 MHz, Tctl 77.8-85.0 C, 8.90 per GHz (474 A-ctl 8.80, 469 8.79); at 1.5 GHz with elasticity 0.75 13.2/s, the same
 as A-ctl. Shots correct (RT reflections on the floor). Closure as expected: recovery-unverified (Postflight), start

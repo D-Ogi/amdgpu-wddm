@@ -1,4 +1,4 @@
-// The single-file installer (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie? to lepsza metoda!").
+// The single-file installer.
 //
 // One file, amdgpu-wddm-setup-<version>.exe, carries the whole release: this program, then the package as a zip
 // section, then a list of every file with its SHA-256, then a 120-byte trailer that says where the two sections are
@@ -54,7 +54,7 @@ namespace AmdgpuWddmSetup
         //   packageBesideExe: a files\ folder of a release stands beside the exe (the unpacked zip, a prepared
         //                     offline folder, a repair set).
         // A layout the person prepared wins over the payload, in both of its forms: that is the layout they asked
-        // for, and it "behaves as today" (owner, 2026-10-12). --package is honoured even when the folder holds no
+        // for, and it "behaves as today". --package is honoured even when the folder holds no
         // release, so that the window says what is wrong with the folder the person named instead of quietly
         // installing another one.
         public static bool Carries(bool present, string explicitPackage, bool packageBesideExe)

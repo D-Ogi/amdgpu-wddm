@@ -48,7 +48,7 @@ def main():
     ap.add_argument('--budget', type=int, default=900, help='seconds; no new cell starts past it')
     a = ap.parse_args()
     RUNS.mkdir(exist_ok=True)
-    # Most informative cells first: the owner's time box (about 15 min, 2026-10-07) may end the sweep early, and a
+    # Most informative cells first: the time box (about 15 min, 2026-10-07) may end the sweep early, and a
     # later run resumes with the cells left.
     first = [(0, 0, 0), (0, 25, 0), (0, 0, 4), (0, 25, 4), (50, 0, 0), (100, 25, 4)]
     cells = first + [c for c in itertools.product(FANS, GPU_MV, CPU_UV) if c not in first]

@@ -122,7 +122,7 @@ profile that was there before it, or removes the key it made, and the report nam
 One lab condition the trial cannot remove: the operator's overlay and the taskbar are top-level windows over
 the same rectangle, and a window above the client disqualifies an independent flip even when everything else
 is right. The trial pauses the overlay's summary poll but leaves its window alone, because that window is how
-the owner is told what is happening on their own screen. The client reports it instead: an occluded present
+a person at the lab is told what is happening on the screen. The client reports it instead: an occluded present
 counts as refused and fails the run, so an arm that was decided by another window says so rather than looking
 like a driver refusal.
 

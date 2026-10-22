@@ -1,6 +1,6 @@
 # ADR 0018: the Vulkan WSI presents through an engine, never through a CPU pixel copy
 
-Date: 2026-09-27. Status: accepted (owner decision of 2026-09-27: the CPU transport of ADR 0015 was an M10-only
+Date: 2026-09-27. Status: accepted (decision of 2026-09-27: the CPU transport of ADR 0015 was an M10-only
 allowance and is not wanted for M12 or later). Supersedes ADR 0015. Restores ADR 0011 point 4 in full and makes
 ADR 0011 point 1 due. Nothing in this ADR is a measured result unless it cites a `facts.md` row.
 
@@ -14,8 +14,8 @@ throughput") and predicted that hardware presentation would replace the transpor
 
 M10 was accepted on 2026-09-25 with that transport. On 2026-09-27 E43 measured it on a real D3D12 game through
 vkd3d-proton (facts M580): the present call takes a median 15.8 ms of a 33.4 ms frame on the presenting thread
-(CPU copy 3.2 ms, BitBlt 1.3 ms, DwmFlush 11.3 ms) and the scene is quantised to 29.7 presents/s. The owner then
-stated that the allowance belonged to the M9/M10 stage only and that the limitation is not wanted.
+(CPU copy 3.2 ms, BitBlt 1.3 ms, DwmFlush 11.3 ms) and the scene is quantised to 29.7 presents/s. The decision
+then was that the allowance belonged to the M9/M10 stage only and that the limitation is not wanted.
 
 The other half of the path is in the kernel driver: `DxgkDdiPresent` (`Bc250WddmPresent`, `driver/kmd/wddm.c`)
 has a copy-free Flip path for DWM's primary (`SetVidPnSourceAddress`, facts M545) and, for Blt presents, a

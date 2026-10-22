@@ -5,7 +5,7 @@ Unit A, Windows 11 Pro, 40 CU, desktop on the GPU route. Sessions 469 to 476, 20
 
 ## Question
 
-The Witcher 3 (next-gen, D3D12) at HIGH with RT is the owner's acceptance target. Where does its frame time go,
+The Witcher 3 (next-gen, D3D12) at HIGH with RT is the project's acceptance target. Where does its frame time go,
 per RT effect? Which lever gives the most frames: an RT effect, or a RADV RT knob?
 
 ## Stack
@@ -37,7 +37,7 @@ The supervisor's lab baseline (`lab-baseline.json`) was re-pinned to this deviat
 1. **One session per arm (469 to 473).** `scripts/run-arm.sh` starts the game, loads the save in the Kaer Morhen
    room and sends the fixed input of `drive-still.sh`: one camera turn (`look:40:0:10:50`), then no input. The
    camera turn opens window B: 90 s of DxgKrnl present events, GPU only. A shot at +50 s and at +100 s, then quit.
-2. **One session with in-game changes (474).** The owner asked for about one minute per setting, changed in the
+2. **One session with in-game changes (474).** The plan called for about one minute per setting, changed in the
    game. The operator changed the RT settings in the game's Graphics page (`scripts/rt-sweep.sh`, every menu level
    confirmed by OCR, `sweep-474.log`). One window B of 600 s covers the session. Four marks cut it into 50 s windows
    (`mark measure X start|end` in `game-log-474.txt`, cut by `etw-present-windows.py` into `split-474.txt`). Each
@@ -141,7 +141,7 @@ The two "about" rows are sums of measured steps, not measured frames.
 
 ## Unusual events
 
-- **468 did not run.** The owner's display mode changes moved the KMD epoch between run-m157's start-confirm step
+- **468 did not run.** Manual display mode changes moved the KMD epoch between run-m157's start-confirm step
   and the Capture witness (health flags 7, the confirmed bit missing). The start was confirmed again, and 469 ran the
   same arm.
 - **Postflight refusal after every session.** The game's exclusive 1920x1080 does a real mode commit (stretched to
@@ -156,7 +156,7 @@ The two "about" rows are sums of measured steps, not measured frames.
 - **475 (rtwave64) was refused before any GPU work.** The preflight's stale-marker gate (from trial 251) admits a
   RADV_PERFTEST marker only when it is newer than the attempt directory that the push creates. The runner wrote it
   before the push. `run-arm.sh` now writes it when run-slot prints "package flushed" (476).
-- **Owner key presses at the intro.** In 474 the owner pressed Space three times at the intro trailers, and in 476
+- **Manual key presses at the intro.** In 474 an operator pressed Space three times at the intro trailers, and in 476
   once at about 01:28Z while the game waited at the intro. Both presses came before the menu. No measurement window
   contains them.
 - **474 operator events.** One Esc did not open the pause menu, and the next Esc opened the LOAD GAME list.

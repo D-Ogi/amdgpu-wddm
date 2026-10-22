@@ -9,7 +9,7 @@ Original scratch/m9/warm07104-run.log remains the ongoing stream; observation-1
 is an immutable partial copy. No Windows reboot was requested.
 
 Full configured local /24TCP22 discovery finds one SSH listener and zero matching
-pinned lab identities, so no configuration update. Owner monitor/mouse observation
+pinned lab identities, so no configuration update. Visual monitor/mouse observation
 requested, no reset yet. Read-only warm07104-recover.ps1 prepared for persisted
 logs since02:14 plus before.log; NOT executed. Exact stop/start failure stage is
 unknown. M328 first full startup and M329 contents remain accepted, but current

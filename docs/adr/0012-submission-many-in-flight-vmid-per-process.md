@@ -1,6 +1,6 @@
 # ADR 0012: submission - many in flight, a VMID per process, the flush on the ring
 
-Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 4 at the owner's suggestion).
+Date: 2026-09-22. Status: **accepted** (split out of ADR 0010 point 4 on request).
 
 ## Context
 

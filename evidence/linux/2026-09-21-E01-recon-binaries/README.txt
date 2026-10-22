@@ -5,4 +5,4 @@ Binary captures from unit A, same SSH session as ../2026-09-21-E01-recon/ (SHA-2
 - gca_config.bin    debugfs amdgpu_gca_config (first 144 bytes are all there is)
 
 Deliberately absent: the VBIOS (debugfs amdgpu_vbios) and the ACPI VFCT table, which embeds the same VBIOS image.
-AMD's VBIOS is not ours to redistribute; both stay in the owner's private firmware folder.
+AMD's VBIOS is not ours to redistribute; both stay in a private firmware folder outside the repository.

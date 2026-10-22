@@ -13,4 +13,4 @@ the port advertises Win32 export only for timeline semaphores (OPAQUE_WIN32 and 
 handles, so the CTS touches the fence-share change only through the info query.
 
 Open: whether binary-semaphore export matters to DXVK or vkd3d-proton before spending work on it; promotion of the
-candidate still waits for the owner's word.
+candidate still waits for a decision.

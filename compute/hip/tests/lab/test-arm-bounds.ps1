@@ -147,7 +147,7 @@ try {
     $capped = $true
 }
 Check $capped 'the supervisor refuses a 500 s arm, cleanup included'
-# The shipped default, against the owner's ceiling. Everything inside the arm is clipped to the
+# The shipped default, against the 180 s ceiling. Everything inside the arm is clipped to the
 # deadline, so the only overrun left is the tail slack: the default bound plus that slack has to
 # stay inside the 180 s of a non-game lab trial. The review of 2026-10-10 counted about 188 s for
 # the defaults of the first version of this library.
@@ -373,7 +373,7 @@ $r = & $arm -Name 'hot-but-not-held' -Dir $WorkDir -Exe 'stub.cmd' -BoundSec 30 
 Check ($r.verdict -eq 'DONE') "a hot sample that does not hold lets the arm finish (verdict $($r.verdict), reason '$($r.stop_reason)')"
 Check ($r.tctl_max -ge 87.0) "and the hot sample is still in the report (max $($r.tctl_max) C)"
 
-# The defaults of the rule are the owner's numbers, not the test's.
+# The defaults of the rule are the project's numbers, not the test's.
 $meta = (Get-Command Invoke-LabArm).Parameters
 Check ($meta['HotHoldSec'].Attributes.Count -ge 0) 'Invoke-LabArm takes a hold time'
 $defaults = (Get-Command Invoke-LabArm).ScriptBlock.Ast.Body.ParamBlock.Parameters |

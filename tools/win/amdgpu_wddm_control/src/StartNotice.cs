@@ -1,5 +1,5 @@
 // The notice the person sees at sign-in when the graphics driver is not running, and the rule that decides which
-// notice it is (owner, 2026-10-13: "Uzytkownik musi byc tego swiadomym od razu"). Pure: no window, no registry, no
+// notice it is. Pure: no window, no registry, no
 // driver. NoticeForm.cs draws it, Program.cs (--start-notice) reads the computer and calls Decide here.
 //
 // Why a notice exists at all. The driver counts every start that nothing confirmed (driver/kmd/guard.c

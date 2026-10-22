@@ -11,7 +11,7 @@ reports VCN firmware `0x00000000` (facts M46), and Media Foundation on unit A of
 encoder at all today (facts M774). So the encoder is **compute**: motion estimation, intra and inter
 prediction, the forward and inverse transform, quantisation, reconstruction and the deblocking filter
 are eight Direct3D 11 compute shaders. Entropy coding (CAVLC) and bitstream assembly are on the CPU,
-which the owner accepted on 2026-10-01.
+an accepted design decision of 2026-10-01.
 
 Output: H.264 Constrained Baseline, one slice per picture, I and P pictures, CAVLC. No CABAC, no
 B pictures, no HEVC.

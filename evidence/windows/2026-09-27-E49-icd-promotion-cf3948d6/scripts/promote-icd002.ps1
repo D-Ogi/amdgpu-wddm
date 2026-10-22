@@ -1,6 +1,6 @@
 # Promote the registered Vulkan ICD C:\BC250\m10\wsi-final\vulkan_radeon.dll from 93B1D1FD (M569, kmt-enum
 # c34ab7cd) to CF3948D6 (fork branch amdgpu-wddm/radv-wddm2-gdi-immediate 2732f9c8: exportable monitored
-# fences, per-present timing log, IMMEDIATE present mode on the GDI path). Owner's decision 2026-09-27.
+# fences, per-present timing log, IMMEDIATE present mode on the GDI path). Decision 2026-09-27.
 # Same procedure as E38 promote-icd001.ps1:
 # - the old file stays next to the active one as vulkan_radeon.93B1D1FD.dll (present since M569; hash checked,
 #   rollback: copy it back over the active file);

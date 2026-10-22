@@ -33,7 +33,7 @@ These are observed desktop samples, not a fixed-animation matched benchmark.
 Initial shader compilation still produces large costs (frame8 draw2.531s).
 Inter-Present gaps include idle time and are not render duration.
 
-The owner explicitly confirms fluid mouse motion with the overlay visible.
+A visual check confirms fluid mouse motion with the overlay visible.
 Same-process, two-device shared red/blue reads have0/2048 mismatches each;
 green staging0/307200, Present and device-removed status0, control native exit0.
 Actual scanout shows desktop/overlay and the green control. Concurrent64KiB

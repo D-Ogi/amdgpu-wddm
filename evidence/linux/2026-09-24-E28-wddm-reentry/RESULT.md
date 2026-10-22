@@ -18,7 +18,7 @@ After successful unload, deferred filters were explicitly rearmed. Second modpro
 
 The VMID branch is observed to retain15 on reload, consistent with the Windows7-versus8 RLC-stage writes. It is not evidence that this skipped redundant write causes the hang.
 
-USB EFI loader had already been renamed back to bootx64.off before unload, preserving Windows fallback. One owner-authorized AC cycle restored relay ON; recovery record included. The original second-load SSH transport may remain waiting after the power cycle; no duplicate modprobe was launched. Windows readiness is recorded separately after it returns.
+USB EFI loader had already been renamed back to bootx64.off before unload, preserving Windows fallback. One authorized AC cycle restored relay ON; recovery record included. The original second-load SSH transport may remain waiting after the power cycle; no duplicate modprobe was launched. Windows readiness is recorded separately after it returns.
 
 ## Changes and limits
 

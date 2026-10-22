@@ -34,4 +34,4 @@ then a separately gated GPU Present trial. Full G0 remains open.
 JSON/closure receipts are copied unchanged; selected text preserves original
 relevant lines with source filenames and UTF-8 decoding. Complete raw archive
 and control logs remain private under scratch/g0-hosted. No selected values
-were redacted. This run did not request or receive an owner visual verdict.
+were redacted. This run did not request or receive a visual verdict.

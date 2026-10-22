@@ -1,5 +1,5 @@
-// A condensed, live view of bc250kmd's own state (owner's request, 2026-09-22: "the overlay should tell what
-// the driver is doing and in what state/mode it is"). KmdProvider.cs already reads the registry trail, which
+// A condensed, live view of bc250kmd's own state (2026-09-22: the overlay tells what
+// the driver is doing and in what state and mode it is). KmdProvider.cs already reads the registry trail, which
 // survives even a driver that stopped answering; this one asks the driver itself, through bc250kmd_cli info
 // (BC250_ESCAPE_GET_INFO), for the things the registry does not carry: version, display-only vs full WDDM
 // table, which gates are open, and the full table's own present counters (blits, flips). Temperature comes

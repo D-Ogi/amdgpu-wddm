@@ -3,7 +3,7 @@
 
     python lab\\run-frameloop.py quick|mt|gap [--trial NAME] [--dry-run]
 
-What it does, in one SSH call each: the owner's STOP flag, a line on the overlay, the client and a plan file
+What it does, in one SSH call each: the STOP flag, a line on the overlay, the client and a plan file
 pushed to C:\\BC250\\frameloop, lab\\frameloop-task.ps1 run there (it starts every configuration as a one-shot
 scheduled task in the console session, because an SSH session is session 0 and can show no window), the result
 archive pulled back into lab\\runs\\<trial>, and one summary row per configuration.
@@ -111,7 +111,7 @@ def sha256(path):
 
 
 def monitor(args, check=False):
-    """One mon.py call. The overlay is how the owner sees what the lab is about to do; a monitor that is not
+    """One mon.py call. The overlay is how a person at the lab sees what it is about to do; a monitor that is not
     answering must not stop a trial, so only the STOP gate is checked."""
     done = subprocess.run([sys.executable, str(TOOLS_WIN / "bc250mon" / "mon.py")]
                           + [str(a) for a in args], cwd=str(ROOT), capture_output=True, text=True,
@@ -394,7 +394,7 @@ def main(argv):
 
     stop = monitor(["stop?"])
     if "no stop request" not in stop.stdout:
-        fail("the owner asked to stop: " + (stop.stdout + stop.stderr).strip()[:200])
+        fail("a stop was requested: " + (stop.stdout + stop.stderr).strip()[:200])
     monitor(["status", "frameloop %s: %d runs, about %d s, the screen will be covered"
              % (set_name, len(runs), budget), "info"])
     monitor(["log", "frameloop trial %s, client %s" % (trial, plan["exe_sha256"][:8])])

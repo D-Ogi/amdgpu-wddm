@@ -11,7 +11,7 @@ primary and GDI screenshot. Eight dynamic BMP/PNG samples and both final capture
 pass the cyan-shape check. CPU baseline shape fails fill0.9286 (33044pixels in bbox
 632,169,888,308); preserve this failed control. Banded primary capture can mix surfaces
 (M593); this record does not independently establish that as the cause. There is no
-owner visual verdict or coherent whole-desktop pixel oracle for032.
+visual verdict or coherent whole-desktop pixel oracle for032.
 
 Execution:3372 matched DWM-owned DMA start/stop pairs, matching IDs,zero trace loss,
 no pending/unmatched/duplicate pairs.58 sampled queue-fence records are monotonic

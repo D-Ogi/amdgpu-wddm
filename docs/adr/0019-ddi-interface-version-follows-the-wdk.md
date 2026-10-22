@@ -1,7 +1,7 @@
 # ADR 0019: the kernel driver compiles and declares the newest WDDM DDI version the WDK offers
 
-Date: 2026-09-27. Status: accepted direction (owner decision of 2026-09-27: "it should definitely be a higher
-version, we want bleeding edge"). Supersedes ADR 0008 point 2. The move itself is engineering work with its own
+Date: 2026-09-27. Status: accepted direction (decision of 2026-09-27: a higher
+version, the newest the WDK offers). Supersedes ADR 0008 point 2. The move itself is engineering work with its own
 experiments; nothing here is measured unless it cites a `facts.md` row.
 
 ## Context
@@ -10,7 +10,7 @@ ADR 0008 point 2 (2026-09-21) fixed the binary at `DXGKDDI_INTERFACE_VERSION_WDD
 introduced GpuMmu, with every later member structurally absent", and deferred any move to "a later decision with
 its own reason". The reason has arrived from two sides:
 
-- The owner's standing direction (2026-09-24) prefers bleeding-edge versions where practical and treats historical
+- The project's standing direction (2026-09-24) prefers bleeding-edge versions where practical and treats historical
   pins as temporary, to be removed with evidence.
 - The graphics stack after M12 (ADR 0017: hosted ICD for the desktop, system D3D11 on DXVK, native D3D12 on
   vkd3d-proton) meets dxgkrnl features that arrived after WDDM 2.0: the later present, flip-queue and

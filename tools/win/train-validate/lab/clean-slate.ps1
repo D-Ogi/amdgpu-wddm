@@ -1,4 +1,4 @@
-# The owner's installer test (2026-10-06) as three calls: remove everything of amdgpu-wddm from the lab, then
+# The clean-slate installer test (2026-10-06) as three calls: remove everything of amdgpu-wddm from the lab, then
 # install the release fresh from its package. The uninstaller is the INSTALLED one of the release on the lab
 # (lead, 2026-10-08). The C:\BC250 harness stays. Generic: the package name and the directory it was pushed to
 # are arguments, so one copy serves every train. Steps, each one call (bounded well under three minutes):
@@ -21,7 +21,7 @@ $ErrorActionPreference = 'Continue'
 if ($Step -eq 'install' -and -not $Name) { 'clean-slate: -Name is needed for the install step'; exit 2 }
 $root = $Root
 $pkg = "$root\$Name"
-# The zip unpacks to <pkg>\setup.exe and <pkg>\files\ (owner, 2026-10-11): the installer scripts live under files\.
+# The zip unpacks to <pkg>\setup.exe and <pkg>\files\ (2026-10-11): the installer scripts live under files\.
 # A package built before that layout has them in <pkg> itself. Asked after the expansion, never before.
 function Get-PackageFilesDir { if (Test-Path -LiteralPath "$pkg\files\manifest.json") { return "$pkg\files" } return $pkg }
 # Query package fields, never pnputil's translated display labels.

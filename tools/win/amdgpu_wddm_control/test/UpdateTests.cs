@@ -32,7 +32,7 @@ static partial class UnitTests
         Equal(0, cmp("v0.7.199.100-tester.11", "0.7.199.100-tester.11"), "the v prefix does not change the version");
         Equal("amdgpu-wddm-tester-0.7.199.100-tester.11.zip", ReleaseVersion.Parse("v0.7.199.100-tester.11").AssetName, "tester asset name");
         Equal("amdgpu-wddm-0.8.0.0.zip", ReleaseVersion.Parse("0.8.0.0").AssetName, "stable asset name");
-        // A second issue of a tester build (owner 2026-10-13: 0.7.216.100-tester.29v2 carries the tester.30 work).
+        // A second issue of a tester build (0.7.216.100-tester.29v2 carries the tester.30 work).
         Check(ReleaseVersion.Parse("v0.7.216.100-tester.29v2") != null && ReleaseVersion.Parse("0.7.216.100-tester.29v12") != null, "a second issue of a tester build parses");
         foreach (var bad in new[] { "0.7.216.100-tester.29v1", "0.7.216.100-tester.29v0", "0.7.216.100-tester.29v", "0.7.216.100-tester.29V2", "0.7.216.100-tester.29v2a", "0.7.216.100v2" })
             Check(ReleaseVersion.Parse(bad) == null, "tag refused: " + bad);

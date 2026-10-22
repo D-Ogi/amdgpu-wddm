@@ -1,4 +1,4 @@
-// Graphics and Vulkan settings for all games and for one game (the owner's registry contract of 2026-10-08). Pure:
+// Graphics and Vulkan settings for all games and for one game (the registry contract). Pure:
 // no registry access here. RecoveryProbe reads the keys into the snapshot (GfxKeys), Recovery.Plan plans the writes
 // through PlanWrites, and the elevated helper writes them.
 //
@@ -21,7 +21,7 @@
 //   MemoryOverflow is not offered in this release (AwaitingIcd below).
 //
 // An absent value is "Application decides" (the driver's default); a game's own value wins over the one for all
-// games. The settings rule (owner, 2026-10-03): nothing is written for "Application decides" or "Same as all games",
+// games. The settings rule: nothing is written for "Application decides" or "Same as all games",
 // choosing it removes the value, and a game's key with no values left is removed. A stored value outside the
 // contract shows as not valid and is never rewritten unless the person chooses another value.
 using System;
@@ -123,7 +123,7 @@ namespace AmdgpuWddmControl
             new GfxSetting { Name = "PerformanceOverlay", Id = "overlay", Root = GraphicsPath, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             new GfxSetting { Name = "RenderOnCpu", Id = "cpu-render", Root = GraphicsPath, GameFirst = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             // How Vulkan games present, for all games at once. The system Vulkan ICD (64-bit, and 32-bit from tester.31)
-            // presents through DXGI when the value is absent (BD-197: the owner's decision of 2026-10-07, back once the
+            // presents through DXGI when the value is absent (BD-197: the decision, back once the
             // route presented on the lab), so "Fast (flip)" is the absent value and "Compatible" (gdi) the rollback a
             // person stores. A stored gdi stays gdi. A DXGI chain that fails falls back to GDI by itself, per swapchain.
             new GfxSetting { Name = "WsiRoute", Id = "vk-present", Root = VulkanPath, Text = true, GlobalOnly = true, SameAsAbsent = "dxgi", AbsentTextId = "gfx.choice.flip-default",
@@ -131,7 +131,7 @@ namespace AmdgpuWddmControl
         };
 
         // MemoryOverflow is not offered. The system Vulkan ICD does not read it: only the RADV inside the D3D11 and
-        // D3D12 drivers does. The owner's GUI rule is no control that does nothing or works only for some programs, so
+        // D3D12 drivers does. The GUI rule is no control that does nothing or works only for some programs, so
         // it is not in All: no row, no search entry, no write and no --gfx name. The support report still lists its
         // stored values. It goes back into All when its ICD makes it a control that works for every program.
         public static readonly GfxSetting[] AwaitingIcd =

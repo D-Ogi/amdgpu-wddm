@@ -22,7 +22,7 @@
       "clang-cl": {"options": ["-Db_lto=true", "-Dallow-broken-lto=true", "-Db_lto_mode=thin"]}
     },
     "isa": {
-      "description": "the x86-64-v3 instruction set, the CPU requirement of the project (owner, 2026-10-21): /arch:AVX2 with MSVC; with clang-cl, -march=x86-64-v3 (AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE), tuned for Zen 2. Never -march=znver2 or -march=native: znver2 adds SSE4a, which Intel CPUs do not have, and native is the CPU of the build machine",
+      "description": "the x86-64-v3 instruction set, the CPU requirement of the project: /arch:AVX2 with MSVC; with clang-cl, -march=x86-64-v3 (AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE), tuned for Zen 2. Never -march=znver2 or -march=native: znver2 adds SSE4a, which Intel CPUs do not have, and native is the CPU of the build machine",
       "msvc": {"c_args": ["/arch:AVX2"]},
       "clang-cl": {"c_args": ["-march=x86-64-v3", "-mtune=znver2"]}
     }

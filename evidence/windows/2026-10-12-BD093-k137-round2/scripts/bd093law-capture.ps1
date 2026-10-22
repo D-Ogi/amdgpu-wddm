@@ -12,7 +12,7 @@
 #   clockcap  the ground truth injection: a real CPU clock ceiling of 2800 MHz through the KMD's own
 #             allow-listed setter, with the law measured under it and the ceiling released again. The one
 #             step of this script that writes anything, and it writes through the KMD as the single SMU
-#             owner, inside the owner's pre-approved CPU clock space, with the driver's own trial window as
+#             owner, inside the pre-approved CPU clock space, with the driver's own trial window as
 #             the dead-man revert.
 #   load      the GPU load coupling arm: the law measured while the GPU runs a fixed load, so state A can
 #             be taken at a GFX island power at or above state B's idle island power.

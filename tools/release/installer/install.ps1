@@ -21,7 +21,7 @@
 # completes, that copy stays as the repair set. On the command line a restart starts by itself after a visible 15 s
 # countdown (any key puts it off) and is a normal, planned restart (never a forced one).
 #
-# Nothing in this engine asks the user for a permission (owner, 2026-10-12): running it IS the consent for the test
+# Nothing in this engine asks the user for a permission: running it IS the consent for the test
 # mode the driver needs and for the BitLocker pause that the boot-option change needs (Get-BitLockerPlan). The
 # switches that used to carry those answers, -AcceptTestSigning and -BitLocker, are still accepted so that every
 # script that passes them keeps running. A preflight check that fails still refuses the install: a machine this
@@ -47,19 +47,19 @@ param(
     [ValidateSet(0, 24, 40)][int]$CuMode = 0,  # 0 = not given: the release default of registry-defaults.json
     [string]$InstallRoot = (Join-Path $env:ProgramFiles 'amdgpu-wddm'),
     [switch]$NoControlApp,
-    # The shortcuts of the control application (owner, 2026-10-12). Both places are written by default. The two No
+    # The shortcuts of the control application. Both places are written by default. The two No
     # switches leave one out, and the two positive ones state the default explicitly, so a later run can put back a
     # shortcut that an earlier one left out (the state keeps the first answer, as it does for the Windows tuning).
     [switch]$NoStartMenuShortcut,
     [switch]$StartMenuShortcut,
     [switch]$NoDesktopShortcut,
     [switch]$DesktopShortcut,
-    # The Nagi wallpaper (owner, 2026-10-13), recorded for Nagi Control App, which sets it once for each person after
+    # The Nagi wallpaper, recorded for Nagi Control App, which sets it once for each person after
     # the install is verified. On by default; -NoWallpaper leaves it out and -Wallpaper states the default, as the
     # shortcut pairs do.
     [switch]$NoWallpaper,
     [switch]$Wallpaper,
-    # The picture on the start screen (owner, 2026-10-14), drawn by the driver itself. On by default; -NoBootLogo
+    # The picture on the start screen, drawn by the driver itself. On by default; -NoBootLogo
     # writes Parameters\BootLogo = 0 and -BootLogo removes that value, which is the release default. Neither switch
     # keeps what the installed driver already has, so a reinstall or an upgrade keeps an earlier choice.
     [switch]$NoBootLogo,
@@ -199,7 +199,7 @@ function Invoke-Preflight {
     else { Add-Check 'administrator' 'fail' 'not elevated' 'admin.missing' }
 
     $os = Get-CimInstance Win32_OperatingSystem
-    # The support policy of the owner, 2026-10-11 (n-2) and 2026-10-12 (older Windows 11: a line, not a refusal).
+    # The Windows support policy (n-2; an older Windows 11 gets a line, not a refusal).
     # Get-WindowsSupportFindings in common.ps1 decides; the ids below are the whole set it can return.
     $win = Get-WindowsSupportState -Os $os
     foreach ($f in @($win.findings)) {
@@ -266,8 +266,7 @@ function Invoke-Preflight {
     elseif ($sac.state -eq 'unknown') { Add-Check 'Smart App Control' 'warn' "state unknown: $($sac.detail). If Windows blocks the setup or the driver, $sacSteps." 'smartappcontrol.unknown' }
     else { Add-Check 'Smart App Control' 'ok' $sac.detail 'smartappcontrol.off' }
 
-    # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused (owner, 2026-10-12:
-    # "powinien byc auto-installer!!!"): the package carries Microsoft's own installer and phase 2 runs it. The only
+    # The Microsoft Visual C++ runtime our programs need. A PC without it is no longer refused: the package carries Microsoft's own installer and phase 2 runs it. The only
     # refusal left is a package that does not carry that installer, or carries a changed copy of it.
     $vc = Get-VcRuntimeState
     $vcExe = Join-Path $package $script:VcRuntimePackagePath
@@ -532,7 +531,7 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     Write-Host "A restart is needed: $Why" -ForegroundColor White
     if ($script:GuiMode) { Write-Info 'the setup window offers the restart'; return }
     if ($script:DryRunMode -or $NoReboot) { Write-Info 'restart the computer yourself; the installer continues after you log on again'; return }
-    # The restart starts by itself after a visible countdown (owner, 2026-10-12): nothing waits for an answer here
+    # The restart starts by itself after a visible countdown: nothing waits for an answer here
     # either. A key press during the countdown puts the restart off, Enter starts it at once.
     $go = (Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now'
     if ($go) {
@@ -541,7 +540,7 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     } else { Write-Info 'restart later; the installer continues after you log on again' }
 }
 
-# ---- automatic diagnostics of a start that did not pass (owner, 2026-10-12) -------------------------------------
+# ---- automatic diagnostics of a start that did not pass -------------------------------------
 # "The installer must collect the logs itself when the install does not pass": the readings verify has already taken
 # decide it (diagnostics.ps1 Get-StartFailureDecision), and when they show a driver that did not start, ONE
 # diagnostics file is written for this run, next to the installer's log. The engine names it in result.json, the
@@ -1012,7 +1011,7 @@ if ($script:VerifyOnly) {
 # ---- the decision (GUI plan A2) ------------------------------------------------------------------------------------
 # Everything this run will do comes from here, before any change: the action, the restarts, where the firmware comes
 # from, and what happens to each setting (WU-006, WU-044). -Plan stops after it. Nothing here asks the user for a
-# permission (owner, 2026-10-12); the consent list of the decision event stays, empty, for the engine contract.
+# permission; the consent list of the decision event stays, empty, for the engine contract.
 function Get-InstallSettingsImpact {
     $tbl = Get-Content -LiteralPath (Join-Path $here 'registry-defaults.json') -Raw | ConvertFrom-Json
     $prev = Get-PreviousAppliedDefaults $tbl ((Get-ItemProperty -LiteralPath "$($script:SoftwareKey)\Release" -Name AppliedDefaults -ErrorAction SilentlyContinue).AppliedDefaults)
@@ -1039,7 +1038,7 @@ function Get-InstallSettingsImpact {
     }
     return (Get-SettingsImpact $groups)
 }
-# No consent is asked for any more (owner, 2026-10-12): starting this installer IS the consent for the test mode the
+# No consent is asked for any more: starting this installer IS the consent for the test mode the
 # driver needs and for the BitLocker pause the boot-option change needs. The list stays in the decision event, empty,
 # because it is part of the engine contract (interfaces-setup.md A2) and because a future change that really needs an
 # answer belongs in it; the gate below still stops a window run that did not give one. What this install changes is
@@ -1256,7 +1255,7 @@ if ($state.phase -eq 'new') {
         Set-StateValue $state 'testsigning_set_by_installer' $false
         Save-Phase 'testsigning-active'
     } else {
-        # No question here (owner, 2026-10-12): a person who started this installer wants the driver, and the driver
+        # No question here: a person who started this installer wants the driver, and the driver
         # needs the test mode. The two lines say what happens, and it happens. -AcceptTestSigning stays accepted so
         # that every script that passes it still runs; it changes nothing now.
         Write-Host ''
@@ -1318,7 +1317,7 @@ if (-not $script:DryRunMode -and -not $script:TestSigningActive) {
     Exit-Engine -Code 5 -Outcome 'failed' -MessageId 'result.testsigning-not-active' -Detail 'phase 2 needs test signing in the running boot'
 }
 # The Microsoft Visual C++ runtime, before our own files go on the PC: our control application, the CLI and the
-# user-mode drivers need it (owner, 2026-10-12: "powinien byc auto-installer!!!"). Microsoft's own installer travels
+# user-mode drivers need it. Microsoft's own installer travels
 # in the package; it runs only when the runtime is missing or older than 14.44, and only after its SHA-256 and its
 # Microsoft signature are checked here again, so a changed copy never runs. A code that asks for a restart is folded
 # into the restart this installation makes at the end of phase 2.
@@ -1729,7 +1728,7 @@ Invoke-Change 'apply release setting policy through the validated shared-state r
 # later control-app choice deleted (BD-175).
 }
 
-# The picture on the start screen (owner, 2026-10-14). Not in registry-defaults.json: its default is the absent
+# The picture on the start screen. Not in registry-defaults.json: its default is the absent
 # value, so the installer removes the value for on and writes 0 for off, and a run that states no answer leaves the
 # installed driver's answer alone (common.ps1). The driver reads it when it starts, so the choice shows at the next
 # start of Windows. A driver setting, not a per-person one: it is applied whether or not the control application is
@@ -2110,8 +2109,7 @@ if ($logonRegistered.Count -and @(Get-CimInstance Win32_Process -Filter "Name='e
     }
 }
 
-# The control application: a Start menu entry and a desktop icon, both on unless a switch leaves one out (owner,
-# 2026-10-12: "domyslnie i menu start i pulpit"). The recovery entry (docs/gui/interfaces.md section 4; it never
+# The control application: a Start menu entry and a desktop icon, both on unless a switch leaves one out. The recovery entry (docs/gui/interfaces.md section 4; it never
 # loads bc250control.dll) belongs to the Start menu alone. Nothing resident is installed either way.
 $controlExe = $null
 if ($script:Manifest -and $script:Manifest.control_app_exe) { $controlExe = Join-Path $InstallRoot ('control\' + $script:Manifest.control_app_exe) }

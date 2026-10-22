@@ -1,6 +1,6 @@
 # M659 - DWM028 GPU Present admission succeeded, busy rejection caused recovery
 
-Unit A, 2026-09-27. Exact KMD163 source2c3849a, SYSB602D9A0 (full identity M657), runnerd175c87/manifest160207f. Trial ended in VIDEO_TDR_FAILURE0x116, not a completed180-second run. No owner visual verdict, no promotion, G0 open.
+Unit A, 2026-09-27. Exact KMD163 source2c3849a, SYSB602D9A0 (full identity M657), runnerd175c87/manifest160207f. Trial ended in VIDEO_TDR_FAILURE0x116, not a completed180-second run. No visual verdict, no promotion, G0 open.
 
 ## Observations
 

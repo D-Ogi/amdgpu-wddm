@@ -1,4 +1,4 @@
-// The GPU telemetry line (owner's request, 2026-09-30): Tctl, GPU load, GFX clock and VRAM in use, cheap enough
+// The GPU telemetry line (2026-09-30): Tctl, GPU load, GFX clock and VRAM in use, cheap enough
 // to stay on the screen during a game. The desktop is composed on the CPU by DWM, so repaints are the expensive
 // part: a 230x22 heartbeat window repainted every 250 ms ran through trials 139/140 with DWM at 28 % of the
 // machine against 4 % without it. This line is therefore sampled four times a second but published at most

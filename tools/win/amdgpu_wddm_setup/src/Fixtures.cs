@@ -45,8 +45,7 @@ namespace AmdgpuWddmSetup
                 ",\"mutated\":" + (mutated ? "true" : "false") + ",\"nothing_changed\":" + (mutated ? "false" : "true") + ",\"message_id\":\"" + message + "\"" + extra + "}";
         }
 
-        // windowsChecks: the lines the Windows support policy can add (owner, 2026-10-11 n-2, and 2026-10-12 "tylko
-        // warning, nie blokada"). "ok" is the ordinary PC. "not-tested" is a Windows 11 older than 22631, an Insider
+        // windowsChecks: the lines the Windows support policy can add. "ok" is the ordinary PC. "not-tested" is a Windows 11 older than 22631, an Insider
         // build and an LTSC edition at once, so one screen covers all three information lines.
         // sac: the Smart App Control line (install.ps1): "off" is the ordinary PC, "evaluation" and "unknown" add the
         // note and its help card to the plan screen.
@@ -145,7 +144,7 @@ namespace AmdgpuWddmSetup
 
         public static List<Fixture> All()
         {
-            // No consent is asked for any more (owner, 2026-10-12), so the engine's decision names none: these
+            // No consent is asked for any more, so the engine's decision names none: these
             // fixtures carry the empty list the engine now writes, and the plan screens below hold no control that
             // asks the user for one. A BitLocker state of "on" or "unknown" is information on the screen, not a
             // question: the upgrade fixture carries "on", the install one "unknown" (PlanEvents).
@@ -167,7 +166,7 @@ namespace AmdgpuWddmSetup
                 new Fixture { Name = "plan-upgrade", RunKind = "plan", Screen = Screen.Plan, PlanEvents = planUpgrade, PlanResult = planned },
                 new Fixture { Name = "plan-already", RunKind = "plan", Screen = Screen.Plan, PlanEvents = PlanEvents("already", Version, "", "download", false), PlanResult = planned },
                 // A Windows the driver is not tested on: older than 23H2, an Insider build and an LTSC edition. The
-                // three lines are information and the Install button stays on (owner, 2026-10-12).
+                // three lines are information and the Install button stays on.
                 new Fixture { Name = "plan-windows-not-tested", RunKind = "plan", Screen = Screen.Plan,
                     PlanEvents = PlanEvents("install", null, "", "download", false, "not-tested"), PlanResult = planned },
                 // Smart App Control in evaluation mode, and in a state setup could not read: a note each, with the

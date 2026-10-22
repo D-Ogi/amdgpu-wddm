@@ -1,5 +1,5 @@
 # What DWM composes over the start window after logon, frame by frame, with and without the poll of the start
-# confirmation (owner, 2026-10-14: "the blue bar flashes for one or two frames every 6-8 s"). Windows PowerShell 5.1,
+# confirmation (2026-10-14: the blue bar flashes for one or two frames every 6-8 s). Windows PowerShell 5.1,
 # over ssh (elevated, session 0), bounded to three minutes:
 #
 #   python tools\win\target.py push <build>\flash-watch.exe tools\win\app-launch\poll-repro.ps1 tools\win\app-launch\dpm-sample.ps1 <fixed>\start-window.ps1 --to C:\BC250\tmp\flash-kit

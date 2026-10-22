@@ -19,7 +19,7 @@ static partial class UnitTests
     static void StartNoticeTests(string root)
     {
         // ---- the decision: case A, case B, and every state that shows nothing -----------------------------------
-        // Case A is the state the owner asked about: the guard refused the start and Windows is on its basic
+        // Case A is the main case: the guard refused the start and Windows is on its basic
         // display. It is reached by either witness, because the two are written at different moments: the count
         // reaches the limit before the refusing start, and the refusing start records the stage.
         Equal(StartNoticeCase.Guard, StartNotice.Decide(Reading(false, 2, 90)), "case A: the count at the limit and the refusing stage");
@@ -67,7 +67,7 @@ static partial class UnitTests
         Strings.Language = before;
 
         // ---- the sign-in task starts the notice and shows nothing else ---------------------------------------------
-        // The blue start window is gone (owner, 2026-10-22): the release's sign-in script starts the notice and
+        // The blue start window is gone: the release's sign-in script starts the notice and
         // has no window, no switch and no preference of its own.
         var windowScript = Path.Combine(root, @"tools\release\installer\start-window.ps1");
         if (File.Exists(windowScript))
@@ -190,7 +190,7 @@ static partial class UnitTests
             .Sum(rx => int.Parse(Regex.Match(actionsSource, rx).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture));
         Check(budget > 120 && budget <= 240, "the repair's own budget is " + budget + " s, inside the four minutes the window promises");
         Check(Strings.In("en", "notice.working").Contains("four minutes"), "the window names a bound the helper keeps");
-        // Case A is on the screen at once (owner, 2026-10-13: "od razu"); only the case that a driver still inside
+        // Case A is on the screen at once; only the case that a driver still inside
         // its own start looks like waits out the poll. And the layout gate of the window covers the text scale of
         // Windows, which is the setting that makes a button's words outgrow its row.
         var programSource = File.ReadAllText(Path.Combine(root, @"tools\win\amdgpu_wddm_control\src\Program.cs"));

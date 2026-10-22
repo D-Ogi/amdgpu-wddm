@@ -1,8 +1,8 @@
 # Time to the first window
 
 How soon Nagi Control App and the single-file setup show their first window on the lab, cold and warm, and whether a
-second start of the control app opens nothing and brings the first one forward. The owner asked for the three
-changes this measures on 2026-10-14: a loading window as soon as possible in both programs, and one control app per
+second start of the control app opens nothing and brings the first one forward. The three
+changes this measures date from 2026-10-14: a loading window as soon as possible in both programs, and one control app per
 session.
 
 ```
@@ -43,7 +43,7 @@ records `first-window-ms` without a real screen.
 
 # Flashes of the start window
 
-What DWM composes over the small blue window after logon (`start-window.ps1`), frame by frame. The owner saw that
+What DWM composes over the small blue window after logon (`start-window.ps1`), frame by frame. A visual check on the lab monitor showed that
 window flash for one or two frames every 6 to 8 seconds (2026-10-14). The measurement puts each flash next to the
 poll of the start confirmation (`start-confirm.ps1`), which runs at the same time after a logon.
 

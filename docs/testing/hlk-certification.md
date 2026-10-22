@@ -1,7 +1,7 @@
 # HLK and WHCP certification plan
 
 This page records the Microsoft rules that apply to a WHCP submission of a graphics adapter driver. It lists the
-HLK test areas for such a driver and the order in which we plan to run them. The owner collected the research on
+HLK test areas for such a driver and the order in which we plan to run them. The research was collected on
 2026-10-12. Each policy claim was then compared with the cited Microsoft page on the same day. A claim that we
 could not find on a Microsoft page carries the mark **Not verified**.
 
@@ -167,7 +167,7 @@ The latest dated results take precedence over older summaries. The table does no
 
 | ID | Requirement and source | Current state and evidence pointer | Work needed |
 | --- | --- | --- | --- |
-| E1 | Running controller and client. [HLK prerequisites](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/getstarted/windows-hlk-prerequisites), controller and test-system requirements. | **Setup.** Hyper-V activation needs the owner's host restart. The VHLK image is downloaded. The local environment record lists no running controller or registered client. | **S.** After the host restart, create the switch and VHLK VM. Install the matching client on 26200 and put it in a Ready pool. |
+| E1 | Running controller and client. [HLK prerequisites](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/getstarted/windows-hlk-prerequisites), controller and test-system requirements. | **Setup.** Hyper-V activation needs a manual host restart. The VHLK image is downloaded. The local environment record lists no running controller or registered client. | **S.** After the host restart, create the switch and VHLK VM. Install the matching client on 26200 and put it in a Ready pool. |
 | E2 | Client prerequisites and reliable return after test restarts. HLK prerequisites, test-system and network requirements. | **Setup.** The client scripts have not run. Default boot returns to 22631. The local environment record describes prepared prerequisite checks and boot selection. | **S.** Check language, networking, shares, account policy and storage. Keep 26200 selected through the campaign's restarts, then restore the previous boot policy. |
 | E3 | A working adapter and desktop on the full-run OS. Prerequisite for `WGF11 D3DWDDM` and the presentation jobs. | **Pending final package.** BD-135 r4 with BD-136 r1 now passes desktop controls on 22631, 26200 and 26300. R2 fixes r1's OOM contract and awaits lab validation. See the BD-136 results. | **M.** Check the replacement package on 26200, through login, rendering and device teardown. Keep CPU and GPU route results distinct. |
 | E4 | Device-selected tests, matching official playlist and current filters. [Select and run tests](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/getstarted/step-6-select-and-run-tests). | **Setup.** The local environment record lists downloaded playlist and filter files. No adapter test-list export or HLK result package exists in the reviewed inputs. | **S.** Import the matching files, select the installed adapter and export its test list. Record the package, kit and filters with each run. |
@@ -204,8 +204,8 @@ Interpretation limits matter when using this table:
 ### What blocks the first campaign
 
 E1, E2 and E4 block scheduling tests on the intended controller/client pair. E3 has passing r1 controls but needs acceptance of the replacement r2 package.
-The owner has approved the additional HLK disk budget, long campaigns and the client's required account setup.
-The host restart remains the owner's action. Those approved decisions are not open permission requests.
+The additional HLK disk budget, long campaigns and the client's required account setup are approved.
+The host restart remains a manual action. Those approved decisions are not open permission requests.
 
 The first campaign can record failures while implementation gaps remain. It need not wait for G1, V1, V2 or V3 to be complete.
 H1 and H2 limit certification coverage, but do not prevent an internal rendering run on the current single-board setup.

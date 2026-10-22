@@ -1,4 +1,4 @@
-# E22 run 002: one gated display flip (bc250kmd 0.7.20). Owner at the monitor. Display-only mode.
+# E22 run 002: one gated display flip (bc250kmd 0.7.20). Operator at the monitor. Display-only mode.
 # Gates: EnableMmio + EnableDcnWrite + EnableVram + EnableVramWrite = 1 for this device start; all closed after.
 $ErrorActionPreference = 'Continue'
 $cli = 'C:\BC250\kmd\bc250kmd_cli.exe'

@@ -1,7 +1,7 @@
 // dotprobe.hip - does gfx1013 silicon execute the GFX10.1 dot-product instructions that LLVM
 // says it does not have?
 //
-// Milestone M16, route B (owner decisions D014, D015). The question is not what the compiler
+// Milestone M16, route B (decisions D014, D015). The question is not what the compiler
 // permits: that is already measured (evidence/m16/gfx1013-dp4a-2026-10-09, clang refuses
 // __builtin_amdgcn_sdot4 for gfx1013 because the target has no dot1-insts feature). The question
 // is what the hardware does when the instruction bytes reach it anyway.

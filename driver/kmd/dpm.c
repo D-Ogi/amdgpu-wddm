@@ -1,14 +1,13 @@
 // DPM: a load-driven GFX clock between the lab floor (1000 MHz / 820 mV) and at most 2000 MHz
-// (docs/design/dpm.md). Owner decision 2026-09-30: The Witcher 3 with RT ran 91.5 % GPU-busy at the fixed
+// (docs/design/dpm.md). The reason: The Witcher 3 with RT ran 91.5 % GPU-busy at the fixed
 // 1000 MHz, so the clock was the limit.
 //
-// Since 0.7.207 an idle GPU runs at 500 MHz (owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu
-// zegar gpu na 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). The policy is in the shim
+// Since 0.7.207 an idle GPU runs at 500 MHz, the idle point. The policy is in the shim
 // (idle_step); this file feeds it the ring's state, reads its three registry settings, applies the point with the
 // same checked transaction as every other level, and reports the state in the telemetry and the escape.
 //
 // Since 0.7.205 the thermal cap alone may go under that floor, to 900 or 800 MHz at the floor's own 820 mV
-// (owner decision 2026-10-05, after RotTR scene 2 held 88 C with the governor already at 1000 MHz and the GPU
+// (since RotTR scene 2 held 88 C with the governor already at 1000 MHz and the GPU
 // 97 % busy). The firmware accepts both points (facts M785: session 402 held 800 and 900 MHz at VID 116
 // with no refusal), and 1000 MHz is only the lowest level the power tables publish (facts M47). A part that
 // does refuse costs nothing: DpmApply treats a refused
@@ -1158,7 +1157,7 @@ static void DpmThread(_In_ PVOID Context)
 
 // The idle state's three settings, read once per start and handed to the policy (0.7.207). A refused value
 // leaves the state off and says so: the clock then behaves as it did in 0.7.205. Absent values are the
-// defaults of bc250_dpm.h, so a lab machine with no DpmIdle* value at all runs the owner's 500 MHz.
+// defaults of bc250_dpm.h, so a lab machine with no DpmIdle* value at all runs the 500 MHz idle point.
 // A start that does not govern (fixed-lab, an unconfirmed or unclean DPM request, no SMU owner) never reaches
 // bc250_dpm_step, so the state could not act: it stays off, the log says why, and the escape and the CLI then
 // read "off" instead of naming a point that nothing would ever apply (0.7.207, review).

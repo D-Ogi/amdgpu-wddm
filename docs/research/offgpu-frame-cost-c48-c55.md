@@ -4,7 +4,7 @@ How the long idle gaps on the 3D ring were explained, and what finally removed t
 investigation are facts [M797, M798 and M799](../facts/d3d.md). This note holds the reasoning, the refutations
 and the rules that come out of them. Read it before you plan another measurement of frame cost on this part.
 
-The owner's goal behind all of it is one sentence: the GPU must not wait.
+The goal behind all of it is one sentence: the GPU must not wait.
 
 ## 1. What was seen
 

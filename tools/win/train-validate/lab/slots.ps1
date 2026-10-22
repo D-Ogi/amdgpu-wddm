@@ -2,7 +2,7 @@
 # hand-typed copy of it). The manifest of the extracted package is read from -Pkg, so one copy serves
 # every train.
 param([Parameter(Mandatory = $true)][string]$Pkg)
-# The zip unpacks to <pkg>\setup.exe and <pkg>\files\ (owner, 2026-10-11), so the manifest and the payload
+# The zip unpacks to <pkg>\setup.exe and <pkg>\files\ (2026-10-11), so the manifest and the payload
 # live under files\; a package built before that layout has them in the folder itself. -Pkg may name either, so
 # one kit serves both and arms.json does not pin the layout.
 if (-not (Test-Path -LiteralPath "$Pkg\manifest.json") -and (Test-Path -LiteralPath "$Pkg\files\manifest.json")) {

@@ -191,7 +191,7 @@ locks, the worker thread, the registry and the message gaps. A harness for them,
 The release range is a **limit** before it is ever a raise: lowering the firmware's ceiling lowers the voltage the
 firmware chooses, so it cannot reach the hazard. 3500 MHz is the highest limit the release build takes. It is also
 the stock boost clock the community's two tools report; nothing on unit A has measured it. The 3600 MHz this
-document carried until 0.7.211 had no source at all. The lab range is the owner's hardware pre-approval of
+document carried until 0.7.211 had no source at all. The lab range is the standing hardware pre-approval of
 2026-10-05, and `bc250_cpu_settings_check` refuses it without at least `BC250_CPU_LAB_MIN_UV_STEPS` undervolt
 steps in the same request.
 

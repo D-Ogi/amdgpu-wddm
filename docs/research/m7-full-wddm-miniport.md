@@ -278,7 +278,7 @@ RECOMMENDATION: `PreemptionAware = 1`, `MultiEngineAware = 1`, `LowIrqlPreemptCo
 `DMA_BUFFER_BOUNDARY` (100) for both graphics and compute. A packet-scheduled driver that owns the ring
 can honestly prevent not-yet-started packets from running - by not writing them to the ring. It costs
 almost nothing and avoids the TDR-reset-loop failure mode, which on this lab (no reliable warm restart,
-fact M21) means a trip for the owner.
+fact M21) means a trip to the lab.
 
 ### Hardware scheduling is optional - confirmed
 
@@ -665,7 +665,7 @@ but `hContext` is the **only** output.
 `D3DDDI_CREATECONTEXTFLAGS` `WDK:UK:672-700`: `NullRendering` 0x1, `DisableGpuTimeout` 0x4,
 `HwQueueSupported` 0x10, `TestContext` 0x40. **For bring-up set `DisableGpuTimeout = 1`** - it suppresses
 TDR on that context while the command stream is still wrong, which on our lab is the difference between
-a retry and a trip for the owner.
+a retry and a trip to the lab.
 
 FACT `LEARN:.../display/enumerating-gpu-nodes`: `NodeOrdinal` is the node, `EngineAffinity` the engine
 within the node. For us, NodeOrdinal is effectively the Vulkan queue family index, `EngineAffinity = 0`.
@@ -1148,7 +1148,7 @@ the reverse engineering.
 # 5. A staged M7 that keeps the ADR 0006 failsafe
 
 Constraints this plan is built around: a broken driver must still fall back to Basic Display; the lab
-must stay reachable; a hang costs the owner a trip (ADR 0006 context, fact M21); and section 1.2(d) means
+must stay reachable; a hang costs a trip to the lab (ADR 0006 context, fact M21); and section 1.2(d) means
 we can no longer return honest failures from the scheduler and paging DDIs.
 
 ## 5.0 The failsafe, first
@@ -1159,7 +1159,7 @@ we can no longer return honest failures from the scheduler and paging DDIs.
 from the same function pointers; the display-only table is exactly today's.
 
 Why this shape:
-- With the gate closed, the binary is byte-for-byte the driver that is running the owner's display today.
+- With the gate closed, the binary is byte-for-byte the driver that is running the lab's display today.
   That is the state after every install, as ADR 0007 already requires.
 - The existing `UnconfirmedStarts` budget (`OURS:driver/kmd/README.md`) already refuses to start at 2
   uncleared starts and falls back to Basic Display. It now covers the full-WDDM path for free.

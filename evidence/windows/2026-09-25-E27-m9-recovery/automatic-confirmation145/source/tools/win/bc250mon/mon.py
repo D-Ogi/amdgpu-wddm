@@ -8,14 +8,14 @@ every call goes through SSH; the JSON body travels base64-encoded to stay clear 
     mon.py panel e02 "E02 control read" "registers=5542" "identical=5074:good" "hangs=0:good"
     mon.py unpanel e02
     mon.py action clock.cool            mon.py action clock.set '{"mhz": 1200, "mv": 850}'
-    mon.py stop?                        exit code 1 if the owner asked to stop
+    mon.py stop?                        exit code 1 if a stop was requested
     mon.py windows                      visible top-level windows: handle, process, geometry, title
     mon.py screenshot [--scale 0.5] [--format png|jpg] [--quality 80] [--overlay 0|1]
                       [--window TITLE | --handle 0x...] [--out FILE]
     mon.py scanout [--scale 0.5] [--format png|bmp] [--out FILE]
 
 Screenshots land in P:/BC-250/scratch/screens/<timestamp>.<ext> unless --out says otherwise. Every capture
-is written to the monitor's log, so the owner sees on the overlay that a picture was taken.
+is written to the monitor's log, so the overlay shows anyone at the lab that a picture was taken.
 
 `scanout` is `screenshot`'s counterpart under the full WDDM table, where GDI's CopyFromScreen reads the CDD's
 surfaces and shows black (facts M84): it runs `bc250kmd_cli fbdump` on the target (BC250_ESCAPE_RUN_FBDUMP,

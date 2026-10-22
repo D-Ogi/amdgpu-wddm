@@ -1,6 +1,6 @@
 # amdgpu-wddm tester uninstaller, v0. Run uninstall.cmd as administrator (from the package folder or from the
 # install root). Removes everything install.ps1 added and puts the GPU back on Microsoft Basic Display Adapter.
-# -DryRun prints every change without making it. Nothing is asked: running this IS the answer (owner, 2026-10-12),
+# -DryRun prints every change without making it. Nothing is asked: running this IS the answer,
 # so test signing goes off again where the installer turned it on (-KeepTestSigning leaves it on), the Windows
 # settings of the optional tuning are kept (-RestoreSystemTuning restores them), and the restart that finishes the
 # removal of files DWM still has loaded starts by itself after a visible countdown (-NoReboot leaves it to the user).
@@ -66,7 +66,7 @@ if($pkgs.Count -or ($state -and $state.driver_state_removal)) {
             -Product $product -Device $removalDevice -Save {param($s) Save-InstallState $s}
     } | Out-Null
 }
-# Running the uninstaller IS the answer (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika"): nothing
+# Running the uninstaller IS the answer: nothing
 # here asks the user to type YES for what they started. -Yes stays accepted, so every script written for the older
 # uninstaller keeps working, and the refusals that protect a machine (a development-lab installation above, an
 # unreadable driver store) are unchanged: those are not confirmations.
@@ -285,7 +285,7 @@ if($removalDevice) {
 }
 Invoke-Change 'pnputil /scan-devices (bind the GPU to its inbox driver now)' { [void](Invoke-Native pnputil.exe @('/scan-devices')) } | Out-Null
 $serviceKey = Split-Path $script:ParametersKey
-# The start-screen picture (owner, 2026-10-14): its value goes first and on its own. The service key below takes the
+# The start-screen picture: its value goes first and on its own. The service key below takes the
 # whole of Parameters with it, but only once the driver is unloaded, and a 0 that outlives this uninstall would turn
 # the picture off for the next install without anybody asking for that.
 if ($null -ne (Read-RegistryValues $script:ParametersKey)['BootLogo']) {
@@ -369,7 +369,7 @@ if ($certsLeft.Count) {
 Write-Step 'Test signing'
 $setByUs = ($state -and $state.testsigning_set_by_installer)
 $off = [bool]$DisableTestSigning
-# What the installer turned on, the uninstaller turns off again, without asking (owner, 2026-10-12). -KeepTestSigning
+# What the installer turned on, the uninstaller turns off again, without asking. -KeepTestSigning
 # leaves it on for a tester who installs another build of ours next.
 if (-not $off -and -not $KeepTestSigning -and $setByUs) {
     Write-Info 'test signing was turned on by this installer, so it is turned off again now (-KeepTestSigning leaves it on)'
@@ -434,7 +434,7 @@ Write-Host ''
 Write-Host "Uninstall complete. Restart the computer to finish. Log: $($script:LogPath)" -ForegroundColor Green
 Write-Host 'Until the restart, some Windows 11 apps (the command bar of File Explorer, Task Manager) can ignore mouse clicks: the GPU changed to Microsoft Basic Display Adapter under the running desktop.' -ForegroundColor Yellow
 # A normal, planned restart (common.ps1, Request-PlannedRestart): programs are asked to close and may keep unsaved
-# work. It starts by itself after a visible countdown, as the installer's does (owner, 2026-10-12): Enter starts it
+# work. It starts by itself after a visible countdown, as the installer's does: Enter starts it
 # at once, any other key puts it off, and nothing has to be pressed. -NoReboot skips it for a script.
 if (-not $NoReboot -and -not $DryRun) {
     if ((Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now') {

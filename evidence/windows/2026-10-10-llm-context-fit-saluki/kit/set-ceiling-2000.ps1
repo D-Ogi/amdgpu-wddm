@@ -1,5 +1,5 @@
 # Step 0 of the Performant Labs comparison block: set the DPM ceiling to 2000 MHz.
-# Owner decision 2026-10-10: the release ceiling is 2000; the base clock stays 1000 and idle 500.
+# Decision 2026-10-10: the release ceiling is 2000; the base clock stays 1000 and idle 500.
 # Writes exactly one value, DpmMaxMHz, under the KMD service parameters. It applies at the next restart.
 # No other registry value, no BIOS, no NVRAM, no fan and no voltage setting is touched.
 $ErrorActionPreference = 'Stop'

@@ -21,7 +21,7 @@ script compares the new log's "Build Options:" line with the option set and stop
 The set the script passes is the configured set plus the reproducible-build switches of
 Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%.
 
--Compiler has no default (owner, 2026-10-21: no build falls back to cl.exe without a word). msvc builds with cl,
+-Compiler has no default (no build falls back to cl.exe without a word). msvc builds with cl,
 link and lib of the Visual Studio environment, as every recorded and shipped set was built. clang-cl builds the same
 set with clang-cl, lld-link and llvm-lib from -ClangToolchain (default LLVM 23.1.4), in the same Visual Studio
 environment, and adds the arguments of its 'compilers' entry in mesa-configs.json: -ffp-contract=off and

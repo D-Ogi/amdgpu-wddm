@@ -34,9 +34,7 @@ changes nothing. While Smart App Control is on, Windows blocks this test-signed 
 
 ## Nothing is asked of the user
 
-The owner, 2026-10-12, seeing a greyed-out Install button under a consent check box: "nie mozna wymagac, ze
-uzytkownik zaznaczy ten checkbox! ... Oczywiste jest, ze uzytkownik chce wlaczyc test mode i wlasnie robi tym
-instalatorem! Przestan wymagac potwierdzen od uzytkownika!" A person who opened this installer wants to install, so
+An earlier version greyed out the Install button under a consent check box. A person who opened this installer wants to install, so
 no screen asks for a permission, and the primary action is never off. The Review screen does carry choices between
 good outcomes, each already answered: the optional Windows tuning, the two places of the shortcut of
 Nagi Control App (both on) and the Nagi wallpaper (on). `InstallFlow.PlanOptionIds` names every control a screen may grow. The Review screen
@@ -82,7 +80,7 @@ every screen by the build). The details are in the support file, a zip that the 
 summary and, per engine run, the command line, events, result, engine output and log, with the user name, computer
 name and profile path redacted. A run that found a driver which did not start also brings the engine's
 own diagnostics of that start, as `run-<n>-diagnostics.txt` and through the same redaction. The engine collects
-it by itself (owner, 2026-10-12), so nobody has to ask the tester for the readings one at a time.
+it by itself, so nobody has to ask the tester for the readings one at a time.
 
 ## How it runs the engine
 
@@ -97,8 +95,7 @@ The window reads the events every 250 ms. An event changes the progress screen i
 mark of a stage, the note, the Cancel button, the value of the strip or a new check row. The window builds the
 screen again only when its frame changes: the title, the stage list or the notice of cancelled removals. The strip
 then stays the same control. Until 2026-10-14 each batch of events built the whole screen again, also for the
-`step` event of each change. Each new control showed the background for one frame (owner: "co 6-8 sekund niebieski
-pasek od instalatora robi krótkie mignięcie"). `--smoke-progress <dir>` plays an install run of 30 s and a plan run
+`step` event of each change. Each new control showed the background for one frame. `--smoke-progress <dir>` plays an install run of 30 s and a plan run
 of 10 s against the window, which is not shown. The strip must stay one control with one window handle, and no
 event may build the screen again. The strip is drawn again only when its value changes or its band moves.
 
@@ -107,7 +104,7 @@ The window starts as the invoking user (`asInvoker`) and relaunches itself eleva
 
 ## Start
 
-The owner, 2026-10-14: "instalator z exe także ładuje się dość długo - także potrzebuje od razu okienka ładowania".
+The single-file installer takes a while to unpack, so it needs a window at once.
 Every run with a window opens a small loading window first (`src/LoadingWindow.cs`): Nagi's welcome picture, the
 name of the program, one line of text and the progress strip. The slow steps come only after Windows has drawn it.
 `src/StartSequence.cs` holds that order, and the unit tests check it against a recorder:
@@ -169,8 +166,8 @@ The help card's pictures come from `art/help` (or `-HelpArt <dir>`): the build e
 720 px or larger than 160 KiB, and an exe that lacks one it embedded. An optional picture that is absent leaves its
 step as text.
 
-A small screen gets no guide panel at all. The content column then takes the width the panel would have had. The
-owner asked for this on 2026-10-12, after GitHub #38 from a tester whose 800x600 screen let the picture cover the
+A small screen gets no guide panel at all. The content column then takes the width the panel would have had. This
+rule follows GitHub #38, from a tester whose 800x600 screen let the picture cover the
 text. Small is a working area of at most 1024 logical pixels wide, or at most 768 high (`SmallScreen.cs`). A screen
 that small has no room for a 300 px column beside the page. The window asks the rule again when it moves to another
 monitor, and after a screen or DPI change. Six render runs name the screen the window is drawn for

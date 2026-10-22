@@ -1,6 +1,6 @@
 # M13.1 resumed - isolate visible presentation on127
 
-Owner prioritized display after M405. Baseline full127 uses stub UMD with
+Display was prioritized after M405. Baseline full127 uses stub UMD with
 PresentBlit/VidPnFlip closed. Capture actual HUBP scanout, registrations,
 DWM events and KMD counters. Enable only diagnostic PresentBlit via existing
 PnP lifecycle, retain current GPU startup policy and hardware display-write

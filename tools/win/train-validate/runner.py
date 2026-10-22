@@ -1,7 +1,7 @@
 """The arm loop of a train validation: the bounds, the gates and the raw records.
 
 Every command goes through `Shell`, and every wait through `Clock`, so the whole sequence runs in the host
-tests against a fake target with no lab, no sleep and no subprocess. The owner's rules live here and not in
+tests against a fake target with no lab, no sleep and no subprocess. The project rules live here and not in
 the operator's head:
 
 * a trial arm is bounded (the lab script ends its own run; this side keeps a backstop of bound + grace),
@@ -19,8 +19,8 @@ the operator's head:
 * a destructive arm does not run until the arm that verifies the package on the lab has passed in this run,
 * a failed arm keeps its logs, runs its restore steps, ends its client on the lab and does not stop the arms
   that do not depend on it,
-* a baselined arm whose number was never read is UNREAD, which is a failure and never a pass: a gate of the
-  owner's is met only on a number that was read and compared.
+* a baselined arm whose number was never read is UNREAD, which is a failure and never a pass: a release
+  gate is met only on a number that was read and compared.
 
 The runner never diagnoses. It records what happened and names the symptom shape in the summary.
 """
@@ -345,7 +345,7 @@ class Runner:
 
         The exit code alone is not enough in either direction: the overlay API can answer without the flag,
         and then mon.py prints no stop request and exits 0, while any error of its own exits non-zero. An
-        unread flag stops the run, because the owner's STOP must never be read by guesswork.
+        unread flag stops the run, because a STOP request must never be read by guesswork.
         """
         done = self._shell(PlannedStep([self.python, self.plan.values["mon"], "stop?"], 90, "gate"))
         text = done.text.strip()[-200:] or "no output"
@@ -382,7 +382,7 @@ class Runner:
         return None, text
 
     def cool_down(self) -> tuple[bool, str]:
-        """Wait until Tctl is under the start line. The owner's rule is to cool below 87 C between trials;
+        """Wait until Tctl is under the start line. The project rule is to cool below 87 C between trials;
         a trial does not start above the manifest's start line either (80 C, as every native trial slot).
 
         The budget is one deadline over the whole gate, the ssh calls included, so a lab that takes 90 s to
@@ -701,7 +701,7 @@ class Runner:
                 self.writer(f"[skip] {arm.id}: waits on {', '.join(missing)}")
                 self.records.append(self._skip(arm, "depends on " + ", ".join(missing)))
                 continue
-            # A destructive arm (the uninstall of the owner's installer test) does not run on a package that
+            # A destructive arm (the uninstall of the clean-slate installer test) does not run on a package that
             # was not verified on the lab in this run. Without the guard, a failed push leaves the machine
             # with no display driver and a person has to put it back.
             guard = arm.arm.get("needs_verified")

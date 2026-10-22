@@ -1,11 +1,11 @@
 # lab-emerg - the emergency channel to unit A when ssh fails
 
-Twice the lab's sshd stopped accepting connections while the machine itself was healthy (BD-051). The owner then
-asked for a second way in that does not depend on sshd. This is it: a small HTTP listener on the unit, a signed
+Twice the lab's sshd stopped accepting connections while the machine itself was healthy (BD-051). A second way in
+that does not depend on sshd was needed. This is it: a small HTTP listener on the unit, a signed
 request from here, and a fixed list of actions.
 
-**Use this channel before you ask the owner for help and before you cycle the mains.** That is the order the
-workspace rules set: ssh, then this channel, then the smart plug, then the owner.
+**Use this channel before you ask for help at the lab and before you cycle the mains.** That is the order the
+workspace rules set: ssh, then this channel, then the smart plug, then a person at the lab.
 
 ```
 python tools\win\lab-emerg\lab-emerg.py status                  boot time, sshd, port 22, processes, boot steering
@@ -50,7 +50,7 @@ work that outlives a response. A `ps` job carries its own deadline and the liste
 
 ## The file actions and their ACL rule
 
-The owner set this rule on 2026-10-01, because `sshd_config` needs to keep its own security descriptor:
+This rule dates from 2026-10-01, because `sshd_config` needs to keep its own security descriptor:
 
 - Overwriting an existing file **keeps that file's ACL** and leaves `<file>.emerg-<utc>.bak` beside it.
 - A new file inherits its directory's ACL and gets **Administrators as owner**, so the interactive user can

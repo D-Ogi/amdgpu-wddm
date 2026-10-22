@@ -2,7 +2,7 @@
 # screen pixel X,Y (the process is made DPI aware first, so the coordinates are those of a full-resolution screenshot)
 # and/or key taps by scan code. SendInput with an absolute move, a one-pixel wiggle (Chromium-based dialogs such as
 # Steam's want a hover before the click) and the button pair; logs the cursor and the window under the point.
-# Owner, 2026-10-01: the EULA of a test game may be accepted on the owner's behalf.
+# 2026-10-01: the EULA of a test game may be accepted on the lab's behalf.
 #   click.ps1 -X 960 -Y 600              click (also gives a fullscreen game the foreground)
 #   click.ps1 -Keys 1C,01 -GapMs 800     Enter, then Esc (hex scan codes, as game-control.py uses)
 # Start it hidden (267, The Ascent's EULA in Steam: a visible console window covered the button), from C:\BC250\tmp:

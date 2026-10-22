@@ -106,7 +106,7 @@ GDI context's root to one contiguous VRAM range of exactly 0x8CA000 bytes. No re
 
 ### Run 008 (2026-09-22 03:15, bc250kmd 0.7.18, EnablePresentBlit 1)
 
-H3 holds, by the only instrument that can see it: the owner, at the monitor, saw the whole desktop, correct, for the
+H3 holds, by the only instrument that can see it: a visual check on the lab monitor showed the whole desktop, correct, for the
 minute the full table ran (facts M84). The driver's log shows every present copied (3 rectangles / 144 rows, 586
 rows for a full refresh, and so on). The overlay's screenshot is still the black 3586-byte frame - `CopyFromScreen`
 reads the CDD's surfaces through GDI, not the scanout, so under the full table it cannot see what the firmware

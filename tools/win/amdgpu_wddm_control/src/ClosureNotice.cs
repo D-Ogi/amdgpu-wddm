@@ -10,7 +10,7 @@
 //   - a record of the driver's own sits next to it: the durable record with any reason other than 0, or, for the
 //     clock of a driver before 0.7.208.1, the legacy record with one of the reasons of a fallback.
 // A 0 that a person wrote by hand has no such record, so it is a choice and nothing here touches it (BD-069, and
-// the rule the owner asked for in BD-181: a closure the user chose is never reverted).
+// the rule of BD-181: a closure the user chose is never reverted).
 //
 // What the driver writes at a start after an unclean end (driver/kmd/interop_policy.c bc250_interop_decide,
 // driver/shim/bc250_dpm.c bc250_dpm_decide): EnableGpuPresentBlit 0, EnableCddDwmInterop 0, InteropClosedReason 4,

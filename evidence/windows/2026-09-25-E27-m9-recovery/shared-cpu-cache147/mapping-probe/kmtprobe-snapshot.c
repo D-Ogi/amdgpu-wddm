@@ -232,7 +232,7 @@ static void Note(const char* Format, ...)
 // ---- the watchdog -------------------------------------------------------------------------------------
 //
 // Nothing below may hang the machine, but a D3DKMT call that never returns would hang the SSH session that
-// started us, and the owner would have to look at the target. The watchdog is the promise that the process
+// started us, and someone would have to look at the target. The watchdog is the promise that the process
 // ends by itself. Exit code 4 means it fired.
 
 static HANDLE g_Done;
@@ -702,7 +702,7 @@ static BOOL StepCreateContext(PROBE* Probe)
     create.NodeOrdinal = 0;             // our only node, DXGK_ENGINE_TYPE_3D
     create.EngineAffinity = 0;
     // DisableGpuTimeout suppresses TDR on this context. ADR 0008 point 7: until a reset exists, timeouts are
-    // avoided rather than recovered, and a TDR here costs the owner a trip to the machine.
+    // avoided rather than recovered, and a TDR here costs a trip to the machine.
     create.Flags.DisableGpuTimeout = 1;
     create.ClientHint = D3DKMT_CLIENTHINT_VULKAN;
     create.pPrivateDriverData = NULL;

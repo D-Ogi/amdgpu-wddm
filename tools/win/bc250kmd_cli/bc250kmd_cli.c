@@ -3197,7 +3197,7 @@ static void DpmPrintIdle(const BC250_ESCAPE_DPM *d)
     }
     if (d->IdleMHz == 0) {
         // A start that does not govern never configures the state (the driver says so in its log), so name that
-        // first: without it a fixed-lab start reads as a setting the owner has to look for.
+        // first: without it a fixed-lab start reads as a setting the reader has to look for.
         if (!(d->Flags & BC250_DPM_FLAG_GOVERNING))
             printf("idle: off (this start does not govern the clock)\n");
         else

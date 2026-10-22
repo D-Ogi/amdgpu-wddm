@@ -2,7 +2,7 @@
 # E24 run 006: 0.7.28 advances pDmaBuffer (M108). Does dxgkrnl now submit what the node builds?
 # Same shape as run 005 - fresh boot, one bring-up (M78), pressure at 64, 256 and 512 MB - with two
 # deliberate differences: the VidPnFlip gate stays CLOSED (this experiment has no use for it, and run 005
-# left the owner watching M100's unpainted primary for four minutes), and the counters are read for the
+# left the operator watching M100's unpainted primary for four minutes), and the counters are read for the
 # thing that was missing: SubmitCommand, and node 1's own submitted/completed numbers.
 cd /p/BC-250/bc250-win || exit 1
 S=/p/BC-250/scratch/tmp

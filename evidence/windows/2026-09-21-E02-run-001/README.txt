@@ -10,7 +10,7 @@ sweep-<BLOCK>.log           one block per run: GC, HDP, NBIO, OSSSYS, MP0, MP1, 
 comparison-with-linux.txt   tools/win/bc250rd/compare_sweeps.py against evidence/linux/2026-09-21-E03-init-trace
 
 Boot history matters for the comparison: before this Windows session the unit ran the Linux probe with amdgpu
-loaded and was then restarted several times by the owner (the NVMe link did not come up at first). Whether the
+loaded and was then restarted several times by the operator (the NVMe link did not come up at first). Whether the
 last restart was a cold start was not recorded.
 
 Nothing was redacted: the files contain no MAC address, serial number, SSID or user data.

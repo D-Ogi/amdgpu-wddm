@@ -1,1 +1,1 @@
-Owner exact UTF-8 reply: "Tak, oba są płynne". REPORT.md used an ASCII transliteration of the same sentence.
+Visual check of the final bounded-diagnostics renderer: both the sign-in animations and the cursor are smooth. See REPORT.md.

@@ -32,7 +32,7 @@
 # client rectangle shows, on the screen, the control painted into the shared double buffer before it, which a render
 # into one bitmap cannot show. The guide panel must draw her picture wherever the
 # side panel is in the window, and must not draw it with "Show Nagi" off.
-# G-SMALL (owner, 2026-10-12): six runs name the screen the window is drawn for (--work-area, in logical units) and
+# G-SMALL: six runs name the screen the window is drawn for (--work-area, in logical units) and
 # hold the rule that a 1024x768, 800x600 or smaller screen draws no right-hand panel, and a larger one draws it.
 # The smoke run passes on a PC without a BC-250 when it reports the driver as not found.
 #
@@ -184,7 +184,7 @@ if ($NagiArt) {
         $artResourceNames += $a.Resource
     }
 }
-# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): art\icon\nagi.ico, the guide character's
+# The application icon: art\icon\nagi.ico, the guide character's
 # bust as a round badge, with its own PROVENANCE.md. csc takes it as /win32icon, which is what an ApplicationIcon of
 # a project file compiles to. It is the icon of this window, of its task-bar button, and of the Start menu and
 # desktop shortcuts the installer writes, which take the icon from this exe.
@@ -357,7 +357,7 @@ if (-not $NoSmoke) {
         # The snapshot has no CuMode, so Standard (24) is a number to write, not a selection that is there already
         # (BD-077: an absent value reads to the release installer as a key it never configured).
         'cu-mode:24'      = @(0, "S1 set $params CuMode = 24 (DWord)", "S1c set $params CuModeChosen = 0x18 (DWord)", 'verify the stock selection (24)', 'never restored')
-        # A count between the two (owner, 2026-10-14): the mask of the documented default set of 30 cores is written
+        # A count between the two: the mask of the documented default set of 30 cores is written
         # before CuMode, the record holds the whole request, and the note names the pairs in the words of the window.
         'cu-mode:30'      = @(0, "S3 set $params CuDisableWgp = 0x84218 (DWord)", "S1 set $params CuMode = 40 (DWord)",
                               "S1c set $params CuModeChosen = 0x8421828 (DWord)", 'Selects 30 of the 40 graphics cores.',
@@ -570,7 +570,7 @@ if (-not $NoSmoke) {
     $u = Invoke-DryRun @('--action', 'set-clocks', '--ceiling', '1500', '--dry-run', '--snapshot', $snapshot) 'set-clocks-without-mode'
     if ($u.Code -ne 2) { throw "set-clocks without --mode must be refused as usage (exit $($u.Code))" }
     # A count outside 24 to 40 in twos, a count option on another action, and a chosen set on another action are
-    # usage errors; the counts in between are valid now (owner, 2026-10-14).
+    # usage errors; the counts in between are valid now.
     foreach ($bad in @(@('cu-mode'), @('cu-mode', '--cu', '33'), @('cu-mode', '--cu', '48'), @('reopen-gpu-path', '--cu', '40'),
         @('reopen-gpu-path', '--cu-map', '0x10'), @('cu-mode', '--cu', '30', '--cu-map', 'zz'), @('game-profile', '--image', 'C:\x.exe', '--value', ''))) {
         $u = Invoke-DryRun (@('--action') + $bad + @('--dry-run', '--snapshot', $snapshot)) ('usage-' + ($bad -join '-' -replace '[^a-z0-9-]', ''))
@@ -741,7 +741,7 @@ if (-not $NoSmoke) {
     }
     $runs += , @('ja-1.5-closed-text150', '1.5', '--lang', 'ja', '--text-scale', '1.5', '--fixture', "`"$closed`"")
     $runs += , @('en-1-closed-work800x600', '1', '--work-area', '800x600', '--fixture', "`"$closed`"")
-    # G-SMALL, the owner's rule of 2026-10-12: the five working areas of a tester's screen, in logical units. The
+    # G-SMALL, the rule: the five working areas of a tester's screen, in logical units. The
     # four small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the
     # page width are checked in every one of them, which is what an 800x600 screen needed (GitHub #38).
     foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {

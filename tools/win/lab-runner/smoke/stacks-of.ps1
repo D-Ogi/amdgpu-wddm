@@ -1,6 +1,6 @@
 # LAB (elevated SSH): non-invasive cdb attach (-pv: threads suspended only while the debugger reads them, nothing
 # injected, the process continues on detach) to one process image; prints every thread's stack as module+offset,
-# with CPU times per thread first. Lab memory/process analysis, owner consent 2026-09-27/28.
+# with CPU times per thread first. Lab memory/process analysis, consent of 2026-09-27/28.
 # -Sym: a folder with our own PDBs (pushed by the operator) symbolizes the shell, engine and ICD frames.
 param([string]$Image = 'ROTTR', [int]$Frames = 24, [string]$Kind = 'kc', [string]$Sym = 'srv*C:\BC250\tmp\sym-none')
 $p = Get-Process -Name $Image -ErrorAction SilentlyContinue | Select-Object -First 1

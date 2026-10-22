@@ -8,4 +8,4 @@ First establish boot/kernel/module identity, unloaded amdgpu, networking and tra
 
 Expected if hypothesis holds: a witnessed difference in the ordered RLC/SMU/KIQ lifecycle. If traces match, investigate another cause; missing output is not proof of a particular hung MMIO instruction. Current scope does not accept M9 or claim Linux reload succeeds.
 
-Recovery: ordinary OS shutdown when responsive; owner-authorized smart-plug AC cycle only for hangs. Restore USB loader steering to return to Windows. Never format media or write firmware boot entries. Preserve diagnostics before any transition.
+Recovery: ordinary OS shutdown when responsive; authorized smart-plug AC cycle only for hangs. Restore USB loader steering to return to Windows. Never format media or write firmware boot entries. Preserve diagnostics before any transition.

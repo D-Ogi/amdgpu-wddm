@@ -32,7 +32,7 @@
  *      because it loads the DLL itself. --no-load-icd leaves it out.
  *
  * The window is created the way gltest creates its own (CS_OWNDC, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT) and is never
- * shown unless --show is given: the development PC must not get a window (the owner's rule). The whole run is
+ * shown unless --show is given: the development PC must not get a window (a workspace rule). The whole run is
  * bounded by a watchdog thread, 30 s by default. Every line is flushed as it is written.
  *
  * Exit code 0 when the probe ran to the end (whatever it found: a probe reports, the lab kit decides), 1 when the

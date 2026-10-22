@@ -4,7 +4,7 @@
 // REG_DWORD, "the number of seconds that the GPU can delay the preempt request from the GPU scheduler", default
 // 2 seconds. Windows reads it when it starts, so a change applies at the next restart of Windows.
 //
-// Why this driver owns it (owner, 2026-10-08; BD-079): this part has no working GPU reset, so a picture that needs
+// Why this driver owns it (BD-079): this part has no working GPU reset, so a picture that needs
 // more than the waiting time does not end as a reset engine but as a stopped machine. The lab has run 10 seconds
 // since 2026-09-28; a tester machine kept Windows' 2 seconds, and the release notes asked the tester to write the
 // value by hand. The release now writes 10 itself (the installer's defaults table, group graphics_drivers), and this

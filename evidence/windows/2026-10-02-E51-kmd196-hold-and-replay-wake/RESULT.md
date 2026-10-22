@@ -46,7 +46,7 @@ Two changes are measured here, each against its own reference:
   session in the game rather than at a menu. The screenshots themselves stay in the workspace, because they show
   the lab desktop.
 - Removed from this directory on purpose: the `saves` block of each trial's closure record, which inventories the
-  owner's save games. The development machine's own drive path, which the plans and the timeline outputs printed,
+  private save games. The development machine's own drive path, which the plans and the timeline outputs printed,
   is written `<BC250_ROOT>` here, as the rest of the repository writes it. Nothing else was taken out of or
   changed in the published files.
 

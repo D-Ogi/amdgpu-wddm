@@ -1,6 +1,6 @@
 # BC250 Open Test Pack
 
-Owner-requested plan, 2026-09-24. Saved from the owner's proposal for future
+Requested plan, 2026-09-24. Saved from the proposal for future
 implementation. This is a test roadmap, not evidence that a tool is installed,
 a workload is supported, or a conformance/performance requirement has passed.
 Upstream support, versions, licenses and exact commands must be checked when
@@ -105,7 +105,7 @@ Proposed showcase: Diligent Asteroids, Filament glTF Viewer, GZDoom with Freedoo
 and optionally an official Godot 3D/particles demo. Use deterministic cameras,
 seeds, assets and frame ranges where an image oracle is expected.
 
-The Forge is not selected in the owner's proposal because the cited documentation
+The Forge is not selected in the proposal because the cited documentation
 reportedly removed Windows Vulkan switching. Recheck that claim only if adding
 it later; it is not a newly verified fact in this plan.
 
@@ -127,7 +127,7 @@ overhead and a declared unavailable/not-run outcome if instrumentation fails.
 ## Runner rules
 
 1. Confirm identities, versions, hashes, capabilities, workload prerequisites,
-   operating point, temperature and owner STOP before admission.
+   operating point, temperature and the operator STOP flag before admission.
 2. A fence timeout, TDR, frozen present, unexpected black image or oracle mismatch
    ends the entire profile immediately. Do not launch another workload afterward.
    Preserve partial logs and record the last accepted/completed work. Killing a

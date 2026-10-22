@@ -34,4 +34,4 @@ Start/end TDR summaries show zero recovery/debug collection, boot unchanged, imm
 
 ## Scope of completion
 
-This supplies the three G0 implementation evidence categories for the tested hosted Zink/RADV GPU desktop and native-window path, using the accepted bounded no-copy list. It does not close the separate longer M13.4 duration, M13.2 lifecycle coverage or M13.6/M13.7 fault/soak milestones. Owner limits every lab trial to180s. Deployment remains the verified CPU baseline after this trial; no permanent GPU promotion is implied.
+This supplies the three G0 implementation evidence categories for the tested hosted Zink/RADV GPU desktop and native-window path, using the accepted bounded no-copy list. It does not close the separate longer M13.4 duration, M13.2 lifecycle coverage or M13.6/M13.7 fault/soak milestones. Every lab trial is limited to180s. Deployment remains the verified CPU baseline after this trial; no permanent GPU promotion is implied.

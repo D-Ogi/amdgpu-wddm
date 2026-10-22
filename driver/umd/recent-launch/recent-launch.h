@@ -197,7 +197,7 @@ inline std::wstring normalize(const std::wstring& path) {
 }
 
 enum class Switch {On,Off,Unreadable};
-// A missing key or value is the owner-approved default, on. Anything else that is not a REG_DWORD 0 or 1 skips.
+// A missing key or value is the approved default, on. Anything else that is not a REG_DWORD 0 or 1 skips.
 inline Switch read_switch(HKEY root,const wchar_t* key) noexcept {
     DWORD type=0,value=0,size=sizeof(value);
     const LSTATUS s=RegGetValueW(root,key,kSwitchValue,RRF_RT_ANY|RRF_NOEXPAND,&type,&value,&size);

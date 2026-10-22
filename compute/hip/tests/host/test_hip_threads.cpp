@@ -1,6 +1,6 @@
 // test_hip_threads.cpp - layer 2 under several threads, over the mock bc250hsa backend.
 //
-// The owner's instruction of 2026-09-29: multithreading is tested with our own clients before a
+// The project rule: multithreading is tested with our own clients before a
 // real application is asked to exercise it. The measurement itself lives in
 // tests/host/hip_threads_client.h, which the lab program compute/hip/samples/threads.hip shares.
 // This file gives that client a device, a registered code object and a launch, and it checks

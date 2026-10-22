@@ -11,7 +11,7 @@ Automatic startup confirmation reached health15/guard0 without manual confirmati
 of the new generation. Closure09:32:01.6971503Z independently verifies loaded
 SYS/version, baseline UMD8279AC7F/ICD93B1D1FD,1000MHz/VID116,66.500C,
 retained CPU DWM7656 and OS boot, no test processes; both test tasks removed.
-No OS reboot or GPU reset. No owner visual verdict was requested or inferred.
+No OS reboot or GPU reset. No visual verdict was requested or inferred.
 
 Retained diagnostic positive witness: Windows received one successful
 DRIVERCAPS interop0 reply, with first/last interrupt time601196998949(100ns).

@@ -1,5 +1,4 @@
-// The order of setup's start (owner, 2026-10-14: "instalator z exe także ładuje się dość długo - także potrzebuje od
-// razu okienka ładowania"). LoadingWindow.cs does the steps; this class decides them, so a host test can hold the
+// The order of setup's start. LoadingWindow.cs does the steps; this class decides them, so a host test can hold the
 // order without a window.
 //
 // What ran before the first window of the single file, measured without a window on the PC that builds this

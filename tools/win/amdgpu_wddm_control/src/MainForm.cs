@@ -97,7 +97,7 @@ namespace AmdgpuWddmControl
                 // (ApplyScreenSize). The window manager may still clamp the window to the desktop, and FitToScreens
                 // can move it: whatever column is left after that is the column the page is built for, so the page
                 // is rebuilt here when the two differ. Without it a 1240 px page stood in a 650 px column on the
-                // owner's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
+                // tester's 800x600 screen and was cut on the right, which is the finding of GitHub #38.
                 Load += (s, e) =>
                 {
                     FitToScreens(); RebuildIfWidthChanged();
@@ -165,7 +165,7 @@ namespace AmdgpuWddmControl
             ClientSize = want;
         }
 
-        // The owner's rule of 2026-10-12 (LayoutRules.SmallScreen): no side panel at all on a small screen.
+        // The rule (LayoutRules.SmallScreen): no side panel at all on a small screen.
         public bool SmallScreen { get { var w = ScreenWorkArea(); return LayoutRules.SmallScreen.IsDevice(w.Width, w.Height, Theme.Scale); } }
 
         // The side panel: never on a small screen, and on a larger one only while the window is wide enough for it.

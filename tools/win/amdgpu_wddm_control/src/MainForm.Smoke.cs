@@ -1,10 +1,10 @@
-// The window's build gates, all without showing it (the owner's rule: no window on the development PC).
+// The window's build gates, all without showing it (no window opens on a build machine).
 //   Describe()        --smoke: every page's text, support view included.
 //   RenderPages(...)  --smoke-render (G-RENDER, G-NOINT, G-A11Y): every page drawn to PNG at the default and the
 //                     minimum window size; overlap, horizontal overflow, scroll range and page width checked; the text
 //                     of every page outside the support view checked for internals; every interactive control checked
 //                     for an accessible name; the guide panel's text present with and without the character; and
-//                     G-SMALL, the owner's rule of 2026-10-12: the right-hand panel is out of the window on a small
+//                     G-SMALL, the rule: the right-hand panel is out of the window on a small
 //                     screen (RenderOptions.WorkArea, so the render never reads the screen it runs on) and in it on a
 //                     screen with room for it.
 //   CheckLabels(...)  --smoke-labels: every page under the label layout rule of LabelLayout.cs (fact M898).
@@ -74,7 +74,7 @@ namespace AmdgpuWddmControl
                     ActiveBytes = (ulong)inUseMiB << 20, RequestedMiB = inUseMiB, ObservedBlock = block,
                 };
             }
-            // The graphics cores as a BC-250 answers them (owner, 2026-10-14): the firmware's own stock set (CC
+            // The graphics cores as a BC-250 answers them: the firmware's own stock set (CC
             // 0xFFF80000 per shader array, so pairs 1 to 3 of each group are fixed and 4 and 5 are free) and a
             // confirmed start of 30 of the 40 cores. Without this the map of pairs can only be drawn read-only,
             // and no render gate would ever measure a cell a person can click.
@@ -266,7 +266,7 @@ namespace AmdgpuWddmControl
                 if (room.Width > 0) want = new Size(Math.Min(want.Width, room.Width), Math.Min(want.Height, room.Height));
                 ClientSize = want;
                 BuildShell();
-                // The owner's rule of 2026-10-12: the right-hand panel is out of the window on a small screen, and in
+                // The rule: the right-hand panel is out of the window on a small screen, and in
                 // it on a screen that has room for it. Both directions are findings, so neither can drift.
                 bool sideInWindow = _side != null && HasVisibleFlag(_side);
                 if (SmallScreen && sideInWindow) w.AppendLine("G-SMALL" + size.Name + ": the side panel shows on a small screen");
@@ -310,7 +310,7 @@ namespace AmdgpuWddmControl
                     if (_fixture && page == "system")
                         foreach (var anchor in new[] { "system.background", "system.updates", "system.drivers", "system.drive" })
                             if (!_anchors.ContainsKey(anchor)) w.AppendLine(where + ": Windows setting missing for this board: " + anchor);
-                    // The map of the pairs of graphics cores (owner, 2026-10-14) is folded away until a person asks
+                    // The map of the pairs of graphics cores is folded away until a person asks
                     // for it, so no run above draws its four rows of five check boxes. The page is measured again
                     // with the map open, by the same rules, and folded back before the next page.
                     if (page == "graphics" && !_cuMapOpen)
@@ -368,7 +368,7 @@ namespace AmdgpuWddmControl
             // order it really works in. The loop above sets the client size and builds after it; the live window
             // does the opposite - it takes its sizes and builds its page before it has a handle, and only then does
             // Windows clamp the window to the desktop and FitToScreens place it. Two things follow, and both were
-            // wrong on the owner's 800x600 screen (GitHub #38): the smallest size the window allows must fit that
+            // wrong on a tester's 800x600 screen (GitHub #38): the smallest size the window allows must fit that
             // screen, or Windows cannot clamp the window at all and the page loses its right edge; and the page
             // must be built again for the column that is left after the clamp, which the Load handler does with
             // RebuildIfWidthChanged.

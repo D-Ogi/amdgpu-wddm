@@ -1,5 +1,5 @@
 # How soon Nagi Control App and the single-file setup put their first window on the lab's screen, cold and warm, and
-# whether a second start of the control app opens nothing and brings the first one forward (owner, 2026-10-14).
+# whether a second start of the control app opens nothing and brings the first one forward (2026-10-14).
 # Windows PowerShell 5.1, over ssh (elevated, session 0), bounded to three minutes:
 #
 #   python tools\win\target.py ps tools\win\app-launch\measure-launch.ps1 -ControlExe <exe> -SetupExe <exe>

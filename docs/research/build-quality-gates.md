@@ -1,6 +1,6 @@
 # Fast build and candidate gates
 
-Owner direction,2026-09-26: enforce repeatable compiler/ABI/analysis checks without
+Direction,2026-09-26: enforce repeatable compiler/ABI/analysis checks without
 running a complete conformance or stress suite after each edit.
 
 ## Fast profile

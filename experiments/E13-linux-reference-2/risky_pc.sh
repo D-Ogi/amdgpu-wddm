@@ -6,12 +6,12 @@
 #
 #   risky_pc.sh reset      amdgpu_gpu_recover (debugfs), amdgpu's own reset of this part
 #   risky_pc.sh suspend    s2idle: amdgpu's suspend and resume. Unit A's RTC has no alarm (rtc_cmos: "no alarms", there
-#                          is no wakealarm file), so the wake is the owner's key press: BC250_WAKE=owner says they are there.
+#                          is no wakealarm file), so the wake is a key press at the lab: BC250_WAKE=owner says an operator is there.
 #   risky_pc.sh unload     console unbound, then modprobe -r amdgpu: its hw_fini. Hung the machine once (facts M42).
 #   risky_pc.sh reload     modprobe amdgpu again after an unload in the same boot. Took the machine down once (boot 7):
 #                          the second bring-up after a teardown, the very thing facts M44 is about under Windows.
 #
-# Owner's consent needed for each; run them last, in this order, with everything else already pulled.
+# Explicit consent needed for each; run them last, in this order, with everything else already pulled.
 # SSH is a parameter so that the key and the known_hosts file stay where they are kept (outside the repository).
 set -u
 STEP=${1:?reset|suspend|unload|reload}
@@ -35,7 +35,7 @@ reset)
 	;;
 suspend)
 	# No way to wake, no sleep: the first attempt (boot 5) could not write wakealarm, slept anyway and stayed asleep until
-	# the owner came by. "Mądry Polak po szkodzie" (a Pole is wise after the damage).
+	# an operator came by. "Mądry Polak po szkodzie" (a Pole is wise after the damage).
 	if [ "${BC250_WAKE:-}" != owner ]; then echo "suspend needs BC250_WAKE=owner: this board cannot wake itself"; kill $tracer $logger; exit 2; fi
 	CMD="echo 'bc250 begin suspend' > $T/trace_marker; sync; echo mem > /sys/power/state; echo rc \$?; sleep 5; echo 'bc250 end suspend' > $T/trace_marker"
 	STEP_TIMEOUT=900
@@ -45,7 +45,7 @@ unload)
 	;;
 reload)
 	# BC250_WATCHDOG=1: the board's sp5100_tco watchdog (60 s) is fed by a shell loop for the step's duration, so a hard
-	# hang ends in a reset without the owner's hand. A load that survives stops the loop with the magic close.
+	# hang ends in a reset without a hand at the box. A load that survives stops the loop with the magic close.
 	WD=""; WDOFF=""
 	if [ "${BC250_WATCHDOG:-}" = 1 ]; then
 		WD="(exec 3>/dev/watchdog; while [ ! -e /tmp/e13/wd-stop ]; do echo . >&3; sleep 5; done; echo V >&3) & "

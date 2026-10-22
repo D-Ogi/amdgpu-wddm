@@ -3,7 +3,7 @@
 Date: 2026-10-14. Run 1 09:20:50-09:23:28Z, run 2 09:53:23-09:56:15Z (lab clock, which was about 9.5 s ahead of the
 development PC in run 2). Unit A, KMD rc4 of tester.31 (SYS B0E01A86,
 read on the lab before each run), 40 CU, the GPU at 500 MHz in every DPM sample of both runs (no clock change). The kit
-did not record the Windows build. Owner's report: the countdown window of the logon task (`start-window.ps1`, "Nagi
+did not record the Windows build. Visual report: the countdown window of the logon task (`start-window.ps1`, "Nagi
 start check") flashes now and then while its text counts down.
 
 ## Method

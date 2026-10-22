@@ -54,7 +54,7 @@
 #include <memory>
 #include <new>
 namespace native12 {
-// The train rule (owner, 2026-10-05): a finished, measured feature is on by default, with a switch to turn
+// The release rule: a finished, measured feature is on by default, with a switch to turn
 // it off. Measured: the plan A client 600 of 600 frames at FlipOnNextVSync (K227), The Witcher 3 2028 of
 // 2028 flips in exclusive fullscreen and 1696 of 1696 in borderless at the native mode with FlipImmediate,
 // 0 refusals, and a mode change away from a flipping chain without a black output (trial 478).

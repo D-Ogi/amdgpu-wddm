@@ -1,5 +1,4 @@
-// One window of Nagi Control App per person (owner, 2026-10-14: "Da się włączyć kilka Nagi Control App na raz -
-// kolejne nie powinny się otwierać"). The first start of the window owns a named mutex in the namespace of its own
+// One window of Nagi Control App per person. The first start of the window owns a named mutex in the namespace of its own
 // session (Local\), so a person who is signed in twice through fast user switching still has one window in each
 // session. A later start finds the mutex taken, sets the named event of the first start and ends without a window.
 // The first start waits on that event and brings its window to the front: the loading window while it still starts,

@@ -6,7 +6,7 @@ Source and package identities are in M503 and each run identity.json.
 On unit A, the persistent interactive task owns temporary Vulkan registration
 and restores the baseline in its finally block. Run001 executes the upstream
 fcc-blit-between-clears control: pass, exit 0, baseline restored. Host controls
-verify fail/crash/timeout/warn stop subsequent execution and owner STOP prevents
+verify fail/crash/timeout/warn stop subsequent execution and the STOP flag prevents
 the next test. The guard checks clocks, temperature and GPU session every five
 seconds between cases; upstream supplies the 45-second test timeout.
 

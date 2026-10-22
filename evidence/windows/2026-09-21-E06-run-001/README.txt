@@ -25,7 +25,7 @@ Order of events (file name suffix is the target's local time, HHMMSS):
   install-081053.txt, state-*-081053, kmd-after-reinstall-081106.txt
                                       installed again, stage 61, escape OK; the driver stays installed
   screen-after-reinstall.jpg          half-scale capture through bc250mon. A capture shows what the compositor
-                                      holds; the owner, at the screen, reported that the picture fills the panel.
+                                      holds; a visual check at the screen showed that the picture fills the panel.
   sweep-interleaved.log               side measurement, taken before the install: every GC register followed by a
                                       read of GRBM_READ_ERROR. The error value was already latched from the sweep
                                       before it and did not change, so this log does not say which read faults.

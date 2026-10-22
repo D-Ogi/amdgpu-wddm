@@ -22,8 +22,7 @@ exposure, so the script keeps the 30th frame. It needs `ffmpeg` on the path and 
 
 ## The crop is a rule, not a setting
 
-The camera sees the owner's room with the lab in it. The owner asked for the image to be cut down hard
-("Nalezy znaczaco przyciac obraz z kamery" - crop the camera image significantly), and the fractions above
+The camera sees a private room with the lab in it. The image must be cut down hard, and the fractions above
 keep unit A's monitor and its case alone.
 
 **Never keep an uncropped frame and never look at one.** If the camera moves, measure a new crop and change
@@ -40,7 +39,7 @@ This repository holds the instrument and nothing it produced.
 - A hung or dark machine, told apart from a machine that only lost the network.
 - The fire watch. After a hot or high-power run, a game session or a clock ceiling test, and after every hang,
   look at the case for smoke, flame or a glow. On any sign, cut the mains with the smart plug at once
-  (`tools/win/smartplug`) and tell the owner.
+  (`tools/win/smartplug`) and report it at once.
 
 A frame proves what the screen shows. It proves nothing about the operating system: ask ssh, or the emergency
 channel in `tools/win/lab-emerg`, before you call the unit alive.

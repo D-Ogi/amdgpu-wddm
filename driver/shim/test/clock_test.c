@@ -3,7 +3,7 @@
 #include "bc250_clock.h"
 #include "smu_v11_8_ppsmc.h"
 static int checks,failures;
-typedef char clock_hot_is_87c[(BC250_CLOCK_HOT_MC==87000)?1:-1]; // owner decision 2026-10-01 (85000 before)
+typedef char clock_hot_is_87c[(BC250_CLOCK_HOT_MC==87000)?1:-1]; // since 2026-10-01 (85000 before)
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL line%d: %s\n",__LINE__,#x);}}while(0)
 #define MAXMSG 128u
 struct backend {int held,begin_count,end_count,temp_count,fail_begin,fail_temp,fail_message,temp,read_delta;
@@ -97,7 +97,7 @@ int main(void){
  unsigned path,step;
  positive(1000,116,1500,919); // voltage up, then clock up
  // The points under the lab floor (900 and 800 MHz for the thermal cap, 0.7.205; 500 MHz for the idle
- // state, 0.7.207, both owner decisions of 2026-10-05): the same voltage
+ // state, 0.7.207): the same voltage
  // as the floor, so no staging, and the same two messages, sent without the import (subfloor_commit).
  positive(1000,116,900,820);   // the lab floor down to 900 MHz
  positive(1000,116,800,820);   // and to 800 MHz
@@ -159,7 +159,7 @@ int main(void){
   struct backend b=setup(step?1000:0,step?256:116,1000,820);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
   CHECK(bc250_clock_prepare(&c,1000,820,&r)==BC250_CLOCK_STATE_INVALID);CHECK(b.count==2 && !r.ready && b.end_count==1);
  }
- // The limit is 87 C (owner decision 2026-10-01; 85 C before; clock_hot_is_87c): refused from 87000 mC on,
+ // The limit is 87 C (since 2026-10-01; 85 C before; clock_hot_is_87c): refused from 87000 mC on,
  // carried out at 86999.
  {struct backend b=setup(1000,116,1500,919);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);b.temp=87000;
   // Hot: a raise is refused after the two readbacks and before any request.

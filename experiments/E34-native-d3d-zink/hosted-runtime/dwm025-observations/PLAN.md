@@ -25,5 +25,5 @@ Compile router and producer, verify hashes and targetPS5 syntax before launch.
 Check STOP,health15/guard0,1000MHz/820mV and temperature below85C. Collect loss
 accounting, DWM module/execution proof, static and moving shapes, retained Blts,
 returned caps and paint counts. Preserve receipts, verify baseline restoration,
-remove terminal tasks. No owner visual verdict is inferred from screenshots.
+remove terminal tasks. No visual verdict of the lab monitor is inferred from screenshots.
 This diagnostic cannot close G0 or prove residency through GPU retirement.

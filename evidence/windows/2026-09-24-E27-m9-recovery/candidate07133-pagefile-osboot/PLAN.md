@@ -1,6 +1,6 @@
 # Large GPU residency and bounded NVMe backing
 
-Owner request2026-09-24: test GPU residency covering75% of the physical16GiB,
+Requirement2026-09-24: test GPU residency covering75% of the physical16GiB,
 therefore12GiB, and provide sensible page-file capacity. Allocation success or
 full model offload does not meet the residency requirement.
 
@@ -10,7 +10,7 @@ The present local segment cannot hold12GiB simultaneously. Do not substitute
 75% of that smaller segment or a paged12GiB allocation as acceptance. Increasing
 local carve-out or enabling sufficient concurrently resident shared memory needs
 separate implementation/configuration and evidence. Firmware writes retain the
-owner's explicit-consent rule; no firmware change is part of this plan.
+explicit-consent rule; no firmware change is part of this plan.
 
 Page-file preparation, before changes: automatic management, current7936MiB,
 peak90MiB; current commit3965624320/16617541632bytes; C volume481573347328bytes
@@ -78,7 +78,7 @@ Queries are samples, not proof of uninterrupted residency between samples.
 
 Validate the new mode first at64MiB on unchanged133, then6GiB within the current
 8GiB carve-out if the control passes.6GiB is instrument/capacity progress only,
-not the owner's12GiB acceptance. Preserve exact probe hash, all snapshots,
+not the12GiB acceptance. Preserve exact probe hash, all snapshots,
 completion counters, pagefile/commit and clocks/temperature. A failed allocation
 or budget query is a result to inspect, not grounds to drop the witness.
 The local WDK26100 declarations and Microsoft descriptions for

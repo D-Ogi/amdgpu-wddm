@@ -116,7 +116,7 @@ namespace AmdgpuWddmControl
     }
     public static class LayoutRules
     {
-        // The screen rule the owner asked for on 2026-10-12: on a 1024x768 or 800x600 screen, and on every smaller one,
+        // The screen rule: on a 1024x768 or 800x600 screen, and on every smaller one,
         // the guide panel with the character and the whole right-hand panel it sits in do not show. A screen that small
         // has no room for a 300 px column beside the page: on the tester's 800x600 screen (GitHub #38) the panel covered
         // the text of the page. The user's own "Show Nagi" choice is untouched by this; it decides on a larger screen.

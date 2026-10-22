@@ -63,7 +63,7 @@ namespace Bc250Mon
                     }
                 }
                 catch { panel.Rows.Add(new Row("Modules", "cannot inspect current DWM", Level.Warn)); }
-                // The GPU desktop route (owner 2026-10-01): DWM maps the zink build of the UMD and draws through RADV.
+                // The GPU desktop route (2026-10-01): DWM maps the zink build of the UMD and draws through RADV.
                 // The zink build changes with every Mesa update, so the module names, not a hash list, identify it.
                 if (zink != null)
                 {

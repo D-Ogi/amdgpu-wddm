@@ -9,9 +9,9 @@ Run 006: bc250kmd 0.7.6 (commit 9e042e2) = 0.7.5 plus tracing wrappers on the ch
 
 Run 007: bc250kmd 0.7.7 (commit f5ab660): the full table's modes carry 60 Hz instead of FREQUENCY_NOTSPECIFIED.
   22:16:29  install (gates closed), stage 61, confirmed.   22:17:43  gate -Full 1 (gate-x-221743 is cut short).
-  ~22:18    BUGCHECK 0x113 VIDEO_DXGKRNL_FATAL_ERROR, seen by the owner on the screen. Restart with the gate still
+  ~22:18    BUGCHECK 0x113 VIDEO_DXGKRNL_FATAL_ERROR, seen by the operator on the screen. Restart with the gate still
             open in the registry: second bugcheck (dump written 22:22:26). Third boot: the start budget refuses the
-            start (stage 90, UnconfirmedStarts 2); the owner brought the machine up in safe mode with networking
+            start (stage 90, UnconfirmedStarts 2); the operator brought the machine up in safe mode with networking
             (boot 22:24:45). Gate closed by hand over SSH, budget cleared.
   bugcheck-analyze-excerpt.txt: 0x113, Arg1 0x1C, Arg2 1, Arg3 1 (= the RotationSupport value we passed, Identity
             only), in dxgkrnl!DMMVIDPNPRESENTPATH::SetRotationSupport, under

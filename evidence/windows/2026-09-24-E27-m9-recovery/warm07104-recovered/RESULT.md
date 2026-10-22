@@ -1,6 +1,6 @@
 # M332 - Warm07104 persisted evidence recovered
 
-Read-only recovery after restoration of AC. Owner reports Windows desktop; pinned SSH identity rediscovered. Current boot is 2026-09-24T03:06:12 local. Installed SYS hash matches candidate 0.7.104.1: 9EE1AA001125B414DC7CBB0382ABF6838427223D8130F1A89505D402D32B69CF. Current adapter is healthy display-only, EnableFullWddm=0, LastStage=61, UnconfirmedStarts=2.
+Read-only recovery after restoration of AC. A visual check shows the Windows desktop; pinned SSH identity rediscovered. Current boot is 2026-09-24T03:06:12 local. Installed SYS hash matches candidate 0.7.104.1: 9EE1AA001125B414DC7CBB0382ABF6838427223D8130F1A89505D402D32B69CF. Current adapter is healthy display-only, EnableFullWddm=0, LastStage=61, UnconfirmedStarts=2.
 
 The failed M330 warm startup's last persisted snapshot is ring-20260924-001459-614.log, SHA256 32998FAC00A9E4CFD9B16137B3B34AEAFA83CEA11479F561A30208B8C1B6C18D. It ends at CP1 scheduler-read, line 65, elapsed 0.393 s. No scheduler-write/done follows. Prior startup stages, PSP commands and RLC stage report success. GFX stage 5 reports seven writes, compared with eight during M328 first startup; this is an observation, not a causal diagnosis.
 

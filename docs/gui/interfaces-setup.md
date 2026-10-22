@@ -21,7 +21,7 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-EventsFile <path>` | events, appended (section 2) |
 | `-ResultFile <path>` | the terminal result, written once (section 3); a stale file is deleted at the start |
 | `-Plan` | checks and the decision only; changes nothing |
-| `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them (owner, 2026-10-12) |
+| `-AcceptTestSigning`, `-BitLocker HaveKey\|Suspend` | passed by every run the window starts, and accepted from a script. The window asks nobody for them |
 | `-StartMenuShortcut\|-NoStartMenuShortcut`, `-DesktopShortcut\|-NoDesktopShortcut` | the two places of the shortcut, one pair each. The window passes the switch of an answer it has. A run with no answer of its own passes neither switch, so the answer the first run saved stands. The continuation after a restart is such a run. |
 | `-Wallpaper\|-NoWallpaper` | the Nagi wallpaper box, with the same rule as the shortcut pairs (`InstallFlow.WallpaperArguments`) |
 | `-BootLogo\|-NoBootLogo` | the box for the picture on the start screen, with the same rule again (`InstallFlow.BootLogoArguments`). The answer is the driver setting `Parameters\BootLogo`, whose default is the absent value. A run with no answer of its own keeps the answer the installed driver carries |
@@ -29,7 +29,7 @@ The window starts `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy By
 | `-DeadlineUtc <ISO 8601 UTC>` | stop at the first stop point after this time (section 10) |
 | `-HoldWindow` | command line only (the RunOnce continuation, section 4): wait for Enter before the console window closes; ignored with `-Gui` |
 
-**Nothing is asked of the user** (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika!"). The plan
+**Nothing is asked of the user**. The plan
 screen carries no permission control, and its Install button is never off. Pressing it is
 the decision. The boxes it does carry are choices between good outcomes, each with a default that needs no
 attention: the optional Windows tuning and the two places of the shortcut. `InstallFlow.PlanOptionIds`
@@ -40,7 +40,7 @@ render gate G-CONSENT refuses a screen that grows a permission control or a disa
 happens by itself after a visible 15-second countdown, in the window and on the console. "Restart now" and "Later"
 are offered, and neither is required. Every preflight refusal that protects the machine is unchanged.
 
-**The Microsoft Visual C++ runtime comes with the package** (owner, 2026-10-12: "powinien byc auto-installer!!!").
+**The Microsoft Visual C++ runtime comes with the package**.
 The driver's programs are built against the Microsoft Visual C++ 2015-2022 runtime (x64). The package carries
 Microsoft's own installer as `payload\redist\vc_redist.x64.exe`. The preflight check `vcruntime` reads the file
 versions of `vcruntime140.dll`, `vcruntime140_1.dll` and `msvcp140.dll` in `System32` and asks for the install when
@@ -53,12 +53,12 @@ prints the step and runs nothing. The one refusal left is `vcruntime.no-installe
 and the package does not carry Microsoft's installer, or carries a changed copy of it. The window treats that id
 like a damaged package - a new try in the same session cannot fix it.
 
-**Which Windows the driver is made for.** The policy is the owner's n-2 of 2026-10-11: Windows 11 23H2 (22631),
+**Which Windows the driver is made for.** The policy is n-2: Windows 11 23H2 (22631),
 24H2 (26100), 25H2 (26200) and the general builds after them. `Get-WindowsSupportFindings` in
 `installer\common.ps1` holds it, and `Get-WindowsSupportState` reads the running PC for it. Windows 10 and older
 (below build 22000) and a 32-bit Windows are refused, as before (`windows.too-old`, `windows.not-x64`). A Windows
 11 below 22631 is one line that names the supported versions and advises an update
-(`windows.below-supported`), and the installation continues (owner, 2026-10-12: "tylko warning, nie blokada"). An
+(`windows.below-supported`), and the installation continues. An
 Insider build adds `windows.insider`. The channel comes from
 `HKLM\SOFTWARE\Microsoft\WindowsSelfHost\Applicability`. A PC in the Insider programme gets that line on a build
 outside the three tested ones. Any build at or above 27000 gets it as well. A PC enrolled on one of the three
@@ -86,8 +86,7 @@ that Windows lets start, such as a later signed one. `smartappcontrol.on` is not
 because the user turns it off while the window stays open, so Try again stays the default. A dry run takes `AMDGPU_WDDM_TEST_SAC` (`on`, `evaluation`,
 `off`, `missing` or a number) in place of the registry value, for the host tests.
 
-**Where to find the application afterwards** (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
-(domyslnie i menu start i pulpit)"). The plan screen has a card with two boxes, the Start menu and the desktop,
+**Where to find the application afterwards**. The plan screen has a card with two boxes, the Start menu and the desktop,
 both on. Neither holds the Install button back. A box opens on the answer the decision event reports
 (`start_menu_shortcut`, `desktop_shortcut`). Both are on where the engine reports neither. A run with no answer
 passes neither switch. The window states each answer it has on the command line
@@ -96,7 +95,7 @@ install wrote in a place this one leaves out, and the uninstall removes every on
 4 lists the three shortcuts. The render gate G-SHORTCUT refuses an install plan screen without the two boxes, a box
 that is off when the screen opens and a box that is not a system option control.
 
-The same card has a third box, "Set the Nagi wallpaper" (owner, 2026-10-13), on when the screen opens and opened on
+The same card has a third box, "Set the Nagi wallpaper", on when the screen opens and opened on
 the `wallpaper` answer of the decision event. It is an option, not a question. The engine only records the answer
 (`interfaces.md` section 4), and G-SHORTCUT checks this box the same way as the two others.
 
@@ -202,7 +201,7 @@ the exit code alone is never the outcome.
 | prepared | 0 | result.offline-prepared |
 
 `diagnostics` is the path of one text file the engine wrote next to its log, and `null` for every run that
-did not write one. It exists only when verify found a driver that did not start (owner, 2026-10-12: the
+did not write one. It exists only when verify found a driver that did not start (the
 installer collects the logs itself when the install does not pass). The file holds the driver's start and
 stop records, the device state with its problem code and name, this boot's entries of the display, PnP and
 service-control providers in the System log and of the DirectX kernel in its own two channels (that provider
@@ -303,7 +302,7 @@ translation `RELEASE-NOTES.<lang>.md` is used when present; otherwise the window
 
 ## 8. Setup window
 
-The zip unpacks to one folder that holds `setup.exe` and one folder, `files\` (owner, 2026-10-11). `files\` is the
+The zip unpacks to one folder that holds `setup.exe` and one folder, `files\`. `files\` is the
 package root: `manifest.json`, `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd`, `installer\`,
 `payload\`, `licenses\` and the documents. `setup.exe` is the only file outside it, and `manifest.json` carries its
 SHA256 and size under `setup` (a name, not a path), so the integrity check covers it wherever the copy sits.

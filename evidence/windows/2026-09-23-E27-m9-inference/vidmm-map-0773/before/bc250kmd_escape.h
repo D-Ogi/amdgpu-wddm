@@ -404,7 +404,7 @@ typedef struct _BC250_ESCAPE_SDMACOPY {
 
 // ---- BC250_ESCAPE_RUN_FBDUMP (dcn.c): a read-only band of the scanned-out surface's pixels ----------------------------
 //
-// The owner's request (2026-09-22): a screenshot that also works under the full WDDM table, where mon.py's GDI
+// The requirement: a screenshot that also works under the full WDDM table, where mon.py's GDI
 // capture shows black (facts M84) because CopyFromScreen reads the CDD's surfaces, not what the display controller
 // scans out. This reads HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS[_HIGH] and _SURFACE_PITCH fresh every call (the
 // same registers BC250_ESCAPE_RUN_DCN already dumps and BC250_ESCAPE_RUN_DCNFLIP already writes) and hands back

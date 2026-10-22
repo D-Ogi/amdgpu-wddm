@@ -24,7 +24,7 @@ Transition and control tasks were removed after terminal process checks.
 The final task list contains only the existing overlay and network watchdog.
 GPU Present0, CDD interop0, identity probe1. Exact159 rollback remains staged.
 Shared-import/lifecycle controls on160 and actual CDD interop/BGP1 remain next;
-this is not G0 acceptance and no owner visual verdict was requested.
+this is not G0 acceptance and no visual verdict was requested.
 
 JSON receipts are copied unchanged except independent-closure.json is a named
 field selection. Selected text keeps original relevant lines; full startup

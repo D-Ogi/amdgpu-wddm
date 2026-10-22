@@ -1,4 +1,4 @@
-// The ray tracing benchmark card's rules (owner, 2026-10-11: "chce karte benchmarku Q2 RTX"). Pure functions over
+// The ray tracing benchmark card's rules. Pure functions over
 // text, bytes and streams, so the host tests decide every case without a game, a driver or a process: Valve's
 // key-value text, the PAK directory, what makes a copy of the game usable, the command line of one pass, the result
 // line of the game's log, the thermal stop and the short history. The runner is src/BenchmarkRun.cs and the card is
@@ -424,7 +424,7 @@ namespace AmdgpuWddmControl
         }
     }
 
-    // The thermal stop of a pass (owner, 2026-10-04): at 89 C at once, or at 87 C held for 10 s. A sample the driver
+    // The thermal stop of a pass: at 89 C at once, or at 87 C held for 10 s. A sample the driver
     // cannot give is never a temperature: it neither stops a pass nor clears a hold, which is the rule the lab
     // harness keeps as well.
     public sealed class ThermalGuard

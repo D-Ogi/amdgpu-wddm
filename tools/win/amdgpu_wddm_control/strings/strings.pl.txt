@@ -1203,7 +1203,7 @@ help.auto.failed|rev|e242261b|Nie udało się zapisać automatycznego raportu di
 drv.verify.earlier-boot|mt|d7afb829|Ostatnia pełna kontrola nie powiodła się przed ponownym uruchomieniem. Zainstalowany sterownik teraz działa.
 status.verification-earlier-boot|mt|6b5b86e8|Ostatnia pełna kontrola była przed ponownym uruchomieniem. Zainstalowany sterownik teraz działa.
 
-# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in ----
 notice.guard.title|mt|660b2a51|Sterownik karty graficznej został wyłączony
 notice.guard.text|mt|1f5d6130|Sterownik karty graficznej został wyłączony, aby komputer dał się dalej używać: jego ostatnie uruchomienia nie dokończyły sprawdzenia.\nWindows rysuje teraz obraz swoim podstawowym sterownikiem ekranu, więc gry nie działają, a wszystko jest wolniejsze.\nMożesz włączyć sterownik karty graficznej z powrotem. Nic innego w tym komputerze się nie zmieni.
 notice.failed.title|mt|fb8e175f|Sterownik karty graficznej nie uruchomił się

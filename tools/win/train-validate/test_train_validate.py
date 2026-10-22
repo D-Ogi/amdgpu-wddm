@@ -5,7 +5,7 @@
 Nothing here reaches the lab, starts a process or sleeps: the whole sequence runs against a fake target
 (`FakeShell`) and a fake clock. The cases are the ones that cost a round in a real train: an arm that
 overruns its bound, a thermal stop, the overlay STOP flag, a failed health gate and a leftover attempt
-directory. The shipped `arms.json` is checked against the owner's bounds and against the lab scripts it
+directory. The shipped `arms.json` is checked against the project bounds and against the lab scripts it
 calls, so a renamed parameter fails here and not in the middle of a validation.
 """
 from __future__ import annotations
@@ -153,7 +153,7 @@ def small_plan(tmp: Path, data=None, attempt_base=600):
 
 
 class ShippedManifest(unittest.TestCase):
-    """The file the operator runs with, against the owner's rules and the scripts on disk."""
+    """The file the operator runs with, against the project rules and the scripts on disk."""
 
     def setUp(self):
         self.data = manifest.load_manifest()
@@ -213,7 +213,7 @@ class ShippedManifest(unittest.TestCase):
         self.assertIn("llama-completion.exe", staged)
 
     def test_every_text_check_asks_in_the_chat_template_and_the_hip_backend_gets_no_flash_attention(self):
-        # Owner, 2026-10-11: a raw prompt to an instruction model proves nothing (Gemma 12B gave the same
+        # 2026-10-11: a raw prompt to an instruction model proves nothing (Gemma 12B gave the same
         # 16 digits on HIP, Vulkan, an RTX 4090 and the CPU), and the HIP build of llama.cpp has no FA yet.
         template = ('-p "\' + $question + \'" -n 64 --temp 0 --seed 1234 -ngl 99 -c 2048 --jinja -cnv -st '
                     '--simple-io')
@@ -264,7 +264,7 @@ class ShippedManifest(unittest.TestCase):
             if arm["kind"] in HOST_KINDS and arm["kind"] != "restart":
                 self.assertIn("why_not_a_trial", arm, arm["id"])
 
-    def test_both_owner_gates_are_in_the_standard_set(self):
+    def test_both_release_gates_are_in_the_standard_set(self):
         standard = set(self.data["sets"]["standard"])
         gates = {arm["gate"] for arm in self.data["arms"] if arm.get("gate") and arm["id"] in standard}
         self.assertEqual(gates, {"rottr", "q2rtx"})
@@ -1088,7 +1088,7 @@ class ArmLoop(unittest.TestCase):
 
     def test_the_stop_flag_ends_the_run_before_the_arm_starts(self):
         run, shell, records = self.run_with([
-            ("mon.py stop?", Completed(1, "STOP requested by the owner")),
+            ("mon.py stop?", Completed(1, "STOP requested")),
             ("temp.py", Completed(0, "Tctl 61.5 C")),
         ])
         self.assertEqual(records["smoke"].verdict, SKIPPED)
@@ -1423,7 +1423,7 @@ class Summary(unittest.TestCase):
                      python="python")
         return run.run(self.plan.arms)
 
-    def test_a_clean_run_states_both_owner_gates_as_met(self):
+    def test_a_clean_run_states_both_release_gates_as_met(self):
         records = self.records([
             ("mon.py stop?", Completed(0, "no stop request")),
             ("temp.py", Completed(0, "Tctl 61.5 C")),
@@ -1435,7 +1435,7 @@ class Summary(unittest.TestCase):
         text = summary_module.write(self.plan, records, self.tmp / "out", train="b99")
         self.assertIn("# b99 lab validation: 0.7.0-tester.1 on unit A", text)
         self.assertIn("**Quake II RTX with ray tracing**: MET", text)
-        # The game arm ran well, and its score is still in a person's eyes: the owner's gate stays open
+        # The game arm ran well, and its score is still in a person's eyes: the release gate stays open
         # until that number is filled in. A met gate on an unread value is what blocked round one.
         self.assertIn("**Rise of the Tomb Raider**: NOT MET", text)
         self.assertIn("the operator still reads it from the screen", text)
@@ -1832,7 +1832,7 @@ class ShippedSetEndToEnd(unittest.TestCase):
 
     def test_operator_values_given_in_separate_summary_calls_are_all_kept(self):
         # r10 on 2026-10-11: the RotTR score went in first and the Witcher 3 rate later, in a second call.
-        # The second call must not drop the first value and reopen the owner's gate.
+        # The second call must not drop the first value and reopen the release gate.
         out = self.tmp / "out"
         self.validate.main(["run", "--package", str(self.package.directory), "--out", str(out),
                             "--train", "b99", "--attempt-base", "1"])
@@ -1871,9 +1871,9 @@ class ShippedSetEndToEnd(unittest.TestCase):
         want = next(call for call in self.shell.said("zipcheck.ps1"))
         self.assertEqual(len(want[want.index("-Want") + 1]), 64, "the lab compares the real SHA-256")
 
-    def test_a_quake_arm_that_runs_and_says_nothing_leaves_the_owner_gate_not_met(self):
+    def test_a_quake_arm_that_runs_and_says_nothing_leaves_the_release_gate_not_met(self):
         # rc 0, the extension line printed, the run to its bound and no frame rate: the shape BD-102 leaves.
-        # The shipped manifest used to report PASS here, and the owner's release gate read MET.
+        # The shipped manifest used to report PASS here, and the release gate read MET.
         self.shell.replies.insert(0, ("pt-run.ps1 -Demo q2rtx-timedemo -RtApi pipeline",
                                       Completed(0, "Using VK_KHR_ray_tracing_pipeline\n"
                                                    "end: reason bound, elapsed 170.4 s")))
@@ -1917,7 +1917,7 @@ class PlanText(unittest.TestCase):
         text = validate.plan_text(plan, tmp / "out", "b99")
         self.assertIn("pt-run.ps1", text)
         self.assertIn("bound 170 s", text)
-        self.assertIn("OWNER GATE rottr", text)
+        self.assertIn("RELEASE GATE rottr", text)
         self.assertIn("nothing above has run", text)
         self.assertIn("the operator's own session fits after the arms above", text)
 
@@ -2156,7 +2156,7 @@ class ValueJudgement(unittest.TestCase):
 
     def test_an_arm_that_ran_well_and_said_no_number_is_unread(self):
         # The shape of BD-102 on the q2rtx arms: the extension line is there, the run ends on its bound and
-        # the frame rate line is absent. rc 0 and PASS would have called the owner's gate met.
+        # the frame rate line is absent. rc 0 and PASS would have called the release gate met.
         records = {r.id: r for r in self.records(Completed(0, "Using VK_KHR_ray_tracing_pipeline\n"
                                                               "end: reason bound, elapsed 170.2 s"))}
         self.assertEqual(records["demo"].verdict, runner_module.UNREAD)
@@ -2165,7 +2165,7 @@ class ValueJudgement(unittest.TestCase):
         self.assertIs(records["demo"].baseline_ok, False)
         self.assertIn("no demo was read", records["demo"].reason)
 
-    def test_an_unread_arm_leaves_its_owner_gate_not_met_and_gets_its_symptom_shape(self):
+    def test_an_unread_arm_leaves_its_release_gate_not_met_and_gets_its_symptom_shape(self):
         records = self.records(Completed(0, "Using VK_KHR_ray_tracing_pipeline\n"
                                             "HARDWARE FENCE TIMEOUT on node 0\nend: reason bound"))
         text = summary_module.write(self.plan, records, self.tmp / "out", train="b99")
@@ -2232,7 +2232,7 @@ class Budgets(unittest.TestCase):
                       writer=lambda *a: None, python="python"), shell
 
     def test_a_game_arm_gives_its_session_room_to_pull_the_evidence(self):
-        # The session script holds the owner's game bound itself and then pulls the deferred ICD logs, the
+        # The session script holds the game bound itself and then pulls the deferred ICD logs, the
         # ETW files and the closure. In the b28 run those pulls were still going 10 minutes after the game
         # had closed, and the host backstop (bound + 45 s) marked a finished benchmark BOUND.
         data = manifest.load_manifest()
@@ -2324,13 +2324,13 @@ class StopFlagReading(unittest.TestCase):
 
     def test_an_answer_without_the_flag_halts_the_run_instead_of_running_the_arm(self):
         # The overlay API answered and the flags payload had no stop key: mon.py then printed nothing and
-        # exited 0. Reading that as 'no stop request' ran every arm with the owner's flag unread.
+        # exited 0. Reading that as 'no stop request' ran every arm with the STOP flag unread.
         run, shell, records = self.run_with(Completed(0, ""))
         self.assertEqual(records["smoke"].verdict, SKIPPED)
         self.assertIn("could not be read", run.halted)
         self.assertEqual(shell.said("vk-smoke.ps1"), [])
 
-    def test_an_error_of_the_monitor_is_not_reported_as_the_owners_stop(self):
+    def test_an_error_of_the_monitor_is_not_reported_as_a_stop_request(self):
         run, _, _ = self.run_with(Completed(2, "", "TargetError: no answer from the monitor"))
         self.assertIn("could not be read", run.halted)
         self.assertNotIn("is set", run.halted)

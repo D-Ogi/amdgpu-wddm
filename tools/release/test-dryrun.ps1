@@ -13,13 +13,12 @@
 # with a good and a changed folder. Needs network access to git.kernel.org and gitlab.com.
 param([Parameter(Mandatory)][string]$Package, [string]$WorkBase)  # WorkBase: scratch for test-filesafe.ps1
 # -Package takes the folder the zip unpacks to or the files\ folder under it: the package root is the one that holds
-# manifest.json (owner, 2026-10-11). The release recipe and an operator may name either.
+# manifest.json. The release recipe and an operator may name either.
 if ((Test-Path -LiteralPath (Join-Path $Package 'files\manifest.json') -PathType Leaf) -and
     -not (Test-Path -LiteralPath (Join-Path $Package 'manifest.json') -PathType Leaf)) {
     $Package = (Join-Path $Package 'files')
 }
-# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
-# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder, so one more level up than it used to be; an older flat package keeps the old place.
 if (-not $PSBoundParameters.ContainsKey('WorkBase')) {
     $packageTop = $(if ((Split-Path $Package -Leaf) -eq 'files') { Split-Path $Package } else { $Package })
     $WorkBase = Join-Path (Split-Path $packageTop) 'test-tmp'
@@ -127,10 +126,10 @@ Check ($r.text -match 'would: copy licenses\\ and THIRD-PARTY\.md -> .+\\license
 Check ($r.text -match 'would: Start menu shortcut .*\\Nagi Control App\.lnk') 'phase 2 shows the Start menu shortcut, with the name Nagi Control App'
 Check ($r.text -match 'would: desktop shortcut .*\\Nagi Control App\.lnk') 'phase 2 shows the desktop icon, with the name Nagi Control App'
 Check ($r.text -notmatch 'would: (Start menu|desktop) shortcut .*amdgpu-wddm Control') 'no shortcut is written under the old name'
-# The Nagi wallpaper (owner, 2026-10-13): on by default, recorded for Nagi Control App with a stamp of this run.
+# The Nagi wallpaper: on by default, recorded for Nagi Control App with a stamp of this run.
 Check ($r.text -match 'wallpaper: the Nagi wallpaper, set by Nagi Control App once for each person after the install is verified') 'phase 2 says the Nagi wallpaper is chosen'
 Check ($r.text -match 'would: HKLM:\\SOFTWARE\\amdgpu-wddm\\Release: Wallpaper = 1, WallpaperStamp = \S+ \d{8}T\d{6}Z') 'phase 2 records the wallpaper choice and its install stamp'
-# The picture on the start screen (owner, 2026-10-14): on by default, and the default writes nothing, because the
+# The picture on the start screen: on by default, and the default writes nothing, because the
 # driver reads an absent BootLogo as on. This PC has no bc250kmd service, so the walk-through sees no value.
 Check ($r.text -match 'start screen: Nagi on the start screen, by the release default') 'phase 2 says Nagi is drawn on the start screen'
 Check ($r.text -notmatch 'BootLogo') 'the default writes no BootLogo value: an absent value is the picture'
@@ -193,7 +192,7 @@ $sr = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-start-record.ps1'), '-Install
 $sr.text
 Check ($sr.code -eq 0) "start record: step failure / guard refusal / started after a failure / absent: exit $($sr.code)"
 
-# Owner, 2026-10-12: the installer collects the logs itself when the install does not pass. The decision and the
+# The installer collects the logs itself when the install does not pass. The decision and the
 # readers of that diagnostics file (test-diagnostics.ps1 under 5.1, an HKCU scratch key and a folder of this run),
 # with the field report 20261011T222253Z replayed as its first fixture.
 $dg = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-diagnostics.ps1'), '-Installer', (Join-Path $Package 'installer'), '-WorkRoot', (Join-Path $WorkBase 'diagnostics'))
@@ -710,7 +709,7 @@ Check ($r.code -eq 0) "G-OFF: exit $($r.code)"
 # The setup window against this package's real engine: a plan run and a dry run through the window's own engine client,
 # each screen in four languages without internals (--smoke-engine shows no window). Every package carries the window
 # from 0.7.216.100-tester.28 on (build-release.ps1 -SetupApp), so a package without it fails here.
-# The unpacked release holds setup.exe in its top folder, one level above the package root (owner, 2026-10-11);
+# The unpacked release holds setup.exe in its top folder, one level above the package root;
 # a kept repair set or a prepared folder holds its copy in the package root itself (common.ps1, Get-PackageSetupExe).
 $setupExe = @((Join-Path $Package 'setup.exe'), (Join-Path $Package '..\setup.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { [IO.Path]::GetFullPath($_) })[0]
 Check ([bool]$setupExe) 'the package carries the setup window (setup.exe in the unpacked release''s top folder)'
@@ -736,7 +735,7 @@ if ($setupExe) {
     }
     $cr0 = Get-Content -LiteralPath (Join-Path $Package 'compatibility.json') -Raw | ConvertFrom-Json
     # The setup window is the one file of the zip outside the package root, so the manifest carries it under "setup"
-    # instead of in files[] (build-release.ps1, owner 2026-10-11). Both hashes are the exe that was packaged.
+    # instead of in files[] (build-release.ps1). Both hashes are the exe that was packaged.
     Check (($cr0.continuation.setup_exe -eq 'setup.exe') -and ($m.setup) -and ([string]$m.setup.file -eq 'setup.exe') -and
            (([string]$m.setup.sha256) -eq (Get-FileHash -LiteralPath $setupExe -Algorithm SHA256).Hash)) 'the compatibility record names the setup window as the continuation, manifest.json hashes it under "setup"'
     Check (@($m.files | Where-Object { $_.path -like '*amdgpu_wddm_setup.exe' -or $_.path -eq 'setup.exe' }).Count -eq 0) 'the package root holds no second copy of the setup window'

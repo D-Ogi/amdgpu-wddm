@@ -23,7 +23,7 @@
     "bytes": 851272298,
     "sha256": "0f7908056f60ac917a3c2f7a50fcda1e0e26a1e72791198d1a98e454495c66c2",
     "verified_against_lab": true,
-    "scope": "Owner-approved full lab kernel dump retained in scratch only; never commit dump bytes"
+    "scope": "Approved full lab kernel dump retained in scratch only; never commit dump bytes"
   },
   "raw_dump_in_repository": false
 }

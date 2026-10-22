@@ -3,7 +3,7 @@
 // Global hotkeys work in both modes and while hidden:
 //   Ctrl+Alt+F9 controls, Ctrl+Alt+F10 hide/show, Ctrl+Alt+F12 STOP.
 // Function keys, not letters: on the Polish layout (and every other AltGr layout) AltGr is Ctrl+Alt, so a
-// global Ctrl+Alt+<letter> swallows the letter the owner is trying to type - Ctrl+Alt+S ate "s with acute".
+// global Ctrl+Alt+<letter> swallows the letter the user is trying to type - Ctrl+Alt+S ate "s with acute".
 using System;
 using System.Drawing;
 using System.Linq;
@@ -110,7 +110,7 @@ namespace Bc250Mon
             Dock_();
         }
 
-        // A hotkey another process already owns is refused silently by Windows, and the owner would then press
+        // A hotkey another process already owns is refused silently by Windows, and the user would then press
         // it and see nothing happen. Say so in the log instead.
         void Hotkey(int id, Keys key, string what)
         {

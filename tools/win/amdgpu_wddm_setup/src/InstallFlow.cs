@@ -1,4 +1,4 @@
-// What the installer does without asking (owner, 2026-10-12: "Przestan wymagac potwierdzen od uzytkownika").
+// What the installer does without asking.
 //
 // Pressing Install in the window, or running install.cmd on the command line, IS the consent for what an
 // installation of this driver needs: Windows test mode, and a pause of BitLocker protection for the restarts the
@@ -42,8 +42,7 @@ namespace AmdgpuWddmSetup
         //   testModeOff: the plan found Windows test mode off, so the install turns it on (check testsigning.inactive)
         //   bitLockerState: the state the engine's decision reports
         //   vcRuntimeMissing: the plan found the Microsoft Visual C++ runtime missing or too old, so the install
-        //                     installs it from the file the package carries (check vcruntime.missing, owner
-        //                     2026-10-12: "powinien byc auto-installer!!!")
+        //                     installs it from the file the package carries (check vcruntime.missing)
         public static string[] PlanChangeIds(bool testModeOff, string bitLockerState, bool vcRuntimeMissing = false)
         {
             var ids = new List<string>();
@@ -58,8 +57,7 @@ namespace AmdgpuWddmSetup
             return ids.ToArray();
         }
 
-        // The shortcuts of the control application (owner, 2026-10-12: "pytajmy tez czy zrobic skrot na pulpicie
-        // (domyslnie i menu start i pulpit)"). Both are on, and neither answer holds the install back: the switches
+        // The shortcuts of the control application. Both are on, and neither answer holds the install back: the switches
         // below only choose where the shortcuts go. An answer the window shows is stated on the command line, so
         // this run decides over the answer an earlier run of the same install saved.
         // An answer nobody stated (null) passes no switch, exactly as the Windows tuning does: the run that
@@ -74,7 +72,7 @@ namespace AmdgpuWddmSetup
             return args.ToArray();
         }
 
-        // The Nagi wallpaper (owner, 2026-10-13): set once for each person after the install is verified, unless the
+        // The Nagi wallpaper: set once for each person after the install is verified, unless the
         // box is cleared. The same rule as the shortcuts: an answer nobody stated passes no switch. The engine only
         // records the answer (install.ps1, Release\Wallpaper); Nagi Control App sets the picture.
         public static string[] WallpaperArguments(bool? wallpaper)
@@ -82,7 +80,7 @@ namespace AmdgpuWddmSetup
             return wallpaper.HasValue ? new[] { wallpaper.Value ? "-Wallpaper" : "-NoWallpaper" } : new string[0];
         }
 
-        // The picture on the start screen (owner, 2026-10-14), on in the same way. The same null rule carries the
+        // The picture on the start screen, on in the same way. The same null rule carries the
         // choice of an earlier install over a reinstall or an upgrade: an answer nobody stated passes no switch, and
         // the engine then leaves the value the installed driver already has (Get-BootLogoPlan in installer\common.ps1).
         public static string[] BootLogoArguments(bool? bootLogo)

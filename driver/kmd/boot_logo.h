@@ -62,8 +62,8 @@ BC250_BOOT_LOGO_RESULT Bc250BootLogoVerify(const BC250_BOOT_LOGO* Logo);
  * fits in the surface's width and in the band the picture may use.
  *
  * The band is the top BC250_LOGO_BOTTOM_PERMILLE thousandths of the surface. Windows draws its own ring below
- * that line and the ring must stay untouched (owner, 2026-10-14: the mascot goes in the logo area above the
- * ring, never over it), so no pixel of the picture is ever placed below the line, whatever AnchorPermille asks
+ * that line and the ring must stay untouched (the mascot goes in the logo area above the ring, never over
+ * it), so no pixel of the picture is ever placed below the line, whatever AnchorPermille asks
  * for. Placement is cleared unless the result is Bc250LogoDrawn. */
 #define BC250_LOGO_BOTTOM_PERMILLE 550ul
 BC250_BOOT_LOGO_RESULT Bc250BootLogoPlace(const BC250_BOOT_LOGO* Logo, const BC250_BOOT_LOGO_TARGET* Target,

@@ -23,7 +23,7 @@
 // An absent value means on from 0.7.213.100-tester.15, where the front became a shipped feature. Zero
 // means off, and off is byte for byte the router that shipped; so does any other value kind.
 // The value is read per `OpenAdapter`, so it is start-latched for `dwm.exe`: a change needs a Windows
-// restart, which is also what a new compositor process needs (owner, 2026-10-03, after BD-060).
+// restart, which is also what a new compositor process needs (after BD-060).
 //
 // HOW THE HANDLES STAY IDENTICAL. The front's per-device record lives in the device private block the
 // runtime allocates, placed AFTER the hosted driver's own block. `hDrvDevice` is therefore the same

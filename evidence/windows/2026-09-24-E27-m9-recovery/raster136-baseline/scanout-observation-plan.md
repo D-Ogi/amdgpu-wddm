@@ -21,7 +21,7 @@ OTG position/blank bounds from original AMD headers; validate EARLIEST_INUSE
 against the settled programmed scanout address. A missing diagnostic route is
 an instrumentation gap, not evidence of a register value. Then use the existing
 shared-pixel/60-present and GPU-content controls, diagnostic old-buffer-report
-counter and owner-visible pacing. Ambiguous deferred observations remain open.
+counter and visible pacing. Ambiguous deferred observations remain open.
 No forced bugcheck, VRR, interlace or own modeset is part of this trial.
 
 Result: pending. Exact deployed state lives in the workspace STATE.md.

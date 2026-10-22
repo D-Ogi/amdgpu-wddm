@@ -8,13 +8,12 @@
 # prepared folder is made by a real download (network needed for that one step only).
 param([Parameter(Mandatory)][string]$Package, [string]$WorkRoot, [string]$FirmwareDir)
 # -Package takes the folder the zip unpacks to or the files\ folder under it: the package root is the one that holds
-# manifest.json (owner, 2026-10-11). The release recipe and an operator may name either.
+# manifest.json. The release recipe and an operator may name either.
 if ((Test-Path -LiteralPath (Join-Path $Package 'files\manifest.json') -PathType Leaf) -and
     -not (Test-Path -LiteralPath (Join-Path $Package 'manifest.json') -PathType Leaf)) {
     $Package = (Join-Path $Package 'files')
 }
-# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder
-# (owner, 2026-10-11), so one more level up than it used to be; an older flat package keeps the old place.
+# Default scratch: beside the folder the zip unpacks to, never inside it. The package root is files\ of that folder, so one more level up than it used to be; an older flat package keeps the old place.
 if (-not $PSBoundParameters.ContainsKey('WorkRoot')) {
     $packageTop = $(if ((Split-Path $Package -Leaf) -eq 'files') { Split-Path $Package } else { $Package })
     $WorkRoot = Join-Path (Split-Path $packageTop) 'test-tmp'
@@ -49,7 +48,7 @@ function Invoke-Ps51([string[]]$ScriptArgs, [switch]$Offline, [string]$StateDir)
 }
 # A copy of a folder: hard links (no second copy of 180 MB), except the subfolders named in -RealCopy.
 # The setup window travels with the copy. In an unpacked release it sits one level above the package root
-# (<root>\..\setup.exe, owner 2026-10-11) and the loop below would not see it; in a prepared folder or a kept
+# (<root>\..\setup.exe) and the loop below would not see it; in a prepared folder or a kept
 # repair set it sits in the folder itself and the loop takes it. Either way the copy gets it in the folder, which
 # is where Get-PackageSetupExe looks for a package that is not an unpacked release.
 function Copy-Linked([string]$From, [string]$To, [string[]]$RealCopy = @()) {

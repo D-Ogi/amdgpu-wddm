@@ -1,7 +1,7 @@
 # Builds the tester release package: one folder and its zip that a tester unpacks and runs (the setup window
 # setup.exe, or files\install.cmd on the command line).
 #
-# Layout of the unpacked release (owner, 2026-10-11): the top folder holds setup.exe and nothing else but one folder,
+# Layout of the unpacked release: the top folder holds setup.exe and nothing else but one folder,
 # files\, which holds the whole package (manifest.json, install.cmd and the other command-line entries, installer\,
 # payload\, licenses\, the documents). files\ is therefore the package root that manifest.json describes and that
 # every installer script works from, and setup.exe is the only file outside that list: manifest.json records it under
@@ -230,7 +230,7 @@ if ($BuildRecords) {
     if (-not (Test-Path -LiteralPath $BuildRecords)) { throw "-BuildRecords $BuildRecords does not exist" }
     $provenanceArgs += @('--build-records', $BuildRecords)
 }
-# A lab candidate is built from a work tree on purpose: the lab test comes before the commit (owner rule), so the
+# A lab candidate is built from a work tree on purpose: the lab test comes before the commit, so the
 # commit that the payload rows would name does not exist yet and no remote-tracking branch can contain it. The gate
 # is then off for this build, the reason is required, and manifest.json carries both, so a package that nobody could
 # tie to published commits cannot look like a gated release. A shipping package is built again after the commit,
@@ -293,7 +293,7 @@ foreach ($destination in $tuningDestinations) {
         $tuningRows += [pscustomobject]@{ component = 'system-tuning'; path = "$destination/$tuningFile" }
     }
 }
-# The Nagi wallpaper (owner, 2026-10-13): the obfuscated container next to the control application, which decodes
+# The Nagi wallpaper: the obfuscated container next to the control application, which decodes
 # it for each person (tools\win\amdgpu_wddm_control\art\wallpaper\PROVENANCE.md). No plain picture enters the
 # package; the header and the SHA-256 of the picture inside are checked here, so a damaged file stops the build.
 $wallpaperRows = @()
@@ -327,8 +327,7 @@ foreach ($h in 'New', 'Fixed', 'Known issues', 'Settings affected') {
     if ($notesText -notmatch ('(?m)^## ' + [regex]::Escape($h) + '\s*$')) { throw "release notes $notes lack the section '## $h'" }
 }
 # The notes ship as RELEASE-NOTES.md and the setup window shows them, so they may not send a tester to a path this
-# package does not have. The unpacked release holds setup.exe in its top folder and everything else in files\
-# (owner, 2026-10-11), so the setup path of the notes up to 0.7.216.100-tester.28 is gone.
+# package does not have. The unpacked release holds setup.exe in its top folder and everything else in files\, so the setup path of the notes up to 0.7.216.100-tester.28 is gone.
 if ($notesText -match 'setup\\amdgpu_wddm_setup\.exe') {
     throw "release notes $notes still name setup\amdgpu_wddm_setup.exe: a tester double-clicks setup.exe in the unpacked folder, and the command line is files\install.cmd"
 }
@@ -393,7 +392,7 @@ foreach ($f in $sources.files) {
 # package up to tester.12, and it read as the tester-facing note. This runs after the last document is copied, so it
 # covers every one of them. The release notes are the one exception: they are chosen by version above, and they name
 # an earlier release where a tester has to know about it. A version token is read whole, with the "vR" of a second
-# issue (0.7.216.100-tester.29v2, owner 2026-10-13): read without it, every mention of this package's own version
+# issue (0.7.216.100-tester.29v2): read without it, every mention of this package's own version
 # would count as the other release 0.7.216.100-tester.29.
 foreach ($d in Get-ChildItem -LiteralPath $pkg -File -Filter '*.md') {
     if ($d.Name -like 'RELEASE-NOTES*') { continue }
@@ -646,7 +645,7 @@ $blobs = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File | Where-Object {
 if ($blobs.Count) { throw "AMD firmware in the package (the installer downloads it): $($blobs.FullName -join ', ')" }
 '  no private-key material, no firmware file'
 # The unpacked release's top folder: setup.exe (with its configuration file, when there is one) and the one folder
-# files\, nothing else (owner, 2026-10-11). A document or a script that creeps back into the top folder is a finding
+# files\, nothing else. A document or a script that creeps back into the top folder is a finding
 # here, not something a tester has to sort out.
 $topFiles = @(Get-ChildItem -LiteralPath $pkgRoot -File | ForEach-Object { $_.Name } | Where-Object { $_ -notin 'setup.exe', 'setup.exe.config' })
 $topDirs = @(Get-ChildItem -LiteralPath $pkgRoot -Directory | ForEach-Object { $_.Name } | Where-Object { $_ -ne 'files' })
@@ -949,7 +948,7 @@ $manifest = [ordered]@{
     provenance_gate_reason = $script:provenanceGateReason
     release_certificate = $release.Thumbprint
     # The setup window: the one file of the zip that is not under the package root, because the unpacked release puts
-    # it in the top folder (owner, 2026-10-11). "file" is a name, not a path: the unpacked release keeps it beside
+    # it in the top folder. "file" is a name, not a path: the unpacked release keeps it beside
     # files\, a kept repair set and a prepared folder keep their copy in the package root (common.ps1,
     # Get-PackageSetupExe). Test-PackageManifest hashes it wherever it is, so verify covers it like every other file.
     setup = [ordered]@{ file = 'setup.exe'; sha256 = $setupHash; size = (Get-Item -LiteralPath $setupPkg).Length }
@@ -981,8 +980,7 @@ Compress-Archive -Path $pkgRoot -DestinationPath $zip
 '{0} files under files\ plus setup.exe, package {1}' -f $files.Count, $pkgRoot
 'zip {0} SHA256 {1}' -f $zip, (Get-FileHash -LiteralPath $zip).Hash
 
-# The single-file installer, beside the zip (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie? to
-# lepsza metoda!"): one exe that carries this whole release inside it, for a tester who would rather download one
+# The single-file installer, beside the zip: one exe that carries this whole release inside it, for a tester who would rather download one
 # file than unpack an archive. The zip stays: it is the same release, and a tester who already has it changes
 # nothing. make-setup-exe.ps1 -Check is the gate - it reads the exe back and compares every file of the payload with
 # the file of this package, byte for byte, and -ReleaseZip compares it with the entries of the zip written above, so an exe

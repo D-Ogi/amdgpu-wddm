@@ -367,7 +367,7 @@ namespace AmdgpuWddmControl
 
             var guide = new CardPanel(Strings.T("settings.guide.title"), width);
             guide.Add(PrefCheck("settings.nagi", "nagi", _prefs.ShowNagi, v => { _prefs.ShowNagi = v; UpdateGuide(); }, guide.Inner));
-            // The owner's rule of 2026-10-12: a small screen has no room for the guide beside the page, so it stays
+            // The rule: a small screen has no room for the guide beside the page, so it stays
             // hidden there whatever this choice says. The line is always here, so a person on a large screen knows
             // what will happen on a small one, and a person on a small one knows why the guide is not there.
             guide.Add(Ui.Dim(Strings.T("settings.nagi.small"), guide.Inner));

@@ -13,8 +13,8 @@ target.
 
 ## The game-start alarm
 
-The owner asked for an audible signal at every game trial start on 2026-09-29. A game session runs for up to
-20 minutes and it heats the unit, so the owner watches the lab screen and the case during that time. The alarm
+An audible signal marks every game trial start (since 2026-09-29). A game session runs for up to
+20 minutes and it heats the unit, so a person watches the lab screen and the case during that time. The alarm
 makes the start of the session impossible to miss.
 
 ```

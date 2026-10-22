@@ -11,7 +11,7 @@ matched DMA pairs attributed to DWM10324, zero trace loss, no unmatched/pending
 or duplicate starts; submission/completion IDs agree, no preemptions.
 Static8000-pixel composition ROIs and all sampled cyan shape checks pass.
 
-The owner initially reported a correct image, then reported a slight artifact
+A visual check initially showed a correct image, then a slight artifact
 in the newly exposed area when shrinking the blue/cyan window. Preserve both
 observations: this is NOT full visual acceptance. Sparse image checks do not
 exclude this transient defect. Large stretched geometry was not reported.

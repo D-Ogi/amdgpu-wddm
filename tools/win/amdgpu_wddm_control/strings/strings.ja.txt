@@ -1201,7 +1201,7 @@ help.auto.failed|mt|e242261b|自動サポートレポートを保存できませ
 drv.verify.earlier-boot|mt|d7afb829|前回の完全なチェックは再起動前に失敗しました。現在、インストール済みのドライバーは動作しています。
 status.verification-earlier-boot|mt|6b5b86e8|前回の完全なチェックは再起動前のものです。現在、インストール済みのドライバーは動作しています。
 
-# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in ----
 notice.guard.title|mt|660b2a51|グラフィックスドライバーを停止しました
 notice.guard.text|mt|1f5d6130|このパソコンを使い続けられるように、グラフィックスドライバーを停止しました。直前の起動で確認が完了しなかったためです。\n現在はWindowsの基本ディスプレイで画面を描いているため、ゲームは動かず、全体の動作も遅くなります。\nグラフィックスドライバーを元に戻せます。このパソコンのほかの設定は変わりません。
 notice.failed.title|mt|fb8e175f|グラフィックスドライバーが起動しませんでした

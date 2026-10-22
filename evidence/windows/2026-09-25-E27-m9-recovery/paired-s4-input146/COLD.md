@@ -77,5 +77,5 @@ It consumes files only and does not start an ETW session or a GUI.
 Compare a matched post-S4 run using the same helper, duration, desktop identity,
 heavy-summary setting and trace keywords. First require real logical coordinate
 changes again; then compare DWM work gaps and durations. Treat the sparse full
-Present events as their own stream. Hardware scanout or the owner's observation
+Present events as their own stream. Hardware scanout or a visual observation
 is still needed to decide whether the physical cursor was smooth.

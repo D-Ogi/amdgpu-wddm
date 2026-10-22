@@ -1,12 +1,12 @@
 # ADR 0010: the decisions that decide performance, written down before they set
 
-Date: 2026-09-22. Status: **accepted** (the owner asked, after stage C, whether the architecture should change while
-it still can; this is the answer, and the owner accepted it the same day).
+Date: 2026-09-22. Status: **accepted** (the question, after stage C, was whether the architecture should change while
+it still can; this is the answer, accepted the same day).
 
 ## Context
 
 The goal is games on Vulkan at a frame rate worth having. Stage C of ADR 0008 has just shown the whole spine working
-(facts M77, M80). Some choices are cheap to revisit later and some are not, and the owner's question was which is
+(facts M77, M80). Some choices are cheap to revisit later and some are not, and the question was which is
 which - including whether C is the right language, or whether Rust or hand-written assembly belong here.
 
 ## Decision
@@ -40,5 +40,5 @@ which - including whether C is the right language, or whether Rust or hand-writt
   (submission), ADR 0013 (node layout) and ADR 0014 (clocks); this ADR keeps points 1 and 2 and the ordering.
 - Nothing already built is thrown away. Points 3 to 5 are work ahead, in that order of stickiness: 5, 3, 4.
 - Until point 4 is done, no performance number from this driver means anything, and none is to be recorded as a fact.
-- If the owner prefers Rust for new modules regardless, point 1 is the only one that changes, and the cost is the
+- If the project prefers Rust for new modules regardless, point 1 is the only one that changes, and the cost is the
   bindings for `d3dkmddi.h` and a build for them in `driver/kmd/build.ps1`.

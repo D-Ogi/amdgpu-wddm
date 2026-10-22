@@ -1,6 +1,6 @@
-# DP audio demo for the owner (headphones on the monitor): 60 s of a stereo 48 kHz melody (C major arpeggios, 0.25 s
+# DP audio demo for a listener (headphones on the monitor): 60 s of a stereo 48 kHz melody (C major arpeggios, 0.25 s
 # notes, left/right alternation every 4 bars), then the time PlaySync took (60 s at the right rate) and the stream
-# state. Overlay first, so the owner knows when to listen.
+# state. Overlay first, so the listener knows when to listen.
 $ErrorActionPreference = 'Continue'
 $cli = 'C:\BC250\dpaudio\bc250kmd_cli.exe'
 $dir = 'C:\BC250\tmp\audio'

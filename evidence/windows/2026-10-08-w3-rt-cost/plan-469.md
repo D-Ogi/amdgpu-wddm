@@ -1,6 +1,6 @@
 # Trial 469: Witcher 3 HIGH + all RT effects, W3 RT effect-cost series arm A (first of two)
 
-468 did not start: the owner's display mode changes moved the KMD epoch (31 -> 97) between run-m157's confirm pre-step and the Capture witness (flags 7, CONFIRMED missing). Heartbeat and an orphan sampler removed, start confirmed again (epoch 97, flags 15).
+468 did not start: manual display mode changes moved the KMD epoch (31 -> 97) between run-m157's confirm pre-step and the Capture witness (flags 7, CONFIRMED missing). Heartbeat and an orphan sampler removed, start confirmed again (epoch 97, flags 15).
 
 Series (2026-10-08, scratch/w3-rt-cost, branch measure/w3-rt-effect-cost): `bash scratch/w3-rt-cost/run-arm.sh N PRESET [PERFTEST]`
 = SESSION_ADAPTER=adapter132 SESSION_ACCEPTED=1 SESSION_SAMPLER=1 SESSION_EXPERIMENT=none SESSION_VSYNC=false

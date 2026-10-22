@@ -19,7 +19,7 @@ namespace AmdgpuWddmSetup
     {
         public static string VersionText { get { return Assembly.GetExecutingAssembly().GetName().Version.ToString(); } }
 
-        // The name a person reads (owner, 2026-10-13: Nagi is the main brand of everything the package shows). The
+        // The name a person reads (Nagi is the main brand of everything the package shows). The
         // title bar draws it; the window's own title (task bar, Alt+Tab) is the string ui.window-title. Files,
         // folders, registry keys and the support file's schema keep the technical name amdgpu-wddm.
         public const string ProductName = "Nagi Setup";
@@ -53,7 +53,7 @@ namespace AmdgpuWddmSetup
             // administrator prompt whatever it was started for; a setup.exe that has its files\ folder beside it
             // carries no payload and is unchanged. --package names another release than the one in the file, and a
             // folder beside the exe is the zip layout: in both cases the payload is not used, because the layout the
-            // user prepared is the one they asked for ("behaves as today", owner 2026-10-12). One unpacking at a time
+            // user prepared is the one they asked for ("behaves as today"). One unpacking at a time
             // (Payload.RunMutexName): a second copy of the same file would reset the folder the first one is
             // installing from, and the first install would die on a missing file.
             var start = new SetupStart(a, argv);
@@ -226,14 +226,14 @@ namespace AmdgpuWddmSetup
                                 " (cause " + form.GuideCause + ", expression " + SetupGuide.Expression(form.GuideCause) + ")");
                         if (form.GuidePanelShown && a.NoNagi == form.GuideArtShown)
                             w.AppendLine(f.Name + ": G-ART the guide art " + (form.GuideArtShown ? "shows with --no-nagi" : "does not show although the guide character is on"));
-                        // G-SMALL, the owner's rule of 2026-10-12: no guide panel at all on a small screen
+                        // G-SMALL, the rule: no guide panel at all on a small screen
                         // (--work-area), the panel with its card on a screen that has room for it, and the page
                         // column inside the room the window really has.
                         foreach (var p in form.SmallScreenFindings()) w.AppendLine(f.Name + ": G-SMALL " + p);
-                        // G-CONSENT, the owner's instruction of 2026-10-12: no screen asks the user for a
+                        // G-CONSENT, the instruction: no screen asks the user for a
                         // permission, and the primary action is never off waiting for one.
                         foreach (var p in form.ConsentFindings()) w.AppendLine(f.Name + ": G-CONSENT " + p);
-                        // G-SHORTCUT, the owner's instruction of 2026-10-12: the plan screen offers the Start menu
+                        // G-SHORTCUT, the instruction: the plan screen offers the Start menu
                         // and the desktop shortcut, and both are on when it opens.
                         foreach (var p in form.ShortcutFindings()) w.AppendLine(f.Name + ": G-SHORTCUT " + p);
                         var text = form.VisibleText(false);

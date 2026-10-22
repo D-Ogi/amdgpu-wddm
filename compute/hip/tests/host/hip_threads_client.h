@@ -1,6 +1,6 @@
 // hip_threads_client.h - the multithreaded HIP client of layer 2 (M16 route B).
 //
-// Why it exists: the owner's instruction of 2026-09-29 is that multithreading is tested with our
+// Why it exists: the project rule is that multithreading is tested with our
 // own clients before a real application is asked to exercise it. The first build of layer 2 held
 // one process lock over its waits, so a thread that waited for the device stopped every other
 // thread of the process. This client measures exactly that: one thread waits for the device

@@ -94,7 +94,7 @@ function Remove-PathOrSchedule([string]$Path) { $script:deleted.Add($Path) }
 Remove-UserDataExceptTuning $user
 Assert ($script:deleted.Count -eq 1 -and $script:deleted[0] -eq (Join-Path $user 'shader-cache')) 'Uninstall removed a user recovery journal'
 Assert ([IO.File]::ReadAllText((Join-Path $user 'system-tuning\state.json')) -ceq 'private recovery fixture') 'Uninstall changed user recovery contents'
-# The Nagi wallpaper picture stays too (owner, 2026-10-13): it can be the background of that account. A folder that
+# The Nagi wallpaper picture stays too: it can be the background of that account. A folder that
 # holds only the picture keeps its root, and a folder with neither kept folder goes as a whole.
 $userWp = Join-Path $outRoot ('user-data-' + [Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory((Join-Path $userWp 'wallpaper'))

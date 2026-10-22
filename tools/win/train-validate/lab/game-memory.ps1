@@ -1,5 +1,5 @@
 # The memory admission of a game arm, read before the session starts. The game harness admits a session only
-# when the 'Memory\Available MBytes' counter reads NeedMB or more (game-runtime.ps1: 3500 MB, the owner's
+# when the 'Memory\Available MBytes' counter reads NeedMB or more (game-runtime.ps1: 3500 MB, the
 # low-memory rule after session 101 paged at the menu). On this board the carve-out takes its share of the
 # 16 GiB before Windows starts: at 12288 MiB Windows sees about 3816 MB and has about 1300 MB available, so no
 # pre-step can ever admit a game. The b29 run waited out a whole host backstop on that (native-caps547).

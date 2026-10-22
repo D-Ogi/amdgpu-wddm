@@ -1,6 +1,6 @@
 # Visible shader correctness gallery
 
-The owner requested visible results while driver tests run. The gallery computes
+Visible results are wanted while driver tests run. The gallery computes
 three512x512 fixed-point escape-time images (Mandelbrot, Julia, Burning Ship) through
 the existing E14 Vulkan dispatch/readback path, then independently calculates each
 pixel on the CPU. Colors represent GPU-read-back iteration counts. The third panel
@@ -10,7 +10,7 @@ Build with build-shader-gallery.cmd from this workspace. Run shader-gallery-comp
 with a shader directory containing gallery.spv and a fresh output directory. Run
 ShaderGallery.exe with that output directory. Use the lab's normal interactive
 token and verify the loaded ICD, as in the evidence worker script. Do not launch
-the GUI on the development PC without informing its owner.
+the GUI on the development PC without announcing it first.
 
 Space pauses automatic selection, Left/Right select a result, Escape closes.
 The8-second timer changes displayed captures; it never dispatches new GPU work.

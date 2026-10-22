@@ -2,7 +2,7 @@ tee: /tmp/e13/pre.txt: No such file or directory
 == kernel
 Linux bc250diag 6.18.52-0-lts #1-Alpine SMP PREEMPT_DYNAMIC 2026-09-15 05:37:48 x86_64 Linux
 BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=full
-== uptime (boot history is the owner's to tell: cold or warm)
+== uptime (boot history is the operator's to tell: cold or warm)
  14:48:52 up 4 min,  0 users,  load average: 0.00, 0.03, 0.01
 == amdgpu loaded? (must be empty)
 amdgpu              14934016  0 

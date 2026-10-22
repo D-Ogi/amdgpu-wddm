@@ -8,7 +8,7 @@ witnesses and exact process module hashes confirm the selected path.
 All sampled cyan-shape checks and8000 exact static composition pixels pass.
 ETW attributes41943 matched DMA pairs to DWM9940, zero lost events/buffers,
 no pending/unmatched/duplicate starts, matching submission/completion IDs,
-no preemptions. No owner visual verdict was received when this record was made.
+no preemptions. No visual verdict was received when this record was made.
 Sparse captures cannot exclude transient artifacts, especially the residual
 exposed-area glitch reported during017. This is not full visual acceptance.
 

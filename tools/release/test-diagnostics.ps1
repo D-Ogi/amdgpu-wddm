@@ -1,4 +1,4 @@
-# The installer's automatic diagnostics of a driver start that did not pass (diagnostics.ps1, owner 2026-10-12):
+# The installer's automatic diagnostics of a driver start that did not pass (diagnostics.ps1):
 #
 #   powershell -NoProfile -File tools\release\test-diagnostics.ps1 [-Installer <package>\installer] [-WorkRoot <dir>]
 #

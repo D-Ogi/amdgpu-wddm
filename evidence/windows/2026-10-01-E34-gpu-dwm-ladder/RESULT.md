@@ -32,7 +32,7 @@ game's anti-aliasing setting was FSR 2 upscaling in Auto quality mode (see the c
 | DxgKrnl DMA busy (`etw-gpu-B-summary-NNN.txt`) | 36.2 % of 52.8 s | 79.2 % of 49.5 s | 73.3 % of 50.3 s |
 | kernel software blits | 0 | 0 | 0 |
 
-The owner played 214 by hand alongside the route and saw no glitch; 214's scene therefore differs in detail.
+An operator played 214 by hand alongside the route and saw no glitch; 214's scene therefore differs in detail.
 
 ## Task Manager's counters (`gpu-counters-NNN.txt`, `gpu-counters.ps1`)
 
@@ -46,7 +46,7 @@ at or below 1.5 %, attributed to the GPU DWM.
 ## Promotion
 
 `route.py 003 gpu` at 01:50:12Z (exit 0): DWM on the GPU route by default (DwmForceCpu 0), recorded as promotion,
-not as M13.4 (no 30-minute run, owner decision of 2026-09-30).
+not as M13.4 (no 30-minute run, project decision of 2026-09-30).
 
 ## Correction (2026-10-01)
 

@@ -26,7 +26,7 @@ a hardware-accelerated DWM milestone, or M9 recovery acceptance.
 | Validation | Same lifecycle with core/synchronization VVL loaded at instance/device scope; no reported VUID or synchronization hazard |
 | Frame rate | timing/:600 successful presents, native0;50.865 present returns/s excluding two documented screenshot holds; median16.8583ms, p9549.1101ms |
 | Refresh synchronization |919 DxgKrnl VSync QPC samples during the run;59.94997Hz, median16.68025ms; GdiFlush then DwmFlush, no sleep-based frame cap |
-| Architecture decision | ADR0015 refines ADR0011 for the owner-authorized CPU WSI path, retaining hardware DCN scanout and IH VSync |
+| Architecture decision | ADR0015 refines ADR0011 for the authorized CPU WSI path, retaining hardware DCN scanout and IH VSync |
 | End state | final/post-health.log:health flags15,1000MHz/VID116,66.625C, same Windows boot, Notepad still running, zero remaining test processes |
 
 ## Fixes and review

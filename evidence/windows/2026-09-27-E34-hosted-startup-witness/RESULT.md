@@ -24,4 +24,4 @@ UMD5C74BF98, direct ICD3508416F and KMD164 are unchanged. The 270-second control
 
 No target PowerShell validation, new GPU measurement or visual verdict is claimed.
 G0 still needs correct Present content, GPU work attributed to dwm.exe and evidence
-excluding whole-frame CPU copies. DWM023 has no owner visual verdict.
+excluding whole-frame CPU copies. DWM023 has no visual verdict.

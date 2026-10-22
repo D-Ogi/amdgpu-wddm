@@ -2,7 +2,7 @@
 
 The [DriverStore package contract](../../docs/design/driverstore-package.md) describes the installed graphics files, migration, submission CAB and signature checks.
 
-Layout of the unpacked release (owner, 2026-10-11): the top folder holds `setup.exe` and one folder, `files\`, which
+Layout of the unpacked release: the top folder holds `setup.exe` and one folder, `files\`, which
 holds everything else (`manifest.json`, `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd`,
 `installer\`, `payload\`, `licenses\`, the documents). `files\` is therefore the package root that `manifest.json`
 describes and that every installer script works from. `setup.exe` is the one file outside that list, and
@@ -11,14 +11,13 @@ keep the package root as their own folder, with their copy of `setup.exe` in it 
 `Get-PackageSetupExe`).
 
 A release ships that folder as a zip **and** as one file: `amdgpu-wddm-setup-<version>.exe`, the setup window with
-the whole package appended after the end of its program image (owner, 2026-10-12: "dlaczego setup.exe nie zawiera
-zipa w sobie? to lepsza metoda!"). `make-setup-exe.ps1` writes it, `build-release.ps1` runs that tool and its
+the whole package appended after the end of its program image. `make-setup-exe.ps1` writes it, `build-release.ps1` runs that tool and its
 `-Check -ReleaseZip` gate for every release - every file of the payload against the file of the package and against
 the entry of the published zip, byte for byte - and `tools\win\amdgpu_wddm_setup\src\Payload.cs` is the reader. The zip is
 unchanged, and so is the `setup.exe` inside it: an exe with a `files\` folder beside it carries no payload.
 
 The package also carries Microsoft's own installer for the Visual C++ 2015-2022 runtime (x64) as
-`payload\redist\vc_redist.x64.exe` (owner, 2026-10-12: "powinien byc auto-installer!!!"). It is a `third_party` row
+`payload\redist\vc_redist.x64.exe`. It is a `third_party` row
 of `release-sources.json` with its SHA-256 and its size. The release never signs that file again, so its row carries
 no `authenticode_sha256`. The packaged copy is then compared with the source byte for byte, which is the stricter
 check. It is the one payload folder
@@ -52,7 +51,7 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `test-diagnostics.ps1` | Called by `test-dryrun.ps1` under 5.1 and by `tools/quality/quick.ps1`. It runs the installer's automatic diagnostics of a driver start that did not pass (`installer/diagnostics.ps1`). The field report 20261011T222253Z is the first fixture. Its readings must come out as "start failure, collect": problem code `CM_PROB_FAILED_POST_START`, status `Error`, the start record of that boot, no start-health reading, `LastStage` 79. A started driver must come out as no failure. Then every hard signal on its own. Then the `setupapi.dev.log` section picker, the driver's log folder, and the 20 s and 4 MiB bounds. Then the whole file, written from records in a scratch key of `HKCU` that the test removes again. The last section holds `install.ps1`, `engine.ps1` and the console route to their part of the contract. |
 | `test-engine-units.ps1` | Called by `test-dryrun.ps1` under 5.1: the RunOnce command line, the continuation closure and its command (setup window, or Windows PowerShell with `install.ps1 -HoldWindow`, run for real from folders with spaces and cmd metacharacters), the kept repair set (each set against its own manifest's firmware), the running-release witness writer under the engine lock, the compatibility record, the restart-boundary decision, the mutation record, the job object's child closure, the removal plans of BD-089 (where each file of a manifest lands, the files of the installed release that a new one does not install, and which of our driver-store packages an install deletes), and the Microsoft Visual C++ runtime step: the version decision over readings of the three `System32` files, the SHA-256 and signature check of Microsoft's own installer with stand-in signature readings (a changed hash, a signature that is not Valid, an unsigned file and another signer are each refused), and the meaning of every exit code with 1603, 1618, 5 and a crash as negative controls. |
 | `test-driver-store-locale.ps1` | Tests driver inventory, removal and failed reads with synthetic responses in five cultures. Called by `test-dryrun.ps1`. |
-| `test-boot-locale.ps1` | Tests numeric BCD and BitLocker queries and the boot change with fake providers in five cultures. The first part is the BitLocker plan the installer makes for itself. It suspends BitLocker for the restarts it needs. It does nothing when BitLocker is off or already suspended, and it proceeds when the state cannot be read. A suspension that cannot be verified must stop the run before the boot options are touched. The last part holds `install.ps1` to the rule that it asks no confirmation question at all (owner, 2026-10-12). Called by `test-dryrun.ps1`. |
+| `test-boot-locale.ps1` | Tests numeric BCD and BitLocker queries and the boot change with fake providers in five cultures. The first part is the BitLocker plan the installer makes for itself. It suspends BitLocker for the restarts it needs. It does nothing when BitLocker is off or already suspended, and it proceeds when the state cannot be read. A suspension that cannot be verified must stop the run before the boot options are touched. The last part holds `install.ps1` to the rule that it asks no confirmation question at all. Called by `test-dryrun.ps1`. |
 | `test-engine-events.ps1` | G-EVT and G-STAGE: plan and dry runs with `-Gui`, every event line and the terminal result against the contract (`docs/gui/interfaces-setup.md`), the deadline and the child-process closure (section 10), the footprint unchanged. |
 | `test-offline.ps1` | G-OFF: `prepare-offline.ps1` builds a prepared folder; install dry runs from it and from a kept repair set with every download failing as if offline; a missing or changed firmware file is refused before any change. |
 | `test-wow64.ps1` | Called by `test-dryrun.ps1` under 5.1 (BD-064): every image under `payload\wow64` and `payload\syswow64` is x86 and every other payload image x64, the x86 entry points are exported undecorated, the `manifest.json` install paths, and verify's 32-bit registration check (`Test-WowRegistration`) against the scratch key `HKCU:\Software\amdgpu-wddm-installer-test-wow` and files under `-WorkRoot`, both removed at the end. |

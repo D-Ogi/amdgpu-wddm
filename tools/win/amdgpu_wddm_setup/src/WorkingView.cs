@@ -4,8 +4,7 @@
 // The window polls the engine's events every 250 ms. It used to build the whole screen again for every batch of new
 // events: the progress strip, the stage list, the rail and the guide panel were disposed and made again, also for the
 // events that change nothing on the screen (a 'step' for every change an install makes). The strip lost its window
-// for a frame and its moving band jumped back each time (owner, 2026-10-14: "co 6-8 sekund niebieski pasek od
-// instalatora robi krótkie mignięcie"). Now the window keeps the screen while its Frame stays the same and changes only
+// for a frame and its moving band jumped back each time. Now the window keeps the screen while its Frame stays the same and changes only
 // what differs (SetupForm.UpdateWorking): a stage's mark, the note, the Cancel button, the value of the strip, and new
 // check rows at the end of the list.
 using System;

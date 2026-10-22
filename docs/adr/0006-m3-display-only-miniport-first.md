@@ -18,8 +18,8 @@ and log, one install and one rollback path) and point 6 remain in force.
   stays outside the repo, and our miniport is written from the documented DDI, with the sample's observed
   behaviour on this board as the acceptance test.
 - The lab has no kernel debugger (the target is reachable over a USB Wi-Fi dongle only, KDNET needs the
-  wired NIC), a bugcheck stays on screen until the owner power-cycles the machine, and the M.2 link does not
-  always come back after a restart (facts M21). Every hang costs the owner a trip. The driver has to be
+  wired NIC), a bugcheck stays on screen until someone power-cycles the machine by hand, and the M.2 link does not
+  always come back after a restart (facts M21). Every hang costs a trip to the lab. The driver has to be
   built for that.
 
 ## Decision
@@ -59,15 +59,15 @@ and log, one install and one rollback path) and point 6 remain in force.
   `bc250rd` that shares no state. Decide at the start of M4.
 - Whether firmware (PSP-loaded microcode) survives a warm restart into Windows (wishlist L2). It decides
   whether M5 needs a PSP path first.
-- Whether the owner can connect the wired NIC, which would give us KDNET and make point 4 a convenience
+- Whether the wired NIC can be connected, which would give us KDNET and make point 4 a convenience
   instead of the only source of truth.
 
 ## Update, 2026-09-21 (after acceptance; the text above is left as decided)
 
-- The owner connected the wired NIC. KDNET works over the on-board RTL8168 and the recovery boot entry has
+- The wired NIC is connected. KDNET works over the on-board RTL8168 and the recovery boot entry has
   network and SSH over that path (facts M27). The context line "the lab has no kernel debugger" is no longer
   true. Points 3 and 4 stay: the guard protects against boot loops with or without a debugger, and the
-  breadcrumbs are what the owner sees on the overlay and what survives when no debugger is attached.
+  breadcrumbs are what the operator sees on the overlay and what survives when no debugger is attached.
 - Baseline for the escape question, measured before our driver exists: `D3DKMTEscape` with a driver-private
   request returns `STATUS_INVALID_PARAMETER` from Basic Display and `STATUS_NOT_SUPPORTED` from the KMDOD
   sample on the same device (`evidence/windows/2026-09-21-escape-probe/`). Neither implements an escape of

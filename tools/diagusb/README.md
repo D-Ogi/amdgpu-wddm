@@ -237,7 +237,7 @@ Three ways, in order of convenience:
 
 ## Steering the boot without a keyboard
 
-Unit A's firmware is set to try USB first and the NVMe disk (Windows) second, and the owner's
+Unit A's firmware is set to try USB first and the NVMe disk (Windows) second, and the lab's
 wireless keyboard does not work in GRUB. Two small, reversible changes on the stick's FAT partition
 steer the boot (both used in E13, both possible from Linux and from Windows, where the stick is a
 drive letter):
@@ -251,7 +251,7 @@ drive letter):
 they rename, so use the one the stick actually carries.
 
 After a warm restart (`reboot`) out of the stick, Windows came up with the wired NIC not working
-(E13, once: the Realtek adapter "Not Present", and KDNET sits on the same NIC); after the owner's
+(E13, once: the Realtek adapter "Not Present", and KDNET sits on the same NIC); after a manual
 hardware reset it worked. Expect to need that reset, or shut the stick down with `poweroff` and start
 the machine cold.
 

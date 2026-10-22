@@ -16,4 +16,4 @@ Log absence is not a pass. No completion without copying and no CPU fallback for
 BGP1. Compare actual reject inputs and SetRoot handle/root with submitting context;
 root/residency/IRQL/record shape remain hypotheses until measured. Inspect original
 process identities; do not restart on an observation timeout. Require collector
-terminal before archive/cleanup. No owner visual verdict assumed.
+terminal before archive/cleanup. No visual verdict of the lab monitor assumed.

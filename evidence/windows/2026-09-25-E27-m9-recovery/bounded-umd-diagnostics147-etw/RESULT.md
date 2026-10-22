@@ -56,7 +56,7 @@ No completed render/present longer than4.028ms appears. The largest whole-trace 
 - Longest present[1744689,1748717]us lasts4.028ms,6 sampled DWM events,3 main4224. One contains `memcpy -> util_copy_rect -> util_resource_copy_region -> lp_resource_copy -> ResourceCopyRegion`. It resolves memcpy RVA0x2B45DFE, util_copy_rect0x2AC85E, util_resource_copy_region0xD03A0, lp_resource_copy0x3374AF, ResourceCopyRegion0xB26B9. The copy still exists but is not a long dominant stall in this interval.
 - First kernel Flip is1747475us,2.786ms after present entry; QueuePacket1747549..1747711us (0.162ms), MMIOFlip1747672us. No queued GPU delay resembling the former59ms interval is present.
 
-The results support keeping verbose per-entrypoint logging opt-in. They do not justify a primary-shadow redesign on the basis of the former memcpy sample alone. A separate controlled animation workload and S4 transition are still needed to assess the owner's wider symptom. Resource pointer/cache roles cannot be inferred from these ETW callstacks.
+The results support keeping verbose per-entrypoint logging opt-in. They do not justify a primary-shadow redesign on the basis of the former memcpy sample alone. A separate controlled animation workload and S4 transition are still needed to assess the wider visually observed symptom. Resource pointer/cache roles cannot be inferred from these ETW callstacks.
 
 ## Scope and artifacts
 

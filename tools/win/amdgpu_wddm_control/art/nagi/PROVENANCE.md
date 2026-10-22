@@ -1,9 +1,7 @@
-PROVENANCE: the guide character art of this project, owned by the project owner, published here by the
-owner's decision of 2026-10-11.
+PROVENANCE: the guide character art of this project, own artwork of the project, published here by its author.
 
-How the set was made (2026-10-04, directed by the owner): the character came from a generated character
-sheet of nine busts, which the owner made with an image model from the owner's own prompt and supplied to
-the project. The sheet was stripped of the generator's metadata and ran through a pixel pass, then six
+How the set was made (2026-10-04): the character came from a generated character sheet of nine busts, made
+with an image model from the author's own prompt. The sheet was stripped of the generator's metadata and ran through a pixel pass, then six
 faces were cut out of it, which is what the `sheet-` prefix says. Two further faces, `qwen-hopeful` and
 `qwen-surprised`, are separate images of the same character, generated with Qwen Image 2.1 on a local GPU
 from one bust of that sheet as the reference, which is what the `qwen-` prefix says. Every face then had

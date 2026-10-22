@@ -8,15 +8,15 @@ development PC, and only text leaves the lab, never a full-resolution image.
 
 ## Two rules of a measured session
 
-These two rules are owner decisions. Do not tune them.
+These two rules are project decisions. Do not tune them.
 
 **The thermal stop.** The runner stops the session when the KMD temperature (Tctl) stays at or above 87 C
-for 10 s, or at once at 89 C (owner, 2026-10-04). A scene load spikes the temperature for a few seconds, so
+for 10 s, or at once at 89 C (2026-10-04). A scene load spikes the temperature for a few seconds, so
 a single hot sample is not a stop. An unreadable sample is -1 and never a temperature: only a readable
 sample below 87 C ends a hot stretch. `test_lab_runner.py` holds this rule against the script.
 
 **No upscaler and no dynamic resolution.** A measured session runs at the native resolution with the
-upscaler off and the resolution scale at 100 percent (owner, 2026-10-01). The runner does not read the
+upscaler off and the resolution scale at 100 percent (2026-10-01). The runner does not read the
 game's graphics options, so the operator sets them and checks them again after every preset change: the
 Witcher 3 HIGH preset sets anti-aliasing to AMD FSR by itself. `test_lab_runner.py` refuses a profile whose
 command line asks for an upscaler or a dynamic resolution.
@@ -49,7 +49,7 @@ these rules against the script.
 | `input/start-input.ps1` | Registers and starts the server as the one-shot task "Lab game input", and `-Stop` ends it |
 | `input/input-exec.ps1` | Writes the next command for the server and waits for its answer |
 | `smoke/*.ps1` | Small lab helpers around a session: the boot state, one click or key tap, the game witness, the evidence of the start, the modules, the stacks and their symbols, the thread rates, the windows, the shader cache, the crash dump and the game settings |
-| `test_lab_runner.py` | The host tests: the profiles, the two owner rules and the screenshot directory. The `lab-runner` check of `tools/quality/quick.ps1` runs them |
+| `test_lab_runner.py` | The host tests: the profiles, the two session rules and the screenshot directory. The `lab-runner` check of `tools/quality/quick.ps1` runs them |
 
 ## How to run it
 
@@ -83,7 +83,7 @@ preset, a resolution and an upscaler check belong to it. `session.py` refuses th
 
 - **Screenshots of the lab screen never enter this repository.** They go to the workspace scratch directory,
   and `BC250_SHOTS_DIR` names another directory outside the repository. The lab monitor also shows game
-  content, and the owner asked for resized images only.
+  content, and only resized images may leave the lab.
 - **The runner never overwrites a capture.** An existing `game` directory in the package is an error, because
   attempt 067 kept nothing after a second start.
 - **The input server runs in the interactive session**, as the one-shot task "Lab game input". The name stays

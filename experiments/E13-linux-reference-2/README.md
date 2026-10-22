@@ -1,7 +1,7 @@
 # E13: second Linux reference session on unit A (wishlist L3, L4, L5, L7, L8, L9, L10, L11, L13, L15; L6 last)
 
 State: **run on 2026-09-21, three boots.** H1 to H4 hold; one step hung the machine (facts M40, M41, M42).
-The owner offered a Linux boot while M6 (E12) was in progress.
+A Linux boot became available while M6 (E12) was in progress.
 
 ## Why now
 
@@ -32,7 +32,7 @@ Boot entry "shell only": amdgpu blacklisted, none of our tools touches the GPU b
   pointers and the ring contents before and after. Expected (H4): one IH vector and one interrupt per fence, visible
   as `amdgpu_iv` events with the client and source ids `bc250_ih.h` names; the fence packets in the ring dumps are
   the ones `bc250_gfx_emit_fence()` builds.
-- `reset` (last; may hang the machine, which then needs the owner): `amdgpu_gpu_recover` with the trace armed (L6).
+- `reset` (last; may hang the machine, which then needs a person at the lab): `amdgpu_gpu_recover` with the trace armed (L6).
 
 Not in this session: L1, L2 (they need recorded cold and warm restarts), L16 (needs a patched module), L5's SDMA
 write-linear by hand, L12's series of cold starts, L14 (rebuilding the stick).
@@ -51,17 +51,17 @@ PC; `/tmp/e13` is fetched with tar at the end. MAC addresses, serial numbers and
 
 ## What was actually done
 
-The plan above assumed the boot entry "shell only". The owner's keyboard does not work in GRUB, so the stick came up
+The plan above assumed the boot entry "shell only". The lab keyboard does not work in GRUB, so the stick came up
 with its default entry, mode `full` (the stick's short probe with its two restored writes, then amdgpu), and "shell
 only" (`bc250.mode=off`) would not have started the network at all. The session became three boots:
 
 | Boot | How it started | Mode | Phases |
 |---|---|---|---|
-| 1 | by the owner, out of Windows; cold or warm not recorded | `full` | `state`, `ib`, `pre` (with amdgpu loaded), then `reload.sh`: **hung at `modprobe -r amdgpu`** |
-| 2 | cold, the owner's power button after the hang | `full` | `pre` (with amdgpu loaded), `state`, `ib` |
+| 1 | by an operator at the lab, out of Windows; cold or warm not recorded | `full` | `state`, `ib`, `pre` (with amdgpu loaded), then `reload.sh`: **hung at `modprobe -r amdgpu`** |
+| 2 | cold, the power button pressed by hand after the hang | `full` | `pre` (with amdgpu loaded), `state`, `ib` |
 | 3 | warm restart out of boot 2, after `set default=2` in the stick's `grub.cfg` (original kept and restored afterwards) | `readonly`: named reads, no write, amdgpu not loaded | `pre`, `load`, `state`, `ib` |
 
-`reset` was not run: it needs the owner's consent and a hang had already cost one trip to the power button.
+`reset` was not run: it needs explicit consent and a hang had already cost one trip to the power button.
 Afterwards the stick's loader was renamed (`efi/boot/bootx64.efi.off`) so that the firmware would go on to the NVMe
 disk; the machine did not come back by itself after that restart (see the journal).
 

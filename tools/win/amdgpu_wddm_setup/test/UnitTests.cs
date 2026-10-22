@@ -68,7 +68,7 @@ static partial class UnitTests
             }
         Check(NoInternals.Find("the KMD fence 0x1F failed, see install.ps1").Count == 4, "G-NOINT catches KMD, fence, a hex code and a script name");
         Check(NoInternals.Find("amdgpu-wddm Control").Count == 0 && NoInternals.Find("Nagi Control App").Count == 0, "G-NOINT allows the product names");
-        // The Nagi naming (owner, 2026-10-13).
+        // The Nagi naming.
         foreach (var lang in Strings.Languages)
         {
             Check(Strings.In(lang, "ui.window-title").StartsWith("Nagi Setup", StringComparison.Ordinal), "Nagi: the window title of " + lang + " starts with Nagi Setup");
@@ -510,7 +510,7 @@ static partial class UnitTests
         Check(SetupArgs.Parse(new[] { "--repair", "--work-area", "800x600" }).Error != null, "args: --work-area only with --smoke-render");
     }
 
-    // The owner's rule of 2026-10-12: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
+    // The rule: on a 1024x768 or 800x600 working area, and on every smaller one, the guide
     // character and the whole right-hand panel she sits in do not show (GitHub #38: on the tester's 800x600 screen the
     // panel covered the text of the screen). The screen comes in through the rule's arguments, so these cases never
     // read the screen this test runs on; the window's own side of it is a render finding (--smoke-render G-SMALL, at
@@ -536,11 +536,11 @@ static partial class UnitTests
         Check(SmallScreen.IsDevice(2048, 1536, 2f), "small screen: 2048x1536 at 200 % is 1024x768 logical, which is small");
         Check(!SmallScreen.IsDevice(2100, 1600, 2f), "small screen: 2100x1600 at 200 % is 1050x800 logical, which is not small");
         Check(!SmallScreen.IsDevice(1920, 1080, 0f), "small screen: a scale that is not known decides nothing");
-        Equal(1024, SmallScreen.MaxWidth, "small screen: the width of the rule the owner gave");
-        Equal(768, SmallScreen.MaxHeight, "small screen: the height of the rule the owner gave");
+        Equal(1024, SmallScreen.MaxWidth, "small screen: the width of the rule");
+        Equal(768, SmallScreen.MaxHeight, "small screen: the height of the rule");
     }
 
-    // The owner's instruction of 2026-10-12: the installer asks the user for nothing. No test-mode check box, no
+    // The instruction: the installer asks the user for nothing. No test-mode check box, no
     // BitLocker option buttons, no Install button that waits for an answer, and no "type YES" on the command line.
     // Pressing Install is the consent. These cases hold the rules of InstallFlow.cs, the words of the four tables,
     // and the absence of the words the removed controls used. The window's own side of it is a render finding
@@ -571,7 +571,7 @@ static partial class UnitTests
                 foreach (var vc in new[] { true, false })
                     foreach (var id in InstallFlow.PlanChangeIds(on, state, vc))
                         Check(Strings.Has(id), "no confirmations: " + id + " has words");
-        // The Microsoft Visual C++ runtime (owner, 2026-10-12): the plan states that the install brings it, and
+        // The Microsoft Visual C++ runtime: the plan states that the install brings it, and
         // says nothing when the PC already has it. It is the last line either way, after the start options.
         Check(InstallFlow.PlanChangeIds(true, "off", true).SequenceEqual(new[] { "plan.change.test-mode", "plan.change.vcruntime" }),
             "runtime: the plan states that setup installs the Microsoft runtime");
@@ -581,7 +581,7 @@ static partial class UnitTests
             "runtime: the runtime line comes after the start options");
         Check(!InstallFlow.PlanChangeIds(true, "off", false).Contains("plan.change.vcruntime") && !InstallFlow.PlanChangeIds(false, "off").Contains("plan.change.vcruntime"),
             "runtime: a PC that has the runtime reads no line about it");
-        // The shortcuts of the control application (owner, 2026-10-12): both on, and the switches only leave one out.
+        // The shortcuts of the control application: both on, and the switches only leave one out.
         Check(InstallFlow.ShortcutArguments(true, true).SequenceEqual(new[] { "-StartMenuShortcut", "-DesktopShortcut" }), "shortcuts: both places, the default, stated on the command line");
         Check(InstallFlow.ShortcutArguments(false, true).SequenceEqual(new[] { "-NoStartMenuShortcut", "-DesktopShortcut" }), "shortcuts: no Start menu entry");
         Check(InstallFlow.ShortcutArguments(true, false).SequenceEqual(new[] { "-StartMenuShortcut", "-NoDesktopShortcut" }), "shortcuts: no desktop icon");
@@ -610,7 +610,7 @@ static partial class UnitTests
         Check(SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).StartMenuShortcut == true && SetupArgs.Parse(new[] { "--start-menu-shortcut", "--desktop-shortcut" }).DesktopShortcut == true,
             "shortcuts: the positive switches state the answer explicitly");
         Check(SetupArgs.Parse(new[] { "--no-desktop-shortcut" }).Error == null, "shortcuts: the switch is accepted by the welcome mode");
-        // The Nagi wallpaper (owner, 2026-10-13): a third box of the same card, on by default, with the same
+        // The Nagi wallpaper: a third box of the same card, on by default, with the same
         // "not stated yet" rule as the two shortcuts. The engine only records the answer for the control application.
         Check(InstallFlow.PlanOptionIds.Contains("shortcuts.wallpaper") && InstallFlow.PlanOptionsOnByDefault.Contains("shortcuts.wallpaper"),
             "wallpaper: the box is a plan option, on by default");
@@ -631,7 +631,7 @@ static partial class UnitTests
         foreach (var lang in Strings.Languages)
             foreach (var id in new[] { "shortcuts.wallpaper", "shortcuts.wallpaper.note" })
                 Check(Strings.In(lang, id).Trim().Length > 0 && Strings.In(lang, id).Contains("Nagi"), "wallpaper: " + lang + " " + id + " names Nagi");
-        // The picture on the start screen (owner, 2026-10-14: on by default in the installer, like the wallpaper):
+        // The picture on the start screen (on by default in the installer, like the wallpaper):
         // a fourth box of the same card, the same "not stated yet" rule, and that rule is what carries an earlier
         // choice over a reinstall or an upgrade.
         Check(InstallFlow.PlanOptionIds.Contains("shortcuts.boot-logo") && InstallFlow.PlanOptionsOnByDefault.Contains("shortcuts.boot-logo"),
@@ -671,7 +671,7 @@ static partial class UnitTests
         foreach (var id in InstallFlow.RemovedConsentIds)
             Check(!Strings.Has(id), "no confirmations: " + id + " is gone from the string tables");
         // The countdown of the restart screen: 15 s, one sentence with the seconds in it, in all four languages.
-        Equal(15, InstallFlow.RestartCountdownSeconds, "no confirmations: the countdown the owner asked for");
+        Equal(15, InstallFlow.RestartCountdownSeconds, "no confirmations: the countdown");
         foreach (var lang in Strings.Languages)
         {
             Equal("0", Strings.Placeholders(Strings.In(lang, "restart.countdown")), "no confirmations: " + lang + " restart.countdown names the seconds");
@@ -686,7 +686,7 @@ static partial class UnitTests
             Check(Strings.Has(id), "no confirmations: the restart screen keeps " + id);
     }
 
-    // The single-file installer (owner, 2026-10-12: "dlaczego setup.exe nie zawiera zipa w sobie?"). The reader's
+    // The single-file installer. The reader's
     // own end-to-end run is --smoke-payload, driven by tools/release/test-setup-exe.ps1 with a packed exe and with
     // a damaged one; these cases hold the parts a test can hold without a package: the file list, the paths it is
     // allowed to name, and the permission list of the folder the package is unpacked into.

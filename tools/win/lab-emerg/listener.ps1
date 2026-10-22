@@ -1,11 +1,11 @@
-# Emergency channel to unit A, independent of sshd (owner request 2026-10-01 after two sshd accept stalls, BD-051).
+# Emergency channel to unit A, independent of sshd (2026-10-01, after two sshd accept stalls, BD-051).
 # Runs as SYSTEM from the scheduled task "BC250 emergency channel" (at startup, restarted on failure).
 # http.sys listener on TCP 8722, firewall: local subnet only. Protocol v2: POST /lab/ with headers X-Ts (unix s),
 # X-Nonce (32 hex), X-Action, X-Arg (base64 of UTF-8) and X-Sig = HMAC-SHA256(key, ts\nnonce\naction\narg\nsha256(body))
 # in hex; the body is raw data (a script for ps, file bytes for put, else empty), at most 16 MB. A timestamp more than
 # 120 s off or a reused nonce is refused. Key C:\BC250\emergency\key.bin (ACL SYSTEM + Administrators).
 # Only the actions below exist; nothing runs between requests (no polling, no spawning).
-# ACLs (owner, 2026-10-01): overwriting an existing file keeps its security descriptor (sshd_config needs its own)
+# ACLs (2026-10-01): overwriting an existing file keeps its security descriptor (sshd_config needs its own)
 # and leaves <file>.emerg-<utc>.bak beside it; a new file inherits its directory's ACL and gets Administrators as owner,
 # so the interactive user (an administrator) can read and change what SYSTEM wrote.
 $ErrorActionPreference = 'Stop'

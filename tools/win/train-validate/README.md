@@ -1,7 +1,7 @@
 # train-validate - the standard validation set of a release train, as one command
 
 A release train is validated by the same set of arms every time: install the package clean, read back what
-was installed, smoke the stacks, run the two owner gates, promote the D3D12 triplet, and play one game
+was installed, smoke the stacks, run the two release gates, promote the D3D12 triplet, and play one game
 session. Until now each train copied the previous train's shell scripts and ran the arms by hand, with an
 agent between every two of them. In train b27 that cost 70 minutes of work for about 10 minutes of tests.
 
@@ -14,7 +14,7 @@ python tools/win/train-validate/validate.py run --train b28 \
 
 That is the whole command. It installs the package, runs every arm inside its bound, gates the machine's
 health after each one, waits for the temperature to fall between arms, writes the raw log of every step and
-leaves a `RESULTS.md` skeleton with one row per arm and the two owner release gates stated as met or not met.
+leaves a `RESULTS.md` skeleton with one row per arm and the two release gates stated as met or not met.
 
 Read the plan first. It starts nothing:
 
@@ -24,19 +24,19 @@ python tools/win/train-validate/validate.py run --train b28 --package <package d
 
 ## What the operator still does
 
-The suite does not take the work the owner reserved for a person.
+The suite does not take the work reserved for a person.
 
 - **The click on the Board memory card** is not part of the run. The board memory arms (`bm-*`) call the
   control application's own elevated verb, `--bc250-board-memory-action`, with a confirmation token that the
   application's own code computes from the state it reads (`lab/board-memory-op.ps1`). That is the command
   line the card starts after its confirmation dialog, so the arms cover the write, the restart and Restore,
-  and not the dialog. The owner's physical CMOS clear stays the only recovery if the board does not start
+  and not the dialog. A physical CMOS clear at the lab stays the only recovery if the board does not start
   again, which is why these arms come last. The game arms run inside them, at 8192 MiB (see the rules).
-- **The interactive Witcher 3 Remaster session** (`w3-high-rt`) stays with the operator: the owner's rule is
-  that the agent drives the game itself, with a half-scale shot every 10 to 15 seconds, and ends the session
+- **The interactive Witcher 3 Remaster session** (`w3-high-rt`) stays with the operator: the project rule is
+  that the operator drives the game itself, with a half-scale shot every 10 to 15 seconds, and ends the session
   when its goals are done. The runner prints where that session fits and never starts it.
 - **A value only a person can read**, such as the Rise of the Tomb Raider result screen, stays open in the
-  summary, and its owner gate stays **NOT MET** until it is filled in. Fill it in afterwards without running
+  summary, and its release gate stays **NOT MET** until it is filled in. Fill it in afterwards without running
   anything again:
 
 ```
@@ -48,7 +48,7 @@ python tools/win/train-validate/validate.py summary --out <out dir> --package <p
 
 ## The rules it holds
 
-These are owner decisions, and the tool holds them in code so that they do not depend on an operator
+These are project decisions, and the tool holds them in code so that they do not depend on an operator
 remembering them.
 
 | Rule | Where it is held |
@@ -67,7 +67,7 @@ remembering them.
 | A health gate follows every arm that touched the GPU | `lab/gate.ps1` and `runner.parse_gate`: GPU faults, fence timeouts, event 4101 of the display provider, bugcheck records, DPM, fan `state=curve controlling=1`, TdrDelay 10 |
 | A failed arm keeps its logs, restores what it changed, ends its client on the lab and does not stop the independent arms | the `post` steps of an arm run on every exit path, then `lab/kill-clients.ps1` for an arm that names a client. `depends_on` decides what is skipped |
 | The uninstall does not run on an unproved package | `needs_verified` on the arm: the destructive step waits until `zipcheck` has proved the zip on the lab in this run. A failed push leaves the lab with its driver, not with a Microsoft Basic Display Adapter and a person to call |
-| A baselined arm that read no number is a failure, not a pass | `runner.judge`: no number is `UNREAD`, and an owner gate is met only when every arm of it passed **and** its value was read and compared |
+| A baselined arm that read no number is a failure, not a pass | `runner.judge`: no number is `UNREAD`, and a release gate is met only when every arm of it passed **and** its value was read and compared |
 | The suite never diagnoses | the summary names the symptom shape of a known failure class and says that a shape is not a diagnosis |
 
 A bugcheck record or a health flag other than 15 after an arm stops the run: the machine then needs a person,
@@ -77,14 +77,14 @@ counted while a planned restart is in progress, where a refusal is the expected 
 
 ## Who owns which bound
 
-The owner's three-minute trial bound is held on the **lab** side, and the host timeout is a backstop over it.
+The three-minute trial bound is held on the **lab** side, and the host timeout is a backstop over it.
 The difference matters when a number is read out of this table.
 
 | Quantity | Value | Who holds it |
 |---|---|---|
 | A trial's own run | 150 s or 160 s, as the arm asks | the lab script: `pt-run.ps1` registers its client as a scheduled task with `ExecutionTimeLimit = Seconds + 30`, so even an abandoned ssh call cannot leave the GPU running |
 | The arm's declared bound | 170 s for a trial, 1200 s for a game | `arms.json`, held by the tests |
-| The host backstop of one step | bound + `host_grace_s` (45 s), so 215 s for a trial | `manifest.plan_steps`. It is over the owner's 180 s on purpose: it must never fire before the lab's own end |
+| The host backstop of one step | bound + `host_grace_s` (45 s), so 215 s for a trial | `manifest.plan_steps`. It is over the 180 s bound on purpose: it must never fire before the lab's own end |
 | The arm's worst case on this side | the sum of its step timeouts, printed per arm by `--dry-run` | a promote arm issues up to nine steps, so its worst case is some twenty minutes although each lab step is inside the trial bound |
 | The plug sampler's join after an arm | up to 40 s | `Runner.run_arm` |
 | The cool-down before a trial or game arm | up to `tctl_cool_max_s` (420 s) plus one read (90 s at worst) | `Runner.cool_down`: one deadline over the reads and the waits together |
@@ -96,14 +96,14 @@ The difference matters when a number is read out of this table.
 | Arm | Kind | What it answers |
 |---|---|---|
 | `push-zip`, `zipcheck` | transfer, read | the package on the lab is the package on this PC |
-| `uninstall`, `restart-1`, `install`, `restart-2` | lab | the owner's installer test: nothing of ours is left, then a fresh install at 40 CU |
+| `uninstall`, `restart-1`, `install`, `restart-2` | lab | the clean-slate installer test: nothing of ours is left, then a fresh install at 40 CU |
 | `slots`, `kmdver`, `preflight` | read | every installed file against the package manifest, the identity of what runs, and 40 CU, DPM, health and TdrDelay |
 | `pin-baseline` | host | the trial harness is pinned to this package. `pin-baseline.py` wraps `release-baseline.py --apply`. That script refuses a second apply of the same release. The wrapper then reads `lab-baseline.json`. It passes when that file already names this release and this manifest hash. A resumed run thus gets the same answer as the first run. The script also refuses a package with a new D3D12 triplet. The wrapper then applies it again with `--keep-accepted-d3d12`. The D3D12 block keeps the accepted triplet until `d3d12-promote` replaces it |
 | `stage-clients` | transfer | the clients that are not in the package are on the lab with the bytes of this PC. `stage.py` hashes every file on both sides and sends only what differs |
 | `vk-smoke`, `x86-smoke` | lab | the system Vulkan ICD and the 32-bit D3D11 stack answer |
 | `vkheaps` | read | the Vulkan memory heaps of the installed system ICD follow the board's carve-out, not a frozen capture |
 | `vk-semaphore` | lab | a Win32 export and import of a timeline semaphore across two processes, unnamed and named, in session 0 and in the interactive session (`tools/win/vksemcheck`). The 32-bit run is a control that decides nothing |
-| `q2rtx-pipeline`, `q2rtx-query`, `q2rtx-loop` | lab, **owner gate** | Quake II RTX runs with `VK_KHR_ray_tracing_pipeline` and with `VK_KHR_ray_query` |
+| `q2rtx-pipeline`, `q2rtx-query`, `q2rtx-loop` | lab, **release gate** | Quake II RTX runs with `VK_KHR_ray_tracing_pipeline` and with `VK_KHR_ray_query` |
 | `cache-0`, `cache-1`, `q2rtx-warm`, `cache-2` | read, lab | the shader disk cache of a new Vulkan driver build is written and then read. A new build has a cache namespace of its own (BD-100), so this is the b25 B1 proof again |
 | `dxrpt` | lab | path tracing through D3D12 holds its frame rate |
 | `cts-rt` | lab | the 140 ray tracing cases of the pinned Vulkan CTS, on the installed system driver |
@@ -113,7 +113,7 @@ The difference matters when a number is read out of this table.
 | `hip` | lab | the installed HIP runtime is on the machine PATH, `vadd.exe` computes, and the HIP llama.cpp backend runs `llama-bench` through it (BD-110). Then TinyLlama answers one question in its chat template through the same backend. The staged build must equal its `consumer-pins.json` |
 | `d3d12-promote` | promote | the package D3D12 triplet becomes the registered one, with its witness. For a new triplet it first puts the accepted files back in the install directory, because the attempt verifies them before it swaps (`lab/d3d12-putback.ps1`). The release file waits next to the accepted one as `<name>.release` until the promotion has put it back |
 | `bm-before`, `bm-set-8192`, `bm-restart-1`, `bm-at-8192`, `vkheaps-8192`, `bm-restore`, `bm-restart-2`, `bm-after` | read, lab, restart | the board memory operation of the control application. It sets 8192 MiB and restarts. It reads the active size, Windows RAM and the Vulkan heaps at 8192 MiB. Then Restore and a restart put back the size before the change |
-| `rottr` | game, **owner gate** | the Rise of the Tomb Raider benchmark completes every scene. It runs after `vkheaps-8192`, at 8192 MiB |
+| `rottr` | game, **release gate** | the Rise of the Tomb Raider benchmark completes every scene. It runs after `vkheaps-8192`, at 8192 MiB |
 | `w3-high-rt` | operator | the Witcher 3 Remaster at HIGH with ray tracing, driven by the operator, at 8192 MiB before `bm-restore` |
 
 Subsets run by name: `--arms install`, `--arms gates`, `--arms smoke`, `--arms cache`, `--arms llm`,
@@ -133,14 +133,14 @@ Two files change between trains, and no script has to be copied.
 1. `arms.json`: the baseline of an arm, which is the value the previous train measured, with its tolerance
    and the run it comes from. An arm whose value falls under the tolerance is a **WARN**, not a failure: a
    number below a baseline needs a reader, and the suite does not decide for them. An arm that read **no**
-   number is a different matter: it is `UNREAD`, the arms that depend on it do not run, and an owner gate
+   number is a different matter: it is `UNREAD`, the arms that depend on it do not run, and a release gate
    over it is not met. A baseline is pinned to a run that passed, never to one that hit its bound.
 2. The package directory on the command line. `--package` takes the unpacked release's top folder or its
-   `files\` folder: the package root is the one that holds `manifest.json` (owner, 2026-10-11: the top folder
+   `files\` folder: the package root is the one that holds `manifest.json` (2026-10-11: the top folder
    holds `setup.exe` and the one folder `files\`), and the zip is looked for beside the folder it unpacks to.
 
 A new arm is an entry in `arms.json`. It names a command that already exists, its bound, its kind, the
-regular expression that reads its result line and its baseline. The tests then hold it to the owner's bounds,
+regular expression that reads its result line and its baseline. The tests then hold it to the project bounds,
 and they refuse an arm whose lab script is absent or does not declare the parameters the manifest passes.
 
 ## What this replaces
@@ -165,10 +165,10 @@ Where two pieces of the workspace did the same job, the suite keeps one of them.
 | `manifest.py` | reads `arms.json` and the package, resolves the placeholders, builds the plan |
 | `runner.py` | the arm loop: the bounds, the STOP flag, the temperature gate, the health gate, the raw records |
 | `promote.py` | the D3D12 promotion step, idempotent. It moves a leftover attempt directory aside and leaves evidence alone. For a new triplet it finds the local copy of each accepted file that the package replaces |
-| `summary.py` | the `RESULTS.md` skeleton, the two owner gates and the symptom shapes |
+| `summary.py` | the `RESULTS.md` skeleton, the two release gates and the symptom shapes |
 | `stage.py` | sends files to the lab and proves them by SHA-256 on both sides |
 | `game-drive.py` | the run step of a game arm whose benchmark sits in a menu (`rottr`). It starts the session and reads the screen through the control channel every 12 s. It moves the menu highlight onto START BENCHMARK with the arrow keys and reads it there before it presses Enter. Then the menu and any submenu with a BACK button must be gone (Esc from a submenu, one retry, then `menu not left`). At the end it prints the result dialog and ends the session |
-| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the owner's installer test), `restart-now.ps1`, `kill-clients.ps1` (the client of a failed arm) and `board-memory-op.ps1 -Step set` and `-Step restore` (the board's memory block). `d3d12-putback.ps1` writes too: it puts the accepted D3D12 files back before a promotion. Three probes of b32 write as well. Each one puts back what it touched on every exit path. `clock-read-user.ps1` and `router-dialog.ps1` register a task of their own in the console session and remove it again. `router-dialog.ps1` also keeps the installer's `AppRouter` values in a record of its own while it runs. `standard-user-logon.ps1 -Phase prepare` arms the automatic logon of a local account that is no administrator. `-Phase cleanup` takes that away with the account and its profile |
+| `lab/*.ps1` | the lab side, all of it parameterised by the package. Read-only but for `clean-slate.ps1` (the clean-slate installer test), `restart-now.ps1`, `kill-clients.ps1` (the client of a failed arm) and `board-memory-op.ps1 -Step set` and `-Step restore` (the board's memory block). `d3d12-putback.ps1` writes too: it puts the accepted D3D12 files back before a promotion. Three probes of b32 write as well. Each one puts back what it touched on every exit path. `clock-read-user.ps1` and `router-dialog.ps1` register a task of their own in the console session and remove it again. `router-dialog.ps1` also keeps the installer's `AppRouter` values in a record of its own while it runs. `standard-user-logon.ps1 -Phase prepare` arms the automatic logon of a local account that is no administrator. `-Phase cleanup` takes that away with the account and its profile |
 | `test_train_validate.py` | the host tests, against a fake target |
 
 ## Commands
@@ -187,6 +187,3 @@ an arm that overruns its bound, a thermal stop, a set STOP flag, a STOP flag tha
 health gate, a leftover attempt directory, a destructive arm asked for without its proof, a baselined arm
 that read nothing, a lab that answers every temperature read after 90 s, a refusal between two arms and a
 clean run of the whole shipped set. `tools/quality/quick.ps1` runs them under the name `train-validate`.
-
-Wolniej, a dokladniej, czy szybciej i raz? Jedno nie musi wykluczac drugiego.
-("Slower but exact, or faster and once? The two need not exclude each other.")

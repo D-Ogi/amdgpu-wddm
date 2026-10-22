@@ -50,7 +50,7 @@ c34ab7cd) takes its DXGI/DirectComposition path only when `wsi_device->win32.get
 set. Correction (2026-09-27, after the first write-up): the RADV WDDM winsys does implement that hook
 (`radv_wddm2_wsi.c`), but `radv_wddm2_wsi_init` sets `wsi->sw = true` and installs no hooks when the caps
 blob is ours, because no D3D12 UMD exists for the adapter; this is the CPU presentation ADR 0015 chose for
-M10 with the owner's permission. So `supports_dxgi` is false and every swapchain uses the CPU-image path: per present a CPU copy (with a B8G8R8A8 swizzle for R8G8B8A8 chains) of the rendered image
+M10 with approval. So `supports_dxgi` is false and every swapchain uses the CPU-image path: per present a CPU copy (with a B8G8R8A8 swizzle for R8G8B8A8 chains) of the rendered image
 into a DIB section, `BitBlt` into the window DC, `GdiFlush`, `DwmFlush`. That path issues no DXGI present
 and no dxgkrnl present, so PresentMon has nothing to record; the loaded system `dxgi.dll` and `DComp.DLL`
 come from the factory/device probe at WSI init, not from a swapchain. `--terminate_on_proc_exit` not firing

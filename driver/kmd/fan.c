@@ -1,6 +1,5 @@
 // The case fan control (Part B of docs/design/fan.md). The board's NCT6686D turns fan 1 from the BIOS "Fan Setting"
-// curve. The owner allowed the driver to take the fan from that curve while it runs (2026-10-06, "TAK"), on two
-// conditions: the BIOS setting stays as it is, and the driver gives the fan back to the chip's own automatic mode on
+// curve. The driver may take the fan from that curve while it runs, on two conditions: the BIOS setting stays as it is, and the driver gives the fan back to the chip's own automatic mode on
 // every exit path. This file is those exit paths, the gate and the escape. The decisions are in the shim.
 //
 // Where the parts live:

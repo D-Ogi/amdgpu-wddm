@@ -29,7 +29,7 @@ probe proves content, not visible presentation. Temperature around67C.
 New Winlogon ETW:84 presents/3s and83 glitch events; zero lost events/buffers.
 Wholetrace maxrender48.520ms and maxPresent59.709ms; prior Default scene differs,
 so no causal DWM speedup ratio.52.8% of active DWM CPU samples resolve DebugPrintf;
-longest Present has CPU ResourceCopyRegion/memcpy before kernel flip. Owner says
+longest Present has CPU ResourceCopyRegion/memcpy before kernel flip. A visual check shows
 animations still stall cursor. Shared cache improvement is real but not a complete
 stutter fix. Next isolate synchronous diagnostics; primary shadow is review only.
 No new S4, cold boot, soak, hardware D3D or complete M9 acceptance.

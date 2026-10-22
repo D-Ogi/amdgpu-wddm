@@ -6,7 +6,7 @@ the first consequence's "acceptable" are superseded by ADR 0009: the WARP deskto
 
 ## Context
 
-The roadmap left the user-mode direction open until M8. The owner asked whether Vulkan is the easier
+The roadmap left the user-mode direction open until M8. The question was whether Vulkan is the easier
 target than Direct3D. It is, but only in user mode, and the difference matters for how the kernel-mode
 driver is shaped, so the direction is recorded now.
 

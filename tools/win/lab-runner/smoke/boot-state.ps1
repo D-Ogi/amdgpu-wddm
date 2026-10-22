@@ -1,5 +1,5 @@
 # LAB (elevated SSH, read-only): last boot time, bugcheck records since a given UTC time, newest dump files,
-# and whether a given game image is running. Used after the owner reports a blue screen.
+# and whether a given game image is running. Used after a blue screen is reported from the lab.
 param([string]$SinceUtc = '', [string]$Image = 'ROTTR')
 $os = Get-CimInstance Win32_OperatingSystem
 'boot={0:yyyy-MM-ddTHH:mm:ssZ} now={1:yyyy-MM-ddTHH:mm:ssZ}' -f $os.LastBootUpTime.ToUniversalTime(), (Get-Date).ToUniversalTime()

@@ -2,9 +2,9 @@
 
 Until 0.7.174 the native KMD clock owner pinned the GPU at the lab point, 1000 MHz / 820 mV, from start to stop.
 The Witcher 3 with RT then runs at 24-28 fps with DMA packets in flight 91.5-94 % of the time (ETW, trial 135): the
-clock looked like the limit ("Busy" below says what that figure is and is not). The owner decided on 2026-09-30 to let the driver scale clock and voltage with load up to
+clock looked like the limit ("Busy" below says what that figure is and is not). From 2026-09-30 the driver scales clock and voltage with load up to
 2000 MHz, with an initial upper limit of 1500 MHz. The base and start clock stays at 1000 MHz. The automatic range is
-500-2000 MHz, with a default upper limit of 2000 MHz (owner decision 2026-10-10). `DpmMaxMHz` can select a lower
+500-2000 MHz, with a default upper limit of 2000 MHz (since 2026-10-10). `DpmMaxMHz` can select a lower
 ceiling. This document is the written reason `docs/hardware.md` asks for above 1500 MHz / 900 mV.
 
 ## Sources
@@ -44,7 +44,7 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
 - The 2000 MHz ceiling is not a safe clock. The community reports a board-level over-current protection that
   hard-locks the machine between about 1850 and 2200 MHz on 40-CU boards, and on every tested board at 2400 MHz,
   with AC removal as the only exit ([M790](../facts/hardware.md#m790), third-party, no log). Our hard ceiling lies
-  inside that band. The release upper limit is 2000 MHz by owner decision 2026-10-10. The report still supports
+  inside that band. The release upper limit is 2000 MHz since 2026-10-10. The report still supports
   having the smart plug ready for runs near that band. It does not qualify any point above the hard ceiling.
 - `bc250_clock_prepare` accepts only table points: a clock on the 100 MHz grid with a voltage between the table's
   value and 1000 mV. The escape SET and the governor go through the same gate, so the administrator's `clock set` can
@@ -178,8 +178,8 @@ stale decision cannot raise either, with one exception named below; lowering is 
 
 ### Below the lab floor (0.7.205)
 
-The owner decided on 2026-10-05 that the GPU clock may go under 1000 MHz when Tctl reaches 87 C ("2 - zgoda"). The
-BIOS fan setting stays as it is ("1 - nie zmieniamy tego"). The reason is Rise of the Tomb Raider, scene 2: the
+Since 2026-10-05 the GPU clock may go under 1000 MHz when Tctl reaches 87 C. The
+BIOS fan setting stays as it is. The reason is Rise of the Tomb Raider, scene 2: the
 reading held 88 C while the governor was already at its 1000 MHz floor with the GPU 97 % busy, so no rule had a step
 left. The table therefore holds two more points, 900 and 800 MHz, and:
 
@@ -233,8 +233,8 @@ lowering to 800 MHz at 88 C, the admitted 800 -> 1000 MHz raise at 87 and 95 C a
 
 ### The idle state (0.7.207)
 
-The owner decided on 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na 500 MHz" (when the lab does not
-work, set its GPU clock to 500 MHz). The table therefore holds a sixth point under the lab floor, 500 MHz at the
+Requirement (2026-10-05): when the lab does not
+work, its GPU clock goes to 500 MHz. The table therefore holds a sixth point under the lab floor, 500 MHz at the
 floor's own 820 mV, and the governor holds it while the GPU has no work. The state is a lowering only. It never
 raises a clock, a voltage or a limit.
 
@@ -268,7 +268,7 @@ rules end an episode:
 Work on the GFX ring does not end an episode by itself any more. Up to 0.7.216.1 it did: with the desktop composed
 on our GPU every DWM frame (the cursor, the clock, an overlay redraw, about 2 ms of GPU work every 2 s) put work on
 the ring. The clock went 500 -> 1000 MHz, held the lab floor for the next 3 s quiet window, went back to 500 MHz,
-and did it again. The owner watched it flap every two seconds at an idle desktop, and the lab counted 29 exits in
+and did it again. An operator at the lab saw it flap every two seconds at an idle desktop, and the lab counted 29 exits in
 6.5 minutes when the desktop was quiet (2026-10-07). The trailing window of that rule admitted the entry's own
 2 permille mean, which a desktop frame every 2 s at 500 MHz already reaches, so the slow exit flapped as well. The
 ring still gates the entry: the entry rule is unchanged.
@@ -360,8 +360,8 @@ Every tick of the test also checks that the thermal cap stays at or above its ow
 point fails the gate. `clock_test.c` covers the transactions to and from 500 MHz, including the admitted
 500 -> 1000 MHz raise at 95 C.
 
-From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 C). The owner set this threshold on
-2026-10-04 ("próg na 87": the threshold at 87). From 0.7.200 to 0.7.203 the warm zone started at 85 C. The rules are:
+From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 C). This threshold was set on
+2026-10-04. From 0.7.200 to 0.7.203 the warm zone started at 85 C. The rules are:
 
 - At 87 C or more, the governor does not raise the clock or the voltage. This applies to a raise from the load and to
   a raise from the runtime floor.
@@ -380,8 +380,8 @@ From 0.7.204 the warm zone starts at the hot threshold (`BC250_DPM_WARM_MC`, 87 
   the zone is off.
 
 When the warm zone stops a raise, the throttle reason is `thermal-warm` (8). The counter `warm` in the driver log
-lines counts the governor ticks with a stopped raise. From 0.7.204 this counter stays at zero or near zero. The owner
-asked for the first warm zone after session 344 (The Ascent, menu, no frame cap). In that session the governor kept
+lines counts the governor ticks with a stopped raise. From 0.7.204 this counter stays at zero or near zero. The first
+warm zone was requested after session 344 (The Ascent, menu, no frame cap). In that session the governor kept
 1500 MHz / 919 mV while Tctl increased from 83.5 C to 85.3 C, because no rule stopped a raise between 82 C and 87 C.
 `test_warm` in `dpm_test.c` covers the edges (85.000, 86.999 and 87.000 C, the hot steps, the backstop). A compile-time
 check in `dpm_test.c` makes sure that the warm zone is 87 C, is not above the hot threshold, and is above the release
@@ -559,8 +559,7 @@ timing, each change alone and both: the legacy rule latches one level down for t
 with a 1.5 C / 3 s soft release recovers between heavy scenes with no cap changes closer than 2 s and no reading
 above 87.4 C. The plant's constants are not the lab's; the lab A/B decides the defaults.
 
-The hot threshold was 85 C, with release below 80 C, up to KMD 0.7.183.1. The owner moved it to 87 C on 2026-10-01
-("Ustaw bezp. temp na 87 C, bo to w końcu AMD": set the safe temperature to 87 C, it is an AMD part after all),
+The hot threshold was 85 C, with release below 80 C, up to KMD 0.7.183.1. It moved to 87 C on 2026-10-01,
 from 0.7.184.1 on. Release moved with it to keep the 5 C hysteresis; the 90 C floor is unchanged. The trigger was
 Witcher 3 session 219 at native 1080p: the telemetry lines peaked at 84.8 C Tctl, and the governor, which samples
 every tick, went thermal-soft twice and capped the clock at 1800 MHz.
@@ -752,7 +751,7 @@ keeps its busy gate for the same message.
 | Value | Meaning |
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
-| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, owner 2026-10-10); 2000 is the hard ceiling |
+| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, since 2026-10-10); 2000 is the hard ceiling |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
@@ -987,7 +986,7 @@ that the machine does not survive costs the curve and not the machine, and the d
 ## Original lab plan and risks
 
 The following is the original 2026-09-30 plan, retained as history. The current default upper limit is 2000 MHz
-and current lab-session limits follow the owner's standing instructions.
+and current lab-session limits follow the standing lab rules.
 
 The lead runs the lab steps (deploy through `scratch\kmd-deploy`, idle, load step, thermal, game); each has a
 three-minute bound (five for the game). The lab starts at the 1500 MHz default, the firmware's own operating point; 2000 comes only with an explicit `DpmMaxMHz` after that passes. Risks: 2000 MHz at 1000 mV has never run on unit A (M52 stops short of it);

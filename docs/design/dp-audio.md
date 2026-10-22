@@ -285,7 +285,7 @@ one device container on this unit is to be measured.
 
 ## Not proven yet
 
-- Nobody has heard the tone in a measured trial. The owner heard DP audio on tester.20 on 2026-10-07 (BD-092),
+- Nobody has heard the tone in a measured trial. An operator at the lab heard DP audio on tester.20 on 2026-10-07 (BD-092),
   which is a report, not a measurement. The lab trial of 2026-10-09 measured the rate, not the sound.
 - The read-back of the update strobes is not known. The driver does not compare them.
 - The container ID is not measured on the lab: whether the audio endpoint and the monitor end in one device

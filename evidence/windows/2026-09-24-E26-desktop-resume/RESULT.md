@@ -8,10 +8,10 @@ Changing UMD registration with only a DWM restart did not load Mesa; after
 PnP reload the loaded-module witness shows the exact E26 branch-labels DLL.
 DWM then presented Flip|FlipWithNoWait (0xC) and scanout stayed black while
 hardware flip remained closed. Enabling the existing EnableDcnWrite and
-EnableVidPnFlip path produced a visible desktop, confirmed by the owner and
+EnableVidPnFlip path produced a visible desktop, confirmed by a visual check and
 actual HUBP framebuffer dumps. No new KMD or register sequence was needed.
 
-The owner observed repeated descending bands in the overlay. That configuration
+A visual check showed repeated descending bands in the overlay. That configuration
 is not accepted as correct. Follow-up M407 addresses resource identity rotation.
 No Windows restart or AC cycle occurred. Generic EnableMmioWrite remained0.
 

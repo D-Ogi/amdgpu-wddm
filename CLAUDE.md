@@ -13,17 +13,17 @@ The previous driver attempt did not fail because of the hardware. It failed beca
 7. **Import AMD code, do not retype it.** Init sequences come from `amdgpu` (MIT) through `driver/shim`. Every deviation from Linux gets a comment stating the reason.
 8. **Other projects' notes are not sources of facts.** The agent notes and docs of earlier BC-250 driver attempts can give experiment ideas and verified code (SMU mailbox, PSP ring), never addresses or conclusions.
 9. **Missed Linux measurements go to `docs/linux-session-wishlist.md` at once.** The lab unit runs Windows, and a Linux boot of it is expensive. Whenever you notice something that would have been easy to capture under Linux, add a row (what, why, date) instead of keeping it in your head. Before any Linux session, plan it from that file; after it, move the finished rows to "Done" with their evidence directory.
-10. **No AI agent is named as author or co-author.** Commits and pull requests carry no `Co-Authored-By` trailer for a model, and no document, evidence write-up or experiment note says that an agent wrote or recorded it. The author of this repository's content is the licensor named in `NOTICE`; agents are tools (owner, 2026-09-26).
+10. **No AI agent is named as author or co-author.** Commits and pull requests carry no `Co-Authored-By` trailer for a model, and no document, evidence write-up or experiment note says that an agent wrote or recorded it. The author of this repository's content is the licensor named in `NOTICE`; agents are tools.
 
 ## Hardware safety
 
 - GPU voltage and clocks: only within the limits in `docs/hardware.md`. No SMU messages outside the allow-list.
-- BIOS flashing, SPI flash or CMOS writes: only with the owner's explicit consent and a programmer-made backup.
+- BIOS flashing, SPI flash or CMOS writes: only with explicit consent for that write and a programmer-made backup.
 - Writing to a register of unknown meaning is forbidden. "Let me see if it accepts a write" is not a method of discovery.
 - The first contact with any new unit goes through `tools/diagusb`, whose only MMIO writes are the two standard probe writes every driver performs (`GRBM_GFX_INDEX` bank select, `SCRATCH_REG0` pattern test), both restored, both skipped in its read-only mode.
 - Secrets (Wi-Fi config, SSH keys, keys of debug channels) and lab network addresses stay outside the repo. Never copy them in, never print them.
 
-## Long-term direction (owner, 2026-09-23)
+## Long-term direction
 
 The performance target is for Windows on the BC-250 to outperform Linux on the same hardware.
 Treat optimization and sound architecture as core engineering work. Use profiling to identify
@@ -37,7 +37,7 @@ or memory ownership. The longer-term ambition includes open-source alternatives 
 applications built around this work. Record measurements as facts (docs/facts/data/) with evidence;
 keep aspirations distinct from demonstrated capabilities.
 
-## Toolchain and Mesa freshness (owner, 2026-09-24)
+## Toolchain and Mesa freshness
 
 Prefer bleeding-edge dependencies where practical, including LLVM and Mesa.
 Use the newest upstream LLVM release and evaluate current Mesa development
@@ -78,7 +78,7 @@ those properties.
   reads one document.
 - Everything in the repo is in English: docs, code, identifiers, commit messages.
 - Plain hyphens `-` in prose, no em dashes.
-- One exception to the English rule, by the owner's wish: a Polish saying or proverb that fits the situation
+- One exception to the English rule: a Polish saying or proverb that fits the situation
   is welcome now and then in READMEs and comments, in Polish with its diacritics, followed by a
   short English gloss. Dry, slightly dark humour likewise. Let future readers pick up some Polish culture
   along the way. Never in facts (`docs/facts/data/`), evidence files or safety rules, where precision comes first.

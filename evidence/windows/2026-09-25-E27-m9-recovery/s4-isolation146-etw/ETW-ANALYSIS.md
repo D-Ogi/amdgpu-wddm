@@ -5,7 +5,7 @@
 ## Result
 
 The trace identifies expensive CPU composition and long DWM wait-for-work
-intervals, but does not establish the cause of the owner's periodic cursor stalls.
+intervals, but does not establish the cause of the visually observed periodic cursor stalls.
 There is no captured mouse-movement oracle to prove that DWM was idle despite
 pending movement. The trace does not support a lost-vsync or long-ISR/DPC theory
 for this recorded interval. Regular vsync is not proof of smooth cursor updates.
@@ -88,7 +88,7 @@ The trace contains Win32k message/paint and DComp events, but no named
 Mouse/Pointer/Cursor/HID input stream. Decoded Win32k message fields contain
 no WM_MOUSEMOVE(512/0x200) events. DispatchMessage has56 WM_PAINT(15) starts.
 USBPORT interrupt activity is not evidence of mouse movement or its delivery.
-The absence of these events is a capture limitation, not proof the owner did
+The absence of these events is a capture limitation, not proof the operator did
 not move the mouse, and not proof the input stack discarded it.
 
 Therefore long WFW may be normal unchanged-desktop idle time, while ~35ms

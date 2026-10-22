@@ -82,7 +82,7 @@ namespace AmdgpuWddmControl
             // flag only for a table at most three seconds old; an older driver, EnableSmuMetrics 0 or a refusal by the
             // firmware leave it clear, and the row then says "No reading".
             add("power", d != null && d.Has(DpmState.FlagPower) ? (d.SocketPowerMw / 1000.0).ToString("0", CultureInfo.InvariantCulture) + " W" : null);
-            // A stopped fan (a duty output runs and nothing turns) is "hot": the owner must see it at a glance.
+            // A stopped fan (a duty output runs and nothing turns) is "hot": the user must see it at a glance.
             string level;
             add("fan", FanValue(fan, control, out level)).Level = level;
             return rows;

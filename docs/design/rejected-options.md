@@ -42,12 +42,12 @@ no text from them, and no AMD or ASRock firmware image goes near our tree.
 ## Reversed, with the reason and the guard that replaced it
 
 A row here was rejected once and is admitted now. The route did not become safe by itself: each one gained a
-bound, a readback and a way back, and the owner asked for the capability (2026-10-05 and 2026-10-06). The old
+bound, a readback and a way back, and the capability was requested (2026-10-05 and 2026-10-06). The old
 reason stays readable, because it is the reason the guard exists.
 
 | Option | Rejected because | Admitted in 0.7.210 because |
 |---|---|---|
-| `SetCoreEnableMask 0x2C` (`0x77` to `0xFF`, eight CPU cores) | An SMU mask and not a firmware write, so the firmware-write rule never blocked it. It needed the owner's word and per-core validation first, and the reported gain was one Linux board | The owner pre-approved the CPU core unlock (2026-10-05) and asked for the control surface (2026-10-06). The allowlist admits the two masks `0x77` and `0xFF` and no other pattern, because another pattern suggests a real harvest of defective cores. The change needs a Windows restart and carries the two-mark boot guard, so a mask the machine does not survive costs the mask and not the machine. `QueryCorePstate 0x0C` and `ReadCoreMHz 0x43` validate the new cores per core, which is the validation the old row asked for |
+| `SetCoreEnableMask 0x2C` (`0x77` to `0xFF`, eight CPU cores) | An SMU mask and not a firmware write, so the firmware-write rule never blocked it. It needed explicit approval and per-core validation first, and the reported gain was one Linux board | The CPU core unlock is pre-approved (2026-10-05) and the control surface was requested (2026-10-06). The allowlist admits the two masks `0x77` and `0xFF` and no other pattern, because another pattern suggests a real harvest of defective cores. The change needs a Windows restart and carries the two-mark boot guard, so a mask the machine does not survive costs the mask and not the machine. `QueryCorePstate 0x0C` and `ReadCoreMHz 0x43` validate the new cores per core, which is the validation the old row asked for |
 | A V/F curve point under the table's line (the community's 900 mV at 1500 MHz) | Our 1500 MHz at 919 mV is the firmware's own point (M22). Their 900 mV was an undervolt below stock with no measurement, and their 500 MHz at 700 mV is under our 820 mV floor | The undervolt is bounded instead of free: at most 25 mV under the table's line at that clock, never under 820 mV, level 5 pinned at 820 mV, and the curve must not fall as the clock rises (`bc250_clock_curve_check`). It runs as a trial that the kernel reverts by itself, and a boot guard drops it if the start it ran was never healthy. Their 700 mV at 500 MHz stays refused: it is 120 mV under the floor and nothing admits it |
 
 ## The CPU messages that stay out (0.7.210)

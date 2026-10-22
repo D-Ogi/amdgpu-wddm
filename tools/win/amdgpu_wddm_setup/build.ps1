@@ -33,9 +33,9 @@
 #      drew the pixels under it first, and clears itself in the colour the window really paints under it, which the
 #      picture cannot show either because one flat colour over another leaves no overlap and no overflow),
 #      G-A11Y (names, Tab reach,
-#      tab order, Enter and Escape), G-CHROME, G-NOINT, G-SMALL, the owner's rule of 2026-10-12 that a 1024x768,
-#      800x600 or smaller screen draws no right-hand panel and a larger one draws it, and G-CONSENT, the owner's
-#      instruction of the same day that no screen asks the user for a permission: the plan screen carries no check
+#      tab order, Enter and Escape), G-CHROME, G-NOINT, G-SMALL, the rule that a 1024x768,
+#      800x600 or smaller screen draws no right-hand panel and a larger one draws it, and G-CONSENT, the
+#      rule that no screen asks the user for a permission: the plan screen carries no check
 #      box or option button of its own and its Install button is never off. G-SHORTCUT holds the two shortcut
 #      options of the same instruction: the plan screen offers the Start menu and the desktop, and both are on when
 #      it opens.
@@ -45,7 +45,7 @@
 #      strip stays one control with one window handle, no engine event builds the screen again, and the strip is
 #      drawn again only when its value changes or its band moves;
 #   5. tools\release\test-setup-exe.ps1: the exe is packed around a small package of its own (the single-file
-#      installer the release ships, owner 2026-10-12) and reads it back through --smoke-payload, and nine damaged, doctored
+#      installer the release ships) and reads it back through --smoke-payload, and nine damaged, doctored
 #      or empty exes are offered to the reader and every one of them is refused.
 # None of them shows a window; nothing is installed and nothing outside -Out is written (the runs' temporary files are
 # under -Out\obj).
@@ -148,7 +148,7 @@ foreach ($name in $helpImages) {
     $helpBytes += $bytes.Length
 }
 Write-Host "  help pictures: $($helpResourceNames.Count) of $($helpImages.Count) ($(($helpResourceNames -replace '^help\.', '') -join ', ')), $helpBytes bytes, embedded from $HelpArt"
-# The application icon (owner, 2026-10-12: "ikonke zrob z biustu Nagi"): the guide character's bust as a round badge,
+# The application icon: the guide character's bust as a round badge,
 # art\icon\nagi.ico with its PROVENANCE.md, the same file the control application uses. It is the window's icon, the
 # icon of the single-file installer that carries this exe, and the icon the Start menu and desktop shortcuts show.
 $icon = Join-Path $repo 'tools\win\amdgpu_wddm_control\art\icon\nagi.ico'
@@ -206,7 +206,7 @@ if (-not $NoSmoke) {
     $expect = [ordered]@{
         # The fake engine still reports a consent in its decision, because the model has to go on reading the
         # field of the engine contract. The window shows no control for it any more (G-CONSENT): what the install
-        # changes is stated on the plan screen, and pressing Install is the consent (owner, 2026-10-12).
+        # changes is stated on the plan screen, and pressing Install is the consent.
         plan    = @('--plan', '-Scenario', 'plan'), @('result: bound', 'outcome: planned', 'view: Plan', 'decision: install restarts 2 consents test-signing', 'settings: rows 3 lines 3', 'unknown checks: future.check', 'events: 9 ignored 0 problems 0')
         noise   = @('--plan', '-Scenario', 'noise'), @('result: bound', 'outcome: planned', 'ignored 2')
         cancel  = @('--cancel', '-Scenario', 'cancel'), @('result: bound', 'outcome: cancelled', 'cancel: requested', 'view: Cancelled result.cancelled.title nothing-changed')
@@ -287,7 +287,7 @@ if (-not $NoSmoke) {
     # nothing would see a tint drawn on a tint or text that the high-contrast colours make unreadable.
     $renders += , @('1', 'en', '1', '--high-contrast')
     $renders += , @('1.5', 'pl', '1', '--high-contrast')
-    # G-SMALL, the owner's rule of 2026-10-12: five working areas of a tester's screen, in logical units. The four
+    # G-SMALL, the rule: five working areas of a tester's screen, in logical units. The four
     # small ones must draw no right-hand panel and the 1920x1080 one must draw it; overlap, overflow and the page
     # column are checked in every one of them, which is what the tester's 800x600 screen needed (GitHub #38).
     foreach ($work in '800x600', '1024x768', '1280x720', '1366x768', '1920x1080') {

@@ -197,7 +197,7 @@ void DcnEscape(_In_ const BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN* Data)
 
 // ---- FbdumpEscape (BC250_ESCAPE_RUN_FBDUMP, 2026-09-22): a read-only band of the scanned-out surface -----------
 //
-// The owner's practical-debugging request: a screenshot that works under the full WDDM table too, where
+// A practical-debugging requirement: a screenshot that works under the full WDDM table too, where
 // mon.py's GDI capture reads the CDD's surfaces and shows black (facts M84). PASSIVE_LEVEL only (MmMapIoSpaceEx).
 // No register write; needs EnableMmio only, the same condition DcnEscape above already answers to.
 

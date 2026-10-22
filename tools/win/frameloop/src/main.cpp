@@ -43,7 +43,7 @@ using measure::Qpc;
 namespace {
 
 // --------------------------------------------------------------------------------------------------- format
-// The back buffer format: the one place in this client where it is named. The owner requires the Present path
+// The back buffer format: the one place in this client where it is named. The project requires the Present path
 // to stay ready for 10-bit and HDR back buffers, so nothing below may assume 8 bits per channel: there is no
 // byte-level readback of a back buffer here, the clear takes a float4 and the pixel shader writes a float4, so
 // changing this constant (and, for HDR, adding the colour-space call) is the whole change.

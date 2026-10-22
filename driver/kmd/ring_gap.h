@@ -5,7 +5,7 @@
  * 300 us of a display VSync. That is 0.45 to 0.67 ms of a 70 Hz frame given away, and 59 to 64 % of all ring
  * idle in the window. Reading it took a 3 GB xperf text dump per session and three days of offline analysis.
  * This header is the same number, computed by the driver that owns the ring, for every workload, with two QPC
- * reads per packet boundary and two lines in the log summary. The owner's goal is that the GPU must not wait;
+ * reads per packet boundary and two lines in the log summary. The project's goal is that the GPU must not wait;
  * a driver that cannot say how long its ring waited cannot work towards it.
  *
  * WHAT THIS OBJECT IS NOT. The driver sees its own ring: from the submit that installs the hardware-pending state
@@ -139,7 +139,7 @@ static __inline unsigned long long Bc250RingGapClose(BC250_RING_GAP* Gap, unsign
     return us;
 }
 
-/* The two numbers the owner's goal is stated in, per displayed frame, in nanoseconds so that integer arithmetic
+/* The two numbers the project's goal is stated in, per displayed frame, in nanoseconds so that integer arithmetic
  * is enough (a lab frame is 14 ms, and 0.45 ms a frame is 450000 ns). Frames is the VSync report count of the
  * same window; 0 frames gives 0, never a division fault. */
 static __inline unsigned long long Bc250RingGapPerFrameNs(unsigned long long Microseconds, unsigned long Frames)

@@ -9,7 +9,7 @@
 Linux bc250diag 6.18.52-0-lts #1-Alpine SMP PREEMPT_DYNAMIC 2026-09-15 05:37:48 x86_64 Linux
 BOOT_IMAGE=/boot/vmlinuz-lts modules=loop,squashfs,sd-mod,usb-storage modprobe.blacklist=amdgpu bc250.mode=network
 ==    WARNING: this is not the bc250.mode=readonly entry - check grub.cfg
-== boot history is the owner's to tell: cold or warm. uptime:
+== boot history is the operator's to tell: cold or warm. uptime:
  15:20:41 up 0 min,  0 users,  load average: 0.25, 0.07, 0.02
 == amdgpu loaded? (empty is what this step wants)
 ==    ! lsmod amdgpu (1 = absent, which is right here) rc=1

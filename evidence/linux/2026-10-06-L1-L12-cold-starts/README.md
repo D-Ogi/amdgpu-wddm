@@ -2,7 +2,7 @@
 
 Date: 2026-10-06, 13:14 to 13:25 UTC. Unit A, the diagnostic stick's Linux (Alpine, kernel `6.18.52-0-lts`),
 GRUB entry `bc250.mode=network` (amdgpu blacklisted at boot). Five boots, each with a recorded history.
-The owner gave consent on 2026-10-06 for cold starts through the smart plug.
+Cold starts through the smart plug were approved on 2026-10-06.
 
 ## Boot history
 

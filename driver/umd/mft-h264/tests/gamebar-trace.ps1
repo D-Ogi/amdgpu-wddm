@@ -11,10 +11,10 @@
 #   - Game Bar itself may write a video file under the signed-in user's Videos\Captures.
 # No registry policy value, no driver, no firmware, no reboot. Everything it creates it removes.
 #
-# Run elevated through the usual tooling, after telling the owner through the overlay:
+# Run elevated through the usual tooling, after an announcement on the lab overlay:
 #   python tools\win\target.py ps driver\umd\mft-h264\tests\gamebar-trace.ps1 -- -Seconds 20
 # Without -AutoHotkey the script only traces; press Win+Alt+R twice on the lab's screen inside
-# the window (the owner sees the screen, so this works without any keystroke injection).
+# the window (an operator at the lab sees the screen, so this works without any keystroke injection).
 #
 # Bounded: the default is 20 s of tracing, well inside the three-minute trial limit.
 

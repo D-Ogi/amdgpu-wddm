@@ -5,7 +5,7 @@
 Applications call the standard D3D11, D3D12 and DXGI runtimes in System32, which load the installed driver of
 the adapter. Nothing of ours is placed next to the application (the M13 criterion of the
 [roadmap](00-goal-and-roadmap.md)). Inside that driver, DXVK (D3D11), vkd3d-proton (D3D12) and RADV
-(Vulkan) are internal backends, loaded by our user-mode driver, not by the application: the owner's decision,
+(Vulkan) are internal backends, loaded by our user-mode driver, not by the application: the project decision,
 recorded in [ADR 0017](adr/0017-graphics-stack-direction-after-m12.md) items 1, 2, 4 and 5. That is the
 intended architecture. What is measured today is less:
 

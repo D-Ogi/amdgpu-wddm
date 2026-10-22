@@ -68,7 +68,7 @@ policy, not independently recorded by an external sampler on every poll.
 
 ## Display and GPU controls
 
-The owner explicitly confirms correct physical image and smooth cursor/overlay
+A visual check confirms correct physical image and smooth cursor/overlay
 on145. Windows boot00:53:18 and DWM1720/start00:54:20 are retained through01:47:24.
 Finalhealth: generation29824235770,epoch5,flags15,376completions,age730ms.
 

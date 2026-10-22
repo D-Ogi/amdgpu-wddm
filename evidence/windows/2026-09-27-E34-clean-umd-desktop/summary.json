@@ -82,6 +82,6 @@
   ],
   "duration_seconds": 180.0941696,
   "restored_cpu_pid": 4596,
-  "owner_visual_verdict": "not received",
+  "visual_verdict": "not received",
   "source_commit": "a0ad8af5ea46b90400d947d82d056f3bd58278c5"
 }

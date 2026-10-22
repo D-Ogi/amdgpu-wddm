@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# One frame from the USB camera the owner attached to the development PC to watch the lab (2026-10-01): a one-shot
+# One frame from the USB camera attached to the development PC to watch the lab (2026-10-01): a one-shot
 # ffmpeg DirectShow capture, no window, no resident process. The camera warms up for ~1 s (auto exposure), so the
-# 30th frame is kept. Owner: crop the image hard ("Należy znacząco przyciąć obraz z kamery"): only unit A's monitor
+# 30th frame is kept. The image is cropped hard: only unit A's monitor
 # and case are kept (fractions of the frame, measured on the 2026-10-01 view; CROP overrides as
-# "w:h:x:y" fractions if the camera moves). The camera also sees the owner's room, so an uncropped frame is never
+# "w:h:x:y" fractions if the camera moves). The camera also sees a private room, so an uncropped frame is never
 # kept and never viewed.
 # Frames stay under <BC250_ROOT>/scratch/labcam and never enter a repository. BC250_ROOT defaults to the parent
 # directory of this repository; LABCAM_OUT overrides the output directory; CAMERA names another DirectShow device.

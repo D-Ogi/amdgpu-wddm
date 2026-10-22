@@ -50,7 +50,7 @@ loses the entry; the device never waits for the worker or sees its result. The w
 
 | State | Meaning |
 |---|---|
-| key or value absent | on (owner decision D3: the one exception to "unchecked = nothing written") |
+| key or value absent | on (design decision D3: the one exception to "unchecked = nothing written") |
 | `REG_DWORD` 1 | on |
 | `REG_DWORD` 0 | off: nothing is written |
 | any other type, size or number, or a read error other than "not found" | no record. This is never read as on. |

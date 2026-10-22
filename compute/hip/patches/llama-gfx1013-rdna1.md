@@ -31,7 +31,7 @@ launch-bounds disagreement above and nothing said so. `build-llama-patched.ps1` 
 markers and refuses an incomplete source copy, and `-ApplyPatches` applies the complete set.
 
 The same two findings are drafted for upstream in `scratch/m16-hip/upstream/`
-`llama-cpp-gfx1013-rdna1-issue.md`. That draft is not posted. The owner decides whether it goes out.
+`llama-cpp-gfx1013-rdna1-issue.md`. That draft is not posted yet.
 
 Nasze gfx1013 bywa niewidzialne w cudzych listach - our gfx1013 tends to be invisible in other
 people's lists.

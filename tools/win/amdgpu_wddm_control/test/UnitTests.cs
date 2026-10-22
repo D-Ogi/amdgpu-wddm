@@ -737,8 +737,7 @@ static partial class UnitTests
         var refused = Closed(); refused.Interop = null; refused.Health = null; refused.Dpm = null; refused.DriverError = "not loaded";
         refused.Parameters["UnconfirmedStarts"] = 2; refused.Parameters["LastStage"] = 90;
         // The refusal is explained and the way back is this app's own action now (enable-driver), not the release
-        // installer: a person on Microsoft Basic Display would have to find and download that installer first
-        // (owner, 2026-10-13). The notice at sign-in and the Home banner carry the same action.
+        // installer: a person on Microsoft Basic Display would have to find and download that installer first. The notice at sign-in and the Home banner carry the same action.
         var refusedLine = line(Recovery.Describe(refused), "Driver start");
         Check(refusedLine.Text.Contains("refused to start") && refusedLine.Action == "enable-driver" && !refusedLine.Text.Contains("installer"),
             "guard refusal explained, with the one-click repair and no installer");
@@ -933,7 +932,7 @@ static partial class UnitTests
         finally { try { Directory.Delete(dir, true); } catch (Exception) { } }
     }
 
-    // The settings rule (owner, 2026-10-03): unchecked = not written, unchecking removes, the exact set is written.
+    // The settings rule: unchecked = not written, unchecking removes, the exact set is written.
     static string Show(IEnumerable<RegWrite> writes) { return string.Join(" ", writes.Select(w => w.Name + (w.Delete ? "-" : "=" + w.Number))); }
 
     static void SettingsRule()

@@ -51,8 +51,8 @@ Final workload summary: no TDR; see results/postcontrol-after.log for counters.
 
 At03:10:31 health generation34815300295 persists, epoch13 is fresh, completed102,
 age4ms, flags7. Guard budget remains0/policy2. Postresume automatic flags15 was
-not yet observed. Native1000MHz/VID116,67.875C. The owner reports visible output
-and responsive mouse, then clarifies Windows is at the sign-in screen and the
+not yet observed. Native1000MHz/VID116,67.875C. A visual check shows visible output
+and responsive mouse; Windows is at the sign-in screen and the
 password is unknown. Do not treat this as an unlocked-desktop acceptance; the
 local credential file was pointed out without exposing its contents.
 

@@ -1,6 +1,6 @@
 # bc250mon - monitor and overlay on the BC-250's own screen
 
-A window the owner can see on the lab machine while experiments are driven remotely: what is being done
+A window anyone at the lab machine can see while experiments are driven remotely: what is being done
 right now, temperature and clocks, results, a log, and a brake. One .NET Framework 4.8 executable (part of
 Windows, nothing to install), started at logon in the interactive session by a scheduled task, elevated
 because `bc250rd.sys` is admin-only.
@@ -8,7 +8,7 @@ because `bc250rd.sys` is admin-only.
 ## Architecture
 
 ```
- providers (threads)                  remote agent over SSH      owner at the machine
+ providers (threads)                  remote agent over SSH      person at the machine
  GpuProvider, SystemProvider,         mon.py -> HTTP            hotkeys, buttons
  KmdProvider, KmdInfoProvider         127.0.0.1:2250
         |                               |                               |
@@ -82,7 +82,7 @@ such service exists, without administrator rights.
 
 ## The "bc250kmd live" panel
 
-`KmdInfoProvider.cs` is the KMD panel's practical-debugging counterpart (owner's request, 2026-09-22): where
+`KmdInfoProvider.cs` is the KMD panel's practical-debugging counterpart (2026-09-22): where
 `KmdProvider` reads the registry trail (works even when the driver has stopped answering), this one asks the
 driver itself, every 5 seconds, by running `C:\BC250\kmd\bc250kmd_cli.exe info` (`BC250_ESCAPE_GET_INFO`) and
 condensing its output:
@@ -203,7 +203,7 @@ window out of the picture). They answer with the image bytes and an `X-Capture-S
 `/windows` and every error answer with JSON. A window is found by handle, or by the first title that contains
 the given text, case-insensitive, nearest the front first.
 
-**Every capture is logged** with the source `screenshot`, so the owner reads on the overlay that a picture of
+**Every capture is logged** with the source `screenshot`, so a person at the lab reads on the overlay that a picture of
 their screen was taken. That is the deal, not a debug aid.
 
 ## Controls
@@ -215,7 +215,7 @@ their screen was taken. That is the deal, not a debug aid.
 | `Ctrl+Alt+F12` | STOP |
 
 Function keys, not letters. `AltGr` is `Ctrl+Alt` on the Polish layout and on every other layout that has
-one, so a global `Ctrl+Alt+<letter>` eats the character the owner is typing: `Ctrl+Alt+S` swallowed `s` with
+one, so a global `Ctrl+Alt+<letter>` eats the character the user is typing: `Ctrl+Alt+S` swallowed `s` with
 an acute accent. A hotkey another process already holds is refused silently by Windows, so the monitor logs a
 warning when a registration fails rather than leaving a dead key.
 
@@ -251,7 +251,7 @@ mon.py log "text" [level]
 mon.py panel e02 "E02 control read" "registers=5542" "identical=5074:good" "hangs=0:good"
 mon.py unpanel e02
 mon.py action clock.cool              mon.py action clock.set '{"mhz": 1200, "mv": 850}'
-mon.py stop?                          exit code 1 if the owner asked to stop
+mon.py stop?                          exit code 1 if a stop was requested
 mon.py windows                        handle, process, geometry and title of every titled window
 mon.py screenshot [--scale 0.5] [--format png|jpg] [--quality 80] [--overlay 0|1]
                   [--window TITLE | --handle 0x...] [--out FILE]
@@ -279,7 +279,7 @@ deletes the full-resolution intermediate BMP it pulls once the downscaled pictur
   then whatever lies on top of it is in the picture. The log line says which of the two was used.
 - A minimized window has nothing to copy from the screen, so the fallback gives a blank image.
 - `overlay=0` uses `WDA_EXCLUDEFROMCAPTURE`, which needs Windows 10 2004 or later. It leaves the window on
-  the monitor and only hides it from the capture, so the owner sees no flicker; if Windows refuses, the
+  the monitor and only hides it from the capture, so the lab screen shows no flicker; if Windows refuses, the
   capture still happens with the overlay in it and the log line says `overlay could not be hidden`.
 - Only the primary screen; a second monitor would need the endpoint to take a display index.
 - A capture runs on the API's single thread, so it blocks other requests for a few hundred milliseconds.

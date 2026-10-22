@@ -14,7 +14,7 @@ $cli=Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -
 $file=New-Object IO.FileStream($out,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
 $encoding=New-Object Text.UTF8Encoding($false)
 function Put([string]$text){$b=$encoding.GetBytes(('{0:HH:mm:ss.fff} {1}' -f [DateTime]::UtcNow,$text)+"`n");$file.Write($b,0,$b.Length);$file.Flush($true)}
-# The installed release's bc250kmd_cli.exe is the only KMD client (owner, 2026-10-08: the harness needs nothing
+# The installed release's bc250kmd_cli.exe is the only KMD client (2026-10-08: the harness needs nothing
 # from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
 function Resolve-KmdClient([string]$Release,[string]$Form){
  if(!$Release -or !(Test-Path -LiteralPath $Release)){throw "No release KMD client '$Release' (HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe)"}

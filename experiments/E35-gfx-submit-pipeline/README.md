@@ -25,9 +25,9 @@ blocks deployment. G0/M9 status does not change from this side fix.
 
 Result: M537 records the passing bounded content control and unresolved overlap/performance acceptance. M538 records compiler/analysis fixes and E14 exact-artifact smoke. See evidence/windows/2026-09-26-E35-gfx-submit-pipeline and evidence/windows/2026-09-26-E35-quality-gates.
 
-## Authorized Windows control (owner, 2026-09-26)
+## Authorized Windows control (2026-09-26)
 
-The owner requested deployment while Witcher 3 installs. Do not terminate its
+Deployment runs while Witcher 3 installs. Do not terminate its
 installer or restart Windows for the planned transition. Use PnP disable/install/
 enable for the identified GPU, preserve UMD/ICD registration and native paging.
 152 is based on the deployed151 source, not unrelated workspace recovery edits.

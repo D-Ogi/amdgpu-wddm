@@ -50,7 +50,7 @@ boundaries and must not be treated as one-to-one IDs.
 Stationary CPU baseline26,584 exact pixels; final primary and independent GDI
 captures each37,800 exact pixels (8,000 static plus the whole29,800-pixel cyan
 client). Independent host decoding agrees. This is selected-region/frozen-state
-validation, not an owner observation or exhaustive live-frame/full-desktop proof.
+validation, not a visual observation or exhaustive live-frame/full-desktop proof.
 
 ## Audit limitation and closure
 

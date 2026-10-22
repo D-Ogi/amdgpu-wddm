@@ -1,4 +1,4 @@
-E13, a fourth boot, later on 2026-09-21 (the owner offered the machine again while the shim's teardown work was under way).
+E13, a fourth boot, later on 2026-09-21 (the machine was available again while the shim's teardown work was under way).
 
 How it started: a warm restart out of Windows 11 (bc250kmd 0.6.1.0 as the display driver, its bring-up gates closed in
 that boot, nothing of ours had touched the GPU beyond the display path), steered into the stick from Windows by

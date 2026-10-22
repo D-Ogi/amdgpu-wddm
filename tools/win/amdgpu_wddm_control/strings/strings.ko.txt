@@ -1201,7 +1201,7 @@ help.auto.failed|mt|e242261b|자동 지원 보고서를 저장하지 못했습�
 drv.verify.earlier-boot|mt|d7afb829|마지막 전체 검사는 다시 시작하기 전에 실패했습니다. 현재 설치된 드라이버는 작동 중입니다.
 status.verification-earlier-boot|mt|6b5b86e8|마지막 전체 검사는 다시 시작하기 전에 수행되었습니다. 현재 설치된 드라이버는 작동 중입니다.
 
-# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in (owner, 2026-10-13) ----
+# ---- the sign-in notice, the one-click repair and the switch for the window after sign-in ----
 notice.guard.title|mt|660b2a51|그래픽 드라이버가 꺼졌습니다
 notice.guard.text|mt|1f5d6130|이 PC를 계속 쓸 수 있도록 그래픽 드라이버를 껐습니다. 마지막 시작들이 점검을 끝내지 못했기 때문입니다.\n지금은 Windows의 기본 디스플레이로 화면을 그리고 있어서 게임이 실행되지 않고 전체가 느립니다.\n그래픽 드라이버를 다시 켤 수 있습니다. 이 PC의 다른 설정은 바뀌지 않습니다.
 notice.failed.title|mt|fb8e175f|그래픽 드라이버가 시작되지 않았습니다

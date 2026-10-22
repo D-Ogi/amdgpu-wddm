@@ -1,5 +1,5 @@
-"""Writes runner profiles for the small Unity games installed on the lab on 2026-10-04 (owner: smaller offline
-D3D11/D3D12 games from the owner's library). Unity selects the graphics API with the player command line
+"""Writes runner profiles for the small Unity games installed on the lab on 2026-10-04 (smaller offline
+D3D11/D3D12 games from the lab's library). Unity selects the graphics API with the player command line
 -force-d3d12 / -force-d3d11 (Unity manual, Command line arguments). Executables from game-exes.ps1."""
 import json
 from pathlib import Path
@@ -23,9 +23,9 @@ for gid, title, app, folder, stem, api, note in GAMES:
     p = {
         'schema': 1, 'id': gid, 'title': title, 'app_id': app, 'api': api,
         'apis': {
-            'd3d12': {'selection': 'game default, no switch (owner 2026-10-04); -force-d3d12 would force it', 'arguments': '',
+            'd3d12': {'selection': 'game default, no switch (2026-10-04); -force-d3d12 would force it', 'arguments': '',
                       'router': 'unchecked', 'witness': {'module': 'amdgpu_wddm_d3d12.dll', 'sha256': 'staged'}},
-            'd3d11': {'selection': 'game default, no switch (owner 2026-10-04); -force-d3d11 would force it', 'arguments': '',
+            'd3d11': {'selection': 'game default, no switch (2026-10-04); -force-d3d11 would force it', 'arguments': '',
                       'router': 'allow', 'witness': {'module': 'amdgpu_wddm_d3d11.dll', 'sha256': D3D11}},
         },
         'steam': {'client': 'C:\\Program Files (x86)\\Steam\\steam.exe',

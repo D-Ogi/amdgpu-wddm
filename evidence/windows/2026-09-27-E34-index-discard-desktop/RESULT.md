@@ -12,7 +12,7 @@ CLI Fbdump). Its log proves multiple surface bases in this BMP, with a base chan
 at row192 exactly where cyan extents change from x624..839 to x632..863. It is
 a mixed-frame capture, not a coherent whole-frame shape oracle. This explains
 the check's limitation; it does not prove every rendered frame correct. Future
-exposed-area validation needs a settled/stepped capture control. No owner visual
+exposed-area validation needs a settled/stepped capture control. No visual
 verdict was received, and the017 residual shrink artifact remains unverified.
 
 Map audit: no bucket overflow. Final image buckets contain one1920x1200 WRITE

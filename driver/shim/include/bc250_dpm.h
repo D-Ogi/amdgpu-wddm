@@ -3,9 +3,8 @@
 /*
  * BC-250 DPM: a load-driven GFX clock governor between the lab floor (1000 MHz / 820 mV) and at
  * most 2000 MHz, with thermal clamps and a boot guard. The load never goes under the lab floor. Two
- * other rules do, both at the floor's own 820 mV: the thermal clamp, down to 800 MHz (0.7.205, owner
- * decision 2026-10-05), and the idle state, 500 MHz while the GPU has no work (0.7.207, owner decision
- * 2026-10-05).
+ * other rules do, both at the floor's own 820 mV: the thermal clamp, down to 800 MHz (0.7.205), and the
+ * idle state, 500 MHz while the GPU has no work (0.7.207).
  * Not amdgpu: amdgpu does no DPM on this part
  * under load (facts M90), the community governors run in user space. docs/design/dpm.md in
  * bc250-win is the design; this header is the part without Windows in it, so the host test
@@ -35,7 +34,7 @@
  * rule that needs one clock this part is known to run puts it (a missing sensor, SetStablePowerState, the
  * fixed mode, stop, power down, giving up, an unknown readback). Index 5 since 0.7.207, where the table
  * reaches down to 500 MHz (index 2 in 0.7.205, with 900 and 800 MHz under it). */
-/* 800 MHz: the lowest level the thermal cap may reach (0.7.205, owner decision 2026-10-05, after RotTR scene
+/* 800 MHz: the lowest level the thermal cap may reach (0.7.205, after RotTR scene
  * 2 held 88 C with the governor already at its 1000 MHz floor and the GPU 97 % busy). The tables publish no
  * level below 1000 MHz (facts M47) although unit A's firmware accepts 800 and 900 MHz (facts M785), so the
  * KMD may still withdraw it for a start: bc250_dpm_subfloor_refused(). */
@@ -138,9 +137,9 @@ enum bc250_dpm_throttle {
 
 /* Thresholds. Busy is in permille of the tick's wall time. These are the defaults every start begins
  * with; an administrator may change them at run time (struct bc250_dpm_tune below). */
-/* The warm zone (0.7.200, owner after session 344: 1500 MHz held while Tctl rose 83.5 -> 85.3 C): from here up no
+/* The warm zone (0.7.200, after session 344: 1500 MHz held while Tctl rose 83.5 -> 85.3 C): from here up no
  * raise of clock or voltage; the level holds, a lowering still happens. 85 C (HOT_MC - 2 C) in 0.7.200-203; at HOT_MC
- * from 0.7.204 (owner, 2026-10-04: "próg na 87", the threshold at 87). The rule stays as a backstop at and above
+ * (87 C) from 0.7.204. The rule stays as a backstop at and above
  * HOT_MC, where the hot cap already holds the clock at or below the running level, and the clock gate refuses a
  * raise. Never above HOT_MC: the hot cap's step down and this rule's hold then cover the same readings.
  * Since 0.7.213 this constant is only what the rule falls back to with the soft zone off: with the zone on the
@@ -240,8 +239,7 @@ enum bc250_dpm_throttle {
  * own definition of an idle GPU (BC250_DPM_IDLE_HOLD_MS). The gate holds from the governor's first tick and across a
  * stall: zone_quiet_ms starts saturated and saturates again on a clamped tick with no work, because a window counted
  * from a start or from a resume is a window in which the zone acts on a GPU nobody has given work to. */
-/* The idle state (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj mu zegar gpu na
- * 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). While the GPU has no work the
+/* The idle state (0.7.207: when the lab has no work, its GPU clock is 500 MHz). While the GPU has no work the
  * governor holds the idle point, below the lab floor, at the floor's own 820 mV. The three settings are the
  * KMD's registry values DpmIdleMHz, DpmIdleHoldMs and DpmIdleBusyPermille (driver/kmd/dpm.c), checked and
  * taken by bc250_dpm_idle_config(); they are not part of struct bc250_dpm_tune, so the RUN_DPM_TUNE escape
@@ -261,7 +259,7 @@ enum bc250_dpm_throttle {
  * Since 0.7.216.6 work on the GFX ring (ring_busy) no longer leaves the state by itself. With the desktop composed
  * on our GPU every DWM frame - the cursor, the clock, an overlay redraw - is a submission, and the ring rule left the
  * idle point at each one: 500 -> 1000 MHz, three seconds at the lab floor for the next quiet window, back to 500, and
- * again, every two seconds while the owner watched and 29 exits in 6.5 minutes at a quiet desktop (2026-10-07). The
+ * again, every two seconds on the lab monitor and 29 exits in 6.5 minutes at a quiet desktop (2026-10-07). The
  * idle point is now a DPM level with hysteresis: it holds while its own work fits it and is left by work that does
  * not. The ring still gates the entry, which is unchanged. */
 /* The slow exit: the trailing window's mean busy share at the idle point, in permille, at which the state is left
@@ -562,7 +560,7 @@ enum bc250_dpm_idle_error bc250_dpm_idle_config(struct bc250_dpm_governor *g, un
  * idle setting does, and the KMD logs it. */
 enum bc250_dpm_idle_error bc250_dpm_idle_set_leave(struct bc250_dpm_governor *g, unsigned int leave_permille);
 /* The caller could not put the hardware at the idle point (the SMU refused it, the readback did not match).
- * The idle point falls back one step at a time, as the owner asked: 500 MHz, then the thermal floor
+ * The idle point falls back one step at a time: 500 MHz, then the thermal floor
  * (800 MHz), then off, which is the lab floor. One refusal is enough for each step: the firmware has never
  * been seen below 1000 MHz (facts M47), so the governor does not try the same point every tick. A refusal of a
  * point at or above the thermal floor is the thermal cap's answer as well - the same clock, the same two

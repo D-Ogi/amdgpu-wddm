@@ -441,7 +441,7 @@ static void test_no_oscillation(void)
 	}
 }
 
-/* The limits: hot at 87 C (owner decision 2026-10-01; 85 C before), the cap released 5 C lower, the floor at
+/* The limits: hot at 87 C (since 2026-10-01; 85 C before), the cap released 5 C lower, the floor at
  * 90 C. A constant CHECK would trip C4127 under /WX, so these fail the build instead. */
 typedef char dpm_hot_is_87c[(BC250_DPM_HOT_MC == 87000 && BC250_CLOCK_HOT_MC == 87000) ? 1 : -1];
 typedef char dpm_release_is_82c[(BC250_DPM_RELEASE_MC == 82000 && BC250_DPM_HOT_MC - BC250_DPM_RELEASE_MC == 5000) ? 1 : -1];
@@ -449,7 +449,7 @@ typedef char dpm_critical_is_90c[(BC250_DPM_CRITICAL_MC == 90000) ? 1 : -1];
 /* The soft threshold (HOT - delta) lies strictly between RELEASE and HOT for every admitted delta. */
 typedef char dpm_soft_threshold_inside[(BC250_DPM_TUNE_MIN_SOFT_DELTA_MC > 0u &&
 					BC250_DPM_HOT_MC - (int)BC250_DPM_TUNE_MAX_SOFT_DELTA_MC > BC250_DPM_RELEASE_MC) ? 1 : -1];
-/* The warm zone starts at HOT (0.7.204, owner: "próg na 87"; 2 C under HOT in 0.7.200-203), never above it, above
+/* The warm zone starts at HOT (0.7.204; 2 C under HOT in 0.7.200-203), never above it, above
  * RELEASE and above the ramp's knee, and above every admitted soft threshold. */
 typedef char dpm_warm_is_87c[(BC250_DPM_WARM_MC == 87000 && BC250_DPM_WARM_MC <= BC250_DPM_HOT_MC &&
 			      BC250_DPM_WARM_MC > BC250_DPM_RELEASE_MC && BC250_DPM_WARM_MC > BC250_DPM_RAMP_KNEE_MC &&
@@ -1122,7 +1122,7 @@ static void test_floor(void)
 /* ---- the warm zone (0.7.200; at 87 C from 0.7.204) ------------------------------------------------ */
 
 /* After session 344 (1500 MHz held while Tctl rose 83.5 -> 85.3 C) 0.7.200 refused every raise from 85 C up to 87 C.
- * 0.7.204 (owner, 2026-10-04: "próg na 87", the threshold at 87) moves the zone to 87 C: from 87 C up no raise, the
+ * 0.7.204 moves the zone to 87 C: from 87 C up no raise, the
  * hot cap lowers one level per hot step. Below 87 C a raise goes, one level per ramp interval (0.7.203). */
 static void test_warm(void)
 {
@@ -2328,7 +2328,7 @@ static void test_plant367(void)
 	}
 }
 
-/* ---- the thermal sub-floor (0.7.205, owner decision 2026-10-05) --------------------------------- */
+/* ---- the thermal sub-floor (0.7.205) ------------------------------------------------------------ */
 
 /* Two levels below the lab floor, and no more (a constant CHECK would trip C4127 under /WX). */
 typedef char dpm_subfloor_is_two_levels[(L(-2) == BC250_DPM_THERMAL_FLOOR_LEVEL) ? 1 : -1];
@@ -2482,7 +2482,7 @@ static void test_busy_source(void)
 	}
 }
 
-/* ---- the idle state (0.7.207, owner decision 2026-10-05) ---------------------------------------- */
+/* ---- the idle state (0.7.207) ------------------------------------------------------------------- */
 
 /* The idle point is the table's first level, five below the lab floor (a constant CHECK would trip C4127). */
 typedef char dpm_idle_is_level_zero[(L(-5) == BC250_DPM_IDLE_LEVEL && BC250_DPM_IDLE_LEVEL == 0u) ? 1 : -1];
@@ -2864,7 +2864,7 @@ static unsigned int trace_rand(unsigned int *seed)
 
 /* The idle point as a DPM level with hysteresis (0.7.216.6). The lab record that asked for it: with the desktop
  * composed on our GPU, every DWM frame put work on the GFX ring, the ring rule left the idle point at each one, and
- * the owner watched 500 -> 1000 -> 500 MHz every two seconds at an idle desktop (29 exits in 6.5 minutes when quiet).
+ * the lab monitor showed 500 -> 1000 -> 500 MHz every two seconds at an idle desktop (29 exits in 6.5 minutes when quiet).
  *   1. A desktop: one short frame every 0.5 to 2 s, 1 to 2 ticks of 40 to 160 permille with the ring busy in those
  *      ticks, for 6.5 minutes. Entered once, never left, one transition of the clock.
  *   2. The same desktop from the lab floor with the ring seen in one frame of eight: the entry rule (unchanged) still

@@ -187,7 +187,7 @@ Each batch writes `results/<RunId>/batch-NNNN/`: the per-attempt `.qpa`, `.casel
 | 2 | incomplete | call again with the same arguments |
 | 3 | stop the sweep | look at the GPU and the logs first. The same call then continues |
 
-Exit 3 covers a lost device, a case that timed out, the thermal stop, the owner STOP flag, a witness mismatch,
+Exit 3 covers a lost device, a case that timed out, the thermal stop, the STOP flag, a witness mismatch,
 a batch where no case ran, and a setup error.
 
 ## Collecting and comparing the results

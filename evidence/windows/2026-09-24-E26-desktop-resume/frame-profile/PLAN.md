@@ -1,6 +1,6 @@
 # Frame latency profile after rotation correction
 
-Owner reports cursor fluid for about one second, then frozen for about one
+A visual check shows the cursor fluid for about one second, then frozen for about one
 second, repeatedly; overlay seconds advance in jumps. M407 visual consistency
 is not responsive-desktop acceptance. Instrument actual draw entry-point wall
 time and PresentCb time, plus gap between completed presents. Retain rendering,

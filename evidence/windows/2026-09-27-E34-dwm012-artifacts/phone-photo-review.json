@@ -1,5 +1,5 @@
 {
-  "source": "Three phone photographs explicitly supplied by the owner after DWM013; originals retained privately, unmodified.",
+  "source": "Three phone photographs supplied from the lab after DWM013; originals retained privately, unmodified.",
   "observation": "IMG_2406 and IMG_2408 show large diagonal triangular regions, stretched unrelated window content, repeated interface elements and black rectangular remnants. IMG_2407 is comparatively intact.",
   "interpretation": "Prioritize vertex/constant-buffer updates, texture coordinates and descriptor state in dynamic multi-draw isolation. No root cause established; still photographs do not measure flicker frequency or establish which frame/call caused corruption.",
   "artifacts": {

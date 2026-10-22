@@ -1,6 +1,4 @@
-// The start of the window (owner, 2026-10-14: "czasem Nagi Control App włącza się dość długo - trzeba dać jak
-// najszybciej ekran ładowania", and "Da się włączyć kilka Nagi Control App na raz - kolejne nie powinny się
-// otwierać"). LaunchSequence.cs decides the order and SingleInstance.cs which start owns the window; this file does
+// The start of the window. LaunchSequence.cs decides the order and SingleInstance.cs which start owns the window; this file does
 // the steps with real windows:
 //   Launch          the application context of the window path: the loading window first, then the main window
 //   LoadingWindow   the small window that is on the screen first: Nagi, the name of the app and one line of text

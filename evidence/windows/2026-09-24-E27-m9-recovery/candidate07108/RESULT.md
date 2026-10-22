@@ -45,7 +45,7 @@ claiming equivalence to our RREG32/WREG32 shim. No new reset sequence is added.
 Power telemetry was read locally during this run (candidate07108-power-start.json).
 Scale uses bundled TinyTuya SocketDevice convention; exact-model calibration and
 sample freshness are unverified. Power is whole-lab auxiliary data, not a liveness
-or GPU-completion witness. Local owner documentation and plug.py now expose the
+or GPU-completion witness. Local lab documentation and plug.py now expose the
 read-only telemetry command. No credential or identity data was copied.
 
 Current lab: healthy108 display-only, all execution gates closed, same04:46:20

@@ -1,6 +1,6 @@
-M313 - SSH restored after owner supplied changed DHCP endpoint;07101persisted logs recovered
+M313 - SSH restored after the changed DHCP endpoint was supplied;07101persisted logs recovered
 
-Connection verified using unchanged pinned host key and hostnameBC250-A. Updated only secrets/client/target.json primary address, retaining previous fallback addresses. No credentials or target configuration copied here. Prior TCP failures established unreachability of configured addresses, not failure of sshd or absence of a running desktop. Owner address correction resolves the observation blocker.
+Connection verified using unchanged pinned host key and hostnameBC250-A. Updated only secrets/client/target.json primary address, retaining previous fallback addresses. No credentials or target configuration copied here. Prior TCP failures established unreachability of configured addresses, not failure of sshd or absence of a running desktop. The address correction resolves the observation blocker.
 
 Read-only recovery-v2 completed with SSHexit0. Original last-startup/pre-install/old-driver files pulled separately. All snapshot before/after hashes stable. Installed07101last startup ends at line59:startup entering CP step1,0.330s. GART/PSP/IH and GFXstages1..5 report success. No CPstep1completion or later readiness entry persisted. CPstep1 maps to KIQ initialization in source; missing completion does not prove which instruction or register hung.
 

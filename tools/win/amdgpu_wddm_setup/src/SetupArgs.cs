@@ -53,16 +53,15 @@ namespace AmdgpuWddmSetup
         public string Handover;
         public const string HandoverPrefix = "amdgpu-wddm-setup-loading-";
         public bool DryRun, ApplySystemTuning;
-        // The two shortcut options of the plan screen, both on unless a switch states otherwise (owner, 2026-10-12).
+        // The two shortcut options of the plan screen, both on unless a switch states otherwise.
         // null is "nothing was stated": the screen opens the box on the answer the engine reports, and the run that
         // continues an install after a restart passes no switch at all, so the saved answer stands (BD: a positive
         // switch clears the saved negative one, which turned an unticked box back on at the restart).
         public bool? StartMenuShortcut, DesktopShortcut;
-        // The Nagi wallpaper box of the same card (owner, 2026-10-13), on unless a switch or the person says no;
+        // The Nagi wallpaper box of the same card, on unless a switch or the person says no;
         // null in the same way as the two shortcut answers.
         public bool? Wallpaper;
-        // The picture on the start screen (owner, 2026-10-14: "Ustawienie Nagi domyslnie wlaczone w instalatorze
-        // (podobnie jak np. tapeta)"), the same box and the same null rule as the wallpaper.
+        // The picture on the start screen, the same box and the same null rule as the wallpaper.
         public bool? BootLogo;
         public readonly List<string> EngineArgs = new List<string>();
         // smoke entries

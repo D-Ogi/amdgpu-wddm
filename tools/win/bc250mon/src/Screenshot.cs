@@ -1,6 +1,6 @@
-// Screen and window capture: the only way the remote agent can see what the owner sees. Only this process
+// Screen and window capture: the only way a remote session can see what the lab screen shows. Only this process
 // can do it - the SSH session lives in session 0 and has no desktop. Every capture is logged by the caller
-// with the source "screenshot", so the owner reads on the overlay that a picture was taken.
+// with the source "screenshot", so a person at the lab reads on the overlay that a picture was taken.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -59,7 +59,7 @@ namespace Bc250Mon
 
         // Takes the overlay out of the picture for the duration of a capture. WDA_EXCLUDEFROMCAPTURE (Windows
         // 10 2004 and later) keeps the window on the monitor and only removes it from the capture APIs, so the
-        // owner sees no flicker. If it is refused, OverlayHidden stays false and the caller says so.
+        // lab screen shows no flicker. If it is refused, OverlayHidden stays false and the caller says so.
         public sealed class CaptureScope : IDisposable
         {
             readonly IntPtr _overlay;

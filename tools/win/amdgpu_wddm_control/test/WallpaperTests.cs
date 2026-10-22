@@ -1,4 +1,4 @@
-// The Nagi wallpaper (owner, 2026-10-13; src/Wallpaper.cs): the .nwp decoder against a good file, a wrong magic, a
+// The Nagi wallpaper (src/Wallpaper.cs): the .nwp decoder against a good file, a wrong magic, a
 // wrong hash and a truncated file, the release file of art/wallpaper with its two pinned hashes, the rule that sets
 // the picture once per install after a verified install, the saved background and its restore message, the
 // preference values, and the words of the Settings card in the four languages.

@@ -18,7 +18,7 @@ Validation:
   runtime handles, retained views and bound views. Omitting kernel-handle
   rotation produces18 failures. This host adapter is not a refcount/timing proof.
 - DWM trace now rotates three handles. By41.430s the unchanged KMD reports174
-  hardware flips, versus4 at41.457s with the old UMD. Owner confirmed the overlay
+  hardware flips, versus4 at41.457s with the old UMD. A visual check confirmed the overlay
   stays whole and the descending bands disappeared. Actual scanout shows desktop.
 - Native Direct3D control exits0: shared red and blue each0/2048 pixel mismatches,
   green staging0/307200; Present and device-removed status0. Captured scanout

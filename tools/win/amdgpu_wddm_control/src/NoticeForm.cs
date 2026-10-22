@@ -1,5 +1,4 @@
-// The window the person sees right after sign-in when the graphics driver is not running (owner, 2026-10-13:
-// "Uzytkownik musi byc tego swiadomym od razu"). The rule that decides whether it opens at all, and which of its
+// The window the person sees right after sign-in when the graphics driver is not running. The rule that decides whether it opens at all, and which of its
 // two cases it shows, is StartNotice.cs; this file is only the window and the one click it offers.
 //
 // It is this application started with --start-notice, from the logon task that already runs in the person's own

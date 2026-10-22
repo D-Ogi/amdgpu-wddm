@@ -37,14 +37,13 @@ struct bc250_clock_report {
  * since 0.7.210 it is the line less BC250_CURVE_UNDERVOLT_MV, never under BC250_CLOCK_FLOOR_MV, so that the
  * operator's V/F curve has a bounded band to work in (docs/design/tuner.md). Anchors: 1000 MHz / 820 mV, the lab point under Windows since E04 (facts M22);
  * 1500 MHz / 918.75 mV (VID 101), the firmware's own point (facts M22, M47); 2000 MHz / 1000 mV, the
- * owner's DPM ceiling (2026-09-30), 61 mV above the community curve's interpolated 939 mV and 129 mV
+ * DPM ceiling, 61 mV above the community curve's interpolated 939 mV and 129 mV
  * below amdgpu's overdrive maximum of 1129 mV. Linear between anchors, rounded up to a whole mV.
  * Below the lab floor the table holds five points, 900 down to 500 MHz, all at the floor's 820 mV
  * (VID 116): a lower clock at the voltage the part is known to run at, never an undervolt, and the
  * anchors' line is not extrapolated below its lowest anchor. Two of them, 900 and 800 MHz, are the
- * thermal cap's (0.7.205, owner decision 2026-10-05: a clock under 1000 MHz is allowed when Tctl reaches
- * 87 C). 500 MHz is the idle point (0.7.207, owner decision 2026-10-05: "jak lab nie pracuje, to ustawiaj
- * mu zegar gpu na 500 MHz" - when the lab does not work, set its GPU clock to 500 MHz). 700 and 600 MHz
+ * thermal cap's (0.7.205: a clock under 1000 MHz is allowed when Tctl reaches 87 C). 500 MHz is the idle
+ * point (0.7.207: when the lab has no work, its GPU clock is 500 MHz). 700 and 600 MHz
  * keep the 100 MHz grid whole, so that a level stays (mhz - MIN) / STEP; no rule of the governor selects
  * them, and only an administrator's own request (DpmIdleMHz, the clock escape) reaches them.
  * The load never asks below the lab floor (the governor's BC250_DPM_FLOOR_LEVEL is 1000 MHz).
@@ -91,7 +90,7 @@ static __inline unsigned int bc250_clock_vid_uv(unsigned int vid) { return 15500
 unsigned int bc250_clock_min_mv(unsigned int mhz);
 /* The lowest voltage any request may carry at a clock on the grid, 0 for any other clock: the table's line less
  * BC250_CURVE_UNDERVOLT_MV, never below BC250_CLOCK_FLOOR_MV. Up to 0.7.207 this was the table's line itself,
- * which is what forbade an undervolt; the owner's direction of 2026-10-06 opens a bounded band under it. Under
+ * which is what forbade an undervolt; since 0.7.210 a bounded band under it is open. Under
  * the lab floor the table is already at BC250_CLOCK_FLOOR_MV, so the band is empty there. */
 unsigned int bc250_clock_floor_mv(unsigned int mhz);
 /* Clock on the grid within the table, voltage between bc250_clock_floor_mv() and the ceiling. */

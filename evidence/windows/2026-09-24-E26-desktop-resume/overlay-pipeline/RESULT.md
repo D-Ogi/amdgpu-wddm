@@ -16,7 +16,7 @@ A full scanout screenshot was inspected locally; only the pipeline crop is
 retained publicly to exclude network addresses. The API snapshot is in
 `deploy-overlay-final.log`. Unknown builds are not given a CPU/GPU label.
 
-Owner observed normal mouse motion while the overlay was stopped, then the
+A visual check showed normal mouse motion while the overlay was stopped, then the
 same roughly half-second fluid/stalled alternation after it returned. The
 feature is installed; it does not resolve rendering latency. This supports
 an overlay-update trigger but does not isolate the internal rendering cost.

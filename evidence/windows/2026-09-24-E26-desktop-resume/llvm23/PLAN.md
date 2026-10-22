@@ -1,6 +1,6 @@
 # LLVM23.1.2 migration - 2026-09-24
 
-Owner explicitly requests upgrading the working llvmpipe baseline to23.1.2.
+Requirement: upgrade the working llvmpipe baseline to23.1.2.
 Build upstream tag llvmorg-23.1.2, commit85ac560262434c9ccfc0c183ec22d4138ed647fb,
 in a separate release MT X86-only build/install directory. Preserve LLVM19.1.7
 and the working M410 UMD for rollback. Rebuild the same Mesa tree/patches against

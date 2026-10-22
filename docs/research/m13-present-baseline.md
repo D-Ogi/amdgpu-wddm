@@ -1,6 +1,6 @@
 # Working full-WDDM desktop baseline
 
-Current checkpoint: M406-M412,2026-09-24. The owner prioritized visible display
+Current checkpoint: M406-M412,2026-09-24. Visible display had priority
 before further M9 acceptance work. [Evidence and limits](../../evidence/windows/2026-09-24-E26-desktop-resume/mesa-main/RESULT.md).
 
 Later steps (KMD 0.7.130.1 after M420, the E34 native D3D measurements M531-M534) are
@@ -15,7 +15,7 @@ Mesa softpipe plus the existing hardware flip path makes the desktop visible.
 The frontend then copied pixels during RotateResourceIdentities, leaving
 kernel identities fixed. It now rotates backing, allocation, GPUVA and CPU
 mapping, retargets live RTV/SRV and bound views, and preserves runtime handles.
-The owner confirms that the visible descending redraw bands disappeared.
+A visual check at the lab confirms that the visible descending redraw bands disappeared.
 
 PROVENANCE: Mesa801c9763c6043f0de8408e905a5324eea06d81d7, MIT.
 The [incremental patch](../../experiments/E26-wddm-desktop/mesa-resource-rotation.patch)
@@ -53,20 +53,20 @@ translation for Direct3D texture/sampler operands. The initial llvmpipe trial
 hit a translator assertion before LLVM; limited stacks isolated it. Eight
 actual translator controls pass; aliasing sampler to texture fails six.
 
-The owner confirms fluid mouse motion with the overlay visible. Across56
+A visual check at the lab confirms fluid mouse motion with the overlay visible. Across56
 post-startup two-draw samples, median draw plus render wait is3.9055ms and
 maximum5.830ms. Startup JIT still has second-scale costs; this is not a matched
 animation benchmark or broad shader conformance. Preserve the measured build.
 
 ## Validation and remaining acceptance
 
-Actual scanout and the owner confirm visible desktop and intact overlay.
+Actual scanout and a visual check at the lab confirm visible desktop and intact overlay.
 Two-device shared red/blue and green staging controls report zero pixel
 mismatches. A concurrent64KiB GPU residency probe passes all four readbacks.
 The M412 final check records DWM4448 from13:58:18 to14:01:27,407 hardware flips
 and no TDR. Current Mesa/LLVM passes the same shared/pixel and GPU controls;
 104 two-draw samples have median draw plus wait4.591ms, maximum6.043ms.
-This is not a matched performance comparison with M410. Owner fluid-cursor
+This is not a matched performance comparison with M410. The fluid-cursor
 confirmation above belongs to M410; current-build input feedback remains open. Generic GPU draws are not proved: DWM rendering is CPU llvmpipe, while
 presentation uses hardware flip and hardware VSync.
 

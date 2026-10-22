@@ -62,7 +62,7 @@ static partial class UnitTests
         // only a stored 24 with nothing else left over is "selected already".
         var pStock = Recovery.Plan("cu-mode", WithDefaults(), more: new Recovery.PlanArgs { Cu = 24 });
         Check(!pStock.Refused && pStock.Cu.Steps.Any(x => x.Kind == "write-24"), "cu-mode 24 with no stored number: the 24 is written");
-        // "Selected already" needs the record of the choice next to the 24 as well (owner, 2026-10-14): a 24 with no
+        // "Selected already" needs the record of the choice next to the 24 as well: a 24 with no
         // record is a number the installed release wrote, and the run that records it as a choice still has work.
         var stored24 = WithDefaults(); stored24.Parameters["CuMode"] = 24;
         Check(Recovery.Plan("cu-mode", stored24, more: new Recovery.PlanArgs { Cu = 24 }).Cu.Steps.Select(x => x.Kind)

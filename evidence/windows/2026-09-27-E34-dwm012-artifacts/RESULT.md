@@ -1,15 +1,15 @@
 # M568: GPU DWM completes the bounded run but fails dynamic visual correctness
 
-**Visual result: failed.** During the moving/resizing window, the owner observed
+**Visual result: failed.** During the moving/resizing window, a visual check showed
 trails at previous positions, broad flicker and corrupted colors/fragments.
-The owner then observed the identical control on CPU DWM and reported none of
+A visual check of the identical control on CPU DWM then showed none of
 these problems. The cause is not yet established. This candidate is not promoted.
 
-The owner shortened the proposed longer trial to three minutes. DWM012 records
+The proposed longer trial was shortened to three minutes. DWM012 records
 185.75 seconds in the runner with GPU DWM PID4120 unchanged across31 samples.
 UMD23F5269C and hosted ICD3508416F are verified in each sample. Temperature
 ranges66.8-69.5 C. The runner's `success=true` means its bounded execution and
-captures completed; it does not include the owner's independent visual verdict.
+captures completed; it does not include the independent visual verdict.
 CPU comparison013 runs the same GDI executable for30 seconds on DWM8008.
 
 ## What the measurements do establish
@@ -49,7 +49,7 @@ open log failed with a sharing error. Finally restored baseline and CPU DWM3164.
 DWM012 monitors file metadata online and parses its contents after writer exit.
 It does not reinterpret011 as a successful rendering test.
 
-The owner subsequently requested a separate GPU window for phone photography,
+A separate GPU window for phone photography was subsequently requested,
 DWM013. Its outcome is not included in this result. The next investigation must
 isolate dynamic rendering/damage, sharing and presentation ordering, preserving
 the CPU control. Static pixels and healthy fences do not close this defect or G0.

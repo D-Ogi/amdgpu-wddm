@@ -10,5 +10,5 @@ Installed oem71.inf closed gates, deviceOK, sameboot12:51:41,DWM1.
 Reset UnconfirmedStarts only after saved logs and verification of all hardware gates closed, to recover guard-refused display startup.
 Trial started after STOP clear, temperature and clock verification in script.
 PnP enable returned13:00:00; SSH then unavailable before state/log collection.
-Waiting for owner screen observation/reset and persisted stage snapshots. No success claim.
+Waiting for visual screen observation/reset and persisted stage snapshots. No success claim.
 PCI instance suffix redacted from install log.

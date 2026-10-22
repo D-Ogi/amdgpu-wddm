@@ -12,7 +12,7 @@ Worker/watchdog exit0. CPU DWM6304 and OS boot/health generation/epoch retained;
 baseline8279/CF39 restored and tasks removed. Closure00:26:21Z September28.
 No GPU DWM trial occurred here. This control establishes visible content from
 the hosted GPU client under CPU composition; combined GPU-DWM and sharing/
-lifecycle controls remain open. Owner reaffirms maximum180 seconds per test.
+lifecycle controls remain open. The limit stays at180 seconds per test.
 
 Raw images, log and capture ordering remain in scratch/g0-hosted/window-client001-ops.
 Export includes reduced numerical results and hashes, not desktop images.

@@ -1,4 +1,4 @@
-"""Offline host tests of the lab game runner: the game profiles, and the two owner rules the runner carries.
+"""Offline host tests of the lab game runner: the game profiles, and the two session rules the runner carries.
 
     python -m unittest discover -s tools/win/lab-runner
 
@@ -24,9 +24,9 @@ STREAM_LOOP = 'while($timer.Elapsed.TotalSeconds -lt $streamLimit'
 # What a profile may ask of the M14.1 application router, and how a session treats the game's own settings.
 ROUTERS = {'allow', 'not-allow', 'unchecked'}
 POLICIES = {'untouched', 'record', 'backup-restore'}
-# Owner, 2026-10-01: an interactive game session runs at most 1200 s.
+# An interactive game session runs at most 1200 s (2026-10-01).
 SESSION_BOUND = 1200
-# Owner, 2026-10-01: no FSR and no dynamic resolution in a measured session.
+# No FSR and no dynamic resolution in a measured session (2026-10-01).
 UPSCALER = re.compile(r'\b(fsr|dlss|xess|fidelityfx|dynamicres|resolutionscale|upscal)', re.I)
 # Before readiness the channel takes only these keys (scan codes Space, Esc, Enter), and an intro skip presses one.
 INTRO_KEYS = {'39', '01', '1C'}
@@ -82,11 +82,11 @@ class Profiles(unittest.TestCase):
                 self.assertLessEqual(seconds, SESSION_BOUND)
 
 
-class OwnerRules(unittest.TestCase):
-    """The two rules a measured session must keep. Both are owner decisions, not tuning."""
+class SessionRules(unittest.TestCase):
+    """The two rules a measured session must keep. Both are project decisions, not tuning."""
 
     def test_thermal_stop_is_87_c_held_10_s_or_89_c_at_once(self):
-        # Owner, 2026-10-04: stop when Tctl stays at or above 87 C for 10 s, or at once at 89 C.
+        # 2026-10-04: stop when Tctl stays at or above 87 C for 10 s, or at once at 89 C.
         self.assertRegex(RUNTIME, r'\$temp\s+-ge\s+87')
         self.assertRegex(RUNTIME, r'\$temp\s+-ge\s+89\s+-or\s+\$hotSeconds\s+-ge\s+10')
         self.assertRegex(RUNTIME, r"stop_reason\s*=\s*'thermal'")
@@ -213,7 +213,7 @@ class Environment(unittest.TestCase):
                       'a foreign Steam client with an armed variable must throw a named reason')
 
     def test_the_runner_never_stops_a_steam_client_it_did_not_start(self):
-        # The client may belong to the owner or another session: the runner starts one, never stops one.
+        # The client may belong to a person at the lab or another session: the runner starts one, never stops one.
         for forbidden in ('-shutdown', 'Stop-Process -Name steam', "Stop-Process -Name 'steam'"):
             with self.subTest(call=forbidden):
                 self.assertNotIn(forbidden, RUNTIME)
@@ -246,7 +246,7 @@ class Sources(unittest.TestCase):
 
 class Screenshots(unittest.TestCase):
     def test_lab_screenshots_land_outside_this_repository(self):
-        # The lab screen also shows game content; its images never enter the repository (owner, 2026-10-01).
+        # The lab screen also shows game content; its images never enter the repository (2026-10-01).
         spec = importlib.util.spec_from_file_location('lab_runner_inp', HERE / 'input/inp.py')
         inp = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(inp)

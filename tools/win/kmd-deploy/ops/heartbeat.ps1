@@ -1,4 +1,4 @@
-# Present heartbeat for the owner's session on unit A: a small borderless top-most window whose text changes
+# Present heartbeat for the interactive session on unit A: a small borderless top-most window whose text changes
 # every 250 ms for $Seconds, so DWM presents while transitions and trial admissions wait for a fresh KMD
 # start-health witness (age_ms <= 15000). An idle desktop presents about once a minute. Runs as the interactive
 # user through a one-shot scheduled task (heartbeat-start.ps1); exits by itself.

@@ -97,8 +97,8 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 
 /* The clock control is a limit before it is ever a raise (docs/design/tuner.md, part B). BC250_CPU_MAX_MHZ is the
  * highest value the release admits: a lowering of the firmware's own ceiling, which lowers the voltage the
- * firmware chooses and so cannot reach the bricking hazard. BC250_CPU_MAX_MHZ_LAB is the lab's own bound under
- * the owner's pre-approval of 2026-10-05, and nothing admits it without an undervolt already in force and a
+ * firmware chooses and so cannot reach the bricking hazard. BC250_CPU_MAX_MHZ_LAB is the lab's own bound for
+ * pre-approved lab experiments, and nothing admits it without an undervolt already in force and a
  * voltage readback under BC250_CPU_REFUSE_MV.
  *
  * BC250_CPU_MAX_MHZ is 3500 MHz, the only stock boost figure any source gives (the community's own stock

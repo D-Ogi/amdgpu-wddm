@@ -1,15 +1,15 @@
 E13, boots 5 to 8 of 2026-09-21: the steps that may take the machine down, after the reset of boot 4 (../boot4-readonly-after-windows/reset).
 All driven by experiments/E13-linux-reference-2/risky_pc.sh from the PC, trace_pipe and /dev/kmsg streamed over SSH.
-Every boot: the stick's readonly entry, amdgpu loaded by session.sh load, kernel 6.18.52-0-lts. Owner at the machine.
+Every boot: the stick's readonly entry, amdgpu loaded by session.sh load, kernel 6.18.52-0-lts. Operator at the machine.
 
 boot 5  suspend (s2idle, the only sleep state: "ACPI: PM: (supports S0 S4 S5)", mem_sleep = [s2idle])
         The wake alarm could not be set: rtc_cmos registers with "no alarms" on this board and rtc0 has no wakealarm file.
-        The script slept anyway (fixed since). Suspend entry at 68.0 s, woken by the owner's press of the board's power
+        The script slept anyway (fixed since). Suspend entry at 68.0 s, woken by the operator's press of the board's power
         button 467 s later, "PM: suspend exit" at 535.1 s, SSH answered, amdgpu still loaded, no amdgpu message at resume.
-        The owner then switched the machine off and on (the stick's QR banner had looked like a panic screen to us both).
+        The operator then switched the machine off and on (the stick's QR banner had looked like a panic screen to us both).
         Whether the GPU still computes after the resume was not tested.
         boot5-suspend-kmsg.txt (stream, ends before the suspend messages), boot5-suspend-dmesg-after-resume.txt, -step.txt
-boot 6  suspend again, the owner as the wake source. The machine did not react to the button this time; off and on.
+boot 6  suspend again, the operator as the wake source. The machine did not react to the button this time; off and on.
         boot6-suspend-kmsg.txt (stream), -step.txt. Nothing from after the sleep.
 boot 7  unload: console unbound, modprobe -r amdgpu. rc 0, the machine stayed up ("finishing device", "ttm finalized").
         Facts M42 had this step hang the machine once; here it did not, twice (boots 7 and 8).

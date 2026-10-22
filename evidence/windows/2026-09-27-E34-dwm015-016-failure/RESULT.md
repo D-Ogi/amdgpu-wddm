@@ -9,8 +9,8 @@ to DWM; those witnesses do not prove image correctness.
 
 DWM015 primary dynamic-20.bmp captures severe stretched triangles, cyan
 stripes and damaged window contents. Most other sparse captures look intact.
-The owner did not watch015, then requested the one-minute016 demonstration
-and reported many glitches. Three supplied photographs (IMG_2413,2418,2411)
+Nobody watched015; the one-minute016 demonstration followed on request
+and a visual check showed many glitches. Three supplied photographs (IMG_2413,2418,2411)
 independently show large stretched window triangles and dark strips. Originals
 stay private; hashes bind them. The full desktop/room photographs are not
 published. DWM016 dynamic-2.bmp also fails the diagnostic moving-shape check.

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Linux visit of 2026-10-07 (owner: "włączaj linuxa ... research, doinstaluj np. libdrm"). One phase per call,
+# Linux visit of 2026-10-07 (research visit; libdrm may be installed). One phase per call,
 # outputs under /media/usb/l1007/out. Read-only towards the GPU except what amdgpu does for ordinary clients and
 # for audio playback. Never names amdgpu_test_ib, amdgpu_gpu_recover, amdgpu_evict_*, amdgpu_benchmark,
 # amdgpu_preempt_ib or amdgpu_force_sclk.

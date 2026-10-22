@@ -1,7 +1,7 @@
 # Release trains
 
-How a batch of finished work reaches the lab and then a tester. The owner set the method on 2026-10-05 and
-changed one rule of it on 2026-10-06. Before that, each feature asked the lab for its own A/B, and the lab
+How a batch of finished work reaches the lab and then a tester. The method was set on 2026-10-05, and
+one rule of it changed on 2026-10-06. Before that, each feature asked the lab for its own A/B, and the lab
 became the bottleneck. A train replaces that with one integration branch and one lab validation per batch.
 
 ## The rule
@@ -12,7 +12,7 @@ became the bottleneck. A train replaces that with one integration branch and one
 3. **One lab validation.** The lab validates the train. It does not validate each feature alone.
 4. **A switch per risky feature, for bisection only.** Each risky feature keeps a runtime switch, a registry
    value or a package choice, so a failure on the lab is isolated by bisection without a rebuild.
-5. **A finished feature rides ON by default** (owner, 2026-10-06). The switch exists to bisect a failure, not
+5. **A finished feature rides ON by default** (since 2026-10-06). The switch exists to bisect a failure, not
    to hold the feature back. Only operator settings and diagnostics stay absent by default: those are values a
    person sets, not features.
 6. **Pass means main and the release on the same day.** When the train passes on the lab, it goes to main and

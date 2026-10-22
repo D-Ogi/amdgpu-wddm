@@ -209,7 +209,7 @@ namespace AmdgpuWddmSetup
         // files, a development installation, and Secure Boot (it changes only in the firmware settings, after a restart).
         // The engine does not mark a cause as transient, so the window decides by check id. A refusal with one failed check
         // outside this list (free space, the firmware download, ...) keeps Try again as the default. A missing
-        // Microsoft Visual C++ runtime is no longer a refusal at all: the install brings it (owner, 2026-10-12).
+        // Microsoft Visual C++ runtime is no longer a refusal at all: the install brings it.
         // A set of files that does not carry Microsoft's own installer for it is a damaged download, so a new try
         // in this session meets the same refusal.
         // The engine outcomes that end a run without stopping it. The stage screen is drawn once more after the
@@ -397,7 +397,7 @@ namespace AmdgpuWddmSetup
         }
 
         // While an installation runs (the Working screen), its tip takes turns with one more: what the name Nagi
-        // stands for (owner, 2026-10-13). The turn changes every TipSeconds; an even turn is the working tip, an odd
+        // stands for. The turn changes every TipSeconds; an even turn is the working tip, an odd
         // one the name. Every other screen and cause keeps its one tip, whatever the turn.
         public const int TipSeconds = 15;
         public const string NameTipId = "guide.name";

@@ -4,7 +4,7 @@ rem pinned binary of 2026-10-01 was built with; only the paths come from the com
 rem
 rem   build-cts.cmd <source tree> <build dir> <temp dir>
 rem
-rem The three directories must lie outside drive C: (owner's rule) and outside this repository. CMake, Ninja
+rem The three directories must lie outside drive C: (a workspace rule) and outside this repository. CMake, Ninja
 rem and Python come from the environment when it sets them: BC250_CMAKE, BC250_NINJA, BC250_PYTHON. The
 rem defaults are the versions of the pinned build (CMake 3.25.2 and Ninja 1.11.1 from msys64, Python 3.14.0).
 setlocal

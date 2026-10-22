@@ -7,7 +7,7 @@
 #   click:left|right[:MS]  clickat:FX:FY[:MS] (fractions of the screen, left button)  point:FX:FY
 #   look:DX:DY:N:MS (relative mouse steps)  wheel:N (+up/-down notches)  wait:MS  quit
 # Buttons and keys are held 150-250 ms by default: a game at a few frames per second misses shorter presses.
-# Owner, 2026-10-01: game sessions up to 1200 s; this server ends at -Seconds whatever happens.
+# Game sessions run up to 1200 s (2026-10-01); this server ends at -Seconds whatever happens.
 param([Parameter(Mandatory)][string]$Session, [int]$Seconds = 900)
 $ErrorActionPreference = 'Stop'
 if ($Session -notmatch '^game-[a-z0-9-]{3,40}$') { throw 'bad session name' }

@@ -1,7 +1,7 @@
-E13 boot 4, the last step of that boot (wishlist L6, owner's consent): amdgpu_gpu_recover through debugfs, driven by
+E13 boot 4, the last step of that boot (wishlist L6, with consent): amdgpu_gpu_recover through debugfs, driven by
 experiments/E13-linux-reference-2/risky_pc.sh reset, which streams trace_pipe and /dev/kmsg over SSH to the PC.
 The streams end 4.17 s after the step's trace marker (first register event 4.00 s after it, last one 173 ms later);
-the machine was hung: black screen, backlight off, no network, the owner's button.
+the machine was hung: black screen, backlight off, no network, the power button.
 
   reset-trace.txt   amdgpu's register events as they arrived; the last line is cut in the middle, that is where the
                     connection died. 4125 register events in 173 ms, 416 of them writes.

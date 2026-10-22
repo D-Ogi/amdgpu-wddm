@@ -8,7 +8,7 @@
 #define BC250_CLOCK_LEVELS 16u
 #define BC250_CLOCK_FLOOR_MV 820u
 #define BC250_CLOCK_CEILING_MV 1000u
-#define BC250_CLOCK_HOT_MC 87000     /* no raise of clock or voltage at or above this (owner, 2026-10-01; was 85000) */
+#define BC250_CLOCK_HOT_MC 87000     /* no raise of clock or voltage at or above this (since 2026-10-01; was 85000) */
 #define BC250_CURVE_UNDERVOLT_MV 25u    /* how far under the table's line one level may go */
 #define BC250_CPU_MIN_MHZ		2800u
 #define BC250_CPU_MAX_MHZ		3500u

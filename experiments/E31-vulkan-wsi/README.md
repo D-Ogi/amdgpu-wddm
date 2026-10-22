@@ -5,7 +5,7 @@ Status: M10 first-picture criteria accepted in M476, 2026-09-25.
 ## Goal
 GPU-render upstream vkcube using the BC-250 RADV ICD, present real Win32 swapchain
 images, collect lab screenshots and measure cadence with an explicit synchronization
-contract. Owner permits CPU presentation copies. DWM CPU rendering and Vulkan GPU
+contract. CPU presentation copies are permitted. DWM CPU rendering and Vulkan GPU
 rendering are separate paths.
 
 Initial baseline: signed KMD147, RADV DB886B8D..., desktop UMD FF864DB8....
@@ -32,7 +32,7 @@ write, driver replacement or executable window on the development PC.
   explicit coverage. Passing cube alone is not formal certification.
 - Defined-image checks, color/orientation, multiple physical-lab screenshots.
 - Measured FPS/frame timing and exact source/binary/ICD/device witnesses.
-- ADR for CPU presentation and hardware VSync, refining ADR0011 under owner's
+- ADR for CPU presentation and hardware VSync, refining ADR0011 under the
   explicit M10 CPU-copy permission. M9 and M13 remain separate unfinished work.
 
 ## Initial CPU WSI candidate

@@ -28,7 +28,7 @@ PURE = ['test-identity', 'test-legacy-state', 'test-hang-detector', 'test-child-
 WITH_OUT = ['test-registration', 'test-release', 'test-stage', 'test-transition-policy']
 WITH_TOOL = ['test-arm-helper', 'test-supervisor']
 # The kit runs on the installed release and needs nothing from the old lab directories C:\BC250\m8 to m14, which go
-# away (owner, 2026-10-08). The KMD client is the release's, resolved through InstallRoot: a kit file that names a
+# away (2026-10-08). The KMD client is the release's, resolved through InstallRoot: a kit file that names a
 # client by path has a copy of its own, which can answer about another driver than the one on the GPU.
 LEGACY_DIRECTORY = re.compile(r'(?i)C:\\BC250\\m(?:8|9|1[0-4])\\')
 CLIENT_BY_PATH = re.compile(r'(?i)[a-z]:\\[^\s"\']*bc250kmd_cli\.exe')

@@ -284,7 +284,7 @@ The suites that extract driver functions (`vidpn-flip`, `dcn-flip`, `post-displa
 
 ## The lab plan for stage A
 
-Each trial is at most three minutes. The overlay tells the owner what happens next. The modes are set with
+Each trial is at most three minutes. The overlay tells the operator what happens next. The modes are set with
 `tools/win/display-modes/` in the console session, because SSH runs in session 0.
 
 | Trial | Steps | Pass |
@@ -295,7 +295,7 @@ Each trial is at most three minutes. The overlay tells the owner what happens ne
 | A4 | `-Set 1280 720`, then `-Set 1920 1080 -Fixed stretch`, each with a hold of 20 s | 1280x720 scaled 1.5 times to 1920x1080 with bars (`taps 4/4 dscl 1`). Then 1920x1080 stretched to the whole screen |
 | A5 | The hold ends, the tool goes back to the registry mode | 1920x1200 again. The log has a commit back to the native size. The stop line of the next stop has 0 underflows |
 
-A screenshot captures the source surface, not the scaler's output. The owner's view of the monitor is the check
+A screenshot captures the source surface, not the scaler's output. A look at the lab monitor is the check
 of the bars and the scale.
 
 The tool sets each mode without `CDS_UPDATEREGISTRY`, so a restart always comes back to the registry mode. It goes

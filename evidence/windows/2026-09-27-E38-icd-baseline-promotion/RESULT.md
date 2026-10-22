@@ -1,7 +1,7 @@
 # E38: registered ICD baseline promoted from 9C40083C to 93B1D1FD
 
 M569, unit A, 2026-09-27 (lab clock 02:05-02:20 local, UTC+2; boot 2026-09-26T18:44:31+02:00 unchanged, no
-reset, KMD unchanged, CPU UMD 8279AC7F untouched, DWM 84 untouched, no registry change). Owner's decision
+reset, KMD unchanged, CPU UMD 8279AC7F untouched, DWM 84 untouched, no registry change). Decision
 after E37 showed the registered ICD still carried the pre-M496 DXGI lookup.
 
 ## Why

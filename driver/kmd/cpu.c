@@ -25,7 +25,7 @@
 //
 // Settings, all REG_DWORD under Services\bc250kmd\Parameters:
 //   CpuTune           1 (written by the INF from 0.7.216) opens the surface; absent or 0, read-only
-//   CpuLab            1 admits BC250_CPU_MAX_MHZ_LAB with an undervolt in force (the owner's own bound)
+//   CpuLab            1 admits BC250_CPU_MAX_MHZ_LAB with an undervolt in force (the lab's own bound)
 //   CpuMaxMHz         the stored clock limit, absent for none
 //   CpuUvSteps        the stored undervolt, in curve-scale steps
 //   CpuTempC          the stored temperature cap

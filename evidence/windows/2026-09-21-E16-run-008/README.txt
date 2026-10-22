@@ -5,9 +5,9 @@ bc250kmd.sys sha256 prefix af0497b95c8ee6b9. Changes against 0.7.7: RotationSupp
   ~22:40    BUGCHECK 0x3B SYSTEM_SERVICE_EXCEPTION (c0000005) in dxgmms2!VIDMM_DMA_POOL::AddDmaBufferToPool, process
             csrss.exe, under win32kbase!DrvSetDisplayConfig -> dxgkrnl!CCD_TOPOLOGY::ApplyTopologyOnAdapter ->
             SESSION_ADAPTER::CreateCddDevice -> DXGDEVICE::CreateContext -> DXGCONTEXT::EnsurePriviledgedDmaPool.
-            The machine did not restart by itself (AutoReboot was 0); the owner restarted it.
+            The machine did not restart by itself (AutoReboot was 0); the operator restarted it.
   22:45:00  boot. The one-shot gate worked: EnableFullWddm was 0 on disk, the display-only driver started, stage 61,
-            picture back, no safe mode. AutoReboot set to 1 at the owner's request.
+            picture back, no safe mode. AutoReboot set to 1 on request.
 
 bugcheck-analyze-excerpt.txt has the stack and the driver's log ring from the dump: H12 holds (five
 EnumVidPnCofuncModality calls, all successful), then CreateProcess / CreateDevice (flags 0x2) and CreateContext with

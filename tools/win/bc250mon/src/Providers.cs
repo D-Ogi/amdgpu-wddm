@@ -57,7 +57,7 @@ namespace Bc250Mon
 
         // The case fan, from the board's own hardware monitor (docs/design/fan.md). Its own try/catch: the fan is
         // information, and an old control DLL or a closed gate must not cost the panel its temperature row. The
-        // driver still does not turn the fan - the BIOS curve does, and the owner keeps that setting as it is.
+        // driver still does not turn the fan - the BIOS curve does, and that setting stays as it is.
         void AddFanRow(Panel p)
         {
             try

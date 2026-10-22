@@ -314,7 +314,7 @@ static class LabStateTest
         Check(file.Read().CuMode == 24 && !file.Read().FromFile, "a deleted file falls back to the default");
     }
 
-    // ---- compute units: the row the owner asked for ---------------------------------------------------------
+    // ---- compute units: the row the panel exists for --------------------------------------------------------
 
     static void CuChecks()
     {
