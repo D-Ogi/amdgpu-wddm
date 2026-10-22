@@ -1,0 +1,5 @@
+r0: start 52.625 C, window 144.5 s, jobs 102862, ring flushes 102862, FLUSH_TLB 41950 (290/s, 0.41/job), VMID invalidations 587300, paging submissions 66069, game avg 56.13 min 46.26
+a1: start 53.625 C, window 148.2 s, jobs 103454, ring flushes 2, FLUSH_TLB 39846 (269/s, 0.39/job), VMID invalidations 557844, paging submissions 62178, game avg 56.27 min 45.88
+a2: start 53.75 C, window 143.9 s, jobs 102416, ring flushes 1, FLUSH_TLB 41698 (290/s, 0.41/job), VMID invalidations 583772, paging submissions 64851, game avg 55.95 min 45.83
+b1: start 53.625 C, window 148.4 s, jobs 102783, ring flushes 102783, FLUSH_TLB 40306 (272/s, 0.39/job), VMID invalidations 564284, paging submissions 62918, game avg 55.96 min 45.14
+b2: start 54 C, window 143.6 s, jobs 102779, ring flushes 102779, FLUSH_TLB 40125 (279/s, 0.39/job), VMID invalidations 561750, paging submissions 62529, game avg 55.37 min 45.02

@@ -340,3 +340,14 @@ flowchart LR
   class M31,M33,M39,M40,M84,M99,M202,M349 other
 ```
 
+### Part 3
+
+```mermaid
+flowchart LR
+  M917["M917<br/>games"]
+  M918["M918"]
+  M917 --> M918
+  classDef other stroke-dasharray:4 3
+  class M917 other
+```
+

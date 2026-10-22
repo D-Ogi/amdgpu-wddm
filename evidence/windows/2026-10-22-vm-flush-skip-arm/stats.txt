@@ -1,0 +1,10 @@
+r0: 3613 frames in 64.4 s, avg 56.14 FPS, 1% low 37.67, 0.1% low 14.40, median frame 17.67 ms
+r0: 10 s windows FPS 52.08 55.13 64.99 60.78 51.94 51.68 56.69
+a1: 3617 frames in 64.3 s, avg 56.27 FPS, 1% low 36.39, 0.1% low 19.19, median frame 17.60 ms
+a1: 10 s windows FPS 52.92 56.10 65.79 59.57 51.57 51.43 56.88
+a2: 3615 frames in 64.6 s, avg 55.95 FPS, 1% low 36.54, 0.1% low 16.35, median frame 17.52 ms
+a2: 10 s windows FPS 50.33 54.89 64.95 61.58 52.15 51.12 57.39
+b1: 3599 frames in 64.3 s, avg 55.95 FPS, 1% low 34.99, 0.1% low 13.89, median frame 17.65 ms
+b1: 10 s windows FPS 52.90 55.37 65.80 59.43 53.03 49.92 54.12
+b2: 3575 frames in 64.6 s, avg 55.37 FPS, 1% low 36.50, 0.1% low 19.27, median frame 17.81 ms
+b2: 10 s windows FPS 52.53 53.03 64.56 60.16 51.52 49.92 56.58

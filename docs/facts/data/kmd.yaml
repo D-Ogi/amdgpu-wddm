@@ -2151,3 +2151,10 @@ facts:
     evidence: "[BD-180 Time Spy rounds](../evidence/windows/2026-10-21-bd180-time-spy-rounds/README.md)"
     edges:
       - {"type": "uses", "to": "M914"}
+  - id: M918
+    status: MEASURED
+    date: "2026-10-22"
+    claim: "In the Cyberpunk 2077 benchmark runs of M917, VidMm sent 269 to 290 `DXGK_OPERATION_FLUSH_TLB` a second on the paging stream, 0.39 to 0.41 for each node-0 job, and the kernel driver turned each one into invalidations of the 14 pool VMIDs (557844 to 587300 VMID invalidations in runs of 144 s to 148 s). So without the ring VM flush, the paging stream alone invalidates the VMID of the game about 0.4 times for each job"
+    status_text: "MEASURED (unit A, five runs)"
+    detail: "From the kernel driver summary lines `VMID pool FLUSH_TLB` and `node 0 hardware`, read before and after each run. The two reads enclose the game from its start to its exit. The rate on file before this, about 12 a second (47863 in 3909 s, `evidence/linux/2026-09-24-E29-sdma-reset/windows-before.log`), is a desktop rate"
+    evidence: "[VM flush skip arm](../evidence/windows/2026-10-22-vm-flush-skip-arm/README.md)"

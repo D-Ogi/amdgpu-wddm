@@ -207,3 +207,13 @@ facts:
     evidence: "[EnableRingVmFlush game arm](../evidence/windows/2026-10-11-ringflush-w3-game-arm/README.md)"
     edges:
       - {"type": "uses", "to": "M842", "cue": "...The Witcher 3 Remaster (D3D12, HIGH with RT, 1920x1080 exclusive fullscreen)..."}
+  - id: M917
+    status: MEASURED
+    date: "2026-10-22"
+    claim: "Skipping the ring VM flush of a job whose VMID already holds the root for its process does not change the Cyberpunk 2077 benchmark on unit A by more than the spread between runs (1920x1200, High settings without ray tracing, 2000 MHz ceiling): 56.27 and 55.95 FPS with the skip, 55.95 and 55.37 FPS with the flush on every job from the same source, and 56.14 FPS with the release kernel driver. The mean PresentMon GPU busy per frame over the first 50 s of the benchmark is 16.90 ms with the skip and 16.96 ms with the flush on every job, and the two runs with the flush on every job differ by 0.26 ms"
+    status_text: "MEASURED (unit A, two runs for each lab image, one release run)"
+    detail: "Installed package 0.7.216.104-tester.32 release on 22631, 40 CU. Lab image A (the skip, `4DBC18F5`) and lab image B (the flush on every job, `1A872C89`) are main `8b30b6f6` with the patch of the evidence, and they differ only in one constant. The reference run used the release kernel driver `CDE214D4`. With the skip, 1 or 2 of about 103000 node-0 jobs of a run carried the ring flush. Each run started at a Tctl of 54 C or less, and in every run the thermal policy lowered the clock from about 50 s into the benchmark. No run had a GPU fault, a fence timeout, a TDR or a refused flip. Limits: two runs for each image, so a difference under about 0.3 ms per frame is not resolved"
+    evidence: "[VM flush skip arm](../evidence/windows/2026-10-22-vm-flush-skip-arm/README.md)"
+    edges:
+      - {"type": "uses", "to": "M875"}
+      - {"type": "uses", "to": "M918"}

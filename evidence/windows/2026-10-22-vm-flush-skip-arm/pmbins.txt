@@ -1,0 +1,40 @@
+r0: offset 8576 of 12190, mean |dt| 0.93 ms over 300 frames
+      0s fps  52.1  gpu busy/frame 18.64 ms  share 0.971  cpu busy/frame 19.00 ms  gpu latency 31.50
+     10s fps  55.1  gpu busy/frame 17.76 ms  share 0.979  cpu busy/frame 17.94 ms  gpu latency 30.22
+     20s fps  65.0  gpu busy/frame 14.86 ms  share 0.966  cpu busy/frame 15.19 ms  gpu latency 24.71
+     30s fps  60.8  gpu busy/frame 16.05 ms  share 0.976  cpu busy/frame 16.26 ms  gpu latency 27.58
+     40s fps  52.0  gpu busy/frame 18.08 ms  share 0.939  cpu busy/frame 19.03 ms  gpu latency 25.93
+     50s fps  51.6  gpu busy/frame 18.92 ms  share 0.977  cpu busy/frame 19.16 ms  gpu latency 29.70
+     60s fps  56.7  gpu busy/frame 17.21 ms  share 0.977  cpu busy/frame 17.43 ms  gpu latency 28.69
+a1: offset 8685 of 12302, mean |dt| 0.82 ms over 300 frames
+      0s fps  52.9  gpu busy/frame 18.49 ms  share 0.979  cpu busy/frame 18.68 ms  gpu latency 31.04
+     10s fps  56.1  gpu busy/frame 17.40 ms  share 0.976  cpu busy/frame 17.64 ms  gpu latency 29.54
+     20s fps  65.8  gpu busy/frame 14.72 ms  share 0.968  cpu busy/frame 15.00 ms  gpu latency 23.99
+     30s fps  59.6  gpu busy/frame 16.34 ms  share 0.974  cpu busy/frame 16.58 ms  gpu latency 27.93
+     40s fps  51.6  gpu busy/frame 18.14 ms  share 0.935  cpu busy/frame 19.17 ms  gpu latency 25.58
+     50s fps  51.4  gpu busy/frame 19.00 ms  share 0.976  cpu busy/frame 19.25 ms  gpu latency 30.20
+     60s fps  57.0  gpu busy/frame 17.11 ms  share 0.975  cpu busy/frame 17.36 ms  gpu latency 27.91
+a2: offset 8373 of 11988, mean |dt| 1.84 ms over 300 frames
+      0s fps  50.3  gpu busy/frame 18.60 ms  share 0.936  cpu busy/frame 19.67 ms  gpu latency 31.50
+     10s fps  54.9  gpu busy/frame 17.83 ms  share 0.979  cpu busy/frame 18.02 ms  gpu latency 30.18
+     20s fps  64.9  gpu busy/frame 14.98 ms  share 0.972  cpu busy/frame 15.22 ms  gpu latency 24.95
+     30s fps  61.6  gpu busy/frame 15.82 ms  share 0.975  cpu busy/frame 16.03 ms  gpu latency 27.26
+     40s fps  52.3  gpu busy/frame 17.91 ms  share 0.936  cpu busy/frame 18.91 ms  gpu latency 24.46
+     50s fps  50.9  gpu busy/frame 19.19 ms  share 0.977  cpu busy/frame 19.43 ms  gpu latency 29.79
+     60s fps  57.8  gpu busy/frame 16.94 ms  share 0.976  cpu busy/frame 17.17 ms  gpu latency 27.93
+b1: offset 8721 of 12320, mean |dt| 0.80 ms over 300 frames
+      0s fps  52.9  gpu busy/frame 18.39 ms  share 0.973  cpu busy/frame 18.69 ms  gpu latency 30.30
+     10s fps  55.6  gpu busy/frame 17.59 ms  share 0.978  cpu busy/frame 17.79 ms  gpu latency 29.79
+     20s fps  65.5  gpu busy/frame 14.73 ms  share 0.965  cpu busy/frame 15.05 ms  gpu latency 23.96
+     30s fps  59.4  gpu busy/frame 16.05 ms  share 0.954  cpu busy/frame 16.60 ms  gpu latency 27.03
+     40s fps  53.1  gpu busy/frame 17.99 ms  share 0.955  cpu busy/frame 18.61 ms  gpu latency 26.24
+     50s fps  49.8  gpu busy/frame 19.57 ms  share 0.975  cpu busy/frame 19.85 ms  gpu latency 30.14
+     60s fps  54.4  gpu busy/frame 17.89 ms  share 0.970  cpu busy/frame 18.25 ms  gpu latency 29.55
+b2: offset 8604 of 12179, mean |dt| 1.25 ms over 300 frames
+      0s fps  52.6  gpu busy/frame 18.63 ms  share 0.979  cpu busy/frame 18.82 ms  gpu latency 31.06
+     10s fps  53.0  gpu busy/frame 17.84 ms  share 0.946  cpu busy/frame 18.66 ms  gpu latency 30.96
+     20s fps  64.5  gpu busy/frame 15.02 ms  share 0.969  cpu busy/frame 15.30 ms  gpu latency 24.91
+     30s fps  60.2  gpu busy/frame 16.16 ms  share 0.973  cpu busy/frame 16.40 ms  gpu latency 27.18
+     40s fps  51.6  gpu busy/frame 18.45 ms  share 0.952  cpu busy/frame 19.15 ms  gpu latency 25.50
+     50s fps  49.8  gpu busy/frame 19.40 ms  share 0.965  cpu busy/frame 19.88 ms  gpu latency 30.16
+     60s fps  56.7  gpu busy/frame 17.22 ms  share 0.976  cpu busy/frame 17.45 ms  gpu latency 28.61

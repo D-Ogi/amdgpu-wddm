@@ -1,0 +1,1513 @@
+diff --git a/docs/design/gfx-submit-root-serialization.md b/docs/design/gfx-submit-root-serialization.md
+index 155014a1..4d22ac2c 100644
+--- a/docs/design/gfx-submit-root-serialization.md
++++ b/docs/design/gfx-submit-root-serialization.md
+@@ -120,11 +120,12 @@ that DWM claimed early and uses every frame would be the oldest claim and the fi
+ retires between two frames. With use order, the VMID that has not submitted for the longest time goes first, and
+ DWM keeps its VMID.
+ 
+-### The per-submit invalidation stays
++### When a job invalidates its VMID
+ 
+-`bc250_gmc_set_vmid_pd` is still called on every submit, for the chosen VMID, with the root unchanged or not. The
+-invalidation is what picks up a leaf-PTE change of the paging path under the same root. The pool never changes the
+-root of a live VMID, so it needs no pipeline sync before a root change.
++With `EnableRingVmFlush` 0, `bc250_gmc_set_vmid_pd` runs on every submit for the chosen VMID, with the same root
++or not. This MMIO path is the rollback, and it stays as it is. With `EnableRingVmFlush` 1, a job invalidates its
++VMID only when `Bc250VmidRingFlushNeeded` selects it (section 3, "Which jobs carry the flush"). The pool never
++changes the root of a live VMID, so it needs no pipeline sync before a root change.
+ 
+ ### The VMID end to end
+ 
+@@ -135,7 +136,7 @@ root of a live VMID, so it needs no pipeline sync before a root change.
+   (`PACKET3_INDIRECT_BUFFER__VMID`, `bc250_gfx_emit_ib`). The CP fetches the IB, and the job makes every access,
+   through that VMID.
+ - The `BC250_PJ_GFX_SUBMIT` journal record carries the VMID in `Valid` (0 in the records of earlier drivers).
+-  `bc250kmd_cli journal` prints it. The hot line `gfx: job seq %lu vmid %lu fence ...` carries it too; the node
++  `bc250kmd_cli journal` prints it. The hot line `gfx: job seq %lu vmid %lu fence ...` carries it too. The node
+   left that line to keep it within 159 characters, and the journal record keeps the node.
+ - `ProgressSiteVmFlush` records the VMID as its input, so a dump of a hang inside the flush names it.
+ 
+@@ -162,12 +163,12 @@ with nothing published, and the next buffer starts the whole set again.
+ | `wddm.c` `#define BC250_WDDM_VMID 1u` | removed |
+ | `wddm.c` `WddmSubmitHardware`: `GfxSubmitIb(Device, BC250_WDDM_VMID, ...)` | `BC250_VMID_AUTO`, the chosen VMID returned |
+ | `wddm.c` `WddmSubmitHardware`: the `vmid %u` of `wddm: fence %u on the gfx ring` | the chosen VMID |
+-| `wddm.c` FLUSH_TLB: `GfxPagingBuildFlush(..., BC250_WDDM_VMID, ...)` | the resolved root; the fan-out above |
++| `wddm.c` FLUSH_TLB: `GfxPagingBuildFlush(..., BC250_WDDM_VMID, ...)` | the resolved root, with the fan-out above |
+ | `gfx.c` `BC250_GFX.VmidRoot[16]` | `BC250_GFX.Vmid.Root[16]` with the rest of the table |
+-| `gfx.c` `SubmitIbLocked`: the refusal predicate on `VmidRoot` | the same predicate with the gate at 0; `Bc250VmidAdmit` with the pool |
++| `gfx.c` `SubmitIbLocked`: the refusal predicate on `VmidRoot` | the same predicate with the gate at 0, `Bc250VmidAdmit` with the pool |
+ | `gfx.c` `SubmitIbLocked`: `VmidRoot[Vmid] = RootPhysical` | `Bc250VmidClaim` under `VmidLock` |
+ | `gfx.c` `TearDown` and `GfxPowerRetainedLocked`: zero `VmidRoot` | `Bc250VmidResetAll` |
+-| `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types; the pipeline test checks the VMID in the queue and in the timeout report |
++| `driver/kmd/test/gfx_pipeline_test.c`, `gfx_retained_test.c` | follow the new types. The pipeline test checks the VMID in the queue and in the timeout report |
+ | `experiments/E27-m9-inference/paging-route-test-suffix.c` (`shim-paging`) | the real `GfxPagingBuildFlush`, gate 0 and the fan-out |
+ 
+ ## 3. Option (b): the flush on the ring, implemented behind `EnableRingVmFlush`, default on from train b31
+@@ -231,21 +232,61 @@ implementation in `driver/shim/bc250_gfx.c`:
+    `adev->gfx.cp_fw_write_wait` says the CP firmware does that operation, and falls back to
+    `amdgpu_ring_emit_reg_write_reg_wait_helper` when it does not. The shim tracks no CP firmware version, so it
+    writes the fallback, which every firmware version runs.
+-3. **The fallback gets the acknowledge-reset cycle between the two.** Without it the wait can read an acknowledge
++3. **The fallback also has the acknowledge-reset cycle between the two.** Without it the wait can read an acknowledge
+    bit that the previous invalidation of this engine left set, and the job would then run on a TLB that was never
+    invalidated. Upstream does the same on SDMA (`sdma_v5_0_ring_emit_reg_write_reg_wait`, "wait for a cycle to
+    reset vm_inv_eng*_ack", which `bc250_sdma_vm_reg_write_reg_wait` follows) and in the CPU path for a GFXHUB
+    below GC 10.3 (the dummy read of the request register in `gmc_v10_0_flush_gpu_tlb`, which
+    `bc250_gmc_flush_gpu_tlb_observed` follows).
+ 
+-The flush is emitted for every pool job, not only for a job whose root differs from the VMID's current root. The
+-invalidation is needed on every job anyway (section 2, "the per-submit invalidation stays"), and a root write that
+-is unconditional keeps the register and the table in step after an emitter that refused.
++When a job carries the flush, the root write and the invalidation go together. The root write also goes when the
++table says that the VMID holds this root, because after a refused emission the register can hold another root.
+ 
+ **The ring costs nothing.** `amdgpu_ring_alloc` rounds every request up to `align_mask + 1`, which is 256 dwords
+ on the gfx ring. The frame is 23 dwords and the flush 29, so both fit the same reservation and the number of jobs
+ the ring holds does not change. The host test asserts it.
+ 
++### Which jobs carry the flush
++
++`Bc250VmidRingFlushNeeded` (`driver/kmd/vmid_pool.h`) decides for each job whether its frame carries the flush.
++The decision follows amdgpu (Linux v6.18, commit 7d0a66e4). amdgpu flushes the VMID of a job only in these cases:
++
++| Case in amdgpu | Source | Equivalent in this driver |
++|---|---|---|
++| The VM receives a VMID that it does not own | `amdgpu_ids.c`, lines 354 and 433 | `Bc250VmidAdmit` claims a VMID for the job |
++| The `tlb_seq` of the VM increased after the last flush of the VMID. An unmap, a BO move and a PDE move increase it | `amdgpu_ids.c`, line 365 | VidMm sends `FLUSH_TLB`, and the paging buffer invalidates `Bc250VmidFlushMask` (section 2, "FLUSH_TLB") |
++| The CPU writes the page tables of the VM | `amdgpu_ids.c`, line 347 | The `CPU_VIRTUAL` updates write only the tables of the system paging process, which runs at VMID 2 on node 1 |
++| The last flush of the VMID is not emitted yet, or it ran on another ring and did not signal yet | `amdgpu_ids.c`, line 360 | Only the gfx ring runs jobs at the pool VMIDs, and its flushes come before each later job in ring order |
++| A GPU reset occurred | `amdgpu_vm.c`, line 788 | `Bc250VmidResetAll` (teardown, retained resume) and `Bc250VmidRingForget` (soft recovery) |
++
++In all other cases, the next job of the same VM at the same VMID runs without a VM flush. The `FLUSH_TLB` case
++needs one property of the KMD. The KMD does not set `DXGK_GPUMMUCAPS::InvalidTlbEntriesNotCached`, so VidMm also
++sends `FLUSH_TLB` for the VA ranges that change from invalid to valid (`d3dkmddi.h`, WDK 10.0.26100). The GpuMmu
++examples show `FLUSH_TLB` after `UpdatePageTable` (`display/examples.md` in windows-driver-docs). The
++documentation does not say whether `FLUSH_TLB` also follows `COPY_PAGE_TABLE_ENTRIES`, which changes tile mappings
++on the paging companion context (section 5).
++
++The table keeps two fields for each VMID. `RingRoot` is the root of the newest committed ring flush, and
++`RingProcess` is the process of that flush. A job carries the flush when one of these conditions is true:
++
++1. `EnableVmFlushEveryJob` is 1 (section 6).
++2. The job names an explicit VMID. Only the `IB_AT` escape does this. It can change its own page tables without
++   `FLUSH_TLB`, so each of its jobs flushes.
++3. `Bc250VmidAdmit` claimed the VMID for this job.
++4. `RingRoot` is 0, or it is not the root of the job.
++5. The process of the job is unknown, or it is not `RingProcess`.
++
++Condition 4 covers a refused emission. After a claim, a refusal leaves the new root in the table and the old root
++in the register. `RingRoot` changes only after a committed frame without a fault, so it still names the old root.
++The next job of the VMID then writes the root again.
++
++Condition 5 is a second protection. amdgpu compares the VM, not the address of the root. A process can free its
++root page, and VidMm can then put the root of the next process at the same address. The `FLUSH_TLB` for the new
++tables also covers this case.
++
++In the steady state, a game and DWM each keep their VMID and their root. Each VMID flushes once, and the next
++jobs run without a flush. The frame of such a job is the frame of 0.7.216.24, dword for dword.
++
+ ### What does not change
+ 
+ Admission does not. `Bc250VmidAdmit` makes the same decision with the gate on as with it off, and the rule that
+@@ -387,17 +428,19 @@ calls it for the VMID of the timed-out job and, in the register snapshot, for th
+ 
+ | Risk | Consequence | Mitigation | Test |
+ |---|---|---|---|
+-| A VMID recycled while a job of its old root still runs | wrong translations, VM fault, 0x116 | the retirement test of the chooser; the rule check before every root write, logged once | `vmid-pool`: an exhaustive model check of every interleaving of submit, retire and root choice for pools of 1, 2, 3 and 2 far-apart VMIDs (2.2 million interleavings), and 1.28 million seeded random steps across the sequence wrap; the safety property is "every job in flight still finds its root at its VMID" |
++| A VMID recycled while a job of its old root still runs | wrong translations, VM fault, 0x116 | the retirement test of the chooser, and the rule check before every root write, logged once | `vmid-pool`: an exhaustive model check of every interleaving of submit, retire and root choice. The pools have 1, 2 and 3 VMIDs, and 2 far-apart VMIDs (2.2 million interleavings). 1.28 million seeded random steps go across the sequence wrap. The safety property is "every job in flight still finds its root at its VMID" |
+ | The chooser is changed to ignore retirement | the same | the negative control | `vmid-pool-ignore-retirement` must fail |
+-| A pool VMID used by firmware (PSP, RLC) | corruption outside our contexts | the bring-up read; a non-zero VMID in 3..15 stays out | `vmid-pool`: the probe cases |
++| A pool VMID used by firmware (PSP, RLC) | corruption outside our contexts | the bring-up read. A VMID in 3..15 that something else programmed stays out | `vmid-pool`: the probe cases |
+ | `FLUSH_TLB` misses a VMID that holds the root | stale translations after a paging unmap | the superset of section 2 | `shim-paging`: the real `GfxPagingBuildFlush` with gate 0 (VMID 1 alone, byte for byte) and with the pool (the fan-out, the recycle race, all or nothing) |
+ | A fault latched on a recycled VMID | a fault nobody can attribute | the history of section 4 | `vmid-pool`: the history cases |
+-| `EnableVmidPool` 0 is not 0.7.213.1 | a bisect switch that lies | the gate-0 path keeps the old predicate at the old point | `vmid-pool`: gate-0 identity against the old predicate (120 cases); `gfx-pipeline`, `gfx-retained` |
+-| Fourteen VMIDs used up by many processes | `STATUS_DEVICE_BUSY`, the behaviour of 0.7.213.1 | nothing; F1 makes the wait cheap | the summary counts `busy` |
++| `EnableVmidPool` 0 is not 0.7.213.1 | a bisect switch that lies | the gate-0 path keeps the old predicate at the old point | `vmid-pool`: gate-0 identity against the old predicate (120 cases). Also `gfx-pipeline` and `gfx-retained` |
++| Fourteen VMIDs used up by many processes | `STATUS_DEVICE_BUSY`, the behaviour of 0.7.213.1 | nothing. F1 makes the wait cheap | the summary counts `busy` |
+ | An acknowledge mask that is not the VMID's bit (gate 1) | a CP that waits forever: a TDR, and no engine reset (facts M53) | the emitted dwords are read back against the reference, per VMID | `gfx-vm-flush`, with `gfx-vm-flush-wrong-ack` as its negative control |
+ | A stale acknowledge bit from this engine's previous invalidation (gate 1) | a job on a TLB that was never invalidated | the acknowledge-reset cycle between the request and the wait | `gfx-vm-flush`: the cycle's register, reference and mask |
+ | The gfx ring and the CPU path on one invalidation engine (gate 1) | one path reads the other's acknowledge | one owner per engine (section 3) | `gfx-vm-flush`: the three engine numbers and the registers they address |
+ | `EnableRingVmFlush` 0 is not 0.7.216.24 | a bisect switch that lies | the flush is a prefix and the frame is untouched code | `gfx-vm-flush`: the frame against a frozen 23-dword array |
++| A job without the ring flush at a VMID whose register or TLB is behind its tables (gate 1) | wrong translations, VM fault, 0x116 | `RingRoot` and `RingProcess` change only after a committed frame without a fault. A reset and a soft recovery clear them | `vmid-pool`: the ring flush model, with the register and a tagged TLB for each VMID. It runs 1.04 million exhaustive interleavings to depth 6 and 480 000 seeded random steps. `vmid-pool-ignore-ring-root` and `vmid-pool-ignore-process` must fail |
++| A page-table write that VidMm does not follow with `FLUSH_TLB` (gate 1) | stale translations after a tile mapping change | none in the KMD yet. The documentation does not say whether `FLUSH_TLB` follows `COPY_PAGE_TABLE_ENTRIES`. `EnableVmFlushEveryJob` 1 is the rollback | the tiled-resource clients on unit A, at both values of `EnableVmFlushEveryJob` |
+ 
+ ## 6. Gate, counters, rollback
+ 
+@@ -423,16 +466,25 @@ meant the MMIO flush. Neither the INF nor the release installer writes the value
+ otherwise has the ring flush on. An install keeps a value that is already there. The start log says:
+ 
+ ```
+-gfx: VM flush on the ring (EnableRingVmFlush), engine 1
++gfx: VM flush on the ring (EnableRingVmFlush), engine 1, when the VMID does not hold the root for the process
++gfx: VM flush on the ring (EnableRingVmFlush), engine 1, every job (EnableVmFlushEveryJob 1)
+ gfx: VM flush by MMIO before the frame (EnableRingVmFlush 0), engine 17
+ ```
+ 
+-and the summary adds one line:
++and the summary adds two lines:
+ 
+ ```
+ wddm summary: ring VM flush on: %lu frames, %lu of them on a root the VMID held
++wddm summary: ring VM flush on selected jobs: %lu jobs without the flush
+ ```
+ 
+-With the gate off the line says `off` and both numbers are 0. To roll back, set `EnableRingVmFlush` to 0 and
+-restart. The kmdver arm of the train validation suite (`tools/win/train-validate/arms.json`) expects the start
+-line of the default, `gfx: VM flush on the ring (EnableRingVmFlush), engine 1`.
++`frames` counts the jobs that carry the flush. With the gate off, the first line says `off`, both of its numbers are
++0, and the second line is absent. To roll back, set `EnableRingVmFlush` to 0 and restart.
++
++`EnableVmFlushEveryJob` is a third REG_DWORD under the same key, read once in `GfxStart`. It applies only with
++`EnableRingVmFlush` on. Absent or 0, a job carries the flush only when `Bc250VmidRingFlushNeeded` selects it
++(section 3, "Which jobs carry the flush"). 1 puts the flush in front of every job, as 0.7.216.65 and earlier
++releases did. The second summary line then says `on all jobs`, and its number stays 0. Neither the INF nor the
++release installer writes the value. To roll back, set `EnableVmFlushEveryJob` to 1 and restart. The kmdver arm of
++the train validation suite (`tools/win/train-validate/arms.json`) expects the start line of the default,
++`gfx: VM flush on the ring (EnableRingVmFlush), engine 1`.
+diff --git a/docs/status/status.json b/docs/status/status.json
+index 4d2f274e..38bb6baf 100644
+--- a/docs/status/status.json
++++ b/docs/status/status.json
+@@ -264,7 +264,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmQueryAdapterInfo",
+-       "source": "driver/kmd/wddm.c:4393",
++       "source": "driver/kmd/wddm.c:4398",
+        "done": true,
+        "reason": "does work",
+        "partial": true
+@@ -329,7 +329,7 @@
+        "since": "WDDM2_0",
+        "targeted": true,
+        "function": "Bc250WddmSetStablePowerState",
+-       "source": "driver/kmd/wddm.c:7349",
++       "source": "driver/kmd/wddm.c:7354",
+        "done": true,
+        "reason": "forwards to DpmSetStable: does work"
+       }
+@@ -361,7 +361,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmControlInterrupt",
+-       "source": "driver/kmd/wddm.c:9120",
++       "source": "driver/kmd/wddm.c:9125",
+        "done": true,
+        "reason": "does work",
+        "partial": true
+@@ -403,7 +403,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmQueryChildRelations",
+-       "source": "driver/kmd/wddm.c:9299",
++       "source": "driver/kmd/wddm.c:9304",
+        "done": true,
+        "reason": "forwards to Bc250QueryChildRelations: does work"
+       },
+@@ -412,7 +412,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmQueryChildStatus",
+-       "source": "driver/kmd/wddm.c:9306",
++       "source": "driver/kmd/wddm.c:9311",
+        "done": true,
+        "reason": "forwards to Bc250QueryChildStatus: does work",
+        "partial": true
+@@ -422,7 +422,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmQueryDeviceDescriptor",
+-       "source": "driver/kmd/wddm.c:9314",
++       "source": "driver/kmd/wddm.c:9319",
+        "done": true,
+        "reason": "forwards to Bc250QueryDeviceDescriptor: does work"
+       },
+@@ -458,7 +458,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedIsSupportedVidPn",
+-       "source": "driver/kmd/wddm.c:9334",
++       "source": "driver/kmd/wddm.c:9339",
+        "done": true,
+        "reason": "forwards to Bc250IsSupportedVidPn: does work"
+       },
+@@ -467,7 +467,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedRecommendFunctionalVidPn",
+-       "source": "driver/kmd/wddm.c:9335",
++       "source": "driver/kmd/wddm.c:9340",
+        "done": false,
+        "reason": "forwards to Bc250RecommendFunctionalVidPn: every return is a failure constant"
+       },
+@@ -476,7 +476,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedEnumVidPnCofuncModality",
+-       "source": "driver/kmd/wddm.c:9336",
++       "source": "driver/kmd/wddm.c:9341",
+        "done": true,
+        "reason": "forwards to Bc250EnumVidPnCofuncModality: does work"
+       },
+@@ -485,7 +485,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedSetVidPnSourceVisibility",
+-       "source": "driver/kmd/wddm.c:9337",
++       "source": "driver/kmd/wddm.c:9342",
+        "done": true,
+        "reason": "forwards to Bc250SetVidPnSourceVisibility: does work"
+       },
+@@ -494,7 +494,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedCommitVidPn",
+-       "source": "driver/kmd/wddm.c:9338",
++       "source": "driver/kmd/wddm.c:9343",
+        "done": true,
+        "reason": "forwards to Bc250CommitVidPn: does work"
+       },
+@@ -503,7 +503,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedRecommendMonitorModes",
+-       "source": "driver/kmd/wddm.c:9340",
++       "source": "driver/kmd/wddm.c:9345",
+        "done": true,
+        "reason": "forwards to Bc250RecommendMonitorModes: does work"
+       },
+@@ -521,7 +521,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmGetScanLine",
+-       "source": "driver/kmd/wddm.c:9155",
++       "source": "driver/kmd/wddm.c:9160",
+        "done": true,
+        "reason": "does work",
+        "partial": true
+@@ -540,7 +540,7 @@
+        "since": "WIN7",
+        "targeted": true,
+        "function": "Bc250WddmTracedQueryVidPnHWCapability",
+-       "source": "driver/kmd/wddm.c:9341",
++       "source": "driver/kmd/wddm.c:9346",
+        "done": false,
+        "reason": "forwards to Bc250QueryVidPnHWCapability: only logs, counts, reads or writes zeros"
+       },
+@@ -568,7 +568,7 @@
+        "since": "WIN8",
+        "targeted": true,
+        "function": "Bc250WddmGetChildContainerId",
+-       "source": "driver/kmd/wddm.c:9320",
++       "source": "driver/kmd/wddm.c:9325",
+        "done": false,
+        "reason": "forwards to Bc250GetChildContainerId: every return is a failure constant"
+       },
+@@ -672,7 +672,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmCreateDevice",
+-       "source": "driver/kmd/wddm.c:4563",
++       "source": "driver/kmd/wddm.c:4568",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -681,7 +681,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmSubmitCommand",
+-       "source": "driver/kmd/wddm.c:6554",
++       "source": "driver/kmd/wddm.c:6559",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -690,7 +690,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmPreemptCommand",
+-       "source": "driver/kmd/wddm.c:6979",
++       "source": "driver/kmd/wddm.c:6984",
+        "done": true,
+        "reason": "forwards to WddmPreemptFence: does work"
+       },
+@@ -708,7 +708,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmDestroyDevice",
+-       "source": "driver/kmd/wddm.c:4579",
++       "source": "driver/kmd/wddm.c:4584",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -726,7 +726,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmCreateContext",
+-       "source": "driver/kmd/wddm.c:4592",
++       "source": "driver/kmd/wddm.c:4597",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -735,7 +735,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmDestroyContext",
+-       "source": "driver/kmd/wddm.c:4717",
++       "source": "driver/kmd/wddm.c:4722",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -762,7 +762,7 @@
+        "since": "WDDM1_3",
+        "targeted": true,
+        "function": "Bc250WddmGetNodeMetadata",
+-       "source": "driver/kmd/wddm.c:4522",
++       "source": "driver/kmd/wddm.c:4527",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -771,7 +771,7 @@
+        "since": "WDDM1_3",
+        "targeted": true,
+        "function": "Bc250WddmCalibrateGpuClock",
+-       "source": "driver/kmd/wddm.c:7382",
++       "source": "driver/kmd/wddm.c:7387",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -780,7 +780,7 @@
+        "since": "WDDM1_3",
+        "targeted": true,
+        "function": "Bc250WddmFormatHistoryBuffer",
+-       "source": "driver/kmd/wddm.c:7420",
++       "source": "driver/kmd/wddm.c:7425",
+        "done": false,
+        "reason": "only logs, counts, reads or writes zeros"
+       },
+@@ -798,7 +798,7 @@
+        "since": "WDDM2_0",
+        "targeted": true,
+        "function": "Bc250WddmSubmitCommandVirtual",
+-       "source": "driver/kmd/wddm.c:6937",
++       "source": "driver/kmd/wddm.c:6942",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -807,7 +807,7 @@
+        "since": "WDDM2_0",
+        "targeted": true,
+        "function": "Bc250WddmCreateProcess",
+-       "source": "driver/kmd/wddm.c:4743",
++       "source": "driver/kmd/wddm.c:4748",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -816,7 +816,7 @@
+        "since": "WDDM2_0",
+        "targeted": true,
+        "function": "Bc250WddmDestroyProcess",
+-       "source": "driver/kmd/wddm.c:4756",
++       "source": "driver/kmd/wddm.c:4761",
+        "done": true,
+        "reason": "forwards to WddmFreeObject: does work"
+       },
+@@ -1109,7 +1109,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmCreateAllocation",
+-       "source": "driver/kmd/wddm.c:5242",
++       "source": "driver/kmd/wddm.c:5247",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1118,7 +1118,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmDestroyAllocation",
+-       "source": "driver/kmd/wddm.c:5289",
++       "source": "driver/kmd/wddm.c:5294",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1127,7 +1127,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmDescribeAllocation",
+-       "source": "driver/kmd/wddm.c:5337",
++       "source": "driver/kmd/wddm.c:5342",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1136,7 +1136,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmGetStandardAllocationDriverData",
+-       "source": "driver/kmd/wddm.c:4829",
++       "source": "driver/kmd/wddm.c:4834",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1172,7 +1172,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmBuildPagingBuffer",
+-       "source": "driver/kmd/wddm.c:6454",
++       "source": "driver/kmd/wddm.c:6459",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1181,7 +1181,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmOpenAllocation",
+-       "source": "driver/kmd/wddm.c:5374",
++       "source": "driver/kmd/wddm.c:5379",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1190,7 +1190,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmCloseAllocation",
+-       "source": "driver/kmd/wddm.c:5473",
++       "source": "driver/kmd/wddm.c:5478",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1199,7 +1199,7 @@
+        "since": "WDDM2_0",
+        "targeted": true,
+        "function": "Bc250WddmSetRootPageTable",
+-       "source": "driver/kmd/wddm.c:4783",
++       "source": "driver/kmd/wddm.c:4788",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1208,7 +1208,7 @@
+        "since": "WDDM2_0",
+        "targeted": true,
+        "function": "Bc250WddmGetRootPageTableSize",
+-       "source": "driver/kmd/wddm.c:4769",
++       "source": "driver/kmd/wddm.c:4774",
+        "done": true,
+        "reason": "returns the answer"
+       },
+@@ -1276,7 +1276,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmResetFromTimeout",
+-       "source": "driver/kmd/wddm.c:6993",
++       "source": "driver/kmd/wddm.c:6998",
+        "done": false,
+        "reason": "every return is a failure constant"
+       },
+@@ -1285,7 +1285,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmRestartFromTimeout",
+-       "source": "driver/kmd/wddm.c:7009",
++       "source": "driver/kmd/wddm.c:7014",
+        "done": false,
+        "reason": "only logs, counts, reads or writes zeros"
+       },
+@@ -1294,7 +1294,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmCollectDbgInfo",
+-       "source": "driver/kmd/wddm.c:7332",
++       "source": "driver/kmd/wddm.c:7337",
+        "done": false,
+        "reason": "only logs, counts, reads or writes zeros"
+       },
+@@ -1303,7 +1303,7 @@
+        "since": "WIN8",
+        "targeted": true,
+        "function": "Bc250WddmQueryDependentEngineGroup",
+-       "source": "driver/kmd/wddm.c:7021",
++       "source": "driver/kmd/wddm.c:7026",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1312,7 +1312,7 @@
+        "since": "WIN8",
+        "targeted": true,
+        "function": "Bc250WddmQueryEngineStatus",
+-       "source": "driver/kmd/wddm.c:7039",
++       "source": "driver/kmd/wddm.c:7044",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1321,7 +1321,7 @@
+        "since": "WIN8",
+        "targeted": true,
+        "function": "Bc250WddmResetEngine",
+-       "source": "driver/kmd/wddm.c:7098",
++       "source": "driver/kmd/wddm.c:7103",
+        "done": true,
+        "reason": "does work",
+        "partial": true
+@@ -1417,7 +1417,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmSetVidPnSourceAddress",
+-       "source": "driver/kmd/wddm.c:9063",
++       "source": "driver/kmd/wddm.c:9068",
+        "done": true,
+        "reason": "does work"
+       },
+@@ -1426,7 +1426,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmTracedUpdateActiveVidPnPresentPath",
+-       "source": "driver/kmd/wddm.c:9339",
++       "source": "driver/kmd/wddm.c:9344",
+        "done": true,
+        "reason": "forwards to Bc250UpdateActiveVidPnPresentPath: does work"
+       },
+@@ -1444,7 +1444,7 @@
+        "since": null,
+        "targeted": true,
+        "function": "Bc250WddmPresent",
+-       "source": "driver/kmd/wddm.c:7990",
++       "source": "driver/kmd/wddm.c:7995",
+        "done": true,
+        "reason": "does work"
+       },
+diff --git a/driver/kmd/bc250kmd.h b/driver/kmd/bc250kmd.h
+index fd41f3f1..fc6a8222 100644
+--- a/driver/kmd/bc250kmd.h
++++ b/driver/kmd/bc250kmd.h
+@@ -1087,6 +1087,8 @@ typedef struct _BC250_GFX_VMID_COUNTERS {
+     BOOLEAN RingFlushGate;      // EnableRingVmFlush, absent = on, 0 = off (gfx-submit-root-serialization.md section 3)
+     ULONG RingFlushes;          // jobs whose root write and invalidation were packets, not MMIO
+     ULONG RingFlushSame;        // of those, the jobs whose VMID already held the root
++    BOOLEAN RingFlushEveryJob;  // EnableVmFlushEveryJob: 1 = every job flushes
++    ULONG RingFlushSkipped;     // ring gate on: the jobs without the flush (same VMID, root and process)
+ } BC250_GFX_VMID_COUNTERS;
+ void GfxVmidReport(_In_ const BC250_DEVICE* Device, _In_z_ const char* Who, ULONG Vmid);
+ void GfxVmidCounters(_In_ const BC250_DEVICE* Device, _Out_ BC250_GFX_VMID_COUNTERS* Counters);
+diff --git a/driver/kmd/bc250kmd.inf b/driver/kmd/bc250kmd.inf
+index a6816e37..9623359e 100644
+--- a/driver/kmd/bc250kmd.inf
++++ b/driver/kmd/bc250kmd.inf
+@@ -133,7 +133,7 @@ AddReg        = AmdgpuStateDefaults
+ ; BEGIN GENERATED STATE DEFAULTS
+ ; Generated by tools/state/generate.py; copied into the package INF.
+ [AmdgpuStateDefaults]
+-HKR,Parameters\DefaultsV2,CatalogId,0x00000000,"f9c680619453d181e3ebba4bf0aefcc4b5dfb5db92915bbf177640808960d2b9"
++HKR,Parameters\DefaultsV2,CatalogId,0x00000000,"810a8f3d4923f314e1178df2aff55549a1c4f8ce9c34f4e3333dd8450bda9215"
+ HKR,Parameters\DefaultsV2,PackageProductVersion,0x00000000,%PackageProductVersion%
+ HKR,Parameters\DefaultsV2,Schema,0x00010001,2
+ HKR,Parameters\DefaultsV2,CpuTune,0x00010001,1
+diff --git a/driver/kmd/gfx.c b/driver/kmd/gfx.c
+index b7782641..ad6df508 100644
+--- a/driver/kmd/gfx.c
++++ b/driver/kmd/gfx.c
+@@ -14,6 +14,11 @@
+ //                                 frame (option (b) of docs/design/gfx-submit-root-serialization.md), on the gfx
+ //                                 ring's own invalidation engine. 0 = the MMIO flush ahead of the frame, byte for
+ //                                 byte as 0.7.216.24: the rollback. Default 1 from train b31.
++//     EnableVmFlushEveryJob  REG_DWORD  Applies only with EnableRingVmFlush on. Values: 1 = the frame of every job
++//                                 carries the root write and the invalidation (the rollback), as in 0.7.216.65 and
++//                                 earlier. Absent or 0 (the default) = only the jobs that Bc250VmidRingFlushNeeded
++//                                 selects (vmid_pool.h). Examples: a new root or a new process at the VMID, an
++//                                 IB_AT job, the first job after a reset.
+ //
+ // One escape (BC250_ESCAPE_RUN_GFX), four operations:
+ //   PLAN    set up (allocates memory and zeroes it, the GART table untouched; reads registers), run stages 1..LastStage against the real registers
+@@ -163,20 +168,24 @@ typedef struct _BC250_GFX {
+     // consumer of this field can still be running.
+     struct amdgpu_device* SubmitAdev;
+     // The VMID pool (vmid_pool.h, docs/design/gfx-submit-root-serialization.md). Vmid.Root is the page directory
+-    // root each VMID was last given (the VmidRoot array of 0.7.213.1); the rest of Vmid says which job last ran at
+-    // each VMID and for whom. The MMIO invalidation still runs on every job. Index 0 is unused: VMID 0 is the GART
+-    // aperture and has no root of ours. Every change happens under GartLock; a change of Root, of a tenant field or
+-    // of VmidHistory also takes VmidLock, which is what the DISPATCH_LEVEL readers (the fault and timeout reports)
+-    // and the FLUSH_TLB builder (GfxPagingLock, never GartLock) take to read them. Both resets of the table run
+-    // with GfxAccessClose done and GfxPagingLock held exclusively, so they need no VmidLock.
++    // root that each VMID got last (the VmidRoot array of 0.7.213.1). The tenant fields of Vmid say which job ran
++    // last at each VMID, and for which process. Vmid.RingRoot and Vmid.RingProcess say which root the newest
++    // committed ring VM flush of each VMID wrote, and for which process. Index 0 is unused: VMID 0 is the GART
++    // aperture and has no root of ours. Every change occurs under GartLock. A change of Root, of a tenant field, of
++    // a ring field or of VmidHistory also takes VmidLock. The DISPATCH_LEVEL readers (the fault and timeout reports)
++    // and the FLUSH_TLB builder (GfxPagingLock, never GartLock) take VmidLock to read these fields. Both resets of
++    // the table run after GfxAccessClose, with GfxPagingLock held exclusively, so they do not need VmidLock.
+     BOOLEAN VmidPoolGate;           // EnableVmidPool, read once at GfxStart; absent = on
+-    // Option (b) of docs/design/gfx-submit-root-serialization.md: the root change and the invalidation of a job
+-    // whose root differs from the VMID's current root go into the command stream instead of MMIO ahead of it.
+-    // Read once at GfxStart; 0 = the MMIO flush of 0.7.216.24, byte for byte (the rollback). The admission decision
+-    // (Bc250VmidAdmit) does not change with the gate: only how the root reaches the register.
++    // Option (b) of docs/design/gfx-submit-root-serialization.md: the root write and the invalidation of a job go
++    // into the command stream, not into MMIO writes before it. VmFlushEveryJob and Bc250VmidRingFlushNeeded select
++    // the jobs that get them. Read once at GfxStart. 0 = the MMIO flush of 0.7.216.24 on every job, byte for byte
++    // (the rollback). The gate does not change the admission decision (Bc250VmidAdmit). It changes only the path of
++    // the root to the register.
+     BOOLEAN RingVmFlushGate;        // EnableRingVmFlush, read once at GfxStart; absent = on, 0 = off
++    BOOLEAN VmFlushEveryJob;        // EnableVmFlushEveryJob, read once at GfxStart. 0 = the decision in vmid_pool.h
+     volatile LONG RingVmFlushes;    // jobs whose flush was emitted on the ring
+     volatile LONG RingVmFlushSame;  // of those, the ones whose VMID already held the root
++    volatile LONG RingVmFlushSkipped; // ring gate on: jobs without the flush
+     BOOLEAN VmidProbed;             // the bring-up read ran; once per device start, a teardown does not clear it
+     USHORT VmidMembers;             // the pool: VMIDs 1 and 3..15 less what the bring-up read found programmed
+     USHORT VmidExcluded;            // the VMIDs that read found programmed by something else
+@@ -1173,6 +1182,7 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
+     unsigned kills = 0;
+     int refused = 0;
+     ULONG verdict;
++    KIRQL irql;
+ 
+     *Seq = 0;
+     *Kills = 0;
+@@ -1223,6 +1233,12 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
+     adev->backend = previousBackend;
+     *Kills = kills;
+     *Micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
++    // After a hang, do not trust what the ring wrote before. The next job of each VMID writes its root and
++    // invalidates its VMID again (Bc250VmidRingForget). This occurs for every verdict, because a forget only adds
++    // flushes.
++    KeAcquireSpinLock(&gfx->VmidLock, &irql);
++    Bc250VmidRingForget(&gfx->Vmid);
++    KeReleaseSpinLock(&gfx->VmidLock, irql);
+ 
+     // Do not reopen or signal here. ResetEngine still has to commit its WDDM queue
+     // and scheduler boundary under the same lock as the private timeout latch.
+@@ -1641,11 +1657,13 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX*
+     struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
+     ULONG seq, previousSeq, observed;
+     LONG previousPending;
+-    BOOLEAN inFlight;
++    BOOLEAN inFlight, ringFlush;
+     BC250_VMID_DECISION decision;
+     KIRQL irql;
+     u64 address;
+     long result;
++    const ULONG requested = Vmid;                           // AUTO, or the explicit VMID of the IB_AT escape
++    const ULONG process = (Identity != NULL) ? Identity->ProcessId : 0;
+ 
+     *Seq = 0;
+     if (VmidUsed != NULL) *VmidUsed = 0;
+@@ -1708,11 +1726,17 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX*
+         return STATUS_DEVICE_BUSY;
+     }
+     Vmid = decision.Vmid;
+-
+-    // VMID 0 is the GART aperture, whose root bc250_gmc_gart_enable() programmed and which bc250_gmc_set_vmid_pd()
+-    // refuses to touch; a caller submitting at VMID 0 is submitting out of the driver's own GTT pages. A job
+-    // flushes its VMID on every submit, same root or not. Remembering the root misses a leaf change under the
+-    // same root, and the invalidation is what a real job's VM flush is for. It polls for up to 100 ms.
++    // With the ring gate on: does the frame of this job carry the root write and the invalidation (vmid_pool.h,
++    // Bc250VmidRingFlushNeeded)? The decision comes before the claim below changes the table. The result is the
++    // same, because a claim always makes the job flush.
++    ringFlush = Gfx->RingVmFlushGate && Vmid != 0 &&
++                Bc250VmidRingFlushNeeded(&Gfx->Vmid, requested, Gfx->VmFlushEveryJob, Vmid, decision.Claim,
++                                         RootPhysical, process);
++
++    // VMID 0 is the GART aperture. bc250_gmc_gart_enable() programmed its root, and bc250_gmc_set_vmid_pd() refuses
++    // to change it. A caller that submits at VMID 0 submits from the GTT pages of the driver. With the gate off, a
++    // job flushes its VMID by MMIO on every submit, with the same root or not, as 0.7.216.24 did. This path is the
++    // rollback and does not use Bc250VmidRingFlushNeeded. It polls for up to 100 ms.
+     if (Vmid != 0 && !Gfx->RingVmFlushGate)
+     {
+         ProgressEnterInput(ProgressSiteVmFlush, (LONG)Vmid);
+@@ -1731,7 +1755,9 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX*
+     // are written below, after the sequence number is published, because they are part of the frame.
+     else if (Vmid != 0)
+     {
+-        if (Gfx->HotSubmitLog) GuardLog("gfx: VMID %lu root 0x%llX flush on the ring", Vmid, RootPhysical);
++        if (Gfx->HotSubmitLog)
++            GuardLog("gfx: VMID %lu root 0x%llX %s", Vmid, RootPhysical,
++                     ringFlush ? "flush on the ring" : "held for this process, no flush");
+         else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
+     }
+     if (Vmid != 0)
+@@ -1785,13 +1811,13 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX*
+         else InterlockedExchangeAdd(&Gfx->HotSubmitLinesSkipped, (Identity != NULL) ? 2 : 1);
+         // The VMID goes into the IB packet's control word (PACKET3_INDIRECT_BUFFER__VMID, bc250_gfx_emit_ib): the
+         // CP fetches the IB, and the job makes every access, through this VMID's page tables.
+-        if (Gfx->RingVmFlushGate)
++        if (ringFlush)
+         {
+-            // The root pair and the invalidation go in front of the frame, on the gfx ring's own invalidation
+-            // engine (BC250_INV_ENG_GFX_RING: the CPU path owns engine 17 and the paging stream engine 0, so no
+-            // two writers share a request and an acknowledge). The root write is emitted whether or not the VMID
+-            // already holds this root: the invalidation is needed on every job anyway, and an unconditional write
+-            // keeps the register and the table in step after an emitter that refused.
++            // The root pair and the invalidation go in front of the frame, on the invalidation engine of the gfx
++            // ring (BC250_INV_ENG_GFX_RING). The CPU path owns engine 17 and the paging stream owns engine 0, so no
++            // two writers share a request and an acknowledge. The root write goes with the invalidation also when
++            // the table says that the VMID holds this root. After a refused emission, RingRoot, not the table,
++            // says which root the register holds.
+             result = bc250_gfx_submit_job_vm(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq,
+                                              AMDGPU_FENCE_FLAG_INT, RootPhysical, BC250_INV_ENG_GFX_RING);
+             if (result == 0)
+@@ -1801,15 +1827,23 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX*
+             }
+         }
+         else
++        {
++            // Gate off: the MMIO flush above ran. Gate on: a committed ring flush for this process already wrote
++            // this root into the register of the VMID. After each page-table change since that flush, VidMm sent
++            // FLUSH_TLB, and the paging buffer invalidated the VMID. The frame is the frame of 0.7.216.24, dword for
++            // dword.
+             result = bc250_gfx_submit_job(ring, GpuAddress, SizeBytes / 4, Vmid, address, seq, AMDGPU_FENCE_FLAG_INT);
++            if (result == 0 && Gfx->RingVmFlushGate) InterlockedIncrement(&Gfx->RingVmFlushSkipped);
++        }
+     }
+     if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
+     {
+         // Nothing was committed: every emitter refuses before writing, and bc250_gfx_submit_ib and
+         // bc250_gfx_submit_job_vm undo the allocation. A claim above stands, and the VMID has no live job. With
+         // the gate off the register holds the new root, because the MMIO flush ran before the claim. With the
+-        // gate on the register still holds the old one, because the packet that writes it was never committed;
+-        // the next job of this VMID writes the root again whatever the table says, so the two come back in step.
++        // gate on the register still holds the old one, because the packet that writes it was never committed.
++        // RingRoot did not change, so it differs from the root of the next job of this VMID. That job writes the
++        // root again, whatever the table says, and the register and the table agree again.
+         (void)InterlockedCompareExchange(&Gfx->SubmitInFlight, previousPending, (LONG)seq);
+         Gfx->SubmitSeq = previousSeq;
+         GuardLog("gfx: IB 0x%llX x%lu dwords at VMID %lu refused, result %d", GpuAddress, SizeBytes / 4, Vmid, result);
+@@ -1820,7 +1854,11 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX*
+     if (Vmid != 0)
+     {
+         KeAcquireSpinLock(&Gfx->VmidLock, &irql);
+-        Bc250VmidSubmitted(&Gfx->Vmid, Vmid, seq, Identity != NULL ? Identity->ProcessId : 0);
++        Bc250VmidSubmitted(&Gfx->Vmid, Vmid, seq, process);
++        // The frame was committed, and the gfx sequence recorded no fault. The CP will write RootPhysical into the
++        // register and invalidate the VMID before this job, in ring order. A refused or faulted emission returned
++        // above.
++        if (ringFlush) Bc250VmidRingFlushed(&Gfx->Vmid, Vmid, RootPhysical, process);
+         KeReleaseSpinLock(&Gfx->VmidLock, irql);
+     }
+     if (VmidUsed != NULL) *VmidUsed = Vmid;
+@@ -1924,6 +1962,8 @@ void GfxVmidCounters(_In_ const BC250_DEVICE* Device, _Out_ BC250_GFX_VMID_COUNT
+     Counters->RingFlushGate = gfx->RingVmFlushGate;
+     Counters->RingFlushes = (ULONG)InterlockedCompareExchange(&gfx->RingVmFlushes, 0, 0);
+     Counters->RingFlushSame = (ULONG)InterlockedCompareExchange(&gfx->RingVmFlushSame, 0, 0);
++    Counters->RingFlushEveryJob = gfx->VmFlushEveryJob;
++    Counters->RingFlushSkipped = (ULONG)InterlockedCompareExchange(&gfx->RingVmFlushSkipped, 0, 0);
+     GfxAccessRelease(Device);
+ }
+ 
+@@ -4353,6 +4393,11 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
+     //                                 0.7.216.24 ahead of the frame, byte for byte: the rollback. Independent of
+     //                                 EnableVmidPool; both on is the recommended pair and the default.
+     gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 1) != 0);
++    //   EnableVmFlushEveryJob  REG_DWORD  Applies with EnableRingVmFlush on. 1 = the frame of every job carries the
++    //                                     root write and the invalidation, as in 0.7.216.65 and earlier (the
++    //                                     rollback). Absent or 0 = only the jobs that Bc250VmidRingFlushNeeded
++    //                                     selects (vmid_pool.h).
++    gfx->VmFlushEveryJob = (GuardReadSetting(L"EnableVmFlushEveryJob", 0) != 0);
+     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
+     KeInitializeSpinLock(&gfx->VmidLock);
+     KeInitializeSpinLock(&gfx->Sdma0RingLock);
+@@ -4365,8 +4410,10 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
+     GuardLog("gfx: ready, GPU submission %s, paging node %s, hot submit log %s", gfx->SubmitGate ? "allowed" : "off",
+              gfx->PagingGate ? "allowed" : "off", gfx->HotSubmitLog ? "on" : "off");
+     GuardLog("gfx: VMID pool %s", gfx->VmidPoolGate ? "on (EnableVmidPool)" : "off (EnableVmidPool 0): every job at VMID 1");
+-    GuardLog("gfx: VM flush %s", gfx->RingVmFlushGate ? "on the ring (EnableRingVmFlush), engine 1" :
+-             "by MMIO before the frame (EnableRingVmFlush 0), engine 17");
++    GuardLog("gfx: VM flush %s%s", gfx->RingVmFlushGate ? "on the ring (EnableRingVmFlush), engine 1" :
++             "by MMIO before the frame (EnableRingVmFlush 0), engine 17",
++             !gfx->RingVmFlushGate ? "" : gfx->VmFlushEveryJob ? ", every job (EnableVmFlushEveryJob 1)" :
++             ", when the VMID does not hold the root for the process");
+     return STATUS_SUCCESS;
+ }
+ 
+diff --git a/driver/kmd/test/gfx_retained_test.c b/driver/kmd/test/gfx_retained_test.c
+index 3e040ab1..ce43ed31 100644
+--- a/driver/kmd/test/gfx_retained_test.c
++++ b/driver/kmd/test/gfx_retained_test.c
+@@ -59,7 +59,7 @@ static int bc250_sdma_reset_for_reload(struct amdgpu_device*a){CHECK(a==&modelAd
+ static void bc250_gfx_rlc_stop(struct amdgpu_device*a){CHECK(a==&modelAdev&&gfxHalt);rlcStop++;}
+ static void KeMemoryBarrier(void){}
+ static void amdgpu_ring_clear_ring(struct amdgpu_ring*r){CHECK(!r->wptr&&!r->wptr_old&&!r->count_dw);memset(r->contents,0,sizeof(r->contents));clears++;}
+-static int stage_run(struct amdgpu_device*a){unsigned i;CHECK(a==&modelAdev&&clears==12&&!device->Gfx->PowerSuspended);stages++;if(stages>=6)CHECK(bootstrap==1&&!device->GfxTlbBootstrap);for(i=0;i<16;i++)CHECK(!device->Gfx->Vmid.Root[i]&&!device->Gfx->Vmid.LiveSeq[i]&&!device->Gfx->Vmid.Order[i]);CHECK(device->Gfx->VmidHistory.Next==15&&device->Gfx->VmidHistory.Entry[14].Vmid==15&&device->Gfx->VmidHistory.Entry[14].Root==0xabc00f);return (int)stages==failStage?-1:0;}
++static int stage_run(struct amdgpu_device*a){unsigned i;CHECK(a==&modelAdev&&clears==12&&!device->Gfx->PowerSuspended);stages++;if(stages>=6)CHECK(bootstrap==1&&!device->GfxTlbBootstrap);for(i=0;i<16;i++)CHECK(!device->Gfx->Vmid.Root[i]&&!device->Gfx->Vmid.LiveSeq[i]&&!device->Gfx->Vmid.Order[i]&&!device->Gfx->Vmid.RingRoot[i]&&!device->Gfx->Vmid.RingProcess[i]);CHECK(device->Gfx->VmidHistory.Next==15&&device->Gfx->VmidHistory.Entry[14].Vmid==15&&device->Gfx->VmidHistory.Entry[14].Root==0xabc00f);return (int)stages==failStage?-1:0;}
+ static struct {int(*Run)(struct amdgpu_device*);}g_Stages[9]={{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run},{stage_run}};
+ static int GpuMemCompleteGfxBootstrap(struct amdgpu_device*a){CHECK(a==&modelAdev&&stages==5);bootstrap++;if(failBootstrap)return -1;device->GfxTlbBootstrap=0;return 0;}
+ /* ACTUAL_SOURCE */
+@@ -67,7 +67,7 @@ static void setup(BC250_DEVICE*d,BC250_GFX*g,unsigned*wb){unsigned i;
+  memset(d,0,sizeof(*d));memset(g,0,sizeof(*g));memset(&modelAdev,0,sizeof(modelAdev));
+  device=d;d->Gfx=g;d->IhQuiet=d->MmioGfxEnabled=1;g->SetUp=g->FencePage=g->SdmaFencePage=g->PagingReady=1;g->StagesDone=8;
+  g->FenceSeq=42;g->SubmitSeq=43;g->PagingSubmitSeq=44;g->FenceData[0]=43;g->FenceData[1]=44;
+- for(i=0;i<16;i++){g->Vmid.Root[i]=0xabc000+i;g->Vmid.Order[i]=i+1;if(i){g->Vmid.FirstSeq[i]=g->Vmid.LastSeq[i]=g->Vmid.LiveSeq[i]=30+i;}}
++ for(i=0;i<16;i++){g->Vmid.Root[i]=g->Vmid.RingRoot[i]=0xabc000+i;g->Vmid.RingProcess[i]=700+i;g->Vmid.Order[i]=i+1;if(i){g->Vmid.FirstSeq[i]=g->Vmid.LastSeq[i]=g->Vmid.LiveSeq[i]=30+i;}}
+  modelAdev.backend=d;modelAdev.gfx.wb_mem.cpu=wb;modelAdev.gfx.wb_mem.size=16;modelAdev.sdma.wb_mem.cpu=wb+4;modelAdev.sdma.wb_mem.size=16;
+  memset(wb,0xaa,32);modelAdev.gfx.num_compute_rings=8;modelAdev.gfx.num_gfx_rings=1;modelAdev.sdma.num_instances=2;
+  closed=opened=sdmaHalt=gfxHalt=resets=rlcStop=stages=bootstrap=clears=0;
+diff --git a/driver/kmd/test/run_vmid_pool.ps1 b/driver/kmd/test/run_vmid_pool.ps1
+index 17013165..887c80a0 100644
+--- a/driver/kmd/test/run_vmid_pool.ps1
++++ b/driver/kmd/test/run_vmid_pool.ps1
+@@ -1,4 +1,4 @@
+-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\vmid-pool",[switch]$IgnoreRetirement)
++param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\vmid-pool",[switch]$IgnoreRetirement,[switch]$IgnoreRingRoot,[switch]$IgnoreProcess)
+ $ErrorActionPreference='Stop'
+ $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+ $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
+@@ -12,6 +12,18 @@ if($IgnoreRetirement){
+     if(!$pool.Contains($live)){throw 'negative control: the chooser line moved'}
+     $pool=$pool.Replace($live,'if (!(Members & (1u << v)) || (Observed & 0u)) continue;')
+ }
++# Two more controls, against the model of the ring VM flush. -IgnoreRingRoot removes the RingRoot clauses from the
++# decision, so the decision does not know which root the register holds. -IgnoreProcess removes the process
++# clauses, so the decision does not know for which process the newest flush was. Each control must fail by a check
++# of the model. The parameters stay referenced (& 0u), so that /W4 /WX builds the control and a check, not the
++# compiler, makes it fail.
++$controls=@()
++if($IgnoreRingRoot){$controls+=@(@('Table->RingRoot[Vmid] == 0 ||','0 ||'),@('Table->RingRoot[Vmid] != Root ||','(Root & 0u) ||'))}
++if($IgnoreProcess){$controls+=,@('Process == 0 || Table->RingProcess[Vmid] != Process;','(Process & 0u);')}
++foreach($c in $controls){
++    if(!$pool.Contains($c[0])){throw "negative control: '$($c[0])' moved"}
++    $pool=$pool.Replace($c[0],$c[1])
++}
+ [IO.File]::WriteAllText((Join-Path $Out 'vmid_pool.h'),$pool)
+ $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
+diff --git a/driver/kmd/test/vmid_pool_test.c b/driver/kmd/test/vmid_pool_test.c
+index 38857059..31cb0045 100644
+--- a/driver/kmd/test/vmid_pool_test.c
++++ b/driver/kmd/test/vmid_pool_test.c
+@@ -417,16 +417,320 @@ static void TestHistory(void)
+     CHECK(haveBefore && before.Process == 39 && before.LastSeq == 239 && before.Root == 0x10000ull + 38);
+     Bc250VmidDescribe(&t, &h, 3, &live, &haveLive, &before, &haveBefore);
+     CHECK(!haveBefore);                                             /* pushed out of the ring by now */
+-    /* Reset (GfxTearDown, power): every tenant that ran a job goes to the history, the table is empty. */
++    /* Reset (GfxTearDown, power): every tenant that ran a job goes to the history. The table is empty, the ring
++     * fields included. */
+     i = h.Next;
++    Bc250VmidRingFlushed(&t, 3, 0xB000, 777);
++    Bc250VmidRingFlushed(&t, 15, 0xE000, 5);
+     Bc250VmidResetAll(&t, &h);
+     CHECK(h.Next == i + 1);                     /* VMID 3; 4 and 9 ran no job since their last claim */
+     { unsigned v; for (v = 0; v < 16; v++) CHECK(t.Root[v] == 0 && t.LiveSeq[v] == 0 && t.Order[v] == 0); }
++    { unsigned v; for (v = 0; v < 16; v++) CHECK(t.RingRoot[v] == 0 && t.RingProcess[v] == 0); }
+     CHECK(t.Clock == 0);
+     Bc250VmidDescribe(&t, &h, 3, &live, &haveLive, &before, &haveBefore);
+     CHECK(!haveLive && haveBefore && before.Root == 0xB000 && before.Process == 777);
+ }
+ 
++/* ---- the ring VM flush decision, against a model of the register and the TLB of each VMID -------------------- */
++
++/* The decision alone, one clause at a time (vmid_pool.h, Bc250VmidRingFlushNeeded). */
++static void TestRingFlushDecision(void)
++{
++    BC250_VMID_TABLE t;
++
++    memset(&t, 0, sizeof(t));
++    /* The ring wrote nothing yet, so every VMID flushes, whatever the other arguments are. */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 0, 0xA000, 4242));
++    Bc250VmidRingFlushed(&t, 3, 0xA000, 4242);
++    CHECK(t.RingRoot[3] == 0xA000 && t.RingProcess[3] == 4242);
++    /* The one case without a flush: the same root for the same process, at AUTO, no claim, no EveryJob. */
++    CHECK(!Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 0, 0xA000, 4242));
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 1, 3, 0, 0xA000, 4242));    /* EnableVmFlushEveryJob 1 */
++    CHECK(Bc250VmidRingFlushNeeded(&t, 3, 0, 3, 0, 0xA000, 4242));                  /* an explicit VMID: IB_AT */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 1, 0xA000, 4242));    /* a claim */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 0, 0xB000, 4242));    /* another root */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 0, 0xA000, 4243));    /* another process */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 0, 0xA000, 0));       /* no identity */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 4, 0, 0xA000, 4242));    /* another VMID */
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 16, 0, 0xA000, 4242));   /* not a VMID */
++    /* A root of 0 never counts as written, because RingRoot 0 means "nothing". */
++    Bc250VmidRingFlushed(&t, 5, 0, 4242);
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 5, 0, 0, 4242));
++    /* The forget of the soft recovery: the tenancies stay, and every VMID flushes again. */
++    t.Root[3] = 0xA000;
++    Bc250VmidRingForget(&t);
++    CHECK(t.Root[3] == 0xA000 && t.RingRoot[3] == 0 && t.RingProcess[3] == 0);
++    CHECK(Bc250VmidRingFlushNeeded(&t, BC250_VMID_AUTO, 0, 3, 0, 0xA000, 4242));
++    Bc250VmidRingFlushed(&t, 16, 0xA000, 1);                                        /* not a VMID: ignored */
++}
++
++#define RM_WDDM_ROOTS 4u
++#define RM_IB 0xFFu                         /* the job of the IB_AT escape, at its own root */
++#define RM_IB_ROOT 0x9000ull
++
++/* A model of SubmitIbLocked with the ring gate on, and of what the CP then does with the frame. The hardware part
++ * of the model is the page-table base register of each VMID and the translations in the TLB of each VMID. Each
++ * translation has a tag: the root, the process and the version of the tables that the walker read it from. When a
++ * job starts at its VMID, the register must hold the root of the job. The TLB must not hold a translation of
++ * another root, of another process or of an older version of the tables of the job. */
++typedef struct {
++    MODEL M;
++    int EveryJob;
++    unsigned long long HwRoot[BC250_VMID_COUNT];
++    int TlbFull[BC250_VMID_COUNT];
++    unsigned long long TlbRoot[BC250_VMID_COUNT];
++    unsigned long TlbProcess[BC250_VMID_COUNT];
++    unsigned TlbGen[BC250_VMID_COUNT];
++    unsigned long Owner[RM_WDDM_ROOTS];     /* the process that owns the tables at WDDM root r */
++    unsigned Gen[RM_WDDM_ROOTS];            /* the version of those tables: equal versions, equal translations */
++    unsigned IbGen;                         /* the version of the IB_AT tables, written again before every job */
++    unsigned GenClock;                      /* gives each new version a number that no version had before */
++    unsigned long NextProcess;
++    unsigned long Flushes, Skips, Refused;
++} RING_MODEL;
++
++static void RingInit(RING_MODEL* r, unsigned members, unsigned long firstSeq, int everyJob)
++{
++    unsigned i;
++    memset(r, 0, sizeof(*r));
++    ModelInit(&r->M, members, firstSeq);
++    r->EveryJob = everyJob;
++    for (i = 0; i < RM_WDDM_ROOTS; i++) { r->Owner[i] = 100u + i; r->Gen[i] = ++r->GenClock; }
++    r->NextProcess = 1000;
++    /* The hardware holds unknown values from before this engine instance. The model trusts none of them. */
++    for (i = 0; i < BC250_VMID_COUNT; i++) {
++        r->HwRoot[i] = 0xDEAD000ull + i;
++        r->TlbFull[i] = 1; r->TlbRoot[i] = 0xBADull; r->TlbProcess[i] = 0xBAD; r->TlbGen[i] = 0xBAD;
++    }
++}
++
++static int RingStale(const RING_MODEL* r, unsigned v, unsigned long long root, unsigned long process, unsigned gen)
++{
++    return r->TlbFull[v] && (r->TlbRoot[v] != root || r->TlbProcess[v] != process || r->TlbGen[v] != gen);
++}
++
++/* Which is RM_IB or the index of a WDDM root. Requested is AUTO, or the explicit VMID of the IB_AT escape. With
++ * Refuse 1, the emitter refuses after the claim, before it commits a dword. Returns the verdict, or -1 when the
++ * model has no space for one more job in flight. */
++static int RingSubmit(RING_MODEL* r, unsigned which, unsigned requested, int refuse)
++{
++    MODEL* m = &r->M;
++    BC250_VMID_DECISION d;
++    unsigned long long root;
++    unsigned long process;
++    unsigned gen;
++    int flush;
++
++    if (m->PendingCount >= MODEL_PENDING_MAX) return -1;
++    if (which == RM_IB) { root = RM_IB_ROOT; process = 0; gen = r->IbGen = ++r->GenClock; } /* no FLUSH_TLB */
++    else { root = 0x1000ull * (which + 1u); process = r->Owner[which]; gen = r->Gen[which]; }
++    Bc250VmidSweep(&m->Table, m->Completed);
++    d = Bc250VmidAdmit(&m->Table, m->Members, 1, requested, root, m->PendingCount != 0, m->LastVmid, m->Completed);
++    if (requested == BC250_VMID_AUTO) CHECK(d.Verdict != BC250_VMID_REFUSE_RULE);
++    if (d.Verdict != BC250_VMID_ADMIT) return d.Verdict;            /* refused before anything changed */
++    flush = Bc250VmidRingFlushNeeded(&m->Table, requested, r->EveryJob, d.Vmid, d.Claim, root, process);
++    if (d.Claim) Bc250VmidClaim(&m->Table, &m->History, d.Vmid, root);
++    if (refuse) { r->Refused++; return BC250_VMID_REFUSE_BUSY; }   /* nothing committed, the claim stands */
++    if (flush) { r->HwRoot[d.Vmid] = root; r->TlbFull[d.Vmid] = 0; r->Flushes++; }
++    else r->Skips++;
++    CHECK(r->HwRoot[d.Vmid] == root);                               /* the job walks its own root */
++    CHECK(!RingStale(r, d.Vmid, root, process, gen));               /* and no translation that it must not see */
++    r->TlbFull[d.Vmid] = 1; r->TlbRoot[d.Vmid] = root; r->TlbProcess[d.Vmid] = process; r->TlbGen[d.Vmid] = gen;
++    if (++m->NextSeq == 0) m->NextSeq = 1;
++    Bc250VmidSubmitted(&m->Table, d.Vmid, m->NextSeq, process);
++    if (flush) Bc250VmidRingFlushed(&m->Table, d.Vmid, root, process);
++    m->Pending[m->PendingCount].Seq = m->NextSeq;
++    m->Pending[m->PendingCount].Vmid = d.Vmid;
++    m->Pending[m->PendingCount].Root = root;
++    m->PendingCount++;
++    m->LastVmid = d.Vmid;
++    return BC250_VMID_ADMIT;
++}
++
++/* VidMm changes the tables of WDDM root r and sends FLUSH_TLB for that root. The paging buffer invalidates each VMID
++ * in Bc250VmidFlushMask (GfxPagingBuildFlush) before a job that depends on the change can run. */
++static void RingPageTables(RING_MODEL* r, unsigned which)
++{
++    unsigned mask = Bc250VmidFlushMask(&r->M.Table, r->M.Members, 0x1000ull * (which + 1u)), v;
++    r->Gen[which] = ++r->GenClock;
++    for (v = 0; v < BC250_VMID_COUNT; v++) if (mask & (1u << v)) r->TlbFull[v] = 0;
++}
++
++/* The second protection: the page of root r is freed with its process, and the next process gets a root at the
++ * same address. This model sends no FLUSH_TLB for the new tables. The event occurs only after the jobs of the old
++ * process retired, because VidMm frees the tables of a process only then. */
++static int RingNewProcess(RING_MODEL* r, unsigned which)
++{
++    unsigned i;
++    for (i = 0; i < r->M.PendingCount; i++) if (r->M.Pending[i].Root == 0x1000ull * (which + 1u)) return 0;
++    r->Owner[which] = ++r->NextProcess;
++    r->Gen[which] = ++r->GenClock;
++    return 1;
++}
++
++/* VidMm moves the root of the process at root A to the address of root B (SetRootPageTable). Neither root has a job
++ * in flight. A new process gets the page of root A. The move copies the root, so the translations of the process
++ * do not change, and the version moves with the process. This model sends no FLUSH_TLB. The process stays the same,
++ * and only its root changes. In this case, only RingRoot shows that the register of a VMID holds an older root than
++ * the table. */
++static int RingMoveRoot(RING_MODEL* r, unsigned from, unsigned to)
++{
++    unsigned i;
++    if (from == to) return 0;
++    for (i = 0; i < r->M.PendingCount; i++)
++        if (r->M.Pending[i].Root == 0x1000ull * (from + 1u) || r->M.Pending[i].Root == 0x1000ull * (to + 1u)) return 0;
++    r->Owner[to] = r->Owner[from];
++    r->Gen[to] = r->Gen[from];
++    r->Owner[from] = ++r->NextProcess;
++    r->Gen[from] = ++r->GenClock;
++    return 1;
++}
++
++/* A teardown or a retained resume (Bc250VmidResetAll), or a soft recovery (Bc250VmidRingForget). Both find the ring
++ * idle. After each of them, the model trusts nothing that the hardware holds. A reset also loses the registers. */
++static void RingReset(RING_MODEL* r, int resetAll)
++{
++    unsigned v;
++    while (ModelRetire(&r->M)) {}
++    if (resetAll) Bc250VmidResetAll(&r->M.Table, &r->M.History);
++    else Bc250VmidRingForget(&r->M.Table);
++    for (v = 0; v < BC250_VMID_COUNT; v++) {
++        if (resetAll) r->HwRoot[v] = 0xDEAD000ull + v;
++        r->TlbFull[v] = 1; r->TlbRoot[v] = 0xBADull; r->TlbProcess[v] = 0xBAD; r->TlbGen[v] = 0xBAD;
++    }
++}
++
++static unsigned long g_ringLeaves;
++
++static void RingExplore(const RING_MODEL* r, unsigned depth)
++{
++    unsigned op;
++    if (depth == 0) { g_ringLeaves++; return; }
++    for (op = 0; op < 10; op++) {
++        RING_MODEL next = *r;
++        switch (op) {
++        case 0: if (RingSubmit(&next, 0, BC250_VMID_AUTO, 0) < 0) continue; break;
++        case 1: if (RingSubmit(&next, 1, BC250_VMID_AUTO, 0) < 0) continue; break;
++        case 2: if (RingSubmit(&next, 1, BC250_VMID_AUTO, 1) < 0) continue; break;     /* emitter refused */
++        case 3: if (RingSubmit(&next, RM_IB, 3, 0) < 0) continue; break;              /* IB_AT at VMID 3 */
++        case 4: if (!ModelRetire(&next.M)) continue; break;
++        case 5: RingPageTables(&next, 0); break;
++        case 6: if (!RingNewProcess(&next, 1)) continue; break;
++        case 7: if (!RingMoveRoot(&next, 0, 1)) continue; break;
++        case 8: RingReset(&next, 1); break;
++        default: RingReset(&next, 0); break;
++        }
++        CHECK(ModelSafe(&next.M));
++        if (bad > 20) return;
++        RingExplore(&next, depth - 1u);
++    }
++}
++
++static void TestRingFlushModel(void)
++{
++    static const unsigned pools[] = { (1u << 1) | (1u << 3), (1u << 1) | (1u << 3) | (1u << 4) };
++    unsigned p, seed;
++    RING_MODEL r;
++    unsigned long flushes = 0, skips = 0, refused = 0, steps = 0;
++    unsigned long before = checks;
++
++    /* One case at a time. Each case is the shortest sequence that needs its clause. */
++    {
++        RING_MODEL s;
++        /* 1. RingRoot: the process moves its root, and the emitter refuses the job after the claim. The process
++         *    did not change, so only RingRoot shows that the register of VMID 1 still holds the old root. */
++        RingInit(&s, (1u << 1) | (1u << 3), 1, 0);
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0 && s.M.LastVmid == 1);
++        CHECK(RingSubmit(&s, 1, BC250_VMID_AUTO, 0) == 0 && s.M.LastVmid == 3);
++        while (ModelRetire(&s.M)) {}
++        CHECK(RingMoveRoot(&s, 0, 2));                              /* process 100: root 0x1000 -> 0x3000 */
++        CHECK(RingSubmit(&s, 2, BC250_VMID_AUTO, 1) == BC250_VMID_REFUSE_BUSY);   /* VMID 1 claimed, refused */
++        CHECK(s.M.Table.Root[1] == 0x3000 && s.HwRoot[1] == 0x1000 && s.M.Table.RingProcess[1] == s.Owner[2]);
++        s.Flushes = 0;
++        CHECK(RingSubmit(&s, 2, BC250_VMID_AUTO, 0) == 0 && s.M.LastVmid == 1 && s.Flushes == 1);
++        /* 2. The process: a root page is freed with its process and goes to the next process, with no FLUSH_TLB. */
++        RingInit(&s, (1u << 1) | (1u << 3), 1, 0);
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0);
++        while (ModelRetire(&s.M)) {}
++        CHECK(RingNewProcess(&s, 0));
++        s.Flushes = 0;
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0 && s.M.LastVmid == 1 && s.Flushes == 1);
++        /* 3. IB_AT: the caller writes its tables again before every job and sends no FLUSH_TLB. */
++        RingInit(&s, (1u << 1) | (1u << 3), 1, 0);
++        CHECK(RingSubmit(&s, RM_IB, 3, 0) == 0);
++        while (ModelRetire(&s.M)) {}
++        s.Flushes = 0;
++        CHECK(RingSubmit(&s, RM_IB, 3, 0) == 0 && s.Flushes == 1);
++        /* 4. A reset loses the registers, so the next job claims a VMID and flushes. 5. A forget keeps the
++         *    registers, but the next job also flushes. */
++        RingInit(&s, (1u << 1) | (1u << 3), 1, 0);
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0);
++        RingReset(&s, 1);
++        s.Flushes = 0;
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0 && s.Flushes == 1);
++        RingReset(&s, 0);
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0 && s.Flushes == 2);
++        CHECK(RingSubmit(&s, 0, BC250_VMID_AUTO, 0) == 0 && s.Flushes == 2 && s.Skips == 1);
++    }
++    for (p = 0; p < 2; p++) {
++        RingInit(&r, pools[p], 1, 0);
++        g_ringLeaves = 0;
++        RingExplore(&r, 6);
++        printf("ring flush exhaustive: pool 0x%04X, depth 6: %lu interleavings\n", pools[p], g_ringLeaves);
++        CHECK(g_ringLeaves > 100000);
++    }
++    /* Seeded random runs over all events and across the wrap of the sequence number. Seeds 1 to 5 use the decision
++     * as it is. Seed 6 uses EveryJob. */
++    for (p = 0; p < 2; p++)
++        for (seed = 1; seed <= 6; seed++) {
++            unsigned long i;
++            RingInit(&r, p ? BC250_VMID_CANDIDATES : ((1u << 1) | (1u << 3) | (1u << 9)), 0xFFFFFFFFul - 500ul,
++                     seed == 6);
++            g_rng = seed * 40503ul + p;
++            for (i = 0; i < 40000ul; i++) {
++                unsigned e = Rand(100);
++                if (e < 40) (void)RingSubmit(&r, Rand(RM_WDDM_ROOTS), BC250_VMID_AUTO, 0);
++                else if (e < 44) (void)RingSubmit(&r, Rand(RM_WDDM_ROOTS), BC250_VMID_AUTO, 1);
++                else if (e < 47) (void)RingSubmit(&r, RM_IB, Rand(2) ? 1u : 3u, 0);
++                else if (e < 80) (void)ModelRetire(&r.M);
++                else if (e < 90) RingPageTables(&r, Rand(RM_WDDM_ROOTS));
++                else if (e < 94) (void)RingNewProcess(&r, Rand(RM_WDDM_ROOTS));
++                else if (e < 98) (void)RingMoveRoot(&r, Rand(RM_WDDM_ROOTS), Rand(RM_WDDM_ROOTS));
++                else if (e < 99) RingReset(&r, Rand(2));
++                else (void)ModelRetire(&r.M);
++                CHECK(ModelSafe(&r.M));
++                if (bad > 20) return;
++            }
++            steps += i;
++            if (seed == 6) CHECK(r.Skips == 0);                     /* EnableVmFlushEveryJob 1: every job flushes */
++            else { flushes += r.Flushes; skips += r.Skips; refused += r.Refused; }
++        }
++    printf("ring flush random: %lu steps, %lu flushes, %lu without, %lu refused emissions\n", steps, flushes, skips,
++           refused);
++    CHECK(flushes > 0 && skips > 0 && refused > 0);
++    /* The steady state that the decision is for: a game and DWM, each on its own VMID. Each gets one flush and then
++     * no more. */
++    {
++        unsigned long i;
++        RingInit(&r, BC250_VMID_CANDIDATES, 1, 0);
++        for (i = 0; i < 200; i++) {
++            CHECK(RingSubmit(&r, i % 2u, BC250_VMID_AUTO, 0) == BC250_VMID_ADMIT);
++            if (i % 3u == 0) (void)ModelRetire(&r.M);
++            if (r.M.PendingCount >= MODEL_PENDING_MAX - 1u) (void)ModelRetire(&r.M);
++        }
++        CHECK(r.Flushes == 2 && r.Skips == 198);
++        /* A page-table change of one of them causes no ring flush, because FLUSH_TLB did the invalidation. */
++        RingPageTables(&r, 0);
++        CHECK(RingSubmit(&r, 0, BC250_VMID_AUTO, 0) == BC250_VMID_ADMIT && r.Flushes == 2);
++        /* A refused emission after a claim: the next job of that VMID writes the root, although the table has it. */
++        while (ModelRetire(&r.M)) {}
++        r.Flushes = 0;
++        CHECK(RingSubmit(&r, 2, BC250_VMID_AUTO, 1) == BC250_VMID_REFUSE_BUSY && r.Flushes == 0);
++        CHECK(RingSubmit(&r, 2, BC250_VMID_AUTO, 0) == BC250_VMID_ADMIT && r.Flushes == 1);
++    }
++    printf("ring flush model: %lu checks\n", checks - before);
++}
++
+ int main(void)
+ {
+     TestProbe();
+@@ -437,6 +741,8 @@ int main(void)
+     TestHistory();
+     TestExhaustive();
+     TestRandom();
++    TestRingFlushDecision();
++    TestRingFlushModel();
+     printf("vmid pool: %u checks, %u failed\n", checks, bad);
+     return bad ? 1 : 0;
+ }
+diff --git a/driver/kmd/vmid_pool.h b/driver/kmd/vmid_pool.h
+index 01dd60f0..9f9c6e26 100644
+--- a/driver/kmd/vmid_pool.h
++++ b/driver/kmd/vmid_pool.h
+@@ -9,8 +9,9 @@
+  * With the pool, a root gets a VMID of its own and keeps it while it keeps submitting:
+  *
+  *   1. A pool VMID that already holds the job's root is used again, whatever is in flight on it. The root does not
+- *      change, so nothing can be redirected. (The per-submit invalidation still runs, as it always did: it is what
+- *      picks up a leaf-PTE change made under an unchanged root.)
++ *      change, so nothing can be redirected. With the ring VM flush, the job invalidates its VMID only when
++ *      Bc250VmidRingFlushNeeded says so. After a leaf-PTE change under an unchanged root, VidMm sends FLUSH_TLB,
++ *      and the paging buffer invalidates the VMID. amdgpu uses vm->tlb_seq for the same purpose.
+  *   2. Otherwise the least recently used pool VMID whose last job has retired is claimed and given the root.
+  *   3. Otherwise there is no VMID to give, and the caller gets STATUS_DEVICE_BUSY, which is the old behaviour.
+  *
+@@ -49,6 +50,8 @@ typedef struct BC250_VMID_TABLE {
+     unsigned long FirstSeq[BC250_VMID_COUNT];    /* the current tenant's first job; 0 = none submitted yet */
+     unsigned long LastSeq[BC250_VMID_COUNT];     /* the current tenant's newest job, kept after it retired */
+     unsigned long Process[BC250_VMID_COUNT];     /* the process of the current tenant's newest job */
++    unsigned long long RingRoot[BC250_VMID_COUNT]; /* the root of the newest committed ring VM flush, 0 = none */
++    unsigned long RingProcess[BC250_VMID_COUNT];   /* the process of that flush, 0 = none or no identity */
+ } BC250_VMID_TABLE;
+ 
+ /* One tenancy that ended: a VMID given a different root, or the table reset by a teardown. */
+@@ -261,6 +264,79 @@ static __inline unsigned Bc250VmidFlushMask(const BC250_VMID_TABLE* Table, unsig
+     return mask ? mask : (1u << BC250_VMID_LEGACY);
+ }
+ 
++/* Bc250VmidRingFlushNeeded says whether the frame of a job carries the ring VM flush: the root write and the
++ * invalidation of its VMID. The caller asks only with EnableRingVmFlush 1. With EnableRingVmFlush 0, the MMIO path
++ * flushes the VMID before every job.
++ *
++ * amdgpu (linux v6.18 7d0a66e4) flushes the VMID of a job only in these cases:
++ *   - The VM gets a VMID that it does not own (amdgpu_ids.c:354 and :433).
++ *   - The tlb_seq of the VM increased after the last flush of the VMID (:365). An unmap, a BO move and a PDE move
++ *     increase tlb_seq.
++ *   - The CPU writes the page tables of the VM (:347, use_cpu_for_update).
++ *   - The last flush of the VMID is not emitted yet, or it ran on another ring and did not signal yet (:360).
++ *   - A GPU reset occurred (amdgpu_vm.c:788).
++ * In all other cases, the next job of the same VM at the same VMID runs without a VM flush.
++ *
++ * This driver replaces each amdgpu case as follows:
++ *   - tlb_seq: VidMm sends FLUSH_TLB. The KMD does not set DXGK_GPUMMUCAPS::InvalidTlbEntriesNotCached, so VidMm
++ *     also sends FLUSH_TLB for the VA ranges that change from invalid to valid (d3dkmddi.h, WDK 10.0.26100). The
++ *     paging buffer then invalidates each VMID in Bc250VmidFlushMask: each VMID that holds a root and each pool
++ *     member. It does this before the paging fence that dependent work waits for (gfx.c, GfxPagingBuildFlush).
++ *     The documentation does not say whether FLUSH_TLB also follows COPY_PAGE_TABLE_ENTRIES (tile mappings).
++ *     EnableVmFlushEveryJob 1 is the rollback for that case.
++ *   - CPU writes: the CPU_VIRTUAL updates write only the tables of the paging process, at adapter start and at
++ *     power-on (system-paging-process.md). That process runs at VMID 2 on node 1, never at a pool VMID. The tables
++ *     of applications are GPU_PHYSICAL updates in paging buffers (WddmGpuMmuCaps).
++ *   - Another ring: only the gfx ring runs jobs at these VMIDs. A flush on the gfx ring comes before each later job
++ *     in ring order.
++ *   - A reset: the next job of each VMID flushes after Bc250VmidResetAll (teardown, retained resume) and after
++ *     Bc250VmidRingForget (soft recovery).
++ *
++ * The function returns 1 (flush) when one of these conditions is true:
++ *   - EveryJob is 1. EnableVmFlushEveryJob 1 makes every job flush, as in 0.7.216.65 and earlier releases.
++ *   - Requested is an explicit VMID. The IB_AT escape names its own root and can change its own page tables
++ *     without FLUSH_TLB, so every IB_AT job flushes.
++ *   - Claim is 1. Bc250VmidAdmit gave this root to the VMID for this job.
++ *   - The RingRoot of the VMID is 0 or is not Root. RingRoot is the root of the newest committed ring flush, or 0
++ *     when no flush was committed after the last reset. A refused emission does not change RingRoot. After a claim
++ *     with a refused emission, the Root of the table can differ from the root in the register. A RingRoot other
++ *     than 0 is always the root in the register.
++ *   - Process is 0 (unknown), or the RingProcess of the VMID is not Process. amdgpu compares the VM (the owner
++ *     fence context), not the address of the root. A process can free its root page, and the next process can get
++ *     a root at the same address. The jobs of the second process must not use the translations of the first
++ *     process. The FLUSH_TLB of VidMm for the new tables also prevents this. This condition is a second
++ *     protection. */
++static __inline int Bc250VmidRingFlushNeeded(const BC250_VMID_TABLE* Table, unsigned Requested, int EveryJob,
++                                             unsigned Vmid, int Claim, unsigned long long Root, unsigned long Process)
++{
++    if (Vmid >= BC250_VMID_COUNT) return 1;
++    return EveryJob || Requested != BC250_VMID_AUTO || Claim || Table->RingRoot[Vmid] == 0 ||
++           Table->RingRoot[Vmid] != Root || Process == 0 || Table->RingProcess[Vmid] != Process;
++}
++
++/* Call this only after a frame with the ring VM flush for Root was committed and the gfx sequence recorded no
++ * fault. The CP then writes Root into the register of the VMID and invalidates the VMID before the job, in ring
++ * order. Never call it for a refused emission. */
++static __inline void Bc250VmidRingFlushed(BC250_VMID_TABLE* Table, unsigned Vmid, unsigned long long Root,
++                                          unsigned long Process)
++{
++    if (Vmid >= BC250_VMID_COUNT) return;
++    Table->RingRoot[Vmid] = Root;
++    Table->RingProcess[Vmid] = Process;
++}
++
++/* Forget what the ring wrote. After this, the next job of each VMID writes its root and invalidates its VMID again.
++ * amdgpu also flushes each VMID once after a GPU reset (amdgpu_vmid_had_gpu_reset). The soft recovery calls this
++ * function, and the tenancies stay. Bc250VmidResetAll clears the same fields with the rest of the table. */
++static __inline void Bc250VmidRingForget(BC250_VMID_TABLE* Table)
++{
++    unsigned v;
++    for (v = 0; v < BC250_VMID_COUNT; v++) {
++        Table->RingRoot[v] = 0;
++        Table->RingProcess[v] = 0;
++    }
++}
++
+ /* Who ran at Vmid: the current tenant (*Live, from the table) and the newest earlier tenancy of the same VMID
+  * (*Before, from the history). Each flag says whether its record exists. A fault latch names a VMID, not a job,
+  * and the job that faulted may belong to either: a latch read late can describe a VMID that was since recycled. */
+diff --git a/driver/kmd/wddm.c b/driver/kmd/wddm.c
+index 719f438c..18c50fc4 100644
+--- a/driver/kmd/wddm.c
++++ b/driver/kmd/wddm.c
+@@ -2940,10 +2940,15 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
+                  vmid.Reuses, vmid.Busy, vmid.RuleRefusals);
+         GuardLog("wddm summary: VMID pool FLUSH_TLB: %lu built, %lu VMID invalidations", vmid.Flushes,
+                  vmid.FlushVmids);
+-        // Option (b): the root write and the invalidation as packets in front of the frame. With the gate off
+-        // both numbers are 0 and the flush was MMIO ahead of every job, as before.
++        // Option (b): the root write and the invalidation as packets in front of the frame. With the gate off,
++        // both numbers are 0 and the MMIO flush ran before every job.
+         GuardLog("wddm summary: ring VM flush %s: %lu frames, %lu of them on a root the VMID held",
+                  vmid.RingFlushGate ? "on" : "off", vmid.RingFlushes, vmid.RingFlushSame);
++        // With the gate on, a job carries the flush only when Bc250VmidRingFlushNeeded selects it (vmid_pool.h).
++        // EnableVmFlushEveryJob 1 puts the flush on all jobs.
++        if (vmid.RingFlushGate)
++            GuardLog("wddm summary: ring VM flush on %s jobs: %lu jobs without the flush",
++                     vmid.RingFlushEveryJob ? "all" : "selected", vmid.RingFlushSkipped);
+     }
+     GuardLog("wddm summary: node 1 (paging, %s): %ld hardware submitted, %ld completed, %ld timeouts, %ld refused",
+              Wddm->NodeCount > BC250_WDDM_NODE_COPY ? "open" : "closed", Wddm->PagingHwSubmitted,
+diff --git a/driver/state/amdgpu-state.bin b/driver/state/amdgpu-state.bin
+index 9637dc6dd4d05b6c411ff9e79fe097f750a096e8..334850e4641ac6b8054048629e3244550f0cd719 100644
+GIT binary patch
+delta 235
+zcmZ1>xJ59)(bpw7#K4GwiGhJ(GZ0%C8YEhz8K;<78X2b<8=9mV8k$?Aq!}fqrJ0(V
+znph?pCYz*LB&S*?8=It=q#6T3N{WSvsX<aoqNS0c>BayL7FM7+3=EU!vdFVC0vU{x
+z53)=*1d9QQ9FPbU=fVVmbRH5rA0$7ylQq~BCRh#<fpRKff<U?wiCqO`gH7Hn$Tppc
+IXA_bX0Bt)V>i_@%
+
+delta 222
+zcmdlYxI!?%(bpw7#K4GwiGhJ(6A-6aCYxCpm>F7{m>Q=TS{SAprzRyOnk1zeB&Mb%
+zCz~XhrlbLJlBJQQp=nZ5nxVP5nTdggfrX`+L5fk5<;DOH7FI@}L5!2<vdFUn84L`Q
+z53)=*1d9PVIbb0Ok&DF61F}JCKp-DPOzvb2Hie0lgG8X90>%K+l|T$Lxe6w}S&(fy
+F696IPA-w<q
+
+diff --git a/driver/state/catalog.generated.h b/driver/state/catalog.generated.h
+index 3c878eef..af5b63e1 100644
+--- a/driver/state/catalog.generated.h
++++ b/driver/state/catalog.generated.h
+@@ -1,8 +1,8 @@
+ // Generated by tools/state/generate.py; edit catalog.json.
+ #pragma once
+ #define AMDGPU_STATE_SCHEMA_VERSION 2u
+-#define AMDGPU_STATE_CATALOG_ID "f9c680619453d181e3ebba4bf0aefcc4b5dfb5db92915bbf177640808960d2b9"
+-#define AMDGPU_STATE_COUNT 178u
++#define AMDGPU_STATE_CATALOG_ID "810a8f3d4923f314e1178df2aff55549a1c4f8ce9c34f4e3333dd8450bda9215"
++#define AMDGPU_STATE_COUNT 179u
+ static const unsigned int StateAllowed1[] = {119u, 255u};
+ static const unsigned int StateAllowed5[] = {0u, 1u};
+ static const unsigned int StateAllowed11[] = {0u, 1u};
+@@ -53,17 +53,18 @@ static const unsigned int StateAllowed90[] = {0u, 1u};
+ static const unsigned int StateAllowed91[] = {0u, 1u};
+ static const unsigned int StateAllowed92[] = {0u, 1u};
+ static const unsigned int StateAllowed93[] = {0u, 1u};
+-static const unsigned int StateAllowed103[] = {0u, 1u};
++static const unsigned int StateAllowed94[] = {0u, 1u};
+ static const unsigned int StateAllowed104[] = {0u, 1u};
+-static const unsigned int StateAllowed107[] = {0u, 1u};
++static const unsigned int StateAllowed105[] = {0u, 1u};
+ static const unsigned int StateAllowed108[] = {0u, 1u};
+ static const unsigned int StateAllowed109[] = {0u, 1u};
+-static const unsigned int StateAllowed110[] = {0u, 2560u, 2576u, 2592u};
+-static const unsigned int StateAllowed111[] = {0u, 1u};
+-static const unsigned int StateAllowed118[] = {0u, 1u};
+-static const unsigned int StateAllowed121[] = {0u, 1u};
++static const unsigned int StateAllowed110[] = {0u, 1u};
++static const unsigned int StateAllowed111[] = {0u, 2560u, 2576u, 2592u};
++static const unsigned int StateAllowed112[] = {0u, 1u};
++static const unsigned int StateAllowed119[] = {0u, 1u};
+ static const unsigned int StateAllowed122[] = {0u, 1u};
+-static const unsigned int StateAllowed126[] = {0u, 1u};
++static const unsigned int StateAllowed123[] = {0u, 1u};
++static const unsigned int StateAllowed127[] = {0u, 1u};
+ static const AMDGPU_STATE_SPEC StateCatalog[] = {
+     {"", "ApertureSegmentMegabytes", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 1u, 384u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "CoreMask", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed1, 2u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_CPU, 0u},
+@@ -156,9 +157,10 @@ static const AMDGPU_STATE_SPEC StateCatalog[] = {
+     {"", "EnableSharedResidency", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed88, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "EnableSmuMetrics", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed89, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "EnableVidPnFlip", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed90, 2u, 1u, 1u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "EnableVmidPool", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed91, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "EnableVram", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed92, 2u, 1u, 1u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "EnableVramWrite", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed93, 2u, 1u, 1u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "EnableVmFlushEveryJob", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed91, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "EnableVmidPool", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed92, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "EnableVram", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed93, 2u, 1u, 1u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "EnableVramWrite", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed94, 2u, 1u, 1u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "FanCurve0", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+     {"", "FanCurve1", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+     {"", "FanCurve2", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+@@ -168,30 +170,30 @@ static const AMDGPU_STATE_SPEC StateCatalog[] = {
+     {"", "FanCurve6", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+     {"", "FanCurve7", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+     {"", "FanCurvePoints", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 2u, 8u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+-    {"", "FanLoadBoost", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed103, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+-    {"", "FanMode", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed104, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
++    {"", "FanLoadBoost", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed104, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
++    {"", "FanMode", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed105, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+     {"", "FanProfile", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 3u, 0, 0u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_FAN, 0u},
+     {"", "HangBugcheckSeconds", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 5u, 60u, 0, 0u, 0u, 0u, 1u, 10u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "HangRecoveryMode", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed107, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "HangRecoveryWaves", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed108, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "HotSubmitLog", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed109, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "HwmonBasePort", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed110, 4u, 1u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_HWMON, 0u},
+-    {"", "HwmonDutyProven", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed111, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_HWMON, 0u},
++    {"", "HangRecoveryMode", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed108, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "HangRecoveryWaves", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed109, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "HotSubmitLog", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed110, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "HwmonBasePort", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed111, 4u, 1u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_HWMON, 0u},
++    {"", "HwmonDutyProven", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed112, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_HWMON, 0u},
+     {"", "HwmonExpectId", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 65535u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_HWMON, 0u},
+     {"", "InteropClosedReason", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN_CLEAR, 0u, AMDGPU_STATE_GROUP_INTEROP, 0u},
+     {"", "InteropLastEnd", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_INTEROP, 0u},
+     {"", "InteropLastReason", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_INTEROP, 0u},
+     {"", "InteropLastState", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_INTEROP, 0u},
+     {"", "InteropSession", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_INTEROP, 0u},
+-    {"", "KeepLog", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed118, 2u, 1u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "KeepLog", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed119, 2u, 1u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "KeepStatus", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "LastStage", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "NotifyDpcInReport", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed121, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "OfferComposedSourceModes", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed122, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "NotifyDpcInReport", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed122, 2u, 1u, 1u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "OfferComposedSourceModes", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed123, 2u, 0u, 0u, 1u, 1u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "StageHistory", AMDGPU_STATE_RECORD, AMDGPU_STATE_SZ, 512u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "SubmitWatchdogMs", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "TelemetryIdleLogMs", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 1u, 120000u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+-    {"", "TraceUmdProbes", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed126, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
++    {"", "TraceUmdProbes", AMDGPU_STATE_SETTING, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, StateAllowed127, 2u, 0u, 0u, 1u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"", "UnconfirmedStarts", AMDGPU_STATE_RECORD, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_ADMIN, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"CuModeBoot", "StockCc0", AMDGPU_STATE_VOLATILE, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+     {"CuModeBoot", "StockCc1", AMDGPU_STATE_VOLATILE, AMDGPU_STATE_DWORD, 4u, 0u, 4294967295u, 0, 0u, 0u, 0u, 0u, 0u, AMDGPU_STATE_DRIVER, 0u, AMDGPU_STATE_GROUP_NONE, 0u},
+diff --git a/driver/state/catalog.json b/driver/state/catalog.json
+index 02ad71c3..dc36ed80 100644
+--- a/driver/state/catalog.json
++++ b/driver/state/catalog.json
+@@ -2175,6 +2175,30 @@
+         "driver/kmd/mmio.c:161"
+       ]
+     },
++    {
++      "path": "",
++      "name": "EnableVmFlushEveryJob",
++      "kind": "setting",
++      "type": "dword",
++      "min": 0,
++      "max": 4294967295,
++      "allowed": [
++        0,
++        1
++      ],
++      "max_bytes": 4,
++      "factory": null,
++      "code": 0,
++      "legacy_absent": null,
++      "group": "none",
++      "access": "admin",
++      "readable": "user",
++      "apply": "next-start",
++      "migration": "raw-once",
++      "source": [
++        "driver/kmd/gfx.c:4395"
++      ]
++    },
+     {
+       "path": "",
+       "name": "EnableVmidPool",
+diff --git a/driver/state/defaults.generated.inf b/driver/state/defaults.generated.inf
+index 532d3a81..36d5e431 100644
+--- a/driver/state/defaults.generated.inf
++++ b/driver/state/defaults.generated.inf
+@@ -1,6 +1,6 @@
+ ; Generated by tools/state/generate.py; copied into the package INF.
+ [AmdgpuStateDefaults]
+-HKR,Parameters\DefaultsV2,CatalogId,0x00000000,"f9c680619453d181e3ebba4bf0aefcc4b5dfb5db92915bbf177640808960d2b9"
++HKR,Parameters\DefaultsV2,CatalogId,0x00000000,"810a8f3d4923f314e1178df2aff55549a1c4f8ce9c34f4e3333dd8450bda9215"
+ HKR,Parameters\DefaultsV2,PackageProductVersion,0x00000000,%PackageProductVersion%
+ HKR,Parameters\DefaultsV2,Schema,0x00010001,2
+ HKR,Parameters\DefaultsV2,CpuTune,0x00010001,1
+diff --git a/tools/quality/doclint_baseline.txt b/tools/quality/doclint_baseline.txt
+index 06370181..ae75a85d 100644
+--- a/tools/quality/doclint_baseline.txt
++++ b/tools/quality/doclint_baseline.txt
+@@ -49,7 +49,6 @@
+ 2	docs/design/dp-audio.md
+ 73	docs/design/dpm.md
+ 12	docs/design/fan.md
+-11	docs/design/gfx-submit-root-serialization.md
+ 16	docs/design/gpu-dwm-interop-switches.md
+ 5	docs/design/hang-detector.md
+ 4	docs/design/iommu-dma-remapping.md
+diff --git a/tools/quality/quick.ps1 b/tools/quality/quick.ps1
+index 7e7dbab2..9e58fd9d 100644
+--- a/tools/quality/quick.ps1
++++ b/tools/quality/quick.ps1
+@@ -584,6 +584,8 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
+   @{n='submit-watchdog-log-the-constant';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-LogTheConstant');Fails=$true}
+   @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true}
+   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
++  @{n='vmid-pool-ignore-ring-root';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRingRoot');Fails=$true}
++  @{n='vmid-pool-ignore-process';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreProcess');Fails=$true}
+   @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent');Fails=$true}
+   @{n='gfx-pipeline-no-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutCapacity');Fails=$true}
+   @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}

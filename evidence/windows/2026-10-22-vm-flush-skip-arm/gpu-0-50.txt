@@ -1,0 +1,5 @@
+r0: 0-50 s, 2849 frames, 56.99 FPS, GPU busy 16.953 ms per frame, share 0.966
+a1: 0-50 s, 2859 frames, 57.19 FPS, GPU busy 16.900 ms per frame, share 0.966
+a2: 0-50 s, 2839 frames, 56.79 FPS, GPU busy 16.895 ms per frame, share 0.959
+b1: 0-50 s, 2866 frames, 57.32 FPS, GPU busy 16.835 ms per frame, share 0.965
+b2: 0-50 s, 2818 frames, 56.38 FPS, GPU busy 17.094 ms per frame, share 0.964
