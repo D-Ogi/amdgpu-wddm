@@ -242,6 +242,9 @@
         "host"
       ]
     },
+    "kmd-nx": {
+      "inputs": ["host", "blob-reader"]
+    },
     "claim-shares": {
       "inputs": [
         "documents"

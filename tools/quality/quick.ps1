@@ -47,6 +47,8 @@ try {
  # The two engine DLLs of one source line (BD-167): each flavour's own pin, and no run against the other's DLL.
  Check 'engine-abi-flavour' { & python -m unittest discover -s "$repo\tools\build" -p 'test_engine_abi.py' }
  Check 'kmd-order' { & python "$repo\tools\quality\test_kmd_reproducible.py" --out "$Out\kmd-order" }
+ # BD-218: source regression guard only; real HVCI acceptance stays separate.
+ Check 'kmd-nx' { & python -B "$repo\tools\quality\kmd_nx.py" --root $repo --out "$Out\kmd-nx"; if($LASTEXITCODE -eq 0){ & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_kmd_nx.py' } }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
  Check 'flavour-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\flavour-controls").FullName; & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_flavour_gate.py' }
