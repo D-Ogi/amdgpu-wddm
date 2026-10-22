@@ -238,10 +238,32 @@ The generic DML fallback to `dm_444_32` is not a checked AYUV bandwidth plan.
 Neither a hardware image witness nor complete Windows format/HLK coverage
 exists for this route. The Microsoft YUV requirement remains open.
 
-The checked linear layout and CPU CNVC preparation now exist. Complete CSC
-with explicit matrix-bank ownership and the atomic surface writer.
+The checked linear layout, locked surface writer and CPU CNVC preparation now
+exist. Complete CSC with explicit matrix-bank ownership and the full transaction.
 Keep rotation, mirroring and unverified YUV formats out of capability admission.
 Retain their implementation and validation work in the requirement matrix.
+
+### Locked linear surface writer
+
+`dcn_surface_write` captures the selected HUBP1 DCC, tiling and address functions.
+It combines them with the checked pitch, format and crossbar fields. Device
+topology counts come from the owner and must be powers of two that fit their
+fields. They are not inferred from the surface size. The plan is linear,
+uncompressed, non-TMZ and mono. The packed YUV format remains a test candidate.
+
+The writer requires an active OTG0 with its master lock acknowledged. HUBP must
+select VTG0 and acknowledge that lock. An earlier pending flip, triple buffering
+or a separate surface lock causes refusal before any write. All 13 reads precede
+the 13 writes. Address high precedes address low, which is last.
+Repeated writes to one register use the result of the preceding planned write.
+Thus the TMZ update cannot restore DCC bits from an older snapshot.
+
+The helper does not change enables, power, lock selectors or locks. The owner
+must keep residency, geometry, CNVC/CSC and DML/requestor state consistent.
+Any attempted-write failure needs whole-transaction restoration before unlock.
+The write count includes an operation whose callback failed after a hardware
+write. Success proves neither latch nor scanout retirement. A hardware witness,
+complete transaction/recovery and Windows DDI integration remain required.
 
 ### CSC source-contract correction, 2026-10-22
 

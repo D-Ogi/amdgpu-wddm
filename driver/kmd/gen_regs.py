@@ -441,6 +441,16 @@ DISPLAY_PIPE_WRITES += [f"mmMPCC{p}_{r}" for p in (0, 1) for r in _MPC_WRITES
                         if f"mmMPCC{p}_{r}" not in DISPLAY_PIPE_WRITES]
 DISPLAY_PIPE_WRITES += ["mmMPC_OUT0_MUX"]
 DISPLAY_PIPE_READS += [f"mmMPCC{p}_MPCC_UPDATE_LOCK_SEL" for p in (0, 1)]
+# BD-223 caller-locked linear HUBP surface configuration/address transaction.
+# No enable, power, VM, metadata or lock-selector write is granted here.
+DISPLAY_PIPE_WRITES += [f"mm{block}{p}_{r}" for p in (0, 1) for block, regs in (
+    ('HUBP', ('DCSURF_ADDR_CONFIG', 'DCSURF_TILING_CONFIG', 'DCSURF_SURFACE_CONFIG')),
+    ('HUBPRET', ('HUBPRET_CONTROL',)),
+    ('HUBPREQ', ('DCSURF_SURFACE_CONTROL', 'DCSURF_SURFACE_PITCH', 'DCSURF_SURFACE_PITCH_C',
+                 'DCSURF_FLIP_CONTROL', 'DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH', 'DCSURF_PRIMARY_SURFACE_ADDRESS')))
+    for r in regs if f"mm{block}{p}_{r}" not in DISPLAY_PIPE_WRITES]
+DISPLAY_PIPE_READS += ['mmHUBP1_DCHUBP_CNTL']
+DISPLAY_PIPE_READS += [f'mmHUBPREQ{p}_DCSURF_FLIP_CONTROL2' for p in (0, 1)]
 DISPLAY_PIPE_READS = [r for r in DISPLAY_PIPE_READS if r not in DISPLAY_PIPE_WRITES]
 # Exact DCN201 timing entry points, extracted from AMD DC. The clock-control
 # register is only polled by optc1_disable_crtc; no clock write is granted here.

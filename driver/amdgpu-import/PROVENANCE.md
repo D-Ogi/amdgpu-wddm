@@ -429,6 +429,8 @@ or hardware ownership is established by this source-only preparation.
 
 ## DCN scaler filter (resolution modes, stage A)
 
+PROVENANCE: `reference/hubp.h` is unchanged Linux amdgpu DC (MIT), `dc/inc/hw/hubp.h`, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`. `extract_surface_sequence.py` preserves the HUBP1 DCC, tiling and address functions in `dc_surface_sequence.inc`. The project adapter captures their writes before the OTG-locked transaction.
+
 PROVENANCE: `reference/dcn20_dpp.h` and `reference/dcn201_dpp.h` are unchanged Linux amdgpu DC (MIT) headers from `dc/dpp/dcn20/` and `dc/dpp/dcn201/`, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
 
 PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
