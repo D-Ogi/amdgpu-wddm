@@ -345,6 +345,72 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("pwsh"), "pwsh 7 is not on PATH")
+class ReleaseSetRegister(unittest.TestCase):
+    """build_release_set.py register in process: the rows go in, and a D3D11 record follows its new engine."""
+
+    CAPS = {"maximum_feature_level": 0xC100, "doubles": 1, "compute_raw_structured": 1, "logic_op": 1,
+            "tile_based": 0, "pixel_min_precision": 2, "other_min_precision": 2, "tiled_resources_tier": 3,
+            "typed_uav_loads": 1, "rovs": 1, "stencil_ref": 1, "conservative_tier": 3, "vp_rt_index_any_shader": 1,
+            "carried_from": "measured"}
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="release-set-reg-", dir=OUT))
+        self.encode = build_release_set.load_config_encoder(HERE.parents[1])
+
+    def tearDown(self):
+        remove_tree(self.tmp)
+
+    def put(self, rel, data):
+        path = self.tmp / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return {"source": rel, "sha256": build_release_set.sha256_file(path), "size": len(data)}
+
+    def test_a_new_engine_rebinds_its_record_and_keeps_the_capability_words(self):
+        engine = self.put("old/engine.dll", b"engine 1")
+        icd = self.put("old/icd.dll", b"icd 1")
+        caps = dict(self.CAPS, engine_sha256=engine["sha256"], icd_sha256=icd["sha256"])
+        old = self.encode(caps, self.tmp / engine["source"], self.tmp / icd["source"])
+        config = self.put("old/amdgpu_wddm_d3d11.config", old)
+        rows = [dict(engine, component="d3d11-umd", path="payload/d3d11/amdgpu_wddm_dxvk.dll", flavour="release"),
+                dict(icd, component="d3d11-umd", path="payload/d3d11/amdgpu_wddm_radv.dll", flavour="release"),
+                dict(config, component="d3d11-umd", path="payload/d3d11/amdgpu_wddm_d3d11.config", flavour="release",
+                     built_from={"inputs": {"caps": {"inline": caps}}})]
+        sources = self.tmp / "release-sources.json"
+        sources.write_text(json.dumps({"schema": 4, "files": rows}), encoding="utf-8")
+        new_engine = self.put("new/engine.dll", b"engine 2")
+        doc = {"version": "1.2.3.4-test.1", "files": [dict(new_engine, component="d3d11-umd", flavour="release",
+                                                           path="payload/d3d11/amdgpu_wddm_dxvk.dll")]}
+        data, receipts, errors = build_release_set.register(doc, sources, self.tmp, HERE.parents[1], doc["version"],
+                                                            self.tmp / "configs")
+        self.assertEqual(errors, [])
+        self.assertEqual(len(receipts), 1)
+        row = [f for f in data["files"] if f["path"].endswith(".config")][0]
+        raw = (self.tmp / row["source"]).read_bytes()
+        self.assertEqual(raw[:68], old[:68])
+        self.assertEqual(raw[68:100].hex().upper(), new_engine["sha256"])
+        self.assertEqual(raw[100:132].hex().upper(), icd["sha256"])
+        self.assertIn("1.2.3.4-test.1", row["built_from"]["inputs"]["caps"]["inline"]["carried_from"])
+
+    def test_an_unchanged_pair_keeps_its_record(self):
+        engine = self.put("old/engine.dll", b"engine 1")
+        icd = self.put("old/icd.dll", b"icd 1")
+        caps = dict(self.CAPS, engine_sha256=engine["sha256"], icd_sha256=icd["sha256"])
+        config = self.put("old/amdgpu_wddm_d3d11.config",
+                          self.encode(caps, self.tmp / engine["source"], self.tmp / icd["source"]))
+        rows = [dict(engine, component="d3d11-umd", path="payload/d3d11/amdgpu_wddm_dxvk.dll", flavour="release"),
+                dict(icd, component="d3d11-umd", path="payload/d3d11/amdgpu_wddm_radv.dll", flavour="release"),
+                dict(config, component="d3d11-umd", path="payload/d3d11/amdgpu_wddm_d3d11.config", flavour="release",
+                     built_from={"inputs": {"caps": {"inline": caps}}})]
+        sources = self.tmp / "release-sources.json"
+        sources.write_text(json.dumps({"schema": 4, "files": rows}), encoding="utf-8")
+        doc = {"version": "1.2.3.4-test.1", "files": [rows[0]]}
+        data, receipts, errors = build_release_set.register(doc, sources, self.tmp, HERE.parents[1], doc["version"],
+                                                            self.tmp / "configs")
+        self.assertEqual((errors, receipts), ([], []))
+        self.assertEqual([f for f in data["files"] if f["path"].endswith(".config")][0]["source"], config["source"])
+
+
 class ReleaseSetRuns(unittest.TestCase):
     """build-release-set.ps1 end to end, on stub recipes."""
 

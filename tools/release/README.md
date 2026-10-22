@@ -346,6 +346,34 @@ change. `-Compare` compares the rows with a `release-sources.json`. Each output 
 build must have the same bytes, or the same image without its signature. `-Out` must be under `BC250_ROOT`, because
 a row names its source relative to that root.
 
+### From the release set to the packages
+
+A tester release has three steps, and the same tool does each of them:
+
+1. Build and register. `-Register` writes the rows into `tools\release\release-sources.json` of the tree that runs
+   the tool. A D3D11 deployment record (`amdgpu_wddm_d3d11.config`) holds the SHA-256 of its engine and its ICD. When
+   one of the two changed, the step writes a new record with the new hashes into `<Out>\configs`. The first 68 bytes
+   (the header and the capability words) do not change, and the step does not measure them again.
+2. Commit and push `tools\release\release-sources.json`.
+3. Package. `-Package -From <Out>` refuses a tree that is not clean or not pushed. It also refuses a row of `<Out>`
+   that the registered file does not hold with the same source and SHA-256. For each flavour it builds the setup
+   window and copies the router inputs of the quality gates. Then it runs `build-release.ps1` with
+   `-BuildRecords <Out>\artifacts`. The release flavour also writes the submission CAB. The packages go to
+   `<Out>\package\<flavour>`, and their hashes go to `<Out>\package-report.json`.
+   Then the host dry run of the installer (`test-dryrun.ps1`) runs on each package, and `flavour_bytes.py` checks
+   the Mesa DLLs of both packages (BD-167): no lab-only string in a release DLL, and in each lab DLL every lab-only
+   string that its Mesa tree holds.
+
+```
+pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Register
+git commit --only -- tools/release/release-sources.json   (then push)
+pwsh -File tools\release\build-release-set.ps1 -Package -From <dir> -UmdSource <Mesa tree> -UmdBuild <its build>
+```
+
+`-UmdSource` and `-UmdBuild` name the user-mode driver tree and its build database that the release gates of
+`build-release.ps1` read (`umd-contract`, `umd-analysis`, `surface-control`). `-LedgerDebtReason` passes a recorded
+reason for unlanded ledger work to `build-release.ps1 -AllowLedgerDebt`.
+
 ## Version resources
 
 A game reads the user-mode driver version through DXGI `CheckInterfaceSupport`. The kernel takes that number from

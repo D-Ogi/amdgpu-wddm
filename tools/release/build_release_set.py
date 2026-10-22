@@ -28,8 +28,10 @@ and release-tester.32.json an example.
       build), --merge writes a copy of a release-sources.json with these rows in place of the old ones.
 """
 import argparse
+import copy
 import fnmatch
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -806,6 +808,91 @@ def merge_rows(rows, sources_path):
     return data
 
 
+# The D3D11 deployment record (amdgpu_wddm_d3d11.config, tools/build/write-umd-config.py) pins the SHA-256 of the
+# engine and the ICD beside it, so a rebuilt engine or ICD needs a new record. The first 68 bytes (header and the
+# capability words) stay as they are: they are not measured again here, and the row says so.
+CONFIG_NAME = "amdgpu_wddm_d3d11.config"
+CONFIG_SIBLINGS = (("amdgpu_wddm_dxvk.dll", "engine_sha256"), ("amdgpu_wddm_radv.dll", "icd_sha256"))
+
+
+def load_config_encoder(repo):
+    spec = importlib.util.spec_from_file_location("write_umd_config", Path(repo) / "tools/build/write-umd-config.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.encode
+
+
+def rebind_configs(data, root, version, out_dir, encode):
+    """Rebind each D3D11 record whose engine or ICD changed to the hashes of the files the rows now name.
+
+    Returns (receipts, errors). A record whose two siblings are unchanged keeps its row."""
+    root, receipts, errors = Path(root), [], []
+    files = data.get("files", [])
+    for row in files:
+        if not row["path"].endswith("/" + CONFIG_NAME):
+            continue
+        where = f"{row['path']} ({row['flavour']})"
+        old_path = root / row["source"]
+        old = old_path.read_bytes()
+        caps = copy.deepcopy(((row.get("built_from") or {}).get("inputs") or {}).get("caps", {}).get("inline"))
+        if not isinstance(caps, dict):
+            errors.append(f"{where}: no inline caps input, so the record cannot be rebound")
+            continue
+        base = row["path"].rsplit("/", 1)[0]
+        siblings, changed = [], False
+        for name, key in CONFIG_SIBLINGS:
+            match = [f for f in files if f["path"] == f"{base}/{name}" and f["flavour"] in (row["flavour"], "shared")]
+            if len(match) != 1:
+                errors.append(f"{where}: {len(match)} rows of {base}/{name}, 1 expected")
+                break
+            path = root / match[0]["source"]
+            digest = sha256_file(path)
+            if digest != match[0]["sha256"].upper():
+                errors.append(f"{where}: {match[0]['source']} is {digest}, its row says {match[0]['sha256']}")
+                break
+            siblings.append(path)
+            if caps[key].upper() != digest:
+                caps[key], changed = digest, True
+        else:
+            if not changed:
+                continue
+            caps["carried_from"] = (caps.get("carried_from", "") + f"; {version}: engine and ICD hashes rebound to "
+                                    f"the files of this release set by build-release-set.ps1, capabilities not "
+                                    f"re-measured").lstrip("; ")
+            encoded = encode(caps, *siblings)
+            if encoded[:68] != old[:68]:
+                errors.append(f"{where}: the rebound record changes the capability words, which this step must not")
+                continue
+            dst = Path(out_dir) / row["flavour"] / ("x86" if "/wow64/" in row["path"] else "x64") / CONFIG_NAME
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(encoded)
+            before = row["sha256"]
+            row["built_from"]["inputs"]["caps"]["inline"] = caps
+            row.update(source=dst.resolve().relative_to(root.resolve()).as_posix(), sha256=sha256_file(dst),
+                       size=len(encoded))
+            row["role"] = (f"M14C deployment record rebound to the {version} engine and ICD. The first 68 bytes "
+                           f"(header and capability words) are unchanged; capabilities were not re-measured.")
+            receipts.append({"path": row["path"], "flavour": row["flavour"], "before_sha256": before,
+                             "sha256": row["sha256"], "source": row["source"], "engine": caps["engine_sha256"],
+                             "icd": caps["icd_sha256"]})
+    return receipts, errors
+
+
+def register(rows_doc, sources_path, root, repo, version, configs_out):
+    """The registered release-sources.json with this set's rows and rebound D3D11 records, and what changed."""
+    data = merge_rows(rows_doc["files"], sources_path)
+    receipts, errors = rebind_configs(data, root, version, configs_out, load_config_encoder(repo))
+    for f in data.get("files", []):
+        p = Path(root) / f["source"]
+        if not p.is_file():
+            errors.append(f"{f['path']} ({f.get('flavour')}): {f['source']} does not exist")
+        elif sha256_file(p) != f["sha256"].upper():
+            errors.append(f"{f['path']} ({f.get('flavour')}): {f['source']} does not match its sha256")
+        elif "size" in f and p.stat().st_size != f["size"]:
+            errors.append(f"{f['path']} ({f.get('flavour')}): {f['source']} does not match its size")
+    return data, receipts, errors
+
+
 # ---------------------------------------------------------------------------------------------------------------
 
 def main():
@@ -838,7 +925,31 @@ def main():
     r.add_argument("--compare")
     r.add_argument("--merge")
     r.add_argument("--merged")
+    reg = sub.add_parser("register")
+    reg.add_argument("--rows", required=True)
+    reg.add_argument("--sources", required=True)
+    reg.add_argument("--root", required=True)
+    reg.add_argument("--repo", required=True)
+    reg.add_argument("--configs-out", required=True)
+    reg.add_argument("--receipt", required=True)
     args = parser.parse_args()
+    if args.command == "register":
+        rows_doc = load_json(args.rows)
+        data, receipts, errors = register(rows_doc, args.sources, args.root, args.repo, rows_doc["version"],
+                                          args.configs_out)
+        for e in errors:
+            print(f"FAIL {e}")
+        if errors:
+            return 1
+        before = sha256_file(args.sources)
+        Path(args.sources).write_bytes((json.dumps(data, indent=2) + "\n").encode("utf-8"))
+        write_json(args.receipt, {"tool": "build-release-set", "version": rows_doc["version"],
+                                  "sources": str(Path(args.sources).resolve()), "before_sha256": before,
+                                  "sha256": sha256_file(args.sources), "rows": len(rows_doc["files"]),
+                                  "rebound_configs": receipts})
+        print(f"registered {len(rows_doc['files'])} rows and {len(receipts)} rebound D3D11 records in "
+              f"{args.sources}")
+        return 0
     if args.command == "plan":
         only = [x.strip() for x in args.only.split(",") if x.strip()]
         plan, errors = make_plan(args.manifest, args.root, args.repo, args.out, args.work, args.sources, only,

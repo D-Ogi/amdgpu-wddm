@@ -7,7 +7,7 @@
 #        [-Root <BC250_ROOT>] [-Sources <release-sources.json>] [-Only <id or pattern>[,...]] [-Plan]
 #        [-AllowUnpushed] [-MaxParallel <n>] [-Jobs <n>] [-Version <v>] [-Work <dir>] [-Tool name=path[,...]]
 #        [-PackageCache <dir>] [-SizeGuard <size-guard.py>] [-GuardMaxAge <s>] [-BuildTimeout <s>] [-KeepGoing]
-#        [-Keep] [-Compare <release-sources.json>] [-MergeInto <release-sources.json>]
+#        [-Keep] [-Compare <release-sources.json>] [-MergeInto <release-sources.json>] [-Register]
 #
 # The manifest (release-manifest.schema.json; release-tester.32.json is an example) has one row per component build:
 # the repository and commit, the recipe of this repository and its arguments, the flavour, the architecture, the
@@ -41,6 +41,17 @@
 #    same image without its signature); -MergeInto writes <Out>\release-sources.json, a copy of that file with these
 #    rows in place of the old ones, for build-release.ps1 (with -BuildRecords <Out>\artifacts: each build's
 #    recipe.json is kept beside its outputs). <Out>\release-report.json holds every gate, build, test and time.
+#    -Register writes the rows into tools\release\release-sources.json of this tree and rebinds each D3D11 deployment
+#    record (amdgpu_wddm_d3d11.config) whose engine or ICD changed to their new SHA-256 (<Out>\configs, the receipt
+#    <Out>\register-receipt.json). The capability words of a record are not measured again. Commit and push the file.
+# 5. Packages, a second run on the registered set:
+#      pwsh -File tools\release\build-release-set.ps1 -Package -From <Out> -UmdSource <dir> -UmdBuild <dir>
+#           [-Flavours release,lab] [-LedgerDebtReason <text>]
+#    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
+#    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
+#    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
+#    each package and its zip, and <Out>\package-report.json their SHA-256. Then the host dry run of the installer
+#    (test-dryrun.ps1) on each package and the BD-167 byte check of the Mesa DLLs of both (flavour_bytes.py).
 #
 # -Plan prints the gates, the builds with their expanded command lines, outputs, tests and disk budget, and builds
 # nothing. -Only rebuilds the rows it names (ids or wildcards); a row it does not name keeps the artifact of the last
@@ -73,8 +84,21 @@ param(
     [Parameter(ParameterSetName = 'Set')][switch]$Keep,
     [Parameter(ParameterSetName = 'Set')][string]$Compare,
     [Parameter(ParameterSetName = 'Set')][string]$MergeInto,
+    # After the rows: write them into this tree's tools\release\release-sources.json and rebind the D3D11 records.
+    [Parameter(ParameterSetName = 'Set')][switch]$Register,
     # One build of a release set, in its own process: the orchestrator below starts this script with the job's file.
-    [Parameter(ParameterSetName = 'Job', Mandatory)][string]$Job
+    [Parameter(ParameterSetName = 'Job', Mandatory)][string]$Job,
+    # The packages of a built and registered release set (see "5. Packages" above).
+    [Parameter(ParameterSetName = 'Package', Mandatory)][switch]$Package,
+    [Parameter(ParameterSetName = 'Package', Mandatory)][string]$From,
+    [Parameter(ParameterSetName = 'Package')][string[]]$Flavours = @('release', 'lab'),
+    # The user-mode driver tree that the release gates of build-release.ps1 read (BC250_UMD_SOURCE, BC250_UMD_BUILD).
+    [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdSource,
+    [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdBuild,
+    # Unlanded ledger work this release carries on purpose (build-release.ps1 -AllowLedgerDebt).
+    [Parameter(ParameterSetName = 'Package')][string]$LedgerDebtReason = '',
+    [Parameter(ParameterSetName = 'Package')][string]$PackageRoot = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
+    [Parameter(ParameterSetName = 'Package')][string]$PackageGuard
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
@@ -254,6 +278,134 @@ if ($PSCmdlet.ParameterSetName -eq 'Job') {
     $script:jobExit = 1
     Invoke-SetJob $Job | Out-Host
     exit $script:jobExit
+}
+
+if ($PSCmdlet.ParameterSetName -eq 'Package') {
+    # 5. Packages. The input is the -Out of a release set run (-From) whose rows are registered: this tree's
+    # tools\release\release-sources.json holds every row of <From>\release-sources.rows.json with the same source and
+    # SHA-256, and the tree is clean and pushed, so the package is built from a commit that names its bytes. Then, for
+    # each flavour: the setup window (tools\win\amdgpu_wddm_setup\build.ps1), the router inputs that the quality gates
+    # read, and build-release.ps1 with the build records of the set (and the submission CAB for release).
+    $Root = [IO.Path]::GetFullPath($PackageRoot)
+    $From = [IO.Path]::GetFullPath($From)
+    $env:BC250_ROOT = $Root
+    $env:PYTHONDONTWRITEBYTECODE = '1'
+    if (-not $PackageGuard) { $PackageGuard = Join-Path $Root 'scratch\cleanup-250\size-guard.py' }
+    $python = (Get-Command python -CommandType Application | Select-Object -First 1).Source
+    $packageReport = Join-Path $From 'package-report.json'
+    $pr = [ordered]@{ tool = 'build-release-set'; step = 'package'; started_utc = Get-Utc; from = $From; flavours = @() }
+    function Stop-Package([string]$Why) {
+        $pr.status = 'failed'; $pr.error = $Why; $pr.finished_utc = Get-Utc
+        Write-Json $packageReport $pr
+        "build-release-set -Package: $Why"
+        exit 1
+    }
+    if (@(& git -C $repo status --porcelain).Count) { Stop-Package "the recipe tree $repo is not clean: commit the registration first" }
+    $head = (& git -C $repo rev-parse HEAD).Trim()
+    if (-not @(& git -C $repo branch -r --contains $head).Count) { Stop-Package "the recipe tree's commit $head is on no remote-tracking branch: push it first" }
+    $pr.recipe_commit = $head
+    $setReport = Read-Json (Join-Path $From 'release-report.json')
+    if ($setReport.status -ne 'ok') { Stop-Package "the release set in $From did not end well (status $($setReport.status))" }
+    $version = $setReport.version
+    $pr.version = $version
+    $rowsDoc = Read-Json (Join-Path $From 'release-sources.rows.json')
+    $registered = Read-Json (Join-Path $PSScriptRoot 'release-sources.json')
+    $missing = @()
+    foreach ($row in $rowsDoc.files) {
+        $hit = @($registered.files | Where-Object { $_.path -ceq $row.path -and $_.flavour -ceq $row.flavour })
+        if ($hit.Count -ne 1 -or $hit[0].sha256 -ne $row.sha256 -or $hit[0].source -ne $row.source) { $missing += "$($row.path) ($($row.flavour))" }
+    }
+    if ($missing.Count) { Stop-Package ("rows not registered in tools\release\release-sources.json (run the set with -Register, commit, push): " + ($missing -join ', ')) }
+    "$(Get-Utc) package: $($rowsDoc.files.Count) rows registered at $($head.Substring(0, 8)), version $version"
+    foreach ($p in $UmdSource, $UmdBuild) { if (-not (Test-Path -LiteralPath $p)) { Stop-Package "user-mode driver tree missing: $p" } }
+    $env:BC250_UMD_SOURCE = [IO.Path]::GetFullPath($UmdSource)
+    $env:BC250_UMD_BUILD = [IO.Path]::GetFullPath($UmdBuild)
+    function Get-Registered([string]$Path, [string]$Flavour) {
+        $rows = @($registered.files | Where-Object { $_.path -ceq $Path -and $_.flavour -in @('shared', $Flavour) })
+        if ($rows.Count -ne 1) { Stop-Package "$($rows.Count) registered rows of $Path ($Flavour), 1 expected" }
+        $p = Join-Path $Root $rows[0].source
+        if ((Get-FileHash -LiteralPath $p).Hash -ine $rows[0].sha256) { Stop-Package "$p does not match its registered sha256" }
+        return $p
+    }
+    function Test-Guard([string]$What) {
+        $guard = (& $python -I $PackageGuard 2>&1 | Select-Object -Last 1)
+        "$(Get-Utc) $guard"
+        if ($LASTEXITCODE -ne 0 -or $guard -notmatch 'size ok') { Stop-Package "the size guard refuses ${What}: $guard" }
+    }
+    foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+        $f = [ordered]@{ flavour = $flavour }
+        $tmp = Join-Path $From "tmp-package-$flavour"
+        New-Item -ItemType Directory -Force $tmp | Out-Null
+        $env:TEMP = $tmp; $env:TMP = $tmp
+        $logs = Join-Path $From "logs\package-$flavour"
+        New-Item -ItemType Directory -Force $logs | Out-Null
+        # The setup window carries the package version in its resource (BD-166); an output of an earlier run is refused.
+        $setup = Join-Path $From "setup\$flavour"
+        if (Test-Path -LiteralPath $setup) { Stop-Package "setup output exists: $setup (remove it for a new package)" }
+        Test-Guard "the setup window ($flavour)"
+        "$(Get-Utc) setup window $flavour"
+        & $shell -NoProfile -File (Join-Path $repo 'tools\win\amdgpu_wddm_setup\build.ps1') -Out $setup -Version $version -Flavour $flavour *> (Join-Path $logs 'setup.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Package "setup window $flavour exit $LASTEXITCODE (log $logs\setup.log)" }
+        $setupExe = Join-Path $setup 'amdgpu_wddm_setup.exe'
+        $stamp = (& $python -I (Join-Path $repo 'tools\build\versionstamp.py') show $setupExe 2>&1) -join "`n"
+        if (-not $stamp.Contains("'ProductVersion': '$version'")) { Stop-Package "the setup window $setupExe does not carry $version" }
+        $f.setup = [ordered]@{ file = $setupExe; sha256 = (Get-FileHash -LiteralPath $setupExe).Hash }
+        # The router gate of the quality suite reads the hosted and CPU UMDs and the D3D11 app package of the flavour.
+        $env:BC250_ROUTER_HOSTED_UMD = Get-Registered 'payload/desktop/bc250d3d_zink.dll' $flavour
+        $env:BC250_ROUTER_CPU_UMD = Get-Registered 'payload/desktop/bc250d3d.dll' $flavour
+        $app = Join-Path $From "router-inputs-$flavour"
+        if (Test-Path -LiteralPath $app) { Remove-Item -LiteralPath $app -Recurse -Force }
+        New-Item -ItemType Directory -Force $app | Out-Null
+        foreach ($name in 'amdgpu_wddm_d3d11.dll', 'amdgpu_wddm_d3d11.config') {
+            Copy-Item -LiteralPath (Get-Registered "payload/d3d11/$name" $flavour) -Destination (Join-Path $app $name)
+        }
+        $env:BC250_ROUTER_APP_PACKAGE = $app
+        $pkgOut = Join-Path $From "package\$flavour"
+        if (Test-Path -LiteralPath $pkgOut) { Stop-Package "package output exists: $pkgOut (remove it for a new package)" }
+        Test-Guard "the $flavour package"
+        $packageArgs = @('-Root', $Root, '-Out', $pkgOut, '-Version', $version, '-Flavour', $flavour, '-SetupApp', $setup,
+                         '-BuildRecords', (Join-Path $From 'artifacts'))
+        if ($flavour -eq 'release') {
+            $cab = Join-Path $From "submission\amdgpu-wddm-$version.cab"
+            New-Item -ItemType Directory -Force (Split-Path $cab) | Out-Null
+            $packageArgs += @('-SubmissionCab', $cab)
+        }
+        if ($LedgerDebtReason) { $packageArgs += @('-AllowLedgerDebt', '-LedgerDebtReason', $LedgerDebtReason) }
+        "$(Get-Utc) package $flavour (log $logs\build-release.log)"
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'build-release.ps1') @packageArgs *> (Join-Path $logs 'build-release.log')
+        $code = $LASTEXITCODE
+        if ($code -ne 0) {
+            @(Get-Content -LiteralPath (Join-Path $logs 'build-release.log') -Tail 15) | ForEach-Object { "    $_" }
+            Stop-Package "build-release.ps1 $flavour exit $code (log $logs\build-release.log)"
+        }
+        $zip = @(Get-ChildItem -LiteralPath $pkgOut -File -Filter '*.zip')
+        if ($zip.Count -ne 1) { Stop-Package "$pkgOut holds $($zip.Count) zips, 1 expected" }
+        $f.zip = [ordered]@{ file = $zip[0].FullName; sha256 = (Get-FileHash -LiteralPath $zip[0].FullName).Hash; size = $zip[0].Length }
+        if ($flavour -eq 'release') { $f.cab = [ordered]@{ file = $cab; sha256 = (Get-FileHash -LiteralPath $cab).Hash } }
+        $f.top = Join-Path $pkgOut ([IO.Path]::GetFileNameWithoutExtension($zip[0].Name))
+        # The host dry run of the installer on the unpacked package.
+        "$(Get-Utc) dry run $flavour (log $logs\dryrun.log)"
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'test-dryrun.ps1') -Package $f.top *> (Join-Path $logs 'dryrun.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Package "the dry run of the $flavour package fails (log $logs\dryrun.log)" }
+        $pr.flavours += $f
+        "$(Get-Utc) $flavour $($zip[0].Name) $($f.zip.sha256) $($f.zip.size) bytes"
+        Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    # BD-167: no lab-only string in a release Mesa DLL, and each one its tree holds in the lab DLL of the same slot.
+    $tops = @{}; foreach ($f in $pr.flavours) { $tops[$f.flavour] = $f.top }
+    if ($tops.release -and $tops.lab) {
+        $mesa = @($registered.repositories['mesa-amdgpu-wddm'].checkouts | ForEach-Object { Join-Path $Root $_ } |
+                  Where-Object { Test-Path -LiteralPath $_ }) | Select-Object -First 1
+        if (-not $mesa) { Stop-Package 'no checkout of mesa-amdgpu-wddm for the flavour byte check' }
+        & $python -I (Join-Path $PSScriptRoot 'flavour_bytes.py') --release (Join-Path $tops.release 'files') `
+            --lab (Join-Path $tops.lab 'files') --sources (Join-Path $PSScriptRoot 'release-sources.json') --mesa $mesa *> (Join-Path $From 'logs\flavour-bytes.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Package "the flavour byte check fails (log $From\logs\flavour-bytes.log)" }
+        $pr.flavour_bytes = 'PASS'
+    }
+    $pr.status = 'ok'; $pr.finished_utc = Get-Utc
+    Write-Json $packageReport $pr
+    "build-release-set -Package: ok (report $packageReport)"
+    exit 0
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -569,6 +721,13 @@ $rowsCode = $LASTEXITCODE
 $rowsDoc = Read-Json $rowsFile
 $report.rows = [ordered]@{ file = $rowsFile; count = @($rowsDoc.files).Count; compare = $rowsDoc.compare; notes = $rowsDoc.notes }
 if ($rowsCode -ne 0) { $report.status = 'failed' }
+if ($Register -and $report.status -eq 'ok') {
+    # The registration edits this tree's release-sources.json; the package step (-Package) needs it committed and pushed.
+    & $python $buildReleaseSet register --rows $rowsFile --sources (Join-Path $PSScriptRoot 'release-sources.json') --root $Root `
+        --repo $repo --configs-out (Join-Path $Out 'configs') --receipt (Join-Path $Out 'register-receipt.json')
+    if ($LASTEXITCODE -ne 0) { $report.status = 'failed' }
+    $report.register = Join-Path $Out 'register-receipt.json'
+}
 Write-Json $reportFile $report
 "build-release-set: $($report.status), $(@($report.builds | Where-Object { $_.status -eq 'ok' }).Count) of $($report.builds.Count) builds ok, $($report.rows.count) rows in $rowsFile, $($report.seconds) s (report $reportFile)"
 exit $(if ($report.status -eq 'ok') { 0 } else { 1 })
