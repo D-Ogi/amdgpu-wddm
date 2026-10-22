@@ -187,6 +187,38 @@ must be prepared outside the interrupt callback, with its bank lifetime tracked.
 KMD and UMD/router changes use separate commits. Every stage retains native-size
 presentation, GPU composition fallback, and legacy visibility/mode/stop behavior.
 
+### DML topology controls
+
+The existing `Bc250Dml201Plan` admits one progressive full-size RGB8 pipe.
+It is not an MPO bandwidth planner. The imported DML20 numerical code can
+process more pipes, but their geometry and topology must describe the actual
+prepared display transaction.
+
+`driver/shim/test/dml201_mpo_test.c` exercises that code with synthetic inputs.
+The fixture uses a 1920x1200 output, a 154 MHz pixel clock, and linear RGB8
+surfaces. Two pipes share OTG0. Separate controls change the OTG and DPP limits.
+The source mapping follows `dcn20_populate_dml_pipes_from_context` and the
+watermark/register calculation follows `dcn20_calculate_wm` and
+`dcn20_calculate_dlg_params` in the pinned AMD source.
+
+The one-pipe fixture computes an urgent watermark of 5.36 us. Adding a second
+native-size plane changes it to 6.16 us. A one-pipe watermark is therefore not
+a substitute for this two-pipe calculation. Scaling a 2400-line source to
+1200 output lines also changes that pipe's line-delivery field. These results
+use AMD's default SoC bounds, not measured memory latency or available clocks.
+
+The model admits two pipes sharing one timing and rejects them with only one
+DPP available. It rejects separate OTGs under a one-OTG limit. Increasing that
+limit to two admits the separate-output control. Upscale and downscale cases
+produce per-pipe DLG, TTU and RQ values without an AMD assertion.
+
+This host test includes the pinned numerical implementation directly. It does
+not add a production multi-pipe API or widen the existing one-pipe admission.
+Next, bind the actual prepared geometry, format, taps and topology to a checked
+multi-pipe adapter. Retain per-pipe outputs and shared watermarks together.
+Reject plans requiring an unavailable split or ODM combination. Establish
+the clock and memory-service contract before applying any output to hardware.
+
 ## AMD implementation reference
 
 PROVENANCE: Linux amdgpu DC, MIT, revision

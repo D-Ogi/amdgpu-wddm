@@ -53,6 +53,13 @@ The isolated host test covers admitted modes, reference-clock changes, bounds an
 It verifies timing-dependent register values so that inherited DLG values cannot stand in for a new calculation.
 It does not test register programming, memory-service latency, clock transitions or display output.
 
+The same runner uses explicit clang-cl 23.1.4 and also runs `dml201_mpo_test.c`.
+That separate host experiment supplies two synthetic RGB pipes to the original
+numerical code. It verifies shared versus separate timing and insufficient DPP/OTG
+counts. It does not widen the one-pipe production adapter or its input contract.
+See the [MPO requirements](../../../docs/design/multiplane-overlay-requirements.md)
+for results and the remaining integration work.
+
 ## Hardware application
 
 `bc250_dcn201_pipe.c` imports the DCN201 hardware hooks through `extract_dcn201_pipe.py`.
