@@ -21,7 +21,7 @@ def round32(value):
     return F(floor(value * (1 << 32) + F(1, 2)), 1 << 32)
 
 
-def oracle(case):
+def oracle(case, divisor=1):
     surface, active, sb, se, db, de, cb, ce, taps, mirror = case
     zero = (0,) * 6
     src, dst = se - sb, de - db
@@ -29,14 +29,14 @@ def oracle(case):
             or src <= 0 or se > surface or dst <= 0 or ce < cb
             or not 1 <= taps <= 8 or mirror not in (0, 1)):
         return (2, *zero)
-    if dst > 16383 or src > 8 * dst:
+    if sb % divisor or src // divisor == 0 or dst > 16383 or src > 8 * dst:
         return (3, *zero)
     first, stop = max(db, cb, 0), min(de, ce, active)
     if first >= stop:
         return (1, *zero)
     # AMD rounds to 31.32 first, then truncates to 19 fractional bits.
     rounded32 = round32(F(src, dst))
-    ratio = truncate19(rounded32)
+    ratio = truncate19(F(floor(rounded32 * (1 << 32) / divisor), 1 << 32))
     if ratio == 8:
         ratio -= F(1, 1 << 32)
     position = ratio * (first - db)
@@ -47,13 +47,14 @@ def oracle(case):
     extension = min(tap_origin, max(0, taps - floor(phase)))
     origin = tap_origin - extension
     phase += extension
-    end = min(src, origin + floor(phase + ratio * (stop - first - 1)))
+    component_src = src // divisor
+    end = min(component_src, origin + floor(phase + ratio * (stop - first - 1)))
     width = end - origin
-    if width <= 0 or origin < 0 or end > src or ratio <= 0 or floor(phase) > 15:
+    if width <= 0 or origin < 0 or end > component_src or ratio <= 0 or floor(phase) > 15:
         return (3, *zero)
     if mirror:
-        origin = src - end
-    return (0, sb + origin, width, first, stop - first,
+        origin = component_src - end
+    return (0, sb // divisor + origin, width, first, stop - first,
             floor(ratio * Q), floor(phase * Q))
 
 
@@ -91,9 +92,11 @@ def cases():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--exe', required=True)
+    parser.add_argument('--chroma', action='store_true')
     args = parser.parse_args()
     inputs = list(cases())
-    result = subprocess.run([args.exe, '--stream'], input=''.join(
+    mode = '--stream-chroma' if args.chroma else '--stream'
+    result = subprocess.run([args.exe, mode], input=''.join(
         ' '.join(map(str, case)) + '\n' for case in inputs),
         text=True, capture_output=True, check=True, timeout=60)
     outputs = result.stdout.splitlines()
@@ -101,14 +104,14 @@ def main():
         raise AssertionError(f'Expected {len(inputs)} results, got {len(outputs)}')
     counts = [0] * 4
     for case, line in zip(inputs, outputs):
-        expected = oracle(case)
+        expected = oracle(case, 2 if args.chroma else 1)
         actual = tuple(map(int, line.split()))
         if actual != expected:
             raise AssertionError(f'{case}: got {actual}, expected {expected}')
         counts[actual[0]] += 1
     if not all(counts):
         raise AssertionError(f'Missing status coverage: {counts}')
-    print(f'Rational oracle: {len(inputs)} cases passed; OK/EMPTY/INVALID/UNSUPPORTED={counts}')
+    print(f'Rational oracle {mode}: {len(inputs)} cases passed; OK/EMPTY/INVALID/UNSUPPORTED={counts}')
 
 
 if __name__ == '__main__':

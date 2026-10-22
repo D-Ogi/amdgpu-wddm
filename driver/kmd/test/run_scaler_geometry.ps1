@@ -34,4 +34,6 @@ try {
     if ($LASTEXITCODE) { throw 'Scaler geometry checks failed' }
     & python "$repo\driver\kmd\test\scaler_geometry_oracle.py" --exe (Join-Path (Get-Location) 'scaler_geometry_test.exe')
     if ($LASTEXITCODE) { throw 'Scaler geometry rational oracle failed' }
+    & python "$repo\driver\kmd\test\scaler_geometry_oracle.py" --exe (Join-Path (Get-Location) 'scaler_geometry_test.exe') --chroma
+    if ($LASTEXITCODE) { throw 'Chroma geometry rational oracle failed' }
 } finally { Pop-Location }

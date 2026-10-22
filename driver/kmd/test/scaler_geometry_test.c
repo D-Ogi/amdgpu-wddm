@@ -49,12 +49,13 @@ static void Controls(void)
 static void Properties(void)
 {
     const unsigned sizes[] = {1, 2, 3, 16, 127, 720, 1080, 1920, 4096, 16383};
-    unsigned s, d, t, k, m;
+    unsigned s, d, t, k, m, divisor;
     for (s = 0; s < sizeof(sizes)/sizeof(sizes[0]); ++s)
     for (d = 0; d < sizeof(sizes)/sizeof(sizes[0]); ++d)
     for (t = 1; t <= 8; ++t)
     for (k = 0; k <= 8; ++k)
-    for (m = 0; m <= 1; ++m) {
+    for (m = 0; m <= 1; ++m)
+    for (divisor = 1; divisor <= 2; ++divisor) {
         BC250_SCALER_AXIS_INPUT in = {0};
         BC250_SCALER_AXIS_PLAN p;
         int result;
@@ -64,31 +65,76 @@ static void Properties(void)
         in.ActiveSize = sizes[d]; in.DestinationEnd = (int)sizes[d];
         in.ClipBegin = (int)(sizes[d] * k / 8); in.ClipEnd = (int)sizes[d];
         in.Taps = t; in.Mirror = m;
-        result = Bc250ScalerAxisPlan(&in, &p);
+        result = Bc250ScalerComponentAxisPlan(&in, divisor, &p);
         if (result != BC250_SCALER_GEOMETRY_OK) {
             CHECK(IsZero(&p));
             continue;
         }
-        CHECK(p.ViewportSize > 0 && p.ViewportBegin + p.ViewportSize <= sizes[s]);
+        CHECK(p.ViewportSize > 0 && p.ViewportBegin + p.ViewportSize <= sizes[s] / divisor);
         CHECK(p.RecoutBegin == (unsigned)in.ClipBegin && p.RecoutSize == sizes[d] - p.RecoutBegin);
         CHECK(p.Ratio19 > 0 && p.Ratio19 < 8 * 524288 && p.Init19 < 16 * 524288);
         // Clipping must preserve the first sample's position in the original
         // source, even when taps force the viewport backwards. No invocation of
         // the upstream viewport routine is used for this conservation equation.
-        ratio = ((uint64_t)sizes[s] << 19) / sizes[d];
-        ratio <<= 13;
+        ratio = (((uint64_t)sizes[s] << 32) + sizes[d] / 2) / sizes[d];
+        ratio /= divisor;
+        ratio = (ratio >> 13) << 13;
         if (ratio == (8ULL << 32)) --ratio;
         base_init = (ratio + ((uint64_t)(t + 1) << 32) + 1) / 2;
         expected = (base_init + ratio * p.RecoutBegin) >> 13;
-        forward = m ? sizes[s] - p.ViewportBegin - p.ViewportSize : p.ViewportBegin;
+        forward = m ? sizes[s] / divisor - p.ViewportBegin - p.ViewportSize : p.ViewportBegin;
         phase = ((uint64_t)forward << 19) + p.Init19;
         CHECK(phase == expected);
     }
 }
 
+static void ChromaAndPlane(void)
+{
+    BC250_SCALER_AXIS_INPUT h = {1920, 1920, 0, 1920, -128, 2432, 1, 1920, 2, 0};
+    BC250_SCALER_AXIS_PLAN c;
+    BC250_SCALER_PLANE_INPUT in = {0};
+    BC250_SCALER_PLANE_PLAN p, zero = {0};
+    CHECK(Bc250ScalerComponentAxisPlan(&h, 2, &c) == BC250_SCALER_GEOMETRY_OK);
+    CHECK(c.RecoutBegin == 1 && c.RecoutSize == 1919); // no chroma alignment of output clip
+    CHECK(c.ViewportBegin == 48 && c.ViewportSize == 721);
+    CHECK(c.Ratio19 == 196608 && c.Init19 == 1081344); // 0.375, 2.0625
+    h = (BC250_SCALER_AXIS_INPUT){128, 128, 2, 9, 0, 7, 0, 7, 2, 0};
+    CHECK(Bc250ScalerComponentAxisPlan(&h, 2, &c) == BC250_SCALER_GEOMETRY_OK);
+    CHECK(c.ViewportBegin == 1 && c.ViewportSize == 3);
+    CHECK(c.Ratio19 == 262144); // 7/7/2, not floor(7/2)/7
+    h.SourceBegin = 1;
+    CHECK(Bc250ScalerComponentAxisPlan(&h, 2, &c) == BC250_SCALER_GEOMETRY_UNSUPPORTED && IsZero(&c));
+    h.SourceBegin = 2;
+    CHECK(Bc250ScalerComponentAxisPlan(&h, 0, &c) == BC250_SCALER_GEOMETRY_INVALID && IsZero(&c));
+    CHECK(Bc250ScalerComponentAxisPlan(&h, 3, &c) == BC250_SCALER_GEOMETRY_INVALID && IsZero(&c));
+    h = (BC250_SCALER_AXIS_INPUT){8192, 1024, 0, 8192, 0, 1024, 0, 1024, 4, 0};
+    CHECK(Bc250ScalerComponentAxisPlan(&h, 2, &c) == BC250_SCALER_GEOMETRY_OK);
+    CHECK(c.Ratio19 == 4 * 524288); // do not halve the clamped luma 8:1 ratio
+    in.Horizontal = (BC250_SCALER_AXIS_INPUT){1920, 1920, 0, 1920, 0, 1920, 1, 1919, 1, 0};
+    in.Vertical = (BC250_SCALER_AXIS_INPUT){1080, 1200, 0, 1080, 0, 1200, 1, 1199, 4, 0};
+    in.ChromaDivisor = 2; in.ChromaTapsH = 2; in.ChromaTapsV = 2;
+    CHECK(Bc250ScalerPlaneGeometry(&in, &p) == BC250_SCALER_GEOMETRY_OK);
+    CHECK(p.ChromaH.RecoutBegin == p.LumaH.RecoutBegin && p.ChromaH.RecoutSize == p.LumaH.RecoutSize);
+    CHECK(p.ChromaV.RecoutBegin == p.LumaV.RecoutBegin && p.ChromaV.RecoutSize == p.LumaV.RecoutSize);
+    CHECK(p.ChromaH.ViewportBegin + p.ChromaH.ViewportSize <= 960);
+    CHECK(p.ChromaV.ViewportBegin + p.ChromaV.ViewportSize <= 540);
+    in.ChromaTapsV = 0; // last subplan fails after the other three succeeded
+    CHECK(Bc250ScalerPlaneGeometry(&in, &p) == BC250_SCALER_GEOMETRY_INVALID);
+    CHECK(memcmp(&p, &zero, sizeof(p)) == 0);
+    in.ChromaTapsV = 2;
+    in.Vertical.ClipBegin = in.Vertical.ClipEnd;
+    CHECK(Bc250ScalerPlaneGeometry(&in, &p) == BC250_SCALER_GEOMETRY_EMPTY);
+    CHECK(memcmp(&p, &zero, sizeof(p)) == 0);
+    in.Horizontal.SourceEnd = INT_MAX;
+    CHECK(Bc250ScalerPlaneGeometry(&in, &p) == BC250_SCALER_GEOMETRY_INVALID);
+    CHECK(memcmp(&p, &zero, sizeof(p)) == 0);
+    CHECK(Bc250ScalerPlaneGeometry(NULL, &p) == BC250_SCALER_GEOMETRY_INVALID);
+    CHECK(Bc250ScalerPlaneGeometry(&in, NULL) == BC250_SCALER_GEOMETRY_INVALID);
+}
+
 int main(int argc, char** argv)
 {
-    if (argc == 2 && strcmp(argv[1], "--stream") == 0) {
+    if (argc == 2 && (strcmp(argv[1], "--stream") == 0 || strcmp(argv[1], "--stream-chroma") == 0)) {
         BC250_SCALER_AXIS_INPUT in;
         BC250_SCALER_AXIS_PLAN p;
         int n, status;
@@ -96,7 +142,8 @@ int main(int argc, char** argv)
                 &in.SurfaceSize, &in.ActiveSize, &in.SourceBegin, &in.SourceEnd,
                 &in.DestinationBegin, &in.DestinationEnd, &in.ClipBegin, &in.ClipEnd,
                 &in.Taps, &in.Mirror)) == 10) {
-            status = Bc250ScalerAxisPlan(&in, &p);
+            status = Bc250ScalerComponentAxisPlan(&in,
+                strcmp(argv[1], "--stream-chroma") == 0 ? 2u : 1u, &p);
             printf("%d %u %u %u %u %u %u\n", status, p.ViewportBegin,
                    p.ViewportSize, p.RecoutBegin, p.RecoutSize, p.Ratio19, p.Init19);
         }
@@ -104,6 +151,7 @@ int main(int argc, char** argv)
     }
     Controls();
     Properties();
+    ChromaAndPlane();
     printf("scaler geometry: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

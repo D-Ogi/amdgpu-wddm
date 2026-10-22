@@ -53,9 +53,20 @@ The AMD viewport function and `fixed31_32` helpers are extracted without edits.
 The separate Windows adapter checks dimensions and clears output on refusal.
 Its host tests include exact rational comparisons, sample-position conservation,
 and the DCN201 exact-8:1 ratio adjustment with intermediate 31.32 rounding.
-This helper computes full-resolution components only. It does not yet compute
-subsampled chroma, select taps, check bandwidth, or program a plane.
+`Bc250ScalerPlaneGeometry` computes both axes for full-resolution and 4:2:0
+components. It publishes a plan only if all component calculations succeed.
+Output clip coordinates need not be even. Chroma ratios use the original source
+extent before division and truncation, including when that extent is odd.
+Neither helper selects taps, checks bandwidth, or programs a plane.
 Its mathematical mirror support does not enable a mirror capability.
+
+Open clipping requirement: the imported AMD path requires even source origins
+for 4:2:0. The adapter refuses odd origins explicitly, without rounding them.
+No Microsoft exception for this restriction has been established. A supported
+source-origin and chroma-phase implementation remains required before claiming
+complete clipping coverage. The geometry API takes clip coordinates in active
+output pixels. The DDI adapter must establish and implement its coordinate
+conversion before passing rectangles to this helper.
 
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
