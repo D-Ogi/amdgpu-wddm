@@ -145,6 +145,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
+ # BD-167: the source lookup of the flavour byte check (tools/release/flavour_bytes.py) on a throwaway repository. A
+ # commit or a checkout that Git cannot read is an error, never the absence of a lab string.
+ Check 'release-flavour-bytes' { & python -m unittest discover -s "$repo\tools\release" -p 'test_flavour_bytes.py' }
  # BD-166: the D3D11 configuration record of a staged package (tools/release/check_package_v3.py). b15 shipped a new
  # ICD with the old record and every D3D11 device failed with ERROR_CRC, so the record is checked in the package that
  # ships. The test stages a package of its own images: no device and no machine state.

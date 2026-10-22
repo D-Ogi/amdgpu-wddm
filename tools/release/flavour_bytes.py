@@ -19,7 +19,12 @@ STRINGS = ['BC250_PREAMBLE_NO_IDLE_WAIT', 'BC250_DEFERRED_LOG', 'queue wait skip
 
 
 def in_tree(mesa, commit, s):
+    # git grep exits 1 when the string is absent. Any other exit (no such commit, no such repository) is an error:
+    # read as absence, it let a lab DLL without its lab strings pass.
     r = subprocess.run(['git', '-C', str(mesa), 'grep', '-q', '-F', s, commit, '--', 'src'], capture_output=True)
+    if r.returncode not in (0, 1):
+        raise RuntimeError('Git source check failed (exit %d, commit %s): %s' %
+                           (r.returncode, commit, r.stderr.decode(errors='replace').strip()))
     return r.returncode == 0
 
 
