@@ -87,7 +87,17 @@ AMD table selection is checked at each ratio boundary. Odd tap counts receive
 zero padding for the final coefficient pair. This does not program a bank or
 establish phase order, image quality or filtering support on the hardware.
 The MPO writer must preserve these weights instead of replacing them with an
-unverified hardware two-tap mode. Taps, bank lifetime and DML stay open.
+unverified hardware two-tap mode. Hardware validation, bank lifetime and DML
+stay open.
+
+`Bc250ScalerPrepare` now combines the geometry, default/requested tap selection,
+line-buffer admission and four coefficient plans in private caller storage.
+It recomputes geometry after selecting the taps. A refusal clears all output.
+Insufficient buffer capacity does not cause a silent filter-quality reduction.
+Default taps follow the AMD DCN201 selection block. Identity uses one tap and
+explicit linear mode uses two taps for each nonidentity component. This is
+CPU preparation only. Bandwidth/DML, format admission, bank lifetime and the
+display transaction remain open. No MPO DDI calls this preparation layer yet.
 
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,

@@ -430,6 +430,15 @@ or hardware ownership is established by this source-only preparation.
 ## DCN scaler filter (resolution modes, stage A)
 
 PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/dcn201_dpp.c` is unchanged from `dc/dpp/dcn201/`.
+`tools/import/extract_scaler_taps.py` extracts the default/requested tap block
+from `dpp201_get_optimal_number_of_taps`, unchanged inside a local wrapper,
+and `dc_fixpt_ceil` from `fixed31_32.h`. The wrapper omits DPP context checks;
+it does not admit FP16 or other formats. The Windows preparation layer validates
+geometry first, uses the identity bypass and selects two taps for linear mode.
+It recomputes geometry with final taps before buffer and coefficient preparation.
+
+PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
 `tools/import/extract_scaler_filters.py` extracts all 25 64-phase tables and
 their selectors from `reference/dce_scl_filters.c`, plus fraction conversion
 from `reference/fixpt31_32.c`. The generated functions and data stay unchanged.

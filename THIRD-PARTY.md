@@ -16,6 +16,11 @@ selectors and fixed-point helpers from Linux amdgpu DC v6.18 `7d0a66e4bb90`.
 Its notices are included. The separate filter-packing adapter and linear
 weight generation use the project license.
 
+`driver/amdgpu-import/reference/dcn201_dpp.c` and the extracted tap-selection
+block in `driver/shim/generated/dc_scaler_taps.inc` retain AMD MIT notices.
+The latter also contains the AMD MIT fixed-point ceiling function. Both are
+from Linux amdgpu DC v6.18 `7d0a66e4bb90`; the combined planner is project code.
+
 ## Fetched at build time, not stored here
 
 | What | Used by | License |
