@@ -426,6 +426,12 @@ DISPLAY_PIPE_READS = ["mmOTG0_OTG_V_TOTAL_CONTROL", "mmOTG0_OTG_STEREO_CONTROL",
                       "mmMPCC0_MPCC_CONTROL", "mmMPC_OUT0_MUX"]
 DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT",
                       "mmDC_I2C_DATA"]
+# BD-223 coefficient preparation for the second pipe. Geometry/address writes
+# are admitted separately when their transaction is implemented. No raw escape writes.
+DISPLAY_PIPE_WRITES += [f"mmDSCL1_{r}" for r in
+                       ("SCL_COEF_RAM_TAP_SELECT", "SCL_COEF_RAM_TAP_DATA", "SCL_MODE")]
+DISPLAY_PIPE_READS += ["mmDSCL1_DSCL_MEM_PWR_CTRL", "mmDSCL1_DSCL_MEM_PWR_STATUS"]
+DISPLAY_DATA_PORTS += ["mmDSCL1_SCL_COEF_RAM_TAP_SELECT", "mmDSCL1_SCL_COEF_RAM_TAP_DATA"]
 # Exact DCN201 timing entry points, extracted from AMD DC. The clock-control
 # register is only polled by optc1_disable_crtc; no clock write is granted here.
 DISPLAY_OPTC_REGS = json.loads((ROOT / 'driver/shim/optc_registers.json').read_text())

@@ -99,6 +99,26 @@ explicit linear mode uses two taps for each nonidentity component. This is
 CPU preparation only. Bandwidth/DML, format admission, bank lifetime and the
 display transaction remain open. No MPO DDI calls this preparation layer yet.
 
+The coefficient writer now stages pipe 0 or 1 under a caller-owned OTG0 lock,
+at PASSIVE_LEVEL, with coefficient memory already on. It verifies that selected
+and current banks agree before staging. Every pair uses an explicit phase/pair
+selector, so the upload does not depend on the old tap count. Staging does not
+write SCL_MODE. The short select step must share the geometry/address transaction.
+
+One owner record per pipe reserves a staged bank. A failed or uncertain write
+poisons that record. It can be invalidated only after the display owner quiesces
+the hardware. Tickets increase across invalidation to reject stale commits.
+Observation releases bank ownership only after the OTG lock is clear and both
+bank fields report the submitted target. This is not PresentId retirement.
+
+These entry points have host-model coverage, not a hardware witness. The model
+assumes the inactive-bank write behavior used by AMD's update sequence. The
+first hardware arm must check that behavior and explicit phase/pair addressing.
+All legacy scaler, stop, reset and mode writers must join the same ownership
+protocol before these helpers can be called by MPO. Filter uploads belong to
+filter changes, not every address-only flip. Filter reuse and the complete
+plane transaction remain to be connected. No MPO capability is enabled here.
+
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements
