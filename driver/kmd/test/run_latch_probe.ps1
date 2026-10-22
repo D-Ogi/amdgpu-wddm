@@ -30,6 +30,10 @@ return @{ Code=$LASTEXITCODE; Output=($output -join "`n") }
 $run=Invoke-Probe "$Out\actual.c" 'latch_probe_test'
 Write-Output $run.Output
 if ($run.Code) {throw 'Probe host tests failed'}
+& "$Out\latch_probe_test.exe" --emit-model-records | Set-Content "$Out\model-records.jsonl" -Encoding UTF8
+if ($LASTEXITCODE) {throw 'Actual-core model record control failed'}
+& python -B "$repo\tools\win\bc250kmd_cli\test_dcn_latch_analysis.py" --model-records "$Out\model-records.jsonl"
+if ($LASTEXITCODE) {throw 'Latch evidence decoder controls failed'}
 & python "$PSScriptRoot\generate_latch_escape_test.py" --out "$Out\escape.c"
 if ($LASTEXITCODE) {throw 'Escape extraction failed'}
 $run=Invoke-Probe "$Out\escape.c" 'latch_escape_test'

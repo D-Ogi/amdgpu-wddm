@@ -439,7 +439,7 @@ The test includes an address A->B->A counterexample that passes these brackets
 but combines words into neither A nor B. The experiment must exclude other
 writers and permit only one address transition. It must retain both surfaces,
 bind observations to its owner generation, and stop on reset or power change.
-This reader is not wired into a KMD escape or the live completion path yet.
+The reader is wired into the lab probe, but not the live completion path.
 It provides no allocation-retirement or hardware-latch proof.
 
 The current `WddmPrimaryExclusiveBegin` is a candidate owner for the probe:
@@ -507,8 +507,9 @@ End. It does not certify the restored desktop. `WritesAttempted` counts a
 production address transaction as one operation and direct writes separately.
 Neither field is an allocation-retirement predicate.
 
-`run_latch_probe.ps1` compiles the actual core with Clang against two explicit
-device models. Both controls agree. Only the lock-after-program arm differs.
+`run_latch_probe.ps1` compiles the actual core with Clang against explicit
+device models. With immediate pending-bank acceptance, both controls agree
+and only the lock-after-program arm differs between H1 and H2.
 Tests inject failures at each modeled read, write and ownership checkpoint,
 including writes that fail after taking effect. Power withdrawal, stuck
 acknowledgements, failed cleanup and End failures are separate controls.
@@ -552,6 +553,36 @@ The ABI version word alone does not identify the image. Run the unlocked and
 lock-before-program controls before interpreting the lock-after-program arm.
 The separate runner stub opens no adapter. Run its exit-code controls on the
 target PowerShell version before a hardware trial.
+
+`analyze-dcn-latch.py` checks the three client JSONL files in arm order 0, 1, 2.
+It decodes the 94 raw DWORDs and checks the summary against them. It recomputes
+the sample brackets, lock states and address from the named AMD masks. Missing
+records, failed controls, cleanup failures and unmatched inputs cannot classify.
+The analyzer records input hashes and never asserts hardware or retirement proof.
+Its tests consume serialized results from the actual C core under the device
+models, plus corrupt, incomplete and inconsistent copies of those records.
+
+The third model is a counterexample to a unique H1 conclusion. It permits an
+already accepted address to latch under a later lock, as H2 does. But trigger
+submission has not yet transferred B into that accepted state when the lock
+arrives. Acceptance waits for an unlocked update opportunity. Both controls
+pass, and all three captured records are identical to the H1 records. Thus
+observing A at the first changed frame word does not distinguish H1 from this
+delayed-acceptance form of H2. This is a software counterexample, not evidence
+that DCN201 implements the delay.
+
+An H1-compatible pattern remains ambiguous until a separate witness establishes
+pending-bank acceptance before the later lock. Waiting longer after taking the
+lock need not resolve it, because that lock can prevent acceptance throughout
+the interval. Observing B under the held lock is the asymmetric result that can
+oppose H1, subject to the external ownership and sample contracts. Neither
+result establishes atomic scaling, CSC updates or full MPO support.
+
+At the pinned AMD revision, `hubp2_is_flip_pending` checks SURFACE_FLIP_PENDING
+and whether EARLIEST_INUSE equals the requested address. That boolean combines
+unfinished states. Its implementation does not expose a separate witness for
+pending-bank acceptance before latch. Do not treat a pending bit alone as that
+missing witness. Linux wishlist L48 records this distinction for measurement.
 
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock

@@ -44,7 +44,7 @@ static unsigned checks,fails;
 static ULONG frame, lock, high, selector, surface, flip, triple, reads,writes,guards;
 static ULONGLONG live,pending;
 static LONGLONG clock_us;
-static unsigned h2,armed,owner,resumed,ended,fault,begin_fail,resume_fail,end_fail;
+static unsigned h2,deferred_acceptance,armed,owner,resumed,ended,fault,begin_fail,resume_fail,end_fail;
 static unsigned fail_read,fail_write,fail_guard,after_write,unlock_stuck,lock_stuck;
 static unsigned no_frames,restore_fail,programs,invalid_owner_writes,power_on_read;
 static unsigned unlock_delay,unlock_countdown;
@@ -100,7 +100,9 @@ static NTSTATUS MmioDcnWriteEx(BC250_DEVICE *d,ULONG offset,ULONG value,BOOLEAN 
     case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH:high=value;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS:
         pending=((ULONGLONG)high<<32)|value;armed=0;break;
-    case BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG:armed=1;break;
+    // A submitted trigger need not prove that the pending bank accepted B.
+    // Model 2 defers that acceptance until an unlocked update opportunity.
+    case BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG:armed=deferred_acceptance?0:1;break;
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }
     return writes==fail_write?STATUS_IO_DEVICE_ERROR:STATUS_SUCCESS;
@@ -130,7 +132,7 @@ static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG card,ULONG pitch,
     ++programs;*wrote=FALSE;
     if(restore_fail && programs>=3)return STATUS_IO_DEVICE_ERROR;
     *wrote=TRUE;pending=card-d->VramMcBase+(ULONGLONG)d->VramPhysical.QuadPart;
-    armed=1;return STATUS_SUCCESS;
+    armed=deferred_acceptance?0:1;return STATUS_SUCCESS;
 }
 /* ACTUAL_PROBE */
 static void Setup(BC250_DEVICE *d)
@@ -143,23 +145,47 @@ static void Setup(BC250_DEVICE *d)
     d->RuntimeFramebufferLength=4096ull*2160*4;
     frame=lock=high=selector=surface=flip=triple=reads=writes=guards=0;
     live=(ULONGLONG)d->RuntimeFramebufferPhysical.QuadPart;pending=0;clock_us=0;
-    h2=armed=owner=resumed=ended=fault=begin_fail=resume_fail=end_fail=0;
+    h2=deferred_acceptance=armed=owner=resumed=ended=fault=begin_fail=resume_fail=end_fail=0;
     fail_read=fail_write=fail_guard=after_write=unlock_stuck=lock_stuck=0;
     no_frames=restore_fail=programs=invalid_owner_writes=power_on_read=0;
     unlock_delay=unlock_countdown=0;irql=0;otg=1;
 }
-int main(void)
+#include "dcn_latch_escape.h"
+// Serialize the actual core result in the client's ABI for an independent
+// offline decoder control. Timings are synthetic and explicitly model-only.
+static void EmitModel(unsigned model,unsigned arm,const BC250_LATCH_PROBE_RESULT* r)
+{
+    BC250_ESCAPE_LATCH_PROBE packet={0};
+    unsigned long words[94],i;
+    unsigned long long begin=(arm+1)*1000000ull,end=begin+(unsigned long long)clock_us;
+    packet.Magic=BC250_ESCAPE_MAGIC;packet.Command=BC250_ESCAPE_LATCH_PROBE_COMMAND;
+    packet.Version=packet.ExpectedVersion=BC250_KMD_VERSION;
+    packet.AbiVersion=BC250_LATCH_PROBE_ABI;packet.Arm=arm;packet.Result=*r;
+    memcpy(words,&packet,sizeof(words));
+    printf("{\"model\":%u,\"records\":[{\"type\":\"header\",\"schema\":1,\"arm\":%u,\"expected_version\":%u,\"qpc_frequency\":1000000,\"hardware_access\":true,\"atomic\":false},",model,arm,BC250_KMD_VERSION);
+    printf("{\"type\":\"result\",\"begin_qpc\":%llu,\"end_qpc\":%llu,\"escape_status\":0,\"nt_status\":0,\"measurement_status\":%lu,\"unlock_status\":%lu,\"restore_status\":%lu,\"end_status\":%lu,\"samples\":%lu,\"writes_attempted\":%lu,\"boundary_observed\":%lu,\"reserved_a_restored\":%lu,\"raw_dwords\":[",
+           begin,end,(ULONG)r->Status,(ULONG)r->UnlockStatus,(ULONG)r->RestoreStatus,(ULONG)r->EndStatus,
+           r->Samples,r->WritesAttempted,r->BoundaryObserved,r->Restored);
+    for(i=0;i<94;++i)printf("%s%lu",i?",":"",words[i]);
+    puts("]},{\"type\":\"end\",\"exit_code\":0,\"hardware_verdict\":null}]}");
+}
+int main(int argc,char** argv)
 {
     BC250_DEVICE d;BC250_LATCH_PROBE_RESULT r;
     unsigned model,arm,i,nread,nwrite,nguard,applied;long status;
-    for(model=0;model<2;model++)for(arm=0;arm<Bc250LatchArmCount;arm++) {
-        Setup(&d);h2=model;
+    int emit=argc==2 && !strcmp(argv[1],"--emit-model-records");
+    if(argc!=1 && !emit)return 2;
+    for(model=0;model<3;model++)for(arm=0;arm<Bc250LatchArmCount;arm++) {
+        Setup(&d);h2=model!=0;deferred_acceptance=model==2;
         CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_SUCCESS);
         CHECK(r.Restored && r.BoundaryObserved && ended==1 && !owner && !lock && !fault);
-        CHECK(r.Boundary.Physical==((arm==0 || (arm==2 && model))?r.AddressB:r.AddressA));
+        CHECK(r.Boundary.Physical==((arm==0 || (arm==2 && model==1))?r.AddressB:r.AddressA));
         CHECK(r.AfterUnlock.Physical==r.AddressB && live==r.AddressA);
         CHECK(!invalid_owner_writes && clock_us<100000);
+        if(emit)EmitModel(model,arm,&r);
     }
+    if(emit)return fails?1:0;
+    deferred_acceptance=0;
     Setup(&d);unlock_delay=5;CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS && !lock);
     Setup(&d);CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS);
     nread=reads;nwrite=writes;nguard=guards;
