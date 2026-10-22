@@ -3171,7 +3171,7 @@
       {
        "name": "pfnRetrieveShaderComment",
        "function": "retrieve_shader_comment",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1050",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1081",
        "done": true,
        "reason": "does work"
       },
@@ -3185,14 +3185,14 @@
       {
        "name": "pfnCalcPrivatePipelineLibrarySize",
        "function": "calc_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:719",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:722",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCreatePipelineLibrary",
        "function": "create_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:867",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:887",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -3200,28 +3200,28 @@
       {
        "name": "pfnDestroyPipelineLibrary",
        "function": "destroy_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:892",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:912",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnAddPipelineStateToLibrary",
        "function": "add_pipeline_to_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:979",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1011",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcSerializedLibrarySize",
        "function": "calc_serialized_library_size",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1001",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1032",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnSerializeLibrary",
        "function": "serialize_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1022",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1053",
        "done": true,
        "reason": "does work"
       },
@@ -3832,7 +3832,7 @@
       {
        "name": "pfnDispatch",
        "function": "dispatch",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1144",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1175",
        "done": true,
        "reason": "does work"
       },
@@ -4007,7 +4007,7 @@
       {
        "name": "pfnSetPipelineState",
        "function": "set_pipeline_state",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1066",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1097",
        "done": true,
        "reason": "does work"
       },
@@ -4021,7 +4021,7 @@
       {
        "name": "pfnSetComputeRootSignature",
        "function": "set_compute_root_signature",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1092",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1123",
        "done": true,
        "reason": "does work"
       },
@@ -4035,7 +4035,7 @@
       {
        "name": "pfnSetComputeRootDescriptorTable",
        "function": "set_compute_root_table",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1105",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1136",
        "done": true,
        "reason": "does work"
       },
@@ -4049,7 +4049,7 @@
       {
        "name": "pfnSetComputeRoot32BitConstant",
        "function": "set_compute_root_constant",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1112",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1143",
        "done": true,
        "reason": "does work"
       },
@@ -4063,7 +4063,7 @@
       {
        "name": "pfnSetComputeRoot32BitConstants",
        "function": "set_compute_root_constants",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1117",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1148",
        "done": true,
        "reason": "does work"
       },
@@ -4077,7 +4077,7 @@
       {
        "name": "pfnSetComputeRootConstantBufferView",
        "function": "set_compute_root_cbv",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1129",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1160",
        "done": true,
        "reason": "does work"
       },
@@ -4091,7 +4091,7 @@
       {
        "name": "pfnSetComputeRootShaderResourceView",
        "function": "set_compute_root_srv",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1134",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1165",
        "done": true,
        "reason": "does work"
       },
@@ -4105,7 +4105,7 @@
       {
        "name": "pfnSetComputeRootUnorderedAccessView",
        "function": "set_compute_root_uav",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1139",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1170",
        "done": true,
        "reason": "does work"
       },

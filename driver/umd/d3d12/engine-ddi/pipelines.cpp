@@ -682,6 +682,9 @@ void APIENTRY destroy_pipeline(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINESTATE 
     // A library this pipeline was stored into keeps what it was given, so the store that still waits for the
     // compile is made here, while the pipeline exists.
     flush_pending_of(r);
+    // A library collector can already own this pipeline's detached store. Its compile/store must finish
+    // before the runtime can reclaim the pipeline's private storage or we can destroy its job.
+    while (r->pending_users.load(std::memory_order_acquire)) Sleep(1);
     if (r->job) {
         // Ends the job (a queued one without a create at all) and releases the pipeline it holds, inside this
         // destroy, exactly where release_engine releases a synchronously created one.
@@ -801,14 +804,21 @@ void forget_serialized_sizes(PipelineLibraryRecord* l) noexcept {
 // Every list below is under the device's pending_stores lock (internal.h), which says why it is not a lock of the
 // library record: a pipeline's destroy finds its library through a pointer that the library's own destroy clears,
 // and a lock inside a record being destroyed cannot guard the thread that is still reading it.
-void link_pending(PipelineLibraryRecord* l, PipelineRecord* p, UINT index) noexcept {
+bool link_pending(PipelineLibraryRecord* l, PipelineRecord* p, UINT index) noexcept {
     SRWLOCK& lock = p->h.device->pending_stores;
     AcquireSRWLockExclusive(&lock);
+    // The test and insertion are one operation. Two Adds must never put the same intrusive node in
+    // a list twice, or overwrite its next pointer while it still belongs to another library (BD-220).
+    if (p->pending_library.load(std::memory_order_relaxed)) {
+        ReleaseSRWLockExclusive(&lock);
+        return false;
+    }
     p->pending_index = index;
     p->pending_next = l->pending_head;
     l->pending_head = p;
     p->pending_library.store(l, std::memory_order_release);
     ReleaseSRWLockExclusive(&lock);
+    return true;
 }
 
 // Takes one pending store out of its library's list, so that exactly one thread makes it: the taker owns it. The
@@ -826,6 +836,8 @@ bool take_pending(PipelineRecord* p, PipelineLibraryRecord** library, UINT* inde
             *at = p->pending_next;
             p->pending_next = nullptr;
             p->pending_library.store(nullptr, std::memory_order_release);
+            p->pending_users.fetch_add(1, std::memory_order_relaxed);
+            l->pending_users.fetch_add(1, std::memory_order_relaxed);
             taken = true;
             break;
         }
@@ -845,9 +857,17 @@ PipelineRecord* take_pending_head(PipelineLibraryRecord* l, UINT* index) noexcep
         p->pending_next = nullptr;
         p->pending_library.store(nullptr, std::memory_order_release);
         *index = p->pending_index;
+        p->pending_users.fetch_add(1, std::memory_order_relaxed);
+        l->pending_users.fetch_add(1, std::memory_order_relaxed);
     }
     ReleaseSRWLockExclusive(&lock);
     return p;
+}
+
+void finish_pending(PipelineLibraryRecord* l, PipelineRecord* p) noexcept {
+    // Do not touch either record after releasing its last collector reference.
+    p->pending_users.fetch_sub(1, std::memory_order_release);
+    l->pending_users.fetch_sub(1, std::memory_order_release);
 }
 
 // The refusal of a pipeline library create. Every code is clamped the way a creation slot must clamp it
@@ -900,9 +920,18 @@ void APIENTRY destroy_pipeline_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELI
     // A store this library still waits for has nowhere to go: the library it would be written into is what is
     // being destroyed, and no blob of it will ever be read. The pipelines are let go of without their compile
     // being waited for, which is also what makes this destroy cheap for an application that gives up on a cache.
-    UINT index = 0;
     uint32_t dropped = 0;
-    while (take_pending_head(r, &index)) ++dropped;
+    AcquireSRWLockExclusive(&c->pending_stores);
+    while (PipelineRecord* p = r->pending_head) {
+        r->pending_head = p->pending_next;
+        p->pending_next = nullptr;
+        p->pending_library.store(nullptr, std::memory_order_release);
+        ++dropped;
+    }
+    ReleaseSRWLockExclusive(&c->pending_stores);
+    // A pipeline's own destroy can already have taken its store. Dropping the remaining list does
+    // not end that collector's use of this record. Wait without holding the list lock.
+    while (r->pending_users.load(std::memory_order_acquire)) Sleep(1);
     if (dropped)
         log_line("pipeline library: destroyed with %u store(s) that no serialize asked for", dropped);
     release_engine(r->h);
@@ -957,8 +986,10 @@ HRESULT store_pipeline(PipelineLibraryRecord* l, PipelineRecord* p, UINT index, 
 // does not poison serialization of the entries the engine did accept.
 void flush_pending(PipelineLibraryRecord* l, const char* slot) noexcept {
     UINT index = 0;
-    while (PipelineRecord* p = take_pending_head(l, &index))
+    while (PipelineRecord* p = take_pending_head(l, &index)) {
         (void)store_pipeline(l, p, index, slot, true);
+        finish_pending(l, p);
+    }
 }
 
 // The store a pipeline owes its library, made before the pipeline is destroyed, so that a library keeps what was
@@ -968,6 +999,7 @@ void flush_pending_of(PipelineRecord* p) noexcept {
     UINT index = 0;
     if (!take_pending(p, &l, &index)) return;
     (void)store_pipeline(l, p, index, "FlushPendingPipelineState", true);
+    finish_pending(l, p);
 }
 
 // D88, a creation slot, so its refusals are clamped. The engine answers E_INVALIDARG for a name it already holds
@@ -986,9 +1018,8 @@ HRESULT APIENTRY add_pipeline_to_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPE
     // Settle the earlier Add even if the compiler has finished since it was queued.
     // The new Add retains its synchronous error channel, including duplicate-name refusal.
     flush_pending_of(p);
-    if (pso_pending(p->job) && !p->pending_library.load(std::memory_order_acquire)) {
+    if (pso_pending(p->job) && link_pending(l, p, index)) {
         forget_serialized_sizes(l);                                 // the blob will be longer than any size held
-        link_pending(l, p, index);
         return S_OK;
     }
     return admitted_create_failure(store_pipeline(l, p, index, "AddPipelineStateToLibrary"));

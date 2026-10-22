@@ -621,6 +621,8 @@ struct PipelineRecord {
     std::atomic<PipelineLibraryRecord*> pending_library{nullptr};
     UINT pending_index{0};                      // under DeviceContext::pending_stores, or owned by its taker
     PipelineRecord* pending_next{nullptr};      // under DeviceContext::pending_stores
+    // A collector removed the store from the list but still uses this record outside the lock.
+    std::atomic<uint32_t> pending_users{0};
 };
 
 // What pfnCalcSerializedLibrarySize last answered to one thread, and therefore the number of bytes that thread's
@@ -648,6 +650,7 @@ struct PipelineLibraryRecord {
     // is logged once, not returned from a later Serialize of the valid remaining entries (BD-219). The list
     // is under DeviceContext::pending_stores, not under a lock of this record, which says why.
     PipelineRecord* pending_head{nullptr};
+    std::atomic<uint32_t> pending_users{0};      // collectors that still use this library record
     std::atomic<long> first_deferred_failure{S_OK}; // diagnostic only, retained for the library lifetime
 };
 

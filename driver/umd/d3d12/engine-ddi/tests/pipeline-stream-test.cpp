@@ -339,6 +339,9 @@ public:
 // pipeline of its own, so the test can tell a load from an ordinary create by the object that comes back.
 class FakePipelineLibrary final : public Child<ID3D12PipelineLibrary1> {
 public:
+    std::mutex store_lock;
+    std::atomic<bool> hold_store{false};
+    std::atomic<unsigned> store_entries{0};
     FakePipeline pipeline;
     std::vector<uint8_t> blob;                  // what CreatePipelineLibrary was given
     std::vector<std::wstring> stored;           // the names StorePipeline was called with, in order
@@ -364,6 +367,9 @@ public:
         return S_OK;
     }
     HRESULT STDMETHODCALLTYPE StorePipeline(LPCWSTR name, ID3D12PipelineState* state) override {
+        ++store_entries;
+        while (hold_store.load()) Sleep(1);
+        std::lock_guard<std::mutex> held(store_lock);
         stored.push_back(name ? name : L"");
         stored_pipelines.push_back(state);
         if (FAILED(store_result)) return store_result;
@@ -1913,6 +1919,106 @@ int main() {
               "the library's destroy)", after_destroy, creates_after_destroy, creates_after_library);
         g_core.pfnDestroyPipelineState(f.h, dropped);
         g_core.pfnDestroyPipelineLibrary(f.h, kept);
+    }
+
+    // BD-220: concurrent Adds cannot link the same intrusive node twice, in one library or across two.
+    // Keep the compiler busy and hold the list lock until both callers have entered their Add.
+    for (unsigned round = 0; round != 16; ++round) {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        g_runs = 0;
+        g_gate.shut();
+        const auto left = f.pipeline_library(nullptr, 0);
+        const auto right = round & 1 ? f.pipeline_library(nullptr, 0) : left;
+        const auto args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{}, seed{};
+        const HRESULT created = create(f, args, pso);
+        const bool parked = until([] { return g_runs.load() == 1; });
+        create(f, args, seed);
+        g_core.pfnAddPipelineStateToLibrary(f.h, left, seed, 20);
+        std::atomic<unsigned> entered{0};
+        HRESULT added[2]{};
+        AcquireSRWLockExclusive(&f.context.pending_stores);
+        std::thread a([&] { ++entered; added[0] = g_core.pfnAddPipelineStateToLibrary(f.h, left, pso, 21); });
+        std::thread b([&] { ++entered; added[1] = g_core.pfnAddPipelineStateToLibrary(f.h, right, pso, 22); });
+        const bool callers = until([&] { return entered.load() == 2; });
+        Sleep(20);
+        ReleaseSRWLockExclusive(&f.context.pending_stores);
+        const bool linked = until([&] { return static_cast<PipelineRecord*>(pso.pDrvPrivate)->pending_library.load() != nullptr; });
+        g_gate.release();
+        a.join(); b.join();
+        auto* p = static_cast<PipelineRecord*>(pso.pDrvPrivate);
+        unsigned occurrences = 0;
+        bool lists_ok = true;
+        for (auto library : {left, right}) {
+            if (library.pDrvPrivate == right.pDrvPrivate && left.pDrvPrivate == right.pDrvPrivate && occurrences) break;
+            auto* l = static_cast<PipelineLibraryRecord*>(library.pDrvPrivate);
+            unsigned count = 0;
+            for (auto* n = l->pending_head; n && count < 4; n = n->pending_next, ++count) {
+                lists_ok = lists_ok && n->pending_library.load() == l;
+                if (n == p) ++occurrences;
+            }
+            lists_ok = lists_ok && count < 4;
+        }
+        check(created == S_OK && parked && callers && linked && added[0] == S_OK && added[1] == S_OK &&
+                  lists_ok && occurrences <= 1,
+              "BD-220 concurrent Add: round %u, lists coherent, one pending node at most (%u)", round, occurrences);
+        if (!lists_ok || occurrences > 1) std::exit(1); // Preserve the failure instead of walking a corrupt cycle.
+        if (round & 2) {
+            g_core.pfnDestroyPipelineState(f.h, pso);
+            g_core.pfnDestroyPipelineState(f.h, seed);
+        }
+        g_core.pfnDestroyPipelineLibrary(f.h, left);
+        if (left.pDrvPrivate != right.pDrvPrivate) g_core.pfnDestroyPipelineLibrary(f.h, right);
+        if (!(round & 2)) {
+            check(!p->pending_library.load() && !static_cast<PipelineRecord*>(seed.pDrvPrivate)->pending_library.load(),
+                  "BD-220 library first: all pipeline back-pointers cleared");
+            g_core.pfnDestroyPipelineState(f.h, pso);
+            g_core.pfnDestroyPipelineState(f.h, seed);
+        }
+    }
+
+    // A detached store still borrows both private records. Exercise each cross-object destruction order
+    // while StorePipeline is held inside the fake engine, after the list operation has completed.
+    for (bool library_first : {false, true}) {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        g_gate.shut();
+        const auto library = f.pipeline_library(nullptr, 0);
+        const auto args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        create(f, args, pso);
+        g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 30);
+        device.library.hold_store = true;
+        g_gate.release();
+        std::atomic<bool> collector_done{false}, destroy_started{false}, destroy_done{false};
+        std::thread collector([&] {
+            if (library_first) g_core.pfnDestroyPipelineState(f.h, pso);
+            else g_core.pfnCalcSerializedLibrarySize(f.h, library);
+            collector_done = true;
+        });
+        const bool in_store = until([&] { return device.library.store_entries.load() == 1; });
+        auto* p = static_cast<PipelineRecord*>(pso.pDrvPrivate);
+        auto* l = static_cast<PipelineLibraryRecord*>(library.pDrvPrivate);
+        const bool borrowed = in_store && p->pending_users.load() == 1 && l->pending_users.load() == 1;
+        std::thread destroyer([&] {
+            destroy_started = true;
+            if (library_first) g_core.pfnDestroyPipelineLibrary(f.h, library);
+            else g_core.pfnDestroyPipelineState(f.h, pso);
+            destroy_done = true;
+        });
+        const bool started = until([&] { return destroy_started.load(); });
+        Sleep(20);
+        const bool retained = !destroy_done.load() && !collector_done.load();
+        device.library.hold_store = false;
+        collector.join(); destroyer.join();
+        check(borrowed && started && retained && destroy_done.load() && collector_done.load() &&
+                  !p->pending_users.load() && !l->pending_users.load() && device.library.accepted.size() == 1,
+              "BD-220 detached store pins both records until completion, library destroy %s",
+              library_first ? "during pipeline destroy" : "after pipeline destroy");
+        if (!library_first) g_core.pfnDestroyPipelineLibrary(f.h, library);
     }
 
     // 7k. The warm path: a create whose engine answers at once, which is what the engine's own disk cache makes of
