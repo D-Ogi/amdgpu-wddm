@@ -78,6 +78,9 @@ class CheckSettingsTests(unittest.TestCase):
 
     def test_unresolved_call_is_a_failure_not_a_skip(self):
         for source in ('static void f(PCWSTR name) {\n    ULONG v = GuardReadSetting(name, 0);\n}\n',
+                       # two plain identifiers are not two typed parameters (a lone identifier is not a parameter)
+                       'static void f(PCWSTR name, ULONG defaultValue) {\n    unsigned v=GuardReadSetting(name,defaultValue);\n}\n',
+                       'static void f(PCWSTR name, ULONG d) {\n    GuardReadSetting(name, d);\n}\n',
                        'static void f(void) {\n    ULONG v = GuardReadSetting(L"Known");\n}\n',
                        'static void f(void) {\n    ULONG (*fn)(PCWSTR, ULONG) = GuardReadSetting;\n}\n'):
             code, out = run_gate(source)

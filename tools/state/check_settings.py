@@ -21,8 +21,9 @@ ROOT = Path(__file__).resolve().parents[2]
 NAMES = ('GuardReadSetting', 'GuardConsumeSetting')
 IDENT = re.compile(r'\b(GuardReadSetting|GuardConsumeSetting)\b')
 WIDE = re.compile(r'^L"([A-Za-z0-9]+)"$')
-# a typed parameter of the definition or a prototype: optional SAL annotation, type words, optional '*', a name
-PARAM = re.compile(r'^(?:_[A-Za-z_]+_\s+)?(?:const\s+)?[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s*\**\s*[A-Za-z_]\w*$')
+# a typed parameter of the definition or a prototype: optional SAL annotation, type words, then whitespace or a
+# pointer declarator as the separator, then the name (a lone identifier is not a parameter)
+PARAM = re.compile(r'^(?:_[A-Za-z_]+_\s+)?(?:const\s+)?[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*(?:\s+\**|\s*\*+)\s*[A-Za-z_]\w*$')
 LITERAL = re.compile(r'^(0[xX][0-9a-fA-F]+|0[0-7]*|[1-9][0-9]*)[uUlL]*$')
 DEFINE = re.compile(r'^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(\(*\s*(?:0[xX][0-9a-fA-F]+|[0-9]+)\s*[uUlL]*\s*\)*)\s*$', re.M)
 NAME_DEFINE = re.compile(r'^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(L"[A-Za-z0-9]+")\s*$', re.M)
