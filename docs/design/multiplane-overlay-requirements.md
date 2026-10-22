@@ -444,6 +444,13 @@ and plane disable requests are negative controls. A frame boundary and coherent
 hardware observation must be associated with the submitted generation. The
 hardware predicate for that association remains open.
 
+The [DCN observation control](../../tools/win/bc250kmd_cli/DCN-OBSERVE.md) uses
+the existing release reader without a KMD change. It retains raw HUBP0 and OTG0
+samples and reports incomplete replies. Its sequential address reads can tear
+despite an unchanged software sequence. HardwareAccess also perturbs scheduling.
+Use it to check the observation channel, not to establish MPO completion.
+HUBP1 and same-address attribute retirement need different instrumentation.
+
 The WDK defines PresentId as a per-plane identifier. Preserve its association
 with LayerIndex. Do not compare identifiers from different planes to infer
 completion. The
