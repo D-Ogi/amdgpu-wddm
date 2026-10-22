@@ -26,6 +26,7 @@ if (-not $PSBoundParameters.ContainsKey('WorkBase')) {
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'headless.ps1')
 . (Join-Path $PSScriptRoot 'installer\driver-package.ps1')
+. (Join-Path $PSScriptRoot 'installer\firmware-package.ps1')   # Test-DriverStoreFirmware (71b3e6bc); dot-sourcing does no I/O
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
@@ -300,7 +301,12 @@ Check ($rg.code -eq 0) "the release switch, the six values, the ICD file check, 
 $rw = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-wow64.ps1'), '-Package', $Package, '-WorkRoot', $WorkBase)
 $rw.text
 Check ($rw.code -eq 0) "x86 images, install paths, exports, verify's registration check: exit $($rw.code)"
-Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'
+if (Test-DriverStoreFirmware $m.firmware) {
+    # From 71b3e6bc the Driver Store package carries the firmware, and the installer writes no firmware folder at all.
+    Check (($r.text -match 'would: keep the pinned firmware with this repair set; Driver Store owns the installed copies') -and ($r.text -notmatch 'would: [^\r\n]*C:\\BC250')) 'firmware step: the Driver Store owns the installed copies, and no step names C:\BC250'
+} else {
+    Check ($r.text -match 'C:\\BC250 itself is not changed') 'firmware step leaves C:\BC250 itself alone'
+}
 Check ($r.text -match '\[ok\s*\]\s+GPU firmware\s+download from linux-firmware [0-9a-f]{40}: git\.kernel\.org, gitlab\.com reachable') 'preflight: both firmware download hosts reachable'
 Check ($r.text -match 'would: get the 9 GPU firmware files from linux-firmware [0-9a-f]{40} into ') 'phase 2 shows the firmware download'
 foreach ($f in @($m.firmware.files)) {
