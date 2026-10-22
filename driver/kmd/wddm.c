@@ -8774,11 +8774,11 @@ static NTSTATUS WddmPresentDmaFlip(_In_opt_ BC250_WDDM* Wddm, _In_ const DXGKARG
 //      it is out of DMA buffer space ... doing so results in the video memory manager bug checking
 //      the system."
 //
-// So this function has no way to report anything. It returns STATUS_SUCCESS on every path, it never
-// returns STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER and it does not use MultipassOffset; a command it
-// cannot translate is counted, logged and dropped - a visible artefact on the screen, never a
-// bugcheck. That is also why the admission in gdi_render.c is exhaustive and host-tested: a mistake
-// there cannot be answered with an error code.
+// The documented RenderGdi return contract does not permit a shortage/retry status. The separate
+// RenderKm return table does, but it does not grant that behavior to this virtual-addressing DDI.
+// This implementation returns STATUS_SUCCESS and does not use MultipassOffset. A command it cannot
+// translate is counted, logged and dropped: a correctness limitation, not a valid retry or fallback.
+// Admission and capacity need independent validation. Success and counters do not prove completed drawing.
 
 
 // gdi_render.h and gdi_pixel.h are plain integers; these tie every one of them to the WDK's own ABI,

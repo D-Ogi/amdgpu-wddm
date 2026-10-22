@@ -77,7 +77,8 @@ unsigned int Bc250GdiCallCapacity(unsigned int dmaDwords, unsigned int aheadDwor
  * structure, so the host test drives every ordering of calls and submissions the DDI does not
  * exclude. The caller serialises them; nothing here reads a clock, a lock or an address order.
  *
- * A buffer is its extent, Base and Bytes, which is what the DDI gives for it. A slot is free when
+ * The map models a buffer by a recorded extent, Base and Bytes. That is not a DDI lifetime proof.
+ * A slot is free when
  * Base is 0. A slot with Claimed set belongs to a call in flight: its length is not decided, so no
  * other claim and no submission may take it. Every other taken slot holds output of ours that no
  * submission has carried away, and it is released only by the address range of a submission. */

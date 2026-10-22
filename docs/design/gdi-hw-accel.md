@@ -596,10 +596,23 @@ does allow the DMA buffer to grow and shrink after the context is created, above
 smaller bound again if the aperture or either ceiling says so. The counters are how the field tells us it happened. They do not fix anything, and they
 are not evidence that the omitted drawing ever reached the screen.
 
-There is no honest alternative inside this DDI. There is no status to ask for more space (the return
-table is success only), the `MultipassOffset` continuation of the `DxgkDdiRender` family is not
-documented for this function, and a processor fallback is impossible here because `RenderGdi`
-receives GPU virtual addresses and no mapped pointers, with no callback it may use to map one.
+The documented `RenderGdi` return table permits only success. Other statuses lead to a bugcheck.
+The shortage/retry statuses of `RenderKm` and `Render` cannot be applied to this DDI merely because
+their argument structures also contain `MultipassOffset`. No reviewed contract establishes such
+a continuation for `RenderGdi`. Do not add an insufficient-DMA return as a capacity fix.
+
+This implementation has no CPU fallback: it binds GPU addresses and has no checked CPU mapping
+and cache-ownership route for these operations. That source limitation does not prove that every
+possible fallback architecture is excluded. Likewise, the success-only return contract does not
+authorize omitted drawing. A fix must account for every admitted operation in the output and for
+the ownership and completion of the resources it uses.
+
+The local DDI snapshot cited above and the current
+[RenderGdi return table](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/nc-d3dkmddi-dxgkddi_rendergdi)
+agree on this restriction (checked 2026-10-22). The separate
+[RenderKm contract](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/nc-d3dkmddi-dxgkddi_renderkm)
+documents an insufficient-buffer status. Its guaranteed-contract paragraph is conditional on that
+mode. It is not evidence that a different return code is legal for RenderGdi.
 
 #### What a bound above one indirect buffer would take
 
@@ -630,6 +643,16 @@ boundaries, the overflow arithmetic, the ownership of each segment and the failu
 work, like the rest of this file's contract. What needs the lab is whether the hardware executes
 several indirect buffers of one submission the way the design says, and that the completion of the
 whole submission is still a single fence.
+
+There are two independent capacity obligations. Splitting a stream into encodable indirect buffers
+removes the single-packet length limit only. It does not increase `DmaSize`, restore space consumed
+by earlier calls, or prove the allocation lifetime of a separately stored command segment. Conversely,
+a larger DMA allocation does not make its complete length encodable in one hardware packet.
+Any segmented design must prove both bounds, preserve the order of overlapping drawing operations,
+retain every segment and referenced resource until GPU completion, and signal the submission fence
+only after all segments finish. Arbitrary splits through packets, inline code or argument data are
+not valid segment boundaries. A compact translation needs its own worst-case expansion proof and
+pixel-equivalence checks. Neither option is implemented by this documentation correction.
 
 So this revision takes neither, and the limitation that follows is stated in the next section
 instead of being argued away.
