@@ -426,6 +426,28 @@ cannot distinguish a lock that blocks scanout latch from one that blocks only
 transfer into a pending bank. The existing model explicitly assumes the former.
 Neither interpretation is established by the function names.
 
+`Bc250LatchSampleRead` prepares that experiment with nine bounded reads on
+pipe 0. Frame, lock selection and request/ack endpoints bracket an
+EARLIEST_INUSE high/low/high read. It retains partial raw words and their
+validity mask on failure. A changed bracket returns BUSY. It does not retry,
+write or wait for a frame. Tests inject a transition at every read boundary
+and a failure at each read. Separate flags distinguish fully held, fully clear
+and partial request/ack states.
+
+Matching endpoints do not prove a continuous lock or an atomic snapshot.
+The test includes an address A->B->A counterexample that passes these brackets
+but combines words into neither A nor B. The experiment must exclude other
+writers and permit only one address transition. It must retain both surfaces,
+bind observations to its owner generation, and stop on reset or power change.
+This reader is not wired into a KMD escape or the live completion path yet.
+It provides no allocation-retirement or hardware-latch proof.
+
+The current `WddmPrimaryExclusiveBegin` is a candidate owner for the probe:
+it claims the primary generation and retires the driver-owned bridge before
+granting the long operation. The retirement wait occurs outside its interrupt
+synchronization section. A probe must also join restore/end and fault paths.
+calling the old diagnostic flip while VidPN owns OTG0 remains refused.
+
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock
 held across a boundary can delay an earlier accepted flip on the other plane.

@@ -117,6 +117,15 @@ try {
     & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
         "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
         "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `
+        /Fedcn_latch_sample_test.exe "$repo\driver\kmd\test\dcn_latch_sample_test.c" `
+        "$repo\driver\kmd\dcn_latch_sample.c" "$repo\driver\kmd\display_io.c" `
+        /link "/LIBPATH:$($crt.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+    if ($LASTEXITCODE) { throw 'Latch sample build failed' }
+    & .\dcn_latch_sample_test.exe
+    if ($LASTEXITCODE) { throw 'Latch sample tests failed' }
+    & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
+        "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
+        "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `
         /Fedcn_cnvc_color_test.exe "$repo\driver\kmd\test\dcn_cnvc_color_test.c" `
         "$repo\driver\kmd\dcn_cnvc_color.c" `
         /link "/LIBPATH:$($crt.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"

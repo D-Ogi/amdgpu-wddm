@@ -450,6 +450,11 @@ DISPLAY_PIPE_WRITES += [f"mm{block}{p}_{r}" for p in (0, 1) for block, regs in (
                  'DCSURF_FLIP_CONTROL', 'DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH', 'DCSURF_PRIMARY_SURFACE_ADDRESS')))
     for r in regs if f"mm{block}{p}_{r}" not in DISPLAY_PIPE_WRITES]
 DISPLAY_PIPE_READS += ['mmHUBP1_DCHUBP_CNTL']
+# BD-223 bounded latch observation. Read only, no diagnostic write admission.
+DISPLAY_LATCH_PRIVATE_READS = ['mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE',
+                               'mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH',
+                               'mmOTG0_OTG_STATUS_FRAME_COUNT']
+DISPLAY_PIPE_READS += DISPLAY_LATCH_PRIVATE_READS
 DISPLAY_PIPE_READS += [f'mmHUBPREQ{p}_DCSURF_FLIP_CONTROL2' for p in (0, 1)]
 DISPLAY_PIPE_READS = [r for r in DISPLAY_PIPE_READS if r not in DISPLAY_PIPE_WRITES]
 # Exact DCN201 timing entry points, extracted from AMD DC. The clock-control
@@ -495,7 +500,7 @@ for _name in DISPLAY_DCN201_PIPE_RO:
 DISPLAY_NAMED = (DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
                  DISPLAY_DDC_WRITES + DISPLAY_DDC_READS)
 EXTRA_READS += [("DMU", n) for n in DISPLAY_NAMED
-                if n not in DISPLAY_DATA_PORTS + DISPLAY_OPTC_NEW + DISPLAY_DP_STREAM_NEW + DISPLAY_DCN201_PIPE_NEW and ("DMU", n) not in EXTRA_READS and
+                if n not in DISPLAY_DATA_PORTS + DISPLAY_OPTC_NEW + DISPLAY_DP_STREAM_NEW + DISPLAY_DCN201_PIPE_NEW + DISPLAY_LATCH_PRIVATE_READS and ("DMU", n) not in EXTRA_READS and
                 n not in ("mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
 
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
