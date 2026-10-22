@@ -134,9 +134,9 @@ int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* map, unsigned long long windowVa, unsign
             continue;
         }
         if (windowVa >= end) continue;
-        /* The window lies inside this buffer's extent, so it is this buffer: identity, and not the
-         * distance from anything. A buffer allocated next to this one begins at `end` and is
-         * therefore not this buffer, which is the case review r5 built. */
+        /* Within the map's extent model this is an append candidate. The DDI fields alone do
+         * not prove allocation lifetime or advancement of GPU VA with the CPU cursor.
+         * An adjacent extent starting at `end` stays distinct (review r5). */
         if (slot->Claimed != 0u) return BC250_GDI_DMA_UNKNOWN;
         offset = (unsigned int)(windowVa - slot->Base);
         if ((offset & 3u) != 0u) return BC250_GDI_DMA_UNKNOWN;
@@ -159,9 +159,9 @@ int Bc250GdiDmaClaim(BC250_GDI_DMA_MAP* map, unsigned long long windowVa, unsign
         if (windowBytes / 4u < claim->Room) claim->Room = windowBytes / 4u;
         return BC250_GDI_DMA_APPEND;
     }
-    /* No buffer of this context holds this window. The DDI gives the start of a DMA buffer as 4 KB
-     * aligned, so a window on that boundary is a buffer this context holds nothing in, and a window
-     * off it is a position this driver cannot place. */
+    /* No tracked extent contains this window. The map admits an aligned address as fresh;
+     * alignment itself is not proof of a new OS allocation or absence of an earlier prefix.
+     * An unaligned address is refused. See gdi_batch.h for the model's limits. */
     if ((windowVa & (unsigned long long)(pageBytes - 1u)) != 0) return BC250_GDI_DMA_UNKNOWN;
     if (empty == BC250_GDI_DMA_SLOTS) return BC250_GDI_DMA_FULL;
     return Bc250GdiDmaTake(map, empty, windowVa, windowBytes, claim);
@@ -213,7 +213,8 @@ unsigned int Bc250GdiDmaSubmitted(BC250_GDI_DMA_MAP* map, unsigned long long buf
     unsigned int i, freed = 0;
 
     if (claimed) *claimed = 0u;
-    if (!map || bufferVa == 0) return 0u;
+    /* An empty submission carries no buffered commands, even at a matching base. */
+    if (!map || bufferVa == 0 || bytes == 0u) return 0u;
     for (i = 0; i < BC250_GDI_DMA_SLOTS; i++)
     {
         BC250_GDI_DMA_SLOT* slot = &map->Slots[i];

@@ -55,30 +55,31 @@
  * is a bound on what may be written and not a check at the end: the dwords are never allocated.
  * The constant is held against AMD's own field definition by C_ASSERT in gdi_dispatch.c.
  *
- * The last two terms of rule 3 are a question about identity, and the DDI answers it with an
+ * The last two terms of rule 3 need a buffer identity model. The DDI supplies an
  * address and a length. DXGKARG_RENDERGDI names the buffer of a call by pDmaBuffer, "a pointer to
  * the start of the DMA buffer, which is aligned on 4 KB", by DmaBufferGpuVirtualAddress, "the
  * virtual address where the DMA buffer was paged in", and by DmaSize, "the size, in bytes, of the
  * DMA buffer that pDmaBuffer points to" (ref/ddi-display/d3dkmddi.md, DXGKARG_RENDERGDI, WDK
  * 10.0.26100). The same two fields of DXGKARG_RENDER are declared [out] and [in] in the same file,
  * with the driver's own obligation spelled out: "the driver should set pDmaBuffer to the next empty
- * byte that follows the last byte that the driver wrote to". So what a call is given is a window
- * and the extent it lies in, and that pair is the only identity on offer. It does not promise that
+ * byte that follows the last byte that the driver wrote to". These descriptions alone do not prove
+ * that the GPU VA advances with the CPU cursor, or identify an allocation generation. They do not promise that
  * one DMA buffer carries one call, and it does not promise any order of RenderGdi calls and
  * submissions. Neither does the general submission guide, which separates the translation from the
  * scheduler's submission.
  *
- * A buffer is therefore identified by its extent and by nothing else. Adjacency is not identity: a
+ * This map uses a recorded extent as its identity model; that is an assumption to validate, not
+ * an allocation-lifetime guarantee from the DDI. Adjacency is not identity: a
  * window that begins exactly where our output in one buffer ended is just as likely to be another
  * buffer the memory manager placed next to it, with its own full size, and review r5 built that
  * case. So the tracker holds the extent of every buffer this context has unsubmitted output in,
  * with a generation each call's claim carries:
  *
  *   Bc250GdiDmaClaim places the window a call was given inside those extents. A window inside an
- *   extent is that buffer, and then the dwords ahead of the call must be exactly the dwords we
+ *   extent is treated as that buffer, and then the dwords ahead of the call must be exactly the dwords we
  *   wrote into it, or the window is a position this driver cannot explain and the call is refused
- *   as a whole. A window inside no extent is a buffer this context holds no output in, which by the
- *   4 KB sentence above is a buffer start, and nothing of ours is ahead of it. The claim reserves
+ *   as a whole. An aligned window outside all tracked extents is treated as a fresh buffer start;
+ *   alignment alone does not prove that no earlier untracked prefix exists. The claim reserves
  *   its slot until the call publishes or gives it back, so a second call cannot take a slot whose
  *   length is still being decided, and the room it answers with is the room that buffer has left
  *   behind the window, which is what keeps a continuation inside the extent it belongs to.
@@ -89,14 +90,19 @@
  *   Bc250GdiDmaSubmitted releases the buffers one submission carried away, by the address range of
  *   that submission, so a submission of one buffer cannot clear the state of another, and it leaves
  *   a reserved slot alone: a call still deciding its own length is not a buffer anyone can retire.
+ *   An empty submission retires nothing. A submit during a claim is counted but not remembered
+ *   for later retirement. Interior submissions after a recorded base do not retire that slot.
+ *   Whether those two orderings occur on this path remains unproved.
  *
- * Nothing but this driver writes hardware commands into a GDI context's DMA buffer, so what the
- * tracker holds is the whole of what that buffer contains, which is what makes a continuation exact
- * rather than estimated. A window nobody can place and a context with no slot left are both the
+ * The tracker measures this driver's recorded prefix within that model. It does not independently
+ * prove the OS buffer's full contents or allocation lifetime. A window nobody can place and a context with no slot left are both the
  * whole call dropped and counted, because a prefix nobody can establish is not a prefix anyone may
  * assume to be zero. The number of buffers one context can hold at a time is BC250_GDI_DMA_SLOTS,
  * and a context that would need more refuses the call instead of forgetting a buffer it has written
  * into or stealing the slot of a call in flight.
+ * DXGK_CONTEXTINFO also provides per-DMA private storage: zero-initialized on creation and not
+ * accessed by VidMm during the buffer's lifetime. A private record remains an alternative; its
+ * cursor, bounds and submission handoff would need a separate implementation and validation.
  *
  * With rule 3 in place, rule 2's refusal is unreachable for every command buffer up to a bound,
  * and the DDI gives the input bound its arithmetic:
@@ -312,7 +318,7 @@ void Bc250GdiDmaAbort(BC250_GDI_DMA_MAP* Map, const BC250_GDI_DMA_CLAIM* Claim);
 /* Release every buffer of this context inside the address range one submission carried away, which
  * is DXGKARG_SUBMITCOMMANDVIRTUAL.DmaBufferVirtualAddress and DmaBufferSize. Returns how many slots
  * it freed, so a caller can count a submission that matched nothing. A range of zero bytes releases
- * the buffer that begins at that address and nothing else. *Claimed, when given, receives how many
+ * no buffer and leaves the map unchanged, including a matching base. *Claimed, when given, receives how many
  * buffers inside the range had a call in flight and were therefore left alone. */
 unsigned int Bc250GdiDmaSubmitted(BC250_GDI_DMA_MAP* Map, unsigned long long BufferVa,
                                   unsigned int Bytes, unsigned int* Claimed);

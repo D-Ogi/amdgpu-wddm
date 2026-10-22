@@ -1,0 +1,54 @@
+{
+  "base": "d3317307f8ccd6ebd147de72806dff0308539fd4",
+  "source_sha256": {
+    "driver/kmd/gdi_batch.c": "7ff744b77b65a0177e84f731b897259aa792c5bba8b45a09db4708e06065ac48",
+    "driver/kmd/gdi_batch.h": "61ee984db33269c13e38a1b17c5ad0abc89d34f9864215441fb3094359b2dba6",
+    "driver/kmd/gdi_render.c": "8e3adda73ad4b5aed88ad01bcfc1c22044cb0ea412b926f26efb6462775f623e",
+    "driver/kmd/gdi_dispatch.c": "1ee9d5bbe9af68699b6136ada1701f19f3ba099525969269bbcfc611f792468c",
+    "driver/kmd/gdi_emit.c": "cecf130c845c9c89c33025844e865cc5e43b66f3468d036bfe24a333def7204d",
+    "driver/kmd/gfx_copy.c": "884a52dd44920d5b004a88c0786166b2c0c399021b4817e6b0554a7b0956de27",
+    "driver/kmd/gdi_kernels.cl": "dc87159310ad59c7f2e37f0ee6eaf27e2893f33b21198655871ea4c1e152d2eb",
+    "driver/kmd/gdi_kernels.generated.h": "bed097803f2403e6b5b6b0f46400e7c08130dd7bff71cb3d297b6a3a5ad11eed",
+    "driver/kmd/test/gdi_kernel_run.c": "9e98bb24165a4b3679c73a74a4287576fa6eed1bb54f326ca8bf99c9e6cae778",
+    "driver/kmd/test/gdi_kernel_test.c": "fd676491739cc1e5ee3f4d99dcda320d810465312aaf8a7e10d391fd6b5009ff",
+    "docs/design/gdi-hw-accel.md": "50460b7c0d437947934337804ac3be0b7ca72f7385a8b4263380537ee27a40ae",
+    "driver/amdgpu-import/nvd.h": "0a4de0b61f8be33d83e7dc1af4b96370898af36d211f296daf018e72820ea0eb"
+  },
+  "compiler": "clang version 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)\nTarget: x86_64-pc-windows-msvc\nThread model: posix\nInstalledDir: P:\\BC-250\\toolchain\\llvm-23.1.4-win64\\bin\nBuild config: +alloc:rpmalloc",
+  "build_flags": [
+    "/O2",
+    "/W4",
+    "/WX",
+    "/MT",
+    "-march=x86-64-v3",
+    "-mtune=znver2",
+    "-fuse-ld=lld"
+  ],
+  "controls": [
+    {
+      "binary_sha256": "53F60244E0FD46DC7EBACAFDD6BB29B5DAFABB1B05D07FA70F2FCD2DFECEE4FA",
+      "arm": "fixed",
+      "exit_code": 0,
+      "checks": 61637,
+      "failures": 0,
+      "stdout_sha256": "a91bc7ee58308b5033f34541be3a751e86a6150f1e4a9884d2a223f15ebcdd2c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "binary_sha256": "372E4920BE07718A1940D372C8328AC4E8063A99C344A96310272DC8A064CC31",
+      "arm": "negative-original",
+      "exit_code": 1,
+      "checks": 61637,
+      "failures": 6,
+      "stdout_sha256": "42d87edf9af24e938cae78768da97d2470df97c03ca567e6c4c75b7e3ba93e19",
+      "stderr_sha256": "916402947a47f33bca719054eb2f2569b2f18cf93787369945c6c909cc7a1f9a"
+    }
+  ],
+  "doclint": "docs/design/gdi-hw-accel.md: 0 findings",
+  "reference_revision": "7515063cea4c9e98db6a92986c5b4ddb0463fd16",
+  "limits": [
+    "Host execution of the C reference kernel, not gfx1013 GPU instructions.",
+    "No Windows same-buffer render/submit concurrency or OS allocation lifetime proof.",
+    "Capacity and identity model limits remain open; no HLK result or deployment."
+  ]
+}

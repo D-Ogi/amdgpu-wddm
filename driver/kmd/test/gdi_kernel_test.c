@@ -1631,8 +1631,32 @@ static void TestDmaMap(void)
     CHECK_EQ(Bc250GdiDmaClaim(&map, a, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
     Bc250GdiDmaAbort(&map, &other);
     CHECK_EQ(Bc250GdiDmaSubmitted(&map, a + 0x40000000ull, 4096u, &claimed), 0u);
-    CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 1u);
-    CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 0u);
+    /* Empty context-switch submissions must not retire a pending prefix. Check every
+     * map byte, repeated calls, an active append claim, and the nonempty control. */
+    {
+        BC250_GDI_DMA_MAP saved;
+        memcpy(&saved, &map, sizeof(saved));
+        claimed = 123u;
+        CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 0u);
+        CHECK_EQ(claimed, 0u);
+        CHECK_EQ(memcmp(&map, &saved, sizeof(map)), 0);
+        CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 0u);
+        CHECK_EQ(memcmp(&map, &saved, sizeof(map)), 0);
+        CHECK_EQ(Bc250GdiDmaClaim(&map, far + 64u, extent - 64u, 4096u, &other),
+                 BC250_GDI_DMA_APPEND);
+        CHECK_EQ(other.Ahead, 16u);
+        memcpy(&saved, &map, sizeof(saved));
+        claimed = 123u;
+        CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 0u, &claimed), 0u);
+        CHECK_EQ(claimed, 0u);
+        CHECK_EQ(memcmp(&map, &saved, sizeof(map)), 0);
+        Bc250GdiDmaAbort(&map, &other);
+        CHECK_EQ(Bc250GdiDmaSubmitted(&map, far, 64u, &claimed), 1u);
+        CHECK_EQ(claimed, 0u);
+        CHECK_EQ(Bc250GdiDmaClaim(&map, far, extent, 4096u, &other), BC250_GDI_DMA_FRESH);
+        CHECK_EQ(other.Ahead, 0u);
+        Bc250GdiDmaAbort(&map, &other);
+    }
     CHECK_EQ(Bc250GdiDmaSubmitted(NULL, far, 0u, &claimed), 0u);
     CHECK_EQ(Bc250GdiDmaSubmitted(&map, 0ull, 4096u, &claimed), 0u);
     TestDmaMapLegacy();

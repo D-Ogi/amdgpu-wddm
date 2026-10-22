@@ -384,16 +384,16 @@ set of batches that includes the counterexample above.
 
 #### Which DMA buffer a call lies in
 
-The last two numbers of rule 3 are a question about identity, and the DDI answers it with an address
-and a length. `DXGKARG_RENDERGDI` names the buffer of a call by `pDmaBuffer`, "a pointer to the start
-of the DMA buffer, which is aligned on 4 KB", by `DmaBufferGpuVirtualAddress`, "the virtual address
-where the DMA buffer was paged in", and by `DmaSize`, "the size, in bytes, of the DMA buffer that
-`pDmaBuffer` points to". The same two fields of `DXGKARG_RENDER` are declared `[out]` and `[in]`,
-with the driver's own obligation spelled out: "the driver should set `pDmaBuffer` to the next empty
-byte that follows the last byte that the driver wrote to". So a call is given a window and the extent
-it lies in, and that pair is the only identity on offer. Nothing says that one buffer carries one
-call, and neither the DDI nor the submission guide gives an order of `RenderGdi` calls and
-submissions.
+The last two numbers of rule 3 need a buffer identity model. `DXGKARG_RENDERGDI` supplies a CPU
+pointer, a GPU virtual address and a byte length. `DXGKARG_RENDER` requires the driver to advance
+the CPU pointer past its written output. Those descriptions alone do not establish that the GPU
+address advances by the same amount, or that an untracked aligned address starts a new allocation
+generation. They do not establish the order of render calls and submissions for one buffer.
+
+The extent map below is the implementation's operating model, not an OS lifetime guarantee.
+Its arithmetic controls establish behavior for supplied sequences. Validation on each supported
+Windows path must still join the CPU cursor, GPU address, reported size, context, submission range
+and an independent buffer-lifetime witness. No such runtime trace accompanies this change.
 
 Two reviews have built the counterexamples that shaped this. A review of r4 found that the lowest
 address seen since the last submission is not an identity: with two independent buffers 8 MiB apart,
@@ -403,7 +403,7 @@ either: an empty buffer that began exactly where the first one ended, with its o
 taken for a continuation of it, and the ordinary producer's 64 KiB worth of drawing was refused in a
 buffer that was entirely free.
 
-So a buffer is its extent and nothing else. `Bc250GdiDmaClaim` places the window of a call inside the
+The map treats a buffer as its recorded extent. `Bc250GdiDmaClaim` places the window of a call inside the
 extents of the buffers this context holds output in, and reserves the slot of that buffer until the
 call publishes what it wrote or gives the claim back:
 
@@ -425,9 +425,17 @@ every refused call does, and frees the slot when the buffer held nothing before.
 `Bc250GdiDmaSubmitted` releases a buffer by the address range of the submission that took it, so a
 submission of one buffer cannot clear the record of another. It leaves a reserved slot alone
 (`GdiRenderDmaRaced`) rather than retiring a buffer under a call that is still deciding its length.
+An empty submission leaves the entire map unchanged, including a slot with the same base address.
+`DXGK_SUBMITCOMMANDFLAGS.ContextSwitch` permits zero-length DMA submissions. These carry no
+buffered commands. This contract edge does not assert that the matching-address case occurred on the lab.
 
-Nothing but this driver writes hardware commands into a GDI context's DMA buffer, which is what makes
-a continuation exact instead of estimated. A context holds `BC250_GDI_DMA_SLOTS` buffers at a time,
+Two ordering questions remain open. A submission during an active append is counted but not saved
+for retirement after that append. A submission starting inside an extent after its recorded base
+does not retire that slot. The reviewed fields do not establish whether either sequence occurs on
+this GDI path. Serial helper tests are not proof of complete render/submit concurrency.
+
+The driver knows the prefix it recorded within this model. That does not prove the complete OS
+allocation's lifetime or contents. A context holds `BC250_GDI_DMA_SLOTS` buffers at a time,
 eight, counting the buffer of every call in flight. That is an implementation bound of this driver
 and not a limit of the DDI, and the ninth buffer drops its call rather than forget a buffer or steal
 a reservation. Every result is counted (`GdiRenderDmaAppend`, `GdiRenderDmaUnknown`,
@@ -437,12 +445,21 @@ numbers included. No trial of this capability has reported any of these counters
 these orderings is claimed to happen or claimed not to: they are the states the code is prepared
 for, and the counters are how a trial would say which of them the operating system produces.
 
-The record lives in this driver's own per-context map. `DXGKARG_RENDERGDI` does carry
-`pDmaBufferPrivateData`, and a tag or a generation in it is a possible home for the same state.
-Nothing here establishes that it could not hold one. The map is a choice, taken because the
-documented meaning of the field beside it is "the number of bytes that remain in the private data
-structure ... for the current operation", which is a cursor with a lifetime of its own, and a
-record this driver owns needs neither.
+The record lives in the per-context map. Per-DMA private data remains an alternative.
+`DXGK_CONTEXTINFO.DmaBufferPrivateDataSize` describes storage initialized to zero when the DMA
+buffer is created and not accessed by VidMm during that buffer's lifetime. `DXGKARG_RENDERGDI`
+exposes a private-data pointer and the remaining byte count for the operation. Using that storage
+would require explicit cursor/bounds handling and a checked handoff to submission. The existence
+of a cursor is not evidence against the documented lifetime, nor does the current map implement
+that alternative.
+
+Contract references: MicrosoftDocs/windows-driver-docs-ddi snapshot
+`7515063cea4c9e98db6a92986c5b4ddb0463fd16`, the pages for
+[DXGKARG_RENDERGDI](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgkarg_rendergdi),
+[DXGKARG_RENDER](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgkarg_render),
+[DXGK_CONTEXTINFO](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgk_contextinfo),
+[DXGKARG_SUBMITCOMMANDVIRTUAL](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgkarg_submitcommandvirtual)
+and [DXGK_SUBMITCOMMANDFLAGS](https://learn.microsoft.com/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgk_submitcommandflags).
 
 A publication that is refused is treated as a dropped call and not as a detail of bookkeeping: the
 dwords stay where they are, `pDmaBuffer` does not move, the submission carries what was already there
