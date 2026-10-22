@@ -4,7 +4,7 @@
  "version": "0.7.216.104-tester.32",
  "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router and the control application, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them.",
  "recipe_repository": "amdgpu-wddm",
- "recipe_commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+ "recipe_commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
  "repositories": {
   "amdgpu-wddm": {
    "url": "https://github.com/D-Ogi/amdgpu-wddm",
@@ -70,7 +70,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "driver/kmd/build.ps1",
    "args": [
@@ -117,7 +117,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "driver/kmd/build.ps1",
    "args": [
@@ -153,7 +153,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-d3d12.ps1",
    "args": [
@@ -215,7 +215,7 @@
    "flavour": "release",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-d3d12.ps1",
    "args": [
@@ -277,7 +277,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-d3d12.ps1",
    "args": [
@@ -339,7 +339,7 @@
    "flavour": "lab",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-d3d12.ps1",
    "args": [
@@ -645,7 +645,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-dxvk.ps1",
    "args": [
@@ -689,7 +689,7 @@
    "flavour": "release",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-dxvk.ps1",
    "args": [
@@ -733,7 +733,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-dxvk.ps1",
    "args": [
@@ -777,7 +777,7 @@
    "flavour": "lab",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-dxvk.ps1",
    "args": [
@@ -992,7 +992,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "mesa-amdgpu-wddm",
-   "commit": "29d95fd74bce06a764d536b0ad8a0bc60b1dc608",
+   "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
    "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
    "recipe": "tools/build/build-mesa.ps1",
    "args": [
@@ -1320,7 +1320,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "mesa-amdgpu-wddm",
-   "commit": "29d95fd74bce06a764d536b0ad8a0bc60b1dc608",
+   "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
    "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
    "recipe": "tools/build/build-mesa.ps1",
    "args": [
@@ -1476,7 +1476,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1507,7 +1507,7 @@
    "flavour": "release",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1538,7 +1538,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
    "args": [
@@ -1585,7 +1585,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1616,7 +1616,7 @@
    "flavour": "lab",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1647,7 +1647,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "5c8c15cc6d7c1f625900a65f960f90a219f7fd90",
+   "commit": "ffbebffd84ad8a37291c73d4db9ad2e33dac319a",
    "tree": "shared",
    "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
    "args": [
