@@ -60,7 +60,8 @@ typedef struct _BC250_SCALER_PLAN {
 // is asked for a source of another size.
 long Bc250ScalingRecout(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                         unsigned long TargetHeight, unsigned long Scaling, BC250_RECT* Recout);
-// The whole plan (Linux's scaler_data for this pipe). Same returns as Bc250ScalingRecout.
+// The whole plan (Linux's scaler_data for this pipe). Same returns as Bc250ScalingRecout,
+// plus _NOT_SUPPORTED when the selected vertical taps do not fit the line buffer.
 long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                      unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan);
 // BD-223: the same plan for a recout the caller chose (a plane's destination rectangle), with the same rules: the

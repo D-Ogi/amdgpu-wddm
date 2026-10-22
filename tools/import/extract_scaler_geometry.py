@@ -22,7 +22,7 @@ FUNCTIONS = [
 def extract(text, name):
     # These pinned functions have an unindented declaration and closing brace.
     matches = list(re.finditer(r'^(?:static inline |static )?(?:struct fixed31_32|'
-                              r'unsigned long long|int|void) ' + re.escape(name)
+                              r'unsigned long long|int|void|bool) ' + re.escape(name)
                               + r'\([^;]*?^\{\n.*?^\}', text, re.M | re.S))
     if len(matches) != 1:
         raise ValueError(f'Expected one definition of {name}, got {len(matches)}')

@@ -68,6 +68,18 @@ complete clipping coverage. The geometry API takes clip coordinates in active
 output pixels. The DDI adapter must establish and implement its coordinate
 conversion before passing rectangles to this helper.
 
+`Bc250ScalerBufferPlan` imports DCN20 line-buffer accounting used by DCN201.
+It checks luma, chroma and alpha capacity in AMD's configuration order. It
+refuses a configuration when none can hold the requested vertical taps and
+ratio. The existing desktop scaler now uses this check too. Mode enumeration
+and programming use the same admission result.
+
+Open filter requirement: AMD's two-tap coefficient table is ModifiedLanczos.
+Two taps alone do not establish bilinear output. The DCN two-tap hardware mode
+and the uploaded coefficients need separate verification against bilinear
+reference images. The better-than-bilinear path also needs image tests. No
+filter quality capability is established by line-buffer admission.
+
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements

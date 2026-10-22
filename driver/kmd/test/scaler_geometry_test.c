@@ -1,5 +1,6 @@
 // Host contract checks and a numeric protocol for the independent rational oracle.
 #include "../../shim/bc250_scaler_geometry.h"
+#include "../../shim/bc250_scaler_buffer.h"
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
@@ -132,6 +133,74 @@ static void ChromaAndPlane(void)
     CHECK(Bc250ScalerPlaneGeometry(&in, NULL) == BC250_SCALER_GEOMETRY_INVALID);
 }
 
+static void BufferCapacity(void)
+{
+    BC250_SCALER_BUFFER_INPUT in = {4096, 2048, 4096, 524288, 262144, 5, 2, 1, 0};
+    BC250_SCALER_BUFFER_PLAN p, zero = {0};
+    const unsigned widths[] = {1, 6, 7, 1280, 1920, 3840, 4096, 7680, 16383};
+    const unsigned ratios[] = {1, 524288, 1048576, 1048577, 2097152, 4194303};
+    unsigned w, r, taps, alpha, yuv;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 1);
+    CHECK(p.Config == 3 && p.LumaPartitions == 5 && p.ChromaPartitions == 6);
+    in.Alpha = 1;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 0 && memcmp(&p, &zero, sizeof(p)) == 0);
+    in.Alpha = 0; in.Is420 = 0;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 0 && memcmp(&p, &zero, sizeof(p)) == 0);
+    in.VerticalTaps = 4;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 1 && p.Config == 0);
+    in.ViewportWidth = in.ChromaViewportWidth = in.RecoutWidth = 16383;
+    in.VerticalTaps = in.ChromaVerticalTaps = 2;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 0 && memcmp(&p, &zero, sizeof(p)) == 0);
+    CHECK(Bc250ScalerBufferPlan(NULL, &p) == 0 && memcmp(&p, &zero, sizeof(p)) == 0);
+    CHECK(Bc250ScalerBufferPlan(&in, NULL) == 0);
+    in.VerticalRatio19 = 8u << 19;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 0);
+    in.VerticalRatio19 = UINT_MAX;
+    CHECK(Bc250ScalerBufferPlan(&in, &p) == 0);
+    for (w = 0; w < sizeof(widths)/sizeof(widths[0]); ++w)
+    for (r = 0; r < sizeof(ratios)/sizeof(ratios[0]); ++r)
+    for (taps = 1; taps <= 8; ++taps)
+    for (alpha = 0; alpha <= 1; ++alpha)
+    for (yuv = 0; yuv <= 1; ++yuv) {
+        const unsigned configs[] = {1, 2, 3, 0};
+        const unsigned capacity_y[] = {2744, 970, 1290, 3712};
+        const unsigned capacity_c[] = {2744, 970, 1290, 2260};
+        const unsigned capacity_a[] = {2744, 970, 1290, 2744};
+        unsigned required_y, required_c, line_y, line_c, index, found = 0;
+        int result;
+        in.ViewportWidth = widths[w]; in.ChromaViewportWidth = (widths[w] + yuv) / (1 + yuv);
+        in.RecoutWidth = widths[w] / 2 + 1;
+        in.VerticalRatio19 = ratios[r];
+        in.ChromaVerticalRatio19 = ratios[r] / (1 + yuv);
+        if (!in.ChromaVerticalRatio19) in.ChromaVerticalRatio19 = 1;
+        in.VerticalTaps = taps; in.ChromaVerticalTaps = (taps + 1) / 2;
+        in.Alpha = alpha; in.Is420 = yuv;
+        result = Bc250ScalerBufferPlan(&in, &p);
+        line_y = in.ViewportWidth < in.RecoutWidth ? in.ViewportWidth : in.RecoutWidth;
+        line_c = in.ChromaViewportWidth < in.RecoutWidth ? in.ChromaViewportWidth : in.RecoutWidth;
+        line_y = (line_y + 5) / 6; line_c = (line_c + 5) / 6;
+        required_y = (in.VerticalRatio19 + 524287) / 524288;
+        required_c = (in.ChromaVerticalRatio19 + 524287) / 524288;
+        required_y = in.VerticalTaps + (required_y > 2 ? required_y - 2 : 0);
+        required_c = in.ChromaVerticalTaps + (required_c > 2 ? required_c - 2 : 0);
+        for (index = 0; index < 4; ++index) {
+            unsigned cfg = configs[index], py, pc, pa;
+            if (cfg == 3 && !yuv) continue;
+            py = capacity_y[cfg] / line_y; pc = capacity_c[cfg] / line_c;
+            pa = capacity_a[cfg] / line_y;
+            if (alpha && pa < py) py = pa;
+            if (py > 64) py = 64;
+            if (pc > 64) pc = 64;
+            if (py < required_y || pc < required_c) continue;
+            found = 1;
+            CHECK(result == 1 && p.Config == cfg);
+            CHECK(p.LumaPartitions == py && p.ChromaPartitions == pc);
+            break;
+        }
+        if (!found) CHECK(result == 0 && memcmp(&p, &zero, sizeof(p)) == 0);
+    }
+}
+
 int main(int argc, char** argv)
 {
     if (argc == 2 && (strcmp(argv[1], "--stream") == 0 || strcmp(argv[1], "--stream-chroma") == 0)) {
@@ -152,6 +221,7 @@ int main(int argc, char** argv)
     Controls();
     Properties();
     ChromaAndPlane();
+    BufferCapacity();
     printf("scaler geometry: %u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;
 }

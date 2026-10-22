@@ -696,6 +696,24 @@ static void TestCallerOwnedTransaction(void)
     CheckCallerOwnsLatch();
 }
 
+static void TestLineBufferAdmission(void)
+{
+    BC250_SCALER_PLAN p, zero = {0};
+    // Four vertical taps need four partitions. DCN20 config 0 has 2744 entries,
+    // so ceil(width/6) <= 686 is the boundary for the current RGB upscale path.
+    CHECK(Bc250ScalerPlan(4116, 720, 5000, 1200, BC250_SCALING_STRETCHED, &p) == 0);
+    CHECK(p.LbConfig == 0 && p.TapsV == 4);
+    CHECK(Bc250ScalerPlan(4117, 720, 5000, 1200, BC250_SCALING_STRETCHED, &p) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    CHECK(memcmp(&p, &zero, sizeof(p)) == 0);
+    CHECK(Bc250ScalingSupport(BC250_DISPLAY_MODES_SCALED, 4117, 720, 5000, 1200) ==
+          BC250_SCALING_BIT(BC250_SCALING_CENTERED));
+    CHECK(Bc250ScalingDefault(BC250_DISPLAY_MODES_SCALED, 4117, 720, 5000, 1200) == BC250_SCALING_CENTERED);
+    CHECK(Bc250ScalerPlan(4117, 720, 5000, 1200, BC250_SCALING_CENTERED, &p) == 0);
+    CHECK(p.TapsV == 1);
+    CHECK(Bc250ScalerPlan(16383, 720, 16383, 1200, BC250_SCALING_STRETCHED, &p) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    CHECK(Bc250ScalerPlan(16383, 720, 16383, 720, BC250_SCALING_IDENTITY, &p) == 0);
+}
+
 int main(void)
 {
     TestFilterTable();
@@ -710,6 +728,7 @@ int main(void)
     TestStoppedProgram();
     TestLiveAccessFailures();
     TestCallerOwnedTransaction();
+    TestLineBufferAdmission();
     printf("dcn_scale_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

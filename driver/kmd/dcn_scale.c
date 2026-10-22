@@ -5,6 +5,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "dcn_scale.h"
 #include "edid.h"
+#include "../shim/bc250_scaler_buffer.h"
 
 // filter_4tap_64p_upscale of dce_scl_filters.c, extracted by tools/import/extract_table.py (PROVENANCE.md).
 const unsigned short g_Bc250SclFilter4tapUpscale[BC250_SCL_PHASES * BC250_SCL_TAPS] = {
@@ -14,9 +15,6 @@ const unsigned short g_Bc250SclFilter4tapUpscale[BC250_SCL_PHASES * BC250_SCL_TA
 #define ONE19 (1ul << 19)
 #define DSCL_MODE_444_BYPASS 0ul            // dcn10_dpp.c enum dscl_mode_sel
 #define DSCL_MODE_444_RGB_ENABLE 1ul
-#define LB_MEMORY_CONFIG_0 0ul              // dc/inc/hw/transform.h enum lb_memory_config
-#define LB_MEMORY_CONFIG_1 1ul
-#define LB_MEMORY_CONFIG_2 2ul
 #define LB_MAX_PARTITIONS 63ul              // dpp1_dscl_set_lb: "hardcoded on all ASICs before DCN 3.2"
 #define COEF_LUMA_VERT 0ul                  // dcn10_dpp_dscl.c enum dcn10_coef_filter_type_sel
 #define COEF_LUMA_HORZ 1ul
@@ -81,27 +79,6 @@ long Bc250ScalingRecout(unsigned long SourceWidth, unsigned long SourceHeight, u
     return BC250_DISP_STATUS_SUCCESS;
 }
 
-// dscl2_calc_lb_num_partitions for RGB (viewport_c == viewport), alpha off.
-static unsigned long LbPartitions(unsigned long LineSize, unsigned long Config)
-{
-    unsigned long memoryLine = (LineSize + 5ul) / 6ul, size, parts;
-    if (memoryLine == 0) memoryLine = 1;
-    size = Config == LB_MEMORY_CONFIG_1 ? 970ul : Config == LB_MEMORY_CONFIG_2 ? 1290ul : 970ul + 1290ul + 484ul;
-    parts = size / memoryLine;
-    return parts > 64ul ? 64ul : parts;
-}
-
-// dpp1_dscl_find_lb_memory_config: the first of config 1 and 2 that holds the vertical taps, else config 0. Every
-// ratio here is 1 or below, so dpp1_dscl_is_lb_conf_valid reduces to taps <= partitions.
-static unsigned long LbConfig(unsigned long LineSize, unsigned long VTaps, unsigned long VTapsC)
-{
-    unsigned long p = LbPartitions(LineSize, LB_MEMORY_CONFIG_1);
-    if (VTaps <= p && VTapsC <= p) return LB_MEMORY_CONFIG_1;
-    p = LbPartitions(LineSize, LB_MEMORY_CONFIG_2);
-    if (VTaps <= p && VTapsC <= p) return LB_MEMORY_CONFIG_2;
-    return LB_MEMORY_CONFIG_0;
-}
-
 // calculate_init_and_vp for a recout offset of 0 within the full recout: the viewport starts at 0, and its size is
 // floor(init + ratio * (recout - 1)) capped at the source size.
 static unsigned long ViewportSize(unsigned long Init19, unsigned long Ratio19, unsigned long Recout,
@@ -129,7 +106,10 @@ static void PlanOpen(unsigned long SourceWidth, unsigned long SourceHeight, unsi
 static long PlanFromRecout(BC250_SCALER_PLAN* Plan)
 {
     const unsigned long SourceWidth = Plan->SourceWidth, SourceHeight = Plan->SourceHeight;
-    unsigned long line;
+    unsigned char* clear = (unsigned char*)Plan;
+    unsigned long i;
+    BC250_SCALER_BUFFER_INPUT buffer = {0};
+    BC250_SCALER_BUFFER_PLAN capacity;
 
     // calculate_scaling_ratios: source / destination, truncated to 19 fraction bits. Chroma = luma for RGB.
     Plan->RatioH19 = (unsigned long)(((unsigned long long)SourceWidth << 19) / Plan->Recout.Width);
@@ -152,8 +132,17 @@ static long PlanFromRecout(BC250_SCALER_PLAN* Plan)
     // dpp1_dscl_get_dscl_mode.
     Plan->DsclMode = (Plan->RatioH19 == ONE19 && Plan->RatioV19 == ONE19) ? DSCL_MODE_444_BYPASS
                                                                            : DSCL_MODE_444_RGB_ENABLE;
-    line = Plan->Viewport.Width < Plan->Recout.Width ? Plan->Viewport.Width : Plan->Recout.Width;
-    Plan->LbConfig = LbConfig(line, Plan->TapsV, Plan->TapsVC);
+    buffer.ViewportWidth = buffer.ChromaViewportWidth = Plan->Viewport.Width;
+    buffer.RecoutWidth = Plan->Recout.Width;
+    buffer.VerticalRatio19 = buffer.ChromaVerticalRatio19 = Plan->RatioV19;
+    buffer.VerticalTaps = Plan->TapsV;
+    buffer.ChromaVerticalTaps = Plan->TapsVC;
+    if (!Bc250ScalerBufferPlan(&buffer, &capacity)) {
+        // Config 0 is not an unconditional fallback: it can lack lines too.
+        for (i = 0; i < sizeof(*Plan); ++i) clear[i] = 0;
+        return BC250_DISP_STATUS_NOT_SUPPORTED;
+    }
+    Plan->LbConfig = capacity.Config;
     // get_filter_4tap_64p: filter_4tap_64p_upscale for a ratio below 1; no filter for 1 tap.
     Plan->FilterH = Plan->TapsH == 4ul;
     Plan->FilterV = Plan->TapsV == 4ul;
@@ -189,8 +178,9 @@ long Bc250ScalerPlanRecout(unsigned long SourceWidth, unsigned long SourceHeight
 unsigned long Bc250ScalingSupport(unsigned long Level, unsigned long SourceWidth, unsigned long SourceHeight,
                                   unsigned long TargetWidth, unsigned long TargetHeight)
 {
-    unsigned long long sw = SourceWidth, sh = SourceHeight, tw = TargetWidth, th = TargetHeight;
+    unsigned long support = 0, scaling;
     BC250_RECT r;
+    BC250_SCALER_PLAN plan;
 
     if (Bc250ScalingRecout(SourceWidth, SourceHeight, TargetWidth, TargetHeight, BC250_SCALING_CENTERED, &r) < 0)
         return 0;
@@ -198,19 +188,20 @@ unsigned long Bc250ScalingSupport(unsigned long Level, unsigned long SourceWidth
     // level offers is reported. dxgkrnl keeps a scaling per monitor in its display database and pins it again for
     // the next mode; a native mode that answered Identity alone would drop out of a source mode set whose path
     // has aspect-ratio scaling pinned.
-    if (sw == tw && sh == th) {
-        if (Level == BC250_DISPLAY_MODES_CENTERED)
-            return BC250_SCALING_BIT(BC250_SCALING_IDENTITY) | BC250_SCALING_BIT(BC250_SCALING_CENTERED);
-        if (Level != BC250_DISPLAY_MODES_SCALED) return BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
-        return BC250_SCALING_BIT(BC250_SCALING_IDENTITY) | BC250_SCALING_BIT(BC250_SCALING_CENTERED) |
-               BC250_SCALING_BIT(BC250_SCALING_STRETCHED) | BC250_SCALING_BIT(BC250_SCALING_ASPECT);
-    }
-    if (Level == BC250_DISPLAY_MODES_CENTERED) return BC250_SCALING_BIT(BC250_SCALING_CENTERED);
-    if (Level != BC250_DISPLAY_MODES_SCALED) return 0;
+    if (SourceWidth == TargetWidth && SourceHeight == TargetHeight)
+        support |= BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
+    if (Level == BC250_DISPLAY_MODES_CENTERED || Level == BC250_DISPLAY_MODES_SCALED)
+        support |= BC250_SCALING_BIT(BC250_SCALING_CENTERED);
     // Same aspect ratio: aspect-ratio scaling is the same picture as stretched. It is offered all the same, for the
     // reason above: the pinned scaling of the path must not hide a mode.
-    return BC250_SCALING_BIT(BC250_SCALING_CENTERED) | BC250_SCALING_BIT(BC250_SCALING_STRETCHED) |
-           BC250_SCALING_BIT(BC250_SCALING_ASPECT);
+    if (Level == BC250_DISPLAY_MODES_SCALED)
+        support |= BC250_SCALING_BIT(BC250_SCALING_STRETCHED) | BC250_SCALING_BIT(BC250_SCALING_ASPECT);
+    // Mode enumeration and programming must agree about line-buffer admission.
+    for (scaling = 0; scaling < BC250_SCALING_CUSTOM; ++scaling)
+        if ((support & BC250_SCALING_BIT(scaling)) &&
+            Bc250ScalerPlan(SourceWidth, SourceHeight, TargetWidth, TargetHeight, scaling, &plan) < 0)
+            support &= ~BC250_SCALING_BIT(scaling);
+    return support;
 }
 
 unsigned long Bc250ScalingDefault(unsigned long Level, unsigned long SourceWidth, unsigned long SourceHeight,

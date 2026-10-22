@@ -14,6 +14,7 @@
 # Generated state files have byte-checked output, independent of core.autocrlf.
 driver/state/defaults.generated.inf text eol=lf
 driver/shim/generated/dc_scaler_geometry.inc text eol=lf
+driver/shim/generated/dc_scaler_buffer.inc text eol=lf
 driver/kmd/bc250kmd.inf text eol=crlf
 driver/state/amdgpu-state.bin binary
 # Shell scripts without an extension that run on the diagnostic USB

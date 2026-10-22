@@ -430,6 +430,14 @@ or hardware ownership is established by this source-only preparation.
 ## DCN scaler filter (resolution modes, stage A)
 
 PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`reference/dcn20_dpp.c`, `reference/dcn10_dpp_dscl.c` and `reference/dc_spl_types.h`
+come unchanged from `drivers/gpu/drm/amd/display/dc/`, at `dpp/dcn20/`,
+`dpp/dcn10/` and `sspl/`, respectively. `tools/import/extract_scaler_buffer.py`
+extracts the line-buffer arithmetic and configuration enum without edits.
+The Windows adapter refuses a final configuration that cannot fit the taps.
+It replaces the assertion-only fallback in `dpp1_dscl_find_lb_memory_config`.
+
+PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
 `reference/dc_resource.c`, `reference/fixed31_32.h` and `reference/fixpt31_32.c`
 are unchanged files from `drivers/gpu/drm/amd/display/dc/core/`, `include/` and
 `dc/basics/`, respectively. `tools/import/extract_scaler_geometry.py --check`

@@ -52,8 +52,8 @@ $tests = [ordered]@{
     'sink_test'      = @('../shim/bc250_sink.c', '../shim/bc250_dp_train.c', 'edid.c')
     'optc_test'      = @('../shim/bc250_optc.c', 'display_io.c')
     'dp_stream_test' = @('../shim/bc250_dp_stream.c', '../shim/bc250_optc.c', 'display_io.c')
-    'dcn_scale_test' = @('dcn_scale.c', 'display_io.c', 'edid.c')
-    'dcn_plane_test' = @('dcn_plane.c', 'dcn_scale.c', 'display_io.c', 'edid.c', '../shim/bc250_dml201.c')
+    'dcn_scale_test' = @('dcn_scale.c', '../shim/bc250_scaler_buffer.c', 'display_io.c', 'edid.c')
+    'dcn_plane_test' = @('dcn_plane.c', 'dcn_scale.c', '../shim/bc250_scaler_buffer.c', 'display_io.c', 'edid.c', '../shim/bc250_dml201.c')
     'mode_admit_test' = @('../shim/bc250_dml201.c', '../shim/bc250_optc.c', '../shim/bc250_dp_train.c', 'display_io.c', 'edid.c')
 }
 # BD-139: the display plan builds as run_dml201.ps1 builds it, with its imported headers and strict floating point.

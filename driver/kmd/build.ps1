@@ -137,6 +137,7 @@ $shimSources += @('bc250_atom_image.c', 'bc250_atom_preflight.c', 'bc250_atom.c'
 $shimSources += @("$repo\driver\shim\bc250_hdmi_link.c")
 $shimSources += @('bc250_hpd.c','bc250_dp_train.c','bc250_dp_phy.c','bc250_sink.c','bc250_optc.c','bc250_link_atom.c') | ForEach-Object { "$repo\driver\shim\$_" }
 $shimSources += @("$repo\driver\shim\bc250_dp_stream.c")
+$shimSources += @("$repo\driver\shim\bc250_scaler_buffer.c")
 $shimSources += @("$repo\driver\shim\bc250_link_regs.c", "$repo\driver\shim\bc250_dml201.c",
     "$repo\driver\shim\bc250_dcn201_pipe.c")
 # M5 second part: amdgpu's gfx/SDMA bring-up transcribed against AMD's imported tables. C4245: AMD's PACKET3() in the
