@@ -24,6 +24,7 @@ typedef int BOOLEAN;
 #define BC250_VRAM_TOP_RESERVED (32ull<<20)
 #define BC250_GART_WINDOW (2ull<<20)
 #define BC250_GART_SCRATCH_OFFSET 4096ull
+#define BC250_VIDMM_GIANT_PAGE_BYTES (1024ull*1024*1024)
 #define GuardLog(...) ((void)0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
 /* vram.c publishes the active board memory size for the board memory card while it sets the geometry.
@@ -34,6 +35,7 @@ typedef struct {
  struct {ULONGLONG bytes;} WddmAperture;
  void* Mmio;BOOLEAN VramEnabled,VramWriteEnabled;
  PHYSICAL_ADDRESS VramPhysical,Bar0Physical;ULONGLONG VramLength,VramMcBase,Bar0Length,DisplayReservationEnd;
+ BOOLEAN LargePageLayout;
  struct {ULONG Pitch,Height;PHYSICAL_ADDRESS PhysicAddress;} Post;
  volatile LONG64 UmaActiveBytes;
 } BC250_DEVICE;
@@ -128,6 +130,16 @@ int main(void){
   d.DisplayReservationEnd=d.VramLength-BC250_VRAM_TOP_RESERVED;
   CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   CHECK(!off && !len && !table && !tablelen);
+  // Large-page layout: the segment starts on the first 1 GiB physical boundary above the framebuffer and
+  // the display reservation, and the offset stays a segment offset (base plus offset is the aligned address).
+  d.DisplayReservationEnd=64ull*1024*1024;d.LargePageLayout=TRUE;
+  CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  CHECK((((ULONGLONG)d.VramPhysical.QuadPart+off)&(BC250_VIDMM_GIANT_PAGE_BYTES-1))==0);
+  CHECK(off>=64ull*1024*1024 && off<64ull*1024*1024+BC250_VIDMM_GIANT_PAGE_BYTES && len>0 && table==off+len);
+  CHECK(table+tablelen<=d.VramLength-BC250_VRAM_TOP_RESERVED);
+  d.LargePageLayout=FALSE;
+  CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
+  CHECK(off==64ull*1024*1024);
   d.DisplayReservationEnd=0;
   memset(&g,0,sizeof(g));g.Device=&d;CHECK(RunSetup(&g)==0 && g.SetUp);
   for(mismatch=1;mismatch<=3;mismatch++) {shim_mismatch=mismatch;CHECK(RunSetup(&g)!=0 && !g.SetUp);}

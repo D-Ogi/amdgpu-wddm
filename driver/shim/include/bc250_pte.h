@@ -150,6 +150,33 @@
 #define BC250_PTE_LARGE_PAGE_SHIFT	16u
 #define BC250_PTE_LARGE_PAGE_FRAG	(BC250_PTE_LARGE_PAGE_SHIFT - 12u)
 
+/* What a large page is on a directory entry. A directory entry with LargePage maps the range of the
+ * table below it (DXGK_PTE reference page, d3dukmdt.h). DXGK_GPUMMUCAPS::LargePageSupported says that
+ * "all levels of page tables, except the leaf one, support large pages", so a driver that reports it
+ * must accept the bit at every directory level that VidMm can use:
+ *
+ *   level 1 (amdgpu PDB0): 512 pages of 4 KB, 2 MiB. amdgpu calls it a huge page.
+ *   level 2 (amdgpu PDB1): 512 of those, 1 GiB. amdgpu calls it a giant page.
+ *   level 3 (amdgpu PDB2): 512 GiB. The allocation size must be the range of the lower level, and
+ *                          no segment of this driver can hold a 512 GiB allocation, so VidMm cannot
+ *                          ask for one. It is refused.
+ *
+ * amdgpu writes the same kind of entry at both levels: AMDGPU_PDE_PTE on any level above the leaf
+ * (amdgpu_vm_pt.c:688) and AMDGPU_PTE_FRAG(frag) of the whole range on every level (:896). It picks
+ * the level whose range the fragment covers (:842-855), with max_frag 31 from Vega10 on (:757-764,
+ * "the L2 is now directly feed with small/huge/giant pages from the walker"). Fact M808 (E17) read a
+ * level 1 entry on unit A, 0x004000046fc004e1: VALID READABLE WRITEABLE PDE_PTE MTYPE_NC FRAG 9. No
+ * level 2 entry was read on unit A. */
+#define BC250_PTE_LEVEL_SHIFT(level)	(12u + 9u * (u32)(level))   /* bytes an entry covers, log2 */
+#define BC250_PTE_HUGE_PAGE_LEVEL	1u
+#define BC250_PTE_HUGE_PAGE_SHIFT	BC250_PTE_LEVEL_SHIFT(BC250_PTE_HUGE_PAGE_LEVEL)   /* 21 */
+#define BC250_PTE_HUGE_PAGE_BYTES	(1ULL << BC250_PTE_HUGE_PAGE_SHIFT)
+#define BC250_PTE_HUGE_PAGE_FRAG	(BC250_PTE_HUGE_PAGE_SHIFT - 12u)
+#define BC250_PTE_GIANT_PAGE_LEVEL	2u
+#define BC250_PTE_GIANT_PAGE_SHIFT	BC250_PTE_LEVEL_SHIFT(BC250_PTE_GIANT_PAGE_LEVEL) /* 30 */
+#define BC250_PTE_GIANT_PAGE_BYTES	(1ULL << BC250_PTE_GIANT_PAGE_SHIFT)
+#define BC250_PTE_GIANT_PAGE_FRAG	(BC250_PTE_GIANT_PAGE_SHIFT - 12u)
+
 /* ---------------------------------------------------------------------------------------------
  * The context: what DXGK_PTE does not carry and this driver has to supply
  * ------------------------------------------------------------------------------------------- */
@@ -193,6 +220,14 @@ struct bc250_pte_context {
 	u32 table_segment;
 	u64 table_base;
 	u64 table_size;
+
+	/* Nonzero when the driver reported DXGK_GPUMMUCAPS::LargePageSupported for this start. Only then
+	 * does bc250_pte_from_dxgk_level accept LargePage on a level 1 or level 2 entry. The caller sets
+	 * it only when vram_base is 1 GiB aligned. VidMm knows only segment offsets, and without
+	 * AllowNonAlignedLargePageAddress it sets LargePage only on an offset aligned to the leaf table
+	 * coverage. The walker reads the physical address, base plus offset. With the base aligned, an
+	 * aligned offset is an aligned address for both page sizes, and an unaligned one is refused. */
+	u32 large_pages;
 };
 
 /* Every field of an AMD entry, for the inverse direction. */
@@ -228,10 +263,16 @@ struct bc250_pte_fields {
  *   LargePage on a leaf becomes AMDGPU_PTE_FRAG(4), a 64 KB page, and the address must be 64 KB
  *   aligned. VidMm's 64 KB pages arrive in their own array (pPageTableEntries64KB,
  *   d3dkmddi.h:4707) so the caller knows which array it is walking without reading the bit, and
- *   the bit is then a cross-check. On a DIRECTORY entry the same bit could instead mean what AMD
- *   calls PDE_PTE - a directory entry that maps a 2 MB page itself - and nothing in the header or
- *   the reference pages says which, so it is refused. Nothing is lost: VidMm only uses what the
- *   driver reported support for, and refusing is loud.
+ *   the bit is then a cross-check. The DXGK_PTE reference page forbids the bit on a leaf ("This
+ *   flag cannot be set for the leaf page tables"), and this driver reports no 64 KB pages, so the
+ *   path is not reachable from VidMm today.
+ *
+ *   LargePage on a DIRECTORY entry is defined by the same reference page: "When set the page table
+ *   address (PageTableAddress + SegmentId) is the memory address of an allocation. The allocation
+ *   size is equal to the virtual address range, covered by the lower page table level." That is
+ *   what AMD calls PDE_PTE: a directory entry that maps the memory itself. bc250_pte_from_dxgk
+ *   refuses it, because it does not know the level. bc250_pte_from_dxgk_level accepts it on a level
+ *   1 entry (2 MiB) or a level 2 entry (1 GiB) when the context reports large pages (large_pages).
  *
  *   PageTablePageSize (DXGK_PTE_PAGE_SIZE, d3dukmdt.h:305-309, :329) names the size of the page
  *   table page a directory entry points at. On gfx10 every level holds 512 entries of 8 bytes
@@ -249,6 +290,36 @@ struct bc250_pte_fields {
 int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind kind,
 			u64 dxgk_flags, u64 dxgk_address, u64 *out);
 
+/*
+ * The same translation for a DXGK page table level (DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE::
+ * PageTableLevel): level 0 is a leaf, every other level a directory. The one difference from
+ * bc250_pte_from_dxgk is a VALID level 1 or level 2 entry with LargePage set, when ctx->large_pages
+ * is nonzero. Such an entry maps the range of the level below (2 MiB or 1 GiB) of the VRAM segment
+ * itself and becomes
+ *
+ *     address | bc250_pte_vm_flags(...) | AMDGPU_PDE_PTE | AMDGPU_PTE_FRAG(9 or 18)
+ *
+ * with the same read, write, execute and snoop bits as a 4 KB leaf of the same DXGK_PTE. Refused
+ * as well as everything bc250_pte_from_dxgk refuses: LargePage at level 3, in host memory
+ * (SysMemLargePageSupported is not reported), in the page table segment, or with large_pages 0; an
+ * address that is not aligned to the page size (AllowNonAlignedLargePageAddress is not reported);
+ * and a range that does not lie inside the VRAM segment.
+ */
+int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
+			      u64 dxgk_flags, u64 dxgk_address, u64 *out);
+
+/*
+ * The observer's half of the contract above: the size in bytes of the large page a decoded level 1
+ * or level 2 entry maps, or 0 when bc250_pte_from_dxgk_level cannot have written that entry. A walker
+ * that meets PDE_PTE on a directory entry ends at the page only when this is non-zero, so that a
+ * malformed entry is refused and not misread. Checked: large_pages set in the context, the level, a
+ * valid non-system entry with PDE_PTE, the fragment of the level's whole range, an address aligned
+ * to that range, and the whole range inside the VRAM segment (the page table segment holds tables,
+ * not allocations, so a page there is never a large page).
+ */
+u64 bc250_pte_large_page_bytes(const struct bc250_pte_context *ctx, u32 level,
+			       const struct bc250_pte_fields *fields);
+
 /* The flags a leaf entry of each aperture carries, without an address. bc250_pte_gart_flags() is
  * the value fact M37 measured, 0x0003000000000077; both are exposed so a test can compare them
  * with what bc250_gart.c produces and with each other. */
@@ -256,7 +327,8 @@ u64 bc250_pte_gart_flags(void);
 u64 bc250_pte_vm_flags(int writeable, int executable, int system, int snooped);
 
 /* The inverse: split an entry back into its fields. Total, never fails; `kind` decides only how
- * much of the low end of the address field is read. */
+ * much of the low end of the address field is read. A directory entry with PDE_PTE set is a page,
+ * and decodes like a leaf: a page address and the leaf flags and fragment it carries. */
 void bc250_pte_decode(u64 entry, enum bc250_pte_kind kind, struct bc250_pte_fields *out);
 
 /*

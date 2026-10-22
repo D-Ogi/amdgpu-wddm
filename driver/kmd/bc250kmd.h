@@ -416,6 +416,12 @@ typedef struct _BC250_DEVICE {
     PAGING_APERTURE WddmAperture;        // immutable geometry for this device start; no owned pointer
     ULONGLONG WddmApertureRequest;       // the aperture size GartCaptureAperture asks for (wddm.c WddmStart,
                                          // ApertureSegmentMegabytes); 0 until WddmStart sets it
+    // Both from the LargePages setting (wddm.c WddmStart), set before the first WddmMemoryLayout of the start and
+    // not changed until stop. LargePageLayout: the VRAM segment starts on a 1 GiB physical boundary and a VRAM
+    // allocation of 2 MiB or more is placed on 2 MiB (values 1 and 2). LargePages: the GpuMmu caps report large
+    // pages and vidmm.c maps them, 2 MiB at level 1 and 1 GiB at level 2 (value 1 only, which needs the layout).
+    BOOLEAN LargePageLayout;
+    BOOLEAN LargePages;
     PVOID Wddm;                         // wddm.c, NULL unless FullWddm
     BOOLEAN MmioIhEnabled;
     BOOLEAN GfxStopPrepared;            // hardware retirement attempted in this device generation
@@ -1334,6 +1340,10 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet i
 // Bc250DpcRoutine and docs/design/paging-node.md section 5.
 void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device);
 // vidmm.c: VidMm's page tables (ADR 0008 stage B). EnableGpuVa 0 = plan and log, 1 = write the entries.
+// The VRAM pages above the leaf that a start with Device->LargePages maps: 2 MiB at level 1, 1 GiB at level 2.
+// vidmm.c checks both against bc250_pte.h, which wddm.c does not include.
+#define BC250_VIDMM_HUGE_PAGE_BYTES (2ull*1024*1024)
+#define BC250_VIDMM_GIANT_PAGE_BYTES (1024ull*1024*1024)
 NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId,
                           ULONGLONG TableOffset, ULONGLONG TableLength, ULONG TableSegmentId);
 NTSTATUS VidMmStart(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffset, ULONGLONG SegmentLength, ULONG VramSegmentId);

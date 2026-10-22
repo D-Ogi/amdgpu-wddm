@@ -533,7 +533,7 @@ static void check_decode(void)
 		if (f.tf)         rebuilt |= AMDGPU_PTE_TF;
 		if (f.noalloc)    rebuilt |= AMDGPU_PTE_NOALLOC;
 		rebuilt |= AMDGPU_PTE_FRAG(f.fragment);
-		if (c->kind != BC250_PTE_DIRECTORY)
+		if (c->kind != BC250_PTE_DIRECTORY || f.pde_pte)
 			rebuilt = AMDGPU_PTE_MTYPE_NV10(rebuilt, f.mtype);
 		if (rebuilt != c->expect) {
 			printf("  round trip %016llX -> %016llX\n",
@@ -650,6 +650,236 @@ static void check_controls(void)
 	}
 }
 
+/* ---------------------------------------------------------------------------------------------
+ * 7. Large pages: LargePage on a level 1 entry, through bc250_pte_from_dxgk_level()
+ * ------------------------------------------------------------------------------------------- */
+
+/* Unit A's VRAM: vram_base_offset 0x270000000, 8 GiB (fact M808 names the base). Only the M808
+ * control below uses it; the other cases use the test's own segment. */
+#define UNITA_VRAM_BASE	0x0000000270000000ull
+#define UNITA_VRAM_SIZE	0x0000000200000000ull
+#define M808_VRAM_2M	0x004000046fc004e1ull   /* fact M808: amdgpu's 2 MiB VRAM entry on unit A */
+
+struct huge_case {
+	const char *name;
+	u32 level;
+	u32 large_pages;
+	u32 unita;              /* 1: unit A's 8 GiB segment at 0x270000000, 0: the test's own segment */
+	struct dxgk_in in;
+	u64 expect;             /* 0: must be refused, with nothing written */
+};
+
+/* A readable, writable, executable, coherent 2 MiB VRAM page; VRAM offsets are bytes here. */
+#define HUGE_VRAM(off)   { 1, 0, 1, 0, 0, VRAM_SEGMENT, 1, 0, 0, 0, 0, (off) }
+
+/*
+ * Expected entries written out in full: address | VALID 0x01 | SNOOPED 0x04 | EXECUTABLE 0x10 |
+ * READABLE 0x20 | WRITEABLE 0x40 | FRAG 9 (0x480) | PDE_PTE (bit 54, 0x0040000000000000), MTYPE_NC.
+ */
+static const struct huge_case g_huge[] = {
+	{ "level 1, VRAM, rwx, coherent", 1, 1, 0, HUGE_VRAM(0x200000ull), 0x00400004002004F5ull },
+	{ "level 1, VRAM, read only, no execute, not coherent", 1, 1, 0,
+	  { 1, 0, 0, 1, 1, VRAM_SEGMENT, 1, 0, 0, 0, 0, 0x200000ull }, 0x00400004002004A1ull },
+	{ "level 1, VRAM, the last 2 MiB of the segment", 1, 1, 0,
+	  HUGE_VRAM(VRAM_SIZE - 0x200000ull), 0x004000040FE004F5ull },
+	{ "level 1 without LargePage: still a directory entry", 1, 1, 0,
+	  RWX_VRAM(0x3000ull), 0x0000000400003005ull },
+	{ "refused: large pages not reported", 1, 0, 0, HUGE_VRAM(0x200000ull), 0 },
+	{ "refused: level 2 in a segment smaller than 1 GiB", 2, 1, 0, HUGE_VRAM(0), 0 },
+	{ "refused: LargePage at level 3", 3, 1, 0, HUGE_VRAM(0x200000ull), 0 },
+	{ "level 0 LargePage: the 64 KB leaf fragment, as before", 0, 1, 0, HUGE_VRAM(0x210000ull),
+	  0x0000000400210275ull },
+	{ "refused: an address not 2 MiB aligned", 1, 1, 0, HUGE_VRAM(0x201000ull), 0 },
+	{ "refused: an address 64 KB but not 2 MiB aligned", 1, 1, 0, HUGE_VRAM(0x210000ull), 0 },
+	{ "refused: host memory", 1, 1, 0,
+	  { 1, 0, 1, 0, 0, SYS_SEGMENT, 1, 0, 0, 0, 0, 0x0000001234600000ull }, 0 },
+	{ "refused: past the end of the segment", 1, 1, 0, HUGE_VRAM(VRAM_SIZE), 0 },
+	/* Unit A's segment: 0x270000000 is 2 MiB aligned and not 1 GiB aligned. FRAG 18 is 0x900. */
+	{ "unit A, level 1, segment offset 0", 1, 1, 1, HUGE_VRAM(0), 0x00400002700004F5ull },
+	{ "unit A, level 2, rwx, coherent: a 1 GiB page", 2, 1, 1, HUGE_VRAM(0x10000000ull),
+	  0x0040000280000975ull },
+	{ "unit A, level 2, read only, no execute, not coherent", 2, 1, 1,
+	  { 1, 0, 0, 1, 1, VRAM_SEGMENT, 1, 0, 0, 0, 0, 0x10000000ull }, 0x0040000280000921ull },
+	{ "unit A, level 2, the last whole 1 GiB of the segment", 2, 1, 1, HUGE_VRAM(0x190000000ull),
+	  0x0040000400000975ull },
+	{ "refused: unit A, level 2, offset 0 is not a 1 GiB address", 2, 1, 1, HUGE_VRAM(0), 0 },
+	{ "refused: unit A, level 2, 2 MiB but not 1 GiB aligned", 2, 1, 1, HUGE_VRAM(0x10200000ull), 0 },
+	{ "refused: unit A, level 2, past the end of the segment", 2, 1, 1, HUGE_VRAM(0x1D0000000ull), 0 },
+	{ "refused: unit A, level 2, large pages not reported", 2, 0, 1, HUGE_VRAM(0x10000000ull), 0 },
+};
+
+static void check_huge(void)
+{
+	struct bc250_pte_fields f;
+	char text[128];
+	unsigned int i;
+
+	printf("\n== large pages (LargePage on a level 1 or level 2 entry)\n");
+	for (i = 0; i < sizeof(g_huge) / sizeof(g_huge[0]); i++) {
+		const struct huge_case *c = &g_huge[i];
+		struct bc250_pte_context ctx = vm_ctx();
+		DXGK_PTE pte;
+		u64 got = 0xDEADBEEFDEADBEEFull;
+		int rc;
+
+		ctx.large_pages = c->large_pages;
+		if (c->unita) {
+			ctx.vram_base = UNITA_VRAM_BASE;
+			ctx.vram_size = UNITA_VRAM_SIZE;
+		}
+		make_pte(&c->in, &pte);
+		rc = bc250_pte_from_dxgk_level(&ctx, c->level, (u64)pte.Flags, (u64)pte.PageAddress, &got);
+		bc250_pte_describe(got, c->level ? BC250_PTE_DIRECTORY : BC250_PTE_LEAF, text, sizeof(text));
+		printf("  %-58s rc %2d %016llX  %s\n", c->name, rc, (unsigned long long)got, text);
+		/* The level 0 row is a control of the old leaf path: LargePage on a leaf is the 64 KB
+		 * fragment, which no VidMm sends to this driver, and the level entry point leaves it as it was. */
+		if (c->expect == 0) {
+			if (rc != BC250_EINVAL || got != 0)
+				fail("a large page that must be refused was accepted, or wrote an entry");
+		} else if (rc != 0 || got != c->expect) {
+			printf("        expected %016llX\n", (unsigned long long)c->expect);
+			g_failures++;
+		}
+	}
+
+	/* The positive control: the same mapping as fact M808's (VRAM, read and write, no execute, not
+	 * coherent, 2 MiB at 0x46FC00000 on unit A's base) must give amdgpu's entry bit for bit. */
+	{
+		struct bc250_pte_context ctx = vm_ctx();
+		struct dxgk_in in = { 1, 0, 0, 0, 1, VRAM_SEGMENT, 1, 0, 0, 0, 0, 0 };
+		DXGK_PTE pte;
+		u64 got = 0;
+
+		ctx.vram_base = UNITA_VRAM_BASE;
+		ctx.vram_size = UNITA_VRAM_SIZE;
+		ctx.large_pages = 1;
+		in.address = 0x000000046fc00000ull - UNITA_VRAM_BASE;
+		make_pte(&in, &pte);
+		if (bc250_pte_from_dxgk_level(&ctx, 1, (u64)pte.Flags, (u64)pte.PageAddress, &got) != 0 ||
+		    got != M808_VRAM_2M) {
+			printf("  M808 control %016llX, amdgpu wrote %016llX\n", (unsigned long long)got,
+			       (unsigned long long)M808_VRAM_2M);
+			fail("the 2 MiB entry is not the one amdgpu wrote for the same mapping");
+		}
+		/* The same context, read as page frame numbers, which is what VidMm sends (fact M72). */
+		ctx.units = BC250_PTE_ADDR_PAGES;
+		in.address = (0x000000046fc00000ull - UNITA_VRAM_BASE) >> 12;
+		make_pte(&in, &pte);
+		got = 0;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, (u64)pte.Flags, (u64)pte.PageAddress, &got) != 0 ||
+		    got != M808_VRAM_2M)
+			fail("the 2 MiB entry differs when the address is a page frame number");
+		bc250_pte_describe(got, BC250_PTE_DIRECTORY, text, sizeof(text));
+		printf("  M808 control: %s\n", text);
+		if (strcmp(text, "004000046FC004E1 VALID R W PDE_PTE FRAG=09 MTYPE=NC addr=00046FC00000") != 0)
+			fail("the 2 MiB entry does not describe itself as a page");
+
+		/* Decode reads a PDE_PTE directory entry as a page: its address, flags and fragment. */
+		bc250_pte_decode(M808_VRAM_2M, BC250_PTE_DIRECTORY, &f);
+		if (f.address != 0x000000046fc00000ull || !f.valid || !f.readable || !f.writeable ||
+		    f.executable || f.system || !f.pde_pte || f.fragment != BC250_PTE_HUGE_PAGE_FRAG ||
+		    f.mtype != MTYPE_NC)
+			fail("decode does not read a 2 MiB entry as a page");
+		bc250_pte_decode(0x0040000280000975ull, BC250_PTE_DIRECTORY, &f);
+		if (f.address != 0x0000000280000000ull || !f.valid || !f.readable || !f.writeable ||
+		    !f.executable || !f.snooped || f.system || !f.pde_pte ||
+		    f.fragment != BC250_PTE_GIANT_PAGE_FRAG || f.mtype != MTYPE_NC)
+			fail("decode does not read a 1 GiB entry as a page");
+	}
+
+	/* The entry point without a level keeps refusing LargePage on a directory, whatever the
+	 * context says: it cannot know that the entry is level 1. */
+	{
+		struct bc250_pte_context ctx = vm_ctx();
+		struct dxgk_in in = HUGE_VRAM(0x200000ull);
+		DXGK_PTE pte;
+		u64 got = 1;
+
+		ctx.large_pages = 1;
+		make_pte(&in, &pte);
+		if (bc250_pte_from_dxgk(&ctx, BC250_PTE_DIRECTORY, (u64)pte.Flags, (u64)pte.PageAddress,
+					&got) != BC250_EINVAL || got != 0)
+			fail("bc250_pte_from_dxgk accepted LargePage on a directory entry");
+	}
+
+	/* A table segment page is not a large page, even level 1 and aligned. */
+	{
+		struct bc250_pte_context ctx = vm_ctx();
+		u64 got = 1;
+
+		ctx.large_pages = 1;
+		ctx.table_segment = 3;
+		ctx.table_base = VRAM_BASE + VRAM_SIZE;
+		ctx.table_size = 4ull * 1024 * 1024;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_LARGEPAGE |
+					      (3ull << BC250_DXGK_PTE_SEGMENT_SHIFT), 0, &got) != BC250_EINVAL ||
+		    got != 0)
+			fail("a large page in the page table segment was accepted");
+	}
+
+	/* Zero on a level 1 entry keeps the PRT terminal, with or without LargePage. */
+	{
+		struct bc250_pte_context ctx = vm_ctx();
+		u64 got = 0;
+
+		ctx.large_pages = 1;
+		if (bc250_pte_from_dxgk_level(&ctx, 1, BC250_DXGK_PTE_VALID | BC250_DXGK_PTE_ZERO |
+					      BC250_DXGK_PTE_LARGEPAGE, 0, &got) != 0 ||
+		    got != 0x00C8000000000006ull)
+			fail("Zero with LargePage at level 1 is not the PRT terminal");
+	}
+
+	/* The observer: bc250_pte_large_page_bytes accepts exactly the entries the encoder writes. The
+	 * entries the encoder wrote above are read back as pages of their size; an entry that the encoder
+	 * refuses (a page in the table segment, a range that runs past the segment while its first 4 KB
+	 * page is inside it, the fragment of another level, a host page, the cap off, level 0 or 3, an
+	 * unaligned address, a directory without PDE_PTE) is 0. */
+	{
+		struct bc250_pte_context ctx = vm_ctx();
+		static const struct { const char *name; u32 level; u32 cap; u64 entry; u64 expect; } cases[] = {
+			{ "2 MiB page of fact M808",                          1, 1, M808_VRAM_2M,           BC250_PTE_HUGE_PAGE_BYTES },
+			{ "1 GiB page at 0x280000000",                        2, 1, 0x0040000280000975ull,  BC250_PTE_GIANT_PAGE_BYTES },
+			{ "1 GiB page, last one of the segment",              2, 1, 0x0040000400000975ull,  BC250_PTE_GIANT_PAGE_BYTES },
+			{ "refused: large pages not reported",                1, 0, M808_VRAM_2M,           0 },
+			{ "refused: level 0",                                 0, 1, M808_VRAM_2M,           0 },
+			{ "refused: level 3",                                 3, 1, 0x0040000280000975ull,  0 },
+			{ "refused: level 2 entry with the level 1 fragment", 2, 1, 0x00400002800004E1ull,  0 },
+			{ "refused: level 1 entry with the level 2 fragment", 1, 1, 0x004000046FC00975ull,  0 },
+			{ "refused: 1 GiB range past the segment end",        2, 1, 0x0040000440000975ull,  0 },
+			{ "refused: 1 GiB range, 2 MiB aligned only",         2, 1, 0x0040000280200975ull,  0 },
+			{ "refused: 2 MiB page in the table segment",         1, 1, 0x00400004700004E1ull,  0 },
+			{ "refused: 2 MiB page below the segment",            1, 1, 0x004000026FE004E1ull,  0 },
+			{ "refused: host page with PDE_PTE",                  1, 1, M808_VRAM_2M | AMDGPU_PTE_SYSTEM, 0 },
+			{ "refused: directory entry without PDE_PTE",         1, 1, 0x000000046FC00001ull,  0 },
+			{ "refused: not valid",                               1, 1, M808_VRAM_2M & ~1ull,   0 },
+		};
+
+		ctx.large_pages = 1;
+		ctx.vram_base = UNITA_VRAM_BASE;
+		ctx.vram_size = UNITA_VRAM_SIZE;
+		ctx.table_segment = 3;
+		ctx.table_base = UNITA_VRAM_BASE + UNITA_VRAM_SIZE;
+		ctx.table_size = 64ull * 1024 * 1024;
+		for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+			u64 bytes;
+
+			ctx.large_pages = cases[i].cap;
+			bc250_pte_decode(cases[i].entry, cases[i].level ? BC250_PTE_DIRECTORY : BC250_PTE_LEAF, &f);
+			bytes = bc250_pte_large_page_bytes(&ctx, cases[i].level, &f);
+			printf("  observer %-52s %016llX -> %llu\n", cases[i].name,
+			       (unsigned long long)cases[i].entry, (unsigned long long)bytes);
+			if (bytes != cases[i].expect) {
+				printf("        expected %llu\n", (unsigned long long)cases[i].expect);
+				g_failures++;
+			}
+		}
+		if (bc250_pte_large_page_bytes(NULL, 1, &f) != 0 || bc250_pte_large_page_bytes(&ctx, 1, NULL) != 0)
+			fail("the observer accepted a null context or null fields");
+	}
+	printf("  %u cases, the M808 control, and the old entry point, table segment, Zero and observer controls\n",
+	       (unsigned int)(sizeof(g_huge) / sizeof(g_huge[0])));
+}
+
 static void check_table_segment(void)
 {
 	struct bc250_pte_context ctx=vm_ctx();
@@ -709,6 +939,7 @@ int main(int argc, char **argv)
 	check_bad();
 	check_decode();
 	check_controls();
+	check_huge();
 	check_table_segment();
 
 	printf("\n%s (%d failures)\n", g_failures == 0 ? "PASS" : "FAIL", g_failures);

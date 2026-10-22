@@ -3448,6 +3448,8 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     Device->WddmApertureRequest = 0;
     Device->ComposedSourceModes = FALSE;
     Device->CommittedSourceFormat = 0;
+    Device->LargePageLayout = FALSE;
+    Device->LargePages = FALSE;
     if (!g_FullWddm) return STATUS_SUCCESS;                            // gate closed: this file does nothing at all
     RtlZeroMemory(&osVersion, sizeof(osVersion));
     osVersion.dwOSVersionInfoSize = sizeof(osVersion);
@@ -3456,6 +3458,21 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // 0.7.201: source modes of the composed formats (display_modes.h), on unless the value is 0.
     Device->ComposedSourceModes = GuardReadSetting(L"OfferComposedSourceModes", 1) != 0;
     GuardLog("wddm: composed source modes %s", Device->ComposedSourceModes ? "offered" : "off");
+    // Large pages for VRAM, as amdgpu maps it: a directory entry with PDE_PTE and the fragment of its range, 2 MiB at
+    // level 1 (fact M808) and 1 GiB at level 2. Read before the first WddmMemoryLayout of this start, because the
+    // layout, the GpuMmu caps and the translation of a LargePage entry must agree for the whole start.
+    //   0 (absent): the layout and the 4 KB mappings of earlier drivers. Off by default: no 1 GiB entry has been
+    //               read back on unit A, and the layout below costs the VRAM under the first 1 GiB boundary.
+    //   1: large pages, on the layout of 2.
+    //   2: the layout of 1 (segment base on 1 GiB, 2 MiB placement) with 4 KB mappings. The control that tells
+    //      the effect of the page size from the effect of the layout.
+    {
+        const ULONG asked = GuardReadSetting(L"LargePages", 0);
+        Device->LargePageLayout = (asked == 1 || asked == 2);
+        Device->LargePages = (asked == 1);
+        GuardLog("wddm: LargePages %lu: %s", asked, Device->LargePages ? "large VRAM pages on the aligned layout" :
+                 (Device->LargePageLayout ? "aligned layout, 4 KB mappings" : "off"));
+    }
 
     // BD-122: the sub-steps of this function inside the start record's WddmStart step (guard.c StartRecord).
     GuardStartSubStep(L"wddm-pool");
@@ -3637,6 +3654,13 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     wddm->VSyncLast = KeQueryPerformanceCounter(&wddm->VSyncFrequency);
     // Production full WDDM requires its GPU VA/paging resources at admission.
     GuardStartSubStep(L"gpu-va-layout");
+    // A carve-out with no room above its first 1 GiB physical boundary gets no large pages, not a failed start.
+    if (Device->LargePageLayout && !WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength)) {
+        Device->LargePageLayout = FALSE;
+        Device->LargePages = FALSE;
+        if (WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength))
+            GuardLog("wddm: LargePages off: no VRAM segment above the first 1 GiB physical boundary");
+    }
     if (GuardReadSetting(L"EnableGpuVa",0)!=1 ||
         !WddmMemoryLayout(Device,&segmentOffset,&segmentLength,&tableOffset,&tableLength)) {
         status=STATUS_DEVICE_NOT_READY;
@@ -3966,6 +3990,16 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     // allocations. Both the private caps and QUERYSEGMENT use this same layout.
     if (Device->DisplayReservationEnd>framebufferEnd)
         framebufferEnd=Device->DisplayReservationEnd;
+    // With large pages the segment starts on a 1 GiB physical boundary. Without AllowNonAlignedLargePageAddress,
+    // VidMm sets LargePage only on an address aligned to the leaf table coverage (DXGK_GPUMMUCAPS), and that
+    // address is a segment offset. The translation needs a 2 MiB page 2 MiB aligned and a 1 GiB page 1 GiB aligned,
+    // in the physical address, which is the base plus the offset. With the base on 1 GiB, an aligned offset is an
+    // aligned address for both pages. The VRAM below the boundary is not offered.
+    if (Device->LargePageLayout) {
+        ULONGLONG base=(ULONGLONG)Device->VramPhysical.QuadPart;
+        if (base>MAXULONGLONG-framebufferEnd-(BC250_VIDMM_GIANT_PAGE_BYTES-1)) return FALSE;
+        framebufferEnd=((base+framebufferEnd+BC250_VIDMM_GIANT_PAGE_BYTES-1)&~(BC250_VIDMM_GIANT_PAGE_BYTES-1))-base;
+    }
     if (framebufferEnd>=limit) return FALSE;
     available=(limit-framebufferEnd)&~65535ull;
     // Capacity policy: reserve 1/32 of usable VRAM, rounded down to64KiB,
@@ -4321,7 +4355,7 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     return STATUS_SUCCESS;
 }
 
-static NTSTATUS WddmGpuMmuCaps(_In_ const DXGKARG_QUERYADAPTERINFO* Query)
+static NTSTATUS WddmGpuMmuCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKARG_QUERYADAPTERINFO* Query)
 {
     DXGK_GPUMMUCAPS* caps = (DXGK_GPUMMUCAPS*)Query->pOutputData;
 
@@ -4337,6 +4371,10 @@ static NTSTATUS WddmGpuMmuCaps(_In_ const DXGKARG_QUERYADAPTERINFO* Query)
     caps->VirtualAddressBitCount = BC250_WDDM_VA_BITS;
     caps->PageTableLevelCount = BC250_WDDM_LEVEL_COUNT;
     caps->LeafPageTableSizeFor64KPagesInBytes = 0;      // stage A declares no 64 KB pages on the segment
+    // "All levels of page tables, except the leaf one, support large pages": vidmm.c maps level 1 (2 MiB) and
+    // level 2 (1 GiB). Level 3 would need a 512 GiB allocation, which no segment here can hold. Large pages in
+    // host memory (SysMemLargePageSupported) and on unaligned addresses (AllowNonAlignedLargePageAddress) stay off.
+    caps->LargePageSupported = Device->LargePages ? 1 : 0;
     return STATUS_SUCCESS;
 }
 
@@ -4405,7 +4443,7 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         status = WddmQuerySegment4(device, QueryAdapterInfo);
         break;
     case DXGKQAITYPE_GPUMMUCAPS:
-        status = WddmGpuMmuCaps(QueryAdapterInfo);
+        status = WddmGpuMmuCaps(device, QueryAdapterInfo);
         break;
     case DXGKQAITYPE_PAGETABLELEVELDESC:
         status = WddmPageTableLevelDesc(device, QueryAdapterInfo);
@@ -5054,6 +5092,13 @@ static int WddmCreateAdmit(void* Context, unsigned long Index, unsigned long* Sl
         align = (UINT)Bc250ScanoutBlobAlignment(view.scanout ? 1 : 0, view.alignment);
         info->hAllocation = object;
         info->Size = (SIZE_T)ROUND_TO_PAGES((SIZE_T)view.bytes);
+        // With the large page layout, a VRAM allocation of 2 MiB or more starts on a 2 MiB segment offset, so that
+        // VidMm can map each whole 2 MiB of it with one level 1 entry. The winsys asks for at most 256 KiB for VRAM
+        // (radv_wddm2_bo.c), which would leave those ranges to chance. 2 MiB is a multiple of every scan-out
+        // alignment, and the size does not change. LargePages 2 places the same way, for a like-for-like control.
+        if (device->LargePageLayout && segment == BC250_WDDM_SEGMENT_VRAM &&
+            info->Size >= BC250_VIDMM_HUGE_PAGE_BYTES && align < BC250_VIDMM_HUGE_PAGE_BYTES)
+            align = (UINT)BC250_VIDMM_HUGE_PAGE_BYTES;
         info->Alignment = align;
         info->HintedBank.Value = 0;
         info->MaximumRenamingListLength = 0;

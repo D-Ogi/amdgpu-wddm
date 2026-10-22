@@ -58,7 +58,7 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
                          ULONGLONG Dma, BOOLEAN Cpu)
 {
     BC250_PAGING_JOURNAL_RECORD r;
-    ULONG i, valid = 0, span, segments = 0;
+    ULONG i, valid = 0, span, segments = 0, large = 0;
 
     if (Update == NULL) return;
     RtlZeroMemory(&r, sizeof(r));
@@ -71,6 +71,7 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
             // KMD183: which segments the slice's valid entries point into (DXGK_PTE.Segment, d3dukmdt.h; 0 is
             // system memory). Read from the same entries Valid counts, so it costs no extra pass.
             segments |= BC250_PJ_FLAG_SEGMENT((ULONG)pte->Segment);
+            if (pte->LargePage) large = BC250_PJ_FLAG_LARGE;
         }
     span = Update->PageTableLevel < 5 ? 12 + 9 * Update->PageTableLevel : 63;
     r.Kind = Cpu ? BC250_PJ_UPDATE_CPU : BC250_PJ_UPDATE_GPU;
@@ -80,7 +81,7 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
     r.Valid = valid;
     r.Flags = (Update->Flags.Repeat ? BC250_PJ_FLAG_REPEAT : 0u) | (Update->Flags.InitialUpdate ? BC250_PJ_FLAG_INITIAL : 0u) |
               (Update->Flags.NotifyEviction ? BC250_PJ_FLAG_EVICTION : 0u) | (Update->Flags.Use64KBPages ? BC250_PJ_FLAG_64KB : 0u) |
-              segments;
+              large | segments;
     r.Va = Update->FirstPteVirtualAddress + ((ULONGLONG)SliceStart << span);
     r.Allocation = (ULONGLONG)(ULONG_PTR)Update->hAllocation;
     r.Offset = Update->AllocationOffsetInBytes;
