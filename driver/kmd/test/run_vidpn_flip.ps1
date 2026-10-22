@@ -178,7 +178,9 @@ if ($Lab) { $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1'); $mutations = $labMutati
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = "$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
+$cl = Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang-cl.exe'
+& $cl --version
+if ($LASTEXITCODE) { throw 'Explicit clang-cl unavailable' }
 $sdk = "$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
 $libs = "$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -194,7 +196,11 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     $obj = Join-Path $Dir 'obj'
     New-Item -ItemType Directory -Force $Dir, $obj | Out-Null
     Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue
-    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT') @flavour @("/I$repo\driver\kmd", "/I$repo\third_party\linux-amdgpu",
+    # Intentional rule removal uses x && !x to keep variables in use. Require
+    # runtime rejection of these mutants, not a compiler-warning substitute.
+    [string[]]$mutationWarnings = @()
+    if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
+    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
         "$repo\driver\kmd\dcn_translate.c", '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host

@@ -448,6 +448,47 @@ granting the long operation. The retirement wait occurs outside its interrupt
 synchronization section. A probe must also join restore/end and fault paths.
 calling the old diagnostic flip while VidPN owns OTG0 remains refused.
 
+#### Probe ownership and recovery plan
+
+The in-driver probe must enter through the lab-only diagnostic gate with
+HardwareAccess and at PASSIVE_LEVEL. The primary writer claim and the OS
+exclusion are separate requirements. Neither a successful sample nor a
+matching generation authorizes use of a copied application address.
+
+Use two disjoint ranges of the existing driver-owned runtime framebuffer.
+`ConnectorBufferPrepare` reserves 35,389,440 bytes before QUERYSEGMENT.
+For a 1920x1200 source with a 7680-byte pitch, each range needs 9,216,000
+bytes. With the second offset rounded up to 64 KiB, their final end is
+18,456,576. This fits that reservation without changing the memory segment.
+These are example calculations, not admission based on a display name.
+Check actual dimensions, pitch, mapping, physical alignment and complete
+ranges at runtime. Refuse a mode whose two ranges do not fit. Do not change
+the mode to make the experiment pass. Retain the reservation for the entire
+probe and recovery, including when a read or restore fails.
+
+After `WddmPrimaryExclusiveBegin` has retired the application surface to the
+bridge, the probe can use only these reserved ranges. `WddmWriterResume` must
+succeed before the long operation.
+Capture and recheck the same owner generation and display configuration.
+Frame waits must occur outside the interrupt synchronization section. Check
+elapsed time again after every sample, including after preemption. A missing
+boundary, late lock, changed owner or failed read is inconclusive, not evidence
+for either latch hypothesis.
+
+Recovery must release any probe-owned hardware lock before calling `WddmPrimaryExclusiveEnd` to
+program the latest retained Desired. It must not restore the application's
+address saved before acquisition. `WddmDestroyTakeLocked` can invalidate and free that
+object during a ready writer. If there is no remaining Desired, restore the
+base of the reserved buffer first, then keep it. A failed lock release or
+failed reserved-buffer restore must enter the fault path and retain storage.
+No failed cleanup may be reported as a passing experiment.
+
+The actual-source `run_vidpn_flip.ps1` controls exercise destroy during a
+writer, failed retirement, failed synchronization and restoration while
+faulting. The DCN flip and observer controls use the same explicit Clang
+toolchain. Their passing results establish tested software behavior only.
+The probe hook, its fault integration and the hardware controls remain open.
+
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock
 held across a boundary can delay an earlier accepted flip on the other plane.

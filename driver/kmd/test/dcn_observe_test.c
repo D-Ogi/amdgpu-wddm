@@ -73,7 +73,8 @@ static void Prepare(BC250_ESCAPE_DCN_OBSERVE*o)
 }
 int main(void)
 {
-    BC250_DEVICE d={(void*)1,TRUE,12};BC250_ESCAPE_DCN_OBSERVE o;
+    BC250_DEVICE d={0};BC250_ESCAPE_DCN_OBSERVE o;
+    d.Mmio=(void*)1;d.FullWddm=TRUE;d.DcnSurfaceSequence=12;
     DXGKARG_ESCAPE e={&o,sizeof(o),{1}};unsigned flag;
     C_ASSERT(sizeof(o)==128);
     Prepare(&o);CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);

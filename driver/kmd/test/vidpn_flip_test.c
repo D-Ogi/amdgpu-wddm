@@ -689,8 +689,10 @@ static void FlipFlagBits(void)
 {
     BC250_WDDM w;BC250_DEVICE d;
     DXGKARG_SETVIDPNSOURCEADDRESS request={0};
-    BC250_WDDM_OBJECT allocation={BC250_WDDM_MAGIC_ALLOCATION};
+    BC250_WDDM_OBJECT allocation={0};
     unsigned written;
+
+    allocation.Magic=BC250_WDDM_MAGIC_ALLOCATION;
 
     request.Flags.Value=0;request.Flags.ModeChange=1;CHECK(request.Flags.Value==0x00000001u);
     request.Flags.Value=0;request.Flags.FlipImmediate=1;CHECK(request.Flags.Value==0x00000002u);
@@ -1743,7 +1745,8 @@ static void WriterSynchronizationRefusals(void)
     /* The first member does not need retirement. A later failure must keep the complete list retryable, with no
      * journal or free of the earlier member and no partial resource destruction. */
     {
-        BC250_WDDM_OBJECT unrelated={BC250_WDDM_MAGIC_ALLOCATION},resource={BC250_WDDM_MAGIC_RESOURCE};
+        BC250_WDDM_OBJECT unrelated={0},resource={0};
+        unrelated.Magic=BC250_WDDM_MAGIC_ALLOCATION;resource.Magic=BC250_WDDM_MAGIC_RESOURCE;
         HANDLE list[2]={&unrelated,&game};
         DXGKARG_DESTROYALLOCATION destroy={0};
         Setup(&d,&w,0);CHECK(Flip(&d,&request)==STATUS_SUCCESS);
