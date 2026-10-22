@@ -165,6 +165,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # The driver package's own AddReg against the release defaults table (BD-091): every setting the INF writes is the
  # released value and carries NOCLOBBER, so no install outside our installer closes a gate while another stays open.
  Check 'inf-gates' { & python "$repo\tools\quality\inf_gates.py" --inf "$repo\driver\kmd\bc250kmd.inf" --defaults "$repo\tools\release\installer\registry-defaults.json" --out "$Out\inf-gates" }
+ # BD-190: every setting the KMD reads is a catalog entry with the same code default. A name outside the catalog
+ # reads as 0 at run time, which turned the boot logo and the lab diagnostics off without a log line.
+ Check 'driver-state-settings' { & python "$repo\tools\state\check_settings.py" --root "$repo" }
  Check 'driver-state-x64' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x64" -Arch x64 }
  Check 'driver-state-x86' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x86" -Arch x86 }
  Check 'stored-fan-choice' { & pwsh -NoProfile -File "$repo\tools\state\test-fan-choice.ps1" -Kits "$Kits" -Out "$Out\stored-fan-choice" }

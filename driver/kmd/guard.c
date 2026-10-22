@@ -197,11 +197,22 @@ BC250_STAGE GuardLastStage(void)
     return g_LastStage;
 }
 
+// A failed read is 0, not the default: a name outside the catalog (STATUS_INVALID_PARAMETER), a closed group or a
+// state that is not ready all select the old variant of the gate that asked. BD-190: BootLogo and LabDiagnostics
+// read 0 this way from tester.31 on, and nothing said so. The line below says it, bounded, so a support file
+// shows the name, the status and the value chosen; tools/state/check_settings.py refuses an unknown name at build
+// time. Nothing in GuardLog reads a setting, so the line cannot recurse.
+#define BC250_SETTING_FAILURE_LINES 32
+static LONG g_SettingReadFailures;
+
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
 {
     ULONG value=0;NTSTATUS status=DriverStateNumber(L"",Name,TRUE,&value);
     if(NT_SUCCESS(status))return value;
-    return status==STATUS_OBJECT_NAME_NOT_FOUND?Default:0;
+    if(status==STATUS_OBJECT_NAME_NOT_FOUND)return Default;
+    if(InterlockedIncrement(&g_SettingReadFailures)<=BC250_SETTING_FAILURE_LINES)
+        GuardLog("setting %ws: read failed 0x%08X, 0 used instead of the default %lu",Name,status,Default);
+    return 0;
 }
 
 // A one-shot gate: the value 1 is read and put back to 0 on disk before anything it opens has run, so a bugcheck

@@ -26,6 +26,51 @@
     },
     {
       "path": "",
+      "name": "BootLogo",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/display.c:166"
+      ]
+    },
+    {
+      "path": "",
+      "name": "BootLogoAnchorPermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 100,
+      "max": 900,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 350,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/display.c:182"
+      ]
+    },
+    {
+      "path": "",
       "name": "CoreMask",
       "kind": "setting",
       "type": "dword",
@@ -2843,6 +2888,30 @@
       "migration": "raw-once",
       "source": [
         "driver/kmd/guard.c:536"
+      ]
+    },
+    {
+      "path": "",
+      "name": "LabDiagnostics",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/lab_gate.c:63"
       ]
     },
     {
