@@ -690,7 +690,9 @@ foreach ($c in @(
     # -NoComponents above, so no licence or component address is in this text: every https:// here would be a
     # firmware download, which this case must not make.
     Check (($r.text -match '\[ok\s*\]\s+GPU firmware\s+9 files in .+ match the pinned SHA256') -and ($r.text -match 'would: get the 9 GPU firmware files from .+download into ') -and ($r.text -notmatch 'https://')) "$($c.name): the firmware comes from the first run's folder, no download"
-    Check ($r.text -match 'DpmMaxMHz=1200 \(command line\)') "$($c.name): the first run's -DpmMaxMHz is written"
+    # The value itself is the resolver's (6282d18d, 00ce1b02): a dry run prints no Parameters plan. The restored
+    # -DpmMaxMHz is checked above in the options line; here the resolver step runs and receives the command line.
+    Check (($r.text -match 'would: apply release setting policy through the validated shared-state resolver') -and ($src -match 'Invoke-DriverStateDefaults -Cli [^\r\n]*\r?\n\s+-Previous \$applied\.parameters -Explicit \$commandLineParameters ')) "$($c.name): the first run's -DpmMaxMHz goes to the shared-state resolver as a command-line value"
     Check (($r.text -match 'control application: not in this package \(or -NoControlApp\); skipped') -and ($r.text -notmatch 'would: copy payload\\control')) "$($c.name): -NoControlApp still holds"
     if ($r.code -ne 0) { $r.text }
     Remove-Item -LiteralPath $dir -Recurse -Force

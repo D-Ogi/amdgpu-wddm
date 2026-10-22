@@ -125,7 +125,16 @@ Check (@($d[0].consents).Count -eq 0) "no consent is asked for: consents $(@($d[
 Check ([int]$d[0].restarts -eq $(if ($tsActive) { 2 } else { 3 })) "restarts: $($d[0].restarts)"
 Check (($d[0].firmware_source -eq 'download') -and (@($d[0].notes) -contains 'RELEASE-NOTES.md') -and $d[0].compatibility.ok) 'firmware from the download, the release notes named, the package''s compatibility record verifies'
 $sp = @(Get-Events $r 'settings-plan')
-Check (($sp.Count -eq 1) -and (@($sp[0].rows).Count -ge 20) -and -not @($sp[0].rows | Where-Object { $_.decision -in 'installer', 'restored' -or -not $_.group -or -not $_.name }).Count -and ($null -ne $sp[0].summary.added)) "settings-plan: $(@($sp[0].rows).Count) rows (group, name, decision), summary $($sp[0].summary | ConvertTo-Json -Compress)"
+# Since the shared driver state (6282d18d, 00ce1b02) the plan judges the driver settings from the migrated state. On a
+# PC without that state, as this one, the parameters group is one row 'state migration', decision 'unavailable' (the
+# protected migration judges them before staging), and every other group of the table keeps a row per value.
+$tblE = (Get-Content -LiteralPath (Join-Path $Package 'installer\registry-defaults.json') -Raw | ConvertFrom-Json).defaults
+$otherRows = @(@('desktop_router', 'app_router', 'graphics_drivers') | ForEach-Object { @($tblE.$_.PSObject.Properties).Count }) + @(@($tblE.d3d12_applications.PSObject.Properties) | ForEach-Object { @($_.Value.PSObject.Properties).Count })
+$otherRows = ($otherRows | Measure-Object -Sum).Sum
+$paramRows = @($sp | ForEach-Object { @($_.rows) } | Where-Object { $_.group -eq 'parameters' })
+$noState = ($paramRows.Count -eq 1) -and ($paramRows[0].name -eq 'state migration') -and ($paramRows[0].decision -eq 'unavailable')
+$rowsOk = $(if ($noState) { @($sp[0].rows).Count -eq (1 + $otherRows) } else { @($sp[0].rows).Count -ge 20 })
+Check (($sp.Count -eq 1) -and $rowsOk -and -not @($sp[0].rows | Where-Object { $_.decision -in 'installer', 'restored' -or -not $_.group -or -not $_.name }).Count -and ($null -ne $sp[0].summary.added)) "settings-plan: $(@($sp[0].rows).Count) rows (group, name, decision)$(if ($noState) { ', parameters: state migration unavailable (no driver state on this PC)' }), summary $($sp[0].summary | ConvertTo-Json -Compress)"
 Check ((Get-Seq $r 'decision') -lt (Get-Seq $r 'settings-plan')) 'the decision comes before the settings plan'
 Check (-not (Get-Events $r 'step').Count -and -not (Get-Events $r 'install-action').Count) 'a plan has no step and records no install action'
 $fresh = $r
