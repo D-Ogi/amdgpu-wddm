@@ -1,0 +1,20 @@
+device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+queue family  0 flags 0xF, timestamps 64 valid bits, period 1.000 ns
+memory        5 types, 3 heaps
+  type  0 heap 1 flags 0x000
+  type  1 heap 0 flags 0x001
+  type  2 heap 1 flags 0x006
+  type  3 heap 1 flags 0x00E
+  type  4 heap 2 flags 0x007
+  heap 0 size 24142 MiB flags 0x1
+  heap 1 size 65447 MiB flags 0x0
+  heap 2 size 214 MiB flags 0x1
+placement local: src/dst type 1 (heap 0, flags 0x001), readback type 3 (flags 0x00E)
+  buffers 4 MiB x2, 262144 elements of 16 bytes, 16 groups x 256 = 4096 invocations, 2 iterations
+  warmup 118 batches of 8 copies, 19 ms
+  negative control kind 4: expected content-check failure, exit 1
+  write  n=2 gpu_ms min 0.004 median 0.005 max 0.005 sum 0.0 | GB/s median 856.7 best 936.2 | cpu_ms 0.1 (0.027 per dispatch)
+  copy   n=2 gpu_ms min 0.012 median 0.013 max 0.013 sum 0.0 | GB/s median 648.9 best 704.7 | cpu_ms 0.1 (0.036 per dispatch)
+  read   n=2 gpu_ms min 0.000 median 0.000 max 0.000 sum 0.0 | GB/s median 66560.0 best 66560.0 | cpu_ms 0.0 (0.021 per dispatch)
+  check write ok (0 words), copy ok (0 words), read sum FAILED (00000000 00000000 00000000 00000000)
+result FAILED

@@ -1,0 +1,144 @@
+{
+  "exe_sha256": "be00183e9238a55f852f1931b9978fe497c81a2fd2d5f45d4989d69f361ebfb0",
+  "command": [
+    "vkmembw.exe",
+    "--mib",
+    "4",
+    "--iters",
+    "2",
+    "--groups",
+    "16",
+    "--warmup-ms",
+    "20",
+    "--placement",
+    "local"
+  ],
+  "cases": [
+    {
+      "control": "positive",
+      "mib": 4,
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 0.798,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  check write ok (0 words), copy ok (0 words), read sum ok (FFF80000 FFFC0000 00000000 00040000)",
+        "result ok"
+      ]
+    },
+    {
+      "control": "--negative-control",
+      "mib": 4,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 0.566,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  negative control kind 1: expected content-check failure, exit 1",
+        "  check write ok (0 words), copy FAILED (4 words), read sum FAILED (61BF79BC 61C379BB 61C779BA 61CB79B9)",
+        "result FAILED"
+      ]
+    },
+    {
+      "control": "--negative-noop-write",
+      "mib": 4,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 0.44,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  negative control kind 2: expected content-check failure, exit 1",
+        "  check write FAILED (1048576 words), copy FAILED (1048576 words), read sum FAILED (FFFC0000 FFF80000 00040000 00000000)",
+        "result FAILED"
+      ]
+    },
+    {
+      "control": "--negative-noop-copy",
+      "mib": 4,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 0.774,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  negative control kind 3: expected content-check failure, exit 1",
+        "  check write ok (0 words), copy FAILED (1048576 words), read sum ok (FFF80000 FFFC0000 00000000 00040000)",
+        "result FAILED"
+      ]
+    },
+    {
+      "control": "--negative-noop-read",
+      "mib": 4,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 0.876,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  negative control kind 4: expected content-check failure, exit 1",
+        "  check write ok (0 words), copy ok (0 words), read sum FAILED (00000000 00000000 00000000 00000000)",
+        "result FAILED"
+      ]
+    },
+    {
+      "control": "--negative-corrupt-copy",
+      "mib": 4,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 1.089,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  negative control kind 5: expected content-check failure, exit 1",
+        "  check write ok (0 words), copy FAILED (4 words), read sum ok (FFF80000 FFFC0000 00000000 00040000)",
+        "result FAILED"
+      ]
+    },
+    {
+      "control": "positive",
+      "mib": 5,
+      "exit_code": 0,
+      "expected_exit": 0,
+      "seconds": 0.877,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  check write ok (0 words), copy ok (0 words), read sum ok (FFF60000 FFFB0000 00000000 00050000)",
+        "result ok"
+      ]
+    },
+    {
+      "control": "--negative-corrupt-copy",
+      "mib": 9,
+      "exit_code": 1,
+      "expected_exit": 1,
+      "seconds": 0.557,
+      "check_lines": [
+        "device        NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329",
+        "  negative control kind 5: expected content-check failure, exit 1",
+        "  check write ok (0 words), copy FAILED (4 words), read sum ok (FFEE0000 FFF70000 00000000 00090000)",
+        "result FAILED"
+      ]
+    }
+  ],
+  "complete": true,
+  "passed": true,
+  "compiler": "clang-cl 23.1.4, /W4 /WX /O2 /MT, x86-64-v3, znver2 tuning",
+  "host_verifier": {
+    "checks": 24,
+    "failures": 0
+  },
+  "scope": "RTX 4090 host correctness controls only. No BC-250, HLK, page-size or comparative bandwidth result.",
+  "source_sha256": {
+    "tools/win/vkmembw/vkmembw.c": "a68b585ea17f15f3c0409f79871b4d7ff0c42a81966dec92fe12494b4bb0faeb",
+    "tools/win/vkmembw/check.h": "0bc50cd9775449b84a35ddc0e78d2f627bd912a6235d4d2805a24e2817eb51a6",
+    "tools/win/vkmembw/test-check.c": "9ea4b583aa8992ad0915fad8a10033fff075848c178f79a6d04a19a8dee341ff",
+    "tools/win/vkmembw/build.ps1": "a775ef35f66b597c9e8e2e59c979aed4e09f0f206f1cb2c3ea894a532c8e69f0"
+  },
+  "logs": {
+    "case-0.txt": "229ba3fc44cfc6a53bfb08138cdfd272cb7e0f36246d8d135cfd1b941511029f",
+    "case-1.txt": "3a984b41fa4a063ab09ac90312d580471e48ad06219e1b575f850e2e49be19f3",
+    "case-2.txt": "ef34259cb539a4a6477698d5e46b0acee0efe01e8cd2e2283664cfcf51f5d1c9",
+    "case-3.txt": "7d30843cf1befcab3ab1003da267f6615791c370ca8edfec94a516fe4cd07e68",
+    "case-4.txt": "259c430644c1a5f5cb69794c22bd9d2d37076b0fdedf853d56e02cfc77a45d57",
+    "case-5.txt": "762c1f13bd4f56ab7fb28d697a262408fd330ee0890666b17fe3177276726471",
+    "case-6.txt": "e1be5bf704f16a62f61845fd506ade6b813bf258e2d9a042dbed80c91624f52a",
+    "case-7.txt": "874f51fcf9c3e20cd42dcb296a69b5e2f308743007026d9385f0db0acb708a3e"
+  }
+}
