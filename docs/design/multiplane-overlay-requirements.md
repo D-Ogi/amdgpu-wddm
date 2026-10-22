@@ -212,12 +212,31 @@ DPP available. It rejects separate OTGs under a one-OTG limit. Increasing that
 limit to two admits the separate-output control. Upscale and downscale cases
 produce per-pipe DLG, TTU and RQ values without an AMD assertion.
 
-This host test includes the pinned numerical implementation directly. It does
-not add a production multi-pipe API or widen the existing one-pipe admission.
-Next, bind the actual prepared geometry, format, taps and topology to a checked
-multi-pipe adapter. Retain per-pipe outputs and shared watermarks together.
-Reject plans requiring an unavailable split or ODM combination. Establish
-the clock and memory-service contract before applying any output to hardware.
+The topology test includes the pinned numerical implementation directly.
+`Bc250Dml201PlanGroup` binds one or two prepared scaler plans to the same
+calculation. Each plane supplies its surface size, pitch and original source
+extent. Viewport, clipped output extent, quantized ratio and final taps come
+from `Bc250ScalerPrepare`. The group retains separate RQ/DLG/TTU and DPP clocks,
+with common watermarks and global clocks. It rejects plans that require a split
+or ODM. It clears failed output so no partial plan becomes available.
+
+This boundary covers linear RGB surfaces with 32-bit storage, including RGB10A2
+storage. The output timing still describes 8-bpc RGB. It does not admit HDR,
+YUV, compression, rotation or mirrors. The caller must check that the format and
+transaction match these restrictions. Zero enabled planes require the separate
+blank/drain path. AMD's cursor budget is retained on each RGB pipe until the
+hardware placement is established. These are implementation bounds, not a
+reduction of the Microsoft requirements above.
+
+`dml201_group_test.c` uses the public adapter with real scaler preparation.
+It compares one native plane with the existing planner, then adds a second
+plane, both scale directions, AMD and linear filters, a clipped surface with
+a nonzero source origin, and cursors. Invalid bounds, taps, pitch, subsampling,
+workspace and pipe counts clear the output. The raw topology test remains a
+separate control. Neither test establishes measured memory latency, available
+clocks, hardware register acceptance or HLK results. The transaction owner,
+clock/service contract and DDI integration still require implementation and
+hardware tests before application of these plans.
 
 ## AMD implementation reference
 

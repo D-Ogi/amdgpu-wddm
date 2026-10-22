@@ -11,7 +11,7 @@ The numerical sources remain unchanged. Two platform adaptations are generated:
 portable variadic logging macros, and a NaN result for the math helpers' zero-divisor assertion.
 The planner rejects non-finite outputs. Other AMD assertions record a failure in the caller's workspace.
 
-The planner admits one progressive, full-size linear RGB8 plane with physical addressing and no DCC.
+`Bc250Dml201Plan` admits one progressive, full-size linear RGB8 plane with physical addressing and no DCC.
 It has no MMIO, allocation, firmware call or global mutable state. The caller supplies an aligned heap
 workspace and protects floating-point state. A successful plan does not prove a hardware mode change.
 The caller must program clocks, watermarks, RQ/DLG/TTU and OTG sync before unblanking.
@@ -26,7 +26,8 @@ The caller must program clocks, watermarks, RQ/DLG/TTU and OTG sync before unbla
   The planner requires this input. It does not silently substitute the upstream 3 GHz fallback.
 - DCN201 IP limits and SoC clock/latency bounds come from `dcn201_resource.c`.
   `BboxDefaults=1` records this origin. They are not measurements of the current hardware.
-  The one-pipe restriction changes the available DPP/OTG count to one.
+  The single-plane entry changes the available DPP/OTG count to one. The group
+  entry permits one DPP per supplied plane and one OTG for the whole group.
   It does not change the numerical algorithms.
 
 Native Linux selects DML20 for DCN201. Its DCN201 clock manager does not use the `pp_smu` argument or
@@ -56,7 +57,15 @@ It does not test register programming, memory-service latency, clock transitions
 The same runner uses explicit clang-cl 23.1.4 and also runs `dml201_mpo_test.c`.
 That separate host experiment supplies two synthetic RGB pipes to the original
 numerical code. It verifies shared versus separate timing and insufficient DPP/OTG
-counts. It does not widen the one-pipe production adapter or its input contract.
+counts. It is separate from the public adapter test, `dml201_group_test.c`.
+The latter binds actual scaler preparation to `Bc250Dml201PlanGroup`. That
+entry keeps per-plane RQ/DLG/TTU and shared watermarks together. It supports
+one or two unsplit linear RGB planes with 32-bit storage and an 8-bpc output.
+Its geometry uses the same quantized ratios and final taps as the scaler plan.
+Format admission, cursor placement, the hardware clock/service contract and
+complete MPO transactions remain the caller's responsibility. Cursors are
+budgeted on each RGB pipe as in AMD's population function. No hardware or
+capability admission follows from this numerical result.
 See the [MPO requirements](../../../docs/design/multiplane-overlay-requirements.md)
 for results and the remaining integration work.
 

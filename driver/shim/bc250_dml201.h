@@ -2,6 +2,7 @@
 #ifndef BC250_DML201_H
 #define BC250_DML201_H
 #include <stddef.h>
+#include "bc250_scaler_plan.h"
 #if !defined(__cplusplus) && !defined(bool)
 typedef unsigned char bool;
 #endif
@@ -50,4 +51,36 @@ size_t Bc250Dml201WorkspaceSize(void);
  * Success is a computed plan, not a hardware admission or application result. */
 int Bc250Dml201Plan(const BC250_DML201_INPUT *input, void *workspace,
                    size_t bytes, BC250_DML201_PLAN *plan);
+
+/* One output, up to two distinct unsplit RGB32-storage planes. RGB8 and
+ * RGB10A2 have the same storage bandwidth; this does not admit HDR or YUV.
+ * Scaler points to the immutable result of Bc250ScalerPrepare for this same
+ * surface and output. SourceWidth/Height are the original source rectangle
+ * extents, before destination clipping, not the resulting viewport extents.
+ */
+typedef struct BC250_DML201_PLANE_INPUT {
+    const BC250_SCALER_PREPARED *Scaler;
+    unsigned int SurfaceWidth, SurfaceHeight, PitchPixels;
+    unsigned int SourceWidth, SourceHeight;
+    unsigned int StorageBits; /* Must be 32. Format admission remains separate. */
+} BC250_DML201_PLANE_INPUT;
+typedef struct BC250_DML201_GROUP_PLAN {
+    unsigned int Valid, Count, Assertions, FirstAssertionLine;
+    /* Each entry has its own RQ/DLG/TTU, destination and DPP clock. Shared
+     * watermarks and global clocks are identical and computed with every pipe.
+     * Keep the whole group together through hardware admission and commit. */
+    BC250_DML201_PLAN Plane[2];
+} BC250_DML201_GROUP_PLAN;
+
+/* Same workspace/FPU contract as Plan. One OTG, one DPP per plane, no split,
+ * ODM, interlace, compression, rotation, mirror or subsampled input. The
+ * caller must establish that those exclusions match the surface transaction.
+ * Count is 1 or 2; an all-disabled output uses the owner's blank/drain path.
+ * timing.PitchPixels is ignored; each plane supplies its own pitch. Output
+ * timing remains 8-bpc RGB. Inputs, workspace and output must not overlap.
+ * Failure clears the group
+ * except assertion diagnostics. No capability or hardware admission implied. */
+int Bc250Dml201PlanGroup(const BC250_DML201_INPUT *timing,
+                        const BC250_DML201_PLANE_INPUT *planes, unsigned int count,
+                        void *workspace, size_t bytes, BC250_DML201_GROUP_PLAN *plan);
 #endif

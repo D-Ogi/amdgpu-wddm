@@ -23,8 +23,8 @@
 typedef struct BC250_DML201_WORKSPACE {
     struct display_mode_lib Lib;
     struct dal_logger Logger;
-    display_e2e_pipe_params_st Pipe;
-    BC250_DML201_PLAN Plan;
+    display_e2e_pipe_params_st Pipe[2];
+    BC250_DML201_PLAN Plan[2];
 } BC250_DML201_WORKSPACE;
 
 size_t Bc250Dml201WorkspaceSize(void) { return sizeof(BC250_DML201_WORKSPACE); }
@@ -51,7 +51,7 @@ static int validScale(const BC250_DML201_INPUT *i)
     return 1;
 }
 
-static int validInput(const BC250_DML201_INPUT *i)
+static int validInput(const BC250_DML201_INPUT *i, int single)
 {
     unsigned int width;
     if (!i || !validScale(i)) return 0;
@@ -64,7 +64,7 @@ static int validInput(const BC250_DML201_INPUT *i)
         i->VFrontPorch >= i->VTotal - i->VActive ||
         i->VSyncWidth > i->VTotal - i->VActive - i->VFrontPorch ||
         i->VTotal - i->VActive < dcn201_ip.min_vblank_lines ||
-        i->PitchPixels < width || i->PitchPixels > 16384 || (i->PitchPixels & 63) ||
+        (single && (i->PitchPixels < width || i->PitchPixels > 16384 || (i->PitchPixels & 63))) ||
         i->PixelClockKhz < 10000 || i->PixelClockKhz > 1200000 ||
         i->DchubRefClockKhz < 40000 || i->DchubRefClockKhz > 60000 ||
         i->DchubRefClockKhz >= i->PixelClockKhz * 4u ||
@@ -151,85 +151,177 @@ static int ceilUint(double value, unsigned int *out)
 }
 
 static int watermarks(struct display_mode_lib *lib, display_e2e_pipe_params_st *p,
-                      BC250_DML201_WATERMARKS *w)
+                      unsigned int count, BC250_DML201_WATERMARKS *w)
 {
-    return ceilUint(get_wm_urgent(lib,p,1)*1000.0,&w->UrgentNs) &&
-        ceilUint(get_wm_stutter_enter_exit(lib,p,1)*1000.0,&w->StutterEnterExitNs) &&
-        ceilUint(get_wm_stutter_exit(lib,p,1)*1000.0,&w->StutterExitNs) &&
-        ceilUint(get_wm_dram_clock_change(lib,p,1)*1000.0,&w->DramClockChangeNs) &&
-        ceilUint(get_wm_memory_trip(lib,p,1)*1000.0,&w->MemoryTripNs);
+    return ceilUint(get_wm_urgent(lib,p,count)*1000.0,&w->UrgentNs) &&
+        ceilUint(get_wm_stutter_enter_exit(lib,p,count)*1000.0,&w->StutterEnterExitNs) &&
+        ceilUint(get_wm_stutter_exit(lib,p,count)*1000.0,&w->StutterExitNs) &&
+        ceilUint(get_wm_dram_clock_change(lib,p,count)*1000.0,&w->DramClockChangeNs) &&
+        ceilUint(get_wm_memory_trip(lib,p,count)*1000.0,&w->MemoryTripNs);
 }
 
-int Bc250Dml201Plan(const BC250_DML201_INPUT *input, void *workspace,
-                   size_t bytes, BC250_DML201_PLAN *plan)
+static int validAxis(const BC250_SCALER_AXIS_PLAN *a, unsigned surface,
+                     unsigned active, unsigned source, unsigned taps)
+{
+    return surface && surface<=16383 && source && source<=surface &&
+        a->ViewportSize && a->ViewportBegin<surface &&
+        a->ViewportSize<=surface-a->ViewportBegin && a->ViewportSize<=source &&
+        a->RecoutSize && a->RecoutBegin<active && a->RecoutSize<=active-a->RecoutBegin &&
+        a->Ratio19 && a->Ratio19<(8u<<19) && taps && taps<=8 &&
+        (taps!=1 || a->Ratio19==(1u<<19));
+}
+
+static int groupPipeInput(const BC250_DML201_INPUT *timing,
+                          const BC250_DML201_PLANE_INPUT *i,
+                          display_e2e_pipe_params_st *p)
+{
+    const BC250_SCALER_PREPARED *s=i->Scaler;
+    if (!s || i->StorageBits!=32 || i->PitchPixels<i->SurfaceWidth ||
+        i->PitchPixels>16384 || (i->PitchPixels&31) ||
+        !validAxis(&s->Geometry.LumaH,i->SurfaceWidth,timing->HActive,i->SourceWidth,s->LumaH.Taps) ||
+        !validAxis(&s->Geometry.LumaV,i->SurfaceHeight,timing->VActive,i->SourceHeight,s->LumaV.Taps) ||
+        s->Buffer.Config>3 || !s->Buffer.LumaPartitions ||
+        s->Geometry.ChromaH.Ratio19!=s->Geometry.LumaH.Ratio19 ||
+        s->Geometry.ChromaV.Ratio19!=s->Geometry.LumaV.Ratio19)
+        return 0;
+    pipeInput(timing,p);
+    p->pipe.src.surface_width_y=i->SurfaceWidth;
+    p->pipe.src.surface_height_y=i->SurfaceHeight;
+    p->pipe.src.viewport_width_max=i->SourceWidth;
+    p->pipe.src.viewport_height_max=i->SourceHeight;
+    p->pipe.src.viewport_width=s->Geometry.LumaH.ViewportSize;
+    p->pipe.src.viewport_height=s->Geometry.LumaV.ViewportSize;
+    p->pipe.src.viewport_x_y=s->Geometry.LumaH.ViewportBegin;
+    p->pipe.src.viewport_y_y=s->Geometry.LumaV.ViewportBegin;
+    p->pipe.src.data_pitch=i->PitchPixels;
+    p->pipe.dest.recout_width=p->pipe.dest.full_recout_width=s->Geometry.LumaH.RecoutSize;
+    p->pipe.dest.recout_height=p->pipe.dest.full_recout_height=s->Geometry.LumaV.RecoutSize;
+    /* Use the same quantized ratios as the hardware geometry/filter plan. */
+    p->pipe.scale_ratio_depth.hscl_ratio=s->Geometry.LumaH.Ratio19/524288.0;
+    p->pipe.scale_ratio_depth.vscl_ratio=s->Geometry.LumaV.Ratio19/524288.0;
+    p->pipe.scale_ratio_depth.hscl_ratio_c=s->Geometry.ChromaH.Ratio19/524288.0;
+    p->pipe.scale_ratio_depth.vscl_ratio_c=s->Geometry.ChromaV.Ratio19/524288.0;
+    p->pipe.scale_ratio_depth.scl_enable=s->Geometry.LumaH.Ratio19!=(1u<<19) ||
+        s->Geometry.LumaV.Ratio19!=(1u<<19);
+    p->pipe.scale_taps.htaps=s->LumaH.Taps;
+    p->pipe.scale_taps.vtaps=s->LumaV.Taps;
+    return 1;
+}
+
+static int planPipes(const BC250_DML201_INPUT *input,
+                     const BC250_DML201_PLANE_INPUT *planes, unsigned int count,
+                     void *workspace, size_t bytes, BC250_DML201_PLAN *plan)
 {
     BC250_DML201_WORKSPACE *w = (BC250_DML201_WORKSPACE *)workspace;
     struct display_mode_lib *lib;
     display_e2e_pipe_params_st *p;
     BC250_DML201_PLAN *o;
-    unsigned int vlevel, comb, k, level;
+    unsigned int vlevel, comb, k, level, n;
     int result = BC250_DML201_UNSUPPORTED;
     if (!plan) return BC250_DML201_INVALID;
-    memset(plan,0,sizeof(*plan));
-    if (!validInput(input) || !workspace || bytes < sizeof(*w) || ((size_t)workspace & 7u))
+    memset(plan,0,count*sizeof(*plan));
+    if (!validInput(input,planes==NULL) || !workspace || bytes < sizeof(*w) || ((size_t)workspace & 7u))
         return BC250_DML201_INVALID;
     memset(w,0,sizeof(*w));
-    lib=&w->Lib; p=&w->Pipe; o=&w->Plan;
+    lib=&w->Lib; p=w->Pipe; o=w->Plan;
     lib->logger=&w->Logger; lib->ip=dcn201_ip; lib->soc=dcn201_soc;
     lib->project=DML_PROJECT_DCN201;
-    /* The integration has one physical pipe. Reject plans requiring a split. */
-    lib->ip.max_num_dpp=1; lib->ip.max_num_otg=1;
+    /* One physical DPP per supplied plane, one shared OTG. No hidden split. */
+    lib->ip.max_num_dpp=count; lib->ip.max_num_otg=1;
     lib->soc.dispclk_dppclk_vco_speed_mhz=input->DentistVcoKhz/1000.0;
     lib->funcs.validate=dml20_ModeSupportAndSystemConfigurationFull;
     lib->funcs.recalculate=dml20_recalculate;
     lib->funcs.rq_dlg_get_dlg_reg=dml20_rq_dlg_get_dlg_reg;
     lib->funcs.rq_dlg_get_rq_reg=dml20_rq_dlg_get_rq_reg;
-    pipeInput(input,p);
-    vlevel=dml_get_voltage_level(lib,p,1); comb=lib->vba.maxMpcComb;
-    if (vlevel >= lib->soc.num_states || comb > 1 || lib->vba.DPPPerPlane[0] != 1 ||
-        lib->vba.ODMCombineEnabled[0] != dm_odm_combine_mode_disabled ||
+    for(n=0;n<count;++n) {
+        if (planes) {
+            if (!groupPipeInput(input,&planes[n],&p[n])) return BC250_DML201_INVALID;
+            /* AMD budgets a cursor on each RGB pipe. Keep that conservative
+             * accounting until the hardware cursor placement is established. */
+        } else pipeInput(input,&p[n]);
+    }
+    vlevel=dml_get_voltage_level(lib,p,count); comb=lib->vba.maxMpcComb;
+    if (vlevel >= lib->soc.num_states || comb > 1 ||
+        lib->vba.NumberOfActivePlanes!=count ||
         !lib->vba.ModeSupport[vlevel][comb]) goto done;
-    o->VoltageLevel=vlevel; o->BboxDefaults=1;
-    p->clks_cfg.dispclk_mhz=lib->vba.RequiredDISPCLK[vlevel][comb];
-    p->clks_cfg.dppclk_mhz=lib->vba.RequiredDPPCLK[vlevel][comb][0];
-    if (!(p->clks_cfg.dispclk_mhz > 0.0 && p->clks_cfg.dppclk_mhz > 0.0)) goto done;
+    for(n=0;n<count;++n) {
+        if (lib->vba.DPPPerPlane[n]!=1 || lib->vba.BlendingAndTiming[n]!=0 ||
+            lib->vba.ODMCombineEnabled[n]!=dm_odm_combine_mode_disabled) goto done;
+        o[n].VoltageLevel=vlevel; o[n].BboxDefaults=1;
+        p[n].clks_cfg.dispclk_mhz=lib->vba.RequiredDISPCLK[vlevel][comb];
+        p[n].clks_cfg.dppclk_mhz=lib->vba.RequiredDPPCLK[vlevel][comb][n];
+        if (!(p[n].clks_cfg.dispclk_mhz>0.0 && p[n].clks_cfg.dppclk_mhz>0.0)) goto done;
+    }
     /* AMD computes B,C,D first and restores the selected A state last. */
     for(k=1;k<=4;++k) {
         unsigned int index=k==4?0:k;
+        unsigned int clockLevel;
         level=vlevel>index?vlevel:index;
+        /* Match dcn20_calculate_wm: state D uses state-2 DCF/SOC clocks
+         * when the selected level is below D. DCN201 has equal 2/3 values. */
+        clockLevel=index==3 && vlevel<3?2:level;
         p->clks_cfg.voltage=level;
-        p->clks_cfg.dcfclk_mhz=lib->soc.clock_limits[level].dcfclk_mhz;
-        p->clks_cfg.socclk_mhz=lib->soc.clock_limits[level].socclk_mhz;
-        if (!watermarks(lib,p,&o->Watermarks[index])) goto done;
+        p->clks_cfg.dcfclk_mhz=lib->soc.clock_limits[clockLevel].dcfclk_mhz;
+        p->clks_cfg.socclk_mhz=lib->soc.clock_limits[clockLevel].socclk_mhz;
+        if (!watermarks(lib,p,count,&o->Watermarks[index])) goto done;
     }
-    if (!asUint(get_vstartup(lib,p,1,0),&o->VStartup) ||
-        !asUint(get_vupdate_offset(lib,p,1,0),&o->VUpdateOffset) ||
-        !asUint(get_vupdate_width(lib,p,1,0),&o->VUpdateWidth) ||
-        !asUint(get_vready_offset(lib,p,1,0),&o->VReady)) goto done;
-    p->pipe.dest.vstartup_start=o->VStartup;
-    p->pipe.dest.vupdate_offset=o->VUpdateOffset;
-    p->pipe.dest.vupdate_width=o->VUpdateWidth;
-    p->pipe.dest.vready_offset=o->VReady;
-    o->PStateSupported=lib->vba.DRAMClockChangeSupport[vlevel][comb]!=dm_dram_clock_change_unsupported;
-    o->CStateEnabled=0; /* Explicit AMD DCN201 policy, dcn20_fpu.c:1230. */
-    lib->funcs.rq_dlg_get_dlg_reg(lib,&o->Dlg,&o->Ttu,p,1,0,false,
-        (bool)o->PStateSupported,false,false,true);
-    lib->funcs.rq_dlg_get_rq_reg(lib,&o->Rq,&p->pipe);
-    if (!ceilUint(p->clks_cfg.dispclk_mhz*1000,&o->DispClockKhz) ||
-        !ceilUint(p->clks_cfg.dppclk_mhz*1000,&o->DppClockKhz) ||
-        !ceilUint(lib->vba.DCFCLK*1000,&o->DcfClockKhz) ||
-        !ceilUint(lib->vba.SOCCLK*1000,&o->SocClockKhz) ||
-        !ceilUint(lib->vba.DCFCLKDeepSleep*1000,&o->DcfDeepSleepKhz) ||
-        !ceilUint(lib->vba.FabricClock*1000,&o->FabricClockKhz) ||
-        !ceilUint(lib->vba.DRAMSpeed*1000/16,&o->DramClockKhz)) goto done;
-    if (!o->VStartup || o->VStartup >= input->VTotal-input->VActive ||
-        !o->VUpdateWidth || !o->DispClockKhz || !o->DppClockKhz) goto done;
-    o->Destination=p->pipe.dest;
+    for(n=0;n<count;++n) {
+        if (!asUint(get_vstartup(lib,p,count,n),&o[n].VStartup) ||
+            !asUint(get_vupdate_offset(lib,p,count,n),&o[n].VUpdateOffset) ||
+            !asUint(get_vupdate_width(lib,p,count,n),&o[n].VUpdateWidth) ||
+            !asUint(get_vready_offset(lib,p,count,n),&o[n].VReady)) goto done;
+        p[n].pipe.dest.vstartup_start=o[n].VStartup;
+        p[n].pipe.dest.vupdate_offset=o[n].VUpdateOffset;
+        p[n].pipe.dest.vupdate_width=o[n].VUpdateWidth;
+        p[n].pipe.dest.vready_offset=o[n].VReady;
+    }
+    for(n=0;n<count;++n) {
+        o[n].PStateSupported=lib->vba.DRAMClockChangeSupport[vlevel][comb]!=dm_dram_clock_change_unsupported;
+        o[n].CStateEnabled=0; /* Explicit AMD DCN201 policy, dcn20_fpu.c:1230. */
+        lib->funcs.rq_dlg_get_dlg_reg(lib,&o[n].Dlg,&o[n].Ttu,p,count,n,false,
+            (bool)o[n].PStateSupported,false,false,true);
+        lib->funcs.rq_dlg_get_rq_reg(lib,&o[n].Rq,&p[n].pipe);
+        if (!ceilUint(p[n].clks_cfg.dispclk_mhz*1000,&o[n].DispClockKhz) ||
+            !ceilUint(p[n].clks_cfg.dppclk_mhz*1000,&o[n].DppClockKhz) ||
+            !ceilUint(lib->vba.DCFCLK*1000,&o[n].DcfClockKhz) ||
+            !ceilUint(lib->vba.SOCCLK*1000,&o[n].SocClockKhz) ||
+            !ceilUint(lib->vba.DCFCLKDeepSleep*1000,&o[n].DcfDeepSleepKhz) ||
+            !ceilUint(lib->vba.FabricClock*1000,&o[n].FabricClockKhz) ||
+            !ceilUint(lib->vba.DRAMSpeed*1000/16,&o[n].DramClockKhz)) goto done;
+        if (!o[n].VStartup || o[n].VStartup>=input->VTotal-input->VActive ||
+            !o[n].VUpdateWidth || !o[n].DispClockKhz || !o[n].DppClockKhz) goto done;
+        o[n].Destination=p[n].pipe.dest;
+        if (n) memcpy(o[n].Watermarks,o[0].Watermarks,sizeof(o[n].Watermarks));
+    }
     result=BC250_DML201_OK;
 done:
     if (w->Logger.Assertions) result=BC250_DML201_ASSERTION;
-    if (result==BC250_DML201_OK) { o->Valid=1; *plan=*o; }
+    if (result==BC250_DML201_OK) {
+        for(n=0;n<count;++n) o[n].Valid=1;
+        memcpy(plan,o,count*sizeof(*plan));
+    }
     plan->Assertions=w->Logger.Assertions;
     plan->FirstAssertionLine=w->Logger.FirstLine;
     return result;
+}
+
+int Bc250Dml201Plan(const BC250_DML201_INPUT *input, void *workspace,
+                   size_t bytes, BC250_DML201_PLAN *plan)
+{
+    return planPipes(input,NULL,1,workspace,bytes,plan);
+}
+
+int Bc250Dml201PlanGroup(const BC250_DML201_INPUT *timing,
+                        const BC250_DML201_PLANE_INPUT *planes, unsigned int count,
+                        void *workspace, size_t bytes, BC250_DML201_GROUP_PLAN *plan)
+{
+    int status;
+    if (!plan) return BC250_DML201_INVALID;
+    memset(plan,0,sizeof(*plan));
+    if (!planes || count<1 || count>2) return BC250_DML201_INVALID;
+    status=planPipes(timing,planes,count,workspace,bytes,plan->Plane);
+    plan->Assertions=plan->Plane[0].Assertions;
+    plan->FirstAssertionLine=plan->Plane[0].FirstAssertionLine;
+    if (status==BC250_DML201_OK) { plan->Count=count; plan->Valid=1; }
+    return status;
 }
