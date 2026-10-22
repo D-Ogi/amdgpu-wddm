@@ -83,6 +83,52 @@ class Display:
         self.frames.append(tuple(self.live))
 
 
+def latch_discriminator():
+    """Two explicit hardware hypotheses with identical idle/final observations.
+
+    H1 is the model above: a master lock inhibits shadow-to-live transfer.
+    H2 adds an armed bank: the lock inhibits staging-to-armed transfer only.
+    H2 is a countermodel, not an assertion that DCN201 implements this protocol.
+    """
+    old = (Plane(True,10,100,1000),Plane(True,20,200,2000))
+    first = (Plane(True,11,100,1000),old[1])
+    final = (first[0],Plane(True,21,200,2000))
+    traces = {}
+    for arm, lock_before_write in (('unlocked',False),('lock_before_write',True),('arm_before_lock',False)):
+        states = []
+        for staging_only in (False,True):
+            live = old
+            shadow = list(old)
+            armed = old
+            locked = lock_before_write
+            shadow[0] = first[0]
+            if not locked:
+                armed = tuple(shadow)
+            if arm == 'arm_before_lock':
+                locked = True
+                shadow[1] = final[1]
+            # Observation at the boundary while the later lock is still held.
+            if staging_only:
+                live = armed
+            elif not locked:
+                live = tuple(shadow)
+            during = live
+            # Both hypotheses converge after unlock plus another boundary.
+            armed = tuple(shadow)
+            live = armed
+            states.append({'during': [vars(p) for p in during], 'after': [vars(p) for p in live]})
+        traces[arm] = states
+    assert traces['unlocked'][0] == traces['unlocked'][1]
+    assert traces['lock_before_write'][0] == traces['lock_before_write'][1]
+    assert traces['arm_before_lock'][0]['during'] != traces['arm_before_lock'][1]['during']
+    assert traces['arm_before_lock'][0]['after'] == traces['arm_before_lock'][1]['after']
+    assert traces['arm_before_lock'][0]['during'] == [vars(p) for p in old]
+    assert traces['arm_before_lock'][1]['during'] == [vars(p) for p in first]
+    return {'checks':6,'hypotheses':['lock_inhibits_latch','lock_inhibits_staging_only'],
+            'traces':traces,'idle_or_after_unlock_observation_discriminates':False,
+            'during_later_lock_boundary_discriminates':True,'hardware_answer':None}
+
+
 def model():
     checked = 0
 
@@ -202,6 +248,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     report = {'scope': 'Source binding plus conditional state model, not hardware or HLK',
               'source': source_contract(), 'model': model(),
+              'next_probe': latch_discriminator(),
               'unproven': ['actual per-register buffering and latch boundary',
                            'rollback after address trigger or immediate side effect',
                            'plane-disable drain and safe allocation retirement',
@@ -210,4 +257,5 @@ if __name__ == '__main__':
     if args.out:
         args.out.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
     print('MPO transaction model:', len(report['source']['checks']), 'source checks,',
-          report['model']['checks'], 'model checks PASS; hardware contract remains open')
+          report['model']['checks'], 'model checks,', report['next_probe']['checks'],
+          'discriminator checks PASS; hardware contract remains open')
