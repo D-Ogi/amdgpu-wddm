@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 NAMES = ('GuardReadSetting', 'GuardConsumeSetting')
 IDENT = re.compile(r'\b(GuardReadSetting|GuardConsumeSetting)\b')
 WIDE = re.compile(r'^L"([A-Za-z0-9]+)"$')
+# a typed parameter of the definition or a prototype: optional SAL annotation, type words, optional '*', a name
+PARAM = re.compile(r'^(?:_[A-Za-z_]+_\s+)?(?:const\s+)?[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s*\**\s*[A-Za-z_]\w*$')
 LITERAL = re.compile(r'^(0[xX][0-9a-fA-F]+|0[0-7]*|[1-9][0-9]*)[uUlL]*$')
 DEFINE = re.compile(r'^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(\(*\s*(?:0[xX][0-9a-fA-F]+|[0-9]+)\s*[uUlL]*\s*\)*)\s*$', re.M)
 NAME_DEFINE = re.compile(r'^\s*#\s*define\s+([A-Za-z_][A-Za-z0-9_]*)\s+(L"[A-Za-z0-9]+")\s*$', re.M)
@@ -120,11 +122,11 @@ def calls(text, where, names):
             continue
         args = split_args(text[j + 1:k])
         after = text[k + 1:k + 64].lstrip()
-        if args and not WIDE.match(args[0]) and (after.startswith('{') or after.startswith(';')):
-            yield ('decl', m.group(1), line, args)     # the definition or a prototype
-            continue
         if len(args) == 2 and args[0] in names:
-            args = [names[args[0]], args[1]]
+            args = [names[args[0]], args[1]]      # the name behind a macro, before any classification
+        if len(args) == 2 and all(PARAM.match(a) for a in args) and (after.startswith('{') or after.startswith(';')):
+            yield ('decl', m.group(1), line, args)     # the definition or a prototype: two typed parameters
+            continue
         if len(args) != 2 or not WIDE.match(args[0]):
             yield ('bad', m.group(1), line, f'{where}:{line}: {m.group(1)} call not understood: ({", ".join(args)})')
             continue
