@@ -152,7 +152,8 @@ try {
             if (Test-Path -LiteralPath $cli) { $health = (& $cli health read 2>&1) -join ' ' }
         }
         "health: $health"
-        if ($health -and $health -notmatch 'flags=15') { $bad += "start health is not flags=15: $health" }
+        # 15, or 31 with QUIET (16, KMD 0.7.216.65) beside the four start bits.
+        if ($health -and $health -notmatch 'flags=(15|31) ') { $bad += "start health is not flags=15 (31 with QUIET): $health" }
 
         # 5. the logons that actually happened, for the record
         $count = Get-WinlogonValue 'AutoLogonCount'

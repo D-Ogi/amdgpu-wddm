@@ -23,7 +23,8 @@ $boot = (Get-CimInstance Win32_OperatingSystem).LastBootUpTime
 "installroot $inst"
 $health = (& $cli health read 2>&1) -join ' '
 "health: $health"
-if ($health -notmatch 'flags=15') { $bad += 'start health is not flags=15' }
+# 15 is FULL, READY, VISIBLE and CONFIRMED; QUIET (16, KMD 0.7.216.65) may stand beside them on an idle desktop.
+if ($health -notmatch 'flags=(15|31) ') { $bad += 'start health is not flags=15 (31 with QUIET)' }
 $p = Read-DriverStateValues -Cli $cli
 "params: CuMode=$($p.CuMode) CuModeLastApplied=$($p.CuModeLastApplied) CuModeConfirmed=$($p.CuModeConfirmed) DpmMode=$($p.DpmMode) DpmMaxMHz=$($p.DpmMaxMHz) DpmIdleMHz=$($p.DpmIdleMHz) HangRecoveryMode=$($p.HangRecoveryMode)"
 if ([int]$p.CuModeConfirmed -ne $Cu) { $bad += "CuModeConfirmed is $($p.CuModeConfirmed), wanted $Cu" }

@@ -56,13 +56,15 @@ function HealthFlags {
     if (-not $line) { return $null }
     return [int]([regex]::Match($line.Line, 'flags=(\d+)').Groups[1].Value)
 }
+# A confirmed start: FULL, READY, VISIBLE and CONFIRMED (15), with QUIET (16, KMD 0.7.216.65) allowed beside them.
+function IsConfirmed($flags) { return ($flags -eq 15 -or $flags -eq 31) }
 function WaitConfirmed($seconds) {
     $end = (Get-Date).AddSeconds($seconds)
     while ((Get-Date) -lt $end) {
-        if ((HealthFlags) -eq 15) { return $true }
+        if (IsConfirmed (HealthFlags)) { return $true }
         Start-Sleep -Seconds 3
     }
-    return ((HealthFlags) -eq 15)
+    return (IsConfirmed (HealthFlags))
 }
 
 $dev = Get-PnpDevice -Class Display -ErrorAction SilentlyContinue |
@@ -81,7 +83,7 @@ try {
     "start health flags before the first stop: {0}" -f $(if ($null -eq $flags) { 'unreadable' } else { $flags })
 
     '--- 1. a stop of a CONFIRMED start must write no record'
-    if ($flags -ne 15) {
+    if (-not (IsConfirmed $flags)) {
         $problems.Add('reading 1 skipped: the start was not confirmed (flags ' + $flags + '), so this stop proves nothing')
     } else {
         & pnputil /disable-device $dev.InstanceId | ForEach-Object { '  ' + $_ }
