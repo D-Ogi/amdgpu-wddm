@@ -430,6 +430,14 @@ or hardware ownership is established by this source-only preparation.
 ## DCN scaler filter (resolution modes, stage A)
 
 PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+`tools/import/extract_scaler_filters.py` extracts all 25 64-phase tables and
+their selectors from `reference/dce_scl_filters.c`, plus fraction conversion
+from `reference/fixpt31_32.c`. The generated functions and data stay unchanged.
+The PolyForm adapter packs odd tap counts into pairs with zero padding.
+Its separate linear mode generates exact S1.12 weights (1-t, t), t=phase/64;
+it does not use the AMD two-tap ModifiedLanczos table for bilinear requests.
+
+PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
 `reference/dcn20_dpp.c`, `reference/dcn10_dpp_dscl.c` and `reference/dc_spl_types.h`
 come unchanged from `drivers/gpu/drm/amd/display/dc/`, at `dpp/dcn20/`,
 `dpp/dcn10/` and `sspl/`, respectively. `tools/import/extract_scaler_buffer.py`

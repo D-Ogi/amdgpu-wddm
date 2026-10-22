@@ -11,6 +11,11 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 | `driver/amdgpu-import/reference/{dc_resource.c,fixed31_32.h,fixpt31_32.c}`, `driver/shim/generated/dc_scaler_geometry.inc` | Linux amdgpu DC, v6.18, commit `7d0a66e4bb90` | MIT, Copyright 2012-15 Advanced Micro Devices, Inc. | Verbatim scaler geometry and fixed-point functions. The separate checked Windows adapter uses the project license |
 | `driver/amdgpu-import/reference/{dcn20_dpp.c,dcn10_dpp_dscl.c,dc_spl_types.h}`, `driver/shim/generated/dc_scaler_buffer.inc` | Linux amdgpu DC, v6.18, commit `7d0a66e4bb90` | MIT, Copyright Advanced Micro Devices, Inc. | Verbatim line-buffer accounting and configuration enum. The separate checked Windows adapter uses the project license |
 
+`driver/shim/generated/dc_scaler_filters.inc` retains the AMD MIT tables,
+selectors and fixed-point helpers from Linux amdgpu DC v6.18 `7d0a66e4bb90`.
+Its notices are included. The separate filter-packing adapter and linear
+weight generation use the project license.
+
 ## Fetched at build time, not stored here
 
 | What | Used by | License |

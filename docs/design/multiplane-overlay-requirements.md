@@ -80,6 +80,15 @@ and the uploaded coefficients need separate verification against bilinear
 reference images. The better-than-bilinear path also needs image tests. No
 filter quality capability is established by line-buffer admission.
 
+The host filter planner now prepares all 25 AMD 64-phase tables and a separate
+linear kernel. Linear weights are exact S1.12 values for (1-t, t), t=phase/64.
+The host oracle checks them against bilinear interpolation of image samples.
+AMD table selection is checked at each ratio boundary. Odd tap counts receive
+zero padding for the final coefficient pair. This does not program a bank or
+establish phase order, image quality or filtering support on the hardware.
+The MPO writer must preserve these weights instead of replacing them with an
+unverified hardware two-tap mode. Taps, bank lifetime and DML stay open.
+
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements

@@ -20,6 +20,8 @@ if ($LASTEXITCODE) { throw 'Explicit clang-cl unavailable' }
 if ($LASTEXITCODE) { throw 'Scaler geometry extraction mismatch' }
 & python (Join-Path $repo 'tools\import\extract_scaler_buffer.py') --check
 if ($LASTEXITCODE) { throw 'Scaler buffer extraction mismatch' }
+& python (Join-Path $repo 'tools\import\extract_scaler_filters.py') --check
+if ($LASTEXITCODE) { throw 'Scaler filter extraction mismatch' }
 Push-Location $Out
 try {
     & $cc /nologo /TC /W4 /WX /O2 /c `
@@ -30,6 +32,14 @@ try {
         "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
         /Foscaler_buffer_production.obj "$repo\driver\shim\bc250_scaler_buffer.c"
     if ($LASTEXITCODE) { throw 'Production buffer planner build failed' }
+    & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
+        "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
+        /Fescaler_filter_test.exe "$repo\driver\kmd\test\scaler_filter_test.c" `
+        "$repo\driver\shim\bc250_scaler_filter.c" `
+        /link "/LIBPATH:$($crt.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+    if ($LASTEXITCODE) { throw 'Scaler filter build failed' }
+    & python "$repo\driver\kmd\test\scaler_filter_oracle.py" --exe (Join-Path (Get-Location) 'scaler_filter_test.exe')
+    if ($LASTEXITCODE) { throw 'Scaler filter oracle failed' }
     & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld /DBC250_SCALER_GEOMETRY_TEST `
         "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
         /Fescaler_geometry_test.exe "$repo\driver\kmd\test\scaler_geometry_test.c" `
