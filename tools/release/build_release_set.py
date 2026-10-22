@@ -370,7 +370,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
             f = Path(o["artifact"])
             if not f.is_file() or sha256_file(f) != o["sha256"]:
                 errors.append(f"row {rid}: the artifact {f} of the earlier run is gone or changed; rebuild the row")
-        kept.append(entry)
+        # The same bytes under today's row: its OUTPUT_NOTES reach the rows from the manifest as it is now.
+        kept.append(dict(entry, definition=define(rid)))
     kept_ids = {k["id"] for k in kept}
     for rid in sorted(selected):
         for d in deps[rid]:
@@ -713,8 +714,9 @@ def literal_args(build, version):
     return out
 
 
-# Fields of an output that only describe its row in release-sources.json: a new text keeps the artifact.
-OUTPUT_NOTES = ("pair_skew", "release_edits")
+# Fields of an output that only describe its row in release-sources.json, so a change of one keeps the artifact:
+# texts, and 'authenticode', which the rows read from the image digest that every PE artifact carries.
+OUTPUT_NOTES = ("pair_skew", "release_edits", "authenticode")
 
 
 def build_key(build):
@@ -763,6 +765,8 @@ def make_rows(plan, results):
                 row["unsigned_sha256"] = art["unsigned"]["sha256"]
             if art.get("authenticode_sha256"):
                 row["authenticode_sha256"] = art["authenticode_sha256"]
+            elif o.get("authenticode") and art.get("image_sha256"):
+                row["authenticode_sha256"] = art["image_sha256"]
             for k in ("release_edits", "pair_skew"):
                 if o.get(k):
                     row[k] = o[k]

@@ -566,13 +566,18 @@ class ReleaseSetRuns(unittest.TestCase):
         rows_doc = json.loads((self.ws.out / "release-sources.rows.json").read_text(encoding="utf-8"))
         self.assertEqual([f["path"] for f in rows_doc["files"]], ["payload/a.bin"])
         self.assertTreesGone()
-        # -Only rebuilds the failed row and keeps the artifact of the good one.
+        # -Only rebuilds the failed row and keeps the artifact of the good one, whose row takes the note that the
+        # manifest gave it since.
         rows[1] = self.ws.row("bad", sleep=0)
+        rows[0]["outputs"][0]["pair_skew"] = "a sentence that the kept row takes from the manifest of this run"
         code, out = self.ws.run(self.ws.manifest(rows), "-Only", "bad,c")
         self.assertEqual(code, 0, out)
         report = self.ws.report()
         self.assertEqual({b["id"]: (b["status"], bool(b.get("kept"))) for b in report["builds"]},
                          {"a": ("ok", True), "bad": ("ok", False), "c": ("ok", False)})
+        rows_doc = json.loads((self.ws.out / "release-sources.rows.json").read_text(encoding="utf-8"))
+        a = next(f for f in rows_doc["files"] if f["path"] == "payload/a.bin")
+        self.assertEqual(a.get("pair_skew"), rows[0]["outputs"][0]["pair_skew"])
 
 
 if __name__ == "__main__":

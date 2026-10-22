@@ -1499,7 +1499,8 @@
    "outputs": [
     {
      "file": "bc250d3d_router.dll",
-     "path": "payload/desktop/bc250d3d_router.dll"
+     "path": "payload/desktop/bc250d3d_router.dll",
+     "authenticode": true
     }
    ]
   },
@@ -1530,7 +1531,8 @@
    "outputs": [
     {
      "file": "bc250d3d_router.dll",
-     "path": "payload/wow64/desktop/bc250d3d_router.dll"
+     "path": "payload/wow64/desktop/bc250d3d_router.dll",
+     "authenticode": true
     }
    ]
   },
@@ -1562,21 +1564,25 @@
    "outputs": [
     {
      "file": "amdgpu_wddm_control.exe",
-     "path": "payload/control/amdgpu_wddm_control.exe"
+     "path": "payload/control/amdgpu_wddm_control.exe",
+     "authenticode": true
     },
     {
      "file": "bc250control.dll",
-     "path": "payload/control/bc250control.dll"
+     "path": "payload/control/bc250control.dll",
+     "authenticode": true
     },
     {
      "file": "bc250control.dll",
      "path": "payload/tools/bc250control.dll",
-     "component": "tool"
+     "component": "tool",
+     "authenticode": true
     },
     {
      "file": "bc250kmd_cli.exe",
      "path": "payload/tools/bc250kmd_cli.exe",
-     "component": "tool"
+     "component": "tool",
+     "authenticode": true
     }
    ],
    "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
@@ -1608,7 +1614,8 @@
    "outputs": [
     {
      "file": "bc250d3d_router.dll",
-     "path": "payload/desktop/bc250d3d_router.dll"
+     "path": "payload/desktop/bc250d3d_router.dll",
+     "authenticode": true
     }
    ]
   },
@@ -1639,7 +1646,8 @@
    "outputs": [
     {
      "file": "bc250d3d_router.dll",
-     "path": "payload/wow64/desktop/bc250d3d_router.dll"
+     "path": "payload/wow64/desktop/bc250d3d_router.dll",
+     "authenticode": true
     }
    ]
   },
@@ -1671,21 +1679,25 @@
    "outputs": [
     {
      "file": "amdgpu_wddm_control.exe",
-     "path": "payload/control/amdgpu_wddm_control.exe"
+     "path": "payload/control/amdgpu_wddm_control.exe",
+     "authenticode": true
     },
     {
      "file": "bc250control.dll",
-     "path": "payload/control/bc250control.dll"
+     "path": "payload/control/bc250control.dll",
+     "authenticode": true
     },
     {
      "file": "bc250control.dll",
      "path": "payload/tools/bc250control.dll",
-     "component": "tool"
+     "component": "tool",
+     "authenticode": true
     },
     {
      "file": "bc250kmd_cli.exe",
      "path": "payload/tools/bc250kmd_cli.exe",
-     "component": "tool"
+     "component": "tool",
+     "authenticode": true
     }
    ],
    "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
