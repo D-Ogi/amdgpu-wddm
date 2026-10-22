@@ -109,8 +109,17 @@ function Read-StartRecord {
 # every kept line; the task's own log keeps the last $Lines of them, so one logon cannot push the file out.
 # This boot's start time goes into both calls: a record older than this boot says so and keeps its lines to itself.
 $script:bootUtc = Get-StartRecordBootUtc
+# The record is read through the shared state (state-reader.ps1), which throws when that state cannot be read, for
+# example with no bc250kmd service. A log line must not end the run: -Probe then exited 1 before its start-health
+# reading, and the task before its confirmation. The failure is logged as such, as Read-Parameter does, never as
+# "no record".
+function Format-StartRecordLine {
+    try { return (Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc) }
+    catch { return "unreadable: $($_.Exception.Message)" }
+}
 function Write-StartRecordLog([int]$Lines = 24) {
-    $record = Read-StartRecord
+    try { $record = Read-StartRecord }
+    catch { Write-StartConfirmLog "start record: unreadable: $($_.Exception.Message)"; return }
     Write-StartConfirmLog ('start record: ' + (Format-StartRecord -Record $record -BootUtc $script:bootUtc))
     if (-not (Test-StartRecordIsReason -Record $record -BootUtc $script:bootUtc)) { return }
     foreach ($line in (Get-StartRecordLogLines -Record $record -Max $Lines)) { Write-StartConfirmLog "start record log: $line" }
@@ -269,7 +278,7 @@ while ($true) {
     if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; break }
     Start-Sleep -Milliseconds 250
 }
-Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format-WindowTask); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc)"
+Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format-WindowTask); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecordLine)"
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written
 # whatever the confirmation's outcome (it names what runs, not how healthy it is); never fails the task. It takes the
 # installer's engine.lock for the whole reading and publication (up to 3 s wait): while an installer runs, no witness.

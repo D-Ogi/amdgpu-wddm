@@ -374,7 +374,9 @@ try {
     Check ($sc -match 'function Read-StartRecord \{') 'start-confirm.ps1 reads the record'
     Check ($sc -match 'Open-DriverStateRecordView' -and $sc -notmatch 'Services\\bc250kmd\\Parameters') 'start-confirm reads only shared state'
     Check ($sc -match '(?m)^Write-StartRecordLog?$') 'and writes it into its log at every logon'
-    Check ($sc -match 'start record: \$\(Format-StartRecord -Record \(Read-StartRecord\) -BootUtc \$script:bootUtc\)') 'and into its exit line'
+    Check (($sc -match 'start record: \$\(Format-StartRecordLine\)') -and ($sc -match '(?s)function Format-StartRecordLine \{\s+try \{ return \(Format-StartRecord -Record \(Read-StartRecord\) -BootUtc \$script:bootUtc\) \}\s+catch \{ return "unreadable: ')) 'and into its exit line'
+    # A shared state that cannot be read is a log line, never the end of the run, and never "no record".
+    Check ($sc -match '(?s)function Write-StartRecordLog\(\[int\]\$Lines = 24\) \{\s+try \{ \$record = Read-StartRecord \}\s+catch \{ Write-StartConfirmLog "start record: unreadable: ') 'an unreadable record is logged as unreadable and the run goes on'
     Check ($sc -match 'Write-StartRecordLog -Lines \$script:StartRecordMaxLogLines') 'the probe prints every kept line'
     Check ($sc -notmatch 'KeepLog') 'nothing about the record is behind the KeepLog gate'
     Check ($sc -match 'bootUtc = Get-StartRecordBootUtc') 'and it reads this boot''s start time for the record'
