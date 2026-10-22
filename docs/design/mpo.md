@@ -143,6 +143,20 @@ source. The Microsoft minimum needs a YUV plane. The driver admits YUV only afte
 NV12 plane on unit A (colour bars in each matrix and range). Until then `OverlayCaps` has no `YUV` bit, and the HLK
 YUV tests are a known failure.
 
+## Corrections from the requirements audit
+
+The requirements audit ([multiplane-overlay-requirements.md](multiplane-overlay-requirements.md)) found these
+points. They apply to every step:
+
+- Windows `LayerIndex` 0 is the top plane. Keep it separate from the hardware pipe number, the desktop role and
+  the order of the MPC tree.
+- DCN 2.0.1 selects the HUBP1 surface functions through HUBP201, not through the generic HUBP2 surface path.
+  Resolve each callback before its sequence is imported.
+- A lock of the whole OTG is not proof of independent timing between the updates of two planes. A later update
+  must not delay a flip of another plane that was accepted before it.
+- An equal surface address is not proof that a new geometry, colour or plane disable took effect. The retirement
+  of a flip needs the state of the whole transaction.
+
 ## The flip
 
 - The scan-out admission and the address checks hold for each plane.

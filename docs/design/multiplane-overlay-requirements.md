@@ -315,6 +315,41 @@ opposite direction. The DDI adapter must map these explicitly, retain omitted
 planes and report completion per plane. Neither that adapter nor the complete
 transaction owner is implemented by this model.
 
+### Disconnect and allocation retirement audit, 2026-10-22
+
+The selected Linux path separates disconnect, drain and power-down. Paths
+below are relative to `drivers/gpu/drm/amd/display/` at the revision above.
+
+| Operation | Selected source | What it establishes |
+|---|---|---|
+| Disconnect | `dc/hwss/dcn201/dcn201_hwseq.c`, `dcn201_plane_atomic_disconnect` | Removes the MPCC and records disconnect pending. This is not completion |
+| Wait before disable | `dc/hwss/dcn10/dcn10_hwseq.c`, `dcn10_plane_atomic_disable` | Waits for disconnect before disabling HUBP and DPP clocks |
+| Disconnect observation | Same file, `dcn10_wait_for_mpcc_disconnect` | For an enabled TG, checks MPC idle before calling HUBP blank |
+| MPC idle callback | `dc/dcn201/dcn201_mpc.c`, `dcn201_mpc_funcs` | Selects `mpc2_assert_idle_mpcc`, not the MPC1 implementation |
+| MPC idle condition | `dc/mpc/dcn20/dcn20_mpc.c`, `mpc2_assert_idle_mpcc` | Accepts MPCC_DISABLED, otherwise polls MPCC_IDLE |
+| HUBP drain | `dc/hubp/dcn10/dcn10_hubp.c`, `hubp1_set_blank` | Sets blank and TTU disable, then polls HUBP_NO_OUTSTANDING_REQ when the control register reads nonzero |
+
+`dc/hwss/dcn201/dcn201_init.c` binds the disconnect, wait and disable callbacks
+above. `dc/hubp/dcn201/dcn201_hubp.c` binds `hubp1_set_blank` and has no
+`hubp_disconnect` callback. Do not infer an earlier TTU-disable operation from
+the optional callback in the disconnect function.
+
+These source sequences narrow the disable experiment. They do not prove that
+MPCC idle alone releases every old surface reference. The HUBP drain is a
+separate step. The zero-register exception in Linux is a power-gating workaround,
+not permission to treat an uncertain MMIO read as successful retirement.
+The imported void wait functions do not supply a checked Windows completion
+result. A Windows adapter needs explicit timeout/error handling and retained
+allocation references on failure. Long Linux polls do not belong in the
+interrupt callback.
+
+DCN201 also selects `hubp1_is_flip_pending`. That function checks the pending
+bit and compares the earliest-in-use address with the requested address.
+It returns false for a software-marked power-gated HUBP. It does not check
+geometry, color, a Windows PresentId, or the complete disable/drain sequence.
+Use it only within its established address-flip scope. L48 requires separate
+hardware controls for attribute-only updates and disable retirement.
+
 ### CSC source-contract correction, 2026-10-22
 
 The first audit resolved the function call but not its resource initializers.
