@@ -473,6 +473,7 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 108544,
+      "authenticode_sha256": "3A48A8F52E50BB29F72E60603555BCA07B7DD015DACDBDEF4A9238A245AB9628",
       "flavour": "release"
     },
     {
@@ -497,6 +498,7 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 108544,
+      "authenticode_sha256": "89F0DDFD64AA939F4D49BB39E3CFDD084DEDCBC739391BD34FE32D7A173DEA47",
       "flavour": "lab"
     },
     {
@@ -1170,6 +1172,7 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
+      "authenticode_sha256": "A13B77AF0C73375D865E6B8014B8FEF746A0772623340CFBCE4B48383975A678",
       "flavour": "release"
     },
     {
@@ -1194,6 +1197,7 @@
         "output": "bc250d3d_router.dll"
       },
       "size": 202752,
+      "authenticode_sha256": "BA210830C998AF19BCB0ECB5E12B9D489EED30FEC92B0ABEC3451052AE439FD9",
       "flavour": "lab"
     },
     {
@@ -1967,6 +1971,7 @@
         "output": "bc250kmd_cli.exe"
       },
       "size": 305152,
+      "authenticode_sha256": "4F65A9909C5B3A0D2E3B7FBE0FA0BED884D12A73FE00499F35D19AA46C71CBBC",
       "flavour": "release"
     },
     {
@@ -1992,6 +1997,7 @@
         "output": "bc250kmd_cli.exe"
       },
       "size": 352768,
+      "authenticode_sha256": "40D9FF710A0B3D855CAB874F326F7C20F3C7B3FCD9CFD3640FE42F6DBEF1CEE1",
       "flavour": "lab"
     },
     {
@@ -2068,6 +2074,7 @@
         "output": "amdgpu_wddm_control.exe"
       },
       "size": 2603008,
+      "authenticode_sha256": "6559B66BD7323C7A14F5D1FD55022C7BF04177DB311E4A43D29AD928FEC2761E",
       "flavour": "release"
     },
     {
@@ -2093,6 +2100,7 @@
         "output": "amdgpu_wddm_control.exe"
       },
       "size": 2603520,
+      "authenticode_sha256": "D118F3A7B6C2D758086AF51F0E27C8DA19DF855EA35B50C39B0A11D7F53948B6",
       "flavour": "lab"
     },
     {
@@ -2118,6 +2126,7 @@
         "output": "bc250control.dll"
       },
       "size": 211968,
+      "authenticode_sha256": "00A82CD77CFA297408E828A4BF6E437D880EC4416DA2E3060B063E19FE745EC2",
       "flavour": "release"
     },
     {
@@ -2143,6 +2152,7 @@
         "output": "bc250control.dll"
       },
       "size": 223232,
+      "authenticode_sha256": "08EFD00F8BBAD26112C09B4895FC1DC1E2251336AD192704D7F645F7B817C046",
       "flavour": "lab"
     },
     {
@@ -2168,6 +2178,7 @@
         "output": "bc250control.dll"
       },
       "size": 211968,
+      "authenticode_sha256": "00A82CD77CFA297408E828A4BF6E437D880EC4416DA2E3060B063E19FE745EC2",
       "flavour": "release"
     },
     {
@@ -2193,6 +2204,7 @@
         "output": "bc250control.dll"
       },
       "size": 223232,
+      "authenticode_sha256": "08EFD00F8BBAD26112C09B4895FC1DC1E2251336AD192704D7F645F7B817C046",
       "flavour": "lab"
     },
     {
