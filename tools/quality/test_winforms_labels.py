@@ -3,8 +3,8 @@
 The negative controls are the shapes that must fail: the start window of tester.31 rc4 as it was written (a docked
 Label, AutoSize off), the other ways PowerShell and C# write the same layout, and C# inside a PowerShell here-string.
 The positive controls are the same windows with AutoSize on, an Anchor instead of a Dock, Dock None, or the layout
-in a comment. The real tree is checked too: it must pass, and the scan must read the start window of 84f35234
-(start-window.ps1 and start-confirm.ps1), which has no Label, and find nothing there.
+in a comment. The real tree is checked too: it must pass, and the two scripts of the start window of 84f35234
+(start-window.ps1 and start-confirm.ps1) must make no WinForms window any more (the window is gone, 2026-10-22).
 """
 import os
 from pathlib import Path
@@ -117,9 +117,10 @@ class Tree(unittest.TestCase):
     def test_repository_passes(self):
         problems, report, winforms = check(REPO)
         self.assertEqual(problems, [])
-        # The start window of 84f35234 has no Label: the scan reads both of its scripts and allows nothing there.
+        # The start window of 84f35234 is gone (owner, 2026-10-22): neither of its two scripts makes a WinForms
+        # window any more, so the scan finds nothing to read there.
         for rel in ("tools/release/installer/start-window.ps1", "tools/release/installer/start-confirm.ps1"):
-            self.assertIn(rel, winforms)
+            self.assertNotIn(rel, winforms)
             self.assertFalse(any(line.startswith(rel + ":") for line in report))
 
 

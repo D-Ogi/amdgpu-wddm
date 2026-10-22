@@ -523,6 +523,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
   @{n='start-health-refusal-drops-other-node-mark';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RefusalDropsOtherNodeMark');Fails=$true}
   @{n='start-health-rearm-skips-open-witness';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RearmSkipsOpenWitness');Fails=$true}
   @{n='start-health-confirm-hung-request';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ConfirmHungRequest');Fails=$true}
+  # QUIET (0.7.216.104): an idle GPU desktop confirms with nothing owed, and a flip still owed never confirms.
+  @{n='start-health-quiet-ignores-owed-flip';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-QuietIgnoresOwedFlip');Fails=$true}
+  @{n='start-health-no-quiet';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoQuiet');Fails=$true}
   @{n='gfx-pipeline';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly')}
   @{n='vmid-pool';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace)}
   @{n='keep-prune';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace)}

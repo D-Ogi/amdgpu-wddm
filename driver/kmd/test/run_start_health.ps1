@@ -1,7 +1,7 @@
 param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145',[switch]$IgnoreFlush,
       [switch]$NoWitnessReopen,[switch]$ReopenAnyClose,[switch]$StickyFaultKeepsMark,[switch]$ConfirmCertifiesNewEpoch,
       [switch]$MarkOverFailedEngines,[switch]$RefusalDropsOtherNodeMark,[switch]$RearmSkipsOpenWitness,
-      [switch]$ConfirmHungRequest)
+      [switch]$ConfirmHungRequest,[switch]$QuietIgnoresOwedFlip,[switch]$NoQuiet)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -28,9 +28,14 @@ if($RefusalDropsOtherNodeMark){$source=Mutate $source 'if (Mark==0) H->PendingRe
 # A recovery that leaves an open witness alone, so a measured interval can span the hang.
 if($RearmSkipsOpenWitness){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'}
 # A start that hung node 0 confirming its own clock/voltage and CU request as the next boot's default.
-if($ConfirmHungRequest){$source=Mutate $source 'h->Completed && !h->Recovered &&' 'h->Completed &&'
+if($ConfirmHungRequest){$source=Mutate $source 'ready=HealthConfirmable(h,&data) && !h->Recovered;' 'ready=HealthConfirmable(h,&data);'
                         $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered) (void)CuModeConfirm(Device,"start-health");' 'if (NT_SUCCESS(status)) (void)CuModeConfirm(Device,"start-health");'
                         $source=Mutate $source 'if (NT_SUCCESS(status) && !recovered) (void)DpmConfirm(Device,"start-health");' 'if (NT_SUCCESS(status)) (void)DpmConfirm(Device,"start-health");'}
+# QUIET (0.7.216.104): a flip programmed and never completed taken for nothing owed, so a hung presentation path
+# confirms on a stale completion.
+if($QuietIgnoresOwedFlip){$source=Mutate $source '&& programmed==H->LastSequence;' ';'}
+# The rule before QUIET: freshness alone, which an idle GPU desktop (one flip a minute) does not meet.
+if($NoQuiet){$source=Mutate $source '(Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS || (Data->Flags&BC250_START_HEALTH_QUIET));' '(Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS);'}
 # A confirmation that certifies whatever epoch it finds after its registry flush, the new one included.
 if($ConfirmCertifiesNewEpoch){$source=Mutate $source 'if (h->Generation!=generation || h->Epoch!=epoch) status=STATUS_RETRY;' 'if (h->Generation!=generation) status=STATUS_RETRY;'}
 [IO.File]::WriteAllText((Join-Path $Out 'start_health_actual.inc'),$source.Replace('#include "bc250kmd.h"',''))

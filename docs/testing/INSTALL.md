@@ -278,15 +278,19 @@ Without internet on the BC-250:
    `-CuMode`, `-NoControlApp`, `-NoStartMenuShortcut`, `-NoDesktopShortcut`, `-NoWallpaper`, `-NoBootLogo` and
    `-NoReboot`.
 
-## The small blue window after logon
+## The start confirmation after logon
 
-After each logon, a small blue window is shown in the top-left corner for two minutes. It says "Nagi start
-check: confirming that the GPU driver started correctly" and counts down to the moment it closes by itself. The driver
-counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display Adapter
-again, to prevent a start loop. The window keeps the desktop drawing for at least one minute, and the confirmation
-then confirms the start. The same confirmation keeps the automatic clock control (DPM) on: if a start is not
-confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays off until you set it again in the control
-application. Do not close the window.
+The driver counts each start that is not confirmed. After two unconfirmed starts, Windows uses Microsoft Basic Display
+Adapter again, to prevent a start loop. The same confirmation keeps the automatic clock control (DPM) on: if a start
+is not confirmed, the next start runs at the fixed 1000 MHz clock, and DPM stays off until you set it again in the
+control application. You do not have to do anything for it, and nothing is shown on the screen.
+
+The driver accepts the confirmation when it has shown the desktop for one minute, has completed at least one new
+picture in that time, and has no picture that it was asked to show and did not show. A desktop where nothing moves is
+a correct start: the GPU desktop draws a new picture when something on the screen changes, for example the clock of
+the taskbar. Up to tester.31 the driver also wanted a new picture in the last 15 seconds, and a small blue window with
+a countdown ("Nagi start check") was shown for two minutes after each logon to make the desktop draw. That window is
+gone.
 
 Two scheduled tasks do this work, and both run at the logon of any user, so an account without administrator rights
 confirms a start as well:
@@ -295,33 +299,22 @@ confirms a start as well:
   window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
   only from an administrator, which is why this task does not run as the user who logs on.
 - "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
-  `S-1-5-32-545`, limited run level). It shows the small blue window and nothing else: it never opens the driver and
-  changes no setting. The task starts Nagi Control App with `--start-window`, and the control application starts the
-  window script without a console window. An install without the control application (`-NoControlApp`) starts the
-  script with `powershell.exe`, and then a console window can show at sign-in. The window stays for the full two
-  minutes, because this task does not read the confirmation's progress. Earlier releases closed it as soon as the
-  start was confirmed, usually after about one minute. If it does not run, the confirmation still keeps the computer
-  off Microsoft Basic Display, and the next start runs at the fixed clock.
+  `S-1-5-32-545`, limited run level). It keeps its old name and only starts the control application's sign-in notice
+  (the next section): it never opens the driver and changes no setting. The task starts Nagi Control App with
+  `--start-window`, and the control application starts the task's script without a console window. An install
+  without the control application (`-NoControlApp`) starts the script with `powershell.exe`, and then a console
+  window can show at sign-in for a moment. If the task does not run, the confirmation is not affected.
 
 The confirmation writes its results to `C:\ProgramData\amdgpu-wddm\start-confirm.log`. Its last line of each logon
-also reports the state, the last run time and the last result of the window task, so a window that did not run or
-could not open is visible there (`last result 0` the window was shown and closed, `2` it could not be shown,
-`3` the person turned the clock window off).
-
-You can turn the clock window off: open Nagi Control App, go to Settings and clear "Show the start check window
-after sign-in". The setting belongs to the account that sets it, needs no administrator rights, and the window task
-then ends at once and reports `3`. Read what it costs before you clear it: without the window the desktop may stop
-drawing before the driver has confirmed the start, so the next start can run at the fixed clock instead of the
-automatic one, and if the confirmation keeps staying unfinished the driver's own guard switches the driver off
-after two such starts, which puts Windows on Microsoft Basic Display Adapter until you turn the driver back on.
+also reports the state, the last run time and the last result of the second task. `last result 0` means that the
+notice was started, or that there is no control application. `last result 2` means that Windows refused to start it.
 
 ## If the graphics driver did not start, you see it at the sign-in
 
-The same window task also starts the control application's own notice (`amdgpu_wddm_control.exe --start-notice`),
+The second task, "amdgpu-wddm start window", starts the control application's own notice (`amdgpu_wddm_control.exe --start-notice`),
 which looks for the driver for up to half a minute and stays silent when the driver answers. A driver that was
 switched off for safety is already recorded as such, so that notice appears at once. The other case waits out the
-half minute, because a driver still inside its own start looks the same from outside. It is a separate window from
-the blue clock, and the setting above never switches it off.
+half minute, because a driver still inside its own start looks the same from outside. No setting switches it off.
 
 - The driver was switched off for safety (two starts did not finish their check, so Windows now uses its basic
   display driver: no games, low performance). The notice says that in plain words and offers three buttons:
@@ -357,8 +350,8 @@ longer have to run the release installer again for this.
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | Eight binaries beside the KMD image in Driver Store. `LICENSE.amdgpu` is in the installed `licenses` folder. The installer downloads or retrieves pinned copies before staging. The repair set retains them for offline repair. |
 | Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
-| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on, shows the clock window and starts the control application's sign-in notice |
-| Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application, "Show the start check window after sign-in"). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
+| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on and starts the control application's sign-in notice |
+| Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
 | Shortcuts of an earlier release | earlier releases named the shortcuts "amdgpu-wddm Control". An install over such a release and `uninstall.cmd` remove those old shortcuts when they point at the control application. A file of that name that points elsewhere stays |
 | Nagi wallpaper | for each person who signs in after the installation is checked, Nagi Control App sets the Nagi wallpaper once (position Fill). It saves the previous background of that person first. The setup window has a box for it, on by default. `install.cmd -NoWallpaper` leaves it out. In Nagi Control App, Settings, "Nagi wallpaper" sets it again or restores the previous background. A slideshow or Windows Spotlight comes back as its last picture only. `uninstall.cmd` changes nobody's background and keeps the picture in `%LOCALAPPDATA%\amdgpu-wddm\wallpaper` |
 | Nagi on the start screen | while Windows starts, the driver draws Nagi above the ring of dots. She is there for about half a second, between the ring of dots and the black screen that follows it, so you may miss her if you look away (`docs/design/boot-logo.md`). The setup window has a box for it, on by default, and `install.cmd -NoBootLogo` leaves her out. The answer is `Parameters\BootLogo` of the driver (absent is on, 0 is off), so an installation over an earlier one keeps the answer you gave it. In Nagi Control App the same switch is on the Display page. `uninstall.cmd` removes the value |
@@ -377,8 +370,8 @@ firmware of the board switches on. To install with all of them, use `install.cmd
 Graphics page of Nagi Control App holds the choice: a number of cores from "Standard (24)" to "All (40)" in steps of
 two, because the hardware switches the cores on in pairs. Under "Choose the pairs of cores yourself" the same page
 shows a map of the pairs, where you select each pair that the driver may use. A new number applies at the next
-restart of Windows. The first start with more than 24 cores needs the confirmation of the small blue window after
-logon. Without that confirmation the next start goes back to 24 and records the reason. The number that you select is
+restart of Windows. The first start with more than 24 cores needs the start confirmation after logon (see "The start
+confirmation after logon"). Without that confirmation the next start goes back to 24 and records the reason. The number that you select is
 kept by every later install: the Graphics page and the switch both record it as your choice. If one pair of cores
 makes this PC stop or restart, select that pair off on the map and leave the other pairs on. The change writes
 registry values and no firmware. More cores give more performance in many games, and also more power and more heat.

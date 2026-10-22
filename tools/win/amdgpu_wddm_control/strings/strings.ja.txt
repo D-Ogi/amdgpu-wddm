@@ -1225,12 +1225,6 @@ plan.enable-driver.dark|mt|02d9a741|画面が数秒暗くなり、大きさが�
 plan.enable-driver.restart|mt|73638369|グラフィックスドライバーが起動しない場合は、その旨を表示してWindowsの再起動を提案します。
 plan.refuse.driver-on|mt|7532d61c|グラフィックスドライバーはすでに動いているため、戻すものはありません。
 plan.refuse.not-guard|mt|040c6a83|グラフィックスドライバーは安全のために停止されたのではないので、ここでは解決しません。ヘルプを開いて次の手順を確認してください。
-settings.start.title|mt|9a62389e|サインインした後
-search.settings.start-window|mt|d956c490|サインイン後に起動確認の小窓を表示する
-search.settings.start-window.terms|mt|3cedb013|起動|確認|ウィンドウ|小窓|サインイン|ログオン|青|時計
-settings.start-window.cost|mt|87e0a47c|この小窓は2分間、画面の描画を続けさせます。それによってドライバーは起動の確認を完了できます。表示しないと確認が未完了のままになり、次回のWindows起動ではグラフィックスチップが低い固定の速度で動きます。確認が未完了のまま続くと、Windowsを数回起動したあとにドライバーが自動的に停止し、元に戻すまでWindowsは基本ディスプレイを使います。
-settings.start-window.notice|mt|c48dfcba|グラフィックスドライバーが停止されたという警告は、このチェックボックスに関わらず必ず表示されます。
-help.setting.start-window|mt|0e802003|サインインすると、画面の左上に時計の付いた小さな窓が2分間表示されます。時計が動き続けることで画面の描画が続き、ドライバーは起動の確認を完了できます。邪魔なときだけ切ってください。切ると確認が未完了のままになり、次回のWindows起動ではグラフィックスチップが低い固定の速度で動きます。さらに未完了が続くと、数回の起動のあとにドライバーが自動的に停止し、元に戻すまでWindowsは基本ディスプレイを使います。この設定はあなた専用で、管理者権限は要りません。
 search.settings.wallpaper|mt|42350221|Nagi の壁紙
 search.settings.wallpaper.terms|mt|e2a1f213|壁紙|背景|デスクトップ|画像|Nagi
 settings.wallpaper.note|mt|af8edf22|確認済みのインストールの後、ボックスをオフにしていない限り、インストーラーは Nagi の壁紙をデスクトップの背景として一度だけ設定します。以前の背景は先に保存されます。ここでは Nagi の壁紙をもう一度設定したり、以前の背景に戻したりできます。

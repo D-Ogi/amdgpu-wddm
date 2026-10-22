@@ -563,6 +563,11 @@ typedef struct _BC250_ESCAPE_CLOCK {
 #define BC250_START_HEALTH_VISIBLE 4u
 #define BC250_START_HEALTH_CONFIRMED 8u
 #define BC250_START_HEALTH_REQUIRED 7u
+// QUIET (0.7.216.104): this interval completed a flip and every primary programmed since has completed, so the
+// presentation path owes nothing. An idle GPU desktop flips about once a minute (the taskbar clock), so its last
+// completion is mostly older than FRESH_MS; QUIET stands in for that freshness in CONFIRM and in the CU mode and
+// DPM milestones. A KMD without this bit never sets it, and a client that ignores it waits for a fresh flip.
+#define BC250_START_HEALTH_QUIET 16u
 #define BC250_START_HEALTH_MIN_MS 60000ull
 #define BC250_START_HEALTH_FRESH_MS 15000ull
 typedef struct _BC250_ESCAPE_START_HEALTH {

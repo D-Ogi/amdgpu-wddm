@@ -19,8 +19,8 @@ other layout.
 
 ALLOWED lists the findings that are meant, each with its reason. An allowed finding that the scan no longer makes is
 an error too, so the list cannot hold a file that has changed. The start window of 84f35234
-(tools/release/installer/start-window.ps1 and start-confirm.ps1) draws its text itself and has no Label; the
-controls (test_winforms_labels.py) check that the scan reads both files and finds nothing there.
+(tools/release/installer/start-window.ps1 and start-confirm.ps1) is gone (owner, 2026-10-22); the controls
+(test_winforms_labels.py) check that neither file makes a WinForms window any more.
 
 Exit 0 with no findings outside ALLOWED and no stale entry in it, 1 otherwise.
 """
@@ -31,8 +31,6 @@ import re
 import sys
 
 ALLOWED = {
-    ("tools/release/test-session-checks.ps1", "$label"):
-        "the session checks build the rc4 window, never shown, as the reference picture for the new one",
     ("tools/win/app-launch/label-window.ps1", "$label"):
         "the measurement window of M898 has the docked Label on purpose",
     ("tools/win/kmd-deploy/ops/heartbeat.ps1", "$l"):

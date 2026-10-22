@@ -40,7 +40,8 @@ namespace AmdgpuWddmControl
     {
         public uint Version, Flags;
         public ulong Generation, Epoch, Completed, LastCompletionAgeMs, ReadyAgeMs;
-        public const uint Full = 1, Ready = 2, Visible = 4, Confirmed = 8;
+        // Quiet: every flip programmed in this interval has completed (BC250_START_HEALTH_QUIET, 0.7.216.104).
+        public const uint Full = 1, Ready = 2, Visible = 4, Confirmed = 8, Quiet = 16;
     }
 
     // BC250_ESCAPE_CU_MODE (driver/kmd/cumode.c, docs/design/cu-mode.md): the CU mode of the start this describes.

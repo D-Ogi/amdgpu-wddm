@@ -8,19 +8,22 @@
 # Microsoft Basic Display Adapter. A DPM start has a guard of its own (dpm.c, DpmPending): the next start after an
 # unconfirmed DPM start runs at the fixed floor clock and writes DpmMode 0. The KMD's start-health confirmation
 # (start_health.c StartHealthRequest, BC250_ESCAPE_RUN_START_HEALTH) clears both, and the KMD accepts it only when
-# the start has been ready and visible for 60 s with fresh presentation completions. An idle desktop presents too
-# rarely for that, so this script shows a small top-most window whose text changes every 250 ms, keeps DWM
-# presenting, and confirms the start once the KMD's milestone is met. Then it exits: at health flags 15, or after
-# -Seconds (120). Nothing stays resident.
+# the start has been ready and visible for 60 s with a completed flip, and either a fresh completion or nothing owed
+# (QUIET, 0.7.216.104: every flip programmed in the interval has completed). This script reads the driver and
+# confirms the start once the KMD's milestone is met. Then it exits: at health flags 15, or after -Seconds (120).
+# Nothing stays resident.
 #
-# BD-080: with -NoWindow this script only reads and confirms, and shows nothing. That is the run of the task above,
-# because the Local System account that confirms at the logon of any user has no desktop in that session. The window
-# is a second task of its own, start-window.ps1, which runs in the session of the user who logged on, with that
-# user's rights and no access to the driver. Both runs take their decisions through the same poll (Invoke-Tick ->
-# Invoke-Poll): the boot-loop guard, the DPM coupling and the fallback are the same in either mode. Where no window
-# runs at all (nobody is logged on behind the confirmation, or the window task was removed), an idle desktop may
-# present too rarely for the KMD's milestone, and the fallback below resets the boot-loop guard alone: the machine
-# stays off Basic Display and the next start runs at the floor clock.
+# Up to tester.31 the milestone asked for a completion within 15 s at the 60 s mark, which an idle desktop rarely
+# gives, and a small blue window with a countdown kept DWM presenting for it. That window came from the time of the
+# CPU desktop and is gone (owner, 2026-10-22: "Niebieskie okienko jest z czasu pulpitu na CPU przeciez. Nie mozemy
+# go usunac w calosci?"). An idle GPU desktop flips about once a minute, for the taskbar clock, and QUIET accepts it.
+#
+# BD-080: this script only reads and confirms, and shows nothing: the Local System account that confirms at the logon
+# of any user has no desktop in that session. -NoWindow is still taken, because the registered task passes it; it
+# changes nothing. The second task of the logon, start-window.ps1, runs in the session of the user who logged on and
+# only starts the sign-in notice of the control application. If the KMD never reaches its milestone (a KMD older
+# than QUIET on an idle desktop, for example), the fallback below resets the boot-loop guard alone: the machine stays
+# off Basic Display and the next start runs at the floor clock.
 #
 # Health reads and the confirmation go through bc250control.dll next to this script (Bc250StartHealth, the same
 # export the control application uses). If the KMD never reaches its milestone, a fallback resets only the
@@ -162,14 +165,15 @@ function Get-FallbackView {
     return [ordered]@{ ok = $ok; text = "device problem $problem, driver version $version (expected $ExpectedVersion), LastStage $stage" }
 }
 
-# ---- BD-080: the other half of this logon, the window task -------------------------------------------------------
-# The window runs as the user who logged on (start-window.ps1, the task below), where this script cannot see it: a
+# ---- BD-080: the other half of this logon, the task in the user's session ----------------------------------------
+# That task runs as the user who logged on (start-window.ps1, the task below), where this script cannot see it: a
 # different session, and under Local System no desktop at all. What it can read is the task's own record, so the log
-# of this run says whether the window half ran and what it reported. start-window.ps1's exit codes: 0 shown and
-# closed, 2 could not be shown, 3 turned off by the person. Nagi Control App, which starts that script for the task
-# (--start-window), passes those through and adds 4 (it stopped the script at its bound) and 5 (it could not start
-# the script). 267009 is "running", and the task is absent on a machine where an older release registered the single
-# task only. This never throws and never changes the run's outcome; it is a log line.
+# of this run says whether that half ran and what it reported. start-window.ps1's exit codes: 0 the sign-in notice
+# was started (or there is no control application), 2 Windows refused to start it. Nagi Control App, which starts
+# that script for the task (--start-window), passes those through and adds 4 (it stopped the script at its bound) and
+# 5 (it could not start the script). 267009 is "running", and the task is absent on a machine where an older release
+# registered the single task only. The task keeps its old name. This never throws and never changes the run's
+# outcome; it is a log line.
 $windowTaskName = 'amdgpu-wddm start window'   # common.ps1 $script:WindowTaskName; test-session-checks.ps1 holds the two together
 function Format-WindowTask {
     try {
@@ -247,8 +251,7 @@ function Invoke-Poll {
     return $null
 }
 
-# One step of the run: poll when the next poll is due, and answer with the step that ends the run, or $null. The
-# headless loop and the window's timer both call this and nothing else, so the two runs decide alike (BD-080).
+# One step of the run: poll when the next poll is due, and answer with the step that ends the run, or $null.
 function Invoke-Tick {
     $now = $clock.Elapsed.TotalSeconds
     if ($now -lt $script:nextPoll) { return $null }
@@ -259,94 +262,13 @@ function Invoke-Tick {
     return $step
 }
 
-# ---- the window: start-window.ps1 and start-confirm.ps1 carry this block alike (test-session-checks.ps1) ----------
-# The small blue window, drawn in one piece (owner, 2026-10-14: it flashed for a frame or two every few seconds). One
-# form that draws itself, with no child control: every change of the text is one WM_PAINT that paints background and
-# text into an off-screen buffer and puts the result on the window with one copy. Nothing paints on the window
-# itself between two such copies. ControlStyles:
-#   UserPaint, AllPaintingInWmPaint  WM_ERASEBKGND paints nothing; the background is part of the one paint
-#   OptimizedDoubleBuffer            the paint goes into a buffer, and the window gets the finished frame in one copy
-#   Opaque                           Invalidate asks Windows for no background erase at all (InvalidateRect, FALSE)
-# A form of WinForms erases its background on the window itself (ScrollableControl clears AllPaintingInWmPaint), and
-# the Label that drew the text up to tester.31 rc4 was a second window on top of it. On the lab (2026-10-14,
-# tools\win\app-launch\measure-flash.ps1, fact M898), DWM composed a frame of navy with only part of the text at 10
-# of 89 text changes of the Label window, and at none of 44 changes of this window. Reads of the Label window's own
-# surface found that partial frame at 125 of 150 changes, for about 2 ms each: the window itself held it, and DWM
-# showed it whenever it composed in those 2 ms. The surface of this window had it at none of 149 changes. The cause
-# is the Label's layout: at each new text, Label.AdjustSize gave the docked Label (AutoSize off) its requested size,
-# 100x23, and the form docked it again. In between, the form painted the uncovered area navy and the small Label
-# kept the top left corner of its text.
-# The look is the Label's, pixel for pixel: Consolas 9, cyan on navy, the text at (4, 3) through GDI+ DrawString
-# with the Label's string format, as a PowerShell host draws a Label (it never switches compatible text rendering
-# off). The window is sized to its two lines at the longest countdown, so no text is cut at any scale or font size.
-function New-StartWindow([string]$Text) {
-    $form = New-Object Windows.Forms.Form
-    $form.FormBorderStyle = 'None'; $form.TopMost = $true; $form.ShowInTaskbar = $false; $form.ShowIcon = $false
-    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(8, 34)
-    $form.BackColor = [Drawing.Color]::Navy
-    # Control.SetStyle is protected; a script reaches it through reflection, which needs no compiler and no rights.
-    $setStyle = [Windows.Forms.Control].GetMethod('SetStyle', [Reflection.BindingFlags]'Instance, NonPublic')
-    [void]$setStyle.Invoke($form, @([Windows.Forms.ControlStyles]'UserPaint, AllPaintingInWmPaint, OptimizedDoubleBuffer, Opaque', $true))
-    $font = New-Object Drawing.Font('Consolas', 9)
-    $form.Tag = @{ Text = $Text; Font = $font }
-    $need = [Windows.Forms.TextRenderer]::MeasureText($Text, $font)
-    $form.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
-    $form.Add_Paint({
-        param($window, $e)
-        try {
-            $e.Graphics.Clear([Drawing.Color]::Navy)
-            $face = New-Object Drawing.RectangleF(4, 3, ($window.ClientSize.Width - 8), ($window.ClientSize.Height - 6))
-            $ink = New-Object Drawing.SolidBrush([Drawing.Color]::Cyan)
-            $format = New-Object Drawing.StringFormat
-            $format.HotkeyPrefix = 'Show'
-            try { $e.Graphics.DrawString([string]$window.Tag.Text, $window.Tag.Font, $ink, $face, $format) }
-            finally { $ink.Dispose(); $format.Dispose() }
-        } catch { }
-    })
-    return $form
-}
-# The text changes only when it is different: then the window is invalidated once, and the next WM_PAINT draws it.
-# True when it changed. The countdown changes once a second, which is the presentation the window exists for.
-function Set-StartWindowText($Form, [string]$Text) {
-    if ([string]$Form.Tag.Text -ceq $Text) { return $false }
-    $Form.Tag.Text = $Text
-    $Form.Invalidate()
-    return $true
-}
-# ---- end of the window --------------------------------------------------------------------------------------------
-
-if ($NoWindow) {
-    # The run of the Local System task: no window, no form, no assembly to load. The window of this logon is
-    # start-window.ps1's, in the user's own session; this loop keeps the time bound of the task either way.
-    Write-StartConfirmLog "window: none (-NoWindow); the window of this logon is the task $windowTaskName, and the exit line below reports what that task did"
-    while ($true) {
-        $step = Invoke-Tick
-        if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; break }
-        Start-Sleep -Milliseconds 250
-    }
-} else {
-    # The windowed run, as it has always been. Every variable here stays in the script's own scope, which an if or
-    # else block does not change: the timer's handler reads $label, $timer and $form while ShowDialog runs.
-    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-    # The text of start-window.ps1 (what the window is for, a countdown that is also the changing text DWM presents);
-    # this run ends with the confirmation, so the countdown is its upper bound.
-    $windowText = {
-        param([double]$Left)
-        $s = [int][Math]::Max(0, [Math]::Ceiling($Left))
-        ("Nagi start check: confirming that the GPU driver started correctly.`r`n" +
-            'Nothing to do. This window closes by itself within {0}:{1:00}.') -f [int][Math]::Floor($s / 60), ($s % 60)
-    }
-    $form = New-StartWindow (& $windowText $Seconds)
-    $timer = New-Object Windows.Forms.Timer
-    $timer.Interval = 250
-    $timer.Add_Tick({
-        [void](Set-StartWindowText $form (& $windowText ($Seconds - $clock.Elapsed.TotalSeconds)))
-        $step = Invoke-Tick
-        if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; $timer.Stop(); $form.Close() }
-    })
-    $timer.Start()
-    [void]$form.ShowDialog()
-    $timer.Dispose(); $form.Dispose()
+# The run of the Local System task: no window, no form, no assembly to load. The sign-in notice of this logon is
+# start-window.ps1's, in the user's own session; this loop keeps the time bound of the task.
+Write-StartConfirmLog "window: none; the task $windowTaskName of this logon starts the sign-in notice only, and the exit line below reports what that task did"
+while ($true) {
+    $step = Invoke-Tick
+    if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; break }
+    Start-Sleep -Milliseconds 250
 }
 Write-StartConfirmLog "exit $($script:exitCode): $($script:lastReason); $(Format-WindowTask); UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'); $(Format-Dpm); confirm calls $($state.confirms); start record: $(Format-StartRecord -Record (Read-StartRecord) -BootUtc $script:bootUtc)"
 # The running-release witness of this boot: the loaded KMD image and its reply against the installed manifest. Written

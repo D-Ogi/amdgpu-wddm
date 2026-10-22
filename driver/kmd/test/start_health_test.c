@@ -76,6 +76,11 @@ static NTSTATUS DpmConfirm(BC250_DEVICE*d,const char*why){(void)d;(void)why;CHEC
 // interval before it was durably confirmed (start_health.c), so it can outnumber the CU confirmations.
 static unsigned bootMarks;
 static void GuardStartConfirmed(void){CHECK(spins==0 && mutexes==1 && flushes>0 && writeStatus==0 && flushStatus==0);bootMarks++;}
+// wddm.c (QUIET, 0.7.216.104): the last primary generation whose programming succeeded, read under the witness's
+// spin lock. wddmPresent 0 is no WDDM state, or a writer between Begin and End: FALSE, never quiet. Every case
+// before the QUIET ones runs with it 0, so their flag words are the ones they always were.
+static int wddmPresent;static ULONG wddmProgrammed;
+static BOOLEAN WddmPrimaryProgrammed(const BC250_DEVICE*d,ULONG*s){(void)d;CHECK(spins==1);*s=wddmPresent?wddmProgrammed:0;return wddmPresent;}
 #include "confirm_actual.inc"
 #include "start_health_actual.inc"
 static BC250_ESCAPE_START_HEALTH query(BC250_DEVICE*d,int confirm)
@@ -289,6 +294,35 @@ int main(void)
     // And the start after it all confirms everything again, so none of the marks outlives its start.
     healthy(&d);cu0=cuConfirms;dpm0=dpmConfirms;old=writes;r=query(&d,1);
     CHECK(r.Status==0 && r.Flags==15 && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+    // QUIET (0.7.216.104): an idle GPU desktop. Its last flip is more than a minute old, so freshness alone refuses
+    // the start, but the last primary programmed is the one that completed: nothing is owed and the start confirms,
+    // its CU mode and DPM with it.
+    wddmPresent=1;
+    ready(&d);advance(1000);StartHealthCompleted(&d,2);wddmProgrammed=2;advance(70000);
+    r=query(&d,0);
+    CHECK(r.Flags==(7|BC250_START_HEALTH_QUIET) && r.Completed==1 && r.LastCompletionAgeMs==70000 && r.ReadyAgeMs==71000);
+    CHECK(StartHealthIsReady(&d,&generation) && generation==d.StartHealth.Generation);
+    cu0=cuConfirms;dpm0=dpmConfirms;old=writes;r=query(&d,1);
+    CHECK(r.Status==0 && (r.Flags&BC250_START_HEALTH_CONFIRMED) && writes==old+1 && cuConfirms==cu0+1 && dpmConfirms==dpm0+1);
+    // A flip programmed and not completed is owed: not quiet, and a stale completion does not confirm.
+    ready(&d);advance(1000);StartHealthCompleted(&d,2);wddmProgrammed=4;advance(70000);
+    r=query(&d,0);CHECK(r.Flags==7);CHECK(!StartHealthIsReady(&d,&generation));
+    old=writes;r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY && writes==old);
+    // Once the VSync path sees that flip complete, the start is fresh and quiet, and confirms.
+    StartHealthCompleted(&d,4);r=query(&d,1);CHECK(r.Status==0 && r.Flags==(15|BC250_START_HEALTH_QUIET));
+    // No WDDM state, or a writer between Begin and End: not quiet, and a stale completion does not confirm.
+    ready(&d);advance(1000);StartHealthCompleted(&d,2);wddmProgrammed=2;advance(70000);wddmPresent=0;
+    r=query(&d,0);CHECK(r.Flags==7);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY);
+    // No completion in this interval: nothing shows that the path works, so nothing is quiet.
+    wddmPresent=1;wddmProgrammed=0;ready(&d);advance(70000);
+    r=query(&d,0);CHECK(r.Flags==7 && !r.Completed);r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY);
+    // The minute still counts: a quiet interval shorter than MIN_MS does not confirm.
+    ready(&d);advance(1000);StartHealthCompleted(&d,2);wddmProgrammed=2;advance(30000);
+    r=query(&d,0);CHECK(r.Flags==(7|BC250_START_HEALTH_QUIET));
+    r=query(&d,1);CHECK(r.NtStatus==(ULONG)STATUS_DEVICE_NOT_READY);
+    // A closed witness is never quiet.
+    StartHealthFault(&d);r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    wddmPresent=0;wddmProgrammed=0;
     // Port onto BD-124 stage 4 (0.7.216.62): StartHealthStop is a real close of the start. A latch close
     // before the stop leaves no mark for a later reset to undo; the stop still returns the pre-stop snapshot.
     healthy(&d);StartHealthFaultPendingReset(&d);CHECK(d.StartHealth.PendingReset);

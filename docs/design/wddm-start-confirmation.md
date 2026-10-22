@@ -37,8 +37,26 @@ PrimarySequence alone is insufficient: it advances on rejected and unchanged
 requests too. Publish a separate witness only after a changed hardware flip
 succeeds, then consume it through the stable completed-primary path.
 Keep an independent last-success monotonic time so a stalled screen cannot
-pass by retaining a previously nonzero count. A static desktop may defer
-confirmation; the active overlay provides regular presentation during startup.
+pass by retaining a previously nonzero count.
+
+QUIET (KMD 0.7.216.104, `BC250_START_HEALTH_QUIET`, flag 16). The witness also
+reports whether a flip is owed. It is quiet when the interval completed at
+least one flip and the last primary programming that succeeded
+(PrimaryProgrammedSequence) is the sequence that the completed-primary path
+consumed last. CONFIRM and the CU mode and DPM milestones then accept the
+interval without fresh progress (start_health.c HealthConfirmable). A static
+desktop is a correct start. An idle GPU desktop flips about once a minute, for
+the taskbar clock (lab, 2026-10-22: three completions in 150 s, each at a
+change of the minute), so the 15 s freshness bound alone left it unconfirmed.
+Up to tester.31 a small window with a countdown kept DWM presenting for that
+bound. That window is gone (owner, 2026-10-22). A flip that is programmed and
+never completes keeps the two sequences different, so a stalled screen is
+still refused. The read follows Device->Wddm under the witness spin lock, and
+only while the witness is open. Every stop closes the witness under that lock
+(GuardRecordStopBegin) before WddmStop detaches and frees the state, so the
+read never meets freed storage. Host test: driver/kmd/test/start_health_test.c
+with two negative controls (run_start_health.ps1 -NoQuiet,
+-QuietIgnoresOwedFlip).
 
 Close health admission before stop, adapter power-down and TDR handling; D0
 alone must not reopen it while full resume is unsupported. Visibility/mode

@@ -2655,13 +2655,13 @@ function Get-OurScheduledTasks {
 # The confirmation itself needs no interactive account: it reads the start health and writes the confirmation
 # through an escape. It runs as Local System (S-1-5-18), whose token is an administrator's, with the trigger that
 # fires at the logon of any user, and headless (-NoWindow), because the account has no desktop in that session.
-# The window is the other half, and it is the half that needs the user's own session and no rights at all: a small
-# top-most window whose text changes keeps DWM presenting, so the KMD's milestone (ready for 60 s with a
-# presentation completion within 15 s, BC250_START_HEALTH_MIN_MS and BC250_START_HEALTH_FRESH_MS in
-# driver\kmd\bc250kmd_escape.h) is reached on an idle desktop. It is registered for the Users group
-# (S-1-5-32-545), which every interactive account belongs to, at the limited run level, and it touches neither
-# the driver nor the registry. Without it the confirmation still keeps the machine out of Basic Display through
-# the fallback of start-confirm.ps1, at the price of one start at the floor clock.
+# The window task is the other half, and it is the half that needs the user's own session and no rights at all: it
+# starts the sign-in notice of the control application, which shows only when the driver is not running. Up to
+# tester.31 it also showed a small top-most window whose changing text kept DWM presenting, for the KMD's old
+# milestone (a presentation completion within 15 s at the 60 s mark); the KMD's QUIET (0.7.216.104,
+# BC250_START_HEALTH_QUIET in driver\kmd\bc250kmd_escape.h) takes an idle desktop as it is, and that window is gone
+# (owner, 2026-10-22). The task keeps its name. It is registered for the Users group (S-1-5-32-545), which every
+# interactive account belongs to, at the limited run level, and it touches neither the driver nor the registry.
 #
 # The accounts are named by their SID here, never by a name: a name of a built-in account is translated on a German,
 # Polish or Japanese Windows, a SID is not, so this plan and the installer carry no translated text (the project's

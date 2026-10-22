@@ -349,153 +349,55 @@ Check ($planCall.Success -and ($planCall.Value -match '\$logonTask\.trigger\.kin
 $triggers = @([regex]::Matches($installSrc, '(?m)^(?!\s*#)[^\r\n]*New-ScheduledTaskTrigger[^\r\n]*'))
 Check (($triggers.Count -eq 1) -and ($triggers[0].Value -match '(?i)-AtLogOn') -and ($triggers[0].Value -notmatch '(?i)-User')) "install.ps1 registers one trigger, at any logon and bound to no account: $(if ($triggers.Count) { ($triggers | ForEach-Object { $_.Value.Trim() }) -join ' | ' } else { 'no call at all' })"
 
-# BD-080: the two scripts behind those tasks. The confirmation takes the same decisions headless as behind the
-# window (one poll function, reached from one place), and the window script is the unprivileged half: it must not
-# call the driver at all, because a standard user's CONFIRM would be refused by the kernel anyway.
+# BD-080: the two scripts behind those tasks. The confirmation decides headless (one poll function, reached from one
+# place), and the script of the user's session is the unprivileged half: it must not call the driver at all, because
+# a standard user's CONFIRM would be refused by the kernel anyway.
 'BD-080: the scripts behind the logon tasks'
 $confirmFile = Join-Path $Installer 'start-confirm.ps1'
 $windowFile = Join-Path $Installer 'start-window.ps1'
 $confirmText = [IO.File]::ReadAllText($confirmFile)
-Check (Test-Path -LiteralPath $windowFile) "the window script ships with the installer ($windowFile)"
-Check ($confirmText -match '(?m)^param\([^\r\n]*\[switch\]\$NoWindow') 'start-confirm.ps1 takes -NoWindow'
-Check ((@([regex]::Matches($confirmText, '(?m)^function Invoke-Poll')).Count -eq 1) -and (@([regex]::Matches($confirmText, '\$step = Invoke-Poll')).Count -eq 1)) 'one poll function, called from one place: the headless run decides what the window run decides (guard and DPM coupling unchanged)'
-Check ((@([regex]::Matches($confirmText, 'Invoke-Tick')).Count -ge 3) -and ($confirmText -match '(?s)if \(\$NoWindow\).*Invoke-Tick.*\} else \{.*Invoke-Tick')) 'both runs, headless and windowed, go through the same tick'
+Check (Test-Path -LiteralPath $windowFile) "the script of the user's session ships with the installer ($windowFile)"
+Check ($confirmText -match '(?m)^param\([^\r\n]*\[switch\]\$NoWindow') 'start-confirm.ps1 still takes -NoWindow, which the registered task passes'
+Check ((@([regex]::Matches($confirmText, '(?m)^function Invoke-Poll')).Count -eq 1) -and (@([regex]::Matches($confirmText, '\$step = Invoke-Poll')).Count -eq 1)) 'one poll function, called from one place (guard and DPM coupling unchanged)'
+Check (@([regex]::Matches($confirmText, '(?m)^\s+\$step = Invoke-Tick')).Count -eq 1) 'one run, the headless loop, through the tick'
 Check ($confirmText -match 'Confirm-Health' -and $confirmText -match 'Complete-WithFallback' -and $confirmText -match "Invoke-Cli @\('confirm'\)") 'the confirmation keeps the KMD start-health confirm and the boot-loop fallback'
-if (Test-Path -LiteralPath $windowFile) {
-    $windowText = [IO.File]::ReadAllText($windowFile)
-    $kmd = @('bc250control', 'bc250kmd_cli', 'Bc250StartHealth', 'CurrentControlSet', 'New-ItemProperty', 'Set-ItemProperty', 'Microsoft.Win32.Registry', 'HKLM', 'Add-Type -TypeDefinition') | Where-Object { $windowText -cmatch [regex]::Escape($_) }
-    Check ($kmd.Count -eq 0) "the window script opens no handle to the driver and writes nothing, in the registry or anywhere else$(if ($kmd.Count) { ": $($kmd -join ', ')" } else { '' })"
-    # The one thing it reads is this user's own preference for the clock window, under HKCU, which needs no rights
-    # and is the user's own to change. It reads it and nothing else: the write cmdlets are in the list above.
-    Check ($windowText -cmatch 'HKCU:\\Software\\amdgpu-wddm\\Control' -and $windowText -cmatch 'ShowStartWindow') 'the window script reads this user''s own switch for the clock window (HKCU ShowStartWindow)'
-    Check ($windowText -cmatch '(?m)^if \(-not \$showWindow\) \{ exit 3 \}') 'a person who turned the clock window off gets no window and the task reports 3'
-    # The sign-in notice (owner, 2026-10-13): the window task starts it, because it is the task that already runs
-    # in the session of the person who just signed in. Three rules of that start, all of them in this script:
-    #   it is started before the switch is read, so turning the clock window off never hides a driver that was
-    #   switched off; the script never waits for it, so the task completes inside its own time limit and does not
-    #   stop the notice; and a control application that is not installed changes nothing about the clock window.
-    Check ($windowText -cmatch '--start-notice') 'the window script starts the sign-in notice of the control application'
-    $noticeAt = $windowText.IndexOf('--start-notice')
-    $switchAt = $windowText.IndexOf('ShowStartWindow')
-    Check (($noticeAt -ge 0) -and ($switchAt -gt $noticeAt)) 'the notice is started before the clock-window switch is read, so the switch cannot hide it'
-    Check ($windowText -cmatch 'Start-Process[^\r\n]*--start-notice' -and $windowText -notmatch 'Start-Process[^\r\n]*-Wait') 'the window script does not wait for the notice'
+# The blue start window is gone (owner, 2026-10-22: "Niebieskie okienko jest z czasu pulpitu na CPU przeciez. Nie
+# mozemy go usunac w calosci?"). Neither script makes a window of its own any more: the KMD's QUIET takes an idle GPU
+# desktop as it is (driver/kmd/start_health.c), and the one window of the logon is the sign-in notice of the control
+# application, which shows only when the driver is not running.
+$windowText = $(if (Test-Path -LiteralPath $windowFile) { [IO.File]::ReadAllText($windowFile) } else { '' })
+foreach ($t in @(@{ n = 'start-confirm.ps1'; s = $confirmText }, @{ n = 'start-window.ps1'; s = $windowText })) {
+    $made = @('Windows.Forms', 'System.Drawing', 'TopMost', 'ShowDialog', 'New-StartWindow', 'Format-StartWindowText', 'ShowStartWindow') | Where-Object { $t.s -cmatch [regex]::Escape($_) }
+    Check ($made.Count -eq 0) "$($t.n) makes no window of its own$(if ($made.Count) { ": $($made -join ', ')" } else { '' })"
+}
+$coreText = [IO.File]::ReadAllText((Join-Path $Installer 'start-confirm-core.ps1'))
+Check ($coreText -match '\(\$Reading\.flags -band 16\) -eq 16') 'the confirmation takes the KMD''s QUIET (flag 16) in place of a fresh flip, as the KMD does'
+if ($windowText) {
+    $kmd = @('bc250control', 'bc250kmd_cli', 'Bc250StartHealth', 'CurrentControlSet', 'New-ItemProperty', 'Set-ItemProperty', 'Microsoft.Win32.Registry', 'HKLM', 'HKCU', 'Add-Type -TypeDefinition') | Where-Object { $windowText -cmatch [regex]::Escape($_) }
+    Check ($kmd.Count -eq 0) "the script of the user's session opens no handle to the driver and reads or writes no registry value$(if ($kmd.Count) { ": $($kmd -join ', ')" } else { '' })"
+    # The sign-in notice (owner, 2026-10-13): this task starts it, because it is the task that already runs in the
+    # session of the person who just signed in. The script never waits for it, so the task completes inside its own
+    # time limit and does not stop the notice.
+    Check ($windowText -cmatch '--start-notice') 'the script starts the sign-in notice of the control application'
+    Check ($windowText -cmatch 'Start-Process[^\r\n]*--start-notice' -and $windowText -notmatch 'Start-Process[^\r\n]*-Wait') 'the script does not wait for the notice'
     # No startup information on that start, above all no -WindowStyle. Windows ignores the first ShowWindow call of
     # a process whose launcher passed STARTUPINFO, and that first call is the only show a WinForms window makes, so
     # a start with -WindowStyle Hidden (the style every headless smoke of this exe in the tree uses) would create
     # the notice and never put it on the screen.
     Check ($windowText -notmatch 'Start-Process[^\r\n]*--start-notice[^\r\n]*-WindowStyle' -and
         $windowText -notmatch '-WindowStyle[^\r\n]*--start-notice') 'the notice is not started with a window style, so its window is actually shown'
-    Check ($windowText -cmatch '(?s)try \{.{0,2000}--start-notice.{0,200}\r?\n\} catch \{ \}') 'the notice start is guarded, so a control application that is missing or refused does not fail the logon'
-    Check ($windowText -cmatch 'Test-Path -LiteralPath \$exe -PathType Leaf') 'the window script starts the notice only when the control application is there'
-    Check ($windowText -match '(?m)^param\([^\r\n]*\[int\]\$Seconds') 'the window script takes its own bound (-Seconds)'
-    Check ($windowText -match 'System.Windows.Forms' -and $windowText -match 'TopMost') 'the window script shows the top-most window that keeps DWM presenting'
-    # The window runs in a session this project never watches, and it writes no file (a standard user may write
-    # nowhere of ours), so its exit code is its whole report. A catch that exits 0 would make a window that never
-    # opened indistinguishable from one that ran its two minutes.
-    Check ($windowText -notmatch '(?s)catch\s*\{[^{}]*exit\s+0') 'the window script does not report success from its catch: a window that cannot be shown is not exit 0'
-    Check ($windowText -match '(?s)catch\s*\{[^{}]*exit\s+2') 'a window that cannot be shown exits 2, which the task keeps as LastTaskResult'
-    # The confirmation runs as Local System and can read that result, which is the only place the window half
+    Check ($windowText -cmatch 'Test-Path -LiteralPath \$exe -PathType Leaf') 'the script starts the notice only when the control application is there'
+    Check ($windowText -match '(?m)^param\([^\r\n]*\[int\]\$Seconds') 'the script still takes -Seconds, which the host passes'
+    # The script runs in a session this project never watches, and it writes no file (a standard user may write
+    # nowhere of ours), so its exit code is its whole report. A catch that exits 0 would make a refused start of the
+    # notice indistinguishable from a started one.
+    Check ($windowText -notmatch '(?s)catch\s*\{[^{}]*exit\s+0') 'the script does not report success from its catch'
+    Check ($windowText -cmatch '(?s)try \{.{0,2000}--start-notice.{0,200}\r?\n\} catch \{\s*exit 2\s*\}') 'a notice that Windows refuses to start exits 2, which the task keeps as LastTaskResult, and fails nothing else'
+    # The confirmation runs as Local System and can read that result, which is the only place the user's half
     # becomes observable at all.
-    Check ($confirmText -match "(?m)^\`$windowTaskName = '$([regex]::Escape($script:WindowTaskName))'") "start-confirm.ps1 names the same window task as the plan ('$($script:WindowTaskName)')"
-    Check ((@([regex]::Matches($confirmText, '(?m)^function Format-WindowTask')).Count -eq 1) -and ($confirmText -match 'Get-ScheduledTaskInfo')) 'start-confirm.ps1 reads the window task (state, last run, last result)'
-    Check ($confirmText -match '(?m)^Write-StartConfirmLog "exit [^\r\n]*Format-WindowTask') 'the exit line of every logon reports what the window task did, so a window half that never ran is in the log'
-}
-
-# The small blue window (owner, 2026-10-14: it flashed for a frame or two every few seconds). Both scripts make and
-# update it through one block of two functions, and that block draws every frame in one piece: no background erase
-# on the window, one buffered paint per change of the text, and nothing else. The forms below get a window handle
-# for the messages, and are never shown.
-'the start window draws every frame in one piece'
-function Get-WindowBlock([string]$Text) {
-    $m = [regex]::Match($Text, '(?s)# ---- the window: .*?# ---- end of the window [^\r\n]*')
-    if ($m.Success) { return ($m.Value -replace "`r`n", "`n") } else { return $null }
-}
-$windowSource = $(if (Test-Path -LiteralPath $windowFile) { [IO.File]::ReadAllText($windowFile) } else { '' })
-$block = Get-WindowBlock $windowSource
-Check ([bool]$block -and ($block -ceq (Get-WindowBlock $confirmText))) 'start-window.ps1 and start-confirm.ps1 carry the same window block'
-Check (($windowSource + $confirmText) -notmatch 'Windows\.Forms\.Label') 'neither script draws the text with a Label, a second window that WinForms paints on its own'
-Check ($windowSource -match '(?s)Add_Tick\(\{\s*#[^\r\n]*\r?\n\s*\[void\]\(Set-StartWindowText \$form' -and
-    $confirmText -match '(?s)Add_Tick\(\{\s*\[void\]\(Set-StartWindowText \$form') 'both timers change the text through Set-StartWindowText, which invalidates only on a change'
-$format = [regex]::Match($windowSource, '(?s)function Format-StartWindowText.*?\r?\n\}').Value
-if ($block -and $format) {
-    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
-    . ([scriptblock]::Create($block + "`n" + $format))
-    $flags = [Reflection.BindingFlags]'Instance, NonPublic'
-    $getStyle = [Windows.Forms.Control].GetMethod('GetStyle', $flags)
-    $wndProc = [Windows.Forms.Control].GetMethod('WndProc', $flags)
-    $text0 = Format-StartWindowText 30
-    $new = New-StartWindow $text0
-    # The window of tester.31 rc4 and before, as the reference for the look: a Form with a docked Label.
-    $old = New-Object Windows.Forms.Form
-    $old.FormBorderStyle = 'None'; $old.TopMost = $true; $old.ShowInTaskbar = $false; $old.ShowIcon = $false
-    $old.StartPosition = 'Manual'; $old.Location = New-Object Drawing.Point(8, 34)
-    $old.BackColor = [Drawing.Color]::Navy
-    $label = New-Object Windows.Forms.Label
-    $label.Dock = 'Fill'; $label.ForeColor = [Drawing.Color]::Cyan; $label.Font = New-Object Drawing.Font('Consolas', 9)
-    $label.Padding = New-Object Windows.Forms.Padding(4, 3, 4, 3)
-    $label.Text = $text0
-    $need = [Windows.Forms.TextRenderer]::MeasureText($label.Text, $label.Font)
-    $old.ClientSize = New-Object Drawing.Size(($need.Width + 12), ($need.Height + 8))
-    $old.Controls.Add($label)
-    try {
-        [void]$new.Handle; [void]$old.Handle
-        $styles = @('UserPaint', 'AllPaintingInWmPaint', 'OptimizedDoubleBuffer', 'Opaque') | Where-Object { -not $getStyle.Invoke($new, @([Windows.Forms.ControlStyles]$_)) }
-        Check ($styles.Count -eq 0 -and $new.Controls.Count -eq 0) "the window is one form that paints itself, double-buffered, with no erase$(if ($styles.Count) { ": not $($styles -join ', ')" })"
-        Check ($new.Location -eq $old.Location -and $new.ClientSize -eq $old.ClientSize -and $new.TopMost) "the window keeps its place and size ($($new.Location.X),$($new.Location.Y) $($new.ClientSize.Width)x$($new.ClientSize.Height))"
-
-        # WM_ERASEBKGND on a buffer filled with a colour the window never uses: the form must leave every pixel. The
-        # form of rc4 painted its navy there, straight on the window.
-        $erased = {
-            param($Control)
-            $bmp = New-Object Drawing.Bitmap($Control.ClientSize.Width, $Control.ClientSize.Height)
-            $g = [Drawing.Graphics]::FromImage($bmp)
-            $g.Clear([Drawing.Color]::FromArgb(255, 255, 0, 255))
-            $hdc = $g.GetHdc()
-            try { [void]$wndProc.Invoke($Control, @([Windows.Forms.Message]::Create($Control.Handle, 0x0014, $hdc, [IntPtr]::Zero))) }
-            finally { $g.ReleaseHdc($hdc); $g.Dispose() }
-            $changed = 0
-            for ($y = 0; $y -lt $bmp.Height; $y += 2) { for ($x = 0; $x -lt $bmp.Width; $x += 2) { if ($bmp.GetPixel($x, $y).ToArgb() -ne -65281) { $changed++ } } }
-            $bmp.Dispose()
-            return $changed
-        }
-        $newErase = & $erased $new
-        $oldErase = & $erased $old
-        Check ($newErase -eq 0 -and $oldErase -gt 0) "WM_ERASEBKGND draws nothing on the window ($newErase sampled pixels changed; the rc4 form changed $oldErase)"
-
-        # The look: the frame of the new form against the Label of the rc4 form, pixel for pixel. The Label covers
-        # that form's whole client area, so its picture is the window's; a hidden form prints no child of its own.
-        $shot = {
-            param($Control)
-            $bmp = New-Object Drawing.Bitmap($Control.Width, $Control.Height)
-            $Control.DrawToBitmap($bmp, (New-Object Drawing.Rectangle(0, 0, $Control.Width, $Control.Height)))
-            return $bmp
-        }
-        Check ($label.Bounds -eq $old.ClientRectangle) "the rc4 Label covers its form ($($label.Bounds))"
-        $a = & $shot $new; $b = & $shot $label
-        $diff = 0; $cyan = 0
-        for ($y = 0; $y -lt $a.Height; $y++) {
-            for ($x = 0; $x -lt $a.Width; $x++) {
-                $p = $a.GetPixel($x, $y)
-                if ($p.ToArgb() -ne $b.GetPixel($x, $y).ToArgb()) { $diff++ }
-                if ($p.G -gt 200 -and $p.B -gt 200 -and $p.R -lt 60) { $cyan++ }
-            }
-        }
-        Check ($diff -eq 0 -and $cyan -gt 100) "the window looks as before, pixel for pixel ($diff of $($a.Width * $a.Height) pixels differ, $cyan cyan)"
-        $a.Dispose(); $b.Dispose()
-
-        # Two minutes of the timer at 250 ms: an invalidation exactly when the text changes, never in between.
-        $script:invalidations = 0
-        $new.Add_Invalidated({ $script:invalidations++ })
-        $changes = 0; $said = 0; $shown = $text0
-        for ($i = 0; $i -lt 120; $i++) {
-            $t = Format-StartWindowText (30 - 0.25 * $i)
-            if (Set-StartWindowText $new $t) { $said++ }
-            if ($t -cne $shown) { $changes++; $shown = $t }
-        }
-        Check ($changes -eq 29 -and $said -eq $changes -and $script:invalidations -eq $changes -and [string]$new.Tag.Text -ceq $shown) "120 timer ticks: $changes text changes, $said reported, $($script:invalidations) invalidations, and the window holds the last text"
-    } finally { $new.Dispose(); $old.Dispose() }
-} else {
-    Check $false 'the window block and Format-StartWindowText are in start-window.ps1'
+    Check ($confirmText -match "(?m)^\`$windowTaskName = '$([regex]::Escape($script:WindowTaskName))'") "start-confirm.ps1 names the same task as the plan ('$($script:WindowTaskName)')"
+    Check ((@([regex]::Matches($confirmText, '(?m)^function Format-WindowTask')).Count -eq 1) -and ($confirmText -match 'Get-ScheduledTaskInfo')) 'start-confirm.ps1 reads that task (state, last run, last result)'
+    Check ($confirmText -match '(?m)^Write-StartConfirmLog "exit [^\r\n]*Format-WindowTask') 'the exit line of every logon reports what that task did, so a half that never ran is in the log'
 }
 
 if ($fail) { "FAILED: $fail check(s)"; exit 1 }

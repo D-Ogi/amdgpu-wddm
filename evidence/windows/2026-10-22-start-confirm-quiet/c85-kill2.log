@@ -1,0 +1,13 @@
+utc 2026-10-22T03:02:54.5332783Z boot 2026-10-22T02:37:33.5000000Z
++   0.3s suspend bc250mon 5336: 0x00000000
++   0.3s before: health abi=1 version=0x000700D8 flags=31 generation=12578650902 epoch=5 completed=432 age_ms=363 ready_ms=260785
++   2.0s pnputil restart exit 0 :: 
++   4.1s health abi=1 version=0x000700D8 flags=7 generation=15238175828 epoch=3 completed=0 age_ms=18446744073709551615 ready_ms=102
++   6.2s health abi=1 version=0x000700D8 flags=23 generation=15238175828 epoch=5 completed=6 age_ms=754 ready_ms=943
++   8.2s health abi=1 version=0x000700D8 flags=23 generation=15238175828 epoch=5 completed=8 age_ms=393 ready_ms=2985
++  67.3s health abi=1 version=0x000700D8 flags=23 generation=15238175828 epoch=5 completed=9 age_ms=1258 ready_ms=62065
++  83.6s idle window: health abi=1 version=0x000700D8 flags=23 generation=15238175828 epoch=5 completed=9 age_ms=17583 ready_ms=78390
++  83.6s confirm: health abi=1 version=0x000700D8 flags=31 generation=15238175828 epoch=5 completed=9 age_ms=17633 ready_ms=78439 exit 0
++  83.7s after: health abi=1 version=0x000700D8 flags=31 generation=15238175828 epoch=5 completed=9 age_ms=17662 ready_ms=78469
++  83.7s resume bc250mon 5336: 0x00000000
++  83.9s device OK CM_PROB_NONE; dwm 1968

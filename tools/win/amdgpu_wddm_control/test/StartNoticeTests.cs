@@ -1,5 +1,5 @@
-// Host tests of the sign-in notice (src/StartNotice.cs), the switch for the window after sign-in
-// (AppSettings.ShowStartWindow) and the one-click repair (the enable-driver action of Recovery.cs, with its one
+// Host tests of the sign-in notice (src/StartNotice.cs), the sign-in script that starts it (start-window.ps1, no
+// window of its own since 2026-10-22) and the one-click repair (the enable-driver action of Recovery.cs, with its one
 // registry write under a stand-in). No driver, no window, no registry of this PC.
 using System;
 using System.Collections.Generic;
@@ -66,36 +66,18 @@ static partial class UnitTests
         }
         Strings.Language = before;
 
-        // ---- the switch for the window after sign-in -----------------------------------------------------------
-        // Rule R4 of the preferences, in the "on while absent" form of D2 and D3: absent and 1 are on, 0 is off;
-        // turning it on removes the value instead of writing one, and reading never writes.
-        var store = new MemoryPrefStore();
-        var prefs = new AppPrefs(store);
-        Check(prefs.ShowStartWindow, "the window is on while the value is absent");
-        Equal(0, store.Writes, "reading the switch writes nothing");
-        prefs.ShowStartWindow = false;
-        Equal((object)0u, store.Get(AppPrefs.StartWindowPref), "turning it off writes 0");
-        Check(!prefs.ShowStartWindow, "0 reads as off");
-        prefs.ShowStartWindow = false;
-        Equal(1, store.Writes, "turning it off again writes nothing new");
-        prefs.ShowStartWindow = true;
-        Check(store.Get(AppPrefs.StartWindowPref) == null, "turning it on removes the value");
-        Check(prefs.ShowStartWindow, "an absent value reads as on again");
-        store.Values[AppPrefs.StartWindowPref] = 1u;
-        Check(prefs.ShowStartWindow, "1 reads as on");
-        store.Values[AppPrefs.StartWindowPref] = 3u;
-        Check(prefs.ShowStartWindow, "a number that is not 0 reads as on");
-        // The release's logon window script reads the same value under the same key, and reads it with no write
-        // and no access to the driver (the rules of test-session-checks.ps1).
+        // ---- the sign-in task starts the notice and shows nothing else ---------------------------------------------
+        // The blue start window is gone (owner, 2026-10-22): the release's sign-in script starts the notice and
+        // has no window, no switch and no preference of its own.
         var windowScript = Path.Combine(root, @"tools\release\installer\start-window.ps1");
         if (File.Exists(windowScript))
         {
             var text = File.ReadAllText(windowScript);
-            Check(text.Contains(RegistryPrefStore.Path), "start-window.ps1 reads the preference key of this application");
-            Check(text.Contains(AppPrefs.StartWindowPref), "start-window.ps1 reads the same value name as the switch");
             Check(text.Contains("--start-notice"), "start-window.ps1 starts the sign-in notice");
+            Check(!text.Contains("Windows.Forms") && !text.Contains("ShowStartWindow"), "start-window.ps1 shows no window and reads no switch");
         }
         else Check(false, "start-window.ps1 is in the repository: " + windowScript);
+        Check(!SettingsSearch.Index.Any(e => e.Id == "settings.start-window"), "the settings have no switch for a start window");
 
         // ---- the plan of the one-click repair ------------------------------------------------------------------
         Check(Recovery.Actions.Contains("enable-driver"), "the action list has enable-driver");
@@ -223,18 +205,6 @@ static partial class UnitTests
             Check(!Regex.IsMatch(startText, @"Start-Process[^\r\n]*--start-notice[^\r\n]*-WindowStyle") &&
                 !Regex.IsMatch(startText, @"-WindowStyle[^\r\n]*--start-notice"), "the notice is not started with a window style, so its window is shown");
         }
-
-        // ---- the setting is reachable and explained (WU-064) --------------------------------------------------
-        var entry = SettingsSearch.Index.FirstOrDefault(e => e.Id == "settings.start-window");
-        Check(entry != null && entry.Page == "settings", "the switch is in the settings search, on the settings page");
-        Check(Strings.Has("help.setting.start-window") && Strings.T("help.setting.start-window").Length > 80, "the switch has its explanation");
-        Check(Strings.T("settings.start-window.cost").Length > 40 && Strings.T("settings.start-window.notice").Contains("always"),
-            "the switch states the real cost of turning it off, and that the warning stays");
-        foreach (var lang in Strings.Languages)
-            foreach (var id in new[] { "settings.start.title", "settings.start-window.cost", "settings.start-window.notice", "help.setting.start-window", "search.settings.start-window" })
-                Check(!Strings.In(lang, id).StartsWith("[", StringComparison.Ordinal), "the switch reads in " + lang + ": " + id);
-        Check(SettingsSearch.Find("sign in", "en").Any(h => h.Entry.Id == "settings.start-window") &&
-            SettingsSearch.Find("okno", "pl").Any(h => h.Entry.Id == "settings.start-window"), "the switch is found by what a person types");
     }
 
     // A reading of a machine whose last start the driver's own guard refused: nothing of the driver answers, the

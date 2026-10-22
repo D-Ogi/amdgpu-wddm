@@ -263,12 +263,33 @@ void StartHealthCompleted(BC250_DEVICE* Device, ULONG Sequence)
     }
     KeReleaseSpinLock(&h->Lock,irql);
 }
-static void HealthSnapshot(const BC250_START_HEALTH_STATE* H, BC250_ESCAPE_START_HEALTH* Data)
+// QUIET (0.7.216.104): the interval completed a flip, and the last primary programming that succeeded is the one
+// the VSync path saw complete (StartHealthCompleted). Nothing is owed: a desktop with nothing to draw does not
+// flip, and an idle GPU desktop flips about once a minute, for the taskbar clock (lab, 2026-10-22: completions at
+// 02:00:01, 02:01:02 and 02:02:01 over 150 s). A flip programmed and not completed makes the sequences differ, so
+// a hung presentation path is never quiet; a hung engine closes the witness through the fault paths above.
+// Under h->Lock: an open witness orders this read before WddmStop frees the WDDM state (WddmPrimaryProgrammed).
+static BOOLEAN HealthQuiet(const BC250_DEVICE* Device, const BC250_START_HEALTH_STATE* H)
+{
+    ULONG programmed;
+    if (H->Closed || !H->Completed || H->LastSequence==0) return FALSE;
+    return WddmPrimaryProgrammed(Device,&programmed) && programmed==H->LastSequence;
+}
+// The healthy milestone itself, one rule for CONFIRM and for StartHealthIsReady: the required flags, a completed
+// flip in this interval, a minute of it, and a completion within FRESH_MS or nothing owed (QUIET).
+static BOOLEAN HealthConfirmable(const BC250_START_HEALTH_STATE* H, const BC250_ESCAPE_START_HEALTH* Data)
+{
+    return (Data->Flags&BC250_START_HEALTH_REQUIRED)==BC250_START_HEALTH_REQUIRED && H->Completed &&
+        Data->ReadyAgeMs>=BC250_START_HEALTH_MIN_MS &&
+        (Data->LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS || (Data->Flags&BC250_START_HEALTH_QUIET));
+}
+static void HealthSnapshot(const BC250_DEVICE* Device, const BC250_START_HEALTH_STATE* H, BC250_ESCAPE_START_HEALTH* Data)
 {
     ULONGLONG now=KeQueryInterruptTime();
     Data->Flags=(H->Full ? BC250_START_HEALTH_FULL : 0) |
         (HealthReady(H) ? BC250_START_HEALTH_READY : 0) |
-        (H->Visible && H->Mode && !H->Closed ? BC250_START_HEALTH_VISIBLE : 0);
+        (H->Visible && H->Mode && !H->Closed ? BC250_START_HEALTH_VISIBLE : 0) |
+        (HealthQuiet(Device,H) ? BC250_START_HEALTH_QUIET : 0);
     // CONFIRMED reports the start, not the interval (BD-098): a durably confirmed generation stays confirmed through
     // the mode sets and visibility changes that advance Epoch. A fault or a close (Closed) takes it away; a resume and
     // a new start zero ConfirmedGeneration. CONFIRM itself still certifies only the current interval (ExpectedEpoch).
@@ -289,7 +310,7 @@ void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot)
     RtlZeroMemory(Snapshot,sizeof(*Snapshot));
     StartHealthEnter(Device);
     KeAcquireSpinLock(&h->Lock,&irql);
-    HealthSnapshot(h,Snapshot);
+    HealthSnapshot(Device,h,Snapshot);
     // BD-120: a stop is a real close of this start, so it goes through the one close with Mark 0 and
     // takes the pending-reset mark away: a node-0 reset can never reopen a witness that a stop closed.
     HealthCloseLocked(h,0);
@@ -297,7 +318,7 @@ void StartHealthStop(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Snapshot)
     StartHealthLeave(Device);
 }
 // The healthy milestone of a CONFIRM, for the CU mode's own confirmation (cumode.c) and the DPM one (dpm.c):
-// the same flags, completions, age and freshness, without the durable start-counter write.
+// the same flags, completions, age and freshness or QUIET (HealthConfirmable), without the durable start-counter write.
 // BD-120: and never on a start that needed an engine reset (Recovered). The witness re-arms after a recovered
 // reset, so this milestone would hold again a minute later, and these two callers would then write the very
 // clock/voltage or CU request that hung node 0 as the next boot's default. The desktop's own confirmation is
@@ -311,9 +332,8 @@ BOOLEAN StartHealthIsReady(BC250_DEVICE* Device, _Out_ ULONGLONG* Generation)
     KIRQL irql;
     RtlZeroMemory(&data,sizeof(data));
     KeAcquireSpinLock(&h->Lock,&irql);
-    HealthSnapshot(h,&data);
-    ready=(data.Flags&BC250_START_HEALTH_REQUIRED)==BC250_START_HEALTH_REQUIRED && h->Completed && !h->Recovered &&
-        data.ReadyAgeMs>=BC250_START_HEALTH_MIN_MS && data.LastCompletionAgeMs<=BC250_START_HEALTH_FRESH_MS;
+    HealthSnapshot(Device,h,&data);
+    ready=HealthConfirmable(h,&data) && !h->Recovered;
     *Generation=h->Generation;
     KeReleaseSpinLock(&h->Lock,irql);
     return ready;
@@ -360,14 +380,12 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
     }
     if (confirm) StartHealthEnter(Device);
     KeAcquireSpinLock(&h->Lock,&irql);
-    HealthSnapshot(h,Data);
+    HealthSnapshot(Device,h,Data);
     status=STATUS_SUCCESS;
     if (confirm) {
         if (Data->ExpectedGeneration!=h->Generation || Data->ExpectedEpoch!=h->Epoch)
             status=STATUS_RETRY;
-        else if ((Data->Flags&BC250_START_HEALTH_REQUIRED)!=BC250_START_HEALTH_REQUIRED ||
-            !h->Completed || Data->ReadyAgeMs<BC250_START_HEALTH_MIN_MS ||
-            Data->LastCompletionAgeMs>BC250_START_HEALTH_FRESH_MS)
+        else if (!HealthConfirmable(h,Data))
             status=STATUS_DEVICE_NOT_READY;
         else { generation=h->Generation; epoch=h->Epoch; }
     }
@@ -386,7 +404,7 @@ void StartHealthRequest(BC250_DEVICE* Device, BC250_ESCAPE_START_HEALTH* Data, B
             if (h->Generation!=generation || h->Epoch!=epoch) status=STATUS_RETRY;
         }
         recovered=h->Recovered;
-        HealthSnapshot(h,Data);
+        HealthSnapshot(Device,h,Data);
         KeReleaseSpinLock(&h->Lock,irql);
         // A durably confirmed start also confirms its 40 CU request (cumode.c). Its own failure is
         // logged there and costs only a fallback at the next start, never this confirmation.

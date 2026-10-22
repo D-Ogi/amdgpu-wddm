@@ -1,0 +1,12 @@
+Unit A, 2026-10-22, lab UTC, tester.32 candidate (KMD 0.7.216.65, release flavour D754962F), 22631, idle desktop
+after the logon (no window opened, no input), scripts/health-idle.ps1 -Seconds 150 -Every 2.
+One line for each change of the start-health completion counter, and the last reading.
+
+===idle
+02:00:12 completed=4317 age_ms=11325
+02:01:02 completed=4318 age_ms=1955
+02:02:01 completed=4319 age_ms=636
+02:02:43 end completed=4319
+
+The three completions are at about 02:00:01, 02:01:00 and 02:02:00 (time of the reading less age_ms): one new
+picture each minute, at the minute change of the taskbar clock.

@@ -1053,3 +1053,12 @@ facts:
       - {"type": "uses", "to": "M65"}
       - {"type": "uses", "to": "M97"}
       - {"type": "uses", "to": "M844"}
+  - id: M916
+    status: MEASURED
+    date: "2026-10-22"
+    claim: "An idle desktop of unit A completes one flip each minute, at the minute change of the taskbar clock, so the start confirmation rule of a completion in the last 15 s at a start age of 60 s or more is met on an idle desktop only by chance. Its start health completion counter went from 4317 to 4319 in 150 s of readings, with completions at about 02:00:01, 02:01:00 and 02:02:00 (kernel driver 0.7.216.65, 22631). With the QUIET witness (flag 16: the interval completed a flip, and the last programmed primary sequence is the one the completion path consumed), the kernel driver confirmed a start whose last picture was 17.6 s old: after a device restart with the lab overlay suspended, the reading at a start age of 78390 ms and a completion age of 17583 ms was flags 23 (required and QUIET, not confirmed), and `bc250kmd_cli health confirm` returned flags 31"
+    status_text: "MEASURED (unit A, one boot: 150 s of idle readings, one logon, one device restart)"
+    detail: "The blue start window of the releases up to tester.31 met the 15 s rule because it drew a countdown every second. The logon with the changed scripts opened no window and confirmed at flags 31, but by the old rule (completion age 51 ms), because the lab overlay draws its panel every few seconds. In busy periods QUIET is clear in a reading that falls between a programmed flip and its completion (flags 15), which is the intended behaviour. The first form of the test, with the overlay running, found no idle period in 170 s. The rule of the kernel driver is `HealthConfirmable` in `driver/kmd/start_health.c`; its host test has 2845 checks, and the two negative controls (`-NoQuiet`, `-QuietIgnoresOwedFlip`) fail as they must. Not measured: an idle logon on a tester's PC without the lab overlay, a hidden taskbar, a taskbar clock with seconds"
+    evidence: "[Start confirmation without the start window](../evidence/windows/2026-10-22-start-confirm-quiet/README.md)"
+    edges:
+      - {"type": "uses", "to": "M898"}

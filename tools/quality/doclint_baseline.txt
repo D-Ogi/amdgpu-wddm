@@ -69,7 +69,7 @@
 3	docs/design/vsync-arm-status.md
 10	docs/design/vsync-diagnostic-samples.md
 39	docs/design/vsync-interrupt-route.md
-21	docs/design/wddm-start-confirmation.md
+20	docs/design/wddm-start-confirmation.md
 349	docs/design/wddm-startup.md
 36	docs/design/wsi-engine-present.md
 2	docs/dxvk-engine-commit-map.md

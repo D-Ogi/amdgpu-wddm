@@ -1244,12 +1244,6 @@ plan.enable-driver.dark|src|-|The screen can go dark for a few seconds, and it c
 plan.enable-driver.restart|src|-|If the graphics driver does not start, this app says so and offers to restart Windows.
 plan.refuse.driver-on|src|-|The graphics driver is running already, so there is nothing to turn back on.
 plan.refuse.not-guard|src|-|The graphics driver was not switched off for safety, so this does not help here. Open Help to find the next step.
-settings.start.title|src|-|After you sign in
-search.settings.start-window|src|-|Show the start check window after sign-in
-search.settings.start-window.terms|src|-|start|check|window|sign in|logon|blue|clock
-settings.start-window.cost|src|-|The window keeps the screen drawing for two minutes, which is what lets the driver finish the check of its start. Without it the check can stay unfinished, and the next start of Windows runs the graphics chip at its lower fixed speed. If the check keeps staying unfinished, the driver switches itself off after a few starts of Windows, and Windows then uses its basic display until you turn the driver back on.
-settings.start-window.notice|src|-|The warning about a graphics driver that was switched off always appears, whatever this box says.
-help.setting.start-window|src|-|After you sign in, a small window with a clock shows for two minutes in the top left corner. The changing clock keeps the screen drawing, and the driver needs that to finish the check of its start. Turn it off only if it is in your way: the check can then stay unfinished, the next start of Windows runs the graphics chip at its lower fixed speed, and if the check keeps staying unfinished the driver switches itself off after a few starts and Windows uses its basic display until you turn the driver back on. This box is yours alone and needs no administrator rights.
 search.settings.wallpaper|src|-|Nagi wallpaper
 search.settings.wallpaper.terms|src|-|wallpaper|background|desktop|picture|Nagi
 settings.wallpaper.note|src|-|After a checked installation, the installer sets the Nagi wallpaper as your desktop background once, unless you cleared its box. Your previous background is saved first. Here you can set the Nagi wallpaper again or bring back your previous background.

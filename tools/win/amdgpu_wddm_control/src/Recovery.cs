@@ -503,7 +503,7 @@ namespace AmdgpuWddmControl
         public static bool ConfirmEligible(StartHealthState h)
         {
             return h != null && (h.Flags & ConfirmRequiredFlags) == ConfirmRequiredFlags && h.Completed > 0 &&
-                h.ReadyAgeMs >= ConfirmMinReadyMs && h.LastCompletionAgeMs <= ConfirmFreshMs;
+                h.ReadyAgeMs >= ConfirmMinReadyMs && (h.LastCompletionAgeMs <= ConfirmFreshMs || (h.Flags & StartHealthState.Quiet) != 0);
         }
 
         public static bool Confirmed(StartHealthState h)
@@ -549,7 +549,7 @@ namespace AmdgpuWddmControl
             if (h.Completed == 0) return "the GPU has not completed any work yet";
             if (h.ReadyAgeMs < ConfirmMinReadyMs)
                 return "the driver must run for 60 seconds first (" + ((ConfirmMinReadyMs - h.ReadyAgeMs + 999) / 1000) + " s left)";
-            if (requireFresh && h.LastCompletionAgeMs > ConfirmFreshMs)
+            if (requireFresh && h.LastCompletionAgeMs > ConfirmFreshMs && (h.Flags & StartHealthState.Quiet) == 0)
                 return "the GPU has not completed work in the last 5 seconds (last " + (h.LastCompletionAgeMs / 1000) + " s ago); move the mouse or open a window and try again";
             return null;
         }

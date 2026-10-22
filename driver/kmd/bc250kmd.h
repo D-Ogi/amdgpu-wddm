@@ -1364,6 +1364,9 @@ void WddmSummary(_In_ BC250_DEVICE* Device);        // writes the DDI counter ta
                                                     // it under GuardLogSummaryBegin (BD-097). It does nothing
                                                     // when the gate is closed, so the escape can call it either way
 void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG* Flips);    // 0/0 when closed
+// The last primary generation whose programming succeeded (start_health.c's QUIET); FALSE with no WDDM state or
+// while a writer is programming. The caller holds StartHealth.Lock over an open witness (start_health.c).
+BOOLEAN WddmPrimaryProgrammed(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Sequence);
 
 BOOLEAN VidMmPagingRootTracked(ULONGLONG Root);
 NTSTATUS GfxPagingBuildVirtualPtes(BC250_DEVICE* Device, ULONGLONG Source,

@@ -609,6 +609,7 @@ static class LabStateTest
         Check(!Health(15, 3, 1, ulong.MaxValue, 3, 1).Stalled && Health(15, 3, 1, ulong.MaxValue, 3, 1).NothingCompleted,
               "the sentinel is not a stall");
         Check(Health(15, 3, 1, 40000, 3, 1).Stalled, "a real age over the bound is one");
+        Check(!Health(15 | StartHealthView.FlagQuiet, 3, 1, 40000, 3, 1).Stalled, "an old completion with nothing owed (QUIET) is an idle desktop");
         Check(LevelOf(HealthRows(new StartHealthView { Error = "KMD start health failed" }), "Start health") == Level.Warn,
               "a failed read is amber with the reason");
         Check(Value(HealthRows(Health(0, 0, 0, 0, 0, 0)), "Start health").Contains("(none)"),

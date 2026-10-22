@@ -95,13 +95,6 @@ namespace AmdgpuWddmControl
         // installs, so a fresh install shows her; the art ships with the exe). Unchecking writes 0.
         public bool ShowNagi { get { return OnUnlessZero("ShowNagi"); } set { SetOnUnlessZero("ShowNagi", value); } }
         public bool ShowTipsAutomatically { get { return Flag("ShowTipsAutomatically"); } set { SetFlag("ShowTipsAutomatically", value); } }
-        // The small window after sign-in that keeps the screen drawing while the driver finishes its start check
-        // (the release's start-window.ps1 reads this value under HKCU, so no administrator rights are needed to
-        // change it). On while the value is absent, like D2 and D3: unchecking writes 0, checking removes the
-        // value. Turning it off never hides the warning about a driver the guard switched off: that notice is a
-        // different window with a different rule (StartNotice.cs).
-        public bool ShowStartWindow { get { return OnUnlessZero(StartWindowPref); } set { SetOnUnlessZero(StartWindowPref, value); } }
-        public const string StartWindowPref = "ShowStartWindow";
         public bool ReduceAnimations { get { return Flag("ReduceAnimations"); } set { SetFlag("ReduceAnimations", value); } }
         public bool ShowSupportOptions { get { return Flag("ShowSupportOptions"); } set { SetFlag("ShowSupportOptions", value); } }
         public bool GettingStartedDismissed { get { return Flag("GettingStartedDismissed"); } set { SetFlag("GettingStartedDismissed", value); } }

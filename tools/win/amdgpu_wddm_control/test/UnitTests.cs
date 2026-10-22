@@ -486,6 +486,7 @@ static partial class UnitTests
         // Constants against the KMD sources.
         Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_REQUIRED " + Recovery.ConfirmRequiredFlags + @"u\b"), "confirm flags = BC250_START_HEALTH_REQUIRED");
         Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_MIN_MS " + Recovery.ConfirmMinReadyMs + @"ull\b"), "confirm ready = BC250_START_HEALTH_MIN_MS");
+        Check(Regex.IsMatch(header, @"#define BC250_START_HEALTH_QUIET " + StartHealthState.Quiet + @"u\b"), "quiet flag = BC250_START_HEALTH_QUIET");
         var kmdh = File.ReadAllText(Path.Combine(root, @"driver\kmd\bc250kmd.h"));
         Check(Regex.IsMatch(kmdh, @"#define BC250_MAX_UNCONFIRMED_STARTS " + Recovery.MaxUnconfirmedStarts + @"\b"), "unconfirmed start limit = BC250_MAX_UNCONFIRMED_STARTS");
         var stages = Regex.Match(kmdh, @"typedef enum _BC250_STAGE \{(?<b>.*?)\} BC250_STAGE;", RegexOptions.Singleline).Groups["b"].Value;
@@ -511,7 +512,7 @@ static partial class UnitTests
             Check(Regex.IsMatch(ps, @"\$script:StartConfirmMinReadyMs = " + Recovery.ConfirmMinReadyMs + @"\b"), "start-confirm-core ready bound");
             Check(Regex.IsMatch(ps, @"\$script:StartConfirmFreshMs = " + Recovery.ConfirmFreshMs + @"\b"), "start-confirm-core fresh bound");
             var rule = Regex.Match(ps, @"function Test-StartConfirmEligible \{(?<b>.*?)\n\}", RegexOptions.Singleline).Groups["b"].Value;
-            foreach (var part in new[] { @"($Reading.flags -band 7) -eq 7", "$Reading.completed -gt 0", "$Reading.ready_ms -ge $script:StartConfirmMinReadyMs", "$Reading.age_ms -le $script:StartConfirmFreshMs" })
+            foreach (var part in new[] { @"($Reading.flags -band 7) -eq 7", "$Reading.completed -gt 0", "$Reading.ready_ms -ge $script:StartConfirmMinReadyMs", "($Reading.age_ms -le $script:StartConfirmFreshMs -or ($Reading.flags -band " + StartHealthState.Quiet + ") -eq " + StartHealthState.Quiet + ")" })
                 Check(rule.Contains(part), "Test-StartConfirmEligible has " + part);
             Equal(4, Regex.Matches(rule, @"-and").Count + 1, "Test-StartConfirmEligible has exactly four terms");
             Check(ps.Contains("($Reading.flags -band 9) -eq 9"), "start-confirm-core confirmed = flags 9");
@@ -528,6 +529,13 @@ static partial class UnitTests
         h = Eligible(); h.ReadyAgeMs = 59999; Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, false).Contains("1 s left"), "ready 59.999 s: refused");
         h = Eligible(); h.LastCompletionAgeMs = 5001;
         Check(!Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, true) != null && Recovery.ConfirmBlocker(h, false) == null, "stale completion: the helper waits, the window does not refuse");
+        // QUIET (0.7.216.104): an idle GPU desktop, its last flip a minute old and nothing owed, is eligible.
+        h = Eligible(); h.Flags = 7 | StartHealthState.Quiet; h.LastCompletionAgeMs = 70000;
+        Check(Recovery.ConfirmEligible(h) && Recovery.ConfirmBlocker(h, true) == null, "stale completion, quiet: eligible");
+        h = Eligible(); h.Flags = 7 | StartHealthState.Quiet; h.Completed = 0;
+        Check(!Recovery.ConfirmEligible(h), "quiet without a completion: refused");
+        h = Eligible(); h.Flags = 7 | StartHealthState.Quiet; h.ReadyAgeMs = 59999;
+        Check(!Recovery.ConfirmEligible(h), "quiet before the minute: refused");
         h = Eligible(); h.Flags = 15; Check(Recovery.Confirmed(h), "flags 15 confirmed");
         h.Flags = 8; Check(!Recovery.Confirmed(h), "CONFIRMED without FULL is not confirmed");
 

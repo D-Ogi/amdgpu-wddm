@@ -181,6 +181,7 @@ namespace Bc250Mon
         public ulong FirstGeneration, FirstEpoch;   // 0 before the first answer
 
         public const uint FlagFull = 1, FlagReady = 2, FlagVisible = 4, FlagConfirmed = 8, FlagRequired = 7;
+        public const uint FlagQuiet = 16;           // BC250_START_HEALTH_QUIET (0.7.216.104): nothing owed
         public const ulong FreshMs = 15000;         // BC250_START_HEALTH_FRESH_MS
         /// <summary>
         /// `LastCompletionAgeMs` when nothing has completed yet: `HealthSnapshot` writes `~0ull` while
@@ -192,13 +193,14 @@ namespace Bc250Mon
 
         /// <summary>No presentation has completed since the last invalidation. Not a stall: nothing started.</summary>
         public bool NothingCompleted { get { return Have && Snapshot.LastCompletionAgeMs == NoCompletion; } }
-        /// <summary>A full start whose last completed presentation is older than the driver's own freshness bound.</summary>
+        /// <summary>A full start whose last completed presentation is older than the driver's own freshness bound and
+        /// that still owes a flip: a quiet one (FlagQuiet) is an idle desktop, not a stall.</summary>
         public bool Stalled
         {
             get
             {
                 return Have && (Snapshot.Flags & FlagFull) != 0 && !NothingCompleted &&
-                       Snapshot.LastCompletionAgeMs > FreshMs;
+                       Snapshot.LastCompletionAgeMs > FreshMs && (Snapshot.Flags & FlagQuiet) == 0;
             }
         }
 

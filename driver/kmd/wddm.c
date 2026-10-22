@@ -3407,6 +3407,26 @@ void WddmCounters(_In_ const BC250_DEVICE* Device, _Out_ LONG* Blits, _Out_ LONG
     *Flips = (wddm != NULL) ? wddm->Flips : 0;
 }
 
+// The start witness's QUIET test (start_health.c): the generation of the last primary programming that succeeded,
+// sampled the way WddmReadCompletedPrimary samples it, with interlocked reads only (no BAR access). The caller
+// holds StartHealth.Lock over an open witness: every stop closes the witness under that lock (GuardRecordStopBegin,
+// pnp.c) before WddmStop detaches and frees this state, so the state cannot go away under the read.
+BOOLEAN WddmPrimaryProgrammed(_In_ const BC250_DEVICE* Device, _Out_ ULONG* Sequence)
+{
+    BC250_WDDM* wddm = (BC250_WDDM*)Device->Wddm;
+    LONG generation;
+    ULONG programmed;
+
+    *Sequence = 0;
+    if (wddm == NULL) return FALSE;
+    generation = InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0);
+    if (generation & 1) return FALSE;
+    programmed = (ULONG)InterlockedCompareExchange(&wddm->PrimaryProgrammedSequence, 0, 0);
+    if (InterlockedCompareExchange(&wddm->PrimarySequence, 0, 0) != generation) return FALSE;
+    *Sequence = programmed;
+    return TRUE;
+}
+
 // ---- start, stop, DPC ------------------------------------------------------------------------------------------
 
 static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG* Offset, _Out_ ULONGLONG* Length,

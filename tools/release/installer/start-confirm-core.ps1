@@ -1,7 +1,7 @@
 # Decision rules of the logon start-confirm task (start-confirm.ps1), pure functions without I/O, host-tested by
 # tests\test-start-confirm.ps1. The task confirms the boot's own KMD start once the KMD's confirmation milestone is
 # met (start_health.c StartHealthRequest: flags FULL|READY|VISIBLE, completions, ready >= 60 s, last completion
-# fresh), the same milestone the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
+# fresh or nothing owed, QUIET), the same milestone the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
 # another adapter start (a generation change ends it), never while a kit run presents its own heartbeat (that run
 # confirms), and never while a transition task runs.
 #
@@ -68,10 +68,15 @@ function New-StartConfirmState {
  return [ordered]@{seconds=$Seconds; generation=$null; yielded=$false; confirmed_here=$false; last_confirm=-1000.0; confirms=0}
 }
 
+# Flag 16 is QUIET (BC250_START_HEALTH_QUIET, 0.7.216.104): every flip programmed in this interval has completed.
+# An idle GPU desktop flips about once a minute (the taskbar clock), so its last completion is mostly older than
+# any freshness bound; QUIET stands in for it, as it does in the KMD's own CONFIRM. A KMD without the bit never
+# sets it, and this task then waits for a fresh flip as before.
 function Test-StartConfirmEligible {
  param([Parameter(Mandatory)]$Reading)
  return ((($Reading.flags -band 7) -eq 7) -and $Reading.completed -gt 0 -and
-         $Reading.ready_ms -ge $script:StartConfirmMinReadyMs -and $Reading.age_ms -le $script:StartConfirmFreshMs)
+         $Reading.ready_ms -ge $script:StartConfirmMinReadyMs -and
+         ($Reading.age_ms -le $script:StartConfirmFreshMs -or ($Reading.flags -band 16) -eq 16))
 }
 
 # One poll: action wait | confirm | exit, with the exit code and a reason for the log.
