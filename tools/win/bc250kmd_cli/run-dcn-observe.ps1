@@ -20,6 +20,9 @@ $started = [DateTime]::UtcNow.ToString('o')
 $process = Start-Process -FilePath $Exe -ArgumentList @('--expected-version', $ExpectedVersion,
     '--samples', "$Samples", '--interval-ms', "$IntervalMs") -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput "$Out\samples.jsonl" -RedirectStandardError "$Out\errors.jsonl"
+# Retain the native handle before exit. Windows PowerShell 5.1 can otherwise
+# report HasExited=True with ExitCode=$null on Start-Process -PassThru objects.
+$null = $process.Handle
 $timedOut = !$process.WaitForExit(30000)
 $killError = $null
 if ($timedOut) {

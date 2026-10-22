@@ -1,4 +1,4 @@
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Out)
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Out, [switch]$RunRunnerControls)
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path "$PSScriptRoot\..\..\..").Path
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -24,9 +24,16 @@ if ($LASTEXITCODE) { throw 'DCN observer compilation failed' }
 & "$Out\dcn_observe.exe" --help
 if ($LASTEXITCODE) { throw 'Observer help failed' }
 Get-FileHash "$Out\dcn_observe.exe"
+$stubFlags = @($flags | ForEach-Object { $_.Replace('dcn_observe.obj','dcn_observe_runner_stub.obj').Replace('dcn_observe.exe','dcn_observe_runner_stub.exe').Replace('dcn_observe.cpp','dcn_observe_runner_stub.cpp') })
+Invoke-Bc250UmdCompiler $compiler @stubFlags
+if ($LASTEXITCODE) { throw 'DCN runner control compilation failed' }
+if ($RunRunnerControls) {
+    & "$PSScriptRoot\test-dcn-observe-runner.ps1" -Stub "$Out\dcn_observe_runner_stub.exe" -Out $Out
+} else { Write-Output 'Elevated Windows PowerShell 5.1 runner controls not run; use -RunRunnerControls before promotion.' }
 $inputs = @('tools/win/bc250kmd_cli/dcn_observe.cpp', 'tools/win/bc250kmd_cli/build-dcn-observe.ps1',
     'tools/win/bc250kmd_cli/run-dcn-observe.ps1', 'tools/win/bc250kmd_cli/analyze-dcn-observe.py',
     'tools/win/bc250kmd_cli/test_dcn_observe_client.py',
+    'tools/win/bc250kmd_cli/dcn_observe_runner_stub.cpp', 'tools/win/bc250kmd_cli/test-dcn-observe-runner.ps1',
     'tools/build/umd-compiler.ps1', 'tools/build/clang-windows.h', 'driver/kmd/bc250kmd_escape.h')
 $hashes = @{}
 foreach ($inputPath in $inputs) { $hashes[$inputPath] = (Get-FileHash -LiteralPath "$repo\$inputPath").Hash }

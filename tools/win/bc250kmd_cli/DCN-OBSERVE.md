@@ -20,6 +20,16 @@ It refuses a different KMD version before register reads.
    python -B -m unittest discover -s tools/win/bc250kmd_cli -p test_dcn_observe_client.py -v
    ```
 
+3. Before promotion, run the runner controls from an elevated shell:
+
+   ```powershell
+   tools/win/bc250kmd_cli/test-dcn-observe-runner.ps1 -Stub <build-directory>/dcn_observe_runner_stub.exe -Out <build-directory>
+   ```
+
+   These controls use Windows PowerShell 5.1 and the real runner with a host stub.
+   They check process exit codes 0 and 1, retained output and caller success/failure.
+   They do not open an adapter. The build can run them with `-RunRunnerControls`.
+
 ## Lab procedure
 
 Keep the whole trial within three minutes. The capture has a separate 30-second watchdog.
