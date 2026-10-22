@@ -36,6 +36,9 @@ if ($LASTEXITCODE) { throw 'CNVC color extraction mismatch' }
     --clang (Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang.exe') `
     --out (Join-Path $Out 'csc-source-contract.json')
 if ($LASTEXITCODE) { throw 'DCN201 CSC source contract changed' }
+& python (Join-Path $repo 'driver\kmd\test\mpo_transaction_model.py') `
+    --out (Join-Path $Out 'mpo-transaction-model.json')
+if ($LASTEXITCODE) { throw 'MPO transaction source/model check failed' }
 Push-Location $Out
 try {
     & $cc /nologo /TC /W4 /WX /O2 /c `

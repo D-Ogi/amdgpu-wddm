@@ -265,6 +265,56 @@ The write count includes an operation whose callback failed after a hardware
 write. Success proves neither latch nor scanout retirement. A hardware witness,
 complete transaction/recovery and Windows DDI integration remain required.
 
+### Transaction scheduling and recovery
+
+The selected AMD `dcn201_pipe_control_lock` uses the timing generator's master
+lock. DCN201 binds its normal lock/unlock functions to `optc1_lock` and
+`optc1_unlock`. The lock selects the TG, sets the request and waits for its
+acknowledgment. It is not a separate lock for each Windows plane.
+The triple-buffer path adds VUPDATE keepout. It is a different protocol,
+not an automatic solution for independent updates.
+
+`driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
+tests an explicit double-buffered state model. In that model, a global lock
+held across a boundary can delay an earlier accepted flip on the other plane.
+This is a counterexample to the proposed scheduling policy, not a measured
+DCN timing fault. The Microsoft hardware requirements above require separate
+calls to retain independent update timing, as well as atomic multi-plane calls.
+
+The owner must check pending work before taking the global lock for a later
+request or coefficient upload. A candidate policy returns
+[STATUS_RETRY](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmddi/nc-d3dkmddi-dxgkddi_setvidpnsourceaddresswithmultiplaneoverlay3)
+before changing hardware when the lock would delay accepted work. It preserves
+the earlier flip in the model. Windows scheduling, starvation and independent
+plane acceptance still need validation. A retry policy is not an HLK pass.
+Preparation and coefficient staging must not hold the global lock across an
+earlier accepted flip's boundary. All writers must share the ownership record.
+
+The owner must retain the last coherent state and all old/new allocation
+references before the first attempted write. A write error may follow a hardware
+effect. Restoring only that register, or returning an error and unlocking, is
+insufficient. The model finds mixed states at these failure boundaries.
+Complete restoration before unlock works in the model, which assumes every
+field is buffered. Actual register buffering, address triggers, disconnect
+drain and rollback side effects remain unverified. Do not turn this model into
+a generic MMIO undo log. If recovery fails, retain both allocation sets and
+enter the display owner's quiesce/recovery path. Do not report completion.
+
+Retirement needs evidence for the whole changed state, not only matching surface
+addresses or a coefficient-bank observation. Same-buffer geometry/color changes
+and plane disable requests are negative controls. A frame boundary and coherent
+hardware observation must be associated with the submitted generation. The
+hardware predicate for that association remains open.
+
+The WDK defines PresentId as a per-plane identifier. Preserve its association
+with LayerIndex. Do not compare identifiers from different planes to infer
+completion. The
+[plane structure](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmddi/ns-d3dkmddi-_dxgk_multiplane_overlay_plane3)
+defines LayerIndex zero as the top plane. The internal MPC ZOrder uses the
+opposite direction. The DDI adapter must map these explicitly, retain omitted
+planes and report completion per plane. Neither that adapter nor the complete
+transaction owner is implemented by this model.
+
 ### CSC source-contract correction, 2026-10-22
 
 The first audit resolved the function call but not its resource initializers.
