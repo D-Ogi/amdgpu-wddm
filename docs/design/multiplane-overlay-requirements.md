@@ -1,0 +1,99 @@
+# Multiplane overlay requirements
+
+Status: implementation in progress. No MPO capability is enabled by this work
+yet. The existing native-size DirectFlip path remains the control. BD-223 covers
+scaled D3D12 flip chains and Vulkan chains presented through vk-wsi-dxgi.
+
+## Release boundary
+
+An opaque RGB fullscreen overlay is an intermediate test, not the complete MPO
+release gate. Unsupported configurations must be refused in Check before
+promotion. Such refusals do not replace the documented minimum feature set.
+Do not advertise a capability until the corresponding implementation and tests
+exist. A correct picture and a PresentMon independent-flip classification are
+both needed. Neither proves HLK compliance by itself.
+
+## Microsoft requirements and evidence
+
+The [MPO hardware requirements](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/multiplane-overlay-hardware-requirements)
+were checked against Microsoft Learn on 2026-10-22. The local conceptual source
+revision is `110f60eaf2ac5836e644d320c1e92c1011f2af5e`. Interface declarations use
+WDK 10.0.26100, with this driver registered as WDDM 2.9.
+
+| Requirement | Implementation needed | Acceptance evidence still needed |
+|---|---|---|
+| Overlapping and separate planes with black uncovered regions | Two actual display pipes with correct composition order | Pixel tests of overlap, separation and uncovered regions |
+| Enable/disable every plane, including the desktop | Persistent per-plane state with omitted planes unchanged | Disable each plane and return to desktop |
+| Premultiplied alpha on a per-plane basis | MPC blending and alpha-capable line-buffer configuration | Known alpha ramps over known background colours |
+| Source and destination clipping on every plane | Checked rectangle and sampling-phase calculations | Edge crops, negative placement, overflow refusals |
+| Independent shrink and stretch | DPP scaler and DML inputs for each plane | Both directions, with the other plane unchanged |
+| Bilinear and better filtering | Correct coefficients, taps and bank lifetime | Pattern images and reference output for both filters |
+| A YUV plane, BT.601/709, normal/full range | Plane layout, chroma sampling and colour conversion | Reference colour bars in each matrix/range combination |
+| Atomic attributes and multi-plane updates | One transaction, one latch boundary | VBlank-crossing updates with no mixed frame/shape |
+| Independent plane updates | Per-plane pending state and PresentId retirement | Separate update calls across a refresh boundary |
+| Active-output constraints | Capabilities bound to the current topology | Output changes invalidate stale admission plans |
+
+The [MPO caps DDI](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dkmddi/nc-d3dkmddi-dxgkddi_getmultiplaneoverlaycaps)
+and its format/count/filter fields describe the available configurations. No
+exception to the baseline requirements above was established from those fields.
+Rotation and mirroring are separately reported capabilities. Leave them false
+until implemented. Keep format and colour space separate: RGB10A2 SDR support
+does not imply PQ, HLG or FP16 HDR support.
+
+## Current implementation boundary
+
+The source-mode scaler already supplies identity/upscale arithmetic and RGB
+coefficient programming. `Bc250ScalerProgramLocked` adds programming within a
+caller-owned OTG0 update lock. The host register model checks access failures
+and that the helper never releases or triggers the caller's transaction.
+
+This is not a completed MPO path. Missing work includes the second plane,
+displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
+plane-specific retirement, bandwidth validation, and all uncovered requirements
+in the table. The transaction owner must restore the last coherent state after
+a partial write. The helper does not implement that recovery. Coefficient work
+must be prepared outside the interrupt callback, with its bank lifetime tracked.
+
+KMD and UMD/router changes use separate commits. Every stage retains native-size
+presentation, GPU composition fallback, and legacy visibility/mode/stop behavior.
+
+## AMD implementation reference
+
+PROVENANCE: Linux amdgpu DC, MIT, revision
+`7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+
+DCN201 selects `dcn20_program_front_end_for_ctx` and `dcn10_lock_all_pipes`.
+`dc.c` locks before committing surface updates and unlocks after them.
+`dcn20_hwseq.c` programs the DPP scaler, HUBP viewport and surface address inside
+that transaction. `dcn201_dpp.c` selects `dpp1_dscl_set_scaler_manual_scale`.
+Port the relevant source through the shim, preserving provenance and documenting
+WDDM-specific changes. Do not copy Linux's long polling into an interrupt DDI.
+
+## HLK coverage and selection
+
+The retained HLK 10.1.26100.8328 catalog contains these associations. They are
+coverage inputs, not a claim that the SDK has selected or passed these jobs for
+a new driver. IDs below are local catalog IDs. The test names identify the jobs.
+
+| Requirement family | Associated jobs |
+|---|---|
+| WDDM13 MultiplaneOverlaySupport / MultiPlaneOverlayVideoProcessing | 784: DX11 VideoProcessing for Overlay. 785: DX11 Video Rotation for overlay |
+| WDDM13 MultiplaneOverlaySupport | 4838-4839: CreateDecodeSwapChain For CompositionSurfaceHandle, Native/WoW64 |
+| WDDM13 MultiplaneOverlaySupport | 4840-4841: CreateSwapChain, Native/WoW64 |
+| WDDM13 MultiplaneOverlaySupport | 4842-4843: CreateSwapChain For CompositionSurfaceHandle, Native/WoW64 |
+| WDDM13 MultiplaneOverlaySupport | 4844-4845: CreateSwapChainForHwnd, Native/WoW64 |
+| WDDM22 MultiPlaneOverlay3 | 4780: iFlip Present Desktop - Multihead. 4781: iFlip Present UAP |
+
+Microsoft's [video-processing test](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/testref/bff94b26-0a7a-434d-8a93-333f383f2e3d)
+lists the WDDM13 overlay requirements. The
+[Multihead test](https://learn.microsoft.com/en-us/windows-hardware/test/hlk/testref/1d24afbc-dfac-4994-880c-dd5af8581471)
+lists MultiPlaneOverlay3 and requires multiple outputs. Do not substitute a
+single-output run or mark it passed without execution. Record its applicability
+from the selected target and the kit's rules.
+
+For the frozen candidate, rediscover target features, apply the applicable
+playlist and filters, and retain the SDK-selected tests and package hashes.
+Reconcile that result with this table before queueing. Any missing applicable
+test remains open. Existing feature discovery from a non-MPO driver cannot
+establish the new selection. A catalog association alone is not proof of an
+unconditional selection rule or of the test's coverage of every hardware limit.
