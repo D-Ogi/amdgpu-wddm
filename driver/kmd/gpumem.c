@@ -468,7 +468,7 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
         low.QuadPart = 0;
         high.QuadPart = 0xFFFFFFFFFFFll;            // 44 bits: what the PTE's address field and the hubs' system aperture take
         boundary.QuadPart = 0;
-        entry->Cpu = MmAllocateContiguousMemorySpecifyCache(rounded, low, high, boundary, MmCached);
+        entry->Cpu = MmAllocateContiguousNodeMemory(rounded, low, high, boundary, PAGE_READWRITE, MM_ANY_NODE_OK);
         if (entry->Cpu == NULL) return -12;
         physical = MmGetPhysicalAddress(entry->Cpu);
         // A PLAN gets memory to build its rings and MQDs in, but the GART table is live hardware state: not written.
@@ -532,7 +532,7 @@ void bc250_shim_mem_free(struct amdgpu_device* adev, struct bc250_mem* m)
     // A zeroed struct (nothing was ever allocated into it) is a safe no-op, as before. An allocation
     // whose cpu is NULL - bc250_shim.h: the owner could not map it - still exists here and is looked
     // up by its MC address instead, because there is no cpu pointer to look it up by (D-02; neither
-    // MmMapIoSpaceEx nor MmAllocateContiguousMemorySpecifyCache above ever returns success with a
+    // MmMapIoSpaceEx nor MmAllocateContiguousNodeMemory above ever returns success with a
     // NULL pointer, so this arm is not reached on this backend today - see sdma_faults_report.md).
     if (mem == NULL || m == NULL || (m->cpu == NULL && m->mc == 0 && m->size == 0)) return;
     for (i = 0; i < BC250_GPUMEM_MAX; i++)

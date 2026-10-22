@@ -476,7 +476,7 @@ NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
     low.QuadPart = 0;
     high.QuadPart = 0xFFFFFFFFFFFll;                // 44 bits, amdgpu's DMA mask for this generation
     boundary.QuadPart = 0;
-    gart->DummyPage = MmAllocateContiguousMemorySpecifyCache(PAGE_SIZE, low, high, boundary, MmCached);
+    gart->DummyPage = MmAllocateContiguousNodeMemory(PAGE_SIZE, low, high, boundary, PAGE_READWRITE, MM_ANY_NODE_OK);
     if (gart->DummyPage == NULL)
     {
         ExFreePoolWithTag(gart, BC250_GART_TAG);
