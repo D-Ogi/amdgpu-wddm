@@ -659,7 +659,9 @@ if ($r.code -ne 0) { $r.text }
 $badDir = Join-Path $fwWork 'bad'
 [void][IO.Directory]::CreateDirectory($badDir)
 foreach ($f in Get-ChildItem -LiteralPath (Join-Path $fwWork 'download') -File) { Copy-Item -LiteralPath $f.FullName -Destination $badDir }
-[IO.File]::AppendAllText((Join-Path $badDir 'cyan_skillfish2_me.bin'), 'x')
+# One byte changed in place: the pin carries the size too and checks it first (71b3e6bc), so the file keeps its size
+# and is refused for its SHA256 (test-offline.ps1 has the longer file).
+$badBin = Join-Path $badDir 'cyan_skillfish2_me.bin'; $badBytes = [IO.File]::ReadAllBytes($badBin); $badBytes[0] = $badBytes[0] -bxor 0xFF; [IO.File]::WriteAllBytes($badBin, $badBytes)
 Remove-Item -LiteralPath (Join-Path $badDir 'LICENSE.amdgpu')
 $r = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-FirmwareDir', $badDir)
 Check ($r.code -eq 2) "changed folder: exit $($r.code) (2 = preflight refusal)"

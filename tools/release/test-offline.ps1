@@ -119,7 +119,10 @@ Check (($r.code -eq 0) -and ($d[0].firmware_source -eq 'package-folder')) "setup
 '[G-OFF] a prepared folder with a missing or a changed firmware file is refused before any change'
 foreach ($c in @(
         @{ name = 'missing'; edit = { param($dir) Remove-Item -LiteralPath (Join-Path $dir 'firmware\cyan_skillfish2_me.bin') }; want = 'cyan_skillfish2_me\.bin missing' }
-        @{ name = 'changed'; edit = { param($dir) [IO.File]::AppendAllText((Join-Path $dir 'firmware\LICENSE.amdgpu'), 'x') }; want = 'LICENSE\.amdgpu has another SHA256' })) {
+        # The pin carries the size too (71b3e6bc) and the size is checked first: a longer file is refused for its
+        # size, and a file of the pinned size with one byte changed for its SHA256.
+        @{ name = 'longer'; edit = { param($dir) [IO.File]::AppendAllText((Join-Path $dir 'firmware\LICENSE.amdgpu'), 'x') }; want = 'LICENSE\.amdgpu has another size' }
+        @{ name = 'changed'; edit = { param($dir) $p = Join-Path $dir 'firmware\LICENSE.amdgpu'; $b = [IO.File]::ReadAllBytes($p); $b[0] = $b[0] -bxor 0xFF; [IO.File]::WriteAllBytes($p, $b) }; want = 'LICENSE\.amdgpu has another SHA256' })) {
     $v = Join-Path $work "prepared-$($c.name)"
     Copy-Linked $prepared $v -RealCopy @('firmware')
     & $c.edit $v
