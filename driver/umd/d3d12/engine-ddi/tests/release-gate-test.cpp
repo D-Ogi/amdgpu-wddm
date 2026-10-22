@@ -35,12 +35,16 @@ void check(bool ok, const char* format, ...) {
 class Fence final : public ID3D12Fence {
 public:
     UINT64 value = 0;
+    ULONG refs = 1;
+    unsigned reads = 0;
+    void (*on_read)(Fence*) = nullptr;
+    void* user = nullptr;
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, void** out) override {
         if (out) *out = nullptr;
         return E_NOINTERFACE;
     }
-    ULONG STDMETHODCALLTYPE AddRef() override { return 2; }
-    ULONG STDMETHODCALLTYPE Release() override { return 1; }
+    ULONG STDMETHODCALLTYPE AddRef() override { return ++refs; }
+    ULONG STDMETHODCALLTYPE Release() override { return --refs; }
     HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID, UINT*, void*) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID, UINT, const void*) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID, const IUnknown*) override { return E_NOTIMPL; }
@@ -49,7 +53,11 @@ public:
         if (out) *out = nullptr;
         return E_NOTIMPL;
     }
-    UINT64 STDMETHODCALLTYPE GetCompletedValue() override { return value; }
+    UINT64 STDMETHODCALLTYPE GetCompletedValue() override {
+        ++reads;
+        if (on_read) on_read(this);
+        return value;
+    }
     HRESULT STDMETHODCALLTYPE SetEventOnCompletion(UINT64, HANDLE) override { return E_NOTIMPL; }
     HRESULT STDMETHODCALLTYPE Signal(UINT64) override { return E_NOTIMPL; }
 };
@@ -57,10 +65,11 @@ public:
 struct Shell {
     unsigned freed = 0;
     unsigned errors = 0;
+    HRESULT free_result = S_OK;
 };
 HRESULT APIENTRY free_memory(void* shell, const engine_ddi::ImportedMemory*) {
     ++static_cast<Shell*>(shell)->freed;
-    return S_OK;
+    return static_cast<Shell*>(shell)->free_result;
 }
 void APIENTRY device_error(void* shell, HRESULT) { ++static_cast<Shell*>(shell)->errors; }
 void APIENTRY list_error(void*, D3D12DDI_HRTCOMMANDLIST, HRESULT) {}
@@ -219,6 +228,77 @@ int main() {
               "linear primary: timeout retains memory without an API error, then one retirement point (late %u, "
               "freed %u)",
               unsigned(late), f.shell.freed);
+    }
+
+    // BD-221: later work on the same queue must not move this destroy's original target.
+    {
+        Fixture f;
+        f.context.in_ddi_bound_ms = 30;
+        f.submit();
+        f.fence.user = &f.queue;
+        f.fence.on_read = [](Fence* fence) {
+            auto* q = static_cast<engine_ddi::EngineQueue*>(fence->user);
+            q->state.store(uint64_t{fence->reads + 1} << 1);
+            fence->value = fence->reads - 1; // always behind new work, but original mark 1 retires
+        };
+        f.context.release(f.node(true));
+        check(f.shell.freed == 1 && !f.shell.errors && !f.context.pending.load() && f.fence.refs == 1,
+              "BD-221: destroy waits for its frozen mark, not continuing submissions (freed %u, pending %u)",
+              f.shell.freed, f.context.pending.load());
+    }
+    // An uncovered mark cannot rely on a future application Signal. Retain safely, return promptly.
+    {
+        Fixture f;
+        f.queue.state.store(1);
+        const ULONGLONG began = GetTickCount64();
+        f.context.release(f.node(true));
+        check(GetTickCount64() - began < 500 && !f.shell.errors && !f.shell.freed &&
+                  f.context.pending.load() == 1 && f.fence.refs == 1,
+              "BD-221: unsignalled work without a future Signal retains memory without a 2 s wait or error");
+        f.queue.state.store(2);
+        f.fence.value = 1;
+        f.context.process_retired();
+        check(f.shell.freed == 1, "BD-221: subsequent proven engine signal can retire retained memory");
+    }
+    // Suppression is specific to a deferred in-DDI owner expiration, not arbitrary free failures.
+    for (unsigned arm = 0; arm < 4; ++arm) {
+        Fixture f;
+        f.context.in_ddi_bound_ms = 1;
+        f.context.release_two_phase = false;
+        f.shell.free_result = arm == 1 ? E_OUTOFMEMORY : HRESULT_FROM_WIN32(ERROR_INVALID_OWNER);
+        const bool in_ddi = arm != 2;
+        const bool deferred = arm != 3;
+        if (deferred) f.submit();
+        f.context.release(f.node(in_ddi));
+        f.fence.value = 1;
+        f.context.process_retired();
+        check(f.shell.freed == 1 && f.shell.errors == (arm ? 1u : 0u) &&
+                  f.context.releases_owner_expired.load() == (arm ? 0u : 1u),
+              "BD-221: free-result arm %u preserves unrelated device errors (errors %u)", arm, f.shell.errors);
+        f.context.process_retired();
+        check(f.shell.freed == 1, "BD-221: free is never retried after owner expiration or failure");
+    }
+    // Slot reuse while the lock is released is not proof of the original queue's retirement.
+    for (unsigned completed = 0; completed < 2; ++completed) {
+        Fixture f;
+        f.context.in_ddi_bound_ms = 5;
+        f.submit();
+        f.fence.user = &f.queue;
+        f.fence.on_read = [](Fence* fence) {
+            if (fence->reads >= 3) static_cast<engine_ddi::EngineQueue*>(fence->user)->id = 2;
+        };
+        if (completed) f.fence.on_read = [](Fence* fence) {
+            if (fence->reads >= 3) {
+                static_cast<engine_ddi::EngineQueue*>(fence->user)->id = 2;
+                fence->value = 1;
+            }
+        };
+        f.context.release(f.node(true));
+        f.fence.value = 100; // a replacement queue's large fence cannot free unproven old work
+        f.context.process_retired();
+        check(f.shell.freed == completed && f.context.releases.stuck() == (completed ? 0u : 1u) &&
+                  f.fence.refs == 1 && !f.shell.errors,
+              "BD-221: slot reuse arm %u requires original fence proof (freed %u)", completed, f.shell.freed);
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

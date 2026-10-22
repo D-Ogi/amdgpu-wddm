@@ -163,7 +163,7 @@ private:
 // Steps 2 and 3 for one payload, on the calling DDI thread: releases the engine objects, then calls free_memory
 // once if there is memory, and reports a failure through report_device_error. Returns free_memory's result
 // (S_OK when there is no memory).
-HRESULT run_release(const ShellHooks& hooks, const ReleasePayload& payload) noexcept;
+HRESULT run_release(const ShellHooks& hooks, const ReleasePayload& payload, bool deferred = false) noexcept;
 
 // Harness observation of the release sequence. Null in the native build.
 struct ReleaseEvent {
@@ -311,6 +311,7 @@ public:
     std::atomic<uint64_t> releases_recorded{0};  // releases that took a first-phase snapshot
     std::atomic<uint64_t> releases_second{0};    // releases that reached a second phase
     std::atomic<uint64_t> releases_run{0};       // releases whose memory went back to the shell
+    std::atomic<uint64_t> releases_owner_expired{0}; // retained linear owners after their DDI ended
     // The retire policy (set_retire_policy): written before the context is used on another thread, read only after.
     bool retire_handoff = false;
     uint32_t retire_backlog_bound = 0;

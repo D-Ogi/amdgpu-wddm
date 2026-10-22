@@ -126,13 +126,16 @@ uint64_t observed_value(EngineQueue* q) noexcept {
     return done;
 }
 
-HRESULT run_release(const ShellHooks& hooks, const ReleasePayload& payload) noexcept {
+HRESULT run_release(const ShellHooks& hooks, const ReleasePayload& payload, bool deferred) noexcept {
     for (IUnknown* object : payload.objects)
         if (object) object->Release();
     if (!payload.has_memory) return S_OK;
     // Exactly once, never retried: the shell keeps its record on failure.
     HRESULT hr = hooks.free_memory ? hooks.free_memory(hooks.shell, &payload.memory) : E_UNEXPECTED;
-    if (FAILED(hr) && hooks.report_device_error) hooks.report_device_error(hooks.shell, hr);
+    // A deferred linear owner cannot be returned through a DDI that has already ended. The importer
+    // retains its record on this specific outcome (kOwnerExpired); it is not device loss (BD-221).
+    const bool expired = deferred && payload.in_ddi && hr == HRESULT_FROM_WIN32(ERROR_INVALID_OWNER);
+    if (FAILED(hr) && !expired && hooks.report_device_error) hooks.report_device_error(hooks.shell, hr);
     return hr;
 }
 
@@ -191,19 +194,63 @@ void DeviceContext::release(PendingRelease* node) noexcept {
     // even with no mark, so that the second phase covers a submission that races this destroy. The memory
     // of a linear primary keeps its single bounded phase inside this DDI.
     const bool two_phase = release_two_phase && node->payload.has_memory && !node->payload.in_ddi;
-again:
+    // Pin the fences while the context lock is released. Queue destruction or slot reuse must not
+    // turn an observation of a new queue into proof that the original work retired.
+    struct WaitFences {
+        ID3D12Fence* fences[kMaxEngineQueues]{};
+        uint64_t ids[kMaxEngineQueues]{}, states[kMaxEngineQueues]{}, done[kMaxEngineQueues]{};
+        ~WaitFences() { for (auto* fence : fences) if (fence) fence->Release(); }
+    } wait;
+    bool unsignalled = false;
     AcquireSRWLockExclusive(&lock);
     const uint32_t marked = snapshot_marks(node);
-    const bool stuck = node->stuck;
     const uint64_t id = node->payload.id;
-    if (node->payload.in_ddi && node->payload.has_memory && !stuck && node->mask) {
-        if (GetTickCount64() - began < in_ddi_bound_ms) {
-            ReleaseSRWLockExclusive(&lock);             // never wait with the lock held
-            Sleep(1);
-            goto again;
+    if (node->payload.in_ddi && node->payload.has_memory && !node->stuck && node->mask) {
+        for (uint32_t s = 0; s < kMaxEngineQueues; ++s) {
+            if (!(node->mask & (uint64_t{1} << s))) continue;
+            auto* q = queues[s];
+            wait.fences[s] = q->fence;
+            wait.fences[s]->AddRef();
+            wait.ids[s] = q->id;
+            wait.states[s] = q->state.load();
+            wait.done[s] = observed_value(q);
+            // Every successful submit already signals our private fence. An uncovered mark means
+            // an in-flight or failed engine Signal, not a future application Signal. Do not spend
+            // the whole DDI bound waiting for a signal that may never be issued successfully.
+            unsignalled |= (wait.states[s] & 1) && (wait.states[s] >> 1) < node->marks[s];
         }
-        late = true;
+        // Freeze the destroy's targets. Resnapshotting here chases unrelated new submissions and
+        // can exhaust the bound even though all work preceding this destroy has finished.
+        while (!unsignalled && !node->stuck && node->mask && GetTickCount64() - began < in_ddi_bound_ms) {
+            ReleaseSRWLockExclusive(&lock);
+            Sleep(1);
+            AcquireSRWLockExclusive(&lock);
+            for (uint32_t s = 0; s < kMaxEngineQueues; ++s) {
+                const uint64_t bit = uint64_t{1} << s;
+                if (!(node->mask & bit)) continue;
+                const uint64_t done = wait.fences[s]->GetCompletedValue();
+                wait.done[s] = done;
+                if (done == kFenceRemoved) node->stuck = true;
+                else if (done >= node->marks[s]) node->mask &= ~bit;
+            }
+        }
+        late = node->mask != 0;
+        // A surviving pending node is indexed by queue slot. If its original queue disappeared,
+        // retain the allocation as unproven instead of transferring its mark to the replacement.
+        for (uint32_t s = 0; s < kMaxEngineQueues; ++s)
+            if ((node->mask & (uint64_t{1} << s)) &&
+                (!(queue_mask & (uint64_t{1} << s)) || queues[s]->id != wait.ids[s])) node->stuck = true;
     }
+    const bool stuck = node->stuck;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    if (late)
+        for (uint32_t s = 0; s < kMaxEngineQueues; ++s)
+            if (node->mask & (uint64_t{1} << s))
+                log_line("release %llu pending: slot %u queue %llu mark %llu observed %llu state %llx unsignalled %u",
+                         static_cast<unsigned long long>(id), s, static_cast<unsigned long long>(wait.ids[s]),
+                         static_cast<unsigned long long>(node->marks[s]), static_cast<unsigned long long>(wait.done[s]),
+                         static_cast<unsigned long long>(wait.states[s]), unsigned(unsignalled));
+#endif
     uint32_t phase = 0;
     uint64_t destroy_qpc = 0;
     if (stuck || node->mask || (two_phase && !stuck)) {
@@ -224,9 +271,10 @@ again:
         log_line("release %llu: retirement cannot be proven (removed device or lost queue); memory stays owned",
                  static_cast<unsigned long long>(id));
     if (late) {
-        log_line("release %llu: the work before this destroy did not retire in %u ms; the memory's release "
+        log_line("release %llu: the work before this destroy is pending after %llu ms (bound %u, unsignalled %u); the memory's release "
                  "leaves its DDI and the memory stays owned",
-                 static_cast<unsigned long long>(id), in_ddi_bound_ms);
+                 static_cast<unsigned long long>(id), static_cast<unsigned long long>(GetTickCount64() - began),
+                 in_ddi_bound_ms, unsigned(unsignalled));
         // BD-180: this bound schedules a later retirement check; it does not prove device loss or
         // invalidate the current API operation. The queued node retains the allocation until its
         // marks retire. ERROR_TIMEOUT is not an admitted runtime error callback code.
@@ -299,7 +347,17 @@ void DeviceContext::process_retired() noexcept {
         const uint32_t second = n->queues[1];
         const uint64_t destroy_qpc = n->snapshot_qpc[0];
         delete n;
-        HRESULT hr = run_release(hooks, payload);
+        HRESULT hr = run_release(hooks, payload, true);
+        if (payload.in_ddi && hr == HRESULT_FROM_WIN32(ERROR_INVALID_OWNER)) {
+            const uint64_t expired = releases_owner_expired.fetch_add(1) + 1;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+            if (expired == 1)
+                log_line("release %llu: linear owner expired after its DDI; import record retained, no device error",
+                         static_cast<unsigned long long>(payload.id));
+#else
+            (void)expired;
+#endif
+        }
         pending.fetch_sub(1);
         live.fetch_sub(1);
         const uint64_t count = releases_run.fetch_add(1) + 1;
