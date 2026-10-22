@@ -305,8 +305,18 @@ Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 
 'the driver package resets the gates between the judgement and the write (pnputil runs the INF AddReg)'
 $inf = Join-Path (Split-Path $Installer) 'payload\kmd\bc250kmd.inf'
+$legacyInfNames = @('UnconfirmedStarts', 'EnableMmio', 'EnableMmioWrite', 'EnableVram', 'EnableVramWrite', 'EnableGart', 'EnablePsp', 'EnableGfx', 'EnableIh', 'EnableDcnWrite', 'EnableVidPnFlip', 'EnableFullWddm', 'EnableGpuVa', 'EnableGpuSubmit', 'EnablePagingNode', 'EnablePresentBlit', 'EnableHangBugcheck', 'KeepLog')
 if (Test-Path -LiteralPath $inf) { $infNames = Get-InfParameterNames $inf; $infSource = 'the package INF' }
-else { $infNames = @('UnconfirmedStarts', 'EnableMmio', 'EnableMmioWrite', 'EnableVram', 'EnableVramWrite', 'EnableGart', 'EnablePsp', 'EnableGfx', 'EnableIh', 'EnableDcnWrite', 'EnableVidPnFlip', 'EnableFullWddm', 'EnableGpuVa', 'EnableGpuSubmit', 'EnablePagingNode', 'EnablePresentBlit', 'EnableHangBugcheck', 'KeepLog'); $infSource = 'the 0.7.199.1 INF list, the same names as 0.7.198.2 (no package INF next to this installer)' }
+else { $infNames = $legacyInfNames; $infSource = 'the 0.7.199.1 INF list, the same names as 0.7.198.2 (no package INF next to this installer)' }
+# Since the shared driver state (6282d18d), the INF writes its installation defaults under Parameters\DefaultsV2 and
+# no value straight into Parameters, so pnputil resets no setting between the judgement and the write
+# (docs/design/driver-state.md). Such a package must name no Parameters value at all; the cases below then run on
+# the 0.7.199.1 list, because the plan functions they check still serve a package of that kind.
+if ((Test-Path -LiteralPath $inf) -and @($infNames).Count -eq 0) {
+    $defaultsV2 = @([IO.File]::ReadAllLines($inf) | Where-Object { $_ -match '^\s*HKR\s*,\s*Parameters\\DefaultsV2\s*,\s*([A-Za-z0-9_]+)\s*,' })
+    Check (($defaultsV2.Count -gt 0) -and (@([IO.File]::ReadAllLines($inf) | Where-Object { $_ -match '^\s*HKR\s*,\s*"?Parameters"?\s*,' }).Count -eq 0)) "the package INF writes no value straight into Parameters, $($defaultsV2.Count) lines under Parameters\DefaultsV2: the driver package resets no setting"
+    $infNames = $legacyInfNames; $infSource = 'the 0.7.199.1 INF list (the package INF writes only Parameters\DefaultsV2)'
+}
 Check ((@($infNames) -contains 'EnableFullWddm') -and (@($infNames) -contains 'EnableMmioWrite')) "$(@($infNames).Count) INF Parameters names from $infSource"
 $key = 'HKCU:\Software\amdgpu-wddm-installer-test'
 function Invoke-InfReset([string]$K) { foreach ($n in $infNames) { New-ItemProperty -LiteralPath $K -Name $n -Value 0 -PropertyType DWord -Force | Out-Null } }
