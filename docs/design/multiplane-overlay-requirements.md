@@ -177,6 +177,50 @@ that transaction. `dcn201_dpp.c` selects `dpp1_dscl_set_scaler_manual_scale`.
 Port the relevant source through the shim, preserving provenance and documenting
 WDDM-specific changes. Do not copy Linux's long polling into an interrupt DDI.
 
+### DCN201 surface dispatch audit, 2026-10-22
+
+The generic DCN20 surface functions are not the selected DCN201 implementation.
+Resolve the function table before importing a register sequence. Paths below
+are relative to `drivers/gpu/drm/amd/display/` at the revision above.
+
+| Selected path | Source | Consequence |
+|---|---|---|
+| Surface configuration | `dc/hubp/dcn201/dcn201_hubp.c:44-58` | Calls HUBP1 DCC, tiling, size and pixel-format functions |
+| Surface address | `dc/hubp/dcn201/dcn201_hubp.c:118-122` | Selects `hubp1_program_surface_flip_and_addr`, not HUBP2 |
+| Address space | `dc/hwss/dcn201/dcn201_hwseq.c:85-150` | Converts MC addresses to UMA before HUBP programming. Our owner must use checked segment conversion |
+| Address commit order | `dc/hubp/dcn10/dcn10_hubp.c:374-469` | High address first. For progressive video, chroma precedes luma. Primary luma low is last |
+| Surface pitch | `dc/hubp/dcn10/dcn10_hubp.c:163-201` | Counts pixels minus one. Zero chroma pitch is explicitly unsafe |
+| Format and CSC | `dc/dpp/dcn201/dcn201_dpp.c:44-188` | CNVC format, alpha and input CSC are separate from HUBP format |
+| CSC bank selection | `dc/dpp/dcn10/dcn10_dpp_cm.c:489-572` | Reads the active bank through debug index 9, programs the alternate bank and then selects it |
+| Transaction lock | `dc/hwss/dcn201/dcn201_hwseq.c:525-553` | Locks the top pipe's TG. Triple-buffer mode uses different lock callbacks |
+
+Two source findings change admission assumptions:
+
+- `dc/resource/dcn201/dcn201_resource.c:574-597` advertises NV12 and P010 as
+  false. `amdgpu_dm/amdgpu_dm_plane.c:800-803` uses those flags to omit the
+  formats from DRM plane enumeration. The corresponding cases in common HUBP
+  and DPP code therefore do not establish a supported Linux scanout path.
+- `hubp201_program_surface_config` accepts rotation and horizontal-mirror
+  parameters but does not program them. A generic HUBP1/2 rotation helper is
+  not evidence that DCN201 uses it. Mathematical mirror geometry remains
+  separate from hardware support.
+
+Both restrictions already appear in AMD's
+[2021 cyan_skillfish submission](https://www.spinics.net/lists/amd-gfx/msg68663.html).
+The current upstream resource file also retains the two false format flags.
+No inspected source explains their cause. This does not prove a silicon limit.
+
+Packed AYUV has format cases in the selected HUBP1 and CNVC code. It is a
+candidate for the YUV investigation, not an established substitute for NV12.
+The generic DML fallback to `dm_444_32` is not a checked AYUV bandwidth plan.
+Neither a hardware image witness nor complete Windows format/HLK coverage
+exists for this route. The Microsoft YUV requirement remains open.
+
+Next, establish the linear surface layout and checked address conversion from
+the selected HUBP1 path. Prepare CNVC/CSC with explicit matrix-bank ownership.
+Keep rotation, mirroring and unverified YUV formats out of capability admission.
+Retain their implementation and validation work in the requirement matrix.
+
 ## HLK coverage and selection
 
 The retained HLK 10.1.26100.8328 catalog contains these associations. They are
