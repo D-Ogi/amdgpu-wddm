@@ -540,21 +540,21 @@ int main(){
   heap.Flags=D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
   heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;expected_type=0;
   engine_ddi::MemoryRequest s=req;s.resource=&target;s.flags=shareable_flags;
-  // 1. The envelope changes nothing about the allocation: a committed texture on a GPU-only heap is raw
-  // memory, as it was before the flag existed, and the engine places its image in it.
-  events.clear();assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.byte_size==65536);
-  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
-  // 2. The runtime refuses that allocation for a shared resource. The refusal is read as "this resource
-  // needs a surface record" only here: a shareable request that has asked the engine for nothing yet.
+  // BD-217: a runtime which accepts the ordinary allocation must not let BC2A
+  // escape as a shared texture. Ask for LB7A before any allocation or import.
+  events.clear();
+  if(owner.allocate(&s,&memory)!=engine_ddi::kShareRequired || memory.memory || !events.empty()){
+   std::puts("FAIL BD-217: shared-capable texture reached ordinary BC2A allocation");return 1;
+  }
+  // The decision is independent of the runtime's historical E_INVALIDARG.
   {
    const auto before=next_allocation;refuse_shareable_create=true;events.clear();
-   assert(owner.allocate(&s,&memory)==engine_ddi::kShareRequired && !memory.memory && events=="A" &&
+   assert(owner.allocate(&s,&memory)==engine_ddi::kShareRequired && !memory.memory && events.empty() &&
           next_allocation==before);
    const auto& report=owner.last_report();
-   assert(report.stage==ImportStage::AllocateCallback && report.refusal &&
+   assert(report.stage==ImportStage::Surface && report.refusal &&
           !std::strcmp(report.refusal,"shared resource needs a surface record"));
-   // The same answer to a request that never said the resource may be shared stays the runtime's status,
-   // and so does any other failure of a shareable request.
+   // A request without sharing permission still passes through the callback's status.
    s.flags=engine_ddi::kMemoryDedicated;events.clear();
    assert(owner.allocate(&s,&memory)==E_INVALIDARG && !memory.memory && events=="A");
    s.flags=shareable_flags;refuse_shareable_create=false;
@@ -750,7 +750,7 @@ int main(){
   // A handle this driver created itself is never adopted over: that is the store corruption the refusal exists
   // for, and the only shape adopt still declines on a known handle.
   {
-   engine_ddi::MemoryRequest plain=req;plain.resource=&target;plain.flags=shareable_flags;
+   engine_ddi::MemoryRequest plain=req;plain.resource=&target;plain.flags=engine_ddi::kMemoryDedicated;
    engine_ddi::ImportedMemory created{},stolen{};
    events.clear();assert(owner.allocate(&plain,&created)==S_OK && events=="AMZI");
    engine_ddi::AdoptRequest over=adopt;over.allocation=created.allocation;events.clear();
@@ -1265,7 +1265,7 @@ int main(){
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted), "
-  "BD-075 shared resources (the shareable envelope unchanged, kShareRequired only from the runtime's refusal of a shareable create, the shared surface's "
+  "BD-075/BD-217 shared resources (the shareable envelope unchanged, positive LB7A selection before an ordinary allocation, the shared surface's "
   "LB7A and E26R v3 records with the three view flags and every refusal by name, and an adopted allocation that is borrowed: no allocate or deallocate "
   "callback, no quarantine, no backing to lend, one record per allocation handle), "
   "BD-101 (the 4 MiB MSAA placement alignment: one reservation of held+alignment, the map at its aligned offset, "

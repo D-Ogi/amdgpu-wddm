@@ -197,13 +197,13 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
 
 // ---- The linear surface: the primary and the shared resource (engine ABI 1.3 V13) ---------------------------------
 // A committed texture a reader outside the engine opens and reads by row pitch has linear tiling. There are two of
-// them and they are selected in two different ways, never by the description's shape:
+// them and they are selected in two different ways:
 //   - the primary, which the desktop compositor opens: the heap's D3D12DDI_HEAP_FLAG_PRIMARY at the create and the
 //     PRIMARY optimization flag at CheckResourceAllocationInfo say so;
-//   - the shared resource (BD-075), which another process or the D3D11 shell opens: nothing in the DDI says so, and
-//     the runtime's refusal of the ordinary allocation shape is what says so, after the fact. See the retry in
-//     create_heap_and_resource and engine-ddi.h, kMemoryShareable.
-// No description becomes linear by its shape alone, which is what keeps every ordinary committed texture tiled.
+//   - a resource in the shared-capable envelope (BD-075, BD-217): the DDI cannot
+//     distinguish an actual shared create, so the shell requests this layout
+//     before allocating. See create_heap_and_resource and kMemoryShareable.
+// Ordinary textures inside that envelope use the same linear representation.
 
 // Every create this process turned into a shared linear surface. Relaxed: it is read for a report, never for a
 // decision, and one retry per shared create is not a hot path.
@@ -253,17 +253,11 @@ bool linear_surface_shape(const D3D12_RESOURCE_DESC1& desc, const D3D12DDIARG_CR
     return true;
 }
 
-// The shareable envelope (BD-075): the descriptions whose create may be retried as a shared surface, and nothing
-// wider. Being inside it is permission to retry after the runtime has refused the ordinary shape; it never makes a
-// create linear by itself.
-// What keeps the retry from masking a real refusal is not any ordering of the two attempts. Attempt 2 asks for a
-// different thing: a different segment (the aperture, which the LB7A + E26R blob selects through
-// Bc250SurfaceResourcePolicy), a different size (surface.backing_size) and a different alignment. The guard is the
-// narrow discriminator instead - E_INVALIDARG alone, from the allocate callback of a first attempt inside this
-// envelope that carried no resource-level private data (heap-import.cpp, share_required) - plus this envelope
-// itself. An earlier comment here claimed attempt 2 was strictly more constrained; it is not, and saying so hid
-// which check was load-bearing (BD-075 review, 2026-10-06). Every retry is therefore counted and named on the
-// debugger channel whatever the trace switches say, and the shell's experiment switch shared-create-retry-off
+// The shareable envelope (BD-075, BD-217): permission to request the linear
+// shared-capable representation, not proof that the runtime asked for sharing.
+// No callback HRESULT identifies sharing: GPU-only BC2A can be accepted too.
+// Every retry is counted and named on the debugger channel, and the shell's
+// experiment switch shared-create-retry-off
 // turns the whole behaviour off for a bisect.
 //   - the heap is a GPU-only L1 heap without PRIMARY and without COHERENT_SYSTEMWIDE: a shared surface is nobody's
 //     primary, and a CPU-visible or system-wide coherent shared heap needs its own contract;
@@ -510,9 +504,8 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
                   (sized.Flags & D3D12DDI_HEAP_FLAG_PRIMARY) &&
                   sized.CPUPageProperty == D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE &&
                   linear_surface_shape(desc, *res_desc);
-    // BD-075: this description may be a shared resource's, so the first attempt below may be retried as one. The
-    // engine is not asked anything yet and the create is unchanged: a shape outside the envelope, and every shape
-    // whose first attempt succeeds, never reaches the retry.
+    // BD-075, BD-217: allow the shell to select shared-capable storage for this
+    // envelope. The first request has no linear layout; kShareRequired asks for it.
     const bool shareable = res_desc && !linear && c->mode == MemoryMode::RuntimeBacked &&
                            shared_surface_shape(sized, desc, *res_desc);
     if (res_desc) {
@@ -604,12 +597,11 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         };
         hr = import_memory(c, build_request(shareable), &memory);
         if (hr == kShareRequired) {
-            // BD-075, attempt 2. The runtime refused the ordinary allocation shape for this resource, which is
-            // what a shared create does and what nothing else that reaches this path does. Nothing was allocated.
-            // The surface is asked of the engine only now, so an ordinary create pays no query at all.
+            // BD-075, BD-217: the shell requests a shared-capable surface before
+            // allocating. Obtain the actual linear layout before the retry.
             const HRESULT query = query_linear_surface(c, desc, &surface);
             if (FAILED(query)) {
-                log_line("shared surface: the runtime refused the ordinary shape and the engine has no linear image "
+                log_line("shared surface: the shell requested LB7A but the engine has no linear image "
                          "for this description: %08lx",
                          static_cast<unsigned long>(query));
                 return query;
@@ -619,12 +611,12 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             align = surface.info.MemoryAlignment;
             // The runtime sized the heap from the tiled answer, so its ByteSize is not compared with the linear
             // need: the heap becomes the surface, exactly as a linear primary's does.
-            // log_refusal, not log_line: this is the one line that says an ordinary committed texture became a
-            // linear shared surface, and the named risk of the whole design is that it fires where it should not.
+            // Keep the representation choice observable, including private
+            // textures inside the shared-capable envelope.
             // It goes to the debugger channel with no trace build, under the refusal budget, and it is counted
             // here so that a trial and a game can both be asked how many retries happened (BD-075 review).
             shared_retries.fetch_add(1, std::memory_order_relaxed);
-            log_refusal("shared surface: the runtime refused the ordinary allocation shape; retrying as a shared "
+            log_refusal("shared surface: the shell requested a shareable surface; retrying as a shared "
                         "linear surface (format %d, %llux%u, heap of %llu bytes aligned to %llu becomes %llu bytes, "
                         "default alignment, pitch %llu)",
                         static_cast<int>(desc.Format), static_cast<unsigned long long>(desc.Width), desc.Height,

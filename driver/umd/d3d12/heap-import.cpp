@@ -468,9 +468,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // resources.cpp, make_present_copy). Two things follow: its release names no owner (release_owned), and it
     // is never scanned out, whichever form it took - see the scan-out clause below.
     const bool driver_surface=surface && !request->rt_owner.handle;
-    // The first attempt of a shared create: an ordinary dedicated request that says the resource may have to be
-    // shared. Nothing about the allocation changes; the flag exists so that this call can tell the runtime's
-    // refusal of a shared resource from any other E_INVALIDARG and answer kShareRequired.
+    // The engine permits a shared-capable linear surface for this description.
+    // The DDI does not tell the shell whether this create is actually shared.
     const bool shareable=(request->flags&engine_ddi::kMemoryShareable)!=0;
     unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
         D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
@@ -619,6 +618,18 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
            (heap.Flags&D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE))
             return refuse("texture on this heap",E_NOTIMPL,*request);
     } else if(!(heap.Flags&D3D12DDI_HEAP_FLAG_BUFFERS))return refuse("buffer heap",E_NOTIMPL,*request);
+    // BD-217: select the supported sharing representation before allocating.
+    // BD-210 made GPU-only BC2A allocations CPU-invisible; the runtime now accepts
+    // the ordinary allocation for shared textures too. Its E_INVALIDARG was a
+    // measurement, not a DDI promise that could identify sharing. The engine's
+    // positive permission is the narrow shared_surface_shape envelope. Private
+    // textures in that envelope also use LB7A; other allocations retain BC2A and
+    // its no-CPU-view intent. No allocation or Vulkan import occurs on this answer.
+    if(shareable && !surface && !ddi_experiment("shared-create-retry-off")){
+        report_.stage=ImportStage::Surface;
+        report_.refusal="shared resource needs a surface record";
+        return engine_ddi::kShareRequired;
+    }
     AllocationAccess access{};VkMemoryPropertyFlags want{};
     switch(heap.CPUPageProperty){
     case D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE:access=AllocationAccess::GpuOnly;want=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;break;
@@ -696,17 +707,6 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     {Exclusive held(lock_);record->next=records_;records_=record;}
     report_.stage=ImportStage::AllocateCallback;
     hr=record->allocation.open(allocation.args);
-    // BD-075, the measurement this whole path rests on (lab-20261005T172552Z, ddi.log line 50860): the runtime
-    // answers E_INVALIDARG to the allocate callback of a shared resource whose ordinary allocation shape carries
-    // no resource-level private data. The DDI has no field that says "this resource is shared", so the refusal
-    // is the only signal there is, and it is read only where it can mean that: the first attempt of a create
-    // inside the shareable envelope, which has not yet asked the engine for anything. Any other allocation
-    // keeps the runtime's status unchanged.
-    // shared-create-retry-off: the bisect switch for this whole behaviour (the project's release rule is
-    // switches, and a bisect on failure). With it the shell never answers kShareRequired, so no create
-    // is ever retried as a shared surface and a shared create fails as it did before BD-075 - without removing the
-    // device, which is the fail-fast part and has no switch.
-    const bool share_required=hr==E_INVALIDARG && shareable && !surface && !ddi_experiment("shared-create-retry-off");
     {Exclusive held(lock_);record->busy=false;if(hr==S_OK)record->handle=record->allocation.handle();}
     // BD-101: the mapping carries the request's alignment, so a heap that asks for more than the address the
     // runtime picks by itself (the 4 MiB MSAA placement alignment) is mapped inside a reservation at an
@@ -754,10 +754,6 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // Failed construction transfers nothing to engine-ddi. Pending mapping and
     // cleanup failures remain owned for an explicit later close, never forgotten.
     if(release(*record)==S_OK)erase(record);
-    if(share_required){
-        report_.refusal="shared resource needs a surface record";
-        return engine_ddi::kShareRequired;
-    }
     return hr;
 }
 // BD-075, the open half. No allocate callback runs here: the allocation exists, the runtime opened it for this

@@ -144,22 +144,24 @@ enum MemoryRequestFlags : uint32_t {
     // image's alone. Set only together with kMemoryDedicated and kMemoryPrimary. A primary without it is a
     // description engine-ddi cannot make linear; the shell decides what becomes of it.
     kMemoryLinearSurface = 0x4,
-    // BD-075: the runtime may be creating this resource as a shared one, and the shell may retry with the
-    // shareable argument shape. It changes nothing about the request that carries it; it is permission alone.
+    // BD-075, BD-217: permission to select the shared-capable linear representation
+    // for this dedicated resource, through kShareRequired and a measured layout.
     // The D3D12 DDI has no sharing field and no sharing flag anywhere (d3d12umddi.h: D3D12DDIARG_CREATEHEAP_0001,
     // ..._CREATERESOURCE_0088, D3D12DDICB_ALLOCATE_0022, D3D12DDI_ALLOCATION_INFO_0022), and the heap flags a
     // shared committed texture arrives with are an ordinary committed texture's (0x26, all three categories), so
-    // no description tells the two apart. What does tell them apart is the runtime's own refusal of the ordinary
-    // allocation shape: it arrives for a shared resource and for nothing else that reaches this path. engine-ddi
-    // therefore sets this flag on the first attempt for a description inside the shareable envelope, and retries
-    // with kMemoryDedicated|kMemoryShareable|kMemoryLinearSurface when the shell answers kShareRequired.
+    // no description tells the two apart. The runtime may accept an ordinary BC2A
+    // allocation even for a shared texture. The shell therefore requests LB7A
+    // before allocation for this envelope; ordinary textures inside it use the
+    // same representation. The retry adds kMemoryLinearSurface and its layout.
     // Set only together with kMemoryDedicated, and never with kMemoryPrimary: a primary is not shared by handle.
     kMemoryShareable = 0x8,
 };
 
-// The shell's answer to an allocate_memory that carried kMemoryShareable and whose runtime allocation callback
-// refused the ordinary argument shape with E_INVALIDARG: nothing was allocated, and the shell is willing to try
-// the shareable shape. It is internal to this driver and never reaches the runtime; admitted_create_failure
+// The shell's answer to an allocate_memory that carried kMemoryShareable:
+// nothing was allocated, and the shell requests the shared-capable representation.
+// The engine obtains the linear image layout and retries with it. This is not a
+// classification of an HRESULT returned by the runtime. It stays internal to the
+// driver and never reaches the runtime; admitted_create_failure
 // clamps it like any other refusal, so a path that forgets to handle it reports E_OUTOFMEMORY and not a code
 // that would cost the application its device. The customer bit is set, so it can never collide with an HRESULT
 // of the platform's.
