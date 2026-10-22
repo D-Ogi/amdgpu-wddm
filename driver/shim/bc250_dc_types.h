@@ -6,7 +6,8 @@ typedef signed char int8_t;
 typedef short int16_t;
 typedef int int32_t;
 typedef __int64 int64_t;
-typedef unsigned char bool;
+// Match stdbool.h conversion semantics, including nonzero masks above bit 7.
+typedef _Bool bool;
 #define true 1
 #define false 0
 #define UINT64_MAX 0xffffffffffffffffull

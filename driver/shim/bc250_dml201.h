@@ -3,9 +3,7 @@
 #define BC250_DML201_H
 #include <stddef.h>
 #include "bc250_scaler_plan.h"
-#if !defined(__cplusplus) && !defined(bool)
-typedef unsigned char bool;
-#endif
+/* bc250_scaler_plan.h supplies the common host/kernel boolean type. */
 #include "dml201/display_mode_structs.h"
 
 enum { BC250_DML201_OK = 0, BC250_DML201_INVALID = -1,

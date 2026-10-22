@@ -148,7 +148,7 @@ $shimGfxSources = @('bc250_ring.c', 'bc250_gfx.c', 'bc250_wave.c', 'bc250_sdma.c
 # Named, not globbed: only what this driver runs is compiled into it.
 $importSources = @('gfxhub_v2_0.c', 'mmhub_v2_0.c', 'cyan_skillfish_reg_init.c', 'psp_v11_0_8.c') | ForEach-Object { "$repo\driver\amdgpu-import\$_" }
 Write-Host 'compile'
-$clFlags = @('/nologo', '/c', '/std:c11', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
+$clFlags = @('/nologo', '/c', '/kernel', '/GS-', '/W4', '/WX', '/we4013', '/we4020', '/we4024', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/Brepro',                      # no timestamp in the object files: the same sources must give the same bytes
     '/wd4201', '/wd4214',           # nameless unions and bit fields in the WDK's own headers
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
@@ -159,9 +159,19 @@ $clFlags = @('/nologo', '/c', '/std:c11', '/kernel', '/GS-', '/W4', '/WX', '/we4
 if ($Flavour -eq 'lab') { $clFlags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
 Write-Host ("flavour: {0}" -f ($(if ($Flavour -eq 'lab') { 'LAB (raw diagnostic escapes compiled in, gated by test signing + LabDiagnostics)' } else { 'RELEASE (no raw diagnostic escapes)' })))
 # Emit the exact per-file commands for targeted static analysis and build auditing.
+# Only these DC adapters require C11 static assertions/compound literals. Keep
+# the legacy compiler/preprocessor mode for existing KMD, shim and import code.
+$c11Names = @('dcn_cnvc_color.c','dcn_coeff.c','dcn_geometry.c','dcn_mpc.c',
+    'dcn_surface_layout.c','dcn_surface_write.c','bc250_scaler_buffer.c',
+    'bc250_scaler_geometry.c','bc250_scaler_filter.c','bc250_scaler_plan.c')
+$ordinarySources = @($sources)+@($shimSources)
+$c11Sources = @($ordinarySources | Where-Object { [IO.Path]::GetFileName($_) -in $c11Names })
+$legacySources = @($ordinarySources | Where-Object { [IO.Path]::GetFileName($_) -notin $c11Names })
+if ($c11Sources.Count -ne $c11Names.Count) { throw 'Named C11 adapter list does not match the source set' }
 $commands = @()
 $groups = @(
-    @{ Files=@($sources)+@($shimSources); Flags=$clFlags+$shimInc },
+    @{ Files=$legacySources; Flags=$clFlags+$shimInc },
+    @{ Files=$c11Sources; Flags=$clFlags+$shimInc+@('/std:c11') },
     @{ Files=@($shimGfxSources); Flags=$clFlags+$shimInc+@("/I$repo\driver\shim",'/TC','/wd4245') },
     @{ Files=@($importSources); Flags=$clFlags+$shimInc+@('/TC','/wd4244','/wd4701','/wd4100') }
 )
@@ -174,7 +184,7 @@ $commands | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Out 'compile_comma
 if($ExportCommandsOnly) { Write-Host 'compile commands exported; no compilation or deployment'; return }
 & python -B (Join-Path $repo 'tools\state\generate.py') --check
 if ($LASTEXITCODE) { throw 'State catalog, immutable defaults and INF differ' }
-# -CompileOnly is the compiler as a gate: the same three cl.exe calls and the same link as a real package build,
+# -CompileOnly is the compiler as a gate: the same compiler groups and link as a real package build,
 # with no quality gates, no identity manifest, no catalog and no signature. It exists because the quality gate
 # itself only EXPORTED these commands (quick.ps1 'kmd-commands' -ExportCommandsOnly), so a C error in
 # driver/kmd or driver/shim reached nobody until somebody built a package. Running the gates here as well would
@@ -205,9 +215,9 @@ if ($PackageVersion) {
         "/I$sdk\Include\$KitVersion\um", "/I$sdk\Include\$KitVersion\shared", (Join-Path $here 'bc250kmd.rc'))
     if (-not (Test-Path -LiteralPath $res)) { throw "rc.exe wrote no $res" }
 }
-Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + $sources + $shimSources)
-Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @("/I$repo\driver\shim", '/TC', '/wd4245') + $shimGfxSources)
-Invoke-Tool (Join-Path $bin 'cl.exe') ($clFlags + $shimInc + @('/TC', '/wd4244', '/wd4701', '/wd4100') + $importSources)
+foreach ($group in $groups) {
+    if ($group.Files.Count) { Invoke-Tool (Join-Path $bin 'cl.exe') (@($group.Flags)+@($group.Files)) }
+}
 Write-Host 'link'
 Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DRIVER', '/SUBSYSTEM:NATIVE,10.00', '/ENTRY:DriverEntry', '/NODEFAULTLIB', '/RELEASE',
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/MACHINE:X64', "/LIBPATH:$wdk\Lib\$KitVersion\km\x64",
