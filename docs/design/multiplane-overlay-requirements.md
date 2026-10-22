@@ -238,6 +238,24 @@ clocks, hardware register acceptance or HLK results. The transaction owner,
 clock/service contract and DDI integration still require implementation and
 hardware tests before application of these plans.
 
+### Blanked requestor setup
+
+`Bc250Dcn201GroupProgramBlanked` maps the computed group to HUBP0/HUBP1 and
+programs each requestor, then the shared watermarks once. It rejects invalid
+fields and inconsistent output timing before MMIO. Both physical HUBPs must
+report blank, TTU disabled and no outstanding requests. Current DISP/DPP clocks
+must meet both planes' requirements. The function leaves clocks and locks
+unchanged and never unblanks a plane. The caller owns the stopped/locked OTG,
+the memory-service clock contract and complete replay after a write failure.
+
+The remap comes from original AMD register names through regcalc. The generator
+checks all corresponding field masks. Host tests use the production display
+accessors, reverse the plane-to-HUBP mapping, distinguish the two scaling plans,
+and inject failures before and after every I/O operation. Failure leaves the
+model blank and stops writes. This does not establish physical drain, power
+state or latch behavior. The function is for setup/recovery. It does not replace
+the independently latched live MPO update path required above.
+
 ## AMD implementation reference
 
 PROVENANCE: Linux amdgpu DC, MIT, revision

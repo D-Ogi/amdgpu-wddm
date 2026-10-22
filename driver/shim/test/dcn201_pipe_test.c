@@ -2,6 +2,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "../dml201/reference/pipe/clk_mask.h"
 #include "../pipe_registers.inc"
+#include "../../kmd/regs.generated.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,26 +13,28 @@ static unsigned checks,failures;
 #define F(r,f,v) Bc250DispField(M(r,f),v)
 typedef struct MOCK {
     unsigned long reg[0x70000/4];unsigned ops,fail_at,failed,after_failure,zero,readonly;
-    unsigned writes,stalls,drop,add,no_done,power_gated;
+    unsigned writes,stalls,drop,add,no_done,power_gated,fail_after;
+    unsigned writes_on[0x70000/4];
 } MOCK;
 static long readMmio(void* ctx,unsigned long r,unsigned long* v)
 {
     MOCK* m=ctx;++m->ops;
-    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
+    if(m->ops==m->fail_at && !m->fail_after){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     if(!r || r>=sizeof(m->reg)){++m->zero;return BC250_DISP_STATUS_ACCESS_DENIED;}
     *v=m->reg[r/4];
     if(r==R(DCHUBP_CNTL) && m->power_gated)*v=0;
+    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     return 0;
 }
 static long writeMmio(void* ctx,unsigned long r,unsigned long v)
 {
     MOCK* m=ctx;++m->ops;
-    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
+    if(m->ops==m->fail_at && !m->fail_after){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     if(!r || r>=sizeof(m->reg)){++m->zero;return BC250_DISP_STATUS_ACCESS_DENIED;}
     if(r==R(REFCLK_CNTL) || r==R(DCHUBBUB_GLOBAL_TIMER_CNTL) || r==R(CLK4_CLK_PLL_REQ) ||
        r==R(CLK4_CLK2_CURRENT_CNT) || r==R(DIG_FIFO_STATUS) || r==R(DPG_STATUS))++m->readonly;
     if(m->failed && r!=R(DISPCLK_FREQ_CHANGE_CNTL))++m->after_failure;
-    ++m->writes;m->reg[r/4]=v;
+    ++m->writes;++m->writes_on[r/4];m->reg[r/4]=v;
     if(r==R(DENTIST_DISPCLK_CNTL)) {
         if(!m->no_done)m->reg[r/4]|=M(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_CHG_DONE)|M(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_CHG_DONE);
         else m->reg[r/4]&=~(M(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_CHG_DONE)|M(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_CHG_DONE));
@@ -40,6 +43,7 @@ static long writeMmio(void* ctx,unsigned long r,unsigned long v)
         if(v&M(OTG_PIXEL_RATE_CNTL,OTG_ADD_PIXEL))++m->add;
         if(v&M(OTG_PIXEL_RATE_CNTL,OTG_DROP_PIXEL))++m->drop;
     }
+    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     return 0;
 }
 static void stallMmio(void* ctx,unsigned long us) {((MOCK*)ctx)->stalls+=(unsigned)us;}
@@ -55,6 +59,7 @@ static void init(MOCK* m,BC250_DISP_IO* io)
     m->reg[R(DENTIST_DISPCLK_CNTL)/4]=F(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_WDIVIDER,40)|
         F(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_WDIVIDER,40)|M(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_CHG_DONE)|M(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_CHG_DONE);
     m->reg[R(DCHUBP_CNTL)/4]=M(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ);
+    m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]=M(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ);
     m->reg[R(DIG_FIFO_STATUS)/4]=F(DIG_FIFO_STATUS,DIG_FIFO_CAL_AVERAGE_LEVEL,32);
 }
 static BC250_DML201_PLAN plan(void)
@@ -70,6 +75,96 @@ static void ready(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
 {
     init(m,io);CHECK(Bc250Dcn201ReadClocks(io,48000,c)==0);CHECK(Bc250Dcn201PlaneBlank(io,1)==0);
     m->ops=0;m->writes=0;io->Reads=0;io->Writes=0;
+}
+
+static BC250_DML201_GROUP_PLAN groupPlan(void)
+{
+    BC250_DML201_INPUT i={0};BC250_SCALER_REQUEST r={0};
+    BC250_SCALER_PREPARED s[2];BC250_DML201_PLANE_INPUT planes[2];
+    BC250_DML201_GROUP_PLAN g={0};size_t size=Bc250Dml201WorkspaceSize();void* ws=malloc(size);
+    CHECK(ws!=NULL);if(!ws)return g;
+    i.HActive=1920;i.HTotal=2200;i.HFrontPorch=88;i.HSyncWidth=44;
+    i.VActive=1080;i.VTotal=1125;i.VFrontPorch=4;i.VSyncWidth=5;
+    i.PixelClockKhz=148500;i.DchubRefClockKhz=48000;i.DentistVcoKhz=3000000;
+    r.Geometry.Horizontal=(BC250_SCALER_AXIS_INPUT){1920,1920,0,1920,0,1920,0,1920,0,0};
+    r.Geometry.ChromaDivisor=1;
+    for(unsigned n=0;n<2;++n) {
+        unsigned h=1080*(n+1);
+        r.Geometry.Vertical=(BC250_SCALER_AXIS_INPUT){h,1080,0,(int)h,0,1080,0,1080,0,0};
+        CHECK(Bc250ScalerPrepare(&r,&s[n])==BC250_SCALER_GEOMETRY_OK);
+        planes[n]=(BC250_DML201_PLANE_INPUT){&s[n],1920,h,1920,1920,h,32};
+    }
+    CHECK(Bc250Dml201PlanGroup(&i,planes,2,ws,size,&g)==BC250_DML201_OK);
+    free(ws);return g;
+}
+
+static void groupReady(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
+{
+    ready(m,io,c);CHECK(Bc250Dcn201PlaneBlankAt(io,1,1)==0);
+    m->ops=m->writes=0;io->Reads=io->Writes=0;
+    memset(m->writes_on,0,sizeof(m->writes_on));
+}
+
+static void groupTest(MOCK* m,BC250_DISP_IO* io)
+{
+    BC250_DCN201_CLOCKS c;BC250_DML201_GROUP_PLAN g=groupPlan(),bad;
+    unsigned pipes[2]={0,1},reverse[2]={1,0},duplicate[2]={1,1},outside[2]={0,2};
+    unsigned total,first,second;
+    groupReady(m,io,&c);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)==0);total=m->ops;
+    CHECK(!m->zero && !m->readonly && !m->drop && !m->add && !m->stalls);
+    CHECK(!m->writes_on[R(DENTIST_DISPCLK_CNTL)/4]);
+    CHECK(m->writes_on[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4]==1);
+    first=(unsigned)Bc250DispGet(m->reg[R(PER_LINE_DELIVERY)/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L));
+    second=(unsigned)Bc250DispGet(m->reg[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L));
+    CHECK(first==g.Plane[0].Dlg.refcyc_per_line_delivery_l);
+    CHECK(second==g.Plane[1].Dlg.refcyc_per_line_delivery_l);CHECK(first!=second);
+    CHECK(m->writes_on[BC250_REG_DMU_HUBP1_DCHUBP_REQ_SIZE_CONFIG/4]>0);
+    CHECK(m->reg[R(DCHUBP_CNTL)/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+    CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+    printf("group program: %u MMIO operations, %u writes, line delivery %u/%u\n",total,m->writes,first,second);
+    for(unsigned after=0;after<2;++after) for(unsigned n=1;n<=total;++n) {
+        groupReady(m,io,&c);m->fail_at=n;m->fail_after=after;
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)<0);
+        CHECK(m->failed && !m->after_failure && !m->zero && !m->readonly);
+        CHECK(m->reg[R(DCHUBP_CNTL)/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+        CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+    }
+    groupReady(m,io,&c);CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,reverse,&c)==0);
+    CHECK(Bc250DispGet(m->reg[R(PER_LINE_DELIVERY)/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L))==second);
+    CHECK(Bc250DispGet(m->reg[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L))==first);
+    groupReady(m,io,&c);bad=g;bad.Count=1;
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,reverse,&c)==0);
+    CHECK(!m->writes_on[R(PER_LINE_DELIVERY)/4]);
+    CHECK(m->writes_on[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4]==1);
+#define BAD_GROUP(field,value) do { groupReady(m,io,&c);bad=g;bad.field=(value); \
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,pipes,&c)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0); } while(0)
+    BAD_GROUP(Count,0);BAD_GROUP(Count,3);BAD_GROUP(Valid,0);
+    BAD_GROUP(Plane[1].Rq.rq_regs_l.chunk_size,0xffffffffu);
+    BAD_GROUP(Plane[1].Ttu.refcyc_per_req_delivery_pre_cur1,1);
+    BAD_GROUP(Plane[1].Watermarks[0].UrgentNs,g.Plane[0].Watermarks[0].UrgentNs+1);
+    BAD_GROUP(Plane[1].Destination.htotal,2201);BAD_GROUP(Plane[1].Destination.otg_inst,1);
+    BAD_GROUP(Plane[1].Destination.interlaced,1);BAD_GROUP(Plane[1].DcfClockKhz,1);
+    groupReady(m,io,&c);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,duplicate,&c)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,outside,&c)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,NULL,&c)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    groupReady(m,io,&c);bad=g;bad.Plane[1].DppClockKhz=c.DppClockKhz+1;
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,pipes,&c)==BC250_DISP_STATUS_NOT_SUPPORTED);CHECK(m->writes==0);
+    groupReady(m,io,&c);c.DentistVcoKhz++;
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)==BC250_DISP_STATUS_MISMATCH);CHECK(m->writes==0);
+    for(unsigned n=0;n<2;++n) for(unsigned missing=0;missing<3;++missing) {
+        const unsigned long bits[]={M(DCHUBP_CNTL,HUBP_BLANK_EN),M(DCHUBP_CNTL,HUBP_TTU_DISABLE),
+            M(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ)};
+        groupReady(m,io,&c);
+        m->reg[(n?BC250_REG_DMU_HUBP1_DCHUBP_CNTL:R(DCHUBP_CNTL))/4]&=~bits[missing];
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
+        bad=g;bad.Count=1;
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,pipes,&c)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
+    }
+    init(m,io);CHECK(Bc250Dcn201PlaneBlankAt(io,2,1)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]=0;io->BudgetUs=7;
+    CHECK(Bc250Dcn201PlaneBlankAt(io,1,1)==BC250_DISP_STATUS_BUDGET);CHECK(io->StalledUs==7);
 }
 int main(void)
 {
@@ -177,5 +272,6 @@ int main(void)
     init(m,&io);m->reg[R(DIG_BE_CNTL)/4]=F(DIG_BE_CNTL,DIG_FE_SOURCE_SELECT,2);
     CHECK(Bc250Dcn201Route(&io,3,1)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
     init(m,&io);CHECK(Bc250Dcn201Route(&io,1,1)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    groupTest(m,&io);
     free(m);printf("dcn201 pipe: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

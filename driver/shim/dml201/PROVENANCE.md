@@ -75,7 +75,7 @@ for results and the remaining integration work.
 `reference/pipe/manifest.json` pins the originals. The extractor also emits register lists through
 `tools/regcalc`. `pipe_registers_readonly.json` separates status and clock-source reads from writes.
 
-The wrapper admits only HUBP0, DPP0, MPC0, OPP0, OTG0 and DIG0. It verifies all field ranges before
+The original modeset entry uses HUBP0, DPP0, MPC0, OPP0, OTG0 and DIG0. It verifies all field ranges before
 the first write. The caller blanks and drains the plane, serializes the full mode change, and supplies
 the ATOM crystal clock. A failed write requires a full replay of the previous plan.
 The wrapper preserves the first I/O error and restores the FIFO override even after a clock error.
@@ -83,12 +83,25 @@ All polls consume the caller's bounded stall budget.
 
 The following adaptations are explicit:
 
-- Upstream array selectors are fixed to pipe and OTG zero.
+- Output array selectors are fixed to OTG/OPP zero. HUBP-local registers can
+  select slice zero or one through `pipe_hubp_remap.inc`. The generator resolves
+  each name through regcalc and verifies that the field masks match. No register
+  stride is assumed and no global/output register is remapped.
 - DCN201 omits VM-only NOM0-3 and cursor1. An absent field accepts only a zero payload.
 - The wrapper rejects a power-gated HUBP instead of treating its skipped drain wait as success.
 - The wrapper has no 3 GHz or 600 MHz fallback when a clock-source read is invalid.
 - It disables stutter to match the computed plan, which has no C-state admission.
 - Only RGB8 video and black output are exposed. Other imported test-pattern branches have no public entry point.
+
+`Bc250Dcn201GroupProgramBlanked` programs separate RQ/DLG/TTU plans for unique
+HUBP0/HUBP1 selections and then writes the shared watermarks once. It verifies
+the complete group before MMIO. Both physical HUBPs must be powered, blanked
+and drained, including when the new group contains only one active plane.
+Read-back DISP/DPP clocks must satisfy every plane. This entry changes no
+clocks and does not establish the DCF/SOC/DRAM service contract. The caller
+owns that contract, the stopped/locked OTG and replay after an attempted-write
+failure. The function does not unblank, trigger or release a lock. It is a
+setup/recovery building block, not the live independent-plane update path.
 
 | Hardware contract | Source |
 | --- | --- |
