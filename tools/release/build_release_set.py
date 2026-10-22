@@ -713,11 +713,19 @@ def literal_args(build, version):
     return out
 
 
+# Fields of an output that only describe its row in release-sources.json: a new text keeps the artifact.
+OUTPUT_NOTES = ("pair_skew", "release_edits")
+
+
 def build_key(build):
     """What decides the bytes of a build, so that an artifact of an earlier run stands for this manifest's row only
     while the row still says the same."""
     keys = ("repo", "commit", "recipe", "recipe_commit", "args", "inputs", "outputs", "compiler", "flavour", "version")
-    return json.dumps({k: build.get(k) for k in keys}, sort_keys=True)
+    key = {k: build.get(k) for k in keys}
+    if isinstance(key["outputs"], list):
+        key["outputs"] = [{k: v for k, v in o.items() if k not in OUTPUT_NOTES} if isinstance(o, dict) else o
+                          for o in key["outputs"]]
+    return json.dumps(key, sort_keys=True)
 
 
 def make_rows(plan, results):
@@ -878,9 +886,53 @@ def rebind_configs(data, root, version, out_dir, encode):
     return receipts, errors
 
 
+# The summary texts of release-sources.json 'sources' name builds as "<flavour> <path>: <repo> <commit>", and the
+# texts of provenance.PARSED_SOURCES start with "bc250-win <commit>" (release-baseline.py and the provenance gate read
+# that commit). A registered row moves both along, so that no text names the build it replaced.
+SOURCE_ENTRY = re.compile(r"\b(release|lab|shared) (payload/[^\s:]+): ([A-Za-z0-9_.-]+) ([0-9a-f]{40})\b")
+SOURCE_HEAD = re.compile(r"^Current \S+ payload sources\.")
+
+
+def refresh_sources(data, version, changed):
+    """Rewrites the texts of data['sources'] that name a build of `changed` ((path, flavour) pairs) and returns
+    their keys."""
+    texts = data.get("sources")
+    if not isinstance(texts, dict):
+        return []
+    release = version.split("-", 1)[1] if "-" in version else version
+    rows = {(f.get("path"), f.get("flavour")): f for f in data.get("files", [])}
+
+    def built(path, flavour):
+        b = (rows.get((path, flavour)) or rows.get((path, "shared")) or {}).get("built_from") or {}
+        return b.get("repo"), b.get("commit")
+
+    def entry(m):
+        repo, commit = built(m.group(2), m.group(1))
+        if (m.group(2), m.group(1)) not in changed or not repo or not commit:
+            return m.group(0)
+        return f"{m.group(1)} {m.group(2)}: {repo} {commit}"
+
+    keys = []
+    for key, text in texts.items():
+        if not isinstance(text, str):
+            continue
+        new = SOURCE_ENTRY.sub(entry, text)
+        path = provenance.PARSED_SOURCES.get(key)
+        if path and any(p == path for p, _ in changed):
+            _, commit = built(path, "release")
+            if commit:
+                new = (f"bc250-win {commit} (KMD {data.get('kmd_version')}): the {release} KMD, both flavours built "
+                       f"by the release set at that commit; the rows of {path} name the recipe and its arguments.")
+        if new != text:
+            texts[key] = SOURCE_HEAD.sub(f"Current {release} payload sources.", new)
+            keys.append(key)
+    return keys
+
+
 def register(rows_doc, sources_path, root, repo, version, configs_out):
     """The registered release-sources.json with this set's rows and rebound D3D11 records, and what changed."""
     data = merge_rows(rows_doc["files"], sources_path)
+    refresh_sources(data, version, {(r["path"], r["flavour"]) for r in rows_doc["files"]})
     receipts, errors = rebind_configs(data, root, version, configs_out, load_config_encoder(repo))
     for f in data.get("files", []):
         p = Path(root) / f["source"]

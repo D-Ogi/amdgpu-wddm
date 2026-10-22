@@ -411,6 +411,43 @@ class ReleaseSetRegister(unittest.TestCase):
         self.assertEqual([f for f in data["files"] if f["path"].endswith(".config")][0]["source"], config["source"])
 
 
+class ReleaseSetSources(unittest.TestCase):
+    """What a registered row changes beside itself: the 'sources' texts, and which edits keep an artifact."""
+
+    OLD, NEW = "a" * 40, "b" * 40
+
+    def test_register_moves_the_source_texts_to_the_new_build(self):
+        data = {"kmd_version": "1.2.3.4", "sources": {
+            "kmd": f"bc250-win {self.OLD} (old line): the old KMD",
+            "d3d12_shell": f"Current old.1 payload sources. release payload/d3d12/x.dll: amdgpu-wddm {self.OLD}; "
+                           f"lab payload/d3d12/x.dll: amdgpu-wddm {self.OLD}. Rows keep the rest.",
+            "firmware": "linux-firmware 0123, downloaded by the installer"},
+            "files": [{"path": "payload/kmd/bc250kmd.sys", "flavour": "release",
+                       "built_from": {"repo": "amdgpu-wddm", "commit": self.NEW}},
+                      {"path": "payload/d3d12/x.dll", "flavour": "release",
+                       "built_from": {"repo": "amdgpu-wddm", "commit": self.NEW}},
+                      {"path": "payload/d3d12/x.dll", "flavour": "lab",
+                       "built_from": {"repo": "amdgpu-wddm", "commit": self.OLD}}]}
+        changed = {("payload/kmd/bc250kmd.sys", "release"), ("payload/d3d12/x.dll", "release")}
+        keys = build_release_set.refresh_sources(data, "1.2.3.4-new.2", changed)
+        texts = data["sources"]
+        self.assertEqual(sorted(keys), ["d3d12_shell", "kmd"])
+        self.assertTrue(texts["kmd"].startswith(f"bc250-win {self.NEW} (KMD 1.2.3.4): the new.2 KMD"))
+        self.assertEqual(texts["d3d12_shell"], f"Current new.2 payload sources. release payload/d3d12/x.dll: "
+                                               f"amdgpu-wddm {self.NEW}; lab payload/d3d12/x.dll: amdgpu-wddm "
+                                               f"{self.OLD}. Rows keep the rest.")
+        self.assertEqual(texts["firmware"], "linux-firmware 0123, downloaded by the installer")
+
+    def test_a_new_pair_skew_keeps_the_artifact_and_a_new_file_does_not(self):
+        row = {"repo": "r", "commit": self.OLD, "outputs": [{"file": "a.dll", "path": "payload/a.dll"}]}
+        noted = copy.deepcopy(row)
+        noted["outputs"][0]["pair_skew"] = "a sentence that says why the two builds differ"
+        moved = copy.deepcopy(row)
+        moved["outputs"][0]["file"] = "b.dll"
+        self.assertEqual(build_release_set.build_key(row), build_release_set.build_key(noted))
+        self.assertNotEqual(build_release_set.build_key(row), build_release_set.build_key(moved))
+
+
 class ReleaseSetRuns(unittest.TestCase):
     """build-release-set.ps1 end to end, on stub recipes."""
 
