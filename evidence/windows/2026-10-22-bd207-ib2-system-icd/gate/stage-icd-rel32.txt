@@ -1,0 +1,13 @@
+utc 2026-10-22T18:44:49.2942578Z
+dll C:\BC250\tmp\vkroute-cp\icd-rel32\vulkan_radeon.dll 81438ED06EDB2A3DE3D753C8C15797E11D17ACADB91D46E9B43DFEA1C76822EF 18407936 bytes
+adapter 0000 'BC-250 GPU (amdgpu-wddm)' VulkanDriverName C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\radeon_icd.json
+system manifest: { "file_format_version": "1.0.0", "ICD": { "library_path": ".\\vulkan_radeon.dll", "api_version": "1.4.335" } } 
+system dll C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\vulkan_radeon.dll 01B584A8D3E553866C7BF5BCF745177EE2E53C8153E8820669601C4603E5B7F8
+manifest C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json 518B9379A6FAF8617DB123D11D019E8004F3238FB196973868582DF8E1215135
+{
+  "file_format_version": "1.0.0",
+  "ICD": {
+    "library_path": ".\\vulkan_radeon.dll",
+    "api_version": "1.4.335"
+  }
+}

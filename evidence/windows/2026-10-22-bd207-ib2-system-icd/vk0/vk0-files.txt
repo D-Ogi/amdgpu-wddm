@@ -1,0 +1,91 @@
+utc 2026-10-22T15:59:32.7688701Z
+file exitcode.txt 19
+file foreground.csv 2705
+file launch.cmd 406
+file presentmon.csv 1241991
+file presentmon.stderr.txt 2
+file presentmon.stdout.txt 2
+file result.json 242
+file run-log.txt 5697
+file samples.csv 2524
+file stderr.txt 2209691
+file stdout.txt 0
+file UserSettings.after.json 154673
+file UserSettings.before.json 91686
+file UserSettings.run.json 154673
+--- exitcode.txt (last 50 lines)
+exit -2147483645 
+--- stdout.txt (last 50 lines)
+--- stderr.txt (last 50 lines)
+2f34:warn:skip_dword_unknown: 	0xbf465158
+2f34:warn:skip_dword_unknown: 	0x1450ffd7
+2f34:warn:skip_dword_unknown: 	0x88506ac4
+2f34:warn:skip_dword_unknown: 	0x0e605634
+2158:warn:d3d12_pipeline_library_load_pipeline: Pipeline "1261885740" does not exist.
+2158:warn:parse_dxbc: Ignoring DXBC checksum.
+2158:warn:skip_dword_unknown: Skipping 4 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x3dc77baa
+2158:warn:skip_dword_unknown: 	0x1552b0f6
+2158:warn:skip_dword_unknown: 	0xa3d413a7
+2158:warn:skip_dword_unknown: 	0xf285a40e
+2158:warn:skip_dword_unknown: Skipping 1 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x00000008
+2158:warn:parse_dxbc: Ignoring DXBC checksum.
+2158:warn:skip_dword_unknown: Skipping 4 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x3dc77baa
+2158:warn:skip_dword_unknown: 	0x1552b0f6
+2158:warn:skip_dword_unknown: 	0xa3d413a7
+2158:warn:skip_dword_unknown: 	0xf285a40e
+2158:warn:skip_dword_unknown: Skipping 1 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x00000008
+2158:warn:parse_dxbc: Ignoring DXBC checksum.
+2158:warn:skip_dword_unknown: Skipping 4 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0xbf465158
+2158:warn:skip_dword_unknown: 	0x1450ffd7
+2158:warn:skip_dword_unknown: 	0x88506ac4
+2158:warn:skip_dword_unknown: 	0x0e605634
+2158:warn:skip_dword_unknown: Skipping 1 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x00000008
+2158:warn:parse_dxbc: Ignoring DXBC checksum.
+2158:warn:skip_dword_unknown: Skipping 4 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0xbf465158
+2158:warn:skip_dword_unknown: 	0x1450ffd7
+2158:warn:skip_dword_unknown: 	0x88506ac4
+2158:warn:skip_dword_unknown: 	0x0e605634
+2158:warn:skip_dword_unknown: Skipping 1 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x00000008
+2158:warn:parse_dxbc: Ignoring DXBC checksum.
+2158:warn:skip_dword_unknown: Skipping 4 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0x3dc77baa
+2158:warn:skip_dword_unknown: 	0x1552b0f6
+2158:warn:skip_dword_unknown: 	0xa3d413a7
+2158:warn:skip_dword_unknown: 	0xf285a40e
+2158:warn:parse_dxbc: Ignoring DXBC checksum.
+2158:warn:skip_dword_unknown: Skipping 4 unknown DWORDs:
+2158:warn:skip_dword_unknown: 	0xbf465158
+2158:warn:skip_dword_unknown: 	0x1450ffd7
+2158:warn:skip_dword_unknown: 	0x88506ac4
+2158:warn:skip_dword_unknown: 	0x0e605634
+1ac0:info:vkd3d_pipeline_library_disk_thread_main: Flushing disk cache (wakeup counter since last flush = 486). It seems like application has stopped creating new PSOs for the time being.
+--- foreground.csv (first 20 rows)
+t_s,fg_pid,fg_name,game_pid,game_iconic,action
+2,6008,explorer,0,,
+4.1,6008,explorer,0,,
+6.1,6008,explorer,0,,
+8.2,6008,explorer,0,,
+10.2,6008,explorer,856,False,force1=True
+12.2,856,Cyberpunk2077,856,False,
+14.3,856,Cyberpunk2077,856,False,
+16.3,856,Cyberpunk2077,856,False,
+18.3,856,Cyberpunk2077,856,False,
+20.3,856,Cyberpunk2077,856,False,
+22.4,856,Cyberpunk2077,856,False,
+25.5,856,Cyberpunk2077,856,False,
+28.1,856,Cyberpunk2077,856,False,
+30.4,856,Cyberpunk2077,856,False,
+32.4,856,Cyberpunk2077,856,False,
+34.5,856,Cyberpunk2077,856,False,
+36.7,856,Cyberpunk2077,856,False,
+38.8,856,Cyberpunk2077,856,True,
+40.8,856,Cyberpunk2077,856,True,
+--- Application log, last 15 min, entries that name Cyberpunk2077

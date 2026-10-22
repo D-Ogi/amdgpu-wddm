@@ -1,0 +1,99 @@
+--- first 25 lines
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x891b
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+ChromaSDKPlugin failed to load!
+
+radv_wddm2_winsys_create
+OpenAdapterFromLuid 0x0 0x891b
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+0460:warn:openvr_instance_extensions: Failed to open VR registry key, status 2.
+0460:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+0460:info:vkd3d_instance_apply_application_workarounds: Program name: "Cyberpunk2077.exe" (hash: ce46d36b351cca3a)
+0460:info:vkd3d_instance_apply_application_workarounds: Detected game Cyberpunk2077.exe, adding config 0x40000000, removing masks 0x0.
+0460:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+0460:info:vkd3d_config_flags_init_once: VKD3D_CONFIG=''.
+0460:info:vkd3d_get_vk_version: vkd3d-proton - applicationVersion: 3.0.1.
+0460:info:vkd3d_instance_init: vkd3d-proton - build: 3b10bd7a7ec6a73.
+radv_wddm2_winsys_create
+0460:warn:openvr_device_extensions: Failed to open VR registry key, status 2.
+0460:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+--- lines matching :err:|:fixme:.*(swapchain|present)|swapchain|Swapchain|fullscreen|Fullscreen|device lost|DEVICE_LOST|VK_ERROR|Vulkan|vkd3d_instance|Using device|driver|Driver
+16: 0460:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+17: 0460:info:vkd3d_instance_apply_application_workarounds: Program name: "Cyberpunk2077.exe" (hash: ce46d36b351cca3a)
+18: 0460:info:vkd3d_instance_apply_application_workarounds: Detected game Cyberpunk2077.exe, adding config 0x40000000, removing masks 0x0.
+19: 0460:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+22: 0460:info:vkd3d_instance_init: vkd3d-proton - build: 3b10bd7a7ec6a73.
+25: 0460:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+81: 0460:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+83: 0460:info:vkd3d_instance_init: vkd3d-proton - build: 3b10bd7a7ec6a73.
+86: 0460:warn:openxr_vulkan_extensions: wineopenxr.dll is missing required symbols.
+23865: 0460:info:dxgi_vk_swap_chain_init: Creating swapchain (1920 x 1200), BufferCount = 3.
+23873: 0460:info:vkd3d_instance_apply_application_workarounds: Detected game Cyberpunk2077.exe, adding 1 configs, removing 0 configs.
+23874: 0460:info:vkd3d_instance_deduce_config_flags_from_environment: shader_cache is used, global_pipeline_cache is enforced.
+23877: 0460:info:vkd3d_instance_init: vkd3d-proton - build: b69df5fb2d44858.
+23878: 0460:info:vkd3d_disable_swapchain_extensions: VK_KHR_swapchain is not enabled, not enabling 5 extensions that depend on it.
+23888: 0460:info:vkd3d_instance_init: vkd3d-proton - build: b69df5fb2d44858.
+23889: 0460:info:vkd3d_disable_swapchain_extensions: VK_KHR_swapchain is not enabled, not enabling 5 extensions that depend on it.
+23911: 0460:info:vkd3d_driver_cache_init: Driver cache C:\Users\bc250\AppData\Local\amdgpu-wddm\vkd3d\vkd3d-proton.Cyberpunk2077.exe.cache.driver: 20456320 bytes loaded in 107.164 ms.
+23988: 1ae0:info:dxgi_vk_swap_chain_recreate_swapchain_in_present_task: Got 3 swapchain images.
+24002: 1ae0:err:d3d12_command_allocator_Release: Released all public references, but there are still 1 pending command lists awaiting execution from command allocator iface 0000021D568A5DF0! Deferring release.
+24003: 1ae0:info:dxgi_vk_swap_chain_recreate_swapchain_in_present_task: Got 3 swapchain images.
+30181: 19f0:err:d3d12_command_queue_execute: Failed to submit queue(s), vr -4.
+30182: 19f0:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30183: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30184: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30185: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30186: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30227: 32e8:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30229: 32e8:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30231: 32e8:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30236: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30238: 32e8:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30240: 32e8:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30241: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30242: 32e8:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30243: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30247: R_DEVICE_LOST").
+30253: 2724:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30254: 2724:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30255: 2724:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30258: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30259: 32e8:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30260: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30262: 32e8:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICallocation handle=0x40019dc0
+30264: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30265: 32e8:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30266: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30269: 1ae0:err:dxgi_vk_swap_chain_wait_semaphore: Failed to wait for present semaphore, vr -4.
+30315: 2158:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30316: 2158:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30317: 2158:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30320: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30321: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30322: 2158:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4allocation handle=0x40019e40
+30324: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphorallocation handle=0x40019ec0
+30325: e: Failed to wait for Vulkan timeline semaphore, vr -4.
+30326: 2158:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30327: 1c9c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30328: 2158:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30336: 0460:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30338: 0460:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30340: 0460:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30346: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30350: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30352: 1c9c:err:vkd3d_wait_for_gpu_timeline_semaphore: Failed to wait for Vulkan timeline semaphore, vr -4.
+30356: c:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30364: 0460:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30366: 0460:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+30368: 0460:err:vkd3d_memory_transfer_queue_flush_locked: Failed to submit command buffer, vr -4.
+30392: 32e8:err:vkd3d_memory_transfer_queue_wait_semaphore: Failed to wait for timeline semaphore, vr -4.
+30393: 32e8:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").
+(stopped at 70)
+matches shown: 70

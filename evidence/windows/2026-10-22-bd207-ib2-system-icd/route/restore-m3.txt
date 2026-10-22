@@ -1,0 +1,9 @@
+utc 2026-10-22T17:33:34.9876806Z
+removed: d3d12.dll
+removed: d3d12core.dll
+removed: dxgi.dll
+removed: vkd3d-proton.cache.write 1277112
+removed: Cyberpunk2077_dxgi.log 1660
+  absent d3d12.dll
+  absent d3d12core.dll
+  absent dxgi.dll

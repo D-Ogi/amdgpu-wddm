@@ -1,0 +1,5 @@
+utc 2026-10-22T17:29:36.4914246Z
+staged: d3d12.dll AED51497, d3d12core.dll 68B8BC7B, dxgi.dll E3C1178E
+  present d3d12.dll AED51497
+  present d3d12core.dll 68B8BC7B
+  present dxgi.dll E3C1178E

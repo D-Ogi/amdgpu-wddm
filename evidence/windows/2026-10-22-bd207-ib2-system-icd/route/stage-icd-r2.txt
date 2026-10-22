@@ -1,0 +1,3 @@
+utc 2026-10-22T17:29:34.1051691Z
+dll C:\BC250\tmp\vkroute-cp\icd\vulkan_radeon.dll F475658C37BB4103644D74F04D0B0227AC244E1A04E50C78D2FFF7B0001E1A05 18406912 bytes
+adapter 0000 'BC-250 GPU (amdgpu-wddm)' VulkanDriverName C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\radeon_icd.json

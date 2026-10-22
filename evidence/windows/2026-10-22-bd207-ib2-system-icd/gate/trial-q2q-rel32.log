@@ -1,0 +1,18 @@
+2026-10-22T18:48:47.3919722Z pt-run args: -Demo q2rtx-timedemo -Width 1280 -Height 720 -Seconds 150 -Overlay off -RtApi query -SetEnv VK_DRIVER_FILES=C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json
+2026-10-22T18:48:49.5815272Z gamecheck: utc 2026-10-22T18:49:45.5748326Z
+2026-10-22T18:48:49.5918630Z gamecheck: games 0
+2026-10-22T18:48:49.5994844Z gamecheck: tctl_mc 61250
+2026-10-22T18:48:50.2179958Z cool: 20:49:46 Tctl 61.0 C (raw 6E1B0FEF)
+2026-10-22T18:49:20.8265488Z cool: 20:50:17 Tctl 55.6 C (raw 68BB0FEF)
+2026-10-22T18:49:44.9397972Z camera t=15 s: P:\BC-250\scratch\bd207-ib2\gate\cam-q2q-rel32-15.jpg
+2026-10-22T18:49:55.9658245Z pt-run exit 0, elapsed 30 s
+2026-10-22T18:49:59.4466001Z camera after: P:\BC-250\scratch\bd207-ib2\gate\cam-q2q-rel32-after.jpg
+2026-10-22T18:49:59.4659689Z run:  extra env: VK_DRIVER_FILES=C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json
+2026-10-22T18:49:59.4753663Z run:  gate temperature: tctl 54.75 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T18:49:59.4853604Z run:  t=2 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=57250 ready=1
+2026-10-22T18:49:59.4944708Z run:  t=12.3 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=66250 ready=1
+2026-10-22T18:49:59.5039678Z run:  end: reason exited, elapsed 19.3 s, tctl 66 C
+2026-10-22T18:49:59.5134744Z run:  bc250-q2rtx-timedemo.log: [20:50:26] Using VK_KHR_ray_query
+2026-10-22T18:49:59.5229283Z run:  bc250-q2rtx-timedemo.log: [20:50:39] 631 frames, 6.56 seconds: 96.159706 fps
+2026-10-22T18:49:59.5322476Z run:  loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:49:59.5405705Z run:  run directory C:\BC250\pathtrace\runs\20261022T185024Z-q2rtx-timedemo

@@ -1,0 +1,34 @@
+2026-10-22T18:49:12.5087723Z demo q2rtx-timedemo bound 150s user BC250-A\bc250 exe C:\BC250\pathtrace\q2rtx\q2rtx.exe
+2026-10-22T18:49:12.5864561Z exe sha256 2BE03E86B51519944F992623AC41635499AD967A28FDBBF4BC28B5EA367A7F58
+2026-10-22T18:49:12.5885114Z launcher: @echo off | set VK_LOADER_DEBUG=driver | cd /d "C:\BC250\pathtrace\q2rtx" | "C:\BC250\pathtrace\q2rtx\q2rtx.exe" +set logfile 1 +set logfile_flush 1 +set logfile_name bc250-q2rtx-timedemo +set logfile_prefix "[%%H:%%M:%%S] " +set vid_fullscreen 0 +set vid_geometry 1280x720+0+0 +set vid_modelist desktop +set ray_tracing_api pipeline +set drs_enable 0 +set flt_fsr_enable 0 +set viewsize 100 +set scr_fps 1 +set vid_vsync 0 +set sys_disablecrashdump 0 +set s_enable 0 +exec bc250_timedemo.cfg 1> "C:\BC250\pathtrace\runs\20261022T184912Z-q2rtx-timedemo\stdout.txt" 2> "C:\BC250\pathtrace\runs\20261022T184912Z-q2rtx-timedemo\stderr.txt" | echo exit %ERRORLEVEL% > "C:\BC250\pathtrace\runs\20261022T184912Z-q2rtx-timedemo\exitcode.txt"
+2026-10-22T18:49:12.6994464Z adapter: BC-250 GPU (amdgpu-wddm) driver 40.7.216.104 status OK mode 1920x1200
+2026-10-22T18:49:12.7384285Z gate temperature: tctl 52.25 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T18:49:12.8519042Z desktop route: gpu (dwm modules: D3D10Warp.dll bc250d3d_zink.dll bc250d3d_router.dll); interop: driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 49962674
+2026-10-22T18:49:12.8549787Z switches OverlayTemp=False Overlay=off PresentMon=False
+2026-10-22T18:49:13.0738484Z console: cmd.exe window
+2026-10-22T18:49:13.1932867Z overlay hidden, markers made: 0
+2026-10-22T18:49:13.2077324Z task started
+2026-10-22T18:49:15.2858233Z process q2rtx pid 6564 session 1
+2026-10-22T18:49:15.3132625Z t=2 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=52875 ready=1
+2026-10-22T18:49:25.5080967Z t=12.3 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=65875 ready=1
+2026-10-22T18:49:27.5522202Z t=14.3 process exited
+2026-10-22T18:49:30.4570463Z end: reason exited, elapsed 17.3 s, tctl 66 C
+2026-10-22T18:49:30.4805460Z --- summary ---
+2026-10-22T18:49:30.4980019Z bc250-q2rtx-timedemo.log: [20:49:13] Physical device 0: AMD BC-250 (RADV GFX1013)
+2026-10-22T18:49:30.5010707Z bc250-q2rtx-timedemo.log: [20:49:13] Picked physical device 0: AMD BC-250 (RADV GFX1013)
+2026-10-22T18:49:30.5144846Z bc250-q2rtx-timedemo.log: [20:49:13] Using VK_KHR_ray_tracing_pipeline
+2026-10-22T18:49:30.5290456Z bc250-q2rtx-timedemo.log: [20:49:13] FP16 support: yes
+2026-10-22T18:49:30.5425892Z bc250-q2rtx-timedemo.log: [20:49:27] 631 frames, 6.91 seconds: 91.383057 fps
+2026-10-22T18:49:30.5581412Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:49:30.5675346Z loader: [Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:49:30.5810735Z loader: [Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:49:30.5946128Z loader: [Vulkan Loader] DRIVER:         Found ICD manifest file C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\radeon_icd.json, version 1.0.0
+2026-10-22T18:49:30.6080661Z loader: [Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+2026-10-22T18:49:30.6226109Z loader: [Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:49:30.6370527Z loader: [Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:49:30.6496082Z loader: [Vulkan Loader] DRIVER:         Found ICD manifest file C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\radeon_icd.json, version 1.0.0
+2026-10-22T18:49:30.6641371Z loader: [Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+2026-10-22T18:49:30.6777169Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:49:30.6933220Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:49:30.7078777Z loader: [Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:49:30.7223760Z run directory C:\BC250\pathtrace\runs\20261022T184912Z-q2rtx-timedemo

@@ -1,0 +1,8 @@
+cp-vk-rel32: offset 16311 of 19629, mean |dt| 0.37 ms over 300 frames
+      0s fps  50.3  gpu busy/frame 17.51 ms  share 0.882  cpu busy/frame 19.69 ms  gpu latency  0.06
+     10s fps  54.3  gpu busy/frame 16.54 ms  share 0.899  cpu busy/frame 18.23 ms  gpu latency  0.08
+     20s fps  62.3  gpu busy/frame 14.80 ms  share 0.922  cpu busy/frame 15.88 ms  gpu latency  0.08
+     30s fps  55.9  gpu busy/frame 16.52 ms  share 0.924  cpu busy/frame 17.72 ms  gpu latency  0.06
+     40s fps  47.0  gpu busy/frame 18.90 ms  share 0.887  cpu busy/frame 21.11 ms  gpu latency  0.23
+     50s fps  42.5  gpu busy/frame 21.80 ms  share 0.927  cpu busy/frame 23.35 ms  gpu latency  0.14
+     60s fps  45.0  gpu busy/frame 20.52 ms  share 0.918  cpu busy/frame 22.05 ms  gpu latency  0.08

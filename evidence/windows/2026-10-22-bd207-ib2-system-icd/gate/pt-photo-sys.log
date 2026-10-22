@@ -1,0 +1,42 @@
+2026-10-22T18:53:46.7997277Z demo q2rtx-photo bound 170s user BC250-A\bc250 exe C:\BC250\pathtrace\q2rtx\q2rtx.exe
+2026-10-22T18:53:46.8768685Z exe sha256 2BE03E86B51519944F992623AC41635499AD967A28FDBBF4BC28B5EA367A7F58
+2026-10-22T18:53:46.8789561Z launcher: @echo off | set VK_LOADER_DEBUG=driver | cd /d "C:\BC250\pathtrace\q2rtx" | "C:\BC250\pathtrace\q2rtx\q2rtx.exe" +set logfile 1 +set logfile_flush 1 +set logfile_name bc250-q2rtx-photo +set logfile_prefix "[%%H:%%M:%%S] " +set vid_fullscreen 0 +set vid_geometry 1280x720+0+0 +set vid_modelist desktop +set ray_tracing_api pipeline +set drs_enable 0 +set flt_fsr_enable 0 +set viewsize 100 +set scr_fps 1 +set vid_vsync 0 +set sys_disablecrashdump 0 +set s_enable 0 +exec bc250_photo.cfg 1> "C:\BC250\pathtrace\runs\20261022T185346Z-q2rtx-photo\stdout.txt" 2> "C:\BC250\pathtrace\runs\20261022T185346Z-q2rtx-photo\stderr.txt" | echo exit %ERRORLEVEL% > "C:\BC250\pathtrace\runs\20261022T185346Z-q2rtx-photo\exitcode.txt"
+2026-10-22T18:53:46.9835175Z adapter: BC-250 GPU (amdgpu-wddm) driver 40.7.216.104 status OK mode 1920x1200
+2026-10-22T18:53:47.0216309Z gate temperature: tctl 57.875 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T18:53:47.1258583Z desktop route: gpu (dwm modules: D3D10Warp.dll bc250d3d_zink.dll bc250d3d_router.dll); interop: driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 49962674
+2026-10-22T18:53:47.1289268Z switches OverlayTemp=False Overlay=off PresentMon=False
+2026-10-22T18:53:47.3361360Z console: cmd.exe window
+2026-10-22T18:53:47.4520395Z overlay hidden, markers made: 0
+2026-10-22T18:53:47.4653639Z task started
+2026-10-22T18:53:49.5479142Z process q2rtx pid 9528 session 1
+2026-10-22T18:53:49.5756160Z t=2 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=57875 ready=1
+2026-10-22T18:53:59.7520509Z t=12.3 clock: clock backend=kmd-smu abi=1 MHz=1700 VID=95 temperature_mc=62125 ready=1
+2026-10-22T18:54:07.8975292Z module vulkan-1.dll 1.4.335.0 C:\Windows\SYSTEM32\vulkan-1.dll
+2026-10-22T18:54:07.9005726Z module dxgi.dll 10.0.22621.5415 (WinBuild.160101.0800) C:\Windows\system32\dxgi.dll
+2026-10-22T18:54:07.9148281Z module vulkan_radeon.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\vulkan_radeon.dll
+2026-10-22T18:54:07.9300605Z module D3D12.DLL 10.0.22621.5415 (WinBuild.160101.0800) C:\Windows\system32\D3D12.DLL
+2026-10-22T18:54:07.9442705Z module D3D12Core.dll 10.0.22621.5415 (WinBuild.160101.0800) C:\Windows\system32\D3D12Core.dll
+2026-10-22T18:54:07.9605204Z module amdgpu_wddm_d3d12.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\d3d12\amdgpu_wddm_d3d12.dll
+2026-10-22T18:54:07.9757377Z module amdgpu_wddm_vkd3d.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\d3d12\amdgpu_wddm_vkd3d.dll
+2026-10-22T18:54:07.9919673Z module amdgpu_wddm_radv_d3d12.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\d3d12\amdgpu_wddm_radv_d3d12.dll
+2026-10-22T18:54:10.0365243Z t=22.6 clock: clock backend=kmd-smu abi=1 MHz=1700 VID=95 temperature_mc=63625 ready=1
+2026-10-22T18:54:12.0844456Z t=24.6 process exited
+2026-10-22T18:54:14.9756587Z end: reason exited, elapsed 27.5 s, tctl 63 C
+2026-10-22T18:54:15.0128682Z --- summary ---
+2026-10-22T18:54:15.0251082Z bc250-q2rtx-photo.log: [20:53:48] Physical device 0: AMD BC-250 (RADV GFX1013)
+2026-10-22T18:54:15.0312854Z bc250-q2rtx-photo.log: [20:53:48] Picked physical device 0: AMD BC-250 (RADV GFX1013)
+2026-10-22T18:54:15.0458171Z bc250-q2rtx-photo.log: [20:53:48] Using VK_KHR_ray_tracing_pipeline
+2026-10-22T18:54:15.0613902Z bc250-q2rtx-photo.log: [20:53:48] FP16 support: yes
+2026-10-22T18:54:15.0800995Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:54:15.0936897Z loader: [Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:54:15.1092810Z loader: [Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:54:15.1249780Z loader: [Vulkan Loader] DRIVER:         Found ICD manifest file C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\radeon_icd.json, version 1.0.0
+2026-10-22T18:54:15.1413385Z loader: [Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+2026-10-22T18:54:15.1558755Z loader: [Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:54:15.1777471Z loader: [Vulkan Loader] DRIVER:         Found no registry files in HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:54:15.1950006Z loader: [Vulkan Loader] DRIVER:         Found ICD manifest file C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\radeon_icd.json, version 1.0.0
+2026-10-22T18:54:15.2095447Z loader: [Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+2026-10-22T18:54:15.2272758Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:54:15.2429135Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:54:15.2586043Z loader: [Vulkan Loader] DRIVER:         Checking for Driver Manifest files in Registry at HKEY_LOCAL_MACHINE\SOFTWARE\Khronos\Vulkan\Drivers
+2026-10-22T18:54:15.2751846Z run directory C:\BC250\pathtrace\runs\20261022T185346Z-q2rtx-photo

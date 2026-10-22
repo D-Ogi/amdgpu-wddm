@@ -1,0 +1,128 @@
+utc 2026-10-22T19:02:02Z
+Quake II RTX photo mode, same view, accumulation at screenshot time; rel32 = tester.32 release system ICD 81438ED0 (staged), sys = installed system ICD 01B584A8
+== photo-rel32 vs photo-rel32b 
+a photo-rel32.png 1280x720
+b photo-rel32b.png 1280x720
+identical False
+psnr_db 29.26
+mean_abs 3.058
+p99.9_abs 87.0
+max_abs 251
+share_above_16 0.07338
+mean_luma_a 43.36 mean_luma_b 44.18
+== photo-sys vs photo-sys2 
+a photo-sys.png 1280x720
+b photo-sys2.png 1280x720
+identical False
+psnr_db 29.09
+mean_abs 2.504
+p99.9_abs 86.0
+max_abs 248
+share_above_16 0.06474
+mean_luma_a 43.69 mean_luma_b 43.70
+== photo-rel32 vs photo-sys 
+a photo-rel32.png 1280x720
+b photo-sys.png 1280x720
+identical False
+psnr_db 28.92
+mean_abs 3.053
+p99.9_abs 92.0
+max_abs 248
+share_above_16 0.06917
+mean_luma_a 43.36 mean_luma_b 43.69
+== photo-rel32 vs photo-sys2 
+a photo-rel32.png 1280x720
+b photo-sys2.png 1280x720
+identical False
+psnr_db 28.08
+mean_abs 3.253
+p99.9_abs 91.0
+max_abs 242
+share_above_16 0.06506
+mean_luma_a 43.36 mean_luma_b 43.70
+== photo-rel32b vs photo-sys 
+a photo-rel32b.png 1280x720
+b photo-sys.png 1280x720
+identical False
+psnr_db 29.34
+mean_abs 3.128
+p99.9_abs 95.0
+max_abs 242
+share_above_16 0.06744
+mean_luma_a 44.18 mean_luma_b 43.69
+== photo-rel32b vs photo-sys2 
+a photo-rel32b.png 1280x720
+b photo-sys2.png 1280x720
+identical False
+psnr_db 28.90
+mean_abs 3.183
+p99.9_abs 88.4
+max_abs 231
+share_above_16 0.07156
+mean_luma_a 44.18 mean_luma_b 43.70
+== photo-rel32 vs photo-rel32b box 0,0,520,700
+box 0,0,520,700
+a photo-rel32.png 520x700
+b photo-rel32b.png 520x700
+identical False
+psnr_db 36.68
+mean_abs 1.627
+p99.9_abs 33.0
+max_abs 211
+share_above_16 0.03363
+mean_luma_a 47.03 mean_luma_b 47.25
+== photo-sys vs photo-sys2 box 0,0,520,700
+box 0,0,520,700
+a photo-sys.png 520x700
+b photo-sys2.png 520x700
+identical False
+psnr_db 38.19
+mean_abs 1.108
+p99.9_abs 34.0
+max_abs 178
+share_above_16 0.02165
+mean_luma_a 47.29 mean_luma_b 47.25
+== photo-rel32 vs photo-sys box 0,0,520,700
+box 0,0,520,700
+a photo-rel32.png 520x700
+b photo-sys.png 520x700
+identical False
+psnr_db 36.36
+mean_abs 1.707
+p99.9_abs 35.0
+max_abs 216
+share_above_16 0.03765
+mean_luma_a 47.03 mean_luma_b 47.29
+== photo-rel32 vs photo-sys2 box 0,0,520,700
+box 0,0,520,700
+a photo-rel32.png 520x700
+b photo-sys2.png 520x700
+identical False
+psnr_db 38.13
+mean_abs 1.435
+p99.9_abs 32.0
+max_abs 221
+share_above_16 0.01286
+mean_luma_a 47.03 mean_luma_b 47.25
+== photo-rel32b vs photo-sys box 0,0,520,700
+box 0,0,520,700
+a photo-rel32b.png 520x700
+b photo-sys.png 520x700
+identical False
+psnr_db 36.79
+mean_abs 1.659
+p99.9_abs 39.0
+max_abs 155
+share_above_16 0.02135
+mean_luma_a 47.25 mean_luma_b 47.29
+== photo-rel32b vs photo-sys2 box 0,0,520,700
+box 0,0,520,700
+a photo-rel32b.png 520x700
+b photo-sys2.png 520x700
+identical False
+psnr_db 36.44
+mean_abs 1.618
+p99.9_abs 37.0
+max_abs 187
+share_above_16 0.02968
+mean_luma_a 47.25 mean_luma_b 47.25

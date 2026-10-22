@@ -1,0 +1,21 @@
+2026-10-22T17:32:16.0475806Z run:  gate temperature: tctl 53.75 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T17:32:16.0572223Z run:  t=4.1 clock: clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=54250 ready=1
+2026-10-22T17:32:16.0671049Z run:  t=14.3 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=61000 ready=1
+2026-10-22T17:32:16.0757324Z run:  t=25 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66500 ready=1
+2026-10-22T17:32:16.0842933Z run:  t=35.6 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=69875 ready=1
+2026-10-22T17:32:16.0923667Z run:  t=46 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=68875 ready=1
+2026-10-22T17:32:16.1003375Z run:  t=56.2 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=68625 ready=1
+2026-10-22T17:32:16.1098992Z run:  t=66.5 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=68750 ready=1
+2026-10-22T17:32:16.1181779Z run:  t=76.8 clock: clock backend=kmd-smu abi=1 MHz=1700 VID=95 temperature_mc=72375 ready=1
+2026-10-22T17:32:16.1261254Z run:  t=87 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=77375 ready=1
+2026-10-22T17:32:16.1339292Z run:  t=97.3 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=80250 ready=1
+2026-10-22T17:32:16.1416444Z run:  t=107.6 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=82625 ready=1
+2026-10-22T17:32:16.1493604Z run:  t=117.8 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=82875 ready=1
+2026-10-22T17:32:16.1581713Z run:  t=128.1 clock: clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=85750 ready=1
+2026-10-22T17:32:16.1668048Z run:  t=138.3 clock: clock backend=kmd-smu abi=1 MHz=1300 VID=107 temperature_mc=84375 ready=1
+2026-10-22T17:32:16.1747551Z run:  t=148.5 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=81125 ready=1
+2026-10-22T17:32:16.1826488Z run:  foreground: the game owned it in 64 of 65 samples (98%); other owners: explorer
+2026-10-22T17:32:16.1909837Z run:  end: reason exited, elapsed 162.6 s, tctl 75.75 C
+2026-10-22T17:32:16.2010646Z run:  cp2077 benchmark: averageFps 52.16236877441406 minFps 38.23170852661133 maxFps 71.54303741455078 frames  (benchmark_2026-10-22_19-30-58)
+2026-10-22T17:32:16.2104505Z run:  cp2077 settings: preset Custom 1920x1200 window 2 upscalingType 0 frameGenerationType 0 rayTracing False
+2026-10-22T17:32:16.2204290Z run:  run directory C:\BC250\pathtrace\runs\20261022T173025Z-cp2077-bench

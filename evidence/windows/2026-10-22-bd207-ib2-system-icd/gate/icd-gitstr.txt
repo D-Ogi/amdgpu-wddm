@@ -1,0 +1,5 @@
+utc 2026-10-22T19:08:09.0667229Z
+dll C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\vulkan_radeon.dll 01B584A8D3E553866C7BF5BCF745177EE2E53C8153E8820669601C4603E5B7F8 18408888 bytes
+  strings: git-ec70ed15e8
+dll C:\BC250\tmp\vkroute-cp\icd-rel32\vulkan_radeon.dll 81438ED06EDB2A3DE3D753C8C15797E11D17ACADB91D46E9B43DFEA1C76822EF 18407936 bytes
+  strings: git-055dbb9f75

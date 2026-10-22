@@ -1,0 +1,71 @@
+2026-10-22T16:40:09.1266152Z gamecheck: utc 2026-10-22T16:41:06.4992462Z
+2026-10-22T16:40:09.1342824Z gamecheck: games 0
+2026-10-22T16:40:09.1439407Z gamecheck: tctl_mc 56750
+2026-10-22T16:40:09.8114256Z cool: 18:41:07 Tctl 56.6 C (raw 69BB0FEF)
+2026-10-22T16:40:40.4176922Z cool: 18:41:38 Tctl 55.5 C (raw 689B0FEF)
+2026-10-22T16:41:11.0475168Z cool: 18:42:08 Tctl 54.6 C (raw 67BB0FEF)
+2026-10-22T16:41:41.6894268Z cool: 18:42:39 Tctl 54.1 C (raw 673B0FEF)
+2026-10-22T16:42:12.2900468Z cool: 18:43:09 Tctl 53.8 C (raw 66DB0FEF)
+2026-10-22T16:42:14.3882150Z before: utc 2026-10-22T16:43:11.8295641Z
+2026-10-22T16:42:14.3986737Z before: cli exit 0, 375 lines
+2026-10-22T16:42:14.4064815Z before: 4026533965   3166.863 wddm summary: node 0 hardware: 280237 submitted, 277406 completed, 0 timeouts, 0 refused, 0 soft-recovered
+2026-10-22T16:42:14.4135319Z before: 4026533966   3166.863 wddm summary: submit diagnostic v2 12000 ms (OS TdrDelay unavailable), 0 checks, 0 re-armed
+2026-10-22T16:42:14.4203676Z before: 4026533976   3166.863 wddm profile: hold wakes 0 event, 0 timeout
+2026-10-22T16:42:14.4271403Z before: 4026533978   3166.863 wddm profile: node 0 ring idle 3057876105 us in 175613 gaps, worst 60016943 us, lost 0, 189147 vsyncs
+2026-10-22T16:42:14.4349436Z before: 4026533979   3166.863 wddm profile: node 0 ring >=4ms 1854/3032574200 us, vsync-ended 32/6692723 us, 35383 ns/frame
+2026-10-22T16:42:14.4429186Z before: 4026533980   3166.863 wddm profile: node 0 ring gap us <16:6443 16:27775 32:50745 64:56388 128:19678
+2026-10-22T16:42:14.4509847Z before: 4026533981   3166.863 wddm profile: node 0 ring gap us 512:12162 2k:568 4k:369 8k+:1485
+2026-10-22T16:42:14.4593991Z before: 4026533990   3166.863 wddm profile: reports not delivered: node 0 retried 0 dropped 0
+2026-10-22T16:42:14.4677838Z before: 4026533994   3166.863 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+2026-10-22T16:42:14.4764460Z before: 4026533995   3166.863 wddm summary: VMID pool: 16 claims, 280221 reuses, 0 busy, 0 rule refusals
+2026-10-22T16:42:14.4841725Z before: 4026533996   3166.863 wddm summary: VMID pool FLUSH_TLB: 21152 built, 296024 VMID invalidations
+2026-10-22T16:42:14.4917244Z before: 4026533997   3166.863 wddm summary: ring VM flush on: 280237 frames, 280221 of them on a root the VMID held
+2026-10-22T16:42:14.4999246Z before: 4026533998   3166.863 wddm summary: node 1 (paging, open): 49537 hardware submitted, 49537 completed, 0 timeouts, 0 refused
+2026-10-22T16:42:14.5095441Z before: 4026534176   3166.863 wddm summary: dcn lock acknowledgement timeouts 0
+2026-10-22T16:42:14.5189852Z before: 4026534183   3166.863 wddm summary: flip results of e refused 0 ok 28600 fault 0 u 0
+2026-10-22T16:42:14.5272488Z before: 4026534184   3166.863 wddm summary: flip writers faulting 0 high 0 sync-failed 0 low-sync-failed 0 resumed 0
+2026-10-22T16:42:14.5353917Z before: 4026534200   3166.863 wddm summary: flip e5 0 faulting 0 code 0x000000 node 0 blank 00000000
+2026-10-22T16:42:14.5446642Z before: 4026534237   3166.863 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+2026-10-22T16:42:14.5539302Z before: image CDE214D499379D9B0488E3D294A8F8DEB5DB78E47648C7108B86A0938B070D51 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\bc250kmd.sys
+2026-10-22T16:43:33.8691644Z camera t=70 s: P:\BC-250\scratch\bd207-ib2\arm\cam-m1-70.jpg
+2026-10-22T16:44:03.3433136Z camera t=100 s: P:\BC-250\scratch\bd207-ib2\arm\cam-m1-100.jpg
+2026-10-22T16:44:36.1774858Z pt-run exit 0
+2026-10-22T16:44:38.3730962Z after: utc 2026-10-22T16:45:35.8118705Z
+2026-10-22T16:44:38.3895528Z after: cli exit 0, 375 lines
+2026-10-22T16:44:38.3996529Z after: 4026534477   3310.846 wddm summary: node 0 hardware: 508592 submitted, 502746 completed, 0 timeouts, 0 refused, 0 soft-recovered
+2026-10-22T16:44:38.4086275Z after: 4026534478   3310.846 wddm summary: submit diagnostic v2 12000 ms (OS TdrDelay unavailable), 0 checks, 0 re-armed
+2026-10-22T16:44:38.4182022Z after: 4026534488   3310.846 wddm profile: hold wakes 0 event, 0 timeout
+2026-10-22T16:44:38.4270061Z after: 4026534490   3310.846 wddm profile: node 0 ring idle 3114671938 us in 295449 gaps, worst 60016943 us, lost 0, 197779 vsyncs
+2026-10-22T16:44:38.4352270Z after: 4026534491   3310.846 wddm profile: node 0 ring >=4ms 2110/3075503190 us, vsync-ended 38/6814971 us, 34457 ns/frame
+2026-10-22T16:44:38.4434671Z after: 4026534492   3310.846 wddm profile: node 0 ring gap us <16:12722 16:58479 32:89755 64:82845 128:30222
+2026-10-22T16:44:38.4528245Z after: 4026534493   3310.846 wddm profile: node 0 ring gap us 512:18476 2k:840 4k:456 8k+:1654
+2026-10-22T16:44:38.4656289Z after: 4026534502   3310.846 wddm profile: reports not delivered: node 0 retried 0 dropped 0
+2026-10-22T16:44:38.4814925Z after: 4026534506   3310.846 wddm summary: VMID pool on, members 0xFFFA, excluded 0x0000
+2026-10-22T16:44:38.4895786Z after: 4026534507   3310.846 wddm summary: VMID pool: 16 claims, 508576 reuses, 0 busy, 0 rule refusals
+2026-10-22T16:44:38.4985384Z after: 4026534508   3310.846 wddm summary: VMID pool FLUSH_TLB: 31086 built, 435100 VMID invalidations
+2026-10-22T16:44:38.5075029Z after: 4026534509   3310.846 wddm summary: ring VM flush on: 508592 frames, 508576 of them on a root the VMID held
+2026-10-22T16:44:38.5164205Z after: 4026534510   3310.846 wddm summary: node 1 (paging, open): 73295 hardware submitted, 73295 completed, 0 timeouts, 0 refused
+2026-10-22T16:44:38.5260154Z after: 4026534688   3310.846 wddm summary: dcn lock acknowledgement timeouts 0
+2026-10-22T16:44:38.5387831Z after: 4026534695   3310.846 wddm summary: flip results of e refused 0 ok 42452 fault 0 u 0
+2026-10-22T16:44:38.5479018Z after: 4026534696   3310.846 wddm summary: flip writers faulting 0 high 0 sync-failed 0 low-sync-failed 0 resumed 0
+2026-10-22T16:44:38.5569354Z after: 4026534712   3310.846 wddm summary: flip e5 0 faulting 0 code 0x000000 node 0 blank 00000000
+2026-10-22T16:44:38.5709019Z after: 4026534749   3310.846 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+2026-10-22T16:44:38.5788025Z after: image CDE214D499379D9B0488E3D294A8F8DEB5DB78E47648C7108B86A0938B070D51 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\bc250kmd.sys
+2026-10-22T16:44:38.6083531Z run:  gate temperature: tctl 53.75 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T16:44:38.6246176Z run:  t=4.1 clock: clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=53750 ready=1
+2026-10-22T16:44:38.6332400Z run:  t=14.3 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=62375 ready=1
+2026-10-22T16:44:38.6434982Z run:  t=25 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66500 ready=1
+2026-10-22T16:44:38.6519392Z run:  t=35.3 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66250 ready=1
+2026-10-22T16:44:38.6602916Z run:  t=45.5 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=70250 ready=1
+2026-10-22T16:44:38.6708613Z run:  t=55.7 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=72750 ready=1
+2026-10-22T16:44:38.6810690Z run:  t=65.9 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=75500 ready=1
+2026-10-22T16:44:38.6915617Z run:  t=76.1 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=77750 ready=1
+2026-10-22T16:44:38.7010693Z run:  t=86.3 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=79500 ready=1
+2026-10-22T16:44:38.7087904Z run:  t=96.5 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=82000 ready=1
+2026-10-22T16:44:38.7167289Z run:  t=106.8 clock: clock backend=kmd-smu abi=1 MHz=1700 VID=95 temperature_mc=84500 ready=1
+2026-10-22T16:44:38.7249780Z run:  t=117 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=81750 ready=1
+2026-10-22T16:44:38.7358391Z run:  foreground: the game owned it in 51 of 52 samples (98%); other owners: CrashReporter
+2026-10-22T16:44:38.7460740Z run:  end: reason exited, elapsed 131.0 s, tctl 76.625 C
+2026-10-22T16:44:38.7566870Z run:  cp2077 benchmark: averageFps 52.78804397583008 minFps 43.82985305786133 maxFps 68.84823608398438 frames  (benchmark_2026-10-22_18-43-40)
+2026-10-22T16:44:38.7660596Z run:  cp2077 settings: preset Custom 1920x1200 window 2 upscalingType 0 frameGenerationType 0 rayTracing False
+2026-10-22T16:44:38.7752820Z run:  run directory C:\BC250\pathtrace\runs\20261022T164320Z-cp2077-bench

@@ -1,0 +1,9 @@
+since 2026-10-22T15:50:00.0000000Z
+events 0
+queue C:\Users\bc250\AppData\Local\REDEngine\ReportQueue
+  dir Cyberpunk2077-20261022-175657-856-7664 2026-10-22T15:57:00.2986685Z
+    Cyberpunk2077.dmp 34319468
+    integrity.json 471
+    report.txt 5585
+    stacktrace.txt 158
+    sysinfo.json 4922

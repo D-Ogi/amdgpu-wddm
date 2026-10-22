@@ -1,0 +1,54 @@
+2026-10-22T16:49:49.9977519Z cp2077 option /graphics/advanced/Anisotropy: '16' -> '8'
+2026-10-22T16:49:50.0160813Z cp2077 option /graphics/advanced/VolumetricFogResolution: 'Ultra' -> 'High'
+2026-10-22T16:49:50.0201971Z cp2077 option /graphics/advanced/VolumetricCloudsQuality: 'Ultra' -> 'High'
+2026-10-22T16:49:50.0304794Z cp2077 option /graphics/advanced/MaxDynamicDecals: 'Ultra' -> 'High'
+2026-10-22T16:49:50.0439392Z cp2077 option /graphics/advanced/ScreenSpaceReflectionsQuality: 'Ultra' -> 'High'
+2026-10-22T16:49:50.0936372Z extra env: VK_DRIVER_FILES=C:\BC250\tmp\vkroute-cp\icd\radeon_icd.json
+2026-10-22T16:49:50.1029152Z demo cp2077-bench bound 420s user BC250-A\bc250 exe S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe
+2026-10-22T16:49:50.3268864Z exe sha256 A7DE82945C03E041FC7339FCF9066224D98DB2F5D80FEA50F7947BB350A60991
+2026-10-22T16:49:50.3289547Z launcher: @echo off | set VK_DRIVER_FILES=C:\BC250\tmp\vkroute-cp\icd\radeon_icd.json | cd /d "S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64" | "S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64\Cyberpunk2077.exe" --launcher-skip -benchmark -skipStartScreen 1> "C:\BC250\pathtrace\runs\20261022T164949Z-cp2077-bench\stdout.txt" 2> "C:\BC250\pathtrace\runs\20261022T164949Z-cp2077-bench\stderr.txt" | echo exit %ERRORLEVEL% > "C:\BC250\pathtrace\runs\20261022T164949Z-cp2077-bench\exitcode.txt"
+2026-10-22T16:49:50.4558871Z adapter: BC-250 GPU (amdgpu-wddm) driver 40.7.216.104 status OK mode 1920x1200
+2026-10-22T16:49:50.4940459Z gate temperature: tctl 53.875 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T16:49:50.5619268Z desktop route: gpu (dwm modules: D3D10Warp.dll bc250d3d_zink.dll bc250d3d_router.dll); interop: driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 49962674
+2026-10-22T16:49:50.5751444Z switches OverlayTemp=False Overlay=off PresentMon=True
+2026-10-22T16:49:50.8430554Z console: conhost --headless
+2026-10-22T16:49:51.0033867Z overlay hidden, markers made: 0
+2026-10-22T16:49:53.0400590Z presentmon pid 11532
+2026-10-22T16:49:53.0565769Z task started
+2026-10-22T16:49:53.0668006Z foreground guard started
+2026-10-22T16:49:55.1293103Z process Cyberpunk2077 pid 6480 session 1
+2026-10-22T16:49:55.1809466Z t=4.1 clock: clock backend=kmd-smu abi=1 MHz=500 VID=116 temperature_mc=54000 ready=1
+2026-10-22T16:50:05.4889835Z t=14.5 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=65125 ready=1
+2026-10-22T16:50:11.6869641Z module dxgi.dll 10.0.17763.1 (WinBuild.160101.0800) S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64\dxgi.dll
+2026-10-22T16:50:11.6910158Z module dxgi.dll 10.0.22621.5415 (WinBuild.160101.0800) C:\Windows\system32\dxgi.dll
+2026-10-22T16:50:11.7041954Z module vulkan-1.dll 1.4.335.0 C:\Windows\SYSTEM32\vulkan-1.dll
+2026-10-22T16:50:11.7183067Z module vulkan_radeon.dll  C:\BC250\tmp\vkroute-cp\icd\vulkan_radeon.dll
+2026-10-22T16:50:11.7324794Z module d3d12.dll  S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64\d3d12.dll
+2026-10-22T16:50:11.7471455Z module d3d12core.dll  S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64\d3d12core.dll
+2026-10-22T16:50:11.7623221Z module D3D12.DLL 10.0.22621.5415 (WinBuild.160101.0800) C:\Windows\system32\D3D12.DLL
+2026-10-22T16:50:11.7770014Z module D3D12Core.dll 1.615.0.0.20250123.2 S:\GOG Galaxy\Games\Cyberpunk 2077\bin\x64\D3D12\D3D12Core.dll
+2026-10-22T16:50:11.7917116Z module amdgpu_wddm_d3d12.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\d3d12\amdgpu_wddm_d3d12.dll
+2026-10-22T16:50:11.8069210Z module amdgpu_wddm_vkd3d.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\d3d12\amdgpu_wddm_vkd3d.dll
+2026-10-22T16:50:11.8221482Z module amdgpu_wddm_radv_d3d12.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\d3d12\amdgpu_wddm_radv_d3d12.dll
+2026-10-22T16:50:15.9070347Z t=24.9 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=66125 ready=1
+2026-10-22T16:50:26.1488127Z t=35.1 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=70125 ready=1
+2026-10-22T16:50:36.3442496Z t=45.3 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=72625 ready=1
+2026-10-22T16:50:46.5177472Z t=55.5 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=75375 ready=1
+2026-10-22T16:50:56.6845033Z t=65.7 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=77875 ready=1
+2026-10-22T16:51:06.8719878Z t=75.9 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=79500 ready=1
+2026-10-22T16:51:17.0962697Z t=86.1 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=82250 ready=1
+2026-10-22T16:51:27.3202127Z t=96.3 clock: clock backend=kmd-smu abi=1 MHz=1800 VID=93 temperature_mc=85375 ready=1
+2026-10-22T16:51:37.5139267Z t=106.5 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=82625 ready=1
+2026-10-22T16:51:39.5686519Z t=108.5 process exited
+2026-10-22T16:51:43.5198783Z foreground: the game owned it in 47 of 48 samples (98%); other owners: CrashReporter
+2026-10-22T16:51:53.5412415Z presentmon pid 11532 still runs: stopping it and its session
+2026-10-22T16:51:53.6162539Z end: reason exited, elapsed 122.6 s, tctl 76.75 C
+2026-10-22T16:51:53.6636537Z cp2077 benchmark: averageFps 51.90211486816406 minFps 42.88109588623047 maxFps 68.8425521850586 frames  (benchmark_2026-10-22_18-50-05)
+2026-10-22T16:51:53.6708726Z cp2077 summary: { "RootType": "worldBenchmarkSummary", "Data": { "gameVersion": "2.31", "benchmarkName": "base\\streaming\\test\\benchmark\\benchmark.gamedef", "gpuName": "AMD BC-250 (RADV GFX1013)", "gpuMemory": 7880, "gpuDriverVersion": "<UNKNOWN VERSION>", "cpuName": "AMD BC-250", "systemMemory": 16384, "osName": "Windows 11 Pro", "osVersion": "10.0.22631", "presetName": "Custom", "presetLocalizedName": "UI-Settings-Video-QualitySetting-Custom", "textureQualityPresetLocalizedName": "UI-Settings-Video-QualitySetting-High", "renderWidth": 1920, "renderHeight": 1200, "windowMode": 2, "verticalSync": false, "fpsClamp": -1, "averageFps": 51.90211486816406, "minFps": 42.88109588623047, "maxFps": 68.8425521850586, "time": 64.4675064086914, "frameNumber": 3346, "upscalingType": 0, "frameGenerationType": 0, "DLAAEnabled": false, "DLAASharpness": 0.0, "DLSSEnabled": false, "DLSSPreset": 0, "DLSSDEnabled": fals
+2026-10-22T16:51:53.6894914Z cp2077 settings: preset Custom 1920x1200 window 2 upscalingType 0 frameGenerationType 0 rayTracing False
+2026-10-22T16:51:53.6967602Z --- summary ---
+2026-10-22T16:51:54.4273008Z presentmon rows: 11796
+2026-10-22T16:51:54.6439427Z presentmode: DXGI, Hardware: Independent Flip = 11792
+2026-10-22T16:51:54.6459832Z presentmode: DXGI, Composed: Flip = 4
+2026-10-22T16:51:54.7060942Z loader: 2dd0:info:vkd3d_driver_cache_init: Driver cache C:\Users\bc250\AppData\Local\amdgpu-wddm\vkd3d\vkd3d-proton.Cyberpunk2077.exe.cache.driver: 20456320 bytes loaded in 86.417 ms.
+2026-10-22T16:51:54.9913640Z run directory C:\BC250\pathtrace\runs\20261022T164949Z-cp2077-bench

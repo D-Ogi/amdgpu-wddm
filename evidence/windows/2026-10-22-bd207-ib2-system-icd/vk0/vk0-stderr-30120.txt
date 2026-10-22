@@ -1,0 +1,10 @@
+30124: 2158:warn:d3d12_pipeline_library_load_pipeline: Pipeline "-1124266901" does not exist.
+30174: allocation handle=0x400198c0
+30175: allocation handle=0x40019940
+30176: bc250: gather exceeds IB_SIZE field: 1101808 dwords
+30177: bc250: native submit failed NTSTATUS=0xC000000D cs_count=1
+30178: bc250: repair signal of progress 15663 queued on context 0x80001980 after a failed submission
+30179: GetDeviceState: 0x0
+30180: faulted VA: 0x0, error: 0x0 (vendor specific: 0)
+30181: 19f0:err:d3d12_command_queue_execute: Failed to submit queue(s), vr -4.
+30182: 19f0:warn:d3d12_device_mark_as_removed: Device 0000021d16a56080 is lost (reason 0x887a0005, "VK_ERROR_DEVICE_LOST").

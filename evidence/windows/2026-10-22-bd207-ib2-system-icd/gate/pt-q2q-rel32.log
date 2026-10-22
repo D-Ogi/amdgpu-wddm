@@ -1,0 +1,35 @@
+2026-10-22T18:50:24.9718090Z extra env: VK_DRIVER_FILES=C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json
+2026-10-22T18:50:24.9933453Z demo q2rtx-timedemo bound 150s user BC250-A\bc250 exe C:\BC250\pathtrace\q2rtx\q2rtx.exe
+2026-10-22T18:50:25.0608532Z exe sha256 2BE03E86B51519944F992623AC41635499AD967A28FDBBF4BC28B5EA367A7F58
+2026-10-22T18:50:25.0629068Z launcher: @echo off | set VK_LOADER_DEBUG=driver | set VK_DRIVER_FILES=C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json | cd /d "C:\BC250\pathtrace\q2rtx" | "C:\BC250\pathtrace\q2rtx\q2rtx.exe" +set logfile 1 +set logfile_flush 1 +set logfile_name bc250-q2rtx-timedemo +set logfile_prefix "[%%H:%%M:%%S] " +set vid_fullscreen 0 +set vid_geometry 1280x720+0+0 +set vid_modelist desktop +set ray_tracing_api query +set drs_enable 0 +set flt_fsr_enable 0 +set viewsize 100 +set scr_fps 1 +set vid_vsync 0 +set sys_disablecrashdump 0 +set s_enable 0 +exec bc250_timedemo.cfg 1> "C:\BC250\pathtrace\runs\20261022T185024Z-q2rtx-timedemo\stdout.txt" 2> "C:\BC250\pathtrace\runs\20261022T185024Z-q2rtx-timedemo\stderr.txt" | echo exit %ERRORLEVEL% > "C:\BC250\pathtrace\runs\20261022T185024Z-q2rtx-timedemo\exitcode.txt"
+2026-10-22T18:50:25.1750408Z adapter: BC-250 GPU (amdgpu-wddm) driver 40.7.216.104 status OK mode 1920x1200
+2026-10-22T18:50:25.2131107Z gate temperature: tctl 54.75 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T18:50:25.3163562Z desktop route: gpu (dwm modules: D3D10Warp.dll bc250d3d_zink.dll bc250d3d_router.dll); interop: driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 49962674
+2026-10-22T18:50:25.3194260Z switches OverlayTemp=False Overlay=off PresentMon=False
+2026-10-22T18:50:25.5379415Z console: cmd.exe window
+2026-10-22T18:50:25.6516252Z overlay hidden, markers made: 0
+2026-10-22T18:50:25.6649764Z task started
+2026-10-22T18:50:27.7559914Z process q2rtx pid 2072 session 1
+2026-10-22T18:50:27.7858310Z t=2 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=57250 ready=1
+2026-10-22T18:50:37.9715573Z t=12.3 clock: clock backend=kmd-smu abi=1 MHz=2000 VID=88 temperature_mc=66250 ready=1
+2026-10-22T18:50:42.0559170Z t=16.4 process exited
+2026-10-22T18:50:44.9633961Z end: reason exited, elapsed 19.3 s, tctl 66 C
+2026-10-22T18:50:44.9880339Z --- summary ---
+2026-10-22T18:50:45.0043430Z bc250-q2rtx-timedemo.log: [20:50:26] Physical device 0: AMD BC-250 (RADV GFX1013)
+2026-10-22T18:50:45.0063755Z bc250-q2rtx-timedemo.log: [20:50:26] Picked physical device 0: AMD BC-250 (RADV GFX1013)
+2026-10-22T18:50:45.0199296Z bc250-q2rtx-timedemo.log: [20:50:26] Using VK_KHR_ray_query
+2026-10-22T18:50:45.0334463Z bc250-q2rtx-timedemo.log: [20:50:26] FP16 support: yes
+2026-10-22T18:50:45.0470613Z bc250-q2rtx-timedemo.log: [20:50:39] 631 frames, 6.56 seconds: 96.159706 fps
+2026-10-22T18:50:45.0615524Z loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:50:45.0729558Z loader: [Vulkan Loader] DRIVER:         Searching for driver manifest files
+2026-10-22T18:50:45.0864637Z loader: [Vulkan Loader] DRIVER:            In following locations:
+2026-10-22T18:50:45.0988720Z loader: [Vulkan Loader] DRIVER:               C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json
+2026-10-22T18:50:45.1134279Z loader: [Vulkan Loader] DRIVER:            Found the following files:
+2026-10-22T18:50:45.1259829Z loader: [Vulkan Loader] DRIVER:               C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json
+2026-10-22T18:50:45.1384511Z loader: [Vulkan Loader] DRIVER:         Found ICD manifest file C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json, version 1.0.0
+2026-10-22T18:50:45.1519573Z loader: [Vulkan Loader] DEBUG | DRIVER: Searching for ICD drivers named .\vulkan_radeon.dll
+2026-10-22T18:50:45.1665529Z loader: [Vulkan Loader] DRIVER:         Searching for driver manifest files
+2026-10-22T18:50:45.1790693Z loader: [Vulkan Loader] DRIVER:            In following locations:
+2026-10-22T18:50:45.1936874Z loader: [Vulkan Loader] DRIVER:               C:\BC250\tmp\vkroute-cp\icd-rel32\radeon_icd.json
+2026-10-22T18:50:45.2071024Z loader: [Vulkan Loader] DRIVER:            Found the following files:
+2026-10-22T18:50:45.2205971Z run directory C:\BC250\pathtrace\runs\20261022T185024Z-q2rtx-timedemo

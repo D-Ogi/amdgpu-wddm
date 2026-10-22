@@ -1,0 +1,19 @@
+2026-10-22T18:52:39.8230152Z pt-run args: -Demo q2rtx-photo -Width 1280 -Height 720 -Seconds 170 -Overlay off -RtApi pipeline
+2026-10-22T18:52:41.9466682Z gamecheck: utc 2026-10-22T18:53:37.9653147Z
+2026-10-22T18:52:41.9564970Z gamecheck: games 0
+2026-10-22T18:52:41.9650380Z gamecheck: tctl_mc 59250
+2026-10-22T18:52:42.5226851Z cool: 20:53:38 Tctl 59.1 C (raw 6C3B0FEF)
+2026-10-22T18:53:11.7393997Z camera t=20 s: P:\BC-250\scratch\bd207-ib2\gate\cam-photo-sys-20.jpg
+2026-10-22T18:53:32.7515971Z pt-run exit 0, elapsed 45 s
+2026-10-22T18:53:36.2730704Z camera after: P:\BC-250\scratch\bd207-ib2\gate\cam-photo-sys-after.jpg
+2026-10-22T18:53:36.2953026Z run:  gate temperature: tctl 57.875 C (client 'C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe')
+2026-10-22T18:53:36.3055752Z run:  t=2 clock: clock backend=kmd-smu abi=1 MHz=1000 VID=116 temperature_mc=57875 ready=1
+2026-10-22T18:53:36.3132688Z run:  t=12.3 clock: clock backend=kmd-smu abi=1 MHz=1700 VID=95 temperature_mc=62125 ready=1
+2026-10-22T18:53:36.3215512Z run:  module vulkan_radeon.dll 40.7.216.104 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_f80522ffe4a6cdcf\vulkan\vulkan_radeon.dll
+2026-10-22T18:53:36.3331647Z run:  t=22.6 clock: clock backend=kmd-smu abi=1 MHz=1700 VID=95 temperature_mc=63625 ready=1
+2026-10-22T18:53:36.3415656Z run:  end: reason exited, elapsed 27.5 s, tctl 63 C
+2026-10-22T18:53:36.3509141Z run:  bc250-q2rtx-photo.log: [20:53:48] Using VK_KHR_ray_tracing_pipeline
+2026-10-22T18:53:36.3619537Z run:  loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:53:36.3725390Z run:  loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:53:36.3816887Z run:  loader: [Vulkan Loader] INFO | DRIVER:  windows_get_device_registry_entry: Device ID(1) Does not contain a value for "VulkanImplicitLayers"
+2026-10-22T18:53:36.3893250Z run:  run directory C:\BC250\pathtrace\runs\20261022T185346Z-q2rtx-photo
