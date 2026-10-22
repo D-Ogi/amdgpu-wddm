@@ -18,6 +18,7 @@ driver/shim/generated/dc_scaler_buffer.inc text eol=lf
 driver/shim/generated/dc_scaler_filters.inc text eol=lf
 driver/shim/generated/dc_scaler_taps.inc text eol=lf
 driver/shim/generated/dc_mpc_blend.inc text eol=lf
+driver/shim/generated/dc_surface_layout.inc text eol=lf
 driver/kmd/bc250kmd.inf text eol=crlf
 driver/state/amdgpu-state.bin binary
 # Shell scripts without an extension that run on the diagnostic USB

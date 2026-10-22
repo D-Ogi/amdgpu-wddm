@@ -155,6 +155,28 @@ cover topology changes, alpha combinations and every read/write fault boundary.
 They do not establish pixel accuracy, atomic hardware latch or retirement.
 This helper is not in the live KMD source list or MPO callback.
 
+`dcn_surface_layout.c` prepares linear packed BGRA8, BGRX8, RGBA8, RGB10A2
+and AMD AYCrCb8 layouts without MMIO. The last remains a preparation candidate.
+The selected HUBP1 functions provide format, crossbar and pixel-pitch fields.
+The adapter checks the complete pitched allocation, its subrange and the local
+memory segment before MC-to-UMA conversion. It rejects address overflow,
+physical addresses outside the AMD field width, misalignment and unsupported
+rotation/mirroring. It retains the existing 4 KiB scanout address policy and
+the AMD 32-pixel linear pitch alignment. Refusal clears the output.
+
+These are field values, not whole-register overwrite permissions. BGRX8 records
+that pixel alpha is absent, even though HUBP shares its BGRA8 encoding. The
+transaction owner must configure CNVC alpha, colour conversion, DCC/tiling,
+bandwidth and residency before using the plan. Imported RGBE branches that
+need the absent DCN201 ALPHA_PLANE_EN field refuse in the adapter. Host layout
+and range tests do not establish YUV scanout or add a format capability.
+The internal AMD_AYCRCB8 identifier must not be mapped directly to DXGI AYUV
+until channel ordering is established. The Microsoft
+[DXGI format reference](https://learn.microsoft.com/en-us/windows/win32/api/dxgiformat/ne-dxgiformat-dxgi_format)
+defines AYUV memory bytes as V, U, Y, A through its R8G8B8A8 view.
+AMD's enum name and format number alone
+do not prove the same mapping. Use asymmetric chroma patterns to distinguish it.
+
 This is not a completed MPO path. Missing work includes second-plane integration,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements

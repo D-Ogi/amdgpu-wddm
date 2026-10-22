@@ -26,6 +26,8 @@ if ($LASTEXITCODE) { throw 'Scaler filter extraction mismatch' }
 if ($LASTEXITCODE) { throw 'Scaler tap extraction mismatch' }
 & python (Join-Path $repo 'tools\import\extract_mpc_blend.py') --check
 if ($LASTEXITCODE) { throw 'MPC blend extraction mismatch' }
+& python (Join-Path $repo 'tools\import\extract_surface_layout.py') --check
+if ($LASTEXITCODE) { throw 'Surface layout extraction mismatch' }
 Push-Location $Out
 try {
     & $cc /nologo /TC /W4 /WX /O2 /c `
@@ -73,6 +75,15 @@ try {
     if ($LASTEXITCODE) { throw 'MPC build failed' }
     & .\dcn_mpc_test.exe
     if ($LASTEXITCODE) { throw 'MPC tests failed' }
+    & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
+        "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
+        "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `
+        /Fedcn_surface_layout_test.exe "$repo\driver\kmd\test\dcn_surface_layout_test.c" `
+        "$repo\driver\kmd\dcn_surface_layout.c" "$repo\driver\kmd\dcn_translate.c" "$repo\driver\kmd\display_io.c" `
+        /link "/LIBPATH:$($crt.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+    if ($LASTEXITCODE) { throw 'Surface layout build failed' }
+    & .\dcn_surface_layout_test.exe
+    if ($LASTEXITCODE) { throw 'Surface layout tests failed' }
     & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
         "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
         "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `

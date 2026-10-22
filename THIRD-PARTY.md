@@ -27,6 +27,12 @@ The extracted DCN201 defaults, blend packing and enums are unchanged except
 for line endings. The checked two-plane transaction adapter uses the project
 license. Source revision: Linux amdgpu DC v6.18 `7d0a66e4bb90`.
 
+`driver/amdgpu-import/reference/dcn10_hubp.c` and the existing
+`reference/hdmi-link/dc_hw_types.h` supply `driver/shim/generated/dc_surface_layout.inc`.
+These AMD MIT sources are Linux v6.18 `7d0a66e4bb90`. The extractor retains
+the declarations and functions with LF endings, and adds private-linkage
+prototypes. The checked Windows layout adapter uses the project license.
+
 ## Fetched at build time, not stored here
 
 | What | Used by | License |
