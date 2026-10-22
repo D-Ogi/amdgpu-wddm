@@ -28,6 +28,8 @@ if ($LASTEXITCODE) { throw 'Scaler tap extraction mismatch' }
 if ($LASTEXITCODE) { throw 'MPC blend extraction mismatch' }
 & python (Join-Path $repo 'tools\import\extract_surface_layout.py') --check
 if ($LASTEXITCODE) { throw 'Surface layout extraction mismatch' }
+& python (Join-Path $repo 'tools\import\extract_cnvc_color.py') --check
+if ($LASTEXITCODE) { throw 'CNVC color extraction mismatch' }
 Push-Location $Out
 try {
     & $cc /nologo /TC /W4 /WX /O2 /c `
@@ -84,6 +86,17 @@ try {
     if ($LASTEXITCODE) { throw 'Surface layout build failed' }
     & .\dcn_surface_layout_test.exe
     if ($LASTEXITCODE) { throw 'Surface layout tests failed' }
+    & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
+        "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
+        "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `
+        /Fedcn_cnvc_color_test.exe "$repo\driver\kmd\test\dcn_cnvc_color_test.c" `
+        "$repo\driver\kmd\dcn_cnvc_color.c" `
+        /link "/LIBPATH:$($crt.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+    if ($LASTEXITCODE) { throw 'CNVC color build failed' }
+    & .\dcn_cnvc_color_test.exe
+    if ($LASTEXITCODE) { throw 'CNVC color tests failed' }
+    & python "$repo\driver\kmd\test\cnvc_color_oracle.py" --exe (Join-Path (Get-Location) 'dcn_cnvc_color_test.exe') --summary
+    if ($LASTEXITCODE) { throw 'CNVC color arithmetic analysis failed' }
     & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
         "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
         "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `

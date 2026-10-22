@@ -238,10 +238,46 @@ The generic DML fallback to `dm_444_32` is not a checked AYUV bandwidth plan.
 Neither a hardware image witness nor complete Windows format/HLK coverage
 exists for this route. The Microsoft YUV requirement remains open.
 
-Next, establish the linear surface layout and checked address conversion from
-the selected HUBP1 path. Prepare CNVC/CSC with explicit matrix-bank ownership.
+The checked linear layout and CPU CNVC preparation now exist. Complete CSC
+with explicit matrix-bank ownership and the atomic surface writer.
 Keep rotation, mirroring and unverified YUV formats out of capability admission.
 Retain their implementation and validation work in the requirement matrix.
+
+### CNVC preparation and color arithmetic
+
+`dcn_cnvc_color` captures the selected `dpp201_cnv_setup` function without
+MMIO. It prepares format, alpha, zero expansion and the original input CSC
+coefficients. RGB uses CSC bypass. The internal packed YUV candidate requires
+an explicit 601 or 709 choice, each with full or limited range. Mismatched
+format and color-space requests fail. Unknown values do not select a default.
+BGRX disables pixel alpha. RGB10A2 writes all four two-bit alpha levels:
+0, 85, 170 and 255. The owner must match these with HUBP and MPC state.
+
+The capture boundary defers OBUF power and CSC bank operations. It does not
+run the debug-index read or select a bank. The original DCN201 function ignores
+its custom-matrix argument. This adapter does not expose that argument.
+The selected DCN201 function table also sets `dpp_program_bias_and_scale`
+to NULL. Do not assume that a generic BNS helper corrects input normalization.
+
+The exact-rational host analysis compares the prepared matrices with the
+[Microsoft conversion equations](https://learn.microsoft.com/en-us/windows/win32/medfound/recommended-8-bit-yuv-formats-for-video-rendering)
+for limited-range 601 and 709. The full-range comparison uses an explicit
+Y/255 and (chroma-128)/255 convention. Both comparisons model AMD input as
+Cr,Y,Cb divided by 256, signed S2.13 coefficients, and clamped output times 255.
+These input and output normalizations are hypotheses for the hardware path.
+
+Across 1000 sampled input triples per matrix, that model gives maximum sampled
+errors of 1.011658 output codes for both full-range matrices, 0.266112 for
+601 limited and 0.286546 for 709 limited. Full-range neutral white is about
+254, not 255. Each neutral ramp is monotonic. These are finite CPU results,
+not bounds over all possible inputs and not hardware or HLK color passes.
+
+Before YUV admission, measure neutral black/white and asymmetric chroma
+patterns through the complete CNVC/CM/MPC path. Establish channel ordering,
+expansion, clamp/rounding and any downstream normalization. Preserve the
+original matrices until that evidence identifies which operation needs a
+change. Active-bank observation, pending-selection ownership, no reuse before
+latch, and atomic RGB/YUV transitions still require implementation and tests.
 
 ## HLK coverage and selection
 

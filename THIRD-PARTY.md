@@ -33,6 +33,12 @@ These AMD MIT sources are Linux v6.18 `7d0a66e4bb90`. The extractor retains
 the declarations and functions with LF endings, and adds private-linkage
 prototypes. The checked Windows layout adapter uses the project license.
 
+`driver/shim/generated/dc_cnvc_color.inc` retains the AMD MIT notices,
+CNVC setup, declarations and input CSC table from Linux v6.18 `7d0a66e4bb90`.
+Its reference inputs are `dcn201_dpp.c`, `dpp.h`, `hw_shared.h`, `dcn10_dpp.h`
+and `hdmi-link/dc_hw_types.h`. The separate CPU capture adapter defers CSC
+bank selection and power operations, and explicitly disables XRGB alpha.
+
 ## Fetched at build time, not stored here
 
 | What | Used by | License |
