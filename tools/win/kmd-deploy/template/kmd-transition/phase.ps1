@@ -57,7 +57,7 @@ if($Phase -eq 'Capture'){
  Write-DurableText "$out\baseline.json" ($baseline|ConvertTo-Json -Depth 10)
 }else{
  $saved=Get-Content "$out\baseline.json" -Raw|ConvertFrom-Json
- if($saved.kmd_sha256 -ne $manifest.$KmdRollbackLabel.'bc250kmd.sys' -or $saved.health -notmatch ('version='+[regex]::Escape($KmdRollbackAbi)+' flags=15')){throw 'Baseline witness invalid'}
+ if($saved.kmd_sha256 -ne $manifest.$KmdRollbackLabel.'bc250kmd.sys' -or $saved.health -notmatch ('version='+[regex]::Escape($KmdRollbackAbi)+' flags=(15|31) ')){throw 'Baseline witness invalid'}
  Assert-KmdHangDetectorBaseline $saved.hang_detector
  [void](Assert-KmdGraphicsRegistrationBaseline $saved.graphics_registration)
  $gpu=Get-PnpDevice -InstanceId $saved.instance

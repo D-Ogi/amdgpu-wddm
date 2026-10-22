@@ -99,7 +99,7 @@ function Get-KmdReadyHealth {
 }
 function Assert-KmdConfirmedHealth {
  param($Before,$After)
- if($After.flags -ne 15 -or $After.generation -ne $Before.generation -or $After.epoch -ne $Before.epoch){throw 'Confirmation does not match observed ready start'}
+ if($After.flags -notin 15,31 -or $After.generation -ne $Before.generation -or $After.epoch -ne $Before.epoch){throw 'Confirmation does not match observed ready start'}
 }
 
 # Mirrors start_health.c confirmation admission (BC250_START_HEALTH_MIN_MS 60000, FRESH_MS 15000; start_health.c
@@ -133,7 +133,7 @@ function Get-KmdAcceptedConfirmedEpoch {
   $health=$record.health
   if($null -eq $health -or $null -eq $health.generation -or $null -eq $health.epoch){throw 'Acceptance record without a witness'}
   if([UInt64]$health.generation -ne $Generation){continue}
-  if([int]$health.flags -ne 15 -or [UInt64]$health.ready_ms -lt 60000){throw 'Acceptance record is not a confirmed start with a full ready age'}
+  if([int]$health.flags -notin 15,31 -or [UInt64]$health.ready_ms -lt 60000){throw 'Acceptance record is not a confirmed start with a full ready age'}
   # The whole admission Verify made before it wrote the record, not the ready age alone (phase.ps1 asserts
   # Assert-KmdFreshWork and Assert-KmdConfirmedHealth on the same witness).
   Assert-KmdFreshWork $health

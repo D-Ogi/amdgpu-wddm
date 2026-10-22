@@ -5,6 +5,7 @@ enum Bc250StartHealthFlags {
  Ready = 2
  Visible = 4
  Confirmed = 8
+ Quiet = 16
 }
 # Pure gate for starting the WSI control within an already-running DWM trial. Self-contained on purpose, so a
 # native-trial package can carry it alone; test-identity.ps1 proves the default ABI is identity.ps1's candidate.
@@ -18,9 +19,12 @@ function Get-ConfirmedPresentStart {
  $completed=[UInt64]$Matches[4];$age=[UInt64]$Matches[5];$ready=[UInt64]$Matches[6]
  if($ElapsedSeconds -lt 0 -or $ElapsedSeconds -ge 90){throw 'Confirmed health not observed within 90 seconds'}
  $required=[Bc250StartHealthFlags]::Full -bor [Bc250StartHealthFlags]::Ready -bor [Bc250StartHealthFlags]::Visible
- $known=$required -bor [Bc250StartHealthFlags]::Confirmed
+ $known=$required -bor [Bc250StartHealthFlags]::Confirmed -bor [Bc250StartHealthFlags]::Quiet
  $confirmed=($flags -band [Bc250StartHealthFlags]::Confirmed) -ne 0
- if(($flags -band $required) -ne $required -or ([int]$flags -band (-bnot [int]$known)) -ne 0 -or !$generation -or !$epoch -or !$completed -or $age -gt 15000){throw 'Unhealthy or stale presentation witness'}
+ # QUIET (BC250_START_HEALTH_QUIET): every programmed flip has completed, so nothing is owed; it stands in for a completion
+ # in the last 15 s, as in the KMD's own HealthConfirmable (an idle desktop flips once a minute).
+ $quiet=($flags -band [Bc250StartHealthFlags]::Quiet) -ne 0
+ if(($flags -band $required) -ne $required -or ([int]$flags -band (-bnot [int]$known)) -ne 0 -or !$generation -or !$epoch -or !$completed -or ($age -gt 15000 -and !$quiet)){throw 'Unhealthy or stale presentation witness'}
  if(($ExpectedGeneration -and $generation -ne $ExpectedGeneration) -or ($ExpectedEpoch -and $epoch -ne $ExpectedEpoch)){throw 'Health generation/epoch changed'}
  # The 60 s ready age belongs to the interval the KMD durably confirmed under its own lock. CONFIRMED follows
  # the confirmed start, that is its generation, while every mode set and every visibility change advances the

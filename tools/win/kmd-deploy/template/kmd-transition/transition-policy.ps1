@@ -21,6 +21,6 @@ function Test-KmdDeploymentAcceptance {
  return ($Candidate.success -is [bool] -and $Candidate.success -and
   $Candidate.tree_closed -is [bool] -and $Candidate.tree_closed -and
   $Candidate.reason -eq 'verified' -and $Candidate.health_scope -eq 'candidate-confirmed' -and
-  $Health.scope -eq 'candidate-confirmed' -and $Health.health.flags -eq 15 -and
+  $Health.scope -eq 'candidate-confirmed' -and $Health.health.flags -in 15,31 -and
   $Health.health.ready_ms -ge 60000 -and $Health.health.completed -gt 0 -and $Health.health.age_ms -le 15000)
 }

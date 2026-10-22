@@ -56,7 +56,7 @@ if ($h.flags -eq 7) {
     $r.health_confirm = $confirm.Trim()
 }
 $after = Read-Health
-if ($after.flags -ne 15 -or $after.generation -ne $h.generation -or $after.epoch -ne $h.epoch) { throw "Not confirmed: $($after.text)" }
+if ($after.flags -notin 15, 31 -or $after.generation -ne $h.generation -or $after.epoch -ne $h.epoch) { throw "Not confirmed: $($after.text)" }
 $r.health_after = $after.text
 $now = @(Get-Process dwm -ErrorAction SilentlyContinue)
 if ($now.Count -ne 1 -or $now[0].Id -ne $r.new_pid) { throw 'DWM replaced during the ready interval' }

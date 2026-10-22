@@ -62,7 +62,10 @@ Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -El
 Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 12}
 Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdCandidateAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ExpectedEpoch 9 -ConfirmedEpoch 6}
 Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'age_ms=1200','age_ms=15001') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
-Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'flags=15','flags=31') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
+Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'flags=15','flags=47') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
+# QUIET (16) is known, and it stands in for a fresh completion: an idle desktop's last flip may be a minute old.
+$quiet=Get-ConfirmedPresentStart -Health ((($commit -f $KmdCandidateAbi) -replace 'flags=15','flags=31') -replace 'age_ms=1200','age_ms=45000') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6
+if(!$quiet.launch -or $quiet.flags -ne 31){throw 'Quiet witness with an old completion rejected'}
 Must-Reject {Get-ConfirmedPresentStart -Health (($commit -f $KmdCandidateAbi) -replace 'completed=7','completed=0') -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}
 if($KmdCandidateAbi -ne $KmdRollbackAbi){Must-Reject {Get-ConfirmedPresentStart -Health ($commit -f $KmdRollbackAbi) -ElapsedSeconds 0 -ExpectedGeneration 5 -ConfirmedEpoch 6}}
 # Each of the three ways to refuse a short ready age names its own rule.

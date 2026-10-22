@@ -73,7 +73,7 @@ try { $result.hang_detector = Read-KmdHangDetector $parametersKey } finally { $p
 Assert-KmdHangDetectorBaseline $result.hang_detector
 $result.driver_log = (& $cli log | Out-String)
 if ($LASTEXITCODE -ne 0) { throw 'Log query failed' }
-if ($result.health -notmatch ('version=' + [regex]::Escape($KmdRollbackAbi) + ' flags=15')) { throw 'Baseline not confirmed healthy' }
+if ($result.health -notmatch ('version=' + [regex]::Escape($KmdRollbackAbi) + ' flags=(15|31) ')) { throw 'Baseline not confirmed healthy' }
 if ($result.clock -notmatch 'MHz=1000 VID=116 temperature_mc=(\d+) ready=1' -or [int]$Matches[1] -ge 85000) { throw 'Clock operating point mismatch' }
 if ($result.dwm.Count -ne 1 -or @($result.dwm[0].modules | Where-Object { $_.sha256 -eq $result.umd_sha256 }).Count -ne 1) { throw 'One CPU DWM with the baseline UMD required' }
 # The desktop this attempt was frozen for (identity.ps1, from lab-baseline.json): exactly that module set in DWM,
