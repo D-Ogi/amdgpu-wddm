@@ -292,6 +292,20 @@ int main(void)
     init(m,&io);m->reg[R(DIG_BE_CNTL)/4]=F(DIG_BE_CNTL,DIG_FE_SOURCE_SELECT,2);
     CHECK(Bc250Dcn201Route(&io,3,1)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
     init(m,&io);CHECK(Bc250Dcn201Route(&io,1,1)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    // Validate before conversion to the AMD bool argument. In particular,
+    // 256 must not silently become either false (byte) or true (_Bool).
+    {
+        static const int invalid[]={-2147483647-1,-65536,-256,-1,2,127,128,255,256,257,65536,2147483647};
+        unsigned n;
+        for(n=0;n<sizeof(invalid)/sizeof(invalid[0]);++n) {
+            init(m,&io);CHECK(Bc250Dcn201Route(&io,3,invalid[n])==BC250_DISP_STATUS_INVALID);
+            CHECK(m->ops==0);
+            init(m,&io);CHECK(Bc250Dcn201PlaneBlankAt(&io,0,invalid[n])==BC250_DISP_STATUS_INVALID);
+            CHECK(m->ops==0);
+            init(m,&io);CHECK(Bc250Dcn201PlaneBlankAt(&io,1,invalid[n])==BC250_DISP_STATUS_INVALID);
+            CHECK(m->ops==0);
+        }
+    }
     groupTest(m,&io);
     free(m);printf("dcn201 pipe: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
