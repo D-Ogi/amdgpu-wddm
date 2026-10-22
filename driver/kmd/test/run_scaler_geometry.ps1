@@ -54,6 +54,17 @@ try {
     & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
         "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
         "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `
+        /Fedcn_geometry_test.exe "$repo\driver\kmd\test\dcn_geometry_test.c" `
+        "$repo\driver\kmd\dcn_geometry.c" "$repo\driver\kmd\display_io.c" `
+        "$repo\driver\shim\bc250_scaler_plan.c" "$repo\driver\shim\bc250_scaler_filter.c" `
+        "$repo\driver\shim\bc250_scaler_geometry.c" "$repo\driver\shim\bc250_scaler_buffer.c" `
+        /link "/LIBPATH:$($crt.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+    if ($LASTEXITCODE) { throw 'DCN geometry build failed' }
+    & .\dcn_geometry_test.exe
+    if ($LASTEXITCODE) { throw 'DCN geometry tests failed' }
+    & $cc /nologo /TC /W4 /WX /O2 /MT -fuse-ld=lld `
+        "/I$($crt.FullName)\include" "/I$sdk\Include\$KitVersion\ucrt" `
+        "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" `
         /Fedcn_coeff_test.exe "$repo\driver\kmd\test\dcn_coeff_test.c" `
         "$repo\driver\kmd\dcn_coeff.c" "$repo\driver\kmd\display_io.c" `
         "$repo\driver\shim\bc250_scaler_filter.c" `

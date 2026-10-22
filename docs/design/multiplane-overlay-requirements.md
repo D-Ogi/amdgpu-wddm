@@ -119,6 +119,25 @@ protocol before these helpers can be called by MPO. Filter uploads belong to
 filter changes, not every address-only flip. Filter reuse and the complete
 plane transaction remain to be connected. No MPO capability is enabled here.
 
+`dcn_geometry.c` prepares 29 DSCL/HUBP register words for either pipe before
+the display lock. It selects RGB, YCbCr444 or YCbCr420 scaler processing,
+keeps separate luma/chroma phases and viewports, and accounts for line-buffer
+alpha. These processing modes do not admit a surface format or establish CSC.
+The locked writer checks the OTG lock and preserves coefficient-bank fields.
+It performs no coefficient upload, allocation, stall, enable or unlock.
+It reports every attempted write, including a failed write that may have reached
+hardware. The caller must restore the complete transaction after such a failure.
+
+This helper is for progressive output. At 8:1, the inactive bottom-field initial
+phase can exceed the four-bit integer field. Its encoding keeps the low four bits,
+as AMD's register macro does. The active top phase is checked without truncation.
+The host controls cover both pipes, clipping, chroma modes, the exact-8 boundary,
+all read failures and each write failing before or after its effect. They do not
+prove hardware latch, bandwidth, colour accuracy or scanout. Surface format,
+mirror/rotation, address, routing, bank ownership and power must be integrated
+by the plane transaction owner before use. These helpers are not yet in the
+live MPO callback or the KMD build source list.
+
 This is not a completed MPO path. Missing work includes the second plane,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements
