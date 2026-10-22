@@ -350,7 +350,14 @@ Check (([string]$m.kmd_abi -eq '0x000700D8' -and [version]($m.kmd_build) -ge [ve
 $scripts = @(Get-ChildItem -LiteralPath (Join-Path $Package 'installer') -Filter *.ps1 | ForEach-Object { [pscustomobject]@{ name = $_.Name; text = [IO.File]::ReadAllText($_.FullName) } })
 $byName = @{}; foreach ($s in $scripts) { $byName[$s.name] = $s.text }
 $bad = @(foreach ($s in $scripts) { foreach ($p in 'Stop-Process', 'taskkill', 'Restart-Service', 'Stop-Service', '/disable-device', '/enable-device', '/remove-device', 'Disable-PnpDevice', 'Enable-PnpDevice', 'Restart-PnpDevice') { if ($s.text -match [regex]::Escape($p)) { "$($s.name): $p" } } })
+# The uninstall is the one place that moves the GPU in place (above). Since the shared driver state (6282d18d) its
+# state worker archives the final state with the device stopped and disabled, and uninstall.ps1 enables that device
+# again for its inbox driver: one /enable-device, on the archived device, and nowhere else.
+$enableOk = ([regex]::Matches($byName['uninstall.ps1'], '/enable-device').Count -eq 1) -and
+    ($byName['uninstall.ps1'] -match "(?s)Invoke-Change 'enable the archived, removed device for its inbox display driver' \{\s+\`$enabled=Invoke-Native pnputil\.exe @\('/enable-device',\`$removalDevice\)")
+$bad = @($bad | Where-Object { -not ($enableOk -and $_ -eq 'uninstall.ps1: /enable-device') })
 Check ($bad.Count -eq 0) "no installer script stops or restarts DWM, a service or the display device$(if ($bad.Count) { ': ' + ($bad -join '; ') })"
+Check $enableOk 'uninstall.ps1 enables the archived, removed device once, for its inbox display driver'
 # The argument lists, not the whole text: the scripts name /restart-device in comments and in the words they print,
 # and those are not a restart. An argument list reaches a binary either as `Invoke-Native <exe> @(...)` or as
 # `-Arguments @(...)`, and the match below reads /restart-device out of one whatever its quoting is ('x', "x" or
@@ -373,7 +380,7 @@ Check (($audioRestarts -join '; ') -eq 'install.ps1: Restart-GpuAudioDevice -Ins
 $bad = @(foreach ($s in $scripts) { if ($s.text -match 'regsvr32') { $s.name } })
 Check ($bad.Count -eq 0) "no installer script calls regsvr32$(if ($bad.Count) { ': ' + ($bad -join ', ') })"
 $pnpCalls = @(foreach ($s in $scripts) { foreach ($mm in [regex]::Matches($s.text, 'Invoke-Native pnputil\.exe @\(\s*[''"]?(/[a-z-]+)[''"]?')) { "$($s.name) $($mm.Groups[1].Value)" } })
-Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /scan-devices') "pnputil calls: $($pnpCalls -join ', ')"
+Check ((($pnpCalls | Sort-Object) -join ', ') -eq 'install.ps1 /delete-driver, uninstall.ps1 /delete-driver, uninstall.ps1 /enable-device, uninstall.ps1 /scan-devices') "pnputil calls:$($pnpCalls -join ', ')"
 # BD-089: the install deletes an older package of ours from the driver store, and it must not touch the device while
 # it does it. The uninstall takes the GPU off our driver on purpose, so there both switches belong.
 Check (($src -match "Invoke-Native pnputil\.exe @\('/delete-driver', \`$oldPackage\)") -and ($src -notmatch "'/delete-driver'[^\r\n]*/uninstall")) 'install.ps1 deletes an older driver package without /uninstall and without /force'
