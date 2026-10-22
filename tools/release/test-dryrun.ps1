@@ -572,10 +572,18 @@ Check ($r.code -eq 5) "probe on a PC without the driver: exit $($r.code) (5 = no
 # cannot be read must still expect the driver version this package carries.
 Check ($r.text -match "probe: fallback view: device problem -1, driver version  \(expected $($m.kmd_abi)\), LastStage ") "probe: fallback view runs bc250kmd_cli info/stages; the built-in expected version is this release's kmd_abi $($m.kmd_abi)"
 Check ($r.text -match 'probe: start health no reading: start health read refused, status 0x[0-9A-F]{8}') 'probe: the DLL loads and Bc250StartHealth answers (no device)'
-Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the registry'
-# BD-122: the probe says why the last start failed, read from Parameters\StartRecord with no gate and without the
-# driver. This PC has no such key, so the probe must say that in plain words rather than print nothing.
-Check ($r.text -match 'start record: no record: this driver version does not keep one') 'probe: the start record is read and named, absent on a PC without the driver'
+# Since the shared driver state (6282d18d) the probe reads DPM and the start record through bc250kmd_cli state
+# snapshot (state-reader.ps1), with no registry fallback. On a PC without the bc250kmd service, as this one, the
+# snapshot refuses with ERROR_SERVICE_DOES_NOT_EXIST (1060) and the probe must name that, not print nothing.
+$noService = '\{[^\r\n]*"error":1060,"service_installed":false\}'
+if (Get-Service -Name bc250kmd -ErrorAction SilentlyContinue) {
+    Check ($r.text -match 'probe: DpmMode (absent|\d+) ') 'probe: DPM state read from the shared state'
+    Check ($r.text -match 'start record: no record: this driver version does not keep one') 'probe: the start record is read and named, absent'
+} else {
+    Check ($r.text -match "probe: DpmMode unreadable: shared state could not be read: $noService") 'probe: DPM state read from the shared state, which names the missing service on a PC without the driver'
+    # BD-122: the probe says why the last start failed; here it says that it cannot read the record, and why.
+    Check ($r.text -match "start record: unreadable: shared state could not be read: $noService") 'probe: the start record is read and named, unreadable without the driver service'
+}
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
 Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm reads the start health through bc250control.dll, not the CLI'
 # release-sources.json holds one row per flavour (schema 4); this package carries the flavour its manifest names.
