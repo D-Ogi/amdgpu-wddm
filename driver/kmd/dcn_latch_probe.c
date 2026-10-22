@@ -269,8 +269,12 @@ long DcnLatchProbe(BC250_DEVICE* Device, unsigned long Arm, BC250_LATCH_PROBE_RE
     }
     status=LatchSample(&c,&Result->Armed);
     if (!NT_SUCCESS(status)) goto cleanup;
+    // EARLIEST can lag a consumed flip while the frame word is unchanged.
+    // A locked arm must still observe B pending, not merely the old A address.
+    // This does not prove acceptance into a hardware pending bank.
     if (Result->Armed.Word[Bc250LatchFrameAfter]!=frame ||
-        (Arm!=Bc250LatchUnlocked && (!Result->Armed.LockHeld || Result->Armed.Physical!=Result->AddressA))) {
+        (Arm!=Bc250LatchUnlocked && (!Result->Armed.LockHeld || Result->Armed.Physical!=Result->AddressA ||
+         !(Result->Armed.Word[Bc250LatchFlipControl] & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)))) {
         status=STATUS_RETRY;goto cleanup; // missed the discriminating interval
     }
     status=LatchWait(&c,0,Arm!=Bc250LatchUnlocked,TRUE,frame,&Result->Boundary);

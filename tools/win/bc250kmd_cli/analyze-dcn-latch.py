@@ -9,6 +9,7 @@ LOCK_REQUEST = 0x1  # OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK
 LOCK_ACK = 0x100  # OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK
 LOCK_SELECT = 0x0E000000  # OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK
 ADDRESS_HIGH = 0xFFFF  # HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK
+FLIP_PENDING = 0x100  # HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK
 SAMPLE_NAMES = ('before', 'armed', 'boundary', 'after_unlock')
 
 
@@ -22,18 +23,18 @@ def decode_sample(words):
     if len(words) != 16:
         raise ValueError('sample size')
     lock_mask = LOCK_REQUEST | LOCK_ACK
-    brackets = (words[9] == 0x1FF and words[0] == words[8] and
-                not words[1] & LOCK_SELECT and not words[7] & LOCK_SELECT and
-                words[2] & lock_mask == words[6] & lock_mask and
+    brackets = (words[10] == 0x3FF and words[0] == words[9] and
+                not words[1] & LOCK_SELECT and not words[8] & LOCK_SELECT and
+                words[2] & lock_mask == words[7] & lock_mask and
                 words[3] & ADDRESS_HIGH == words[5] & ADDRESS_HIGH)
     held = brackets and words[2] & lock_mask == lock_mask
     clear = brackets and words[2] & lock_mask == 0
     physical = ((words[3] & ADDRESS_HIGH) << 32) | words[4] if brackets else 0
-    # Word 13 is ABI padding, not a semantic field. Never interpret it.
     cached_physical = words[14] | words[15] << 32
-    coherent = (words[10] == int(brackets) and words[11] == int(held) and
-                words[12] == int(clear) and cached_physical == physical)
+    coherent = (words[11] == int(brackets) and words[12] == int(held) and
+                words[13] == int(clear) and cached_physical == physical)
     return dict(brackets=brackets, held=held, clear=clear, physical=physical,
+                pending=bool(words[6] & FLIP_PENDING),
                 derived_fields_match=coherent, frame_word=words[0])
 
 
@@ -53,7 +54,7 @@ def decode(records):
         raise ValueError('Version or QPC invalid')
     words = row['raw_dwords']
     if not isinstance(words, list) or len(words) != 94:
-        raise ValueError('ABI 1 must contain exactly 94 DWORDs')
+        raise ValueError('ABI 2 must contain exactly 94 DWORDs')
     for i, word in enumerate(words):
         integer(word, f'word {i}')
     # Offsets from the Windows ABI in dcn_latch_escape.h, checked on x86/x64.
@@ -73,7 +74,7 @@ def decode(records):
     def require(condition, reason):
         if not condition:
             reasons.append(reason)
-    require(words[:8] == [0x30353242, 37, 0, version, 1, arm, version, 0], 'reply identity/status')
+    require(words[:8] == [0x30353242, 37, 0, version, 2, arm, version, 0], 'reply identity/status')
     require(not any(words[8:16]), 'reserved reply words')
     require(transport == 0 and exit_code == 0, 'transport or client failure')
     require(words[16] == arm and not words[17] & 1, 'arm or owner generation')
@@ -93,6 +94,7 @@ def decode(records):
         require(armed['physical'] in (a, b) and boundary['physical'] == b, 'unlocked control did not reach B')
     else:
         require(armed['held'] and boundary['held'] and armed['physical'] == a, 'locked interval not observed from A')
+        require(armed['pending'], 'B already consumed or not pending when locked interval sampled')
         require(boundary['physical'] in (a, b), 'boundary is neither A nor B')
         if arm == 1:
             require(boundary['physical'] == a, 'lock-before-program control did not retain A')

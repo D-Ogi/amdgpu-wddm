@@ -52,10 +52,12 @@ if ($Mutations) {
         $file="$Out\$($change[0]).c"
         [IO.File]::WriteAllText($file,$escapeSource.Replace($change[1],$change[2]))
         $run=Invoke-Probe $file $change[0]
+        [IO.File]::WriteAllText("$Out\$($change[0]).txt",$run.Output)
         if (!$run.Code -or $run.Output -notmatch 'FAIL line') {throw "Mutation survived: $($change[0])"}
         Write-Output "Mutation caught at runtime: $($change[0])"
     }
     $changes=@(
+        @('armed-pending', '!(Result->Armed.Word[Bc250LatchFlipControl] & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)', '0'),
         @('single-transition', 'transitions>=2', 'transitions>=1'),
         @('fixed-phase-limit', 'C->PhaseMs=(ULONG)((2*frameUs+2000+999)/1000);', 'C->PhaseMs=40;'),
         @('no-write-cleanup', 'if (!Result->WritesAttempted) {', 'if (!Result->WritesAttempted && Arm==Bc250LatchArmCount) {'),
@@ -74,6 +76,7 @@ if ($Mutations) {
         $file="$Out\$($change[0]).c"
         [IO.File]::WriteAllText($file,$source.Replace($change[1],$change[2]))
         $run=Invoke-Probe $file $change[0]
+        [IO.File]::WriteAllText("$Out\$($change[0]).txt",$run.Output)
         if (!$run.Code -or $run.Output -notmatch 'FAIL line') {throw "Mutation survived: $($change[0])"}
         Write-Output "Mutation caught at runtime: $($change[0])"
     }

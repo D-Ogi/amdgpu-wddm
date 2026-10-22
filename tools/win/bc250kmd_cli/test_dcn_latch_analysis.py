@@ -22,6 +22,7 @@ class SourceBindings(unittest.TestCase):
             ('OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK', analysis.LOCK_ACK),
             ('OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK', analysis.LOCK_SELECT),
             ('HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH__SURFACE_EARLIEST_INUSE_ADDRESS_HIGH_MASK', analysis.ADDRESS_HIGH),
+            ('HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK', analysis.FLIP_PENDING),
         ):
             match = re.search(r'^#define\s+' + name + r'\s+(0x[0-9a-fA-F]+)L?\s*$', header, re.M)
             self.assertIsNotNone(match, name)
@@ -90,18 +91,28 @@ class EvidenceControls(unittest.TestCase):
 
     def test_every_sample_bracket(self):
         for sample in range(4):
-            for word, bit in ((8, 1), (1, analysis.LOCK_SELECT), (7, analysis.LOCK_SELECT),
-                              (6, analysis.LOCK_REQUEST), (5, 1), (9, 1), (10, 1),
-                              (11, 1), (12, 1), (14, 1)):
+            for word, bit in ((9, 1), (1, analysis.LOCK_SELECT), (8, analysis.LOCK_SELECT),
+                              (7, analysis.LOCK_REQUEST), (5, 1), (10, 1),
+                              (11, 1), (12, 1), (13, 1), (14, 1)):
                 c = self.capture(); c[1]['raw_dwords'][30+sample*16+word] ^= bit
                 with self.subTest(sample=sample, word=word): self.assertFalse(analysis.decode(c)['eligible'])
 
-    def test_abi_padding_not_used_as_evidence(self):
+    def test_old_abi_and_reserved_words_rejected(self):
         c = self.capture()
-        for sample in range(4): c[1]['raw_dwords'][30+sample*16+13] = 0xDEADBEEF
-        self.assertTrue(analysis.decode(c)['eligible'])
+        c[1]['raw_dwords'][4] = 1
+        self.assertFalse(analysis.decode(c)['eligible'])
+        c = self.capture()
         c[1]['raw_dwords'][8] = 1
         self.assertFalse(analysis.decode(c)['eligible'])
+
+    def test_clear_pending_rejects_old_address_race(self):
+        for arm in (1, 2):
+            c = self.capture(arm=arm)
+            c[1]['raw_dwords'][46+6] &= ~analysis.FLIP_PENDING
+            self.assertFalse(analysis.decode(c)['eligible'])
+        c = self.capture(arm=0)
+        c[1]['raw_dwords'][46+6] = 0
+        self.assertTrue(analysis.decode(c)['eligible'])
 
     def test_unused_high_register_bits_not_address_bits(self):
         c = self.capture()
@@ -113,10 +124,10 @@ class EvidenceControls(unittest.TestCase):
         c = self.capture()
         for sample in range(4):
             value = 0xFFFFFFFF if sample < 2 else 0
-            for word in (0, 8): c[1]['raw_dwords'][30+sample*16+word] = value
+            for word in (0, 9): c[1]['raw_dwords'][30+sample*16+word] = value
         self.assertTrue(analysis.decode(c)['eligible'])
         for sample in range(4):
-            for word in (0, 8): c[1]['raw_dwords'][30+sample*16+word] = 0
+            for word in (0, 9): c[1]['raw_dwords'][30+sample*16+word] = 0
         self.assertFalse(analysis.decode(c)['eligible'])
 
     def test_h2_does_not_mean_already_b_when_armed(self):

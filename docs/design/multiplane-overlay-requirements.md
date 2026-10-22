@@ -426,9 +426,9 @@ cannot distinguish a lock that blocks scanout latch from one that blocks only
 transfer into a pending bank. The existing model explicitly assumes the former.
 Neither interpretation is established by the function names.
 
-`Bc250LatchSampleRead` prepares that experiment with nine bounded reads on
+`Bc250LatchSampleRead` prepares that experiment with ten bounded reads on
 pipe 0. Frame, lock selection and request/ack endpoints bracket an
-EARLIEST_INUSE high/low/high read. It retains partial raw words and their
+EARLIEST_INUSE high/low/high read and the flip-control word. It retains partial raw words and their
 validity mask on failure. A changed bracket returns BUSY. It does not retry,
 write or wait for a frame. Tests inject a transition at every read boundary
 and a failure at each read. Separate flags distinguish fully held, fully clear
@@ -494,6 +494,9 @@ toolchain. Their passing results establish tested software behavior only.
 The lab-only escape and client below expose it. No hardware result is claimed.
 Its three arms are an unlocked transition, lock before programming, and lock
 after programming. A late lock returns RETRY with its raw observations.
+Both locked arms require the pending bit in their Armed sample. The old
+address alone is insufficient: EARLIEST can still contain A after B was consumed.
+This additional condition does not prove acceptance into a pending bank.
 The core refuses a foreign lock, a nonzero selector, compressed or triple
 buffered surfaces, unsupported modes and insufficient reserved space.
 Admission is checked again after the primary writer has acquired the plane.
@@ -532,13 +535,17 @@ The power-withdrawal test caught
 and now prevents a manual-trigger write after power changed during unlock.
 These tests establish software behavior under the stated models only.
 Physical controls and full MPO remain open.
-The hardware arm stays on hold pending the Armed pending-state observation,
-unlock timing and compiler-mode review. The delayed model has no EARLIEST lag.
-its results do not close those separate review findings.
+The model also permits EARLIEST to lag the consumed flip by 60 us. A lock
+just before VUPDATE remains eligible. A lock at or just after VUPDATE returns
+RETRY despite the unchanged frame word and old A address. Removing the pending
+check makes that control fail. These are synthetic timings, not hardware bounds.
+The hardware arm stays on hold pending unlock timing and review of the changes.
 
 ### Lab escape and client
 
-Command 37 uses the 376-byte `BC250_ESCAPE_LATCH_PROBE` ABI 1.
+Command 37 uses the 376-byte `BC250_ESCAPE_LATCH_PROBE` ABI 2.
+ABI 1 is refused even though its size is the same. The extra flip-control
+word moves the derived fields inside each sample.
 Only the arm, ABI and expected KMD version are inputs beyond the header.
 Reserved words must be zero. All output is cleared before admission. Supplied
 output addresses cannot become inputs. The call requires an administrator,

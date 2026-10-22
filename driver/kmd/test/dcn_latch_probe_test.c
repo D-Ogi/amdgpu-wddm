@@ -59,6 +59,9 @@ static unsigned unlock_delay,unlock_countdown;
 static unsigned refuse_after_begin,program_refused;
 static unsigned signal_fail;
 static ULONG model_frame_us=1000,vupdate_delay_us;
+static ULONG earliest_lag_us,prelock_latency_us;
+static ULONGLONG earliest_next;
+static LONGLONG earliest_due;
 static int irql,otg;
 static long InterlockedCompareExchange(volatile LONG *p,LONG v,LONG cmp)
 { LONG old=*p;if(old==cmp)*p=v;return old; }
@@ -76,9 +79,10 @@ static void KeStallExecutionProcessor(ULONG us)
         if((before+model_frame_us-vupdate_delay_us)/model_frame_us !=
            (clock_us+model_frame_us-vupdate_delay_us)/model_frame_us &&
            pending && (!lock || (h2 && armed))) {
-            live=pending;pending=0;
+            earliest_next=pending;earliest_due=clock_us+earliest_lag_us;pending=0;
         }
     }
+    if(earliest_next && clock_us>=earliest_due) {live=earliest_next;earliest_next=0;}
 }
 static ULONG DisplaySourceWidth(const BC250_DEVICE *d) {return d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE *d) {return d->Post.Height;}
@@ -99,7 +103,8 @@ static NTSTATUS MmioDcnRead(BC250_DEVICE *d,ULONG offset,ULONG *v)
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH:*v=(ULONG)(live>>32);break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE:*v=(ULONG)live;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL:*v=surface;break;
-    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:*v=flip;break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:
+        *v=flip|(pending?HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK:0);break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL2:*v=triple;break;
     default:CHECK(0);return STATUS_INVALID_PARAMETER;
     }
@@ -112,6 +117,9 @@ static NTSTATUS MmioDcnWriteEx(BC250_DEVICE *d,ULONG offset,ULONG value,BOOLEAN 
     if(writes==fail_write && !after_write)return STATUS_IO_DEVICE_ERROR;
     switch(offset) {
     case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:
+        // Model elapsed time between Program(B) and the later lock write.
+        // VUPDATE may consume B while EARLIEST still reports A.
+        if(value && programs==2 && prelock_latency_us)KeStallExecutionProcessor(prelock_latency_us);
         if(value)lock=value|(lock_stuck?0:OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK);
         else if(!unlock_stuck) {if(unlock_delay)unlock_countdown=unlock_delay;else lock=0;}
         break;
@@ -180,6 +188,7 @@ static void Setup(BC250_DEVICE *d)
     unlock_delay=unlock_countdown=0;irql=0;otg=1;
     refuse_after_begin=program_refused=0;
     model_frame_us=1000;vupdate_delay_us=0;
+    earliest_lag_us=prelock_latency_us=0;earliest_next=0;earliest_due=0;
     signal_fail=0;
 }
 #include "dcn_latch_escape.h"
@@ -217,6 +226,18 @@ int main(int argc,char** argv)
         if(emit)EmitModel(model,arm,&r);
     }
     if(emit)return fails?1:0;
+    // Before VUPDATE, the lock can still cover B (positive control). At or
+    // after VUPDATE the pending bit is clear, even while the old A address
+    // survives in EARLIEST for 60 us. Reject that false discriminator.
+    for(i=19;i<=22;++i) {
+        Setup(&d);vupdate_delay_us=20;earliest_lag_us=60;prelock_latency_us=i;
+        status=DcnLatchProbe(&d,Bc250LatchLockAfterProgram,&r);
+        CHECK(status==(i<20?STATUS_SUCCESS:STATUS_RETRY));
+        CHECK(r.Armed.Physical==r.AddressA && r.Armed.LockHeld);
+        CHECK(!!(r.Armed.Word[Bc250LatchFlipControl] & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)==(i<20));
+        CHECK(r.BoundaryObserved==(i<20));
+        CHECK(r.Restored && ended==1 && !owner && !lock && !fault && live==r.AddressA);
+    }
     // Start just after VUPDATE, so the next counter transition is too early.
     // Cover every 20 us phase including a VUPDATE just before the next VSync.
     for(delay=20;delay<1000;delay+=20)for(model=0;model<3;model++)

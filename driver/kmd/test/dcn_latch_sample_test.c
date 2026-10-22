@@ -35,6 +35,8 @@ static long read_word(void* context, unsigned long offset, unsigned long* value)
     case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK: *value = m->lock; break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH: *value = (unsigned long)(m->address >> 32); break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE: *value = (unsigned long)m->address; break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:
+        *value = HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK; break;
     default: CHECK(0); return BC250_DISP_STATUS_INVALID;
     }
     return 0;
@@ -46,31 +48,32 @@ int main(void)
     BC250_LATCH_SAMPLE s;
     unsigned i, field;
     long status;
-    for (i = 0; i <= 9; ++i) {
+    for (i = 0; i <= Bc250LatchWordCount; ++i) {
         memset(&m, 0, sizeof(m)); memset(&io, 0, sizeof(io)); memset(&s, 0xcc, sizeof(s));
         io.Context = &m; io.Read = read_word; m.address = 0x1234567800ull; m.lock = held; m.fail = i;
         status = Bc250LatchSampleRead(&io, &s);
         CHECK(status == (i ? BC250_DISP_STATUS_DEVICE : 0));
-        CHECK(m.reads == (i ? i : 9));
-        CHECK(s.ValidMask == (i ? (1ul << (i - 1)) - 1 : (1ul << 9) - 1));
+        CHECK(m.reads == (i ? i : Bc250LatchWordCount));
+        CHECK(s.ValidMask == (i ? (1ul << (i - 1)) - 1 : (1ul << Bc250LatchWordCount) - 1));
         CHECK(io.Writes == 0 && io.StalledUs == 0);
         CHECK(s.BracketsMatch == !i && s.LockHeld == !i);
         CHECK(!s.LockClear);
         CHECK(s.Physical == (i ? 0 : m.address));
+        if (!i) CHECK(s.Word[Bc250LatchFlipControl] == HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK);
         if (i) CHECK(s.Word[i - 1] == 0);
     }
     // Inject one transition at each point. Changes outside a field's bracket
     // are intentionally not reported as torn observations.
-    for (field = 0; field < 5; ++field) for (i = 1; i <= 10; ++i) {
-        int mismatch = (field == 0 && i > 1 && i <= 9) ||
-            (field == 1 && i > 3 && i <= 7) ||
-            (field == 2 && i <= 8) || (field == 3 && i > 4 && i <= 6);
+    for (field = 0; field < 5; ++field) for (i = 1; i <= Bc250LatchWordCount+1; ++i) {
+        int mismatch = (field == 0 && i > 1 && i <= Bc250LatchFrameAfter+1) ||
+            (field == 1 && i > 3 && i <= Bc250LatchLockAfter+1) ||
+            (field == 2 && i <= Bc250LatchSelectAfter+1) || (field == 3 && i > 4 && i <= 6);
         memset(&m, 0, sizeof(m)); memset(&io, 0, sizeof(io));
         io.Context = &m; io.Read = read_word; m.address = 0x1234567800ull; m.lock = held;
         m.field = field; m.change = i;
         status = Bc250LatchSampleRead(&io, &s);
         CHECK(status == (mismatch ? BC250_DISP_STATUS_BUSY : 0));
-        CHECK(m.reads == 9 && s.ValidMask == 511);
+        CHECK(m.reads == Bc250LatchWordCount && s.ValidMask == (1ul<<Bc250LatchWordCount)-1);
         CHECK(s.BracketsMatch == (unsigned)!mismatch);
         if (mismatch) CHECK(s.Physical == 0 && !s.LockHeld);
         CHECK(!io.Writes && !io.StalledUs);

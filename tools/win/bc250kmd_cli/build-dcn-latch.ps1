@@ -6,6 +6,12 @@ $Out=(Resolve-Path $Out).Path
 $env:TEMP=$Out; $env:TMP=$Out
 . "$repo\tools\build\umd-compiler.ps1"
 $compiler=Resolve-Bc250UmdCompiler $Root 'clang' '' $Out 'x64'
+foreach ($arch in @('i686','x86_64')) {
+    Invoke-Bc250UmdCompiler $compiler @('/nologo','/TC','/c','/W4','/WX',
+        "--target=$arch-pc-windows-msvc", "/I$repo\driver\kmd",
+        "/Fo$Out\latch-abi-$arch.obj", "$repo\driver\kmd\test\dcn_latch_abi_test.c")
+    if ($LASTEXITCODE) {throw "Latch ABI compilation failed: $arch"}
+}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
 $sdk="$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0"
@@ -48,7 +54,8 @@ foreach ($arguments in $invalid) {
 $inputs=@('tools/win/bc250kmd_cli/dcn_latch.cpp','tools/win/bc250kmd_cli/dcn_latch_client_test.cpp','tools/win/bc250kmd_cli/build-dcn-latch.ps1',
     'tools/win/bc250kmd_cli/run-dcn-latch.ps1','tools/win/bc250kmd_cli/dcn_latch_runner_stub.cpp','tools/win/bc250kmd_cli/test-dcn-latch-runner.ps1',
     'tools/build/umd-compiler.ps1','tools/build/clang-windows.h','driver/kmd/bc250kmd_escape.h',
-    'driver/kmd/dcn_latch_escape.h','driver/kmd/dcn_latch_probe.h','driver/kmd/dcn_latch_sample.h','driver/kmd/display_io.h')
+    'driver/kmd/dcn_latch_escape.h','driver/kmd/dcn_latch_probe.h','driver/kmd/dcn_latch_sample.h','driver/kmd/display_io.h',
+    'driver/kmd/test/dcn_latch_abi_test.c')
 $hashes=@{}
 foreach ($inputPath in $inputs) {$hashes[$inputPath]=(Get-FileHash -LiteralPath "$repo\$inputPath").Hash}
 @{schema=1; source_commit=(& git -C $repo rev-parse HEAD); source_status=@(& git -C $repo status --porcelain);

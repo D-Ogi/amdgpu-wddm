@@ -5,7 +5,7 @@
 enum bc250_latch_word {
     Bc250LatchFrameBefore, Bc250LatchSelectBefore, Bc250LatchLockBefore,
     Bc250LatchHighBefore, Bc250LatchLow, Bc250LatchHighAfter,
-    Bc250LatchLockAfter, Bc250LatchSelectAfter, Bc250LatchFrameAfter,
+    Bc250LatchFlipControl, Bc250LatchLockAfter, Bc250LatchSelectAfter, Bc250LatchFrameAfter,
     Bc250LatchWordCount
 };
 typedef struct _BC250_LATCH_SAMPLE {
@@ -17,7 +17,7 @@ typedef struct _BC250_LATCH_SAMPLE {
     unsigned long long Physical;
 } BC250_LATCH_SAMPLE;
 
-// Exactly nine reads on success, no writes, waits or retries. Partial raw words
+// Exactly ten reads on success, no writes, waits or retries. Partial raw words
 // remain available on read failure, but all derived fields stay zero. Mismatch
 // returns BUSY. Matching brackets are only a candidate observation: the caller
 // must retain both surfaces and exclude other writers, reset and power changes.

@@ -14,7 +14,7 @@ int main()
         good.Result.Samples=4; good.Result.WritesAttempted=1;
         good.Result.AddressA=0x100000000ull; good.Result.AddressB=0x100010000ull;
         BC250_LATCH_SAMPLE* samples[]={&good.Result.Before,&good.Result.Armed,&good.Result.Boundary,&good.Result.AfterUnlock};
-        for (auto s:samples) {s->ValidMask=0x1ff; s->BracketsMatch=1;}
+        for (auto s:samples) {s->ValidMask=(1ul<<Bc250LatchWordCount)-1; s->BracketsMatch=1;}
         good.Result.Before.Physical=good.Result.AddressA; good.Result.Before.LockClear=1;
         good.Result.AfterUnlock.Physical=good.Result.AddressB; good.Result.AfterUnlock.LockClear=1;
         CHECK(complete_reply(0,good,BC250_KMD_VERSION,arm));
@@ -27,6 +27,7 @@ int main()
 #define REJECT(field,value) do {auto d=good; d.field=value; CHECK(!complete_reply(0,d,BC250_KMD_VERSION,arm));} while (0)
         REJECT(Magic,0); REJECT(Command,0); REJECT(Version,0); REJECT(ExpectedVersion,0);
         REJECT(AbiVersion,0); REJECT(Arm,99); REJECT(Result.Arm,99); REJECT(Status,2); REJECT(NtStatus,1);
+        REJECT(AbiVersion,1);
         REJECT(Result.Status,-1); REJECT(Result.UnlockStatus,-1); REJECT(Result.RestoreStatus,-1); REJECT(Result.EndStatus,-1);
         REJECT(Result.Restored,0); REJECT(Result.BoundaryObserved,0); REJECT(Result.Samples,3); REJECT(Result.WritesAttempted,0);
         REJECT(Result.AddressA,0); REJECT(Result.AddressB,0); REJECT(Result.AddressB,good.Result.AddressA);
