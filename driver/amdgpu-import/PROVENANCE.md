@@ -429,6 +429,8 @@ or hardware ownership is established by this source-only preparation.
 
 ## DCN scaler filter (resolution modes, stage A)
 
+PROVENANCE: `reference/dcn20_dpp.h` and `reference/dcn201_dpp.h` are unchanged Linux amdgpu DC (MIT) headers from `dc/dpp/dcn20/` and `dc/dpp/dcn201/`, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
+
 PROVENANCE: Linux amdgpu DC, MIT, v6.18 commit `7d0a66e4bb9081d75c82ec4957c50034cb0ea449`.
 `reference/dcn201_dpp.c` is unchanged from `dc/dpp/dcn201/`.
 `tools/import/extract_scaler_taps.py` extracts the default/requested tap block

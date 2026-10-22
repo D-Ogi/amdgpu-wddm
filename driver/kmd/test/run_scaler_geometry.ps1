@@ -30,6 +30,10 @@ if ($LASTEXITCODE) { throw 'MPC blend extraction mismatch' }
 if ($LASTEXITCODE) { throw 'Surface layout extraction mismatch' }
 & python (Join-Path $repo 'tools\import\extract_cnvc_color.py') --check
 if ($LASTEXITCODE) { throw 'CNVC color extraction mismatch' }
+& python (Join-Path $repo 'driver\kmd\test\dcn201_csc_contract.py') `
+    --clang (Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang.exe') `
+    --out (Join-Path $Out 'csc-source-contract.json')
+if ($LASTEXITCODE) { throw 'DCN201 CSC source contract changed' }
 Push-Location $Out
 try {
     & $cc /nologo /TC /W4 /WX /O2 /c `

@@ -213,7 +213,7 @@ are relative to `drivers/gpu/drm/amd/display/` at the revision above.
 | Address commit order | `dc/hubp/dcn10/dcn10_hubp.c:374-469` | High address first. For progressive video, chroma precedes luma. Primary luma low is last |
 | Surface pitch | `dc/hubp/dcn10/dcn10_hubp.c:163-201` | Counts pixels minus one. Zero chroma pitch is explicitly unsafe |
 | Format and CSC | `dc/dpp/dcn201/dcn201_dpp.c:44-188` | CNVC format, alpha and input CSC are separate from HUBP format |
-| CSC bank selection | `dc/dpp/dcn10/dcn10_dpp_cm.c:489-572` | Reads the active bank through debug index 9, programs the alternate bank and then selects it |
+| CSC bank selection | `dc/dpp/dcn10/dcn10_dpp_cm.c:489-572` | Generic code alternates ICSC/COMA. DCN201 resource initializers do not supply its debug field or COMA registers. See the correction below |
 | Transaction lock | `dc/hwss/dcn201/dcn201_hwseq.c:525-553` | Locks the top pipe's TG. Triple-buffer mode uses different lock callbacks |
 
 Two source findings change admission assumptions:
@@ -242,6 +242,33 @@ The checked linear layout and CPU CNVC preparation now exist. Complete CSC
 with explicit matrix-bank ownership and the atomic surface writer.
 Keep rotation, mirroring and unverified YUV formats out of capability admission.
 Retain their implementation and validation work in the requirement matrix.
+
+### CSC source-contract correction, 2026-10-22
+
+The first audit resolved the function call but not its resource initializers.
+`dpp201_cnv_setup` calls `dpp1_program_input_csc`. The latter uses the DCN10
+debug field `CM_TEST_DEBUG_DATA_ID9_ICSC_MODE` to choose ICSC or COMA.
+The DCN201 resource table expands `TF_REG_LIST_DCN20`, not
+`TF_REG_LIST_DCN10`. It supplies the primary ICSC registers but no COMA
+registers. Its shift and mask initializers omit both debug-field macros.
+The omitted fields are present in the common structure prefix and have zero
+values in these static objects. Thus the generic alternating-bank algorithm
+alone does not establish an alternating-bank path for DCN201.
+
+DCN20 has a different function, `dpp2_program_input_csc`. It uses ICSC_B and
+the debug field `CM_TEST_DEBUG_DATA_ICSC_MODE` (shift 3, mask 0x18).
+DCN10 uses shift 4 and mask 0x30. The DCN201 register header has ICSC_B names
+but no COMA names. Its selected resource initializer and register structure
+omit the separate DCN20 bank-B append list. Do not substitute ICSC_B for COMA
+or copy the DCN10 debug mask into a DCN201 writer without further evidence.
+
+`driver/kmd/test/dcn201_csc_contract.py` expands the original macros with
+Clang. It reads the selected resource initializers and checks their fields
+and common structure prefixes. Explicit DCN10 and DCN20 debug/append macros
+are positive controls. This host check performs no MMIO and proves no hardware
+limitation. The unvalidated COMA writer was removed before integration.
+Linux wishlist L47 now requires a bank-status control and frame-boundary
+observation before a hardware CSC bank writer is admitted.
 
 ### CNVC preparation and color arithmetic
 
