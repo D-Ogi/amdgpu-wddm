@@ -2587,14 +2587,14 @@
       {
        "name": "pfnCheckFormatSupport",
        "function": "check_format_support",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1430",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1422",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCheckMultisampleQualityLevels",
        "function": "check_multisample_quality_levels",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1389",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1381",
        "done": true,
        "reason": "does work"
       },
@@ -2988,21 +2988,21 @@
       {
        "name": "pfnMapHeap",
        "function": "map_heap",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1030",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1022",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnUnmapHeap",
        "function": "unmap_heap",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1044",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1036",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcPrivateHeapAndResourceSizes",
        "function": "calc_heap_and_resource",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:450",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:444",
        "done": true,
        "reason": "returns the answer"
       },
@@ -3037,7 +3037,7 @@
       {
        "name": "pfnCalcPrivateOpenedHeapAndResourceSizes",
        "function": "calc_opened_heap_and_resource",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:786",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:778",
        "done": true,
        "reason": "returns the answer"
       },
@@ -3108,28 +3108,28 @@
       {
        "name": "pfnCheckResourceVirtualAddress",
        "function": "check_resource_virtual_address",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1052",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1044",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnCheckResourceAllocationInfo",
        "function": "check_resource_allocation_info",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1132",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1124",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCheckSubresourceInfo",
        "function": "check_subresource_info",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1192",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1184",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCheckExistingResourceAllocationInfo",
        "function": "check_existing_resource_allocation_info",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1224",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1216",
        "done": true,
        "reason": "does work"
       },
@@ -3171,14 +3171,14 @@
       {
        "name": "pfnRetrieveShaderComment",
        "function": "retrieve_shader_comment",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1048",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1050",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCheckResourceAllocationHandle",
        "function": "check_resource_allocation_handle",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1410",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1402",
        "done": true,
        "reason": "returns the answer"
       },
@@ -3192,7 +3192,7 @@
       {
        "name": "pfnCreatePipelineLibrary",
        "function": "create_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:866",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:867",
        "done": true,
        "reason": "does work",
        "partial": true
@@ -3200,28 +3200,28 @@
       {
        "name": "pfnDestroyPipelineLibrary",
        "function": "destroy_pipeline_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:891",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:892",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnAddPipelineStateToLibrary",
        "function": "add_pipeline_to_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:972",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:979",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCalcSerializedLibrarySize",
        "function": "calc_serialized_library_size",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:991",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1001",
        "done": true,
        "reason": "returns the answer"
       },
       {
        "name": "pfnSerializeLibrary",
        "function": "serialize_library",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1012",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1022",
        "done": true,
        "reason": "does work"
       },
@@ -3832,7 +3832,7 @@
       {
        "name": "pfnDispatch",
        "function": "dispatch",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1142",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1144",
        "done": true,
        "reason": "does work"
       },
@@ -3867,21 +3867,21 @@
       {
        "name": "pfnDiscardResource",
        "function": "discard_resource",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1744",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1736",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnCopyTextureRegion",
        "function": "copy_texture_region",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1688",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1680",
        "done": true,
        "reason": "does work"
       },
       {
        "name": "pfnResourceCopy",
        "function": "resource_copy",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1731",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1723",
        "done": true,
        "reason": "does work"
       },
@@ -3895,7 +3895,7 @@
       {
        "name": "pfnCopyBufferRegion",
        "function": "copy_buffer_region",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1462",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1454",
        "done": true,
        "reason": "does work"
       },
@@ -3923,7 +3923,7 @@
       {
        "name": "pfnResourceBarrier",
        "function": "resource_barrier",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1766",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:1758",
        "done": true,
        "reason": "does work"
       },
@@ -4007,7 +4007,7 @@
       {
        "name": "pfnSetPipelineState",
        "function": "set_pipeline_state",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1064",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1066",
        "done": true,
        "reason": "does work"
       },
@@ -4021,7 +4021,7 @@
       {
        "name": "pfnSetComputeRootSignature",
        "function": "set_compute_root_signature",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1090",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1092",
        "done": true,
        "reason": "does work"
       },
@@ -4035,7 +4035,7 @@
       {
        "name": "pfnSetComputeRootDescriptorTable",
        "function": "set_compute_root_table",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1103",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1105",
        "done": true,
        "reason": "does work"
       },
@@ -4049,7 +4049,7 @@
       {
        "name": "pfnSetComputeRoot32BitConstant",
        "function": "set_compute_root_constant",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1110",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1112",
        "done": true,
        "reason": "does work"
       },
@@ -4063,7 +4063,7 @@
       {
        "name": "pfnSetComputeRoot32BitConstants",
        "function": "set_compute_root_constants",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1115",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1117",
        "done": true,
        "reason": "does work"
       },
@@ -4077,7 +4077,7 @@
       {
        "name": "pfnSetComputeRootConstantBufferView",
        "function": "set_compute_root_cbv",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1127",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1129",
        "done": true,
        "reason": "does work"
       },
@@ -4091,7 +4091,7 @@
       {
        "name": "pfnSetComputeRootShaderResourceView",
        "function": "set_compute_root_srv",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1132",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1134",
        "done": true,
        "reason": "does work"
       },
@@ -4105,7 +4105,7 @@
       {
        "name": "pfnSetComputeRootUnorderedAccessView",
        "function": "set_compute_root_uav",
-       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1137",
+       "source": "driver/umd/d3d12/engine-ddi/pipelines.cpp:1139",
        "done": true,
        "reason": "does work"
       },
@@ -4282,7 +4282,7 @@
       {
        "name": "pfnBarrier",
        "function": "barrier",
-       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2094",
+       "source": "driver/umd/d3d12/engine-ddi/resources.cpp:2086",
        "done": true,
        "reason": "does work"
       },

@@ -644,11 +644,11 @@ struct PipelineLibraryRecord {
     RecordHeader h;                             // engine: ID3D12PipelineLibrary1
     SerializedSize sizes[kSerializedSizeSlots];
     std::atomic<uint32_t> stored{0};            // pipelines stored in the engine's library, for the log line only
-    // The stores that wait for their compile (PipelineRecord::pending_library), and the engine's refusal of one
-    // of them: a deferred store has no caller left to answer, so the code is kept for the next serialize. The list
+    // The stores that wait for their compile (PipelineRecord::pending_library). A deferred cache-store failure
+    // is logged once, not returned from a later Serialize of the valid remaining entries (BD-219). The list
     // is under DeviceContext::pending_stores, not under a lock of this record, which says why.
     PipelineRecord* pending_head{nullptr};
-    std::atomic<long> store_failure{S_OK};
+    std::atomic<long> first_deferred_failure{S_OK}; // diagnostic only, retained for the library lifetime
 };
 
 struct CommandPoolRecord {

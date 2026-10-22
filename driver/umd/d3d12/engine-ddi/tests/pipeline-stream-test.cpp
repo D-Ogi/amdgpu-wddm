@@ -342,6 +342,8 @@ public:
     FakePipeline pipeline;
     std::vector<uint8_t> blob;                  // what CreatePipelineLibrary was given
     std::vector<std::wstring> stored;           // the names StorePipeline was called with, in order
+    std::vector<std::wstring> accepted;         // engine names are unique; failed stores add no cache entry
+    std::wstring refused_name;                 // targeted engine failure without poisoning later stores
     std::vector<ID3D12PipelineState*> stored_pipelines;
     std::wstring last_loaded;
     std::vector<uint8_t> last_load_stream;
@@ -364,7 +366,12 @@ public:
     HRESULT STDMETHODCALLTYPE StorePipeline(LPCWSTR name, ID3D12PipelineState* state) override {
         stored.push_back(name ? name : L"");
         stored_pipelines.push_back(state);
-        return store_result;
+        if (FAILED(store_result)) return store_result;
+        if (!refused_name.empty() && refused_name == stored.back()) return E_INVALIDARG;
+        for (const auto& existing : accepted)
+            if (existing == stored.back()) return E_INVALIDARG;
+        accepted.push_back(stored.back());
+        return S_OK;
     }
     // engine-ddi never uses the two description forms for a rasterizing pipeline: a graphics or mesh load goes
     // through LoadPipeline with the same subobject stream the create writes.
@@ -1751,6 +1758,123 @@ int main() {
               static_cast<unsigned long>(created), static_cast<unsigned long>(stored), at_store, creates_at_store,
               static_cast<unsigned long>(stale), static_cast<size_t>(size), static_cast<unsigned long>(wrote),
               device.library.stored.size(), device.creates.load());
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // BD-219: two saves with additional asynchronous pipelines between them. An engine refusal
+    // after Add already returned S_OK loses a cache entry, not the remaining valid library.
+    for (unsigned mode = 0; mode != 4; ++mode) {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        device.library.serialized_size = 4096;
+        const auto library = f.pipeline_library(nullptr, 0);
+        std::vector<D3D12DDI_HPIPELINESTATE> pipelines(4);
+        std::vector<uint8_t> blob(4096, 0);
+        bool good = true;
+        for (unsigned batch = 0; batch != 2; ++batch) {
+            g_gate.shut();
+            for (unsigned j = 0; j != 2; ++j) {
+                const unsigned n = 2 * batch + j;
+                auto a = graphics_args(f, FALSE);
+                good &= create(f, a, pipelines[n]) == S_OK;
+                const UINT index = mode == 2 && n == 2 ? 0 : n;
+                good &= g_core.pfnAddPipelineStateToLibrary(f.h, library, pipelines[n], index) == S_OK;
+            }
+            if (mode == 1 && batch == 1) device.library.refused_name = L"00000002";
+            if (mode == 3 && batch == 1) device.library.store_result = E_OUTOFMEMORY;
+            g_gate.release();
+            good &= g_core.pfnCalcSerializedLibrarySize(f.h, library) == blob.size();
+            good &= g_core.pfnSerializeLibrary(f.h, library, blob.data()) == S_OK;
+        }
+        // Saving again neither retries a rejected entry nor stores any successful entry twice.
+        const auto attempts = device.library.stored.size();
+        good &= g_core.pfnCalcSerializedLibrarySize(f.h, library) == blob.size();
+        good &= g_core.pfnSerializeLibrary(f.h, library, blob.data()) == S_OK;
+        good &= attempts == 4 && device.library.stored.size() == attempts &&
+                device.library.accepted.size() == (mode == 0 ? 4u : mode == 3 ? 2u : 3u) &&
+                device.library.serializes == 3;
+        check(good, "BD-219 two serializes: %s preserves accepted entries; "
+              "third save does not retry (attempts %zu, accepted %zu, serializes %u)",
+              mode == 0 ? "all stores succeed" : mode == 1 ? "targeted refusal" :
+              mode == 2 ? "duplicate-name refusal" : "two allocation refusals", attempts, device.library.accepted.size(),
+              device.library.serializes);
+        for (auto p : pipelines) g_core.pfnDestroyPipelineState(f.h, p);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // A deferred store made by PSO destruction has the same cache-only failure policy.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        device.library.serialized_size = 4096;
+        const auto library = f.pipeline_library(nullptr, 0);
+        bool good = true;
+        for (unsigned index = 0; index != 2; ++index) {
+            g_gate.shut();
+            auto a = graphics_args(f, FALSE);
+            D3D12DDI_HPIPELINESTATE pso{};
+            good &= create(f, a, pso) == S_OK;
+            good &= g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, index) == S_OK;
+            device.library.store_result = E_INVALIDARG;
+            g_gate.release();
+            g_core.pfnDestroyPipelineState(f.h, pso);
+        }
+        std::vector<uint8_t> blob(4096);
+        good &= g_core.pfnCalcSerializedLibrarySize(f.h, library) == blob.size();
+        good &= g_core.pfnSerializeLibrary(f.h, library, blob.data()) == S_OK;
+        check(good && device.library.accepted.empty() && device.library.stored.size() == 2,
+              "BD-219 destroy flush: two failed deferred stores still serialize a valid empty engine library");
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // Immediate Store and actual Serialize errors retain their own caller and must not be hidden.
+    {
+        Fixture f;
+        const auto library = f.pipeline_library(nullptr, 0);
+        auto a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT made = create(f, a, pso);
+        f.device.library.store_result = E_OUTOFMEMORY;
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 0);
+        f.device.library.serialized_size = 4096;
+        f.device.library.serialize_result = E_OUTOFMEMORY;
+        std::vector<uint8_t> blob(4096);
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);
+        const HRESULT saved = g_core.pfnSerializeLibrary(f.h, library, blob.data());
+        check(made == S_OK && stored == E_OUTOFMEMORY && saved == E_OUTOFMEMORY &&
+              f.device.library.accepted.empty() && f.device.library.serializes == 1,
+              "BD-219 immediate controls: synchronous Store and actual Serialize allocation errors remain failures");
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // A second Add must settle the pipeline's older pending store before its new store.
+    // Distinct indices both survive in order; repeating the same index is an immediate refusal.
+    for (bool duplicate : {false, true}) {
+        AsyncDevice device;
+        Fixture f(&device);
+        Async async(&f.context, 1);
+        device.library.serialized_size = 4096;
+        const auto library = f.pipeline_library(nullptr, 0);
+        g_gate.shut();
+        auto a = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT made = create(f, a, pso);
+        const HRESULT first = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 10);
+        g_gate.release();
+        const HRESULT second = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, duplicate ? 10 : 11);
+        std::vector<uint8_t> blob(4096);
+        const auto size = g_core.pfnCalcSerializedLibrarySize(f.h, library);
+        const HRESULT saved = g_core.pfnSerializeLibrary(f.h, library, blob.data());
+        check(made == S_OK && first == S_OK && second == (duplicate ? E_OUTOFMEMORY : S_OK) &&
+              size == blob.size() && saved == S_OK && device.library.stored.size() == 2 &&
+              device.library.stored[0] == L"0000000A" &&
+              device.library.stored[1] == (duplicate ? L"0000000A" : L"0000000B"),
+              "BD-219 pending order: second %s index settles older store first; immediate result %08lx, save %08lx",
+              duplicate ? "same" : "different", static_cast<unsigned long>(second), static_cast<unsigned long>(saved));
         g_core.pfnDestroyPipelineState(f.h, pso);
         g_core.pfnDestroyPipelineLibrary(f.h, library);
     }

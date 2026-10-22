@@ -791,12 +791,13 @@ void forget_serialized_sizes(PipelineLibraryRecord* l) noexcept {
 // at pfnCalcSerializedLibrarySize, at pfnSerializeLibrary, or when the pipeline is destroyed, whichever comes
 // first. So a store whose compile is still running is remembered in the library and made at one of those three
 // points. That is what keeps a game which stores every pipeline right after creating it off the serial chain the
-// asynchronous compile exists to break; the D3D12 contract allows it, because the one failure an application can
-// see out of StorePipeline is a name it already holds, the runtime owns the names and this DDI only has indices
-// (see pfnAddPipelineStateToLibrary below), and the engine's own refusal has no caller left to answer and is kept
-// in store_failure for the next serialize.
-// One pending store per pipeline: a second store of one pipeline, which no application makes twice in a row,
-// waits for the compile instead.
+// asynchronous compile exists to break. StorePipeline can also fail for allocation, not only a duplicate name
+// (Microsoft's ID3D12PipelineLibrary::StorePipeline contract). Once this deferred Add has answered S_OK, however,
+// an engine cache-store refusal has no caller left to answer: omit that entry and log once per library (BD-219).
+// Serialize still writes the engine's valid remaining cache; a missing entry is a subsequent cache miss, not a
+// reason to discard all successful entries. Actual pipeline compile/use failures remain failures of their consumers.
+// One pending store per pipeline: a second Add first settles its older store, then makes the new one. This also
+// prevents a later size query from re-storing an entry a second Add has already put into the engine.
 // Every list below is under the device's pending_stores lock (internal.h), which says why it is not a lock of the
 // library record: a pipeline's destroy finds its library through a pointer that the library's own destroy clears,
 // and a lock inside a record being destroyed cannot guard the thread that is still reading it.
@@ -913,19 +914,34 @@ void APIENTRY destroy_pipeline_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELI
 // already compiled, or the thread that collects the blob for one that was not. The pipeline is waited for here,
 // which for the deferred store is the point of the whole exercise: the wait is paid once, by the thread that needs
 // the blob, and not by the thread that creates the pipelines.
-HRESULT store_pipeline(PipelineLibraryRecord* l, PipelineRecord* p, UINT index, const char* slot) noexcept {
+void note_store_failure(PipelineLibraryRecord* l, UINT index, const char* slot, HRESULT hr, bool deferred) noexcept {
+    if (deferred) {
+        long first = S_OK;
+        if (!l->first_deferred_failure.compare_exchange_strong(first, hr, std::memory_order_relaxed)) return;
+        log_refusal("%s: deferred cache entry at index %u omitted (hr %08lx); serializing the remaining library; "
+                    "further deferred cache refusals of this library are not logged", slot, index,
+                    static_cast<unsigned long>(hr));
+    } else {
+        log_refusal("%s: the engine refused the pipeline at index %u (hr %08lx)", slot, index,
+                    static_cast<unsigned long>(hr));
+    }
+}
+
+HRESULT store_pipeline(PipelineLibraryRecord* l, PipelineRecord* p, UINT index, const char* slot,
+                       bool deferred = false) noexcept {
     HRESULT ready = S_OK;
     ID3D12PipelineState* pso = pipeline_engine(p, ready);
     if (FAILED(ready) || !pso) {
         refuse_uncreated(p, slot, ready);
-        return FAILED(ready) ? ready : E_INVALIDARG;
+        const HRESULT hr = FAILED(ready) ? ready : E_INVALIDARG;
+        note_store_failure(l, index, slot, hr, deferred);
+        return hr;
     }
     WCHAR name[kLibraryNameChars] = {};
     swprintf_s(name, L"%08X", index);
     const HRESULT hr = engine_library(l)->StorePipeline(name, pso);
     if (FAILED(hr)) {
-        log_refusal("%s: the engine refused the pipeline at index %u (hr %08lx)", slot, index,
-                    static_cast<unsigned long>(hr));
+        note_store_failure(l, index, slot, hr, deferred);
         return hr;
     }
     // The blob is longer now, so no size the runtime asked for before describes it any more. Forgetting them all
@@ -937,17 +953,12 @@ HRESULT store_pipeline(PipelineLibraryRecord* l, PipelineRecord* p, UINT index, 
     return S_OK;
 }
 
-// Every store this library still owes, made now. The two slots that read the blob call it first; the failure of a
-// store whose caller is gone is kept for the serialize, which is the next slot with an error channel of its own.
+// Every store this library still owes, taken exactly once. A failed deferred cache entry
+// does not poison serialization of the entries the engine did accept.
 void flush_pending(PipelineLibraryRecord* l, const char* slot) noexcept {
     UINT index = 0;
-    while (PipelineRecord* p = take_pending_head(l, &index)) {
-        const HRESULT hr = store_pipeline(l, p, index, slot);
-        if (FAILED(hr)) {
-            long first = S_OK;
-            l->store_failure.compare_exchange_strong(first, hr, std::memory_order_relaxed);
-        }
-    }
+    while (PipelineRecord* p = take_pending_head(l, &index))
+        (void)store_pipeline(l, p, index, slot, true);
 }
 
 // The store a pipeline owes its library, made before the pipeline is destroyed, so that a library keeps what was
@@ -956,19 +967,15 @@ void flush_pending_of(PipelineRecord* p) noexcept {
     PipelineLibraryRecord* l = nullptr;
     UINT index = 0;
     if (!take_pending(p, &l, &index)) return;
-    const HRESULT hr = store_pipeline(l, p, index, "DestroyPipelineState");
-    if (FAILED(hr)) {
-        long first = S_OK;
-        l->store_failure.compare_exchange_strong(first, hr, std::memory_order_relaxed);
-    }
+    (void)store_pipeline(l, p, index, "FlushPendingPipelineState", true);
 }
 
 // D88, a creation slot, so its refusals are clamped. The engine answers E_INVALIDARG for a name it already holds
 // (vkd3d-proton cache.c, d3d12_pipeline_library_StorePipeline), which is what D3D12 shows an application that
 // stores two pipelines under one name - but the runtime owns the names and the DDI only has indices, so the
-// duplicate is the runtime's to detect and this slot never has to carry that code. Everything this slot can
-// refuse is therefore decided here, on this thread; the engine's store itself waits for the compile and is
-// deferred to the blob's collection when the compile is still running (see "Stores that wait for their compile").
+// duplicate is the runtime's to detect and this slot never carries that code. An immediate engine failure is
+// returned here, clamped to the DDI contract. A deferred cache-store failure is only logged when its compile
+// finishes (see "Stores that wait for their compile"); the valid remaining cache can still be serialized.
 HRESULT APIENTRY add_pipeline_to_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINELIBRARY hl,
                                          D3D12DDI_HPIPELINESTATE hp, UINT index) {
     DeviceContext* c = resolve(device);
@@ -976,6 +983,9 @@ HRESULT APIENTRY add_pipeline_to_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPE
     PipelineLibraryRecord* l = library_of(c, hl);
     auto* p = record_of<PipelineRecord>(hp.pDrvPrivate, Tag::PipelineState, c);
     if (!l || !p) return admitted_create_failure(E_INVALIDARG);
+    // Settle the earlier Add even if the compiler has finished since it was queued.
+    // The new Add retains its synchronous error channel, including duplicate-name refusal.
+    flush_pending_of(p);
     if (pso_pending(p->job) && !p->pending_library.load(std::memory_order_acquire)) {
         forget_serialized_sizes(l);                                 // the blob will be longer than any size held
         link_pending(l, p, index);
@@ -1015,14 +1025,6 @@ HRESULT APIENTRY serialize_library(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINELI
     PipelineLibraryRecord* l = library_of(c, h);
     if (!l || !blob) return admitted_create_failure(E_INVALIDARG);
     flush_pending(l, "SerializeLibrary");           // normally nothing: the size query of this thread flushed
-    if (const HRESULT stale = static_cast<HRESULT>(l->store_failure.exchange(S_OK, std::memory_order_relaxed));
-        FAILED(stale)) {
-        // A store the engine refused after this slot's caller was gone. The blob would be missing a pipeline the
-        // application believes it stored, so the serialize is refused instead, once, with the engine's own code.
-        log_refusal("SerializeLibrary: a deferred store of this library was refused by the engine (hr %08lx)",
-                    static_cast<unsigned long>(stale));
-        return admitted_create_failure(stale);
-    }
     const uint64_t capacity = take_serialized_size(l);
     if (!capacity || capacity > SIZE_MAX) {
         log_refusal("SerializeLibrary: no size query of this thread answered %llu bytes for this library since it "
