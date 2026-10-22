@@ -774,8 +774,25 @@ These input and output normalizations are hypotheses for the hardware path.
 Across 1000 sampled input triples per matrix, that model gives maximum sampled
 errors of 1.011658 output codes for both full-range matrices, 0.266112 for
 601 limited and 0.286546 for 709 limited. Full-range neutral white is about
-254, not 255. Each neutral ramp is monotonic. These are finite CPU results,
-not bounds over all possible inputs and not hardware or HLK color passes.
+254, not 255. Each neutral ramp is monotonic. These are sampled CPU results,
+not hardware or HLK color passes.
+
+The oracle also computes an exact-rational upper bound over the continuous
+input cube [0,255]^3. The six cube faces and both transforms' clipping planes
+partition that cube into polytopes. Within each polytope the difference is
+affine, so its absolute maximum occurs at a vertex. The oracle enumerates
+all independent three-plane intersections and evaluates the vertices inside
+the cube. It checks each maximum witness with the original conversion
+functions. A control has zero error at all eight cube corners but a nonzero
+error at an interior clipping boundary. A corner-only bound fails this control.
+
+The continuous maxima are approximately 1.014499111 codes for 601 full,
+1.012818981 for 709 full, 0.266111458 for 601 limited and 0.286545609 for
+709 limited. The JSON retains exact fractions and witness coordinates.
+These maxima bound every integer 8-bit input under the stated model, including
+values outside nominal video ranges. A fractional maximum is not necessarily
+attainable by an integer input. Output quantization, hardware normalization
+and 10-bit P010 are outside this bound. It is not an HLK tolerance claim.
 
 Before YUV admission, measure neutral black/white and asymmetric chroma
 patterns through the complete CNVC/CM/MPC path. Establish channel ordering,
