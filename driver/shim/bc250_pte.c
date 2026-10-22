@@ -141,8 +141,45 @@ static void bc250_pte_set_prt(u64 *flags)
 #include "../amdgpu-import/gfx10_prt_flags.inc"
 }
 
-int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind kind,
-			u64 dxgk_flags, u64 dxgk_address, u64 *out)
+/*
+ * A level 1 or level 2 entry with LargePage: the entry maps the range that the table below it would
+ * cover, 1 << shift bytes (see the header). The bits are those of a 4 KB leaf of the same DXGK_PTE,
+ * plus AMDGPU_PDE_PTE and the fragment of the whole range, which is how amdgpu writes a huge or a
+ * giant page (amdgpu_vm_pt.c:688, :896) and what fact M808 read back on unit A for a huge page.
+ * gmc_v10_0_get_vm_pde() converts no address of a PDE_PTE entry (gmc_v10_0.c:472-473): like a VRAM
+ * leaf, it takes the physical address.
+ */
+static int bc250_pte_huge(const struct bc250_pte_context *ctx, u32 shift, u64 dxgk_flags, u64 phys,
+			  int system, u64 *out)
+{
+	u32 segment = (u32)((dxgk_flags & BC250_DXGK_PTE_SEGMENT_MASK) >> BC250_DXGK_PTE_SEGMENT_SHIFT);
+	u64 bytes = 1ULL << shift;
+	u64 flags;
+
+	/* VRAM of a VMID 1..15 table only. Host pages are not contiguous, and this driver reports no
+	 * SysMemLargePageSupported; the page table segment holds tables, not allocations. */
+	if (ctx->aperture != BC250_PTE_VM || system != 0 || segment != ctx->vram_segment)
+		return BC250_EINVAL;
+
+	/* AllowNonAlignedLargePageAddress is not reported, so VidMm may send only an aligned address.
+	 * An unaligned one would map a different range than VidMm meant, so it is refused, and so is a
+	 * range that ends past the segment. bc250_pte_address has already put phys inside the segment. */
+	if ((phys & (bytes - 1)) != 0 || (phys & ~AMDGPU_PTE_ADDR_MASK) != 0 ||
+	    ctx->vram_size < bytes || phys - ctx->vram_base > ctx->vram_size - bytes)
+		return BC250_EINVAL;
+
+	flags = bc250_pte_vm_flags((dxgk_flags & BC250_DXGK_PTE_READONLY) == 0,
+				   (dxgk_flags & BC250_DXGK_PTE_NOEXECUTE) == 0,
+				   0,
+				   (dxgk_flags & BC250_DXGK_PTE_CACHECOHERENT) != 0);
+	flags |= AMDGPU_PDE_PTE | AMDGPU_PTE_FRAG(shift - 12u);
+	*out = phys | flags;
+	return 0;
+}
+
+/* huge_shift: 0 refuses LargePage on a directory entry, otherwise the log2 of the range it maps. */
+static int bc250_pte_translate(const struct bc250_pte_context *ctx, enum bc250_pte_kind kind,
+			       u32 huge_shift, u64 dxgk_flags, u64 dxgk_address, u64 *out)
 {
 	u64 phys = 0, flags;
 	int system = 0, rc;
@@ -205,10 +242,12 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
 		return rc;
 
 	if (kind == BC250_PTE_DIRECTORY) {
-		/* See the header: on a directory entry LargePage has two possible readings and the
-		 * DDI names neither, so it does not get a guess. */
+		/* See the header: on a directory entry LargePage means the entry maps the memory of the
+		 * lower level's range itself. Only the caller that knows the level, for a context that
+		 * reported the cap, passes a shift; everything else refuses it as before. */
 		if ((dxgk_flags & BC250_DXGK_PTE_LARGEPAGE) != 0)
-			return BC250_EINVAL;
+			return huge_shift != 0 ?
+				bc250_pte_huge(ctx, huge_shift, dxgk_flags, phys, system, out) : BC250_EINVAL;
 
 		/* The PDE address field reaches six bits lower than a PTE's. Upstream asserts the
 		 * same condition the other way round, BUG_ON(*addr & 0xFFFF00000000003FULL) at
@@ -272,16 +311,58 @@ int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind
 	return 0;
 }
 
+int bc250_pte_from_dxgk(const struct bc250_pte_context *ctx, enum bc250_pte_kind kind,
+			u64 dxgk_flags, u64 dxgk_address, u64 *out)
+{
+	return bc250_pte_translate(ctx, kind, 0, dxgk_flags, dxgk_address, out);
+}
+
+int bc250_pte_from_dxgk_level(const struct bc250_pte_context *ctx, u32 level,
+			      u64 dxgk_flags, u64 dxgk_address, u64 *out)
+{
+	u32 huge_shift = 0;
+
+	if (ctx != NULL && ctx->large_pages != 0 &&
+	    (level == BC250_PTE_HUGE_PAGE_LEVEL || level == BC250_PTE_GIANT_PAGE_LEVEL))
+		huge_shift = BC250_PTE_LEVEL_SHIFT(level);
+	return bc250_pte_translate(ctx, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, huge_shift,
+				   dxgk_flags, dxgk_address, out);
+}
+
+u64 bc250_pte_large_page_bytes(const struct bc250_pte_context *ctx, u32 level,
+			       const struct bc250_pte_fields *fields)
+{
+	u64 bytes;
+
+	if (ctx == NULL || fields == NULL || ctx->large_pages == 0 ||
+	    (level != BC250_PTE_HUGE_PAGE_LEVEL && level != BC250_PTE_GIANT_PAGE_LEVEL))
+		return 0;
+	if (!fields->valid || !fields->pde_pte || fields->system)
+		return 0;
+	bytes = 1ULL << BC250_PTE_LEVEL_SHIFT(level);
+	/* The same conditions bc250_pte_huge() put on the entry it wrote, read back from the fields. */
+	if (fields->fragment != BC250_PTE_LEVEL_SHIFT(level) - 12u || (fields->address & (bytes - 1)) != 0 ||
+	    ctx->vram_size < bytes || fields->address < ctx->vram_base ||
+	    fields->address - ctx->vram_base > ctx->vram_size - bytes)
+		return 0;
+	return bytes;
+}
+
 /* ---------------------------------------------------------------------------------------------
  * The inverse, for logging
  * ------------------------------------------------------------------------------------------- */
 
 void bc250_pte_decode(u64 entry, enum bc250_pte_kind kind, struct bc250_pte_fields *out)
 {
+	int page;
+
 	if (out == NULL)
 		return;
 
-	out->address = entry & (kind == BC250_PTE_DIRECTORY ? AMDGPU_PDE_ADDR_MASK : AMDGPU_PTE_ADDR_MASK);
+	/* A directory entry with PDE_PTE is a page (a 2 MiB large page, or a PRT terminal), and its
+	 * low bits are the flags and fragment of a leaf, not address bits. */
+	page = kind != BC250_PTE_DIRECTORY || (entry & AMDGPU_PDE_PTE) != 0;
+	out->address = entry & (page ? AMDGPU_PTE_ADDR_MASK : AMDGPU_PDE_ADDR_MASK);
 	out->mtype = (u32)((entry & AMDGPU_PTE_MTYPE_NV10_MASK) >> 48);
 	out->fragment = (u32)((entry >> 7) & 0x1fu);
 
@@ -298,9 +379,10 @@ void bc250_pte_decode(u64 entry, enum bc250_pte_kind kind, struct bc250_pte_fiel
 	out->tf         = (entry & AMDGPU_PTE_TF) != 0;
 	out->noalloc    = (entry & AMDGPU_PTE_NOALLOC) != 0;
 
-	/* A directory entry has no flags below bit 3, so the fragment field it appears to carry is
-	 * part of its address. Report it as zero rather than as a number that means nothing. */
-	if (kind == BC250_PTE_DIRECTORY) {
+	/* A directory entry that names a table has no flags below bit 3, so the fragment field it
+	 * appears to carry is part of its address. Report it as zero rather than as a number that
+	 * means nothing. */
+	if (!page) {
 		out->fragment = 0;
 		out->executable = 0;
 		out->readable = 0;
@@ -391,7 +473,7 @@ unsigned int bc250_pte_describe(u64 entry, enum bc250_pte_kind kind, char *out, 
 			sink_str(&s, " FRAG=");
 			sink_hex(&s, f.fragment, 2);
 		}
-		if (kind != BC250_PTE_DIRECTORY) {
+		if (kind != BC250_PTE_DIRECTORY || f.pde_pte) {
 			sink_str(&s, " MTYPE=");
 			sink_str(&s, mtype_name[f.mtype & 7u]);
 		}

@@ -31,6 +31,10 @@
 #define BC250_VIDMM_LOG_REFUSALS 6
 #define BC250_VIDMM_SEGMENT_IDS 32u         // DXGK_PTE.Segment is five bits wide
 
+// wddm.c rounds the segment base and the placement with these; the translation accepts exactly these pages.
+C_ASSERT(BC250_VIDMM_HUGE_PAGE_BYTES == BC250_PTE_HUGE_PAGE_BYTES);
+C_ASSERT(BC250_VIDMM_GIANT_PAGE_BYTES == BC250_PTE_GIANT_PAGE_BYTES);
+
 typedef struct _BC250_VIDMM {
     PAGING_APERTURE_STATE Aperture;
     PAGING_PT_SHADOW_SLOT GraphScratch; // shared only under exclusive CpuUpdateLock; never kernel-stack storage
@@ -68,6 +72,11 @@ typedef struct _BC250_VIDMM {
     // Encodings bc250_pte_from_dxgk refused, by the segment the entry named. The CPU path counted them in
     // Refused; the GPU path (VidMmEncodePageTable) returned FALSE and counted nothing.
     volatile LONG64 RefusedSegment[BC250_VIDMM_SEGMENT_IDS];
+    // Directory entries with LargePage, by level: 2 MiB pages at level 1, 1 GiB pages at level 2. Encoded counts
+    // valid encodings, with the same observation semantics as EncodedCoherent. Refused counts every refusal of an
+    // entry with LargePage above the leaf, so a request this start cannot map is visible whatever its level.
+    volatile LONG64 EncodedLarge[BC250_VIDMM_LEVELS];
+    volatile LONG64 RefusedLarge[BC250_VIDMM_LEVELS];
     volatile LONG GpuRefused;
     volatile LONG Roots;
 } BC250_VIDMM;
@@ -75,8 +84,8 @@ typedef struct _BC250_VIDMM {
 static BC250_VIDMM g_VidMm;
 
 // dxgmms2 numbers the levels from the leaf: level 0 names pages, everything above names a lower table
-// (bc250_pte.h question 3; the GPU virtual address page of the WDK documentation).
-static enum bc250_pte_kind VidMmKind(UINT Level) { return Level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY; }
+// (bc250_pte.h question 3; the GPU virtual address page of the WDK documentation), or with LargePage the memory
+// of the lower level's range. Both encoders give the level to bc250_pte_from_dxgk_level as VidMm sent it.
 
 // One past the highest byte of RAM the OS owns: a host page named above that is refused, not translated. 0 (do not
 // check) if the OS will not say. PASSIVE_LEVEL.
@@ -138,6 +147,15 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
         g_VidMm.Pte.table_base=g_VidMm.SegmentPhysical;
         g_VidMm.Pte.table_size=TableLength;
     }
+    // With Device->LargePageLayout, WddmMemoryLayout starts the segment on a 1 GiB physical boundary, and with
+    // Device->LargePages the GpuMmu caps report LargePageSupported (wddm.c). If the base is not aligned, VidMm's
+    // aligned segment offsets are not aligned addresses: fail the start, instead of refusing every large page later.
+    if (Device->LargePageLayout && (g_VidMm.Pte.vram_base & (BC250_VIDMM_GIANT_PAGE_BYTES-1)) != 0)
+        return STATUS_INVALID_PARAMETER;
+    if (Device->LargePages) {
+        if (!Device->LargePageLayout) return STATUS_INVALID_PARAMETER;
+        g_VidMm.Pte.large_pages = 1;
+    }
     g_VidMm.Pte.system_limit = VidMmSystemLimit();
     g_VidMm.Write = (GuardReadSetting(L"EnableGpuVa", 0) == 1) && Device->VramWriteEnabled;
     // Page-table update/walk paths must not allocate a mapping while building
@@ -177,6 +195,8 @@ NTSTATUS VidMmStartLayout(_In_ const BC250_DEVICE* Device, ULONGLONG SegmentOffs
     g_VidMm.Ready = TRUE;
     GuardLog("vidmm: table segment %u at physical 0x%llX + 0x%llX, host memory below 0x%llX, updates are %s", TableSegmentId,
              g_VidMm.SegmentPhysical, TableLength, g_VidMm.Pte.system_limit, g_VidMm.Write ? "WRITTEN" : "planned only (EnableGpuVa closed)");
+    GuardLog("vidmm: VRAM segment %u at physical 0x%llX + 0x%llX, large pages %s", VramSegmentId, g_VidMm.Pte.vram_base,
+             g_VidMm.Pte.vram_size, g_VidMm.Pte.large_pages ? "2 MiB at level 1 and 1 GiB at level 2" : "off");
     return STATUS_SUCCESS;
 }
 
@@ -293,7 +313,8 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
     BC250_VIDMM* vm=&g_VidMm;
     LONG64 coherent[3]={0},noncoherent[3]={0},mismatch[3]={0};
     LONG64 seen[BC250_VIDMM_SEGMENT_IDS]={0}; // 256 bytes, one interlocked add per named segment
-    ULONG i,kind,level=Update->PageTableLevel;
+    LONG64 large=0;
+    ULONG i,kind,level=Update->PageTableLevel,firstLarge=0;
     for(i=0;i<Count;i++) {
         const DXGK_PTE* pte=Update->pPageTableEntries+(Update->Flags.Repeat?0:Start+i);
         ULONG segment=(ULONG)((pte->Flags&BC250_DXGK_PTE_SEGMENT_MASK)>>BC250_DXGK_PTE_SEGMENT_SHIFT);
@@ -306,6 +327,7 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
             continue; // PRT SNOOP is a terminal flag, not a physical cache policy.
         }
         if(!(pte->Flags&BC250_DXGK_PTE_VALID)) continue;
+        if(level!=0 && (pte->Flags&BC250_DXGK_PTE_LARGEPAGE) && large++==0) firstLarge=i;
         seen[segment&(BC250_VIDMM_SEGMENT_IDS-1)]++; // the mask is the five-bit field width: no-op
         kind=segment==vm->Pte.system_segment?0u:
              (vm->Pte.table_size && segment==vm->Pte.table_segment?2u:1u);
@@ -320,6 +342,12 @@ static void VidMmCountEncoding(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upd
     }
     for(i=0;i<BC250_VIDMM_SEGMENT_IDS;i++)
         if(seen[i])InterlockedAdd64(&vm->SegmentSeen[i],seen[i]);
+    // The first large page of each level goes to the log with what VidMm sent and what the GPU will read.
+    if(large && InterlockedAdd64(&vm->EncodedLarge[level],large)==large) {
+        const DXGK_PTE* pte=Update->pPageTableEntries+(Update->Flags.Repeat?0:Start+firstLarge);
+        GuardLog("vidmm: first large page level %u flags 0x%llX address 0x%llX entry 0x%llX",
+                 level,pte->Flags,pte->PageAddress,Entries[firstLarge]);
+    }
 }
 
 // A PTE bc250_pte_from_dxgk refused: count it by the segment it named, and log the first few with the
@@ -331,6 +359,8 @@ static void VidMmNoteRefusal(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Updat
     ULONG segment=(ULONG)((Pte->Flags&BC250_DXGK_PTE_SEGMENT_MASK)>>BC250_DXGK_PTE_SEGMENT_SHIFT);
     LONG64 n=InterlockedIncrement64(&vm->RefusedSegment[segment&(BC250_VIDMM_SEGMENT_IDS-1)]);
     if (Gpu) InterlockedIncrement(&vm->GpuRefused);
+    if (Update->PageTableLevel!=0 && Update->PageTableLevel<BC250_VIDMM_LEVELS && (Pte->Flags&BC250_DXGK_PTE_LARGEPAGE))
+        InterlockedIncrement64(&vm->RefusedLarge[Update->PageTableLevel]);
     if (n<=BC250_VIDMM_LOG_REFUSALS && KeGetCurrentIrql()<=DISPATCH_LEVEL)
         GuardLog("vidmm: %s encoding refused level %u segment %u flags 0x%llX address 0x%llX",
                  Gpu?"GPU":"CPU",Update->PageTableLevel,segment,Pte->Flags,Pte->PageAddress);
@@ -373,7 +403,7 @@ static NTSTATUS VidMmUpdatePageTableLocked(_In_ const DXGK_BUILDPAGINGBUFFER_UPD
     __try {
         for (i=0; i<Update->NumPageTableEntries; i++) {
             const DXGK_PTE* pte = Update->pPageTableEntries + (Update->Flags.Repeat ? 0 : i);
-            if (bc250_pte_from_dxgk(&vm->Pte,VidMmKind(level),pte->Flags,pte->PageAddress,&entries[i]) != 0) {
+            if (bc250_pte_from_dxgk_level(&vm->Pte,level,pte->Flags,pte->PageAddress,&entries[i]) != 0) {
                 InterlockedIncrement(&vm->Refused);
                 VidMmNoteRefusal(Update,pte,FALSE);
                 status = STATUS_INVALID_PARAMETER;
@@ -491,8 +521,8 @@ BOOLEAN VidMmEncodePageTable(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* 
     for (i = 0; i < Update->NumPageTableEntries; i++) {
         const DXGK_PTE* pte = Update->pPageTableEntries + (Update->Flags.Repeat ? 0 : i);
         u64 entry;
-        if (bc250_pte_from_dxgk(&vm->Pte,VidMmKind(Update->PageTableLevel),
-                               pte->Flags,pte->PageAddress,&entry) != 0) {
+        if (bc250_pte_from_dxgk_level(&vm->Pte,Update->PageTableLevel,
+                                     pte->Flags,pte->PageAddress,&entry) != 0) {
             VidMmNoteRefusal(Update,pte,TRUE);
             return FALSE;
         }
@@ -619,6 +649,20 @@ static BOOLEAN VidMmLocalPageAllowed(const BC250_VIDMM* Vm, ULONGLONG Physical)
             Physical-Vm->Pte.table_base<=Vm->Pte.table_size-PAGE_SIZE);
 }
 
+// A directory entry with PDE_PTE ends a walk only if this start can have written it: a 2 MiB page at level 1 or a
+// 1 GiB page at level 2 with the fragment of that range, aligned to it, the whole range inside the VRAM segment,
+// with large pages reported (bc250_pte_large_page_bytes, the observer's half of bc250_pte_from_dxgk_level).
+// Page gets the physical address of the 4 KB page that holds Va. Any other PDE_PTE entry is refused, not misread.
+static BOOLEAN VidMmLargePage(const BC250_VIDMM* Vm, UINT Level, const struct bc250_pte_fields* Fields,
+                              ULONGLONG Va, _Out_ ULONGLONG* Page)
+{
+    ULONGLONG bytes = bc250_pte_large_page_bytes(&Vm->Pte, Level, Fields);
+    *Page = 0;
+    if (bytes == 0) return FALSE;
+    *Page = Fields->address + (Va & (bytes - 1) & ~(ULONGLONG)(PAGE_SIZE - 1));
+    return TRUE;
+}
+
 // A root page table address as VidMm gives it, as the physical address the VMID's base register wants (without
 // amdgpu's VALID bit: gfx.c's shim call adds it). FALSE for anything that is not a page inside the segment.
 BOOLEAN VidMmRootPhysical(_In_ const D3DGPU_PHYSICAL_ADDRESS* Address, _Out_ ULONGLONG* Physical)
@@ -664,9 +708,13 @@ static BOOLEAN VidMmTranslateViewLocked(ULONGLONG RootPhysical, ULONGLONG Va, _O
             entry = page[index];
         }
         bc250_pte_decode(entry, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, &fields);
-        // A directory entry that is itself a page (PDE-as-PTE, a large mapping) is nothing this file writes; refuse
-        // rather than misread it.
-        if (!fields.valid || (level != 0 && fields.pde_pte)) return FALSE;
+        if (!fields.valid) return FALSE;
+        // A directory entry that is itself a page ends the walk. It carries the leaf's permissions.
+        if (level != 0 && fields.pde_pte) {
+            if (!VidMmLargePage(vm,(UINT)level,&fields,Va,&table) ||
+                (RequireRead && !fields.readable) || (RequireWrite && !fields.writeable)) return FALSE;
+            break;
+        }
         if (level == 0 && ((RequireRead && !fields.readable) ||
                            (RequireWrite && !fields.writeable))) return FALSE;
         table = fields.address;
@@ -762,7 +810,13 @@ static BOOLEAN VidMmProbeIbLocked(ULONGLONG RootPhysical, ULONGLONG Va, _Out_ UL
         entry = page[index];
         if (level == 0) leaf = entry;
         bc250_pte_decode(entry, level == 0 ? BC250_PTE_LEAF : BC250_PTE_DIRECTORY, &fields);
-        if (!fields.valid || (level != 0 && fields.pde_pte)) return FALSE;
+        if (!fields.valid) return FALSE;
+        // A large page ends the walk; Leaf then gives the entry that maps the page, at its own level.
+        if (level != 0 && fields.pde_pte) {
+            if (!VidMmLargePage(vm,(UINT)level,&fields,Va,&table)) return FALSE;
+            leaf = entry;
+            break;
+        }
         table = fields.address;
         if (level == 0) *System = (fields.system != 0);
     }
@@ -849,6 +903,13 @@ void VidMmSummary(void)
             GuardLog("vidmm summary: PTE encoding level %u segment %u coherent %lld noncoherent %lld",
                      level,segment,coherent,noncoherent);
         }
+    }
+    GuardLog("vidmm summary: large pages %s", vm->Pte.large_pages ? "reported" : "not reported");
+    for (level = 1; level < BC250_VIDMM_LEVELS; level++) {
+        LONG64 encoded=InterlockedCompareExchange64(&vm->EncodedLarge[level],0,0);
+        LONG64 refused=InterlockedCompareExchange64(&vm->RefusedLarge[level],0,0);
+        if (encoded || refused)
+            GuardLog("vidmm summary: level %u large pages encoded %lld, refused %lld", level, encoded, refused);
     }
     GuardLog("vidmm summary: %ld cpu-virtual calls, %ld gpu-physical calls, %ld gpu-physical refusals",
              vm->CpuCalls, vm->GpuCalls, vm->GpuRefused);
