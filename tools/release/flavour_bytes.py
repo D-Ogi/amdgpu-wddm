@@ -12,6 +12,9 @@ import pathlib
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from driver_package import members  # noqa: E402
+
 STRINGS = ['BC250_PREAMBLE_NO_IDLE_WAIT', 'BC250_DEFERRED_LOG', 'queue wait skipped']
 
 
@@ -30,10 +33,13 @@ def main():
     src = json.loads(pathlib.Path(a.sources).read_text(encoding='utf-8-sig'))
     mesa_rows = [r for r in src['files'] if (r.get('built_from') or {}).get('repo') == 'mesa-amdgpu-wddm'
                  and r['path'].lower().endswith('.dll')]
+    # A user-mode driver goes into the Driver Store package under its member name (payload/kmd/..., an x86 file with
+    # a "32" suffix), so a row's path is looked up there first; any other file keeps its row path.
+    packaged = {m['source']: m['path'] for m in members(src)}
     failures = 0
     for flavour, root in (('release', pathlib.Path(a.release)), ('lab', pathlib.Path(a.lab))):
         for r in [r for r in mesa_rows if r['flavour'] == flavour]:
-            f = root / r['path'].replace('/', '\\')
+            f = root / packaged.get(r['path'], r['path']).replace('/', '\\')
             if not f.is_file():
                 print('FAIL %s %s: not in the package (%s)' % (flavour, r['path'], f))
                 failures += 1
