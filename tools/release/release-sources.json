@@ -94,7 +94,7 @@
     "d3d11_engine": "Current tester.32 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_icd": "Current tester.32 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_umd": "Current tester.32 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 471a7487ee7f0404d03b7fe00834d154e2675a48; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 471a7487ee7f0404d03b7fe00834d154e2675a48; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm a115b714ee6806fa866b7170ae68e8700cd0d3c6; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm a115b714ee6806fa866b7170ae68e8700cd0d3c6; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "vulkan_icd": "Current tester.32 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm ec70ed15e8bde52aadc5c72f8475333e06358694; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm ec70ed15e8bde52aadc5c72f8475333e06358694; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "vulkan_icd": "Current tester.32 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 055dbb9f7595502418354b75816788e4e0461cd5; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 055dbb9f7595502418354b75816788e4e0461cd5; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; release payload/control/bc250control.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/control/bc250control.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.32 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.32 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -1059,10 +1059,10 @@
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
       "source": "scratch/build-train/tester.32-r3/artifacts/release/system-x64-rel/vulkan_radeon.dll",
-      "sha256": "ED65D4A3DF1ED6A10C5876EE2C4149969E15C2ACF3C9C1E1571F76AD10D3A0BA",
+      "sha256": "81438ED06EDB2A3DE3D753C8C15797E11D17ACADB91D46E9B43DFEA1C76822EF",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
+        "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
         "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1075,7 +1075,7 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "8",
+          "24",
           "-Compiler",
           "clang-cl",
           "-Temp",
@@ -1091,7 +1091,7 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 18406912,
+      "size": 18407936,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
@@ -1099,10 +1099,10 @@
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
       "source": "scratch/build-train/tester.32-r3/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
-      "sha256": "6F73AEA53D551F74DE586B4CF2BB554FAC38B022FAC5414D4D1A3E4C4112B970",
+      "sha256": "F1571EAAB02DE2A22B31879B81E4C876077D6ACB25A74D499D16228378AE9C58",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
+        "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
         "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1115,7 +1115,7 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "8",
+          "24",
           "-Compiler",
           "clang-cl",
           "-Temp",
@@ -1132,7 +1132,7 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 18419200,
+      "size": 18420736,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -1892,7 +1892,7 @@
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
       "size": 20177408,
-      "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line ec70ed15 (release/tester32-radv-system: BD-197, BD-201, BD-211), as in 31v3 two lines: the BD-197 DXGI present work has no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves.",
+      "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
@@ -1930,7 +1930,7 @@
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
       "size": 20194816,
-      "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line ec70ed15 (release/tester32-radv-system: BD-197, BD-201, BD-211), as in 31v3 two lines: the BD-197 DXGI present work has no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves.",
+      "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
