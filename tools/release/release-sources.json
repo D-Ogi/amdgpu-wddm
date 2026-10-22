@@ -86,7 +86,7 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win bc3d75d30a51133af97ad8debf7f5adf13fb7120 (KMD 0.7.216.65): the lab.c59bd190 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
+    "kmd": "bc250-win c0dbd6a9d12da3d128267b1b3934fd06b5c45aec (KMD 0.7.216.65): the lab.c59bd190 lab KMD, built by the release set at that commit (set scratch/build-train/lab-c59bd190, row kmd-lab); the release flavour row stays at bc3d75d3 until both flavours are rebuilt from main for tester.32. The rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
     "d3d12_shell": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm bc3d75d30a51133af97ad8debf7f5adf13fb7120. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_engine": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4. File rows retain exact recipes, hashes, dependencies and validation limits.",
