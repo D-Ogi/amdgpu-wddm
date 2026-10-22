@@ -21,6 +21,12 @@ block in `driver/shim/generated/dc_scaler_taps.inc` retain AMD MIT notices.
 The latter also contains the AMD MIT fixed-point ceiling function. Both are
 from Linux amdgpu DC v6.18 `7d0a66e4bb90`; the combined planner is project code.
 
+`driver/amdgpu-import/reference/{dcn201_mpc.c,dcn20_mpc.c,mpc.h}` and
+`driver/shim/generated/dc_mpc_blend.inc` retain the AMD MIT notices.
+The extracted DCN201 defaults, blend packing and enums are unchanged except
+for line endings. The checked two-plane transaction adapter uses the project
+license. Source revision: Linux amdgpu DC v6.18 `7d0a66e4bb90`.
+
 ## Fetched at build time, not stored here
 
 | What | Used by | License |

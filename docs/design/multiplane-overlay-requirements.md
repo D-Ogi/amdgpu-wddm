@@ -138,7 +138,24 @@ mirror/rotation, address, routing, bank ownership and power must be integrated
 by the plane transaction owner before use. These helpers are not yet in the
 live MPO callback or the KMD build source list.
 
-This is not a completed MPO path. Missing work includes the second plane,
+`dcn_mpc.c` prepares a DPP0/1 -> MPCC0/1 -> OPP0 tree in private storage.
+DCN201 defaults and blend packing come from the AMD import. The adapter selects
+pixel alpha, global alpha or their combination, with premultiplied input when
+requested. Both blend backgrounds are black. The remaining plane keeps
+TOP_LAYER_ONLY after a removal, so its alpha still applies to black. It does not
+switch to PASSTHROUGH. Both-off requires black OTG blanking from the owner.
+disconnecting the output mux alone is not proof of black scanout.
+
+The locked writer checks OTG0 and both MPCC lock selectors before any write.
+The owner must reserve and arm both instances while quiesced. It preserves
+unrelated control, stereo and output-rate fields. The mux is written last.
+It never arms or releases locks and never waits. An uncertain write requires
+the owner to restore the complete prior transaction before unlock. Host tests
+cover topology changes, alpha combinations and every read/write fault boundary.
+They do not establish pixel accuracy, atomic hardware latch or retirement.
+This helper is not in the live KMD source list or MPO callback.
+
+This is not a completed MPO path. Missing work includes second-plane integration,
 displayable-allocation intent, UMD/router callbacks, MPO3 admission and commit,
 plane-specific retirement, bandwidth validation, and all uncovered requirements
 in the table. The transaction owner must restore the last coherent state after

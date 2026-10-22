@@ -432,6 +432,16 @@ DISPLAY_PIPE_WRITES += [f"mmDSCL1_{r}" for r in _DSCL_WRITES]
 DISPLAY_PIPE_WRITES += [f"mmHUBP1_{r}" for r in _VIEWPORT]
 DISPLAY_PIPE_READS += ["mmDSCL1_DSCL_MEM_PWR_CTRL", "mmDSCL1_DSCL_MEM_PWR_STATUS"]
 DISPLAY_DATA_PORTS += ["mmDSCL1_SCL_COEF_RAM_TAP_SELECT", "mmDSCL1_SCL_COEF_RAM_TAP_DATA"]
+# BD-223 two reserved MPCCs feeding OPP0. Lock selectors are read-only here:
+# the owner must arm them while the instances are quiesced, before OTG lock.
+_MPC_WRITES = ["MPCC_CONTROL", "MPCC_TOP_GAIN", "MPCC_BOT_GAIN_INSIDE", "MPCC_BOT_GAIN_OUTSIDE",
+               "MPCC_BG_R_CR", "MPCC_BG_G_Y", "MPCC_BG_B_CB", "MPCC_TOP_SEL", "MPCC_BOT_SEL",
+               "MPCC_OPP_ID", "MPCC_SM_CONTROL"]
+DISPLAY_PIPE_WRITES += [f"mmMPCC{p}_{r}" for p in (0, 1) for r in _MPC_WRITES
+                        if f"mmMPCC{p}_{r}" not in DISPLAY_PIPE_WRITES]
+DISPLAY_PIPE_WRITES += ["mmMPC_OUT0_MUX"]
+DISPLAY_PIPE_READS += [f"mmMPCC{p}_MPCC_UPDATE_LOCK_SEL" for p in (0, 1)]
+DISPLAY_PIPE_READS = [r for r in DISPLAY_PIPE_READS if r not in DISPLAY_PIPE_WRITES]
 # Exact DCN201 timing entry points, extracted from AMD DC. The clock-control
 # register is only polled by optc1_disable_crtc; no clock write is granted here.
 DISPLAY_OPTC_REGS = json.loads((ROOT / 'driver/shim/optc_registers.json').read_text())
@@ -696,8 +706,8 @@ def main():
         sys.exit("a display write register is not on the display read table - a write must be verifiable")
     if disp_read[-1] >= BAR5_LENGTH:
         sys.exit(f"display: 0x{disp_read[-1]:X} is beyond BAR5")
-    out += ["// Display modes (dpaux.c, dcn_scale.c, modeset.c): DP AUX0 with its DDC1 pads, pipe 0's viewport, scaler,",
-            "// line buffer and MPCC 0 background, and the OTG 0 lock. Sorted, unique. For those three files alone.",
+    out += ["// Display owner: DP AUX0/DDC, DSCL/HUBP0/1 geometry and coefficients, MPCC0/1 and OPP0,",
+            "// and the OTG0 lock. Sorted, unique. Not a general or diagnostic write permission.",
             "#ifdef BC250_REGS_WITH_DISPLAY_TABLES",
             f"#define BC250_MMIO_DISPLAY_ALLOW_COUNT {len(disp_read)}",
             "static const unsigned long g_MmioDisplayAllow[BC250_MMIO_DISPLAY_ALLOW_COUNT] = {"]
