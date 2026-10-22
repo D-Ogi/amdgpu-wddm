@@ -370,8 +370,12 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
             f = Path(o["artifact"])
             if not f.is_file() or sha256_file(f) != o["sha256"]:
                 errors.append(f"row {rid}: the artifact {f} of the earlier run is gone or changed; rebuild the row")
-        # The same bytes under today's row: its OUTPUT_NOTES reach the rows from the manifest as it is now.
-        kept.append(dict(entry, definition=define(rid)))
+        # The same bytes under today's row: its OUTPUT_NOTES reach the rows from the manifest as it is now. The jobs
+        # stay those of the earlier run, so that the row gives the command line that made the artifact.
+        definition = define(rid)
+        if (entry.get("definition") or {}).get("jobs"):
+            definition["jobs"] = entry["definition"]["jobs"]
+        kept.append(dict(entry, definition=definition))
     kept_ids = {k["id"] for k in kept}
     for rid in sorted(selected):
         for d in deps[rid]:

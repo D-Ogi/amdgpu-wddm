@@ -223,6 +223,29 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         self.assertEqual((builds["k"]["slots"], builds["k"]["jobs"]), (3, 24))
         self.assertEqual(len(plan["shared_trees"]), 1)
 
+    def test_a_kept_row_keeps_the_jobs_it_was_built_with(self):
+        rows = [self.ws.row("a", extra=["-Jobs", "{jobs}"]), self.ws.row("b")]
+        manifest = self.ws.manifest(rows)
+        first, errors = self.ws.plan(manifest, max_parallel=3, logical=24)
+        self.assertEqual(errors, [])
+        a = next(b for b in first["builds"] if b["id"] == "a")
+        self.assertEqual(a["jobs"], 8)
+        # An earlier run in the output directory built 'a' with 8 jobs.
+        art = self.ws.out / "artifacts" / "release" / "a" / "a.bin"
+        art.parent.mkdir(parents=True, exist_ok=True)
+        art.write_bytes(b"built a")
+        entry = {"id": "a", "status": "ok", "definition": a,
+                 "outputs": [{"file": "a.bin", "path": "payload/a.bin", "flavour": "release", "artifact": str(art),
+                              "sha256": build_release_set.sha256_file(art), "size": art.stat().st_size}]}
+        (self.ws.out / build_release_set.REPORT).write_text(json.dumps({"builds": [entry]}), encoding="utf-8")
+        plan, errors = self.ws.plan(manifest, only=["b"], max_parallel=1, logical=24)
+        self.assertEqual(errors, [])
+        self.assertEqual(next(b for b in plan["builds"] if b["id"] == "b")["jobs"], 24)
+        kept = next(k for k in plan["kept"] if k["id"] == "a")
+        self.assertEqual(kept["definition"]["jobs"], 8)
+        args = build_release_set.literal_args(kept["definition"], plan["version"])
+        self.assertEqual(args[args.index("-Jobs") + 1], "8")
+
     def test_only_needs_the_rows_it_reads(self):
         rows = [self.ws.row("a"), self.ws.row("b", extra=["-Payload", "{payload:payload/a.bin}"])]
         plan, errors = self.ws.plan(self.ws.manifest(rows), only=["b"])
