@@ -3990,6 +3990,10 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     // allocations. Both the private caps and QUERYSEGMENT use this same layout.
     if (Device->DisplayReservationEnd>framebufferEnd)
         framebufferEnd=Device->DisplayReservationEnd;
+    // The reservation must lie inside the usable VRAM before any rounding arithmetic on it: a reservation near
+    // the top of the address space would otherwise underflow the overflow guard below and round to a plausible
+    // layout.
+    if (framebufferEnd>=limit) return FALSE;
     // With large pages the segment starts on a 1 GiB physical boundary. Without AllowNonAlignedLargePageAddress,
     // VidMm sets LargePage only on an address aligned to the leaf table coverage (DXGK_GPUMMUCAPS), and that
     // address is a segment offset. The translation needs a 2 MiB page 2 MiB aligned and a 1 GiB page 1 GiB aligned,

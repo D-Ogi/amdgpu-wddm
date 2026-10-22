@@ -140,6 +140,18 @@ int main(void){
   d.LargePageLayout=FALSE;
   CHECK(WddmMemoryLayout(&d,&off,&len,&table,&tablelen));
   CHECK(off==64ull*1024*1024);
+  // A reservation at or past the usable top is refused before the rounding arithmetic, layout on or off; a
+  // reservation near the top of the address space must not underflow the overflow guard into a layout.
+  {
+   const ULONGLONG tops[]={MAXULONGLONG,MAXULONGLONG-BC250_VIDMM_GIANT_PAGE_BYTES,d.VramLength-BC250_VRAM_TOP_RESERVED,d.VramLength};
+   unsigned t;
+   for(t=0;t<sizeof(tops)/sizeof(tops[0]);t++){
+    d.DisplayReservationEnd=tops[t];d.LargePageLayout=TRUE;
+    CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));CHECK(!off && !len && !table && !tablelen);
+    d.LargePageLayout=FALSE;
+    CHECK(!WddmMemoryLayout(&d,&off,&len,&table,&tablelen));CHECK(!off && !len && !table && !tablelen);
+   }
+  }
   d.DisplayReservationEnd=0;
   memset(&g,0,sizeof(g));g.Device=&d;CHECK(RunSetup(&g)==0 && g.SetUp);
   for(mismatch=1;mismatch<=3;mismatch++) {shim_mismatch=mismatch;CHECK(RunSetup(&g)!=0 && !g.SetUp);}
