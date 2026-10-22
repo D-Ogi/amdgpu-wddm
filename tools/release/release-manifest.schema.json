@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/D-Ogi/amdgpu-wddm/blob/main/tools/release/release-manifest.schema.json",
+  "title": "Release manifest of tools/release/build-release-set.ps1",
+  "description": "One row per component build of a release set. build_release_set.py validates every manifest against this file before it plans anything, so this schema is the contract and the tool has no second copy of it.",
+  "type": "object",
+  "required": ["schema", "release", "version", "recipe_repository", "recipe_commit", "repositories", "rows"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": 1},
+    "release": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,31}$", "description": "The release name, for example tester.32."},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?$", "description": "The package version that {version} gives every recipe that stamps a version resource. -Version replaces it."},
+    "note": {"type": "string"},
+    "recipe_repository": {"type": "string", "description": "The name of this repository in 'repositories'."},
+    "recipe_commit": {"$ref": "#/$defs/commit", "description": "The commit of this repository whose recipes build every row of another repository that names no recipe_commit of its own. A row of this repository takes the recipe of its own commit, as provenance.py reads a row without recipe_commit."},
+    "repositories": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/repository"},
+      "description": "The table of release-sources.json (url, checkouts, submodules), and the base of the attribution scan of each repository."
+    },
+    "rows": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/row"}}
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sentence": {"type": "string", "minLength": 40, "pattern": "^(\\S+\\s+){5,}\\S+", "description": "A reason a person can use: at least 40 characters and 6 words, the rule of provenance.py for 'unverified'."},
+    "repository": {
+      "type": "object",
+      "required": ["url", "checkouts"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string", "minLength": 1},
+        "checkouts": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "submodules": {"type": "object", "additionalProperties": {"type": "string"}},
+        "base": {"$ref": "#/$defs/commit", "description": "The commit the attribution scan starts from (exclusive): usually the commit the previous release pinned."},
+        "note": {"type": "string"}
+      }
+    },
+    "input": {
+      "oneOf": [
+        {"type": "object", "required": ["repo", "commit"], "additionalProperties": false,
+         "properties": {"repo": {"type": "string"}, "commit": {"$ref": "#/$defs/commit"},
+                        "paths": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}}},
+        {"type": "object", "required": ["inline"], "additionalProperties": false, "properties": {"inline": {"type": "object"}}},
+        {"type": "object", "required": ["workspace"], "additionalProperties": false, "properties": {"workspace": {"type": "string", "minLength": 1}}}
+      ]
+    },
+    "output": {
+      "type": "object",
+      "required": ["file", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "file": {"type": "string", "minLength": 1, "description": "The file under {out} that the build writes."},
+        "path": {"type": "string", "pattern": "^payload/", "description": "The package path it ships as: the 'path' of its release-sources.json row."},
+        "flavour": {"enum": ["release", "lab", "shared"], "description": "The flavour of its release-sources.json row, when it is not the build's (the INF of the release KMD is 'shared')."},
+        "component": {"type": "string", "minLength": 1, "description": "The component of its release-sources.json row, when it is not the build's (one hosted ICD build ships in the D3D12 and the D3D11 slot)."},
+        "unsigned": {"type": "string", "minLength": 1, "description": "The image under {out} before the build signed it: the row gets its unsigned_sha256."},
+        "authenticode": {"type": "boolean", "description": "true: the release signs this file again, so the row gets its authenticode_sha256 and the package copy is compared by that digest."},
+        "release_edits": {"type": "string", "minLength": 1, "description": "Copied to the row: what build-release.ps1 changes in the packaged copy."},
+        "pair_skew": {"type": "string", "minLength": 1, "description": "Copied to the row: why this wow64 file and its x64 pair come from different commits."}
+      }
+    },
+    "test": {
+      "type": "object",
+      "required": ["name", "run"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$"},
+        "run": {"type": "string", "minLength": 1, "description": "A .ps1, .py or .exe. A relative path is a file of the recipe tree; placeholders as in args."},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "cwd": {"type": "string"},
+        "env": {"type": "object", "additionalProperties": {"type": "string"}},
+        "requires": {"type": "string", "description": "A path (placeholders as in args): the test runs only when it exists, and the report says why it did not."},
+        "summary": {"type": "string", "description": "A regular expression with named groups (checks, failures, skipped, ...). Each matching line of the test's output adds its numbers to the report."},
+        "pass": {"type": "string", "description": "A regular expression that at least one line of the output must match, in addition to exit code 0."}
+      }
+    },
+    "row": {
+      "type": "object",
+      "required": ["id", "component", "flavour", "arch", "repo", "commit", "recipe", "args", "compiler", "kind", "deterministic", "outputs"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,23}$", "description": "Short: the build directory is <work>\\<id>, and Mesa's deep paths need a short prefix."},
+        "component": {"type": "string", "minLength": 1},
+        "flavour": {"enum": ["release", "lab"]},
+        "arch": {"enum": ["x64", "x86", "any"]},
+        "repo": {"type": "string"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "base": {"$ref": "#/$defs/commit", "description": "The start of this row's attribution scan, in place of the repository's base."},
+        "tree": {"enum": ["worktree", "shared", "clone"], "description": "worktree (default): a work tree of its own. shared: one read-only work tree for every row of this repository and commit, which must still be clean after the build. clone: a new repository (BuildTree.psm1 New-Tree -Clone)."},
+        "recipe": {"type": "string", "minLength": 1},
+        "recipe_commit": {"$ref": "#/$defs/commit"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "inputs": {"type": "object", "additionalProperties": {"$ref": "#/$defs/input"}},
+        "compiler": {"enum": ["clang-cl", "msvc", "csc", "none"], "description": "Named for every row: no build falls back to a compiler without a word."},
+        "compiler_reason": {"$ref": "#/$defs/sentence", "description": "Why a user-mode row builds with msvc: compatibility, correctness or a measured advantage."},
+        "kind": {"enum": ["user", "kernel", "managed", "data"]},
+        "deterministic": {"type": "boolean", "description": "true: the recipe claims a bit-identical rebuild. false: 'unverified' says why not."},
+        "unverified": {"$ref": "#/$defs/sentence"},
+        "disk_peak_gb": {"type": "number", "exclusiveMinimum": 0, "description": "The most this build occupies at once, its own trees included and shared trees not. Default 2."},
+        "slots": {"type": "integer", "minimum": 1, "description": "How many of -MaxParallel the build takes, at most all of them (then it runs alone); its {jobs} are slots times the jobs of one slot. Default 1."},
+        "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/output"}},
+        "keep": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "Further files under {out} that the artifact keeps (recipe.json is always kept when the build writes one)."},
+        "tests": {"type": "array", "items": {"$ref": "#/$defs/test"}},
+        "role": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    }
+  }
+}

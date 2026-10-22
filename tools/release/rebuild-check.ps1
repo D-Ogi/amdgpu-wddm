@@ -17,8 +17,10 @@
 #   recipe   a work tree of the recipe repository at recipe_commit, when that is not src;
 #   in\<n>   each pinned input: the listed paths of its commit (git archive), a work tree of its commit with the
 #            submodules when it lists no paths, or an inline JSON object as a file;
-#   out      the empty output directory.
-# Argument placeholders: {src} {out} {root} {input:<name>} {payload:<package path>} (the source file of that entry),
+#   out      the empty output directory;
+#   tmp      the build's own temporary directory ({tmp}: a recipe's -Temp, so that builds share no TEMP).
+# The trees, inputs and placeholders are the functions of BuildTree.psm1, which build-release-set.ps1 uses as well.
+# Argument placeholders: {src} {out} {tmp} {root} {input:<name>} {payload:<package path>} (the source file of that entry),
 # {tool:<name>} (-Tool, then the environment variable BC250_TOOL_<NAME>, then PATH), and
 # {version} {flavour}: the release this package is, which a build that stamps the version resource of a
 # shipped file takes as an argument (BD-166). -Version and -Flavour give them; without -Version the
@@ -66,91 +68,16 @@ foreach ($t in @($Tool | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
     if (-not $v) { throw "-Tool takes name=path, not '$t'" }
     $tools[$k.ToLowerInvariant()] = $v
 }
-$provenance = Join-Path $PSScriptRoot 'provenance.py'
 $manifest = Get-Content -LiteralPath $Sources -Raw | ConvertFrom-Json -AsHashtable
 $recipeRepo = $manifest.recipe_repository
 $sourceOf = @{}
 foreach ($f in $manifest.files) { $sourceOf[$f.path] = Join-Path $Root ($f.source -replace '/', '\') }
 
-function Get-Checkout([string]$Name, [string]$Commit) {
-    $out = & python $provenance locate --sources $Sources --root $Root --repo $repo $Name $Commit 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "locate ${Name} ${Commit}: $out" }
-    return ($out | Select-Object -Last 1).Trim()
-}
-
-$script:trees = [Collections.Generic.List[object]]::new()
+# The work trees, the inputs and the argument placeholders: BuildTree.psm1, which build-release-set.ps1 shares.
+Import-Module (Join-Path $PSScriptRoot 'BuildTree.psm1') -Force
+$ctx = New-BuildContext -Sources $Sources -Root $Root -Repo $repo -Tools $tools -SourceOf $sourceOf
 $script:dirs = [Collections.Generic.List[string]]::new()
 $script:keepLogs = [Collections.Generic.HashSet[string]]::new()
-# A detached work tree of the commit, and its submodules from the module repositories of the checkout. The URL of each
-# submodule is overridden on the command line only (-c), so no configuration of the checkout changes.
-function New-Tree([string]$Name, [string]$Commit, [string]$Dest) {
-    $checkout = Get-Checkout $Name $Commit
-    & git -C $checkout worktree add --detach $Dest $Commit 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "git worktree add $Dest $Commit in $checkout failed" }
-    $script:trees.Add([pscustomobject]@{ checkout = $checkout; tree = $Dest })
-    $common = (& git -C $checkout rev-parse --git-common-dir).Trim()
-    if (-not [IO.Path]::IsPathRooted($common)) { $common = Join-Path $checkout $common }
-    Initialize-Submodules $Dest (Join-Path $common 'modules')
-}
-function Initialize-Submodules([string]$Tree, [string]$ModuleBase) {
-    if (-not (Test-Path -LiteralPath (Join-Path $Tree '.gitmodules'))) { return }
-    $lines = @(& git -C $Tree config -f .gitmodules --get-regexp '^submodule\..*\.path$')
-    foreach ($line in $lines) {
-        if ($line -notmatch '^submodule\.(.+)\.path\s+(.+)$') { continue }
-        $name = $Matches[1]; $sub = $Matches[2].Trim()
-        $module = Join-Path $ModuleBase ($name -replace '/', '\')
-        if (-not (Test-Path -LiteralPath $module)) { throw "submodule $name of $Tree is not initialised in the checkout ($module): run git submodule update --init there once" }
-        & git -C $Tree -c protocol.file.allow=always -c "submodule.$name.url=$module" submodule update --init --quiet -- $sub 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "git submodule update $sub in $Tree failed" }
-        Initialize-Submodules (Join-Path $Tree $sub) (Join-Path $module 'modules')
-    }
-}
-# The listed paths of a commit, as plain files (an input is read, never built in place). The export is the committed
-# bytes: core.autocrlf=false, because the checkout's own setting must not change an input. A checkout with
-# core.autocrlf=true gave the CRLF form of a header whose LF blob a recipe pins (the engine header of the D3D12 shell,
-# train b30), so the same commit gave two inputs on two checkouts.
-function Export-Input([string]$Name, [string]$Commit, [string[]]$Paths, [string]$Dest) {
-    $checkout = Get-Checkout $Name $Commit
-    New-Item -ItemType Directory -Force $Dest | Out-Null
-    $tar = Join-Path $Dest '..\input.tar'
-    & git -C $checkout -c core.autocrlf=false archive --format=tar -o $tar $Commit @Paths
-    if ($LASTEXITCODE -ne 0) { throw "git archive $Commit $($Paths -join ' ') in $checkout failed" }
-    & "$env:SystemRoot\System32\tar.exe" -x -f $tar -C $Dest
-    if ($LASTEXITCODE -ne 0) { throw "tar -x $tar failed" }
-    Remove-Item -LiteralPath $tar -Force
-}
-function Resolve-ToolPath([string]$Name) {
-    $k = $Name.ToLowerInvariant()
-    if ($tools.ContainsKey($k)) { return $tools[$k] }
-    $envValue = [Environment]::GetEnvironmentVariable("BC250_TOOL_$($Name.ToUpperInvariant())")
-    if ($envValue) { return $envValue }
-    $c = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $c) { throw "tool ${Name}: pass -Tool $Name=<path> or set BC250_TOOL_$($Name.ToUpperInvariant())" }
-    return $c.Source
-}
-# An argument that starts with a placeholder is a path: its / become \. Other arguments keep their text (a switch such
-# as /arch:AVX2 stays a switch).
-function Expand-Arg([string]$Arg, [hashtable]$Map) {
-    $isPath = $Arg.StartsWith('{')
-    $value = [regex]::Replace($Arg, '\{([a-z_]+)(?::([^}]+))?\}', {
-            param($m)
-            $kind = $m.Groups[1].Value; $name = $m.Groups[2].Value
-            switch ($kind) {
-                'input' { if (-not $Map.inputs.ContainsKey($name)) { throw "unknown input $name" }; return $Map.inputs[$name] }
-                'payload' { if (-not $sourceOf.ContainsKey($name)) { throw "unknown payload $name" }; return $sourceOf[$name] }
-                'tool' { return (Resolve-ToolPath $name) }
-                'version' { if (-not $Map.version) { throw 'this build stamps a version resource: pass -Version' }; return $Map.version }
-                default { if (-not $Map.ContainsKey($kind)) { throw "unknown placeholder {$kind}" }; return $Map[$kind] }
-            }
-        })
-    if ($isPath) { $value = $value -replace '/', '\' }
-    return $value
-}
-function Get-Digest([string]$File) {
-    $line = & python $provenance digest $File
-    if ($LASTEXITCODE -ne 0) { return $null }
-    return ($line -split '\s+')[1]
-}
 
 # The entries to rebuild, grouped by build.
 $selected = @(foreach ($f in $manifest.files) {
@@ -196,18 +123,13 @@ try {
         $runs = @(@{ tag = 'first'; base = Join-Path $dir 'a' })
         if ($Twice) { $runs += @{ tag = 'second'; base = Join-Path $dir 'bb' } }
         foreach ($r in $runs) {
-            $r.map = @{ src = Join-Path $r.base 'src'; out = Join-Path $r.base 'out'; root = $Root; inputs = @{}; version = $Version; flavour = $Flavour }
+            $r.map = @{ src = Join-Path $r.base 'src'; out = Join-Path $r.base 'out'; tmp = Join-Path $r.base 'tmp'; root = $Root
+                inputs = (Resolve-Inputs $ctx $b.inputs (Join-Path $r.base 'in') -NoCreate); version = $Version; flavour = $Flavour }
             $r.recipeTree = if ($b.repo -eq $recipeRepo -and $recipeCommit -eq $b.commit) { $r.map.src } else { Join-Path $r.base 'recipe' }
-            if ($b.inputs) {
-                foreach ($n in $b.inputs.Keys) {
-                    $spec = $b.inputs[$n]
-                    $r.map.inputs[$n] = if ($spec.inline) { Join-Path $r.base "in\$n.json" } elseif ($spec.workspace) { Join-Path $Root ($spec.workspace -replace '/', '\') } else { Join-Path $r.base "in\$n" }
-                }
-            }
         }
         if ($Plan) {
             foreach ($r in $runs) {
-                $expanded = @(foreach ($a in @($b.args)) { try { Expand-Arg $a $r.map } catch { "<$($_.Exception.Message)>" } })
+                $expanded = @(foreach ($a in @($b.args)) { try { Expand-Arg $ctx $a $r.map } catch { "<$($_.Exception.Message)>" } })
                 "  $($r.tag): $($r.recipeTree)\$($b.recipe -replace '/', '\') $($expanded -join ' ')"
             }
             foreach ($f in $entries) { "    -> $($f.path) = out\$($f.built_from.output -replace '/', '\')$(if ($f.unverified) { '  (unverified)' })" }
@@ -220,23 +142,11 @@ try {
         foreach ($r in $runs) {
             $log = Join-Path $dir "build-$($r.tag).log"
             try {
-                New-Tree $b.repo $b.commit $r.map.src
-                if ($r.recipeTree -ne $r.map.src) { New-Tree $recipeRepo $recipeCommit $r.recipeTree }
-                if ($b.inputs) {
-                    foreach ($n in $b.inputs.Keys) {
-                        $spec = $b.inputs[$n]
-                        if ($spec.inline) {
-                            New-Item -ItemType Directory -Force (Join-Path $r.base 'in') | Out-Null
-                            [IO.File]::WriteAllText($r.map.inputs[$n], ($spec.inline | ConvertTo-Json -Depth 10))
-                        } elseif ($spec.repo -and $spec.paths) {
-                            Export-Input $spec.repo $spec.commit @($spec.paths) $r.map.inputs[$n]
-                        } elseif ($spec.repo) {
-                            New-Tree $spec.repo $spec.commit $r.map.inputs[$n]
-                        }
-                    }
-                }
-                New-Item -ItemType Directory -Force $r.map.out | Out-Null
-                $expanded = @(foreach ($a in @($b.args)) { Expand-Arg $a $r.map })
+                New-Tree $ctx $b.repo $b.commit $r.map.src
+                if ($r.recipeTree -ne $r.map.src) { New-Tree $ctx $recipeRepo $recipeCommit $r.recipeTree }
+                $null = Resolve-Inputs $ctx $b.inputs (Join-Path $r.base 'in')
+                New-Item -ItemType Directory -Force $r.map.out, $r.map.tmp | Out-Null
+                $expanded = @(foreach ($a in @($b.args)) { Expand-Arg $ctx $a $r.map })
                 $recipeFile = Join-Path $r.recipeTree ($b.recipe -replace '/', '\')
                 $watch = [Diagnostics.Stopwatch]::StartNew()
                 if ($recipeFile.EndsWith('.py')) { & python $recipeFile @expanded *> $log } else { & pwsh -NoProfile -File $recipeFile @expanded *> $log }
@@ -269,7 +179,7 @@ try {
                                 $res.status = 'match-image'; $res.detail += 'the unsigned image matches; the signature differs'
                             }
                         }
-                        if ($res.status -eq 'differs' -and $f.authenticode_sha256 -and (Get-Digest $file) -eq $f.authenticode_sha256) {
+                        if ($res.status -eq 'differs' -and $f.authenticode_sha256 -and (Get-Digest $ctx $file) -eq $f.authenticode_sha256) {
                             $res.status = 'match-image'; $res.detail += 'the Authenticode digest matches; the signature differs'
                         }
                     }
@@ -290,10 +200,7 @@ try {
     $env:BC250_ROOT = $savedRoot
     $env:__COMPAT_LAYER = $savedCompat
     if (-not $Keep) {
-        foreach ($t in $script:trees) {
-            & git -C $t.checkout worktree remove --force $t.tree 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0 -and (Test-Path -LiteralPath $t.tree)) { Remove-Item -LiteralPath $t.tree -Recurse -Force -ErrorAction SilentlyContinue; & git -C $t.checkout worktree prune }
-        }
+        Remove-Trees $ctx
         foreach ($d in $script:dirs) {
             if ($script:keepLogs.Contains($d)) {
                 Get-ChildItem -LiteralPath $d -Force | Where-Object { $_.Name -notlike 'build-*.log' } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue

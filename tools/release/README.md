@@ -36,7 +36,11 @@ is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The
 | `release-sources.json` | The registered lab artifacts that make up the release, with SHA256 and the origin of each file (see "Provenance" below). The build refuses any other byte. |
 | `provenance.py` | Gate (build): every payload file names its commit, its recipe and its hash, and every commit that it names is on a published branch. See "Provenance" below. |
 | `rebuild-check.ps1` | Builds payload files again from their commits in temporary work trees and compares the hashes. `build-release.ps1 -RebuildCheck` runs it. |
+| `BuildTree.psm1` | The work trees, inputs and argument placeholders that `rebuild-check.ps1` and `build-release-set.ps1` share. |
 | `test_provenance.py` | Host test of `provenance.py` in temporary repositories. It is the `release-provenance` check of `tools\quality\quick.ps1`. |
+| `build-release-set.ps1`, `build_release_set.py` | Builds every component of a release set from a release manifest, in parallel, after its gates, and writes the `release-sources.json` rows of the result. See "Release set builds" below. |
+| `release-manifest.schema.json`, `release-tester.32.json` | The contract of a release manifest, and the manifest of tester.32 as an example. |
+| `test_build_release_set.py` | Host test of the release set build with stub recipes in temporary repositories. It is the `release-build-set` check of `tools\quality\quick.ps1`. |
 | `build-release.ps1` | Copies the sources, re-signs the KMD (.sys signature, new catalog via Inf2Cat), writes `manifest.json`, zips. Gates: source hashes, signer, no key material, scripts parse under PowerShell 5.1, every licence file named in `THIRD-PARTY.md` present and none of them a web page. |
 | `installer\` | What the tester runs: `install.cmd`, `uninstall.cmd`, `verify.cmd`, `prepare-offline.cmd` (package root) and the PowerShell 5.1 scripts, and the setup window `setup.exe` in the unpacked release's top folder (`tools/win/amdgpu_wddm_setup`), the default entry of an ordinary user. `build-release.ps1` refuses to build without `-SetupApp` (from 0.7.216.100-tester.28 on). |
 | `make-setup-exe.ps1` | Writes the single-file installer from an unpacked release: `[setup.exe][the package as a zip][the file list][a 120-byte trailer]`, deterministic (sorted entries, one constant timestamp). `-Check` reads the exe back and compares every file of the payload with the file of the package, byte for byte. `-ReleaseZip <zip>` compares it with the entries of the published archive as well. `build-release.ps1` always passes both. Nothing here signs anything: the appended sections would break an Authenticode signature, and the release signs the driver package and its catalog. |
@@ -239,7 +243,7 @@ the release head:
 
 `marker-guard-sources.json` names each source by its commit, never by a branch: another workflow deletes a branch and
 would take the gate with it, and the commit is what was merged. A wagon gets its row in the commit that merges it into
-the train. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
+the release set. An id the head drops on purpose goes into `marker-guard-accept.txt`, one line per decision
 (`<id> <path> <reason>`); without that file the gate runs with no exceptions. The fork repositories take the same run
 with `--paths src`. One run over `driver` and `tools` takes about 15 s.
 
@@ -260,7 +264,8 @@ and the release build fails when the record does not agree with the files. The r
 
 `repositories` gives each repository name its URL, its local checkouts under `BC250_ROOT` and the repositories of
 its submodules. `recipe_repository` is the name of this repository in that table. An argument of a recipe can hold
-a placeholder: `{src}`, `{out}`, `{root}`, `{input:<name>}`, `{payload:<package path>}` or `{tool:<name>}`.
+a placeholder: `{src}`, `{out}`, `{tmp}`, `{root}`, `{input:<name>}`, `{payload:<package path>}` or `{tool:<name>}`.
+`{tmp}` is the temporary directory of the build (the `-Temp` of a recipe), so that parallel builds share no TEMP.
 
 `build-release.ps1` runs `provenance.py check` two times. The check uses no network and builds nothing.
 
@@ -287,6 +292,59 @@ pwsh -File tools\release\rebuild-check.ps1 -Twice -IncludeUnverified    # two bu
 
 When a rebuild gives the bytes of an `unverified` entry, the script reports it. Remove the `unverified` field in
 the same commit that records the result.
+
+## Release set builds
+
+`build-release-set.ps1` builds the components of a release set with one command. Its input is a release manifest. The
+contract is `release-manifest.schema.json`, and `release-tester.32.json` is the example. The manifest has one row for each component
+build: the repository and the commit, the recipe of this repository and its arguments, the flavour, the
+architecture, the compiler, and the files of the build with the package path of each. `build_release_set.py` reads the
+manifest, makes the plan and runs the gates. The script runs the builds.
+
+The gates run before the first build, and one failed gate stops the release set:
+
+| Gate | Passes when |
+|---|---|
+| `commits` | Each commit is in a checkout: the commit of each build and recipe, of each pinned input, and of each submodule that `repositories` maps. |
+| `published` | A remote-tracking branch of the repository URL holds each of these commits. `-AllowUnpushed` changes a failure to a warning, for a local dry run. |
+| `attribution` | No commit names an AI agent or model as author, committer or co-author, or in its message. No message quotes the repository owner or gives a rule as the owner's with a date (the pattern of the push gate). Such a message in a commit that the fork already holds gives a warning only, because published history stays as it is. The scan starts after the `base` of the repository or row, which is the commit of the previous release, and ends at the pinned commit. |
+| `compiler` | Each row names its compiler, and the policy allows it. User mode builds with clang-cl, or with msvc and a `compiler_reason`. The kernel driver builds with msvc. When the recipe has a `-Compiler` parameter, the arguments must give the same compiler. No argument has `-march=znver2`. |
+| `size` | The size guard (`scratch\cleanup-250\size-guard.py`) reports the workspace under its warning lines. |
+| `host` | Always passes. It gives a warning when the compiler processes of other builds run on this PC. |
+
+The builds run in parallel, in their own processes. Each build takes one slot or more of `-MaxParallel` (default 3),
+and its `{jobs}` is its slots multiplied by the logical processors divided by `-MaxParallel`. A build starts only when
+its `disk_peak_gb` fits under the warning lines of the size guard. The script adds the peaks of the builds that run
+to the last measurement, and it measures again when that measurement is older than `-GuardMaxAge`. Each build has its
+own directory `<Work>\<row id>` (default `Work` is `scratch\repro-builds\bt`: short, for the deep paths of Mesa) and
+its own TEMP. Its tree is a work tree of the commit, a clone (`tree: clone`, for a build that writes `git describe`
+into its image), or one shared work tree of the commit (`tree: shared`). A shared work tree must be clean when the
+build ends. When a build ends, its outputs and the PDB of each image go to `<Out>\artifacts\<flavour>\<row id>`,
+its tree is removed, and its logs stay in `<Out>\logs\<row id>`. A failed build fails the release set. Then no new build
+starts, unless `-KeepGoing` is given. A build that reads the outputs of a failed build never starts.
+
+The `tests` of a row are its host tests. They run on the output of the build before its tree is removed. The numbers
+of their summary lines go into the report.
+
+The script writes three files into `-Out`:
+
+| File | Content |
+|---|---|
+| `release-sources.rows.json` | A `release-sources.json` row for each output, and the PDB and the image digest of each output. |
+| `release-sources.json` | Only with `-MergeInto <file>`: a copy of that file, with these rows in place of the old rows. Give it to `build-release.ps1`, with `-BuildRecords <Out>\artifacts`. |
+| `release-report.json` | Each gate, build, test and time. |
+
+```
+pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Plan
+pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Compare <release-sources.json>
+pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Only hosted-*
+```
+
+`-Plan` prints the gates and each build with its command line, and builds nothing. `-Only` builds only the rows that
+it names (ids or wildcards). The other rows keep the artifacts of the last run in `-Out`, if the manifest row did not
+change. `-Compare` compares the rows with a `release-sources.json`. Each output of a row that claims a deterministic
+build must have the same bytes, or the same image without its signature. `-Out` must be under `BC250_ROOT`, because
+a row names its source relative to that root.
 
 ## Version resources
 

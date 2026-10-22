@@ -20,6 +20,7 @@
     "status-map",
     "ledger",
     "release-provenance",
+    "release-build-set",
     "version-stamp",
     "app-route-lib",
     "system-tuning",
@@ -1445,6 +1446,12 @@
     },
     "release-provenance": {
       "timeout": 1200
+    },
+    "release-build-set": {
+      "inputs": [
+        "host"
+      ],
+      "timeout": 600
     },
     "link-command-import": {
       "inputs": [

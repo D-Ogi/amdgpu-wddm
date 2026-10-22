@@ -67,9 +67,11 @@ PROSE_COMMIT = re.compile(r"\b[0-9a-f]{40}\b")
 # project and the licence refs of upstream projects. The manifest names them, and commits_ok does not look for them.
 FOREIGN_COMMIT_PATHS = ("firmware.", "sources.firmware", "licenses[")
 PLACEHOLDER = re.compile(r"\{([a-z_]+)(?::([^}]+))?\}")
-SIMPLE_PLACEHOLDERS = {"src", "out", "root"}
+# {tmp} is the build's own temporary directory (a recipe's -Temp): rebuild-check.ps1 and build-release-set.ps1 give each
+# build one, so that parallel builds share no TEMP. It names a place, never an input, so it changes no byte.
+SIMPLE_PLACEHOLDERS = {"src", "out", "root", "tmp"}
 # The texts of `sources` that a lab tool reads as data, each with the payload row whose build it must name.
-# scratch/m15/native-caps001/release-baseline.py (the pin-baseline arm of the train validation) takes the commit at
+# scratch/m15/native-caps001/release-baseline.py (the pin-baseline arm of the release set validation) takes the commit at
 # the start of sources.kmd with re.match(r'bc250-win ([0-9a-f]{8,40})\b'), reads BC250_KMD_VERSION of
 # driver/kmd/bc250kmd_escape.h at that commit, and refuses a manifest whose kmd_abi differs from it. Round 9 of
 # tester.27 put a sentence in front of that commit, and the arm refused the installed package on the lab.
