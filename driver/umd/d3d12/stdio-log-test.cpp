@@ -640,36 +640,56 @@ void reparse_tests() {
     const std::string mine=root()+"\\programdata-planted";
     set_env("ProgramData",mine.c_str());
     make_tree(games_folder());
-    SYSTEMTIME utc{};
-    GetSystemTime(&utc);
     char image[MAX_PATH]{};
     const DWORD n=GetModuleFileNameA(nullptr,image,sizeof(image));
     char name[96]{};
     detail::safe_image_name(name,sizeof(name),(n&&n<sizeof(image))?image:"");
-    // Every name open_sink would try this second, so that it has nothing left to fall back on.
+    // Every name open_sink would try this second, so that it has nothing left to fall back on. open_sink names its
+    // file by the second in which it runs, so a second that ends between the planting and the call leaves it a free
+    // name: that happened on a loaded build PC (four builds at once). Such a round says nothing, and the case runs
+    // again in a new second, with the planted names and any file of that round removed.
     std::vector<std::string> taken;
     const char* kind="nothing";
-    for(unsigned attempt=0;attempt<8;++attempt){
-        char file[128]{};
-        if(!detail::log_file_name(file,sizeof(file),name,GetCurrentProcessId(),utc,attempt))break;
-        const std::string path=games_folder()+"\\"+file;
-        if(CreateSymbolicLinkA(path.c_str(),(root()+"\\stolen.log").c_str(),0x2 /* a file, unprivileged */)){
-            kind="reparse point";
-        } else if(CreateDirectoryA(path.c_str(),nullptr)){
-            if(std::strcmp(kind,"reparse point"))kind="directory";
-        } else {
-            break;
+    bool decided=false;
+    for(unsigned round=0;round<5 && !decided;++round){
+        for(const std::string& path:taken){
+            if(!DeleteFileA(path.c_str()))RemoveDirectoryA(path.c_str());
         }
-        taken.push_back(path);
+        for(const std::string& file:files_in(games_folder()))DeleteFileA((games_folder()+"\\"+file).c_str());
+        taken.clear();
+        SYSTEMTIME utc{};
+        GetSystemTime(&utc);
+        for(unsigned attempt=0;attempt<8;++attempt){
+            char file[128]{};
+            if(!detail::log_file_name(file,sizeof(file),name,GetCurrentProcessId(),utc,attempt))break;
+            const std::string path=games_folder()+"\\"+file;
+            if(CreateSymbolicLinkA(path.c_str(),(root()+"\\stolen.log").c_str(),0x2 /* a file, unprivileged */)){
+                kind="reparse point";
+            } else if(CreateDirectoryA(path.c_str(),nullptr)){
+                if(std::strcmp(kind,"reparse point"))kind="directory";
+            } else {
+                break;
+            }
+            taken.push_back(path);
+        }
+        if(taken.size()!=8)break;
+        const size_t before=files_in(games_folder()).size();
+        detail::Sink s=detail::open_sink();
+        SYSTEMTIME after{};
+        GetSystemTime(&after);
+        const bool same_second=after.wYear==utc.wYear && after.wMonth==utc.wMonth && after.wDay==utc.wDay &&
+            after.wHour==utc.wHour && after.wMinute==utc.wMinute && after.wSecond==utc.wSecond;
+        const bool refused=s.file==nullptr;
+        close_sink(s);
+        if(!same_second && !refused)continue;                   // the call ran in another second: no verdict
+        decided=true;
+        CHECK(refused);                                         // refused: no line went anywhere
+        CHECK(read_file(root()+"\\stolen.log").empty());        // and nothing followed the planted name
+        CHECK(files_in(games_folder()).size()==before);
     }
     std::printf("stdio-log-test: 8 names planted, each one a %s: %s\n",kind,taken.size()==8?"yes":"no");
     if(taken.size()==8){
-        const size_t before=files_in(games_folder()).size();
-        detail::Sink s=detail::open_sink();
-        CHECK(s.file==nullptr);                                 // refused: no line went anywhere
-        close_sink(s);
-        CHECK(read_file(root()+"\\stolen.log").empty());        // and nothing followed the planted name
-        CHECK(files_in(games_folder()).size()==before);
+        CHECK(decided);                                         // five rounds, each one split by a second: unlikely
     } else {
         // Nothing can be planted here, so the case says nothing either way; the refusal itself is the code path
         // CREATE_NEW takes, and open_new checks the attributes of what it opened on top of that.
