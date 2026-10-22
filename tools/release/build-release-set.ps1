@@ -218,7 +218,17 @@ function Invoke-SetJob([string]$SpecPath) {
         $env:BC250_GATE_NOCACHE = '1'
         $env:PYTHONDONTWRITEBYTECODE = '1'
         $env:TEMP = $d.tmp; $env:TMP = $d.tmp
-        if ($spec.package_cache -and (Test-Path -LiteralPath $spec.package_cache)) { $env:MESON_PACKAGE_CACHE_DIR = $spec.package_cache }
+        # Each build gets its own copy of the shared Meson package cache. Two Meson runs that download the same
+        # wrap into one cache at the same time race on the final rename, which Windows refuses when the file is
+        # already there (zlib, two Mesa lines at once). A file this build fetched goes back into the shared cache.
+        $ownCache = $null
+        if ($spec.package_cache -and (Test-Path -LiteralPath $spec.package_cache)) {
+            $ownCache = Join-Path $d.work 'pc'
+            New-Item -ItemType Directory -Force $ownCache | Out-Null
+            Get-ChildItem -LiteralPath $spec.package_cache -File | Where-Object { $_.Name -notlike 'tmp*' } |
+                ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $ownCache }
+            $env:MESON_PACKAGE_CACHE_DIR = $ownCache
+        }
         if (-not $d.src_shared) { New-Tree $ctx $b.repo $b.commit $d.src -Clone:($b.tree -eq 'clone') }
         if ($d.recipe -ne $d.src -and -not $d.recipe_shared) { New-Tree $ctx $spec.recipe_repository $b.recipe_commit $d.recipe }
         $inputMap = Resolve-Inputs $ctx $b.inputs $d.inputs
@@ -268,6 +278,16 @@ function Invoke-SetJob([string]$SpecPath) {
         $result.error = $_.Exception.Message
         "$(Get-Utc) FAIL $($result.error)"
     } finally {
+        if ($ownCache -and (Test-Path -LiteralPath $ownCache)) {
+            foreach ($f in Get-ChildItem -LiteralPath $ownCache -File | Where-Object { $_.Name -notlike 'tmp*' }) {
+                $dest = Join-Path $spec.package_cache $f.Name
+                if (Test-Path -LiteralPath $dest) { continue }
+                # A copy under a name of its own, then a rename that fails harmlessly if another build was first.
+                $part = "$dest.$PID.part"
+                try { Copy-Item -LiteralPath $f.FullName -Destination $part; Move-Item -LiteralPath $part -Destination $dest }
+                catch { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+            }
+        }
         # The tree goes at once, and the build's directory with it: what the release set keeps is in the artifact folder.
         try { $null = Remove-Trees $ctx } catch { "$(Get-Utc) trees: $($_.Exception.Message)" }
         if (-not $spec.keep) { Remove-Item -LiteralPath $d.work -Recurse -Force -ErrorAction SilentlyContinue }
