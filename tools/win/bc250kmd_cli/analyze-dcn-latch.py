@@ -53,8 +53,8 @@ def decode(records):
     if not version or not frequency or finish < begin:
         raise ValueError('Version or QPC invalid')
     words = row['raw_dwords']
-    if not isinstance(words, list) or len(words) != 94:
-        raise ValueError('ABI 2 must contain exactly 94 DWORDs')
+    if not isinstance(words, list) or len(words) != 120:
+        raise ValueError('ABI 3 must contain exactly 120 DWORDs')
     for i, word in enumerate(words):
         integer(word, f'word {i}')
     # Offsets from the Windows ABI in dcn_latch_escape.h, checked on x86/x64.
@@ -74,7 +74,7 @@ def decode(records):
     def require(condition, reason):
         if not condition:
             reasons.append(reason)
-    require(words[:8] == [0x30353242, 37, 0, version, 2, arm, version, 0], 'reply identity/status')
+    require(words[:8] == [0x30353242, 37, 0, version, 3, arm, version, 0], 'reply identity/status')
     require(not any(words[8:16]), 'reserved reply words')
     require(transport == 0 and exit_code == 0, 'transport or client failure')
     require(words[16] == arm and not words[17] & 1, 'arm or owner generation')
@@ -82,6 +82,28 @@ def decode(records):
     require(words[18] >= 4 and words[19] > 0, 'no complete operation witness')
     require(0 < a < b < (1 << 48) and not (a | b) & 0xFFFF, 'reserved address pair')
     require(finish-begin <= 30*frequency, 'exceeded runner bound')
+    require((words[94] | words[95] << 32) == frequency, 'kernel/client QPC frequency mismatch')
+    unlock = []
+    for index, label in enumerate(('normal', 'cleanup')):
+        u = words[96+index*12:108+index*12]
+        attempted, reads, last_value, clear, status, reserved = u[:6]
+        start, last, held = (u[i] | u[i+1] << 32 for i in (6, 8, 10))
+        require(attempted in (0, 1), f'{label} unlock attempted flag')
+        if not attempted:
+            require(not any(u), f'{label} unlock unused record is nonzero')
+        else:
+            require(1 <= reads <= 1001 and clear == 1 and status == 0 and reserved == 0,
+                    f'{label} unlock incomplete observation')
+            require(not last_value & (LOCK_REQUEST | LOCK_ACK), f'{label} unlock raw lock still set')
+            require(begin <= start <= last <= finish and (last-start)*1000 <= frequency,
+                    f'{label} unlock time outside bounded interval')
+            require(held == 0 if reads == 1 else start <= held <= last,
+                    f'{label} unlock last-set time inconsistent')
+        unlock.append(dict(attempted=attempted, reads=reads, last_value=last_value,
+                           clear_observed=clear, status=status, start_qpc=start,
+                           last_qpc=last, last_set_qpc=held,
+                           elapsed_us=(last-start)*1000000/frequency if attempted and last>=start else None))
+    require(unlock[0]['attempted'] == int(arm != 0), 'normal unlock observation missing or unexpected')
     for name, sample in samples.items():
         require(sample['brackets'] and sample['derived_fields_match'], f'{name}: invalid raw brackets or derived fields')
     before, armed, boundary, after = (samples[n] for n in SAMPLE_NAMES)
@@ -99,6 +121,7 @@ def decode(records):
         if arm == 1:
             require(boundary['physical'] == a, 'lock-before-program control did not retain A')
     return dict(arm=arm, eligible=not reasons, reasons=reasons, version=version,
+                unlock=unlock,
                 address_a=a, address_b=b, samples=samples, generation=words[17],
                 begin_qpc=begin, end_qpc=finish, qpc_frequency=frequency,
                 boundary_address='A' if boundary['physical'] == a else 'B' if boundary['physical'] == b else 'other')

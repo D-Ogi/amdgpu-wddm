@@ -6,12 +6,22 @@ enum bc250_latch_arm {
     Bc250LatchUnlocked, Bc250LatchLockBeforeProgram, Bc250LatchLockAfterProgram,
     Bc250LatchArmCount
 };
+typedef struct _BC250_LATCH_UNLOCK_SAMPLE {
+    // Reads counts successful raw reads. LastSetQpc is the last observation
+    // with either request or ack set, not proof of a fully held lock.
+    unsigned long Attempted, Reads, LastValue, ClearObserved;
+    long Status;
+    unsigned long Reserved;
+    unsigned long long StartQpc, LastQpc, LastSetQpc;
+} BC250_LATCH_UNLOCK_SAMPLE;
 typedef struct _BC250_LATCH_PROBE_RESULT {
     unsigned long Arm, Generation, Samples, WritesAttempted;
     long Status, UnlockStatus, RestoreStatus, EndStatus;
     unsigned long BoundaryObserved, Restored;
     unsigned long long AddressA, AddressB;
     BC250_LATCH_SAMPLE Before, Armed, Boundary, AfterUnlock;
+    unsigned long long QpcFrequency;
+    BC250_LATCH_UNLOCK_SAMPLE Unlock[2]; // normal operation, then cleanup
 } BC250_LATCH_PROBE_RESULT;
 
 // Caller: lab gate, administrator, exact HardwareAccess synchronization,

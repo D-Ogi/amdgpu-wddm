@@ -509,8 +509,10 @@ for polling and EARLIEST lag. That margin is a timeout allowance, not a latch
 witness. The probe refuses unknown or non-progressive timing and periods
 above 50 ms before writing. This is an experiment limit, not a display cap.
 Each wait samples every 20 us with both a poll-count and elapsed-time bound
-(at most 5101 samples). Lock and unlock acknowledgements permit 11 reads
-and 10 stalls of 1 us. Samples also check a 500 ms operation budget. Cleanup
+(at most 5101 samples). Lock acknowledgement permits 11 reads
+and 10 stalls of 1 us. Unlock permits 1001 reads and 1000 stalls of 1 us,
+with a separate elapsed-time limit of 1 ms. This is an experiment allowance,
+not a measured hardware latency bound. Samples also check a 500 ms operation budget. Cleanup
 gets a separate budget. These checks do not bound OS scheduling delays.
 The caller must retain OS lifetime exclusion for the complete call.
 
@@ -539,13 +541,20 @@ The model also permits EARLIEST to lag the consumed flip by 60 us. A lock
 just before VUPDATE remains eligible. A lock at or just after VUPDATE returns
 RETRY despite the unchanged frame word and old A address. Removing the pending
 check makes that control fail. These are synthetic timings, not hardware bounds.
-The hardware arm stays on hold pending unlock timing and review of the changes.
+Normal unlock and cleanup have separate records. Each retains successful-read
+count, last raw lock word, status and QPC times before the write, at the last
+read, and at the last read with either lock bit set. The interval includes
+MMIO and scheduling overhead. It is an observation interval, not the exact
+hardware transition time. A clear read outside the allowance is retained but
+cannot pass or trigger the update. The read-count bound stops the loop even
+with a stopped clock. Tests cover delayed clear through 1000 us, timeout at 1001 us, cleanup,
+stopped/backward time and a delayed read. The hardware arm awaits review.
 
 ### Lab escape and client
 
-Command 37 uses the 376-byte `BC250_ESCAPE_LATCH_PROBE` ABI 2.
-ABI 1 is refused even though its size is the same. The extra flip-control
-word moves the derived fields inside each sample.
+Command 37 uses the 480-byte `BC250_ESCAPE_LATCH_PROBE` ABI 3.
+ABI 1 and 2 are refused. ABI 2 added the flip-control word to each sample.
+ABI 3 appends kernel QPC frequency and two unlock observations.
 Only the arm, ABI and expected KMD version are inputs beyond the header.
 Reserved words must be zero. All output is cleared before admission. Supplied
 output addresses cannot become inputs. The call requires an administrator,
@@ -580,7 +589,7 @@ The separate runner stub opens no adapter. Run its exit-code controls on the
 target PowerShell version before a hardware trial.
 
 `analyze-dcn-latch.py` checks the three client JSONL files in arm order 0, 1, 2.
-It decodes the 94 raw DWORDs and checks the summary against them. It recomputes
+It decodes the 120 raw DWORDs and checks the summary against them. It recomputes
 the sample brackets, lock states and address from the named AMD masks. Missing
 records, failed controls, cleanup failures and unmatched inputs cannot classify.
 The analyzer records input hashes and never asserts hardware or retirement proof.

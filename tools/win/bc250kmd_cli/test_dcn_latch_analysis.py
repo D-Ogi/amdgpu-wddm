@@ -65,7 +65,7 @@ class EvidenceControls(unittest.TestCase):
         self.assertFalse(result['hardware_contract_verified'])
 
     def test_every_truncated_packet(self):
-        for count in range(94):
+        for count in range(120):
             with self.subTest(count=count):
                 c = self.capture(); c[1]['raw_dwords'] = c[1]['raw_dwords'][:count]
                 with self.assertRaises(ValueError): analysis.decode(c)
@@ -98,12 +98,21 @@ class EvidenceControls(unittest.TestCase):
                 with self.subTest(sample=sample, word=word): self.assertFalse(analysis.decode(c)['eligible'])
 
     def test_old_abi_and_reserved_words_rejected(self):
-        c = self.capture()
-        c[1]['raw_dwords'][4] = 1
-        self.assertFalse(analysis.decode(c)['eligible'])
+        for version in (1, 2):
+            c = self.capture()
+            c[1]['raw_dwords'][4] = version
+            self.assertFalse(analysis.decode(c)['eligible'])
         c = self.capture()
         c[1]['raw_dwords'][8] = 1
         self.assertFalse(analysis.decode(c)['eligible'])
+
+    def test_unlock_observation_corruption(self):
+        for offset, value in ((94, 0), (96, 0), (97, 0), (97, 1002),
+                              (98, analysis.LOCK_ACK), (99, 0), (100, 1),
+                              (101, 1), (102, 0xFFFFFFFF), (104, 0xFFFFFFFF),
+                              (106, 1), (108, 1)):
+            c = self.capture(); c[1]['raw_dwords'][offset] = value
+            with self.subTest(offset=offset): self.assertFalse(analysis.decode(c)['eligible'])
 
     def test_clear_pending_rejects_old_address_race(self):
         for arm in (1, 2):

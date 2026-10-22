@@ -28,6 +28,7 @@ int main()
         REJECT(Magic,0); REJECT(Command,0); REJECT(Version,0); REJECT(ExpectedVersion,0);
         REJECT(AbiVersion,0); REJECT(Arm,99); REJECT(Result.Arm,99); REJECT(Status,2); REJECT(NtStatus,1);
         REJECT(AbiVersion,1);
+        REJECT(AbiVersion,2);
         REJECT(Result.Status,-1); REJECT(Result.UnlockStatus,-1); REJECT(Result.RestoreStatus,-1); REJECT(Result.EndStatus,-1);
         REJECT(Result.Restored,0); REJECT(Result.BoundaryObserved,0); REJECT(Result.Samples,3); REJECT(Result.WritesAttempted,0);
         REJECT(Result.AddressA,0); REJECT(Result.AddressB,0); REJECT(Result.AddressB,good.Result.AddressA);

@@ -77,6 +77,7 @@ int main(void)
     d=request(); allowed=0; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_ACCESS_DENIED); CHECK(gates==1);
     d=request(); d.AbiVersion=0; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_INVALID_PARAMETER);
     d=request(); d.AbiVersion=1; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_INVALID_PARAMETER);
+    d=request(); d.AbiVersion=2; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_INVALID_PARAMETER);
     d=request(); d.ExpectedVersion^=1; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_INVALID_PARAMETER);
     d=request(); d.Arm=Bc250LatchArmCount; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_INVALID_PARAMETER);
     d=request(); d.Arm=0xffffffff; LatchProbeEscape(&device,&d,1,1); refused(&d,STATUS_INVALID_PARAMETER);

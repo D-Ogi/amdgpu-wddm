@@ -55,7 +55,8 @@ static LONGLONG clock_us;
 static unsigned h2,deferred_acceptance,armed,owner,resumed,ended,fault,begin_fail,resume_fail,end_fail;
 static unsigned fail_read,fail_write,fail_guard,after_write,unlock_stuck,lock_stuck;
 static unsigned no_frames,restore_fail,programs,invalid_owner_writes,power_on_read;
-static unsigned unlock_delay,unlock_countdown;
+static unsigned unlock_delay,unlock_inflight,qpc_frozen,unlock_read_cost_us,qpc_backwards;
+static LONGLONG unlock_due;
 static unsigned refuse_after_begin,program_refused;
 static unsigned signal_fail;
 static ULONG model_frame_us=1000,vupdate_delay_us;
@@ -67,7 +68,7 @@ static long InterlockedCompareExchange(volatile LONG *p,LONG v,LONG cmp)
 { LONG old=*p;if(old==cmp)*p=v;return old; }
 static int KeGetCurrentIrql(void) { return irql; }
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER *f)
-{ LARGE_INTEGER r;if(f)f->QuadPart=1000000;r.QuadPart=clock_us;return r; }
+{ LARGE_INTEGER r;if(f)f->QuadPart=1000000;r.QuadPart=qpc_frozen?0:(qpc_backwards && clock_us?-1:clock_us);return r; }
 static void KeStallExecutionProcessor(ULONG us)
 {
     LONGLONG before=clock_us;
@@ -98,7 +99,8 @@ static NTSTATUS MmioDcnRead(BC250_DEVICE *d,ULONG offset,ULONG *v)
     case BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT:*v=frame;break;
     case BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0:*v=selector;break;
     case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:
-        if(unlock_countdown && --unlock_countdown==0)lock=0;
+        if(unlock_inflight && unlock_read_cost_us)KeStallExecutionProcessor(unlock_read_cost_us);
+        if(unlock_inflight && clock_us>=unlock_due) {lock=0;unlock_inflight=0;}
         *v=lock;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH:*v=(ULONG)(live>>32);break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE:*v=(ULONG)live;break;
@@ -121,7 +123,7 @@ static NTSTATUS MmioDcnWriteEx(BC250_DEVICE *d,ULONG offset,ULONG value,BOOLEAN 
         // VUPDATE may consume B while EARLIEST still reports A.
         if(value && programs==2 && prelock_latency_us)KeStallExecutionProcessor(prelock_latency_us);
         if(value)lock=value|(lock_stuck?0:OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK);
-        else if(!unlock_stuck) {if(unlock_delay)unlock_countdown=unlock_delay;else lock=0;}
+        else if(!unlock_stuck) {unlock_due=clock_us+unlock_delay;unlock_inflight=1;}
         break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH:high=value;break;
     case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS:
@@ -185,7 +187,7 @@ static void Setup(BC250_DEVICE *d)
     h2=deferred_acceptance=armed=owner=resumed=ended=fault=begin_fail=resume_fail=end_fail=0;
     fail_read=fail_write=fail_guard=after_write=unlock_stuck=lock_stuck=0;
     no_frames=restore_fail=programs=invalid_owner_writes=power_on_read=0;
-    unlock_delay=unlock_countdown=0;irql=0;otg=1;
+    unlock_delay=unlock_inflight=qpc_frozen=unlock_read_cost_us=qpc_backwards=0;unlock_due=0;irql=0;otg=1;
     refuse_after_begin=program_refused=0;
     model_frame_us=1000;vupdate_delay_us=0;
     earliest_lag_us=prelock_latency_us=0;earliest_next=0;earliest_due=0;
@@ -197,17 +199,22 @@ static void Setup(BC250_DEVICE *d)
 static void EmitModel(unsigned model,unsigned arm,const BC250_LATCH_PROBE_RESULT* r)
 {
     BC250_ESCAPE_LATCH_PROBE packet={0};
-    unsigned long words[94],i;
+    unsigned long words[sizeof(packet)/sizeof(unsigned long)],i;
     unsigned long long begin=(arm+1)*1000000ull,end=begin+(unsigned long long)clock_us;
     packet.Magic=BC250_ESCAPE_MAGIC;packet.Command=BC250_ESCAPE_LATCH_PROBE_COMMAND;
     packet.Version=packet.ExpectedVersion=BC250_KMD_VERSION;
     packet.AbiVersion=BC250_LATCH_PROBE_ABI;packet.Arm=arm;packet.Result=*r;
+    for(i=0;i<2;++i)if(packet.Result.Unlock[i].Attempted) {
+        packet.Result.Unlock[i].StartQpc+=begin;
+        if(packet.Result.Unlock[i].Reads)packet.Result.Unlock[i].LastQpc+=begin;
+        if(packet.Result.Unlock[i].Reads>1)packet.Result.Unlock[i].LastSetQpc+=begin;
+    }
     memcpy(words,&packet,sizeof(words));
     printf("{\"model\":%u,\"records\":[{\"type\":\"header\",\"schema\":1,\"arm\":%u,\"expected_version\":%u,\"qpc_frequency\":1000000,\"hardware_access\":true,\"atomic\":false},",model,arm,BC250_KMD_VERSION);
     printf("{\"type\":\"result\",\"begin_qpc\":%llu,\"end_qpc\":%llu,\"escape_status\":0,\"nt_status\":0,\"measurement_status\":%lu,\"unlock_status\":%lu,\"restore_status\":%lu,\"end_status\":%lu,\"samples\":%lu,\"writes_attempted\":%lu,\"boundary_observed\":%lu,\"reserved_a_restored\":%lu,\"raw_dwords\":[",
            begin,end,(ULONG)r->Status,(ULONG)r->UnlockStatus,(ULONG)r->RestoreStatus,(ULONG)r->EndStatus,
            r->Samples,r->WritesAttempted,r->BoundaryObserved,r->Restored);
-    for(i=0;i<94;++i)printf("%s%lu",i?",":"",words[i]);
+    for(i=0;i<sizeof(words)/sizeof(words[0]);++i)printf("%s%lu",i?",":"",words[i]);
     puts("]},{\"type\":\"end\",\"exit_code\":0,\"hardware_verdict\":null}]}");
 }
 int main(int argc,char** argv)
@@ -279,7 +286,51 @@ int main(int argc,char** argv)
         }
     }
     deferred_acceptance=0;
-    Setup(&d);unlock_delay=5;CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS && !lock);
+    {
+        static const unsigned delays[]={0,1,5,10,11,57,100,999,1000};
+        for(i=0;i<sizeof(delays)/sizeof(delays[0]);++i) {
+            Setup(&d);unlock_delay=delays[i];
+            CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS && !lock && r.Restored);
+            CHECK(r.Unlock[0].Attempted==1 && r.Unlock[0].ClearObserved==1 && r.Unlock[0].Status==0);
+            CHECK(r.Unlock[0].Reads==delays[i]+1 && !r.Unlock[0].LastValue);
+            CHECK(r.Unlock[0].LastQpc-r.Unlock[0].StartQpc==delays[i]);
+            CHECK(!delays[i] || r.Unlock[0].LastQpc-r.Unlock[0].LastSetQpc==1);
+            CHECK(!r.Unlock[1].Attempted && r.QpcFrequency==1000000);
+        }
+        Setup(&d);unlock_delay=1001;
+        CHECK(DcnLatchProbe(&d,1,&r)==STATUS_IO_TIMEOUT && fault && !r.Restored && ended==1);
+        for(i=0;i<2;++i) {
+            CHECK(r.Unlock[i].Attempted && r.Unlock[i].Reads==1001 && !r.Unlock[i].ClearObserved);
+            CHECK(r.Unlock[i].LastQpc-r.Unlock[i].StartQpc==1000 && r.Unlock[i].Status==STATUS_IO_TIMEOUT);
+        }
+        // A failed lock still owes cleanup; retain its independent measurement.
+        Setup(&d);lock_stuck=1;unlock_delay=57;
+        CHECK(DcnLatchProbe(&d,1,&r)==STATUS_IO_TIMEOUT && r.Restored && !fault);
+        CHECK(!r.Unlock[0].Attempted && r.Unlock[1].ClearObserved);
+        CHECK(r.Unlock[1].LastQpc-r.Unlock[1].StartQpc==57);
+        // A stopped clock cannot make a stuck unlock spin indefinitely.
+        {
+            LATCH_CONTEXT c;
+            Setup(&d);memset(&c,0,sizeof(c));memset(&r,0,sizeof(r));
+            c.Device=&d;c.Result=&r;c.Frequency=1000000;c.LockOwned=1;
+            owner=resumed=1;lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+            unlock_stuck=qpc_frozen=1;
+            CHECK(LatchUnlock(&c,&r.Unlock[0])==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[0].Reads==1001 && clock_us==1000 && c.LockOwned);
+            // A clear read after a scheduling/read delay is retained but cannot
+            // become a successful in-budget observation or send a trigger.
+            Setup(&d);memset(&r,0,sizeof(r));c.LockOwned=1;
+            owner=resumed=1;lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+            unlock_read_cost_us=2000;
+            CHECK(LatchUnlock(&c,&r.Unlock[0])==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[0].ClearObserved && r.Unlock[0].LastQpc==2000 && !c.LockOwned && writes==1);
+            Setup(&d);memset(&r,0,sizeof(r));c.LockOwned=1;
+            owner=resumed=1;lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+            unlock_delay=100;qpc_backwards=1;
+            CHECK(LatchUnlock(&c,&r.Unlock[0])==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[0].Reads==1 && !r.Unlock[0].ClearObserved && writes==1);
+        }
+    }
     Setup(&d);CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS);
     nread=reads;nwrite=writes;nguard=guards;
     // Every MMIO read, write (before/after effect) and ownership checkpoint can fail.

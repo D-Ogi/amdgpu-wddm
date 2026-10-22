@@ -55,32 +55,55 @@ static NTSTATUS LatchWrite(LATCH_CONTEXT* C, ULONG Offset, ULONG Value)
     return MmioDcnWriteEx(C->Device,Offset,Value,TRUE);
 }
 
-static NTSTATUS LatchUnlock(LATCH_CONTEXT* C)
+static NTSTATUS LatchUnlock(LATCH_CONTEXT* C, BC250_LATCH_UNLOCK_SAMPLE* Sample)
 {
     NTSTATUS status;
     ULONG value, i;
+    LONGLONG start, now;
     if (!C->LockOwned) return STATUS_SUCCESS;
+    Sample->Attempted=1;
+    start=KeQueryPerformanceCounter(NULL).QuadPart;
+    if (start<0) {status=STATUS_INVALID_DEVICE_STATE;goto done;}
+    Sample->StartQpc=(ULONGLONG)start;
     // A fault can close the logical owner while this probe still owes unlock.
     // The caller's Level Two lifetime exclusion must still hold here. Do not
     // access a power-transitioned device in an attempt to repair its state.
     if (!C->Device->Mmio || InterlockedCompareExchange(&C->Device->RetainedPowerPhase,0,0))
-        return STATUS_DEVICE_NOT_READY;
+        {status=STATUS_DEVICE_NOT_READY;goto done;}
     ++C->Result->WritesAttempted;
     status=MmioDcnWriteEx(C->Device,BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,0,TRUE);
-    if (!NT_SUCCESS(status)) return status;
-    for (i=0;i<11;++i) {
+    if (!NT_SUCCESS(status)) goto done;
+    // A 1 ms experiment allowance, not a measured hardware latency bound.
+    // The count bound also terminates if the clock stops advancing. Record
+    // time from before the unlock write through the first observed clear read.
+    for (i=0;i<=1000;++i) {
+        if (!C->Device->Mmio || InterlockedCompareExchange(&C->Device->RetainedPowerPhase,0,0))
+            {status=STATUS_DEVICE_NOT_READY;goto done;}
+        if (!LatchTime(C,start,1) || !LatchTime(C,C->Start,500))
+            {status=STATUS_IO_TIMEOUT;goto done;}
         status=MmioDcnRead(C->Device,BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,&value);
-        if (!NT_SUCCESS(status)) return status;
+        if (!NT_SUCCESS(status)) goto done;
+        ++Sample->Reads;Sample->LastValue=value;
+        now=KeQueryPerformanceCounter(NULL).QuadPart;
+        if (now<start || (Sample->Reads>1 && (ULONGLONG)now<Sample->LastQpc))
+            {status=STATUS_INVALID_DEVICE_STATE;goto done;}
+        Sample->LastQpc=(ULONGLONG)now;
         if (!(value & (OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
-                       OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK))) break;
-        if (i<10) KeStallExecutionProcessor(1);
+                       OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK))) {
+            Sample->ClearObserved=1;C->LockOwned=FALSE;break;
+        }
+        Sample->LastSetQpc=(ULONGLONG)now;
+        if (i<1000) KeStallExecutionProcessor(1);
     }
-    if (i==11) return STATUS_IO_TIMEOUT;
-    C->LockOwned=FALSE;
+    if (!Sample->ClearObserved || !LatchTime(C,start,1) || !LatchTime(C,C->Start,500))
+        {status=STATUS_IO_TIMEOUT;goto done;}
     if (!C->Device->Mmio || InterlockedCompareExchange(&C->Device->RetainedPowerPhase,0,0))
-        return STATUS_DEVICE_NOT_READY;
+        {status=STATUS_DEVICE_NOT_READY;goto done;}
     ++C->Result->WritesAttempted;
-    return MmioDcnWriteEx(C->Device,BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG,1,TRUE);
+    status=MmioDcnWriteEx(C->Device,BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG,1,TRUE);
+done:
+    Sample->Status=status;
+    return status;
 }
 
 static NTSTATUS LatchLock(LATCH_CONTEXT* C)
@@ -232,6 +255,7 @@ long DcnLatchProbe(BC250_DEVICE* Device, unsigned long Arm, BC250_LATCH_PROBE_RE
     if (c.Frequency<=0 || c.Frequency>MAXLONGLONG/500) {
         Result->Status=STATUS_INVALID_DEVICE_STATE;return Result->Status;
     }
+    Result->QpcFrequency=(ULONGLONG)c.Frequency;
     status=LatchPrepare(&c);
     if (!NT_SUCCESS(status)) goto done;
     // Refuse a foreign lock/selector before Begin's bridge writes any register.
@@ -280,7 +304,7 @@ long DcnLatchProbe(BC250_DEVICE* Device, unsigned long Arm, BC250_LATCH_PROBE_RE
     status=LatchWait(&c,0,Arm!=Bc250LatchUnlocked,TRUE,frame,&Result->Boundary);
     if (!NT_SUCCESS(status)) goto cleanup;
     Result->BoundaryObserved=1;
-    Result->UnlockStatus=LatchUnlock(&c);
+    Result->UnlockStatus=LatchUnlock(&c,&Result->Unlock[0]);
     if (!NT_SUCCESS(Result->UnlockStatus)) {status=Result->UnlockStatus;goto cleanup;}
     status=LatchWait(&c,Result->AddressB,FALSE,FALSE,0,&Result->AfterUnlock);
 cleanup:
@@ -294,7 +318,7 @@ cleanup:
     // Cleanup has its own bounded observation window, but still keeps the
     // owner and Level Two call. A failed experiment must not skip restoration.
     c.Start=KeQueryPerformanceCounter(NULL).QuadPart;
-    if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c);
+    if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c,&Result->Unlock[1]);
     Result->RestoreStatus=Result->UnlockStatus;
     if (NT_SUCCESS(Result->RestoreStatus)) Result->RestoreStatus=LatchProgram(&c,Result->AddressA);
     if (NT_SUCCESS(Result->RestoreStatus))

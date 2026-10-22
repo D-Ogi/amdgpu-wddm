@@ -57,14 +57,16 @@ if ($Mutations) {
         Write-Output "Mutation caught at runtime: $($change[0])"
     }
     $changes=@(
+        @('unlock-ten-us', 'i<=1000', 'i<=10'),
+        @('unlock-postread-budget', 'if (!Sample->ClearObserved || !LatchTime(C,start,1) || !LatchTime(C,C->Start,500))', 'if (!Sample->ClearObserved)'),
         @('armed-pending', '!(Result->Armed.Word[Bc250LatchFlipControl] & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)', '0'),
         @('single-transition', 'transitions>=2', 'transitions>=1'),
         @('fixed-phase-limit', 'C->PhaseMs=(ULONG)((2*frameUs+2000+999)/1000);', 'C->PhaseMs=40;'),
         @('no-write-cleanup', 'if (!Result->WritesAttempted) {', 'if (!Result->WritesAttempted && Arm==Bc250LatchArmCount) {'),
         @('runtime-post-valid', '!d->RuntimePostValid || C->Width!=d->RuntimePost.Width', 'C->Width!=d->RuntimePost.Width'),
         @('runtime-post-size', 'C->Width!=d->RuntimePost.Width || C->Height!=d->RuntimePost.Height', 'C->Width!=d->RuntimePost.Width'),
-        @('cleanup-unlock', 'if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c);',
-          'if (c.LockOwned && Arm==Bc250LatchUnlocked) Result->UnlockStatus=LatchUnlock(&c);'),
+        @('cleanup-unlock', 'if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c,&Result->Unlock[1]);',
+          'if (c.LockOwned && Arm==Bc250LatchUnlocked) Result->UnlockStatus=LatchUnlock(&c,&Result->Unlock[1]);'),
         @('cleanup-fault', 'WddmLatchProbeCheck(Device,c.Generation,TRUE)',
           'WddmLatchProbeCheck(Device,c.Generation,FALSE)'),
         @('late-lock', 'if (Arm==Bc250LatchLockAfterProgram) {', 'if (Arm==Bc250LatchArmCount) {'),
