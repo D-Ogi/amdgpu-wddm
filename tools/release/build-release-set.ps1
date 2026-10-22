@@ -154,7 +154,11 @@ function Invoke-HostTest($Context, $Test, [hashtable]$Map, [string]$RecipeTree, 
     $saved = @{}
     foreach ($k in @(($Test.env ?? @{}).Keys)) {
         $saved[$k] = [Environment]::GetEnvironmentVariable($k)
-        [Environment]::SetEnvironmentVariable($k, (Expand-Arg $Context $Test.env[$k] $Map))
+        $value = Expand-Arg $Context $Test.env[$k] $Map
+        # A variable that names a place of the test's own output gets that directory: a program such as the DXVK
+        # engine writes its log only into a directory that exists, and its test then failed on an empty log.
+        if ($Test.env[$k] -like '{testout}*' -and $value) { New-Item -ItemType Directory -Force $value | Out-Null }
+        [Environment]::SetEnvironmentVariable($k, $value)
     }
     $cwd = if ($Test.cwd) { Expand-Arg $Context $Test.cwd $Map } else { $Map.out }
     New-Item -ItemType Directory -Force $cwd | Out-Null
