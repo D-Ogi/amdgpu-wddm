@@ -116,8 +116,15 @@ $r.text
 Check ($r.code -eq 0) "walk-through exit $($r.code)"
 Check ($r.text -match 'would: bcdedit /set ''\{current\}'' testsigning on') 'phase 1 shows the test-signing change'
 Check ($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET') 'phase 2 shows deferred driver staging'
-Check ($r.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: .*DpmMode=1 \(new\); DpmMaxMHz=2000 \(new\)') 'phase 2 shows DPM on, 2000 MHz'
-Check ($r.text -match 'Parameters: .*UnconfirmedStarts=0') 'UnconfirmedStarts reset (installer-owned)'
+# Since the shared driver state (6282d18d, 00ce1b02, BD-175) phase 2 writes no Parameters plan of its own: the INF
+# carries the installation defaults under Parameters\DefaultsV2, and the resolver applies the release table to the
+# migrated state. A dry run cannot read that state, so it names the step; the values are read from the table and the INF.
+$pkgInfDefaults = @{}; foreach ($mm in [regex]::Matches($inf, '(?m)^HKR,Parameters\\DefaultsV2,([A-Za-z0-9_]+),0x00010001,(\d+)\s*$')) { $pkgInfDefaults[$mm.Groups[1].Value] = [int64]$mm.Groups[2].Value }
+Check (($r.text -match 'would: apply release setting policy through the validated shared-state resolver') -and ([int]$m.defaults.parameters.DpmMode -eq 1) -and ([int]$m.defaults.parameters.DpmMaxMHz -eq 2000) -and ($pkgInfDefaults['DpmMode'] -eq 1) -and ($pkgInfDefaults['DpmMaxMHz'] -eq 2000)) 'phase 2 applies the release table through the shared-state resolver, DPM on, 2000 MHz (table and INF DefaultsV2)'
+# UnconfirmedStarts is a runtime record of the driver since 6282d18d (driver/state/catalog.json, kind record), and
+# runtime records never get setting defaults (docs/design/driver-state.md): neither the INF, the table nor the plan
+# writes it any more.
+Check ((-not $pkgInfDefaults.ContainsKey('UnconfirmedStarts')) -and ($inf -notmatch '(?m)^HKR,\s*Parameters[^,]*,\s*UnconfirmedStarts') -and ($null -eq $m.defaults.parameters.UnconfirmedStarts) -and ($r.text -notmatch 'UnconfirmedStarts=')) 'UnconfirmedStarts is a driver record: no installation default and no installer write'
 Check ($r.text -match 'previous installer defaults: the defaults of tester\.1 to tester\.7 \(no record\)') 'no AppliedDefaults record on this computer: legacy table'
 Check ($r.text -match 'would: .*\\Release: .*AppliedDefaults') 'Release\AppliedDefaults recorded'
 Check ($r.text -match "would: scheduled task 'amdgpu-wddm start confirm'") 'phase 2 shows the start-confirm task'
@@ -308,13 +315,19 @@ $src = [IO.File]::ReadAllText((Join-Path $Package 'installer\install.ps1'))
 Check ($src -notmatch "icacls\.exe @\('C:\\BC250'") 'no icacls on C:\BC250 itself'
 Check ($src -notmatch 'Copy-Item') 'install.ps1 copies only through Copy-FileSafe / Copy-TreeSafe'
 Check (($src -match "Add-Result 'GPU desktop path'") -and ($src -match "Invoke-Native \`$cli @\('interop'\)") -and ($src -match 'effective blit\\\+cdd') -and ($src -match 'died in a session') -and ($src -match 'bc250d3d_zink')) 'verify checks the GPU desktop path (interop effective blit+cdd, no unclean session, zink in DWM)'
-$pos = @("Read-RegistryValues `$script:ParametersKey", "Invoke-Change 'DiInstallDriverW INSTALL_AS_SET", "Invoke-RegistryDefaults `$script:ParametersKey") | ForEach-Object { $src.IndexOf($_) }
-Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($src -match "parameters_before_install") -and ($src -match '\$parametersBefore \$restoreNames')) 'driver settings are read before staging (the INF resets the gates) and judged from that snapshot'
-Check ($r.text -match 'driver settings before the driver package: \d+ values under Parameters, \d+ of \d+ judged by this release') 'the walk-through takes the snapshot before staging'
-# The snapshot keeps the whole key, and every value that this release does not judge goes back as it was. A snapshot
-# of the judged names alone dropped CuMode at every release install, and the GPU then ran on 24 of its 40 compute
-# units (test-registry-defaults.ps1 has the case).
-Check (($src -match 'foreach \(\$n in \$all\.Keys\) \{ \$parametersBefore\[\$n\] = \$all\[\$n\] \}') -and ($src -match '\$restoreNames = @\(@\(\$infParameterNames\) \+ @\(\$parametersBefore\.Keys \| Where-Object \{ \$_ -notin \$judgedNames -and \(Test-RestorableRegistryValue')) 'the snapshot keeps every value of the Parameters key, and the ones outside the table are written back'
+# Since the shared driver state (6282d18d, 00ce1b02, BD-175) the settings are captured through the state worker before
+# staging and judged from that capture after the binding; the Parameters snapshot of parameters_before_install is
+# never replayed, because it would put back a value that a later control-app choice deleted.
+$pos = @('Save-DriverSettingsComparison -State $state', "Invoke-Change 'DiInstallDriverW INSTALL_AS_SET", '$before=Get-DriverSettingsComparison -State $state', 'Invoke-DriverStateDefaults -Cli') | ForEach-Object { $src.IndexOf($_) }
+Check ((@($pos | Where-Object { $_ -lt 0 }).Count -eq 0) -and ($pos[0] -lt $pos[1]) -and ($pos[1] -lt $pos[2]) -and ($pos[2] -lt $pos[3]) -and ($src -match '-Before \$before') -and ($src -notmatch '\$state\.parameters_before_install')) 'driver settings are captured before staging and judged from that capture, never from parameters_before_install'
+$iFreeze = $r.text.IndexOf('would: freeze state writers and publish the protected state handoff before INF staging')
+$iStage = $r.text.IndexOf('would: DiInstallDriverW INSTALL_AS_SET')
+$iResolve = $r.text.IndexOf('would: apply release setting policy through the validated shared-state resolver')
+Check (($iFreeze -ge 0) -and ($iFreeze -lt $iStage) -and ($iStage -lt $iResolve)) "the walk-through captures the state before staging and applies the table after it ($iFreeze, $iStage, $iResolve)"
+# The capture keeps the whole state, and the INF resets no value: a snapshot of the judged names alone once dropped
+# CuMode at every release install, and the GPU then ran on 24 of its 40 compute units.
+$lifecycle = [IO.File]::ReadAllText((Join-Path $Package 'installer\state-lifecycle.ps1'))
+Check (($lifecycle -match "Set-StateValue \`$State 'driver_settings_compare' \(\[pscustomobject\]@\{schema=1;inf_sha256=\`$InfSha256;device=\`$Device;items=@\(\`$snapshot\.items\)\}\)") -and ([regex]::Matches($inf, '(?m)^\s*HKR\s*,\s*"?Parameters"?\s*,').Count -eq 0)) 'the capture keeps every item of the state, and the INF writes no value straight into Parameters'
 # The encoder registration is reported where a support report can read it (BugReport.cs collects every verify report).
 Check (($src -match "Add-Result 'H\.264 encoder'") -and ($src -match "Add-Warning 'H\.264 encoder'") -and ($src -match 'Test-MftRegistration -ClassesKey \$script:ClassesKey -DllPath \$mftInstalled')) 'verify reports the H.264 encoder registration, and a registration that is not right is a warning'
 Check (($src -match "Add-Result 'full WDDM gate'") -and ($src -match 'EnableFullWddm -eq 1\) -or \(\$p\.EnableFullWddm -eq 2\)')) 'verify fails a display-only start (EnableFullWddm not 1 or 2)'
