@@ -3,8 +3,10 @@
 # the usage text. With -Sources, the CLI and both copies of bc250control.dll must come from one build folder, so the
 # CLI and the DLL of a release are one source (tester.10 paired a DLL of the control-app branch with a CLI of the KMD
 # branch, without health and clock). Windows PowerShell 5.1 and PowerShell 7; no window, nothing written.
-#   pwsh -File tools\release\test-cli-commands.ps1 -Cli <package>\payload\tools\bc250kmd_cli.exe [-Sources release-sources.json]
-param([Parameter(Mandatory)][string]$Cli, [string]$Commands, [string]$Sources)
+# release-sources.json from schema 4 holds one row per flavour for each PE image (release_flavour.py); a package
+# carries one flavour, so -Flavour (manifest.json "flavour") selects its rows and the shared ones.
+#   pwsh -File tools\release\test-cli-commands.ps1 -Cli <package>\payload\tools\bc250kmd_cli.exe [-Sources release-sources.json [-Flavour release|lab]]
+param([Parameter(Mandatory)][string]$Cli, [string]$Commands, [string]$Sources, [string]$Flavour)
 $ErrorActionPreference = 'Stop'
 if (-not $Commands) { $Commands = Join-Path $PSScriptRoot 'cli-commands.json' }  # 5.1 has no $PSScriptRoot in param defaults
 $fail = 0
@@ -27,10 +29,11 @@ foreach ($form in $forms) {
 
 if ($Sources) {
     $files = @((Get-Content -LiteralPath $Sources -Raw | ConvertFrom-Json).files)
+    if ($Flavour) { $files = @($files | Where-Object { (-not $_.PSObject.Properties['flavour']) -or (@($Flavour, 'shared') -contains [string]$_.flavour) }) }
     $folder = { param($p) $f = @($files | Where-Object { $_.path -eq $p }); if ($f.Count -ne 1) { return "<$($f.Count) entries for $p>" }; return ($f[0].source -replace '/[^/]+$', '') }
     $cliDir = & $folder 'payload/tools/bc250kmd_cli.exe'
     $dllDirs = @('payload/tools/bc250control.dll', 'payload/control/bc250control.dll' | ForEach-Object { & $folder $_ })
-    Check (($dllDirs | Where-Object { $_ -ne $cliDir }).Count -eq 0) "CLI and control DLLs from one build folder ($cliDir)"
+    Check (($dllDirs | Where-Object { $_ -ne $cliDir }).Count -eq 0) "CLI and control DLLs from one build folder ($cliDir$(if ($Flavour) { ", flavour $Flavour" }))"
 }
 
 if ($fail) { "FAIL: $fail check(s)"; exit 1 }

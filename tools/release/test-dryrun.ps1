@@ -549,7 +549,10 @@ Check ($r.text -match 'probe: DpmMode no key') 'probe: DPM state read from the r
 Check ($r.text -match 'start record: no record: this driver version does not keep one') 'probe: the start record is read and named, absent on a PC without the driver'
 $sc = [IO.File]::ReadAllText((Join-Path $Package 'payload\tools\start-confirm.ps1'))
 Check ($sc -notmatch "cli health|& `\$cli health") 'start-confirm reads the start health through bc250control.dll, not the CLI'
-$r = Invoke-Ps51 @((Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $Package 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json'))
+# release-sources.json holds one row per flavour (schema 4); this package carries the flavour its manifest names.
+$cliArgs = @((Join-Path $PSScriptRoot 'test-cli-commands.ps1'), '-Cli', (Join-Path $Package 'payload\tools\bc250kmd_cli.exe'), '-Sources', (Join-Path $PSScriptRoot 'release-sources.json'))
+if ($m.flavour) { $cliArgs += @('-Flavour', [string]$m.flavour) }
+$r = Invoke-Ps51 $cliArgs
 $r.text
 Check ($r.code -eq 0) "packaged bc250kmd_cli.exe answers every form of cli-commands.json, one build with the control DLL: exit $($r.code)"
 Check ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\bc250control.dll')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'payload\control\bc250control.dll')).Hash) 'tools\bc250control.dll is the control application''s DLL'
