@@ -122,7 +122,7 @@ def compare(captures):
                     'H2: the earlier armed address reaches B while the later lock endpoints remain held.',
                     'An H1-compatible pattern also fits H2 with pending-bank acceptance deferred until an unlocked update.',
                     'Trigger submission alone does not establish pending-bank acceptance before the later lock.',
-                    'Same loaded KMD, boot, mode, exclusive owner and single-transition lifetime must be established by the frozen kit.',
+                    'Same loaded KMD, boot, unchanged mode and exclusive owner lifetime must be established by the frozen kit.',
                     'Matching QPC, version and addresses do not establish that external contract.',
                     'Brackets permit ABA counterexamples without writer exclusion; this analysis cannot prove exclusion.',
                     'Frame-word movement is not an elapsed-frame count or proof of displayed pixels.',

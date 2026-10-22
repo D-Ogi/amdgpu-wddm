@@ -10,7 +10,7 @@ typedef struct {
     BC250_DEVICE* Device;
     BC250_LATCH_PROBE_RESULT* Result;
     BC250_DISP_IO Io;
-    ULONG Generation, Width, Height, Pitch;
+    ULONG Generation, Width, Height, Pitch, PhaseMs;
     ULONGLONG Bytes;
     LONGLONG Start, Frequency;
     BOOLEAN LockOwned, Prepared;
@@ -128,17 +128,24 @@ static NTSTATUS LatchWait(LATCH_CONTEXT* C, ULONGLONG Physical, BOOLEAN Held,
     BOOLEAN Boundary, ULONG Frame, BC250_LATCH_SAMPLE* Sample)
 {
     LONGLONG start=KeQueryPerformanceCounter(NULL).QuadPart;
-    ULONG polls;
+    ULONG polls, transitions=0, limit=C->PhaseMs*50;
     NTSTATUS status;
-    for (polls=0;polls<2001;++polls) {
+    for (polls=0;polls<=limit;++polls) {
         status=LatchSample(C,Sample);
-        if (!LatchTime(C,start,40)) return STATUS_IO_TIMEOUT;
+        if (!LatchTime(C,start,C->PhaseMs)) return STATUS_IO_TIMEOUT;
         if (NT_SUCCESS(status)) {
             if (Held ? !Sample->LockHeld : !Sample->LockClear) return STATUS_DEVICE_BUSY;
+            // The counter changes at VSync start, before VUPDATE. Two distinct
+            // observed changes enclose a whole frame. Do not subtract frame
+            // words: wrap is allowed and reset is excluded by the owner guard.
+            if (Boundary && Sample->Word[Bc250LatchFrameAfter]!=Frame) {
+                Frame=Sample->Word[Bc250LatchFrameAfter];
+                ++transitions;
+            }
             if ((!Physical || Sample->Physical==Physical) &&
-                (!Boundary || Sample->Word[Bc250LatchFrameAfter]!=Frame)) return STATUS_SUCCESS;
+                (!Boundary || transitions>=2)) return STATUS_SUCCESS;
         } else if (status!=STATUS_DEVICE_BUSY) return status;
-        if (polls<2000) KeStallExecutionProcessor(20);
+        if (polls<limit) KeStallExecutionProcessor(20);
     }
     return STATUS_IO_TIMEOUT;
 }
@@ -146,7 +153,8 @@ static NTSTATUS LatchWait(LATCH_CONTEXT* C, ULONGLONG Physical, BOOLEAN Held,
 static NTSTATUS LatchPrepare(LATCH_CONTEXT* C)
 {
     BC250_DEVICE* d=C->Device;
-    ULONGLONG bytes, second, base, vramOffset;
+    D3DKMDT_VIDEO_SIGNAL_INFO signal;
+    ULONGLONG bytes, second, base, vramOffset, frameUs;
     ULONG control, flip, flip2;
     NTSTATUS status;
     C->Width=DisplaySourceWidth(d);C->Height=DisplaySourceHeight(d);
@@ -160,6 +168,25 @@ static NTSTATUS LatchPrepare(LATCH_CONTEXT* C)
         !C->Width || !C->Height || !C->Pitch || (C->Pitch&127u) ||
         C->Width>C->Pitch/4 || d->VramPhysical.QuadPart<0 ||
         d->RuntimeFramebufferPhysical.QuadPart<=0) return STATUS_NOT_SUPPORTED;
+    if (InterlockedCompareExchange(&d->RuntimeDisplayChanged,0,0)) {
+        status=ConnectorLinkCurrentSignal(d,&signal);
+        if (!NT_SUCCESS(status)) return status;
+    } else {
+        if (!d->InheritedSignalValid) return STATUS_NOT_SUPPORTED;
+        signal=d->InheritedSignal;
+    }
+    if (signal.ScanLineOrdering!=D3DDDI_VSSLO_PROGRESSIVE ||
+        !signal.VSyncFreq.Numerator || !signal.VSyncFreq.Denominator ||
+        signal.VSyncFreq.Numerator==D3DKMDT_FREQUENCY_NOTSPECIFIED ||
+        signal.VSyncFreq.Denominator==D3DKMDT_FREQUENCY_NOTSPECIFIED)
+        return STATUS_NOT_SUPPORTED;
+    frameUs=((ULONGLONG)signal.VSyncFreq.Denominator*1000000u+
+        signal.VSyncFreq.Numerator-1)/signal.VSyncFreq.Numerator;
+    // Experiment admission, not a display capability limit: three observation
+    // phases fit the 500 ms total budget at up to 50 ms/frame. Add 2 ms for
+    // polling/EARLIEST lag; this is a timeout allowance, not a latch witness.
+    if (!frameUs || frameUs>50000) return STATUS_NOT_SUPPORTED;
+    C->PhaseMs=(ULONG)((2*frameUs+2000+999)/1000);
     bytes=(ULONGLONG)C->Pitch*C->Height;
     if (bytes>MAXULONGLONG-65535) return STATUS_INVALID_PARAMETER;
     second=(bytes+65535)&~65535ull;

@@ -13,10 +13,18 @@ typedef long long LONGLONG;
 typedef unsigned long long ULONGLONG;
 typedef unsigned char BOOLEAN;
 typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
+typedef struct {
+    struct { ULONG Numerator,Denominator; } VSyncFreq;
+    ULONG ScanLineOrdering;
+} D3DKMDT_VIDEO_SIGNAL_INFO;
+#define D3DDDI_VSSLO_PROGRESSIVE 1
+#define D3DKMDT_FREQUENCY_NOTSPECIFIED 0xfffffffful
 typedef struct _BC250_DEVICE {
     void *Mmio, *RuntimeFramebuffer;
     BOOLEAN VidPnFlipEnabled,VramEnabled,DcnWriteEnabled,RuntimePostValid;
     LONG RetainedPowerPhase,RuntimeDisplayChanged;
+    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
+    BOOLEAN InheritedSignalValid;
     struct { ULONG Width,Height,Pitch; } Post,RuntimePost;
     struct { ULONG PipeChanged,InheritedFixed; } Modeset;
     LARGE_INTEGER VramPhysical,RuntimeFramebufferPhysical;
@@ -49,6 +57,8 @@ static unsigned fail_read,fail_write,fail_guard,after_write,unlock_stuck,lock_st
 static unsigned no_frames,restore_fail,programs,invalid_owner_writes,power_on_read;
 static unsigned unlock_delay,unlock_countdown;
 static unsigned refuse_after_begin,program_refused;
+static unsigned signal_fail;
+static ULONG model_frame_us=1000,vupdate_delay_us;
 static int irql,otg;
 static long InterlockedCompareExchange(volatile LONG *p,LONG v,LONG cmp)
 { LONG old=*p;if(old==cmp)*p=v;return old; }
@@ -57,17 +67,24 @@ static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER *f)
 { LARGE_INTEGER r;if(f)f->QuadPart=1000000;r.QuadPart=clock_us;return r; }
 static void KeStallExecutionProcessor(ULONG us)
 {
-    ULONG next;
+    LONGLONG before=clock_us;
     clock_us+=us;
-    next=no_frames?frame:(ULONG)(clock_us/1000);
-    if(next!=frame) {
-        frame=next;
-        if(pending && (!lock || (h2 && armed))) { live=pending;pending=0; }
+    if(!no_frames) {
+        frame=(ULONG)(clock_us/model_frame_us);
+        // VSync advances the frame counter. VUPDATE is a distinct event at a
+        // configurable offset within that frame; it is not the counter read.
+        if((before+model_frame_us-vupdate_delay_us)/model_frame_us !=
+           (clock_us+model_frame_us-vupdate_delay_us)/model_frame_us &&
+           pending && (!lock || (h2 && armed))) {
+            live=pending;pending=0;
+        }
     }
 }
 static ULONG DisplaySourceWidth(const BC250_DEVICE *d) {return d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE *d) {return d->Post.Height;}
 static int DcnOtgRunning(const BC250_DEVICE *d) {(void)d;return otg;}
+static NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE *d,D3DKMDT_VIDEO_SIGNAL_INFO *s)
+{ *s=d->InheritedSignal;return signal_fail?STATUS_DEVICE_NOT_READY:STATUS_SUCCESS; }
 static NTSTATUS MmioDcnRead(BC250_DEVICE *d,ULONG offset,ULONG *v)
 {
     ++reads;
@@ -114,6 +131,7 @@ static BOOLEAN WddmPrimaryExclusiveBegin(BC250_DEVICE *d,ULONG kind,ULONG *g)
     if(refuse_after_begin==1)otg=0;
     if(refuse_after_begin==2) {d->RuntimeDisplayChanged=1;d->RuntimePostValid=0;}
     if(refuse_after_begin==3) {d->RuntimeDisplayChanged=1;d->RuntimePost.Height++;}
+    if(refuse_after_begin==4)d->InheritedSignal.VSyncFreq.Numerator=0;
     return TRUE;
 }
 static NTSTATUS WddmWriterResume(BC250_DEVICE *d)
@@ -148,6 +166,8 @@ static void Setup(BC250_DEVICE *d)
     memset(d,0,sizeof(*d));d->Mmio=d;d->RuntimeFramebuffer=d;
     d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;
     d->RuntimePost=d->Post;d->RuntimePostValid=1;
+    d->InheritedSignalValid=1;d->InheritedSignal.ScanLineOrdering=D3DDDI_VSSLO_PROGRESSIVE;
+    d->InheritedSignal.VSyncFreq.Numerator=1000000;d->InheritedSignal.VSyncFreq.Denominator=1000;
     d->VidPnFlipEnabled=d->VramEnabled=d->DcnWriteEnabled=1;
     d->VramPhysical.QuadPart=0x100000000ull;d->VramMcBase=0x200000000ull;
     d->VramLength=0x80000000ull;d->RuntimeFramebufferPhysical.QuadPart=0x101000000ull;
@@ -159,6 +179,8 @@ static void Setup(BC250_DEVICE *d)
     no_frames=restore_fail=programs=invalid_owner_writes=power_on_read=0;
     unlock_delay=unlock_countdown=0;irql=0;otg=1;
     refuse_after_begin=program_refused=0;
+    model_frame_us=1000;vupdate_delay_us=0;
+    signal_fail=0;
 }
 #include "dcn_latch_escape.h"
 // Serialize the actual core result in the client's ABI for an independent
@@ -182,7 +204,7 @@ static void EmitModel(unsigned model,unsigned arm,const BC250_LATCH_PROBE_RESULT
 int main(int argc,char** argv)
 {
     BC250_DEVICE d;BC250_LATCH_PROBE_RESULT r;
-    unsigned model,arm,i,nread,nwrite,nguard,applied;long status;
+    unsigned model,arm,i,nread,nwrite,nguard,applied,delay;long status;
     int emit=argc==2 && !strcmp(argv[1],"--emit-model-records");
     if(argc!=1 && !emit)return 2;
     for(model=0;model<3;model++)for(arm=0;arm<Bc250LatchArmCount;arm++) {
@@ -195,6 +217,46 @@ int main(int argc,char** argv)
         if(emit)EmitModel(model,arm,&r);
     }
     if(emit)return fails?1:0;
+    // Start just after VUPDATE, so the next counter transition is too early.
+    // Cover every 20 us phase including a VUPDATE just before the next VSync.
+    for(delay=20;delay<1000;delay+=20)for(model=0;model<3;model++)
+        for(arm=0;arm<Bc250LatchArmCount;arm++) {
+            Setup(&d);h2=model!=0;deferred_acceptance=model==2;
+            vupdate_delay_us=delay;clock_us=delay+1;
+            CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_SUCCESS);
+            CHECK(r.Boundary.Physical==((arm==0 || (arm==2 && model==1))?r.AddressB:r.AddressA));
+            CHECK(r.Restored && r.AfterUnlock.Physical==r.AddressB && live==r.AddressA);
+        }
+    {
+        static const ULONG rates[]={20,24,25,50,60,144};
+        for(i=0;i<sizeof(rates)/sizeof(rates[0]);i++)for(arm=0;arm<3;arm++) {
+            Setup(&d);model_frame_us=(1000000+rates[i]-1)/rates[i];
+            d.InheritedSignal.VSyncFreq.Numerator=rates[i];
+            d.InheritedSignal.VSyncFreq.Denominator=1;
+            vupdate_delay_us=135;clock_us=136;
+            if(arm==2)d.RuntimeDisplayChanged=1; // both timing sources
+            CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_SUCCESS);
+            CHECK(r.Boundary.Physical==(arm==0?r.AddressB:r.AddressA));
+            CHECK(clock_us<500000 && r.Restored && !fault);
+        }
+        Setup(&d);model_frame_us=50000;no_frames=1;
+        d.InheritedSignal.VSyncFreq.Numerator=20;d.InheritedSignal.VSyncFreq.Denominator=1;
+        CHECK(DcnLatchProbe(&d,0,&r)==STATUS_IO_TIMEOUT && clock_us<=204000 && ended==1);
+        for(i=0;i<8;i++) {
+            Setup(&d);
+            switch(i) {
+            case 0:d.InheritedSignalValid=0;break;
+            case 1:d.InheritedSignal.ScanLineOrdering=2;break;
+            case 2:d.InheritedSignal.VSyncFreq.Numerator=0;break;
+            case 3:d.InheritedSignal.VSyncFreq.Denominator=0;break;
+            case 4:d.InheritedSignal.VSyncFreq.Numerator=D3DKMDT_FREQUENCY_NOTSPECIFIED;break;
+            case 5:d.InheritedSignal.VSyncFreq.Numerator=19;d.InheritedSignal.VSyncFreq.Denominator=1;break;
+            case 6:d.RuntimeDisplayChanged=1;signal_fail=1;break;
+            case 7:d.InheritedSignal.VSyncFreq.Denominator=D3DKMDT_FREQUENCY_NOTSPECIFIED;break;
+            }
+            CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !writes && !ended && !fault);
+        }
+    }
     deferred_acceptance=0;
     Setup(&d);unlock_delay=5;CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS && !lock);
     Setup(&d);CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS);
@@ -230,7 +292,7 @@ int main(int argc,char** argv)
     Setup(&d);restore_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && fault && !r.Restored);
     Setup(&d);begin_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !writes && !programs && !ended);
     Setup(&d);resume_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !fault && ended==1);
-    for(i=1;i<=3;i++) {
+    for(i=1;i<=4;i++) {
         Setup(&d);refuse_after_begin=i;
         CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !writes && !fault && ended==1);
         CHECK(!r.WritesAttempted && !r.Restored && r.RestoreStatus==STATUS_SUCCESS);

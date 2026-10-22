@@ -482,6 +482,9 @@ object during a ready writer. If there is no remaining Desired, restore the
 base of the reserved buffer first, then keep it. A failed lock release or
 failed reserved-buffer restore must enter the fault path and retain storage.
 No failed cleanup may be reported as a passing experiment.
+If the probe attempted no write, call End without a probe restore or fault.
+`Begin`, `Resume` and `End` retain ownership of their own bridge recovery. In that
+case `Restored` stays zero and the measurement retains its refusal status.
 
 The actual-source `run_vidpn_flip.ps1` controls exercise destroy during a
 writer, failed retirement, failed synchronization and restoration while
@@ -495,8 +498,15 @@ The core refuses a foreign lock, a nonzero selector, compressed or triple
 buffered surfaces, unsupported modes and insufficient reserved space.
 Admission is checked again after the primary writer has acquired the plane.
 
-Each frame wait permits at most 2001 samples and 2000 stalls of 20 us, with
-a 40 ms elapsed-time check. Lock and unlock acknowledgements permit 11 reads
+The boundary wait requires two distinct observed frame-counter changes.
+The first change can precede VUPDATE. Two changes enclose a complete frame.
+They do not by themselves prove a displayed surface or allocation retirement.
+The phase timeout is twice the committed frame period, rounded up, plus 2 ms
+for polling and EARLIEST lag. That margin is a timeout allowance, not a latch
+witness. The probe refuses unknown or non-progressive timing and periods
+above 50 ms before writing. This is an experiment limit, not a display cap.
+Each wait samples every 20 us with both a poll-count and elapsed-time bound
+(at most 5101 samples). Lock and unlock acknowledgements permit 11 reads
 and 10 stalls of 1 us. Samples also check a 500 ms operation budget. Cleanup
 gets a separate budget. These checks do not bound OS scheduling delays.
 The caller must retain OS lifetime exclusion for the complete call.
@@ -513,10 +523,18 @@ and only the lock-after-program arm differs between H1 and H2.
 Tests inject failures at each modeled read, write and ownership checkpoint,
 including writes that fail after taking effect. Power withdrawal, stuck
 acknowledgements, failed cleanup and End failures are separate controls.
-Four core mutations must fail at runtime. The power-withdrawal test caught
+The delayed-VUPDATE model separates the counter change from the address update.
+With VUPDATE offsets from 20 to 980 us in a synthetic 1 ms frame, the former
+single-change wait produced 196 wrong boundary observations. The new
+wait passes these cases and 20, 24, 25, 50, 60 and 144 Hz controls. Mutations
+that restore the single-change wait or constant 40 ms bound fail at runtime.
+The power-withdrawal test caught
 and now prevents a manual-trigger write after power changed during unlock.
 These tests establish software behavior under the stated models only.
 Physical controls and full MPO remain open.
+The hardware arm stays on hold pending the Armed pending-state observation,
+unlock timing and compiler-mode review. The delayed model has no EARLIEST lag.
+its results do not close those separate review findings.
 
 ### Lab escape and client
 

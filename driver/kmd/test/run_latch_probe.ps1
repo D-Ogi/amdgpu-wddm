@@ -56,6 +56,8 @@ if ($Mutations) {
         Write-Output "Mutation caught at runtime: $($change[0])"
     }
     $changes=@(
+        @('single-transition', 'transitions>=2', 'transitions>=1'),
+        @('fixed-phase-limit', 'C->PhaseMs=(ULONG)((2*frameUs+2000+999)/1000);', 'C->PhaseMs=40;'),
         @('no-write-cleanup', 'if (!Result->WritesAttempted) {', 'if (!Result->WritesAttempted && Arm==Bc250LatchArmCount) {'),
         @('runtime-post-valid', '!d->RuntimePostValid || C->Width!=d->RuntimePost.Width', 'C->Width!=d->RuntimePost.Width'),
         @('runtime-post-size', 'C->Width!=d->RuntimePost.Width || C->Height!=d->RuntimePost.Height', 'C->Width!=d->RuntimePost.Width'),
