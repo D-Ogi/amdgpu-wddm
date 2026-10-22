@@ -578,11 +578,22 @@ the interval. Observing B under the held lock is the asymmetric result that can
 oppose H1, subject to the external ownership and sample contracts. Neither
 result establishes atomic scaling, CSC updates or full MPO support.
 
-At the pinned AMD revision, `hubp2_is_flip_pending` checks SURFACE_FLIP_PENDING
+At the pinned AMD revision, `dcn201_hubp_funcs` selects
+`hubp1_is_flip_pending` from `dcn10_hubp.c`. It checks SURFACE_FLIP_PENDING
 and whether EARLIEST_INUSE equals the requested address. That boolean combines
 unfinished states. Its implementation does not expose a separate witness for
 pending-bank acceptance before latch. Do not treat a pending bit alone as that
 missing witness. Linux wishlist L48 records this distinction for measurement.
+
+DCN201 also selects `dcn10_wait_for_pending_cleared` through its hardware
+sequencer table. This function waits for VBLANK and then VACTIVE on each enabled
+top pipe. Its source comment warns that a cleared OTG pending indication can
+precede the update, and taking the lock again before VUPDATE can prevent
+separate operations. This supports keeping trigger, pending status and update
+completion distinct. It does not establish the proposed delayed-acceptance
+model as DCN201 behavior or provide a pre-latch acceptance witness. Waiting
+through this sequence before taking the probe's later lock would change the
+experiment: B could already be active.
 
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock
