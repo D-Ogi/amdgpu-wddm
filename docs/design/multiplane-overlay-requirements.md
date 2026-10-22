@@ -549,6 +549,10 @@ hardware transition time. A clear read outside the allowance is retained but
 cannot pass or trigger the update. The read-count bound stops the loop even
 with a stopped clock. Tests cover delayed clear through 1000 us, timeout at 1001 us, cleanup,
 stopped/backward time and a delayed read. The hardware arm awaits review.
+After a late clear, cleanup still programs A and waits for its address.
+The measurement and unlock status remain failed. If cleanup cannot restore A,
+it requests recovery. Tests cover late clear in both unlock paths and a separate
+restore failure. A mutation that skips restoration after late clear must fail.
 
 ### Lab escape and client
 
@@ -587,6 +591,21 @@ The ABI version word alone does not identify the image. Run the unlocked and
 lock-before-program controls before interpreting the lock-after-program arm.
 The separate runner stub opens no adapter. Run its exit-code controls on the
 target PowerShell version before a hardware trial.
+
+The initial arm plan allows zero retries: one request per arm. STATUS_RETRY is
+inconclusive, not evidence for either latch hypothesis. The pending bit under
+the master update lock is not yet established on DCN201. If a locked control
+returns RETRY, stop the sequence and retain its raw sample and cleanup result.
+A further attempt needs a revised, bounded plan. Do not loop until it passes.
+
+The locked boundary wait spans two observed frame changes, with a phase limit
+of at most 102 ms. Cleanup has a separate observation budget. The connector
+mutex in `ConnectorLinkCurrentSignal` has no timeout, so the 500 ms sampling
+budget is not a wall-clock bound for the complete call.
+
+BD-190 must pass its lab check before this arm. Its catalog correction changes CatalogId
+and requires a full package install. Rebuild the frozen kit against that package
+and bind it to the loaded lab KMD hash. A standalone SYS replacement is insufficient.
 
 `analyze-dcn-latch.py` checks the three client JSONL files in arm order 0, 1, 2.
 It decodes the 120 raw DWORDs and checks the summary against them. It recomputes

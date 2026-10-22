@@ -308,6 +308,24 @@ int main(int argc,char** argv)
         CHECK(DcnLatchProbe(&d,1,&r)==STATUS_IO_TIMEOUT && r.Restored && !fault);
         CHECK(!r.Unlock[0].Attempted && r.Unlock[1].ClearObserved);
         CHECK(r.Unlock[1].LastQpc-r.Unlock[1].StartQpc==57);
+        // A clear read can finish outside the observation allowance. Both the
+        // normal unlock and the cleanup unlock must still restore A once clear.
+        // The original measurement remains failed; restoration is independent.
+        for(arm=1;arm<3;++arm)for(i=0;i<2;++i) {
+            Setup(&d);unlock_read_cost_us=2000;lock_stuck=i;
+            CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_IO_TIMEOUT);
+            CHECK(r.Status==STATUS_IO_TIMEOUT && r.UnlockStatus==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[i].ClearObserved && r.Unlock[i].Status==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[i].LastQpc-r.Unlock[i].StartQpc==2000);
+            CHECK(!r.Unlock[1-i].Attempted);
+            CHECK(r.RestoreStatus==STATUS_SUCCESS && r.Restored && live==r.AddressA);
+            CHECK(ended==1 && !owner && !lock && !fault && !invalid_owner_writes);
+        }
+        // A separate restore failure still requests recovery after a late clear.
+        Setup(&d);unlock_read_cost_us=2000;restore_fail=1;
+        CHECK(DcnLatchProbe(&d,2,&r)==STATUS_IO_TIMEOUT);
+        CHECK(r.Unlock[0].ClearObserved && r.RestoreStatus==STATUS_IO_DEVICE_ERROR);
+        CHECK(!r.Restored && fault && ended==1 && !owner && !lock);
         // A stopped clock cannot make a stuck unlock spin indefinitely.
         {
             LATCH_CONTEXT c;

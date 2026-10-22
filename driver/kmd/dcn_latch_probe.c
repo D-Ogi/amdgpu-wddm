@@ -319,7 +319,10 @@ cleanup:
     // owner and Level Two call. A failed experiment must not skip restoration.
     c.Start=KeQueryPerformanceCounter(NULL).QuadPart;
     if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c,&Result->Unlock[1]);
-    Result->RestoreStatus=Result->UnlockStatus;
+    // A late clear fails the measurement but releases the lock obligation.
+    // Do not let that historical timeout suppress restoration. LatchProgram
+    // still checks power, ownership and runtime state before any write.
+    Result->RestoreStatus=c.LockOwned?Result->UnlockStatus:STATUS_SUCCESS;
     if (NT_SUCCESS(Result->RestoreStatus)) Result->RestoreStatus=LatchProgram(&c,Result->AddressA);
     if (NT_SUCCESS(Result->RestoreStatus))
         Result->RestoreStatus=LatchWait(&c,Result->AddressA,FALSE,FALSE,0,&restore);

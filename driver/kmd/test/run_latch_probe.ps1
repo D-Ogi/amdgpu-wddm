@@ -57,6 +57,7 @@ if ($Mutations) {
         Write-Output "Mutation caught at runtime: $($change[0])"
     }
     $changes=@(
+        @('late-clear-restore', 'Result->RestoreStatus=c.LockOwned?Result->UnlockStatus:STATUS_SUCCESS;', 'Result->RestoreStatus=Result->UnlockStatus;'),
         @('unlock-ten-us', 'i<=1000', 'i<=10'),
         @('unlock-postread-budget', 'if (!Sample->ClearObserved || !LatchTime(C,start,1) || !LatchTime(C,C->Start,500))', 'if (!Sample->ClearObserved)'),
         @('armed-pending', '!(Result->Armed.Word[Bc250LatchFlipControl] & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)', '0'),
