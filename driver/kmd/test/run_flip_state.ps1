@@ -43,25 +43,25 @@ $mutations = [ordered]@{
     'drained-ignores-resumed' = @{ find = 'if (Facts->Drained && !Facts->Resumed)'; with = 'if (Facts->Drained)'
         why = 'W-i: a DRAINED readback is used after the writer resumed the plane' }
     'drained-two-bits' = @{ find = 'return ReadOk && BlankEn && TtuDisable && NoOutstanding;'
-        with = 'return ReadOk && BlankEn && TtuDisable && (NoOutstanding | 1u);'
+        with = 'return ReadOk && BlankEn && TtuDisable && ((void)NoOutstanding, 1);'
         why = 'DRAINED without HUBP_NO_OUTSTANDING_REQ' }
     'immediate-without-proof' = @{ find = 'if (Immediate && !Proof) return BC250_FLIP_RESULT_UNPROVEN;'
-        with = 'if (Immediate && !Proof && !Immediate) return BC250_FLIP_RESULT_UNPROVEN;'
+        with = 'if (((void)Immediate, (void)Proof, 0)) return BC250_FLIP_RESULT_UNPROVEN;'
         why = 'E3: an immediate request gets success without P' }
     'failed-write-success' = @{ find = 'if (!WriteOk) return BC250_FLIP_RESULT_FAULT_PROGRAM;'
-        with = 'if (!WriteOk && WriteOk) return BC250_FLIP_RESULT_FAULT_PROGRAM;'
+        with = 'if (((void)WriteOk, 0)) return BC250_FLIP_RESULT_FAULT_PROGRAM;'
         why = 'a failed write sequence is answered as a programmed flip' }
     'begin-in-faulting' = @{ find = 'if (Faulting) return BC250_WRITER_BEGIN_FAULTING;'
-        with = 'if (Faulting && !Faulting) return BC250_WRITER_BEGIN_FAULTING;'
+        with = 'if (((void)Faulting, 0)) return BC250_WRITER_BEGIN_FAULTING;'
         why = 'a writer starts in FAULTING' }
     'end-programs-when-stopped' = @{ find = 'if (OtgRunning != 1) return BC250_WRITER_END_FAULT;'
         with = 'if (OtgRunning == 0) return BC250_WRITER_END_FAULT;'
         why = 'End takes a failed OTG read as a running OTG' }
     'wu-unblank-lost' = @{ find = 'if (Unblank) return BC250_WU_UNBLANK;'
-        with = 'if (Unblank && !Unblank) return BC250_WU_UNBLANK;'
+        with = 'if (((void)Unblank, 0)) return BC250_WU_UNBLANK;'
         why = 'W-u: a deposit the unblank programmed is recorded by what End did' }
     'wu-superseded-programmed' = @{ find = 'if (!Current) return BC250_WU_SUPERSEDED;'
-        with = 'if (!Current && Current) return BC250_WU_SUPERSEDED;'
+        with = 'if (((void)Current, 0)) return BC250_WU_SUPERSEDED;'
         why = 'W-u: a superseded deposit is recorded as programmed by End' }
     'wu-refusal-programmed' = @{ find = 'if (Result == BC250_FLIP_RESULT_REFUSED) return BC250_WU_END_REFUSED;'
         with = 'if (Result == BC250_FLIP_RESULT_REFUSED) return BC250_WU_END_PROGRAM;'
@@ -73,16 +73,20 @@ $mutations = [ordered]@{
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+$cl = Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang-cl.exe'
+& $cl --version
+if ($LASTEXITCODE -ne 0) { throw 'Explicit clang-cl unavailable' }
 $env:TEMP = "$Root\scratch\tmp"; $env:TMP = $env:TEMP
 $env:INCLUDE = ''; $env:LIB = ''
 
 # Builds and runs the test with the header in $Include; returns the exit code and the output.
-function Invoke-FlipState([string]$Dir, [string]$Include) {
+function Invoke-FlipState([string]$Dir, [string]$Include, [bool]$Lab) {
     $obj = Join-Path $Dir 'obj'
     New-Item -ItemType Directory -Force $Dir, $obj | Out-Null
     Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue
-    & $cl @('/nologo', '/TC', '/W4', '/WX', '/O2', '/MT', "/I$Include", "/I$($msvc.FullName)\include",
+    $flavour = @()
+    if ($Lab) { $flavour += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+    & $cl @flavour @('/nologo', '/TC', '/W4', '/WX', '/O2', '/MT', '-fuse-ld=lld', "/I$Include", "/I$($msvc.FullName)\include",
         "/I$sdk\Include\$KitVersion\ucrt", "/Fo$obj\", "/Fe$Dir\flip_state_test.exe", (Join-Path $here 'flip_state_test.c'),
         '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64") | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Host build failed ($Dir)" }
@@ -91,9 +95,13 @@ function Invoke-FlipState([string]$Dir, [string]$Include) {
 }
 
 if (-not $Mutation) {
-    $run = Invoke-FlipState $Out $kmd
-    Write-Output $run.Output
-    exit $run.Code
+    foreach ($lab in @($false, $true)) {
+        $flavour = if ($lab) { 'lab' } else { 'release' }
+        $run = Invoke-FlipState (Join-Path $Out $flavour) $kmd $lab
+        Write-Output "$flavour`: $($run.Output)"
+        if ($run.Code) { exit $run.Code }
+    }
+    exit 0
 }
 
 $names = if ($Mutation -eq 'all') { @($mutations.Keys) } else { @($Mutation) }
@@ -107,10 +115,13 @@ foreach ($name in $names) {
     $include = Join-Path $dir 'include'
     New-Item -ItemType Directory -Force $include | Out-Null
     Set-Content -NoNewline -Path (Join-Path $include 'flip_state.h') -Value $header.Replace($m.find, $m.with)
-    $run = Invoke-FlipState $dir $include
-    $failed = $run.Code -ne 0 -and $run.Output -match 'FAIL line'
-    Write-Output ("mutation {0}: {1} ({2})" -f $name, $(if ($failed) { 'caught' } else { 'NOT CAUGHT' }), $m.why)
-    if (-not $failed) { $passed += $name }
+    foreach ($lab in @($false, $true)) {
+        $flavour = if ($lab) { 'lab' } else { 'release' }
+        $run = Invoke-FlipState (Join-Path $dir $flavour) $include $lab
+        $failed = $run.Code -ne 0 -and $run.Output -match 'FAIL line'
+        Write-Output ("mutation {0} ({1}): {2} ({3})" -f $name, $flavour, $(if ($failed) { 'caught' } else { 'NOT CAUGHT' }), $m.why)
+        if (-not $failed) { $passed += "$name/$flavour" }
+    }
 }
 if ($passed.Count) { Write-Output "mutations not caught: $($passed -join ', ')"; exit 1 }
 Write-Output "flip state mutations: $($names.Count) caught"

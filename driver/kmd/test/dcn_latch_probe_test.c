@@ -15,7 +15,7 @@ typedef unsigned char BOOLEAN;
 typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
 typedef struct _BC250_DEVICE {
     void *Mmio, *RuntimeFramebuffer;
-    BOOLEAN VidPnFlipEnabled,VramEnabled,DcnWriteEnabled;
+    BOOLEAN VidPnFlipEnabled,VramEnabled,DcnWriteEnabled,RuntimePostValid;
     LONG RetainedPowerPhase,RuntimeDisplayChanged;
     struct { ULONG Width,Height,Pitch; } Post,RuntimePost;
     struct { ULONG PipeChanged,InheritedFixed; } Modeset;
@@ -48,6 +48,7 @@ static unsigned h2,deferred_acceptance,armed,owner,resumed,ended,fault,begin_fai
 static unsigned fail_read,fail_write,fail_guard,after_write,unlock_stuck,lock_stuck;
 static unsigned no_frames,restore_fail,programs,invalid_owner_writes,power_on_read;
 static unsigned unlock_delay,unlock_countdown;
+static unsigned refuse_after_begin,program_refused;
 static int irql,otg;
 static long InterlockedCompareExchange(volatile LONG *p,LONG v,LONG cmp)
 { LONG old=*p;if(old==cmp)*p=v;return old; }
@@ -108,7 +109,13 @@ static NTSTATUS MmioDcnWriteEx(BC250_DEVICE *d,ULONG offset,ULONG value,BOOLEAN 
     return writes==fail_write?STATUS_IO_DEVICE_ERROR:STATUS_SUCCESS;
 }
 static BOOLEAN WddmPrimaryExclusiveBegin(BC250_DEVICE *d,ULONG kind,ULONG *g)
-{ (void)d;CHECK(kind==BC250_WRITER_LATCH_PROBE);if(begin_fail)return FALSE;owner=1;*g=12;return TRUE; }
+{
+    CHECK(kind==BC250_WRITER_LATCH_PROBE);if(begin_fail)return FALSE;owner=1;*g=12;
+    if(refuse_after_begin==1)otg=0;
+    if(refuse_after_begin==2) {d->RuntimeDisplayChanged=1;d->RuntimePostValid=0;}
+    if(refuse_after_begin==3) {d->RuntimeDisplayChanged=1;d->RuntimePost.Height++;}
+    return TRUE;
+}
 static NTSTATUS WddmWriterResume(BC250_DEVICE *d)
 { (void)d;if(resume_fail)return STATUS_IO_DEVICE_ERROR;resumed=1;return STATUS_SUCCESS; }
 static NTSTATUS WddmLatchProbeCheck(BC250_DEVICE *d,ULONG gen,BOOLEAN fail)
@@ -130,6 +137,7 @@ static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG card,ULONG pitch,
     CHECK(owner && resumed && !lock && !immediate);
     CHECK(pitch==d->Post.Pitch && bytes==(ULONGLONG)pitch*d->Post.Height);
     ++programs;*wrote=FALSE;
+    if(program_refused)return STATUS_NOT_SUPPORTED;
     if(restore_fail && programs>=3)return STATUS_IO_DEVICE_ERROR;
     *wrote=TRUE;pending=card-d->VramMcBase+(ULONGLONG)d->VramPhysical.QuadPart;
     armed=deferred_acceptance?0:1;return STATUS_SUCCESS;
@@ -139,6 +147,7 @@ static void Setup(BC250_DEVICE *d)
 {
     memset(d,0,sizeof(*d));d->Mmio=d;d->RuntimeFramebuffer=d;
     d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;
+    d->RuntimePost=d->Post;d->RuntimePostValid=1;
     d->VidPnFlipEnabled=d->VramEnabled=d->DcnWriteEnabled=1;
     d->VramPhysical.QuadPart=0x100000000ull;d->VramMcBase=0x200000000ull;
     d->VramLength=0x80000000ull;d->RuntimeFramebufferPhysical.QuadPart=0x101000000ull;
@@ -149,6 +158,7 @@ static void Setup(BC250_DEVICE *d)
     fail_read=fail_write=fail_guard=after_write=unlock_stuck=lock_stuck=0;
     no_frames=restore_fail=programs=invalid_owner_writes=power_on_read=0;
     unlock_delay=unlock_countdown=0;irql=0;otg=1;
+    refuse_after_begin=program_refused=0;
 }
 #include "dcn_latch_escape.h"
 // Serialize the actual core result in the client's ABI for an independent
@@ -193,7 +203,8 @@ int main(int argc,char** argv)
     for(i=1;i<=nread;i++) {
         Setup(&d);fail_read=i;status=DcnLatchProbe(&d,1,&r);
         CHECK(!NT_SUCCESS(status));CHECK(!owner && !lock && !invalid_owner_writes);
-        CHECK(clock_us<500000 && (!ended || r.Restored || fault));
+        CHECK(clock_us<500000 && (!ended || !r.WritesAttempted || r.Restored || fault));
+        if(ended && !r.WritesAttempted)CHECK(!fault && !r.Restored && !programs);
     }
     for(applied=0;applied<2;applied++)for(i=1;i<=nwrite;i++) {
         Setup(&d);fail_write=i;after_write=applied;status=DcnLatchProbe(&d,1,&r);
@@ -203,22 +214,32 @@ int main(int argc,char** argv)
     for(i=1;i<=nguard;i++) {
         Setup(&d);fail_guard=i;status=DcnLatchProbe(&d,1,&r);
         CHECK(!NT_SUCCESS(status));CHECK(!owner && !lock && !invalid_owner_writes);
-        CHECK(clock_us<500000 && (r.Restored || fault));
+        CHECK(clock_us<500000 && (!r.WritesAttempted || r.Restored || fault));
+        if(!r.WritesAttempted)CHECK(!fault && !r.Restored && !programs);
     }
     // Power withdrawal prohibits further MMIO writes, including cleanup.
     for(i=1;i<=nread;i++) {
         Setup(&d);power_on_read=i;status=DcnLatchProbe(&d,1,&r);
         CHECK(!NT_SUCCESS(status));CHECK(!owner && !invalid_owner_writes);
-        CHECK(clock_us<500000 && (!ended || fault));
+        CHECK(clock_us<500000 && (!ended || !r.WritesAttempted || fault));
+        if(!r.WritesAttempted)CHECK(!fault && !r.Restored);
     }
     Setup(&d);unlock_stuck=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,1,&r)) && fault && !r.Restored && ended==1);
     Setup(&d);lock_stuck=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,1,&r)) && !lock && r.Restored);
     Setup(&d);no_frames=1;CHECK(DcnLatchProbe(&d,0,&r)==STATUS_IO_TIMEOUT && clock_us<100000 && ended==1);
     Setup(&d);restore_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && fault && !r.Restored);
     Setup(&d);begin_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !writes && !programs && !ended);
-    Setup(&d);resume_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && fault && ended==1);
+    Setup(&d);resume_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !fault && ended==1);
+    for(i=1;i<=3;i++) {
+        Setup(&d);refuse_after_begin=i;
+        CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !writes && !fault && ended==1);
+        CHECK(!r.WritesAttempted && !r.Restored && r.RestoreStatus==STATUS_SUCCESS);
+    }
+    Setup(&d);program_refused=1;
+    CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && programs==1 && !writes && !fault && ended==1);
+    CHECK(!r.WritesAttempted && !r.Restored && r.RestoreStatus==STATUS_SUCCESS);
     Setup(&d);end_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && r.Restored);
-    for(i=0;i<12;i++) {
+    for(i=0;i<15;i++) {
         Setup(&d);
         switch(i) {
         case 0:d.RuntimeFramebufferLength=1;break;
@@ -233,6 +254,9 @@ int main(int argc,char** argv)
         case 9:selector=OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK;break;
         case 10:lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;break;
         case 11:irql=2;break;
+        case 12:d.RuntimeDisplayChanged=1;d.RuntimePostValid=0;break;
+        case 13:d.RuntimeDisplayChanged=1;d.RuntimePost.Width++;break;
+        case 14:d.RuntimeDisplayChanged=1;d.RuntimePost.Height++;break;
         }
         CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !writes && !programs && !ended);
     }

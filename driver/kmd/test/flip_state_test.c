@@ -141,7 +141,12 @@ static void WuEnds(void)
 }
 
 /* Ten writers and no writer; the W-u record's code stays 0x170005, the code an earlier r6 gave W-u as a fault. */
-typedef char WritersAreTen[(BC250_WRITER_NONE == 0 && BC250_WRITER_KINDS == 11) ? 1 : -1];
+typedef char ProductWriterIdsStable[(BC250_WRITER_NONE == 0 && BC250_WRITER_DESTROY == 10) ? 1 : -1];
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+typedef char LabWriterCount[(BC250_WRITER_LATCH_PROBE == 11 && BC250_WRITER_KINDS == 12) ? 1 : -1];
+#else
+typedef char ReleaseWriterCount[(BC250_WRITER_KINDS == 11) ? 1 : -1];
+#endif
 typedef char WuCodeIs170005[(BC250_FLIP_RECORD_WRITER_UNPROVEN == 0x170005u) ? 1 : -1];
 
 /* The bound of section 7.2, E5 step 5. */

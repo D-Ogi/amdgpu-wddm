@@ -56,6 +56,9 @@ if ($Mutations) {
         Write-Output "Mutation caught at runtime: $($change[0])"
     }
     $changes=@(
+        @('no-write-cleanup', 'if (!Result->WritesAttempted) {', 'if (!Result->WritesAttempted && Arm==Bc250LatchArmCount) {'),
+        @('runtime-post-valid', '!d->RuntimePostValid || C->Width!=d->RuntimePost.Width', 'C->Width!=d->RuntimePost.Width'),
+        @('runtime-post-size', 'C->Width!=d->RuntimePost.Width || C->Height!=d->RuntimePost.Height', 'C->Width!=d->RuntimePost.Width'),
         @('cleanup-unlock', 'if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c);',
           'if (c.LockOwned && Arm==Bc250LatchUnlocked) Result->UnlockStatus=LatchUnlock(&c);'),
         @('cleanup-fault', 'WddmLatchProbeCheck(Device,c.Generation,TRUE)',

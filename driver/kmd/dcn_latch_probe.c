@@ -151,6 +151,9 @@ static NTSTATUS LatchPrepare(LATCH_CONTEXT* C)
     NTSTATUS status;
     C->Width=DisplaySourceWidth(d);C->Height=DisplaySourceHeight(d);
     C->Pitch=InterlockedCompareExchange(&d->RuntimeDisplayChanged,0,0) ? d->RuntimePost.Pitch : d->Post.Pitch;
+    if (InterlockedCompareExchange(&d->RuntimeDisplayChanged,0,0) &&
+        (!d->RuntimePostValid || C->Width!=d->RuntimePost.Width || C->Height!=d->RuntimePost.Height))
+        return STATUS_NOT_SUPPORTED;
     if (!d->Mmio || InterlockedCompareExchange(&d->RetainedPowerPhase,0,0) ||
         !d->RuntimeFramebuffer || !d->VramEnabled || !d->DcnWriteEnabled ||
         !d->VidPnFlipEnabled || d->Modeset.PipeChanged || d->Modeset.InheritedFixed ||
@@ -250,6 +253,13 @@ long DcnLatchProbe(BC250_DEVICE* Device, unsigned long Arm, BC250_LATCH_PROBE_RE
     if (!NT_SUCCESS(Result->UnlockStatus)) {status=Result->UnlockStatus;goto cleanup;}
     status=LatchWait(&c,Result->AddressB,FALSE,FALSE,0,&Result->AfterUnlock);
 cleanup:
+    // Begin/Resume/End own their bridge and recovery. If no probe write could
+    // have taken effect, do not invent a restore failure or request E5. Keep
+    // Restored zero: no restore was performed, and the measurement still failed.
+    if (!Result->WritesAttempted) {
+        Result->RestoreStatus=STATUS_SUCCESS;
+        goto end_owner;
+    }
     // Cleanup has its own bounded observation window, but still keeps the
     // owner and Level Two call. A failed experiment must not skip restoration.
     c.Start=KeQueryPerformanceCounter(NULL).QuadPart;
@@ -260,6 +270,7 @@ cleanup:
         Result->RestoreStatus=LatchWait(&c,Result->AddressA,FALSE,FALSE,0,&restore);
     Result->Restored=NT_SUCCESS(Result->RestoreStatus)?1u:0u;
     if (!Result->Restored) (void)WddmLatchProbeCheck(Device,c.Generation,TRUE);
+end_owner:
     Result->EndStatus=WddmPrimaryExclusiveEnd(Device,c.Generation,FALSE);
 done:
     Result->Status=status;
