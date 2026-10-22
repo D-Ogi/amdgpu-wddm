@@ -982,7 +982,7 @@
     {
      "file": "src/amd/vulkan/vulkan_radeon.dll",
      "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-     "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line ec70ed15 (release/tester32-radv-system: BD-197, BD-201, BD-211), as in 31v3 two lines: the BD-197 DXGI present work has no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
+     "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
     }
    ],
    "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
@@ -993,7 +993,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "mesa-amdgpu-wddm",
-   "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
+   "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
    "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
    "recipe": "tools/build/build-mesa.ps1",
    "args": [
@@ -1060,6 +1060,22 @@
       "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
      ],
      "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+    },
+    {
+     "name": "winsys-ib2-gather",
+     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+     "args": [
+      "-Source",
+      "{src}",
+      "-Build",
+      "{out}",
+      "-OutputDir",
+      "{testout}/winsys-ib2",
+      "-Test",
+      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c"
+     ],
+     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
      "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
     }
    ]
@@ -1311,7 +1327,7 @@
     {
      "file": "src/amd/vulkan/vulkan_radeon.dll",
      "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-     "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line ec70ed15 (release/tester32-radv-system: BD-197, BD-201, BD-211), as in 31v3 two lines: the BD-197 DXGI present work has no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
+     "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
     }
    ],
    "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
@@ -1322,7 +1338,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "mesa-amdgpu-wddm",
-   "commit": "ec70ed15e8bde52aadc5c72f8475333e06358694",
+   "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
    "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
    "recipe": "tools/build/build-mesa.ps1",
    "args": [
@@ -1390,6 +1406,22 @@
       "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
      ],
      "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+    },
+    {
+     "name": "winsys-ib2-gather",
+     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+     "args": [
+      "-Source",
+      "{src}",
+      "-Build",
+      "{out}",
+      "-OutputDir",
+      "{testout}/winsys-ib2",
+      "-Test",
+      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c"
+     ],
+     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
      "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
     }
    ]
