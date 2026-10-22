@@ -8,8 +8,11 @@ enum BC250_INPUT_COLOR {
     BC250_INPUT_709_FULL, BC250_INPUT_709_LIMITED,
     BC250_INPUT_COLOR_COUNT
 };
+// CNVC-only tag. Never pass this to the packed linear layout/address writer.
+// NV12 retains its separate BC250_NV12_LAYOUT and video address sequence.
+#define BC250_CNVC_NV12 0x100u
 typedef struct BC250_CNVC_REQUEST {
-    unsigned Format; // BC250_LINEAR_FORMAT, matched to the surface plan by owner.
+    unsigned Format; // BC250_LINEAR_FORMAT or BC250_CNVC_NV12, matched by owner.
     unsigned Color;  // Explicit: RGB_FULL for RGB; one of the four YUV choices.
 } BC250_CNVC_REQUEST;
 typedef struct BC250_CNVC_PLAN {
@@ -22,6 +25,8 @@ typedef struct BC250_CNVC_PLAN {
 // bank choice, no format/capability admission. Includes zero expansion as used
 // by dcn20_program_pipe, not a proof of physical sample normalization. RGB CSC
 // is bypassed. Packed YUV is internal AMD_AYCRCB8, not verified DXGI AYUV.
+// NV12 uses AMD VIDEO_420_YCbCr with explicit range/color and no pixel alpha.
+// Chroma siting/phase is not part of the matrix and must be prepared separately.
 // Owner must supply matching HUBP/DSCL/MPC state, OBUF power and proven CM
 // normalization/bypass state, preserve bank lifetime, and atomically commit all
 // plane state. DCN201 has no selected bias-and-scale callback; do not assume

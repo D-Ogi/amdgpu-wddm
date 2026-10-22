@@ -6,6 +6,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "../shim/bc250_dc_types.h"
 #include <stddef.h>
+_Static_assert(BC250_CNVC_NV12 >= BC250_LINEAR_FORMAT_COUNT, "CNVC-only format tag overlaps packed layouts");
 
 #define __maybe_unused
 #include "../shim/generated/dc_cnvc_color.inc"
@@ -111,25 +112,28 @@ int Bc250CnvcPrepare(const BC250_CNVC_REQUEST* Request, BC250_CNVC_PLAN* Plan)
         COLOR_SPACE_SRGB, COLOR_SPACE_YCBCR601, COLOR_SPACE_YCBCR601_LIMITED,
         COLOR_SPACE_YCBCR709, COLOR_SPACE_YCBCR709_LIMITED
     };
-    unsigned j, yuv;
+    unsigned j, yuv, nv12;
     if (!Plan) return 0;
     if (Request) in = *Request;
     *Plan = (BC250_CNVC_PLAN){0};
-    if (!Request || in.Format >= BC250_LINEAR_FORMAT_COUNT || in.Color >= BC250_INPUT_COLOR_COUNT) return 0;
-    yuv = in.Format == BC250_LINEAR_AMD_AYCRCB8;
+    nv12 = in.Format == BC250_CNVC_NV12;
+    if (!Request || (!nv12 && in.Format >= BC250_LINEAR_FORMAT_COUNT) || in.Color >= BC250_INPUT_COLOR_COUNT) return 0;
+    yuv = nv12 || in.Format == BC250_LINEAR_AMD_AYCRCB8;
     if (yuv != (unsigned)(in.Color != BC250_INPUT_RGB_FULL)) return 0;
-    dpp201_cnv_setup(&capture.base,formats[in.Format],EXPANSION_MODE_ZERO,unused,colors[in.Color],&lut);
+    dpp201_cnv_setup(&capture.base,nv12 ? SURFACE_PIXEL_FORMAT_VIDEO_420_YCbCr : formats[in.Format],
+                    EXPANSION_MODE_ZERO,unused,colors[in.Color],&lut);
     if (capture.invalid || capture.cscCalls != 1 || capture.powerCalls != 1 || (unsigned)capture.cscRequired != yuv) return 0;
     // AMD maps ARGB and XRGB to the same surface encoding. Our XRGB owner
     // explicitly disables pixel alpha; it must also choose matching MPC mode.
-    if (in.Format == BC250_LINEAR_BGRX8) capture.word[FORMAT_CONTROL] &= ~MASK_FORMAT_CONTROL__ALPHA_EN;
+    // NV12 has no alpha component either. Do not inherit AMD's default alpha_en.
+    if (in.Format == BC250_LINEAR_BGRX8 || nv12) capture.word[FORMAT_CONTROL] &= ~MASK_FORMAT_CONTROL__ALPHA_EN;
     Plan->FormatControl = capture.word[FORMAT_CONTROL];
     Plan->PixelFormat = capture.word[CNVC_SURFACE_PIXEL_FORMAT];
     Plan->AlphaLut = capture.word[ALPHA_2BIT_LUT];
     for (j = 0; j < 12; ++j) Plan->Matrix[j] = capture.matrix[j];
     Plan->Format = in.Format; Plan->Color = in.Color;
     Plan->CscRequired = capture.cscRequired;
-    Plan->HasPixelAlpha = in.Format != BC250_LINEAR_BGRX8;
+    Plan->HasPixelAlpha = in.Format != BC250_LINEAR_BGRX8 && !nv12;
     Plan->WriteAlphaLut = capture.lutWritten; Plan->Ready = 1;
     return 1;
 }

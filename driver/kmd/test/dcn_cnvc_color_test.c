@@ -64,6 +64,36 @@ static void AliasingAndNull(void)
     CHECK(!Bc250CnvcPrepare(NULL,&p)); CHECK(!memcmp(&p,&zero,sizeof(p)));
     CHECK(!Bc250CnvcPrepare(&r,NULL)); CHECK(!Bc250CnvcPrepare(NULL,NULL));
 }
+static void Nv12(void)
+{
+    unsigned c;
+    for (c = BC250_INPUT_601_FULL; c <= BC250_INPUT_709_LIMITED; ++c) {
+        BC250_CNVC_REQUEST r = {BC250_CNVC_NV12,c};
+        BC250_CNVC_REQUEST packed = {BC250_LINEAR_AMD_AYCRCB8,c};
+        BC250_CNVC_PLAN p, reference;
+        union { BC250_CNVC_REQUEST request; BC250_CNVC_PLAN plan; } overlap;
+        memset(&p,0xff,sizeof(p));
+        CHECK(Bc250CnvcPrepare(&r,&p));
+        CHECK(p.Ready && p.CscRequired && p.Format == BC250_CNVC_NV12 && p.Color == c);
+        CHECK(p.PixelFormat == 65); // AMD dpp201_cnv_setup VIDEO_420_YCbCr.
+        CHECK(p.FormatControl == CNVC_CFG0_FORMAT_CONTROL__FORMAT_EXPANSION_MODE_MASK);
+        CHECK(!p.HasPixelAlpha && !p.WriteAlphaLut && !p.AlphaLut);
+        CHECK(Bc250CnvcPrepare(&packed,&reference));
+        CHECK(!memcmp(p.Matrix,reference.Matrix,sizeof(p.Matrix)));
+        overlap.request = r;
+        CHECK(Bc250CnvcPrepare(&overlap.request,&overlap.plan));
+        CHECK(!memcmp(&p,&overlap.plan,sizeof(p)));
+        // Reuse NV12 storage for RGB and then back, without stale matrix/alpha.
+        r.Format = BC250_LINEAR_BGRA8; r.Color = BC250_INPUT_RGB_FULL;
+        CHECK(Bc250CnvcPrepare(&r,&p) && !p.CscRequired && p.HasPixelAlpha);
+        r.Format = BC250_CNVC_NV12; r.Color = c;
+        CHECK(Bc250CnvcPrepare(&r,&p) && p.CscRequired && !p.HasPixelAlpha);
+    }
+    Refused((BC250_CNVC_REQUEST){BC250_CNVC_NV12,BC250_INPUT_RGB_FULL});
+    Refused((BC250_CNVC_REQUEST){BC250_CNVC_NV12,BC250_INPUT_COLOR_COUNT});
+    Refused((BC250_CNVC_REQUEST){BC250_CNVC_NV12-1,BC250_INPUT_709_LIMITED});
+    Refused((BC250_CNVC_REQUEST){BC250_CNVC_NV12+1,BC250_INPUT_709_LIMITED});
+}
 int main(int argc, char** argv)
 {
     if (argc == 2 && !strcmp(argv[1],"--matrices")) {
@@ -78,7 +108,7 @@ int main(int argc, char** argv)
         }
         return 0;
     }
-    Formats(); AliasingAndNull();
+    Formats(); AliasingAndNull(); Nv12();
     printf("CNVC color and alpha: %u checks, %u failures\n",checks,failures);
     return failures ? 1 : 0;
 }

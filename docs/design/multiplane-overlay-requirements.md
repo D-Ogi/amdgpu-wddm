@@ -758,6 +758,25 @@ format and color-space requests fail. Unknown values do not select a default.
 BGRX disables pixel alpha. RGB10A2 writes all four two-bit alpha levels:
 0, 85, 170 and 255. The owner must match these with HUBP and MPC state.
 
+The separate `BC250_CNVC_NV12` tag prepares the selected AMD
+`SURFACE_PIXEL_FORMAT_VIDEO_420_YCbCr` path. It is outside the packed-layout
+enum and cannot be passed to the graphics address writer. Its CNVC format
+is 65, while the prepared HUBP NV12 surface format is 64. These are different
+blocks' encodings, not interchangeable values. All four explicit 601/709
+full/limited choices retain the same CSC matrix as the packed YUV candidate.
+NV12 has no pixel alpha, so the adapter clears AMD's default alpha enable and
+requires matching opaque MPC state. It does not write the cursor or alpha LUT.
+Reusing plan storage across RGB and NV12 clears the old matrix and alpha state.
+
+This fills the CPU color-preparation step only. Existing 4:2:0 geometry has no
+chroma-location input. It cannot distinguish centered from left/top-left
+chroma by a color matrix. AMD's separate SSPL path has explicit cositing
+adjustments, but that is not proof of the selected DCN201 path. Resolve phase,
+mirroring and clipping together before NV12 admission. The Microsoft
+[chroma subsampling definitions](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/d3dumddi/ne-d3dumddi-_dxvaddi_videochromasubsampling)
+distinguish horizontal and vertical cositing from colorimetry and nominal
+range. P010 is not admitted by this preparation API.
+
 The capture boundary defers OBUF power and CSC bank operations. It does not
 run the debug-index read or select a bank. The original DCN201 function ignores
 its custom-matrix argument. This adapter does not expose that argument.
