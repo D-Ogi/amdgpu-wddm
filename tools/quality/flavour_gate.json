@@ -73,6 +73,11 @@
     "escapes": "CONNECTOR_REPLUG (BD-170 writer-overlap witness)",
     "marker": "lab:connector-replug",
     "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "LATCH_PROBE (BD-223 reserved-buffer experiment)",
+    "marker": "lab:latch-probe",
+    "source": "driver/kmd/display.c"
    }
   ]
  },

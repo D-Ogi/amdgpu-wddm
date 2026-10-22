@@ -334,7 +334,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250Escape",
-       "source": "driver/kmd/display.c:613",
+       "source": "driver/kmd/display.c:662",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -585,7 +585,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250SetPointerPosition",
-       "source": "driver/kmd/display.c:237",
+       "source": "driver/kmd/display.c:240",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros",
        "applicability": {
@@ -599,7 +599,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250SetPointerShape",
-       "source": "driver/kmd/display.c:244",
+       "source": "driver/kmd/display.c:247",
        "done": false,
        "reason": "every return is a failure constant",
        "applicability": {

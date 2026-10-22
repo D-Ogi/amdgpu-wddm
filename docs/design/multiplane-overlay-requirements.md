@@ -487,8 +487,8 @@ The actual-source `run_vidpn_flip.ps1` controls exercise destroy during a
 writer, failed retirement, failed synchronization and restoration while
 faulting. The DCN flip and observer controls use the same explicit Clang
 toolchain. Their passing results establish tested software behavior only.
-`dcn_latch_probe.c` implements the lab-only core and the fault handoff. It is
-not yet exposed through an escape or a client. No hardware result is claimed.
+`dcn_latch_probe.c` implements the lab-only core and the fault handoff.
+The lab-only escape and client below expose it. No hardware result is claimed.
 Its three arms are an unlocked transition, lock before programming, and lock
 after programming. A late lock returns RETRY with its raw observations.
 The core refuses a foreign lock, a nonzero selector, compressed or triple
@@ -512,10 +512,46 @@ device models. Both controls agree. Only the lock-after-program arm differs.
 Tests inject failures at each modeled read, write and ownership checkpoint,
 including writes that fail after taking effect. Power withdrawal, stuck
 acknowledgements, failed cleanup and End failures are separate controls.
-Four code mutations must fail at runtime. The power-withdrawal test caught
+Four core mutations must fail at runtime. The power-withdrawal test caught
 and now prevents a manual-trigger write after power changed during unlock.
 These tests establish software behavior under the stated models only.
-The escape admission, client, physical controls and full MPO remain open.
+Physical controls and full MPO remain open.
+
+### Lab escape and client
+
+Command 37 uses the 376-byte `BC250_ESCAPE_LATCH_PROBE` ABI 1.
+Only the arm, ABI and expected KMD version are inputs beyond the header.
+Reserved words must be zero. All output is cleared before admission. Supplied
+output addresses cannot become inputs. The call requires an administrator,
+PASSIVE_LEVEL, HardwareAccess alone, FullWddm, no retained power transition,
+and the existing test-signing plus LabDiagnostics gate. The exact-size dispatch
+and handler are compiled out of the release driver. The binary flavour gate
+requires `lab:latch-probe` in the lab image and forbids it in the release image.
+The general RUN_DCNFLIP path remains refused under FullWddm.
+
+The actual handler tests reject invalid flags, ABI, version, arm and reserved
+words, a non-administrator, elevated IRQL, a closed lab gate and an unavailable
+device. Four admission mutations must fail at runtime. These supplement the
+four core mutations. None of these host tests writes to hardware.
+
+`build-dcn-latch.ps1` builds the client and its controls with explicit Clang.
+`dcn_latch --expected-version <word> --arm <0|1|2>` selects exactly one BC-250
+adapter and checks GET_INFO before the mutating request. It issues one request,
+preserves all reply DWORDs and reports measurement and cleanup status separately.
+A missed interval or a cleanup failure is not retried. Reply tests reject each
+missing success condition independently. Exit zero means a complete record,
+not a latch verdict, desktop restoration or MPO support.
+
+`run-dcn-latch.ps1` verifies the client hash, requires a new output directory
+and limits the process to 30 seconds. It retains the process handle for
+PowerShell 5.1. A timeout stops user mode. It does not prove that the kernel
+call returned. Stop after a timeout or failed control and inspect lab health.
+Before running any arm, the slot owner must check and retain the loaded lab
+KMD identity, boot identity and display configuration in the frozen trial kit.
+The ABI version word alone does not identify the image. Run the unlocked and
+lock-before-program controls before interpreting the lock-after-program arm.
+The separate runner stub opens no adapter. Run its exit-code controls on the
+target PowerShell version before a hardware trial.
 
 `driver/kmd/test/mpo_transaction_model.py` checks those source bindings and
 tests an explicit double-buffered state model. In that model, a global lock

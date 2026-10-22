@@ -30,7 +30,27 @@ return @{ Code=$LASTEXITCODE; Output=($output -join "`n") }
 $run=Invoke-Probe "$Out\actual.c" 'latch_probe_test'
 Write-Output $run.Output
 if ($run.Code) {throw 'Probe host tests failed'}
+& python "$PSScriptRoot\generate_latch_escape_test.py" --out "$Out\escape.c"
+if ($LASTEXITCODE) {throw 'Escape extraction failed'}
+$run=Invoke-Probe "$Out\escape.c" 'latch_escape_test'
+Write-Output $run.Output
+if ($run.Code) {throw 'Escape admission tests failed'}
 if ($Mutations) {
+    $admissionChanges=@(
+        @('escape-flags','Flags==required.Value','Flags!=required.Value'),
+        @('escape-version','expected==BC250_KMD_VERSION','expected!=BC250_KMD_VERSION'),
+        @('escape-admin','if (!Admin) {','if (!Admin && Flags==0) {'),
+        @('escape-lab-gate','if (!LabDiagnosticsAllowed())','if (LabDiagnosticsAllowed())')
+    )
+    $escapeSource=[IO.File]::ReadAllText("$Out\escape.c")
+    foreach ($change in $admissionChanges) {
+        if ([regex]::Matches($escapeSource,[regex]::Escape($change[1])).Count -ne 1) {throw "Mutation anchor: $($change[0])"}
+        $file="$Out\$($change[0]).c"
+        [IO.File]::WriteAllText($file,$escapeSource.Replace($change[1],$change[2]))
+        $run=Invoke-Probe $file $change[0]
+        if (!$run.Code -or $run.Output -notmatch 'FAIL line') {throw "Mutation survived: $($change[0])"}
+        Write-Output "Mutation caught at runtime: $($change[0])"
+    }
     $changes=@(
         @('cleanup-unlock', 'if (c.LockOwned) Result->UnlockStatus=LatchUnlock(&c);',
           'if (c.LockOwned && Arm==Bc250LatchUnlocked) Result->UnlockStatus=LatchUnlock(&c);'),
