@@ -11,6 +11,12 @@
 //
 // Entry points, all shader model 6.5: vs_main, ps_main, ms_main (WITNESS_PAYLOAD for the amplification variant),
 // as_main.
+//
+// WITNESS_PROBE (amdgpu_wddm_mesh --probe): the programs also count their work in the root UAV u0, one block of
+// PROBE_WORDS words per pass. Word 0 counts amplification threads, word 1 mesh groups, word 2 is the mask of the
+// mesh group ids (bit gid.x), word 3 the mask of the triangles the mesh groups drew (bit tri), word 4 counts the
+// primitives the mesh groups declared, word 5 counts pixel invocations. The counts tell a mesh stage that never ran
+// from one that ran and read a wrong payload, and both from primitives that were declared but not rasterized.
 
 #define WITNESS_TRIS 8
 
@@ -32,6 +38,15 @@ struct MsPrim {
 struct Payload {
     uint tri[WITNESS_TRIS];
 };
+
+#ifdef WITNESS_PROBE
+RWByteAddressBuffer probe : register(u0);
+#define PROBE_ADD(word, value) probe.InterlockedAdd((word) * 4u, (value))
+#define PROBE_OR(word, value) probe.InterlockedOr((word) * 4u, (value))
+#else
+#define PROBE_ADD(word, value)
+#define PROBE_OR(word, value)
+#endif
 
 uint vtag_of(uint tri) { return 0x10u + tri; }
 uint ptag_of(uint tri) { return 0x80u + (7u - tri); }
@@ -58,6 +73,7 @@ PsIn vs_main(uint vid : SV_VertexID) {
 }
 
 float4 ps_main(PsIn i) : SV_Target0 {
+    PROBE_ADD(5u, 1u);
     return float4(float(i.vtag) / 255.0, float(i.ptag) / 255.0, 165.0 / 255.0, 1.0);
 }
 
@@ -74,6 +90,10 @@ void ms_main(uint3 gid : SV_GroupID,
 #else
     const uint tri = gid.x;
 #endif
+    PROBE_ADD(1u, 1u);
+    PROBE_OR(2u, 1u << (gid.x & 31u));
+    PROBE_OR(3u, 1u << (tri & 31u));
+    PROBE_ADD(4u, 1u);
     for (uint c = 0; c < 3u; ++c) {
         verts[c].pos = clip_of(corner(tri, c));
         verts[c].vtag = vtag_of(tri);
@@ -88,6 +108,7 @@ groupshared Payload s_pay;
 
 [numthreads(WITNESS_TRIS, 1, 1)]
 void as_main(uint3 tid : SV_GroupThreadID) {
+    PROBE_ADD(0u, 1u);
     s_pay.tri[tid.x] = tid.x;
     GroupMemoryBarrierWithGroupSync();
     DispatchMesh(WITNESS_TRIS, 1, 1, s_pay);

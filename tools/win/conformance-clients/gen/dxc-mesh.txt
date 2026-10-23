@@ -6,3 +6,7 @@ dxc -nologo -T ps_6_5 -E ps_main -Vn g_mesh_ps -Fh gen\mesh_ps.h shaders\mesh.hl
 dxc -nologo -T ms_6_5 -E ms_main -Vn g_mesh_ms -Fh gen\mesh_ms.h shaders\mesh.hlsl
 dxc -nologo -T ms_6_5 -E ms_main -D WITNESS_PAYLOAD -Vn g_mesh_ms_payload -Fh gen\mesh_ms_payload.h shaders\mesh.hlsl
 dxc -nologo -T as_6_5 -E as_main -Vn g_mesh_as -Fh gen\mesh_as.h shaders\mesh.hlsl
+dxc -nologo -T ps_6_5 -E ps_main -D WITNESS_PROBE -Vn g_mesh_ps_probe -Fh gen\mesh_ps_probe.h shaders\mesh.hlsl
+dxc -nologo -T ms_6_5 -E ms_main -D WITNESS_PROBE -Vn g_mesh_ms_probe -Fh gen\mesh_ms_probe.h shaders\mesh.hlsl
+dxc -nologo -T ms_6_5 -E ms_main -D WITNESS_PAYLOAD -D WITNESS_PROBE -Vn g_mesh_ms_payload_probe -Fh gen\mesh_ms_payload_probe.h shaders\mesh.hlsl
+dxc -nologo -T as_6_5 -E as_main -D WITNESS_PROBE -Vn g_mesh_as_probe -Fh gen\mesh_as_probe.h shaders\mesh.hlsl

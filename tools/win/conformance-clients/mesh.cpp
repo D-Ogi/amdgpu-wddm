@@ -12,6 +12,7 @@
 // fails on every covered pixel instead of passing with a plausible picture.
 //
 //   --adapter warp|bc250|hw|index:N [--out DIR] [--deadline S] [--debug-layer] [--only ms,as] [--isolate 0|1]
+//           [--probe]
 //                                         exit 0 all PASS, 1 a FAIL or ERROR (or a debug layer error), 4 SKIP only,
 //                                         2 usage, 3 no device or GPU work unretired
 //   --selftest                            CPU only: the oracle, its negative controls and the comparator
@@ -23,6 +24,11 @@
 // the control a host gate compares against. --only also gates recording now, not only reporting: the pass that is
 // not selected is not drawn at all (the vertex reference is always drawn, because it is what the others are
 // compared with).
+//
+// --probe. Every program also counts its work in a root UAV, one block per pass (shaders\mesh.hlsl, WITNESS_PROBE),
+// and one PROBE line per drawn pass prints the counts after the comparison. The image comparison is the same. A
+// mesh-as pass that fails with ms_groups=0 launched no mesh group; one with ms_groups=8 and a wrong ms_tri_mask read
+// a wrong payload; one with the right masks and ps_invocations=0 declared its primitives but rasterized none.
 //
 // MeshShaderTier is printed on the FEATURES line. Tier 0, or a highest shader model below 6_5, is a SKIP and
 // exit code 4: a mesh program is a DXIL program of shader model 6.5.
@@ -39,16 +45,21 @@
 #include "gen/mesh_ms.h"
 #include "gen/mesh_ms_payload.h"
 #include "gen/mesh_as.h"
+#include "gen/mesh_ps_probe.h"
+#include "gen/mesh_ms_probe.h"
+#include "gen/mesh_ms_payload_probe.h"
+#include "gen/mesh_as_probe.h"
 
 namespace {
 
 const char* const usage =
     "amdgpu_wddm_mesh --adapter warp|bc250|hw|index:N [--out DIR] [--deadline SECONDS] [--debug-layer]\n"
-    "                 [--only ms,as] [--isolate 0|1]\n"
+    "                 [--only ms,as] [--isolate 0|1] [--probe]\n"
     "                 | --selftest\n"
     "Subtests: mesh-ms, mesh-as. One CONFORMANCE line each, then CONFORMANCE overall.\n"
     "--isolate 1 (default): one submission and one bounded wait per pass, one PASS line each.\n"
-    "--isolate 0: all passes in one submission, as before (a hang is then not attributable).";
+    "--isolate 0: all passes in one submission, as before (a hang is then not attributable).\n"
+    "--probe: the programs also count their work in a root UAV; one PROBE line per drawn pass.";
 
 template <class T> class ComPtr {
 public:
@@ -176,7 +187,13 @@ struct Options {
     unsigned deadline{60}, mask{3};
     bool debug{};
     bool isolate{true};   // BD-119: one submission and one bounded wait per pass
+    bool probe{};         // --probe: the programs count their work in a root UAV
 };
+
+// --probe: one block of the probe buffer per pass, PROBE_WORDS words used (shaders\mesh.hlsl).
+constexpr UINT kProbeWords = 6;
+constexpr UINT kProbeBlock = 64;
+constexpr UINT kProbeBytes = 3 * kProbeBlock;
 
 // --only: which subtests run. The mask gates recording as well as reporting (BD-119).
 bool parse_only(const char* text, unsigned& mask);
@@ -702,6 +719,15 @@ int run(const Options& o) {
     {
         D3D12_ROOT_SIGNATURE_DESC desc{};
         desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;   // no resources, and no input assembler in either pipeline
+        // --probe: one root UAV, u0, that every stage can write.
+        D3D12_ROOT_PARAMETER probe_parameter{};
+        probe_parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        probe_parameter.Descriptor = {0, 0};
+        probe_parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        if (o.probe) {
+            desc.NumParameters = 1;
+            desc.pParameters = &probe_parameter;
+        }
         ComPtr<ID3DBlob> blob, error;
         hr = serialize(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error);
         if (SUCCEEDED(hr))
@@ -714,13 +740,31 @@ int run(const Options& o) {
         }
     }
 
+    // --probe: the counters, zero at creation (a committed resource), and their read-back buffer.
+    ComPtr<ID3D12Resource> probe, probe_readback;
+    if (o.probe) {
+        D3D12_RESOURCE_DESC probe_desc = buffer_desc;
+        probe_desc.Width = kProbeBytes;
+        probe_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        if (FAILED(device->CreateCommittedResource(&default_heap, D3D12_HEAP_FLAG_NONE, &probe_desc,
+                                                   D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&probe))))
+            return 3;
+        probe_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        if (FAILED(device->CreateCommittedResource(&readback_heap, D3D12_HEAP_FLAG_NONE, &probe_desc,
+                                                   D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                   IID_PPV_ARGS(&probe_readback))))
+            return 3;
+    }
+    const D3D12_SHADER_BYTECODE ps_code = o.probe ? bytecode(g_mesh_ps_probe, sizeof(g_mesh_ps_probe))
+                                                  : bytecode(g_mesh_ps, sizeof(g_mesh_ps));
+
     // The reference pipeline: the vertex program reads SV_VertexID, so there is no input layout and no vertex
     // buffer, which is also what a mesh pipeline must not have.
     {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
         desc.pRootSignature = root.Get();
         desc.VS = bytecode(g_mesh_vs, sizeof(g_mesh_vs));
-        desc.PS = bytecode(g_mesh_ps, sizeof(g_mesh_ps));
+        desc.PS = ps_code;
         desc.BlendState = blend_state();
         desc.SampleMask = UINT_MAX;
         desc.RasterizerState = raster_state();
@@ -743,8 +787,8 @@ int run(const Options& o) {
         formats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
         MeshStream mesh{};
         mesh.root = root.Get();
-        mesh.ms = bytecode(g_mesh_ms, sizeof(g_mesh_ms));
-        mesh.ps = bytecode(g_mesh_ps, sizeof(g_mesh_ps));
+        mesh.ms = o.probe ? bytecode(g_mesh_ms_probe, sizeof(g_mesh_ms_probe)) : bytecode(g_mesh_ms, sizeof(g_mesh_ms));
+        mesh.ps = ps_code;
         mesh.blend = blend_state();
         mesh.sample_mask = UINT_MAX;
         mesh.raster = raster_state();
@@ -754,9 +798,10 @@ int run(const Options& o) {
         const HRESULT hr_ms = device2->CreatePipelineState(&stream, IID_PPV_ARGS(&pass[1].pipeline));
         AmplifiedStream amplified{};
         amplified.root = root.Get();
-        amplified.as = bytecode(g_mesh_as, sizeof(g_mesh_as));
-        amplified.ms = bytecode(g_mesh_ms_payload, sizeof(g_mesh_ms_payload));
-        amplified.ps = bytecode(g_mesh_ps, sizeof(g_mesh_ps));
+        amplified.as = o.probe ? bytecode(g_mesh_as_probe, sizeof(g_mesh_as_probe)) : bytecode(g_mesh_as, sizeof(g_mesh_as));
+        amplified.ms = o.probe ? bytecode(g_mesh_ms_payload_probe, sizeof(g_mesh_ms_payload_probe))
+                               : bytecode(g_mesh_ms_payload, sizeof(g_mesh_ms_payload));
+        amplified.ps = ps_code;
         amplified.blend = blend_state();
         amplified.sample_mask = UINT_MAX;
         amplified.raster = raster_state();
@@ -792,6 +837,7 @@ int run(const Options& o) {
     // One pass's commands into the open list: the whole render and its read-back copy.
     const auto record_pass = [&](UINT p) {
         list->SetGraphicsRootSignature(root.Get());
+        if (o.probe) list->SetGraphicsRootUnorderedAccessView(0, probe->GetGPUVirtualAddress() + p * kProbeBlock);
         list->RSSetViewports(1, &viewport);
         list->RSSetScissorRects(1, &scissor);
         list->OMSetRenderTargets(1, &pass[p].rtv, FALSE, nullptr);
@@ -863,6 +909,25 @@ int run(const Options& o) {
         }
     }
 
+    // --probe: the counters of all passes in one more submission, after every pass retired.
+    UINT32 counts[kProbeBytes / 4]{};
+    if (o.probe) {
+        if (FAILED(allocator->Reset()) || FAILED(list->Reset(allocator.Get(), nullptr))) return 3;
+        list->CopyBufferRegion(probe_readback.Get(), 0, probe.Get(), 0, kProbeBytes);
+        if (!submit_and_wait("probe-readback")) {
+            std::printf("CONFORMANCE overall ERROR reason=submission-not-retired pass=probe-readback\n");
+            std::fflush(stdout);
+            ExitProcess(3);
+        }
+        void* mapped = nullptr;
+        D3D12_RANGE whole{0, kProbeBytes};
+        if (SUCCEEDED(probe_readback->Map(0, &whole, &mapped)) && mapped) {
+            std::memcpy(counts, mapped, kProbeBytes);
+            D3D12_RANGE none{0, 0};
+            probe_readback->Unmap(0, &none);
+        }
+    }
+
     for (UINT p = 0; p < 3; ++p) {
         pass[p].image.assign(kPixels, kPrefill);
         if (!pass[p].pipeline || !record[p]) continue;
@@ -904,6 +969,27 @@ int run(const Options& o) {
         out.control = compare_words(pass[p].image.data(), permuted.data(), kPixels).count;
         out.verdict = out.diff.count || out.control != oracle.covered ? Verdict::Fail : Verdict::Pass;
         if (!out.diff.count && out.control != oracle.covered) out.reason = "control-not-discriminating";
+    }
+    if (o.probe) {
+        std::string json;
+        for (UINT p = 0; p < 3; ++p) {
+            if (!record[p] || !pass[p].pipeline) continue;
+            const UINT32* c = counts + p * (kProbeBlock / 4);
+            std::printf("PROBE %s as_threads=%u ms_groups=%u ms_gid_mask=0x%08x ms_tri_mask=0x%08x ms_prims=%u "
+                        "ps_invocations=%u\n", pass[p].name, c[0], c[1], c[2], c[3], c[4], c[5]);
+            json += std::string(json.empty() ? "" : ",") + "\"" + pass[p].name + "\":[";
+            for (UINT i = 0; i < kProbeWords; ++i) json += (i ? "," : "") + std::to_string(c[i]);
+            json += "]";
+        }
+        std::fflush(stdout);
+        if (!o.out.empty()) {
+            const std::wstring dir(o.out.begin(), o.out.end());
+            CreateDirectoryW(dir.c_str(), nullptr);
+            const std::string body = "{\"words\":[\"as_threads\",\"ms_groups\",\"ms_gid_mask\",\"ms_tri_mask\","
+                                     "\"ms_prims\",\"ps_invocations\"],\"passes\":{" + json + "}}\n";
+            if (!write_file(dir + L"\\probe.json", body.data(), body.size()))
+                std::fprintf(stderr, "probe.json not written\n");
+        }
     }
     const int code = publish("");
     // The debug layer is for the host: every stored message of severity corruption or error fails the run.
@@ -957,6 +1043,7 @@ int main(int argc, char** argv) {
             else return 2;
         }
         else if (!std::strcmp(a, "--debug-layer")) o.debug = true;
+        else if (!std::strcmp(a, "--probe")) o.probe = true;
         else return 2;
     }
     if (!(o.adapter == "warp" || o.adapter == "bc250" || o.adapter == "hw" || o.adapter.rfind("index:", 0) == 0))

@@ -234,7 +234,7 @@ so a pass that never ran cannot compare equal.
 ```
 pwsh tools\win\conformance-clients\build-mesh.ps1 -Kits P:\BC-250\toolchain\nuget
 amdgpu_wddm_mesh --adapter warp|bc250|hw|index:N [--out DIR] [--deadline S] [--debug-layer] [--only ms,as]
-                 [--isolate 0|1]
+                 [--isolate 0|1] [--probe]
 amdgpu_wddm_mesh --selftest
 ```
 
@@ -246,9 +246,19 @@ every adapter, so the skip path can be checked where no tier-0 adapter is at han
 
 `--isolate 1` (the default) records every pass in its own command list and submits it with its own fence and
 its own bounded wait, and prints one `PASS` line per pass with the time to retire. When a submission does not
-retire, the line names the pass. `--isolate 0` puts all passes in one submission, as before; it is the control.
+retire, the line names the pass. `--isolate 0` puts all passes in one submission, as before. It is the control.
 `--only` also selects what is recorded: a pass that is not selected is not drawn. The vertex reference is always
 drawn, because the other passes are compared with it.
+
+`--probe` builds every pipeline from the `WITNESS_PROBE` programs and a root signature with one root UAV. Each pass
+writes its counts into its own block of that buffer: amplification threads, mesh groups, the mask of the mesh group
+ids, the mask of the triangles the mesh groups drew, the primitives they declared and the pixel invocations. A
+submission after the passes reads the counts back, and one `PROBE` line per drawn pass prints them (`--out` also
+writes `probe.json`). The comparison of the images does not change. On WARP the counts are 0/0/0/0/0/520 for the
+reference, 0/8/0xff/0xff/8/520 for mesh-ms and 8/8/0xff/0xff/8/520 for mesh-as. A failed mesh-as pass with
+`ms_groups=0` started no mesh group. With `ms_groups=8` and a wrong `ms_tri_mask` it read a wrong payload. With the
+right masks and `ps_invocations=0` it declared its primitives but rasterized none. Without `--probe` the programs are
+byte-identical to the ones before the option: the macros expand to nothing.
 
 Output: the `FEATURES` line carries `MeshShaderTier`, then a `REFERENCE` line, then one `CONFORMANCE` line per
 subtest and `CONFORMANCE overall`. Exit codes are the same as the conformance client's: 0 all pass, 1 a failure or

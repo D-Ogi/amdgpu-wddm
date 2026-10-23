@@ -41,7 +41,13 @@ $programs = @(
     @{ Name = 'mesh_ps';         Profile = 'ps_6_5'; Entry = 'ps_main'; Defines = @() },
     @{ Name = 'mesh_ms';         Profile = 'ms_6_5'; Entry = 'ms_main'; Defines = @() },
     @{ Name = 'mesh_ms_payload'; Profile = 'ms_6_5'; Entry = 'ms_main'; Defines = @('-D', 'WITNESS_PAYLOAD') },
-    @{ Name = 'mesh_as';         Profile = 'as_6_5'; Entry = 'as_main'; Defines = @() }
+    @{ Name = 'mesh_as';         Profile = 'as_6_5'; Entry = 'as_main'; Defines = @() },
+    # --probe: the same programs, which also count their work in the root UAV u0 (shaders\mesh.hlsl).
+    @{ Name = 'mesh_ps_probe';         Profile = 'ps_6_5'; Entry = 'ps_main'; Defines = @('-D', 'WITNESS_PROBE') },
+    @{ Name = 'mesh_ms_probe';         Profile = 'ms_6_5'; Entry = 'ms_main'; Defines = @('-D', 'WITNESS_PROBE') },
+    @{ Name = 'mesh_ms_payload_probe'; Profile = 'ms_6_5'; Entry = 'ms_main';
+       Defines = @('-D', 'WITNESS_PAYLOAD', '-D', 'WITNESS_PROBE') },
+    @{ Name = 'mesh_as_probe';         Profile = 'as_6_5'; Entry = 'as_main'; Defines = @('-D', 'WITNESS_PROBE') }
 )
 $dxcVersion = (& $dxc --version 2>&1 | Select-Object -First 1)
 # The workspace root is written as <BC250_ROOT>, so the record does not depend on the caller's -Kits spelling.
