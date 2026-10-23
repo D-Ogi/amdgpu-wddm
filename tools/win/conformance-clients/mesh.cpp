@@ -11,10 +11,18 @@
 // primitive tag on its primitive output, so a mesh pipeline whose primitive output does not reach the pixel input
 // fails on every covered pixel instead of passing with a plausible picture.
 //
-//   --adapter warp|bc250|hw|index:N [--out DIR] [--deadline S] [--debug-layer] [--only ms,as]
+//   --adapter warp|bc250|hw|index:N [--out DIR] [--deadline S] [--debug-layer] [--only ms,as] [--isolate 0|1]
 //                                         exit 0 all PASS, 1 a FAIL or ERROR (or a debug layer error), 4 SKIP only,
 //                                         2 usage, 3 no device or GPU work unretired
 //   --selftest                            CPU only: the oracle, its negative controls and the comparator
+//
+// BD-119. --isolate (the default) gives every pass its own command list, its own submission and its own bounded
+// fence wait, and prints one PASS line per pass with the time it took to retire. A pass whose submission does not
+// retire is then named: the earlier single-submission form could only say that something in the command list hung,
+// which is what left the arm C hang of 2026-10-11 unattributed. --isolate 0 restores that single submission, as
+// the control a host gate compares against. --only also gates recording now, not only reporting: the pass that is
+// not selected is not drawn at all (the vertex reference is always drawn, because it is what the others are
+// compared with).
 //
 // MeshShaderTier is printed on the FEATURES line. Tier 0, or a highest shader model below 6_5, is a SKIP and
 // exit code 4: a mesh program is a DXIL program of shader model 6.5.
@@ -35,9 +43,12 @@
 namespace {
 
 const char* const usage =
-    "amdgpu_wddm_mesh --adapter warp|bc250|hw|index:N [--out DIR] [--deadline SECONDS] [--debug-layer] [--only ms,as]\n"
+    "amdgpu_wddm_mesh --adapter warp|bc250|hw|index:N [--out DIR] [--deadline SECONDS] [--debug-layer]\n"
+    "                 [--only ms,as] [--isolate 0|1]\n"
     "                 | --selftest\n"
-    "Subtests: mesh-ms, mesh-as. One CONFORMANCE line each, then CONFORMANCE overall.";
+    "Subtests: mesh-ms, mesh-as. One CONFORMANCE line each, then CONFORMANCE overall.\n"
+    "--isolate 1 (default): one submission and one bounded wait per pass, one PASS line each.\n"
+    "--isolate 0: all passes in one submission, as before (a hang is then not attributable).";
 
 template <class T> class ComPtr {
 public:
@@ -159,6 +170,17 @@ std::vector<UINT32> permute_primitive_tags(const UINT32* reference) {
     return out;
 }
 
+// The command line of one run. Declared before the self-test, which checks its defaults.
+struct Options {
+    std::string adapter, out;
+    unsigned deadline{60}, mask{3};
+    bool debug{};
+    bool isolate{true};   // BD-119: one submission and one bounded wait per pass
+};
+
+// --only: which subtests run. The mask gates recording as well as reporting (BD-119).
+bool parse_only(const char* text, unsigned& mask);
+
 // ------------------------------------------------------------------------------------------------- self-test
 bool expect(bool condition, const char* what, unsigned& failures) {
     std::printf("SELFTEST %s %s\n", condition ? "ok  " : "FAIL", what);
@@ -259,6 +281,19 @@ int selftest() {
     sprintf_s(t, "comparator: a pass that never ran rejected, %u of %u mismatches", d.count, d.checked);
     expect(d.count == kPixels, t, failures);
 
+    // BD-119: --only has to gate what is recorded, so that a pass can be left out of the submission, and
+    // --isolate has to parse to the per-pass form by default. The masks below are what the run loop reads.
+    unsigned mask = 0;
+    expect(parse_only("ms", mask) && mask == 1, "cli: --only ms selects the mesh pass alone", failures);
+    expect(parse_only("as", mask) && mask == 2, "cli: --only as selects the amplification pass alone", failures);
+    expect(parse_only("ms,as", mask) && mask == 3, "cli: --only ms,as selects both", failures);
+    expect(!parse_only("ms,bogus", mask), "cli: --only with an unknown name rejected", failures);
+    {
+        const Options defaults;
+        sprintf_s(t, "cli: isolate defaults to one submission per pass (isolate=%d)", defaults.isolate ? 1 : 0);
+        expect(defaults.isolate, t, failures);
+    }
+
     std::printf("SELFTEST %s failures=%u\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;
 }
@@ -274,11 +309,6 @@ const char* verdict_text(Verdict v) {
     }
 }
 
-struct Options {
-    std::string adapter, out;
-    unsigned deadline{60}, mask{3};
-    bool debug{};
-};
 
 struct Outcome {
     const char* name{};
@@ -742,8 +772,25 @@ int run(const Options& o) {
     D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(kSide), static_cast<float>(kSide), 0.0f, 1.0f};
     D3D12_RECT scissor{0, 0, static_cast<LONG>(kSide), static_cast<LONG>(kSide)};
     const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    for (UINT p = 0; p < 3; ++p) {
-        if (!pass[p].pipeline) continue;
+    ComPtr<ID3D12Fence> fence;
+    if (FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)))) return 3;
+    const HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!done) return 3;
+    const DWORD bound = o.deadline < 10 ? o.deadline * 1000 : 10000;
+    UINT64 fence_value = 0;
+
+    // BD-119: which passes are recorded at all. The vertex reference always is; a mesh pass only when --only
+    // selects it, so that a hang of one pass can be excluded by leaving it out.
+    bool record[3] = {true, (o.mask & 1u) != 0, (o.mask & 2u) != 0};
+    for (UINT p = 1; p < 3; ++p) {
+        if (record[p]) continue;
+        Outcome& out = p == 1 ? ms : as;
+        out.verdict = Verdict::Skip;
+        out.reason = "not-selected";
+    }
+
+    // One pass's commands into the open list: the whole render and its read-back copy.
+    const auto record_pass = [&](UINT p) {
         list->SetGraphicsRootSignature(root.Get());
         list->RSSetViewports(1, &viewport);
         list->RSSetScissorRects(1, &scissor);
@@ -773,25 +820,52 @@ int run(const Options& o) {
         src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         src.SubresourceIndex = 0;
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-    }
-    if (FAILED(list->Close())) return 3;
-    ComPtr<ID3D12Fence> fence;
-    if (FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)))) return 3;
-    const HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    if (!done) return 3;
-    ID3D12CommandList* lists[] = {list.Get()};
-    queue->ExecuteCommandLists(1, lists);
-    if (FAILED(queue->Signal(fence.Get(), 1)) || FAILED(fence->SetEventOnCompletion(1, done))) return 3;
-    const DWORD bound = o.deadline < 10 ? o.deadline * 1000 : 10000;
-    if (WaitForSingleObject(done, bound) != WAIT_OBJECT_0 || fence->GetCompletedValue() < 1) {
-        std::printf("CONFORMANCE overall ERROR reason=submission-not-retired\n");
+    };
+
+    // Close the open list, submit it and wait the bound for its own fence value. names is what the PASS and the
+    // failure line call this submission. False: the work did not retire, and the caller must not touch the GPU.
+    const auto submit_and_wait = [&](const char* names) -> bool {
+        if (FAILED(list->Close())) return false;
+        ID3D12CommandList* lists[] = {list.Get()};
+        const ULONGLONG start = GetTickCount64();
+        queue->ExecuteCommandLists(1, lists);
+        const UINT64 value = ++fence_value;
+        if (FAILED(queue->Signal(fence.Get(), value)) || FAILED(fence->SetEventOnCompletion(value, done)))
+            return false;
+        const bool retired = WaitForSingleObject(done, bound) == WAIT_OBJECT_0 && fence->GetCompletedValue() >= value;
+        std::printf("PASS %s submission=%llu retired=%d ms=%llu\n", names, static_cast<unsigned long long>(value),
+                    retired ? 1 : 0, static_cast<unsigned long long>(GetTickCount64() - start));
         std::fflush(stdout);
-        ExitProcess(3);   // GPU work that did not retire: nothing is released
+        return retired;
+    };
+
+    if (o.isolate) {
+        // One submission per pass. The failing pass is the one whose PASS line says retired=0.
+        for (UINT p = 0; p < 3; ++p) {
+            if (!record[p] || !pass[p].pipeline) continue;
+            if (p && FAILED(allocator->Reset())) return 3;            // the previous pass retired, so this is safe
+            if (p && FAILED(list->Reset(allocator.Get(), nullptr))) return 3;
+            record_pass(p);
+            if (!submit_and_wait(pass[p].name)) {
+                std::printf("CONFORMANCE overall ERROR reason=submission-not-retired pass=%s\n", pass[p].name);
+                std::fflush(stdout);
+                ExitProcess(3);   // GPU work that did not retire: nothing is released
+            }
+        }
+    } else {
+        // The control: every pass in one submission, as the client did before BD-119. A hang here names no pass.
+        for (UINT p = 0; p < 3; ++p)
+            if (record[p] && pass[p].pipeline) record_pass(p);
+        if (!submit_and_wait("reference+mesh-ms+mesh-as")) {
+            std::printf("CONFORMANCE overall ERROR reason=submission-not-retired\n");
+            std::fflush(stdout);
+            ExitProcess(3);
+        }
     }
 
     for (UINT p = 0; p < 3; ++p) {
         pass[p].image.assign(kPixels, kPrefill);
-        if (!pass[p].pipeline) continue;
+        if (!pass[p].pipeline || !record[p]) continue;
         void* mapped = nullptr;
         D3D12_RANGE whole{0, kPixels * sizeof(UINT32)};
         if (SUCCEEDED(pass[p].readback->Map(0, &whole, &mapped)) && mapped) {
@@ -825,7 +899,7 @@ int run(const Options& o) {
     const std::vector<UINT32> permuted = permute_primitive_tags(pass[0].image.data());
     for (UINT p = 1; p < 3; ++p) {
         Outcome& out = p == 1 ? ms : as;
-        if (out.verdict == Verdict::Fail) continue;   // its pipeline was refused above
+        if (out.verdict == Verdict::Fail || !record[p]) continue;   // refused above, or --only left it out
         out.diff = compare_words(pass[p].image.data(), pass[0].image.data(), kPixels);
         out.control = compare_words(pass[p].image.data(), permuted.data(), kPixels).count;
         out.verdict = out.diff.count || out.control != oracle.covered ? Verdict::Fail : Verdict::Pass;
@@ -876,6 +950,12 @@ int main(int argc, char** argv) {
         else if (!std::strcmp(a, "--out") && value) o.out = argv[++i];
         else if (!std::strcmp(a, "--deadline") && value) { o.deadline = seconds(argv[++i]); if (!o.deadline) return 2; }
         else if (!std::strcmp(a, "--only") && value) { if (!parse_only(argv[++i], o.mask)) return 2; }
+        else if (!std::strcmp(a, "--isolate") && value) {
+            const char* v = argv[++i];
+            if (!std::strcmp(v, "0")) o.isolate = false;
+            else if (!std::strcmp(v, "1")) o.isolate = true;
+            else return 2;
+        }
         else if (!std::strcmp(a, "--debug-layer")) o.debug = true;
         else return 2;
     }

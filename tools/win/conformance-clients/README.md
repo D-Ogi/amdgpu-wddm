@@ -234,6 +234,7 @@ so a pass that never ran cannot compare equal.
 ```
 pwsh tools\win\conformance-clients\build-mesh.ps1 -Kits P:\BC-250\toolchain\nuget
 amdgpu_wddm_mesh --adapter warp|bc250|hw|index:N [--out DIR] [--deadline S] [--debug-layer] [--only ms,as]
+                 [--isolate 0|1]
 amdgpu_wddm_mesh --selftest
 ```
 
@@ -242,6 +243,12 @@ gates after the link are the same: `--help` exits 0, `--invalid` exits 2 and `--
 checks the oracle and the comparator on ideal, unknown-word, exchanged-cell, missing-triangle, thin-triangle,
 flipped, permuted-tag and never-run images, in ten checks. `-TestForceTier0` is a host arm that reads the tier as 0 on
 every adapter, so the skip path can be checked where no tier-0 adapter is at hand. It is never a lab artifact.
+
+`--isolate 1` (the default) records every pass in its own command list and submits it with its own fence and
+its own bounded wait, and prints one `PASS` line per pass with the time to retire. When a submission does not
+retire, the line names the pass. `--isolate 0` puts all passes in one submission, as before; it is the control.
+`--only` also selects what is recorded: a pass that is not selected is not drawn. The vertex reference is always
+drawn, because the other passes are compared with it.
 
 Output: the `FEATURES` line carries `MeshShaderTier`, then a `REFERENCE` line, then one `CONFORMANCE` line per
 subtest and `CONFORMANCE overall`. Exit codes are the same as the conformance client's: 0 all pass, 1 a failure or
