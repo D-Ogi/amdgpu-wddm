@@ -227,6 +227,11 @@ Write-Host 'flavour gate'
 & python (Join-Path $repo 'tools\quality\flavour_gate.py') '--flavour' $Flavour '--kmd' "$pkg\bc250kmd.sys" '--kmd-only'
 if ($LASTEXITCODE -ne 0) { throw 'flavour gate: the linked SYS is not the flavour this build names (see above)' }
 
+# Static HVCI layout requirements; runtime HVCI and HLK remain separate gates.
+Write-Host 'KMD PE memory layout'
+& python -B (Join-Path $repo 'tools\quality\kmd_pe.py') "$pkg\bc250kmd.sys" '--out' "$Out\kmd-pe.json"
+if ($LASTEXITCODE -ne 0) { throw 'KMD PE memory layout gate failed (see above)' }
+
 if($CompileOnly) {
     # The unsigned bytes, so that a gate run can be compared with the package build of the same tree by hand.
     '  {0}  bc250kmd.unsigned.sys' -f (Get-FileHash (Join-Path $Out 'bc250kmd.unsigned.sys') -Algorithm SHA256).Hash
