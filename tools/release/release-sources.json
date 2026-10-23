@@ -87,8 +87,8 @@
   },
   "sources": {
     "kmd": "bc250-win b5ffae8cb2667f3caff299cf9481f4493a10f834 (KMD 0.7.216.65): the tester.32 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
-    "d3d12_shell": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "d3d12_engine": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d12_shell": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 6bbf6a22504297174d1873e9a4c2f04846f132a7; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 6bbf6a22504297174d1873e9a4c2f04846f132a7. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d12_engine": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton f5fda15126faa9cbb8392035b965d4b7d968ae45; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton f5fda15126faa9cbb8392035b965d4b7d968ae45. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_shell": "Current tester.32 payload sources. release payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_engine": "Current tester.32 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -96,7 +96,7 @@
     "desktop_umd": "Current tester.32 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 471a7487ee7f0404d03b7fe00834d154e2675a48; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 471a7487ee7f0404d03b7fe00834d154e2675a48; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm a115b714ee6806fa866b7170ae68e8700cd0d3c6; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm a115b714ee6806fa866b7170ae68e8700cd0d3c6; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "vulkan_icd": "Current tester.32 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 055dbb9f7595502418354b75816788e4e0461cd5; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 055dbb9f7595502418354b75816788e4e0461cd5; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; release payload/control/bc250control.dll: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; lab payload/control/bc250control.dll: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "wow64": "Current tester.32 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "wow64": "Current tester.32 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 6bbf6a22504297174d1873e9a4c2f04846f132a7; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 6bbf6a22504297174d1873e9a4c2f04846f132a7; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton f5fda15126faa9cbb8392035b965d4b7d968ae45; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton f5fda15126faa9cbb8392035b965d4b7d968ae45; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.32 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer",
     "control_app": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -195,10 +195,10 @@
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
-      "sha256": "C96222AC08C4554A6DCE474233E03592BD929A2EE7AAECDD76F929055181FF05",
+      "sha256": "A302EA825B1AB810B274A1FCA43E5CD328DD1878B60A8BD71826322F1C078DEB",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+        "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -243,7 +243,7 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1234432,
+      "size": 1238016,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
@@ -251,10 +251,10 @@
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
-      "sha256": "D4F549D61F0B682E46E563B05922DC35049D129492F8BCF95265A37A074F4A0A",
+      "sha256": "9370DA2CB8B2BE59ED0B4D06233911A3A6169FC46D5034D5235E097A996FFDD2",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+        "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -299,19 +299,19 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1276928,
+      "size": 1280512,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/release/8f59313fadcc293a1959/amdgpu_wddm_vkd3d.dll",
-      "sha256": "6770A1B6D80125449695B87C61F96DF0A9E1F5F86CBC7E09B5B7DC9B65A4B71B",
+      "source": "scratch/build-train/tester.32-r4/artifacts/release/engine12-x64-rel/amdgpu_wddm_vkd3d.dll",
+      "sha256": "83974B071DB827A5EFC25751F3D17D5E4D7CB322ECDD17FBA127D9C9B94C3681",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
-        "recipe_commit": "43a8816613aaf12c1e3b825ad2b3a37eb972f63b",
+        "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+        "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -322,8 +322,10 @@
           "{src}",
           "-Build",
           "{out}",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
-          "6",
+          "8",
           "-Flavour",
           "release",
           "-Version",
@@ -332,19 +334,18 @@
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
       "size": 3713024,
-      "role": "D3D12 engine x64, release flavour (vkd3d-proton fork amdgpu-wddm/tester31-engine b69df5fb, the published head of this line, which is the tester.31 engine line 10b9c3f1 with the BD-180 merge on top), ddi-engine-lto. The line carries the five draw-path optimisations of this train and the BD-167 release-flavour commits: this build holds none of the thirteen diagnostic names the declaration demands of its lab copy, and it satisfies the AMDGPU_WDDM_LOG release rule, which asks for the game-log marker and the %ProgramData% game-log folder beside that name and refuses the stderr target. Its options still define VKD3D_NO_DEBUG_MESSAGES, so no vkd3d warning is compiled into a release package. /arch:AVX2 with LTO, /Brepro and /FC with /d1trimfile, from an empty output directory, by the merged recipe, so one recipe identity answers for all four engine files of rc5. Carried from 0.7.216.100-tester.27: D3D12 engine (vkd3d-proton fork amdgpu-wddm/per-app-graphics-settings 41bd52c8 = 4e9a98e9 plus one commit: VKD3D_SAMPLER_ANISOTROPY sets the maximum anisotropy of static samplers and sampler descriptors with a linear minification filter, limited to maxSamplerAnisotropy; dxil-spirv d2d82332). Built by tools/build build-vkd3d.ps1 from the 4e9a98e9 tree with the worktree diff of 41bd52c8 (D208B484, the same bytes as git diff 4e9a98e9 41bd52c8)",
-      "unverified": "This build was not repeated, so no second clean build confirms its bytes, and no lab run has used them: the lab trial A5 of 2026-10-15 ran the LAB engines of c04c4940 over rc4. The previous pin of this row was the b30 engine of 997bff9e, four trains behind the line this release builds from.",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/lab/54e98a10c7cb93b73e0a/amdgpu_wddm_vkd3d.dll",
-      "sha256": "128C04ECD80E1891D7339FC847B790E6113CE8B765A8D284EAC70C7802E7CBA8",
+      "source": "scratch/build-train/tester.32-r4/artifacts/lab/engine12-x64-lab/amdgpu_wddm_vkd3d.dll",
+      "sha256": "73F3705E943211ECB3B640C3902ACD9A862E7CBEF1D28701E6CDD993E6D4D3E3",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
-        "recipe_commit": "43a8816613aaf12c1e3b825ad2b3a37eb972f63b",
+        "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+        "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -355,8 +356,10 @@
           "{src}",
           "-Build",
           "{out}",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
-          "6",
+          "8",
           "-Flavour",
           "lab",
           "-Version",
@@ -364,11 +367,9 @@
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "size": 3819008,
-      "role": "D3D12 engine x64, lab flavour (vkd3d-proton fork amdgpu-wddm/tester31-engine b69df5fb), ddi-engine-lto with the fork's lab-flavour option. Two things make this build the lab one. The declaration's thirteen diagnostic names are compiled in, the BC250_DRAW_STATS counters among them. And BD-180: the lab recipe now drops -DVKD3D_NO_DEBUG_MESSAGES, the one token that made VKD3D_DEBUG and VKD3D_SHADER_DEBUG unable to print anything, because the compiler had removed the messages; every lab engine staged before rc5 carried that token in both flavours. So this build names what a failed shader was - a parser blob that would not parse against an entry point that was not found, a pipeline shader that would not compile, a Vulkan shader module the driver refused - with the stage, the byte length and an FNV-1a64 fingerprint of the bytecode, which joins to the D3D12 shell's own failure record. The pre-existing vkd3d_shader_hash is labelled apart from these, because it is FNV-1 and not FNV-1a. Carried from 0.7.216.100-tester.27: D3D12 engine (vkd3d-proton fork amdgpu-wddm/per-app-graphics-settings 41bd52c8 = 4e9a98e9 plus one commit: VKD3D_SAMPLER_ANISOTROPY sets the maximum anisotropy of static samplers and sampler descriptors with a linear minification filter, limited to maxSamplerAnisotropy; dxil-spirv d2d82332). Built by tools/build build-vkd3d.ps1 from the 4e9a98e9 tree with the worktree diff of 41bd52c8 (D208B484, the same bytes as git diff 4e9a98e9 41bd52c8)",
-      "unverified": "This build was not repeated, so no second clean build confirms its bytes. the build of the same source at c04c4940 is what the lab trial A5 ran over rc4 on unit A on 2026-10-15, and its host probe confirmed WARN from the actual DLL in both architectures while the rc4 engine produced an empty log; these bytes are a rebuild from the merged line and have not run on the lab themselves.",
-      "flavour": "lab",
-      "note": "BC250_DRAW_STATS and the VKD3D_ names"
+      "size": 3818496,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "flavour": "lab"
     },
     {
       "component": "d3d12-icd",
@@ -1611,10 +1612,10 @@
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
-      "sha256": "C62674866362FCE30718CBF775067791E634D9CDC40E31A0ADC0532A466BA924",
+      "sha256": "0345B410BA83602A9B9BAE02F17F08F1F5C5726F4F8339FCF469B06C2A6C241C",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+        "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -1659,7 +1660,7 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1090048,
+      "size": 1094656,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
@@ -1667,10 +1668,10 @@
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
-      "sha256": "93CA61DC5E863C59EEBB6CB86EA807F1693F1ED922F159873D1A0ACC393EAA84",
+      "sha256": "8AF6DFB062DF11ED236DF381D91D5DF0A6DD8022B4B689EA4D30E47175C56D06",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+        "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -1715,19 +1716,19 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 1127424,
+      "size": 1132544,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/release/470d2fbd68014c018d24/amdgpu_wddm_vkd3d.dll",
-      "sha256": "69ECEDB3C88D6FB8C24199CAB19C6C9821F08ADB195E3847306CCAE270D226D9",
+      "source": "scratch/build-train/tester.32-r4/artifacts/release/engine12-x86-rel/amdgpu_wddm_vkd3d.dll",
+      "sha256": "C3442358734C85A51692FC4B31B7CFD3EA4FA5C3E07608D68E26CD300B245073",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
-        "recipe_commit": "43a8816613aaf12c1e3b825ad2b3a37eb972f63b",
+        "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+        "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -1738,8 +1739,10 @@
           "{src}",
           "-Build",
           "{out}",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
-          "6",
+          "8",
           "-Flavour",
           "release",
           "-Version",
@@ -1748,19 +1751,18 @@
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
       "size": 3259392,
-      "role": "D3D12 engine x86, release flavour (vkd3d-proton fork amdgpu-wddm/tester31-engine b69df5fb), ddi-engine-lto: the 32-bit engine of the same line and recipe as the x64 release engine, for WoW64 D3D12 applications. It holds none of the thirteen diagnostic names the declaration demands of its lab copy and satisfies the AMDGPU_WDDM_LOG release rule. Carried from 0.7.216.100-tester.27: x86 D3D12 engine (vkd3d-proton fork amdgpu-wddm/per-app-graphics-settings-x86 b477495e = 41bd52c8, the commit of the x64 engine with VKD3D_SAMPLER_ANISOTROPY, plus the cherry-pick of bdec00f3, the x86 calling convention fix of NtQueryInformationProcess that the tester.20 x86 engine carries; dxil-spirv d2d82332). The ddi-engine-lto option set of the x64 engine, built by tools/build build-vkd3d.ps1 -Arch x86 from a clean tree (scratch/train/b23-build/engines/build-x86-engines.ps1). Gates: x86 machine, the one export Bc250Vkd3dEngineGetFuncs, no dynamic C runtime, and the offline engine test, 212 of 212, on a host GPU",
-      "unverified": "This build was not repeated, so no second clean build confirms its bytes, and no lab run has used them.",
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/lab/321b0f0fcc5c347054b2/amdgpu_wddm_vkd3d.dll",
-      "sha256": "8A3692C7514AE45ECC6D2AF5B6E5CD720C42CC5CE2077168C6D4B8FA1859767B",
+      "source": "scratch/build-train/tester.32-r4/artifacts/lab/engine12-x86-lab/amdgpu_wddm_vkd3d.dll",
+      "sha256": "0EA343A00B1DB24CF6BD7EB153AED0AAD7FD8A79DB909286C8CAB88FEA288759",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536",
-        "recipe_commit": "43a8816613aaf12c1e3b825ad2b3a37eb972f63b",
+        "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+        "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -1771,8 +1773,10 @@
           "{src}",
           "-Build",
           "{out}",
+          "-Temp",
+          "{tmp}",
           "-Jobs",
-          "6",
+          "8",
           "-Flavour",
           "lab",
           "-Version",
@@ -1781,10 +1785,8 @@
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
       "size": 3352576,
-      "role": "D3D12 engine x86, lab flavour (vkd3d-proton fork amdgpu-wddm/tester31-engine b69df5fb), ddi-engine-lto with the fork's lab-flavour option and, since BD-180, without -DVKD3D_NO_DEBUG_MESSAGES, so the shader-failure messages its switches ask for reach the log. The thirteen diagnostic names of the declaration are compiled in, the BC250_DRAW_STATS counters among them. Carried from 0.7.216.100-tester.27: x86 D3D12 engine (vkd3d-proton fork amdgpu-wddm/per-app-graphics-settings-x86 b477495e = 41bd52c8, the commit of the x64 engine with VKD3D_SAMPLER_ANISOTROPY, plus the cherry-pick of bdec00f3, the x86 calling convention fix of NtQueryInformationProcess that the tester.20 x86 engine carries; dxil-spirv d2d82332). The ddi-engine-lto option set of the x64 engine, built by tools/build build-vkd3d.ps1 -Arch x86 from a clean tree (scratch/train/b23-build/engines/build-x86-engines.ps1). Gates: x86 machine, the one export Bc250Vkd3dEngineGetFuncs, no dynamic C runtime, and the offline engine test, 212 of 212, on a host GPU",
-      "unverified": "This build was not repeated, so no second clean build confirms its bytes. the x86 build of the same source at c04c4940 passed the host WARN probe from the actual DLL; these are a rebuild from the merged line.",
-      "flavour": "lab",
-      "note": "BC250_DRAW_STATS and the VKD3D_ names, x86"
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "flavour": "lab"
     },
     {
       "component": "d3d12-umd-wow64",
