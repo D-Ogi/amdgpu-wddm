@@ -173,6 +173,20 @@ struct ReplayDrainCounter {
     std::atomic<uint64_t> longest{0};           // QPC ticks
 };
 
+// What the shell's last Present saw of the device's counters: the next Present's deltas are one frame's waits
+// (present_frame, the "frame stall:" line). One device's presents come one at a time from the queue domain; the lock
+// keeps a second presenter (another swap chain on another thread) from folding two frames into one line: it skips.
+struct FrameMark {
+    SRWLOCK lock = SRWLOCK_INIT;
+    uint64_t qpc = 0;                           // the last Present; 0 before the first
+    uint64_t frames = 0;                        // presents seen
+    uint64_t stalls = 0;                        // frames of kFrameStallMilliseconds or more
+    uint64_t long_waits = 0;
+    uint64_t pso_waits = 0, pso_wait_qpc = 0, pso_consumer = 0;
+    uint64_t waits[static_cast<size_t>(Drain::Count)]{};
+    uint64_t wait_qpc[static_cast<size_t>(Drain::Count)]{};
+};
+
 struct Replay {
     DeviceContext* context = nullptr;
     ReplayPolicy policy{};
@@ -195,7 +209,10 @@ struct Replay {
     std::atomic<uint64_t> asleep_waits{0};      // slow waits that found the worker asleep with work behind it
     std::atomic<uint64_t> boosts{0};            // worker priority lifts by a waiting drain
     std::atomic<uint64_t> long_waits{0};        // ring waits of kLongWaitMilliseconds or more
+    std::atomic<uint64_t> last_long_ticks{0};   // the latest long wait: its length and the entry the worker was in
+    std::atomic<void (*)(const EntryHeader*) noexcept> last_long_run{nullptr};
     std::atomic<uint64_t> next_summary{UINT64_MAX};   // QPC of the next timed summary, after the one at close 64
+    FrameMark frame{};                          // the shell's Present: the frame-stall line (present_frame)
 };
 
 // The calling thread's ring for one Replay: serial names the Replay (0: none), ring is null for a direct thread.

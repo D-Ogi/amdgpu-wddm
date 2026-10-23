@@ -473,6 +473,11 @@ void set_direct_entry(DeviceContext* context, bool on) noexcept;
 // The shell's Present, first thing: the frame clock, the arm rotation, the rows and arm d's wait. Only the first
 // thread that calls it counts frames; for the others it returns at once.
 void entry_frame() noexcept;
+// The shell's Present, once the frame is handed over: counts the device's frame and, when kFrameStallMilliseconds
+// (100) or more passed since the device's previous Present, writes one "frame stall:" line with that frame's ring
+// waits by drain kind, the latest long wait's entry and the pipeline waits (replay.cpp). Nothing with the replay
+// policy off; a context of null is nothing.
+void present_frame(DeviceContext* context) noexcept;
 // Whether the statistics are on (the shell then times its own entries).
 bool entry_stats_on() noexcept;
 

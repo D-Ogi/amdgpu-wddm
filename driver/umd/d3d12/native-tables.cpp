@@ -421,6 +421,9 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     // domain, as the frame rate limit is, and never on a refused present. Without the setting nothing happens.
     if(device && hr==S_OK)
         engine_frame_gate(*device,amdgpu_wddm::app_settings::max_frame_latency(settings));
+    // The frame-stall line (engine-ddi present_frame): after the latency gate, so that a frame's line counts the
+    // time this present waited there as part of the frame.
+    if(device && hr==S_OK)engine_ddi::present_frame(engine_context(*device));
     if(ddi_trace_enabled()){
         // present_context is the identity of the context the kernel present is made on, and queue_context that of
         // the queue the call named; they are equal for a linear primary and differ for a stage-6 copy, whose kernel

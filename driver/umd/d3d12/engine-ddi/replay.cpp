@@ -2,6 +2,7 @@
 // engine-ddi: deferred command-list replay (replay.h), everything off the encode path: the thread's ring, the
 // worker, waits and drains, descriptor snapshots, set_replay_policy and teardown.
 #include "replay.h"
+#include "pso-async.h"
 #include <cstdarg>
 #include <cstdio>
 #include <intrin.h>
@@ -35,6 +36,8 @@ constexpr DWORD kSleepMilliseconds = 100;       // a sleeping worker looks again
 constexpr uint32_t kWakeKilobytes = 8;          // pending entries that wake a sleeping worker (about 80 calls)
 constexpr uint32_t kLongWaitMilliseconds = 20;  // a ring wait this long gets a line of its own
 constexpr uint64_t kLongWaitLines = 4096;       // that many lines, then one at every power of two
+constexpr uint32_t kFrameStallMilliseconds = 100;   // a frame this long since the device's previous Present gets a line
+constexpr uint64_t kFrameStallLines = 4096;     // that many lines, then one at every power of two
 constexpr uint32_t kSummarySeconds = 10;        // after the summary at ecl drain 64, one at the first drain this much later
 
 std::atomic<uint64_t> g_serial{0};
@@ -268,6 +271,8 @@ void long_wait_line(ReplayRing* r, uint64_t target, Drain kind, const WaitStart&
                     int lifted, const WaitStuck& stuck) noexcept {
     Replay* rp = r->replay;
     const uint64_t n = rp->long_waits.fetch_add(1, std::memory_order_relaxed) + 1;
+    rp->last_long_ticks.store(ticks, std::memory_order_relaxed);        // for the frame-stall line
+    rp->last_long_run.store(stuck.run, std::memory_order_relaxed);
     if (n > kLongWaitLines && !power_of_two(n)) return;
     ULONG64 cycles = 0;
     if (!QueryThreadCycleTime(r->thread, &cycles)) cycles = w.cycles;
@@ -779,6 +784,75 @@ HRESULT set_replay_policy(DeviceContext* c, const ReplayPolicy* policy) noexcept
                kYieldMicroseconds, kWakeKilobytes, kLongWaitMilliseconds, kSummarySeconds,
                static_cast<unsigned long long>(rp->qpc0), static_cast<unsigned long long>(rp->qpf));
     return S_OK;
+}
+
+// ---- The shell's Present: the frame-stall line -----------------------------------------------------------------
+// One line per frame of kFrameStallMilliseconds or more: ms is the time since the device's previous Present, and the
+// rest is what the device's own waits took of it. waits/wait_ms and kinds: the ring waits (an API thread blocked
+// until the worker passed its entry, so the engine was inside that entry) by drain kind as count/ms; last_long_*:
+// the latest long wait's length and entry; pso_*: binds that waited for a pipeline the pool was still compiling, and
+// pipelines the consumer compiled itself. ms far above wait_ms + pso_ms: the frame was long for a reason the shell
+// does not time (the application, a kernel call of the shell, the engine inside a direct call). The mark is per
+// device: the counters are read, their deltas against the mark printed, the mark moved; nothing is reset.
+void present_frame(DeviceContext* context) noexcept {
+    if (!context) return;
+    Replay* rp = context->replay;
+    if (!rp) return;
+    FrameMark& f = rp->frame;
+    if (!TryAcquireSRWLockExclusive(&f.lock)) return;
+    const uint64_t now = qpc(), before = f.qpc;
+    f.qpc = now;
+    ++f.frames;
+    constexpr size_t kinds = static_cast<size_t>(Drain::Count);
+    uint64_t waits[kinds], wait_qpc[kinds], sum_waits = 0, sum_qpc = 0;
+    for (size_t k = 0; k < kinds; ++k) {
+        const ReplayDrainCounter& c = rp->drains[k];
+        waits[k] = c.waits.load(std::memory_order_relaxed);
+        wait_qpc[k] = c.qpc.load(std::memory_order_relaxed);
+        sum_waits += waits[k] - f.waits[k];
+        sum_qpc += wait_qpc[k] - f.wait_qpc[k];
+    }
+    const uint64_t long_waits = rp->long_waits.load(std::memory_order_relaxed);
+    const PsoAsync* pso = context->pso;
+    const uint64_t pso_waits = pso ? pso->waits.load(std::memory_order_relaxed) : 0;
+    const uint64_t pso_qpc = pso ? pso->wait_qpc.load(std::memory_order_relaxed) : 0;
+    const uint64_t pso_consumer = pso ? pso->by_consumer.load(std::memory_order_relaxed) : 0;
+    if (before && now - before >= rp->qpf * kFrameStallMilliseconds / 1000) {
+        const uint64_t n = ++f.stalls;
+        if (n <= kFrameStallLines || power_of_two(n)) {
+            char text[160];
+            size_t used = 0;
+            text[0] = 0;
+            for (size_t k = 0; k < kinds; ++k) {
+                if (waits[k] == f.waits[k]) continue;
+                const int w = std::snprintf(text + used, sizeof(text) - used, " %s=%llu/%.1f", kDrainNames[k],
+                                            static_cast<unsigned long long>(waits[k] - f.waits[k]),
+                                            milliseconds(rp, wait_qpc[k] - f.wait_qpc[k]));
+                if (w < 0 || used + static_cast<size_t>(w) >= sizeof(text)) break;
+                used += static_cast<size_t>(w);
+            }
+            replay_log(rp, "frame stall: n=%llu ms=%.1f qpc=%llu thread=%lu waits=%llu wait_ms=%.1f long_waits=%llu "
+                       "last_long_ms=%.1f last_long_rva=0x%llx pso_waits=%llu pso_ms=%.1f pso_consumer=%llu kinds:%s",
+                       static_cast<unsigned long long>(n), milliseconds(rp, now - before),
+                       static_cast<unsigned long long>(now), GetCurrentThreadId(),
+                       static_cast<unsigned long long>(sum_waits), milliseconds(rp, sum_qpc),
+                       static_cast<unsigned long long>(long_waits - f.long_waits),
+                       milliseconds(rp, rp->last_long_ticks.load(std::memory_order_relaxed)),
+                       rva_of(rp->last_long_run.load(std::memory_order_relaxed)),
+                       static_cast<unsigned long long>(pso_waits - f.pso_waits),
+                       pso ? static_cast<double>(pso_qpc - f.pso_wait_qpc) * 1000.0 / static_cast<double>(pso->qpf) : 0.0,
+                       static_cast<unsigned long long>(pso_consumer - f.pso_consumer), text);
+        }
+    }
+    for (size_t k = 0; k < kinds; ++k) {
+        f.waits[k] = waits[k];
+        f.wait_qpc[k] = wait_qpc[k];
+    }
+    f.long_waits = long_waits;
+    f.pso_waits = pso_waits;
+    f.pso_wait_qpc = pso_qpc;
+    f.pso_consumer = pso_consumer;
+    ReleaseSRWLockExclusive(&f.lock);
 }
 
 } // namespace engine_ddi

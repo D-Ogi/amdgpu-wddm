@@ -2509,6 +2509,7 @@ int main() {
     {
         Fixture f;
         check(f.on(8, 4u << 20, true), "diagnostics: policy on with the log hook");
+        present_frame(&f.context);                  // the first Present: the mark, no line
         ListBox& l = f.list();
         ListBox& m = f.list();
         const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -2537,6 +2538,27 @@ int main() {
                 drain_list(const_cast<CommandListRecord*>(&m.record), Drain::Ecl);
             }
         }).join();
+        // The second Present, at least 100 ms after the first (the 30 ms hold and the 64 drains took part of it): one
+        // frame-stall line with the held drain's wait as a teardown wait and the long wait's entry. A third Present
+        // at once is a short frame: no line.
+        Sleep(100);
+        present_frame(&f.context);
+        present_frame(&f.context);
+        {
+            const std::string stall = f.line("frame stall: n=1 ");
+            double stall_ms = 0, last_ms = 0;
+            size_t at = stall.find(" ms=");
+            if (at != std::string::npos) stall_ms = std::atof(stall.c_str() + at + 4);
+            at = stall.find(" last_long_ms=");
+            if (at != std::string::npos) last_ms = std::atof(stall.c_str() + at + 14);
+            check(!stall.empty() && stall_ms >= 100.0 && stall.find(" long_waits=") != std::string::npos &&
+                      stall.find(" long_waits=0 ") == std::string::npos && last_ms >= 25.0 &&
+                      stall.find(" last_long_rva=0x0 ") == std::string::npos && stall.find(" teardown=1/") != std::string::npos &&
+                      stall.find(" pso_waits=0 ") != std::string::npos && f.line("frame stall: n=2 ").empty() &&
+                      f.replay()->frame.frames == 3 && f.replay()->frame.stalls == 1,
+                  "frame stall: one line for the long frame (%.1f ms) with the teardown wait, the long wait (%.1f ms) "
+                  "and its entry, none for the short frame: %s", stall_ms, last_ms, stall.c_str());
+        }
         const Replay* rp = f.replay();
         const ReplayDrainCounter& held_wait = rp->drains[static_cast<size_t>(Drain::Teardown)];
         const uint64_t ms = rp->qpf / 1000;

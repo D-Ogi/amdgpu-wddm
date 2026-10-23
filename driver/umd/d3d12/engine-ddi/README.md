@@ -129,8 +129,11 @@ Nothing waits on the CPU: both phases read the queues' state words and fences at
   drain kind; waits of 1, 10 and 50 ms or more and the longest per kind; the longest stretch a wait saw without
   the worker finishing an entry, with that entry's rva; workers found asleep; priority lifts), and one key=value
   `replay long-wait:` line per ring wait of 20 ms or more (kind, waiter and worker levels, bytes behind and run,
-  the worker's CPU time during the wait, its stuck stretch). The optional `log` hook gets every replay line too;
-  the shell writes them to a file with the `replay-log` experiment (`../replay-log.h`).
+  the worker's CPU time during the wait, its stuck stretch), and one `frame stall:` line per frame of 100 ms or
+  more between two of the shell's presents (`present_frame`): the frame's ring waits by drain kind as count/ms, the
+  latest long wait's length and entry, the pipeline waits and consumer compiles of the frame. A long frame whose
+  waits are small was long for a reason the shell does not time. The optional `log` hook gets every replay line
+  too; the shell writes them to a file with the `replay-log` experiment (`../replay-log.h`).
 - The worker calls no hook and makes no context operation. The shell's `worker` hook runs it in a scope that
   admits only the runtime callbacks recording needs; `drained`, on a DDI thread after a drain, reports a device
   removal a worker saw.
