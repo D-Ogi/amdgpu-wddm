@@ -1672,6 +1672,15 @@ static void Child(const std::string &s)
     if (s == "front-rule") { FrontRuleTests(); return; }
     if (s == "front-record") { FrontRecordTests(); return; }
     OpenHive(s);
+    // The scenarios share one layout and name their log files by process id. Windows reuses a process id as
+    // soon as its process has gone, so a scenario may find the route or front log that an earlier scenario of
+    // the same id left, and read or count it as its own (round 4 of tester.32: app-render-on-cpu-app-off found
+    // another scenario's line in DesktopRouter's directory). Every scenario starts with no file of its id.
+    for (const wchar_t *dir : {L"\\routelogs", L"\\applogs"}) {
+        DeleteFileW(RouteLog(Layout + dir).c_str());
+        DeleteFileW((Layout + dir + L"\\front-" + ExeBase() + L"-" + std::to_wstring(GetCurrentProcessId()) +
+                     L".log").c_str());
+    }
 
     // Router with doubles. The router lives in <layout>\router next to a double named bc250d3d_zink.dll.
     if (s == "route-not-client") {
