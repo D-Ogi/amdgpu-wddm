@@ -19,7 +19,11 @@
     "entry list). That asset of tester.27 is uploaded again to tester.28 under the tester.28 name, with the same",
     "bytes, so its size and sha256 do not change. The folder in the zip keeps its tester.27 name. The model pins were measured in this workspace: scratch\\llm-vram\\results-2026-10-10-newmodels\\",
     "model-hashes.txt and scratch\\strata\\models\\SHA256SUMS.txt. The sizes match the Hugging Face HEAD",
-    "responses of 2026-10-11. The Ollama tags answer HTTP 200 in the registry, checked the same day."
+    "responses of 2026-10-11. The Ollama tags answer HTTP 200 in the registry, checked the same day.",
+    "tester.32 does not offer Ollama. Its asset bc250-ollama-0.40.3-bc250.27.zip (SHA256 B5D337FC) carries its own HIP",
+    "runtime (amdhip64 E754A950), not the release runtime of this package, with diagnostic names that the release",
+    "flavour forbids, and its consumer was built without the gfx1013 patch. The pin is empty, so the installer refuses",
+    "the component and downloads nothing. Ollama comes back with a rebuilt asset that passes check-hip-payload.py."
   ],
   "components": [
     {
@@ -50,14 +54,14 @@
       "summary": "Keeps a model server running for you and gets models by name. Our build uses the GPU through this driver.",
       "question": "Install Ollama for this board, set up for this GPU?",
       "version": "0.40.3-bc250.27",
-      "default": true,
+      "default": false,
       "install_dir": "tools\\ollama",
       "licence": "MIT",
       "licence_url": "https://github.com/ollama/ollama/blob/main/LICENSE",
       "asset": {
         "name": "bc250-ollama-0.40.3-bc250.27.zip",
         "size": 52583879,
-        "sha256": "B5D337FC8F0883F4D32A8B8BC818292FB5C695F764CF276C2EC42A03A41235CD",
+        "sha256": "",
         "url_templates": [
           "https://github.com/D-Ogi/amdgpu-wddm/releases/download/v{release}/{name}"
         ]

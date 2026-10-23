@@ -48,7 +48,8 @@
       ],
       "submodules": {
         "subprojects/dxil-spirv": "dxil-spirv"
-      }
+      },
+      "base": "b69df5fb2d44858a7d5aa9e322d6a4698a8b4536"
     },
     "dxil-spirv": {
       "url": "https://github.com/D-Ogi/dxil-spirv",
@@ -153,7 +154,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -215,7 +216,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -277,7 +278,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -339,7 +340,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "commit": "6bbf6a22504297174d1873e9a4c2f04846f132a7",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -1809,6 +1810,218 @@
         }
       ],
       "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
+    },
+    {
+      "id": "engine12-x64-rel",
+      "component": "d3d12-engine",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "vkd3d-proton",
+      "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+      "tree": "clone",
+      "recipe": "tools/build/build-vkd3d.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine-lto",
+        "-Arch",
+        "x64",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "build-vkd3d.ps1 has no clang-cl configuration: the engine has been built by MSVC (ddi-engine-lto, /GL /LTCG /arch:AVX2) since tester.17, and the x86 Meson builds refuse clang-cl (common.ps1). A compiler change of the engine is its own measured change, one factor at a time; this row adds only the BD-226 limiter change.",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 2.0,
+      "outputs": [
+        {
+          "file": "libs/ddi/amdgpu_wddm_vkd3d.dll",
+          "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe",
+          "args": [
+            "{out}/libs/ddi/amdgpu_wddm_vkd3d.dll"
+          ],
+          "cwd": "{testout}",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED"
+        }
+      ],
+      "note": "vkd3d-proton fork amdgpu-wddm/compile-exempt f5fda151 = the tester.32 engine line b69df5fb plus one commit: a draw-time pipeline variant passes the compile limiter's bound (BD-226)."
+    },
+    {
+      "id": "engine12-x64-lab",
+      "component": "d3d12-engine",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "vkd3d-proton",
+      "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+      "tree": "clone",
+      "recipe": "tools/build/build-vkd3d.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine-lto",
+        "-Arch",
+        "x64",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "build-vkd3d.ps1 has no clang-cl configuration: the engine has been built by MSVC (ddi-engine-lto, /GL /LTCG /arch:AVX2) since tester.17, and the x86 Meson builds refuse clang-cl (common.ps1). A compiler change of the engine is its own measured change, one factor at a time; this row adds only the BD-226 limiter change.",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 2.0,
+      "outputs": [
+        {
+          "file": "libs/ddi/amdgpu_wddm_vkd3d.dll",
+          "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe",
+          "args": [
+            "{out}/libs/ddi/amdgpu_wddm_vkd3d.dll"
+          ],
+          "cwd": "{testout}",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED"
+        }
+      ],
+      "note": "vkd3d-proton fork amdgpu-wddm/compile-exempt f5fda151 = the tester.32 engine line b69df5fb plus one commit: a draw-time pipeline variant passes the compile limiter's bound (BD-226)."
+    },
+    {
+      "id": "engine12-x86-rel",
+      "component": "d3d12-umd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "vkd3d-proton",
+      "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+      "tree": "clone",
+      "recipe": "tools/build/build-vkd3d.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine-lto",
+        "-Arch",
+        "x86",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "build-vkd3d.ps1 has no clang-cl configuration: the engine has been built by MSVC (ddi-engine-lto, /GL /LTCG /arch:AVX2) since tester.17, and the x86 Meson builds refuse clang-cl (common.ps1). A compiler change of the engine is its own measured change, one factor at a time; this row adds only the BD-226 limiter change.",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 2.0,
+      "outputs": [
+        {
+          "file": "libs/ddi/amdgpu_wddm_vkd3d.dll",
+          "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe",
+          "args": [
+            "{out}/libs/ddi/amdgpu_wddm_vkd3d.dll"
+          ],
+          "cwd": "{testout}",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED"
+        }
+      ],
+      "note": "vkd3d-proton fork amdgpu-wddm/compile-exempt f5fda151 = the tester.32 engine line b69df5fb plus one commit: a draw-time pipeline variant passes the compile limiter's bound (BD-226)."
+    },
+    {
+      "id": "engine12-x86-lab",
+      "component": "d3d12-umd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "vkd3d-proton",
+      "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
+      "tree": "clone",
+      "recipe": "tools/build/build-vkd3d.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine-lto",
+        "-Arch",
+        "x86",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "build-vkd3d.ps1 has no clang-cl configuration: the engine has been built by MSVC (ddi-engine-lto, /GL /LTCG /arch:AVX2) since tester.17, and the x86 Meson builds refuse clang-cl (common.ps1). A compiler change of the engine is its own measured change, one factor at a time; this row adds only the BD-226 limiter change.",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 2.0,
+      "outputs": [
+        {
+          "file": "libs/ddi/amdgpu_wddm_vkd3d.dll",
+          "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe",
+          "args": [
+            "{out}/libs/ddi/amdgpu_wddm_vkd3d.dll"
+          ],
+          "cwd": "{testout}",
+          "summary": "^(?:ok|PASS|FAIL)",
+          "pass": "^PASSED"
+        }
+      ],
+      "note": "vkd3d-proton fork amdgpu-wddm/compile-exempt f5fda151 = the tester.32 engine line b69df5fb plus one commit: a draw-time pipeline variant passes the compile limiter's bound (BD-226)."
     }
   ]
 }
