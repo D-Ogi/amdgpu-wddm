@@ -91,8 +91,10 @@ bool Storage::canaries_intact() const {
 
 // ---- Shell hooks -------------------------------------------------------------------------------------------------
 int Shell::table_of(D3D12DDI_HRTCOMMANDLIST list) const {
-    for (const Bind& b : binds)
-        if (b.list == list.handle) return static_cast<int>(b.table);
+    // A later recording can reuse an earlier stack address for its runtime handle, and a reset can rebind
+    // an existing handle. The most recent binding wins, just as in the runtime's current dispatch table.
+    for (auto b = binds.rbegin(); b != binds.rend(); ++b)
+        if (b->list == list.handle) return static_cast<int>(b->table);
     return -1;
 }
 
@@ -563,6 +565,20 @@ int wmain(int argc, wchar_t** argv) {
     check(fence_reached(1, 1) && fence_reached(7, 1) && !fence_reached(0, 1) && !fence_reached(UINT64_MAX, 1),
           "wait_queue_idle: a completed value reaches its target only when it is at least the target and not "
           "UINT64_MAX (a removed device)");
+
+    {
+        Shell shell;
+        int reused = 0, other = 0;
+        const D3D12DDI_HRTCOMMANDLIST handle{&reused};
+        check(shell.table_of(handle) == -1, "shell binding: a handle never bound has no table");
+        bind_list_table(&shell, handle, 0);
+        bind_list_table(&shell, D3D12DDI_HRTCOMMANDLIST{&other}, 0);
+        bind_list_table(&shell, handle, 1);
+        check(shell.table_of(handle) == 1 && shell.table_of(D3D12DDI_HRTCOMMANDLIST{&other}) == 0,
+              "shell binding: a reused handle uses its latest table without changing another handle");
+        bind_list_table(&shell, handle, 0);
+        check(shell.table_of(handle) == 0, "shell binding: a subsequent reset can switch back to compute");
+    }
 
     Device device;
     hr = open_device(env, device);

@@ -225,7 +225,7 @@ void test_shared_create(Env& env) {
     // Every retry of this section, counted two ways: the always-on counter and the always-on line each retry
     // writes. The named risk of the whole design is a retry on an ordinary committed texture, and a trial or a game
     // can only see that if the signal does not depend on a trace build.
-    const char* const retry_prefix = "shared surface: the runtime refused the ordinary allocation shape";
+    const char* const retry_prefix = "shared surface: the shell requested a shareable surface";
     const uint64_t retries_before = engine_ddi::shared_surface_retries();
     const size_t retry_lines_before = refusal_lines(retry_prefix).size();
     for (const Case& c : cases) {

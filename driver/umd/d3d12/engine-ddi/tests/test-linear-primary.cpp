@@ -96,6 +96,33 @@ void observe(void* user, const engine_ddi::ReleaseEvent* event) {
     static_cast<Observed*>(user)->events.push_back(*event);
 }
 
+// BD-221 pins the actual fence across the unlocked wait. A completed-value override on EngineQueue affects
+// snapshot_marks only, not that pinned fence. Install a separate real fence while no submission is made, so
+// both observations see the same controlled completion. Keep the queue's original ownership unchanged.
+struct ControlledFence {
+    engine_ddi::EngineQueue* queue;
+    ID3D12Fence* original;
+    ID3D12Fence* controlled = nullptr;
+    HRESULT result;
+    explicit ControlledFence(engine_ddi::EngineQueue* q) : queue(q), original(q->fence) {
+        result = q->context->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence),
+                                                reinterpret_cast<void**>(&controlled));
+        if (SUCCEEDED(result)) queue->fence = controlled;
+        checkf(SUCCEEDED(result), "linear primary: controlled retirement fence created (hr %08lx)",
+               static_cast<unsigned long>(result));
+    }
+    void restore() {
+        if (controlled) {
+            queue->fence = original;
+            controlled->Release();
+            controlled = nullptr;
+        }
+    }
+    ~ControlledFence() { restore(); }
+    ControlledFence(const ControlledFence&) = delete;
+    ControlledFence& operator=(const ControlledFence&) = delete;
+};
+
 // What the engine itself answers for the linear image of this shape; 0 when it has none.
 UINT64 engine_alignment(Device& device, const Shape& s) {
     D3D12_RESOURCE_DESC1 d{};
@@ -535,7 +562,6 @@ void test_linear_primary(Env& env) {
     }
 
     // The primary's memory goes back inside its own destroy: the destroy waits for the work before it.
-    uint32_t expected_errors = 0;
     {
         Observed observed;
         engine_ddi::harness_set_release_observer(device.context, observe, &observed);
@@ -543,16 +569,21 @@ void test_linear_primary(Env& env) {
         Buffer waited, late, other;
         hr = create_target(env, device, shape, waited);
         if (hr == S_OK) {
+            ControlledFence fence(queue);
+            const uint64_t mark = queue->state.load() >> 1;
+            check(mark != 0 && !(queue->state.load() & 1), "linear primary: a signalled submission precedes destroy");
             // The work retires 40 ms into the destroy.
-            engine_ddi::harness_force_completed(queue, 1);
+            HRESULT signalled = E_FAIL;
             std::thread retire([&] {
                 Sleep(40);
-                engine_ddi::harness_force_completed(queue, 0);
+                if (fence.controlled) signalled = fence.controlled->Signal(mark);
             });
             const ULONGLONG began = GetTickCount64();
             destroy_buffer(env, device, waited);
             const ULONGLONG took = GetTickCount64() - began;
             retire.join();
+            checkf(signalled == S_OK, "linear primary: controlled completion signalled (hr %08lx)",
+                   static_cast<unsigned long>(signalled));
             checkf(observed.events.size() == 1 && !observed.events[0].deferred && observed.events[0].had_memory &&
                        observed.events[0].free_result == S_OK && took >= 15 && took < 2000 &&
                        !engine_ddi::harness_pending_releases(device.context) && !device.shell.device_errors,
@@ -567,14 +598,13 @@ void test_linear_primary(Env& env) {
         hr = create_target(env, device, shape, late);
         const HRESULT hr_other = create_target(env, device, Shape{64, 64, DXGI_FORMAT_B8G8R8A8_UNORM, 1, false}, other);
         if (hr == S_OK && hr_other == S_OK) {
-            // The work does not retire within the bound: the error is reported, nothing is freed in this call.
+            // BD-221: a bound schedules retirement; it is not evidence of device loss. Nothing is freed early.
+            ControlledFence fence(queue);
             engine_ddi::harness_set_in_ddi_bound(device.context, 30);
-            engine_ddi::harness_force_completed(queue, 1);
             destroy_buffer(env, device, late);
-            expected_errors = 1;
             checkf(observed.events.empty() && engine_ddi::harness_pending_releases(device.context) == 1 &&
-                       device.shell.device_errors == 1 && device.shell.last_device_error == HRESULT_FROM_WIN32(ERROR_TIMEOUT),
-                   "linear primary: past the bound the destroy reports ERROR_TIMEOUT and records the release "
+                       device.shell.device_errors == 0,
+                   "linear primary: past the bound the destroy retains memory without a device error "
                    "(%zu events, %u pending, %u errors, last %08lx)",
                    observed.events.size(), engine_ddi::harness_pending_releases(device.context),
                    device.shell.device_errors, static_cast<unsigned long>(device.shell.last_device_error));
@@ -585,7 +615,10 @@ void test_linear_primary(Env& env) {
                        observed.events.empty(),
                    "linear primary: ordinary memory does not wait (%u pending)",
                    engine_ddi::harness_pending_releases(device.context));
-            engine_ddi::harness_force_completed(queue, 0);
+            const HRESULT signalled = fence.controlled ? fence.controlled->Signal(queue->state.load() >> 1) : E_FAIL;
+            checkf(signalled == S_OK, "linear primary: delayed completion signalled (hr %08lx)",
+                   static_cast<unsigned long>(signalled));
+            fence.restore(); // Restore before another operation can submit on this queue.
             engine_ddi::harness_set_in_ddi_bound(device.context, 2000);
             Buffer next;
             hr = create_target(env, device, shape, next);      // any DDI call is a retirement point
@@ -608,8 +641,8 @@ void test_linear_primary(Env& env) {
           "linear primary: destroy_engine_queue reports Retired");
     uint32_t live = UINT32_MAX;
     hr = engine_ddi::destroy_device_context(device.context, &live);
-    checkf(hr == S_OK && live == 0 && device.shell.device_errors == expected_errors && !device.shell.list_errors,
-           "linear primary: destroy_device_context S_OK with no live object, no error but the timeout's (hr %08lx, "
+    checkf(hr == S_OK && live == 0 && !device.shell.device_errors && !device.shell.list_errors,
+           "linear primary: destroy_device_context S_OK with no live object or device error (hr %08lx, "
            "%u live, %u device errors)",
            static_cast<unsigned long>(hr), live, device.shell.device_errors);
 }

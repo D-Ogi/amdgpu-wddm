@@ -160,11 +160,11 @@ try {
         Invoke-Step 'replay test' { & .\replay-test.exe }
 
         if (-not $NativeOnly) {
-            Invoke-Step 'harness library' { & cl.exe @flags $harnessFlag /c /Fo:harness\ /Fd:harness\engine-ddi.pdb @libSources }
+            Invoke-Step 'harness library explicit compiler' { Invoke-Bc250UmdCompiler $compilerExe @nativeFlags $harnessFlag /c /Fo:harness\ /Fd:harness\engine-ddi.pdb @libSources }
             $harnessObjs = @($libSources | ForEach-Object { Join-Path 'harness' ([IO.Path]::ChangeExtension((Split-Path -Leaf $_), '.obj')) })
             Invoke-Step 'harness library link' { & lib.exe /nologo /Brepro /OUT:engine-ddi-harness.lib @harnessObjs }
             if (-not $harnessSources.Count) { throw 'no harness sources in engine-ddi\tests' }
-            Invoke-Step 'harness executable' { & cl.exe @flags $harnessFlag /Fo:harness\ /Fd:harness\ /Fe:engine-ddi-harness.exe @harnessSources engine-ddi-harness.lib dxgi.lib }
+            Invoke-Step 'harness executable explicit compiler' { Invoke-Bc250UmdCompiler $compilerExe @nativeFlags $harnessFlag /Fo:harness\ /Fd:harness\ /Fe:engine-ddi-harness.exe @harnessSources engine-ddi-harness.lib dxgi.lib }
         }
     } finally { Pop-Location }
 
