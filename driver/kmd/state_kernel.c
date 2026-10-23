@@ -10,7 +10,7 @@
 static HANDLE Defaults,Root,Generation,Data,Volatile,Parameters,Shared;
 static EX_RUNDOWN_REF Readers;
 static KMUTEX StateLock;
-static BOOLEAN Initialized,HasActive;
+static BOOLEAN Initialized,HasActive,ForeignActive;
 static volatile LONG Prepared,Ready;
 static volatile LONG InvalidGroups;
 static AMDGPU_TRANSFER_HEADER AcceptedTransfer;
@@ -219,8 +219,16 @@ static void Hex(const unsigned char id[16],WCHAR out[33])
     static const WCHAR digits[]=L"0123456789abcdef";ULONG i;
     for(i=0;i<16;i++){out[2*i]=digits[id[i]>>4];out[2*i+1]=digits[id[i]&15];}out[32]=0;
 }
+// The CatalogId of a generation: 64 lowercase hexadecimal digits, as the generator and the transaction write it.
+static BOOLEAN CatalogName(PCWSTR id)
+{
+    ULONG i;
+    for(i=0;i<64;i++)if(!((id[i]>=L'0' && id[i]<=L'9') || (id[i]>=L'a' && id[i]<=L'f')))return FALSE;
+    return !id[64];
+}
 static void CloseActive(void)
 {
+    ForeignActive=FALSE;
     if(Data)ZwClose(Data);Data=NULL;
     if(Generation)ZwClose(Generation);Generation=NULL;
     if(Root)ZwClose(Root);Root=NULL;
@@ -241,7 +249,15 @@ static NTSTATUS LoadActive(BOOLEAN allowPriorVersion)
     status=Number(Generation,L"Ready",&schema);
     if(!NT_SUCCESS(status) || schema!=AmdgpuStateSchema())return STATUS_DEVICE_CONFIGURATION_ERROR;
     status=String(Generation,L"CatalogId",catalog,65);if(!NT_SUCCESS(status))return status;
-    Wide(AmdgpuStateCatalogId(),expected,65);if(wcscmp(catalog,expected))return STATUS_REVISION_MISMATCH;
+    Wide(AmdgpuStateCatalogId(),expected,65);
+    if(wcscmp(catalog,expected)) {
+        // The generation of an earlier catalog of this schema is the source of a pending update in place
+        // (Bootstrap with a CURRENT handoff): Source() reads its data by setting name. Its receipt names the
+        // old catalog and is not bound; without a handoff the generation is refused as before.
+        if(!allowPriorVersion || !CatalogName(catalog))return STATUS_REVISION_MISMATCH;
+        ForeignActive=TRUE;
+        return Open(Generation,L"Data",KEY_READ|KEY_WRITE,FALSE,FALSE,&Data);
+    }
     status=Open(Generation,L"Data",KEY_READ|KEY_WRITE,FALSE,FALSE,&Data);if(!NT_SUCCESS(status))return status;
     status=Open(Generation,L"Migration",KEY_READ,FALSE,FALSE,&metadata);
     if(NT_SUCCESS(status)) {
@@ -404,7 +420,7 @@ static NTSTATUS Bootstrap(HANDLE parameters,HANDLE shared)
     // Once activated, a leftover handoff is merely an idempotence receipt. Read
     // current choices without re-importing its early snapshot or needing source.
     status=LoadActive(h.origin==AMDGPU_TRANSFER_CURRENT);
-    if(NT_SUCCESS(status) && RtlCompareMemory(h.transaction,AcceptedTransfer.transaction,16)==16) {
+    if(NT_SUCCESS(status) && !ForeignActive && RtlCompareMemory(h.transaction,AcceptedTransfer.transaction,16)==16) {
         if(RtlCompareMemory(h.device_hash,AcceptedTransfer.device_hash,32)!=32)status=STATUS_REVISION_MISMATCH;
         goto done;
     }

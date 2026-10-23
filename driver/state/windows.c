@@ -20,6 +20,8 @@ struct amdgpu_windows_state {
     BYTE *package;
     DWORD package_bytes;
     unsigned int writable;
+    // 1: opened by AmdgpuWindowsStateOpenSource on a generation of an earlier catalog; value writes are refused.
+    unsigned int source;
     SRWLOCK lock;
 };
 static unsigned int Status(LSTATUS status)
@@ -76,7 +78,7 @@ unsigned int AmdgpuWindowsStateCheckWrite(AMDGPU_WINDOWS_STATE *s,DWORD *error)
 {
     unsigned int result;
     if(!s || !error)return AMDGPU_STATE_INVALID_ARGUMENT;
-    *error=0;if(!s->writable)return AMDGPU_STATE_ACCESS;
+    *error=0;if(!s->writable || s->source)return AMDGPU_STATE_ACCESS;
     AcquireSRWLockShared(&s->lock);
     result=Identity(s,error,TRUE);
     ReleaseSRWLockShared(&s->lock);return result;
@@ -173,7 +175,14 @@ static DWORD SharedRoot(REGSAM access,HKEY *shared)
     return error;
 #endif
 }
-unsigned int AmdgpuWindowsStateOpen(AMDGPU_WINDOWS_STATE **out,unsigned int writable,DWORD *error)
+// The CatalogId of a generation: 64 lowercase hexadecimal digits, as the generator and the KMD write it.
+static BOOL CatalogName(const WCHAR *id)
+{
+    unsigned int i;
+    for(i=0;i<64;i++) if(!((id[i]>=L'0' && id[i]<=L'9') || (id[i]>=L'a' && id[i]<=L'f'))) return FALSE;
+    return !id[64];
+}
+static unsigned int OpenState(AMDGPU_WINDOWS_STATE **out,unsigned int writable,unsigned int source,DWORD *error)
 {
     HKEY shared=NULL; AMDGPU_WINDOWS_STATE *s=NULL;
     DWORD ready=0,i; WCHAR child[80],catalog[65],expected[65]; unsigned int result=AMDGPU_STATE_IO;
@@ -200,7 +209,13 @@ unsigned int AmdgpuWindowsStateOpen(AMDGPU_WINDOWS_STATE **out,unsigned int writ
     status=String(s->generation,L"CatalogId",catalog,65); *error=status;
     if(status!=ERROR_SUCCESS) goto done;
     (void)Name(AmdgpuStateCatalogId(),expected,65);
-    if(wcscmp(catalog,expected)) { result=AMDGPU_STATE_SCHEMA; goto done; }
+    if(wcscmp(catalog,expected)) {
+        // A generation of this schema under another catalog of the product is a migration source only: the
+        // installer worker reads it by setting name before it stages a package with a new catalog. Every other
+        // reader refuses it, because its values are bound to the catalog that wrote them.
+        if(!source || !CatalogName(catalog)) { result=AMDGPU_STATE_SCHEMA; goto done; }
+        s->source=1;
+    }
     status=RegOpenKeyExW(s->generation,L"Data",0,access,&s->data); *error=status;
     if(status!=ERROR_SUCCESS) goto done;
     // V is optional for postmortem access after a restart before KMD has run.
@@ -214,6 +229,10 @@ done:
     AmdgpuWindowsStateClose(s);
     return result;
 }
+unsigned int AmdgpuWindowsStateOpen(AMDGPU_WINDOWS_STATE **out,unsigned int writable,DWORD *error)
+{ return OpenState(out,writable,0,error); }
+unsigned int AmdgpuWindowsStateOpenSource(AMDGPU_WINDOWS_STATE **out,unsigned int writable,DWORD *error)
+{ return OpenState(out,writable,1,error); }
 void AmdgpuWindowsStateClose(AMDGPU_WINDOWS_STATE *s)
 {
     if(!s) return;
@@ -275,7 +294,7 @@ static unsigned int Change(AMDGPU_WINDOWS_STATE *s,const char *path,const char *
     if(!s || !error) return AMDGPU_STATE_INVALID_ARGUMENT;
     *error=ERROR_SUCCESS;
     if(!spec) return AMDGPU_STATE_UNKNOWN;
-    if(!s->writable || spec->kind==AMDGPU_STATE_VOLATILE ||
+    if(!s->writable || s->source || spec->kind==AMDGPU_STATE_VOLATILE ||
        (spec->access!=AMDGPU_STATE_ADMIN && !(clear && spec->access==AMDGPU_STATE_ADMIN_CLEAR)))
         return AMDGPU_STATE_ACCESS;
     if(!clear) { result=AmdgpuStateMayWrite(spec,1,0,type,data,bytes); if(result) return result; }
@@ -386,7 +405,7 @@ unsigned int AmdgpuWindowsStateRetire(AMDGPU_WINDOWS_STATE *s,const unsigned cha
     HANDLE writer=NULL;HKEY shared=NULL,current=NULL;WCHAR tx[33];unsigned int result;
     AMDGPU_WINDOWS_STATE observed;
     if(!s || !error)return AMDGPU_STATE_INVALID_ARGUMENT;
-    *error=0;if(!s->writable)return AMDGPU_STATE_ACCESS;
+    *error=0;if(!s->writable || s->source)return AMDGPU_STATE_ACCESS;
     result=TransactionName(transaction,tx);if(result)return result;
     *error=AmdgpuStateWriterLock(&writer);if(*error)return Status(*error);
     AcquireSRWLockExclusive(&s->lock);

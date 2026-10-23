@@ -373,7 +373,9 @@ static DWORD ReadSettings(PCWSTR device,INSTALLER_SETTING *values)
     if(h.origin!=AMDGPU_TRANSFER_FRESH && h.origin!=AMDGPU_TRANSFER_LEGACY &&
        h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
     if(h.origin==AMDGPU_TRANSFER_CURRENT) {
-        result=AmdgpuWindowsStateOpen(&state,0,&error);if(result)return AsError(result,error);
+        // The installed generation may belong to an earlier catalog of this schema (an update in place that
+        // adds or changes settings): a migration source, read by setting name.
+        result=AmdgpuWindowsStateOpenSource(&state,0,&error);if(result)return AsError(result,error);
     }
     for(i=0;i<AmdgpuStateCount();i++) {
         const AMDGPU_STATE_SPEC *spec=AmdgpuStateAt(i);AMDGPU_STATE_VALUE value={0};DWORD data=0;
@@ -463,7 +465,9 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     AmdgpuStateBootToken(BootId(),h.source_boot);
     buffer=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);if(!buffer)return ERROR_NOT_ENOUGH_MEMORY;
     if(h.origin==AMDGPU_TRANSFER_CURRENT) {
-        result=AmdgpuWindowsStateOpen(&state,1,&error);if(result){error=AsError(result,error);goto done;}
+        // The generation of the installed package may belong to an earlier catalog: a migration source. The
+        // capture reads it by setting name; the KMD's transaction writes the new generation under this catalog.
+        result=AmdgpuWindowsStateOpenSource(&state,1,&error);if(result){error=AsError(result,error);goto done;}
         result=AmdgpuWindowsStateIdentity(state,h.source_generation,&error);if(result){error=AsError(result,error);goto done;}
         result=AmdgpuWindowsStateFreeze(state,h.transaction,&error);if(result){error=AsError(result,error);goto done;}
         if(archive){error=Device(argv[4],&h,TRUE);if(error)goto done;}

@@ -8,6 +8,11 @@ extern "C" {
 #endif
 typedef struct amdgpu_windows_state AMDGPU_WINDOWS_STATE;
 unsigned int AmdgpuWindowsStateOpen(AMDGPU_WINDOWS_STATE **state, unsigned int writable, DWORD *error);
+// The active generation as a migration source: the same schema under any well-formed catalog identity. The
+// installer worker reads the installed settings by name before it stages a package with another catalog and
+// captures them for the KMD's transaction. Value writes, CheckWrite and Retire are refused on this handle;
+// freeze, identity and capture work. Every other reader uses AmdgpuWindowsStateOpen.
+unsigned int AmdgpuWindowsStateOpenSource(AMDGPU_WINDOWS_STATE **state, unsigned int writable, DWORD *error);
 void AmdgpuWindowsStateClose(AMDGPU_WINDOWS_STATE *state);
 // Validate the retained generation and unfrozen writer boundary without writing.
 // A multi-call client must also retain the common writer lock across its calls.

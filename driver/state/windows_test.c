@@ -171,6 +171,46 @@ static void CaptureTest(AMDGPU_WINDOWS_STATE *state)
     CHECK(AmdgpuWindowsStateSet(state,"","CpuTune",REG_DWORD,&choice,4,&error)==0);
     HeapFree(GetProcessHeap(),0,buffer);
 }
+// The generation of an earlier catalog of the same schema: strict readers refuse it, the installer worker
+// reads it as the source of an update in place, freezes it and captures it; it never writes a value into it.
+static void SourceTest(HKEY root,HKEY generation,HKEY data)
+{
+    AMDGPU_WINDOWS_STATE *state=NULL,*strict=NULL,*readonly=NULL;AMDGPU_STATE_VALUE value;AMDGPU_TRANSFER_HEADER h={0};
+    BYTE *buffer=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);const void *payload=NULL;
+    DWORD error=0,out=0;unsigned int bytes=0,i,cpu=~0u;
+    static const WCHAR earlier[]=L"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    CHECK(buffer!=NULL);if(!buffer)return;
+    String(generation,L"CatalogId",earlier);Number(data,L"CpuTune",1);Number(root,L"Frozen",0);
+    CHECK(AmdgpuWindowsStateOpen(&strict,0,&error)==AMDGPU_STATE_SCHEMA && !strict);
+    CHECK(AmdgpuWindowsStateOpenSource(&readonly,0,&error)==0 && readonly);
+    CHECK(AmdgpuWindowsStateOpenSource(&state,1,&error)==0 && state);
+    if(!state || !readonly) goto done;
+    CHECK(AmdgpuWindowsStateQuery(readonly,"","CpuTune",AMDGPU_STATE_QUERY_OVERRIDE,&value,&out,4)==0 && out==1);
+    out=0;CHECK(AmdgpuWindowsStateSet(state,"","CpuTune",REG_DWORD,&out,4,&error)==AMDGPU_STATE_ACCESS);
+    CHECK(AmdgpuWindowsStateClear(state,"","CpuTune",&error)==AMDGPU_STATE_ACCESS);
+    CHECK(AmdgpuWindowsStateCheckWrite(state,&error)==AMDGPU_STATE_ACCESS);
+    CHECK(AmdgpuWindowsStateQuery(state,"","CpuTune",AMDGPU_STATE_QUERY_OVERRIDE,&value,&out,4)==0 && out==1);
+    h.origin=AMDGPU_TRANSFER_CURRENT;h.source_schema=AmdgpuStateSchema();h.transaction[0]=8;h.device_hash[0]=2;h.source_boot[0]=3;
+    CHECK(AmdgpuWindowsStateIdentity(state,h.source_generation,&error)==0);
+    memcpy(h.catalog,AmdgpuStateCatalogId(),64);
+    strcpy_s(h.source_version,32,"0.7.216.103");strcpy_s(h.destination_version,32,"0.7.216.104");
+    CHECK(AmdgpuWindowsStateFreeze(state,h.transaction,&error)==0);
+    CHECK(AmdgpuWindowsStateRetire(state,h.transaction,&error)==AMDGPU_STATE_ACCESS);
+    CHECK(AmdgpuWindowsCaptureCurrent(state,&h,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes,&error)==0 && bytes);
+    for(i=0;i<AmdgpuStateCount();i++)if(!strcmp(AmdgpuStateAt(i)->name,"CpuTune") && !AmdgpuStateAt(i)->path[0])cpu=i;
+    CHECK(AmdgpuTransferFind(buffer,bytes,cpu,&value,&payload)==0 && value.type==REG_DWORD && value.bytes==4);
+    CHECK(payload && !memcmp(payload,"\1\0\0\0",4));
+    CHECK(AmdgpuWindowsStateCancelFreeze(state,h.transaction,&error)==0);
+    AmdgpuWindowsStateClose(state);state=NULL;
+    // A malformed identity is never a source: not a word, not uppercase digits.
+    String(generation,L"CatalogId",L"wrong");
+    CHECK(AmdgpuWindowsStateOpenSource(&state,0,&error)==AMDGPU_STATE_SCHEMA && !state);
+    String(generation,L"CatalogId",L"0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF");
+    CHECK(AmdgpuWindowsStateOpenSource(&state,0,&error)==AMDGPU_STATE_SCHEMA && !state);
+done:
+    AmdgpuWindowsStateClose(state);AmdgpuWindowsStateClose(readonly);AmdgpuWindowsStateClose(strict);
+    RegDeleteValueW(data,L"CpuTune");HeapFree(GetProcessHeap(),0,buffer);
+}
 static void DataTest(HKEY root,HKEY generation,HKEY data)
 {
     AMDGPU_WINDOWS_STATE *state=NULL,*readonly=NULL; AMDGPU_STATE_VALUE value;
@@ -305,6 +345,7 @@ int wmain(int argc,WCHAR **argv)
     for(i=0;i<65;i++) id[i]=(unsigned char)AmdgpuStateCatalogId()[i];
     String(generation,L"CatalogId",id);
     DataTest(root,generation,data);
+    SourceTest(root,generation,data);
     RetireTest(root,generation);
     RegCloseKey(data);RegCloseKey(generation);RegCloseKey(generations);RegCloseKey(root);
     CHECK(RegDeleteTreeW(Fixture,NULL)==0);RegCloseKey(Fixture);

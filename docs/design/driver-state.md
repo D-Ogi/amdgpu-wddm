@@ -21,6 +21,10 @@ It grants no write access or permission to remove keys or change permissions. Ex
 
 `StateV2` holds an active generation, its data, and separate volatile records.
 A generation has a schema and catalog identity. Readers reject incomplete or unknown generations.
+Two readers accept a generation of the same schema under an earlier catalog as the source of an update in place:
+the installer worker (settings snapshot, prepare) and the first start of the new package with a pending handoff.
+Both read it by setting name, write no value into it and bind no receipt from it. The transaction publishes the
+new generation under the new catalog. Without a handoff the KMD refuses such a generation.
 User-mode readers check the signed package's catalog file before they consume factory defaults.
 This path also supports diagnosis when the graphics adapter cannot start.
 

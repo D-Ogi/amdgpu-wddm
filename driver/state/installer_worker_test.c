@@ -11,7 +11,7 @@
 extern DWORD AmdgpuInstallerTestExecute(DWORD,WCHAR**);
 extern DWORD AmdgpuInstallerTestSettings(PCWSTR,DWORD*);
 static BYTE saved[AMDGPU_TRANSFER_MAX_BYTES],removed[AMDGPU_TRANSFER_MAX_BYTES];
-static UINT saved_bytes,removed_bytes,origin,failure,freeze,stop,publish,archives,captured,checks;
+static UINT saved_bytes,removed_bytes,origin,failure,freeze,stop,publish,archives,captured,checks,strict_opens,source_opens;
 static DWORD board_error,pending_error,remove_error,origin_error,device_error;static BOOL current_package;
 static int failed;
 ULONG AmdgpuInstallerTestBoot=91;
@@ -20,7 +20,7 @@ static DWORD rb_bytes,complete_bytes,active_bytes,restores,retired,enabled,sourc
 #define CHECK(x) do{checks++;if(!(x)){printf("FAIL %u line %u: %s\n",checks,__LINE__,#x);failed++;}}while(0)
 static void Reset(UINT source)
 {
-    saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=0;
+    saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=strict_opens=source_opens=0;
     board_error=pending_error=remove_error=origin_error=device_error=0;origin=source;current_package=FALSE;
     rb_bytes=complete_bytes=active_bytes=restores=retired=enabled=source_removed=target_error=restore_error=retire_error=complete_error=0;
     AmdgpuInstallerTestBoot=91;
@@ -52,8 +52,14 @@ DWORD AmdgpuInstallerTestSource(PCWSTR id,AMDGPU_ROLLBACK *r,BOOL remove)
 DWORD AmdgpuInstallerTestTarget(PCWSTR id,const AMDGPU_ROLLBACK *r,BOOL mode)
 {(void)id;(void)r;if(target_error)return target_error;if(!stop || (enabled && mode<2) || (mode==4 && !enabled))return ERROR_BUSY;
  if(mode==3){CHECK(complete_bytes && retired);enabled++;}return 0;}
+static UINT OpenState(AMDGPU_WINDOWS_STATE **out,DWORD *error)
+{*error=failure==1?ERROR_ACCESS_DENIED:0;*out=(AMDGPU_WINDOWS_STATE*)1;return *error?AMDGPU_STATE_ACCESS:0;}
 UINT AmdgpuWindowsStateOpen(AMDGPU_WINDOWS_STATE **out,UINT writable,DWORD *error)
-{(void)writable;*error=failure==1?ERROR_ACCESS_DENIED:0;*out=(AMDGPU_WINDOWS_STATE*)1;return *error?AMDGPU_STATE_ACCESS:0;}
+{(void)writable;strict_opens++;return OpenState(out,error);}
+// The installed generation may belong to an earlier catalog: the settings snapshot and prepare open it as a
+// migration source; the rollback verbs (the same package, the same catalog) open it strictly.
+UINT AmdgpuWindowsStateOpenSource(AMDGPU_WINDOWS_STATE **out,UINT writable,DWORD *error)
+{(void)writable;source_opens++;return OpenState(out,error);}
 void AmdgpuWindowsStateClose(AMDGPU_WINDOWS_STATE *s){(void)s;}
 UINT AmdgpuWindowsStateIdentity(AMDGPU_WINDOWS_STATE *s,BYTE generation[16],DWORD *error)
 {(void)s;memset(generation,2,16);*error=failure==2?ERROR_REVISION_MISMATCH:0;return *error?AMDGPU_STATE_SCHEMA:0;}
@@ -152,6 +158,7 @@ int main(void)
      for(i=AMDGPU_TRANSFER_FRESH;i<=AMDGPU_TRANSFER_CURRENT;i++) {
         Reset(i);CHECK(!AmdgpuInstallerTestSettings(L"PCI\\VEN_1002&DEV_13FE\\FIXTURE",pairs));
         CHECK(!freeze && !stop && !publish && !archives);
+        CHECK(source_opens==(UINT)(i==AMDGPU_TRANSFER_CURRENT) && !strict_opens);
         CHECK(pairs[2*cpu]==(DWORD)(i!=AMDGPU_TRANSFER_FRESH));
         if(i!=AMDGPU_TRANSFER_FRESH)CHECK(pairs[2*cpu+1]==1);
         failure=4;if(i!=AMDGPU_TRANSFER_FRESH)CHECK(AmdgpuInstallerTestSettings(L"fixture",pairs)==ERROR_ACCESS_DENIED);
@@ -165,6 +172,7 @@ int main(void)
         Reset(i);CHECK(!Run(L"prepare",tx));CHECK(publish==1);CHECK(captured==1);
         CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==i);
         CHECK(freeze==(UINT)(i==AMDGPU_TRANSFER_CURRENT));CHECK(stop==0);
+        CHECK(source_opens==(UINT)(i==AMDGPU_TRANSFER_CURRENT) && !strict_opens);
         CHECK(!Run(L"prepare",tx));CHECK(publish==1);CHECK(captured==1);
         CHECK(Run(L"prepare",L"02020202020202020202020202020202")==ERROR_REVISION_MISMATCH);
         CHECK(!Run(L"ack",tx));
@@ -201,6 +209,7 @@ int main(void)
     CHECK(Run(L"prepare",L"../redirect")==ERROR_INVALID_PARAMETER);
     Reset(AMDGPU_TRANSFER_CURRENT);current_package=TRUE;
     CHECK(!Roll(L"rollback-capture"));CHECK(rb_bytes && active_bytes && freeze==1 && stop==1);
+    CHECK(strict_opens==1 && !source_opens);
     CHECK(!Roll(L"rollback-check"));CHECK(!Roll(L"rollback-remove"));CHECK(source_removed==1);
     CHECK(Run(L"prepare",tx)==ERROR_BUSY);
     CHECK(Roll(L"rollback-restore")==ERROR_RETRY);CHECK(!restores && !enabled);

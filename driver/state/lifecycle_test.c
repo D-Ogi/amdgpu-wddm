@@ -569,6 +569,58 @@ int main(void)
     CHECK(InitReadOnly()==0 && Candidate!=NULL && !uuid_calls);sets_before=set_calls;
     CHECK(DriverStateActivate(good)==0);Accepted();CHECK(set_calls>sets_before);
     root=Key(L"S\\StateV2",FALSE);CHECK(!Value(root,L"FactoryTransfer",FALSE));DriverStateClose();NoLeaks();
+
+    // An update in place: the installer's worker froze the active generation and captured it into the handoff;
+    // the first start of the new package merges the capture with that generation's data and publishes a new
+    // generation under its own catalog. The retained generation may belong to an earlier catalog of the same
+    // schema (a release that added settings); without a handoff such a generation is refused.
+    for(i=0;i<4;i++) {
+        static const WCHAR same[]=L"02000000000000000000000000000000";
+        static const WCHAR earlier[]=L"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        static const char *const names[]={"update in place with the same catalog","update in place across a catalog change",
+            "a generation of another catalog without a handoff is refused","a malformed catalog identity is never a source"};
+        AMDGPU_TRANSFER_HEADER old;WCHAR wide[65];unsigned j,gen2,data2,meta2;
+        Reset(names[i]);
+        root=Key(L"S\\StateV2",TRUE);SetString(root,L"Active",same);
+        SetNumber(root,L"Frozen",i==2?0:1);SetString(root,L"FrozenBy",L"01000000000000000000000000000000");
+        gen2=Key(L"S\\StateV2\\Generations\\02000000000000000000000000000000",TRUE);
+        data2=Key(L"S\\StateV2\\Generations\\02000000000000000000000000000000\\Data",TRUE);
+        meta2=Key(L"S\\StateV2\\Generations\\02000000000000000000000000000000\\Migration",TRUE);
+        SetNumber(gen2,L"Ready",AmdgpuStateSchema());
+        for(j=0;j<65;++j)wide[j]=(BYTE)AmdgpuStateCatalogId()[j];
+        SetString(gen2,L"CatalogId",i==0?wide:i==3?L"wrong":earlier);
+        SetNumber(data2,L"CuMode",40);SetNumber(data2,L"DpmMode",0);SetNumber(data2,L"EnableFullWddm",1);
+        memset(&old,0,sizeof(old));old.magic=AMDGPU_TRANSFER_MAGIC;old.version=AMDGPU_TRANSFER_VERSION;
+        old.origin=AMDGPU_TRANSFER_LEGACY;old.source_schema=1;old.board_kind=AMDGPU_BOARD_UNPROVEN;
+        old.transaction[0]=2;old.device_hash[0]=42;AmdgpuStateBootToken(100,old.source_boot);
+        strcpy_s(old.source_version,32,"0.7.216.100");strcpy_s(old.destination_version,32,"0.7.216.101");
+        memcpy(old.catalog,AmdgpuStateCatalogId(),64);
+        if(i)memcpy(old.catalog,"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+        SetValue(meta2,L"Transfer",REG_BINARY,&old,sizeof(old));
+        if(i!=2) {
+            memset(&raw,0,sizeof(raw));raw.origin=AMDGPU_TRANSFER_CURRENT;raw.source_schema=AmdgpuStateSchema();
+            raw.transaction[0]=1;raw.source_generation[0]=2;raw.device_hash[0]=42;
+            AmdgpuStateBootToken(123,raw.source_boot);memcpy(raw.catalog,AmdgpuStateCatalogId(),64);
+            strcpy_s(raw.source_version,32,"0.7.216.101");strcpy_s(raw.destination_version,32,"0.7.216.102");
+            CHECK(AmdgpuTransferCapture(&raw,CaptureLegacy,NULL,handoff,sizeof(handoff),&bytes)==0);handoff_bytes=bytes;
+        }
+        if(i>=2) {
+            CHECK(DriverStateInit((PDRIVER_OBJECT)1)==STATUS_REVISION_MISMATCH);
+            CHECK(!DriverStateReady() && Candidate==NULL && !ready_writes && !active_writes);NoLeaks();continue;
+        }
+        CHECK(DriverStateInit((PDRIVER_OBJECT)1)==0);CHECK(Candidate!=NULL && !DriverStateReady());
+        CHECK(!ready_writes && !active_writes);
+        CHECK(DriverStateActivate(good)==0);Accepted();CheckNumber(L"CuMode",40);CheckNumber(L"DpmMode",0);
+        gen=Key(GenerationPath,FALSE);stored=Value(gen,L"CatalogId",FALSE);
+        CHECK(stored && !wcscmp((WCHAR*)values[stored].data,wide));
+        stored=Value(gen2,L"CatalogId",FALSE);CHECK(stored && !wcscmp((WCHAR*)values[stored].data,i?earlier:wide));
+        stored=Value(root,L"Frozen",FALSE);CHECK(stored && *(DWORD*)values[stored].data==0);
+        DriverStateClose();NoLeaks();
+        // The next start finds the new generation: the handoff is only its receipt.
+        CHECK(DriverStateInit((PDRIVER_OBJECT)1)==0 && !DriverStateReady() && Candidate==NULL);
+        CHECK(DriverStateActivate(good)==0);Accepted();CheckNumber(L"CuMode",40);
+        DriverStateClose();NoLeaks();
+    }
     printf("state lifecycle: %u scenarios, %u checks, %u failures; actual kernel+transaction, no registry/GPU\n",scenarios,checks,failures);
     return failures?1:0;
 }
