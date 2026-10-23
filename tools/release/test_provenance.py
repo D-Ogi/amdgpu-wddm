@@ -24,6 +24,7 @@ import struct
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 import provenance
 
@@ -104,7 +105,11 @@ class Workspace:
         git(self.engine, "fetch", "-q", "origin")
         self.engine_commit = git(self.engine, "rev-parse", "HEAD")
         # The recipe repository: a recipe, a data file, and the payload's source files under the root.
+        catalog = b'AMDST02\0' + struct.pack('<II', 2, 1) + b'1' * 64 + b'\0' * 12
         self.tool = self.make_repo("tool", {"build.ps1": b"# recipe\n", "data/icd.json": b'{"icd": 1}\n',
+                                            "driver/state/amdgpu-state.bin": catalog,
+                                            "driver/state/catalog.generated.h":
+                                                b'#define AMDGPU_STATE_CATALOG_ID "' + b'1' * 64 + b'"\n#define AMDGPU_STATE_COUNT 1u\n#define AMDGPU_STATE_SCHEMA_VERSION 2u\n',
                                             "driver/kmd/bc250kmd_escape.h":
                                                 b"#define BC250_KMD_VERSION 0x000700D8u   // revision 216\n"})
         self.tool_commit = git(self.tool, "rev-parse", "HEAD")
@@ -115,6 +120,7 @@ class Workspace:
             "tool.exe": b"downloaded bytes",
             "engine.dll": b"engine bytes",
             "driver.sys": fake_pe(b"\x01" * 64, b"lab signature"),
+            "state.bin": catalog,
         }
         for name, data in self.files.items():
             (self.root / "scratch" / name).write_bytes(data)
@@ -497,6 +503,8 @@ class ProvenanceGate(unittest.TestCase):
         m = self.manifest()
         self.file(m, "payload/driver.sys")["path"] = "payload/kmd/bc250kmd.sys"
         commit = self.ws.tool_commit
+        m['files'].append(self.ws.entry('payload/kmd/amdgpu-state.bin', 'state.bin',
+            built_from={'repo': 'tool', 'commit': commit, 'path': 'driver/state/amdgpu-state.bin'}))
         m["kmd_abi"] = "0x000700D8"
         m["sources"] = {"kmd": f"bc250-win {commit} (train/b29), the b29 train driver 0.7.216.28. New in round 9."}
         errors, _, _ = self.ws.check(m)
@@ -734,6 +742,97 @@ class AuthenticodeDigest(unittest.TestCase):
     def test_not_a_pe_file(self):
         with self.assertRaises(ValueError):
             self.digest(b"plain text")
+
+
+class StateCatalogInputsTests(unittest.TestCase):
+    def setUp(self):
+        self.paths = ['payload/tools/bc250kmd_cli.exe', 'payload/tools/amdgpu-state-installer.exe',
+                      'payload/control/bc250control.dll', 'payload/tools/bc250control.dll',
+                      'payload/desktop/bc250d3d_router.dll', 'payload/wow64/desktop/bc250d3d_router.dll',
+                      'payload/kmd/bc250kmd.sys']
+        self.sources = {'recipe_repository': 'driver', 'files': [self.row(p) for p in
+                        ['payload/kmd/amdgpu-state.bin'] + self.paths]}
+        self.repos = Mock()
+        self.repos.find.return_value = Path('fixture')
+        self.headers = {'a' * 40: self.header('1', 182), 'b' * 40: self.header('2', 178),
+                        'c' * 40: self.header('1', 182)}
+
+    def row(self, path):
+        return {'path': path, 'built_from': {'repo': 'driver', 'commit': 'a' * 40}}
+
+    @staticmethod
+    def header(value, count):
+        return f'#define AMDGPU_STATE_CATALOG_ID "{value * 64}"\n#define AMDGPU_STATE_COUNT {count}u\n#define AMDGPU_STATE_SCHEMA_VERSION 2u'
+
+    def check(self):
+        def read(checkout, verb, spec):
+            self.assertEqual(verb, 'show')
+            commit, path = spec.split(':', 1)
+            self.assertEqual(path, 'driver/state/catalog.generated.h')
+            return (0, self.headers[commit]) if commit in self.headers else (1, '')
+        with patch.object(provenance, 'git', side_effect=read):
+            return provenance.state_catalog_inputs_ok(self.sources, self.repos)
+
+    def test_same_catalog_across_different_commits(self):
+        self.sources['files'][1]['built_from']['commit'] = 'c' * 40
+        self.assertEqual(self.check(), [])
+
+    def test_each_consumer_with_stale_header_is_named(self):
+        for row in self.sources['files'][1:]:
+            row['built_from']['commit'] = 'b' * 40
+        errors = self.check()
+        self.assertEqual(len(errors), len(self.paths))
+        for path in self.paths:
+            self.assertEqual(sum(path in error for error in errors), 1)
+
+    def test_rebuilt_cli_does_not_hide_old_router(self):
+        self.sources['files'][-2]['built_from']['commit'] = 'b' * 40
+        self.assertEqual(len(self.check()), 1)
+        self.assertIn('payload/wow64/desktop/bc250d3d_router.dll', self.check()[0])
+
+    def test_windows_path_case_cannot_hide_stale_consumer(self):
+        self.sources['files'][0]['path'] = self.sources['files'][0]['path'].upper()
+        self.sources['files'][1]['path'] = self.sources['files'][1]['path'].upper()
+        self.sources['files'][1]['built_from']['commit'] = 'b' * 40
+        errors = self.check()
+        self.assertEqual(len(errors), 1)
+        self.assertIn(self.sources['files'][1]['path'], errors[0])
+
+    def test_missing_or_duplicate_anchor_refused(self):
+        anchor = self.sources['files'].pop(0)
+        self.assertTrue(self.check())
+        self.sources['files'] += [anchor, anchor]
+        self.assertTrue(self.check())
+
+    def test_missing_origin_or_foreign_repository_refused(self):
+        self.sources['files'][1].pop('built_from')
+        self.assertTrue(self.check())
+        self.sources['files'][1]['built_from'] = {'repo': 'other', 'commit': 'a' * 40}
+        self.assertTrue(self.check())
+
+    def test_missing_commit_or_header_refused(self):
+        self.repos.find.return_value = None
+        self.assertTrue(self.check())
+        self.repos.find.return_value = Path('fixture')
+        self.headers.clear()
+        self.assertTrue(self.check())
+
+    def test_malformed_or_duplicate_header_refused(self):
+        for text in ['', self.header('1', 182) + '\n#define AMDGPU_STATE_COUNT 182u']:
+            self.headers['a' * 40] = text
+            self.assertTrue(self.check())
+
+    def test_same_id_different_count_or_schema_refused(self):
+        self.sources['files'][1]['built_from']['commit'] = 'c' * 40
+        self.headers['c' * 40] = self.header('1', 178)
+        self.assertTrue(self.check())
+        self.headers['c' * 40] = self.header('1', 182).replace('VERSION 2u', 'VERSION 3u')
+        self.assertTrue(self.check())
+
+    def test_unrelated_payload_has_no_state_requirement(self):
+        self.sources['files'] = [self.row('payload/tool.exe')]
+        self.assertEqual(self.check(), [])
+        self.repos.find.assert_not_called()
 
 
 if __name__ == "__main__":
