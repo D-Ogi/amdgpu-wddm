@@ -45,7 +45,7 @@
 22	docs/design/bc250-open-test-pack.md
 33	docs/design/cu-mode.md
 66	docs/design/d3d11-ddi-engine.md
-26	docs/design/d3d12-ddi-engine.md
+25	docs/design/d3d12-ddi-engine.md
 2	docs/design/dp-audio.md
 73	docs/design/dpm.md
 12	docs/design/fan.md
@@ -171,5 +171,4 @@
 1	tools/win/smartplug/README.md
 6	tools/win/triage/README.md
 1	tools/win/vkfillcheck/README.md
-1	tools/win/vkmembw/README.md
 2	tools/wininstall/README.md
