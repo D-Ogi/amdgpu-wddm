@@ -26,7 +26,18 @@ struct Adapter {
     UINT32 instance_policy{};
     SRWLOCK tables_lock=SRWLOCK_INIT;
     D3D12DDI_HRTTABLE list_tables[2]{};
+    // The D3D12DDIARG_CREATEDEVICE_0003 Version (build << 16) this adapter's devices use, 0 until a CreateDevice
+    // passed its checks (adopt_ddi_version). FillDDITable selects the L68 argument layout from it.
+    std::atomic<UINT> ddi_version{0};
 };
+// The first device that passes CreateDevice's checks sets the adapter's version, and it stays for the adapter's
+// life, also when that device's engine then fails: L68 of a published table has one argument layout. A later
+// device of the same version is accepted; one of another version is refused (false), the recorded value unchanged.
+inline bool adopt_ddi_version(Adapter& adapter,UINT version) noexcept {
+    UINT expected=0;
+    return adapter.ddi_version.compare_exchange_strong(expected,version,std::memory_order_acq_rel) ||
+        expected==version;
+}
 struct Device {
     Adapter* adapter{};
     D3D12DDI_HRTDEVICE runtime{};
@@ -35,6 +46,9 @@ struct Device {
     QueueRegistry queues;
     MemoryRegistry memory;
     DeviceEngine* engine{};
+    // The D3D12DDIARG_CREATEDEVICE_0003 Version the runtime negotiated (build << 16): 0092, 0093 or 0094
+    // (adapter.cpp).
+    UINT ddi_version{};
     // ddi_trace_mode() of this device, read once when its engine is created (device-engine.cpp).
     int trace_mode{};
     // The recording binding of this device's command lists (RecordingScope, device-engine.h), or null for the

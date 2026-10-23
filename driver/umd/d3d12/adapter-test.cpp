@@ -164,14 +164,22 @@ int main(int argc,char** argv) {
         assert(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && scanout.post_width==1920 &&
                scanout.post_height==1200 && scanout.version==BC250_SCANOUT_CAPS_VERSION);
     }
-    UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==1);
-    UINT64 guard[2]={0xabcdef,0x123456};count=0;
+    UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==3);
+    UINT64 guard[4]={0xabcdef,0x123456,0x777,0x888};count=2;
     assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
-    assert(count==1 && guard[0]==0xabcdef && guard[1]==0x123456);
-    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==S_OK && guard[0]==D3D12DDI_SUPPORTED_0092 && guard[1]==0x123456);
+    assert(count==3 && guard[0]==0xabcdef && guard[1]==0x123456 && guard[2]==0x777 && guard[3]==0x888);
+    // Newest first: 0094, 0093, then 0092 for a runtime that knows neither.
+    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==S_OK && guard[0]==D3D12DDI_SUPPORTED_0094 &&
+           guard[1]==D3D12DDI_SUPPORTED_0093 && guard[2]==D3D12DDI_SUPPORTED_0092 && guard[3]==0x888);
     assert(funcs.pfnCreateDevice(a.hAdapter,nullptr)==E_INVALIDARG);
     D3D12DDIARG_CALCPRIVATEDEVICESIZE sizeArgs{};
     assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
+    // The three offered builds are accepted, the build before them and the one after are not.
+    sizeArgs.Interface=D3D12DDI_INTERFACE_VERSION_R8;
+    sizeArgs.Version=D3D12DDI_BUILD_VERSION_0094<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs));
+    sizeArgs.Version=D3D12DDI_BUILD_VERSION_0093<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs));
+    sizeArgs.Version=D3D12DDI_BUILD_VERSION_0091<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
+    sizeArgs.Version=D3D12DDI_BUILD_VERSION_0095<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
     sizeArgs.Interface=D3D12DDI_INTERFACE_VERSION_R8;sizeArgs.Version=D3D12DDI_BUILD_VERSION_0092<<16;
     SIZE_T size=funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs);assert(size);
     void* storage=::operator new(size);
@@ -187,12 +195,61 @@ int main(int argc,char** argv) {
     // A CPU-only shell is no longer a successful device. Missing allocation
     // callbacks refuse before any engine DLL or GPU is touched on the host.
     assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_INVALIDARG);
-    assert(static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate)->devices.load()==0);
+    auto& state=*static_cast<native12::Adapter*>(a.hAdapter.pDrvPrivate);
+    assert(state.devices.load()==0);
+    // A CreateDevice refused by its checks records no version, and a command list table asked for before any
+    // version is known is refused (E_UNEXPECTED), not given a barrier layout by default.
+    assert(state.ddi_version.load()==0);
+    {
+        D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 list{};
+        assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,&list,sizeof(list),1,
+            {reinterpret_cast<HANDLE>(UINT_PTR(0x56780002u))})==E_UNEXPECTED && !list.pfnBarrier);
+        assert(!state.list_tables[1].handle);
+    }
+    // The first version stays; the same one again is accepted, another is refused and changes nothing.
+    assert(native12::adopt_ddi_version(state,D3D12DDI_BUILD_VERSION_0094<<16));
+    assert(native12::adopt_ddi_version(state,D3D12DDI_BUILD_VERSION_0094<<16));
+    assert(!native12::adopt_ddi_version(state,D3D12DDI_BUILD_VERSION_0092<<16) &&
+           state.ddi_version.load()==(D3D12DDI_BUILD_VERSION_0094<<16));
+    // CreateDevice with every callback it checks and another version: refused before any engine is made.
+    um.pfnAllocateCb=reinterpret_cast<decltype(um.pfnAllocateCb)>(&error);
+    um.pfnDeallocateCb=reinterpret_cast<decltype(um.pfnDeallocateCb)>(&error);
+    um.pfnSetCommandListDDITableCb=reinterpret_cast<decltype(um.pfnSetCommandListDDITableCb)>(&error);
+    um.pfnSetCommandListErrorCb=reinterpret_cast<decltype(um.pfnSetCommandListErrorCb)>(&error);
+    device.Version=D3D12DDI_BUILD_VERSION_0092<<16;
+    assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_NOINTERFACE && state.devices.load()==0 &&
+           state.ddi_version.load()==(D3D12DDI_BUILD_VERSION_0094<<16));
     ::operator delete(storage);
 
     assert(funcs.pfnFillDDITable(a.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,guard,sizeof(guard),0,{})==E_INVALIDARG);
-    assert(guard[1]==0x123456);
+    assert(guard[2]==D3D12DDI_SUPPORTED_0092 && guard[3]==0x888);
     publication_tests(funcs,a.hAdapter);
+    // A second adapter in the same process that negotiated another build: its command list tables have the 0092
+    // layout and their own wrappers, and are published although the first adapter's 0094 tables already are
+    // (before the per-layout stores, the second fill was refused with E_UNEXPECTED). The first adapter's tables are
+    // still published with the same entries afterwards.
+    {
+        using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
+        const D3D12DDI_HRTTABLE first[2]={
+            {reinterpret_cast<HANDLE>(UINT_PTR(0x56780001u))},{reinterpret_cast<HANDLE>(UINT_PTR(0x56780002u))}};
+        const D3D12DDI_HRTTABLE second[2]={
+            {reinterpret_cast<HANDLE>(UINT_PTR(0x56790001u))},{reinterpret_cast<HANDLE>(UINT_PTR(0x56790002u))}};
+        D3D12DDI_ADAPTERFUNCS funcs_b{};D3D12DDIARG_OPENADAPTER b{};b.pAdapterFuncs=&funcs_b;
+        b.pAdapterCallbacks=&callbacks;b.hRTAdapter.handle=reinterpret_cast<HANDLE>(UINT_PTR(0x1234));
+        assert(open(&b)==S_OK && b.hAdapter.pDrvPrivate && b.hAdapter.pDrvPrivate!=a.hAdapter.pDrvPrivate);
+        auto& state_b=*static_cast<native12::Adapter*>(b.hAdapter.pDrvPrivate);
+        assert(native12::adopt_ddi_version(state_b,D3D12DDI_BUILD_VERSION_0092<<16));
+        for(UINT i=0;i<2;++i){
+            const List a94=published_table<List>(funcs,a.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,i,first[i]);
+            const List b92=published_table<List>(funcs_b,b.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,i,second[i]);
+            assert(b92.pfnBarrier && b92.pfnBarrier!=a94.pfnBarrier && b92.pfnDispatch!=a94.pfnDispatch);
+            assert(state_b.list_tables[i].handle==second[i].handle);
+            const List a94_again=published_table<List>(funcs,a.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,i,first[i]);
+            const List b92_again=published_table<List>(funcs_b,b.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,i,second[i]);
+            assert(!memcmp(&a94_again,&a94,sizeof(List)) && !memcmp(&b92_again,&b92,sizeof(List)));
+        }
+        assert(funcs_b.pfnCloseAdapter(b.hAdapter)==S_OK);
+    }
     assert(funcs.pfnCloseAdapter(a.hAdapter)==S_OK);
     Sleep(200); // longer than a recent-launch worker takes on the host
     assert(GetFileAttributesA(store.c_str())==INVALID_FILE_ATTRIBUTES);

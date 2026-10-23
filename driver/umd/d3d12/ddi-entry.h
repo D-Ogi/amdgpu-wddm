@@ -425,18 +425,24 @@ constexpr bool ddi_same_name(const char* a,const char* b) noexcept {
     while(*a && *a==*b){++a;++b;}
     return *a==*b;
 }
-// One immutable original table per Policy and table number in this UMD module.
+// One immutable original table per Policy, list layout and table number in this UMD module.
 // Refill with identical entries is permitted. A changed entry refuses the whole
 // refill without publishing any output. No mutable current adapter/device global.
+// The command list tables have two layouts, 0092 (DDI builds 92 and 93) and 0094, which differ in the type of
+// L68 pfnBarrier only. Each layout has its own store and its own typed wrappers, so adapters that negotiated
+// different builds in one process each keep their own original table.
 // Wrap before publishing to the runtime; the caller owns publication of *out.
 // The source must already contain all shell and engine entries; never wrap twice.
 template<class Policy> class DdiEntryTables final {
     using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
     using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
+    using List94=D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
     inline static Core core_{};
-    inline static List lists_[2]{};
     inline static std::atomic<bool> core_ready_{};
-    inline static std::atomic<bool> list_ready_[2]{};
+    template<class L> struct ListStore {
+        inline static L lists[2]{};
+        inline static std::atomic<bool> ready[2]{};
+    };
     inline static SRWLOCK lock_=SRWLOCK_INIT;
     class Lock final {
     public:
@@ -482,35 +488,40 @@ template<class Policy> class DdiEntryTables final {
             return core_ready_.load(std::memory_order_acquire)?core_.*Member:Fn{};
         }
     };
-    template<unsigned Index,auto Member,class Name> struct ListBinding:Name {
+    template<class L,unsigned Index,auto Member,class Name> struct ListBinding:Name {
         // The recording slots may take the policy's fast path (EntryThunk). Close and Reset bound a recording,
         // and Present is a queue operation (QueueDomainScope); those three always take the full entry.
         static constexpr bool fast=!ddi_same_name(Name::name(),"pfnCloseCommandList") &&
             !ddi_same_name(Name::name(),"pfnResetCommandList") && !ddi_same_name(Name::name(),"pfnPresent");
         static auto original() noexcept {
-            using Fn=std::remove_reference_t<decltype(lists_[Index].*Member)>;
-            return list_ready_[Index].load(std::memory_order_acquire)?lists_[Index].*Member:Fn{};
+            using Fn=std::remove_reference_t<decltype(ListStore<L>::lists[Index].*Member)>;
+            return ListStore<L>::ready[Index].load(std::memory_order_acquire)?ListStore<L>::lists[Index].*Member:Fn{};
         }
     };
-    template<unsigned Index> static HRESULT wrap_list_at(const List& source,List* out) noexcept {
+    template<class L,unsigned Index> static HRESULT wrap_list_at(const L& source,L* out) noexcept {
         if(!out) return E_INVALIDARG;
-        List wrapped{};
-#define N12_WRAP_LIST(m) wrapped.m=&EntryThunk<decltype(source.m),ListBinding<Index,&List::m,ListName_##m>,Policy>::call;
+        L wrapped{};
+#define N12_WRAP_LIST(m) wrapped.m=&EntryThunk<decltype(source.m),ListBinding<L,Index,&L::m,ListName_##m>,Policy>::call;
         NATIVE12_LIST_0092_MEMBERS(N12_WRAP_LIST)
 #undef N12_WRAP_LIST
 #define N12_VALIDATE_LIST(m) if(!source.m || source.m==wrapped.m) return E_INVALIDARG;
         NATIVE12_LIST_0092_MEMBERS(N12_VALIDATE_LIST)
 #undef N12_VALIDATE_LIST
         Lock guard;
-        if(list_ready_[Index].load(std::memory_order_acquire)) {
-#define N12_COMPARE_LIST(m) if(lists_[Index].m!=source.m) return E_UNEXPECTED;
+        if(ListStore<L>::ready[Index].load(std::memory_order_acquire)) {
+#define N12_COMPARE_LIST(m) if(ListStore<L>::lists[Index].m!=source.m) return E_UNEXPECTED;
             NATIVE12_LIST_0092_MEMBERS(N12_COMPARE_LIST)
 #undef N12_COMPARE_LIST
         } else {
-            lists_[Index]=source;
-            list_ready_[Index].store(true,std::memory_order_release);
+            ListStore<L>::lists[Index]=source;
+            ListStore<L>::ready[Index].store(true,std::memory_order_release);
         }
         *out=wrapped;return S_OK;
+    }
+    template<class L> static HRESULT wrap_list_of(unsigned index,const L& source,L* out) noexcept {
+        if(index==0) return wrap_list_at<L,0>(source,out);
+        if(index==1) return wrap_list_at<L,1>(source,out);
+        return E_INVALIDARG;
     }
 public:
 #define N12_COUNT(m) +1
@@ -518,7 +529,8 @@ public:
     static constexpr unsigned list_slots=0 NATIVE12_LIST_0092_MEMBERS(N12_COUNT);
 #undef N12_COUNT
     static_assert(core_slots==122 && list_slots==70);
-    static_assert(sizeof(Core)==core_slots*sizeof(void*) && sizeof(List)==list_slots*sizeof(void*));
+    static_assert(sizeof(Core)==core_slots*sizeof(void*) && sizeof(List)==list_slots*sizeof(void*) &&
+                  sizeof(List94)==list_slots*sizeof(void*));
     static HRESULT wrap_core(const Core& source,Core* out) noexcept {
         if(!out) return E_INVALIDARG;
         Core wrapped{};
@@ -539,10 +551,12 @@ public:
         }
         *out=wrapped;return S_OK;
     }
+    // The 0092 layout (builds 92 and 93) and the 0094 layout, each with its own store.
     static HRESULT wrap_list(unsigned index,const List& source,List* out) noexcept {
-        if(index==0) return wrap_list_at<0>(source,out);
-        if(index==1) return wrap_list_at<1>(source,out);
-        return E_INVALIDARG;
+        return wrap_list_of<List>(index,source,out);
+    }
+    static HRESULT wrap_list(unsigned index,const List94& source,List94* out) noexcept {
+        return wrap_list_of<List94>(index,source,out);
     }
 };
 #undef NATIVE12_CORE_0088_MEMBERS

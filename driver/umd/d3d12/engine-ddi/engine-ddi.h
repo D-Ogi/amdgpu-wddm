@@ -467,6 +467,7 @@ uint32_t pso_detach_summary() noexcept;
 // install_direct_list: writes the direct entries over the graphics table's (table_index 1) slots, keeping those as
 // the fallback. A later call for another device must find the same slots (else false: that table keeps them).
 bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t table_index) noexcept;
+bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0094* table, uint32_t table_index) noexcept;
 // The direct entry records only for a context the shell admits as it admits its own fast entry (the recording
 // binding published): on after that is published, off before it is cleared.
 void set_direct_entry(DeviceContext* context, bool on) noexcept;
@@ -532,6 +533,13 @@ HRESULT fill_device_core(D3D12DDI_DEVICE_FUNCS_CORE_0088* table, SIZE_T table_si
 // the shell overrides it with its own Present, which calls resource_allocation.
 HRESULT fill_command_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, SIZE_T table_size, uint32_t table_index,
                           const FillInfo* info) noexcept;
+// Sets L68 pfnBarrier of a table fill_command_list filled to the 0088 entry, the one of DDI builds 92 and 93
+// (build, not Version), which take D3D12DDIARG_BARRIER_0088. false, with the slot unchanged, for any other build
+// (0094 has its own table layout: make_list_0094) or a null table.
+bool select_barrier(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* table, uint32_t ddi_build) noexcept;
+// The 0094 layout of a table fill_command_list filled: every other slot as in from, L68 the entry that takes
+// D3D12DDIARG_BARRIER_0094, under its own type. false for a null output.
+bool make_list_0094(const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& from, D3D12DDI_COMMAND_LIST_FUNCS_3D_0094* to) noexcept;
 // Fills both slots of the render pass table (D3D12DDI_TABLE_TYPE_0043_RENDER_PASS, H:2507) at 0053,
 // D3D12DDI_RENDER_PASS_FUNCS_0053 (H:18254-18259): pfnBeginRenderPass and pfnEndRenderPass onto the engine's
 // ID3D12GraphicsCommandList4. There is no fail-safe form of this table. The shell publishes it only while
@@ -736,9 +744,9 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
                            AdapterCaps** out) noexcept;
 void free_adapter_caps(AdapterCaps* caps) noexcept;
 // Answers one GetCaps call from the engine's answers or a documented constant (INTEGRATION.md, "GetCaps").
-// ddi_version is the build version whose payload layouts the caller expects; this revision knows 92
-// (D3D12DDI_BUILD_VERSION_0092) only. It writes only when DataSize is the exact payload size of the type,
-// never a prefix; a wrong size or a bad pInfo is E_INVALIDARG with nothing written, and a type it does not
+// ddi_version is the build version whose payload layouts the caller expects; this revision knows 92 to 94
+// (D3D12DDI_BUILD_VERSION_0092 to _0094); type 1079 needs 93 or later. It writes only when DataSize is the exact
+// payload size of the type, never a prefix; a wrong size or a bad pInfo is E_INVALIDARG with nothing written, and a type it does not
 // answer is E_NOTIMPL. Both are logged with the type and the size. Thread-safe: it only reads caps.
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept;
 

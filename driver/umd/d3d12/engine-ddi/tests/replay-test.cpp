@@ -197,6 +197,7 @@ public:
     unsigned barrier_layouts[2]{}, barrier_flags = 0;
     const void* barrier_texture = nullptr;
     unsigned barrier_global_sync = 0;
+    unsigned barrier_global[4]{};                           // the last global barrier: syncs, then accesses
     const void* barrier_buffer = nullptr;
     UINT64 barrier_offset = 0, barrier_size = 0;
 
@@ -609,6 +610,10 @@ public:
                     c.x(static_cast<unsigned>(b.SyncBefore)).x(static_cast<unsigned>(b.SyncAfter))
                         .x(static_cast<unsigned>(b.AccessBefore)).x(static_cast<unsigned>(b.AccessAfter));
                     barrier_global_sync = static_cast<unsigned>(b.SyncBefore);
+                    barrier_global[0] = static_cast<unsigned>(b.SyncBefore);
+                    barrier_global[1] = static_cast<unsigned>(b.SyncAfter);
+                    barrier_global[2] = static_cast<unsigned>(b.AccessBefore);
+                    barrier_global[3] = static_cast<unsigned>(b.AccessAfter);
                 } else if (g.Type == D3D12_BARRIER_TYPE_TEXTURE) {
                     const D3D12_TEXTURE_BARRIER& b = g.pTextureBarriers[k];
                     c.x(static_cast<unsigned>(b.SyncBefore)).x(static_cast<unsigned>(b.SyncAfter))
@@ -994,6 +999,7 @@ void APIENTRY replay_log(void* shell, const char* line) {
 
 D3D12DDI_DEVICE_FUNCS_CORE_0088 g_core{};
 D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 g_list{};             // the graphics table
+PFND3D12DDI_BARRIER_0094 g_barrier94 = nullptr;            // L68 of the graphics table at 0094 (make_list_0094)
 D3D12DDI_RENDER_PASS_FUNCS_0053 g_pass{};                 // the render pass table (fill_render_pass)
 DeviceContext* APIENTRY resolve_device(D3D12DDI_HDEVICE device) {
     return static_cast<DeviceContext*>(device.pDrvPrivate);
@@ -1160,6 +1166,7 @@ struct Data {
     D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT footprint;
     D3D12DDIARG_RESOURCE_BARRIER_0022 barriers[3];
     D3D12DDIARG_BARRIER_0088 enhanced[6];
+    D3D12DDIARG_BARRIER_0094 enhanced94[6];
     D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054 geometries[2];
     const D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054* geometry_pointers[2];
     D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC_0054 postbuild[2];
@@ -1227,6 +1234,20 @@ struct Sources {
         d.enhanced[5].Type = D3D12DDI_BARRIER_TYPE_RANGED;
         d.enhanced[5].RangedBarrier.hResource.pDrvPrivate = &o.buffer2;
         d.enhanced[5].RangedBarrier.Flags = D3D12DDI_RANGED_BARRIER_FLAG_ATOMIC_COPY;
+        // The same six in the 0094 layout: the first five are the same members (pattern bytes included), the ranged
+        // one is the 0094 member, which has no scopes.
+        for (size_t k = 0; k < 5; ++k) {
+            d.enhanced94[k].Type = d.enhanced[k].Type;
+            if (d.enhanced[k].Type == D3D12DDI_BARRIER_TYPE_TEXTURE)
+                d.enhanced94[k].TextureBarrier = d.enhanced[k].TextureBarrier;
+            else if (d.enhanced[k].Type == D3D12DDI_BARRIER_TYPE_BUFFER)
+                d.enhanced94[k].BufferBarrier = d.enhanced[k].BufferBarrier;
+            else
+                d.enhanced94[k].GlobalBarrier = d.enhanced[k].GlobalBarrier;
+        }
+        d.enhanced94[5].Type = D3D12DDI_BARRIER_TYPE_RANGED;
+        d.enhanced94[5].RangedBarrier.hResource.pDrvPrivate = &o.buffer2;
+        d.enhanced94[5].RangedBarrier.Flags = D3D12DDI_RANGED_BARRIER_FLAG_ACQUIRE_0094;
         d.geometries[0].Type = D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
         d.geometries[1].Type = D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
         d.geometry_pointers[0] = &d.geometries[1];
@@ -1468,6 +1489,8 @@ void sequence(const ListBox& l, Objects& o, Sources& s) {
     // L68: the six mixed barriers in five groups, then two of one type in one group.
     step([&] { g_list.pfnBarrier(h, 6, d.enhanced); });
     step([&] { g_list.pfnBarrier(h, 2, d.enhanced); });
+    // The same six in the 0094 layout, whose array stride differs and whose ranged barrier has no scopes.
+    step([&] { g_barrier94(h, 6, d.enhanced94); });
     step([&] { g_list.pfnWriteBufferImmediate(h, 3, d.immediates, d.immediate_modes); });
     step([&] { g_list.pfnWriteBufferImmediate(h, 2, d.immediates, nullptr); });
     // The render pass table's two slots, which are a table of their own (fill_render_pass): two render targets
@@ -1570,6 +1593,31 @@ int main() {
               fill_render_pass(&g_pass, sizeof(g_pass), &fill) == S_OK && g_pass.pfnBeginRenderPass &&
               g_pass.pfnEndRenderPass,
           "tables filled, the render pass table among them");
+    // L68 by DDI build: select_barrier keeps the 0088 entry fill_command_list put there for 92 and 93 and refuses
+    // 94 (another layout), 91, 95 and a null table with the slot unchanged. make_list_0094 builds the 0094 layout,
+    // in the compute table too: every other slot as filled, L68 an entry of the 0094 type.
+    {
+        using T94 = D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
+        static_assert(std::is_same_v<decltype(T94{}.pfnBarrier), PFND3D12DDI_BARRIER_0094>);
+        D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 t92 = g_list, t93 = g_list, other = g_list, compute{};
+        const bool picked = select_barrier(&t92, 92) && select_barrier(&t93, 93);
+        const bool refused = !select_barrier(&other, 94) && !select_barrier(&other, 91) &&
+                             !select_barrier(&other, 95) && !select_barrier(nullptr, 92);
+        T94 t94{}, compute94{};
+        const bool made = make_list_0094(g_list, &t94) && !make_list_0094(g_list, nullptr);
+        D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 rest{};
+        std::memcpy(&rest, &t94, sizeof(rest));
+        rest.pfnBarrier = g_list.pfnBarrier;
+        const bool compute_made = fill_command_list(&compute, sizeof(compute), 0, &fill) == S_OK &&
+                                  make_list_0094(compute, &compute94) && compute94.pfnBarrier == t94.pfnBarrier;
+        check(picked && refused && made && compute_made && t92.pfnBarrier == g_list.pfnBarrier &&
+                  t93.pfnBarrier == g_list.pfnBarrier && t94.pfnBarrier &&
+                  reinterpret_cast<void*>(t94.pfnBarrier) != reinterpret_cast<void*>(g_list.pfnBarrier) &&
+                  other.pfnBarrier == g_list.pfnBarrier && std::memcmp(&rest, &g_list, sizeof(rest)) == 0,
+              "L68 by DDI build: 92 and 93 the 0088 entry; the 0094 layout its own typed entry in both tables, every "
+              "other slot unchanged; 94, 91, 95 and no table refused by the 0092 layout");
+        g_barrier94 = t94.pfnBarrier;
+    }
 
     // 1. The policy's refusals; on, off and on again.
     {
@@ -2696,6 +2744,92 @@ int main() {
             g_list.pfnBarrier(h, 0, d.enhanced);
             check(f.shell.list_errors == errors && l.engine.calls.load() == quiet,
                   "L68: no barriers at all is no engine call and no refusal");
+        }
+        // 0094. The same six barriers in the 0094 layout are the same five groups, in the same order.
+        {
+            s.prepare(1);
+            const uint64_t before = l.engine.barrier_calls.load();
+            const uint64_t errors = f.shell.list_errors.load();
+            g_barrier94(h, 6, d.enhanced94);
+            check(l.engine.barrier_calls == before + 1 && f.shell.list_errors == errors &&
+                      l.engine.barrier_types[0] == D3D12_BARRIER_TYPE_TEXTURE && l.engine.barrier_counts[0] == 2 &&
+                      l.engine.barrier_types[1] == D3D12_BARRIER_TYPE_GLOBAL && l.engine.barrier_counts[1] == 1 &&
+                      l.engine.barrier_types[2] == D3D12_BARRIER_TYPE_BUFFER && l.engine.barrier_counts[2] == 1 &&
+                      l.engine.barrier_types[3] == D3D12_BARRIER_TYPE_TEXTURE && l.engine.barrier_counts[3] == 1 &&
+                      l.engine.barrier_types[4] == D3D12_BARRIER_TYPE_GLOBAL && l.engine.barrier_counts[4] == 1 &&
+                      l.engine.barrier_layouts[0] == static_cast<unsigned>(D3D12_BARRIER_LAYOUT_COPY_DEST) &&
+                      l.engine.barrier_texture == o.texture.h.engine && l.engine.barrier_buffer == o.buffer.h.engine,
+                  "L68 at 0094: six barriers of four types become one Barrier call of five groups, as at 0088");
+        }
+        // A 0094 ranged barrier, whatever its flag and resource, is one global barrier SYNC_ALL to SYNC_ALL,
+        // ACCESS_COMMON to ACCESS_COMMON.
+        {
+            const D3D12DDI_RANGED_BARRIER_FLAGS_0094 flags[] = {
+                D3D12DDI_RANGED_BARRIER_FLAG_NONE_0094, D3D12DDI_RANGED_BARRIER_FLAG_ATOMIC_COPY_0094,
+                D3D12DDI_RANGED_BARRIER_FLAG_ACQUIRE_0094, D3D12DDI_RANGED_BARRIER_FLAG_RELEASE_0094};
+            void* resources[] = {nullptr, &o.buffer2};
+            bool all = true;
+            for (const auto flag : flags)
+                for (void* resource : resources) {
+                    D3D12DDIARG_BARRIER_0094 one;
+                    std::memset(&one, 0x5A, sizeof(one));
+                    one.Type = D3D12DDI_BARRIER_TYPE_RANGED;
+                    one.RangedBarrier.Flags = flag;
+                    one.RangedBarrier.hResource.pDrvPrivate = resource;
+                    std::memset(l.engine.barrier_global, 0xCC, sizeof(l.engine.barrier_global));
+                    const uint64_t before = l.engine.barrier_calls.load();
+                    const uint64_t errors = f.shell.list_errors.load();
+                    g_barrier94(h, 1, &one);
+                    all = all && l.engine.barrier_calls == before + 1 && f.shell.list_errors == errors &&
+                          l.engine.barrier_types[0] == D3D12_BARRIER_TYPE_GLOBAL &&
+                          l.engine.barrier_counts[0] == 1 &&
+                          l.engine.barrier_global[0] == static_cast<unsigned>(D3D12_BARRIER_SYNC_ALL) &&
+                          l.engine.barrier_global[1] == static_cast<unsigned>(D3D12_BARRIER_SYNC_ALL) &&
+                          l.engine.barrier_global[2] == static_cast<unsigned>(D3D12_BARRIER_ACCESS_COMMON) &&
+                          l.engine.barrier_global[3] == static_cast<unsigned>(D3D12_BARRIER_ACCESS_COMMON);
+                }
+            check(all, "L68 at 0094: a ranged barrier with NONE, ATOMIC_COPY, ACQUIRE or RELEASE, with and without a "
+                       "resource, is one global barrier SYNC_ALL, ACCESS_COMMON");
+        }
+        // The 0094 stride: 200 barriers of alternating ranged and buffer type are 200 groups in four calls, and
+        // every buffer barrier still names its resource (a wrong stride reads a null handle and is refused).
+        {
+            static D3D12DDIARG_BARRIER_0094 many94[200];
+            for (size_t k = 0; k < std::size(many94); ++k) {
+                many94[k] = D3D12DDIARG_BARRIER_0094{};
+                if (k % 2) {
+                    many94[k].Type = D3D12DDI_BARRIER_TYPE_BUFFER;
+                    many94[k].BufferBarrier.hResource.pDrvPrivate = &o.buffer;
+                } else {
+                    many94[k].Type = D3D12DDI_BARRIER_TYPE_RANGED;
+                    many94[k].RangedBarrier.Flags = D3D12DDI_RANGED_BARRIER_FLAG_RELEASE_0094;
+                }
+            }
+            const uint64_t before = l.engine.barrier_calls.load();
+            const uint64_t errors = f.shell.list_errors.load();
+            g_barrier94(h, static_cast<UINT32>(std::size(many94)), many94);
+            bool alternating = true;
+            for (size_t k = 0; k < 8; ++k)
+                alternating = alternating && l.engine.barrier_counts[k] == 1 &&
+                              l.engine.barrier_types[k] ==
+                                  static_cast<UINT32>(k % 2 ? D3D12_BARRIER_TYPE_BUFFER : D3D12_BARRIER_TYPE_GLOBAL);
+            check(l.engine.barrier_calls == before + 4 && f.shell.list_errors == errors && alternating &&
+                      l.engine.barrier_buffer == o.buffer.h.engine,
+                  "L68 at 0094: 200 alternating ranged and buffer barriers are four Barrier calls, the last of 8 "
+                  "groups, and no refusal (%llu calls)", ull(l.engine.barrier_calls.load() - before));
+        }
+        // The 0094 refusals are those of 0088: an undefined type, and a buffer barrier with no resource.
+        {
+            const uint64_t quiet94 = l.engine.calls.load();
+            D3D12DDIARG_BARRIER_0094 bad[2]{};
+            bad[0].Type = static_cast<D3D12DDI_BARRIER_TYPE>(7);
+            bad[1].Type = D3D12DDI_BARRIER_TYPE_BUFFER;
+            const uint64_t errors = f.shell.list_errors.load();
+            g_barrier94(h, 1, &bad[0]);
+            g_barrier94(h, 1, &bad[1]);
+            check(f.shell.list_errors == errors + 2 && f.shell.list_error == E_INVALIDARG &&
+                      l.engine.calls.load() == quiet94,
+                  "L68 at 0094: an undefined type and a buffer barrier with no resource are refused, no engine call");
         }
         f.close(l);
         check(!l.engine.unexpected && !l.engine.stale, "L68: no unexpected engine method, no released object named");

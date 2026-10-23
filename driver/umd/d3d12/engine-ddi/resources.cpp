@@ -11,6 +11,10 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <atomic>
+#include <cstdint>
+#include <new>
+#include <type_traits>
 
 namespace engine_ddi {
 
@@ -106,6 +110,88 @@ D3D12_RESOURCE_DESC to_desc0(const D3D12_RESOURCE_DESC1& d) noexcept {
             d.Layout, d.Flags};
 }
 
+// The engine's size and alignment for desc at the given alignment, with the castable formats of the create. A
+// compressed image with unordered access is valid only with an uncompressed castable format (RelaxedFormatCasting,
+// which the runtime reports from DDI 0094 on). The engine's GetResourceAllocationInfo takes no castable formats and
+// refuses such an image, and Unreal Engine 5 then reports that video memory is exhausted. GetResourceAllocationInfo3
+// takes them. Only a description without castable formats goes to the older query: it cannot carry a list, so a list
+// without an ID3D12Device12 (or a count without a list) is refused with UINT64_MAX at the default alignment, the
+// engine's own refusal shape, and each caller handles it as it handles an engine refusal.
+namespace {
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+std::atomic<uint64_t> legacy_sizing_calls{0}, castable_sizing_calls{0};
+std::atomic<int64_t> live_castable_copies{0};
+std::atomic<bool> fail_next_castable_copy{false};
+#endif
+std::atomic<bool> castable_refusal_logged{false};
+} // namespace
+
+D3D12_RESOURCE_ALLOCATION_INFO engine_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
+                                                      uint64_t alignment, UINT castable_count,
+                                                      const DXGI_FORMAT* castable) noexcept {
+    if (castable_count) {
+        if (!castable || !c->device12) {
+            if (!castable_refusal_logged.exchange(true, std::memory_order_relaxed))
+                log_line("allocation info: %u castable formats %s: unsized (UINT64_MAX)", castable_count,
+                         castable ? "and the engine has no ID3D12Device12" : "without a list");
+            return {UINT64_MAX, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT};
+        }
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+        castable_sizing_calls.fetch_add(1, std::memory_order_relaxed);
+#endif
+        D3D12_RESOURCE_DESC1 d1 = desc;
+        d1.Alignment = alignment;
+        const UINT32 count = castable_count;
+        return c->device12->GetResourceAllocationInfo3(0, 1, &d1, &count, &castable, nullptr);
+    }
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    legacy_sizing_calls.fetch_add(1, std::memory_order_relaxed);
+#endif
+    D3D12_RESOURCE_DESC d0 = to_desc0(desc);
+    d0.Alignment = alignment;
+    return c->device->GetResourceAllocationInfo(0, 1, &d0);
+}
+
+} // namespace
+
+// Declared in internal.h: external linkage, outside the file-local namespace.
+HRESULT copy_castable(UINT count, const DXGI_FORMAT* formats, DXGI_FORMAT** out) noexcept {
+    *out = nullptr;
+    if (!count) return S_OK;
+    if (!formats) return E_INVALIDARG;
+#if SIZE_MAX < UINT64_MAX
+    if (uint64_t{count} * sizeof(DXGI_FORMAT) > SIZE_MAX) return E_OUTOFMEMORY;  // a 32-bit size_t
+#endif
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    if (fail_next_castable_copy.exchange(false)) return E_OUTOFMEMORY;
+#endif
+    auto* copy = new (std::nothrow) DXGI_FORMAT[count];
+    if (!copy) return E_OUTOFMEMORY;
+    std::memcpy(copy, formats, size_t{count} * sizeof(DXGI_FORMAT));
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    live_castable_copies.fetch_add(1);
+#endif
+    *out = copy;
+    return S_OK;
+}
+
+void free_castable(DXGI_FORMAT* formats) noexcept {
+    if (!formats) return;
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+    live_castable_copies.fetch_sub(1);
+#endif
+    delete[] formats;
+}
+
+#ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
+void harness_fail_next_castable_copy() noexcept { fail_next_castable_copy.store(true); }
+uint64_t harness_legacy_sizing_calls() noexcept { return legacy_sizing_calls.load(); }
+uint64_t harness_castable_sizing_calls() noexcept { return castable_sizing_calls.load(); }
+int64_t harness_live_castable_copies() noexcept { return live_castable_copies.load(); }
+#endif
+
+namespace {
+
 uint32_t category_of(const D3D12_RESOURCE_DESC1& d) noexcept {
     if (d.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) return D3D12DDI_HEAP_FLAG_BUFFERS;
     if (d.Flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
@@ -169,7 +255,7 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
     for (const uint64_t alignment : candidates) {
         if (alignment && requested && alignment != requested) break;  // an explicit alignment is the only one
         d0.Alignment = alignment;
-        info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+        info = engine_allocation_info(c, desc, alignment, castable_count, castable);
         if (info.SizeInBytes == UINT64_MAX || !info.Alignment || offset % info.Alignment) continue;
         if (alignment && info.Alignment != alignment) continue;          // not granted
         if (offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset) continue;  // a smaller may fit
@@ -433,11 +519,13 @@ HRESULT engine_heap_from_memory(DeviceContext* c, const D3D12_HEAP_DESC& desc, c
 // stored_from is the format the application named, kept when desc stores it (internal.h, StoredFormat).
 void construct_resource(ResourceRecord* r, DeviceContext* c, ID3D12Resource* engine, Backing* b, uint64_t offset,
                         const D3D12_RESOURCE_DESC1& desc, D3D12DDI_HRTRESOURCE rt, ResourceKind kind,
-                        DXGI_FORMAT stored_from) noexcept {
+                        DXGI_FORMAT stored_from, UINT castable_count = 0, DXGI_FORMAT* castable = nullptr) noexcept {
     if (b) backing_acquire(b);                          // a reserved resource has none
     if (!stored_format(stored_from)) stored_from = DXGI_FORMAT_UNKNOWN;
     new (r) ResourceRecord{{Tag::Resource, 0, engine, c}, b, offset, desc, rt, kind, kInitNone, nullptr, nullptr,
                            0, 0, stored_from};
+    r->castable_count = castable ? castable_count : 0;  // the record owns castable (copy_castable)
+    r->castable = castable;
     c->live.fetch_add(1);
 }
 
@@ -459,6 +547,17 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
         if (FAILED(hr)) return hr;
         if (res_desc->NumCastableFormats && !res_desc->pCastableFormats) return E_INVALIDARG;
     }
+    // The record's copy of the castable formats, made first: a failed copy fails the create before any engine object
+    // or backing reference exists. The guard frees it on every return that does not hand it to construct_resource.
+    struct CastableCopy {
+        DXGI_FORMAT* formats = nullptr;
+        ~CastableCopy() { free_castable(formats); }
+        DXGI_FORMAT* take() noexcept { DXGI_FORMAT* f = formats; formats = nullptr; return f; }
+    } owned;
+    if (res_desc) {
+        const HRESULT copied = copy_castable(res_desc->NumCastableFormats, res_desc->pCastableFormats, &owned.formats);
+        if (FAILED(copied)) return copied;
+    }
     if (!heap_desc) {
         // Placed: the base resource names the heap memory.
         if (!res_desc) return E_INVALIDARG;
@@ -474,7 +573,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             log_untiled_reserved(c, desc, hr);
             if (FAILED(hr)) return hr;
             construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, nullptr, 0, desc, rt,
-                               ResourceKind::Reserved, res_desc->Format);
+                               ResourceKind::Reserved, res_desc->Format, res_desc->NumCastableFormats, owned.take());
             return S_OK;
         }
         if (!base->backing) return E_INVALIDARG;        // a reserved resource names no heap memory
@@ -489,7 +588,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
                            res_desc->NumCastableFormats, res_desc->pCastableFormats, &engine);
         if (FAILED(hr)) return hr;
         construct_resource(static_cast<ResourceRecord*>(hres.pDrvPrivate), c, engine, base->backing, offset, desc, rt,
-                           ResourceKind::Placed, res_desc->Format);
+                           ResourceKind::Placed, res_desc->Format, res_desc->NumCastableFormats, owned.take());
         return S_OK;
     }
     if (!hheap.pDrvPrivate) return E_INVALIDARG;
@@ -524,10 +623,11 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             D3D12_RESOURCE_DESC d0 = to_desc0(desc);
             if (sized.Alignment && sized.Alignment < D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT)
                 d0.Alignment = sized.Alignment;
-            D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+            D3D12_RESOURCE_ALLOCATION_INFO info = engine_allocation_info(
+                c, desc, d0.Alignment, res_desc->NumCastableFormats, res_desc->pCastableFormats);
             if (info.SizeInBytes == UINT64_MAX && d0.Alignment) {
                 d0.Alignment = 0;
-                info = c->device->GetResourceAllocationInfo(0, 1, &d0);
+                info = engine_allocation_info(c, desc, 0, res_desc->NumCastableFormats, res_desc->pCastableFormats);
             }
             if (info.SizeInBytes == UINT64_MAX || !info.SizeInBytes) return E_INVALIDARG;
             desc.Alignment = d0.Alignment;              // the image is placed with the alignment its memory has
@@ -697,7 +797,8 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     c->live.fetch_add(1);
     if (res_desc) {
         auto* record = static_cast<ResourceRecord*>(hres.pDrvPrivate);
-        construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Committed, res_desc->Format);
+        construct_resource(record, c, engine, b, 0, desc, rt, ResourceKind::Committed, res_desc->Format,
+                           res_desc->NumCastableFormats, owned.take());
         if (linear) {
             record->linear_row_pitch = static_cast<uint32_t>(surface.info.RowPitch);
             record->linear_size = surface.backing_size;
@@ -998,6 +1099,9 @@ void APIENTRY destroy_heap_and_resource(D3D12DDI_HDEVICE device, D3D12DDI_HHEAP 
                 r->h.engine = nullptr;
             }
             release_engine(r->h);
+            free_castable(r->castable);
+            r->castable = nullptr;
+            r->castable_count = 0;
             poison(r->h);
             c->live.fetch_sub(1);
             if (b) backing_release(b);
@@ -1067,15 +1171,13 @@ void no_additional_data(D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
     out->AdditionalDataAlignment = out->ResourceDataAlignment;
 }
 
-// The engine's size and alignment for desc, with desc.Alignment first and 0 if the engine refuses that (a
-// small-alignment request).
-HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
-    D3D12_RESOURCE_DESC d0 = to_desc0(desc);
-    D3D12_RESOURCE_ALLOCATION_INFO info = c->device->GetResourceAllocationInfo(0, 1, &d0);
-    if (info.SizeInBytes == UINT64_MAX && d0.Alignment) {
-        d0.Alignment = 0;
-        info = c->device->GetResourceAllocationInfo(0, 1, &d0);
-    }
+// The engine's size and alignment for desc and its castable formats, with desc.Alignment first and 0 if the engine
+// refuses that (a small-alignment request).
+HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out,
+                        UINT castable_count = 0, const DXGI_FORMAT* castable = nullptr) noexcept {
+    D3D12_RESOURCE_ALLOCATION_INFO info = engine_allocation_info(c, desc, desc.Alignment, castable_count, castable);
+    if (info.SizeInBytes == UINT64_MAX && desc.Alignment)
+        info = engine_allocation_info(c, desc, 0, castable_count, castable);
     if (info.SizeInBytes == UINT64_MAX || info.Alignment > UINT32_MAX) return E_INVALIDARG;
     out->ResourceDataSize = info.SizeInBytes;
     out->ResourceDataAlignment = static_cast<UINT32>(info.Alignment);
@@ -1140,7 +1242,7 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
             hr = linear_allocation_info(c, desc, out);
         } else {
             desc.Alignment = alignment_restriction;
-            hr = allocation_info(c, desc, out);
+            hr = allocation_info(c, desc, out, in->NumCastableFormats, in->pCastableFormats);
         }
     }
     if (FAILED(hr)) {
@@ -1221,7 +1323,7 @@ void APIENTRY check_existing_resource_allocation_info(D3D12DDI_HDEVICE device, D
     auto* r = record_of<ResourceRecord>(hres.pDrvPrivate, Tag::Resource, c);
     const HRESULT hr = !(r && out) ? E_INVALIDARG
                        : r->linear_row_pitch ? linear_allocation_info(c, r->desc, out)
-                                             : allocation_info(c, r->desc, out);
+                                             : allocation_info(c, r->desc, out, r->castable_count, r->castable);
     if (FAILED(hr)) {
         if (out) *out = D3D12DDI_RESOURCE_ALLOCATION_INFO_0022{};
         c->report(hr);
@@ -2083,7 +2185,31 @@ bool api_barrier_type(D3D12DDI_BARRIER_TYPE in, D3D12_BARRIER_TYPE* out) noexcep
     }
 }
 
-void APIENTRY barrier(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIARG_BARRIER_0088* ddi) {
+// At 0094 the slot takes D3D12DDIARG_BARRIER_0094 (H:11285-11301). Its global, texture and buffer members are the
+// 0088 types; its ranged member, D3D12DDI_RANGED_BARRIER_0094 (H:11268-11283), is new: a resource, a subresource, a
+// range and one flag of NONE, ATOMIC_COPY, ACQUIRE and RELEASE (the last two acquire or release a buffer range for
+// an atomic copy), and no synchronisation or access scopes. The 0088 ranged member is the largest of its union and
+// the 0094 one is not, so the array stride is not the same (x64: 80 bytes at 0088, 72 at 0094; x86: 72 and 64), and
+// each build has its own entry over this one implementation.
+// A 0094 ranged barrier becomes a global barrier of the widest scopes: SYNC_ALL before and after, ACCESS_COMMON
+// before and after, which the engine makes a dependency of all commands on all memory reads and writes
+// (vkd3d-proton command.c, d3d12_command_list_process_enhanced_barrier_global). That over-synchronises a range;
+// it does not make atomic copy supported, which 1006 still does not report and L51 still refuses.
+static_assert(offsetof(D3D12DDIARG_BARRIER_0094, GlobalBarrier) == offsetof(D3D12DDIARG_BARRIER_0088, GlobalBarrier) &&
+                  offsetof(D3D12DDIARG_BARRIER_0094, TextureBarrier) ==
+                      offsetof(D3D12DDIARG_BARRIER_0088, TextureBarrier) &&
+                  offsetof(D3D12DDIARG_BARRIER_0094, BufferBarrier) == offsetof(D3D12DDIARG_BARRIER_0088, BufferBarrier),
+              "0094 keeps the 0088 global, texture and buffer members at the same place");
+#if defined(_WIN64)
+static_assert(sizeof(D3D12DDIARG_BARRIER_0088) == 80 && sizeof(D3D12DDIARG_BARRIER_0094) == 72,
+              "x64 strides of the two argument layouts");
+#else
+static_assert(sizeof(D3D12DDIARG_BARRIER_0088) == 72 && sizeof(D3D12DDIARG_BARRIER_0094) == 64,
+              "x86 strides of the two argument layouts");
+#endif
+
+template <class Arg> void barrier_of(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const Arg* ddi) {
+    static_assert(std::is_same_v<Arg, D3D12DDIARG_BARRIER_0088> || std::is_same_v<Arg, D3D12DDIARG_BARRIER_0094>);
     CommandListRecord* l = list_of(hlist, "Barrier");
     if (!l) return;
     if (count && !ddi) {
@@ -2127,7 +2253,7 @@ void APIENTRY barrier(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIA
     UINT32 groups = 0;
     // Second pass: translate in place, and start a new run wherever the type changes.
     for (UINT32 i = 0; i < count; ++i) {
-        const D3D12DDIARG_BARRIER_0088& b = ddi[i];
+        const Arg& b = ddi[i];
         D3D12_BARRIER_TYPE type{};
         api_barrier_type(b.Type, &type);                // checked in the first pass
         const auto kind = static_cast<size_t>(type);
@@ -2139,23 +2265,34 @@ void APIENTRY barrier(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIA
         ++filled[kind];
         switch (type) {
         case D3D12_BARRIER_TYPE_GLOBAL: {
-            // A global barrier, or the four scopes of a ranged one, which are the same four values under another
-            // member of the union.
             const bool ranged = b.Type == D3D12DDI_BARRIER_TYPE_RANGED;
             D3D12_GLOBAL_BARRIER& out = *global++;
-            out.SyncBefore =
-                static_cast<D3D12_BARRIER_SYNC>(ranged ? b.RangedBarrier.SyncBefore : b.GlobalBarrier.SyncBefore);
-            out.SyncAfter =
-                static_cast<D3D12_BARRIER_SYNC>(ranged ? b.RangedBarrier.SyncAfter : b.GlobalBarrier.SyncAfter);
-            out.AccessBefore = static_cast<D3D12_BARRIER_ACCESS>(ranged ? b.RangedBarrier.AccessBefore
-                                                                        : b.GlobalBarrier.AccessBefore);
-            out.AccessAfter =
-                static_cast<D3D12_BARRIER_ACCESS>(ranged ? b.RangedBarrier.AccessAfter : b.GlobalBarrier.AccessAfter);
-            if (ranged) {
-                static std::atomic<bool> once{false};
+            if (!ranged) {
+                out.SyncBefore = static_cast<D3D12_BARRIER_SYNC>(b.GlobalBarrier.SyncBefore);
+                out.SyncAfter = static_cast<D3D12_BARRIER_SYNC>(b.GlobalBarrier.SyncAfter);
+                out.AccessBefore = static_cast<D3D12_BARRIER_ACCESS>(b.GlobalBarrier.AccessBefore);
+                out.AccessAfter = static_cast<D3D12_BARRIER_ACCESS>(b.GlobalBarrier.AccessAfter);
+                break;
+            }
+            static std::atomic<bool> once{false};
+            if constexpr (std::is_same_v<Arg, D3D12DDIARG_BARRIER_0088>) {
+                // At 0088 the four scopes of a ranged barrier are the same four values under another member.
+                out.SyncBefore = static_cast<D3D12_BARRIER_SYNC>(b.RangedBarrier.SyncBefore);
+                out.SyncAfter = static_cast<D3D12_BARRIER_SYNC>(b.RangedBarrier.SyncAfter);
+                out.AccessBefore = static_cast<D3D12_BARRIER_ACCESS>(b.RangedBarrier.AccessBefore);
+                out.AccessAfter = static_cast<D3D12_BARRIER_ACCESS>(b.RangedBarrier.AccessAfter);
                 if (!once.exchange(true))
                     log_line("Barrier: a ranged barrier (flags %#x) is made a global barrier of the same scopes",
                              static_cast<unsigned>(b.RangedBarrier.Flags));
+            } else {
+                out.SyncBefore = D3D12_BARRIER_SYNC_ALL;
+                out.SyncAfter = D3D12_BARRIER_SYNC_ALL;
+                out.AccessBefore = D3D12_BARRIER_ACCESS_COMMON;
+                out.AccessAfter = D3D12_BARRIER_ACCESS_COMMON;
+                if (!once.exchange(true))
+                    log_line("Barrier: a 0094 ranged barrier (flags %#x, resource %p) is made a global barrier "
+                             "SYNC_ALL, ACCESS_COMMON",
+                             static_cast<unsigned>(b.RangedBarrier.Flags), b.RangedBarrier.hResource.pDrvPrivate);
             }
             break;
         }
@@ -2229,6 +2366,13 @@ void APIENTRY barrier(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIA
            },
            in(table.data(), groups), in(globals.data(), global_count), in(textures.data(), texture_count),
            in(buffers.data(), buffer_count));
+}
+
+void APIENTRY barrier(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIARG_BARRIER_0088* ddi) {
+    barrier_of(hlist, count, ddi);
+}
+void APIENTRY barrier_0094(D3D12DDI_HCOMMANDLIST hlist, UINT32 count, const D3D12DDIARG_BARRIER_0094* ddi) {
+    barrier_of(hlist, count, ddi);
 }
 } // namespace
 
@@ -2816,6 +2960,34 @@ void fill_list_resources(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexc
     // PFND3D12DDI_BARRIER_0088 Remarks). A bundle reaches it too; the engine drops a barrier recorded in a bundle,
     // which is what D3D12 says of one (vkd3d-proton bundle.c, d3d12_bundle_Barrier).
     t->pfnBarrier = barrier;
+}
+
+bool select_barrier(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t ddi_build) noexcept {
+    if (!t) return false;
+    if (ddi_build == D3D12DDI_BUILD_VERSION_0092 || ddi_build == D3D12DDI_BUILD_VERSION_0093) {
+        t->pfnBarrier = barrier;
+        return true;
+    }
+    log_refusal("Barrier: no 0092-layout L68 entry for DDI build %u", static_cast<unsigned>(ddi_build));
+    return false;
+}
+
+bool make_list_0094(const D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& from, D3D12DDI_COMMAND_LIST_FUNCS_3D_0094* to) noexcept {
+    // D3D12DDI_COMMAND_LIST_FUNCS_3D_0094 (H:11303-11382) is the 0092 table with PFND3D12DDI_BARRIER_0094 in L68:
+    // the same 70 members in the same order, and every member other than L68 has the same type in both. Those are
+    // copied as they are; L68 is written with the 0094 entry under its own type, and the 0088 entry of from is not
+    // carried over.
+    using T92 = D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
+    using T94 = D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
+    static_assert(sizeof(T94) == sizeof(T92) && offsetof(T94, pfnBarrier) == offsetof(T92, pfnBarrier) &&
+                  offsetof(T94, pfnDispatchMesh) == offsetof(T92, pfnDispatchMesh) &&
+                  offsetof(T94, pfnOmSetAlphaBlendFactor) == offsetof(T92, pfnOmSetAlphaBlendFactor) &&
+                  std::is_same_v<decltype(T94::pfnDispatchMesh), decltype(T92::pfnDispatchMesh)> &&
+                  std::is_same_v<decltype(T94::pfnOmSetAlphaBlendFactor), decltype(T92::pfnOmSetAlphaBlendFactor)>);
+    if (!to) return false;
+    std::memcpy(to, &from, sizeof(*to));
+    to->pfnBarrier = barrier_0094;
+    return true;
 }
 
 } // namespace engine_ddi

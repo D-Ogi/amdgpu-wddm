@@ -363,7 +363,7 @@ public:
         engine_ddi::ContextCreateInfo context{};
         context.size=sizeof(context);context.boundary_revision=engine_ddi::kBoundaryRevision;
         context.memory_mode=engine_ddi::MemoryMode::RuntimeBacked;
-        context.ddi_interface=D3D12DDI_INTERFACE_VERSION_R8;context.ddi_version=D3D12DDI_BUILD_VERSION_0092<<16;
+        context.ddi_interface=D3D12DDI_INTERFACE_VERSION_R8;context.ddi_version=device_.ddi_version;
         context.engine_device=engine_;context.engine_funcs=&access_.functions;
         context.hooks={sizeof(context.hooks),&device_,report_error,report_list_error,is_lost,bind_list,allocate,free,
                        adopt};

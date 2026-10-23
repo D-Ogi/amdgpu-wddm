@@ -161,6 +161,23 @@ SIZE_T APIENTRY fence_size(D3D12DDI_HDEVICE h,const D3D12DDIARG_CREATE_FENCE*) {
 void APIENTRY dispatch(D3D12DDI_HCOMMANDLIST h,UINT x,UINT y,UINT z) {
     assert(current==static_cast<Owner*>(h.pDrvPrivate) && x==2 && y==3 && z==4);++current->calls;
 }
+// L68 in the two list layouts (0092 for builds 92 and 93, 0094): each entry has the type of its layout and records
+// the argument it received, so a test sees which entry a published wrapper reached and with what.
+unsigned barrier88_calls{},barrier94_calls{};
+const D3D12DDIARG_BARRIER_0088* barrier88_seen{};
+const D3D12DDIARG_BARRIER_0094* barrier94_seen{};
+void APIENTRY barrier88(D3D12DDI_HCOMMANDLIST h,UINT32 n,const D3D12DDIARG_BARRIER_0088* p) {
+    assert(current==static_cast<Owner*>(h.pDrvPrivate) && n==1);++current->calls;++barrier88_calls;barrier88_seen=p;
+}
+void APIENTRY barrier94(D3D12DDI_HCOMMANDLIST h,UINT32 n,const D3D12DDIARG_BARRIER_0094* p) {
+    assert(current==static_cast<Owner*>(h.pDrvPrivate) && n==1);++current->calls;++barrier94_calls;barrier94_seen=p;
+}
+static_assert(std::is_same_v<decltype(&barrier88),PFND3D12DDI_BARRIER_0088>);
+static_assert(std::is_same_v<decltype(&barrier94),PFND3D12DDI_BARRIER_0094>);
+// Policies of their own, so that each layout-order test starts with empty stores.
+struct Order92First:Policy {};
+struct Order94First:Policy {};
+struct FastPolicy94:FastPolicy {};
 // Fast-path fixtures: a recording slot that enters another recording slot of the same list (the inner call must
 // take the full path, being nested), and one that throws.
 D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 fast_list{};
@@ -672,10 +689,82 @@ int main() {
     assert(f.fast_entered==core_fast+8 && f.entered==core_full+3 && f.entered==f.left && f.calls==core_calls+11);
     assert(!current);
 
+    // The two list layouts. 0092 (builds 92 and 93) and 0094 have stores of their own, so adapters that negotiated
+    // different builds in one process both get their tables, in either order; a refill of one layout with its own
+    // entries succeeds, a changed entry is refused without touching the other layout, and calls through the table
+    // published first still reach its own entries after the other layout is published. The 0094 wrapper of L68 has
+    // the 0094 type and passes the 0094 argument to the 0094 entry, on the ordinary and on the fast path.
+    {
+        using List94=D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
+        static_assert(sizeof(List94)==sizeof(List));
+        static_assert(std::is_same_v<decltype(List94{}.pfnBarrier),PFND3D12DDI_BARRIER_0094>);
+        List source92=source_list();source92.pfnBarrier=barrier88;
+        List94 source94{};std::memcpy(&source94,&source92,sizeof(source94));source94.pfnBarrier=barrier94;
+        D3D12DDIARG_BARRIER_0088 arg88{};D3D12DDIARG_BARRIER_0094 arg94{};
+        auto check_both=[&](const List& w92,const List94& w94,Owner& o) {
+            const unsigned before88=barrier88_calls,before94=barrier94_calls,calls=o.calls.load();
+            w92.pfnBarrier({&o},1,&arg88);
+            assert(barrier88_calls==before88+1 && barrier94_calls==before94 && barrier88_seen==&arg88);
+            w94.pfnBarrier({&o},1,&arg94);
+            assert(barrier94_calls==before94+1 && barrier88_calls==before88+1 && barrier94_seen==&arg94);
+            w92.pfnDispatch({&o},2,3,4);w94.pfnDispatch({&o},2,3,4);
+            assert(o.calls==calls+4 && o.entered==o.left && !current);
+        };
+        auto order=[&](auto tables,bool first92) {
+            using T=decltype(tables);
+            Owner o;List w92{},again92{};List94 w94{},again94{};
+            if(first92){
+                assert(T::wrap_list(1,source92,&w92)==S_OK);
+                List94 early{};assert(T::wrap_list(1,source94,&early)==S_OK);
+                // The table published first, called after the other layout's publication.
+                w92.pfnBarrier({&o},1,&arg88);assert(barrier88_seen==&arg88);
+                w94=early;
+            }else{
+                assert(T::wrap_list(1,source94,&w94)==S_OK);
+                List early{};assert(T::wrap_list(1,source92,&early)==S_OK);
+                w94.pfnBarrier({&o},1,&arg94);assert(barrier94_seen==&arg94);
+                w92=early;
+            }
+            assert(w94.pfnBarrier && reinterpret_cast<void*>(w94.pfnBarrier)!=reinterpret_cast<void*>(w92.pfnBarrier));
+            assert(w94.pfnDispatch!=w92.pfnDispatch);       // each layout has wrappers of its own
+            check_both(w92,w94,o);
+            // Same-version reuse: the same entries again, the same wrappers.
+            assert(T::wrap_list(1,source92,&again92)==S_OK && !std::memcmp(&again92,&w92,sizeof(w92)));
+            assert(T::wrap_list(1,source94,&again94)==S_OK && !std::memcmp(&again94,&w94,sizeof(w94)));
+            // A changed entry is refused in its own layout only, with nothing written.
+            List94 changed94=source94;changed94.pfnBarrier=Dummy<PFND3D12DDI_BARRIER_0094>::call;
+            List94 untouched94{};
+            assert(T::wrap_list(1,changed94,&untouched94)==E_UNEXPECTED);
+            assert(!untouched94.pfnBarrier && !untouched94.pfnDispatch);
+            assert(T::wrap_list(1,source92,&again92)==S_OK);
+            assert(T::wrap_list(2,source94,&untouched94)==E_INVALIDARG);
+            check_both(w92,w94,o);
+            // The other table number is a store of its own in each layout.
+            List94 compute94{};assert(T::wrap_list(0,source94,&compute94)==S_OK && compute94.pfnBarrier!=w94.pfnBarrier);
+            compute94.pfnBarrier({&o},1,&arg94);assert(barrier94_seen==&arg94 && !current);
+        };
+        order(native12::DdiEntryTables<Order92First>{},true);
+        order(native12::DdiEntryTables<Order94First>{},false);
+        // The fast path: an admitted owner's L68 call through the published 0094 wrapper runs in FastScope and
+        // reaches the 0094 entry with the 0094 argument; an owner that is not admitted takes the full path.
+        List94 fast94{};
+        assert(native12::DdiEntryTables<FastPolicy94>::wrap_list(1,source94,&fast94)==S_OK);
+        Owner fast_owner;fast_owner.fast=true;
+        const unsigned before94=barrier94_calls;
+        fast94.pfnBarrier({&fast_owner},1,&arg94);
+        assert(barrier94_calls==before94+1 && barrier94_seen==&arg94);
+        assert(fast_owner.fast_entered==1 && fast_owner.fast_left==1 && fast_owner.entered==0 && !current);
+        Owner full_owner;
+        fast94.pfnBarrier({&full_owner},1,&arg94);
+        assert(barrier94_calls==before94+2 && full_owner.fast_entered==0 && full_owner.entered==1 &&
+               full_owner.entered==full_owner.left && !current);
+        assert(barrier88_seen==&arg88);                  // no 0094 call reached the 0088 entry
+    }
+
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});
     call_a.join();call_b.join();refill.join();
     assert(!current && a.entered==a.left && b.entered==b.left);
-    std::puts("DDI entry: 122 core + 70x2 list signatures; scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording and descriptor fast path (admission, Close/Reset/Present, other core slots and nested fallback, failures inside the fast scope with the fast_denied note) and concurrency pass");
+    std::puts("DDI entry: 122 core + 70x2 list signatures in the 0092 and the 0094 layout (both publication orders, reuse, refusal of a changed entry, typed L68 on the full and the fast path); scope, denial, exceptions, immutable refill, paired tracing, typed output observation, recording and descriptor fast path (admission, Close/Reset/Present, other core slots and nested fallback, failures inside the fast scope with the fast_denied note) and concurrency pass");
 }

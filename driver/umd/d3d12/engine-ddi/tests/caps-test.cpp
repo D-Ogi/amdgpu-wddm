@@ -30,7 +30,8 @@ void check(bool ok, const char* format, ...) {
     failures += ok ? 0 : 1;
 }
 
-constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0092;
+// The shell asks with the newest layout it offers (adapter-caps.cpp); 0092 is checked separately.
+constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0094;
 constexpr uint32_t kAbi12 = (1u << 16) | 2u;
 constexpr uint32_t kAbi = BC250_VKD3D_ENGINE_ABI_VERSION;   // what the shell asks the engine for
 
@@ -362,7 +363,21 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
           static_cast<unsigned long>(hr));
     r = {D3D12DDICAPS_TYPE_3DPIPELINESUPPORT, nullptr, raw, 4};
     hr = engine_ddi::build_caps(caps, 91, &r);
-    check(hr == E_INVALIDARG && untouched(raw, sizeof(raw)), "a ddi_version other than 92: E_INVALIDARG");
+    const bool refused91 = hr == E_INVALIDARG && untouched(raw, sizeof(raw));
+    hr = engine_ddi::build_caps(caps, 95, &r);
+    check(refused91 && hr == E_INVALIDARG && untouched(raw, sizeof(raw)),
+          "a ddi_version outside 92 to 94 (91, 95): E_INVALIDARG");
+    hr = engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0093, &r);
+    D3D12DDI_3DPIPELINELEVEL l93;
+    std::memcpy(&l93, raw, sizeof(l93));
+    check(hr == S_OK && l93 == D3D12DDI_3DPIPELINELEVEL_12_0 && untouched(raw + 4, sizeof(raw) - 4),
+          "ddi_version 93: the same layouts are answered (1007 12_0)");
+    std::memset(raw, 0xEE, sizeof(raw));
+    hr = engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0092, &r);
+    D3D12DDI_3DPIPELINELEVEL l92;
+    std::memcpy(&l92, raw, sizeof(l92));
+    check(hr == S_OK && l92 == D3D12DDI_3DPIPELINELEVEL_12_0 && untouched(raw + 4, sizeof(raw) - 4),
+          "ddi_version 92: the 0092 layouts are still answered (1007 12_0)");
 
     // 1012 SHADER_MODELS: the count first, then the list.
     UINT n = 0;
@@ -1007,6 +1022,17 @@ int options_1091(const engine_ddi::AdapterCaps* caps) {
     return d.SampleCmpGradientAndBiasSupported | (d.ExtendedCommandInfoSupported << 1);
 }
 
+// 1079 OPTIONS_0093 (8 bytes): S_OK and both fields, packed as bits 0 and 1; -1 on a failure.
+int options_1079(const engine_ddi::AdapterCaps* caps) {
+    D3D12DDI_OPTIONS_DATA_0093 d;
+    std::memset(&d, 0xEE, sizeof(d));
+    if (get(caps, D3D12DDICAPS_TYPE_OPTIONS_0093, d) != S_OK) return -1;
+    if ((d.AdvancedTextureOpsSupported != 0 && d.AdvancedTextureOpsSupported != 1) ||
+        (d.WriteableMSAATexturesSupported != 0 && d.WriteableMSAATexturesSupported != 1))
+        return -1;
+    return d.AdvancedTextureOpsSupported | (d.WriteableMSAATexturesSupported << 1);
+}
+
 // The shader model: the engine's answer to SHADER_MODEL asked with 6_8, the 1012 list up to it, 1091 from OPTIONS21
 // at 6_8 only, the ceiling of the experiments shader-model-68-off and shader-model-67-off, and the refusals.
 void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
@@ -1019,13 +1045,16 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         a.options21.ExtendedCommandInfoSupported = TRUE;
         return a;
     };
-    struct Case { D3D_SHADER_MODEL engine; D3D12DDI_SHADER_MODEL highest; int expected_1091; const char* what; };
+    struct Case {
+        D3D_SHADER_MODEL engine; D3D12DDI_SHADER_MODEL highest; int expected_1091; int expected_1079; const char* what;
+    };
     const Case cases[] = {
-        {D3D_SHADER_MODEL_6_5, D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071, 0, "engine at 6_5"},
-        {D3D_SHADER_MODEL_6_6, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082, 0, "engine at 6_6"},
-        {D3D_SHADER_MODEL_6_7, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093, 0, "engine at 6_7"},
-        {D3D_SHADER_MODEL_6_8, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, "engine at 6_8"},
-        {D3D_SHADER_MODEL_6_9, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, "engine at 6_9 (asked 6_8)"},
+        {D3D_SHADER_MODEL_6_5, D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071, 0, 0, "engine at 6_5"},
+        {D3D_SHADER_MODEL_6_6, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082, 0, 0, "engine at 6_6"},
+        // 1079: both FALSE even with both OPTIONS14 fields TRUE (integer border colours need DDI 0096).
+        {D3D_SHADER_MODEL_6_7, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093, 0, 0, "engine at 6_7"},
+        {D3D_SHADER_MODEL_6_8, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, 0, "engine at 6_8"},
+        {D3D_SHADER_MODEL_6_9, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, 0, "engine at 6_9 (asked 6_8)"},
     };
     for (const Case& k : cases) {
         const Answers a = engine_at(k.engine);
@@ -1033,10 +1062,11 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         if (!caps) continue;
         const ModelList l = model_list(caps);
         const int o = options_1091(caps);
-        check(list_is(l, k.highest) && o == k.expected_1091,
+        const int o79 = options_1079(caps);
+        check(list_is(l, k.highest) && o == k.expected_1091 && o79 == k.expected_1079,
               "shader model, %s: 1012 lists 5_1 to %x (count %u), 1091 SampleCmpGradientAndBias %d, "
-              "ExtendedCommandInfo %d",
-              k.what, static_cast<unsigned>(k.highest), l.count, o & 1, (o >> 1) & 1);
+              "ExtendedCommandInfo %d, 1079 AdvancedTextureOps %d, WriteableMSAATextures %d",
+              k.what, static_cast<unsigned>(k.highest), l.count, o & 1, (o >> 1) & 1, o79 & 1, (o79 >> 1) & 1);
         engine_ddi::free_adapter_caps(caps);
     }
 
@@ -1057,6 +1087,36 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         engine_ddi::free_adapter_caps(caps);
     }
 
+    // 1079 with OPTIONS14 unanswered: also both FALSE, S_OK.
+    a = engine_at(D3D_SHADER_MODEL_6_7);
+    a.unsupported = D3D12_FEATURE_D3D12_OPTIONS14;
+    caps = query_stub(a, info, "engine at 6_7 without OPTIONS14");
+    if (caps) {
+        check(options_1079(caps) == 0, "1079: an unanswered OPTIONS14 reports both FALSE");
+        engine_ddi::free_adapter_caps(caps);
+    }
+
+    // 1079 exists from 0093 on: exact 8 bytes, refused at 0092, nothing written on a refusal.
+    caps = query_stub(engine_at(D3D_SHADER_MODEL_6_8), info, "engine at 6_8, 1079 payload");
+    if (caps) {
+        uint8_t raw[16];
+        std::memset(raw, 0xEE, sizeof(raw));
+        D3D12DDIARG_GETCAPS r{D3D12DDICAPS_TYPE_OPTIONS_0093, nullptr, raw, 4};
+        const HRESULT hr4 = engine_ddi::build_caps(caps, kDdi, &r);
+        r.DataSize = 12;
+        const HRESULT hr12 = engine_ddi::build_caps(caps, kDdi, &r);
+        r.DataSize = 8;
+        const HRESULT hr92 = engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0092, &r);
+        check(hr4 == E_INVALIDARG && hr12 == E_INVALIDARG && hr92 == E_INVALIDARG && untouched(raw, sizeof(raw)),
+              "1079 with 4 and 12 bytes, and at ddi_version 92: E_INVALIDARG, nothing written");
+        const HRESULT hr93 = engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0093, &r);
+        D3D12DDI_OPTIONS_DATA_0093 d93;
+        std::memcpy(&d93, raw, sizeof(d93));
+        check(hr93 == S_OK && !d93.AdvancedTextureOpsSupported && !d93.WriteableMSAATexturesSupported,
+              "1079 at ddi_version 93: answered, both FALSE (%08lx)", static_cast<unsigned long>(hr93));
+        engine_ddi::free_adapter_caps(caps);
+    }
+
     // The payload size is exact: 4 and 12 bytes are refused with nothing written.
     caps = query_stub(engine_at(D3D_SHADER_MODEL_6_8), info, "engine at 6_8, payload sizes");
     if (caps) {
@@ -1073,7 +1133,8 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         const HRESULT h67 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_7);
         const bool at67 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093) && options_1091(caps) == 0;
         const HRESULT h66 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_6);
-        const bool at66 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082) && options_1091(caps) == 0;
+        const bool at66 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082) && options_1091(caps) == 0 &&
+                          options_1079(caps) == 0;
         const HRESULT h68 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_8);
         const bool at68 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108) && options_1091(caps) == 3;
         check(h67 == S_OK && at67 && h66 == S_OK && at66 && h68 == S_OK && at68,

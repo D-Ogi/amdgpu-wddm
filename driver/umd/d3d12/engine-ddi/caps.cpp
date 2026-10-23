@@ -28,6 +28,7 @@ static_assert(sizeof(D3D12DDICAPS_UMD_BASED_COMMAND_QUEUE_PRIORITY_DATA_0023) ==
 static_assert(sizeof(D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050) == 4, "1067: H:7004-7008");
 static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0090) == 4, "1077: H:11127-11131");
 static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0091) == 16, "1078: H:11143-11150");
+static_assert(sizeof(D3D12DDI_OPTIONS_DATA_0093) == 8, "1079: H:11254-11259");
 static_assert(sizeof(D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110) == 8, "1091: H:13671-13679");
 
 // ---- Enums passed through by value ------------------------------------------------------------------------------------
@@ -90,7 +91,7 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS11 options11;
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
-    D3D12_FEATURE_DATA_D3D12_OPTIONS14 options14;   // logged only: no DDI type reaches the runtime at 0092
+    D3D12_FEATURE_DATA_D3D12_OPTIONS14 options14;   // logged only: 1079 reports both FALSE (caps.cpp)
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;   // 1091
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
@@ -100,7 +101,10 @@ public:
 
 namespace {
 constexpr uint32_t kAbi12 = (1u << 16) | 2u;
-constexpr uint32_t kDdiVersion = 92;                     // D3D12DDI_BUILD_VERSION_0092, H:11156
+// The payload layouts build_caps writes: 0093 adds type 1079 and changes no 0092 layout (H:11247-11259); 0094 adds
+// no caps type and changes only the L68 barrier argument (H:11262-11301).
+constexpr uint32_t kDdiVersionMin = 92;                  // D3D12DDI_BUILD_VERSION_0092, H:11156
+constexpr uint32_t kDdiVersionMax = 94;                  // D3D12DDI_BUILD_VERSION_0094, H:11265
 
 constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0,
                                          D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_2};
@@ -456,7 +460,7 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
     }
     c->levels.pFeatureLevelsRequested = nullptr;          // not kept past the call
     // One line per adapter: the model and the optional features of 6_7 and 6_8 as the engine computed them. The
-    // OPTIONS14 pair reaches no runtime at DDI 0092 (D3D12DDICAPS_TYPE_OPTIONS_0093 is queried only from 0093 on).
+    // OPTIONS14 pair is not forwarded: 1079 reports both FALSE (build_caps).
     log_line("QueryAdapterCaps: shader model %x; AdvancedTextureOps %d, WriteableMSAATextures %d, "
              "SampleCmpGradientAndBias %d, ExtendedCommandInfo %d",
              static_cast<unsigned>(c->shader_model.HighestShaderModel), c->options14.AdvancedTextureOpsSupported,
@@ -527,7 +531,7 @@ HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitectu
 }
 
 HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDIARG_GETCAPS* request) noexcept {
-    if (!caps || !request || ddi_version != kDdiVersion) return E_INVALIDARG;
+    if (!caps || !request || ddi_version < kDdiVersionMin || ddi_version > kDdiVersionMax) return E_INVALIDARG;
     const AdapterCaps& c = *caps;
     const D3D12DDIARG_GETCAPS& r = *request;
     switch (r.Type) {
@@ -704,6 +708,19 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         d->InvertedViewportDepthFlipsZSupported = c.options13.InvertedViewportDepthFlipsZSupported;
         return S_OK;
     }
+    case D3D12DDICAPS_TYPE_OPTIONS_0093: {
+        // Two optional features of shader model 6_7, both FALSE whatever the engine answers in OPTIONS14.
+        // AdvancedTextureOps includes integer border colours, whose sampler layout comes only with DDI 0096
+        // (H:11677-11706); this shell creates samplers from the 0092 D3D12DDI_SAMPLER_DESC (descriptors.cpp).
+        // WriteableMSAATextures has no test of the shell's MSAA UAV path yet. The type exists from 0093 on; a
+        // 0092 caller gets E_INVALIDARG like any unknown layout.
+        if (ddi_version < 93) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0093>(r);
+        if (!d) return E_INVALIDARG;
+        d->AdvancedTextureOpsSupported = FALSE;
+        d->WriteableMSAATexturesSupported = FALSE;
+        return S_OK;
+    }
     case D3D12DDICAPS_TYPE_SHADER_MODEL_6_8_OPTIONS_0110: {
         // A 0110 type, asked by runtimes that map 6_8 whenever 1012 lists 6_8, with no DDI version check (runtime
         // 26100: QueryShaderModel66AndLater; M840). It is answered here although the shell negotiates 0092: an
@@ -717,7 +734,7 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         return S_OK;
     }
     default:
-        // Every other type defined at 0092 is left unanswered on purpose (INTEGRATION.md, "GetCaps mapping").
+        // Every other type defined at 0093 is left unanswered on purpose (INTEGRATION.md, "GetCaps mapping").
         log_line("GetCaps type %u (DataSize %u, pInfo %s): not answered in this revision", static_cast<unsigned>(r.Type),
                  r.DataSize, r.pInfo ? "set" : "null");
         return E_NOTIMPL;

@@ -629,7 +629,10 @@ void fill_list_graphics(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_i
     t->pfnOMSetRenderTargets = om_set_render_targets;
 }
 
-bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
+namespace {
+// The direct slots have the same types in the 0092 and the 0094 layout; L68, where the two differ, is not one of
+// them. A second layout's table holds other wrappers than the first one's and keeps them (no direct entries).
+template <class Table> bool install_direct(Table* t, uint32_t table_index) noexcept {
     if (!t || table_index != 1) return false;
     entry_knobs();                              // the arm before the first call: direct unless BC250_ENTRY_PATH
     bool ok = true;
@@ -654,6 +657,14 @@ bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_
     ENGINE_DDI_DIRECT_SLOTS(ENGINE_DDI_DIRECT_SET)
 #undef ENGINE_DDI_DIRECT_SET
     return true;
+}
+} // namespace
+
+bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
+    return install_direct(t, table_index);
+}
+bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0094* t, uint32_t table_index) noexcept {
+    return install_direct(t, table_index);
 }
 
 void set_direct_entry(DeviceContext* context, bool on) noexcept {

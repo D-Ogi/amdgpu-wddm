@@ -450,6 +450,7 @@ void destroy(DeviceContext* c) noexcept {
     pso_off(c);                                 // then the compile pool: every pipeline of this device is gone
     release_initialization(c);
     release_ref(c->empty_local);
+    release_ref(c->device12);
     release_ref(c->device10);
     release_ref(c->device8);
     release_ref(c->device7);
@@ -505,6 +506,9 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
     // Optional: only AddToStateObject needs it.
     if (FAILED(c->device->QueryInterface(__uuidof(ID3D12Device7), reinterpret_cast<void**>(&c->device7))))
         c->device7 = nullptr;
+    // Optional: without it a size with castable formats is refused (engine_allocation_info).
+    if (FAILED(c->device->QueryInterface(__uuidof(ID3D12Device12), reinterpret_cast<void**>(&c->device12))))
+        c->device12 = nullptr;
     c->mode = info->memory_mode;
     c->hooks = info->hooks;
     c->funcs = *info->engine_funcs;

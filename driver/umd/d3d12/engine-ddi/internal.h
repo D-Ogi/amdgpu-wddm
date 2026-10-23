@@ -264,6 +264,7 @@ public:
     ID3D12Device7* device7 = nullptr;           // null if the engine has none: AddToStateObject answers E_NOTIMPL
     ID3D12Device8* device8 = nullptr;
     ID3D12Device10* device10 = nullptr;
+    ID3D12Device12* device12 = nullptr;         // null if the engine has none: a size with castable formats is refused
     MemoryMode mode = MemoryMode::RuntimeBacked;
     ShellHooks hooks{};
     BC250_VKD3D_ENGINE_FUNCS funcs{};
@@ -495,7 +496,18 @@ struct ResourceRecord {
     // (native-tables.cpp, QueueDomainScope) and in this resource's own destroy, which the runtime does not run
     // concurrently with a present of the same resource.
     PresentCopySurface* present_copy;
+    // The castable formats of the create, for CheckExistingResourceAllocationInfo: the engine sizes a compressed
+    // image with unordered access only with its uncompressed castable formats (RelaxedFormatCasting). The record owns
+    // a copy of the whole list (copy_castable, before the create is committed); destroy_heap_and_resource frees it
+    // with free_castable. Null and 0 for a resource without castable formats.
+    uint32_t castable_count;
+    DXGI_FORMAT* castable;
 };
+
+// The record's copy of a create's castable formats: S_OK with *out null for none, E_INVALIDARG for a count without a
+// list, E_OUTOFMEMORY when the copy cannot be made. free_castable takes null.
+HRESULT copy_castable(UINT count, const DXGI_FORMAT* formats, DXGI_FORMAT** out) noexcept;
+void free_castable(DXGI_FORMAT* formats) noexcept;
 
 // BD-133: releases a resource's Present copy surfaces and clears the pointer. A surface goes only when the shell
 // proved it idle (its slot has no fence and is not retained, PresentContext::retire); every other one is kept for
@@ -777,6 +789,13 @@ uint32_t harness_stuck_releases(DeviceContext* context) noexcept;
 uint32_t harness_live_objects(DeviceContext* context) noexcept;
 uint32_t harness_pending_initializations(DeviceContext* context) noexcept;
 bool harness_retirement_lost(DeviceContext* context) noexcept;
+// Castable formats: when set, the next copy_castable with a list fails with E_OUTOFMEMORY. The counts are the
+// engine sizing queries since the process started (the legacy GetResourceAllocationInfo, GetResourceAllocationInfo3)
+// and the record copies not freed yet.
+void harness_fail_next_castable_copy() noexcept;
+uint64_t harness_legacy_sizing_calls() noexcept;
+uint64_t harness_castable_sizing_calls() noexcept;
+int64_t harness_live_castable_copies() noexcept;
 // Submission retirement points that the retire policy left to the resource DDIs (set_retire_policy).
 uint64_t harness_deferred_retire_points(DeviceContext* context) noexcept;
 // Fault injection: completed_value returns value instead of the fence's (0 turns it off); the next retirement

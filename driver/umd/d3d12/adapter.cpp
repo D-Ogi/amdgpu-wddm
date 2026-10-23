@@ -24,9 +24,16 @@ constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::
     amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::VSync) |
     amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::Anisotropy) |
     amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::MaxFrameLatency);
+// The DDI builds this shell offers, newest first; the runtime states the one it picked in CreateDevice's Version.
+// Measured on unit A (2026-10-23): the 22631 inbox runtime picks 0092. Agility SDK 1.619.6 picks the newest build
+// offered; with 0093 as the newest it asked caps type 1079 and reported no enhanced barriers, with 0094 it reports
+// them (OPTIONS12 EnhancedBarriersSupported 1). 0093 adds only the caps type OPTIONS_0093 (H:11251-11257); 0094
+// changes the L68 argument (resources.cpp, select_barrier). 0092 stays offered for a runtime that knows neither.
+constexpr UINT64 kSupportedVersions[]={D3D12DDI_SUPPORTED_0094,D3D12DDI_SUPPORTED_0093,D3D12DDI_SUPPORTED_0092};
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
-    return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 &&
-        (runtimeVersion>>16)==D3D12DDI_BUILD_VERSION_0092;
+    const UINT build=runtimeVersion>>16;
+    return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 && (build==D3D12DDI_BUILD_VERSION_0094 ||
+        build==D3D12DDI_BUILD_VERSION_0093 || build==D3D12DDI_BUILD_VERSION_0092);
 }
 void trace(const char* operation,unsigned long long value=0) noexcept {
     amdgpu_wddm_log::print("d3d12-ddi %s %llu\n",operation,value);amdgpu_wddm_log::flush();
@@ -47,7 +54,11 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     if(!a->hRTDevice.handle || !cb.pfnSetErrorCb || !cb.pfnCreateContextVirtualCb || !cb.pfnDestroyContextCb ||
        !cb.pfnAllocateCb || !cb.pfnDeallocateCb || !cb.pfnSetCommandListDDITableCb || !cb.pfnSetCommandListErrorCb) return E_INVALIDARG;
     auto adapter=static_cast<Adapter*>(h.pDrvPrivate);
+    if(!native12::adopt_ddi_version(*adapter,a->Version)){
+        trace("CreateDevice-version-refused",adapter->ddi_version.load());return E_NOINTERFACE;
+    }
     auto device=new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
+    device->ddi_version=a->Version;
     // The per-application settings: once per process, the effective values in the log; Anisotropy as the
     // vkd3d-proton fork's VKD3D_SAMPLER_ANISOTROPY, which the engine reads when it creates this device.
     namespace as=amdgpu_wddm::app_settings;
@@ -80,11 +91,13 @@ HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
 }
 HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;
-    const UINT32 capacity=*count;*count=1;trace("GetSupportedVersions",capacity);
+    constexpr UINT32 n=static_cast<UINT32>(sizeof(kSupportedVersions)/sizeof(kSupportedVersions[0]));
+    const UINT32 capacity=*count;*count=n;trace("GetSupportedVersions",capacity);
     if(!values) return S_OK;
-    if(capacity<1) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
-    // Diagnostic negotiation target only. Unimplemented capability/table queries remain fail-closed.
-    values[0]=D3D12DDI_SUPPORTED_0092;return S_OK;
+    if(capacity<n) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    // Unimplemented capability/table queries remain fail-closed.
+    for(UINT32 i=0;i<n;++i)values[i]=kSupportedVersions[i];
+    return S_OK;
 }
 HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {
     const auto trace_id=native12::ddi_trace_begin("pfnGetCaps");

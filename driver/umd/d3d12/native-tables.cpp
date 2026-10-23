@@ -171,7 +171,8 @@ template<engine_ddi::EntryClass C,unsigned Table,class Fn> void time_entry(Fn& s
     using T=TimedEntry<C,Table,Fn>;
     if(slot!=&T::call){T::target=slot;slot=&T::call;}
 }
-template<unsigned Table> void time_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092& t) noexcept {
+// Table is the table number, plus 2 for the 0094 layout: the two layouts wrap their slots apart (ddi-entry.h).
+template<unsigned Table,class List> void time_list(List& t) noexcept {
 #define N12_TIME_LIST(name) time_entry<engine_ddi::EntryClass::name,Table>(t.pfn##name);
     ENGINE_DDI_ENTRY_TIMED_LIST_CLASSES(N12_TIME_LIST)
 #undef N12_TIME_LIST
@@ -492,23 +493,46 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
     }
     case D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D:{
         using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
+        using List94=D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
+        static_assert(sizeof(List94)==sizeof(List));
         if(number>1 || size!=sizeof(List) || !runtime.handle)return E_INVALIDARG;
-        List original{},wrapped{};
+        List original{};
         HRESULT hr=compose_list_0092(&original,sizeof(original),number,present,fill);if(hr!=S_OK)return hr;
+        // The table takes the layout of the version the adapter's devices use (device-state.h): 0092 for builds
+        // 92 and 93, 0094 for build 94, whose L68 takes another argument layout. A table asked for before any
+        // device has none to follow, and is refused rather than given a layout by default.
+        const UINT version=adapter.ddi_version.load(std::memory_order_acquire);
+        auto publish=[&](auto& wrapped)->HRESULT {
+            using Wrapped=std::remove_reference_t<decltype(wrapped)>;
+            constexpr unsigned layout=std::is_same_v<Wrapped,List94>?2u:0u;
+            // The entry statistics' timed entries (engine-ddi.h, "Direct entry"), and the direct entries of the
+            // graphics table over the shell's own. Those write ring entries only for a device with the recording
+            // binding and deferred replay, so they are not installed when either default is off, nor under the full
+            // trace (mode 1), whose hooks only the shell's entry runs; direct-entry-off takes them back alone.
+            if(engine_ddi::entry_stats_on()){if(number)time_list<1+layout>(wrapped);else time_list<0+layout>(wrapped);}
+            if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
+               !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
+                (void)engine_ddi::install_direct_list(&wrapped,1);
+            HRESULT result=S_OK;
+            AcquireSRWLockExclusive(&adapter.tables_lock);
+            auto& prior=adapter.list_tables[number];
+            if(prior.handle && prior.handle!=runtime.handle)result=E_UNEXPECTED;
+            else{prior=runtime;*static_cast<Wrapped*>(output)=wrapped;}
+            ReleaseSRWLockExclusive(&adapter.tables_lock);return result;
+        };
+        if((version>>16)==D3D12DDI_BUILD_VERSION_0094){
+            List94 table{},wrapped{};
+            if(!engine_ddi::make_list_0094(original,&table))return E_UNEXPECTED;
+            hr=DdiEntryTables<EntryPolicy>::wrap_list(number,table,&wrapped);if(hr!=S_OK)return hr;
+            return publish(wrapped);
+        }
+        if(!engine_ddi::select_barrier(&original,version>>16)){
+            amdgpu_wddm_log::print("d3d12-ddi FillDDITable-list-refused version %u\n",version);
+            amdgpu_wddm_log::flush();return E_UNEXPECTED;
+        }
+        List wrapped{};
         hr=DdiEntryTables<EntryPolicy>::wrap_list(number,original,&wrapped);if(hr!=S_OK)return hr;
-        // The entry statistics' timed entries (engine-ddi.h, "Direct entry"), and the direct entries of the graphics
-        // table over the shell's own. Those write ring entries only for a device with the recording binding and
-        // deferred replay, so they are not installed when either default is off, nor under the full trace (mode 1),
-        // whose hooks only the shell's entry runs; direct-entry-off takes them back alone.
-        if(engine_ddi::entry_stats_on()){if(number)time_list<1>(wrapped);else time_list<0>(wrapped);}
-        if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
-           !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
-            (void)engine_ddi::install_direct_list(&wrapped,1);
-        AcquireSRWLockExclusive(&adapter.tables_lock);
-        auto& prior=adapter.list_tables[number];
-        if(prior.handle && prior.handle!=runtime.handle)hr=E_UNEXPECTED;
-        else{prior=runtime;*static_cast<List*>(output)=wrapped;}
-        ReleaseSRWLockExclusive(&adapter.tables_lock);return hr;
+        return publish(wrapped);
     }
     case D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D:{
         if(number || size!=sizeof(Queue))return E_INVALIDARG;

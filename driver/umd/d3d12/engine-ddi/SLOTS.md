@@ -41,6 +41,10 @@ API form: the `LEGACY_*` barrier layouts become the queue-agnostic API layout of
 `D3D12DDI_BARRIER_TYPE_RANGED` barrier becomes a global barrier of the same scopes, which is the conservative
 reading of a range. Neither is refused, because reporting `EnhancedBarriersSupported` makes the runtime route a
 legacy `ResourceBarrier` call through this slot too, and a refusal there would cost the device on the first one.
+At DDI 0094 the slot takes `D3D12DDIARG_BARRIER_0094`, whose ranged member has a flag (NONE, ATOMIC_COPY,
+ACQUIRE, RELEASE) but no scopes, and whose array stride differs. The shell sets the entry of the build the runtime
+negotiated (`select_barrier`); a 0094 ranged barrier becomes a global barrier `SYNC_ALL`, `ACCESS_COMMON` before
+and after. That over-synchronises a range and does not make atomic copy supported.
 
 D76 `pfnCheckSubresourceInfo` answers the two shapes whose memory layout is known here, a buffer and the linear
 primary, from the description the resource was created with and the row pitch of its linear surface. Any other
