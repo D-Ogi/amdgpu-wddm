@@ -43,7 +43,7 @@ reading of a range. Neither is refused, because reporting `EnhancedBarriersSuppo
 legacy `ResourceBarrier` call through this slot too, and a refusal there would cost the device on the first one.
 At DDI 0094 the slot takes `D3D12DDIARG_BARRIER_0094`, whose ranged member has a flag (NONE, ATOMIC_COPY,
 ACQUIRE, RELEASE) but no scopes, and whose array stride differs. The shell sets the entry of the build the runtime
-negotiated (`select_barrier`); a 0094 ranged barrier becomes a global barrier `SYNC_ALL`, `ACCESS_COMMON` before
+negotiated (`select_barrier`). A 0094 ranged barrier becomes a global barrier `SYNC_ALL`, `ACCESS_COMMON` before
 and after. That over-synchronises a range and does not make atomic copy supported.
 
 D76 `pfnCheckSubresourceInfo` answers the two shapes whose memory layout is known here, a buffer and the linear

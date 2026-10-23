@@ -73,10 +73,10 @@ HRESULT engine_ddi::set_memory_architecture_policy(engine_ddi::AdapterCaps* caps
      shell's answers for 1002 ("Memory architecture policy" below). Without the call 1002 is as in the table.
 2. `pfnGetCaps`: `return engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0094, pCaps);`. build_caps only reads
    `caps` and may run on any thread.
-3. `pfnGetSupportedVersions`: three entries, `D3D12DDI_SUPPORTED_0094`, `_0093`, then `_0092`;
+3. `pfnGetSupportedVersions`: three entries, `D3D12DDI_SUPPORTED_0094`, `_0093`, then `_0092`.
    CalcPrivateDeviceSize and CreateDevice accept these three builds only. Because the first GetCaps calls come
    before this negotiation, `ddi_version` is the constant 94 (the newest layout offered), not a negotiated value.
-   0093 adds type 1079 and changes no 0092 layout (H:11247-11259); 0094 adds no caps type (H:11262-11301), so a
+   0093 adds type 1079 and changes no 0092 layout (H:11247-11259). 0094 adds no caps type (H:11262-11301), so a
    runtime that negotiates 0092 reads the same answers. build_caps accepts 92 to 94, answers 1079 from 93 on and
    refuses any other `ddi_version`.
    0094 changes the argument of L68 `pfnBarrier` (D3D12DDIARG_BARRIER_0094, another ranged member and another array
@@ -84,7 +84,7 @@ HRESULT engine_ddi::set_memory_architecture_policy(engine_ddi::AdapterCaps* caps
    then sets L68 with `select_barrier(table, build)`: the 0088 entry at 92 and 93, the 0094 entry at 94. A list
    table asked for before a version is recorded, and a later device of another version, are refused.
    Why 0094: on unit A, Agility SDK 1.619.6 negotiated 0093 from {0093, 0092}, asked 1079 and still reported no
-   enhanced barriers; from {0094, 0093, 0092} it negotiates 0094 and reports them (OPTIONS12
+   enhanced barriers. From {0094, 0093, 0092} it negotiates 0094 and reports them (OPTIONS12
    EnhancedBarriersSupported 1, and RelaxedFormatCasting 1, which it also gates on enhanced barriers). The 22631
    inbox runtime negotiates 0092 from either offer.
 4. `pfnCloseAdapter`: `free_adapter_caps(caps)`.
@@ -102,7 +102,7 @@ Layout references are WDK 10.0.26100 `um/d3d12umddi.h` ("H:"); DDI-ref and the o
 `ref\graphics-driver-samples\compute-only-sample\cosumd12` (@de4a2161), cited for shape only. A wrong DataSize is
 E_INVALIDARG with nothing written. An unanswered type returns E_NOTIMPL and logs type, size and whether pInfo is set.
 
-Every `D3D12DDICAPS_TYPE` value (H:94-150) that exists at 0093. The version is the suffix of the name; a value
+Every `D3D12DDICAPS_TYPE` value (H:94-150) that exists at 0093. The version is the suffix of the name. A value
 without one predates the suffixes, except 1069, which H:127-130 lists between 1068 (0061) and 1070 (0073). 1008 and
 1011 are not defined. Left out because they are later than 0093: 1013 (0103), 1075 (0103), 1080 (0098),
 1081 (0101), 1082 (0102), 1084-1086 (106), 1087 (0109), 1088 (0110); 1083 is reserved (H:142). One later value
@@ -207,7 +207,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1067 HARDWARE_SCHEDULING_CAPS | `D3D12DDICAPS_HARDWARE_SCHEDULING_CAPS_0050`, 4, H:7004-7008 | ComputeQueuesPer3DQueue | 0 | "0 means don't use scheduling groups", H:7007 |
 | 1077 OPTIONS_0090 | `D3D12DDI_OPTIONS_DATA_0090`, 4, H:11127-11131 | RelaxedFormatCastingSupported | same value | OPTIONS12 |
 | 1078 OPTIONS_0091 | `D3D12DDI_OPTIONS_DATA_0091`, 16, H:11143-11150 | the four fields | same values | OPTIONS13 |
-| 1079 OPTIONS_0093 | `D3D12DDI_OPTIONS_DATA_0093`, 8, H:11254-11259 | AdvancedTextureOpsSupported, WriteableMSAATexturesSupported | FALSE, FALSE | constant. AdvancedTextureOps includes integer border colours, whose sampler layout comes with DDI 0096 (H:11677-11706); WriteableMSAATextures has no test of the MSAA UAV path yet. Another DataSize, or `ddi_version` 92, is E_INVALIDARG |
+| 1079 OPTIONS_0093 | `D3D12DDI_OPTIONS_DATA_0093`, 8, H:11254-11259 | AdvancedTextureOpsSupported, WriteableMSAATexturesSupported | FALSE, FALSE | constant. AdvancedTextureOps includes integer border colours, whose sampler layout comes with DDI 0096 (H:11677-11706). WriteableMSAATextures has no test of the MSAA UAV path yet. Another DataSize, or `ddi_version` 92, is E_INVALIDARG |
 
 FEATURE_LEVELS, SHADER_MODEL, ARCHITECTURE1, GPU_VIRTUAL_ADDRESS_SUPPORT, OPTIONS and OPTIONS1 are required:
 `query_adapter_caps` fails with the engine's Result when one is unanswered. The others are optional: an
@@ -246,7 +246,7 @@ names the DDI build that defined it. It is not a build the driver must negotiate
 
 1091 is answered at either negotiated build, because runtime 26100 asks it of any driver that reports 6_8.
 1079 (OPTIONS_0093: AdvancedTextureOps, WriteableMSAATextures) is asked only of a driver that negotiated 0093 or
-later. It reports both FALSE (table above); the engine's OPTIONS14 values appear in the QueryAdapterCaps log line
+later. It reports both FALSE (table above). The engine's OPTIONS14 values appear in the QueryAdapterCaps log line
 only.
 
 ```cpp

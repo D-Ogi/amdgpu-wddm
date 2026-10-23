@@ -544,9 +544,9 @@ arm still decides.
 The lab arm (2026-10-23, the release default zone): a Quake II RTX loop at 1920x1200, with a suspend of the game
 process for 1.5 s per cycle from Tctl 72 C. Without the recall the clock came back in a median of 4721 ms over 10
 cycles (one cycle not within 6.5 s), and the clock before each stall fell from 2000 to 1600 MHz. With the recall it
-came back in a median of 100 ms over 8 cycles (max 780 ms) and stayed at 2000 MHz; the arm ended at its 84 C stop
-line. Neither arm had a TDR or a runner stop. The clock is sampled about every 14 ms with `bc250kmd_cli clock read`;
-frame times were not recorded.
+came back in a median of 100 ms over 8 cycles (max 780 ms). It stayed at 2000 MHz. The arm ended at its 84 C stop
+line. Neither arm had a TDR or a runner stop. The clock is sampled about every 14 ms with `bc250kmd_cli clock read`.
+The arm did not record frame times.
 
 The reason is session 367 (KMD 0.7.202.1, `DpmMaxMHz` 2000). The governor was at 1000 MHz, and Tctl was 75.7 C after
 an earlier load. A load spike (busy 93 %) raised the clock to 2000 MHz / 1000 mV in three ticks. The hot spot then
