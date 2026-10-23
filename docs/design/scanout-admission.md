@@ -148,8 +148,9 @@ comes after `SharedPrimaryTransition`, and then the output stays black.
 
 The 10-bit row has a second condition, `BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT`: the committed source mode
 is `D3DDDIFMT_A2B10G10R10`. No kernel driver sets the flag yet, so a user-mode reader keeps an RGB10A2
-chain composed. The reason is dxgkrnl, not the plane. Under the 8-bit desktop mode, dxgkrnl never sends
-the flip of a 10-bit primary to the kernel driver: the compositor enters the independent flip transition,
+chain composed. The reason is dxgkrnl, not the plane. On the measured configuration (Windows 11 23H2 build
+22631, the 8-bit desktop mode, this kernel driver) dxgkrnl sent no flip of a 10-bit primary to the kernel
+driver during the whole session: the compositor enters the independent flip transition,
 leaves it 150 us later with no call to the driver, blanks the source with `SetVidPnSourceVisibility`
 FALSE, frees and recreates its own primaries and shows them again. With a game that presents a few
 frames a second this repeats about twice a second, and the screen is black most of the time. The lab
@@ -157,8 +158,10 @@ measured it with Clair Obscur: Expedition 33 (UE5, a 1920x1200 `R10G10B10A2_UNOR
 the shell's trace said `scanout admitted ... format=24`, the kernel driver's counters showed 0 flips in
 `abgr2101010` and 0 scan-out refusals, and the visibility ring showed the blank and show cycle. The 8-bit
 rows flip under the same mode (The Witcher 3 with RGBA8, Quake II RTX, trial 478 and the BD-197
-acceptance). The kernel driver may set the flag once a flip of a 10-bit primary under a committed 10-bit
-mode is measured; until then an HDR or 10-bit chain presents through composition, as M15.4 states.
+acceptance). Whether another OS build, or a committed 10-bit mode, flips a 10-bit primary is not measured;
+the measurement says only that this path stays composed. The kernel driver may set the flag once a flip of
+a 10-bit primary under a committed 10-bit mode is measured end to end; until then an HDR or 10-bit chain
+presents through composition, as M15.4 states.
 
 The router's front admits a pair whose two rows differ, for example an RGBA8 client over DWM's BGRA8
 buffer. Both rows must pass `bc250_scanout_format_admitted` and must have the same bytes per pixel.

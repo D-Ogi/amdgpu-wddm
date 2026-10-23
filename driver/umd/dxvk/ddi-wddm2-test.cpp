@@ -627,6 +627,21 @@ void scanout_primary() {
         CHECK(composed(&on));
         CHECK(scanout_primary_decide(&on,true,0,UINT(format),1920,1200,request.surface.Pitch).reason==R::Format);
     }
+    // The primary producer itself with a kernel driver that programs plane formats: the 10-bit chain still
+    // stands down on the format clause until the trailer also says the committed mode is 10-bit, then its
+    // primary is admitted (a synthetic control; no kernel driver sets the flag yet). FP16 has no scan-out
+    // row and stands down with both flags.
+    trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS;
+    desc.Format=DXGI_FORMAT_R10G10B10A2_UNORM;
+    CHECK(composed(&on));
+    CHECK(scanout_primary_decide(&on,true,0,UINT(desc.Format),1920,1200,7680).reason==R::Format);
+    trailerFlags|=BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
+    CHECK(convert(&on)==S_OK && request.scanout && request.surface.Pitch==7680);
+    CHECK(scanout_primary_decide(&on,true,0,UINT(desc.Format),1920,1200,7680).reason==R::Admitted);
+    desc.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+    CHECK(composed(&on));
+    CHECK(scanout_primary_decide(&on,true,0,UINT(desc.Format),1920,1200,request.surface.Pitch).reason==R::Format);
+    trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP;
     desc.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
     // The pitch clause, which the conversion cannot reach for a 4-byte row: the rule checks the equality
     // rather than assuming it.

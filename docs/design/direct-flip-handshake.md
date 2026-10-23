@@ -399,8 +399,9 @@ The rollback ladder, in order. Each rung assumes less than the one above it:
 - **The D3D11 client.** The D3D11 shell does not set the SCANOUT bit yet, so a D3D11 game stays composed.
 - **10-bit and HDR.** The shared table has a `SCANOUT_PRIMARY` row for RGB10A2, but every user-mode reader
   admits it only with the trailer flag `BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT`, which no kernel driver sets
-  yet: under the 8-bit desktop mode dxgkrnl never flips a 10-bit primary, and a 10-bit chain that was
-  admitted blanked the output twice a second (BD-224, `scanout-admission.md`). The rule compares the
+  yet: under the 8-bit desktop mode of the lab's Windows 11 23H2 dxgkrnl sent no flip of a 10-bit primary,
+  and a 10-bit chain that was admitted blanked the output twice a second (BD-224, `scanout-admission.md`).
+  The rule compares the
   storage row, so it refuses a 10-bit pair honestly until a 10-bit mode is committed and measured.
 - **The interval bound.** `FlipInterval` is not declared. `FlipImmediateMmIo` is declared since BD-170
   (2026-10-14, `vidpn-flip.md` section 7.1), so a flip at present interval 0 is an MMIO flip with
