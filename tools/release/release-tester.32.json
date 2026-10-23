@@ -2,7 +2,7 @@
  "schema": 1,
  "release": "tester.32",
  "version": "0.7.216.104-tester.32",
- "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router and the control application, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them. Round 4: the two kernel driver rows and the recipe tree move to the main commit that carries the large-page mapping behind LargePages and the BD-190 catalog fix; every other row keeps its commit and artifact, since no source of those components changed.",
+ "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router, the control application and the state worker, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them. Round 4: the kernel driver rows and the recipe tree move to the main commit that carries the large-page mapping behind LargePages and the BD-190 catalog fix. That commit changes driver/state/catalog.json, and the compiled catalog is linked into the CLI, the control library, both desktop routers and the state worker (the package gate state-package.ps1 refused the first round-4 package on the stale CLI), so those rows move with it; every other row keeps its commit and artifact, since no source of those components changed.",
  "recipe_repository": "amdgpu-wddm",
  "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
  "repositories": {
@@ -1510,7 +1510,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1542,7 +1542,7 @@
    "flavour": "release",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1574,7 +1574,7 @@
    "flavour": "release",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
    "args": [
@@ -1625,7 +1625,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1657,7 +1657,7 @@
    "flavour": "lab",
    "arch": "x86",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "tools/build/build-umd-router.ps1",
    "args": [
@@ -1689,7 +1689,7 @@
    "flavour": "lab",
    "arch": "x64",
    "repo": "amdgpu-wddm",
-   "commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
    "tree": "shared",
    "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
    "args": [
@@ -1733,6 +1733,74 @@
     }
    ],
    "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
+  },
+  {
+   "id": "state-worker-rel",
+   "component": "tool",
+   "flavour": "release",
+   "arch": "x64",
+   "repo": "amdgpu-wddm",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+   "tree": "shared",
+   "recipe": "driver/state/installer-build.ps1",
+   "args": [
+    "-Out",
+    "{out}",
+    "-Kits",
+    "{root}/toolchain/nuget",
+    "-Test",
+    "-Version",
+    "{version}",
+    "-Flavour",
+    "release"
+   ],
+   "compiler": "msvc",
+   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+   "kind": "user",
+   "deterministic": true,
+   "disk_peak_gb": 0.2,
+   "outputs": [
+    {
+     "file": "amdgpu-state-installer.exe",
+     "path": "payload/tools/amdgpu-state-installer.exe",
+     "authenticode": true
+    }
+   ],
+   "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
+  },
+  {
+   "id": "state-worker-lab",
+   "component": "tool",
+   "flavour": "lab",
+   "arch": "x64",
+   "repo": "amdgpu-wddm",
+   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+   "tree": "shared",
+   "recipe": "driver/state/installer-build.ps1",
+   "args": [
+    "-Out",
+    "{out}",
+    "-Kits",
+    "{root}/toolchain/nuget",
+    "-Test",
+    "-Version",
+    "{version}",
+    "-Flavour",
+    "lab"
+   ],
+   "compiler": "msvc",
+   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+   "kind": "user",
+   "deterministic": true,
+   "disk_peak_gb": 0.2,
+   "outputs": [
+    {
+     "file": "amdgpu-state-installer.exe",
+     "path": "payload/tools/amdgpu-state-installer.exe",
+     "authenticode": true
+    }
+   ],
+   "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
   }
  ]
 }
