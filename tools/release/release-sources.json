@@ -109,7 +109,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.inf",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.inf",
       "sha256": "E2528296B4383EA9619CF428F631F6719D07B1EC8A87A1533156B255A239DD9B",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -136,7 +136,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.sys",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.sys",
       "sha256": "6CC177ACB1D558D9641594A2B83F0F111B131EA4DB229B42B035515F8AD8B6AF",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -165,7 +165,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/kmd-lab/bc250kmd.sys",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/kmd-lab/bc250kmd.sys",
       "sha256": "E64D9578BD143280B03A89430342B5012149B2552D5412CB2A1B27FF50D11E69",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -194,7 +194,7 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
       "sha256": "C96222AC08C4554A6DCE474233E03592BD929A2EE7AAECDD76F929055181FF05",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -250,7 +250,7 @@
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
       "sha256": "D4F549D61F0B682E46E563B05922DC35049D129492F8BCF95265A37A074F4A0A",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -306,7 +306,7 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/release/8f59313fadcc293a1959/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/8f59313fadcc293a1959/amdgpu_wddm_vkd3d.dll",
       "sha256": "6770A1B6D80125449695B87C61F96DF0A9E1F5F86CBC7E09B5B7DC9B65A4B71B",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -339,7 +339,7 @@
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/lab/54e98a10c7cb93b73e0a/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/54e98a10c7cb93b73e0a/amdgpu_wddm_vkd3d.dll",
       "sha256": "128C04ECD80E1891D7339FC847B790E6113CE8B765A8D284EAC70C7802E7CBA8",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -373,7 +373,7 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
       "sha256": "A21FC1BE9EF095F2FC5B7241B6D3777E00615E39623EF6A0AF4953586D77F529",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -413,7 +413,7 @@
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
       "sha256": "5C1F30C1DF00EA351B3BB0150A2343D6C5E2D59DD9F76F931111581CA6693806",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -454,7 +454,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/router-x64-rel/bc250d3d_router.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/router-x64-rel/bc250d3d_router.dll",
       "sha256": "DB9D410575445AFCF447EF403A035F6AF9507E3AED492C2D9792A4072C493E97",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -479,7 +479,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
       "sha256": "9F51EC3DA33C3998C82B45DBE8C2E83A366A8197E4A301B734A71EE9F1982AAA",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -504,7 +504,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/train/b35-build/stamped/release/2522c009062cbb01811e/bc250d3d_zink.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/2522c009062cbb01811e/bc250d3d_zink.dll",
       "sha256": "6F6644936A0B3C5074C5C1421FC016CAF9BE49CFAD1734EF5F35CBF2D716F7E6",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -534,7 +534,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/train/b35-build/stamped/lab/47b92517047036b3b701/bc250d3d_zink.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/47b92517047036b3b701/bc250d3d_zink.dll",
       "sha256": "A47EF72ED093384D1D3B1E3321F6BE82F960F46BFACFB8F273182097856867B1",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -566,7 +566,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
       "sha256": "F0B1F211141A040EE95084467DC037E1145EF3C8CEECB30EE1325F978EE76077",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -606,7 +606,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
       "sha256": "50B7F3400843E2F3EDEFF20054306EEBB0DEDB77435F8A7745F6F3492FC8C436",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -647,7 +647,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/train/b35-build/stamped/release/d248b28e7bf6cbd6fb53/bc250d3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/d248b28e7bf6cbd6fb53/bc250d3d.dll",
       "sha256": "0B3654AA91EEA96CD4CFF4CBF37CA0CDA3557F42FD3BBD3A81B028A98A173BEB",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -686,7 +686,7 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/train/b35-build/stamped/lab/9539cc6fdeec396156c9/bc250d3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/9539cc6fdeec396156c9/bc250d3d.dll",
       "sha256": "5B7B99076142A8BF367E0A89E0CAC64C37330AFCF0B03313096BC52B925D7902",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -727,7 +727,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
       "sha256": "196D818744982B1D5EE51DE3008C1662CDD415DA9D713705B01FCA4D33413A28",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -765,7 +765,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
       "sha256": "F491BD03D582EE8DCC1E007E279B815F4D90173FB5CA004CB2F3952FF73463D1",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -803,7 +803,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/build-train/tester.32-r3/configs/release/x64/amdgpu_wddm_d3d11.config",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/configs/release/x64/amdgpu_wddm_d3d11.config",
       "sha256": "7F0790A88A1B374F64C1312D5A081195D12E9AC9F75A1952EAA2900E828C42CF",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -854,7 +854,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/build-train/tester.32-r3/configs/lab/x64/amdgpu_wddm_d3d11.config",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/configs/lab/x64/amdgpu_wddm_d3d11.config",
       "sha256": "1E7697F242AA4302B36FAE7F9687B3A1F5EBBEFE9BE1ED34AF28D62FDB069DD1",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -906,7 +906,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
       "sha256": "D52C242A278C78C5A9605BB5CA9BA8A60763339AF35D9337BD6A6673198A33D0",
       "built_from": {
         "repo": "dxvk",
@@ -941,7 +941,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
       "sha256": "1A73B6971B6FAD841CFA3B054E68691C380C2315F9D342C6E468CD00A0AF4774",
       "built_from": {
         "repo": "dxvk",
@@ -977,7 +977,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
       "sha256": "A21FC1BE9EF095F2FC5B7241B6D3777E00615E39623EF6A0AF4953586D77F529",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1017,7 +1017,7 @@
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
       "sha256": "5C1F30C1DF00EA351B3BB0150A2343D6C5E2D59DD9F76F931111581CA6693806",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1058,7 +1058,7 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/system-x64-rel/vulkan_radeon.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/system-x64-rel/vulkan_radeon.dll",
       "sha256": "81438ED06EDB2A3DE3D753C8C15797E11D17ACADB91D46E9B43DFEA1C76822EF",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1098,7 +1098,7 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
       "sha256": "F1571EAAB02DE2A22B31879B81E4C876077D6ACB25A74D499D16228378AE9C58",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1139,7 +1139,7 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/radeon_icd.json",
-      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/m10/wsi-final/radeon_icd.json",
       "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1153,7 +1153,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/router-x86-rel/bc250d3d_router.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/router-x86-rel/bc250d3d_router.dll",
       "sha256": "AB38C88FD8B68CC7AEFC37389051B115525053733AE598F9C2822878AADC4284",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1178,7 +1178,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
       "sha256": "60264817888750D350BE28C92492F9FDDC86B79029E6AE1A41ECA8D385A3993C",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1203,7 +1203,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/train/b35-build/stamped/release/634edde9e94a26e7cf34/bc250d3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/634edde9e94a26e7cf34/bc250d3d.dll",
       "sha256": "25AB05D3A50491FB61FF3C3733BAB5BBB564353333431679113C584F023AB4B4",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1244,7 +1244,7 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/train/b35-build/stamped/lab/f3b1b66ec4ab03abc0a9/bc250d3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/f3b1b66ec4ab03abc0a9/bc250d3d.dll",
       "sha256": "016C012083A5D5D61F2DEC73E6CB4E6EC6CACBF7499B319E3E5829DBFAA386A3",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1287,7 +1287,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
       "sha256": "DEE867C7DE7A071DF27B04B9EADD789ADE9210D64C5F49A9D233B853AE238D96",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1325,7 +1325,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
       "sha256": "BA7B6D44E0D2B855CA55DA4F21D944CFB339F4DA10005BC03B988BAB8336BE2C",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1363,7 +1363,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b35-build/configs/release/x86/amdgpu_wddm_d3d11.config",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/configs/release/x86/amdgpu_wddm_d3d11.config",
       "sha256": "26A505A71D6676225482A425B756763C55DC0F98DAAB70A1FF931FB3778ADEA5",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1414,7 +1414,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/train/b35-build/configs/lab/x86/amdgpu_wddm_d3d11.config",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/configs/lab/x86/amdgpu_wddm_d3d11.config",
       "sha256": "E7E5AF50C6980261F5C14BF767396EA7B601E98AA60278B6D54D2E65D03FFF9C",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1466,7 +1466,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
       "sha256": "D9B3F8D851F7006931F03FD31A959DE033FF4E85186BE8EF658763A468CCE06E",
       "built_from": {
         "repo": "dxvk",
@@ -1501,7 +1501,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
       "sha256": "C0DEF995FB3755BDF3E75984051CC08ECB1330B0CF050D50F61B79801ABA789A",
       "built_from": {
         "repo": "dxvk",
@@ -1537,7 +1537,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
       "sha256": "C649AEE96BEAC62821C1636622B326A49637913284ED703838E17EEFB7F47436",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1573,7 +1573,7 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
       "sha256": "2B8AE94C90FD2E4ABCC0AF31D8D32550AD72EC2E8893DEAE590225452492B108",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1610,7 +1610,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
       "sha256": "C62674866362FCE30718CBF775067791E634D9CDC40E31A0ADC0532A466BA924",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1666,7 +1666,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
       "sha256": "93CA61DC5E863C59EEBB6CB86EA807F1693F1ED922F159873D1A0ACC393EAA84",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1722,7 +1722,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/release/470d2fbd68014c018d24/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/470d2fbd68014c018d24/amdgpu_wddm_vkd3d.dll",
       "sha256": "69ECEDB3C88D6FB8C24199CAB19C6C9821F08ADB195E3847306CCAE270D226D9",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -1755,7 +1755,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/train/b35-build/stamped/lab/321b0f0fcc5c347054b2/amdgpu_wddm_vkd3d.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/321b0f0fcc5c347054b2/amdgpu_wddm_vkd3d.dll",
       "sha256": "8A3692C7514AE45ECC6D2AF5B6E5CD720C42CC5CE2077168C6D4B8FA1859767B",
       "built_from": {
         "repo": "vkd3d-proton",
@@ -1789,7 +1789,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
       "sha256": "C649AEE96BEAC62821C1636622B326A49637913284ED703838E17EEFB7F47436",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1825,7 +1825,7 @@
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
       "sha256": "2B8AE94C90FD2E4ABCC0AF31D8D32550AD72EC2E8893DEAE590225452492B108",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1862,7 +1862,7 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
       "sha256": "95B5FBA5E5E23FDB17ED2C7620C1199C12CA782D9645CB2C8D8A63FBAE7B7D1F",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1899,7 +1899,7 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.32-r3/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r3/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
       "sha256": "A6F45649B75CDAF5BBA1D0137B51AF13E6967E206E5BEF15E59EBE0C02459047",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -1937,7 +1937,7 @@
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/radeon_icd.json",
-      "source": "scratch/m10/wsi-final/radeon_icd.json",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/m10/wsi-final/radeon_icd.json",
       "sha256": "234175BDF7A764CCEA3827A4C833495E67CAD7AF643CAC25FCC43D0A82203FCE",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1951,7 +1951,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250kmd_cli.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250kmd_cli.exe",
       "sha256": "CCE025669EE4CA77C98DDDD509F24B6FA86A15991445450647F7CC05ACD2E874",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -1977,7 +1977,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250kmd_cli.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250kmd_cli.exe",
       "sha256": "DAC034C49ECE0883C8239D5BFF63BF57D90A8C0E5CAC4E7147BD15B798E84E66",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2003,7 +2003,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/train/b35-build/stamped/release/7f830dc36c858d24c638/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/7f830dc36c858d24c638/amdgpu_wddm_d3d12caps.exe",
       "sha256": "D56541C897C982B928768B4FC090356AC5CB791A1EB81AE98D9655E8634CBD33",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2028,7 +2028,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/train/b35-build/stamped/lab/52cecbd1b990720d74fe/amdgpu_wddm_d3d12caps.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/52cecbd1b990720d74fe/amdgpu_wddm_d3d12caps.exe",
       "sha256": "1190AE83C5FFC71DDF31B99511D65DAFCDF97D30F2DA3C00FA35A8FFACC93880",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2054,7 +2054,7 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/amdgpu_wddm_control.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/control-rel/amdgpu_wddm_control.exe",
       "sha256": "5DE4CC6CF1D94F7DA21126FAEE5A087A36E17B21E1CEADD77A16216F377E096D",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2080,7 +2080,7 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
       "sha256": "795A159F46C7D6EBCC4A347866A726FADA9F4B87518C86123223CB270AF1F979",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2106,7 +2106,7 @@
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250control.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250control.dll",
       "sha256": "EF9C8E886CB12935C1E9D41E740D3BBA39F3E179DA02118F820EBF98FD0C6ADC",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2132,7 +2132,7 @@
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250control.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250control.dll",
       "sha256": "F08B544C548EF37B133BA384172126F5C002AE2BC20716BFF43A7FABBB8B869E",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2158,7 +2158,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250control.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250control.dll",
       "sha256": "EF9C8E886CB12935C1E9D41E740D3BBA39F3E179DA02118F820EBF98FD0C6ADC",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2184,7 +2184,7 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250control.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250control.dll",
       "sha256": "F08B544C548EF37B133BA384172126F5C002AE2BC20716BFF43A7FABBB8B869E",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2210,7 +2210,7 @@
     {
       "component": "tool",
       "path": "payload/tools/vulkaninfo.exe",
-      "source": "scratch/m8/vulkaninfo.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/m8/vulkaninfo.exe",
       "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
       "third_party": {
         "url": "https://sdk.lunarg.com/sdk/download/1.4.335.0/windows/VulkanRT-X64-1.4.335.0-Components.zip",
@@ -2226,7 +2226,7 @@
     {
       "component": "tool",
       "path": "payload/tools/vulkaninfo.exe",
-      "source": "scratch/m8/vulkaninfo.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/m8/vulkaninfo.exe",
       "sha256": "02A70101D8F9CBBCD4741FBBE5F7E18EC8799BE82DCC0A66DA3DBE5026C6EE00",
       "third_party": {
         "url": "https://sdk.lunarg.com/sdk/download/1.4.335.0/windows/VulkanRT-X64-1.4.335.0-Components.zip",
@@ -2243,7 +2243,7 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/b35-build/stamped/release/63558149b1573e4eae51/amdgpu_wddm_mft_h264.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/63558149b1573e4eae51/amdgpu_wddm_mft_h264.dll",
       "sha256": "9F1312656B271DD0D4FCBD4EC312C67A0076E279EF89CF62D4C95AF6EE9E140D",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2268,7 +2268,7 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/b35-build/stamped/lab/c336a8f1a874ed6f3320/amdgpu_wddm_mft_h264.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/c336a8f1a874ed6f3320/amdgpu_wddm_mft_h264.dll",
       "sha256": "0BF666663BD5B1CCDF29CEAF35611AF40FB357B18C27F35EAB35ECF452FFE9C7",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2294,7 +2294,7 @@
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/train/b35-build/stamped/release/a158e3d9b80d93bec5fd/d3d11bench.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/a158e3d9b80d93bec5fd/d3d11bench.exe",
       "sha256": "1F3D05C4CC1B8E15938046CD504DEA64A43DD6A074F54EE4740CEF7ACF246460",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2319,7 +2319,7 @@
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/train/b35-build/stamped/lab/dfe06ffe6b483cdab28c/d3d11bench.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/dfe06ffe6b483cdab28c/d3d11bench.exe",
       "sha256": "89B964BCFF8A1D99B5ABD5E66A2724C68F762B4AC932BEF465D4D1C4399F35A9",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2345,7 +2345,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/train/b35-build/stamped/release/bfd744a2aee9e5c72116/amdhip64.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/bfd744a2aee9e5c72116/amdhip64.dll",
       "sha256": "66210E3EE81EBE6C941F792CA6D2A0CE3A86805723D88FCEF9046990A60D21C5",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2380,7 +2380,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/train/b35-build/stamped/lab/416b61319da742bc38d1/amdhip64.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/416b61319da742bc38d1/amdhip64.dll",
       "sha256": "B6C1441C90DA163646F22D2C0C34AFF6E66A3CAF808C0965017F99C46BE42064",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2416,7 +2416,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/train/b35-build/stamped/release/bfd744a2aee9e5c72116/vadd.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/bfd744a2aee9e5c72116/vadd.exe",
       "sha256": "9FEB737CFB0F0F9BB26757BD5ED9A4C024E8E8EE937A749E3EA3C2AD3DDD6CAF",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2452,7 +2452,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/train/b35-build/stamped/lab/416b61319da742bc38d1/vadd.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/416b61319da742bc38d1/vadd.exe",
       "sha256": "01139340E21AF7E1CC32965C79AE967EF49F8E1A2EB650D708DA1DDD7129A8A7",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2489,7 +2489,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/train/b35-build/stamped/release/fae7344921e9bf0cc593/bc250hipblas.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/fae7344921e9bf0cc593/bc250hipblas.dll",
       "sha256": "04DEBF56B44E0C0DA847C87FA604D81527605B21D4EC8D97DCD46083BD82D4BD",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2521,7 +2521,7 @@
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/train/b35-build/stamped/lab/1daae4f32b6d5f8ec9c9/bc250hipblas.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/1daae4f32b6d5f8ec9c9/bc250hipblas.dll",
       "sha256": "935C2AB7B4F73BAD439F988078592E23B70DBEB06092C942B395E0D7D20D7400",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2554,7 +2554,7 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/train/b35-build/stamped/release/98a86d6d0eb4b8a01193/amdgpu_wddm_gl.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/release/98a86d6d0eb4b8a01193/amdgpu_wddm_gl.dll",
       "sha256": "12FF2133E79ED36DA69F83B171DAF158C71BD905038E8BC695C3D9206934C606",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2587,7 +2587,7 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/train/b35-build/stamped/lab/9654a6d3c7aac0155f45/amdgpu_wddm_gl.dll",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/train/b35-build/stamped/lab/9654a6d3c7aac0155f45/amdgpu_wddm_gl.dll",
       "sha256": "F95B23E1F7C6DC4D4CD52FC4E2F3CB8600C6A3099381DACB50DA2AC1889E1511",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2622,7 +2622,7 @@
     {
       "component": "vc-runtime",
       "path": "payload/redist/vc_redist.x64.exe",
-      "source": "toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
       "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B",
       "third_party": {
         "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
@@ -2636,7 +2636,7 @@
     {
       "component": "vc-runtime",
       "path": "payload/redist/vc_redist.x64.exe",
-      "source": "toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/toolchain/vc-runtime/14.44.35211/vc_redist.x64.exe",
       "sha256": "CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B",
       "third_party": {
         "url": "https://aka.ms/vs/17/release/vc_redist.x64.exe",
@@ -2651,7 +2651,7 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/amdgpu-state.bin",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/amdgpu-state.bin",
       "sha256": "C1211E452C725F82304C079935A7639FE4B545448F1F2AD1A56CB679F10C355A",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2677,7 +2677,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/build-train/tester.32-r4/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
       "sha256": "3B13584CECD71D4ABDC775FB1D132EFB193502AF9A91962320F945C95FA41297",
       "built_from": {
         "repo": "amdgpu-wddm",
@@ -2703,7 +2703,7 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/build-train/tester.32-r4/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
+      "source": "scratch/package-gates-parallel/input-snapshot/files/scratch/build-train/tester.32-r4/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
       "sha256": "4C8DBE0B786D2CB8E82D745F0B7D76B24F94375DE2CEE617C8F40F6C008BFE53",
       "built_from": {
         "repo": "amdgpu-wddm",
