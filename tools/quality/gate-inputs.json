@@ -246,6 +246,9 @@
     "kmd-nx": {
       "inputs": ["host", "blob-reader"]
     },
+    "kmd-pe-tests": {
+      "inputs": ["host"]
+    },
     "claim-shares": {
       "inputs": [
         "documents"
