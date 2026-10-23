@@ -370,7 +370,9 @@ int main() {
     // test asserts the reason and not a failure. Increment 3: no list is the default, which is on, and the
     // geometry is the trailer's source mode at the moment of the decision, whatever a list names.
     {
-        const bc250_scanout_caps on=caps_on(),off{},planes=caps_on(1920,1200,BC250_SCANOUT_CAPS_PLANE_FORMATS);
+        const bc250_scanout_caps on=caps_on(),off{},planes=caps_on(1920,1200,BC250_SCANOUT_CAPS_PLANE_FORMATS),
+            deep=caps_on(1920,1200,BC250_SCANOUT_CAPS_PLANE_FORMATS|BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT),
+            deep_only=caps_on(1920,1200,BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT);
         bc250_scanout_caps planes_only=planes;planes_only.flags=BC250_SCANOUT_CAPS_PLANE_FORMATS;
         const unsigned bgra=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM,pitch=7680;
         const char* none="";
@@ -427,13 +429,19 @@ int main() {
             // RGBA8 and RGB10A2 are SCANOUT_PRIMARY rows, and they need the trailer's PLANE_FORMATS flag:
             // a kernel driver that does not program the plane's pixel format would refuse their flip only
             // after SharedPrimaryTransition. FP16 is refused with the flag too (it has no plane encoding).
+            // RGB10A2 also needs SOURCE_MODE_10BIT (BD-224): under the 8-bit desktop mode dxgkrnl never
+            // flips a 10-bit primary, and the admitted chain blanked the output twice a second.
             {none,on,0,true,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::Format,
              ScanoutSwitch::Default},
             {none,on,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Format,
              ScanoutSwitch::Default},
             {none,planes,0,true,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,ScanoutStandDown::Admitted,
              ScanoutSwitch::Default},
-            {none,planes,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Admitted,
+            {none,planes,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Format,
+             ScanoutSwitch::Default},
+            {none,deep,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Admitted,
+             ScanoutSwitch::Default},
+            {none,deep_only,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,pitch,ScanoutStandDown::Format,
              ScanoutSwitch::Default},
             {none,planes,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
             {none,planes,0,true,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1920,1200,15360,ScanoutStandDown::Format,
@@ -442,7 +450,7 @@ int main() {
              ScanoutSwitch::Default},
             {none,planes,0,true,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,7936,ScanoutStandDown::Pitch,
              ScanoutSwitch::Default},
-            {none,planes,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,15360,ScanoutStandDown::Pitch,
+            {none,deep,0,true,AMDGPU_WDDM_DXGI_R10G10B10A2_UNORM,1920,1200,15360,ScanoutStandDown::Pitch,
              ScanoutSwitch::Default},
             // The flag alone is not DIRECT_FLIP: without it the trailer is closed.
             {none,planes_only,0,true,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,
@@ -451,8 +459,10 @@ int main() {
         for(const auto& c:cases) {
             const ScanoutDecision d=scanout_decide(c.list,c.caps,c.force,c.desktop,c.dxgi,c.w,c.h,c.pitch);
             if(d.reason!=c.reason || d.switch_state!=c.state)
-                std::printf("case '%s' %ux%u: got %s/%s\n",c.list,c.w,c.h,scanout_stand_down_text(d.reason),
-                            scanout_switch_text(d.switch_state));
+                std::printf("case '%s' %ux%u format %u pitch %u caps %08x: got %s/%s, expected %s/%s\n",c.list,c.w,c.h,
+                            c.dxgi,c.pitch,c.caps.flags,scanout_stand_down_text(d.reason),
+                            scanout_switch_text(d.switch_state),scanout_stand_down_text(c.reason),
+                            scanout_switch_text(c.state));
             CHECK(d.reason==c.reason);
             CHECK(d.switch_state==c.state);
             CHECK(d.admitted==(c.reason==ScanoutStandDown::Admitted));

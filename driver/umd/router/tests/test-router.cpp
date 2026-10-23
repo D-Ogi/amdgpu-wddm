@@ -1027,20 +1027,31 @@ static void FrontRuleTests()
         // M15.14 (0.7.216.20): RGBA8 and RGB10A2 are scan-out rows, but a row that is not the firmware's
         // own format needs the trailer's PLANE_FORMATS flag, because only that kernel driver programs the
         // plane's pixel format. With the flag, the client's row may differ from the compositor's BGRA8
-        // row (the swizzle and the address latch in one VUPDATE); FP16 stays refused.
+        // row (the swizzle and the address latch in one VUPDATE); FP16 stays refused. The 10-bit row also
+        // needs SOURCE_MODE_10BIT, the kernel driver's word that the committed mode is 10-bit (BD-224:
+        // dxgkrnl flips a primary at the mode's pixel depth only, and under the 8-bit desktop mode a 10-bit
+        // chain in the transition blanks the output twice a second).
         bc250_scanout_caps planes = caps;
         planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        bc250_scanout_caps deep = planes;
+        deep.flags |= BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
         const DXGI_FORMAT newRows[] = {DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM};
         for (DXGI_FORMAT format : newRows) {
+            const bool tenbit = format == DXGI_FORMAT_R10G10B10A2_UNORM;
+            const bc250_scanout_caps &enough = tenbit ? deep : planes;
             a = client;
             a.format = format;
             run(caps, &a, &compositor, FlipRefusal::format, "a new scan-out row without PLANE_FORMATS");
-            run(planes, &a, &compositor, FlipRefusal::none, "a new scan-out row with PLANE_FORMATS");
+            run(planes, &a, &compositor, tenbit ? FlipRefusal::format : FlipRefusal::none,
+                "a new scan-out row with PLANE_FORMATS under an 8-bit mode");
+            run(enough, &a, &compositor, FlipRefusal::none, "a new scan-out row with the flags it needs");
             Resource b = compositor;
             b.format = format;
             run(caps, &a, &b, FlipRefusal::format, "two new rows without PLANE_FORMATS");
-            run(planes, &a, &b, FlipRefusal::none, "two new rows with PLANE_FORMATS");
-            run(planes, &client, &b, FlipRefusal::none, "a BGRA8 client over a new compositor row");
+            run(planes, &a, &b, tenbit ? FlipRefusal::format : FlipRefusal::none,
+                "two new rows with PLANE_FORMATS under an 8-bit mode");
+            run(enough, &a, &b, FlipRefusal::none, "two new rows with the flags they need");
+            run(enough, &client, &b, FlipRefusal::none, "a BGRA8 client over a new compositor row");
         }
         a = client;
         run(planes, &a, &compositor, FlipRefusal::none, "BGRA8 with PLANE_FORMATS");
@@ -1083,7 +1094,7 @@ static void FrontRuleTests()
     // admitted either way.
     {
         bc250_scanout_caps planes = caps;
-        planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        planes.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS | BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
         const DXGI_FORMAT rows[] = {DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM,
                                     DXGI_FORMAT_R10G10B10A2_UNORM};
         for (DXGI_FORMAT one : rows) {
@@ -1585,12 +1596,17 @@ static void FrontAnswerChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDE
     CHECK(ask(other, compositor, 0) == FALSE, "TRUE for a BGRA8 record over an RGBA8 blob");
     CHECK(Has(lastLine(), "answer=0 rule=format") && Has(lastLine(), "fmt=0 "), "mismatch: %s",
           lastLine().c_str());
-    // RGB10A2, the 10-bit swap chain.
+    // RGB10A2, the 10-bit swap chain: refused under PLANE_FORMATS alone (BD-224: the committed mode is 8-bit, and
+    // dxgkrnl would never flip the 10-bit primary), admitted when the trailer also says the mode is 10-bit.
     lb7a.Format = D3DDDIFMT_A2B10G10R10;
     e26r.Format = DXGI_FORMAT_R10G10B10A2_UNORM;
     device.pfnOpenResource(hDevice, &open, other, rt);
-    CHECK(ask(other, compositor, 0) == TRUE, "RGB10A2 with PLANE_FORMATS refused: %s", lastLine().c_str());
-    CHECK(Has(lastLine(), "fmt=24"), "RGB10A2: %s", lastLine().c_str());
+    CHECK(ask(other, compositor, 0) == FALSE, "RGB10A2 admitted under an 8-bit mode: %s", lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
+                   BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
+    CHECK(ask(other, compositor, 0) == TRUE, "RGB10A2 under a 10-bit mode refused: %s", lastLine().c_str());
+    CHECK(Has(lastLine(), "fmt=24") && Has(lastLine(), "caps_flags=00000007"), "RGB10A2: %s", lastLine().c_str());
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
     // FP16 at its own 8-byte pitch: not a scan-out row, with or without the flag.
     lb7a.Format = D3DDDIFMT_A16B16G16R16F;
     lb7a.Pitch = width * 8;

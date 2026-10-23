@@ -37,7 +37,9 @@
 //   Format         the chain's format is not a SCANOUT_PRIMARY row with a DXGI name, or is a row other
 //                  than the firmware's own format while the trailer lacks BC250_SCANOUT_CAPS_PLANE_FORMATS
 //                  (a kernel driver before 0.7.216.20 does not program the plane's pixel format, so RGBA8
-//                  and RGB10A2 stay composed there).
+//                  and RGB10A2 stay composed there), or is the 10-bit row while the trailer lacks
+//                  BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT (BD-224: under the 8-bit desktop mode dxgkrnl
+//                  never flips a 10-bit primary, and the admitted chain blanked the output twice a second).
 //   Pitch          the engine's row pitch is not the one pitch every component derives (scanout_row_pitch).
 //
 // The increment-2 spelling "scanout-flip-1920x1200" still reads as an explicit on, and so does a bare

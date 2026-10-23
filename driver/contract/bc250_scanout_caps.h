@@ -43,6 +43,16 @@
 // driver that does not program the format refuses any other row after the OS has taken
 // SharedPrimaryTransition, which blanks the output (ref/ddi-display/d3dkmddi.md:12793).
 #define BC250_SCANOUT_CAPS_PLANE_FORMATS 0x2u
+// The committed video present source mode is a 10-bit mode (D3DDDIFMT_A2B10G10R10), so a flip of an
+// RGB10A2 primary would keep the mode's pixel depth. No kernel driver sets it yet. BD-224: under the 8-bit
+// desktop mode, dxgkrnl never sends the flip of a 10-bit primary to the kernel driver. The compositor enters
+// the independent flip transition, leaves it 150 us later with no call to the driver, blanks the source
+// (SetVidPnSourceVisibility FALSE), rebuilds its own primaries and shows them again, about twice a second
+// while the game presents: the screen is black most of the time (Clair Obscur: Expedition 33, UE5, a
+// R10G10B10A2 chain of 1920x1200, lab 2026-10-23). The 8-bit rows RGBA8 and BGRA8 flip under that mode
+// (The Witcher 3, Quake II RTX). So a 10-bit row is admitted only while the kernel driver says the committed
+// mode has the same depth, and until a driver measures such a flip the row stays a composed primary.
+#define BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT 0x4u
 
 struct bc250_scanout_caps {
     unsigned int magic;
@@ -58,11 +68,21 @@ typedef char bc250_scanout_caps_size_check[
 // The one user-mode rule for "may a surface of this row be scanned out on this start". The row must be a
 // SCANOUT_PRIMARY row of the shared table. A row that is not the firmware's own format also needs
 // BC250_SCANOUT_CAPS_PLANE_FORMATS, because only a kernel driver that publishes it programs the plane's
-// pixel format. flags is the trailer's flags word; a reader without a trailer passes 0. The D3D12 shell
-// (scanout-mode.h) and the router's front (front-direct-flip.h) both call this, so they cannot disagree.
+// pixel format. A 10-bit row (RGB10A2) also needs BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT, because dxgkrnl
+// flips a primary only at the committed mode's pixel depth (BD-224, above). flags is the trailer's flags
+// word; a reader without a trailer passes 0. The D3D12 shell (scanout-mode.h), the D3D11 shell
+// (runtime-surface-format.h) and the router's front (front-direct-flip.h) all call this, so they cannot
+// disagree.
+static __inline int bc250_scanout_row_is_10bit(const AMDGPU_WDDM_SURFACE_FORMAT* row)
+{
+    return row->d3dddi == AMDGPU_WDDM_D3DDDI_A2B10G10R10;
+}
+
 static __inline int bc250_scanout_format_admitted(const AMDGPU_WDDM_SURFACE_FORMAT* row, unsigned int flags)
 {
     if (!amdgpu_wddm_surface_admit(row, AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY)) return 0;
     if (row->policy & AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE) return 1;
-    return (flags & BC250_SCANOUT_CAPS_PLANE_FORMATS) != 0;
+    if (!(flags & BC250_SCANOUT_CAPS_PLANE_FORMATS)) return 0;
+    if (bc250_scanout_row_is_10bit(row) && !(flags & BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT)) return 0;
+    return 1;
 }

@@ -397,8 +397,11 @@ The rollback ladder, in order. Each rung assumes less than the one above it:
   pair as `pitch`. That is a lost flip and not a wrong one, because the kernel driver programs the pitch
   of each flip from the flipped allocation.
 - **The D3D11 client.** The D3D11 shell does not set the SCANOUT bit yet, so a D3D11 game stays composed.
-- **10-bit and HDR.** The kernel's scan-out format table admits 8-bit `SCANOUT_PRIMARY` rows only. The
-  rule compares the storage row, so it refuses a 10-bit pair honestly until that table is wider.
+- **10-bit and HDR.** The shared table has a `SCANOUT_PRIMARY` row for RGB10A2, but every user-mode reader
+  admits it only with the trailer flag `BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT`, which no kernel driver sets
+  yet: under the 8-bit desktop mode dxgkrnl never flips a 10-bit primary, and a 10-bit chain that was
+  admitted blanked the output twice a second (BD-224, `scanout-admission.md`). The rule compares the
+  storage row, so it refuses a 10-bit pair honestly until a 10-bit mode is committed and measured.
 - **The interval bound.** `FlipInterval` is not declared. `FlipImmediateMmIo` is declared since BD-170
   (2026-10-14, `vidpn-flip.md` section 7.1), so a flip at present interval 0 is an MMIO flip with
   `Flags.FlipImmediate`. The driver programs it with the immediate flip type and does not wait for a vsync.

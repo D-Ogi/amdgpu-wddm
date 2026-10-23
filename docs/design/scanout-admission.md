@@ -50,7 +50,7 @@ In the order the function applies them:
 
 | Status | Rule |
 | --- | --- |
-| `format` | the format is a `SCANOUT_PRIMARY` row of `driver/contract/amdgpu_wddm_surface_format.h`. `driver/kmd/plane_format.h` has an encoding for it at the same bytes per pixel. The rows are BGRA8, X8, RGBA8 and RGB10A2 (the last two from 0.7.216.20) |
+| `format` | the format is a `SCANOUT_PRIMARY` row of `driver/contract/amdgpu_wddm_surface_format.h`. `driver/kmd/plane_format.h` has an encoding for it at the same bytes per pixel. The rows are BGRA8, X8, RGBA8 and RGB10A2 (the last two from 0.7.216.20). The user-mode readers ask for RGB10A2 only under a 10-bit source mode (below) |
 | `geometry` | the width and height are the POST mode's. Only one VidPN source mode exists (`display.c`) |
 | `pitch` | `DcnLinearSurfaceBytes` gives the surface a row layout at the row's bytes per pixel. This also refuses a pitch that is not a whole number of pixels, which is what keeps `HUBPREQ0_DCSURF_SURFACE_PITCH` (pitch / bytes per pixel - 1) exact |
 | `size` | the rows fit in the allocation |
@@ -145,6 +145,20 @@ user-mode reader admits a row without that bit only when the trailer has the fla
 (`bc250_scanout_format_admitted` in `driver/contract/bc250_scanout_caps.h`). A new user-mode driver on an
 older kernel driver therefore keeps RGBA8 and RGB10A2 composed. This is necessary because a refused flip
 comes after `SharedPrimaryTransition`, and then the output stays black.
+
+The 10-bit row has a second condition, `BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT`: the committed source mode
+is `D3DDDIFMT_A2B10G10R10`. No kernel driver sets the flag yet, so a user-mode reader keeps an RGB10A2
+chain composed. The reason is dxgkrnl, not the plane. Under the 8-bit desktop mode, dxgkrnl never sends
+the flip of a 10-bit primary to the kernel driver: the compositor enters the independent flip transition,
+leaves it 150 us later with no call to the driver, blanks the source with `SetVidPnSourceVisibility`
+FALSE, frees and recreates its own primaries and shows them again. With a game that presents a few
+frames a second this repeats about twice a second, and the screen is black most of the time. The lab
+measured it with Clair Obscur: Expedition 33 (UE5, a 1920x1200 `R10G10B10A2_UNORM` chain) on 2026-10-23:
+the shell's trace said `scanout admitted ... format=24`, the kernel driver's counters showed 0 flips in
+`abgr2101010` and 0 scan-out refusals, and the visibility ring showed the blank and show cycle. The 8-bit
+rows flip under the same mode (The Witcher 3 with RGBA8, Quake II RTX, trial 478 and the BD-197
+acceptance). The kernel driver may set the flag once a flip of a 10-bit primary under a committed 10-bit
+mode is measured; until then an HDR or 10-bit chain presents through composition, as M15.4 states.
 
 The router's front admits a pair whose two rows differ, for example an RGBA8 client over DWM's BGRA8
 buffer. Both rows must pass `bc250_scanout_format_admitted` and must have the same bytes per pixel.

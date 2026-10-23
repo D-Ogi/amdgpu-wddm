@@ -154,10 +154,16 @@ void direct_flip_rule() {
         ready_primary(b,format,1920,1200,7680,0); b.allocation.allocation=0x2000;
         CHECK(!direct_flip_supported(&a,&b));
     }
-    // The flag is the only difference: with it, the same lookup admits the two new rows and still not FP16.
+    // The flag is the only difference: with it, the same lookup admits RGBA8 and still not FP16. The 10-bit
+    // row needs the kernel driver's word that the committed mode is 10-bit as well (BD-224).
     CHECK(runtime_scanout_format(DXGI_FORMAT_R8G8B8A8_UNORM,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
           runtime_scanout_format(DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
-          runtime_scanout_format(DXGI_FORMAT_R10G10B10A2_UNORM,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+          !runtime_scanout_format(DXGI_FORMAT_R10G10B10A2_UNORM,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+          !runtime_scanout_format(DXGI_FORMAT_R10G10B10A2_UNORM,BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT) &&
+          runtime_scanout_format(DXGI_FORMAT_R10G10B10A2_UNORM,
+                                 BC250_SCANOUT_CAPS_PLANE_FORMATS|BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT) &&
+          !runtime_scanout_format(DXGI_FORMAT_R16G16B16A16_FLOAT,
+                                  BC250_SCANOUT_CAPS_PLANE_FORMATS|BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT) &&
           !runtime_scanout_format(DXGI_FORMAT_R16G16B16A16_FLOAT,BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
           !runtime_scanout_format(DXGI_FORMAT_R8G8B8A8_UNORM) &&
           runtime_scanout_format(DXGI_FORMAT_B8G8R8A8_UNORM_SRGB));

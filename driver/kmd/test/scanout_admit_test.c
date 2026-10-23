@@ -127,27 +127,32 @@ int main(void)
     //     whose bytes a pixel are the row's, and every encoding is reached from a SCANOUT_PRIMARY row: a
     //     row added to the table before the driver can program it fails here, not on the lab. The
     //     FIRMWARE_PLANE rows are exactly the ARGB8888 ones, the firmware's own format, and a shell may
-    //     offer any other SCANOUT_PRIMARY row only with BC250_SCANOUT_CAPS_PLANE_FORMATS.
+    //     offer any other SCANOUT_PRIMARY row only with BC250_SCANOUT_CAPS_PLANE_FORMATS, and the 10-bit row
+    //     only with BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT as well (BD-224: dxgkrnl flips a primary at the
+    //     committed mode's pixel depth only, so a 10-bit chain under the 8-bit desktop mode stays composed).
     {
         unsigned int count, r;
         unsigned long reached[BC250_PLANE_FORMATS] = {0};
+        const unsigned int planes = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        const unsigned int deep = planes | BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
         const AMDGPU_WDDM_SURFACE_FORMAT* rows = amdgpu_wddm_surface_formats(&count);
         for (r = 0; r < count; r++) {
             const unsigned long plane = Bc250PlaneFormatOf(rows[r].d3dddi);
             const int scanout = amdgpu_wddm_surface_admit(&rows[r], AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY) != 0;
             const int firmware = amdgpu_wddm_surface_admit(&rows[r], AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE) != 0;
+            const int tenbit = bc250_scanout_row_is_10bit(&rows[r]);
             if (scanout) {
                 CHECK(Bc250PlaneEncoding(plane) != NULL);
                 CHECK(Bc250PlaneEncoding(plane) && Bc250PlaneEncoding(plane)->BytesPerPixel == rows[r].bytes_per_pixel);
                 CHECK(WddmSurfaceFormatBpp(rows[r].d3dddi, BC250_SURFACE_SCANOUT) == rows[r].bytes_per_pixel);
                 if (plane < BC250_PLANE_FORMATS) reached[plane]++;
-                CHECK(bc250_scanout_format_admitted(&rows[r], BC250_SCANOUT_CAPS_DIRECT_FLIP |
-                                                              BC250_SCANOUT_CAPS_PLANE_FORMATS));
+                CHECK(bc250_scanout_format_admitted(&rows[r], deep));
+                CHECK(bc250_scanout_format_admitted(&rows[r], planes) == !tenbit);
                 CHECK(bc250_scanout_format_admitted(&rows[r], BC250_SCANOUT_CAPS_DIRECT_FLIP) == firmware);
+                CHECK(tenbit == (plane == BC250_PLANE_FORMAT_ABGR2101010));
             } else {
                 CHECK(WddmSurfaceFormatBpp(rows[r].d3dddi, BC250_SURFACE_SCANOUT) == 0);
-                CHECK(!bc250_scanout_format_admitted(&rows[r], BC250_SCANOUT_CAPS_DIRECT_FLIP |
-                                                               BC250_SCANOUT_CAPS_PLANE_FORMATS));
+                CHECK(!bc250_scanout_format_admitted(&rows[r], deep));
             }
             CHECK(!firmware || (scanout && plane == BC250_PLANE_FORMAT_ARGB8888));
         }

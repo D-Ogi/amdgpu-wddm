@@ -45,7 +45,9 @@
 //                    (bc250_scanout_format_admitted: a kernel driver before 0.7.216.20 does not program the
 //                    plane's pixel format, and its refusal would come after SharedPrimaryTransition). RGBA8
 //                    and RGB10A2 are SCANOUT_PRIMARY rows, so this clause is what keeps them composed on an
-//                    older kernel driver.
+//                    older kernel driver. The 10-bit row also needs BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT
+//                    (BD-224): dxgkrnl flips a primary at the committed mode's pixel depth only, and a 10-bit
+//                    chain admitted under the 8-bit desktop mode blanked the output twice a second.
 //   PITCH            the row pitch is not bc250_scanout_primary_pitch. Nothing downstream can check a pitch
 //                    that only the shell knows.
 //

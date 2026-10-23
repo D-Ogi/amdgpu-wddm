@@ -38,7 +38,12 @@
  *
  * RGBA8 and RGB10A2 are SCANOUT_PRIMARY from the kernel driver 0.7.216.20 (M15.14, a game's own
  * R8G8B8A8 swap chain, lab session 458). The plane reads them with its red and blue crossbar
- * swapped, and RGB10A2 with the 10-bit surface format (plane_format.h gives the AMD fields).
+ * swapped, and RGB10A2 with the 10-bit surface format (plane_format.h gives the AMD fields). A
+ * user-mode reader admits RGB10A2 for scan-out only while the kernel driver says the committed
+ * source mode is 10-bit (BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT, bc250_scanout_caps.h): under the
+ * 8-bit desktop mode dxgkrnl never flips a 10-bit primary, and such a chain blanked the output
+ * (BD-224, lab 2026-10-23). The row keeps the bit, because the plane can read it; the trailer says
+ * when a flip of it can happen.
  *
  * RGBA16F (an FP16 swap chain, scRGB when the application says so) is COMPOSED at 8 bytes a
  * pixel. Every reader takes bytes_per_pixel from the row, never 4: the pitch is at least
