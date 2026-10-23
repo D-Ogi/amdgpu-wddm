@@ -69,7 +69,8 @@ void write_summary(PsoAsync* a, const char* reason, uint32_t stranded) noexcept 
     const uint64_t longest_us = a->longest_wait_qpc.load(std::memory_order_relaxed) * 1000000 / a->qpf;
     pso_log(a, "pso summary (%s, device %u): %llu queued, %llu synchronous, %llu by a pool thread, "
                "%llu by the consumer, %llu waits (%llu us, longest %llu us), %llu failures, "
-               "%llu ended without a create, %u stranded, %u outstanding, %llu retries, %llu retry failures",
+               "%llu ended without a create, %u stranded, %u outstanding, %llu retries, %llu retry failures, "
+               "qpc=%llu",
             reason, a->number,
             static_cast<unsigned long long>(a->queued.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->synchronous.load(std::memory_order_relaxed)),
@@ -81,7 +82,8 @@ void write_summary(PsoAsync* a, const char* reason, uint32_t stranded) noexcept 
             static_cast<unsigned long long>(a->aborted.load(std::memory_order_relaxed)), stranded,
             a->outstanding.load(std::memory_order_relaxed),
             static_cast<unsigned long long>(a->retried.load(std::memory_order_relaxed)),
-            static_cast<unsigned long long>(a->retry_failures.load(std::memory_order_relaxed)));
+            static_cast<unsigned long long>(a->retry_failures.load(std::memory_order_relaxed)),
+            static_cast<unsigned long long>(qpc()));
 }
 
 // Work that moves a counter: a create queued, a compile finished, a consumer that waited, a job ended without a

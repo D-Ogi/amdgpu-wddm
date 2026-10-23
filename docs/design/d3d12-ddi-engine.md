@@ -127,7 +127,7 @@ rows; unit A numbers come from a lab run of the same test.
 | Runtime allocations | Descriptor heaps and resources are engine allocations. | Import from runtime allocations in the same minor, the way the DXVK engine's E5 imports images. |
 | Residency, offer and reclaim | Not implemented. | Same shape as the DXVK engine's gap; needs the hosted query from memory to kernel allocation. |
 | FL 12_0 and 12_1 | vkd3d-proton reports 12_0 only with tiled resources tier 2 (`libs/vkd3d/device.c`, feature level selection), so it needs sparse binding from hosted RADV. 12_1 adds ROVs and conservative rasterization. | Sparse on by default in the hosted driver after its conformance run, then a caps run on unit A. |
-| Disk shader cache | Off (V6). Every process start compiles its pipelines again. | Decide with the load-time part of the M15 measurement, as for the DXVK engine. |
+| Disk shader cache | On, per user and per application: `%LOCALAPPDATA%\amdgpu-wddm\vkd3d\vkd3d-proton.<exe>.cache` (the engine's stream archive of SPIR-V and pipeline blobs, merged from `.cache.write`) and `.cache.driver` (one `VkPipelineCache` of the hosted driver, saved by a thread-pool job). The engine DLL names the directory before its first device (fork `libs/ddi/ddi_engine.c`), and the hosted driver keeps its own `mesa_shader_cache`. A pipeline whose blobs are in the archive makes no compile at the next start. | A compile that the cache does not cover still runs under the engine's compile limiter (two at a time, one above 80 C), which draw-time variants pass since BD-226. |
 
 ## Validation
 
@@ -154,7 +154,7 @@ descriptor handle increment of 64 where the development PC has 32 (M757). Handle
 nothing may assume a fixed increment.
 
 A build handed to the lab follows the DXVK engine's rule:
-- it comes from a clean tree: `recipe.json` records no modified or untracked entries;
+- it comes from a clean tree: `recipe.json` records no modified or untracked entries.
 - it carries two receipts from the development PC, one plain and one with the Khronos validation layer and
   synchronization validation. Both must pass with no validation messages and no vkd3d-proton error lines.
 

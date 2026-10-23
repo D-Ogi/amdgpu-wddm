@@ -32,6 +32,10 @@ param(
     [string]$Cli,
     [string]$Directory,
     [string]$Experiment = '',
+    # Extra NAME=VALUE pairs for the client's process, written into the wrapper the task runs (a scheduled task does
+    # not inherit this session's variables). Example: AMDGPU_WDDM_LOG=file:C:\path\client-driver.log, which the lab
+    # shell honours and the release shell ignores (BD-167).
+    [string[]]$ClientEnvironment = @(),
     [ValidateRange(20, 150)][int]$Seconds = 70,
     # Frames and back buffers, read by the client from its own environment, so both arms and both chain depths
     # are the same executable.
@@ -402,6 +406,10 @@ $lines += 'set AMDGPU_WDDM_D3D12_EXPERIMENT='
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_FRAMES=$Frames"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_BUFFERS=$Buffers"
 if ($Format) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_FORMAT=$Format" }
+foreach ($pair in $ClientEnvironment) {
+    if ($pair -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw "ClientEnvironment entry is not NAME=VALUE: $pair" }
+    $lines += "set $pair"
+}
 $lines += "`"$Client`" --interactive `"$root`" --deadline $Seconds > `"$stdout`" 2> `"$stderr`""
 $lines += 'echo client_exit %ERRORLEVEL%>> "' + $stdout + '"'
 Set-Content -LiteralPath $wrapper -Value $lines -Encoding ascii

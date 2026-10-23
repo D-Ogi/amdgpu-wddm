@@ -26,8 +26,11 @@ constexpr uint32_t kSpinMicroseconds = 20;      // the worker spins this long fo
 // Then it yields its processor to ready threads, looking for work between yields, this long before it sleeps. A
 // sleeping worker costs the recording thread a wake (a system call) per burst: 310 measured 0.57 ms per frame of the
 // main thread in replay_wake, publishes and Closes together. Yielding costs the worker's processor only when no other
-// thread is ready to run on it.
-constexpr uint32_t kYieldMicroseconds = 1000;
+// thread is ready to run on it; when none is, the yield loop pauses on the processor. With a 1000 us window the two
+// workers of Clair Obscur: Expedition 33 each ran 65 % of a processor on a GPU-bound scene (340 sleeps a second, a
+// spin and a full yield window before each), heat on the shared die rather than frame time (BD-225). 100 us keeps
+// the wake cost of a burst that follows within the window and gives back most of that processor time.
+constexpr uint32_t kYieldMicroseconds = 100;
 constexpr DWORD kSleepMilliseconds = 100;       // a sleeping worker looks again at least this often
 constexpr uint32_t kWakeKilobytes = 8;          // pending entries that wake a sleeping worker (about 80 calls)
 constexpr uint32_t kLongWaitMilliseconds = 20;  // a ring wait this long gets a line of its own
@@ -376,12 +379,14 @@ template <class F> void per_kind(const Replay* rp, char (&text)[400], F&& fields
 // figure counts from the policy's start: a window is the difference of two summaries.
 void summary(Replay* rp, const char* why) noexcept {
     const uint32_t n = rp->count.load(std::memory_order_acquire);
-    uint64_t entries = 0, bytes = 0, run = 0, wakes = 0, sleeps = 0, notifies = 0, stuck = 0;
+    uint64_t entries = 0, bytes = 0, run = 0, wakes = 0, sleeps = 0, notifies = 0, stuck = 0, cycles = 0;
     void (*stuck_run)(const EntryHeader*) noexcept = nullptr;
     char levels[64] = {};
     size_t used = 0;
     for (uint32_t i = 0; i < n; ++i) {
         ReplayRing* r = rp->rings[i];
+        ULONG64 ring_cycles = 0;
+        if (QueryThreadCycleTime(r->thread, &ring_cycles)) cycles += ring_cycles;
         entries += r->entries.load(std::memory_order_relaxed);
         bytes += r->entry_bytes.load(std::memory_order_relaxed);
         run += r->worker_entries.load(std::memory_order_relaxed);
@@ -428,12 +433,16 @@ void summary(Replay* rp, const char* why) noexcept {
                              static_cast<unsigned long long>(microseconds(rp, c.longest.load(std::memory_order_relaxed))));
     });
     replay_log(rp, "replay %s long drains (waits of 1/10/50 ms or more, longest us):%s", why, text[0] ? text : " none");
+    // worker_cpu_ms: the workers' processor time together since they started (thread cycles), against the seconds
+    // on: a worker that spins or yields between bursts shows here, a sleeping one does not (BD-225).
     replay_log(rp, "replay %s workers: longest stretch without a finished entry seen by a wait %llu us at rva 0x%llx; "
-               "base levels %s; waits that found a worker asleep %llu, priority lifts %llu, long waits %llu",
+               "base levels %s; waits that found a worker asleep %llu, priority lifts %llu, long waits %llu, "
+               "worker_cpu_ms=%.1f",
                why, static_cast<unsigned long long>(microseconds(rp, stuck)), rva_of(stuck_run), levels,
                static_cast<unsigned long long>(rp->asleep_waits.load(std::memory_order_relaxed)),
                static_cast<unsigned long long>(rp->boosts.load(std::memory_order_relaxed)),
-               static_cast<unsigned long long>(rp->long_waits.load(std::memory_order_relaxed)));
+               static_cast<unsigned long long>(rp->long_waits.load(std::memory_order_relaxed)),
+               cycle_milliseconds(rp, cycles));
 }
 
 // The list's entries, wherever they are, have replayed when this returns; its tail is cleared.
