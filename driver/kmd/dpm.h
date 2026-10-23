@@ -24,6 +24,7 @@ typedef struct _BC250_DPM_SNAP {
     ULONG SoftReleases;                     // 0.7.197: Gov.soft_releases
     ULONG WarmHolds;                        // 0.7.200: Gov.warm_holds, driver log only (not in the escape)
     ULONG RampHolds;                        // 0.7.203: Gov.ramp_holds, driver log only (not in the escape)
+    ULONG RecallRaises, RecallRevokes, RecallLevel; // BD-228: Gov.recall_raises, recall_revokes, recall_level, log only
     // 0.7.213, the soft thermal zone (BD-087): what the zone did, and the lead of the last tick, driver log only.
     // ZoneLeadOk says whether the slope ring could measure a lead at all in that tick and ZoneLeadGaps counts the ticks
     // where it could not, so a lead of 0 on a flat die reads differently from a sensor that keeps failing (0.7.213

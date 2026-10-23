@@ -289,6 +289,7 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	g->level = BC250_DPM_FLOOR_LEVEL;
 	g->cap_ms = BC250_DPM_CAP_MS_MAX;	/* no change yet: the first hot tick steps at once */
 	g->raise_ms = BC250_DPM_CAP_MS_MAX;	/* no raise yet: the first one is not held */
+	bc250_dpm_recall_forget(g);		/* no level confirmed yet: nothing to go back to (BD-228) */
 	/* A governor that has seen no tick has seen no work, so the soft zone's gate (zone_may_act) starts closed and the
 	 * first tick that carries work opens it. Starting this at 0 said "work just now" and gave the zone the whole
 	 * QUIET_MS window at every start: on a die the CPU holds at 86 C that window took the cap down a level, and with
@@ -753,6 +754,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	 * changing either one. */
 	struct bc250_dpm_tune compute_tune = g->tune;
 	int compute = g->compute.on && in->compute_contexts != 0u;
+	int compute_was = g->compute_set;	/* BD-228: a change of the threshold set ends the recall */
 	/* bc250_dpm_set_tune admits no floor above the ceiling; a caller that wrote g->tune itself gets it clamped. */
 	unsigned int floor = t->floor_level < g->max_level ? t->floor_level : g->max_level;
 	/* The reading the soft rules are judged on (0.7.213): this tick's, or its straight-line extrapolation over
@@ -804,6 +806,28 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	 * thermal_cap. */
 	g->cap_ms = g->cap_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->cap_ms + dt;
 	g->raise_ms = g->raise_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->raise_ms + dt;
+	/* BD-228, the recall. Only bc250_dpm_recall_confirm sets a level; here the governor ages it and ends it. Each of
+	 * these ends it: another curve serial (the voltage the level ran with is not the one a return would get), a
+	 * running level above the confirmed one (the caller wrote g->level without a transaction, as a readback or the
+	 * unknown-clock sentinel does), a change of the threshold set (a compute load is not the load that held the
+	 * level), and a tick whose dt_ms had to be clamped (the time that really passed is unknown, the rule of
+	 * zone_quiet_ms). While the clock runs at the confirmed level the window starts again. A thermal cap under it,
+	 * and the end of the window, put the running level in its place: a clock the cap took down follows the released
+	 * cap at the pace of the ramp as before, and only a drop of the load itself (a stall, a loading screen) comes
+	 * back at once. */
+	g->recall_used = 0;
+	if (g->recall_valid && (in->curve_serial != g->recall_serial || cur > g->recall_level || compute != compute_was ||
+				in->dt_ms > BC250_DPM_MAX_DT_MS))
+		bc250_dpm_recall_forget(g);
+	if (g->recall_valid) {
+		if (g->thermal_cap < g->recall_level) g->recall_level = cur;
+		if (cur == g->recall_level) g->recall_ms = 0;
+		else g->recall_ms = add_ms(g->recall_ms, dt);
+		if (g->recall_ms >= BC250_DPM_RAMP_RECALL_MS) {
+			g->recall_level = cur;
+			g->recall_ms = 0;
+		}
+	}
 	if (!in->temperature_valid || in->temperature_mc >= BC250_DPM_CRITICAL_MC) {
 		/* Critical goes to the lowest level the cap may use (800 MHz since 0.7.205). A missing reading goes
 		 * to the lab floor instead: blind, the driver owns the one point this part is known to run at. That
@@ -1060,6 +1084,18 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		 * at 74.9 C spaces the next one at 75 C. A stalled tick counts as MAX_DT_MS, as everywhere. */
 		if (target > cur && in->temperature_mc >= BC250_DPM_RAMP_KNEE_MC) {
 			unsigned int ramp = g->raise_ms >= bc250_dpm_ramp_interval_ms(in->temperature_mc) ? cur + 1u : cur;
+			/* BD-228: a return to the level held within the recall window is free; a raise above it keeps the ramp.
+			 * The warm zone above has already held any raise at or above its threshold, and target is already
+			 * bounded by the thermal cap and the ceiling, so this widens nothing that those rules refuse. */
+			if (g->recall_valid && g->recall_ms < BC250_DPM_RAMP_RECALL_MS && g->recall_level > ramp) {
+				unsigned int back = target < g->recall_level ? target : g->recall_level;
+				if (back > ramp) {
+					g->recall_ramp = ramp;
+					ramp = back;
+					g->recall_raises++;
+					g->recall_used = 1;
+				}
+			}
 			if (target > ramp) {
 				target = ramp;
 				g->throttle = BC250_DPM_THROTTLE_THERMAL_RAMP;
@@ -1082,6 +1118,40 @@ void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level)
 	if (level > g->level) g->raises++;
 	else if (level < g->level) g->lowers++;
 	g->level = level;
+}
+
+void bc250_dpm_recall_confirm(struct bc250_dpm_governor *g, unsigned int level, unsigned int serial)
+{
+	if (level > BC250_DPM_TOP_LEVEL) level = BC250_DPM_TOP_LEVEL;
+	/* A lower level under the same curve keeps the higher one and its age: that is the drop a return goes back from. */
+	if (g->recall_valid && serial == g->recall_serial && level < g->recall_level) return;
+	g->recall_valid = 1;
+	g->recall_serial = serial;
+	g->recall_level = level;
+	g->recall_ms = 0;
+}
+
+void bc250_dpm_recall_forget(struct bc250_dpm_governor *g)
+{
+	g->recall_valid = 0;
+	g->recall_level = 0;
+	g->recall_ms = BC250_DPM_CAP_MS_MAX;
+}
+
+unsigned int bc250_dpm_recall_revoke(struct bc250_dpm_governor *g, unsigned int target)
+{
+	if (g->recall_used) {
+		g->recall_used = 0;
+		g->recall_revokes++;
+		if (target > g->recall_ramp) target = g->recall_ramp;
+	}
+	bc250_dpm_recall_forget(g);
+	return target;
+}
+
+int bc250_joint_relaxed(unsigned int before_mhz, unsigned int after_mhz)
+{
+	return before_mhz != 0u && (after_mhz == 0u || after_mhz > before_mhz);
 }
 
 enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s, unsigned int level,

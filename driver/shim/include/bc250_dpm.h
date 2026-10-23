@@ -439,6 +439,9 @@ struct bc250_dpm_input {
 	 * compute set's. Zero is "no compute client has a context open now", which is also what a caller that
 	 * knows nothing of this field leaves behind, so the graphics thresholds are the unchanged default. */
 	unsigned int	compute_contexts;
+	/* The serial of the active voltage curve at this tick (BD-228), read with the curve under its lock. A recalled
+	 * level counts only under the serial it was confirmed with. 0 for a caller that has no curve. */
+	unsigned int	curve_serial;
 };
 
 struct bc250_dpm_governor {
@@ -467,6 +470,14 @@ struct bc250_dpm_governor {
 	unsigned int	warm_holds;		/* steps in which the warm zone refused a raise (0.7.200) */
 	unsigned int	raise_ms;		/* since the last step that returned a raise, saturating (0.7.203) */
 	unsigned int	ramp_holds;		/* steps in which the thermal ramp cut or held a raise (0.7.203) */
+	/* BD-228, the recall of the ramp. recall_valid says that the caller confirmed recall_level: the hardware ran it,
+	 * set by a transaction that carried the curve of recall_serial (bc250_dpm_recall_confirm). recall_ms is the time
+	 * since the clock last ran at recall_level (saturating), recall_raises counts the steps in which a raise went
+	 * back to it past the ramp, and recall_used says that the last step did that. */
+	int		recall_valid, recall_used;
+	unsigned int	recall_level, recall_ms, recall_serial, recall_raises;
+	unsigned int	recall_ramp;		/* with recall_used: the level the ramp alone gave in the last step */
+	unsigned int	recall_revokes;		/* recalled raises taken back before the transaction */
 	int		subfloor_ok;		/* the thermal cap may use the points under the lab floor (0.7.205) */
 	unsigned int	subfloor_refusals;	/* bc250_dpm_subfloor_refused() calls of this start */
 	/* The idle state (0.7.207). idle_on is the setting of this start, idle the state now. */
@@ -530,6 +541,14 @@ int bc250_dpm_compute_on(const struct bc250_dpm_governor *g);
  * (success) or leaves g->level as it was (failure). Never returns above min(max_level, thermal_cap). */
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in);
 void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level);
+/* BD-228. confirm: the hardware runs level now, set by a transaction that carried the voltage of the curve with this
+ * serial; only this call gives the ramp a level to go back to. forget: no level held before counts (a power
+ * transition, a readback that replaced the level, a change of the operating conditions the caller sees). */
+void bc250_dpm_recall_confirm(struct bc250_dpm_governor *g, unsigned int level, unsigned int serial);
+void bc250_dpm_recall_forget(struct bc250_dpm_governor *g);
+/* The operating conditions changed after this tick's step (the joint arm gave the CPU more room): the recall ends,
+ * and a target the recall chose falls back to what the ramp alone gave. Returns the level to apply. */
+unsigned int bc250_dpm_recall_revoke(struct bc250_dpm_governor *g, unsigned int target);
 /* The caller could not put the hardware at a level below BC250_DPM_FLOOR_LEVEL (the SMU refused it, the
  * readback did not match). From here on, for the rest of this start, the thermal cap's lowest level is the
  * lab floor again, and a cap already below it is raised to it. The two sub-floor points are outside the
@@ -712,6 +731,9 @@ struct bc250_joint_input {
 	unsigned int	base_mhz;		/* the CPU's limit without the arm: the operator's, or the recorded baseline */
 	unsigned int	dt_ms;
 };
+
+/* BD-228: the joint arm gave the CPU more room between these two caps (0 is no cap): a release, or a step up. */
+int bc250_joint_relaxed(unsigned int before_mhz, unsigned int after_mhz);
 
 struct bc250_joint {
 	unsigned int	cap_mhz;		/* the CPU limit the arm asks for, 0 for none */

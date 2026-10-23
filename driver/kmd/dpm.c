@@ -324,12 +324,15 @@ static NTSTATUS DeleteLogged(PCWSTR Name)
 // Every reader of the voltage column goes through these two, and both take SnapLock: the escape may replace the
 // active curve at any moment, and a torn read of 11 values would ask the firmware for a voltage nobody chose.
 // One spin lock per clock transition is nothing next to the transaction itself.
-static ULONG DpmLevelMv(BC250_DPM_STATE* S, ULONG Level)
+// The voltage and the serial of the curve it comes from, under one acquisition of SnapLock (BD-228): the recall of
+// the ramp counts a level only under the curve whose voltage the transaction carried.
+static ULONG DpmLevelMvSerial(BC250_DPM_STATE* S, ULONG Level, ULONG* Serial)
 {
     KIRQL irql;
     ULONG mv;
     KeAcquireSpinLock(&S->SnapLock, &irql);
     mv = bc250_dpm_curve_level_mv(&S->Curve, Level);
+    *Serial = S->Curve.serial;
     KeReleaseSpinLock(&S->SnapLock, irql);
     return mv;
 }
@@ -520,6 +523,9 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.SoftReleases = g->soft_releases;
     snap.WarmHolds = g->warm_holds;
     snap.RampHolds = g->ramp_holds;
+    snap.RecallRaises = g->recall_raises;
+    snap.RecallRevokes = g->recall_revokes;
+    snap.RecallLevel = g->recall_level;
     snap.ZoneSteps = g->zone_steps;
     snap.ZoneTicks = g->zone_ticks;
     snap.ZoneLeadMc = g->zone_lead_mc;
@@ -649,6 +655,15 @@ static void DpmLogIdleLine(const char* What, const BC250_DPM_SNAP* P)
              P->IdleLeavePermille, P->IdleFastExits, P->IdleSlowExits);
 }
 
+// The ramp's recall (BD-228) on a line of its own, and only once a raise went back past the ramp: a start that never
+// had one logs exactly what the release before it logged.
+static void DpmLogRecallLine(const char* What, const BC250_DPM_SNAP* P)
+{
+    if (P->RecallRaises == 0) return;
+    GuardLog("dpm: %s ramp recall raises %lu revoked %lu, recalled level %lu", What, P->RecallRaises, P->RecallRevokes,
+             P->RecallLevel);
+}
+
 // The compute threshold set (BD-127) on two lines of its own, and only once it has something to say: a start whose GPU
 // never gets a compute context, or one with DpmComputeProfile 0 and no context, logs exactly what 0.7.216.7 logged.
 // Two lines, by the rule of the guardlog-width gate: one would be some 190 characters at its widest. The first line
@@ -694,16 +709,30 @@ static void DpmLogCurveLine(const char* What, const BC250_DPM_SNAP* P)
     }
 }
 
-// The one place a level reaches the hardware. TRUE when the hardware is at Level now.
-static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, ULONG Level, const char* Why)
+// The one place a level reaches the hardware. TRUE when the hardware is at Level now. Recalled: the governor's step
+// chose Level by the recall of the ramp (BD-228) under the curve of TickSerial. When an escape changed the curve after
+// that tick read it, the raise does not go to the hardware: the recalled level ran with the voltage of the old curve,
+// not of this one. The level stays, nothing counts as an error, and the next tick sees the new serial and forgets the
+// recall.
+static BOOLEAN DpmApplyEx(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, ULONG Level, const char* Why,
+                          BOOLEAN Recalled, ULONG TickSerial)
 {
     struct bc250_clock_report report;
     ULONG from = bc250_dpm_level_mhz(S->Gov.level);
+    ULONG serial;
     // The voltage comes from the active curve (0.7.210), which is the table's own line until an operator sets
-    // one. DpmLevelMv takes SnapLock, so the value cannot be half of an old curve and half of a new one.
-    NTSTATUS status = SmuSetPoint(&Device->Smu, bc250_dpm_level_mhz(Level), DpmLevelMv(S, Level), &report);
+    // one. DpmLevelMvSerial takes SnapLock, so the value cannot be half of an old curve and half of a new one.
+    ULONG mv = DpmLevelMvSerial(S, Level, &serial);
+    NTSTATUS status;
+    if (Recalled && (serial != TickSerial || !S->Gov.recall_valid)) {
+        bc250_dpm_recall_forget(&S->Gov);
+        GuardLog("dpm: the curve changed under a recalled raise to %lu MHz: not applied", bc250_dpm_level_mhz(Level));
+        return FALSE;
+    }
+    status = SmuSetPoint(&Device->Smu, bc250_dpm_level_mhz(Level), mv, &report);
     if (NT_SUCCESS(status) && report.ready) {
         bc250_dpm_commit(&S->Gov, Level);
+        bc250_dpm_recall_confirm(&S->Gov, Level, serial);
         S->ErrorsInRow = 0;
         T->ObservedMHz = report.observed_mhz;
         T->ObservedVid = report.observed_vid;
@@ -737,7 +766,7 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
                  report.messages_completed, report.messages_attempted, report.observed_mhz, report.observed_vid,
                  bc250_dpm_idle_mhz(&S->Gov), S->Gov.idle_refusals, Why);
         InterlockedExchange(&S->Resync, 1);
-        (void)DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "idle refused");
+        (void)DpmApplyEx(Device, S, T, BC250_DPM_FLOOR_LEVEL, "idle refused", FALSE, 0);
         return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
     }
     if (Level < BC250_DPM_FLOOR_LEVEL) {
@@ -754,7 +783,7 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
                  bc250_dpm_level_mhz(BC250_DPM_FLOOR_LEVEL), Why);
         bc250_dpm_subfloor_refused(&S->Gov);
         InterlockedExchange(&S->Resync, 1);
-        (void)DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "sub-floor refused");
+        (void)DpmApplyEx(Device, S, T, BC250_DPM_FLOOR_LEVEL, "sub-floor refused", FALSE, 0);
         return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
     }
     T->Errors++;
@@ -765,6 +794,11 @@ static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, U
              report.status, report.messages_completed, report.messages_attempted, report.initial_mhz,
              report.initial_vid, report.observed_mhz, report.observed_vid, report.settle_reads, S->ErrorsInRow, Why);
     return FALSE;
+}
+
+static BOOLEAN DpmApply(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T, ULONG Level, const char* Why)
+{
+    return DpmApplyEx(Device, S, T, Level, Why, FALSE, 0);
 }
 
 // The candidate has reached the hardware: record its serial (0.7.211). Only a transaction that went through
@@ -810,6 +844,9 @@ static void DpmResyncLevel(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T
     int level = -1;
     NTSTATUS status = SmuReadClock(&Device->Smu, &mhz, &vid, &degrees);
     T->Resyncs++;
+    // BD-228: what the governor held before the resync does not count, and neither does the level written below,
+    // a readback or the unknown-clock sentinel. Only a transaction confirms a level for the recall again.
+    bc250_dpm_recall_forget(&S->Gov);
     if (NT_SUCCESS(status)) {
         T->ObservedMHz = mhz;
         T->ObservedVid = vid;
@@ -971,6 +1008,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         // threshold set, because a compute client's busy share measures its wait on the CPU and not the
         // headroom. One interlocked read; wddm.c keeps the count.
         in.compute_contexts = (unsigned int)InterlockedCompareExchange(&S->ComputeContexts, 0, 0);
+        in.curve_serial = curveSerial;     // BD-228: the recall counts only under the curve it was confirmed with
         S->Gov.stable = InterlockedCompareExchange(&S->Stable, 0, 0) != 0;
         DpmTakeTune(S);
         target = bc250_dpm_step(&S->Gov, &in);
@@ -996,7 +1034,14 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
                          note.Pending, note.ElapsedMs, note.Skipped, note.Calls);
         }
         // The joint power arm reads this tick's governor and decides the CPU limit; it never changes target.
-        if (S->JointOn) DpmJointTick(Device, S, &in);
+        // BD-228: a release or a step up of its CPU cap ends the recall, because the CPU may now take more of the
+        // package power than it had while the GPU held the recalled level. A raise this tick's step already chose
+        // by the recall falls back to the ramp before it reaches the hardware.
+        if (S->JointOn) {
+            ULONG cap = S->Joint.cap_mhz;
+            DpmJointTick(Device, S, &in);
+            if (bc250_joint_relaxed(cap, S->Joint.cap_mhz)) target = bc250_dpm_recall_revoke(&S->Gov, target);
+        }
         action = bc250_dpm_session_step(&S->Session, target, dtMs);
         if (action == BC250_DPM_SESSION_SET) {
             // Durable before the first raise, or no raise.
@@ -1018,7 +1063,8 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         T->Target = target;
         if (target != S->Gov.level) {
             // The level changes, so the transaction carries the new curve's voltage anyway.
-            if (!DpmApply(Device, S, T, target, curveTake ? "load, curve" : "load")) {
+            if (!DpmApplyEx(Device, S, T, target, curveTake ? "load, curve" : "load", S->Gov.recall_used ? TRUE : FALSE,
+                            curveSerial)) {
                 if (S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT) DpmGiveUp(Device, S, T);
             } else if (curveTake) DpmCurveApplied(S, curveSerial);
         } else if (curveTake) {
@@ -1107,6 +1153,7 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         DpmLogLine("telemetry", &snap);
         DpmLogIdleLine("telemetry", &snap);
         DpmLogComputeLine("telemetry", &snap);
+        DpmLogRecallLine("telemetry", &snap);
         DpmLogJointLine("telemetry", &snap);
         HwmonLogLine(Device, "telemetry");
         SmuMetricsLogLine(Device, "telemetry");
@@ -1589,6 +1636,7 @@ void DpmStop(BC250_DEVICE* Device)
         DpmLogLine("stopped", &snap);
         DpmLogIdleLine("stopped", &snap);
         DpmLogComputeLine("stopped", &snap);
+        DpmLogRecallLine("stopped", &snap);
         DpmLogJointLine("stopped", &snap);
         DpmLogCurveLine("stopped", &snap);
     }
@@ -1629,6 +1677,9 @@ void DpmPause(BC250_DEVICE* Device)
     bc250_dpm_idle_leave(&s->Gov);
     // The joint arm starts again from no cap after the resume; CpuPause, which runs first, took it out of the chip.
     DpmJointEnd(Device, s, "power down");
+    // BD-228: the paused ticks do not run the governor, so nothing would age the recalled level across a transition
+    // of any length. The resume's resync forgets it again and confirms nothing.
+    bc250_dpm_recall_forget(&s->Gov);
     KeReleaseMutex(&s->TickLock, FALSE);
 }
 
@@ -1724,6 +1775,7 @@ void DpmLogSummary(BC250_DEVICE* Device)
     DpmLogLine("summary", &snap);
     DpmLogIdleLine("summary", &snap);
     DpmLogComputeLine("summary", &snap);
+    DpmLogRecallLine("summary", &snap);
     DpmLogJointLine("summary", &snap);
     HwmonLogLine(Device, "summary");
     SmuMetricsLogLine(Device, "summary");

@@ -491,6 +491,63 @@ change.
 When the ramp makes a raise smaller or stops it, the throttle reason is `thermal-ramp` (9). The counter `ramp` in the
 driver log lines counts these governor ticks. `want` in the telemetry stays the level that the load asks for.
 
+From BD-228 the ramp has a recall. The governor keeps the highest level that a confirmed transaction set, and goes
+back to it at once within 10 s (`BC250_DPM_RAMP_RECALL_MS`):
+
+- Only the KMD confirms a level (`bc250_dpm_recall_confirm`), after a `SmuSetPoint` that went through. The confirm
+  carries the serial of the curve whose voltage the transaction used. The KMD reads that voltage and that serial
+  under one acquisition of `SnapLock`.
+- Within the window, a raise goes to the lower of the recalled level and the level that the load asks for. A raise
+  above the recalled level keeps the ramp.
+- These end the recall: another curve serial (SET, CANCEL, RESET and the end of a trial each move it), a running
+  level above the recalled one, a change of the compute threshold set, a tick that the governor clamps to
+  `BC250_DPM_MAX_DT_MS`, `DpmResyncLevel`, `DpmPause`, and a release or a step up of the CPU cap by the joint
+  power arm (`bc250_joint_relaxed`).
+- When the joint arm gives the CPU more room in the tick of a recalled raise, `bc250_dpm_recall_revoke` takes the
+  target back to the level that the ramp alone gave, before the transaction.
+- A level that the KMD writes without a transaction (a readback, the unknown-clock sentinel) confirms nothing.
+- When an escape changes the curve after a tick read the serial, a recalled raise of that tick does not go to the
+  hardware. The next tick sees the new serial and ends the recall.
+- A thermal cap below the recalled level, and the end of the window, put the running level in its place. A clock
+  that the cap took down follows the released cap at the pace of the ramp, as before.
+- The warm zone, the hot rule, the thermal cap and the ceiling come before the recall. The recall widens none of
+  them.
+
+The recall is a heuristic, not a thermal proof. It assumes that a load which comes back after a short stall is the
+load that held the level before it. The frequency and the voltage that ran some seconds before do not prove the heat
+of the load now, and they say nothing of the CPU power. The rules above remove the cases where the operating point
+itself changed. The thermal rules stay the bound. The lab arm compares the thermals of a game with and without the
+recall before the change ships.
+
+The reason is a game trial on tester.32 candidates (BD-228). At 80 C, a stall of about 1 s let the clock fall from
+2000 MHz. The ramp then needed 30-36 s to come back, one level per 2.8 s. With the recall, a full load comes back in
+two ticks. A raise aims at 80 % busy at the new clock, so 1500 MHz asks for 1900 MHz first. `test_ramp_recall` in
+`dpm_test.c` covers the return, a raise above the recalled level, a level without a transaction, the end of the
+window, a stalled tick, a curve change, a compute context, a resync with a failed floor transaction, a power
+transition, a joint relaxation in the tick of a recalled raise, the hot band, a thermal cap, a start below the knee,
+the release default with the soft zone, and a short and a long idle episode. Every simulation in `dpm_test.c`
+confirms its transactions (`commit_ok`), so the recall runs in all of them as it ships.
+
+`test_plant367_stall` puts a stall of 1 s into the session 367 plant, once 30 s in (the die still warms) and once at
+300 s (the steady state), with the 0.7.212 rules and with the release default:
+
+| Stall | Rules | Ramp only: back after | Recall: back after | Hot spot peak (recall) | Runner stops |
+|---|---|---|---|---|---|
+| 30 s | 0.7.212 | 10075 ms | 50 ms | 86.69 C | 0 |
+| 300 s | 0.7.212 | 10225 ms | 50 ms | 86.69 C | 0 |
+| 30 s | Release default | 13550 ms | 50 ms | 84.45 C | 0 |
+| 300 s | Release default | 5925 ms | 25 ms | 84.98 C | 0 |
+
+The hot spot peak with the recall is the peak of the same run without the stall. The plant is a model, so the lab
+arm still decides.
+
+The lab arm (2026-10-23, the release default zone): a Quake II RTX loop at 1920x1200, with a suspend of the game
+process for 1.5 s per cycle from Tctl 72 C. Without the recall the clock came back in a median of 4721 ms over 10
+cycles (one cycle not within 6.5 s), and the clock before each stall fell from 2000 to 1600 MHz. With the recall it
+came back in a median of 100 ms over 8 cycles (max 780 ms) and stayed at 2000 MHz; the arm ended at its 84 C stop
+line. Neither arm had a TDR or a runner stop. The clock is sampled about every 14 ms with `bc250kmd_cli clock read`;
+frame times were not recorded.
+
 The reason is session 367 (KMD 0.7.202.1, `DpmMaxMHz` 2000). The governor was at 1000 MHz, and Tctl was 75.7 C after
 an earlier load. A load spike (busy 93 %) raised the clock to 2000 MHz / 1000 mV in three ticks. The hot spot then
 increased by approximately 12 C in 5 s. Tctl was 87.1 C approximately 9 s after the last idle telemetry line. The
@@ -974,6 +1031,11 @@ that the machine does not survive costs the curve and not the machine, and the d
 - From 0.7.203 these lines also show `ramp N` after `warm N`. N is the number of governor ticks in which the thermal
   ramp made a raise smaller or stopped it. The `RUN_DPM` escape does not carry this counter. A CLI built before
   0.7.203 shows throttle 9 as `?`.
+- From BD-228 a `dpm: <what> ramp recall raises N revoked R, recalled level L` line follows the idle and compute
+  lines, once N is not 0. N is the number of governor ticks in which the policy chose a raise back to the recalled
+  level past the ramp. R is the number of those raises that the joint arm took back before the transaction. N counts
+  choices, not completed changes: the `dpm: A -> B MHz` lines show the raises that the hardware took.
+  The `RUN_DPM` escape does not carry this counter.
 
 ## Other places that assumed 1000 MHz
 

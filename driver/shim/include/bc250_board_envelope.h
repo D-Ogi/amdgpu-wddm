@@ -77,6 +77,11 @@ static inline int bc250_board_supported(unsigned int provider_id)
 #define BC250_DPM_RAMP_KNEE_MC		70000
 #define BC250_DPM_RAMP_MIN_MS		1000u
 #define BC250_DPM_RAMP_MAX_MS		4000u
+/* BD-228: the ramp lets a raise go back at once to the highest level that a confirmed transaction set within this
+ * window. A heuristic: a load that comes back after a short stall is taken to be the load that held the level. A
+ * stall of about a second in a game cost 30-36 s at a reduced clock with the ramp alone (OWN3, 80 C). The thermal
+ * rules stay the bound; docs/design/dpm.md lists what ends the recall. */
+#define BC250_DPM_RAMP_RECALL_MS	10000u
 #define BC250_DPM_CRITICAL_MC		90000
 #define BC250_DPM_RELEASE_MC		82000	/* below: the thermal cap rises again (HOT_MC - 5 C) */
 #define BC250_DPM_RELEASE_STEP_MS	1000u	/* one level per this, while below RELEASE_MC */

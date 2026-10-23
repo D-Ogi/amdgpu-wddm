@@ -327,6 +327,7 @@ static struct bc250_dpm_input tick(unsigned int busy, int temp_c, unsigned int d
 	in.ring_busy = 0;		/* the ring is empty: only the idle state of 0.7.207 reads this */
 	in.sdma_permille = 0;		/* the paging node is idle: the idle state alone reads this too */
 	in.compute_contexts = 0;	/* no compute client: the graphics thresholds, as every case before BD-127 */
+	in.curve_serial = 0;		/* no curve change: the recall of BD-228 keeps the serial it was confirmed with */
 	return in;
 }
 
@@ -339,6 +340,16 @@ static unsigned int cap_bottom(const struct bc250_dpm_governor *g)
 	return g->subfloor_ok ? BC250_DPM_THERMAL_FLOOR_LEVEL : BC250_DPM_FLOOR_LEVEL;
 }
 
+/* The caller's transaction went through: the KMD commits the level and, when it moved, confirms it for the recall of
+ * the ramp (BD-228) under curve serial 0. Every simulation goes through this, so the recall runs as it ships; a case
+ * about an unconfirmed level writes g->level itself. */
+static void commit_ok(struct bc250_dpm_governor *g, unsigned int level)
+{
+	unsigned int before = g->level;
+	bc250_dpm_commit(g, level);
+	if (g->level != before) bc250_dpm_recall_confirm(g, g->level, 0);
+}
+
 /* One tick applied without failure, the temperature in millidegrees (the thresholds' edges); returns the level. */
 static unsigned int run_mc(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int dt)
 {
@@ -348,7 +359,7 @@ static unsigned int run_mc(struct bc250_dpm_governor *g, unsigned int busy, int 
 	level = bc250_dpm_step(g, &in);
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
 	CHECK(g->thermal_cap >= cap_bottom(g));
-	bc250_dpm_commit(g, level);
+	commit_ok(g, level);
 	return level;
 }
 
@@ -521,7 +532,7 @@ static void test_thermal(void)
 	/* No reading is treated as critical. */
 	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(7);
 	in = tick(1000, 60, 25); in.temperature_valid = 0;
-	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+	level = bc250_dpm_step(&g, &in); commit_ok(&g, level);
 	CHECK(level == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 
 	/* Thermal wins over a max setting, the max setting over the load. */
@@ -1064,7 +1075,7 @@ static void test_floor(void)
 	CHECK(level == L(10));
 	/* No sensor: the lab floor, not the thermal floor (nothing is known about the temperature). */
 	in = tick(0, 60, 25); in.temperature_valid = 0;
-	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+	level = bc250_dpm_step(&g, &in); commit_ok(&g, level);
 	CHECK(level == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	for (i = 0; i < 20 * BC250_DPM_RELEASE_STEP_MS / 25u; i++) level = run(&g, 0, 70, 25);
 	CHECK(level == L(10));
@@ -1347,7 +1358,7 @@ static void test_soft_release(void)
 	{
 		struct bc250_dpm_input in = tick(1000, 60, 25);
 		in.temperature_valid = 0;
-		level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+		level = bc250_dpm_step(&g, &in); commit_ok(&g, level);
 	}
 	CHECK(level == L(0) && g.soft_ms == 0 && g.soft_releases == 0);
 }
@@ -1546,7 +1557,7 @@ static void test_zone(void)
 	{
 		struct bc250_dpm_input in = tick(1000, 0, 25 + BC250_DPM_MAX_DT_MS);
 		in.temperature_mc = mc;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 		CHECK(g.slope_count == 0);
 	}
 	for (i = 0; i < (BC250_DPM_ZONE_SLOPE_SLOTS - 1u) * BC250_DPM_ZONE_SLOPE_SLOT_MS / 25u; i++, mc += 5) {
@@ -1726,7 +1737,7 @@ static unsigned int run_busy_mc(struct bc250_dpm_governor *g, unsigned int busy,
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
 	CHECK(g->thermal_cap >= cap_bottom(g));
 	CHECK(g->zone_lead_mc <= BC250_DPM_ZONE_LEAD_MAX_MC);
-	bc250_dpm_commit(g, level);
+	commit_ok(g, level);
 	return level;
 }
 
@@ -1874,7 +1885,7 @@ static void test_zone_quiet_gate(void)
 	{
 		struct bc250_dpm_input in = tick(0, 0, 60000);	/* one clamped tick, 60 s, nothing on either engine */
 		in.temperature_mc = 86000;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 	}
 	CHECK(g.zone_quiet_ms >= BC250_DPM_ZONE_QUIET_MS && g.zone_ticks == 0);
 	for (i = 0; i < 200u; i++) run_mc(&g, 0, 86000, 25);
@@ -1888,7 +1899,7 @@ static void test_zone_quiet_gate(void)
 		struct bc250_dpm_input in = tick(1000, 0, 60000);
 		in.temperature_mc = 86000;
 		in.ring_busy = 1;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 	}
 	CHECK(g.zone_quiet_ms == 0 && g.zone_ticks == 1u && g.zone == 1);
 }
@@ -1912,7 +1923,7 @@ static void test_zone_stall(void)
 		struct bc250_dpm_input in = tick(1000, 0, 30000);
 		in.temperature_mc = 78000;
 		in.ring_busy = 1;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 		CHECK(g.zone_lead_mc <= BC250_DPM_ZONE_LEAD_MAX_MC && g.zone_ticks == 0 && g.thermal_cap == BC250_DPM_TOP_LEVEL);
 		CHECK(g.slope_count == 0 && !g.zone);			/* and the ring is empty afterwards */
 	}
@@ -1934,7 +1945,7 @@ static void test_zone_stall(void)
 	{
 		struct bc250_dpm_input in = tick(0, 0, 30000);
 		in.temperature_mc = 78000;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 	}
 	for (i = 0; i < 400u; i++) run_mc(&g, 0, 78000, 25);
 	CHECK(g.zone_ticks == 0 && g.zone_steps == 0 && g.thermal_cap == (unsigned int)bc250_dpm_level_of(1500));
@@ -1999,7 +2010,7 @@ static void test_zone_sensor_gap(void)
 		struct bc250_dpm_input in = tick(1000, 0, 25);
 		in.temperature_valid = 0;
 		in.ring_busy = 1;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 		CHECK(g.slope_count == BC250_DPM_ZONE_SLOPE_SLOTS && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	}
 	mc += 5;
@@ -2014,7 +2025,7 @@ static void test_zone_sensor_gap(void)
 		struct bc250_dpm_input in = tick(1000, 0, 25);
 		in.temperature_valid = 0;
 		in.ring_busy = 1;
-		bc250_dpm_commit(&g, bc250_dpm_step(&g, &in));
+		commit_ok(&g, bc250_dpm_step(&g, &in));
 	}
 	mc += 5;
 	run_busy_mc(&g, 1000, mc, 25);
@@ -2069,7 +2080,7 @@ static void zone_replay(const char *name, const short *deci, unsigned int n, uns
 			in.temperature_mc = mc;
 			in.ring_busy = 1;
 			(void)bc250_dpm_step(&g, &in);
-			bc250_dpm_commit(&g, ceiling);		/* open loop: hold the clock at the ceiling */
+			commit_ok(&g, ceiling);		/* open loop: hold the clock at the ceiling */
 			CHECK(g.zone_lead_mc <= BC250_DPM_ZONE_LEAD_MAX_MC);
 			if (g.zone_ticks > before && mc < *lowest) *lowest = mc;
 		}
@@ -2192,6 +2203,219 @@ static void test_ramp(void)
 	CHECK(level == L(4));	/* 1 s of the stall + 10 s at a 3.47 s interval: three more raises */
 }
 
+/* BD-228: a stall of the load lets the clock fall; within BC250_DPM_RAMP_RECALL_MS a raise goes back at once to the
+ * level that a confirmed transaction set before, past the ramp. Above that level, after the window, after a stalled
+ * tick, a curve change, a power transition, a resync, a change of the threshold set and a thermal cap the ramp holds
+ * as before; the warm zone holds every raise. OWN3: 2000 MHz at 80 C, a one-second stall, 36 s back to 2000 MHz with
+ * the ramp alone. */
+static unsigned int run_until_below(struct bc250_dpm_governor *g, unsigned int level, int temp_mc, unsigned int max_ticks)
+{
+	unsigned int i, now = g->level;
+	for (i = 0; i < max_ticks && now >= level; i++) now = run_mc(g, 0, temp_mc, 25);
+	return i;
+}
+
+/* One tick as the KMD runs it: a step under the curve of serial with compute contexts open, and a confirmed
+ * transaction when the level changes. */
+static unsigned int run_rc(struct bc250_dpm_governor *g, unsigned int busy, int temp_mc, unsigned int serial,
+			   unsigned int compute)
+{
+	struct bc250_dpm_input in = tick(busy, 0, 25);
+	unsigned int level, before = g->level;
+	in.temperature_mc = temp_mc;
+	in.curve_serial = serial;
+	in.compute_contexts = compute;
+	level = bc250_dpm_step(g, &in);
+	CHECK(level <= g->max_level && level <= g->thermal_cap);
+	if (level != before) {
+		bc250_dpm_commit(g, level);
+		bc250_dpm_recall_confirm(g, level, serial);
+	}
+	return level;
+}
+
+/* A governor at level, set by a confirmed transaction under curve serial 0. */
+static void held_at(struct bc250_dpm_governor *g, unsigned int level)
+{
+	init_old(g, BC250_DPM_TOP_LEVEL);
+	g->level = level;
+	bc250_dpm_recall_confirm(g, level, 0);
+}
+
+static void test_ramp_recall(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, n;
+
+	/* 2000 MHz at 80 C, then the load stops until the clock is at 1500 MHz or below. */
+	held_at(&g, L(10));
+	for (i = 0; i < 8; i++) CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	CHECK(g.recall_valid && g.recall_level == L(10) && g.recall_ms == 0);
+	n = run_until_below(&g, L(6), 80000, 400);
+	CHECK(n < 400 && g.level <= L(5) && (unsigned long)n * 25u < BC250_DPM_RAMP_RECALL_MS);
+	CHECK(g.recall_valid && g.recall_level == L(10));
+	/* The load comes back. A raise aims at 80 % busy at the new clock, so a full load at 1500 MHz asks 1900 MHz and the
+	 * next tick 2000 MHz: two ticks, both recalled, no ramp hold. The ramp alone gives one level per 1-4 s here. */
+	n = run_mc(&g, 1000, 80000, 25);
+	CHECK(n > L(6) && n < L(10) && g.recall_raises == 1 && g.recall_used);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	CHECK(g.throttle == BC250_DPM_THROTTLE_NONE && g.recall_raises == 2 && g.ramp_holds == 0);
+
+	/* A level written without a transaction is no recall: the first confirmed level is the first lowering, 1900 MHz. */
+	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10) && !g.recall_valid);
+	(void)run_until_below(&g, L(6), 80000, 400);
+	CHECK(g.recall_valid && g.recall_level == L(9));
+	(void)run_mc(&g, 1000, 80000, 25);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(9) && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+
+	/* A raise above the recalled level keeps the ramp: held at 1500 MHz (870 permille: under the raise threshold,
+	 * and over the one a level lower would need), a stall, then a full load: back to 1500 MHz at once, the rest waits. */
+	held_at(&g, L(5));
+	for (i = 0; i < 8; i++) CHECK(run_mc(&g, 870, 80000, 25) == L(5));
+	(void)run_until_below(&g, L(3), 80000, 400);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(5) && g.recall_raises == 1);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(5) && g.recall_raises == 1);
+	CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+
+	/* After the window: the ramp as before, one level. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(3), 80000, 400);
+	for (i = 0; i < BC250_DPM_RAMP_RECALL_MS / 25u; i++) (void)run_mc(&g, 0, 80000, 25);
+	n = g.level;
+	CHECK(run_mc(&g, 1000, 80000, 25) == n + 1u && g.recall_raises == 0 && g.throttle == BC250_DPM_THROTTLE_THERMAL_RAMP);
+
+	/* A stalled tick ends the recall: the ramp as before. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	n = run_mc(&g, 0, 80000, 3600000u);
+	CHECK(!g.recall_valid || g.recall_level == n);	/* a lowering in the same tick confirms its own level */
+	CHECK(run_mc(&g, 1000, 80000, 25) <= n + 1u && g.recall_raises == 0);
+
+	/* Another curve (SET, CANCEL, RESET or the end of a trial: each moves the serial) ends the recall. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	n = g.level;
+	CHECK(run_rc(&g, 1000, 80000, 1, 0) <= n + 1u && g.recall_raises == 0 && g.recall_serial == 1);
+	CHECK(run_rc(&g, 1000, 80000, 1, 0) <= n + 1u && g.recall_raises == 0);
+
+	/* A change of the threshold set ends the recall: a compute client opens a context during the stall. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	n = g.level;
+	CHECK(run_rc(&g, 1000, 80000, 0, 1) <= n + 1u && g.recall_raises == 0);
+
+	/* DpmResyncLevel: it forgets, writes the unknown-clock sentinel, and the floor transaction fails; the step runs on
+	 * the sentinel and confirms nothing. The recovery transaction confirms the floor, and the load gets the ramp. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	bc250_dpm_recall_forget(&g);
+	g.level = BC250_DPM_TOP_LEVEL;
+	for (i = 0; i < 4; i++) {
+		struct bc250_dpm_input in = tick(0, 0, 25);
+		in.temperature_mc = 80000;
+		(void)bc250_dpm_step(&g, &in);
+		CHECK(!g.recall_valid);
+	}
+	commit_ok(&g, BC250_DPM_FLOOR_LEVEL);
+	bc250_dpm_recall_confirm(&g, BC250_DPM_FLOOR_LEVEL, 0);
+	CHECK(g.recall_valid && g.recall_level == BC250_DPM_FLOOR_LEVEL);
+	CHECK(run_mc(&g, 1000, 80000, 25) <= L(1) && g.recall_raises == 0);
+
+	/* DpmPause: the floor transaction, then the recall ends; the paused ticks run no step. The resume's resync forgets
+	 * again and reads the floor back. Without the two calls the floor would keep the 2000 MHz of before the pause. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	commit_ok(&g, BC250_DPM_FLOOR_LEVEL);
+	bc250_dpm_recall_confirm(&g, BC250_DPM_FLOOR_LEVEL, 0);
+	CHECK(g.recall_level == L(10));
+	bc250_dpm_recall_forget(&g);
+	bc250_dpm_recall_forget(&g);
+	g.level = BC250_DPM_FLOOR_LEVEL;
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(1) && g.recall_raises == 0);
+
+	/* From 87 C nothing rises, recalled or not: the hot entry clamps the cap to the running clock, under the recalled
+	 * level, and the warm zone holds the raise. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	n = g.level;
+	CHECK(run_mc(&g, 1000, 87500, 25) <= n && g.recall_raises == 0);
+	CHECK(run_mc(&g, 1000, 87500, 25) <= n && g.recall_raises == 0);
+
+	/* A thermal cap under the recalled level forgets it: the clock follows the released cap at the ramp's pace. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	for (i = 0; i < 4000u / 25u; i++) (void)run_mc(&g, 1000, 88000, 25);	/* the hot cap steps the clock down */
+	CHECK(g.thermal_cap < L(10) && g.level < L(10));
+	for (i = 0; i < 20000u / 25u && g.thermal_cap < L(10); i++) (void)run_mc(&g, 1000, 75000, 25);
+	CHECK(g.recall_raises == 0);
+
+	/* Below the knee nothing changes: the load's raise is free there anyway. */
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 60000, 25) == L(10));
+	(void)run_until_below(&g, L(3), 60000, 400);
+	n = g.level;
+	CHECK(run_mc(&g, 1000, 60000, 25) > n + 1u && g.recall_raises == 0 && g.throttle == BC250_DPM_THROTTLE_NONE);
+
+	/* The joint arm gives the CPU more room in the tick of a recalled raise: the target falls back to the ramp before
+	 * the transaction, and the recall ends. Only a release or a step up of the cap counts. */
+	CHECK(bc250_joint_relaxed(2800u, 0u) && bc250_joint_relaxed(2800u, 2900u));
+	CHECK(!bc250_joint_relaxed(0u, 2800u) && !bc250_joint_relaxed(2900u, 2800u) && !bc250_joint_relaxed(2800u, 2800u));
+	CHECK(!bc250_joint_relaxed(0u, 0u));
+	held_at(&g, L(10));
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	n = g.level;
+	{
+		struct bc250_dpm_input in = tick(1000, 0, 25);
+		unsigned int target;
+		in.temperature_mc = 80000;
+		target = bc250_dpm_step(&g, &in);
+		CHECK(target > n + 1u && g.recall_used && g.recall_ramp <= n + 1u);
+		target = bc250_dpm_recall_revoke(&g, target);	/* the KMD: bc250_joint_relaxed after DpmJointTick */
+		CHECK(target == g.recall_ramp && target <= n + 1u && !g.recall_valid && !g.recall_used && g.recall_revokes == 1);
+		commit_ok(&g, target);
+		CHECK(g.recall_level == target);
+		CHECK(run_mc(&g, 1000, 80000, 25) <= target + 1u && g.recall_raises == 1);
+	}
+	/* A revoke in a tick without a recalled raise leaves the target alone. */
+	held_at(&g, L(5));
+	CHECK(bc250_dpm_recall_revoke(&g, L(7)) == L(7) && g.recall_revokes == 0 && !g.recall_valid);
+
+	/* The release default: the soft zone and its lead on. A flat 80 C die comes back the same way. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL); g.level = L(10);
+	bc250_dpm_recall_confirm(&g, L(10), 0);
+	for (i = 0; i < 40; i++) CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	(void)run_until_below(&g, L(6), 80000, 400);
+	for (i = 0; i < 4 && g.level < L(10); i++) (void)run_mc(&g, 1000, 80000, 25);
+	CHECK(g.level == L(10) && g.recall_raises >= 1 && g.ramp_holds == 0);
+
+	/* The idle state: a short idle episode (a loading screen) leaves to the floor first, and a later tick recalls. */
+	held_at(&g, L(10));
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	for (i = 0; i < 6000u / 25u && g.level != BC250_DPM_IDLE_LEVEL; i++) (void)run_mc(&g, 0, 80000, 25);
+	CHECK(g.level == BC250_DPM_IDLE_LEVEL && (i + 1u) * 25u < BC250_DPM_RAMP_RECALL_MS);
+	CHECK(run_mc(&g, 1000, 80000, 25) <= BC250_DPM_FLOOR_LEVEL && g.recall_raises == 0);
+	for (i = 0; i < 4 && g.level < L(10); i++) (void)run_mc(&g, 1000, 80000, 25);
+	CHECK(g.level == L(10) && g.recall_raises >= 1);
+	/* An idle episode longer than the window: the ramp as before. */
+	held_at(&g, L(10));
+	CHECK(bc250_dpm_idle_config(&g, 500, 3000, 2) == BC250_DPM_IDLE_OK);
+	CHECK(run_mc(&g, 1000, 80000, 25) == L(10));
+	for (i = 0; i < (BC250_DPM_RAMP_RECALL_MS + 2000u) / 25u; i++) (void)run_mc(&g, 0, 80000, 25);
+	CHECK(g.level == BC250_DPM_IDLE_LEVEL);
+	(void)run_mc(&g, 1000, 80000, 25);
+	for (i = 0; i < 4; i++) (void)run_mc(&g, 1000, 80000, 25);
+	CHECK(g.level <= BC250_DPM_FLOOR_LEVEL + 1u && g.recall_raises == 0);
+}
+
 /* Session 367 on a plant: the governor at 1000 MHz with the hot spot at 75.7 C after an earlier load (the sink still
  * warm), ceiling 2000 MHz, then a game whose work fills 93.1 % of 2000 MHz for ten minutes. The plant has the same two
  * nodes as plant_run with constants fitted to the lab instead of to the scene-change shape: the hot spot's fast node
@@ -2203,9 +2427,15 @@ struct ramp_result {
 	unsigned int raises, lowers;
 	unsigned int ramp_holds, warm_holds, thermal_events;
 	unsigned int stops, stop_phases, longest_1s;	/* the lab runner's 1 s samples at 87 C or more (plant367_run) */
+	/* BD-228 (plant367_stall): the level before the stall, the time from the end of the stall until the clock is
+	 * back at it (~0u: never), and the recalled raises. */
+	unsigned int pre_level, back_ms, recall_raises;
 };
 
-static struct ramp_result plant367_run(int ramp, int start_mc)
+/* stall_ms: the load stops for one second at this time (0: no stall). recall 0: the KMD confirms nothing, so the
+ * ramp runs as before BD-228. zone: the release default (bc250_dpm_init: the soft zone and its lead on) instead of the
+ * 0.7.212 rules. */
+static struct ramp_result plant367_ex(int ramp, int start_mc, unsigned int stall_ms, int recall, int zone)
 {
 	struct bc250_dpm_governor g;
 	struct ramp_result r;
@@ -2218,10 +2448,18 @@ static struct ramp_result plant367_run(int ramp, int start_mc)
 
 	memset(&r, 0, sizeof(r));
 	r.first_hot_ms = ~0u;
-	init_old(&g, BC250_DPM_TOP_LEVEL);	/* session 367 is the ramp against the 0.7.212 thermal rules */
+	if (zone) bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	else init_old(&g, BC250_DPM_TOP_LEVEL);	/* session 367 is the ramp against the 0.7.212 thermal rules */
 	last = g.level;
+	r.back_ms = ~0u;
 	for (i = 0; i < ticks; i++) {
 		unsigned int mhz = bc250_dpm_level_mhz(g.level), busy = demand >= mhz ? 1000u : demand * 1000u / mhz, level;
+		int stalled = stall_ms && i * 25u >= stall_ms && i * 25u < stall_ms + 1000u;
+		if (stall_ms && i * 25u == stall_ms) r.pre_level = g.level;
+		if (stalled) busy = 0;
+		if (stall_ms && !stalled && i * 25u >= stall_ms + 1000u && r.back_ms == ~0u && g.level >= r.pre_level)
+			r.back_ms = i * 25u - (stall_ms + 1000u);
+		if (!recall) bc250_dpm_recall_forget(&g);
 		double v = bc250_dpm_level_mv(g.level) / 1000.0;
 		double p = mhz / 2000.0 * v * v * (0.15 + 0.85 * busy / 1000.0);
 		struct bc250_dpm_input in = tick(busy, 0, 25);
@@ -2231,8 +2469,8 @@ static struct ramp_result plant367_run(int ramp, int start_mc)
 		in.temperature_mc = (int)(die * 1000.0) + (int)((seed >> 16) % 801u) - 400;
 		level = ramp ? bc250_dpm_step(&g, &in) : step_without_ramp(&g, &in);
 		CHECK(level <= g.max_level && level <= g.thermal_cap);
-		bc250_dpm_commit(&g, level);
-		if (g.level != last) { r.settle_ms = i * 25u; last = g.level; }
+		commit_ok(&g, level);
+		if (!stalled && g.level != last) { r.settle_ms = i * 25u; last = g.level; }
 		if (in.temperature_mc >= BC250_DPM_HOT_MC) {
 			if (r.first_hot_ms == ~0u) r.first_hot_ms = i * 25u;
 			r.hot_ms += 25u;
@@ -2266,7 +2504,13 @@ static struct ramp_result plant367_run(int ramp, int start_mc)
 	r.ramp_holds = ramp ? g.ramp_holds : 0u;	/* the old rule's cuts were undone */
 	r.warm_holds = g.warm_holds;
 	r.thermal_events = g.thermal_events;
+	r.recall_raises = g.recall_raises;
 	return r;
+}
+
+static struct ramp_result plant367_run(int ramp, int start_mc)
+{
+	return plant367_ex(ramp, start_mc, 0, 1, 0);
 }
 
 static void ramp_print(const char *name, const struct ramp_result *r)
@@ -2325,6 +2569,31 @@ static void test_plant367(void)
 		printf("plant367 starts 50-83 C: old rule hot spot >= 87 C in %u of 34, runner stop in %u; ramp: peak hot spot "
 		       "%u mC, longest run of readings >= 87 C %u ms, of 1 s samples %u, no runner stop, %u starts end at "
 		       "1300 MHz, the others at 1400\n", old_hot, old_stop, worst, worst_ms, worst_1s, at1300);
+	}
+}
+
+/* BD-228 on the session 367 plant: a one-second stall of the game, on a die that is still warming (30 s in, the climb
+ * at the ramp's pace) and at the steady state (300 s in, 1400 MHz at 84-86 C), with the 0.7.212 rules and with the
+ * release default. The recall must bring the clock back faster than the ramp alone, and keep every bound of the
+ * case without a stall: hot spot under 87 C, no stop of the lab runner. */
+static void test_plant367_stall(void)
+{
+	static const unsigned int at[2] = { 30000u, 300000u };
+	unsigned int k, zone;
+	for (zone = 0; zone < 2; zone++) {
+		for (k = 0; k < 2; k++) {
+			struct ramp_result off = plant367_ex(1, 75700, at[k], 0, (int)zone);
+			struct ramp_result on = plant367_ex(1, 75700, at[k], 1, (int)zone);
+			printf("plant367 stall at %3u s, %-7s ramp only: back in %6d ms, peak %u mC, stops %u; recall: back in "
+			       "%6d ms, peak %u mC, stops %u, %u recalled raises, final %u MHz\n", at[k] / 1000u,
+			       zone ? "default" : "0.7.212", off.back_ms == ~0u ? -1 : (int)off.back_ms, off.die_peak_mc, off.stops,
+			       on.back_ms == ~0u ? -1 : (int)on.back_ms, on.die_peak_mc, on.stops, on.recall_raises,
+			       on.final_mhz);
+			CHECK(off.recall_raises == 0u && on.recall_raises > 0u);
+			CHECK(on.back_ms != ~0u && on.back_ms <= 100u && on.back_ms < off.back_ms);
+			CHECK(on.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && on.stops == 0u && on.longest_1s <= 1u);
+			CHECK(on.final_mhz >= 1300u && on.mean_mhz >= off.mean_mhz);
+		}
 	}
 }
 
@@ -2403,18 +2672,18 @@ static void test_subfloor(void)
 	CHECK(run_mc(&g, 1000, 90000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	in = tick(1000, 60, 25); in.temperature_valid = 0;
 	for (i = 0; i < 400u; i++) {
-		level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+		level = bc250_dpm_step(&g, &in); commit_ok(&g, level);
 		CHECK(level == BC250_DPM_THERMAL_FLOOR_LEVEL && g.thermal_cap == BC250_DPM_THERMAL_FLOOR_LEVEL);
 		CHECK(g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	}
 	/* From the floor or above it the rule is the lowering it has always been (0.7.204 behaviour). */
 	init_old(&g, BC250_DPM_TOP_LEVEL); g.level = L(5); g.thermal_cap = L(5);
-	level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level);
+	level = bc250_dpm_step(&g, &in); commit_ok(&g, level);
 	CHECK(level == L(0) && g.thermal_cap == L(0) && g.throttle == BC250_DPM_THROTTLE_SENSOR);
 	/* Only the release brings a sub-floor cap back up, and it does so one level at a time. */
 	init_old(&g, BC250_DPM_TOP_LEVEL);
 	CHECK(run_mc(&g, 1000, 90000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
-	for (i = 0; i < 4u; i++) { level = bc250_dpm_step(&g, &in); bc250_dpm_commit(&g, level); }
+	for (i = 0; i < 4u; i++) { level = bc250_dpm_step(&g, &in); commit_ok(&g, level); }
 	for (i = 1; i < BC250_DPM_RELEASE_STEP_MS / 25u; i++)
 		CHECK(run_mc(&g, 1000, 60000, 25) == BC250_DPM_THERMAL_FLOOR_LEVEL);
 	CHECK(run_mc(&g, 1000, 60000, 25) == L(-1) && g.thermal_cap == L(-1));
@@ -2500,7 +2769,7 @@ static unsigned int run_nodes(struct bc250_dpm_governor *g, unsigned int busy, i
 	level = bc250_dpm_step(g, &in);
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
 	CHECK(g->thermal_cap >= cap_bottom(g));
-	bc250_dpm_commit(g, level);
+	commit_ok(g, level);
 	return level;
 }
 
@@ -2518,7 +2787,7 @@ static unsigned int run_blind(struct bc250_dpm_governor *g, unsigned int busy, u
 	unsigned int level;
 	in.temperature_valid = 0;
 	level = bc250_dpm_step(g, &in);
-	bc250_dpm_commit(g, level);
+	commit_ok(g, level);
 	return level;
 }
 
@@ -3228,7 +3497,7 @@ static void joint_replay(const char *name, const short *deci, unsigned int n, un
 			in.temperature_mc = deci[i] * 100;
 			in.ring_busy = 1;
 			level = bc250_dpm_step(&g, &in);
-			bc250_dpm_commit(&g, level);
+			commit_ok(&g, level);
 			bc250_joint_read(&g, &in, &ji);
 			ji.cpu_ready = 1;
 			ji.base_mhz = 3200u;
@@ -3277,7 +3546,7 @@ static unsigned int run_compute(struct bc250_dpm_governor *g, unsigned int busy,
 	level = bc250_dpm_step(g, &in);
 	CHECK(level <= g->max_level && level <= g->thermal_cap);
 	CHECK(g->thermal_cap >= cap_bottom(g));
-	bc250_dpm_commit(g, level);
+	commit_ok(g, level);
 	return level;
 }
 
@@ -3497,6 +3766,8 @@ int main(void)
 	test_zone_backstop_timing();
 	test_zone_traces();
 	test_ramp();
+	test_ramp_recall();
+	test_plant367_stall();
 	test_plant367();
 	test_subfloor();
 	test_compute();
