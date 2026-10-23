@@ -227,19 +227,19 @@ Values that exist live but not in the capture are listed in `parameters_added`. 
 ## Host tests
 
 ```
-python tools\win\kmd-deploy\check-offline.py            44 checks, about 3 minutes
-python tools\win\kmd-deploy\check-offline.py --quick    41 checks, without the bounded-child tests
+python tools\win\kmd-deploy\check-offline.py            source builds and all host checks
+python tools\win\kmd-deploy\check-offline.py --quick    without the bounded-child process tests
 python tools\win\kmd-deploy\tools\test_versions.py      the version rules, also part of both runs above
 python tools\win\kmd-deploy\tools\test_accept.py <dry-run attempt dir>    11 checks on a scratch copy
 ```
 
 `tools/quality/quick.ps1` runs `--quick` as the check `kmd-deploy`. The gate compiles every Python file, parses
-all 87 PowerShell scripts with the Windows PowerShell 5.1 parser, proves that the kmd168 helpers in the template
-are the 171 stage's own files byte for byte, and runs every transition host test. The bounded-child tests start
+the PowerShell scripts with the Windows PowerShell 5.1 parser, builds the helpers twice in separate directories,
+compares their bytes, and runs the transition host tests. The bounded-child tests start
 short-lived hidden `powershell.exe` children inside a job that the helper kills. Nothing resident and no window.
 
-Two historical tests do not run: `test-select-driver-args.ps1` drives the device installer, and
-`test-receipt-pipe.ps1` needs a fixture binary the 171 stage did not preserve.
+The quick run includes eight invalid `select-driver` requests that must fail before device access.
+The full run also tests the receipt-pipe timeout against a fixture built from source. It does not install a driver.
 
 `test_accept.py` needs a `stage.py freeze --dry-run --out` tree to work on:
 
@@ -262,8 +262,10 @@ Negative controls of `freeze` itself, in `tools/test_versions.py` (part of `chec
   version.
 - A rollback that is not the KMD or the release that `lab-baseline.json` names, and a wrong certificate.
 
-The test also reads the tester.20 release over its build 0.7.216.14, and the 0.7.216.16 build as a candidate over
-it, when those directories are in the workspace. `tools/test-identity-revisions.ps1` runs `test-identity.ps1` on
+The test builds complete package fixtures and a temporary Git source repository from its tracked recipe.
+It reads a release over build 0.7.216.14 and admits a 0.7.216.16 candidate. It also refuses a missing or changed
+binary in a 0.7.R.1 package. No old attempt, release or build directory is required.
+`tools/test-identity-revisions.ps1` runs `test-identity.ps1` on
 identities with build counters (216.16 over 216.100, 216.16 over 216.14, 217.1 over 216.100) and refuses a wrong
 directory pattern, one version twice, build 0, a label without its build and a foreign ABI.
 
@@ -290,15 +292,35 @@ environment variables.
 `BC250_KMD_DEPLOY_WORK` moves the attempts and the host-test output elsewhere. Nothing is written to drive C: of
 the development PC.
 
-The kit also reads two sets of recorded history, by their hashes, and refuses to continue if either changed. One
-is `<BC250_ROOT>/scratch/kmd-deploy/hist171/`: the nine helpers of the measured 170 to 171 promotion, the kmd168
-transition helpers plus the `bounded-child.exe` and `select-driver.exe` that every transition reuses byte for
-byte. Their digests and their provenance are in `hist171-manifest.json` in this directory, which is tracked and
-hash pinned in turn. `tools/test_hist171.py` is its gate. The set used to be read from the frozen 171 attempt in
-the closed M14 milestone tree, which the workspace cleanup of 2026-10-12 deleted. The bytes were recovered from
-four later frozen attempts that all record the same 171 stage manifest, so the set now lives beside the kit's default
-work directory. It is input, not output: a relocated `BC250_KMD_DEPLOY_WORK` (the package gate sets one) does not
-move it, and only `BC250_KMD_DEPLOY_HIST` points the kit at another verified copy.
+### Helper source builds
+
+`build_helpers.py --out <fresh-directory>` builds `bounded-child.exe`, `select-driver.exe` and the host-only
+receipt-pipe fixture. The gate builds all three twice. `/Brepro` and `lld-link` remove timestamp differences.
+The gate requires identical executable hashes across output directories. It refuses changed, absent or extra
+executables, changed source hashes and changed compiler or linker bytes.
+
+The compiler is `<BC250_ROOT>/toolchain/llvm-23.1.4-win64/bin/clang-cl.exe`, with `x86-64-v3` and `znver2` tuning.
+There is no MSVC compiler fallback. The build prints its version and commands. The external inputs are the LLVM
+tools, installed Visual Studio headers and static libraries, workspace NuGet Windows SDK headers and libraries,
+Git, Python and Windows PowerShell. No executable from an earlier attempt is an input.
+
+`build-manifest.json` records the source commit, dirty flag, source hashes, compiler and linker versions/hashes,
+dependency paths, commands and output hashes. `freeze` makes a fresh helper build under `WORK/helper-builds/`,
+checks it again before copying, and adds its receipt as `helper-build-manifest.json` to the attempt.
+The freeze runs the full host gate against these exact executables. Their hashes must also match both
+independent gate builds. The gate summary records the tested build directory and hashes.
+The stage manifest binds that receipt and both deployed executable hashes. The pipe fixture is not deployed.
+The existing package, certificate and deployed-baseline inputs remain necessary for a freeze.
+
+The C++ files are copies of this repository's E34 sources. `bounded-child.cpp` comes from commit `278df6e2`,
+before the separate active-console/cancel-file feature, to preserve the deployment helper's command contract.
+`select-driver.cpp` comes from `kmd171-transition` at `15616862`. The receipt-pipe fixture comes from
+`kmd168-transition` at that revision. No behavior change is part of the source build.
+
+An operator copy must match the repository's build inputs. The builder refuses a stale copy, rather than using
+unrecorded source bytes. Run from a Git worktree for development builds. Their receipt marks local edits.
+For an operator copy, `BC250_KMD_DEPLOY_SOURCE_REPO` selects the source worktree. The default is
+`<BC250_ROOT>/bc250-win`. All its build inputs must match the operator copy before compilation.
 
 ## The operator copy
 

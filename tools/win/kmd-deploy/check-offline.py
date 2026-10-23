@@ -4,13 +4,13 @@
     python check-offline.py --quick    the same without the tests that launch bounded-child.exe
 
 The bounded-child tests start short-lived hidden powershell.exe children inside a Job that the helper kills (at
-most a few seconds); nothing resident, nothing with a visible window. Two historical tests are not run here:
-test-select-driver-args.ps1 drives the device installer (select-driver.exe, byte-identical to the one the 171
-promotion validated), and test-receipt-pipe.ps1 needs a fixture binary the 171 stage did not preserve.
+most a few seconds); nothing resident, nothing with a visible window. Invalid select-driver arguments are
+tested before any device opens. Full mode also tests the receipt-pipe fixture built from source.
 Outputs go to host-tests/<UTC stamp>/ under this directory, never to C:.
 """
 import argparse
 import json
+import os
 import py_compile
 import re
 import subprocess
@@ -19,7 +19,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kmdcommon import BASE, HIST, OPS, POWERSHELL, TEMPLATE, HOST_TESTS, digest, historical_manifest, ps_env  # noqa: E402
+from kmdcommon import BASE, OPS, POWERSHELL, TEMPLATE, HOST_TESTS, ps_env  # noqa: E402
+import build_helpers  # noqa: E402
 
 PURE = ['test-identity', 'test-legacy-state', 'test-hang-detector', 'test-child-closure', 'test-cpu-snapshot', 'test-deployment-acceptance',
         'test-health-order', 'test-health-wait', 'test-install-observation', 'test-logged-transition',
@@ -72,10 +73,14 @@ def ps(script, *args, timeout=120):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--quick', action='store_true')
+    parser.add_argument('--helper-build', type=Path, help='Test these freshly built freeze outputs as well')
     args = parser.parse_args()
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     out = HOST_TESTS / stamp
     out.mkdir(parents=True, exist_ok=False)
+    temp = out / 'tmp'
+    temp.mkdir()
+    os.environ['TEMP'] = os.environ['TMP'] = str(temp)
     results = []
 
     def record(name, ok, detail):
@@ -94,18 +99,27 @@ def main():
     record('legacy lab paths', not hits, '\n'.join(hits[:10]) if hits else 'no kit file names C:\\BC250\\m8..m14 '
            'or a KMD client by path')
 
-    # The tracked manifest of the nine historical helpers is the pinned one, and a changed helper or manifest is
-    # refused (tools/test_hist171.py). This runs before the gate below reads the set.
-    r = subprocess.run([sys.executable, str(BASE / 'tools/test_hist171.py')], capture_output=True, text=True, timeout=120)
-    record('historical helper set', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
+    # Two independent fresh builds prove deterministic bytes, then source/output tampering must be refused.
+    r = subprocess.run([sys.executable, str(BASE / 'tools/test_helpers.py'), '--out', str(out / 'helpers')],
+                       capture_output=True, text=True, timeout=300)
+    (out / 'helper-build.log').write_text(r.stdout + r.stderr, encoding='utf-8')
+    record('source helper builds', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
+    if r.returncode:
+        raise SystemExit('Helper build refused; see ' + str(out / 'helper-build.log'))
 
     transition = TEMPLATE / 'kmd-transition'
     kmd168 = TEMPLATE / 'kmd168-transition'
-    # The kmd168 helpers in the template are the 171 stage's own files, byte for byte.
-    files = historical_manifest()
-    for path in sorted(kmd168.iterdir()):
-        rel = 'kmd168-transition/' + path.name
-        record('reused ' + rel, files.get(rel) == digest(path), 'hash ' + digest(path)[:8])
+    built = out / 'helpers/first'
+    if args.helper_build:
+        measured = json.loads((built / 'build-manifest.json').read_text(encoding='utf-8'))
+        candidate = json.loads((args.helper_build / 'build-manifest.json').read_text(encoding='utf-8'))
+        build_helpers.verify(args.helper_build, candidate)
+        if candidate['files'] != measured['files'] or candidate['source_files'] != measured['source_files']:
+            raise SystemExit('Freeze helper build differs from deterministic source builds')
+        built = args.helper_build
+        record('freeze helper binding', True, 'exact freeze outputs match both fresh builds and receive the host tests')
+    r = ps(transition / 'test-select-driver-args.ps1', '-Exe', built / 'select-driver.exe')
+    record('select-driver invalid arguments', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
     for name in PURE:
         r = ps(transition / (name + '.ps1'))
         record(name, r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
@@ -123,16 +137,19 @@ def main():
     r = ps(kmd168 / 'test-deadline.ps1')
     record('kmd168 test-deadline', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
     if not args.quick:
-        tool = HIST / 'bounded-child.exe'
-        if digest(tool) != files['bounded-child.exe']:
-            raise SystemExit('bounded-child.exe differs from the 171 stage')
+        tool = built / 'bounded-child.exe'
         for name in WITH_TOOL:
             r = ps(transition / (name + '.ps1'), '-Tool', tool, '-Out', out / name)
             record(name, r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
         r = ps(kmd168 / 'test-bounded-child.ps1', '-Exe', tool, '-Out', out / 'test-bounded-child')
         record('kmd168 test-bounded-child', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
+        r = ps(kmd168 / 'test-receipt-pipe.ps1', '-Fixture', built / 'receipt-pipe-fixture.exe',
+               '-Out', out / 'test-receipt-pipe')
+        record('kmd168 test-receipt-pipe', r.returncode == 0 and 'PASS' in r.stdout, r.stdout + r.stderr)
     failed = [x['check'] for x in results if not x['pass']]
-    summary = {'utc': stamp, 'quick': args.quick, 'checks': len(results), 'failed': failed, 'results': results}
+    summary = {'utc': stamp, 'quick': args.quick, 'checks': len(results), 'failed': failed, 'results': results,
+               'tested_helper_build': str(built),
+               'tested_helper_files': json.loads((built / 'build-manifest.json').read_text(encoding='utf-8'))['files']}
     (out / 'summary.json').write_text(json.dumps(summary, indent=1) + '\n', encoding='utf-8')
     print(f'{len(results) - len(failed)}/{len(results)} passed; summary {out / "summary.json"}')
     return 1 if failed else 0

@@ -4,11 +4,12 @@
 
 The identity of a package is (R, B) from DriverVer 0.7.R.B: R must be the low 16 bits of BC250_KMD_VERSION, B is the
 build counter (B >= 1), and a release package carries its own B under the checked rule of release_version. Synthetic
-cases cover every refusal. When the tester.20 release and the 0.7.216.x builds are present in the workspace, they are
-read as well (live cases; each prints SKIP when its directory is absent). Prints PASS and exits 0.
+cases cover every refusal. Complete package fixtures and a temporary source Git repository exercise read_package
+without old attempt binaries or optional live examples. Prints PASS and exits 0.
 """
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -18,7 +19,7 @@ sys.path.insert(0, str(BASE))
 import kmdcommon as k  # noqa: E402
 import stage  # noqa: E402
 
-checks, skips = [], []
+checks = []
 
 
 def check(name, ok):
@@ -182,49 +183,96 @@ def synthetic():
           and "$KmdDesktopModules='" + 'A' * 64 + ',' + 'F' * 64 + "'" in ident)
 
 
-def live():
-    root = k.ROOT / 'scratch'
-    release = root / 'train/b22-build/release/amdgpu-wddm-tester-0.7.216.100-tester.20'
-    build = root / 'train/b22-build/kmd-r20/a/package'
-    candidate = root / 'hang-recovery/build-b23/kmd/package'
-    old = k.ROOT / 'scratch/kmd-deploy/attempts/kmd197-deploy001/candidate197'
-    if old.is_dir():
-        p = k.read_package(old, k.REPO, 'old')
-        check('live: an accepted 0.7.R.1 candidate still reads (kmd197-deploy001)',
+def package_fixtures():
+    """Tracked fixture recipe; real Git reads and package parsing, no old build input."""
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        repo = root / 'source'
+        repo.mkdir()
+        env = dict(os.environ, GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1')
+
+        def git(*args):
+            return subprocess.check_output(['git', '-C', str(repo), *args], env=env, text=True,
+                                           stderr=subprocess.STDOUT, timeout=30).strip()
+
+        git('init', '--quiet')
+        git('config', 'user.name', 'Package fixture')
+        git('config', 'user.email', 'fixture@example.invalid')
+        git('config', 'core.autocrlf', 'false')
+        git('config', 'core.hooksPath', str(root / 'no-hooks'))
+        source = repo / 'driver/kmd'
+        source.mkdir(parents=True)
+        (source / 'hang.c').write_text('GuardReadSetting(L"EnableHangBugcheck");\n'
+                                     'GuardReadSetting(L"HangBugcheckSeconds");\n', encoding='utf-8')
+        packages = {}
+        for number, version in enumerate(('0.7.197.1', '0.7.216.14', '0.7.216.16', '0.7.137.1'), 1):
+            directory = root / version
+            directory.mkdir()
+            revision, _ = k.parse_version(version, 'fixture')
+            inf = build_inf(version).encode('utf-8')
+            (source / 'bc250kmd.inf').write_bytes(inf)
+            (source / 'bc250kmd_escape.h').write_text(
+                f'#define BC250_KMD_VERSION 0x{0x70000 + revision:08X}u\n', encoding='ascii')
+            git('add', 'driver')
+            git('-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Package fixture ' + version)
+            commit = git('rev-parse', 'HEAD')
+            for name, data in {'bc250kmd.inf': inf, 'bc250kmd.sys': pe(number, b'BUILD-CERT'),
+                               'bc250kmd.cat': b'CAT', 'bc250-lab-test.cer': b'CERT'}.items():
+                (directory / name).write_bytes(data)
+            manifest = {'status': 'BUILT', 'deployment_source_eligible': True,
+                        'source': {'source_clean': True, 'commit': commit, 'tree': git('rev-parse', 'HEAD^{tree}')},
+                        'packages': {'package': {n: k.digest(directory / n) for n in k.CORE}}}
+            (directory / 'source-manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+            packages[version] = directory
+        old, build, candidate, other = (packages[v] for v in
+                                       ('0.7.197.1', '0.7.216.14', '0.7.216.16', '0.7.137.1'))
+        p = k.read_package(old, repo, 'old fixture')
+        check('fixture: a 0.7.R.1 package reads',
               (p['version'], p['revision'], p['build'], k.label_suffix(p['version'])) == ('0.7.197.1', 197, 1, '197'))
-    else:
-        skips.append('live old candidate')
-    if not (release.is_dir() and build.is_dir()):
-        skips.append('live tester.20 release')
-        return
-    b = k.read_package(build, k.REPO, 'build')
-    check('live: build 0.7.216.14 ABI 0x000700D8', (b['version'], b['abi']) == ('0.7.216.14', '0x000700D8'))
-    r = k.read_package(release, k.REPO, 'rollback', build)
-    manifest = json.loads((release / 'manifest.json').read_text(encoding='utf-8-sig'))
-    check('live: tester.20 release reads as 0.7.216.100 over build 0.7.216.14',
-          (r['kind'], r['version'], r['build'], r['kmd_build'], r['abi'], r['commit']) ==
-          ('release', '0.7.216.100', 100, '0.7.216.14', '0x000700D8', b['commit'])
-          and r['release_certificate'] == manifest['release_certificate'].upper())
-    check('refused: a release package without its build', refused(k.read_package, release, k.REPO, 'rollback'))
-    check('refused: --rollback-build with a build package', refused(k.read_package, build, k.REPO, 'rollback', build))
-    other = root / 'k137/build/package'
-    if other.is_dir():
+        b = k.read_package(build, repo, 'build fixture')
+        check('fixture: build 0.7.216.14 ABI 0x000700D8', (b['version'], b['abi']) == ('0.7.216.14', '0x000700D8'))
+        release = root / 'release/files'
+        payload = release / k.RELEASE_KMD
+        payload.mkdir(parents=True)
+        cert = release / 'payload/cert' / k.RELEASE_CER
+        cert.parent.mkdir()
+        cert.write_bytes(b'RELEASE-CERT')
+        (payload / 'bc250kmd.inf').write_bytes(release_inf(build_inf('0.7.216.14'), '0.7.216.100').encode('utf-8'))
+        (payload / 'bc250kmd.sys').write_bytes(pe(2, b'RESIGNED-CERT'))
+        (payload / 'bc250kmd.cat').write_bytes(b'RESIGNED-CAT')
+        manifest = {'schema': 1, 'kmd_abi': '0x000700D8', 'kmd_version': '0.7.216.100', 'kmd_build': '0.7.216.14',
+                    'release_certificate': 'a' * 40,
+                    'files': [{'path': path.relative_to(release).as_posix(), 'sha256': k.digest(path)}
+                              for path in sorted(release.rglob('*')) if path.is_file()]}
+        (release / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+        r = k.read_package(release.parent, repo, 'rollback fixture', build)
+        check('fixture: release reads as 0.7.216.100 over build 0.7.216.14',
+              (r['kind'], r['version'], r['build'], r['kmd_build'], r['abi'], r['commit']) ==
+              ('release', '0.7.216.100', 100, '0.7.216.14', '0x000700D8', b['commit'])
+              and r['release_certificate'] == manifest['release_certificate'].upper())
+        check('refused: a release package without its build', refused(k.read_package, release, repo, 'rollback'))
+        check('refused: --rollback-build with a build package', refused(k.read_package, build, repo, 'rollback', build))
         check('refused: a release over a build it was not made from',
-              refused(k.read_package, release, k.REPO, 'rollback', other))
-    else:
-        skips.append('live foreign build')
-    if candidate.is_dir():
-        c = k.read_package(candidate, k.REPO, 'candidate')
+              refused(k.read_package, release, repo, 'rollback', other))
+        c = k.read_package(candidate, repo, 'candidate fixture')
         k.compare_packages(c, r)
-        check('live: candidate 0.7.216.16 over the tester.20 release', c['version'] == '0.7.216.16')
-    else:
-        skips.append('live 0.7.216.16 candidate')
+        check('fixture: candidate 0.7.216.16 over release', c['version'] == '0.7.216.16')
+        sys_path = old / 'bc250kmd.sys'
+        original = sys_path.read_bytes()
+        sys_path.unlink()
+        check('refused: half-deleted old package', refused(k.read_package, old, repo, 'old', contains='0 package flavors'))
+        sys_path.write_bytes(original + b'changed')
+        check('refused: changed old package binary', refused(k.read_package, old, repo, 'old', contains='0 package flavors'))
+        sys_path.write_bytes(original)
+        check('fixture: restored package reads again', k.read_package(old, repo, 'old')['version'] == '0.7.197.1')
 
 
 def main():
+    k.HOST_TESTS.mkdir(parents=True, exist_ok=True)
+    tempfile.tempdir = str(k.HOST_TESTS)
     synthetic()
-    live()
-    print(f'PASS: versions, {len(checks)} checks' + (f'; SKIP {", ".join(skips)}' if skips else ''))
+    package_fixtures()
+    print(f'PASS: versions, {len(checks)} checks')
     return 0
 
 
