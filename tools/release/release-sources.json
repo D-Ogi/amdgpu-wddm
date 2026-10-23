@@ -86,7 +86,7 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f (KMD 0.7.216.65): the tester.32 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
+    "kmd": "bc250-win b5ffae8cb2667f3caff299cf9481f4493a10f834 (KMD 0.7.216.65): the tester.32 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
     "d3d12_shell": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_engine": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.32 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -95,11 +95,11 @@
     "d3d11_icd": "Current tester.32 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_umd": "Current tester.32 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 471a7487ee7f0404d03b7fe00834d154e2675a48; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 471a7487ee7f0404d03b7fe00834d154e2675a48; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm a115b714ee6806fa866b7170ae68e8700cd0d3c6; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm a115b714ee6806fa866b7170ae68e8700cd0d3c6; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "vulkan_icd": "Current tester.32 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 055dbb9f7595502418354b75816788e4e0461cd5; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 055dbb9f7595502418354b75816788e4e0461cd5; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "control": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f; release payload/control/bc250control.dll: amdgpu-wddm d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f; lab payload/control/bc250control.dll: amdgpu-wddm d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "control": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; release payload/control/bc250control.dll: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; lab payload/control/bc250control.dll: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.32 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm fa5f386e8c93039e4cdbca607b2541e102e4e0f0; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk c271e0e005936223683d7ecb7200816b6a2405e1; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton b69df5fb2d44858a7d5aa9e322d6a4698a8b4536; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 66986af442c97653cd6046b01d27bb555ff39fd4; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 771f84136ef41d7403ff05360e27773db6e77d8d; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.32 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer",
-    "control_app": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "control_app": "Current tester.32 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 3e5817ca4c87a1abdd26a460b7641e4ed007b141. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_router": "Current tester.32 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm da55a3a155f86f28870169e70dcb3570647bc331. File rows retain exact recipes, hashes, dependencies and validation limits."
   },
   "public_commits": {
@@ -113,7 +113,7 @@
       "sha256": "E2528296B4383EA9619CF428F631F6719D07B1EC8A87A1533156B255A239DD9B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -137,10 +137,10 @@
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/kmd-rel/bc250kmd.sys",
-      "sha256": "6CC177ACB1D558D9641594A2B83F0F111B131EA4DB229B42B035515F8AD8B6AF",
+      "sha256": "3420CD07D08C6D3BC3245EC04B25C6552EA098282BFA34782AC8145A7A9D84EA",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -157,19 +157,19 @@
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1093520,
-      "unsigned_sha256": "B0038F56C82F3E2E82E246CA75862AF1B6C9004A012FB8C5BCD092406D6D8BB5",
-      "authenticode_sha256": "B24A988C974B232EC00648D5F8811ED16B0443A71BE1A9D42F36411AA6D8A078",
+      "size": 1094032,
+      "unsigned_sha256": "F05833015D2252F8B02CF411D229E43BFEBD998B86893D0E9B4D3B150ED9993E",
+      "authenticode_sha256": "8EFDCCAFE40CF3F1758AFE20912D8122EB6D20BC288C32039C5A1F1A3E2463EF",
       "flavour": "release"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/kmd-lab/bc250kmd.sys",
-      "sha256": "E64D9578BD143280B03A89430342B5012149B2552D5412CB2A1B27FF50D11E69",
+      "sha256": "EB9ACEAA8A2DC7B3BFC2503588672E341B96DCBB04C7F2C62FD7D236D20595FC",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -186,9 +186,9 @@
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1118096,
-      "unsigned_sha256": "6942763531FB5F06DF85DEE98951506A7F358A16BBF3E7AA0E84F3A8C239BCD7",
-      "authenticode_sha256": "5BA5A5F2A406AC8EAD742A5CEC1EA0FF18C9AB11DBE50D8FDB9067491388CFD4",
+      "size": 1118608,
+      "unsigned_sha256": "8558095D1D676AE981DB7C7B32B5E2B876F2587373B01B383A309271C39BEC77",
+      "authenticode_sha256": "C2948351C60524F088FD9F33449F82D09027B4EC4EA9231C830341CBB9D56E39",
       "flavour": "lab"
     },
     {
@@ -1952,10 +1952,10 @@
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250kmd_cli.exe",
-      "sha256": "CCE025669EE4CA77C98DDDD509F24B6FA86A15991445450647F7CC05ACD2E874",
+      "sha256": "2EDA2E0BD397B3E38F6A9CE765BE1E8C1566CC065E3536220750EA5474BC2D80",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -1971,17 +1971,17 @@
         "output": "bc250kmd_cli.exe"
       },
       "size": 305664,
-      "authenticode_sha256": "360724EAB24029E62D41556013A6E1DEF215E7EF17E0E59A4440C0D3C6932C3C",
+      "authenticode_sha256": "44AEB497F87934FA6527301577934A3130B4242F4AB8D0B61B9A0986EECF9671",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250kmd_cli.exe",
-      "sha256": "DAC034C49ECE0883C8239D5BFF63BF57D90A8C0E5CAC4E7147BD15B798E84E66",
+      "sha256": "816ECD0A1EEEA27FC49AA2977B20DA9DA9847425B0C2572FA1C3ACDF8FAB4293",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -1996,8 +1996,8 @@
         ],
         "output": "bc250kmd_cli.exe"
       },
-      "size": 353280,
-      "authenticode_sha256": "95D663AD81902A1AA41FFBE915FE56E42328C8F3524AC0B5F479AC82158D98A7",
+      "size": 353792,
+      "authenticode_sha256": "8F4D95E7E6E284E267E1BBC8885E21D97A5EC34F136BCC05AA738C648B664C62",
       "flavour": "lab"
     },
     {
@@ -2055,10 +2055,10 @@
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/amdgpu_wddm_control.exe",
-      "sha256": "5DE4CC6CF1D94F7DA21126FAEE5A087A36E17B21E1CEADD77A16216F377E096D",
+      "sha256": "FCA017870D5F7DF1F968070EB61C183FC4D5AA3BB6F734AFE54C259D90A840F3",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2074,17 +2074,17 @@
         "output": "amdgpu_wddm_control.exe"
       },
       "size": 2603008,
-      "authenticode_sha256": "01EDD1963E21942FFAF1E35BBCD26FD3B169EADFB281095A8F41F8639324DBC7",
+      "authenticode_sha256": "C140A37892D91F620F39D1984747D3FC8E9BC2AC709A52677427680E8DC50EAF",
       "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
-      "sha256": "795A159F46C7D6EBCC4A347866A726FADA9F4B87518C86123223CB270AF1F979",
+      "sha256": "25E740FE49BC95119DF324B432CC2DB2490C9D3D5C4E2A88AAB0A97B9058904B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2100,17 +2100,17 @@
         "output": "amdgpu_wddm_control.exe"
       },
       "size": 2603520,
-      "authenticode_sha256": "CD5278DC7315D2D8302DF3CE9D40A2B2D98E27949E8744BA90947DC7141E3EC3",
+      "authenticode_sha256": "96F50CCFEDA940A994CD53AF052A435171C8FF668F681EA96DCB3F1522EABC07",
       "flavour": "lab"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250control.dll",
-      "sha256": "EF9C8E886CB12935C1E9D41E740D3BBA39F3E179DA02118F820EBF98FD0C6ADC",
+      "sha256": "37E321FDA2150A57998FCCE56B5D17E0D50989969F37023D290AC230F403C91C",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2126,17 +2126,17 @@
         "output": "bc250control.dll"
       },
       "size": 212480,
-      "authenticode_sha256": "EF86A304EDD7C61969BC207AA709769245D86423D1523D60669A82A6E8F44466",
+      "authenticode_sha256": "3464E726C9EBD6B7F3BEE3F2AD055DE17CF0BFE469D165C5742CDF56BB1BE73C",
       "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250control.dll",
-      "sha256": "F08B544C548EF37B133BA384172126F5C002AE2BC20716BFF43A7FABBB8B869E",
+      "sha256": "83AC30199F22D51BFBBBBB4ADC5863955AF614AC63FB501569E93E8231CCF984",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2152,17 +2152,17 @@
         "output": "bc250control.dll"
       },
       "size": 223232,
-      "authenticode_sha256": "C8817D0948CBDF3DDB313FDFE5F2D1441750E106314D9A4B95C73476DA729155",
+      "authenticode_sha256": "65354DC86A3482E7AFCEC913D5BFB5934F115A9712FC83B428D1228BD57DEF75",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/control-rel/bc250control.dll",
-      "sha256": "EF9C8E886CB12935C1E9D41E740D3BBA39F3E179DA02118F820EBF98FD0C6ADC",
+      "sha256": "37E321FDA2150A57998FCCE56B5D17E0D50989969F37023D290AC230F403C91C",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2178,17 +2178,17 @@
         "output": "bc250control.dll"
       },
       "size": 212480,
-      "authenticode_sha256": "EF86A304EDD7C61969BC207AA709769245D86423D1523D60669A82A6E8F44466",
+      "authenticode_sha256": "3464E726C9EBD6B7F3BEE3F2AD055DE17CF0BFE469D165C5742CDF56BB1BE73C",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/control-lab/bc250control.dll",
-      "sha256": "F08B544C548EF37B133BA384172126F5C002AE2BC20716BFF43A7FABBB8B869E",
+      "sha256": "83AC30199F22D51BFBBBBB4ADC5863955AF614AC63FB501569E93E8231CCF984",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Kits",
@@ -2204,7 +2204,7 @@
         "output": "bc250control.dll"
       },
       "size": 223232,
-      "authenticode_sha256": "C8817D0948CBDF3DDB313FDFE5F2D1441750E106314D9A4B95C73476DA729155",
+      "authenticode_sha256": "65354DC86A3482E7AFCEC913D5BFB5934F115A9712FC83B428D1228BD57DEF75",
       "flavour": "lab"
     },
     {
@@ -2655,7 +2655,7 @@
       "sha256": "C1211E452C725F82304C079935A7639FE4B545448F1F2AD1A56CB679F10C355A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -2678,10 +2678,10 @@
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
       "source": "scratch/build-train/tester.32-r4/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
-      "sha256": "3B13584CECD71D4ABDC775FB1D132EFB193502AF9A91962320F945C95FA41297",
+      "sha256": "A2E68F9861DBE34957D02C9A1B3D2CED8A14771427CED194238C50B74A66BB85",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
           "-Out",
@@ -2697,17 +2697,17 @@
         "output": "amdgpu-state-installer.exe"
       },
       "size": 235008,
-      "authenticode_sha256": "4B57B22F4EAFCED4BCF131A93A4BDE19F238ACCA14EA65C1255A6FB0971D32E3",
+      "authenticode_sha256": "60A30BD5F1BD96D53F82BAABEF88E6E31EFB54A2A817C4CB3AA199E526EC6E6F",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
       "source": "scratch/build-train/tester.32-r4/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
-      "sha256": "4C8DBE0B786D2CB8E82D745F0B7D76B24F94375DE2CEE617C8F40F6C008BFE53",
+      "sha256": "82192E8CF99E52F7D85ED8D1D8482440908C8E76A850E7F3CFD9E64114C44988",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+        "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
           "-Out",
@@ -2723,7 +2723,7 @@
         "output": "amdgpu-state-installer.exe"
       },
       "size": 235008,
-      "authenticode_sha256": "480EBA64FEB65C7EE005C2E571F688DE5397D8684AF3C65E298CA35A3F1FA3EB",
+      "authenticode_sha256": "FAC191A896869F8D152F85EDDEC1780F210BFF41D72295CE0429A554F7F58F37",
       "flavour": "lab"
     }
   ],

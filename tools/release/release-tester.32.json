@@ -1,1814 +1,1814 @@
 {
- "schema": 1,
- "release": "tester.32",
- "version": "0.7.216.104-tester.32",
- "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router, the control application and the state worker, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them. Round 4: the kernel driver rows and the recipe tree move to the main commit that carries the large-page mapping behind LargePages and the BD-190 catalog fix. That commit changes driver/state/catalog.json, and the compiled catalog is linked into the CLI, the control library, both desktop routers and the state worker (the package gate state-package.ps1 refused the first round-4 package on the stale CLI), so those rows move with it; every other row keeps its commit and artifact, since no source of those components changed.",
- "recipe_repository": "amdgpu-wddm",
- "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
- "repositories": {
-  "amdgpu-wddm": {
-   "url": "https://github.com/D-Ogi/amdgpu-wddm",
-   "checkouts": [
-    "{repo}"
-   ],
-   "base": "1750f50535a79e49878298c6078df8745ce1068f"
-  },
-  "mesa-amdgpu-wddm": {
-   "url": "https://github.com/D-Ogi/mesa-amdgpu-wddm",
-   "checkouts": [
-    "mesa-wddm",
-    "scratch/forksync/mesa-amdgpu-wddm"
-   ],
-   "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb"
-  },
-  "dxvk": {
-   "url": "https://github.com/D-Ogi/dxvk",
-   "checkouts": [
-    "scratch/forksync/dxvk",
-    "scratch/app-settings/dxvk"
-   ],
-   "submodules": {
-    "subprojects/dxbc-spirv": "dxbc-spirv"
-   },
-   "base": "b4f080f7840a4e88110bc91cc7a833ccb9c0638f"
-  },
-  "dxbc-spirv": {
-   "url": "https://github.com/D-Ogi/dxbc-spirv",
-   "checkouts": [
-    "scratch/fork-sync-2026-09-30/engines/dxbc-spirv"
-   ]
-  },
-  "vkd3d-proton": {
-   "url": "https://github.com/D-Ogi/vkd3d-proton",
-   "checkouts": [
-    "scratch/forksync/vkd3d-proton",
-    "scratch/wow64-d3d12/src/vkd3d-proton",
-    "scratch/app-settings/vkd3d-proton",
-    "scratch/m15/vkd3d-1.3-src"
-   ],
-   "submodules": {
-    "subprojects/dxil-spirv": "dxil-spirv"
-   }
-  },
-  "dxil-spirv": {
-   "url": "https://github.com/D-Ogi/dxil-spirv",
-   "checkouts": [
-    "scratch/forksync/dxil-spirv"
-   ]
-  },
-  "Vulkan-Headers": {
-   "url": "https://github.com/KhronosGroup/Vulkan-Headers",
-   "checkouts": [
-    "scratch/forksync/vkd3d-proton/khronos/Vulkan-Headers"
-   ]
-  }
- },
- "rows": [
-  {
-   "id": "kmd-rel",
-   "component": "kmd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
-   "tree": "shared",
-   "recipe": "driver/kmd/build.ps1",
-   "args": [
-    "-Kits",
-    "{tool:kits}",
-    "-Out",
-    "{out}",
-    "-QualityWorkspace",
-    "{root}",
-    "-Flavour",
-    "release",
-    "-PackageVersion",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "kernel",
-   "deterministic": true,
-   "disk_peak_gb": 1.5,
-   "slots": 3,
-   "outputs": [
-    {
-     "file": "package/bc250kmd.sys",
-     "path": "payload/kmd/bc250kmd.sys",
-     "unsigned": "bc250kmd.unsigned.sys",
-     "authenticode": true
+  "schema": 1,
+  "release": "tester.32",
+  "version": "0.7.216.104-tester.32",
+  "note": "The component builds of tester.32 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the five Mesa ICD lines, the desktop router, the control application and the state worker, both flavours, at the commits of the release plan. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them. Round 4: the kernel driver rows and the recipe tree move to the main commit that carries the large-page mapping behind LargePages and the BD-190 catalog fix. That commit changes driver/state/catalog.json, and the compiled catalog is linked into the CLI, the control library, both desktop routers and the state worker (the package gate state-package.ps1 refused the first round-4 package on the stale CLI), so those rows move with it; every other row keeps its commit and artifact, since no source of those components changed.",
+  "recipe_repository": "amdgpu-wddm",
+  "recipe_commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
+  "repositories": {
+    "amdgpu-wddm": {
+      "url": "https://github.com/D-Ogi/amdgpu-wddm",
+      "checkouts": [
+        "{repo}"
+      ],
+      "base": "1750f50535a79e49878298c6078df8745ce1068f"
     },
-    {
-     "file": "package/bc250kmd.inf",
-     "path": "payload/kmd/bc250kmd.inf",
-     "flavour": "shared",
-     "release_edits": "build-release.ps1 maps product a.b.c.d to DriverVer (a+40).b.c.d, stamps ProductPackageVersion and the image identity comment; no Reboot directive"
+    "mesa-amdgpu-wddm": {
+      "url": "https://github.com/D-Ogi/mesa-amdgpu-wddm",
+      "checkouts": [
+        "mesa-wddm",
+        "scratch/forksync/mesa-amdgpu-wddm"
+      ],
+      "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb"
     },
-    {
-     "file": "package/amdgpu-state.bin",
-     "path": "payload/kmd/amdgpu-state.bin",
-     "flavour": "shared"
-    }
-   ],
-   "note": "Three slots: the build runs its own quality gates on every core, and two KMD builds never share the quality workspace at once."
-  },
-  {
-   "id": "kmd-lab",
-   "component": "kmd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
-   "tree": "shared",
-   "recipe": "driver/kmd/build.ps1",
-   "args": [
-    "-Kits",
-    "{tool:kits}",
-    "-Out",
-    "{out}",
-    "-QualityWorkspace",
-    "{root}",
-    "-Flavour",
-    "lab",
-    "-PackageVersion",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "kernel",
-   "deterministic": true,
-   "disk_peak_gb": 1.5,
-   "slots": 3,
-   "outputs": [
-    {
-     "file": "package/bc250kmd.sys",
-     "path": "payload/kmd/bc250kmd.sys",
-     "unsigned": "bc250kmd.unsigned.sys",
-     "authenticode": true
-    }
-   ],
-   "note": "Three slots: the build runs its own quality gates on every core, and two KMD builds never share the quality workspace at once."
-  },
-  {
-   "id": "d3d12-x64-rel",
-   "component": "d3d12-shell",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-d3d12.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-MesaSource",
-    "{input:mesa}",
-    "-VulkanInclude",
-    "{input:vulkan}/include",
-    "-EngineInclude",
-    "{input:engine}/libs/ddi",
-    "-Arch",
-    "x64",
-    "-Flavour",
-    "release",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "mesa": {
-     "repo": "mesa-amdgpu-wddm",
-     "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-     "paths": [
-      "src/util/bc250_host_bootstrap.h"
-     ]
-    },
-    "vulkan": {
-     "repo": "Vulkan-Headers",
-     "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
-     "paths": [
-      "include"
-     ]
-    },
-    "engine": {
-     "repo": "vkd3d-proton",
-     "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
-     "paths": [
-      "libs/ddi"
-     ]
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 0.5,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d12.dll",
-     "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
-    }
-   ]
-  },
-  {
-   "id": "d3d12-x86-rel",
-   "component": "d3d12-umd-wow64",
-   "flavour": "release",
-   "arch": "x86",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-d3d12.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-MesaSource",
-    "{input:mesa}",
-    "-VulkanInclude",
-    "{input:vulkan}/include",
-    "-EngineInclude",
-    "{input:engine}/libs/ddi",
-    "-Arch",
-    "x86",
-    "-Flavour",
-    "release",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "mesa": {
-     "repo": "mesa-amdgpu-wddm",
-     "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-     "paths": [
-      "src/util/bc250_host_bootstrap.h"
-     ]
-    },
-    "vulkan": {
-     "repo": "Vulkan-Headers",
-     "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
-     "paths": [
-      "include"
-     ]
-    },
-    "engine": {
-     "repo": "vkd3d-proton",
-     "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
-     "paths": [
-      "libs/ddi"
-     ]
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 0.5,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d12.dll",
-     "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
-    }
-   ]
-  },
-  {
-   "id": "d3d12-x64-lab",
-   "component": "d3d12-shell",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-d3d12.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-MesaSource",
-    "{input:mesa}",
-    "-VulkanInclude",
-    "{input:vulkan}/include",
-    "-EngineInclude",
-    "{input:engine}/libs/ddi",
-    "-Arch",
-    "x64",
-    "-Flavour",
-    "lab",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "mesa": {
-     "repo": "mesa-amdgpu-wddm",
-     "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-     "paths": [
-      "src/util/bc250_host_bootstrap.h"
-     ]
-    },
-    "vulkan": {
-     "repo": "Vulkan-Headers",
-     "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
-     "paths": [
-      "include"
-     ]
-    },
-    "engine": {
-     "repo": "vkd3d-proton",
-     "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
-     "paths": [
-      "libs/ddi"
-     ]
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 0.5,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d12.dll",
-     "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
-    }
-   ]
-  },
-  {
-   "id": "d3d12-x86-lab",
-   "component": "d3d12-umd-wow64",
-   "flavour": "lab",
-   "arch": "x86",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-d3d12.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-MesaSource",
-    "{input:mesa}",
-    "-VulkanInclude",
-    "{input:vulkan}/include",
-    "-EngineInclude",
-    "{input:engine}/libs/ddi",
-    "-Arch",
-    "x86",
-    "-Flavour",
-    "lab",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "mesa": {
-     "repo": "mesa-amdgpu-wddm",
-     "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-     "paths": [
-      "src/util/bc250_host_bootstrap.h"
-     ]
-    },
-    "vulkan": {
-     "repo": "Vulkan-Headers",
-     "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
-     "paths": [
-      "include"
-     ]
-    },
-    "engine": {
-     "repo": "vkd3d-proton",
-     "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
-     "paths": [
-      "libs/ddi"
-     ]
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 0.5,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d12.dll",
-     "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
-    }
-   ]
-  },
-  {
-   "id": "dxvk-x64-rel",
-   "component": "d3d11-umd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "dxvk",
-   "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "tree": "clone",
-   "recipe": "tools/build/build-dxvk.ps1",
-   "args": [
-    "-Config",
-    "ddi-engine",
-    "-Compiler",
-    "clang-cl",
-    "-Arch",
-    "x64",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Temp",
-    "{tmp}",
-    "-Jobs",
-    "{jobs}",
-    "-Flavour",
-    "release",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 1.5,
-   "outputs": [
-    {
-     "file": "src/ddi/amdgpu_wddm_dxvk.dll",
-     "path": "payload/d3d11/amdgpu_wddm_dxvk.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "engine",
-     "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
-     "args": [
-      "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
-      "--cache-root",
-      "{testout}/cache"
-     ],
-     "cwd": "{out}/src/ddi",
-     "env": {
-      "DXVK_LOG_PATH": "{testout}/logs",
-      "DXVK_SHADER_CACHE": "",
-      "DXVK_SHADER_CACHE_PATH": ""
-     },
-     "summary": "^(?:ok|PASS) ",
-     "pass": "^PASSED: 0 failure"
-    }
-   ],
-   "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
-  },
-  {
-   "id": "dxvk-x86-rel",
-   "component": "d3d11-umd-wow64",
-   "flavour": "release",
-   "arch": "x86",
-   "repo": "dxvk",
-   "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "tree": "clone",
-   "recipe": "tools/build/build-dxvk.ps1",
-   "args": [
-    "-Config",
-    "ddi-engine",
-    "-Compiler",
-    "msvc",
-    "-Arch",
-    "x86",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Temp",
-    "{tmp}",
-    "-Jobs",
-    "{jobs}",
-    "-Flavour",
-    "release",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "user",
-   "deterministic": true,
-   "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze.",
-   "disk_peak_gb": 1.5,
-   "outputs": [
-    {
-     "file": "src/ddi/amdgpu_wddm_dxvk.dll",
-     "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "engine",
-     "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
-     "args": [
-      "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
-      "--cache-root",
-      "{testout}/cache"
-     ],
-     "cwd": "{out}/src/ddi",
-     "env": {
-      "DXVK_LOG_PATH": "{testout}/logs",
-      "DXVK_SHADER_CACHE": "",
-      "DXVK_SHADER_CACHE_PATH": ""
-     },
-     "summary": "^(?:ok|PASS) ",
-     "pass": "^PASSED: 0 failure"
-    }
-   ],
-   "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
-  },
-  {
-   "id": "dxvk-x64-lab",
-   "component": "d3d11-umd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "dxvk",
-   "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "tree": "clone",
-   "recipe": "tools/build/build-dxvk.ps1",
-   "args": [
-    "-Config",
-    "ddi-engine",
-    "-Compiler",
-    "clang-cl",
-    "-Arch",
-    "x64",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Temp",
-    "{tmp}",
-    "-Jobs",
-    "{jobs}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 1.5,
-   "outputs": [
-    {
-     "file": "src/ddi/amdgpu_wddm_dxvk.dll",
-     "path": "payload/d3d11/amdgpu_wddm_dxvk.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "engine",
-     "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
-     "args": [
-      "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
-      "--cache-root",
-      "{testout}/cache"
-     ],
-     "cwd": "{out}/src/ddi",
-     "env": {
-      "DXVK_LOG_PATH": "{testout}/logs",
-      "DXVK_SHADER_CACHE": "",
-      "DXVK_SHADER_CACHE_PATH": ""
-     },
-     "summary": "^(?:ok|PASS) ",
-     "pass": "^PASSED: 0 failure"
-    }
-   ],
-   "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
-  },
-  {
-   "id": "dxvk-x86-lab",
-   "component": "d3d11-umd-wow64",
-   "flavour": "lab",
-   "arch": "x86",
-   "repo": "dxvk",
-   "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "tree": "clone",
-   "recipe": "tools/build/build-dxvk.ps1",
-   "args": [
-    "-Config",
-    "ddi-engine",
-    "-Compiler",
-    "msvc",
-    "-Arch",
-    "x86",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Temp",
-    "{tmp}",
-    "-Jobs",
-    "{jobs}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "user",
-   "deterministic": true,
-   "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze.",
-   "disk_peak_gb": 1.5,
-   "outputs": [
-    {
-     "file": "src/ddi/amdgpu_wddm_dxvk.dll",
-     "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "engine",
-     "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
-     "args": [
-      "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
-      "--cache-root",
-      "{testout}/cache"
-     ],
-     "cwd": "{out}/src/ddi",
-     "env": {
-      "DXVK_LOG_PATH": "{testout}/logs",
-      "DXVK_SHADER_CACHE": "",
-      "DXVK_SHADER_CACHE_PATH": ""
-     },
-     "summary": "^(?:ok|PASS) ",
-     "pass": "^PASSED: 0 failure"
-    }
-   ],
-   "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
-  },
-  {
-   "id": "d3d11-x64-rel",
-   "component": "d3d11-umd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-dxvk.ps1",
-   "args": [
-    "-DxvkSource",
-    "{input:dxvk}",
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Flavour",
-    "release",
-    "-EnginePath",
-    "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
-    "-IcdPath",
-    "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
     "dxvk": {
-     "repo": "dxvk",
-     "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+      "url": "https://github.com/D-Ogi/dxvk",
+      "checkouts": [
+        "scratch/forksync/dxvk",
+        "scratch/app-settings/dxvk"
+      ],
+      "submodules": {
+        "subprojects/dxbc-spirv": "dxbc-spirv"
+      },
+      "base": "b4f080f7840a4e88110bc91cc7a833ccb9c0638f"
+    },
+    "dxbc-spirv": {
+      "url": "https://github.com/D-Ogi/dxbc-spirv",
+      "checkouts": [
+        "scratch/fork-sync-2026-09-30/engines/dxbc-spirv"
+      ]
+    },
+    "vkd3d-proton": {
+      "url": "https://github.com/D-Ogi/vkd3d-proton",
+      "checkouts": [
+        "scratch/forksync/vkd3d-proton",
+        "scratch/wow64-d3d12/src/vkd3d-proton",
+        "scratch/app-settings/vkd3d-proton",
+        "scratch/m15/vkd3d-1.3-src"
+      ],
+      "submodules": {
+        "subprojects/dxil-spirv": "dxil-spirv"
+      }
+    },
+    "dxil-spirv": {
+      "url": "https://github.com/D-Ogi/dxil-spirv",
+      "checkouts": [
+        "scratch/forksync/dxil-spirv"
+      ]
+    },
+    "Vulkan-Headers": {
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers",
+      "checkouts": [
+        "scratch/forksync/vkd3d-proton/khronos/Vulkan-Headers"
+      ]
     }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 1,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d11.dll",
-     "path": "payload/d3d11/amdgpu_wddm_d3d11.dll"
-    }
-   ]
   },
-  {
-   "id": "d3d11-x86-rel",
-   "component": "d3d11-umd-wow64",
-   "flavour": "release",
-   "arch": "x86",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-dxvk.ps1",
-   "args": [
-    "-DxvkSource",
-    "{input:dxvk}",
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Flavour",
-    "release",
-    "-EnginePath",
-    "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
-    "-IcdPath",
-    "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "dxvk": {
-     "repo": "dxvk",
-     "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 1,
-   "outputs": [
+  "rows": [
     {
-     "file": "amdgpu_wddm_d3d11.dll",
-     "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll"
-    }
-   ]
-  },
-  {
-   "id": "d3d11-x64-lab",
-   "component": "d3d11-umd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-dxvk.ps1",
-   "args": [
-    "-DxvkSource",
-    "{input:dxvk}",
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Flavour",
-    "lab",
-    "-EnginePath",
-    "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
-    "-IcdPath",
-    "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "dxvk": {
-     "repo": "dxvk",
-     "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 1,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d11.dll",
-     "path": "payload/d3d11/amdgpu_wddm_d3d11.dll"
-    }
-   ]
-  },
-  {
-   "id": "d3d11-x86-lab",
-   "component": "d3d11-umd-wow64",
-   "flavour": "lab",
-   "arch": "x86",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-dxvk.ps1",
-   "args": [
-    "-DxvkSource",
-    "{input:dxvk}",
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Flavour",
-    "lab",
-    "-EnginePath",
-    "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
-    "-IcdPath",
-    "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
-    "-Compiler",
-    "clang-cl",
-    "-Version",
-    "{version}"
-   ],
-   "inputs": {
-    "dxvk": {
-     "repo": "dxvk",
-     "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
-    }
-   },
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 1,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_d3d11.dll",
-     "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll"
-    }
-   ]
-  },
-  {
-   "id": "hosted-x64-rel",
-   "component": "d3d12-icd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-mt",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "clang-cl",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "release",
-    "-ClangToolchain",
-    "{root}/toolchain/llvm-23.1.4-win64",
-    "-Variant",
-    "release,isa",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/d3d12/amdgpu_wddm_radv.dll"
+      "id": "kmd-rel",
+      "component": "kmd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
+      "tree": "shared",
+      "recipe": "driver/kmd/build.ps1",
+      "args": [
+        "-Kits",
+        "{tool:kits}",
+        "-Out",
+        "{out}",
+        "-QualityWorkspace",
+        "{root}",
+        "-Flavour",
+        "release",
+        "-PackageVersion",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "kernel",
+      "deterministic": true,
+      "disk_peak_gb": 1.5,
+      "slots": 3,
+      "outputs": [
+        {
+          "file": "package/bc250kmd.sys",
+          "path": "payload/kmd/bc250kmd.sys",
+          "unsigned": "bc250kmd.unsigned.sys",
+          "authenticode": true
+        },
+        {
+          "file": "package/bc250kmd.inf",
+          "path": "payload/kmd/bc250kmd.inf",
+          "flavour": "shared",
+          "release_edits": "build-release.ps1 maps product a.b.c.d to DriverVer (a+40).b.c.d, stamps ProductPackageVersion and the image identity comment; no Reboot directive"
+        },
+        {
+          "file": "package/amdgpu-state.bin",
+          "path": "payload/kmd/amdgpu-state.bin",
+          "flavour": "shared"
+        }
+      ],
+      "note": "Three slots: the build runs its own quality gates on every core, and two KMD builds never share the quality workspace at once."
     },
     {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-     "component": "d3d11-umd"
-    }
-   ],
-   "tests": [
-    {
-     "name": "radv-queue",
-     "run": "tools/build/build-radv-queue-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/queue"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+      "id": "kmd-lab",
+      "component": "kmd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
+      "tree": "shared",
+      "recipe": "driver/kmd/build.ps1",
+      "args": [
+        "-Kits",
+        "{tool:kits}",
+        "-Out",
+        "{out}",
+        "-QualityWorkspace",
+        "{root}",
+        "-Flavour",
+        "lab",
+        "-PackageVersion",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "kernel",
+      "deterministic": true,
+      "disk_peak_gb": 1.5,
+      "slots": 3,
+      "outputs": [
+        {
+          "file": "package/bc250kmd.sys",
+          "path": "payload/kmd/bc250kmd.sys",
+          "unsigned": "bc250kmd.unsigned.sys",
+          "authenticode": true
+        }
+      ],
+      "note": "Three slots: the build runs its own quality gates on every core, and two KMD builds never share the quality workspace at once."
     },
     {
-     "name": "winsys-destroy",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
-    }
-   ]
-  },
-  {
-   "id": "hosted-x86-rel",
-   "component": "d3d12-umd-wow64",
-   "flavour": "release",
-   "arch": "x86",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-mt",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "msvc",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "release",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll"
+      "id": "d3d12-x64-rel",
+      "component": "d3d12-shell",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-MesaSource",
+        "{input:mesa}",
+        "-VulkanInclude",
+        "{input:vulkan}/include",
+        "-EngineInclude",
+        "{input:engine}/libs/ddi",
+        "-Arch",
+        "x64",
+        "-Flavour",
+        "release",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "mesa": {
+          "repo": "mesa-amdgpu-wddm",
+          "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+          "paths": [
+            "src/util/bc250_host_bootstrap.h"
+          ]
+        },
+        "vulkan": {
+          "repo": "Vulkan-Headers",
+          "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
+          "paths": [
+            "include"
+          ]
+        },
+        "engine": {
+          "repo": "vkd3d-proton",
+          "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
+          "paths": [
+            "libs/ddi"
+          ]
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d12.dll",
+          "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
+        }
+      ]
     },
     {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-     "component": "d3d11-umd-wow64"
-    }
-   ],
-   "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
-  },
-  {
-   "id": "wow64-x86-rel",
-   "component": "vulkan-icd-wow64",
-   "flavour": "release",
-   "arch": "x86",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "771f84136ef41d7403ff05360e27773db6e77d8d",
-   "base": "0715572c0b31a969897657b08f0cc75bd65d41f0",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-mt",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "msvc",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "release",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/vulkan_radeon.dll",
-     "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-     "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
-    }
-   ],
-   "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
-  },
-  {
-   "id": "system-x64-rel",
-   "component": "vulkan-icd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
-   "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-system",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "clang-cl",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "release",
-    "-ClangToolchain",
-    "{root}/toolchain/llvm-23.1.4-win64",
-    "-Variant",
-    "release,isa",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/vulkan_radeon.dll",
-     "path": "payload/vulkan/vulkan_radeon.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "radv-queue",
-     "run": "tools/build/build-radv-queue-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/queue"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+      "id": "d3d12-x86-rel",
+      "component": "d3d12-umd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-MesaSource",
+        "{input:mesa}",
+        "-VulkanInclude",
+        "{input:vulkan}/include",
+        "-EngineInclude",
+        "{input:engine}/libs/ddi",
+        "-Arch",
+        "x86",
+        "-Flavour",
+        "release",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "mesa": {
+          "repo": "mesa-amdgpu-wddm",
+          "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+          "paths": [
+            "src/util/bc250_host_bootstrap.h"
+          ]
+        },
+        "vulkan": {
+          "repo": "Vulkan-Headers",
+          "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
+          "paths": [
+            "include"
+          ]
+        },
+        "engine": {
+          "repo": "vkd3d-proton",
+          "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
+          "paths": [
+            "libs/ddi"
+          ]
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d12.dll",
+          "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
+        }
+      ]
     },
     {
-     "name": "winsys-destroy",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+      "id": "d3d12-x64-lab",
+      "component": "d3d12-shell",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-MesaSource",
+        "{input:mesa}",
+        "-VulkanInclude",
+        "{input:vulkan}/include",
+        "-EngineInclude",
+        "{input:engine}/libs/ddi",
+        "-Arch",
+        "x64",
+        "-Flavour",
+        "lab",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "mesa": {
+          "repo": "mesa-amdgpu-wddm",
+          "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+          "paths": [
+            "src/util/bc250_host_bootstrap.h"
+          ]
+        },
+        "vulkan": {
+          "repo": "Vulkan-Headers",
+          "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
+          "paths": [
+            "include"
+          ]
+        },
+        "engine": {
+          "repo": "vkd3d-proton",
+          "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
+          "paths": [
+            "libs/ddi"
+          ]
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d12.dll",
+          "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
+        }
+      ]
     },
     {
-     "name": "winsys-ib2-gather",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys-ib2",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
-    }
-   ]
-  },
-  {
-   "id": "desktop-x64-rel",
-   "component": "desktop-umd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "a115b714ee6806fa866b7170ae68e8700cd0d3c6",
-   "base": "8c9bf720cb3a5688074e44bffba834def7e48fcd",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "clang-cl",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "release",
-    "-ClangToolchain",
-    "{root}/toolchain/llvm-23.1.4-win64",
-    "-Variant",
-    "release,isa",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/desktop/amdgpu_wddm_radv.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "radv-queue",
-     "run": "tools/build/build-radv-queue-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/queue"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+      "id": "d3d12-x86-lab",
+      "component": "d3d12-umd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-d3d12.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-MesaSource",
+        "{input:mesa}",
+        "-VulkanInclude",
+        "{input:vulkan}/include",
+        "-EngineInclude",
+        "{input:engine}/libs/ddi",
+        "-Arch",
+        "x86",
+        "-Flavour",
+        "lab",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "mesa": {
+          "repo": "mesa-amdgpu-wddm",
+          "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+          "paths": [
+            "src/util/bc250_host_bootstrap.h"
+          ]
+        },
+        "vulkan": {
+          "repo": "Vulkan-Headers",
+          "commit": "ee2ec5fd83dafce291024683b50dc89219333076",
+          "paths": [
+            "include"
+          ]
+        },
+        "engine": {
+          "repo": "vkd3d-proton",
+          "commit": "997bff9e1c35243666dae582f4645a0555b5bc7c",
+          "paths": [
+            "libs/ddi"
+          ]
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d12.dll",
+          "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
+        }
+      ]
     },
     {
-     "name": "winsys-destroy",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
-    }
-   ]
-  },
-  {
-   "id": "hosted-x64-lab",
-   "component": "d3d12-icd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-mt",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "clang-cl",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-ClangToolchain",
-    "{root}/toolchain/llvm-23.1.4-win64",
-    "-Variant",
-    "release,isa",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/d3d12/amdgpu_wddm_radv.dll"
+      "id": "dxvk-x64-rel",
+      "component": "d3d11-umd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "dxvk",
+      "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "tree": "clone",
+      "recipe": "tools/build/build-dxvk.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine",
+        "-Compiler",
+        "clang-cl",
+        "-Arch",
+        "x64",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 1.5,
+      "outputs": [
+        {
+          "file": "src/ddi/amdgpu_wddm_dxvk.dll",
+          "path": "payload/d3d11/amdgpu_wddm_dxvk.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
+          "args": [
+            "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
+            "--cache-root",
+            "{testout}/cache"
+          ],
+          "cwd": "{out}/src/ddi",
+          "env": {
+            "DXVK_LOG_PATH": "{testout}/logs",
+            "DXVK_SHADER_CACHE": "",
+            "DXVK_SHADER_CACHE_PATH": ""
+          },
+          "summary": "^(?:ok|PASS) ",
+          "pass": "^PASSED: 0 failure"
+        }
+      ],
+      "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
     },
     {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-     "component": "d3d11-umd"
-    }
-   ],
-   "tests": [
-    {
-     "name": "radv-queue",
-     "run": "tools/build/build-radv-queue-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/queue"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+      "id": "dxvk-x86-rel",
+      "component": "d3d11-umd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "dxvk",
+      "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "tree": "clone",
+      "recipe": "tools/build/build-dxvk.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine",
+        "-Compiler",
+        "msvc",
+        "-Arch",
+        "x86",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "user",
+      "deterministic": true,
+      "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze.",
+      "disk_peak_gb": 1.5,
+      "outputs": [
+        {
+          "file": "src/ddi/amdgpu_wddm_dxvk.dll",
+          "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
+          "args": [
+            "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
+            "--cache-root",
+            "{testout}/cache"
+          ],
+          "cwd": "{out}/src/ddi",
+          "env": {
+            "DXVK_LOG_PATH": "{testout}/logs",
+            "DXVK_SHADER_CACHE": "",
+            "DXVK_SHADER_CACHE_PATH": ""
+          },
+          "summary": "^(?:ok|PASS) ",
+          "pass": "^PASSED: 0 failure"
+        }
+      ],
+      "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
     },
     {
-     "name": "winsys-destroy",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
-    }
-   ]
-  },
-  {
-   "id": "hosted-x86-lab",
-   "component": "d3d12-umd-wow64",
-   "flavour": "lab",
-   "arch": "x86",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
-   "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
-   "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-mt",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "msvc",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll"
+      "id": "dxvk-x64-lab",
+      "component": "d3d11-umd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "dxvk",
+      "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "tree": "clone",
+      "recipe": "tools/build/build-dxvk.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine",
+        "-Compiler",
+        "clang-cl",
+        "-Arch",
+        "x64",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 1.5,
+      "outputs": [
+        {
+          "file": "src/ddi/amdgpu_wddm_dxvk.dll",
+          "path": "payload/d3d11/amdgpu_wddm_dxvk.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
+          "args": [
+            "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
+            "--cache-root",
+            "{testout}/cache"
+          ],
+          "cwd": "{out}/src/ddi",
+          "env": {
+            "DXVK_LOG_PATH": "{testout}/logs",
+            "DXVK_SHADER_CACHE": "",
+            "DXVK_SHADER_CACHE_PATH": ""
+          },
+          "summary": "^(?:ok|PASS) ",
+          "pass": "^PASSED: 0 failure"
+        }
+      ],
+      "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
     },
     {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-     "component": "d3d11-umd-wow64"
-    }
-   ],
-   "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
-  },
-  {
-   "id": "wow64-x86-lab",
-   "component": "vulkan-icd-wow64",
-   "flavour": "lab",
-   "arch": "x86",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "771f84136ef41d7403ff05360e27773db6e77d8d",
-   "base": "0715572c0b31a969897657b08f0cc75bd65d41f0",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-mt",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "msvc",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/vulkan_radeon.dll",
-     "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-     "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
-    }
-   ],
-   "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
-  },
-  {
-   "id": "system-x64-lab",
-   "component": "vulkan-icd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
-   "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv-system",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "clang-cl",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-ClangToolchain",
-    "{root}/toolchain/llvm-23.1.4-win64",
-    "-Variant",
-    "release,isa",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/vulkan_radeon.dll",
-     "path": "payload/vulkan/vulkan_radeon.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "radv-queue",
-     "run": "tools/build/build-radv-queue-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/queue"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+      "id": "dxvk-x86-lab",
+      "component": "d3d11-umd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "dxvk",
+      "commit": "c271e0e005936223683d7ecb7200816b6a2405e1",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "tree": "clone",
+      "recipe": "tools/build/build-dxvk.ps1",
+      "args": [
+        "-Config",
+        "ddi-engine",
+        "-Compiler",
+        "msvc",
+        "-Arch",
+        "x86",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Temp",
+        "{tmp}",
+        "-Jobs",
+        "{jobs}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "user",
+      "deterministic": true,
+      "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze.",
+      "disk_peak_gb": 1.5,
+      "outputs": [
+        {
+          "file": "src/ddi/amdgpu_wddm_dxvk.dll",
+          "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "engine",
+          "run": "{out}/src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
+          "args": [
+            "{out}/src/ddi/amdgpu_wddm_dxvk.dll",
+            "--cache-root",
+            "{testout}/cache"
+          ],
+          "cwd": "{out}/src/ddi",
+          "env": {
+            "DXVK_LOG_PATH": "{testout}/logs",
+            "DXVK_SHADER_CACHE": "",
+            "DXVK_SHADER_CACHE_PATH": ""
+          },
+          "summary": "^(?:ok|PASS) ",
+          "pass": "^PASSED: 0 failure"
+        }
+      ],
+      "note": "A clone, not a work tree of the shared fork checkout: git describe then gives the 8-digit id of a clone of the fork (v3.1.1-119-gc271e0e0), which is in the image."
     },
     {
-     "name": "winsys-destroy",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+      "id": "d3d11-x64-rel",
+      "component": "d3d11-umd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-dxvk.ps1",
+      "args": [
+        "-DxvkSource",
+        "{input:dxvk}",
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Flavour",
+        "release",
+        "-EnginePath",
+        "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
+        "-IcdPath",
+        "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "dxvk": {
+          "repo": "dxvk",
+          "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 1,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d11.dll",
+          "path": "payload/d3d11/amdgpu_wddm_d3d11.dll"
+        }
+      ]
     },
     {
-     "name": "winsys-ib2-gather",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys-ib2",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
-    }
-   ]
-  },
-  {
-   "id": "desktop-x64-lab",
-   "component": "desktop-umd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "mesa-amdgpu-wddm",
-   "commit": "a115b714ee6806fa866b7170ae68e8700cd0d3c6",
-   "base": "8c9bf720cb3a5688074e44bffba834def7e48fcd",
-   "recipe": "tools/build/build-mesa.ps1",
-   "args": [
-    "-Config",
-    "radv",
-    "-Source",
-    "{src}",
-    "-Build",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Jobs",
-    "{jobs}",
-    "-Compiler",
-    "clang-cl",
-    "-Temp",
-    "{tmp}",
-    "-Flavour",
-    "lab",
-    "-Lab",
-    "-ClangToolchain",
-    "{root}/toolchain/llvm-23.1.4-win64",
-    "-Variant",
-    "release,isa",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "clang-cl",
-   "kind": "user",
-   "deterministic": false,
-   "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-   "disk_peak_gb": 3,
-   "outputs": [
-    {
-     "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
-     "path": "payload/desktop/amdgpu_wddm_radv.dll"
-    }
-   ],
-   "tests": [
-    {
-     "name": "radv-queue",
-     "run": "tools/build/build-radv-queue-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/queue"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+      "id": "d3d11-x86-rel",
+      "component": "d3d11-umd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-dxvk.ps1",
+      "args": [
+        "-DxvkSource",
+        "{input:dxvk}",
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Flavour",
+        "release",
+        "-EnginePath",
+        "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
+        "-IcdPath",
+        "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "dxvk": {
+          "repo": "dxvk",
+          "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 1,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d11.dll",
+          "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll"
+        }
+      ]
     },
     {
-     "name": "winsys-destroy",
-     "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
-     "args": [
-      "-Source",
-      "{src}",
-      "-Build",
-      "{out}",
-      "-OutputDir",
-      "{testout}/winsys",
-      "-Test",
-      "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
-     ],
-     "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
-     "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
-    }
-   ]
-  },
-  {
-   "id": "router-x64-rel",
-   "component": "desktop-umd",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-router.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Flavour",
-    "release",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.3,
-   "outputs": [
-    {
-     "file": "bc250d3d_router.dll",
-     "path": "payload/desktop/bc250d3d_router.dll",
-     "authenticode": true
-    }
-   ]
-  },
-  {
-   "id": "router-x86-rel",
-   "component": "desktop-umd-wow64",
-   "flavour": "release",
-   "arch": "x86",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-router.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Flavour",
-    "release",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.3,
-   "outputs": [
-    {
-     "file": "bc250d3d_router.dll",
-     "path": "payload/wow64/desktop/bc250d3d_router.dll",
-     "authenticode": true
-    }
-   ]
-  },
-  {
-   "id": "control-rel",
-   "component": "control",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
-   "tree": "shared",
-   "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
-   "args": [
-    "-Kits",
-    "{root}/toolchain/nuget",
-    "-Out",
-    "{out}",
-    "-Flavour",
-    "release",
-    "-NoSmoke",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.5,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_control.exe",
-     "path": "payload/control/amdgpu_wddm_control.exe",
-     "authenticode": true
+      "id": "d3d11-x64-lab",
+      "component": "d3d11-umd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-dxvk.ps1",
+      "args": [
+        "-DxvkSource",
+        "{input:dxvk}",
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Flavour",
+        "lab",
+        "-EnginePath",
+        "{payload:payload/d3d11/amdgpu_wddm_dxvk.dll}",
+        "-IcdPath",
+        "{payload:payload/d3d11/amdgpu_wddm_radv.dll}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "dxvk": {
+          "repo": "dxvk",
+          "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 1,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d11.dll",
+          "path": "payload/d3d11/amdgpu_wddm_d3d11.dll"
+        }
+      ]
     },
     {
-     "file": "bc250control.dll",
-     "path": "payload/control/bc250control.dll",
-     "authenticode": true
+      "id": "d3d11-x86-lab",
+      "component": "d3d11-umd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-dxvk.ps1",
+      "args": [
+        "-DxvkSource",
+        "{input:dxvk}",
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Flavour",
+        "lab",
+        "-EnginePath",
+        "{payload:payload/wow64/d3d11/amdgpu_wddm_dxvk.dll}",
+        "-IcdPath",
+        "{payload:payload/wow64/d3d11/amdgpu_wddm_radv.dll}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}"
+      ],
+      "inputs": {
+        "dxvk": {
+          "repo": "dxvk",
+          "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+        }
+      },
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 1,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d11.dll",
+          "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll"
+        }
+      ]
     },
     {
-     "file": "bc250control.dll",
-     "path": "payload/tools/bc250control.dll",
-     "component": "tool",
-     "authenticode": true
+      "id": "hosted-x64-rel",
+      "component": "d3d12-icd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-mt",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "clang-cl",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "release",
+        "-ClangToolchain",
+        "{root}/toolchain/llvm-23.1.4-win64",
+        "-Variant",
+        "release,isa",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/d3d12/amdgpu_wddm_radv.dll"
+        },
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/d3d11/amdgpu_wddm_radv.dll",
+          "component": "d3d11-umd"
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-queue",
+          "run": "tools/build/build-radv-queue-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/queue"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+        },
+        {
+          "name": "winsys-destroy",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
+      ]
     },
     {
-     "file": "bc250kmd_cli.exe",
-     "path": "payload/tools/bc250kmd_cli.exe",
-     "component": "tool",
-     "authenticode": true
-    }
-   ],
-   "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
-  },
-  {
-   "id": "router-x64-lab",
-   "component": "desktop-umd",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-router.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x64",
-    "-Flavour",
-    "lab",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.3,
-   "outputs": [
-    {
-     "file": "bc250d3d_router.dll",
-     "path": "payload/desktop/bc250d3d_router.dll",
-     "authenticode": true
-    }
-   ]
-  },
-  {
-   "id": "router-x86-lab",
-   "component": "desktop-umd-wow64",
-   "flavour": "lab",
-   "arch": "x86",
-   "repo": "amdgpu-wddm",
-   "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
-   "tree": "shared",
-   "recipe": "tools/build/build-umd-router.ps1",
-   "args": [
-    "-OutputDir",
-    "{out}",
-    "-Arch",
-    "x86",
-    "-Flavour",
-    "lab",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.3,
-   "outputs": [
-    {
-     "file": "bc250d3d_router.dll",
-     "path": "payload/wow64/desktop/bc250d3d_router.dll",
-     "authenticode": true
-    }
-   ]
-  },
-  {
-   "id": "control-lab",
-   "component": "control",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
-   "tree": "shared",
-   "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
-   "args": [
-    "-Kits",
-    "{root}/toolchain/nuget",
-    "-Out",
-    "{out}",
-    "-Flavour",
-    "lab",
-    "-NoSmoke",
-    "-Version",
-    "{version}"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.5,
-   "outputs": [
-    {
-     "file": "amdgpu_wddm_control.exe",
-     "path": "payload/control/amdgpu_wddm_control.exe",
-     "authenticode": true
+      "id": "hosted-x86-rel",
+      "component": "d3d12-umd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-mt",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "msvc",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll"
+        },
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
+          "component": "d3d11-umd-wow64"
+        }
+      ],
+      "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
     },
     {
-     "file": "bc250control.dll",
-     "path": "payload/control/bc250control.dll",
-     "authenticode": true
+      "id": "wow64-x86-rel",
+      "component": "vulkan-icd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "771f84136ef41d7403ff05360e27773db6e77d8d",
+      "base": "0715572c0b31a969897657b08f0cc75bd65d41f0",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-mt",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "msvc",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/vulkan_radeon.dll",
+          "path": "payload/wow64/vulkan/vulkan_radeon.dll",
+          "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
+        }
+      ],
+      "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
     },
     {
-     "file": "bc250control.dll",
-     "path": "payload/tools/bc250control.dll",
-     "component": "tool",
-     "authenticode": true
+      "id": "system-x64-rel",
+      "component": "vulkan-icd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
+      "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-system",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "clang-cl",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "release",
+        "-ClangToolchain",
+        "{root}/toolchain/llvm-23.1.4-win64",
+        "-Variant",
+        "release,isa",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/vulkan_radeon.dll",
+          "path": "payload/vulkan/vulkan_radeon.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-queue",
+          "run": "tools/build/build-radv-queue-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/queue"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+        },
+        {
+          "name": "winsys-destroy",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "winsys-ib2-gather",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys-ib2",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
+      ]
     },
     {
-     "file": "bc250kmd_cli.exe",
-     "path": "payload/tools/bc250kmd_cli.exe",
-     "component": "tool",
-     "authenticode": true
-    }
-   ],
-   "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
-  },
-  {
-   "id": "state-worker-rel",
-   "component": "tool",
-   "flavour": "release",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
-   "tree": "shared",
-   "recipe": "driver/state/installer-build.ps1",
-   "args": [
-    "-Out",
-    "{out}",
-    "-Kits",
-    "{root}/toolchain/nuget",
-    "-Test",
-    "-Version",
-    "{version}",
-    "-Flavour",
-    "release"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.2,
-   "outputs": [
+      "id": "desktop-x64-rel",
+      "component": "desktop-umd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "a115b714ee6806fa866b7170ae68e8700cd0d3c6",
+      "base": "8c9bf720cb3a5688074e44bffba834def7e48fcd",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "clang-cl",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "release",
+        "-ClangToolchain",
+        "{root}/toolchain/llvm-23.1.4-win64",
+        "-Variant",
+        "release,isa",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/desktop/amdgpu_wddm_radv.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-queue",
+          "run": "tools/build/build-radv-queue-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/queue"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+        },
+        {
+          "name": "winsys-destroy",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
+      ]
+    },
     {
-     "file": "amdgpu-state-installer.exe",
-     "path": "payload/tools/amdgpu-state-installer.exe",
-     "authenticode": true
-    }
-   ],
-   "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
-  },
-  {
-   "id": "state-worker-lab",
-   "component": "tool",
-   "flavour": "lab",
-   "arch": "x64",
-   "repo": "amdgpu-wddm",
-   "commit": "d4ba47f9e7fc08164717cab5320ac2c7c6b3ba3f",
-   "tree": "shared",
-   "recipe": "driver/state/installer-build.ps1",
-   "args": [
-    "-Out",
-    "{out}",
-    "-Kits",
-    "{root}/toolchain/nuget",
-    "-Test",
-    "-Version",
-    "{version}",
-    "-Flavour",
-    "lab"
-   ],
-   "compiler": "msvc",
-   "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
-   "kind": "user",
-   "deterministic": true,
-   "disk_peak_gb": 0.2,
-   "outputs": [
+      "id": "hosted-x64-lab",
+      "component": "d3d12-icd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-mt",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "clang-cl",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-ClangToolchain",
+        "{root}/toolchain/llvm-23.1.4-win64",
+        "-Variant",
+        "release,isa",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/d3d12/amdgpu_wddm_radv.dll"
+        },
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/d3d11/amdgpu_wddm_radv.dll",
+          "component": "d3d11-umd"
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-queue",
+          "run": "tools/build/build-radv-queue-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/queue"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+        },
+        {
+          "name": "winsys-destroy",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
+      ]
+    },
     {
-     "file": "amdgpu-state-installer.exe",
-     "path": "payload/tools/amdgpu-state-installer.exe",
-     "authenticode": true
+      "id": "hosted-x86-lab",
+      "component": "d3d12-umd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "66986af442c97653cd6046b01d27bb555ff39fd4",
+      "recipe_commit": "bc3d75d30a51133af97ad8debf7f5adf13fb7120",
+      "base": "2dea401cee9aafaea5846c5333a26839f0bff7cb",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-mt",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "msvc",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll"
+        },
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
+          "component": "d3d11-umd-wow64"
+        }
+      ],
+      "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
+    },
+    {
+      "id": "wow64-x86-lab",
+      "component": "vulkan-icd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "771f84136ef41d7403ff05360e27773db6e77d8d",
+      "base": "0715572c0b31a969897657b08f0cc75bd65d41f0",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-mt",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "msvc",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/vulkan_radeon.dll",
+          "path": "payload/wow64/vulkan/vulkan_radeon.dll",
+          "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 771f8413 (fix/bd201-destroy-fail-wow64: BD-201 and BD-211 on the 31v3 32-bit line 0715572c), built x86 with msvc, while the 64-bit row is the system line 055dbb9f (release/tester32-radv-system: BD-197, BD-201, BD-207, BD-211, BD-217), as in 31v3 two lines: the BD-197 DXGI present work and its BD-217 double-destroy fix have no 32-bit build or measured arm, so the 32-bit slot takes the destroy and memstream fixes on its own line. BD-207 gives the system line the IB2 calls from the gather slot that the 32-bit line already makes. The two commits are diverged, so this sentence stops covering the pair as soon as either pin moves."
+        }
+      ],
+      "compiler_reason": "The x86 Meson builds stay on msvc until the x86 clang-cl work lands: build-mesa.ps1 and build-dxvk.ps1 refuse clang-cl for x86 (common.ps1), for the reasons of the wow64 freeze."
+    },
+    {
+      "id": "system-x64-lab",
+      "component": "vulkan-icd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "055dbb9f7595502418354b75816788e4e0461cd5",
+      "base": "042227dcddf2c7c6a28daebf01a8c828fdf130fa",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv-system",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "clang-cl",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-ClangToolchain",
+        "{root}/toolchain/llvm-23.1.4-win64",
+        "-Variant",
+        "release,isa",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/vulkan_radeon.dll",
+          "path": "payload/vulkan/vulkan_radeon.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-queue",
+          "run": "tools/build/build-radv-queue-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/queue"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+        },
+        {
+          "name": "winsys-destroy",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "winsys-ib2-gather",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys-ib2",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
+      ]
+    },
+    {
+      "id": "desktop-x64-lab",
+      "component": "desktop-umd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "mesa-amdgpu-wddm",
+      "commit": "a115b714ee6806fa866b7170ae68e8700cd0d3c6",
+      "base": "8c9bf720cb3a5688074e44bffba834def7e48fcd",
+      "recipe": "tools/build/build-mesa.ps1",
+      "args": [
+        "-Config",
+        "radv",
+        "-Source",
+        "{src}",
+        "-Build",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Jobs",
+        "{jobs}",
+        "-Compiler",
+        "clang-cl",
+        "-Temp",
+        "{tmp}",
+        "-Flavour",
+        "lab",
+        "-Lab",
+        "-ClangToolchain",
+        "{root}/toolchain/llvm-23.1.4-win64",
+        "-Variant",
+        "release,isa",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
+      "disk_peak_gb": 3,
+      "outputs": [
+        {
+          "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
+          "path": "payload/desktop/amdgpu_wddm_radv.dll"
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-queue",
+          "run": "tools/build/build-radv-queue-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/queue"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_queue_binding_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+), skipped=(?<skipped>\\d+)"
+        },
+        {
+          "name": "winsys-destroy",
+          "run": "{root}/scratch/bd201-fix/tools/run-winsys-tests.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/winsys",
+            "-Test",
+            "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
+      ]
+    },
+    {
+      "id": "router-x64-rel",
+      "component": "desktop-umd",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-router.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.3,
+      "outputs": [
+        {
+          "file": "bc250d3d_router.dll",
+          "path": "payload/desktop/bc250d3d_router.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "router-x86-rel",
+      "component": "desktop-umd-wow64",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-router.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.3,
+      "outputs": [
+        {
+          "file": "bc250d3d_router.dll",
+          "path": "payload/wow64/desktop/bc250d3d_router.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "control-rel",
+      "component": "control",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
+      "tree": "shared",
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Flavour",
+        "release",
+        "-NoSmoke",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_control.exe",
+          "path": "payload/control/amdgpu_wddm_control.exe",
+          "authenticode": true
+        },
+        {
+          "file": "bc250control.dll",
+          "path": "payload/control/bc250control.dll",
+          "authenticode": true
+        },
+        {
+          "file": "bc250control.dll",
+          "path": "payload/tools/bc250control.dll",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "bc250kmd_cli.exe",
+          "path": "payload/tools/bc250kmd_cli.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ],
+      "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
+    },
+    {
+      "id": "router-x64-lab",
+      "component": "desktop-umd",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-router.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Flavour",
+        "lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.3,
+      "outputs": [
+        {
+          "file": "bc250d3d_router.dll",
+          "path": "payload/desktop/bc250d3d_router.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "router-x86-lab",
+      "component": "desktop-umd-wow64",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "da55a3a155f86f28870169e70dcb3570647bc331",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-router.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Flavour",
+        "lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.3,
+      "outputs": [
+        {
+          "file": "bc250d3d_router.dll",
+          "path": "payload/wow64/desktop/bc250d3d_router.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "control-lab",
+      "component": "control",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
+      "tree": "shared",
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Flavour",
+        "lab",
+        "-NoSmoke",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_control.exe",
+          "path": "payload/control/amdgpu_wddm_control.exe",
+          "authenticode": true
+        },
+        {
+          "file": "bc250control.dll",
+          "path": "payload/control/bc250control.dll",
+          "authenticode": true
+        },
+        {
+          "file": "bc250control.dll",
+          "path": "payload/tools/bc250control.dll",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "bc250kmd_cli.exe",
+          "path": "payload/tools/bc250kmd_cli.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ],
+      "note": "One build folder per flavour: the CLI and both copies of bc250control.dll come from it (test-cli-commands.ps1)."
+    },
+    {
+      "id": "state-worker-rel",
+      "component": "tool",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
+      "tree": "shared",
+      "recipe": "driver/state/installer-build.ps1",
+      "args": [
+        "-Out",
+        "{out}",
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Test",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "release"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.2,
+      "outputs": [
+        {
+          "file": "amdgpu-state-installer.exe",
+          "path": "payload/tools/amdgpu-state-installer.exe",
+          "authenticode": true
+        }
+      ],
+      "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
+    },
+    {
+      "id": "state-worker-lab",
+      "component": "tool",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "3e5817ca4c87a1abdd26a460b7641e4ed007b141",
+      "tree": "shared",
+      "recipe": "driver/state/installer-build.ps1",
+      "args": [
+        "-Out",
+        "{out}",
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Test",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "lab"
+      ],
+      "compiler": "msvc",
+      "compiler_reason": "This recipe has no -Compiler parameter yet and builds with cl.exe of the Visual Studio environment, so msvc is the only compiler its row can name.",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.2,
+      "outputs": [
+        {
+          "file": "amdgpu-state-installer.exe",
+          "path": "payload/tools/amdgpu-state-installer.exe",
+          "authenticode": true
+        }
+      ],
+      "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
     }
-   ],
-   "note": "The state worker embeds the compiled state catalog, like the CLI, the control library and the desktop routers; the package gate holds all of them against payload/kmd/amdgpu-state.bin, so this row moves with the kernel driver rows whenever driver/state/catalog.json changes."
-  }
- ]
+  ]
 }
