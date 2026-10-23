@@ -20,16 +20,32 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kmdcommon import (ATTEMPTS, BASE, HIST, HIST171_STAGE_MANIFEST_SHA256, LAB_BASELINE, MODES, OPS, POWERSHELL,  # noqa: E402
+from kmdcommon import (ATTEMPTS, BASE, LAB_BASELINE, MODES, OPS, POWERSHELL, WORK,  # noqa: E402
                        REMOTE_BASE, REMOTE_TMP, REPO, TEMPLATE, TRANSITION, compare_packages, digest, fail,
-                       historical_manifest, identity, label_suffix, next_receipt, ps_env, read_package, resolve_attempt,
+                       identity, label_suffix, next_receipt, ps_env, read_package, resolve_attempt,
                        target, verify_attempt)
+import build_helpers  # noqa: E402
 
 SAFE_NAME = re.compile(r'^[a-zA-Z0-9_./-]+$')
+
+
+def stage_helpers(attempt, helper_dir, helpers):
+    """Stage only newly built helpers and bind their build receipt to the stage manifest."""
+    build_helpers.verify(helper_dir, helpers)
+    for path in sorted((TEMPLATE / 'kmd168-transition').iterdir()):
+        if path.is_file():
+            copy_verified(path, attempt / 'kmd168-transition' / path.name, digest(path))
+    for name in ('bounded-child.exe', 'select-driver.exe'):
+        copy_verified(helper_dir / name, attempt / name, helpers['files'][name])
+    copy_verified(helper_dir / 'build-manifest.json', attempt / 'helper-build-manifest.json',
+                  digest(helper_dir / 'build-manifest.json'))
+    return {'helper_build_manifest_sha256': digest(attempt / 'helper-build-manifest.json'),
+            'helper_source_commit': helpers['source_commit']}
 
 
 def check_signature(package):
@@ -71,8 +87,10 @@ def ps_file(script, *args, timeout=300):
                           capture_output=True, text=True, timeout=timeout, env=ps_env())
 
 
-def run_gates():
-    r = subprocess.run([sys.executable, str(BASE / 'check-offline.py'), '--quick'], capture_output=True, text=True, timeout=600)
+def run_gates(helper_dir):
+    # Freeze tests the very outputs it stages, including process-tree and receipt-pipe behavior.
+    r = subprocess.run([sys.executable, str(BASE / 'check-offline.py'), '--helper-build', str(helper_dir)],
+                       capture_output=True, text=True, timeout=600)
     if r.returncode:
         fail('offline gates failed:\n' + r.stdout[-3000:])
     return r.stdout.strip().splitlines()[-1]
@@ -154,8 +172,9 @@ def freeze(args):
     check_baseline(rollback, baseline)
     signatures = {'candidate': check_signature(candidate), 'rollback': check_signature(rollback)}
     check_certificates(candidate, rollback, signatures)
-    hist = historical_manifest()
-    gates = run_gates()
+    helper_dir = WORK / 'helper-builds' / uuid.uuid4().hex
+    helpers = build_helpers.build(helper_dir)
+    gates = run_gates(helper_dir)
 
     prefix = f'kmd{label_suffix(candidate["version"])}-deploy'
     if args.dry_run:
@@ -178,12 +197,7 @@ def freeze(args):
             copy_verified(path, attempt / TRANSITION / path.name, digest(path))
     (attempt / TRANSITION / 'identity.ps1').write_bytes(generated_identity(candidate, rollback, baseline, prefix).encode('utf-8'))
     ident = identity(attempt / TRANSITION / 'identity.ps1')
-    for rel, value in hist.items():
-        if rel.startswith('kmd168-transition/') or rel in ('bounded-child.exe', 'select-driver.exe'):
-            template_copy = TEMPLATE / rel
-            if template_copy.exists() and digest(template_copy) != value:
-                fail(f'template {rel} differs from the 171 stage')
-            copy_verified(HIST / rel, attempt / rel, value)
+    helper_binding = stage_helpers(attempt, helper_dir, helpers)
     for label, package in ((ident['KmdCandidateLabel'], candidate), (ident['KmdRollbackLabel'], rollback)):
         for fname, value in package['files'].items():
             copy_verified(package['paths'][fname], attempt / label / fname, value)
@@ -205,9 +219,7 @@ def freeze(args):
             files[rel] = digest(path)
     runner = ''.join(f'{rel}\t{value}\n' for rel, value in sorted(files.items()) if rel.startswith(TRANSITION + '/'))
     manifest = {'schema': 1,
-                # The value every earlier attempt recorded: the SHA256 of the 171 stage manifest the nine reused
-                # helpers come from. The kit now reads them through hist171-manifest.json, which names it too.
-                'runner': {'template_sha256': digest_text(runner), 'historical_stage_manifest': HIST171_STAGE_MANIFEST_SHA256,
+                'runner': {'template_sha256': digest_text(runner), **helper_binding,
                            'lab_baseline_sha256': digest(LAB_BASELINE)},
                 'candidate': {k: candidate[k] for k in ('version', 'abi', 'flavor', 'commit', 'tree', 'build_manifest_sha256')} |
                              {'label': ident['KmdCandidateLabel'], 'source': str(candidate['directory'])},
