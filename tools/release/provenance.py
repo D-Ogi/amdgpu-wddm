@@ -218,6 +218,68 @@ def load_versionstamp():
     return module
 
 
+def state_catalog_inputs_ok(sources, repos):
+    """Known state consumers must compile the catalog shipped by this flavour.
+
+    This checks pinned transitive source inputs, not binary contents or runtime
+    state. The compiled CLI/worker package check and provenance checks still apply.
+    """
+    catalog_path = "payload/kmd/amdgpu-state.bin"
+    consumers = {
+        "payload/kmd/bc250kmd.sys", "payload/tools/bc250kmd_cli.exe",
+        "payload/tools/amdgpu-state-installer.exe", "payload/control/bc250control.dll",
+        "payload/tools/bc250control.dll", "payload/desktop/bc250d3d_router.dll",
+        "payload/wow64/desktop/bc250d3d_router.dll",
+    }
+    files = sources.get("files", [])
+    selected = [row for row in files if row.get("path", "").casefold() in consumers | {catalog_path}]
+    if not selected:
+        return []
+    anchors = [row for row in selected if row.get("path", "").casefold() == catalog_path]
+    if len(anchors) != 1:
+        return ["state catalog: exactly one flavour-selected catalog row is required"]
+    errors, cache = [], {}
+
+    def identity(row):
+        build = row.get("built_from") or {}
+        name, commit = build.get("repo"), build.get("commit")
+        if name != sources.get("recipe_repository") or not isinstance(commit, str) or not HEX40.fullmatch(commit):
+            raise ValueError("needs a full build commit in the recipe repository")
+        key = (name, commit)
+        if key not in cache:
+            checkout = repos.find(name, commit)
+            if checkout is None:
+                raise ValueError("build commit is unavailable")
+            code, header = git(checkout, "show", commit + ":driver/state/catalog.generated.h")
+            if code:
+                raise ValueError("generated catalog header is unavailable at the build commit")
+            fields = []
+            for macro, pattern in (("CATALOG_ID", r'"([0-9a-f]{64})"'),
+                                   ("SCHEMA_VERSION", r'([0-9]+)u'), ("COUNT", r'([0-9]+)u')):
+                values = re.findall(r"^#define AMDGPU_STATE_" + macro + r"[ \t]+" + pattern + r"[ \t]*$", header, re.M)
+                if len(values) != 1:
+                    raise ValueError("missing or ambiguous generated catalog " + macro)
+                fields.append(values[0])
+            cache[key] = tuple(fields)
+        return cache[key]
+
+    try:
+        expected = identity(anchors[0])
+    except ValueError as exc:
+        return [f"state catalog: {exc}"]
+    for row in selected:
+        if row is anchors[0]:
+            continue
+        try:
+            actual = identity(row)
+            if actual != expected:
+                errors.append(f"state catalog: {row['path']} build uses {actual[0]} ({actual[2]} entries), "
+                              f"package requires {expected[0]} ({expected[2]} entries); rebuild this consumer")
+        except ValueError as exc:
+            errors.append(f"state catalog: {row['path']}: {exc}")
+    return errors
+
+
 def check(sources_path, root, repo, package=None, package_version=None, package_flavour="release",
           flavour=None, build_records=None):
     """Returns (errors, rows, summary). rows: one dict per payload file. `flavour` picks the manifest rows of
@@ -267,6 +329,7 @@ def check(sources_path, root, repo, package=None, package_version=None, package_
     if errors:
         return errors, rows, {}
     repos = Repositories(table, root, repo)
+    errors.extend(state_catalog_inputs_ok(sources, repos))
     payload_paths = {f.get("path") for f in sources.get("files", [])}
 
     def commit_ok(where, name, commit):
