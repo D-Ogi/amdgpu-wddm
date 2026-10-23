@@ -251,10 +251,20 @@ static NTSTATUS LoadActive(BOOLEAN allowPriorVersion)
     status=String(Generation,L"CatalogId",catalog,65);if(!NT_SUCCESS(status))return status;
     Wide(AmdgpuStateCatalogId(),expected,65);
     if(wcscmp(catalog,expected)) {
+        AMDGPU_TRANSFER_HEADER receipt;
         // The generation of an earlier catalog of this schema is the source of a pending update in place
-        // (Bootstrap with a CURRENT handoff): Source() reads its data by setting name. Its receipt names the
-        // old catalog and is not bound; without a handoff the generation is refused as before.
+        // (Bootstrap with a CURRENT handoff): Source() reads its data by setting name. Its receipt must name
+        // the generation and its own catalog, but it is not bound (Metadata would hold it against this
+        // catalog). Without a handoff the generation is refused as before.
         if(!allowPriorVersion || !CatalogName(catalog))return STATUS_REVISION_MISMATCH;
+        status=Open(Generation,L"Migration",KEY_READ,FALSE,FALSE,&metadata);if(!NT_SUCCESS(status))return status;
+        status=Read(metadata,L"Transfer",&type,&receipt,sizeof(receipt),&count);ZwClose(metadata);
+        if(!NT_SUCCESS(status))return status;
+        if(type!=REG_BINARY || count!=sizeof(receipt))return STATUS_DATA_ERROR;
+        Hex(receipt.transaction,receiptId);
+        if(wcscmp(transaction,receiptId) || receipt.magic!=AMDGPU_TRANSFER_MAGIC ||
+           receipt.version!=AMDGPU_TRANSFER_VERSION)return STATUS_REVISION_MISMATCH;
+        for(i=0;i<64;i++)if((WCHAR)(UCHAR)receipt.catalog[i]!=catalog[i])return STATUS_REVISION_MISMATCH;
         ForeignActive=TRUE;
         return Open(Generation,L"Data",KEY_READ|KEY_WRITE,FALSE,FALSE,&Data);
     }

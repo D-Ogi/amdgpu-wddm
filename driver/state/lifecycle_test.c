@@ -574,11 +574,12 @@ int main(void)
     // the first start of the new package merges the capture with that generation's data and publishes a new
     // generation under its own catalog. The retained generation may belong to an earlier catalog of the same
     // schema (a release that added settings); without a handoff such a generation is refused.
-    for(i=0;i<4;i++) {
+    for(i=0;i<5;i++) {
         static const WCHAR same[]=L"02000000000000000000000000000000";
         static const WCHAR earlier[]=L"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         static const char *const names[]={"update in place with the same catalog","update in place across a catalog change",
-            "a generation of another catalog without a handoff is refused","a malformed catalog identity is never a source"};
+            "a generation of another catalog without a handoff is refused","a malformed catalog identity is never a source",
+            "a receipt of another catalog than the generation is refused"};
         AMDGPU_TRANSFER_HEADER old;WCHAR wide[65];unsigned j,gen2,data2,meta2;
         Reset(names[i]);
         root=Key(L"S\\StateV2",TRUE);SetString(root,L"Active",same);
@@ -595,7 +596,7 @@ int main(void)
         old.transaction[0]=2;old.device_hash[0]=42;AmdgpuStateBootToken(100,old.source_boot);
         strcpy_s(old.source_version,32,"0.7.216.100");strcpy_s(old.destination_version,32,"0.7.216.101");
         memcpy(old.catalog,AmdgpuStateCatalogId(),64);
-        if(i)memcpy(old.catalog,"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
+        if(i==1 || i==2)memcpy(old.catalog,"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",64);
         SetValue(meta2,L"Transfer",REG_BINARY,&old,sizeof(old));
         if(i!=2) {
             memset(&raw,0,sizeof(raw));raw.origin=AMDGPU_TRANSFER_CURRENT;raw.source_schema=AmdgpuStateSchema();
