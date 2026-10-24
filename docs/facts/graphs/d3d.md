@@ -8,6 +8,7 @@ Table, with each fact's status: [`../d3d.md`](../d3d.md). Edge types: `supersede
 
 ```mermaid
 flowchart LR
+  M564["M564"]
   M574["M574"]
   M575["M575"]
   M774["M774"]
@@ -17,12 +18,15 @@ flowchart LR
   M838["M838"]
   M839["M839"]
   M900["M900"]
+  M922["M922<br/>hardware"]
+  M922 ==>|supports| M564
   M575 ==>|supersedes| M574
   M801 ==>|supersedes| M774
   M839 -.->|refutes| M838
   M900 ==>|supports| M781
   M900 ==>|supports| M782
   classDef other stroke-dasharray:4 3
+  class M922 other
 ```
 
 ## References

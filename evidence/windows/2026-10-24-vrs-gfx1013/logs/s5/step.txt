@@ -1,0 +1,23 @@
+step mask=0x21 arms=pipe1x1 start 2026-10-24T11:27:40.9465186Z
+client 33CB2C414B13B62BEEF7CF50A90A401B3C5A86BC5BA95C36C2A5143AAACD81A3  C:\BC250\tmp\vrs-probe\vrsprobe-x64.exe
+icd    2FD8921D82DEA6F7DB8158B01167F84856E555F393507CB65B8F33289FDA42CD  C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll
+kmd before: 0 fault lines, 0 timeout lines
+env RADV_BC250_VRS_PROBE=33 AMDGPU_WDDM_LOG=stderr
+--- pipe1x1: exit 0 after 0.5 s
+  caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+  caps texel_min=8x8 texel_max=8x8 max_fragment_size=2x2 non_trivial_combiners=1 primitive_multi_viewport=1
+  caps rate 2x2 samples 0x7
+  caps rate 2x1 samples 0x7
+  caps rate 1x2 samples 0x7
+  caps rate 1x1 samples 0xffffffff
+  caps r8_uint_rate_attachment=1
+  counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+  RESULT arm=pipe1x1 region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+  VERDICT arm=pipe1x1 expect=1x1 match=1
+  BC250 VRS PROBE: mask=0x21 draw=0 comb=0 vtx=0 ovr=0 ovr2x2=1 htile=0
+  BC250 VRS PROBE: PA_CL_VS_OUT_CNTL=0x01240000
+  BC250 VRS PROBE: DB_VRS_OVERRIDE_CNTL=0x00000051
+  BC250 VRS PROBE: PA_CL_VS_OUT_CNTL=0x00000000
+  BC250 VRS PROBE: DB_VRS_OVERRIDE_CNTL=0x00000051
+kmd after: 0 fault lines, 0 timeout lines
+step end 2026-10-24T11:27:41.9126039Z after 1.0 s; stop=none

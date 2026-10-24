@@ -1,0 +1,33 @@
+env RADV_BC250_VRS_PROBE       3
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+arm pipe1x2: pipeline rate 1 wide, 2 high; expect 1x2; size 256x256
+step load-icd                     t=58.5 ms
+icd interface 7
+step create-instance              t=79.6 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 c043a7a843097ef4f18690ec154e507797078099befa87cf15a149b8cbd632f3
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=8x8 texel_max=8x8 max_fragment_size=2x2 non_trivial_combiners=1 primitive_multi_viewport=1
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0x7
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=229.3 ms
+step resources                    t=234.7 ms
+step pipeline                     t=240.7 ms
+step record                       t=250.1 ms
+step submit                       t=258.5 ms
+step done                         t=264.7 ms
+gpu wait 6.15 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+dump C:\BC250\tmp\vrs-probe\p2s2\pipe1x2.bin 1048576 bytes
+RESULT arm=pipe1x2 region=all expect=1x2 shape=1x1 match=0 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=pipe1x2 expect=1x2 match=0
+texels y=0  id=12224 fc=(8,8)/16 rate=0x0  id=12225 fc=(24,8)/16 rate=0x0  id=12228 fc=(40,8)/16 rate=0x0  id=12229 fc=(56,8)/16 rate=0x0
+texels y=1  id=12226 fc=(8,24)/16 rate=0x0  id=12227 fc=(24,24)/16 rate=0x0  id=12230 fc=(40,24)/16 rate=0x0  id=12231 fc=(56,24)/16 rate=0x0
+texels y=2  id=12232 fc=(8,40)/16 rate=0x0  id=12233 fc=(24,40)/16 rate=0x0  id=12236 fc=(40,40)/16 rate=0x0  id=12237 fc=(56,40)/16 rate=0x0
+texels y=3  id=12234 fc=(8,56)/16 rate=0x0  id=12235 fc=(24,56)/16 rate=0x0  id=12238 fc=(40,56)/16 rate=0x0  id=12239 fc=(56,56)/16 rate=0x0
+exit 0 after 422.5 ms

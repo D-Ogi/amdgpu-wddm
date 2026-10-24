@@ -1,0 +1,34 @@
+env RADV_BC250_VRS_PROBE       71
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+arm attnd2x2: rate attachment, no depth attachment, combiner 1 REPLACE; expect left=1x1,right=2x2; size 256x256
+step load-icd                     t=65.5 ms
+icd interface 7
+step create-instance              t=86.4 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 c043a7a843097ef4f18690ec154e507797078099befa87cf15a149b8cbd632f3
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=8x8 texel_max=8x8 max_fragment_size=2x2 non_trivial_combiners=1 primitive_multi_viewport=1
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0x7
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=222.8 ms
+step resources                    t=228.5 ms
+step pipeline                     t=234.8 ms
+step record                       t=244.3 ms
+step submit                       t=259.6 ms
+step done                         t=265.5 ms
+gpu wait 5.86 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+dump C:\BC250\tmp\vrs-probe\p2s6\attnd2x2.bin 1048576 bytes
+RESULT arm=attnd2x2 region=left expect=1x1 shape=1x1 match=1 pixels=32768 written=32768 distinct_ids=32768 bad_ids=0 ratio=1.0000 uniform2x2=0/8192 uniform2x1=0/16384 uniform1x2=0/16384 rate_read=0x0:32768
+RESULT arm=attnd2x2 region=right expect=2x2 shape=1x1 match=0 pixels=32768 written=32768 distinct_ids=32768 bad_ids=0 ratio=1.0000 uniform2x2=0/8192 uniform2x1=0/16384 uniform1x2=0/16384 rate_read=0x0:32768
+VERDICT arm=attnd2x2 expect=left=1x1,right=2x2 match=0
+texels y=0  id=896 fc=(8,8)/16 rate=0x0  id=897 fc=(24,8)/16 rate=0x0  id=900 fc=(40,8)/16 rate=0x0  id=901 fc=(56,8)/16 rate=0x0
+texels y=1  id=898 fc=(8,24)/16 rate=0x0  id=899 fc=(24,24)/16 rate=0x0  id=902 fc=(40,24)/16 rate=0x0  id=903 fc=(56,24)/16 rate=0x0
+texels y=2  id=904 fc=(8,40)/16 rate=0x0  id=905 fc=(24,40)/16 rate=0x0  id=908 fc=(40,40)/16 rate=0x0  id=909 fc=(56,40)/16 rate=0x0
+texels y=3  id=906 fc=(8,56)/16 rate=0x0  id=907 fc=(24,56)/16 rate=0x0  id=910 fc=(40,56)/16 rate=0x0  id=911 fc=(56,56)/16 rate=0x0
+exit 0 after 438.1 ms

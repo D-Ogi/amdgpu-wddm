@@ -1,0 +1,33 @@
+env RADV_BC250_VRS_PROBE       15
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+arm primkeep: vertex shader writes 2x2, combiner 0 KEEP (control: rate discarded); expect 1x1; size 256x256
+step load-icd                     t=73.4 ms
+icd interface 7
+step create-instance              t=95.3 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 2fd8921d82dea6f7db8158b01167f84856e555f393507cb65b8f33289fda42cd
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=8x8 texel_max=8x8 max_fragment_size=2x2 non_trivial_combiners=1 primitive_multi_viewport=1
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0x7
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=242.8 ms
+step resources                    t=248.5 ms
+step pipeline                     t=254.2 ms
+step record                       t=263.4 ms
+step submit                       t=271.5 ms
+step done                         t=277.4 ms
+gpu wait 5.90 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+dump C:\BC250\tmp\vrs-probe\s4\primkeep.bin 1048576 bytes
+RESULT arm=primkeep region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=primkeep expect=1x1 match=1
+texels y=0  id=27456 fc=(8,8)/16 rate=0x0  id=27457 fc=(24,8)/16 rate=0x0  id=27460 fc=(40,8)/16 rate=0x0  id=27461 fc=(56,8)/16 rate=0x0
+texels y=1  id=27458 fc=(8,24)/16 rate=0x0  id=27459 fc=(24,24)/16 rate=0x0  id=27462 fc=(40,24)/16 rate=0x0  id=27463 fc=(56,24)/16 rate=0x0
+texels y=2  id=27464 fc=(8,40)/16 rate=0x0  id=27465 fc=(24,40)/16 rate=0x0  id=27468 fc=(40,40)/16 rate=0x0  id=27469 fc=(56,40)/16 rate=0x0
+texels y=3  id=27466 fc=(8,56)/16 rate=0x0  id=27467 fc=(24,56)/16 rate=0x0  id=27470 fc=(40,56)/16 rate=0x0  id=27471 fc=(56,56)/16 rate=0x0
+exit 0 after 433.1 ms

@@ -1,0 +1,33 @@
+env RADV_BC250_VRS_PROBE       7
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+arm primkeep: vertex shader writes 2x2, combiner 0 KEEP (control: rate discarded); expect 1x1; size 256x256
+step load-icd                     t=64.2 ms
+icd interface 7
+step create-instance              t=82.3 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 c043a7a843097ef4f18690ec154e507797078099befa87cf15a149b8cbd632f3
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=8x8 texel_max=8x8 max_fragment_size=2x2 non_trivial_combiners=1 primitive_multi_viewport=1
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0x7
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=219.0 ms
+step resources                    t=224.4 ms
+step pipeline                     t=230.1 ms
+step record                       t=239.2 ms
+step submit                       t=247.7 ms
+step done                         t=253.6 ms
+gpu wait 5.84 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+dump C:\BC250\tmp\vrs-probe\p2s3\primkeep.bin 1048576 bytes
+RESULT arm=primkeep region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=primkeep expect=1x1 match=1
+texels y=0  id=32000 fc=(8,8)/16 rate=0x0  id=32001 fc=(24,8)/16 rate=0x0  id=32004 fc=(40,8)/16 rate=0x0  id=32005 fc=(56,8)/16 rate=0x0
+texels y=1  id=32002 fc=(8,24)/16 rate=0x0  id=32003 fc=(24,24)/16 rate=0x0  id=32006 fc=(40,24)/16 rate=0x0  id=32007 fc=(56,24)/16 rate=0x0
+texels y=2  id=32008 fc=(8,40)/16 rate=0x0  id=32009 fc=(24,40)/16 rate=0x0  id=32012 fc=(40,40)/16 rate=0x0  id=32013 fc=(56,40)/16 rate=0x0
+texels y=3  id=32010 fc=(8,56)/16 rate=0x0  id=32011 fc=(24,56)/16 rate=0x0  id=32014 fc=(40,56)/16 rate=0x0  id=32015 fc=(56,56)/16 rate=0x0
+exit 0 after 409.8 ms

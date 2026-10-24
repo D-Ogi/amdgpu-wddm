@@ -1,0 +1,10 @@
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+step load-icd                     t=39.1 ms
+icd interface 7
+step create-instance              t=9500.4 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 2fd8921d82dea6f7db8158b01167f84856e555f393507cb65b8f33289fda42cd
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=0 pipeline=0 primitive=0 attachment=0 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1

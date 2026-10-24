@@ -1,0 +1,42 @@
+radv_wddm2_winsys_create
+BC250 memory: overflow=allow source=default exe=vrsprobe-x64.exe MakeResident CantTrimFurther=1 MustSucceed=0, driver allocations CantTrimFurther=1 MustSucceed=1
+OpenAdapterFromLuid 0x0 0x841c
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+bc250: deferred destroy: header version=4 destroy=on(default) witness=on(default) cap_mb=512(default) policy=absent/00 log=(none)(default) summary_s=30(default) coalesce=on(default) gather_slots=16(default) progress_fence=gpu(default)
+bc250: deferred destroy: barrier tracking on (default)
+bc250: IB submission: IB2 calls from the gather slot (BC250_IB_NOCOPY=0 copies every IB)
+BC250 VRS PROBE: mask=0x03 draw=1 comb=0 vtx=0 ovr=0 ovr2x2=0 htile=0
+radv/bc250: submission switches local_bos=1
+radv_wddm2_winsys_create
+allocation handle=0x40000380
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ext_dgc=1 expose_dgc=1 native_task=0 hybrid_task=1 task_latched=0 why="a mesh draw token executes through radv_bc250_dgc, so MESH is reported; TASK is reported with it because a D3D12 runtime names MESH|TASK|FRAGMENT in every DISPATCH_MESH command signature and drops the extension for the whole device without both bits, and no task stage can be bound while taskShader is false. The route's accepted state is narrower than the direct DispatchMesh path's (BD-119, bc250_dgc_state_valid): multiview, streamout, VRS, an active query and a few more refuse the execute" d3d12=ExecuteIndirect-available
+allocation handle=0x40000400
+allocation handle=0x40000480
+allocation handle=0x40000500
+allocation handle=0x40000580
+allocation handle=0x40000600
+allocation handle=0x40000680
+allocation handle=0x40000700
+allocation handle=0x40000780
+BC250 VRS PROBE: PA_CL_VS_OUT_CNTL=0x01240000
+BC250 VRS PROBE: VGT_DRAW_PAYLOAD_CNTL=0x00000040
+BC250 VRS PROBE: FSR_API=0x00000101
+BC250 VRS PROBE: GE_VRS_RATE=0x00000000
+BC250 VRS PROBE: PA_CL_VS_OUT_CNTL=0x00000000
+BC250 VRS PROBE: VGT_DRAW_PAYLOAD_CNTL=0x00000040
+BC250 VRS PROBE: FSR_API=0x00000101
+BC250 VRS PROBE: GE_VRS_RATE=0x00000000
+allocation handle=0x40000840
+allocation handle=0x400008c0
+allocation handle=0x40000940
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x400009c0
+bc250: gather capacity=4096 bytes required=64 ibs=2 calls=2 copies=0
+bc250: deferred destroy: summary: 0 BOs held (0 MiB), 6 destroyed at once; peak 0 BOs, 0 MiB; longest hold 0 ms; 0 ranges leaked (0 KiB); 0 allocations retried after 0 CPU waits and 0 sweeps; 0 cap reports; teardown: 0 CPU waits, 0 ms; 0 host imports destroyed, never held
+bc250: deferred destroy: witness finish destroys=6 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:3/0/0 shader-ring:1/0/0 cpu-upload:0/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:2/0/0 other:0/0/0
+bc250: deferred destroy: periodic final t=0s deferred: held=0 held_kib=0 held_va_kib=0 held_va_32bit=0 peak=0 peak_kib=0 held_total=0 held_total_mib=0 released=0 immediate=6 longest_hold_ms=0 leaked_ranges=0 leaked_va_kib=0 locked=0 locked_kib=0 refused=0 refused_kib=0 refusals=0 refused_retries=0 destroys=6 borrowed=0 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 cap_reports=0 retries=0 oom_waits=0 sweeps=0 va_refused=0 va_refused_kib=0 va_refusals=0 va_refused_retries=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:3/0/0 shader-ring:1/0/0 cpu-upload:0/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:2/0/0 other:0/0/0
+bc250: deferred destroy: periodic final t=0s submit: submits=1 progress_separate=0 progress_merged=0 signal_calls=2 signal_objects=2 wait_objects=0 wait_dropped=0 wait_calls=0 wait_skipped=0 gather_slots=16 gather_waits=0 gather_wait_ms=0 gather_wait_max_us=0 coalesce=on progress_fence=gpu progress_gpu=1 kernel_queues=0 progress_repairs=0 progress_repairs_failed=0

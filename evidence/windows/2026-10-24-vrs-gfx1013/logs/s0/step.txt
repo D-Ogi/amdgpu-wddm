@@ -1,0 +1,14 @@
+step mask=off arms=caps,plain start 2026-10-24T11:24:35.3927166Z
+client 33CB2C414B13B62BEEF7CF50A90A401B3C5A86BC5BA95C36C2A5143AAACD81A3  C:\BC250\tmp\vrs-probe\vrsprobe-x64.exe
+icd    2FD8921D82DEA6F7DB8158B01167F84856E555F393507CB65B8F33289FDA42CD  C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll
+kmd before: 0 fault lines, 0 timeout lines
+env RADV_BC250_VRS_PROBE=(unset)
+--- caps: exit 0 after 10.5 s
+  caps fsr_extension=0 pipeline=0 primitive=0 attachment=0 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+--- plain: exit 0 after 0.4 s
+  caps fsr_extension=0 pipeline=0 primitive=0 attachment=0 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+  counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+  RESULT arm=plain region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0xFFFF:65536
+  VERDICT arm=plain expect=1x1 match=1
+kmd after: 0 fault lines, 0 timeout lines
+step end 2026-10-24T11:24:47.0148344Z after 11.6 s; stop=none

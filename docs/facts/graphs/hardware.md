@@ -30,6 +30,7 @@ flowchart LR
   M241["M241<br/>kmd"]
   M242["M242"]
   M333["M333<br/>linux"]
+  M564["M564<br/>d3d"]
   M787["M787"]
   M789["M789"]
   M804["M804"]
@@ -41,6 +42,7 @@ flowchart LR
   M896["M896"]
   M907["M907"]
   M910["M910"]
+  M922["M922"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -64,13 +66,14 @@ flowchart LR
   M813 ==>|supports| M6
   M896 ==>|supports| M880
   M910 ==>|supports| M907
+  M922 ==>|supports| M564
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
   M12 -.->|refutes| R3
   M333 ==>|supersedes| M35
   classDef other stroke-dasharray:4 3
-  class M5,M12,M90,M241,M333,M870,M880 other
+  class M5,M12,M90,M241,M333,M564,M870,M880 other
 ```
 
 ## References

@@ -1,0 +1,27 @@
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+arm plain: no shading rate state, no rate read (works without the extension); expect 1x1; size 256x256
+step load-icd                     t=63.7 ms
+icd interface 7
+step create-instance              t=83.1 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 2fd8921d82dea6f7db8158b01167f84856e555f393507cb65b8f33289fda42cd
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=0 pipeline=0 primitive=0 attachment=0 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+step create-device                t=202.1 ms
+step resources                    t=207.1 ms
+step pipeline                     t=213.6 ms
+step record                       t=223.0 ms
+step submit                       t=231.3 ms
+step done                         t=236.8 ms
+gpu wait 5.63 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+dump C:\BC250\tmp\vrs-probe\s0\plain.bin 1048576 bytes
+RESULT arm=plain region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0xFFFF:65536
+VERDICT arm=plain expect=1x1 match=1
+texels y=0  id=22528 fc=(8,8)/16 rate=0xFFFF  id=22529 fc=(24,8)/16 rate=0xFFFF  id=22532 fc=(40,8)/16 rate=0xFFFF  id=22533 fc=(56,8)/16 rate=0xFFFF
+texels y=1  id=22530 fc=(8,24)/16 rate=0xFFFF  id=22531 fc=(24,24)/16 rate=0xFFFF  id=22534 fc=(40,24)/16 rate=0xFFFF  id=22535 fc=(56,24)/16 rate=0xFFFF
+texels y=2  id=22536 fc=(8,40)/16 rate=0xFFFF  id=22537 fc=(24,40)/16 rate=0xFFFF  id=22540 fc=(40,40)/16 rate=0xFFFF  id=22541 fc=(56,40)/16 rate=0xFFFF
+texels y=3  id=22538 fc=(8,56)/16 rate=0xFFFF  id=22539 fc=(24,56)/16 rate=0xFFFF  id=22542 fc=(40,56)/16 rate=0xFFFF  id=22543 fc=(56,56)/16 rate=0xFFFF
+exit 0 after 395.5 ms

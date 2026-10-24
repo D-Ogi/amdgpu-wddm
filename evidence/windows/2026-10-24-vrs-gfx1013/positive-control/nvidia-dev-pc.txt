@@ -1,0 +1,355 @@
+positive control, development PC, system Vulkan loader, 2026-10-24T11:17:12Z
+client sha256 33cb2c414b13b62beef7cf50a90a401b3c5a86bc5ba95c36c2a5143aaacd81a3
+=== caps
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+step load-icd                     t=0.6 ms
+step create-instance              t=2.4 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+exit 0
+=== plain
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm plain: no shading rate state, no rate read (works without the extension); expect 1x1; size 256x256
+step load-icd                     t=0.7 ms
+step create-instance              t=2.2 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=123.7 ms
+step resources                    t=168.0 ms
+step pipeline                     t=169.0 ms
+step record                       t=169.4 ms
+step submit                       t=169.7 ms
+step done                         t=170.0 ms
+gpu wait 0.26 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+RESULT arm=plain region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=plain expect=1x1 match=1
+texels y=0  id=16928 fc=(8,8)/16 rate=0x0  id=16929 fc=(24,8)/16 rate=0x0  id=16944 fc=(40,8)/16 rate=0x0  id=16945 fc=(56,8)/16 rate=0x0
+texels y=1  id=16930 fc=(8,24)/16 rate=0x0  id=16931 fc=(24,24)/16 rate=0x0  id=16946 fc=(40,24)/16 rate=0x0  id=16947 fc=(56,24)/16 rate=0x0
+texels y=2  id=16932 fc=(8,40)/16 rate=0x0  id=16933 fc=(24,40)/16 rate=0x0  id=16948 fc=(40,40)/16 rate=0x0  id=16949 fc=(56,40)/16 rate=0x0
+texels y=3  id=16934 fc=(8,56)/16 rate=0x0  id=16935 fc=(24,56)/16 rate=0x0  id=16950 fc=(40,56)/16 rate=0x0  id=16951 fc=(56,56)/16 rate=0x0
+exit 0 after 222.0 ms
+exit 0
+=== pipe1x1
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm pipe1x1: pipeline rate 1x1; expect 1x1; size 256x256
+step load-icd                     t=0.6 ms
+step create-instance              t=4.1 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=131.7 ms
+step resources                    t=183.0 ms
+step pipeline                     t=184.0 ms
+step record                       t=184.4 ms
+step submit                       t=184.7 ms
+step done                         t=185.0 ms
+gpu wait 0.26 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+RESULT arm=pipe1x1 region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=pipe1x1 expect=1x1 match=1
+texels y=0  id=16320 fc=(8,8)/16 rate=0x0  id=16321 fc=(24,8)/16 rate=0x0  id=16336 fc=(40,8)/16 rate=0x0  id=16337 fc=(56,8)/16 rate=0x0
+texels y=1  id=16322 fc=(8,24)/16 rate=0x0  id=16323 fc=(24,24)/16 rate=0x0  id=16338 fc=(40,24)/16 rate=0x0  id=16339 fc=(56,24)/16 rate=0x0
+texels y=2  id=16324 fc=(8,40)/16 rate=0x0  id=16325 fc=(24,40)/16 rate=0x0  id=16340 fc=(40,40)/16 rate=0x0  id=16341 fc=(56,40)/16 rate=0x0
+texels y=3  id=16326 fc=(8,56)/16 rate=0x0  id=16327 fc=(24,56)/16 rate=0x0  id=16342 fc=(40,56)/16 rate=0x0  id=16343 fc=(56,56)/16 rate=0x0
+exit 0 after 236.5 ms
+exit 0
+=== pipe2x2
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm pipe2x2: pipeline rate 2x2; expect 2x2; size 256x256
+step load-icd                     t=0.6 ms
+step create-instance              t=2.1 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=122.8 ms
+step resources                    t=168.4 ms
+step pipeline                     t=169.4 ms
+step record                       t=169.7 ms
+step submit                       t=170.0 ms
+step done                         t=170.3 ms
+gpu wait 0.27 ms
+counter invocations=16384 pixels=65536 ratio=0.2500 pipeline_stat_fs_invocations=16384
+RESULT arm=pipe2x2 region=all expect=2x2 shape=2x2 match=1 pixels=65536 written=65536 distinct_ids=16384 bad_ids=0 ratio=0.2500 uniform2x2=16384/16384 uniform2x1=32768/32768 uniform1x2=32768/32768 rate_read=0x5:65536
+VERDICT arm=pipe2x2 expect=2x2 match=1
+texels y=0  id=3648 fc=(16,16)/16 rate=0x5  id=3648 fc=(16,16)/16 rate=0x5  id=3649 fc=(48,16)/16 rate=0x5  id=3649 fc=(48,16)/16 rate=0x5
+texels y=1  id=3648 fc=(16,16)/16 rate=0x5  id=3648 fc=(16,16)/16 rate=0x5  id=3649 fc=(48,16)/16 rate=0x5  id=3649 fc=(48,16)/16 rate=0x5
+texels y=2  id=3650 fc=(16,48)/16 rate=0x5  id=3650 fc=(16,48)/16 rate=0x5  id=3651 fc=(48,48)/16 rate=0x5  id=3651 fc=(48,48)/16 rate=0x5
+texels y=3  id=3650 fc=(16,48)/16 rate=0x5  id=3650 fc=(16,48)/16 rate=0x5  id=3651 fc=(48,48)/16 rate=0x5  id=3651 fc=(48,48)/16 rate=0x5
+exit 0 after 224.9 ms
+exit 0
+=== pipe2x1
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm pipe2x1: pipeline rate 2 wide, 1 high; expect 2x1; size 256x256
+step load-icd                     t=0.7 ms
+step create-instance              t=2.2 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=123.3 ms
+step resources                    t=179.7 ms
+step pipeline                     t=180.8 ms
+step record                       t=181.1 ms
+step submit                       t=181.5 ms
+step done                         t=181.7 ms
+gpu wait 0.27 ms
+counter invocations=32768 pixels=65536 ratio=0.5000 pipeline_stat_fs_invocations=32768
+RESULT arm=pipe2x1 region=all expect=2x1 shape=2x1 match=1 pixels=65536 written=65536 distinct_ids=32768 bad_ids=0 ratio=0.5000 uniform2x2=0/16384 uniform2x1=32768/32768 uniform1x2=0/32768 rate_read=0x4:65536
+VERDICT arm=pipe2x1 expect=2x1 match=1
+texels y=0  id=4480 fc=(16,8)/16 rate=0x4  id=4480 fc=(16,8)/16 rate=0x4  id=4481 fc=(48,8)/16 rate=0x4  id=4481 fc=(48,8)/16 rate=0x4
+texels y=1  id=4482 fc=(16,24)/16 rate=0x4  id=4482 fc=(16,24)/16 rate=0x4  id=4483 fc=(48,24)/16 rate=0x4  id=4483 fc=(48,24)/16 rate=0x4
+texels y=2  id=4484 fc=(16,40)/16 rate=0x4  id=4484 fc=(16,40)/16 rate=0x4  id=4485 fc=(48,40)/16 rate=0x4  id=4485 fc=(48,40)/16 rate=0x4
+texels y=3  id=4486 fc=(16,56)/16 rate=0x4  id=4486 fc=(16,56)/16 rate=0x4  id=4487 fc=(48,56)/16 rate=0x4  id=4487 fc=(48,56)/16 rate=0x4
+exit 0 after 236.7 ms
+exit 0
+=== pipe1x2
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm pipe1x2: pipeline rate 1 wide, 2 high; expect 1x2; size 256x256
+step load-icd                     t=0.6 ms
+step create-instance              t=2.1 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=138.8 ms
+step resources                    t=185.1 ms
+step pipeline                     t=186.2 ms
+step record                       t=186.5 ms
+step submit                       t=186.8 ms
+step done                         t=187.1 ms
+gpu wait 0.27 ms
+counter invocations=32768 pixels=65536 ratio=0.5000 pipeline_stat_fs_invocations=32768
+RESULT arm=pipe1x2 region=all expect=1x2 shape=1x2 match=1 pixels=65536 written=65536 distinct_ids=32768 bad_ids=0 ratio=0.5000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=32768/32768 rate_read=0x1:65536
+VERDICT arm=pipe1x2 expect=1x2 match=1
+texels y=0  id=6080 fc=(8,16)/16 rate=0x1  id=6081 fc=(24,16)/16 rate=0x1  id=6088 fc=(40,16)/16 rate=0x1  id=6089 fc=(56,16)/16 rate=0x1
+texels y=1  id=6080 fc=(8,16)/16 rate=0x1  id=6081 fc=(24,16)/16 rate=0x1  id=6088 fc=(40,16)/16 rate=0x1  id=6089 fc=(56,16)/16 rate=0x1
+texels y=2  id=6082 fc=(8,48)/16 rate=0x1  id=6083 fc=(24,48)/16 rate=0x1  id=6090 fc=(40,48)/16 rate=0x1  id=6091 fc=(56,48)/16 rate=0x1
+texels y=3  id=6082 fc=(8,48)/16 rate=0x1  id=6083 fc=(24,48)/16 rate=0x1  id=6090 fc=(40,48)/16 rate=0x1  id=6091 fc=(56,48)/16 rate=0x1
+exit 0 after 238.6 ms
+exit 0
+=== prim2x2
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm prim2x2: vertex shader writes 2x2, combiner 0 REPLACE; expect 2x2; size 256x256
+step load-icd                     t=0.7 ms
+step create-instance              t=2.2 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=123.2 ms
+step resources                    t=170.5 ms
+step pipeline                     t=171.5 ms
+step record                       t=171.8 ms
+step submit                       t=172.2 ms
+step done                         t=172.4 ms
+gpu wait 0.27 ms
+counter invocations=16384 pixels=65536 ratio=0.2500 pipeline_stat_fs_invocations=16384
+RESULT arm=prim2x2 region=all expect=2x2 shape=2x2 match=1 pixels=65536 written=65536 distinct_ids=16384 bad_ids=0 ratio=0.2500 uniform2x2=16384/16384 uniform2x1=32768/32768 uniform1x2=32768/32768 rate_read=0x5:65536
+VERDICT arm=prim2x2 expect=2x2 match=1
+texels y=0  id=1376 fc=(16,16)/16 rate=0x5  id=1376 fc=(16,16)/16 rate=0x5  id=1377 fc=(48,16)/16 rate=0x5  id=1377 fc=(48,16)/16 rate=0x5
+texels y=1  id=1376 fc=(16,16)/16 rate=0x5  id=1376 fc=(16,16)/16 rate=0x5  id=1377 fc=(48,16)/16 rate=0x5  id=1377 fc=(48,16)/16 rate=0x5
+texels y=2  id=1378 fc=(16,48)/16 rate=0x5  id=1378 fc=(16,48)/16 rate=0x5  id=1379 fc=(48,48)/16 rate=0x5  id=1379 fc=(48,48)/16 rate=0x5
+texels y=3  id=1378 fc=(16,48)/16 rate=0x5  id=1378 fc=(16,48)/16 rate=0x5  id=1379 fc=(48,48)/16 rate=0x5  id=1379 fc=(48,48)/16 rate=0x5
+exit 0 after 227.1 ms
+exit 0
+=== primkeep
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm primkeep: vertex shader writes 2x2, combiner 0 KEEP (control: rate discarded); expect 1x1; size 256x256
+step load-icd                     t=0.8 ms
+step create-instance              t=2.4 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=122.9 ms
+step resources                    t=166.7 ms
+step pipeline                     t=167.7 ms
+step record                       t=168.1 ms
+step submit                       t=168.4 ms
+step done                         t=168.7 ms
+gpu wait 0.30 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+RESULT arm=primkeep region=all expect=1x1 shape=1x1 match=1 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=primkeep expect=1x1 match=1
+texels y=0  id=22272 fc=(8,8)/16 rate=0x0  id=22273 fc=(24,8)/16 rate=0x0  id=22288 fc=(40,8)/16 rate=0x0  id=22289 fc=(56,8)/16 rate=0x0
+texels y=1  id=22274 fc=(8,24)/16 rate=0x0  id=22275 fc=(24,24)/16 rate=0x0  id=22290 fc=(40,24)/16 rate=0x0  id=22291 fc=(56,24)/16 rate=0x0
+texels y=2  id=22276 fc=(8,40)/16 rate=0x0  id=22277 fc=(24,40)/16 rate=0x0  id=22292 fc=(40,40)/16 rate=0x0  id=22293 fc=(56,40)/16 rate=0x0
+texels y=3  id=22278 fc=(8,56)/16 rate=0x0  id=22279 fc=(24,56)/16 rate=0x0  id=22294 fc=(40,56)/16 rate=0x0  id=22295 fc=(56,56)/16 rate=0x0
+exit 0 after 221.3 ms
+exit 0
+=== att2x2
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm att2x2: rate attachment, depth attachment bound, combiner 1 REPLACE; expect left=1x1,right=2x2; size 256x256
+step load-icd                     t=0.7 ms
+step create-instance              t=2.4 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=125.5 ms
+step resources                    t=168.1 ms
+step pipeline                     t=169.5 ms
+step record                       t=169.8 ms
+step submit                       t=170.1 ms
+step done                         t=170.4 ms
+gpu wait 0.27 ms
+counter invocations=40960 pixels=65536 ratio=0.6250 pipeline_stat_fs_invocations=40960
+RESULT arm=att2x2 region=left expect=1x1 shape=1x1 match=1 pixels=32768 written=32768 distinct_ids=32768 bad_ids=0 ratio=1.0000 uniform2x2=0/8192 uniform2x1=0/16384 uniform1x2=0/16384 rate_read=0x0:32768
+RESULT arm=att2x2 region=right expect=2x2 shape=2x2 match=1 pixels=32768 written=32768 distinct_ids=8192 bad_ids=0 ratio=0.2500 uniform2x2=8192/8192 uniform2x1=16384/16384 uniform1x2=16384/16384 rate_read=0x5:32768
+VERDICT arm=att2x2 expect=left=1x1,right=2x2 match=1
+texels y=0  id=1728 fc=(8,8)/16 rate=0x0  id=1729 fc=(24,8)/16 rate=0x0  id=1744 fc=(40,8)/16 rate=0x0  id=1745 fc=(56,8)/16 rate=0x0
+texels y=1  id=1730 fc=(8,24)/16 rate=0x0  id=1731 fc=(24,24)/16 rate=0x0  id=1746 fc=(40,24)/16 rate=0x0  id=1747 fc=(56,24)/16 rate=0x0
+texels y=2  id=1732 fc=(8,40)/16 rate=0x0  id=1733 fc=(24,40)/16 rate=0x0  id=1748 fc=(40,40)/16 rate=0x0  id=1749 fc=(56,40)/16 rate=0x0
+texels y=3  id=1734 fc=(8,56)/16 rate=0x0  id=1735 fc=(24,56)/16 rate=0x0  id=1750 fc=(40,56)/16 rate=0x0  id=1751 fc=(56,56)/16 rate=0x0
+exit 0 after 224.0 ms
+exit 0
+=== attnd2x2
+env RADV_BC250_VRS_PROBE       (unset)
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  (unset)
+env RADV_DEBUG                 (unset)
+arm attnd2x2: rate attachment, no depth attachment, combiner 1 REPLACE; expect left=1x1,right=2x2; size 256x256
+step load-icd                     t=0.7 ms
+step create-instance              t=2.3 ms
+icd module    C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvoglv64.dll sha256 7c8d6327e157435aeac82f6b600bf47107c3b2b5c6dbbdf91cfb10715f7369c3
+device 0      NVIDIA GeForce RTX 4090 (vendor 0x10DE device 0x2684) driver 0x94D84000 api 1.4.329
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=16x16 texel_max=16x16 max_fragment_size=4x4 non_trivial_combiners=1 primitive_multi_viewport=67108864
+caps rate 4x4 samples 0x1
+caps rate 4x2 samples 0x1
+caps rate 2x4 samples 0x3
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0xf
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=125.1 ms
+step resources                    t=168.5 ms
+step pipeline                     t=169.6 ms
+step record                       t=169.9 ms
+step submit                       t=170.3 ms
+step done                         t=171.1 ms
+gpu wait 0.83 ms
+counter invocations=40960 pixels=65536 ratio=0.6250 pipeline_stat_fs_invocations=40960
+RESULT arm=attnd2x2 region=left expect=1x1 shape=1x1 match=1 pixels=32768 written=32768 distinct_ids=32768 bad_ids=0 ratio=1.0000 uniform2x2=0/8192 uniform2x1=0/16384 uniform1x2=0/16384 rate_read=0x0:32768
+RESULT arm=attnd2x2 region=right expect=2x2 shape=2x2 match=1 pixels=32768 written=32768 distinct_ids=8192 bad_ids=0 ratio=0.2500 uniform2x2=8192/8192 uniform2x1=16384/16384 uniform1x2=16384/16384 rate_read=0x5:32768
+VERDICT arm=attnd2x2 expect=left=1x1,right=2x2 match=1
+texels y=0  id=5024 fc=(8,8)/16 rate=0x0  id=5025 fc=(24,8)/16 rate=0x0  id=5040 fc=(40,8)/16 rate=0x0  id=5041 fc=(56,8)/16 rate=0x0
+texels y=1  id=5026 fc=(8,24)/16 rate=0x0  id=5027 fc=(24,24)/16 rate=0x0  id=5042 fc=(40,24)/16 rate=0x0  id=5043 fc=(56,24)/16 rate=0x0
+texels y=2  id=5028 fc=(8,40)/16 rate=0x0  id=5029 fc=(24,40)/16 rate=0x0  id=5044 fc=(40,40)/16 rate=0x0  id=5045 fc=(56,40)/16 rate=0x0
+texels y=3  id=5030 fc=(8,56)/16 rate=0x0  id=5031 fc=(24,56)/16 rate=0x0  id=5046 fc=(40,56)/16 rate=0x0  id=5047 fc=(56,56)/16 rate=0x0
+exit 0 after 225.2 ms
+exit 0
+=== check-dump.py on dumps of the same arms, 2026-10-24T11:20:12Z, sha256 cd2f45088a380df138262e599a2a04c60035b4b4b76c6588a7e910d04a2655f6
+FRAGCOORD file=positive-control/dumps/plain.bin pixels=65536 centre1x1=65536 centre2x2=0 centre2x1=0 centre1x2=0 none=0 bad_marker=0 first_none=-
+FRAGCOORD file=positive-control/dumps/pipe2x2.bin pixels=65536 centre1x1=0 centre2x2=65536 centre2x1=0 centre1x2=0 none=0 bad_marker=0 first_none=-
+FRAGCOORD file=positive-control/dumps/pipe2x1.bin pixels=65536 centre1x1=0 centre2x2=0 centre2x1=65536 centre1x2=0 none=0 bad_marker=0 first_none=-
+FRAGCOORD file=positive-control/dumps/pipe1x2.bin pixels=65536 centre1x1=0 centre2x2=0 centre2x1=0 centre1x2=65536 none=0 bad_marker=0 first_none=-
+FRAGCOORD file=positive-control/dumps/prim2x2.bin pixels=65536 centre1x1=0 centre2x2=65536 centre2x1=0 centre1x2=0 none=0 bad_marker=0 first_none=-
+FRAGCOORD file=positive-control/dumps/att2x2.bin pixels=65536 centre1x1=32768 centre2x2=32768 centre2x1=0 centre1x2=0 none=0 bad_marker=0 first_none=-

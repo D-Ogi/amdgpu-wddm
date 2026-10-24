@@ -1,0 +1,75 @@
+env RADV_BC250_VRS_PROBE       3
+env RADV_BC250_VRS_NOOP        (unset)
+env MESA_SHADER_CACHE_DISABLE  true
+env RADV_DEBUG                 (unset)
+arm pipe2x1: pipeline rate 2 wide, 1 high; expect 2x1; size 256x256
+step load-icd                     t=56.7 ms
+icd interface 7
+step create-instance              t=77.7 ms
+icd module    C:\BC250\tmp\vrs-probe\icd\amdgpu_wddm_radv.dll sha256 c043a7a843097ef4f18690ec154e507797078099befa87cf15a149b8cbd632f3
+device 0      AMD BC-250 (RADV GFX1013) (vendor 0x1002 device 0x13FE) driver 0x06863063 api 1.4.363  <- BC-250
+caps fsr_extension=1 pipeline=1 primitive=1 attachment=1 dynamic_rendering=1 pipeline_statistics=1 fragment_atomics=1
+caps texel_min=8x8 texel_max=8x8 max_fragment_size=2x2 non_trivial_combiners=1 primitive_multi_viewport=1
+caps rate 2x2 samples 0x7
+caps rate 2x1 samples 0x7
+caps rate 1x2 samples 0x7
+caps rate 1x1 samples 0xffffffff
+caps r8_uint_rate_attachment=1
+step create-device                t=233.9 ms
+step resources                    t=239.5 ms
+step pipeline                     t=245.3 ms
+step record                       t=254.9 ms
+step submit                       t=263.6 ms
+step done                         t=269.8 ms
+gpu wait 6.31 ms
+counter invocations=65536 pixels=65536 ratio=1.0000 pipeline_stat_fs_invocations=65536
+dump C:\BC250\tmp\vrs-probe\p2s2\pipe2x1.bin 1048576 bytes
+RESULT arm=pipe2x1 region=all expect=2x1 shape=1x1 match=0 pixels=65536 written=65536 distinct_ids=65536 bad_ids=0 ratio=1.0000 uniform2x2=0/16384 uniform2x1=0/32768 uniform1x2=0/32768 rate_read=0x0:65536
+VERDICT arm=pipe2x1 expect=2x1 match=0
+texels y=0  id=10880 fc=(8,8)/16 rate=0x0  id=10881 fc=(24,8)/16 rate=0x0  id=10884 fc=(40,8)/16 rate=0x0  id=10885 fc=(56,8)/16 rate=0x0
+texels y=1  id=10882 fc=(8,24)/16 rate=0x0  id=10883 fc=(24,24)/16 rate=0x0  id=10886 fc=(40,24)/16 rate=0x0  id=10887 fc=(56,24)/16 rate=0x0
+texels y=2  id=10888 fc=(8,40)/16 rate=0x0  id=10889 fc=(24,40)/16 rate=0x0  id=10892 fc=(40,40)/16 rate=0x0  id=10893 fc=(56,40)/16 rate=0x0
+texels y=3  id=10890 fc=(8,56)/16 rate=0x0  id=10891 fc=(24,56)/16 rate=0x0  id=10894 fc=(40,56)/16 rate=0x0  id=10895 fc=(56,56)/16 rate=0x0
+exit 0 after 428.3 ms
+radv_wddm2_winsys_create
+BC250 memory: overflow=allow source=default exe=vrsprobe-x64.exe MakeResident CantTrimFurther=1 MustSucceed=0, driver allocations CantTrimFurther=1 MustSucceed=1
+OpenAdapterFromLuid 0x0 0x841c
+phys adapter = 0 device = 13fe rev 0
+node 0 (type: 1) = BC-250 GFX, flags = 0
+node 1 (type: 6) = BC-250 SDMA0, flags = 0
+bc250: caps blob, device 0x13fe family 79 gfx 12
+bc250: deferred destroy: header version=4 destroy=on(default) witness=on(default) cap_mb=512(default) policy=absent/00 log=(none)(default) summary_s=30(default) coalesce=on(default) gather_slots=16(default) progress_fence=gpu(default)
+bc250: deferred destroy: barrier tracking on (default)
+bc250: IB submission: IB2 calls from the gather slot (BC250_IB_NOCOPY=0 copies every IB)
+BC250 VRS PROBE: mask=0x03 draw=1 comb=0 vtx=0 ovr=0 ovr2x2=0 htile=0
+radv/bc250: submission switches local_bos=1
+radv_wddm2_winsys_create
+allocation handle=0x40000380
+bc250: gfx preamble inlined (no gfx_init IB)
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ext_dgc=1 expose_dgc=1 native_task=0 hybrid_task=1 task_latched=0 why="a mesh draw token executes through radv_bc250_dgc, so MESH is reported; TASK is reported with it because a D3D12 runtime names MESH|TASK|FRAGMENT in every DISPATCH_MESH command signature and drops the extension for the whole device without both bits, and no task stage can be bound while taskShader is false. The route's accepted state is narrower than the direct DispatchMesh path's (BD-119, bc250_dgc_state_valid): multiview, streamout, VRS, an active query and a few more refuse the execute" d3d12=ExecuteIndirect-available
+allocation handle=0x40000400
+allocation handle=0x40000480
+allocation handle=0x40000500
+allocation handle=0x40000580
+allocation handle=0x40000600
+allocation handle=0x40000680
+allocation handle=0x40000700
+allocation handle=0x40000780
+BC250 VRS PROBE: PA_CL_VS_OUT_CNTL=0x01240000
+BC250 VRS PROBE: VGT_DRAW_PAYLOAD_CNTL=0x00000040
+BC250 VRS PROBE: FSR_API=0x00000101
+BC250 VRS PROBE: GE_VRS_RATE=0x00000000
+BC250 VRS PROBE: PA_CL_VS_OUT_CNTL=0x00000000
+BC250 VRS PROBE: VGT_DRAW_PAYLOAD_CNTL=0x00000040
+BC250 VRS PROBE: FSR_API=0x00000102
+BC250 VRS PROBE: GE_VRS_RATE=0x00000001
+allocation handle=0x40000840
+allocation handle=0x400008c0
+allocation handle=0x40000940
+bc250: progress before submit previous=0 observed=0 slot=0 retire=0 waits=0 signals=1
+allocation handle=0x400009c0
+bc250: gather capacity=4096 bytes required=64 ibs=2 calls=2 copies=0
+bc250: deferred destroy: summary: 0 BOs held (0 MiB), 6 destroyed at once; peak 0 BOs, 0 MiB; longest hold 0 ms; 0 ranges leaked (0 KiB); 0 allocations retried after 0 CPU waits and 0 sweeps; 0 cap reports; teardown: 0 CPU waits, 0 ms; 0 host imports destroyed, never held
+bc250: deferred destroy: witness finish destroys=6 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:3/0/0 shader-ring:1/0/0 cpu-upload:0/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:2/0/0 other:0/0/0
+bc250: deferred destroy: periodic final t=0s deferred: held=0 held_kib=0 held_va_kib=0 held_va_32bit=0 peak=0 peak_kib=0 held_total=0 held_total_mib=0 released=0 immediate=6 longest_hold_ms=0 leaked_ranges=0 leaked_va_kib=0 locked=0 locked_kib=0 refused=0 refused_kib=0 refusals=0 refused_retries=0 destroys=6 borrowed=0 in_flight=0 in_flight_32bit=0 in_flight_kib=0 stale_names=0 cap_reports=0 retries=0 oom_waits=0 sweeps=0 va_refused=0 va_refused_kib=0 va_refusals=0 va_refused_retries=0 classes(destroyed/held/in_flight)=virtual:0/0/0 command-stream:3/0/0 shader-ring:1/0/0 cpu-upload:0/0/0 descriptor-pool:0/0/0 query-pool:0/0/0 application:2/0/0 other:0/0/0
+bc250: deferred destroy: periodic final t=0s submit: submits=1 progress_separate=0 progress_merged=0 signal_calls=2 signal_objects=2 wait_objects=0 wait_dropped=0 wait_calls=0 wait_skipped=0 gather_slots=16 gather_waits=0 gather_wait_ms=0 gather_wait_max_us=0 coalesce=on progress_fence=gpu progress_gpu=1 kernel_queues=0 progress_repairs=0 progress_repairs_failed=0

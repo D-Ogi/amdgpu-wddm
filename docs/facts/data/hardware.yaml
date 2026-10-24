@@ -867,6 +867,15 @@ facts:
     edges:
       - {"type": "uses", "to": "M906"}
       - {"type": "supports", "to": "M907"}
+  - id: M922
+    status: MEASURED
+    date: "2026-10-24"
+    claim: "gfx1013 does no variable rate shading: the GFX10.3 per-draw rate (GE_VRS_RATE), per-vertex rate (PA_CL_VS_OUT_CNTL.USE_VTX_VRS_RATE with the PA_CL_VRS_CNTL vertex combiner), HTILE attachment rate (PA_CL_VRS_CNTL HTILE combiner) and DB override (DB_VRS_OVERRIDE_CNTL 2x2) all leave every fragment shaded at 1x1. GC 10.1 has no register or field at any of these addresses and bits."
+    status_text: "MEASURED (unit A, one draw per arm, 12 arms on two probe ICDs; positive control on another GPU)"
+    detail: "Lab-flavour probe ICD from mesa-wddm diag/bc250-vrs-probe 0877b385 + 844b7372 (RADV_BC250_VRS_PROBE takes the GFX10.3 VRS paths on GFX1013 and logs each VRS value that it writes); client vrsprobe 33CB2C41, 256 x 256, one full-screen draw, atomic id per invocation plus a pipeline statistics query. With ICD C043A7A8 the logged values are the expected ones (pipe2x2 GE_VRS_RATE 0x11, pipe2x1 0x01, pipe1x2 0x10, prim2x2 PA_CL_VRS_CNTL 0x1 with USE_VTX_VRS_RATE, att2x2/attnd2x2 PA_CL_VRS_CNTL 0x40), and every arm gives 65536 invocations = 65536 pipeline statistics invocations = 65536 pixels, 65536 distinct ids, rate 0x0, FragCoord at the 1x1 centre. With ICD 2FD8921D, DB_VRS_OVERRIDE_CNTL 0x51 (OVERRIDE, 2x2) also gives 1x1. No KMD fault or timeout. The same client on an RTX 4090 gives 16384 invocations for 2x2 and the expected shape in all 9 arms. GC 10.1 headers and Mesa gfx10.json have nothing at context 0x28064 and 0x28848, uconfig 0x3098C, PA_CL_VS_OUT_CNTL bit 28, VGT_DRAW_PAYLOAD_CNTL bit 6 and DB_HTILE_SURFACE bits 19-20. Not shown: whether anything decodes these addresses; the DB_HTILE_SURFACE value of the attachment arms was not logged."
+    evidence: "[VRS on gfx1013](../evidence/windows/2026-10-24-vrs-gfx1013/RESULT.md)"
+    edges:
+      - {"type": "supports", "to": "M564"}
   - id: S1
     status: HYPOTHESIS
     date: "2026-09-21"
