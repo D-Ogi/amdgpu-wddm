@@ -16,8 +16,9 @@ and release-tester.32.json an example.
       (--allow-unpushed makes this a warning, for a local dry run). attribution: no commit message, author or
       committer from the base to the commit names an AI agent or model (ATTRIBUTION), and no message quotes the
       repository owner or attributes a rule to the owner with a date (OWNER_RX; in a commit that the fork already
-      holds, a warning only). compiler: each row names
-      its compiler on the recipe's command line, and the compiler policy allows it (compiler_findings).
+      holds, a warning only). A repository with an 'upstream' commit leaves the history that commit reaches out of
+      the scan, when a remote of the upstream URL holds it, and the report counts what it left out. compiler: each
+      row names its compiler on the recipe's command line, and the compiler policy allows it (compiler_findings).
   build_release_set.py collect --job <job.json>
       Inside one build: copies each output and the PDB its image names into the artifact directory, with the
       build's recipe.json and the files of 'keep', and writes collect.json (SHA-256, size, PDB identity).
@@ -67,6 +68,11 @@ ATTRIBUTION = [
     ("Copilot", r"\bcopilot\b"), ("DeepSeek", r"\bdeepseek\b"),
 ]
 ATTRIBUTION_RX = [(word, re.compile(rx, re.I)) for word, rx in ATTRIBUTION]
+# These model names are also English words or other products (a poem, an operating system, a story), so they are a hit
+# only in an attribution context: a trailer line ("<Something>-by:"), or a line that names the vendor or its product.
+# Mesa's util code names the Haiku operating system beside Windows and macOS, and that is not an author.
+CONTEXT_WORDS = {"Opus", "Sonnet", "Haiku", "Fable"}
+CONTEXT_RX = re.compile(r"^\s*[a-z][a-z-]*-by\s*:|\bclaude\b|\banthropic\b", re.I)
 # A commit message states a requirement as the project's own, never as a quote of the repository owner or an
 # attribution with a date. The push gate of the workspace refuses such a message with this same pattern, so a
 # release set that names such a commit could not be pushed. Technical owners (SMU owner, file owner, owner lock)
@@ -431,10 +437,13 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
 # ---------------------------------------------------------------------------------------------------------------
 # The gates.
 
-def scan_attribution(checkout, base, commit):
-    """Every commit of base..commit whose author, committer or message names an AI agent or model."""
+def scan_attribution(checkout, base, commit, upstream=None):
+    """Every commit of base..commit whose author, committer or message names an AI agent or model. With upstream, the
+    commits that the upstream commit reaches are not read: they are the upstream project's history, which a merge
+    brings in with its own authors and trailers (the push gate admits them the same way)."""
+    exclude = [f"^{upstream}"] if upstream else []
     r = subprocess.run(["git", "-C", str(checkout), "log", "--format=%H%x1f%an <%ae>%x1f%cn <%ce>%x1f%B%x1e",
-                        f"{base}..{commit}"], capture_output=True)
+                        f"{base}..{commit}", *exclude], capture_output=True)
     if r.returncode != 0:
         return None, [], r.stderr.decode("utf-8", "replace").strip()
     hits, count = [], 0
@@ -448,7 +457,7 @@ def scan_attribution(checkout, base, commit):
         fields += [(f"message line {i + 1}", line) for i, line in enumerate(body.strip().splitlines())]
         for field, text in fields:
             for word, rx in ATTRIBUTION_RX:
-                if rx.search(text):
+                if rx.search(text) and (word not in CONTEXT_WORDS or CONTEXT_RX.search(text)):
                     hits.append({"commit": sha.strip(), "field": field, "word": word, "text": text.strip()[:160]})
             if field.startswith("message") and OWNER_RX.search(text):
                 hits.append({"commit": sha.strip(), "field": field, "word": "owner attribution",
@@ -566,7 +575,7 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
     for b in plan["builds"]:
         ranges.setdefault((b["repo"], b.get("base"), b["commit"]), []).append(b["id"])
         ranges.setdefault((recipe_repo, b.get("recipe_base"), b["recipe_commit"]), []).append(f"{b['id']} recipe")
-    att_lines, hits, published, failed = [], [], [], False
+    att_lines, hits, published, failed, left_out = [], [], [], False, []
     for (repo, base, commit), wheres in sorted(ranges.items(), key=lambda kv: (kv[0][0], kv[0][2])):
         if not base:
             att_lines.append(f"{repo} {commit[:8]} ({', '.join(wheres)}): no base, so the range of the scan is "
@@ -578,12 +587,39 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
             att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: not both commits are in a checkout")
             failed = True
             continue
-        count, found, error = scan_attribution(checkout, base, commit)
+        # The upstream commit of a fork line: only a commit that a remote of the upstream project's URL holds may
+        # take its history out of the scan, so that a fork commit named as 'upstream' hides nothing.
+        upstream = table[repo].get("upstream")
+        if upstream:
+            if provenance.normalize_url(upstream["url"]) == provenance.normalize_url(table[repo]["url"]):
+                att_lines.append(f"{repo} upstream {upstream['commit'][:8]}: its URL is the fork's own URL "
+                                 f"{table[repo]['url']}, so it proves nothing about whose history it is")
+                failed = True
+                continue
+            branches = repos.published(repo, upstream["commit"], url=upstream["url"])
+            if not branches:
+                att_lines.append(f"{repo} upstream {upstream['commit'][:8]} is on no remote-tracking branch of "
+                                 f"{upstream['url']} (add that remote to the checkout and fetch it)")
+                failed = True
+                continue
+        count, found, error = scan_attribution(checkout, base, commit, upstream and upstream["commit"])
         if error:
             att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: git log failed: {error}")
             failed = True
             continue
-        att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: {count} commits, {len(found)} hits")
+        if upstream:
+            code, text = provenance.git(checkout, "rev-list", "--count", f"{base}..{commit}")
+            if code != 0:
+                att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: git rev-list failed: {text}")
+                failed = True
+                continue
+            skipped = int(text) - count
+            left_out.append({"repo": repo, "range": f"{base[:8]}..{commit[:8]}", "upstream": upstream["commit"],
+                             "url": upstream["url"], "on": branches[0], "commits": skipped})
+            att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: {count} commits, {len(found)} hits; {skipped} "
+                             f"commits of upstream {upstream['commit'][:8]} ({branches[0]}) left out")
+        else:
+            att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: {count} commits, {len(found)} hits")
         for h in found:
             # The push gate checks only the commits a push adds. An owner attribution in the message of a commit
             # that the fork already holds was published before that rule, and the project does not rewrite published
@@ -597,7 +633,7 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
             att_lines.append(f"  {repo} {h['commit'][:8]} {h['field']}: '{h['word']}' in {h['text']!r}")
     gates.append({"name": "attribution",
                   "status": "FAIL" if failed or hits else ("WARN" if published else "PASS"), "lines": att_lines,
-                  "hits": hits, "published_owner_attributions": published})
+                  "hits": hits, "published_owner_attributions": published, "upstream_left_out": left_out})
     # The compiler of each row.
     comp = []
     for b in plan["builds"]:

@@ -318,6 +318,69 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         _, gates = self.gates(manifest)
         self.assertEqual(gates["attribution"]["status"], "PASS", gates["attribution"])
 
+    def publish(self):
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "origin")
+
+    def upstream_merge(self, message):
+        """A commit of an upstream project (published on its own remote, another URL) merged into main and pushed.
+        Returns the upstream commit, the upstream URL and the merge."""
+        remote = self.ws.remotes / "upstream.git"
+        if not remote.exists():
+            git(self.ws.remotes, "init", "-q", "--bare", str(remote))
+            git(self.ws.repo, "remote", "add", "upstream", str(remote))
+        git(self.ws.repo, "checkout", "-q", "-b", "up", self.ws.base_commit)
+        up = self.ws.commit(message, name="upstream.txt")
+        git(self.ws.repo, "push", "-q", "upstream", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "upstream")
+        git(self.ws.repo, "checkout", "-q", "main")
+        git(self.ws.repo, "merge", "-q", "--no-ff", "-m", "merge the upstream project", "up")
+        self.publish()
+        return up, str(remote), git(self.ws.repo, "rev-parse", "HEAD")
+
+    def test_an_upstream_trailer_is_left_out_and_counted(self):
+        up, url, merge = self.upstream_merge("util: a faster path\n\nAssisted-by: Claude Code (Claude Opus 5.5)\n")
+        manifest = self.ws.manifest([self.ws.row("a", commit=merge)], recipe_commit=merge)
+        # Without the upstream commit, the trailer of the upstream author stops the release set.
+        _, gates = self.gates(manifest)
+        self.assertEqual(gates["attribution"]["status"], "FAIL")
+        self.assertEqual({h["commit"] for h in gates["attribution"]["hits"]}, {up})
+        manifest["repositories"]["recipes"]["upstream"] = {"commit": up, "url": url}
+        result, gates = self.gates(manifest)
+        self.assertEqual(gates["attribution"]["status"], "PASS", gates["attribution"]["lines"])
+        self.assertEqual(result["status"], "PASS")
+        left = gates["attribution"]["upstream_left_out"]
+        self.assertEqual([(x["upstream"], x["commits"]) for x in left], [(up, 1)])
+        self.assertIn("1 commits of upstream", " ".join(gates["attribution"]["lines"]))
+
+    def test_a_fork_trailer_fails_beside_an_upstream_merge(self):
+        up, url, _ = self.upstream_merge("util: a faster path\n\nAssisted-by: Claude Code\n")
+        fork = self.ws.commit("radv: a fix\n\nGenerated-by: Opus 5.5\n")
+        self.publish()
+        manifest = self.ws.manifest([self.ws.row("a", commit=fork)], recipe_commit=fork)
+        manifest["repositories"]["recipes"]["upstream"] = {"commit": up, "url": url}
+        _, gates = self.gates(manifest)
+        self.assertEqual(gates["attribution"]["status"], "FAIL", gates["attribution"]["lines"])
+        self.assertEqual({(h["commit"], h["word"]) for h in gates["attribution"]["hits"]}, {(fork, "Opus")})
+        # A fork commit named as the upstream hides nothing: the upstream remote does not hold it, and the fork's own
+        # URL is no upstream URL.
+        for spec in ({"commit": fork, "url": url}, {"commit": fork, "url": str(self.ws.remote)}):
+            manifest["repositories"]["recipes"]["upstream"] = spec
+            _, gates = self.gates(manifest)
+            self.assertEqual(gates["attribution"]["status"], "FAIL", spec)
+            self.assertEqual(gates["attribution"]["upstream_left_out"], [], spec)
+
+    def test_a_model_name_that_is_also_a_word_needs_an_attribution_context(self):
+        os_name = self.ws.commit("util: the condvar barrier that Windows, macOS and Haiku use\n\n"
+                                 "The opus of this sonnet is no fable.\n")
+        self.publish()
+        _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=os_name)], recipe_commit=os_name))
+        self.assertEqual(gates["attribution"]["status"], "PASS", gates["attribution"]["lines"])
+        trailer = self.ws.commit("util: a fix\n\nAssisted-by: Haiku 4.5\n")
+        self.publish()
+        _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=trailer)], recipe_commit=trailer))
+        self.assertEqual({(h["commit"], h["word"]) for h in gates["attribution"]["hits"]}, {(trailer, "Haiku")})
+
     def test_collect_takes_the_pdb_of_the_image(self):
         # The KMD build leaves its image in package\ and bc250kmd.pdb elsewhere; a PDB of the same name from another
         # build must not pass for it.

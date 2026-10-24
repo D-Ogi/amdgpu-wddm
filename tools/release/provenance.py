@@ -183,14 +183,15 @@ class Repositories:
                     break
         return self._found[key]
 
-    def published(self, name, commit):
-        """Remote-tracking branches that contain the commit, of remotes whose URL is the repository's URL."""
-        key = (name, commit)
+    def published(self, name, commit, url=None):
+        """Remote-tracking branches that contain the commit, of remotes whose URL is the repository's URL (or the
+        URL given, such as the upstream project's)."""
+        key = (name, commit, url)
         if key in self._published:
             return self._published[key]
         branches = []
         checkout = self.find(name, commit)
-        want = normalize_url(self.table[name]["url"])
+        want = normalize_url(url or self.table[name]["url"])
         if checkout is not None:
             code, text = git(checkout, "remote")
             remotes = []
