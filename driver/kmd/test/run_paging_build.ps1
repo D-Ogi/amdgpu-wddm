@@ -7,7 +7,8 @@
 #   -Mutation cpu-virtual-ignore    a failed CPU_VIRTUAL update is journalled and reported as SUCCESS.
 # The test is user-mode code: clang-cl 23.1.4 from the workspace toolchain, named by path, with no fallback.
 # The test runs without a window and without error dialogs, for at most -TimeoutSeconds; on the deadline it is
-# stopped and the run fails. Its output is kept in paging_build_test.log, and a run counts only with its summary line.
+# stopped and the run fails (host_native.ps1). Its output is kept in paging_build_test.log, and a run counts only with its
+# summary line. A negative control must fail by exactly the number of checks pinned for it below.
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
     [string]$Out = "$Root\scratch\pagingbuild",
@@ -48,30 +49,14 @@ $flags = @('/nologo', '--target=x86_64-pc-windows-msvc', '-fuse-ld=lld', '/TC', 
     "/Fo$Out\", "/Fe$Out\paging_build_test.exe")
 & $clang @flags "$here\paging_build_test.c" '/link' "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$sdklib\ucrt\x64" "/LIBPATH:$sdklib\um\x64"
 if ($LASTEXITCODE -ne 0) { throw 'paging build test: compile failed' }
-$psi = [Diagnostics.ProcessStartInfo]::new("$Out\paging_build_test.exe")
-$psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-$psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-$p = [Diagnostics.Process]::Start($psi)
-try {
-    $stderrTask = $p.StandardError.ReadToEndAsync(); $stdoutTask = $p.StandardOutput.ReadToEndAsync()
-    if (-not $p.WaitForExit($TimeoutSeconds * 1000)) { throw "paging_build_test.exe did not end in $TimeoutSeconds s" }
-    $p.WaitForExit(); $code = $p.ExitCode
-} finally {
-    if (-not $p.HasExited) { $p.Kill($true); $p.WaitForExit() }
-}
-$lines = @(($stdoutTask.Result + $stderrTask.Result) -split "`r?`n" | Where-Object { $_ -ne '' })
-$lines | Set-Content -LiteralPath "$Out\paging_build_test.log" -Encoding utf8
-$lines | Write-Host
-Write-Host "paging_build_test.exe exit code $code"
-$summary = @($lines -match '^BuildPagingBuffer DDI: \d+ checks, \d+ failures$')
-if ($summary.Count -ne 1) { throw 'paging build test: no summary line, the run did not complete' }
-$failures = [int]($summary[0] -replace '^.* checks, (\d+) failures$', '$1')
-$failLines = @($lines -match '^FAIL line').Count
-if ($failures -ne $failLines) { throw "paging build test: summary says $failures failures, $failLines FAIL lines" }
+. "$here\host_native.ps1"
+$r = Invoke-HostTest "$Out\paging_build_test.exe" "$Out\paging_build_test.log" '^BuildPagingBuffer DDI: (?<checks>\d+) checks, (?<failures>\d+) failures$' $TimeoutSeconds
 if ($Mutation -eq 'none') {
-    if ($code -ne 0 -or $failures -ne 0) { throw "paging build test failed: exit $code, $failures failures" }
+    if ($r.Failures -ne 0) { throw "paging build test failed: $($r.Failures) failures" }
     exit 0
 }
-if ($code -ne 1 -or $failures -eq 0) { throw "negative control $Mutation did not fail the test" }
-Write-Host "negative control $Mutation : the test failed as required"
+# Each control is pinned to the failures its rule change causes: another count means the control tests something else.
+$expected = @{ 'absorb-inner-failure' = 29; 'cpu-virtual-ignore' = 9 }[$Mutation]
+if ($r.Code -ne 1 -or $r.Failures -ne $expected) { throw "negative control $Mutation : $($r.Failures) failures, $expected expected" }
+Write-Host "negative control $Mutation : the test failed as required ($expected failures)"
 exit 0

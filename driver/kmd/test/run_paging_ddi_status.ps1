@@ -89,9 +89,8 @@ Invoke-Tool $clang (@('/nologo', '--target=x86_64-pc-windows-msvc', '/TC', '/W4'
     @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
 
 Write-Host 'run'
-$lines = @(& "$Out\paging_ddi_status_test.exe" 2>&1 | ForEach-Object { "$_" })
-$code = $LASTEXITCODE
-$lines | Write-Host
+. "$here\host_native.ps1"
+$r = Invoke-HostTest "$Out\paging_ddi_status_test.exe" "$Out\paging_ddi_status_test.log" '^paging_ddi_status_test: (?<checks>\d+) checks, (?<failures>\d+) failures$'
 
 # The kernel compile-check of the header: the same function against the WDK status values, with the KMD's compiler,
 # so that a change of either side fails here and not on the lab.
@@ -113,8 +112,12 @@ $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '
 Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + @($probe))
 
 Write-Host ''
-Write-Host "paging_ddi_status_test.exe exit code $code"
-if ($Mutation -eq 'none') { exit $code }
-if ($code -ne 1 -or -not ($lines -match '^FAIL line')) { throw "negative control $Mutation did not fail the test" }
-Write-Host "negative control $Mutation : the test failed as required"
+if ($Mutation -eq 'none') {
+    if ($r.Failures -ne 0) { throw "paging DDI status test failed: $($r.Failures) failures" }
+    exit 0
+}
+# Each control is pinned to the failures its rule change causes: a crash, a deadline or another count is invalid.
+$expected = @{ 'refusal-success' = 15; 'pending-success' = 8 }[$Mutation]
+if ($r.Code -ne 1 -or $r.Failures -ne $expected) { throw "negative control $Mutation : $($r.Failures) failures, $expected expected" }
+Write-Host "negative control $Mutation : the test failed as required ($expected failures)"
 exit 0

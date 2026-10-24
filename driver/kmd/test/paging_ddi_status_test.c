@@ -3,7 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../paging_ddi_status.h"
-#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL line%d: %s\n",__LINE__,#x);exit(1);}}while(0)
+static unsigned checks, bad;
+#define CHECK(x) do{++checks;if(!(x)){++bad;printf("FAIL line %d: %s\n",__LINE__,#x);}}while(0)
 
 static void permitted(long status)
 {
@@ -64,6 +65,6 @@ int main(void)
     // The flag is written on every call.
     CHECK(PagingDdiStatus((long)0xC000000DL, &flag) == (long)0xC000000DL && flag == 1);
     CHECK(PagingDdiStatus(PAGING_DDI_SUCCESS, &flag) == PAGING_DDI_SUCCESS && flag == 0);
-    printf("paging_ddi_status_test: all checks passed\n");
-    return 0;
+    printf("paging_ddi_status_test: %u checks, %u failures\n", checks, bad);
+    return bad ? 1 : 0;
 }

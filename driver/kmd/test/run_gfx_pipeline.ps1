@@ -63,16 +63,34 @@ if((Get-Content "$Out\gfx_pipeline_actual.inc" -Raw) -notmatch 'WddmRecordFenceL
 $link=@('/link',"/LIBPATH:$($msvc.FullName)\lib\x64","/LIBPATH:$libs\ucrt\x64","/LIBPATH:$libs\um\x64")
 & $cl @flags "/Fe$Out\ring_test.exe" "$PSScriptRoot\gfx_ring_capacity_test.c" "$Out\bc250_ring_actual.c" @link
 if($LASTEXITCODE -ne 0){throw 'ring test build failed'}
-& "$Out\ring_test.exe"
-$ringResult=$LASTEXITCODE
 & $cl @flags "/Fe$Out\pipeline_test.exe" "$PSScriptRoot\gfx_pipeline_test.c" @link
 if($LASTEXITCODE -ne 0){throw 'pipeline test build failed'}
-& "$Out\pipeline_test.exe"
-$queueResult=$LASTEXITCODE
-if($KmdOnly){if($ringResult -ne 0 -or $queueResult -ne 0){exit 1};exit 0}
-& $cl @flags "/Fe$Out\gather_test.exe" "$PSScriptRoot\gfx_gather_test.c" @link
-if($LASTEXITCODE -ne 0){throw 'gather test build failed'}
-& "$Out\gather_test.exe"
-$gatherResult=$LASTEXITCODE
-if($ringResult -ne 0 -or $queueResult -ne 0 -or $gatherResult -ne 0){exit 1}
+if(!$KmdOnly){
+    & $cl @flags "/Fe$Out\gather_test.exe" "$PSScriptRoot\gfx_gather_test.c" @link
+    if($LASTEXITCODE -ne 0){throw 'gather test build failed'}
+}
+# Every program runs bounded and windowless and counts only with its summary line (host_native.ps1). A negative control
+# must fail by exactly the CHECK failures pinned for it here, in each program; a crash, a deadline, a build error or
+# another count is an invalid control and fails the gate. The gather control is not pinned: no Mesa tree is checked
+# out with this gate (-KmdOnly), so it needs only a failure of the gather test.
+. "$PSScriptRoot\host_native.ps1"
+$controls=[ordered]@{WithoutCapacity=@(3,0);WithoutBoundaryPad=@(15,0);WithoutPadCapacity=@(4,0);EqualityFence=@(2,53);IdleOnlyPresent=@(0,46);SerializeGather=@(0,0)}
+$chosen=@($controls.Keys | Where-Object { $PSBoundParameters.ContainsKey($_) })
+if($chosen.Count -gt 1){throw "one negative control at a time: $($chosen -join ', ')"}
+$ring=Invoke-HostTest "$Out\ring_test.exe" "$Out\ring_test.log" '^GFX ring capacity/fence order: (?<checks>\d+) checks, (?<failures>\d+) failures$'
+$queue=Invoke-HostTest "$Out\pipeline_test.exe" "$Out\pipeline_test.log" '^GFX WDDM actual submit/completion/watchdog: (?<checks>\d+) checks, (?<failures>\d+) failures$'
+$gather=$null
+if(!$KmdOnly){$gather=Invoke-HostTest "$Out\gather_test.exe" "$Out\gather_test.log" '^RADV actual gather selection/retirement: (?<checks>\d+) checks, (?<failures>\d+) failures$'}
+$gatherFailures=if($gather){$gather.Failures}else{0}
+if($chosen.Count -eq 0){
+    if($ring.Failures -or $queue.Failures -or $gatherFailures){exit 1}
+    exit 0
+}
+$name=$chosen[0]; $want=$controls[$name]
+if($name -eq 'SerializeGather'){
+    if($KmdOnly -or $gatherFailures -eq 0 -or $ring.Failures -or $queue.Failures){throw "negative control $name did not fail the gather test alone"}
+} elseif($ring.Failures -ne $want[0] -or $queue.Failures -ne $want[1] -or $gatherFailures){
+    throw "negative control $name : ring $($ring.Failures), pipeline $($queue.Failures), gather $gatherFailures failures; ring $($want[0]), pipeline $($want[1]), gather 0 expected"
+}
+Write-Host "negative control $name : the tests failed as required (ring $($ring.Failures), pipeline $($queue.Failures), gather $gatherFailures)"
 exit 0
