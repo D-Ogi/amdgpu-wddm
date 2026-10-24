@@ -1,0 +1,86 @@
+{
+  "host_native_control": false,
+  "scope": "Stage B capture only. Native16 pixel-frequency host surrogate is not AMD scheduling proof. PRIVATE+THREADED, no cap change.",
+  "modules": [
+    {
+      "path": "amdgpu_wddm_vkd3d.dll",
+      "sha256": "F7AB0CF8C178BBEB6C147570E6627441E9EE09AC21B207ECB57468F1E02B23E3",
+      "observed_utc": "2026-10-24T07:28:52.9347630Z"
+    },
+    {
+      "path": "vulkan-1.dll",
+      "sha256": "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73",
+      "observed_utc": "2026-10-24T07:28:52.9459428Z"
+    },
+    {
+      "path": "amdgpu_wddm_radv.dll",
+      "sha256": "FA3637B03A50075224AABE02A03D0DE991DEBCF79FF0F239AE1F12BF190DEEC5",
+      "observed_utc": "2026-10-24T07:28:53.0441989Z"
+    }
+  ],
+  "driver_marker_count": 138,
+  "zero_mask_marker_observed": true,
+  "timed_out": false,
+  "runner_sha256": "B8D7CE382D7B54171289AEEA59065D658890CBF6B4026FE40AA308E0F0D9EE5C",
+  "cleared_process_environment": [
+    "AMDGPU_WDDM_LAB_DDI0102_LIMITS",
+    "radv_emulate_point_rounding",
+    "VK_INSTANCE_LAYERS",
+    "VK_LOADER_DRIVERS_SELECT",
+    "VK_LOADER_DRIVERS_DISABLE",
+    "VK_LOADER_LAYERS_ENABLE",
+    "VK_LOADER_LAYERS_DISABLE",
+    "VKD3D_LOG_FILE",
+    "VKD3D_FEATURE_LEVEL",
+    "VKD3D_SHADER_MODEL"
+  ],
+  "driver_state_verified": true,
+  "mode": "exposed16",
+  "adapter": "BC-250",
+  "module_errors": [],
+  "utc": "2026-10-24T07:28:52.7590007Z",
+  "icd": "diagnostic",
+  "negative": 0,
+  "program": "paired",
+  "expected_engine_sha256": "F7AB0CF8C178BBEB6C147570E6627441E9EE09AC21B207ECB57468F1E02B23E3",
+  "observed_icd": true,
+  "icd_verification_required": true,
+  "expected_icd_sha256": "FA3637B03A50075224AABE02A03D0DE991DEBCF79FF0F239AE1F12BF190DEEC5",
+  "native_samples": 8,
+  "exit_code": 0,
+  "elapsed_seconds": 2.9878286,
+  "kit_manifest_sha256": "52B14B82A50B4C2876A7AC16A57D50F4D5260FF8C3D2A50672C52B0744F93D86",
+  "observed_engine": true,
+  "artifacts": [
+    {
+      "path": "capture-stderr.txt",
+      "sha256": "86BE6DDE72C8F9192AF6DFD86AEFEFEDB8BB3D4C63C3A21E908825D8C372E38F",
+      "bytes": 45954
+    },
+    {
+      "path": "capture-stdout.txt",
+      "sha256": "C4C007A95EB3568CFCA4F5A701285A7913CD89D4938147BB75D9F6ABBEBA80E3",
+      "bytes": 8944
+    },
+    {
+      "path": "capture.bin",
+      "sha256": "9EF26B17C25FDC564851D139BE2DE5695BD715A2A5CD2E42E9637FA6449A6882",
+      "bytes": 61082112
+    },
+    {
+      "path": "capture.json",
+      "sha256": "7B64CCF3B4E94E75A747AD775A908038408FA817817DC987FA2B67D30E96FDBA",
+      "bytes": 2927
+    },
+    {
+      "path": "icd.json",
+      "sha256": "C0EE56BB44E8498EE25DC69D49BC8B444DBD6CA2BA5715194CC319D163E75D6F",
+      "bytes": 215
+    },
+    {
+      "path": "s16f8-client.exe",
+      "sha256": "6EA29A7985C7522B6823CB9D07E5CAE094D9114291CD0F729F038B69F093A8B3",
+      "bytes": 1167360
+    }
+  ]
+}

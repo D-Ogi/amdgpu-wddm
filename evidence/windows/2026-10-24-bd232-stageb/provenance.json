@@ -1,0 +1,88 @@
+{
+  "redaction": "Runner module paths reduced to basenames. No numeric measurement or hash changed.",
+  "sources": [
+    {
+      "arm": "native8",
+      "original_runner_sha256": "efbba19adddccc64b89ca5edce7b157437c2a71bcdda4d39d1ad99eb15a0a7d6",
+      "original_analysis_sha256": "d2712ee213ffe84ed54ee99b39706d55d43a3e41aa009dcdc3a849d47bd64dca",
+      "raw_sha256": "5BFE34FD01629F536D7711E9EB64AD119AC9B8452D07EBEB893553B2D7F8AB0A"
+    },
+    {
+      "arm": "paired",
+      "original_runner_sha256": "d35812f8e297caa968b428cd3523fa77fa2f8b414b19f3c2f506dac1955ed034",
+      "original_analysis_sha256": "2ae2de56918ac642a405bedf58ac5c4b69990f127fb16778fafe8e6339d979c2",
+      "raw_sha256": "9EF26B17C25FDC564851D139BE2DE5695BD715A2A5CD2E42E9637FA6449A6882"
+    },
+    {
+      "arm": "native16-reference",
+      "original_runner_sha256": "b7fcd871ab3e34f95e77ef7339af847afcfd40f09fe4efac106ee8ec25790994",
+      "original_analysis_sha256": "230a6b8b1b8dbdac9670175f5a8b7daf4f8fb005e79e48f17fb5158df72c8ce9",
+      "raw_sha256": "6FEC4DD4BABB3BA16366103115FBC6BEC3D3D0452747AADFB077E596921B3DB4"
+    }
+  ],
+  "kit": {
+    "zip_sha256": "2320222152faec251a61e47282f91421c8a98746f3e72ba4761592eddb577802",
+    "zip_bytes": 28922024,
+    "manifest_sha256": "52b14b82a50b4c2876a7ac16a57d50f4d5260ff8c3d2a50672c52b0744f93d86",
+    "files_verified": 125,
+    "source_revision": "9c5cb1abbc78543d9de3c5ebfd183e5784168e7c",
+    "parent": "d97c4a069a0f6e503cf00b63c0bf61ab227ec739",
+    "patch_base": "f8101281935998608b8be2b6608ee4261b8ac1da",
+    "patch_sha256": "9d9727b84bae52b27f6569e8e0b57a23467f8f6dfe951baa1bce23316e2ef392",
+    "candidate_sha256": "fa3637b03a50075224aabe02a03d0de991debcf79ff0f239ae1f12bf190deec5",
+    "control_sha256": "e4b0fb84d18009ecdda0d8fcd0a3c0cc15ed26a3a399b8cf2c96b016a9a93525",
+    "control_flavour": "lab without RADV_S16F8_PROBE",
+    "candidate_flavour": "lab with RADV_S16F8_PROBE=1",
+    "source_files": [
+      {
+        "path": "meson.build",
+        "sha256": "30d489c1cfdaca59ffa7cacafd55fb64d35c3ec6888a65d3eafb034310ae43d0"
+      },
+      {
+        "path": "src/amd/vulkan/radv_cmd_buffer.c",
+        "sha256": "e99f10c21fbc0d8c55801930b0e044fd331fe4d6022932b450b19b8fdf1455b6"
+      },
+      {
+        "path": "src/amd/vulkan/radv_device.c",
+        "sha256": "6557c6e813bdbb9fd7947066b765031557543f7d7c6f667f17be244e1061309e"
+      },
+      {
+        "path": "src/amd/vulkan/radv_pipeline_graphics.c",
+        "sha256": "3cbf1067cf5c261c6e3cb8399fff27e97e73dad59726557bac63f7076aa33d43"
+      },
+      {
+        "path": "src/amd/vulkan/radv_s16f8_probe.h",
+        "sha256": "797f403ee6c84d77f0ff6fda58f4e17dcd212f885e71cbd5162774f82e72f1bb"
+      },
+      {
+        "path": "src/amd/vulkan/nir/radv_nir_lower_fs_barycentric.c",
+        "sha256": "d082e7b963f8e98c6135d5d0e88b4ae7a33a9c0abef42691781fe01bfc4c8a9c"
+      }
+    ],
+    "compiler_sha256": "2fcd72a41bbc6bcf8e89c63555c4db7451da53bf47082fb91d6b1c1e990636ad",
+    "build_script_sha256": "aadd7173d1d9bfdd88fb0225bfb739c6cf226f116a7a4b8dceae09c453e14ea8",
+    "recipe_sha256": "37ccd039fe1d93f86d506bf5beb18106cc432436c6fb115e0ac1ae1e00a26f7d",
+    "unchanged_from_old_kit": [
+      {
+        "path": "s16f8-client.exe",
+        "sha256": "6ea29a7985c7522b6823cb9d07e5cae094d9114291cd0f729f038b69f093a8b3"
+      },
+      {
+        "path": "amdgpu_wddm_vkd3d.dll",
+        "sha256": "f7ab0cf8c178bbeb6c147570e6627441e9ee09ac21b207ecb57468f1e02b23e3"
+      },
+      {
+        "path": "analyze.py",
+        "sha256": "5e7efd548f26427a46d28921211edf154c318ab5d4ad3218683467d64adb4fb0"
+      },
+      {
+        "path": "run-arm.ps1",
+        "sha256": "b8d7ce382d7b54171289aeea59065d658890cbf6b4026fe40aa308e0f0d9ee5c"
+      },
+      {
+        "path": "probe.hlsl",
+        "sha256": "ba3e9151d56b50f0667ef66b31d4a7daed3658a05693ee2e1dcc74c9cc7522cd"
+      }
+    ]
+  }
+}

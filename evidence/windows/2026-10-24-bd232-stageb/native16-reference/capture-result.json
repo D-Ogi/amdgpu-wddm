@@ -1,0 +1,81 @@
+{
+  "host_native_control": true,
+  "scope": "Stage B capture only. Native16 pixel-frequency host surrogate is not AMD scheduling proof. PRIVATE+THREADED, no cap change.",
+  "modules": [
+    {
+      "path": "vulkan-1.dll",
+      "sha256": "5C42CA8EA4BC43EE17FFE8FCDAFBA36E377C2AF29722CB09F400C24D9D80FB73",
+      "observed_utc": "2026-10-24T02:51:00.9256158Z"
+    },
+    {
+      "path": "amdgpu_wddm_vkd3d.dll",
+      "sha256": "F7AB0CF8C178BBEB6C147570E6627441E9EE09AC21B207ECB57468F1E02B23E3",
+      "observed_utc": "2026-10-24T02:51:00.9180858Z"
+    },
+    {
+      "path": "nvoglv64.dll",
+      "sha256": "7C8D6327E157435AEAC82F6B600BF47107C3B2B5C6DBBDF91CFB10715F7369C3",
+      "observed_utc": "2026-10-24T02:51:01.0369272Z"
+    }
+  ],
+  "driver_marker_count": 0,
+  "zero_mask_marker_observed": false,
+  "timed_out": false,
+  "runner_sha256": "B8D7CE382D7B54171289AEEA59065D658890CBF6B4026FE40AA308E0F0D9EE5C",
+  "cleared_process_environment": [
+    "AMDGPU_WDDM_LAB_DDI0102_LIMITS",
+    "radv_emulate_point_rounding",
+    "VK_INSTANCE_LAYERS",
+    "VK_LOADER_DRIVERS_SELECT",
+    "VK_LOADER_DRIVERS_DISABLE",
+    "VK_LOADER_LAYERS_ENABLE",
+    "VK_LOADER_LAYERS_DISABLE",
+    "VKD3D_LOG_FILE",
+    "VKD3D_FEATURE_LEVEL",
+    "VKD3D_SHADER_MODEL"
+  ],
+  "driver_state_verified": true,
+  "mode": "off",
+  "adapter": "NVIDIA GeForce RTX 4090",
+  "module_errors": [],
+  "utc": "2026-10-24T02:51:00.7371741Z",
+  "icd": "control",
+  "negative": 0,
+  "program": "native",
+  "expected_engine_sha256": "F7AB0CF8C178BBEB6C147570E6627441E9EE09AC21B207ECB57468F1E02B23E3",
+  "observed_icd": false,
+  "icd_verification_required": false,
+  "expected_icd_sha256": "72F0141E2A23F29FA892766D5DB35E34BCC1746869F61CCC9B73203B5AA23138",
+  "native_samples": 16,
+  "exit_code": 0,
+  "elapsed_seconds": 3.1624174999999997,
+  "kit_manifest_sha256": "340173ABBCDF271A49926E91820B59F2229DDF9B24BDEA1D4ED986CC82D26AAC",
+  "observed_engine": true,
+  "artifacts": [
+    {
+      "path": "capture-stderr.txt",
+      "sha256": "87258419068D2A235F88533AC3AF2B45283112D820BE56A1C15E62D381720FDF",
+      "bytes": 31010
+    },
+    {
+      "path": "capture-stdout.txt",
+      "sha256": "063F29B6DA47CFFC9FC021F944F9DC4BE2DB8A931730711156EA8F6816FCF215",
+      "bytes": 8943
+    },
+    {
+      "path": "capture.bin",
+      "sha256": "6FEC4DD4BABB3BA16366103115FBC6BEC3D3D0452747AADFB077E596921B3DB4",
+      "bytes": 61082112
+    },
+    {
+      "path": "capture.json",
+      "sha256": "671707BBB187E9896140DCEFC300C803F8D537AA26C3A90B8949C4278048D191",
+      "bytes": 2928
+    },
+    {
+      "path": "s16f8-client.exe",
+      "sha256": "6EA29A7985C7522B6823CB9D07E5CAE094D9114291CD0F729F038B69F093A8B3",
+      "bytes": 1167360
+    }
+  ]
+}
