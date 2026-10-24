@@ -2019,6 +2019,9 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
     unsigned retiredCount=0;
     ULONG iterations=0;
     PAGING_DRAIN_EXIT exitReason=PagingDrainExitIdle;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    static volatile LONG labRetiredOnce;     // BD-235: the receipt at the first retired paging fence, once per boot
+#endif
     if (!wddm) return;
     ProgressEnter(ProgressSitePagingDrain);
     for (;;) {
@@ -2026,6 +2029,9 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
         BOOLEAN completed=FALSE, failed=FALSE;
         UINT fence=0;
         ULONG seq=0;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        ULONG labSeq=0;
+#endif
         NTSTATUS status;
         KIRQL irql;
         LARGE_INTEGER due;
@@ -2039,6 +2045,9 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
         }
         if (wddm->PagingHwPending && GfxPagingFenceArrived(Device,wddm->PagingHwSeq)) {
             retired=wddm->PagingHead;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            labSeq=wddm->PagingHwSeq;       // BD-235: the retired sequence, for the first-retired receipt
+#endif
             wddm->PagingHwPending=FALSE;
             WddmRingGapEdgeLocked(wddm, BC250_WDDM_NODE_COPY, FALSE);   // C48: node 1's ring went idle
             KeCancelTimer(&wddm->PagingSubmitTimer);
@@ -2094,6 +2103,12 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
             WddmRecordCompletionLocked(wddm,fence,BC250_WDDM_NODE_COPY);
         }
         KeReleaseSpinLock(&wddm->Lock,irql);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        if (completed && labSeq != 0 && InterlockedCompareExchange(&labRetiredOnce, 1, 0) == 0) {
+            GuardLog("lab: sdma0 first retired paging fence: seq %lu", labSeq);
+            GfxLabSdmaReceipt(Device, "first retired", 0);
+        }
+#endif
         if (failed) WddmFailSubmission(Device,fence,BC250_WDDM_NODE_COPY);
         if (completed) WddmQueueReport(wddm);   // every retirement is reported, the quota's last one included
         next=PagingDrainNext(&retiredCount,completed,PAGING_DRAIN_QUOTA);

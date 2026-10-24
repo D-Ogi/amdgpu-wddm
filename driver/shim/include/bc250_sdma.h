@@ -178,6 +178,24 @@ u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
  * next fresh bring-up, or 0 for upstream's 0. The KMD sets it once at DriverEntry from PagingRingStartBytes
  * (guard.c GuardLabConsumePagingRingStart); bc250_sdma_gfx_resume_instance() takes it back to 0 at its first look. */
 extern u64 bc250_sdma_lab_ring_start;
+
+/* BD-235 lab experiment, lab flavour only: the seed receipt. The last fresh bring-up of SDMA0 fills it
+ * (bc250_sdma_gfx_resume_instance(), never a recovery): what was requested, what was written and what was
+ * refused, kept apart, and what the engine and the two write-back slots held right after the pointer writes and
+ * the adoption path. The KMD logs it after the bring-up ring test (gfx.c). The readings are sequential CPU reads,
+ * not one atomic sample. */
+struct bc250_sdma_lab_receipt {
+	u64 requested;		/* bc250_sdma_lab_ring_start at this bring-up, 0 = absent */
+	u64 applied;		/* the value written to RPTR/RPTR_HI/WPTR/WPTR_HI, 0 = nothing written */
+	u32 refused;		/* 1: requested, but not a multiple of the ring size */
+	u32 adopted;		/* 1: the engine kept its pointers (hw_wptr != 0), the seed was not looked at */
+	u32 rptr_lo, rptr_hi, wptr_lo, wptr_hi;	/* SDMA0 GFX RB_RPTR(_HI) and RB_WPTR(_HI), read back */
+	u64 poll;		/* the WPTR poll slot, bytes */
+	u64 rptr_wb;		/* the RPTR write-back slot, bytes */
+	u64 sw_wptr_dw;		/* ring->wptr, dwords */
+	u32 bringups;		/* fresh SDMA0 bring-ups that filled this receipt */
+};
+extern struct bc250_sdma_lab_receipt bc250_sdma_lab_bringup;
 #endif
 
 /* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(): a WRITE_LINEAR of one dword into this engine's

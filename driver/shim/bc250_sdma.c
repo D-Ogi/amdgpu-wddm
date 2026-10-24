@@ -314,6 +314,27 @@ static void bc250_sdma_ctx_switch_enable(struct amdgpu_device *adev, bool enable
  * ------------------------------------------------------------------------------------------- */
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 u64 bc250_sdma_lab_ring_start;
+struct bc250_sdma_lab_receipt bc250_sdma_lab_bringup;
+
+/* BD-235 receipt: SDMA0's pointer registers and the two write-back slots after the bring-up writes. Sequential
+ * reads. The rptr write-back slot is the one bc250_sdma_setup() cut out of wb_mem for instance 0. */
+static void bc250_sdma_lab_capture(struct amdgpu_device *adev, struct amdgpu_ring *ring)
+{
+	struct bc250_sdma_lab_receipt *r = &bc250_sdma_lab_bringup;
+
+	r->rptr_lo = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, 0u, mmSDMA0_GFX_RB_RPTR));
+	r->rptr_hi = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, 0u, mmSDMA0_GFX_RB_RPTR_HI));
+	r->wptr_lo = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, 0u, mmSDMA0_GFX_RB_WPTR));
+	r->wptr_hi = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, 0u, mmSDMA0_GFX_RB_WPTR_HI));
+	r->poll = ring->wptr_cpu_addr != NULL ? *(volatile u64 *)ring->wptr_cpu_addr : 0;
+	r->rptr_wb = 0;
+	if (adev->sdma.wb_mem.cpu != NULL && ring->rptr_gpu_addr >= adev->sdma.wb_mem.mc &&
+	    ring->rptr_gpu_addr - adev->sdma.wb_mem.mc + sizeof(u64) <= adev->sdma.wb_mem.size)
+		r->rptr_wb = *(volatile u64 *)((char *)adev->sdma.wb_mem.cpu +
+					      (size_t)(ring->rptr_gpu_addr - adev->sdma.wb_mem.mc));
+	r->sw_wptr_dw = ring->wptr;
+	r->bringups++;
+}
 #endif
 
 static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, bool reset_transport)
@@ -415,11 +436,18 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, boo
 	 * WPTR_HI here, then, through `adopted`, ring->wptr, the WPTR pair under MINOR_PTR_UPDATE = 1 and the poll
 	 * slot below. It is consumed at the first look, applied or refused. A start must be a multiple of the ring
 	 * size, so the engine starts at ring offset 0 like a fresh ring, and of 8 bytes (the doorbell unit). */
+	if (i == 0 && !reset_transport) {
+		bc250_sdma_lab_bringup.requested = bc250_sdma_lab_ring_start;
+		bc250_sdma_lab_bringup.applied = 0;
+		bc250_sdma_lab_bringup.refused = 0;
+		bc250_sdma_lab_bringup.adopted = hw_wptr != 0;
+	}
 	if (i == 0 && !reset_transport && hw_wptr == 0 && bc250_sdma_lab_ring_start != 0) {
 		u64 start = bc250_sdma_lab_ring_start;
 
 		bc250_sdma_lab_ring_start = 0;
 		if ((start & 7u) != 0 || ring->ring_size == 0 || (start & ((u64)ring->ring_size - 1u)) != 0) {
+			bc250_sdma_lab_bringup.refused = 1;
 			dev_err(adev->dev, "sdma0 lab ring start 0x%llX refused: not a multiple of the %u-byte ring\n",
 				start, ring->ring_size);
 		} else {
@@ -428,7 +456,8 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, boo
 			WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR), lower_32_bits(start));
 			WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR_HI), upper_32_bits(start));
 			adopted = start;
-			dev_info(adev->dev, "sdma0 lab ring start 0x%llX applied (read and write pointer)\n", start);
+			bc250_sdma_lab_bringup.applied = start;
+			dev_info(adev->dev, "sdma0 lab ring start 0x%llX written (read and write pointer)\n", start);
 		}
 	}
 #endif
@@ -484,6 +513,11 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, boo
 	 * never sees the ring enabled with a shadow that contradicts where it stands. */
 	if (adopted != 0 && ring->wptr_cpu_addr != NULL)
 		*(volatile u64 *)ring->wptr_cpu_addr = ring->wptr << 2;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+	/* BD-235 receipt: read back after the seed writes and the adoption path, before RB_ENABLE. */
+	if (i == 0 && !reset_transport)
+		bc250_sdma_lab_capture(adev, ring);
+#endif
 
 	doorbell = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_DOORBELL));
 	doorbell_offset = RREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i,

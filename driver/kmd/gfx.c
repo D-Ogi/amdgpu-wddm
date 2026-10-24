@@ -282,6 +282,10 @@ static void GfxAccessOpen(_Inout_ BC250_DEVICE* Device)
 // SDMA ring test touches no register (bc250_sdma.h). Without it stage 7 proves that registers can be written and nothing
 // more: in E15 run 001 both engines were dead after a re-init behind an rc 0 in 56 us (facts M59). Not in a plan, where
 // nothing executes and the slot would never change.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+static void GfxLabSdmaBringupReceipt(_Inout_ BC250_DEVICE* Device, _In_ struct amdgpu_device* Adev, int Result);
+#endif
+
 static int StageSdma(struct amdgpu_device* adev)
 {
     BC250_GFX* gfx = CONTAINING_RECORD(adev->backend, BC250_GFX, Sequence);
@@ -309,6 +313,9 @@ static int StageSdma(struct amdgpu_device* adev)
         result = bc250_sdma_ring_test_submit(ring, &slotCpu);
         KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
         if (result == 0) result = bc250_sdma_ring_test_wait(adev, slotCpu);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        if (i == 0) GfxLabSdmaBringupReceipt(gfx->Sequence.Device, adev, result);   // BD-235 seed receipt
+#endif
     }
     return result;
 }
@@ -2761,6 +2768,60 @@ static BOOLEAN GfxPagingFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG S
 // snapshot (wddm.c). The fence slot holds the last paging sequence that the SDMA completed. The marker slot holds the
 // value of the last fence/poll barrier of the update and copy packets (bc250_sdma_paging.c PagingPipelineSync), or the
 // 0 that GfxSubmitPaging writes before it starts a submission.
+// BD-235 seed receipt (lab flavour only). SDMA0's RB_RPTR(_HI) and RB_WPTR(_HI) through MmioRead (READ_REG list),
+// the WPTR poll slot, the RPTR write-back slot and ring->wptr in dwords, and the paging fence slot (the last
+// retired paging sequence). Sequential CPU reads, not one atomic sample; the text says so. Adev must be live:
+// the bring-up holds it, and the other callers take GfxAccessAcquire first.
+static void GfxLabSdmaReceiptAdev(_Inout_ BC250_DEVICE* Device, _In_ struct amdgpu_device* Adev,
+                                  _In_z_ const char* When, ULONG Pending)
+{
+    static const ULONG offsets[4] = { BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI, BC250_REG_GC_SDMA0_GFX_RB_RPTR,
+                                      BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI, BC250_REG_GC_SDMA0_GFX_RB_WPTR };
+    struct amdgpu_ring* ring = &Adev->sdma.instance[0].ring;
+    ULONG v[4], valid = 0, i;
+    u64 poll = 0, rptrWb = 0;
+
+    for (i = 0; i < 4; i++) {
+        if (NT_SUCCESS(MmioRead(Device, offsets[i], &v[i]))) valid |= 1ul << i;
+        else v[i] = 0;
+    }
+    if (ring->wptr_cpu_addr != NULL) poll = *(volatile u64*)ring->wptr_cpu_addr;
+    if (Adev->sdma.wb_mem.cpu != NULL && ring->rptr_gpu_addr >= Adev->sdma.wb_mem.mc &&
+        ring->rptr_gpu_addr - Adev->sdma.wb_mem.mc + sizeof(u64) <= Adev->sdma.wb_mem.size)
+        rptrWb = *(volatile u64*)((char*)Adev->sdma.wb_mem.cpu + (SIZE_T)(ring->rptr_gpu_addr - Adev->sdma.wb_mem.mc));
+    GuardLog("lab: sdma0 receipt %s: RPTR 0x%08X_%08X WPTR 0x%08X_%08X valid 0x%lX (sequential reads)", When,
+             v[0], v[1], v[2], v[3], valid);
+    GuardLog("lab: sdma0 receipt %s: poll 0x%llX rptr_wb 0x%llX sw wptr 0x%llX dw", When, poll, rptrWb, (u64)ring->wptr);
+    GuardLog("lab: sdma0 receipt %s: retired %lu pending %lu", When,
+             (ULONG)bc250_sdma_fence_read(Adev, BC250_PAGING_FENCE_SLOT), Pending);
+}
+
+// The bring-up receipt that bc250_sdma_gfx_resume_instance() filled, then the same set read now, after the
+// bring-up ring test of SDMA0 completed (Result 0) or failed.
+static void GfxLabSdmaBringupReceipt(_Inout_ BC250_DEVICE* Device, _In_ struct amdgpu_device* Adev, int Result)
+{
+    const struct bc250_sdma_lab_receipt* r = &bc250_sdma_lab_bringup;
+
+    GuardLog("lab: sdma0 receipt bring-up: requested 0x%llX applied 0x%llX refused %lu adopted %lu, bring-ups %lu",
+             r->requested, r->applied, (ULONG)r->refused, (ULONG)r->adopted, (ULONG)r->bringups);
+    GuardLog("lab: sdma0 receipt bring-up: RPTR 0x%08X_%08X WPTR 0x%08X_%08X (read back after the writes)",
+             r->rptr_hi, r->rptr_lo, r->wptr_hi, r->wptr_lo);
+    GuardLog("lab: sdma0 receipt bring-up: poll 0x%llX rptr_wb 0x%llX sw wptr 0x%llX dw (sequential reads)",
+             r->poll, r->rptr_wb, r->sw_wptr_dw);
+    GuardLog("lab: sdma0 receipt ring test: result %d", Result);
+    GfxLabSdmaReceiptAdev(Device, Adev, "ring test", 0);
+}
+
+void GfxLabSdmaReceipt(_Inout_ BC250_DEVICE* Device, _In_z_ const char* When, ULONG Pending)
+{
+    BC250_GFX* gfx;
+
+    if (GfxAccessAcquire(Device) == NULL) return;
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx != NULL && gfx->PagingDevicePtr != NULL) GfxLabSdmaReceiptAdev(Device, gfx->PagingDevicePtr, When, Pending);
+    GfxAccessRelease(Device);
+}
+
 BOOLEAN GfxPagingSlots(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Fence, _Out_ ULONG* Marker)
 {
     BC250_GFX* gfx;
@@ -4060,6 +4121,10 @@ static int PagingWriteRing(void* Context, const PAGING_PRIVATE_SPAN* Span)
 // the submits that wrote nothing, with the time they took and the totals of this device start, so a quiet log is
 // never read as a quiet node - the same rule D5 gave the node-0 submit lines, with a cadence instead of a gate.
 // Nothing here touches the ring or the fence: a failure to log is not a failure to submit.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+static volatile LONG GfxLabCrossed[2];   // BD-235: the bit 31 and bit 32 receipts were logged (once per boot)
+#endif
+
 static void GfxLogPagingSubmit(_Inout_ BC250_GFX* Gfx, ULONG Dwords, ULONGLONG Start, ULONG Seq)
 {
     BC250_LOG_RATE_NOTE note;
@@ -4085,6 +4150,9 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     KIRQL irql;
     ULONG dwords, count, seq;
     u64 fenceAddr, wptrBytes;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    u64 labBefore;
+#endif
     int result;
 
     *Seq = 0;
@@ -4142,11 +4210,29 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     wptrBytes = ring->wptr << 2;
     if (ring->wptr_cpu_addr != NULL) *(volatile u64*)ring->wptr_cpu_addr = wptrBytes;
     GpuMemDoorbellWrite(Device, ring->doorbell_index, wptrBytes);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    labBefore = (u64)ring->wptr_old << 2;     // where this submission starts, under the lock
+#endif
     KeReleaseSpinLock(&gfx->Sdma0RingLock, irql);
 
     gfx->PagingSubmitSeq = seq;
     *Seq = seq;
     GfxLogPagingSubmit(gfx, dwords, Start, seq);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-235: one receipt at the first paging submission whose 64-bit byte write pointer crosses bit 31, one at
+    // bit 32, with this submission as the pending one. Read after the doorbell: the engine may already be at it.
+    // Another SDMA0 writer (a lab escape) between two paging submissions is not seen here.
+    if (labBefore < (1ull << 31) && wptrBytes >= (1ull << 31) &&
+        InterlockedCompareExchange(&GfxLabCrossed[0], 1, 0) == 0) {
+        GuardLog("lab: sdma0 wptr crossed bit 31: 0x%llX -> 0x%llX bytes, seq %lu", labBefore, wptrBytes, seq);
+        GfxLabSdmaReceiptAdev(Device, gfx->PagingDevicePtr, "bit 31", seq);
+    }
+    if (labBefore < (1ull << 32) && wptrBytes >= (1ull << 32) &&
+        InterlockedCompareExchange(&GfxLabCrossed[1], 1, 0) == 0) {
+        GuardLog("lab: sdma0 wptr crossed bit 32: 0x%llX -> 0x%llX bytes, seq %lu", labBefore, wptrBytes, seq);
+        GfxLabSdmaReceiptAdev(Device, gfx->PagingDevicePtr, "bit 32", seq);
+    }
+#endif
     return STATUS_SUCCESS;
 }
 

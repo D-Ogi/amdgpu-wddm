@@ -1238,6 +1238,9 @@ BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235, lab flavour only: the paging fence and marker slots, for the paging timeout snapshot. FALSE without a device.
 BOOLEAN GfxPagingSlots(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Fence, _Out_ ULONG* Marker);
+// BD-235, lab flavour only: two log lines with SDMA0's ring pointers now (registers, poll and rptr write-back slots,
+// the software wptr), the last retired paging sequence and Pending. IRQL <= DISPATCH_LEVEL.
+void GfxLabSdmaReceipt(_Inout_ BC250_DEVICE* Device, _In_z_ const char* When, ULONG Pending);
 #endif
 BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device);
 void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device);
