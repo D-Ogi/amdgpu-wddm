@@ -47,6 +47,7 @@ if (Test-Path -LiteralPath $OutputDir) {
 foreach ($d in @($OutputDir, $obj, $testDir)) { New-Item -ItemType Directory -Force $d | Out-Null }
 
 $saved = Save-ProcessEnvironment
+$here = (Get-Location).Path
 try {
     $env:TEMP = $OutputDir; $env:TMP = $OutputDir
     $install = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
@@ -66,6 +67,9 @@ try {
     $linkDll = @('/link', '/DLL', '/Brepro', '/DEBUG', '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
                  'gdi32.lib', 'user32.lib', 'setupapi.lib', 'advapi32.lib')
     $sources = @("$src\adl-main.cpp", "$src\adl-discover.cpp")
+    # The debug information records the working directory, and the PDB signature (and so the image bytes) follows
+    # it. From the repository root, -ffile-prefix-map makes it ".", the same for every caller.
+    Push-Location $repo
 
     function Build-Dll([string]$Out, [string]$Def, [string]$ObjDir, [string[]]$Defines) {
         New-Item -ItemType Directory -Force $ObjDir | Out-Null
@@ -90,6 +94,7 @@ try {
         "/Fd$obj\client.pdb" "$src\tests\ags-client.cpp" "/Fe$(Join-Path $OutputDir 'ags-client.exe')" /link /Brepro `
         d3d12.lib dxgi.lib psapi.lib
     if ($LASTEXITCODE -ne 0) { throw 'ags-client build failed' }
+    Pop-Location
 
     Push-Location $OutputDir
     try {
@@ -140,5 +145,5 @@ try {
         outputs = @($outputs | ForEach-Object {
             [ordered]@{ path = $_.FullName.Substring($OutputDir.Length + 1); sha256 = (Get-FileHash -LiteralPath $_.FullName).Hash } })
     } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputDir 'build.json') -Encoding utf8
-} finally { Restore-ProcessEnvironment $saved }
+} finally { Set-Location -LiteralPath $here; Restore-ProcessEnvironment $saved }
 '{0}  {1}' -f (Get-FileHash -LiteralPath (Join-Path $OutputDir $name)).Hash, $name
