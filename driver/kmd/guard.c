@@ -216,45 +216,114 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
 }
 
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-// BD-235 lab experiment, lab flavour only, not a catalog setting: the paging ring's start pointer. The value lives
-// in the driver's Parameters key, which the driver otherwise only reads (driver isolation treats it as read only);
-// a lab script writes it there and this deletes it, so the experiment leaves the key as it found it. The delete
-// is flushed BEFORE the value is handed on: a bug check at the bring-up it changes cannot repeat at the next
-// boot. A value that cannot be deleted is not used, and neither is anything but an 8-byte REG_QWORD (deleted all
-// the same). The shim checks the alignment where the ring size is known (bc250_sdma.c).
-ULONGLONG GuardLabConsumePagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
+// BD-235 lab experiment, lab flavour only, not a catalog setting: the paging ring's start pointer.
+// The seed is PagingRingStartBytes (REG_QWORD) with PagingRingStartNonce (REG_QWORD, nonzero), both in the driver's
+// Parameters key. The driver only reads that key: driver package isolation makes Parameters read only for the
+// driver (develop/driver-isolation.md, "should only be read at runtime and not modified"), and on this OS
+// IoOpenDriverRegistryKey(DriverRegKeyParameters) refuses KEY_SET_VALUE with 0xC0000022 (arm-ringstart1 boot a).
+// A seed is consumed once per nonce: the start writes the nonce as LabPagingRingStartNonce into the driver's internal
+// persistent state (DriverRegKeyPersistentState, the place isolation gives a driver for its own runtime state) and
+// flushes it BEFORE the seed goes to the shim. A later start that finds the same nonce there does not use the seed,
+// so a bug check at the bring-up it changes cannot repeat at the next boot, even though the seed stays in
+// Parameters until the lab script removes it. The flush is the same ZwFlushKey at the same point of the start as
+// the boot-loop guard's own count (GuardCheckAndCountStart), so it holds for a bug check in the boot itself.
+static PDRIVER_OBJECT g_LabDriverObject;
+static ULONGLONG g_LabSeed, g_LabNonce;
+static NTSTATUS g_LabSeedRead = STATUS_OBJECT_NAME_NOT_FOUND;
+
+static NTSTATUS LabQueryQword(HANDLE Key, PCWSTR Name, _Out_ ULONGLONG* Value)
 {
     UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONGLONG)];
     PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
     UNICODE_STRING name;
-    ULONGLONG value = 0;
-    ULONG length = 0, type = 0;
+    ULONG length = 0;
+    NTSTATUS status;
+
+    *Value = 0;
+    RtlInitUnicodeString(&name, Name);
+    status = ZwQueryValueKey(Key, &name, KeyValuePartialInformation, info, sizeof(buffer), &length);
+    if (!NT_SUCCESS(status)) return status;
+    if (info->Type != REG_QWORD || info->DataLength != sizeof(ULONGLONG)) return STATUS_OBJECT_TYPE_MISMATCH;
+    RtlCopyMemory(Value, info->Data, sizeof(ULONGLONG));
+    return STATUS_SUCCESS;
+}
+
+// DriverEntry: the seed and its nonce, read only. Nothing is used yet.
+void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status, nonce;
+
+    g_LabDriverObject = DriverObject;
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        g_LabSeedRead = status;
+        GuardLog("lab: paging ring start: Parameters key not opened for reading (0x%08X), nothing used", status);
+        return;
+    }
+    g_LabSeedRead = LabQueryQword(key, L"PagingRingStartBytes", &g_LabSeed);
+    nonce = LabQueryQword(key, L"PagingRingStartNonce", &g_LabNonce);
+    ZwClose(key);
+    if (g_LabSeedRead == STATUS_OBJECT_NAME_NOT_FOUND) return;
+    if (!NT_SUCCESS(g_LabSeedRead) || !NT_SUCCESS(nonce) || g_LabSeed == 0 || g_LabNonce == 0) {
+        GuardLog("lab: paging ring start not used: seed 0x%llX (0x%08X), nonce 0x%llX (0x%08X); two nonzero REG_QWORDs "
+                 "expected", g_LabSeed, g_LabSeedRead, g_LabNonce, nonce);
+        g_LabSeed = 0;
+        g_LabSeedRead = STATUS_OBJECT_TYPE_MISMATCH;
+        return;
+    }
+    GuardLog("lab: paging ring start 0x%llX nonce 0x%llX read (read only), for this start", g_LabSeed, g_LabNonce);
+}
+
+// StartDevice, after the boot-loop guard passed: the seed for this start's first fresh SDMA0 bring-up, or 0. The
+// nonce is written and flushed first; any failure on the way gives 0. Without a seed, a marker of an earlier seed is
+// deleted, so the internal state holds nothing once the lab script has removed the seed.
+ULONGLONG GuardLabCommitPagingRingStart(void)
+{
+    UNICODE_STRING name;
+    ULONGLONG marker = 0, seed = g_LabSeed, nonce = g_LabNonce;
     HANDLE key;
     NTSTATUS status, query;
 
-    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE | KEY_SET_VALUE, 0, &key);
+    g_LabSeed = 0;      // one look per DriverEntry read; a second start in this boot finds the marker in any case
+    if (g_LabDriverObject == NULL) return 0;
+    if (seed == 0 && g_LabSeedRead != STATUS_OBJECT_NAME_NOT_FOUND) return 0;   // malformed: already logged
+    status = IoOpenDriverRegistryKey(g_LabDriverObject, DriverRegKeyPersistentState, KEY_QUERY_VALUE | KEY_SET_VALUE, 0,
+                                     &key);
     if (!NT_SUCCESS(status)) {
-        GuardLog("lab: paging ring start: Parameters key not opened for writing (0x%08X), nothing used", status);
+        if (seed != 0)
+            GuardLog("lab: paging ring start 0x%llX nonce 0x%llX not used: persistent state not opened (0x%08X)", seed,
+                     nonce, status);
         return 0;
     }
-    RtlInitUnicodeString(&name, L"PagingRingStartBytes");
-    query = ZwQueryValueKey(key, &name, KeyValuePartialInformation, info, sizeof(buffer), &length);
-    if (query == STATUS_OBJECT_NAME_NOT_FOUND) { ZwClose(key); return 0; }
-    if (NT_SUCCESS(query)) type = info->Type;
-    if (NT_SUCCESS(query) && type == REG_QWORD && info->DataLength == sizeof(ULONGLONG))
-        RtlCopyMemory(&value, info->Data, sizeof(value));
-    status = ZwDeleteValueKey(key, &name);
+    RtlInitUnicodeString(&name, L"LabPagingRingStartNonce");
+    query = LabQueryQword(key, L"LabPagingRingStartNonce", &marker);
+    if (seed == 0) {
+        if (query != STATUS_OBJECT_NAME_NOT_FOUND) {
+            status = ZwDeleteValueKey(key, &name);
+            if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+            GuardLog("lab: paging ring start: no seed, marker 0x%llX deleted (0x%08X)", marker, status);
+        }
+        ZwClose(key);
+        return 0;
+    }
+    if (NT_SUCCESS(query) && marker == nonce) {
+        ZwClose(key);
+        GuardLog("lab: paging ring start 0x%llX nonce 0x%llX already consumed at an earlier start, not used", seed,
+                 nonce);
+        return 0;
+    }
+    status = ZwSetValueKey(key, &name, 0, REG_QWORD, &nonce, sizeof(nonce));
     if (NT_SUCCESS(status)) status = ZwFlushKey(key);
     ZwClose(key);
     if (!NT_SUCCESS(status)) {
-        GuardLog("lab: paging ring start 0x%llX not deleted (0x%08X), not used", value, status);
+        GuardLog("lab: paging ring start 0x%llX nonce 0x%llX not used: marker not written (0x%08X)", seed, nonce,
+                 status);
         return 0;
     }
-    if (value == 0)
-        GuardLog("lab: paging ring start deleted unused: query 0x%08X type %lu, a nonzero REG_QWORD expected", query,
-                 type);
-    else GuardLog("lab: paging ring start 0x%llX read and deleted, for the first SDMA0 bring-up", value);
-    return value;
+    GuardLog("lab: paging ring start 0x%llX nonce 0x%llX consumed: marker written and flushed, for the first SDMA0 "
+             "bring-up", seed, nonce);
+    return seed;
 }
 #endif
 

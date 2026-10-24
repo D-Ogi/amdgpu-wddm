@@ -120,6 +120,10 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         return status;
     }
     GuardStage(StageStartGuardPassed);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-235 experiment: the seed, once per nonce, after the guard counted this start; 0 for every other start.
+    bc250_sdma_lab_ring_start = GuardLabCommitPagingRingStart();
+#endif
     device->StopDone=FALSE; // Only an admitted start may require hardware unwind.
     device->SourceVisible=FALSE;
     InterlockedExchange(&device->StartVisibilityPending,1);

@@ -649,9 +649,11 @@ void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx an
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-// BD-235 lab experiment, lab flavour only: PagingRingStartBytes (REG_QWORD under the driver's Parameters key),
-// deleted and flushed before it is returned; 0 when absent, malformed or not deleted. PASSIVE_LEVEL, DriverEntry.
-ULONGLONG GuardLabConsumePagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
+// BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
+// driver's Parameters key), read only in DriverEntry (PASSIVE_LEVEL); consumed once per nonce at StartDevice
+// through LabPagingRingStartNonce in the internal persistent state, written and flushed before the seed is used.
+void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
+ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 #endif
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
