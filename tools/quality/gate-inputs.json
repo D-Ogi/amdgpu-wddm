@@ -1278,6 +1278,12 @@
         "clang-host"
       ]
     },
+    "gfx-pipeline-no-pad-capacity": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "firmware-metadata-no-runtime": {
       "inputs": [
         "host",

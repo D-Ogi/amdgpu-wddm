@@ -63,9 +63,24 @@ unsigned int bc250_ring_boundary_pad_size(const struct amdgpu_ring *ring, unsign
  * ring->funcs->begin_use, because there is no power management to wake.
  * [shim] BD-235: a reservation that would straddle a multiple of 2^30 dwords first gets NOPs up to
  * it (bc250_ring_boundary_pad_size()); they go out with the caller's commit. The pad is a multiple
- * of align_mask + 1 on an aligned write pointer, so the caller's own alignment arithmetic holds. A
- * ring that tracks its read pointer must have room for the pad and the request together. The paging
- * path of the KMD pads and publishes before it calls this, so here it finds nothing to pad. */
+ * of align_mask + 1 on an aligned write pointer, so the caller's own alignment arithmetic holds. The
+ * paging path of the KMD pads and publishes before it calls this, so here it finds nothing to pad.
+ *
+ * Capacity with a pad, checked before the first NOP is written:
+ * - Every ring: the pad and the request together fit the ring storage with one dword empty, or the
+ *   request would overwrite its own pad. On an aligned write pointer the pad is shorter than the
+ *   aligned request, so pad + ndw < 2 * max_dw; every ring of this shim has storage of 2 * max_dw
+ *   dwords (amdgpu_ring.c:114), so the check refuses nothing there. It is a check, not an assumption,
+ *   for any other configuration. A request without a pad is not checked here (a throwaway paging
+ *   ring, bc250_sdma_paging.c, has max_dw equal to its storage).
+ * - A ring that tracks its read pointer: room for the pad and the request beside the unretired work.
+ * - A ring that does not (track_rptr false) cannot be checked here. Its caller guarantees that the
+ *   engine has consumed every older dword that pad + ndw dwords from the write pointer reach. For
+ *   the live SDMA0 ring that is the KMD's paging path (gfx.c, before GfxSdmaBoundaryLocked).
+ *
+ * amdgpu_ring_undo() goes back to wptr_old, which is after the pad: an undone request keeps its pad
+ * NOPs, and the next commit publishes them in front of the next request. NOPs on an aligned pointer
+ * change nothing but the place where the next request starts. */
 int amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw)
 {
 	unsigned int pad;
@@ -81,6 +96,11 @@ int amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw)
 	}
 
 	pad = bc250_ring_boundary_pad_size(ring, ndw);
+	if (pad != 0 && (pad > ring->buf_mask || ndw > ring->buf_mask - pad)) {
+		dev_err(ring->adev->dev, "ring alloc of %u dwords and a boundary pad of %u exceeds the ring of %u dwords\n",
+			ndw, pad, ring->buf_mask + 1u);
+		return -1;
+	}
 	if (pad != 0 && ring->track_rptr && (!ring->rptr_cpu_addr || !bc250_ring_room(ring, pad + ndw)))
 		return -16;
 	if (pad != 0)

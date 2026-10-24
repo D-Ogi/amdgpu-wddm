@@ -598,6 +598,7 @@ Check 'paging-ddi-status-pending-success' { & pwsh -NoProfile -File "$repo\drive
   @{n='gfx-pipeline-no-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutCapacity');Fails=$true}
   @{n='gfx-pipeline-equal-fence';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-EqualityFence');Fails=$true}
   @{n='gfx-pipeline-no-boundary-pad';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutBoundaryPad');Fails=$true}
+  @{n='gfx-pipeline-no-pad-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutPadCapacity');Fails=$true}
   # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
   @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
   @{n='firmware-io';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits)}

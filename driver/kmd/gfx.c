@@ -4155,6 +4155,17 @@ static void GfxLogPagingSubmit(_Inout_ BC250_GFX* Gfx, ULONG Dwords, ULONGLONG S
 // The rule itself is generic (bc250_ring.c bc250_ring_boundary_pad_size, applied in amdgpu_ring_alloc for every
 // ring). Here, under Sdma0RingLock, the NOPs up to the boundary are published by themselves first, exactly as in
 // boot a1, and the submission then starts at the boundary.
+// The SDMA0 ring does not track its read pointer (track_rptr false), so amdgpu_ring_alloc() cannot see unretired work
+// on it; the writers keep the room, and the pad needs it as much as the request. The writers of this ring:
+// - this path: one submission at a time. PagingSubmitInFlight stays set until the fence of the last submission
+//   arrives (GfxPagingFenceArrivedAccess), so when this path pads, no paging work is unretired, and its pad and
+//   request (pad < aligned request <= max_dw 1024) fit the 2048-dword ring;
+// - SdmaIbStartupControl and SdmaVaStartupControl: before WDDM publication, never beside OS submissions, and each
+//   waits for its own fence;
+// - the lab flavour's raw escapes (RUN_GFX ring test, RUN_FENCE, RUN_SDMACOPY and RUN_SDMAIB): each waits for its own
+//   fence, but none checks PagingSubmitInFlight. So in the lab flavour one escape submission can be unretired beside
+//   one paging submission, and the sum can exceed the ring (a pad of 1008, a request of 1024 and 32 unretired
+//   dwords). A raw escape during OS paging traffic is outside this guarantee; the release flavour has no such escape.
 typedef struct _GFX_BOUNDARY_NOTE {
     ULONG Action;        // 0 nothing to do, 1 padded, 2 pad refused by amdgpu_ring_alloc
     ULONG PadDwords;

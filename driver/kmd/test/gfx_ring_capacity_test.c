@@ -108,6 +108,65 @@ int main(void)
         memcpy(before,memory,sizeof(memory));
         CHECK(amdgpu_ring_alloc(&ring,257)!=0 && ring.wptr==0xffffff00ull && !memcmp(before,memory,sizeof(memory)));
     }
+    {
+        // BD-235 capacity on the live SDMA0 ring's shape: 2048 dwords, max_dw 1024, align 16, read pointer not
+        // tracked. The longest pad (1008) in front of the longest request (1024) fits, with one dword to spare.
+        struct amdgpu_ring_funcs sdma = {AMDGPU_RING_TYPE_SDMA,15,0};
+        const u64 b = 0x40000000ull;
+        unsigned int ok;
+        ring.funcs=&sdma; ring.track_rptr=false; ring.max_dw=1024; ring.buf_mask=2047;
+        memset(memory,0x5a,sizeof(memory));
+        ring.wptr=b-1008;
+        CHECK(bc250_ring_boundary_pad_size(&ring,1024)==1008);
+        CHECK(amdgpu_ring_alloc(&ring,1024)==0 && ring.wptr==b && ring.wptr_old==b && ring.count_dw==1024);
+        for (ok=1, i=1040; i<2048; ++i) ok &= memory[i]==0;
+        CHECK(ok && memory[1039]==0x5a5a5a5au && memory[0]==0x5a5a5a5au);
+        // The request then fills ring index 0-1023 and leaves the pad (1040-2047) as it was.
+        for (i=0; i<1024; ++i) amdgpu_ring_write(&ring,0x600+i);
+        for (ok=1, i=1040; i<2048; ++i) ok &= memory[i]==0;
+        CHECK(ok && memory[0]==0x600 && memory[1023]==0x600+1023 && memory[1024]==0x5a5a5a5au && ring.count_dw==0);
+        // Exact boundary: a reservation that ends at 2^30 dwords, and one that starts there, get no pad. One dword more
+        // than the end: a whole pad of 1008.
+        ring.wptr=b-1024;
+        CHECK(bc250_ring_boundary_pad_size(&ring,1024)==0 && amdgpu_ring_alloc(&ring,1024)==0 && ring.wptr==b-1024);
+        ring.wptr=b-1008;
+        CHECK(bc250_ring_boundary_pad_size(&ring,1008)==0 && bc250_ring_boundary_pad_size(&ring,1009)==1008);
+        ring.wptr=b;
+        CHECK(bc250_ring_boundary_pad_size(&ring,1024)==0 && amdgpu_ring_alloc(&ring,1024)==0 && ring.wptr==b);
+        // A request over max_dw is refused before the pad is computed or written.
+        ring.wptr=b-1008; memset(memory,0x5a,sizeof(memory)); memcpy(before,memory,sizeof(memory));
+        CHECK(amdgpu_ring_alloc(&ring,1025)!=0 && ring.wptr==b-1008 && !memcmp(before,memory,sizeof(memory)));
+        // Undo after a pad goes back to wptr_old, after the pad: the NOPs stay, and the next commit publishes them.
+        CHECK(amdgpu_ring_alloc(&ring,1024)==0 && ring.wptr==b);
+        amdgpu_ring_write(&ring,0x700);
+        amdgpu_ring_undo(&ring);
+        CHECK(ring.wptr==b && ring.wptr_old==b && memory[1040]==0 && memory[2047]==0 && memory[0]==0x700);
+        amdgpu_ring_commit(&ring);
+        CHECK(ring.wptr==b && writeback==b<<2);
+        // A ring whose storage is not twice max_dw: the pad and the request together do not fit, and the request is
+        // refused before the first NOP, with the ring and the memory as they were. Without a pad the same request is
+        // admitted, as before (a throwaway paging ring has max_dw equal to its storage).
+        ring.buf_mask=1023; ring.wptr=b-1008;
+        memcpy(before,memory,sizeof(memory));
+        CHECK(amdgpu_ring_alloc(&ring,1024)!=0 && ring.wptr==b-1008 && !memcmp(before,memory,sizeof(memory)));
+        CHECK(amdgpu_ring_alloc(&ring,16)==0 && ring.wptr==b-1008);
+        ring.wptr=b-512;     // 512 before the boundary: the pad of 512 and the aligned request of 528 need 1040
+        CHECK(bc250_ring_boundary_pad_size(&ring,513)==512 && amdgpu_ring_alloc(&ring,513)!=0 && ring.wptr==b-512);
+        CHECK(bc250_ring_boundary_pad_size(&ring,512)==0 && amdgpu_ring_alloc(&ring,512)==0 && ring.wptr==b-512);
+        // Outstanding work on a tracked ring: the pad and the request need room beside it. 2048 dwords, 32 of them
+        // unretired, the pad of 1008 and the request of 1024 together need 2064: refused before the first NOP.
+        ring.buf_mask=2047; ring.track_rptr=true; ring.wptr=b-1008; read=(u32)(b-1008-32);
+        memcpy(before,memory,sizeof(memory));
+        CHECK(amdgpu_ring_alloc(&ring,1024)!=0 && ring.wptr==b-1008 && !memcmp(before,memory,sizeof(memory)));
+        read=(u32)(b-1008-15);       // 15 unretired: 2047 - 15 = 2032 = 1008 + 1024, fits exactly
+        CHECK(amdgpu_ring_alloc(&ring,1024)==0 && ring.wptr==b);
+        ring.wptr=b-1008; read=(u32)(b-1008-16);   // one more unretired dword: refused
+        CHECK(amdgpu_ring_alloc(&ring,1024)!=0 && ring.wptr==b-1008);
+        // The same outstanding work on an untracked ring is admitted: the allocator cannot see it, and the room is the
+        // caller's (gfx.c, the comment before GfxSdmaBoundaryLocked).
+        ring.track_rptr=false; read=(u32)(b-1008-32);
+        CHECK(amdgpu_ring_alloc(&ring,1024)==0 && ring.wptr==b);
+    }
     printf("GFX ring capacity/fence order: %u checks, %u failures\n", checks, bad);
     return bad ? 1:0;
 }

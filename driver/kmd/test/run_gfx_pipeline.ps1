@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$WithoutBoundaryPad,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='',[string]$MesaSource=$(if ($env:BC250_RADV_SOURCE) { $env:BC250_RADV_SOURCE } else { '' }))
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$WithoutBoundaryPad,[switch]$WithoutPadCapacity,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='',[string]$MesaSource=$(if ($env:BC250_RADV_SOURCE) { $env:BC250_RADV_SOURCE } else { '' }))
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp'; $env:TMP=$env:TEMP
@@ -24,12 +24,22 @@ if($SerializeGather){
     [IO.File]::WriteAllText("$Out\gather_actual.inc",$g)
 }
 $ring=Get-Content "$repo\driver\shim\bc250_ring.c" -Raw
-if($WithoutCapacity){$ring=$ring.Replace('if (ring->track_rptr && !bc250_ring_has_space(ring, ndw)) return -16;', '/* negative control: old allocator ignores CP read pointer */')}
+if($WithoutCapacity){
+    $anchor='if (ring->track_rptr && !bc250_ring_has_space(ring, ndw)) return -16;'
+    if(([regex]::Matches($ring,[regex]::Escape($anchor))).Count -ne 1){throw 'capacity anchor not found once'}
+    $ring=$ring.Replace($anchor,'/* negative control: old allocator ignores CP read pointer */')
+}
 # BD-235 negative control: amdgpu_ring_alloc() inserts no pad before a reservation that straddles 2^30 dwords.
 if($WithoutBoundaryPad){
     $anchor='pad = bc250_ring_boundary_pad_size(ring, ndw);'
     if(([regex]::Matches($ring,[regex]::Escape($anchor))).Count -ne 1){throw 'boundary pad anchor not found once'}
     $ring=$ring.Replace($anchor,'pad = 0; /* negative control: no boundary pad */')
+}
+# BD-235 negative control: amdgpu_ring_alloc() writes the pad without the check that the pad and the request fit the ring.
+if($WithoutPadCapacity){
+    $anchor='if (pad != 0 && (pad > ring->buf_mask || ndw > ring->buf_mask - pad)) {'
+    if(([regex]::Matches($ring,[regex]::Escape($anchor))).Count -ne 1){throw 'pad capacity anchor not found once'}
+    $ring=$ring.Replace($anchor,'if (0) { /* negative control: no pad capacity check */')
 }
 [IO.File]::WriteAllText("$Out\bc250_ring_actual.c",$ring)
 $fence=Get-Content "$repo\driver\shim\include\bc250_fence_order.h" -Raw
