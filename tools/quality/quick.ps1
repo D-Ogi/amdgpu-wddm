@@ -412,6 +412,19 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
        -CpuUmd $env:BC250_ROUTER_CPU_UMD -AppPackage $env:BC250_ROUTER_APP_PACKAGE `
        -Build (Join-Path $Out 'router-front') -OutputDir (Join-Path $Out 'router-stack')
  }
+ # The open ADL subset (docs/design/adl-subset.md) for both architectures: the export, dependency and calling-
+ # convention gates, the unit test, and the real AGS 6.3 library over the shipped, the injected and the two
+ # negative-control builds. AGS is not in the repository (THIRD-PARTY.md); the dx12 case needs a D3D12 adapter.
+ CheckIf 'umd-adl' "$Workspace\ref\AGS_SDK-v6.3.0\amd_ags.h" {
+     $env:BC250_ROOT=$Workspace
+     foreach($arch in @('x64','x86')){
+         $build=Join-Path $Out "umd-adl-$arch"
+         & pwsh -NoProfile -File "$repo\tools\build\build-umd-adl.ps1" -Arch $arch -OutputDir $build
+         if($LASTEXITCODE -ne 0){ exit 1 }
+         & pwsh -NoProfile -File "$repo\tools\build\test-umd-adl-ags.ps1" -Arch $arch -BuildDir $build
+         if($LASTEXITCODE -ne 0){ exit 1 }
+     }
+ }
  Check 'escape-abi' { & python -m unittest discover -s "$repo\tools\win\bc250kmd_cli" }
  # These three compile a C fixture of driver\kmd\test with cl.exe and run it. The compiler is the input.
  CheckIf 'allocation-identity' $clExe { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }

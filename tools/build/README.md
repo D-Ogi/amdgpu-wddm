@@ -16,6 +16,8 @@ these scripts are its executable half.
 | `engine_abi.py`, `test_engine_abi.py` | selects the release or the lab engine DLL pin of `driver/umd/d3d12/engine-ddi/engine-abi.json` (`build-engine-ddi.ps1 -Flavour`), with the semantics of `tools/release/release_flavour.py`: neither flavour's DLL can pass the other's run |
 | `build-umd-router.ps1` | cl for the UMD router `bc250d3d_router.dll` (`driver/umd/router`), its UMD doubles and its host-test harness |
 | `test-umd-router.ps1` | the router's host gate on that output, with the hosted UMD, the CPU UMD and the DXVK shell named by parameter |
+| `build-umd-adl.ps1` | clang-cl for the open ADL subset (`driver/umd/adl`): `atiadlxx.dll` (`-Arch x64`) or `atiadlxy.dll` (`-Arch x86`), its test builds, the unit test and the AGS client. It runs the export, dependency and unit gates |
+| `test-umd-adl-ags.ps1` | the AGS 6.3 host tests of that output: the real `amd_ags_x64.dll` or `amd_ags_x86.dll` with the shipped, injected and host builds and the two negative controls |
 | `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link, and the CheckSum that covers them |
 | `build-radv-queue-tests.ps1`, `radv-queue-tests.py` | host tests of the hosted queue winsys in a built RADV tree ([driver/icd/mesa-wddm2-runtime-queues](../../driver/icd/mesa-wddm2-runtime-queues/README.md)) |
 | `build-radv-unorm10-export-test.ps1`, `radv-unorm10-export-test.py` | host test of the 10-bit UNORM colour export rounding (BD-049) in a built RADV tree: the epilog key, the NIR export and the ACO epilog over about 1.3 million inputs, and a negative control without the rounding that must fail |
