@@ -25,7 +25,10 @@ Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyCo
 $dir = "C:\BC250\tmp\control\$Session"
 if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }
 $null = New-Item -ItemType Directory -Force -Path $dir
-$act = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$server`" -Session $Session -Seconds $Seconds"
+# conhost --headless: on Windows 11 the default terminal opens a visible console window for this task even with
+# -WindowStyle Hidden. That window takes the foreground from a game that starts a moment later, and a game without
+# the foreground can stop rendering (BD-234).
+$act = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$server`" -Session $Session -Seconds $Seconds"
 $pr = New-ScheduledTaskPrincipal -UserId 'bc250' -LogonType Interactive -RunLevel Highest
 $st = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds ($Seconds + 30)) -AllowStartIfOnBatteries
 $null = Register-ScheduledTask -TaskName $task -Action $act -Principal $pr -Settings $st
