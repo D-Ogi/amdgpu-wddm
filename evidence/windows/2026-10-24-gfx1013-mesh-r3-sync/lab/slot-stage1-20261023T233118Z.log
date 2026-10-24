@@ -1,0 +1,119 @@
+mesh-slot stage1 start 23:31:18Z
+== swap ICD release 91A35561 23:31:18Z
+kept original already there 3BF4F341DDF7EC7C1812C69F944D1AE6309FE1D1420958D65BE5FA3260F4F4E0
+renamed the loaded copy aside: C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll.swap-aside-20261023T233123630Z
+C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll 3BF4F341DDF7EC7C1812C69F944D1AE6309FE1D1420958D65BE5FA3260F4F4E0 -> 91A35561A5AA91565C93E4E0BC7D7AF09297
+copies 1, written 1, kept 0, already in place 0, restore False
+guard C1-caps 23:31:26Z Tctl=54.0
+== arm C1-caps 23:31:27Z
+icd 91A35561 \d3d12\amdgpu_wddm_radv_d3d12.dll
+== caps-inbox: exit 0, 16.7 s, 37 lines
+HighestShaderModel 0x66 (asked 0x67)
+OPTIONS7: MeshShaderTier 10 SamplerFeedbackTier 0
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+events: none
+== caps-agility: exit 0, 8.8 s, 37 lines
+HighestShaderModel 0x68 (asked 0x69)
+OPTIONS7: MeshShaderTier 10 SamplerFeedbackTier 0
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+events: none
+icd after 91A35561
+guard P-probe 23:31:57Z Tctl=54.4
+== arm P-probe 23:31:59Z
+icd 91A35561 \d3d12\amdgpu_wddm_radv_d3d12.dll
+== p-ms: exit 0, 0.3 s, 12 lines
+FEATURES MeshShaderTier=10 MeshShaderSupportsFullRangeRenderTargetArrayIndex=0 DerivativesInMeshAndAmplificationShaders=0 HighestShaderModel=6_6 MaxSupportedFeatureLevel=12_1 device=12_1 options7_hr=00000000
+PASS reference submission=1 retired=1 ms=0
+PASS mesh-ms submission=2 retired=1 ms=16
+PASS probe-readback submission=3 retired=1 ms=0
+REFERENCE covered=520 least_per_triangle=65 invalid=0 first_invalid=none
+PROBE reference as_threads=0 ms_groups=0 ms_gid_mask=0x00000000 ms_tri_mask=0x00000000 ms_prims=0 ps_invocations=520
+PROBE mesh-ms as_threads=0 ms_groups=8 ms_gid_mask=0x000000ff ms_tri_mask=0x000000ff ms_prims=8 ps_invocations=520
+CONFORMANCE mesh-ms PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE overall PASS
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+events: none
+== p-as: exit 0, 0.2 s, 13 lines
+FEATURES MeshShaderTier=10 MeshShaderSupportsFullRangeRenderTargetArrayIndex=0 DerivativesInMeshAndAmplificationShaders=0 HighestShaderModel=6_6 MaxSupportedFeatureLevel=12_1 device=12_1 options7_hr=00000000
+PASS reference submission=1 retired=1 ms=0
+PASS mesh-as submission=2 retired=1 ms=0
+PASS probe-readback submission=3 retired=1 ms=0
+REFERENCE covered=520 least_per_triangle=65 invalid=0 first_invalid=none
+PROBE reference as_threads=0 ms_groups=0 ms_gid_mask=0x00000000 ms_tri_mask=0x00000000 ms_prims=0 ps_invocations=520
+PROBE mesh-as as_threads=8 ms_groups=8 ms_gid_mask=0x000000ff ms_tri_mask=0x000000ff ms_prims=8 ps_invocations=520
+CONFORMANCE mesh-as PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE overall PASS
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+BC250 TASK WITNESS: draw 1 retired, phase=3 after 1 ms (later submit) record_pfp=00000008,00000001,00000001 record_me=00000008,00000001,00000001 payload=00000000,00000001,00000002 pfp_sync=1
+events: none
+icd after 91A35561
+guard W 23:32:06Z Tctl=54.4
+== arm W 23:32:08Z
+icd 91A35561 \d3d12\amdgpu_wddm_radv_d3d12.dll
+== w-ms: exit 0, 0.2 s, 9 lines
+FEATURES MeshShaderTier=10 MeshShaderSupportsFullRangeRenderTargetArrayIndex=0 DerivativesInMeshAndAmplificationShaders=0 HighestShaderModel=6_6 MaxSupportedFeatureLevel=12_1 device=12_1 options7_hr=00000000
+PASS reference submission=1 retired=1 ms=15
+PASS mesh-ms submission=2 retired=1 ms=0
+REFERENCE covered=520 least_per_triangle=65 invalid=0 first_invalid=none
+CONFORMANCE mesh-ms PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE overall PASS
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+events: none
+== w-as: exit 0, 0.2 s, 10 lines
+FEATURES MeshShaderTier=10 MeshShaderSupportsFullRangeRenderTargetArrayIndex=0 DerivativesInMeshAndAmplificationShaders=0 HighestShaderModel=6_6 MaxSupportedFeatureLevel=12_1 device=12_1 options7_hr=00000000
+PASS reference submission=1 retired=1 ms=0
+PASS mesh-as submission=2 retired=1 ms=0
+REFERENCE covered=520 least_per_triangle=65 invalid=0 first_invalid=none
+CONFORMANCE mesh-as PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE overall PASS
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+BC250 TASK WITNESS: draw 1 retired, phase=3 after 8 ms (device destroy) record_pfp=00000008,00000001,00000001 record_me=00000008,00000001,00000001 payload=00000000,00000001,00000002 pfp_sync=1
+events: none
+== w-all: exit 0, 0.2 s, 12 lines
+FEATURES MeshShaderTier=10 MeshShaderSupportsFullRangeRenderTargetArrayIndex=0 DerivativesInMeshAndAmplificationShaders=0 HighestShaderModel=6_6 MaxSupportedFeatureLevel=12_1 device=12_1 options7_hr=00000000
+PASS reference submission=1 retired=1 ms=0
+PASS mesh-ms submission=2 retired=1 ms=0
+PASS mesh-as submission=3 retired=1 ms=0
+REFERENCE covered=520 least_per_triangle=65 invalid=0 first_invalid=none
+CONFORMANCE mesh-ms PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE mesh-as PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE overall PASS
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+BC250 TASK WITNESS: draw 1 retired, phase=3 after 8 ms (device destroy) record_pfp=00000008,00000001,00000001 record_me=00000008,00000001,00000001 payload=00000000,00000001,00000002 pfp_sync=1
+events: none
+== w-single: exit 0, 0.2 s, 10 lines
+FEATURES MeshShaderTier=10 MeshShaderSupportsFullRangeRenderTargetArrayIndex=0 DerivativesInMeshAndAmplificationShaders=0 HighestShaderModel=6_6 MaxSupportedFeatureLevel=12_1 device=12_1 options7_hr=00000000
+PASS reference+mesh-ms+mesh-as submission=1 retired=1 ms=16
+REFERENCE covered=520 least_per_triangle=65 invalid=0 first_invalid=none
+CONFORMANCE mesh-ms PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE mesh-as PASS mismatches=0 checked=4096 first=none control_permuted_ptag=520 hr=00000000
+CONFORMANCE overall PASS
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+BC250 TASK WITNESS: draw 1 retired, phase=3 after 8 ms (device destroy) record_pfp=00000008,00000001,00000001 record_me=00000008,00000001,00000001 payload=00000000,00000001,00000002 pfp_sync=1
+events: none
+icd after 91A35561
+guard E-eb 23:32:14Z Tctl=54.6
+== arm E-eb 23:32:17Z
+icd 91A35561 \d3d12\amdgpu_wddm_radv_d3d12.dll
+== eb-inbox: exit 0, 1.0 s, 8 lines
+SKIP enhanced-buffer, enhanced-global, enhanced-texture (no Enhanced Barriers)
+PASS legacy
+SKIP mixed (no Enhanced Barriers)
+RESULT failed 0
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+events: none
+== eb-agility: exit 0, 0.7 s, 8 lines
+SKIP enhanced-buffer, enhanced-global, enhanced-texture (no Enhanced Barriers)
+PASS legacy
+SKIP mixed (no Enhanced Barriers)
+RESULT failed 0
+BC250 DGC: stages=0x00003fff(VERTEX|TESS_CTRL|TESS_EVAL|GEOMETRY|FRAGMENT|COMPUTE|TASK|MESH|RAYGEN|ANY_HIT|CLOSEST_HIT|MISS|INTERSECTION|CALLABLE) tokens=DRAW_MESH_TASKS(+COUNT,+NV)|PUSH_CONSTANT|SEQUENCE_INDEX route=radv_bc250_dgc meshShader=1 taskShader=1 ex
+events: none
+icd after 91A35561
+== restore ICD 23:32:22Z
+loaded by GalaxyClient(11508), GOG Galaxy Notifications Renderer(2244): held copies are renamed aside (-RenameLoaded)
+renamed the loaded copy aside: C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll.swap-aside-20261023T233226580Z
+C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll 91A35561A5AA91565C93E4E0BC7D7AF092978016C21B342B0AB5E03FB0E58BB8 -> 3BF4F341DDF7EC7C1812C69F944D1AE6309F
+copies 1, written 1, kept 0, already in place 0, restore True
+restored ICD: 3BF4F341 (want 3BF4F341)
+mesh-slot stage1 end 23:32:29Z

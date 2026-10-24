@@ -1,0 +1,7 @@
+mesh-slot swap start 00:33:32Z
+== swap ICD release 91A35561 00:33:32Z
+kept original already there 3BF4F341DDF7EC7C1812C69F944D1AE6309FE1D1420958D65BE5FA3260F4F4E0
+renamed the loaded copy aside: C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll.swap-aside-20261024T003337786Z
+C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll 3BF4F341DDF7EC7C1812C69F944D1AE6309FE1D1420958D65BE5FA3260F4F4E0 -> 91A35561A5AA91565C93E4E0BC7D7AF09297
+copies 1, written 1, kept 0, already in place 0, restore False
+mesh-slot swap end 00:33:37Z

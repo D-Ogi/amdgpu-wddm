@@ -1,0 +1,29 @@
+mesh-slot stage2 start 23:33:11Z
+== swap ICD release 91A35561 23:33:11Z
+kept original already there 3BF4F341DDF7EC7C1812C69F944D1AE6309FE1D1420958D65BE5FA3260F4F4E0
+renamed the loaded copy aside: C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll.swap-aside-20261023T233315349Z
+C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll 3BF4F341DDF7EC7C1812C69F944D1AE6309FE1D1420958D65BE5FA3260F4F4E0 -> 91A35561A5AA91565C93E4E0BC7D7AF09297
+copies 1, written 1, kept 0, already in place 0, restore False
+guard S-ms 23:33:19Z Tctl=54.4
+== arm S-ms 23:33:20Z
+developer mode: off
+2026-10-23T23:33:24.8617790Z start mesh-r2-ms: MeshletRender,MeshletInstancing
+2026-10-23T23:33:48.3803628Z end mesh-r2-ms, task Ready
+PASS MeshletRender alive_at_end=1 window=1 responding=True exit= agility=app-local debug=0 debug_errors=0 debug_warnings=0 frames= seconds=10.0 reasons= log=C:\BC250\agility-samples\logs\MeshletRender-20261023T233326Z
+PASS MeshletInstancing alive_at_end=1 window=1 responding=True exit= agility=app-local debug=0 debug_errors=0 debug_warnings=0 frames= seconds=10.0 reasons= log=C:\BC250\agility-samples\logs\MeshletInstancing-20261023T233336Z
+TOTAL pass=2 fail=0 skip=0 seconds=21
+guard S-as 23:33:51Z Tctl=55.0
+== arm S-as 23:33:54Z
+developer mode: off
+2026-10-23T23:33:57.9613299Z start mesh-r2-as: MeshletCull,DynamicLOD
+2026-10-23T23:34:21.5270078Z end mesh-r2-as, task Ready
+PASS MeshletCull alive_at_end=1 window=1 responding=True exit= agility=app-local debug=0 debug_errors=0 debug_warnings=0 frames= seconds=10.0 reasons= log=C:\BC250\agility-samples\logs\MeshletCull-20261023T233358Z
+PASS DynamicLOD alive_at_end=1 window=1 responding=True exit= agility=app-local debug=0 debug_errors=0 debug_warnings=0 frames= seconds=10.0 reasons= log=C:\BC250\agility-samples\logs\DynamicLOD-20261023T233409Z
+TOTAL pass=2 fail=0 skip=0 seconds=20
+== restore ICD 23:34:22Z
+loaded by GalaxyClient(11508), GOG Galaxy Notifications Renderer(2244): held copies are renamed aside (-RenameLoaded)
+renamed the loaded copy aside: C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll.swap-aside-20261023T233426679Z
+C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll 91A35561A5AA91565C93E4E0BC7D7AF092978016C21B342B0AB5E03FB0E58BB8 -> 3BF4F341DDF7EC7C1812C69F944D1AE6309F
+copies 1, written 1, kept 0, already in place 0, restore True
+restored ICD: 3BF4F341 (want 3BF4F341)
+mesh-slot stage2 end 23:34:29Z

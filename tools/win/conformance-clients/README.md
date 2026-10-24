@@ -283,6 +283,11 @@ hardware implementation. The six debug layer warnings are 929, the complement pr
 READBACK memory, and 820, a clear without a clear value in the resource description. The `-TestForceTier0` arm
 reports `CONFORMANCE overall SKIP` with `reason=MeshShaderTier=0,HighestShaderModel=6_8` and exits 4.
 
+On the BC-250, this witness (exe SHA256 8A5F9930, with `--probe`) passes every pass on the gfx1013 mesh ICD
+91A35561. That ICD is mesa-amdgpu-wddm `bd7e7997`, the head of `amdgpu-wddm/upstream-2026-10-23`. mesh-as gets
+8/8/0xff/0xff/8/520. With the PFP sync of the hybrid task route turned off, mesh-as gets `ms_groups=0`. The stage logs,
+the game run and the rebuild records are in `evidence/windows/2026-10-24-gfx1013-mesh-r3-sync`.
+
 ## Caveats
 
 - WARP 10.0.26100.9278 sets `SV_InnerCoverage` bit 0 on every conservatively covered pixel of a back-facing

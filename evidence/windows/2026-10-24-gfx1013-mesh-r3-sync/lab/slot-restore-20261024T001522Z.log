@@ -1,0 +1,8 @@
+mesh-slot restore start 00:15:22Z
+== restore ICD 00:15:22Z
+loaded by GalaxyClient(11508), GOG Galaxy Notifications Renderer(2244): held copies are renamed aside (-RenameLoaded)
+renamed the loaded copy aside: C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll.swap-aside-20261024T001527177Z
+C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_e4aef77cc71c4233\d3d12\amdgpu_wddm_radv_d3d12.dll 91A35561A5AA91565C93E4E0BC7D7AF092978016C21B342B0AB5E03FB0E58BB8 -> 3BF4F341DDF7EC7C1812C69F944D1AE6309F
+copies 1, written 1, kept 0, already in place 0, restore True
+restored ICD: 3BF4F341 (want 3BF4F341)
+mesh-slot restore end 00:15:29Z

@@ -1,0 +1,19 @@
+# mesh witness: lab-tested 8A5F9930 against a rebuild (build-mesh.ps1) of the same tools/win/conformance-clients
+# tree (db41461d) in the checkout where 8A5F9930 was built
+0x00100-0x00102  COFF TimeDateStamp  92d7db -> 050adc
+0x390D4-0x390D6  debug entry 0 TimeDateStamp  92d7db -> 050adc
+260608 bytes, 2 differing range(s), 0 outside the per-build fields
+SHA-256 reference                        8A5F99308644AD280A8987035C027F9FF938D861566FDB1E1403CCB38B644895
+SHA-256 rebuilt                          54D6F0D8F95D2AD1BE89B64A22D6835077B73562F1A200D9FB989817B6B7C951
+SHA-256 rebuilt, reference fields copied 8A5F99308644AD280A8987035C027F9FF938D861566FDB1E1403CCB38B644895
+
+# the same tree in a second checkout at another path (the build is deterministic in one path:
+# two builds there differ only in the per-build fields)
+260608 bytes, 155 differing range(s), 153 outside the per-build fields
+SHA-256 reference                        8A5F99308644AD280A8987035C027F9FF938D861566FDB1E1403CCB38B644895
+SHA-256 rebuilt                          477A2F140BBE5BD86EB7555CA50408C8E81A791810AE92232C8E08D6303D9D73
+SHA-256 rebuilt, reference fields copied 6F4710792B7BC06ACE30FD8E345B345933AEC166823588E4FE88BA87F676E514
+260608 bytes, 2 differing range(s), 0 outside the per-build fields
+SHA-256 reference                        477A2F140BBE5BD86EB7555CA50408C8E81A791810AE92232C8E08D6303D9D73
+SHA-256 rebuilt                          1C9F327F26662B26483A82B22038CA394AB715FA952E4DBC0ECC498D12E066E1
+SHA-256 rebuilt, reference fields copied 477A2F140BBE5BD86EB7555CA50408C8E81A791810AE92232C8E08D6303D9D73

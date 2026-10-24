@@ -1,0 +1,21 @@
+# D3D12 ICD, release flavour: lab-tested 91A35561 against a build of amdgpu-wddm/upstream-2026-10-23 at bd7e7997
+# from another checkout and build directory (tools/build/build-mesa.ps1 -Config radv-mt -Arch x64 -Jobs 8
+# -Compiler clang-cl -Flavour release -Variant release,isa, without -Version)
+0x00080-0x00083  COFF TimeDateStamp  525ac32c -> bed2d7a5
+0x11118B4-0x11118B7  debug entry 0 TimeDateStamp  525ac32c -> bed2d7a5
+0x11118D0-0x11118D3  debug entry 1 TimeDateStamp  525ac32c -> bed2d7a5
+0x11118EC-0x11118F3  RSDS GUID  cc861ed4bde27906 -> ce584891a31261b1
+18192384 bytes, 4 differing range(s), 0 outside the per-build fields
+SHA-256 reference                        91A35561A5AA91565C93E4E0BC7D7AF092978016C21B342B0AB5E03FB0E58BB8
+SHA-256 rebuilt                          AE8D1B3D1758971A17B2607479F6223701F18D1C67DA151338BE8F798EB672A8
+SHA-256 rebuilt, reference fields copied 91A35561A5AA91565C93E4E0BC7D7AF092978016C21B342B0AB5E03FB0E58BB8
+
+# lab flavour: lab-tested 1F633521 against the same build with -Flavour lab -Lab
+0x00080-0x00083  COFF TimeDateStamp  b26e6abf -> 9ff31917
+0x111C414-0x111C417  debug entry 0 TimeDateStamp  b26e6abf -> 9ff31917
+0x111C430-0x111C433  debug entry 1 TimeDateStamp  b26e6abf -> 9ff31917
+0x111C44C-0x111C453  RSDS GUID  011eb0e822e1e7bb -> f24a26f7b4254a77
+18236416 bytes, 4 differing range(s), 0 outside the per-build fields
+SHA-256 reference                        1F63352166238DC790F645A884FAF2C515FA974051A3F55B5D87C340F1D72563
+SHA-256 rebuilt                          0D1DE7B409EEE64C70FD995032348C9F1584C8ED51E9CF3972438FA934652462
+SHA-256 rebuilt, reference fields copied 1F63352166238DC790F645A884FAF2C515FA974051A3F55B5D87C340F1D72563
