@@ -230,12 +230,12 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
 static PDRIVER_OBJECT g_LabDriverObject;
 static ULONGLONG g_LabSeed, g_LabNonce;
 static NTSTATUS g_LabSeedRead = STATUS_OBJECT_NAME_NOT_FOUND;
-// BD-235 lab selector, the same way: PagingBoundaryMode (REG_DWORD, Parameters, read only at DriverEntry) picks what
-// the paging submit does before a submission whose 64-bit SDMA0 byte pointer would cross a multiple of 2^32 (gfx.c
-// GfxSdmaBoundaryLocked): 0 nothing (the release behaviour today), 1 pad with NOPs to the boundary, 2 re-seed the
-// idle queue to 0. Not a catalog setting: a lab arm swaps the KMD image only, and the installed catalog, its
-// identity and bc250kmd_cli stay those of the installed package.
-static ULONG g_LabBoundaryMode;
+// BD-235 lab selector, the same way: PagingBoundaryMode (REG_DWORD, Parameters, read only at DriverEntry). 1, and
+// any value but 0, and no value at all: the ring boundary pad of both flavours (bc250_ring.c, gfx.c
+// GfxSdmaBoundaryLocked). 0: no pad on any ring, the behaviour before the fix, for a lab control run only. Not a
+// catalog setting: a lab arm swaps the KMD image only, and the installed catalog, its identity and bc250kmd_cli stay
+// those of the installed package.
+static ULONG g_LabBoundaryMode = BC250_PAGING_BOUNDARY_RELEASE_MODE;
 
 static NTSTATUS LabQueryDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
 {
@@ -289,11 +289,14 @@ void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
     nonce = LabQueryQword(key, L"PagingRingStartNonce", &g_LabNonce);
     mode = LabQueryDword(key, L"PagingBoundaryMode", &value);
     ZwClose(key);
-    if (mode != STATUS_OBJECT_NAME_NOT_FOUND) {
-        g_LabBoundaryMode = (NT_SUCCESS(mode) && value <= 2) ? value : 0;
-        GuardLog("lab: paging boundary mode %lu read (read only; value %lu, 0x%08X): 0 none, 1 pad, 2 reseed",
+    if (mode == STATUS_OBJECT_NAME_NOT_FOUND)
+        GuardLog("lab: paging boundary mode %lu: PagingBoundaryMode absent, the default (pad)", g_LabBoundaryMode);
+    else {
+        g_LabBoundaryMode = (NT_SUCCESS(mode) && value == 0) ? 0 : 1;
+        GuardLog("lab: paging boundary mode %lu read (read only; value %lu, 0x%08X): 0 none (control), else pad",
                  g_LabBoundaryMode, value, mode);
     }
+    bc250_ring_boundary_pad = g_LabBoundaryMode != 0;
     if (g_LabSeedRead == STATUS_OBJECT_NAME_NOT_FOUND) return;
     if (!NT_SUCCESS(g_LabSeedRead) || !NT_SUCCESS(nonce) || g_LabSeed == 0 || g_LabNonce == 0) {
         GuardLog("lab: paging ring start not used: seed 0x%llX (0x%08X), nonce 0x%llX (0x%08X); two nonzero REG_QWORDs "
@@ -357,7 +360,7 @@ ULONGLONG GuardLabCommitPagingRingStart(void)
 }
 #endif
 
-// BD-235: the paging submit's boundary strategy (gfx.c). The lab flavour takes the arm's selector; the release flavour
+// BD-235: the ring boundary rule (bc250_ring.c, gfx.c). The lab flavour takes the arm's selector; the release flavour
 // takes BC250_PAGING_BOUNDARY_RELEASE_MODE (bc250kmd.h).
 ULONG GuardPagingBoundaryMode(void)
 {

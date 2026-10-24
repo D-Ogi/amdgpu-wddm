@@ -656,12 +656,13 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
+extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run
 #endif
-// BD-235: what the paging submit does before a submission whose 64-bit SDMA0 byte pointer would cross a multiple of
-// 2^32 (gfx.c GfxSdmaBoundaryLocked). 0 nothing, 1 pad with NOPs up to the boundary, 2 re-seed the idle queue to 0.
-// The lab flavour reads PagingBoundaryMode (REG_DWORD, Parameters, read only in DriverEntry); the release flavour
-// uses this constant, which takes the mode the lab arm proves.
-#define BC250_PAGING_BOUNDARY_RELEASE_MODE 0u
+// BD-235: no ring reservation straddles ring byte 2^32 (bc250_ring.c; the paging submit pads and publishes first,
+// gfx.c GfxSdmaBoundaryLocked). 1 pad with NOPs up to the boundary, proven on unit A (arm-ringstart3 boot a1); 0 no
+// pad, a lab control only. The lab flavour reads PagingBoundaryMode (REG_DWORD, Parameters, read only in
+// DriverEntry; absent is 1); the release flavour uses this constant.
+#define BC250_PAGING_BOUNDARY_RELEASE_MODE 1u
 ULONG GuardPagingBoundaryMode(void);    // any IRQL: a value fixed at DriverEntry
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog

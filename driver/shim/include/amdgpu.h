@@ -869,6 +869,12 @@ u64 amdgpu_gmc_pd_addr(struct amdgpu_bo *bo);
  * ------------------------------------------------------------------------------------------- */
 int  amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw);
 int  bc250_ring_has_space(const struct amdgpu_ring *ring, unsigned int ndw);
+/* [shim] BD-235 (bc250_ring.c): no ring reservation straddles a multiple of 2^30 dwords (ring byte
+ * 2^32). The size of the NOP pad up to that boundary that a request of ndw dwords needs, 0 for none;
+ * amdgpu_ring_alloc() inserts it. bc250_ring_boundary_pad 0 turns the rule off (a lab control). */
+#define BC250_RING_BOUNDARY_DW	(1ull << 30)
+extern int bc250_ring_boundary_pad;
+unsigned int bc250_ring_boundary_pad_size(const struct amdgpu_ring *ring, unsigned int ndw);
 void amdgpu_ring_commit(struct amdgpu_ring *ring);
 void amdgpu_ring_undo(struct amdgpu_ring *ring);
 void amdgpu_ring_insert_nop(struct amdgpu_ring *ring, uint32_t count);

@@ -163,9 +163,6 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmSDMA0_GFX_IB_RPTR"), ("GC", "mmSDMA0_GFX_IB_SIZE"), ("GC", "mmSDMA0_GFX_CONTEXT_STATUS"),
          ("GC", "mmSDMA0_STATUS1_REG"), ("GC", "mmSDMA0_RB_RPTR_FETCH"), ("GC", "mmSDMA0_RB_RPTR_FETCH_HI"),
          ("GC", "mmSDMA0_GFX_RB_CNTL"), ("GC", "mmSDMA0_GFX_RB_WPTR_POLL_CNTL"),
-         # BD-235, gfx.c GfxSdmaReseedLocked: the queue enable bits and the pointer-lowering gate of the re-seed (both
-         # on the GFX table already, as the bring-up writes them).
-         ("GC", "mmSDMA0_GFX_IB_CNTL"), ("GC", "mmSDMA0_GFX_MINOR_PTR_UPDATE"),
          # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
          ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"), ("OSSSYS", "mmIH_STATUS"),
          # dcn.c: the eight registers its decoded summary reads by name (ADR 0011 point 3), out of the 75 on

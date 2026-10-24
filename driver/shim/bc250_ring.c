@@ -19,25 +19,57 @@
  * In a 2048-dword ring with 256-dword alignment this admits seven slots.
  * Returning busy does not mutate the ring. The PASSIVE submit caller owns
  * waiting and its timeout; never spin at DIRQL or overwrite unread packets. */
+static int bc250_ring_room(const struct amdgpu_ring *ring, u32 ndw)
+{
+	u32 used = ((u32)ring->wptr - *ring->rptr_cpu_addr) & ring->buf_mask;
+
+	return ndw <= ring->buf_mask - used;
+}
+
 int bc250_ring_has_space(const struct amdgpu_ring *ring, unsigned int ndw)
 {
-	u32 used, available;
 	if (!ring->rptr_cpu_addr || ndw > ring->max_dw ||
 	    ndw > (~0u - ring->funcs->align_mask)) return 0;
 	ndw = (ndw + ring->funcs->align_mask) & ~ring->funcs->align_mask;
 	if (ndw > ring->max_dw) return 0;
-	used = ((u32)ring->wptr - *ring->rptr_cpu_addr) & ring->buf_mask;
-	available = ring->buf_mask - used;
-	return ndw <= available;
+	return bc250_ring_room(ring, ndw);
+}
+
+/* [shim] BD-235: no reservation straddles a multiple of 2^30 ring dwords, which is ring byte 2^32 and,
+ * because 2^32 is a multiple of 2^30, also dword 2^32. Unit A's SDMA0 stops inside a packet that
+ * straddles byte 2^32 of its 64-bit ring pointer; the same packet behind NOPs that end exactly at
+ * 2^32 runs clean (arm-ringstart3, boot a1). Upstream has no such rule (sdma_v5_0.c and
+ * amdgpu_ring.c at v6.18 pad only to align_mask + 1), and it keeps long payloads in IBs, so its ring
+ * packets are short. A CP ring's reservations are 256-dword slots on 256-dword boundaries and its
+ * runtime frames are under 256 dwords, so there this rule can only act on a longer request.
+ * bc250_ring_boundary_pad is 1 except in a lab control run (the lab KMD's PagingBoundaryMode 0). */
+int bc250_ring_boundary_pad = 1;
+
+unsigned int bc250_ring_boundary_pad_size(const struct amdgpu_ring *ring, unsigned int ndw)
+{
+	u64 mask = ring->funcs->align_mask;
+	u64 end, next;
+
+	if (!bc250_ring_boundary_pad || ndw > (~0u - ring->funcs->align_mask)) return 0;
+	end = (ring->wptr + ndw + mask) & ~mask;
+	next = (ring->wptr | (BC250_RING_BOUNDARY_DW - 1)) + 1;
+	return end > next ? (unsigned int)(next - ring->wptr) : 0;
 }
 
 /* amdgpu_ring.c:81 amdgpu_ring_alloc().
  *
  * Deviations: upstream WARN_ON_ONCE()s an oversized request and returns -ENOMEM; the shim returns
  * the same kind of negative code through the caller's own error space. There is no
- * ring->funcs->begin_use, because there is no power management to wake. */
+ * ring->funcs->begin_use, because there is no power management to wake.
+ * [shim] BD-235: a reservation that would straddle a multiple of 2^30 dwords first gets NOPs up to
+ * it (bc250_ring_boundary_pad_size()); they go out with the caller's commit. The pad is a multiple
+ * of align_mask + 1 on an aligned write pointer, so the caller's own alignment arithmetic holds. A
+ * ring that tracks its read pointer must have room for the pad and the request together. The paging
+ * path of the KMD pads and publishes before it calls this, so here it finds nothing to pad. */
 int amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw)
 {
+	unsigned int pad;
+
 	if (ndw > (~0u - ring->funcs->align_mask)) return -1;
 	/* Align requested size with padding so unlock_commit can pad safely */
 	ndw = (ndw + ring->funcs->align_mask) & ~ring->funcs->align_mask;
@@ -47,6 +79,12 @@ int amdgpu_ring_alloc(struct amdgpu_ring *ring, unsigned int ndw)
 			"ring alloc of %u dwords exceeds max_dw %u\n", ndw, ring->max_dw);
 		return -1;
 	}
+
+	pad = bc250_ring_boundary_pad_size(ring, ndw);
+	if (pad != 0 && ring->track_rptr && (!ring->rptr_cpu_addr || !bc250_ring_room(ring, pad + ndw)))
+		return -16;
+	if (pad != 0)
+		amdgpu_ring_insert_nop(ring, pad);
 
 	if (ring->track_rptr && !bc250_ring_has_space(ring, ndw)) return -16;
 

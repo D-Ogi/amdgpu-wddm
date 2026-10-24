@@ -43,7 +43,6 @@
 #include "log_rate.h"
 #include "bc250kmd_escape.h"
 #include "regs.generated.h"
-#include "gc_10_1_0_sh_mask.h"      // BD-235 re-seed: SDMA0 RB/IB enable and STATUS_REG idle masks
 #include "bc250_gmc.h"
 #include "bc250_gfx.h"
 #include "bc250_wave.h"
@@ -4146,45 +4145,25 @@ static void GfxLogPagingSubmit(_Inout_ BC250_GFX* Gfx, ULONG Dwords, ULONGLONG S
 // BD-235: the 2^32 boundary of the paging ring's 64-bit byte pointer. Unit A, arm-ringstart2 boot a (DEFECTS BD-235,
 // 2026-10-24 09:05Z): seq 22 was one inline WRITE of 960 dwords from ring dword 0x6D0, whose bytes ran from
 // 0xFFFFFB40 to 0x1_00000AC0. SDMA0 stopped with RPTR and RPTR_FETCH at 0x1_00000380, inside its payload, and no VM
-// fault. The same packet across bit 31 (boot b) and across the ring wrap above 2^32 (boot c) ran clean.
-// Upstream has no rule for this boundary. sdma_v5_0_ring_set_wptr (sdma_v5_0.c:371-403) publishes the 64-bit byte
-// pointer as it stands, the queue start writes RPTR/WPTR and their _HI halves from it (:715-725, :757-764), and the
-// only padding is to the 16-dword fetch size (align_mask 0xf, :1943; amdgpu_ring_commit, amdgpu_ring.c:183-188).
-// Upstream also keeps long payloads in IBs (sdma_v5_0_ring_emit_ib, :430-457), so its ring packets are short. Our
-// paging path writes its packets into the ring itself (PagingWriteRing), so one submission can straddle 2^32.
-// GuardPagingBoundaryMode() selects what happens before such a submission, under Sdma0RingLock:
-//   1 PAD: NOP dwords up to the boundary, published by themselves; the submission then starts at the boundary.
-//   2 RESEED: wait until the queue is idle, stop it, and set its pointers and both write-back slots to 0 the way
-//     the bring-up programs a fresh queue. Read them back, then enable the queue; the submission then starts at 0.
-//     If the queue is not idle within GFX_SDMA_RESEED_IDLE_US, or its pointers do not read back 0 (E15: an engine
-//     that has run can keep its pointers, bc250_sdma.c), the old pointers go back and PAD runs instead.
-#define GFX_SDMA_BOUNDARY_DW     (1ull << 30)       // 2^32 bytes, in ring dwords
-#define GFX_SDMA_RESEED_IDLE_US  2000u
-
+// fault. The same packet across bit 31 (boot b) and across the ring wrap above 2^32 (boot c) ran clean, and so did
+// the same submission behind 304 NOP dwords that ended at 2^32 (arm-ringstart3 boot a1, 10:20Z). Re-seeding the idle
+// queue's pointers to 0 instead hung unit A (arm-ringstart3 boot a2) and is not in the driver.
+// Upstream has no rule for this boundary: sdma_v5_0_ring_set_wptr (sdma_v5_0.c:371-403) publishes the 64-bit byte
+// pointer as it stands, and the only padding is to the 16-dword fetch size (align_mask 0xf, :1943;
+// amdgpu_ring_commit, amdgpu_ring.c:183-188). Upstream keeps long payloads in IBs (sdma_v5_0_ring_emit_ib,
+// :430-457), so its ring packets are short; our paging path writes its packets into the ring (PagingWriteRing).
+// The rule itself is generic (bc250_ring.c bc250_ring_boundary_pad_size, applied in amdgpu_ring_alloc for every
+// ring). Here, under Sdma0RingLock, the NOPs up to the boundary are published by themselves first, exactly as in
+// boot a1, and the submission then starts at the boundary.
 typedef struct _GFX_BOUNDARY_NOTE {
-    ULONG Mode;          // the selector at this submission
-    ULONG Action;        // 0 nothing done, 1 padded, 2 reseeded, 3 reseed not done and padded, 4 pad refused
+    ULONG Action;        // 0 nothing to do, 1 padded, 2 pad refused by amdgpu_ring_alloc
     ULONG PadDwords;
-    ULONG WaitedUs;      // the reseed's idle wait
-    NTSTATUS Status;     // the reseed's result: a register access status, STATUS_TIMEOUT, or STATUS_UNSUCCESSFUL
     u64 From;            // the byte pointer before
     u64 To;              // the byte pointer the submission starts at
-    u64 Rptr, Wptr;      // the reseed's register readback after the writes, or the last idle-wait read
 } GFX_BOUNDARY_NOTE;
 
-// TRUE when this submission (Count dwords, then the commit's padding to align_mask) would end above the next
-// multiple of 2^30 dwords. A submission that ends exactly on that multiple does not straddle it.
-static BOOLEAN GfxSdmaCrossesBoundary(_In_ const struct amdgpu_ring* Ring, ULONG Count)
-{
-    u64 mask = Ring->funcs->align_mask;
-    u64 end = (Ring->wptr + Count + mask) & ~mask;
-    u64 next = (Ring->wptr | (GFX_SDMA_BOUNDARY_DW - 1)) + 1;
-
-    return end > next;
-}
-
 // The write pointer to the engine: the poll slot, then the doorbell. This is amdgpu_ring_commit() without its padding
-// (bc250_ring.c:100-139), through GpuMemDoorbellWrite, which needs no backend.
+// (bc250_ring.c), through GpuMemDoorbellWrite, which needs no backend.
 static void GfxSdmaPublishLocked(_Inout_ BC250_DEVICE* Device, _In_ struct amdgpu_ring* Ring)
 {
     u64 bytes = Ring->wptr << 2;
@@ -4193,149 +4172,30 @@ static void GfxSdmaPublishLocked(_Inout_ BC250_DEVICE* Device, _In_ struct amdgp
     GpuMemDoorbellWrite(Device, Ring->doorbell_index, bytes);
 }
 
-static void GfxSdmaPadLocked(_Inout_ BC250_DEVICE* Device, _Inout_ struct amdgpu_ring* Ring,
-                             _Inout_ GFX_BOUNDARY_NOTE* Note)
-{
-    u64 next = (Ring->wptr | (GFX_SDMA_BOUNDARY_DW - 1)) + 1;
-
-    Note->PadDwords = (ULONG)(next - Ring->wptr);
-    if (amdgpu_ring_alloc(Ring, Note->PadDwords) != 0) { Note->Action = 4; return; }
-    amdgpu_ring_insert_nop(Ring, Note->PadDwords);
-    GfxSdmaPublishLocked(Device, Ring);
-    Note->To = Ring->wptr << 2;
-}
-
-// A 64-bit pointer register pair, read HI, LO, HI; LO again when HI changed between the reads.
-static NTSTATUS GfxSdmaRead64(_In_ const BC250_DEVICE* Device, ULONG Lo, ULONG Hi, _Out_ u64* Value)
-{
-    ULONG hi = 0, lo = 0, hi2 = 0;
-    NTSTATUS status = MmioGfxRead(Device, Hi, &hi);
-
-    if (NT_SUCCESS(status)) status = MmioGfxRead(Device, Lo, &lo);
-    if (NT_SUCCESS(status)) status = MmioGfxRead(Device, Hi, &hi2);
-    if (NT_SUCCESS(status) && hi2 != hi) status = MmioGfxRead(Device, Lo, &lo);
-    *Value = ((u64)hi2 << 32) | lo;
-    return status;
-}
-
-static void GfxSdmaWrite(_In_ const BC250_DEVICE* Device, ULONG Offset, ULONG Value, _Inout_ NTSTATUS* Status)
-{
-    NTSTATUS status = MmioGfxWrite(Device, Offset, Value);
-
-    if (NT_SUCCESS(*Status) && !NT_SUCCESS(status)) *Status = status;
-}
-
-// The four pointer registers to Bytes in the order of the bring-up (bc250_sdma_gfx_resume_instance: RPTR, RPTR_HI,
-// WPTR, WPTR_HI), then the WPTR pair again under MINOR_PTR_UPDATE = 1 (sdma_v5_0.c:757-764 and :788-789).
-static void GfxSdmaSetPointers(_In_ const BC250_DEVICE* Device, u64 Bytes, _Inout_ NTSTATUS* Status)
-{
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_RPTR, (ULONG)Bytes, Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI, (ULONG)(Bytes >> 32), Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_WPTR, (ULONG)Bytes, Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI, (ULONG)(Bytes >> 32), Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_MINOR_PTR_UPDATE, 1, Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_WPTR, (ULONG)Bytes, Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI, (ULONG)(Bytes >> 32), Status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_MINOR_PTR_UPDATE, 0, Status);
-}
-
-// RESEED. Only on an idle queue: RPTR = WPTR = the software pointer, STATUS_REG.IDLE, and no SDMA0 escape fence owed.
-// The paging fence before this submission has retired already (the PagingSubmitInFlight claim). SDMA0 stays unhalted,
-// as in the bring-up, where the pointers are written with the engine running and the queue off.
-static NTSTATUS GfxSdmaReseedLocked(_Inout_ BC250_DEVICE* Device, _In_ BC250_GFX* Gfx, _Inout_ struct amdgpu_ring* Ring,
-                                    _Inout_ GFX_BOUNDARY_NOTE* Note)
-{
-    struct amdgpu_device* adev = Gfx->PagingDevicePtr;
-    volatile u64* rptrWb = NULL;
-    u64 sw = Ring->wptr << 2, rptr = 0, wptr = 0;
-    ULONG rb = 0, ib = 0, idle = 0;
-    NTSTATUS status, restore = STATUS_SUCCESS, enable = STATUS_SUCCESS;
-
-    if (Gfx->RingOwes[BC250_FENCE_RING_SDMA0] != 0) return STATUS_DEVICE_BUSY;
-    for (;;) {
-        status = GfxSdmaRead64(Device, BC250_REG_GC_SDMA0_GFX_RB_RPTR, BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI, &rptr);
-        if (NT_SUCCESS(status))
-            status = GfxSdmaRead64(Device, BC250_REG_GC_SDMA0_GFX_RB_WPTR, BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI, &wptr);
-        if (NT_SUCCESS(status)) status = MmioRead(Device, BC250_REG_GC_SDMA0_STATUS_REG, &idle);
-        Note->Rptr = rptr;
-        Note->Wptr = wptr;
-        if (!NT_SUCCESS(status)) return status;
-        if (rptr == sw && wptr == sw && (idle & SDMA0_STATUS_REG__IDLE_MASK) != 0) break;
-        if (Note->WaitedUs >= GFX_SDMA_RESEED_IDLE_US) return STATUS_TIMEOUT;
-        KeStallExecutionProcessor(10);
-        Note->WaitedUs += 10;
-    }
-    if (adev->sdma.wb_mem.cpu != NULL && Ring->rptr_gpu_addr >= adev->sdma.wb_mem.mc &&
-        Ring->rptr_gpu_addr - adev->sdma.wb_mem.mc + sizeof(u64) <= adev->sdma.wb_mem.size)
-        rptrWb = (volatile u64*)((char*)adev->sdma.wb_mem.cpu + (SIZE_T)(Ring->rptr_gpu_addr - adev->sdma.wb_mem.mc));
-
-    // sdma_v5_0_gfx_stop (sdma_v5_0.c:563): the queue off, ring buffer, then IBs.
-    status = MmioGfxRead(Device, BC250_REG_GC_SDMA0_GFX_RB_CNTL, &rb);
-    if (NT_SUCCESS(status)) status = MmioGfxRead(Device, BC250_REG_GC_SDMA0_GFX_IB_CNTL, &ib);
-    if (!NT_SUCCESS(status)) return status;
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_CNTL, rb & ~(ULONG)SDMA0_GFX_RB_CNTL__RB_ENABLE_MASK, &status);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_IB_CNTL, ib & ~(ULONG)SDMA0_GFX_IB_CNTL__IB_ENABLE_MASK, &status);
-    // The poll slot BEFORE the registers (the bring-up writes it after them, onto a fresh page that reads 0):
-    // F32_POLL_ENABLE stays set, and a slot that still held sw over registers of 0 would name sw bytes of ring to run.
-    if (Ring->wptr_cpu_addr != NULL) *(volatile u64*)Ring->wptr_cpu_addr = 0;
-    if (rptrWb != NULL) *rptrWb = 0;
-    KeMemoryBarrier();
-    if (NT_SUCCESS(status)) GfxSdmaSetPointers(Device, 0, &status);
-    if (NT_SUCCESS(status))
-        status = GfxSdmaRead64(Device, BC250_REG_GC_SDMA0_GFX_RB_RPTR, BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI, &rptr);
-    if (NT_SUCCESS(status))
-        status = GfxSdmaRead64(Device, BC250_REG_GC_SDMA0_GFX_RB_WPTR, BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI, &wptr);
-    Note->Rptr = rptr;
-    Note->Wptr = wptr;
-    if (NT_SUCCESS(status) && (rptr != 0 || wptr != 0)) status = STATUS_UNSUCCESSFUL;
-    if (NT_SUCCESS(status)) {
-        Ring->wptr = 0;
-        Ring->wptr_old = 0;
-    } else {
-        // Not taken, or a register refused: the old pointers back everywhere before the queue runs again.
-        GfxSdmaSetPointers(Device, sw, &restore);
-        if (Ring->wptr_cpu_addr != NULL) *(volatile u64*)Ring->wptr_cpu_addr = sw;
-        if (rptrWb != NULL) *rptrWb = sw;
-        KeMemoryBarrier();
-        if (!NT_SUCCESS(restore)) status = restore;
-    }
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_RB_CNTL, rb, &enable);
-    GfxSdmaWrite(Device, BC250_REG_GC_SDMA0_GFX_IB_CNTL, ib, &enable);
-    if (NT_SUCCESS(status) && !NT_SUCCESS(enable)) status = enable;
-    Note->To = Ring->wptr << 2;
-    return status;
-}
-
-static void GfxSdmaBoundaryLocked(_Inout_ BC250_DEVICE* Device, _In_ BC250_GFX* Gfx, _Inout_ struct amdgpu_ring* Ring,
-                                  ULONG Count, _Out_ GFX_BOUNDARY_NOTE* Note)
+static void GfxSdmaBoundaryLocked(_Inout_ BC250_DEVICE* Device, _Inout_ struct amdgpu_ring* Ring, ULONG Count,
+                                  _Out_ GFX_BOUNDARY_NOTE* Note)
 {
     RtlZeroMemory(Note, sizeof(*Note));
-    Note->Mode = GuardPagingBoundaryMode();
     Note->From = Note->To = Ring->wptr << 2;
-    if (Note->Mode == 0 || !GfxSdmaCrossesBoundary(Ring, Count)) return;
-    if (Note->Mode == 2) {
-        Note->Status = GfxSdmaReseedLocked(Device, Gfx, Ring, Note);
-        if (NT_SUCCESS(Note->Status)) { Note->Action = 2; return; }
-    }
-    Note->Action = Note->Mode == 2 ? 3 : 1;
-    GfxSdmaPadLocked(Device, Ring, Note);
+    Note->PadDwords = bc250_ring_boundary_pad_size(Ring, Count);
+    if (Note->PadDwords == 0) return;
+    // The pad's own reservation ends exactly at the boundary, so amdgpu_ring_alloc() adds nothing to it.
+    if (amdgpu_ring_alloc(Ring, Note->PadDwords) != 0) { Note->Action = 2; return; }
+    amdgpu_ring_insert_nop(Ring, Note->PadDwords);
+    GfxSdmaPublishLocked(Device, Ring);
+    Note->Action = 1;
+    Note->To = Ring->wptr << 2;
 }
 
-// One line per boundary action (two for a reseed that fell back to the pad), after Sdma0RingLock is released.
+// One line per boundary action, after Sdma0RingLock is released. Both flavours.
 static void GfxLogBoundary(_In_ const GFX_BOUNDARY_NOTE* Note, ULONG Seq)
 {
-    if (Note->Action == 2)
-        GuardLog("gfx: sdma0 ring boundary: reseeded at 0x%llX to 0, idle %lu us, RPTR 0x%llX WPTR 0x%llX, seq %lu",
-                 Note->From, Note->WaitedUs, Note->Rptr, Note->Wptr, Seq);
-    if (Note->Action == 3)
-        GuardLog("gfx: sdma0 ring boundary: reseed at 0x%llX not done (0x%08X, %lu us, RPTR 0x%llX WPTR 0x%llX)",
-                 Note->From, Note->Status, Note->WaitedUs, Note->Rptr, Note->Wptr);   // the pad line names the seq
-    if (Note->Action == 1 || Note->Action == 3)
+    if (Note->Action == 1)
         GuardLog("gfx: sdma0 ring boundary: padded %lu dw at 0x%llX up to 0x%llX bytes, seq %lu (mode %lu)",
-                 Note->PadDwords, Note->From, Note->To, Seq, Note->Mode);
-    if (Note->Action == 4)
+                 Note->PadDwords, Note->From, Note->To, Seq, GuardPagingBoundaryMode());
+    else if (Note->Action == 2)
         GuardLog("gfx: sdma0 ring boundary: pad of %lu dw at 0x%llX refused, seq %lu (mode %lu)", Note->PadDwords,
-                 Note->From, Seq, Note->Mode);
+                 Note->From, Seq, GuardPagingBoundaryMode());
 }
 
 static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* PrivateData, ULONG PrivateBytes,
@@ -4381,7 +4241,7 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
     labBefore = (u64)ring->wptr << 2;         // where this submission starts, under the lock, before any padding
 #endif
     count = dwords + bc250_sdma_fence_size(ring, AMDGPU_FENCE_FLAG_INT);
-    GfxSdmaBoundaryLocked(Device, gfx, ring, count, &boundary);
+    GfxSdmaBoundaryLocked(Device, ring, count, &boundary);
     result = amdgpu_ring_alloc(ring, count);
     if (result == 0)
     {
@@ -4431,7 +4291,6 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
         GuardLog("lab: sdma0 wptr crossed bit 32: 0x%llX -> 0x%llX bytes, seq %lu", labBefore, wptrBytes, seq);
         GfxLabSdmaReceiptAdev(Device, gfx->PagingDevicePtr, "bit 32", seq);
     }
-    if (boundary.Action == 2) GfxLabSdmaReceiptAdev(Device, gfx->PagingDevicePtr, "reseed", seq);
 #endif
     return STATUS_SUCCESS;
 }
