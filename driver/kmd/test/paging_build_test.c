@@ -99,7 +99,8 @@ static struct {
     NTSTATUS vidmm, publish;    /* VidMmUpdatePageTable, WddmPublishPagingRecord */
 } mock;
 static unsigned builder_calls, vidmm_calls, publishes, published_words, journal_updates, journal_notes;
-static ULONG journal_start, journal_count, journal_kind; static BOOLEAN journal_cpu; static ULONGLONG journal_bytes;
+static ULONG journal_start, journal_count, journal_kind, journal_failure; static BOOLEAN journal_cpu;
+static ULONGLONG journal_bytes;
 
 static LONG InterlockedIncrement(volatile LONG* p) { return ++*p; }
 static LONG64 InterlockedIncrement64(volatile LONG64* p) { return ++*p; }
@@ -176,8 +177,12 @@ static NTSTATUS VidMmUpdatePageTable(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABL
 static void PagingJournalUpdate(const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* u, ULONG Start, ULONG Count,
                                 ULONGLONG Dma, BOOLEAN Cpu)
 { (void)u; (void)Dma; ++journal_updates; journal_start = Start; journal_count = Count; journal_cpu = Cpu; }
-static void PagingJournalNote(ULONG Kind, ULONGLONG Va, HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags)
-{ (void)Va; (void)Allocation; (void)Dma; (void)Flags; ++journal_notes; journal_kind = Kind; journal_bytes = Bytes; }
+static void PagingJournalNote(ULONG Kind, ULONGLONG Va, HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags,
+                              ULONG Failure)
+{
+    (void)Va; (void)Allocation; (void)Dma; (void)Flags;
+    ++journal_notes; journal_kind = Kind; journal_bytes = Bytes; journal_failure = Failure;
+}
 static NTSTATUS WddmPublishPagingRecord(DXGKARG_BUILDPAGINGBUFFER* b, ULONG Written, BOOLEAN Update, ULONG Start,
                                         ULONG Next)
 { (void)b; (void)Update; (void)Start; (void)Next; ++publishes; published_words += Written; return mock.publish; }
@@ -195,7 +200,8 @@ static void Fresh(DXGK_BUILDPAGINGBUFFER_OPERATION Operation, DXGK_PAGETABLEUPDA
     memset(&mock, 0, sizeof(mock));
     memset(&build, 0, sizeof(build));
     builder_calls = vidmm_calls = publishes = published_words = journal_updates = journal_notes = 0;
-    journal_start = journal_count = journal_kind = 0; journal_cpu = FALSE; journal_bytes = 0; logs = 0;
+    journal_start = journal_count = journal_kind = journal_failure = 0; journal_cpu = FALSE; journal_bytes = 0;
+    logs = 0;
     build.Operation = Operation;
     build.UpdatePageTable.UpdateMode = Mode;
     build.UpdatePageTable.NumPageTableEntries = 20;
@@ -297,6 +303,7 @@ int main(void)
     Fresh(DXGK_OPERATION_FLUSH_TLB, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
     mock.written = 12;
     CHECK(Ddi() == STATUS_SUCCESS && publishes == 1 && journal_notes == 1 && journal_kind == BC250_PJ_FLUSH_TLB);
+    CHECK(journal_failure == 0);
     CHECK(wddm_state.PagingFlushesBuilt == 1);
     /* A record that cannot be published is a failure too (it was already). */
     Fresh(DXGK_OPERATION_UPDATE_PAGE_TABLE, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
@@ -321,7 +328,9 @@ int main(void)
 
     /* Fill and transfer: each builder's status goes to the OS as it is. A failure before the first page journals
      * nothing; a failure after N published pages (2528, the BD-235 fill) leaves the position where the builder left
-     * it and journals the bytes that were built, and the OS still gets the failure, never SUCCESS. */
+     * it and journals the bytes that were built, and the OS still gets the failure, never SUCCESS. Q3a: that record
+     * carries the builder's status as its failure word (the journal marks it failed and never stamps it); the two
+     * statuses after which the OS submits the words carry 0. */
     {
         static const DXGK_BUILDPAGINGBUFFER_OPERATION ops[] = { DXGK_OPERATION_VIRTUAL_FILL, DXGK_OPERATION_FILL,
                                                                 DXGK_OPERATION_VIRTUAL_TRANSFER, DXGK_OPERATION_TRANSFER };
@@ -335,19 +344,24 @@ int main(void)
             mock.status = STATUS_INVALID_PARAMETER; mock.moved = 2528 * page; mock.progress = 2528;
             CHECK(Ddi() == STATUS_INVALID_PARAMETER && build.MultipassOffset == 2528);
             CHECK(journal_notes == 1 && journal_bytes == 2528 * page && wddm_state.PagingContractRefusals == 1);
+            CHECK(journal_failure == (ULONG)STATUS_INVALID_PARAMETER);
             Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
             mock.status = STATUS_DEVICE_NOT_READY; mock.moved = 2528 * page; mock.progress = 2528;   /* a reset */
             CHECK(Ddi() == STATUS_DEVICE_NOT_READY && build.MultipassOffset == 2528);
+            CHECK(journal_notes == 1 && journal_failure == (ULONG)STATUS_DEVICE_NOT_READY);
             Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
             mock.status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER; mock.moved = 2528 * page; mock.progress = 2528;
             CHECK(Ddi() == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER && build.MultipassOffset == 2528);
             CHECK(wddm_state.PagingContractRefusals == 0 && wddm_state.PagingInsufficientBuffer == 1);
+            CHECK(journal_notes == 1 && journal_failure == 0);
             Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 2528);
             mock.status = STATUS_PENDING; mock.moved = page; mock.progress = 1;
             CHECK(Ddi() == STATUS_UNSUCCESSFUL && wddm_state.PagingContractRefusals == 1);
+            CHECK(journal_notes == 1 && journal_failure == (ULONG)STATUS_PENDING);   /* the builder's own status */
             Fresh(ops[i], DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 2528);
             mock.moved = 3000 * page; mock.progress = 3000;
             CHECK(Ddi() == STATUS_SUCCESS && build.MultipassOffset == 5528 && wddm_state.PagingContractRefusals == 0);
+            CHECK(journal_notes == 1 && journal_failure == 0);
         }
     }
     /* COPY_PAGE_TABLE_ENTRIES: the builder's status, as it is. */

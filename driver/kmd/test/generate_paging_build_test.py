@@ -8,6 +8,8 @@ bc250kmd_escape.h; everything they call is a mock in the test. A mutation (a neg
 copy, never the tree:
     absorb-inner-failure  a failed GPU_PHYSICAL update or FLUSH_TLB falls through to SUCCESS (the rule before BD-235 Q3)
     cpu-virtual-ignore    a failed CPU_VIRTUAL update is journalled and reported as SUCCESS (the rule before BD-235 Q3)
+    unmarked-failure      a fill or transfer that failed after a prefix journals it as a build that succeeded (the
+                          rule before BD-235 Q3a)
 """
 from pathlib import Path
 import re
@@ -39,7 +41,7 @@ a = wddm.index('typedef enum _BC250_WDDM_XFER {')
 xfer = wddm[a:wddm.index('} BC250_WDDM_XFER;', a) + len('} BC250_WDDM_XFER;')]
 kinds = []
 for name in ('BC250_PJ_FILL', 'BC250_PJ_FLUSH_TLB', 'BC250_PJ_TRANSFER', 'BC250_PJ_VIRTUAL_FILL',
-             'BC250_PJ_VIRTUAL_TRANSFER', 'BC250_PJ_FLAG_TO_SYSTEM'):
+             'BC250_PJ_VIRTUAL_TRANSFER', 'BC250_PJ_FLAG_TO_SYSTEM', 'BC250_PJ_FLAG_FAILED'):
     found = re.findall(r'^#define ' + name + r'\b.*$', escape, re.M)
     assert len(found) == 1, name + ' must be defined once in bc250kmd_escape.h'
     kinds.append(found[0])
@@ -57,6 +59,9 @@ elif mutation == 'cpu-virtual-ignore':
                     '        if (status != STATUS_SUCCESS) {',
                '        NTSTATUS status=VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);\n'
                '        if (0) { /* negative control: the status is ignored */', mutation)
+elif mutation == 'unmarked-failure':
+    ddi = once(ddi, '    return Status == STATUS_SUCCESS || Status == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER ? 0u : (ULONG)Status;\n',
+               '    (void)Status; return 0u; /* negative control: no failure is marked */\n', mutation)
 elif mutation != 'none':
     raise SystemExit('unknown mutation ' + mutation)
 

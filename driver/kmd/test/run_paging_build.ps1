@@ -1,10 +1,11 @@
 # Host test of the BuildPagingBuffer DDI statuses through wddm.c's own code (BD-235). No lab access.
 # BC250_ROOT is the workspace root: the environment variable, else the parent directory of this repository.
 # generate_paging_build_test.py extracts WddmBuildPagingBufferImpl and Bc250WddmBuildPagingBuffer; paging_build_test.c
-# gives them mock builders. Two negative controls (tools\quality\quick.ps1) edit the extracted COPY, and the test must
+# gives them mock builders. Three negative controls (tools\quality\quick.ps1) edit the extracted COPY, and the test must
 # then fail by a FAIL line:
 #   -Mutation absorb-inner-failure  a failed GPU_PHYSICAL update or FLUSH_TLB falls through to SUCCESS;
-#   -Mutation cpu-virtual-ignore    a failed CPU_VIRTUAL update is journalled and reported as SUCCESS.
+#   -Mutation cpu-virtual-ignore    a failed CPU_VIRTUAL update is journalled and reported as SUCCESS;
+#   -Mutation unmarked-failure      a fill or transfer that failed after a prefix journals it as a build that succeeded.
 # The test is user-mode code: clang-cl 23.1.4 from the workspace toolchain, named by path, with no fallback.
 # The test runs without a window and without error dialogs, for at most -TimeoutSeconds; on the deadline it is
 # stopped and the run fails (host_native.ps1). Its output is kept in paging_build_test.log, and a run counts only with its
@@ -16,7 +17,7 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [string]$Llvm = "$Root\toolchain\llvm-23.1.4-win64",
     [string]$SourceRoot = '',
-    [ValidateSet('none', 'absorb-inner-failure', 'cpu-virtual-ignore')][string]$Mutation = 'none',
+    [ValidateSet('none', 'absorb-inner-failure', 'cpu-virtual-ignore', 'unmarked-failure')][string]$Mutation = 'none',
     [ValidateRange(1, 600)][int]$TimeoutSeconds = 60
 )
 $ErrorActionPreference = 'Stop'
@@ -56,7 +57,7 @@ if ($Mutation -eq 'none') {
     exit 0
 }
 # Each control is pinned to the failures its rule change causes: another count means the control tests something else.
-$expected = @{ 'absorb-inner-failure' = 29; 'cpu-virtual-ignore' = 9 }[$Mutation]
+$expected = @{ 'absorb-inner-failure' = 29; 'cpu-virtual-ignore' = 9; 'unmarked-failure' = 12 }[$Mutation]
 if ($r.Code -ne 1 -or $r.Failures -ne $expected) { throw "negative control $Mutation : $($r.Failures) failures, $expected expected" }
 Write-Host "negative control $Mutation : the test failed as required ($expected failures)"
 exit 0

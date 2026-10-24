@@ -93,6 +93,14 @@ reads: this slice unmapped VA X of allocation A at time T, went to the GPU in th
 SDMA sequence S. The SDMA ring walk of the dump reader (`sdmawalk.py`) and the log's "paging submit ... seq" lines
 name the same S.
 
+A fill or transfer that built a prefix and then failed (BD-235: a 64 MiB virtual fill that stopped after 2528
+pages) keeps its record with the bytes it built, so that a dump shows how far it came. The OS submits the words of
+a build only after `SUCCESS` or `INSUFFICIENT_DMA_BUFFER`, so such a record also carries `BC250_PJ_FLAG_FAILED`
+(bit 8) and the builder's NTSTATUS in `Index`, and both stamps pass it: its `Fence` and `Seq` stay 0, also when a
+later submission reuses the same buffer range (from BD-235 Q3a. Before, that submission took the record). The CLI
+prints `FAILED build 0x........, not submitted`. Host test: `paging-journal`, with the control
+`paging-journal-stamp-failed`.
+
 Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they rise with record indices; the log's
 `Milliseconds` are `(Time - GuardInit's start) / 10000`.
 
@@ -137,11 +145,11 @@ Times are `KeQueryInterruptTime()` taken under the journal's spin lock, so they 
 
 - 74 KB of nonpaged image data; one spin lock acquisition per record and per stamp, each walk bounded by the ring
   (1024 records) at DISPATCH_LEVEL or below. Nothing is logged, no register is touched.
-- A refused build whose buffer the OS never submitted keeps `Fence 0` until the next submission of the same buffer
-  range claims it; the reader tells the two apart by time. A preempted paging packet resubmitted with its original
-  fence keeps the first SDMA sequence recorded.
-- The ring covers 1024 operations. Up to 0.7.192.1 that was 1-30 s of a game's paging traffic; from 0.7.193.1 the
+- A fill or transfer whose build failed after a prefix keeps `Fence 0` and `Seq 0` and is marked failed (from BD-235
+  Q3a). Before Q3a, the next submission of the same buffer range claimed it, and only the times told the two apart.
+  A preempted paging packet resubmitted with its original fence keeps the first SDMA sequence recorded.
+- The ring covers 1024 operations. Up to 0.7.192.1 that was 1-30 s of a game's paging traffic. From 0.7.193.1 the
   GFX submit record shares the ring and brings it down to about 1.4-1.8 s under a paging burst (see "Write rate
   and ring coverage" above). The faults this is for happen inside microseconds of their submit, well inside that.
-- Allocation handles are the driver's own objects (`BC250_WDDM_OBJECT*`), not the UMD's D3DKMT handles; the UMD
+- Allocation handles are the driver's own objects (`BC250_WDDM_OBJECT*`), not the UMD's D3DKMT handles. The UMD
   side correlates by VA.

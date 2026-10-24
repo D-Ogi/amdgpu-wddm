@@ -1771,6 +1771,11 @@ typedef char BC250_ESCAPE_FBDUMP_SIZE_CHECK[(sizeof(BC250_ESCAPE_FBDUMP) == 5244
 #define BC250_PJ_FLAG_PROCESS 64u               // UPDATE: Allocation holds hProcess, not an allocation handle
 #define BC250_PJ_FLAG_LARGE 128u                // UPDATE: a valid entry of the slice has DXGK_PTE.LargePage: a 2 MiB
                                                 // page at level 1, a 1 GiB page at level 2. Never set by older drivers
+#define BC250_PJ_FLAG_FAILED 256u               // FILL, VIRTUAL_FILL, TRANSFER, VIRTUAL_TRANSFER (BD-235): the build
+                                                // that wrote this prefix returned a failure, so the OS submits none of
+                                                // its words. Index holds the builder's NTSTATUS. The fence and
+                                                // sequence stamps skip the record: Fence and Seq stay 0. Never set by
+                                                // older drivers
 #define BC250_PJ_CTX_UMD 1u                     // GFX_SUBMIT, Count: the context arrived as a BC2C blob
 #define BC250_PJ_CTX_SYSTEM 2u                  // GFX_SUBMIT, Count: DXGK_CREATECONTEXTFLAGS.SystemContext
 // UPDATE, KMD183 (0.7.183.1 and later): bits 16-31 are a mask of the DXGK_PTE.Segment values the slice's valid

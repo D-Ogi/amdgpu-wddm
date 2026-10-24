@@ -6395,6 +6395,17 @@ static ULONGLONG WddmPagingBuildPosition(_In_ const DXGKARG_BUILDPAGINGBUFFER* B
     return Build->DmaBufferGpuVirtualAddress + Build->DmaBufferWriteOffset;
 }
 
+// BD-235 Q3a: the journal's failure word for a fill or transfer that built a prefix (paging_journal.c,
+// PagingJournalNote). The OS submits the words of a build only after SUCCESS or INSUFFICIENT_DMA_BUFFER (the DDI
+// page's remarks: after ALLOCATION_BUSY VidMm calls the same operation again, and any other status stops the
+// system). After any other status none of the prefix runs: the record keeps it as evidence of how far the build
+// came, marked failed, and a later submission of the same buffer range does not stamp its fence on it. 0 for those
+// two statuses, else the builder's own status (never 0, which is SUCCESS).
+static ULONG WddmPagingBuildFailure(_In_ NTSTATUS Status)
+{
+    return Status == STATUS_SUCCESS || Status == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER ? 0u : (ULONG)Status;
+}
+
 // A built transfer: the old totals plus the KMD183 split by kind and direction (BC250_WDDM_XFER).
 static void WddmCountTransfer(_Inout_ BC250_WDDM* Wddm, _In_ BC250_WDDM_XFER Kind, _In_ ULONGLONG Moved)
 {
@@ -6455,7 +6466,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
             InterlockedAdd64(&wddm->PagingFillBytes,(LONG64)moved);
             PagingJournalNote(BC250_PJ_FILL,0,pBuildPagingBuffer->Fill.hAllocation,moved,
-                WddmPagingBuildPosition(pBuildPagingBuffer),0);
+                WddmPagingBuildPosition(pBuildPagingBuffer),0,WddmPagingBuildFailure(status));
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -6475,7 +6486,8 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             InterlockedAdd64(&wddm->PagingBytesMoved,(LONG64)moved);
             InterlockedAdd64(&wddm->PagingFillBytes,(LONG64)moved);
             PagingJournalNote(BC250_PJ_VIRTUAL_FILL,pBuildPagingBuffer->FillVirtual.DestinationVirtualAddress,
-                pBuildPagingBuffer->FillVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),0);
+                pBuildPagingBuffer->FillVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),0,
+                WddmPagingBuildFailure(status));
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -6498,7 +6510,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             PagingJournalNote(BC250_PJ_VIRTUAL_TRANSFER,pBuildPagingBuffer->TransferVirtual.SourceVirtualAddress,
                 pBuildPagingBuffer->TransferVirtual.hAllocation,moved,WddmPagingBuildPosition(pBuildPagingBuffer),
                 pBuildPagingBuffer->TransferVirtual.TransferDirection==DXGK_MEMORY_TRANSFER_LOCAL_TO_SYSTEM ?
-                    BC250_PJ_FLAG_TO_SYSTEM : 0u);
+                    BC250_PJ_FLAG_TO_SYSTEM : 0u,WddmPagingBuildFailure(status));
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -6512,7 +6524,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
                 pBuildPagingBuffer->Transfer.Source.SegmentId==0 ? BC250WddmXferPhysicalFromSystem :
                 BC250WddmXferPhysicalOther,moved);
             PagingJournalNote(BC250_PJ_TRANSFER,0,pBuildPagingBuffer->Transfer.hAllocation,moved,
-                WddmPagingBuildPosition(pBuildPagingBuffer),0);
+                WddmPagingBuildPosition(pBuildPagingBuffer),0,WddmPagingBuildFailure(status));
         }
         if (status==STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
             InterlockedIncrement(&wddm->PagingInsufficientBuffer);
@@ -6613,7 +6625,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             if (update)
                 PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,startByte,nextByte-startByte,
                                     WddmPagingBuildPosition(pBuildPagingBuffer),FALSE);
-            else PagingJournalNote(BC250_PJ_FLUSH_TLB,0,NULL,0,WddmPagingBuildPosition(pBuildPagingBuffer),0);
+            else PagingJournalNote(BC250_PJ_FLUSH_TLB,0,NULL,0,WddmPagingBuildPosition(pBuildPagingBuffer),0,0);
         }
         pBuildPagingBuffer->MultipassOffset = nextByte;
         if (pagingStatus == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)

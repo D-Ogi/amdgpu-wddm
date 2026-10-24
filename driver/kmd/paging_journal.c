@@ -95,8 +95,11 @@ void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Upda
 
 // Every other kind: a virtual fill or transfer (Va is the destination or source address, Bytes what the build
 // moved), a physical one (Va 0), a TLB flush (only its position in the paging buffer) or DestroyAllocation
-// (Va the UMD's requested address, Bytes the allocation's size).
-void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags)
+// (Va the UMD's requested address, Bytes the allocation's size). Failure is 0, or the status of a build that
+// failed after it wrote Bytes: the record keeps that prefix, takes BC250_PJ_FLAG_FAILED and the status in Index,
+// and no submission stamps it (BD-235: the fill that stopped after 2528 pages).
+void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags,
+                       ULONG Failure)
 {
     BC250_PAGING_JOURNAL_RECORD r;
 
@@ -107,6 +110,10 @@ void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULO
     r.Allocation = (ULONGLONG)(ULONG_PTR)Allocation;
     r.Offset = Bytes;
     r.Dma = Dma;
+    if (Failure != 0) {
+        r.Flags |= BC250_PJ_FLAG_FAILED;
+        r.Index = Failure;
+    }
     PagingJournalCommit(&r);
 }
 
@@ -145,8 +152,10 @@ void PagingJournalGfxSubmit(ULONG Seq, ULONG Fence, ULONGLONG Ib1, ULONGLONG Roo
 // The OS submits the paging buffer the records were built into: DmaStart/DmaBytes is that submission's GPU
 // range (SubmitCommand's DmaBufferVirtualAddress and DmaBufferSize), Fence its SubmissionFenceId. Records built
 // into the range and not yet claimed take it. The walk runs backwards and stops at the first claimed record of
-// the same range, which is the previous submission of a reused buffer; a build the OS never submitted (a refused
-// buffer) would be claimed by the next submission of its range, which the reader tells from the times.
+// the same range, which is the previous submission of a reused buffer. A record of a failed build
+// (BC250_PJ_FLAG_FAILED) is never claimed: the OS submitted none of its words, and before BD-235 Q3a the next
+// submission of the same range took it, so a dump showed a prefix that never ran as submitted with that fence.
+// The walk passes it and goes on, because records built before it can still be unclaimed.
 void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence)
 {
     ULONGLONG n, live;
@@ -158,6 +167,7 @@ void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence)
     for (n = 0; n < live; n++) {
         BC250_PAGING_JOURNAL_RECORD* r = &g_PagingJournal.Entry[(g_PagingJournal.Next - 1 - n) % BC250_PAGING_JOURNAL_ENTRIES];
         if (!PagingJournalBuiltIntoBuffer(r->Kind)) continue;
+        if (r->Flags & BC250_PJ_FLAG_FAILED) continue;
         if (r->Dma == 0 || r->Dma < DmaStart || r->Dma - DmaStart >= DmaBytes) continue;
         if (r->Fence != 0) break;
         r->Fence = Fence;
@@ -166,7 +176,8 @@ void PagingJournalStampFence(ULONGLONG DmaStart, ULONG DmaBytes, ULONG Fence)
 }
 
 // The paging submit gave the buffer that carries Fence its SDMA sequence (GfxSubmitPaging, under wddm->Lock at
-// DISPATCH_LEVEL). Same walk; a resubmission of a preempted packet keeps the first sequence recorded.
+// DISPATCH_LEVEL). Same walk, which also passes a failed build's record; a resubmission of a preempted packet keeps
+// the first sequence recorded.
 void PagingJournalStampSeq(ULONG Fence, ULONG Seq)
 {
     ULONGLONG n, live;
@@ -178,6 +189,7 @@ void PagingJournalStampSeq(ULONG Fence, ULONG Seq)
     for (n = 0; n < live; n++) {
         BC250_PAGING_JOURNAL_RECORD* r = &g_PagingJournal.Entry[(g_PagingJournal.Next - 1 - n) % BC250_PAGING_JOURNAL_ENTRIES];
         if (!PagingJournalBuiltIntoBuffer(r->Kind)) continue;
+        if (r->Flags & BC250_PJ_FLAG_FAILED) continue;
         if (r->Fence != Fence) continue;
         if (r->Seq != 0) break;
         r->Seq = Seq;

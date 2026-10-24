@@ -364,6 +364,24 @@
         "clang-host"
       ]
     },
+    "paging-build-unmarked-failure": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "paging-journal": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "paging-journal-stamp-failed": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "sdma0-writers": {
       "inputs": [
         "host"

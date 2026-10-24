@@ -53,7 +53,7 @@
 16	docs/design/gpu-dwm-interop-switches.md
 5	docs/design/hang-detector.md
 4	docs/design/iommu-dma-remapping.md
-16	docs/design/paging-journal.md
+14	docs/design/paging-journal.md
 40	docs/design/paging-node.md
 11	docs/design/paging-queue-storage.md
 28	docs/design/recent-launches.md

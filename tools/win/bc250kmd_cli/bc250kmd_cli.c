@@ -2905,6 +2905,10 @@ static void PrintJournalRecord(const BC250_ESCAPE_PAGING_JOURNAL *journal, unsig
                  r->Valid != 0 ? r->Valid : 1ul, r->Valid != 0 ? "" : " (not recorded)");
     else if (r->Flags & BC250_PJ_FLAG_PROCESS)
         snprintf(identity, sizeof(identity), " hprocess 0x%llX (no allocation)", r->Allocation);
+    // BD-235 Q3a: a fill or transfer whose build failed after this prefix. The OS submitted none of it, so the
+    // record has no fence or sequence; Index is the builder's status, not a page table index.
+    else if (r->Flags & BC250_PJ_FLAG_FAILED)
+        snprintf(identity, sizeof(identity), " FAILED build 0x%08lX, not submitted", r->Index);
 
     // UPDATE records of 0.7.183.1 and later carry the PTE segments of their valid entries in Flags bits 16-31
     // (BC250_PJ_FLAG_SEGMENT): " seg 0,1" = system memory and segment 1. Older drivers leave the bits zero.

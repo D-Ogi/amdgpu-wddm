@@ -275,10 +275,15 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
 Check 'paging-ddi-status' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status" }
 Check 'paging-ddi-status-refusal-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-refusal-success" -Mutation refusal-success }
 Check 'paging-ddi-status-pending-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-pending-success" -Mutation pending-success }
-# BD-235: the BuildPagingBuffer statuses through wddm.c's own DDI code, and two negative controls (the rules before Q3).
+# BD-235: the BuildPagingBuffer statuses through wddm.c's own DDI code, and three negative controls (the rules before Q3
+# and Q3a).
 Check 'paging-build' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build" }
 Check 'paging-build-absorb-inner-failure' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-absorb-inner-failure" -Mutation absorb-inner-failure }
 Check 'paging-build-cpu-virtual-ignore' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-cpu-virtual-ignore" -Mutation cpu-virtual-ignore }
+Check 'paging-build-unmarked-failure' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-unmarked-failure" -Mutation unmarked-failure }
+# BD-235 Q3a: the journal's stamps pass a failed build's record, also when the OS reuses its buffer range.
+Check 'paging-journal' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_journal.ps1" -Root $Workspace -Out "$Out\paging-journal" }
+Check 'paging-journal-stamp-failed' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_journal.ps1" -Root $Workspace -Out "$Out\paging-journal-stamp-failed" -Mutation stamp-failed }
 # BD-235: no raw ring writer runs beside OS paging. The SDMA0 writers, their paths and the orders they need (with five
 # controls of its own), and the escapes admitted under FullWddm in both flavours, with a negative control.
 Check 'sdma0-writers' { & python -B "$repo\driver\kmd\test\check_sdma0_writers.py" --source "$repo\driver\kmd" }

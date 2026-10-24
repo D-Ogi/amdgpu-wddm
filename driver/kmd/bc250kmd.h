@@ -1286,7 +1286,8 @@ struct _BC250_PAGING_JOURNAL_RECORD;
 void PagingJournalInit(void);
 void PagingJournalUpdate(_In_ const DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE* Update, ULONG SliceStart, ULONG SliceCount,
                          ULONGLONG Dma, BOOLEAN Cpu);
-void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags);
+void PagingJournalNote(ULONG Kind, ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONGLONG Dma, ULONG Flags,
+                       ULONG Failure);
 // KMD193 (bsod-245 items 3 and 4): the destroy's own caller and the allocation's creator, and one record per
 // GFX IB that reached the ring. Same record layout; paging_identity.h packs the fields each kind left unused.
 void PagingJournalDestroy(ULONGLONG Va, _In_opt_ HANDLE Allocation, ULONGLONG Bytes, ULONG Flags, ULONG Creator,
