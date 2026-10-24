@@ -6520,8 +6520,10 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
     }
     // Paging-process CPU_VIRTUAL initialization must be immediate, including when
     // pDmaBuffer is NULL. GPU_PHYSICAL updates use the ordered path below.
-    // BD-235: the journal records the update only when VidMmUpdatePageTable made it. It checks every entry before it
-    // writes one, so a failure leaves the table as it was; the failure goes to the OS (Bc250WddmBuildPagingBuffer).
+    // BD-235: the journal records the update only when VidMmUpdatePageTable made it, and a failure goes to the OS
+    // (Bc250WddmBuildPagingBuffer). A refusal by its checks (entry encoding, table identity, shadow room) comes before
+    // the first write and leaves the table as it was. A fault caught during the writes does not: the table can then
+    // hold part of the update, and the journal does not record it.
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE &&
         pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL) {
         NTSTATUS status=VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);

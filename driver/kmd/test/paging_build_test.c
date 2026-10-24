@@ -5,6 +5,7 @@
  * the status the OS gets, what was published and journalled, the multipass position and the counters. */
 #include <stdio.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 #include "paging_ddi_status.h"
 
@@ -201,6 +202,7 @@ static void Fresh(DXGK_BUILDPAGINGBUFFER_OPERATION Operation, DXGK_PAGETABLEUPDA
     build.UpdatePageTable.PageTableLevel = 1;
     build.MultipassOffset = Offset;
     build.DmaSize = 4096;
+    private_record[0] = 0xA5A5A5A5u;    /* a stale header: the branch must invalidate it before the builder */
     build.pDmaBufferPrivateData = private_record;
     build.DmaBufferPrivateDataSize = sizeof(private_record);
     build.hSystemContext = (HANDLE)&context_state;
@@ -218,17 +220,31 @@ static void InnerFailure(DXGK_BUILDPAGINGBUFFER_OPERATION Op, NTSTATUS Status, B
     mock.status = Status; mock.unsupported = Reason; mock.written = Written; mock.next = Offset + 5;
     CHECK(Ddi() == ToOs);
     CHECK(builder_calls == 1 && publishes == 0 && journal_updates == 0 && journal_notes == 0);
-    CHECK(build.MultipassOffset == Offset);
+    CHECK(build.MultipassOffset == Offset && private_record[0] == 0);   /* no valid record header is left */
     CHECK(wddm_state.PagingInnerFailures == 1 && wddm_state.PagingContractRefusals == 1);
     CHECK(wddm_state.PagingUnsupported[Reason] == (Reason == BC250PagingSupported ? 0 : 1));
     CHECK(wddm_state.PagingUpdatesBuilt == 0 && wddm_state.PagingFlushesBuilt == 0);
     CHECK(wddm_state.PagingBuildLock == 0 && logs == 2);   /* the inner failure line and the wrapper's line */
 }
 
+/* A crash of the test dies quietly into this console: no abort message box, no Windows Error Reporting dialog.
+ * windows.h would collide with the mock types above, so SetErrorMode is declared here (WinBase.h). */
+__declspec(dllimport) unsigned int __stdcall SetErrorMode(unsigned int Mode);
+#define SEM_FAILCRITICALERRORS 0x0001u
+#define SEM_NOGPFAULTERRORBOX 0x0002u
+#define SEM_NOOPENFILEERRORBOX 0x8000u
+static void die_quietly(void)
+{
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+}
+
 int main(void)
 {
     const ULONGLONG page = 4096;
 
+    setvbuf(stdout, NULL, _IONBF, 0);   /* a crash must not swallow the FAIL lines */
+    die_quietly();
     /* GPU_PHYSICAL update and FLUSH_TLB: every status that is not a result is a failure to the OS. */
     InnerFailure(DXGK_OPERATION_UPDATE_PAGE_TABLE, STATUS_INVALID_PARAMETER, BC250PagingSupported, 0, 0,
                  STATUS_INVALID_PARAMETER);                         /* an encoding or MC range refusal */
@@ -262,6 +278,7 @@ int main(void)
     Fresh(DXGK_OPERATION_UPDATE_PAGE_TABLE, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 10);
     mock.status = STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
     CHECK(Ddi() == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER && publishes == 0 && build.MultipassOffset == 10);
+    CHECK(private_record[0] == 0);
     /* No private record space: INSUFFICIENT_DMA_BUFFER before the builder. */
     Fresh(DXGK_OPERATION_UPDATE_PAGE_TABLE, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
     build.pDmaBufferPrivateData = NULL;
