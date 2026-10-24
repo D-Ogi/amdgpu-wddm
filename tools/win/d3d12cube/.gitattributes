@@ -1,0 +1,2 @@
+# Preserve the reviewed client's source hash on Windows checkouts.
+cube-mip.cpp text eol=lf
