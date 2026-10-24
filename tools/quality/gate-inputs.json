@@ -364,6 +364,23 @@
         "clang-host"
       ]
     },
+    "sdma0-writers": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "escape-admission": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "escape-admission-admit-fence": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "ih-consume": {
       "inputs": [
         "host"

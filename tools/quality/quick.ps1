@@ -279,6 +279,11 @@ Check 'paging-ddi-status-pending-success' { & pwsh -NoProfile -File "$repo\drive
 Check 'paging-build' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build" }
 Check 'paging-build-absorb-inner-failure' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-absorb-inner-failure" -Mutation absorb-inner-failure }
 Check 'paging-build-cpu-virtual-ignore' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-cpu-virtual-ignore" -Mutation cpu-virtual-ignore }
+# BD-235: no raw ring writer runs beside OS paging. The SDMA0 writers, their paths and the orders they need (with five
+# controls of its own), and the escapes admitted under FullWddm in both flavours, with a negative control.
+Check 'sdma0-writers' { & python -B "$repo\driver\kmd\test\check_sdma0_writers.py" --source "$repo\driver\kmd" }
+Check 'escape-admission' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_escape_admission.ps1" -Root $Workspace -Out "$Out\escape-admission" }
+Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_escape_admission.ps1" -Root $Workspace -Out "$Out\escape-admission-admit-fence" -Mutation admit-fence }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
  Check 'dpm' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm" -Kits "$Kits" }
  Check 'cpu' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_cpu.ps1" -Out "$Out\cpu" -Kits "$Kits" }

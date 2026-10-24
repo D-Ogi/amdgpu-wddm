@@ -4156,16 +4156,21 @@ static void GfxLogPagingSubmit(_Inout_ BC250_GFX* Gfx, ULONG Dwords, ULONGLONG S
 // ring). Here, under Sdma0RingLock, the NOPs up to the boundary are published by themselves first, exactly as in
 // boot a1, and the submission then starts at the boundary.
 // The SDMA0 ring does not track its read pointer (track_rptr false), so amdgpu_ring_alloc() cannot see unretired work
-// on it; the writers keep the room, and the pad needs it as much as the request. The writers of this ring:
-// - this path: one submission at a time. PagingSubmitInFlight stays set until the fence of the last submission
-//   arrives (GfxPagingFenceArrivedAccess), so when this path pads, no paging work is unretired, and its pad and
-//   request (pad < aligned request <= max_dw 1024) fit the 2048-dword ring;
-// - SdmaIbStartupControl and SdmaVaStartupControl: before WDDM publication, never beside OS submissions, and each
-//   waits for its own fence;
-// - the lab flavour's raw escapes (RUN_GFX ring test, RUN_FENCE, RUN_SDMACOPY and RUN_SDMAIB): each waits for its own
-//   fence, but none checks PagingSubmitInFlight. So in the lab flavour one escape submission can be unretired beside
-//   one paging submission, and the sum can exceed the ring (a pad of 1008, a request of 1024 and 32 unretired
-//   dwords). A raw escape during OS paging traffic is outside this guarantee; the release flavour has no such escape.
+// on it; the writers keep the room, and the pad needs it as much as the request. The writers of this ring, and why
+// none of the others has unretired work beside this path (driver/kmd/test/check_sdma0_writers.py holds the list,
+// their callers and the orders below; a change there fails the gate):
+// - this path: one submission at a time. PagingSubmitInFlight is claimed before Sdma0RingLock and stays set until
+//   the fence of the last submission arrives (GfxPagingFenceArrivedAccess), so when this path pads, no paging work is
+//   unretired, and its pad and request (pad < aligned request <= max_dw 1024) fit the 2048-dword ring;
+// - SdmaIbStartupControl, SdmaVaStartupControl and the stage 7 ring tests of GfxInitializeHardware: before WDDM
+//   publication (SdmaIbStartupControl refuses a published adapter), and each waits for its own fence;
+// - the stage 7 ring tests of a retained resume (GfxPowerRetainedLocked): PowerSuspended has kept this path from
+//   admitting a submission since the suspend, and access is closed and drained before the stages run;
+// - the raw escapes of the lab flavour (RUN_GFX other than STATE, RUN_FENCE, RUN_SDMACOPY, RUN_SDMAIB): Bc250Escape
+//   refuses every command outside WddmDiagnosticAllowed while FullWddm is set (display.c), before it reaches them, and
+//   that list has none of them (escape_admission_test.c, both flavours). OS paging exists only with the full table,
+//   which is also what sets FullWddm (entry.c, WddmGateOpen). So no raw escape writes this ring in a boot where this
+//   path can run. If one ever must, it needs a reservation shared with this path through fence retirement first.
 typedef struct _GFX_BOUNDARY_NOTE {
     ULONG Action;        // 0 nothing to do, 1 padded, 2 pad refused by amdgpu_ring_alloc
     ULONG PadDwords;
