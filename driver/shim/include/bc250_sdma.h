@@ -173,6 +173,13 @@ void bc250_sdma_fence_page_free(struct amdgpu_device *adev);
 u64 bc250_sdma_fence_addr(struct amdgpu_device *adev, unsigned int slot);
 u64 bc250_sdma_fence_read(struct amdgpu_device *adev, unsigned int slot);
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+/* BD-235 lab experiment, lab flavour only: the byte pointer the paging ring (SDMA0 GFX queue) starts at on its
+ * next fresh bring-up, or 0 for upstream's 0. The KMD sets it once at DriverEntry from PagingRingStartBytes
+ * (guard.c GuardLabConsumePagingRingStart); bc250_sdma_gfx_resume_instance() takes it back to 0 at its first look. */
+extern u64 bc250_sdma_lab_ring_start;
+#endif
+
 /* sdma_v5_0.c:1012 sdma_v5_0_ring_test_ring(): a WRITE_LINEAR of one dword into this engine's
  * scratch slot, then a poll. Needs the page above. Returns 0, BC250_EINVAL or BC250_ETIME. */
 int bc250_sdma_ring_test(struct amdgpu_ring *ring);

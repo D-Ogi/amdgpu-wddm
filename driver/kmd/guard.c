@@ -215,6 +215,49 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
     return 0;
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-235 lab experiment, lab flavour only, not a catalog setting: the paging ring's start pointer. The value lives
+// in the driver's Parameters key, which the driver otherwise only reads (driver isolation treats it as read only);
+// a lab script writes it there and this deletes it, so the experiment leaves the key as it found it. The delete
+// is flushed BEFORE the value is handed on: a bug check at the bring-up it changes cannot repeat at the next
+// boot. A value that cannot be deleted is not used, and neither is anything but an 8-byte REG_QWORD (deleted all
+// the same). The shim checks the alignment where the ring size is known (bc250_sdma.c).
+ULONGLONG GuardLabConsumePagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
+{
+    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONGLONG)];
+    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    UNICODE_STRING name;
+    ULONGLONG value = 0;
+    ULONG length = 0, type = 0;
+    HANDLE key;
+    NTSTATUS status, query;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE | KEY_SET_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: paging ring start: Parameters key not opened for writing (0x%08X), nothing used", status);
+        return 0;
+    }
+    RtlInitUnicodeString(&name, L"PagingRingStartBytes");
+    query = ZwQueryValueKey(key, &name, KeyValuePartialInformation, info, sizeof(buffer), &length);
+    if (query == STATUS_OBJECT_NAME_NOT_FOUND) { ZwClose(key); return 0; }
+    if (NT_SUCCESS(query)) type = info->Type;
+    if (NT_SUCCESS(query) && type == REG_QWORD && info->DataLength == sizeof(ULONGLONG))
+        RtlCopyMemory(&value, info->Data, sizeof(value));
+    status = ZwDeleteValueKey(key, &name);
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+    ZwClose(key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: paging ring start 0x%llX not deleted (0x%08X), not used", value, status);
+        return 0;
+    }
+    if (value == 0)
+        GuardLog("lab: paging ring start deleted unused: query 0x%08X type %lu, a nonzero REG_QWORD expected", query,
+                 type);
+    else GuardLog("lab: paging ring start 0x%llX read and deleted, for the first SDMA0 bring-up", value);
+    return value;
+}
+#endif
+
 // A one-shot gate: the value 1 is read and put back to 0 on disk before anything it opens has run, so a bugcheck
 // behind the gate cannot repeat itself at the next boot (E16 run 007 did, once). Any other value is left alone.
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default)

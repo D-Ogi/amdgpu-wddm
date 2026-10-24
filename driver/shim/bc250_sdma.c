@@ -312,6 +312,10 @@ static void bc250_sdma_ctx_switch_enable(struct amdgpu_device *adev, bool enable
  * The write pointer of an SDMA ring counts bytes, not dwords, which is where the `<< 2` comes from;
  * bc250_ring.c keeps the dword convention of the CP rings and says so.
  * ------------------------------------------------------------------------------------------- */
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+u64 bc250_sdma_lab_ring_start;
+#endif
+
 static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, bool reset_transport)
 {
 	struct amdgpu_ring *ring;
@@ -401,6 +405,33 @@ static int bc250_sdma_gfx_resume_instance(struct amdgpu_device *adev, int i, boo
 			 "sdma%d kept its pointers across the undo (rptr 0x%llX, wptr 0x%llX);"
 			 " adopting the write pointer\n", i, hw_rptr, hw_wptr);
 	}
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+	/* BD-235 lab experiment, lab flavour only. Both paging stalls of BD-235 were on the one submission whose
+	 * 64-bit byte pointer crossed 2^32; a start just below that boundary reaches it within seconds instead of
+	 * after 4 GiB of paging traffic. Only a fresh bring-up of SDMA0 (the paging ring) takes it: never an
+	 * adoption (the engine kept its pointers, hw_wptr != 0) and never a recovery (reset_transport). The value
+	 * goes where upstream's restore arm puts a saved pointer (sdma_v5_0.c:715-720): RPTR, RPTR_HI, WPTR and
+	 * WPTR_HI here, then, through `adopted`, ring->wptr, the WPTR pair under MINOR_PTR_UPDATE = 1 and the poll
+	 * slot below. It is consumed at the first look, applied or refused. A start must be a multiple of the ring
+	 * size, so the engine starts at ring offset 0 like a fresh ring, and of 8 bytes (the doorbell unit). */
+	if (i == 0 && !reset_transport && hw_wptr == 0 && bc250_sdma_lab_ring_start != 0) {
+		u64 start = bc250_sdma_lab_ring_start;
+
+		bc250_sdma_lab_ring_start = 0;
+		if ((start & 7u) != 0 || ring->ring_size == 0 || (start & ((u64)ring->ring_size - 1u)) != 0) {
+			dev_err(adev->dev, "sdma0 lab ring start 0x%llX refused: not a multiple of the %u-byte ring\n",
+				start, ring->ring_size);
+		} else {
+			WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR), lower_32_bits(start));
+			WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_RPTR_HI), upper_32_bits(start));
+			WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR), lower_32_bits(start));
+			WREG32_SOC15_IP(GC, bc250_sdma_reg_offset(adev, (u32)i, mmSDMA0_GFX_RB_WPTR_HI), upper_32_bits(start));
+			adopted = start;
+			dev_info(adev->dev, "sdma0 lab ring start 0x%llX applied (read and write pointer)\n", start);
+		}
+	}
+#endif
 
 	/* setup the wptr shadow polling */
 	wptr_gpu_addr = ring->wptr_gpu_addr;

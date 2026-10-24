@@ -648,6 +648,12 @@ void GuardReleaseStart(void);       // orderly stop of a started device: give th
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-235 lab experiment, lab flavour only: PagingRingStartBytes (REG_QWORD under the driver's Parameters key),
+// deleted and flushed before it is returned; 0 when absent, malformed or not deleted. PASSIVE_LEVEL, DriverEntry.
+ULONGLONG GuardLabConsumePagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
+extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
+#endif
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer

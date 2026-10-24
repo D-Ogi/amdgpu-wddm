@@ -2111,10 +2111,14 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 (lab flavour only): what the paging SDMA held when the paging deadline passed. In BD-235 the paging fence
 // stopped for 12 s and the log had only its number. Read only, at DISPATCH_LEVEL in the paging watchdog DPC,
-// outside wddm->Lock, once per start (PagingDiagnosticTaken). All registers are on the READ_REG list, and none of
-// them is banked by GRBM_GFX_INDEX, so no wave capture admission is needed.
-//   - The SDMA0 GFX queue carries the paging ring. RB_RPTR/WPTR are byte offsets in the ring; IB_BASE, IB_OFFSET,
-//     IB_RPTR and IB_SIZE describe the IB that the engine fetches now, which need not be the stopped submission.
+// outside wddm->Lock, at most once per paging submission: PagingDiagnosticTaken is set when the deadline passes
+// and cleared again when the next paging submission goes on the ring (WddmGpuFencePaging). All registers are on the
+// READ_REG list, and none of them is banked by GRBM_GFX_INDEX, so no wave capture admission is needed. The reads
+// are sequential CPU observations, not one atomic sample of the engine.
+//   - The SDMA0 GFX queue carries the paging ring. RB_RPTR/WPTR are the engine's 64-bit byte pointers (the ring
+//     offset is the pointer modulo the ring size) and RB_RPTR_FETCH the pointer it has fetched up to; IB_BASE,
+//     IB_OFFSET, IB_RPTR and IB_SIZE describe the IB that the engine fetches now, which need not be the stopped
+//     submission.
 //   - The marker slot is the value of the last fence/poll barrier. A ring stopped on that poll shows a marker that
 //     differs from the value the poll waits for.
 static void WddmPagingTimeoutSnapshot(_Inout_ BC250_DEVICE* Device, ULONG Seq, UINT Fence)
@@ -2131,28 +2135,43 @@ static void WddmPagingTimeoutSnapshot(_Inout_ BC250_DEVICE* Device, ULONG Seq, U
         { "GCVM_FAULT_STATUS", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_STATUS },
         { "GCVM_FAULT_ADDR_LO32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_LO32 },
         { "GCVM_FAULT_ADDR_HI32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_HI32 },
+        { "SDMA0_RPTR_FETCH", BC250_REG_GC_SDMA0_RB_RPTR_FETCH },
+        { "SDMA0_RPTR_FETCH_HI", BC250_REG_GC_SDMA0_RB_RPTR_FETCH_HI },
+        { "SDMA0_RB_CNTL", BC250_REG_GC_SDMA0_GFX_RB_CNTL },
+        { "SDMA0_WPTR_POLL_CNTL", BC250_REG_GC_SDMA0_GFX_RB_WPTR_POLL_CNTL },
     };
-    // 15 registers, three to a line: five lines, once per start.
-    ULONG values[15];
-    ULONG i, refused = 0, status, fenceSlot, markerSlot;
+    // 19 registers: six lines of three and one of one, per timed-out paging submission. A
+    // register that MmioRead refuses keeps the value 0 in its line, and its bit is clear in the validity mask
+    // (bit n = registers[n] read), so an unread fault latch is never taken for "no fault".
+    ULONG values[19];
+    ULONG i, valid = 0, status, fenceSlot, markerSlot;
     ULONGLONG page;
     BOOLEAN slots;
 
     C_ASSERT(RTL_NUMBER_OF(registers) == RTL_NUMBER_OF(values));
-    C_ASSERT(RTL_NUMBER_OF(values) % 3 == 0);
-    for (i = 0; i < RTL_NUMBER_OF(values); i++)
-        if (!NT_SUCCESS(MmioRead(Device, registers[i].Offset, &values[i]))) { values[i] = 0; refused++; }
+    C_ASSERT(RTL_NUMBER_OF(values) < 32);
+    for (i = 0; i < RTL_NUMBER_OF(values); i++) {
+        if (NT_SUCCESS(MmioRead(Device, registers[i].Offset, &values[i]))) valid |= 1ul << i;
+        else values[i] = 0;
+    }
     slots = GfxPagingSlots(Device, &fenceSlot, &markerSlot);
-    for (i = 0; i < RTL_NUMBER_OF(values); i += 3)
+    for (i = 0; i + 3 <= RTL_NUMBER_OF(values); i += 3)
         GuardLog("wddm: paging timeout %s 0x%08X %s 0x%08X %s 0x%08X",
                  registers[i].Name, values[i], registers[i + 1].Name, values[i + 1],
                  registers[i + 2].Name, values[i + 2]);
+    for (; i < RTL_NUMBER_OF(values); i++)
+        GuardLog("wddm: paging timeout %s 0x%08X", registers[i].Name, values[i]);
+    GuardLog("wddm: paging timeout validity mask 0x%05lX (bit n = register n read, %lu registers)", valid,
+             (ULONG)RTL_NUMBER_OF(values));
     // The fault latch, decoded as in WddmTimeoutSnapshot: ADDR_LO32/HI32 hold the page frame.
-    status = values[12];
-    page = (((ULONGLONG)values[14] << 32) | values[13]) << 12;
-    GuardLog("wddm: paging timeout fault cid %lu %s vmid %lu rw %lu page 0x%llX, %lu refused",
-             BC250_GCVM_FAULT_CID(status), Bc250GfxhubClientName(BC250_GCVM_FAULT_CID(status)),
-             BC250_GCVM_FAULT_VMID(status), BC250_GCVM_FAULT_RW(status), page, refused);
+    // Decoded only when all three latch registers were read.
+    if ((valid & (7ul << 12)) == (7ul << 12)) {
+        status = values[12];
+        page = (((ULONGLONG)values[14] << 32) | values[13]) << 12;
+        GuardLog("wddm: paging timeout fault cid %lu %s vmid %lu rw %lu page 0x%llX",
+                 BC250_GCVM_FAULT_CID(status), Bc250GfxhubClientName(BC250_GCVM_FAULT_CID(status)),
+                 BC250_GCVM_FAULT_VMID(status), BC250_GCVM_FAULT_RW(status), page);
+    } else GuardLog("wddm: paging timeout fault latch not read (validity mask 0x%05lX)", valid);
     if (slots)
         GuardLog("wddm: paging timeout seq %lu fence %u: fence slot 0x%08X, marker slot 0x%08X",
                  Seq, Fence, fenceSlot, markerSlot);
