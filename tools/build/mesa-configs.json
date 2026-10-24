@@ -10,6 +10,10 @@
       "c_args": ["/clang:-ffp-contract=off", "-gline-tables-only"]
     }
   },
+  "clang_x86_system_includes": {
+    "description": "The system include directories, relative to the Mesa source tree, that the x86 policy gate of build-mesa.ps1 -Compiler clang-cl -Arch x86 admits (Test-ClangX86Policy, tools/build/common.ps1). The DirectX-Headers subproject declares its include directory a system directory (is_system), so meson gives it to clang-cl as -isystem, and clang shows no warning in a system header: the clang-cl x86 calling-convention policy does not reach these headers. They are Microsoft's D3D12 and DXGI interface headers, and src/getopt (is_system too, read only by the GLSL host tools glcpp and glsl_compiler, which are not shipped), the same in the MSVC x86 build, whose policy checks them (/external:W1 /we4229 /we4440). The script also admits the -I directories of llvm-config --cppflags of -Llvm, the LLVM headers that meson gives as -isystem for the LLVM dependency. Any other system directory stops the build",
+    "paths": ["subprojects/DirectX-Headers-1.0/include", "src/getopt"]
+  },
   "variants": {
     "release": {
       "description": "meson buildtype release with the PDB: optimisation level 3, /O2 /Gw, in place of the /O2 of debugoptimized. A set without b_ndebug gets -Db_ndebug=false, the NDEBUG state that debugoptimized gave it: in a release buildtype, meson's default b_ndebug=if-release defines NDEBUG",

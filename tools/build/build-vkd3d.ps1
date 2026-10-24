@@ -323,30 +323,12 @@ try {
     }
     Write-Host "configure gate: the Build Options line matches the $Config option set ($($options.Count) options)"
 
-    # The x86 calling-convention policy of clang-cl is two warnings made errors (common.ps1). A switch that turns all
-    # warnings off (/W0, -w) or these two off, in any compile command of the project or of a subproject, removes the
-    # policy from that file, where the MSVC policy (/we, through _CL_ after every other switch) would stay. clang
-    # also shows no warning in a system header, so a switch that makes a directory a system directory (/external:I,
-    # /imsvc, -isystem) removes the policy from the headers in it. Every compile command must name the i686 target and
-    # the policy, and none may carry such a switch. The Windows SDK and C runtime headers (INCLUDE) stay system
-    # headers for clang; the MSVC x86 build checks them.
+    # Every compile command names the i686 target and the clang-cl x86 policy, and none removes the policy
+    # (Test-ClangX86Policy, common.ps1).
     if ($clangTarget) {
-        $policy = @("--target=$clangTarget", '/clang:-Werror=ignored-attributes', '/clang:-Werror=cast-calling-convention')
-        $off = '^(/clang:)?(-w|-Wno-everything|-Wno-(error=)?(ignored-attributes|cast-calling-convention))$|^/[Ww]0?$' +
-               '|^/external:|^[-/]imsvc|^(/clang:)?(-isystem|--system-header-prefix)'
-        $commands = @(Get-Content -LiteralPath (Join-Path $Build 'compile_commands.json') -Raw | ConvertFrom-Json)
-        $refused = @()
-        foreach ($c in $commands) {
-            $words = @([regex]::Matches($c.command, '"[^"]*"|\S+') | ForEach-Object { $_.Value.Trim('"') })
-            $lacks = @($policy | Where-Object { $words -cnotcontains $_ })
-            $drops = @($words | Where-Object { $_ -cmatch $off })
-            if ($lacks.Count -or $drops.Count) { $refused += "$($c.file): lacks [$($lacks -join ' ')] drops [$($drops -join ' ')]" }
-        }
-        $recipe.gate['x86_policy'] = [ordered]@{ compile_commands = $commands.Count; switches = $policy; refused = $refused }
+        $recipe.gate['x86_policy'] = Test-ClangX86Policy $Build $clangTarget
         Write-Recipe $recipePath $recipe
-        if (-not $commands.Count) { throw "x86 policy gate: $Build\compile_commands.json has no compile command" }
-        if ($refused.Count) { throw "x86 policy gate: $($refused.Count) compile command(s) without the clang-cl x86 policy:`n$($refused -join "`n")" }
-        Write-Host "x86 policy gate: all $($commands.Count) compile commands name $($policy -join ' ') and drop no warning"
+        Assert-ClangX86Policy $recipe.gate['x86_policy'] $Build
     }
 
     if ($ConfigureOnly) { Write-Host "configured only: $Build (recipe: $recipePath)"; return }

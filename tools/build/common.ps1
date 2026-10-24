@@ -316,7 +316,8 @@ function Add-MesonVariants([string[]]$Options, $ConfigsFile, [string]$Compiler, 
 # pointer applies to the function type (MSVC ignores it, C4229, and gives cdecl), and a typedef or a redeclaration
 # that changes the convention is an error of its own (C4440 and C2373 in MSVC). test-x86-callconv.ps1 holds the
 # controls of both compilers. The policy is a warning made an error, which /W0 or -w in a compile command, or a
-# system include directory, would remove: the recipe checks the compile commands after configure (build-vkd3d.ps1).
+# system include directory, would remove: the recipe checks the compile commands after configure
+# (Test-ClangX86Policy, used by build-vkd3d.ps1 and build-mesa.ps1).
 function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build, [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
                                       [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc', [string]$ClangTarget = '') {
     $token = 'X:\mesa-build'
@@ -346,6 +347,63 @@ function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [stri
     foreach ($o in $Options) { $merged.Add($o) }
     foreach ($name in $add.Keys) { Add-MesonArguments $merged $name $add[$name] }
     return @($merged)
+}
+
+# The x86 calling-convention policy of clang-cl is two warnings made errors (Add-ReproducibleMesonOptions). A switch
+# that turns all warnings off (/W0, -w) or these two off, in any compile command of the project or of a subproject,
+# removes the policy from that file, where the MSVC policy (/we, through _CL_ after every other switch) would stay.
+# clang also shows no warning in a system header, so a switch that makes a directory a system directory
+# (/external:I, /imsvc, -isystem) removes the policy from the headers in it. -Wsystem-headers is no way out: the
+# Windows SDK headers carry attributes that clang ignores (uuid on a forward declaration, dllimport on a typedef),
+# which -Werror=ignored-attributes then stops. Every compile command of <Build>\compile_commands.json must name the
+# target and the policy, and none may carry such a switch, with one exception: a system directory that the caller
+# names in -SystemIncludes (absolute paths; a config's reviewed list, such as Mesa's DirectX-Headers subproject,
+# which declares its include directory a system directory). The policy does not reach the headers of such a
+# directory, and the record names each directory with its number of commands. The Windows SDK and C runtime headers
+# (INCLUDE) stay system headers for clang; the MSVC x86 build checks them. Returns the gate record for recipe.json:
+# the number of compile commands, the switches, the admitted system directories and one line per refused command.
+# -TargetSwitch is the word that names the target in the recipe's compiler command (default --target=<target>).
+function Test-ClangX86Policy([string]$Build, [string]$ClangTarget, [string[]]$SystemIncludes = @(), [string]$TargetSwitch = '') {
+    if (-not $TargetSwitch) { $TargetSwitch = "--target=$ClangTarget" }
+    $policy = @($TargetSwitch, '/clang:-Werror=ignored-attributes', '/clang:-Werror=cast-calling-convention')
+    $off = '^(/clang:)?(-w|-Wno-everything|-Wno-(error=)?(ignored-attributes|cast-calling-convention))$|^/[Ww]0?$' +
+           '|^(/clang:)?--system-header-prefix'
+    # A system directory in one word: /external:I<dir>, -isystem<dir> or /clang:-isystem<dir>, /imsvc<dir>. Any other
+    # /external: switch, and a switch whose directory is the next word, cannot be read here and is refused.
+    $systemDir = '^(/external:I|(/clang:)?-isystem|[-/]imsvc)(?<dir>.+)$'
+    $unread = '^/external:|^(/clang:)?-isystem$|^[-/]imsvc$'
+    $allowed = @{}
+    foreach ($s in $SystemIncludes) { $allowed[[IO.Path]::GetFullPath($s).TrimEnd('\').ToLowerInvariant()] = 0 }
+    $path = Join-Path $Build 'compile_commands.json'
+    $commands = if (Test-Path -LiteralPath $path) { @(Get-Content -LiteralPath $path -Raw | ConvertFrom-Json) } else { @() }
+    $refused = @()
+    foreach ($c in $commands) {
+        $words = @([regex]::Matches($c.command, '"[^"]*"|\S+') | ForEach-Object { $_.Value.Trim('"') })
+        $lacks = @($policy | Where-Object { $words -cnotcontains $_ })
+        $drops = @()
+        foreach ($w in $words) {
+            $m = [regex]::Match($w, $systemDir)
+            if ($m.Success) {
+                $dir = [IO.Path]::GetFullPath([IO.Path]::Combine($c.directory, $m.Groups['dir'].Value)).TrimEnd('\').ToLowerInvariant()
+                if ($allowed.ContainsKey($dir)) { $allowed[$dir]++ } else { $drops += $w }
+            } elseif ($w -cmatch $off -or $w -cmatch $unread) { $drops += $w }
+        }
+        if ($lacks.Count -or $drops.Count) { $refused += "$($c.file): lacks [$($lacks -join ' ')] drops [$($drops -join ' ')]" }
+    }
+    $admitted = [ordered]@{}
+    foreach ($k in ($allowed.Keys | Sort-Object)) { $admitted[$k] = $allowed[$k] }
+    return [ordered]@{ compile_commands = $commands.Count; switches = $policy; system_includes = $admitted; refused = $refused }
+}
+
+# Stops the build when the gate record of Test-ClangX86Policy refuses: no compile command, or a command without the
+# policy. Called after the record is in recipe.json, so that the refusal is kept.
+function Assert-ClangX86Policy($Gate, [string]$Build) {
+    if (-not $Gate.compile_commands) { throw "x86 policy gate: $Build\compile_commands.json has no compile command" }
+    if ($Gate.refused.Count) {
+        throw "x86 policy gate: $($Gate.refused.Count) compile command(s) without the clang-cl x86 policy:`n$($Gate.refused -join "`n")"
+    }
+    Write-Host "x86 policy gate: all $($Gate.compile_commands) compile commands name $($Gate.switches -join ' ') and drop no warning"
+    foreach ($k in $Gate.system_includes.Keys) { Write-Host "x86 policy gate: admitted system directory $k in $($Gate.system_includes[$k]) command(s)" }
 }
 
 # BD-167: the flavour of a fork build, for recipe.json. A fork branch that carries the release series declares the

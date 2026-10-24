@@ -30,6 +30,11 @@ of the compiler and the linker, and stops when one of them is missing. The repro
 are /Brepro, -fmacro-prefix-map and -fdebug-prefix-map in place of /FC and /d1trimfile, and the link switches
 /Brepro, -pdbaltpath:%_PDB% and -pdbsourcepath (Add-ReproducibleMesonOptions).
 
+-Compiler clang-cl -Arch x86 names the i686-pc-windows-msvc target in the compiler command (CC, CXX), so that meson
+detects an x86 host, and takes the clang-cl form of the x86 calling-convention policy from
+Add-ReproducibleMesonOptions (-Werror=ignored-attributes and -Werror=cast-calling-convention). After configure,
+every compile command must carry the target and the policy and no switch that removes them (Test-ClangX86Policy).
+
 -Variant adds named changes from the 'variants' of mesa-configs.json to the set, for the selected compiler, without
 a change to the recorded set: release (buildtype release, /O2 /Gw), lto (/GL and /LTCG, or ThinLTO) and isa
 (/arch:AVX2, or -march=x86-64-v3 -mtune=znver2). Without -Variant the set builds as recorded.
@@ -137,7 +142,11 @@ if ($forkFlavour -eq 'lab' -and $recipeConfig.PSObject.Properties['lab_options']
 # The compiler's own arguments and the variants, if any: additions that leave the recorded set as it is.
 $Variant = @($Variant | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $options = Add-MesonVariants $options $configsFile $Compiler $Variant
-$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler
+# clang-cl for x86 is the i686 target, named in the compiler command below (CC, CXX), so that meson detects an x86
+# host machine; common.ps1 then adds the clang-cl form of the x86 calling-convention policy.
+$clangTarget = if ($Compiler -eq 'clang-cl' -and $Arch -eq 'x86') { 'i686-pc-windows-msvc' } else { '' }
+$targetSwitch = if ($clangTarget) { "/clang:--target=$clangTarget" } else { '' }
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler -ClangTarget $clangTarget
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'meson.build'))) { throw "$Source is not a Mesa source tree (no meson.build)" }
 $llvmConfig = $null
@@ -214,10 +223,20 @@ try {
     # names the tools of the Visual Studio environment as meson's own search finds them, so its build.ninja is the
     # one of a build without the variables. -Compiler clang-cl names the tools of -ClangToolchain, inside the same
     # Visual Studio environment, whose INCLUDE and LIB clang-cl and lld-link read. llvm-lib and not lib.exe, because
-    # the objects of a ThinLTO build are LLVM bitcode. x64 only (Add-ReproducibleMesonOptions).
+    # the objects of a ThinLTO build are LLVM bitcode. For x86 the compiler command names the i686 target: meson takes
+    # the host machine from the target that the compiler reports, and the x86 Visual Studio environment does not
+    # change the target of clang-cl. CL and _CL_ go: clang-cl reads them, and the x86 environment puts the MSVC policy
+    # in _CL_, which clang-cl ignores at compile and appends after /link at a link, where lld-link reads each switch as
+    # a file. The clang-cl policy is in the option set (Add-ReproducibleMesonOptions).
+    # The target is /clang:--target=<target>, not --target=<target> as in build-vkd3d.ps1: meson's resource compiler
+    # wrapper (mesonbuild/scripts/rc.py) reads the compiler command with argparse, which takes a word that starts with
+    # - for an option of its own and gives it to rc.exe (RC1106: invalid option). A word that starts with / stays in
+    # the compiler command, and clang-cl reads the driver switch after /clang: the same way.
     if ($clangTools) {
-        $env:CC = $clangTools['clang-cl']
-        $env:CXX = $clangTools['clang-cl']
+        $env:CC = (@($clangTools['clang-cl']) + @($targetSwitch | Where-Object { $_ })) -join ' '
+        $env:CXX = $env:CC
+        $env:CL = $null
+        $env:_CL_ = $null
         $env:CC_LD = $clangTools['lld-link']
         $env:CXX_LD = $clangTools['lld-link']
         $env:AR = $clangTools['llvm-lib']
@@ -327,6 +346,27 @@ try {
         throw "meson recorded different options. Missing: $($missing -join ' ') Extra: $($extra -join ' ')"
     }
     Write-Host "configure gate: the Build Options line matches the $Config option set ($($options.Count) options)"
+
+    # Every compile command names the i686 target and the clang-cl x86 policy, and none removes the policy
+    # (Test-ClangX86Policy, common.ps1). The system directories of clang_x86_system_includes in mesa-configs.json are
+    # admitted and recorded, each in the source tree and in the build tree (meson gives an include_directories entry
+    # in both). So are the -I directories of llvm-config --cppflags of -Llvm: meson gives the include directories of
+    # the LLVM dependency as -isystem.
+    if ($clangTarget) {
+        $systemIncludes = @()
+        if ($configsFile.PSObject.Properties['clang_x86_system_includes']) {
+            $systemIncludes = @($configsFile.clang_x86_system_includes.paths |
+                ForEach-Object { (Join-Path $Source $_), (Join-Path $Build $_) })
+        }
+        if ($llvmConfig) {
+            $cppflags = & $llvmConfig --cppflags
+            if ($LASTEXITCODE -ne 0) { throw "$llvmConfig --cppflags exit $LASTEXITCODE" }
+            $systemIncludes += @(-split $cppflags | Where-Object { $_ -like '-I*' } | ForEach-Object { $_.Substring(2) })
+        }
+        $recipe.gate['x86_policy'] = Test-ClangX86Policy $Build $clangTarget $systemIncludes $targetSwitch
+        Write-Recipe $recipePath $recipe
+        Assert-ClangX86Policy $recipe.gate['x86_policy'] $Build
+    }
 
     if ($ConfigureOnly) { Write-Host "configured only: $Build (recipe: $recipePath)"; return }
 

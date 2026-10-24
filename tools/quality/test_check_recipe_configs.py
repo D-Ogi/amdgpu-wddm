@@ -41,7 +41,8 @@ RELEASE_UNGUARDED = "if ($forkFlavour -eq 'release') {"
 RELEASE_READ = "@($recipeConfig.release_options"
 SHIPS_GUARDED = "if ($recipeConfig.PSObject.Properties['ships'] -and"
 SHIPS_UNGUARDED = "if ($recipeConfig.ships -and"
-ANCHOR = "$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler"
+ANCHOR = ("$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler "
+          "-ClangTarget $clangTarget")
 FLAVOUR_PROBE = "-SimpleMatch \"'amdgpu-wddm-lab-flavour'\""
 # The stamp's lookup and read of the ships map, as one if; the nested form below must pass as well.
 SHIPS_BLOCK = re.compile(r"if \(\$recipeConfig\.PSObject\.Properties\['ships'\] -and "

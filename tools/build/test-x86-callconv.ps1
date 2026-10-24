@@ -81,12 +81,60 @@ try {
                 $checks++
             }
         }
+        # The compile-command gate of build-vkd3d.ps1 and build-mesa.ps1 (Test-ClangX86Policy, common.ps1): a command
+        # with the target and the policy passes; a command without the target or a switch, or with a switch that
+        # turns the policy off or makes a directory a system directory, is refused, except a system directory that
+        # the caller admits (the 'dep' directory of these cases); an empty database stops the build.
+        $switches = '/clang:-Werror=ignored-attributes /clang:-Werror=cast-calling-convention'
+        $full = "clang-cl.exe --target=i686-pc-windows-msvc /c $switches"
+        $gateCases = @(
+            @{ Name='policy'; Command="$full /Isrc a.c"; Refused=$false },
+            @{ Name='quoted'; Command="`"C:\llvm\clang-cl.exe`" --target=i686-pc-windows-msvc /clang:-Werror=ignored-attributes `"/clang:-Werror=cast-calling-convention`" a.c"; Refused=$false },
+            @{ Name='no-target'; Command="clang-cl.exe /c $switches a.c"; Refused=$true },
+            @{ Name='no-cast-switch'; Command='clang-cl.exe --target=i686-pc-windows-msvc /clang:-Werror=ignored-attributes a.c'; Refused=$true },
+            @{ Name='admitted-isystem'; Command="$full /clang:-isystemdep a.c"; Refused=$false; Admitted=1 },
+            @{ Name='admitted-external'; Command="$full /external:Idep\ a.c"; Refused=$false; Admitted=1 },
+            @{ Name='other-isystem'; Command="$full /clang:-isystemother a.c"; Refused=$true },
+            @{ Name='other-external'; Command="$full /external:Iother a.c"; Refused=$true },
+            @{ Name='imsvc'; Command="$full /imsvcother a.c"; Refused=$true },
+            @{ Name='split-isystem'; Command="$full -isystem dep a.c"; Refused=$true },
+            @{ Name='external-w0'; Command="$full /external:W0 a.c"; Refused=$true },
+            @{ Name='system-prefix'; Command="$full /clang:--system-header-prefix=dep a.c"; Refused=$true },
+            @{ Name='W0'; Command="$full /W0 a.c"; Refused=$true },
+            @{ Name='w'; Command="$full -w a.c"; Refused=$true },
+            @{ Name='wno-cast'; Command="$full /clang:-Wno-cast-calling-convention a.c"; Refused=$true },
+            @{ Name='wno-error-attr'; Command="$full -Wno-error=ignored-attributes a.c"; Refused=$true }
+        )
+        foreach ($case in $gateCases) {
+            $dir = Join-Path $OutputDir "policy-gate-$($case.Name)"
+            $null = New-Item -ItemType Directory -Force $dir
+            ConvertTo-Json -InputObject @([ordered]@{ directory = $dir; command = $case.Command; file = 'a.c' }) |
+                Set-Content -Encoding utf8 (Join-Path $dir 'compile_commands.json')
+            $gate = Test-ClangX86Policy $dir 'i686-pc-windows-msvc' @((Join-Path $dir 'dep'))
+            if ($gate.compile_commands -ne 1) { throw "policy gate $($case.Name): $($gate.compile_commands) commands read" }
+            if (($gate.refused.Count -gt 0) -ne $case.Refused) { throw "policy gate $($case.Name): refused [$($gate.refused -join '; ')]" }
+            $admitted = @($gate.system_includes.Values)[0]
+            $want = if ($case.ContainsKey('Admitted')) { $case.Admitted } else { 0 }
+            if ($admitted -ne $want) { throw "policy gate $($case.Name): the admitted directory counts $admitted commands, not $want" }
+            $stopped = $false
+            try { Assert-ClangX86Policy $gate $dir 6>$null } catch { $stopped = $true }
+            if ($stopped -ne $case.Refused) { throw "policy gate $($case.Name): Assert-ClangX86Policy stopped=$stopped" }
+            $checks++
+        }
+        $empty = Join-Path $OutputDir 'policy-gate-empty'
+        $null = New-Item -ItemType Directory -Force $empty
+        Set-Content -Encoding utf8 (Join-Path $empty 'compile_commands.json') '[]'
+        $stopped = $false
+        try { Assert-ClangX86Policy (Test-ClangX86Policy $empty 'i686-pc-windows-msvc') $empty 6>$null } catch { $stopped = $true }
+        if (-not $stopped) { throw 'policy gate: an empty compile_commands.json did not stop the build' }
+        $checks++
         # The same cases through the i686 clang-cl of the recipes. clang stops on its own where a calling convention
         # changes on a redeclaration; the two warnings of the policy stop a convention that clang ignores (on data)
         # and a cast of a function to a pointer of another convention. A convention after the * of a function
         # pointer is not a case for clang: it applies to the function type (MSVC ignores it, C4229, and gives
         # cdecl), which the code check below shows. A header in a system directory gets no warning, so the
-        # recipe refuses system directories (build-vkd3d.ps1); the control shows why.
+        # recipe refuses system directories that it does not admit by name (Test-ClangX86Policy); the control
+        # shows why.
         $clang = Join-Path $ClangToolchain 'bin\clang-cl.exe'
         if (-not (Test-Path -LiteralPath $clang)) { throw "$clang does not exist: -ClangToolchain takes the LLVM Windows toolchain of the recipes" }
         $target = '--target=i686-pc-windows-msvc'
