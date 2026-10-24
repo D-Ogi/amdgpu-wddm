@@ -230,6 +230,29 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
 static PDRIVER_OBJECT g_LabDriverObject;
 static ULONGLONG g_LabSeed, g_LabNonce;
 static NTSTATUS g_LabSeedRead = STATUS_OBJECT_NAME_NOT_FOUND;
+// BD-235 lab selector, the same way: PagingBoundaryMode (REG_DWORD, Parameters, read only at DriverEntry) picks what
+// the paging submit does before a submission whose 64-bit SDMA0 byte pointer would cross a multiple of 2^32 (gfx.c
+// GfxSdmaBoundaryLocked): 0 nothing (the release behaviour today), 1 pad with NOPs to the boundary, 2 re-seed the
+// idle queue to 0. Not a catalog setting: a lab arm swaps the KMD image only, and the installed catalog, its
+// identity and bc250kmd_cli stay those of the installed package.
+static ULONG g_LabBoundaryMode;
+
+static NTSTATUS LabQueryDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
+{
+    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)];
+    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    UNICODE_STRING name;
+    ULONG length = 0;
+    NTSTATUS status;
+
+    *Value = 0;
+    RtlInitUnicodeString(&name, Name);
+    status = ZwQueryValueKey(Key, &name, KeyValuePartialInformation, info, sizeof(buffer), &length);
+    if (!NT_SUCCESS(status)) return status;
+    if (info->Type != REG_DWORD || info->DataLength != sizeof(ULONG)) return STATUS_OBJECT_TYPE_MISMATCH;
+    RtlCopyMemory(Value, info->Data, sizeof(ULONG));
+    return STATUS_SUCCESS;
+}
 
 static NTSTATUS LabQueryQword(HANDLE Key, PCWSTR Name, _Out_ ULONGLONG* Value)
 {
@@ -252,7 +275,8 @@ static NTSTATUS LabQueryQword(HANDLE Key, PCWSTR Name, _Out_ ULONGLONG* Value)
 void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
 {
     HANDLE key;
-    NTSTATUS status, nonce;
+    NTSTATUS status, nonce, mode;
+    ULONG value;
 
     g_LabDriverObject = DriverObject;
     status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
@@ -263,7 +287,13 @@ void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
     }
     g_LabSeedRead = LabQueryQword(key, L"PagingRingStartBytes", &g_LabSeed);
     nonce = LabQueryQword(key, L"PagingRingStartNonce", &g_LabNonce);
+    mode = LabQueryDword(key, L"PagingBoundaryMode", &value);
     ZwClose(key);
+    if (mode != STATUS_OBJECT_NAME_NOT_FOUND) {
+        g_LabBoundaryMode = (NT_SUCCESS(mode) && value <= 2) ? value : 0;
+        GuardLog("lab: paging boundary mode %lu read (read only; value %lu, 0x%08X): 0 none, 1 pad, 2 reseed",
+                 g_LabBoundaryMode, value, mode);
+    }
     if (g_LabSeedRead == STATUS_OBJECT_NAME_NOT_FOUND) return;
     if (!NT_SUCCESS(g_LabSeedRead) || !NT_SUCCESS(nonce) || g_LabSeed == 0 || g_LabNonce == 0) {
         GuardLog("lab: paging ring start not used: seed 0x%llX (0x%08X), nonce 0x%llX (0x%08X); two nonzero REG_QWORDs "
@@ -326,6 +356,17 @@ ULONGLONG GuardLabCommitPagingRingStart(void)
     return seed;
 }
 #endif
+
+// BD-235: the paging submit's boundary strategy (gfx.c). The lab flavour takes the arm's selector; the release flavour
+// takes BC250_PAGING_BOUNDARY_RELEASE_MODE (bc250kmd.h).
+ULONG GuardPagingBoundaryMode(void)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return g_LabBoundaryMode;
+#else
+    return BC250_PAGING_BOUNDARY_RELEASE_MODE;
+#endif
+}
 
 // A one-shot gate: the value 1 is read and put back to 0 on disk before anything it opens has run, so a bugcheck
 // behind the gate cannot repeat itself at the next boot (E16 run 007 did, once). Any other value is left alone.

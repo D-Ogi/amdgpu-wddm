@@ -650,12 +650,19 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD unde
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
-// driver's Parameters key), read only in DriverEntry (PASSIVE_LEVEL); consumed once per nonce at StartDevice
+// driver's Parameters key) and PagingBoundaryMode (REG_DWORD), read only in DriverEntry (PASSIVE_LEVEL); the seed is
+// consumed once per nonce at StartDevice
 // through LabPagingRingStartNonce in the internal persistent state, written and flushed before the seed is used.
 void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 #endif
+// BD-235: what the paging submit does before a submission whose 64-bit SDMA0 byte pointer would cross a multiple of
+// 2^32 (gfx.c GfxSdmaBoundaryLocked). 0 nothing, 1 pad with NOPs up to the boundary, 2 re-seed the idle queue to 0.
+// The lab flavour reads PagingBoundaryMode (REG_DWORD, Parameters, read only in DriverEntry); the release flavour
+// uses this constant, which takes the mode the lab arm proves.
+#define BC250_PAGING_BOUNDARY_RELEASE_MODE 0u
+ULONG GuardPagingBoundaryMode(void);    // any IRQL: a value fixed at DriverEntry
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
