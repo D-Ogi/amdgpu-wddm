@@ -4158,7 +4158,8 @@ static void GfxLogPagingSubmit(_Inout_ BC250_GFX* Gfx, ULONG Dwords, ULONGLONG S
 // The SDMA0 ring does not track its read pointer (track_rptr false), so amdgpu_ring_alloc() cannot see unretired work
 // on it; the writers keep the room, and the pad needs it as much as the request. The writers of this ring, and why
 // none of the others has unretired work beside this path (driver/kmd/test/check_sdma0_writers.py holds the list,
-// their callers and the orders below; a change there fails the gate):
+// their callers, the admission decision and the orders below. It is a regex scan that fails closed on ring writes and
+// graph names outside the functions it parses, not a C parser, so a writer that it cannot see still needs review):
 // - this path: one submission at a time. PagingSubmitInFlight is claimed before Sdma0RingLock and stays set until
 //   the fence of the last submission arrives (GfxPagingFenceArrivedAccess), so when this path pads, no paging work is
 //   unretired, and its pad and request (pad < aligned request <= max_dw 1024) fit the 2048-dword ring;
@@ -4296,7 +4297,9 @@ static NTSTATUS GfxSubmitPagingAccess(_Inout_ BC250_DEVICE* Device, const void* 
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-235: one receipt at the first paging submission whose 64-bit byte write pointer crosses bit 31, one at
     // bit 32, with this submission as the pending one. Read after the doorbell: the engine may already be at it.
-    // Another SDMA0 writer (a lab escape) between two paging submissions is not seen here.
+    // Only paging submissions are measured. Under FullWddm no escape writes SDMA0 (display.c admission, gate
+    // sdma0-writers). The stage ring tests of a retained resume, which runs with paging closed, can move the
+    // pointer between two paging submissions, and a crossing that they make is not seen here.
     if (labBefore < (1ull << 31) && wptrBytes >= (1ull << 31) &&
         InterlockedCompareExchange(&GfxLabCrossed[0], 1, 0) == 0) {
         GuardLog("lab: sdma0 wptr crossed bit 31: 0x%llX -> 0x%llX bytes, seq %lu", labBefore, wptrBytes, seq);

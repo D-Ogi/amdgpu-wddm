@@ -17,15 +17,23 @@ path (bc250_ring.c, gfx.c GFX_BOUNDARY_NOTE). This check holds that property in 
    - GfxPowerRetainedLocked: writes SDMA0 (the ring tests of the stages) only on resume, when PowerSuspended has kept
      the paging path from admitting a submission since the suspend, and after GfxAccessClose has drained access.
    - GfxSubmitPaging: the paging path, one submission at a time (PagingSubmitInFlight until its fence retires).
-3. The orders those arguments need, in the source text:
+3. The admission decision of Bc250Escape is the pinned statement ADMISSION (the FullWddm test, the refused status and
+   the STATUS_DEVICE_BUSY return), once, at the top level of the function body, and no raw writer call comes before it.
+   escape-admission tests the table that WddmDiagnosticAllowed reads; this check holds the decision that uses it.
+4. The orders those arguments need, in the source text:
    - Bc250Escape calls no raw writer before the FullWddm admission check;
    - SdmaIbStartupControl refuses a published adapter before its first SdmaCopyEscape call;
    - GfxPowerRetainedLocked closes access before it runs a stage, and refuses a resume that is not suspended;
    - GfxSubmitPagingAccess claims PagingSubmitInFlight before it takes Sdma0RingLock.
-4. No preprocessor line names a function of this graph (a macro could add a path that the scan does not see).
+5. No preprocessor line names a function of this graph (a macro could add a path that the scan does not see).
+6. Fail closed outside the parsed functions: a ring write or an Sdma0RingLock acquisition that is in no parsed
+   definition (for example a function that is not written at column 0) is a finding, and so is a name of the graph
+   outside a parsed definition unless the statement only declares that function.
 
-A change to any of them fails here, so that the change comes with its own argument. Before the scan of the tree, five
-mutations of the real source must each fail with their own finding; that is the negative control.
+The scan reads the KMD's .c and .h files with regular expressions in the KMD's own style; it is not a C parser. It
+fails closed on the cases above, so that a change to them comes with its own argument. A writer that it cannot see at
+all (a ring reached through a pointer that no named function of the graph forms) still needs review. Before the scan
+of the tree, nine mutations of the real source must each fail with their own finding; that is the negative control.
 """
 from pathlib import Path
 import argparse
@@ -49,6 +57,9 @@ EDGES = {
     ('SdmaVaStartupControl', 'SdmaPteStartupControl'), ('g_Stages', 'StageSdma'),
 }
 RAW_CALLS = ('GfxEscape(', 'GfxFenceEscape(', 'SdmaCopyEscape(')
+# Bc250Escape's admission decision, comments removed and white space collapsed (display.c).
+ADMISSION = ('if (device->FullWddm && !WddmDiagnosticAllowed(data,Escape->PrivateDriverDataSize)) { '
+             'data->Status=BC250_ESCAPE_STATUS_REFUSED; return STATUS_DEVICE_BUSY; }')
 ORDERS = [
     ('Bc250Escape', 'device->FullWddm && !WddmDiagnosticAllowed(', RAW_CALLS),
     ('SdmaIbStartupControl', 'Device->Wddm != NULL', ('SdmaCopyEscape(',)),
@@ -73,11 +84,24 @@ def strip_strings(text):
     return re.sub(r'"(?:\\.|[^"\\])*"', '""', text)
 
 
+def declares(text, at, name):
+    """True when the file-scope statement around offset `at` only declares function `name` (a prototype, or a name
+    declared with a function typedef such as DXGKDDI_ESCAPE)."""
+    start = max(text.rfind(';', 0, at), text.rfind('}', 0, at), text.rfind('{', 0, at)) + 1
+    end = text.find(';', at)
+    if end < 0:
+        return False
+    statement = '\n'.join(l for l in text[start:end + 1].split('\n') if not l.lstrip().startswith('#'))
+    return re.fullmatch(r'\s*(?:[A-Za-z_]\w*[\s*]+)+' + name +
+                        r'\s*(?:\((?:[^;{}()]|\([^;{}()]*\))*\))?\s*;', statement) is not None
+
+
 def scan(sources):
     """sources: {file name: text}. Returns the findings, an empty list when the tree holds the property."""
-    nodes, defines = {}, []
+    nodes, defines, texts = {}, [], {}
     for name, raw in sources.items():
         text = strip_strings(strip_comments(raw))
+        spans = []
         defines += [(name, line) for line in text.split('\n') if line.lstrip().startswith('#')]
         for rx in (FN, TABLE):
             for m in rx.finditer(text):
@@ -85,6 +109,8 @@ def scan(sources):
                     continue
                 end = text.find('\n}', m.end())
                 nodes.setdefault(m.group(1), []).append(text[m.end() - 1:end + 2])
+                spans.append((m.start(), end + 2 if end >= 0 else len(text)))
+        texts[name] = (text, spans)
     findings = []
     writers = {n for n, bodies in nodes.items() if any(LOCK.search(b) for b in bodies)}
     if writers != WRITERS:
@@ -128,7 +154,39 @@ def scan(sources):
                 findings.append('%s: no "%s"' % (function, call))
             elif before < at:
                 findings.append('%s: "%s" before "%s"' % (function, call, first))
+    bodies = nodes.get('Bc250Escape', [])
+    if len(bodies) == 1:
+        flat = ' '.join(bodies[0].split())
+        at = flat.find(ADMISSION)
+        if flat.count(ADMISSION) != 1:
+            findings.append('Bc250Escape: the admission decision is not the pinned statement (%d copies)'
+                            % flat.count(ADMISSION))
+        elif flat[:at].count('{') - flat[:at].count('}') != 1:
+            findings.append('Bc250Escape: the admission decision is not at the top level of the function')
+        else:
+            early = [c for c in RAW_CALLS if flat.find(c) != -1 and flat.find(c) < at]
+            if early:
+                findings.append('Bc250Escape: %s before the admission decision' % early)
     graph = seen | {c for e in EDGES for c in e}
+    named = re.compile(r'\b(?:%s)\b' % '|'.join(sorted(graph | WRITERS | HELPERS)))
+    for name, (text, spans) in sorted(texts.items()):
+        def outside(at):
+            return not any(a <= at < b for a, b in spans)
+
+        def where(at):
+            line = text.count('\n', 0, at) + 1
+            return '%s:%d: %s' % (name, line, text.split('\n')[line - 1].strip()[:100])
+        for rx, what in ((RING_WRITE, 'a ring write'), (LOCK, 'an Sdma0RingLock acquisition')):
+            for m in rx.finditer(text):
+                if outside(m.start()):
+                    findings.append('%s outside a parsed function: %s' % (what, where(m.start())))
+        for m in named.finditer(text):
+            line_start = text.rfind('\n', 0, m.start()) + 1
+            if text[line_start:m.start()].lstrip().startswith('#') or not outside(m.start()):
+                continue                    # preprocessor lines have their own rule (5)
+            if not declares(text, m.start(), m.group(0)):
+                findings.append('%s named outside a parsed function, not a declaration: %s'
+                                % (m.group(0), where(m.start())))
     for name, line in defines:
         counted = re.sub(r'\b(?:RTL_NUMBER_OF|sizeof)\s*\(\s*\w+\s*\)', '', line)   # a size is not a path
         hit = sorted(set(IDENT.findall(counted)) & graph)
@@ -150,7 +208,9 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--source', type=Path, default=Path(__file__).resolve().parents[1])
     a = p.parse_args()
-    sources = {f.name: f.read_text(encoding='utf-8', errors='replace') for f in sorted(a.source.glob('*.c'))}
+    files = sorted(list(a.source.glob('*.c')) + list(a.source.glob('*.h')))
+    sources = {f.name: f.read_text(encoding='utf-8', errors='replace') for f in files}
+    guard = 'if (device->FullWddm && !WddmDiagnosticAllowed(data,Escape->PrivateDriverDataSize)) {'
     escape = 'device->FullWddm && !WddmDiagnosticAllowed('
     controls = [
         ('a new writer of the ring', 'writers of SDMA0',
@@ -174,6 +234,16 @@ def main():
          mutate(sources, 'gfx.c', 'static BOOLEAN GfxPagingSubmitReadyAccess(',
                 'static int LabUnlockedWrite(struct amdgpu_ring* ring)\n{\n    return amdgpu_ring_alloc(ring, 16);\n}\n\n'
                 'static BOOLEAN GfxPagingSubmitReadyAccess(')),
+        ('the admission decision disabled', 'Bc250Escape: the admission decision is not the pinned statement',
+         mutate(sources, 'display.c', guard, guard.replace(')) {', ') && 0) {'))),
+        ('the admission refusal without its return', 'Bc250Escape: the admission decision is not the pinned statement',
+         mutate(sources, 'display.c', '        return STATUS_DEVICE_BUSY;\n    }\n    if (data->Command == BC250_ESCAPE_OBSERVE_DCN)',
+                '    }\n    if (data->Command == BC250_ESCAPE_OBSERVE_DCN)')),
+        ('an indented definition that writes the ring', 'a ring write outside a parsed function',
+         dict(sources, **{'gfx.c': sources['gfx.c'] + '\n static int LabUnseenWriter(struct amdgpu_ring* ring)\n {\n'
+                                                     '    return amdgpu_ring_alloc(ring, 16);\n }\n'})),
+        ('a writer taken as a value at file scope', 'SdmaCopyEscape named outside a parsed function',
+         dict(sources, **{'gfx.c': sources['gfx.c'] + '\nstatic void* g_LabHidden = (void*)SdmaCopyEscape;\n'})),
     ]
     assert escape in sources['display.c']
     bad = 0
@@ -187,8 +257,8 @@ def main():
     findings = scan(sources)
     for f in findings:
         print('FAIL ' + f)
-    print('SDMA0 writers: %d writers, %d paths, %d orders; %d findings, %d control failures'
-          % (len(WRITERS), len(EDGES), len(ORDERS), len(findings), bad))
+    print('SDMA0 writers: %d writers, %d paths, %d orders, 1 admission decision, %d controls; %d findings, '
+          '%d control failures' % (len(WRITERS), len(EDGES), len(ORDERS), len(controls), len(findings), bad))
     return 1 if findings or bad else 0
 
 

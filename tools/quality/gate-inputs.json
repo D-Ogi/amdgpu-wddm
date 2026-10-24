@@ -387,6 +387,11 @@
         "host"
       ]
     },
+    "host-native": {
+      "inputs": [
+        "host"
+      ]
+    },
     "escape-admission": {
       "inputs": [
         "host",

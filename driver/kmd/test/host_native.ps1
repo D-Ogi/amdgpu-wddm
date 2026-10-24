@@ -3,9 +3,11 @@
 #   Reporting and critical-error dialogs (SetErrorMode is inherited by child processes).
 # - It runs for at most -TimeoutSeconds. On the deadline the process tree is stopped and the call throws.
 # - The output is kept in -Log. The run counts only with exactly one summary line that matches -Summary, whose
-#   groups 'checks' and 'failures' are numbers, and the FAIL lines must equal the failures in it. Otherwise it throws.
-# A crash, a deadline or a missing summary is therefore never a test result: a negative control that ends that way is
-# an invalid control, not a pass.
+#   groups 'checks' and 'failures' are numbers, and the FAIL lines must equal the failures in it. The exit code must be
+#   exactly 0 with no failures and exactly 1 with failures (the CHECK convention of these tests). Otherwise it throws.
+# A crash, a deadline, another exit code or a missing summary is therefore never a test result: a negative control
+# that ends that way is an invalid control, not a pass. test_host_native.ps1 (gate host-native) checks these rules
+# with child fixtures.
 if (-not ('Bc250HostErrorMode' -as [type])) {
     Add-Type -TypeDefinition @'
 using System.Runtime.InteropServices;
@@ -15,11 +17,13 @@ public static class Bc250HostErrorMode {
 '@
 }
 
-function Invoke-HostTest([string]$Exe, [string]$Log, [string]$Summary, [int]$TimeoutSeconds = 60) {
+function Invoke-HostTest([string]$Exe, [string]$Log, [string]$Summary, [int]$TimeoutSeconds = 60,
+                         [string[]]$Arguments = @()) {
     # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX, for this process and its children.
     $before = [Bc250HostErrorMode]::SetErrorMode(0x8003)
     try {
         $psi = [Diagnostics.ProcessStartInfo]::new($Exe)
+        foreach ($a in $Arguments) { $psi.ArgumentList.Add($a) }
         $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
         $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
         $p = [Diagnostics.Process]::Start($psi)
@@ -42,6 +46,7 @@ function Invoke-HostTest([string]$Exe, [string]$Log, [string]$Summary, [int]$Tim
     $checks = [int]$found[0]['checks']; $failures = [int]$found[0]['failures']
     $failLines = @($lines -match '^FAIL').Count
     if ($failures -ne $failLines) { throw "$(Split-Path -Leaf $Exe): summary says $failures failures, $failLines FAIL lines" }
-    if (($failures -eq 0) -ne ($code -eq 0)) { throw "$(Split-Path -Leaf $Exe): exit code $code with $failures failures" }
+    $want = if ($failures -eq 0) { 0 } else { 1 }
+    if ($code -ne $want) { throw "$(Split-Path -Leaf $Exe): exit code $code with $failures failures, $want expected" }
     return [pscustomobject]@{ Code = $code; Checks = $checks; Failures = $failures }
 }

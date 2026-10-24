@@ -275,6 +275,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
 Check 'paging-ddi-status' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status" }
 Check 'paging-ddi-status-refusal-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-refusal-success" -Mutation refusal-success }
 Check 'paging-ddi-status-pending-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-pending-success" -Mutation pending-success }
+# BD-235: the rules of the bounded host test runner (host_native.ps1) with child fixtures: exit 0 or 1 to go with the
+# summary, one summary, the FAIL count, the deadline.
+Check 'host-native' { & pwsh -NoProfile -File "$repo\driver\kmd\test\test_host_native.ps1" -Root $Workspace -Out "$Out\host-native" }
 # BD-235: the BuildPagingBuffer statuses through wddm.c's own DDI code, and three negative controls (the rules before Q3
 # and Q3a).
 Check 'paging-build' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build" }

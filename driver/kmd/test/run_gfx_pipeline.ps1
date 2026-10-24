@@ -69,12 +69,17 @@ if(!$KmdOnly){
     & $cl @flags "/Fe$Out\gather_test.exe" "$PSScriptRoot\gfx_gather_test.c" @link
     if($LASTEXITCODE -ne 0){throw 'gather test build failed'}
 }
-# Every program runs bounded and windowless and counts only with its summary line (host_native.ps1). A negative control
-# must fail by exactly the CHECK failures pinned for it here, in each program; a crash, a deadline, a build error or
-# another count is an invalid control and fails the gate. The gather control is not pinned: no Mesa tree is checked
-# out with this gate (-KmdOnly), so it needs only a failure of the gather test.
+# Every program runs bounded and windowless and counts only with its summary line and the exit code 0 or 1 that goes
+# with it (host_native.ps1). Each control pins its CHECK failures as (ring test, pipeline test): EqualityFence @(2,53) is
+# 2 failures of the ring test and 53 of the pipeline test. A crash, a deadline, a build error or another count is an
+# invalid control and fails the gate. Every run, positive or control, must also complete at least the checks of the
+# positive run (MinChecks), so that a program that stops early is not a result. SerializeGather pins no count: it needs
+# a Mesa tree (not -KmdOnly) and a failure of the gather test alone, with the ring and pipeline tests clean.
 . "$PSScriptRoot\host_native.ps1"
 $controls=[ordered]@{WithoutCapacity=@(3,0);WithoutBoundaryPad=@(15,0);WithoutPadCapacity=@(4,0);EqualityFence=@(2,53);IdleOnlyPresent=@(0,46);SerializeGather=@(0,0)}
+# The checks of the positive run (2026-10-24): ring 10066, pipeline 2674. A control may run more (a failing
+# wait loops longer: EqualityFence 4529, IdleOnlyPresent 28009 pipeline checks), never fewer.
+$minChecks=@{Ring=10066;Pipeline=2674}
 $chosen=@($controls.Keys | Where-Object { $PSBoundParameters.ContainsKey($_) })
 if($chosen.Count -gt 1){throw "one negative control at a time: $($chosen -join ', ')"}
 $ring=Invoke-HostTest "$Out\ring_test.exe" "$Out\ring_test.log" '^GFX ring capacity/fence order: (?<checks>\d+) checks, (?<failures>\d+) failures$'
@@ -82,6 +87,9 @@ $queue=Invoke-HostTest "$Out\pipeline_test.exe" "$Out\pipeline_test.log" '^GFX W
 $gather=$null
 if(!$KmdOnly){$gather=Invoke-HostTest "$Out\gather_test.exe" "$Out\gather_test.log" '^RADV actual gather selection/retirement: (?<checks>\d+) checks, (?<failures>\d+) failures$'}
 $gatherFailures=if($gather){$gather.Failures}else{0}
+if($ring.Checks -lt $minChecks.Ring -or $queue.Checks -lt $minChecks.Pipeline){
+    throw "incomplete run: ring $($ring.Checks) checks (at least $($minChecks.Ring)), pipeline $($queue.Checks) checks (at least $($minChecks.Pipeline))"
+}
 if($chosen.Count -eq 0){
     if($ring.Failures -or $queue.Failures -or $gatherFailures){exit 1}
     exit 0
