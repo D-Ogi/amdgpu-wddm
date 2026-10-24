@@ -154,6 +154,14 @@ NAMED = [("NBIO", "mmRCC_DEV0_EPF0_RCC_CONFIG_MEMSIZE"), ("GC", "mmSCRATCH_REG0"
          ("GC", "mmCP_STAT"), ("GC", "mmCP_BUSY_STAT"),
          ("GC", "mmCP_STALLED_STAT1"), ("GC", "mmCP_STALLED_STAT2"), ("GC", "mmCP_STALLED_STAT3"),
          ("GC", "mmCP_CPF_STATUS"), ("GC", "mmGRBM_STATUS_SE0"),
+         # BD-235, wddm.c (lab flavour only): the paging SDMA's queue and status, read once when the paging deadline
+         # passes (read only; all of them are on the READ_REG list already). SDMA0_STATUS_REG and the GCVM fault
+         # latch are named above.
+         ("GC", "mmSDMA0_GFX_RB_RPTR"), ("GC", "mmSDMA0_GFX_RB_RPTR_HI"),
+         ("GC", "mmSDMA0_GFX_RB_WPTR"), ("GC", "mmSDMA0_GFX_RB_WPTR_HI"),
+         ("GC", "mmSDMA0_GFX_IB_BASE_LO"), ("GC", "mmSDMA0_GFX_IB_BASE_HI"), ("GC", "mmSDMA0_GFX_IB_OFFSET"),
+         ("GC", "mmSDMA0_GFX_IB_RPTR"), ("GC", "mmSDMA0_GFX_IB_SIZE"), ("GC", "mmSDMA0_GFX_CONTEXT_STATUS"),
+         ("GC", "mmSDMA0_STATUS1_REG"),
          # ih.c: what the DPC may touch (navi10_ih_get_wptr's overflow clear, navi10_ih_set_rptr without a doorbell)
          ("OSSSYS", "mmIH_RB_CNTL"), ("OSSSYS", "mmIH_RB_RPTR"), ("OSSSYS", "mmIH_RB_WPTR"), ("OSSSYS", "mmIH_STATUS"),
          # dcn.c: the eight registers its decoded summary reads by name (ADR 0011 point 3), out of the 75 on

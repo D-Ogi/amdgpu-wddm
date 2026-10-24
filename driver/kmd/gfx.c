@@ -2756,6 +2756,30 @@ static BOOLEAN GfxPagingFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG S
     return TRUE;
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-235 (lab flavour only): the two paging slots of the fence page, as the CPU sees them now, for the paging timeout
+// snapshot (wddm.c). The fence slot holds the last paging sequence that the SDMA completed. The marker slot holds the
+// value of the last fence/poll barrier of the update and copy packets (bc250_sdma_paging.c PagingPipelineSync), or the
+// 0 that GfxSubmitPaging writes before it starts a submission.
+BOOLEAN GfxPagingSlots(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Fence, _Out_ ULONG* Marker)
+{
+    BC250_GFX* gfx;
+    BOOLEAN result = FALSE;
+
+    *Fence = 0;
+    *Marker = 0;
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx != NULL && gfx->PagingDevicePtr != NULL) {
+        *Fence = (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT);
+        *Marker = (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_MARKER_SLOT);
+        result = TRUE;
+    }
+    GfxAccessRelease(Device);
+    return result;
+}
+#endif
+
 BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
 {
     BOOLEAN result;

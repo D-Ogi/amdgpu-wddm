@@ -1229,6 +1229,10 @@ NTSTATUS GfxSubmitPaging(_Inout_ BC250_DEVICE* Device, const void* PrivateData, 
 //   GfxSubmitReady/GfxSubmitFail above, same contracts, independent state (node 0 failing does not fail node 1
 //   and vice versa - the two nodes fail on their own hardware).
 BOOLEAN GfxPagingFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-235, lab flavour only: the paging fence and marker slots, for the paging timeout snapshot. FALSE without a device.
+BOOLEAN GfxPagingSlots(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Fence, _Out_ ULONG* Marker);
+#endif
 BOOLEAN GfxPagingSubmitReady(_In_ const BC250_DEVICE* Device);
 void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device);
 // Whether the paging node is enabled at all this device start (EnablePagingNode, read once at GfxStart): the

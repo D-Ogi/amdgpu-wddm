@@ -318,6 +318,16 @@
         "host"
       ]
     },
+    "paging-ddi-status": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "paging-ddi-status-refusal-passthrough": {
+      "inputs": [
+        "host"
+      ]
+    },
     "ih-consume": {
       "inputs": [
         "host"

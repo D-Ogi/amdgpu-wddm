@@ -23,6 +23,7 @@
 #include "submit_watchdog.h"     // BD-114: the private submit watchdog's budget, its progress window and its stamps
 #include "gfx_copy.h"
 #include "paging_private.h"
+#include "paging_ddi_status.h"   // BD-235: the statuses that BuildPagingBuffer may give to the OS
 #include "paging_drain.h"
 #include "object_index.h"
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
@@ -486,6 +487,11 @@ typedef struct _BC250_WDDM {
     volatile LONG64 PagingXferBytes[BC250WddmXferKinds];
     volatile LONG PagingInsufficientBuffer;
     volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
+    // BD-235: builds whose status the DDI does not permit (reported to the OS as success), and GPU page table
+    // updates or TLB flushes that a builder refused with no BC250_WDDM_PAGING_UNSUPPORTED reason.
+    volatile LONG PagingContractRefusals;
+    volatile LONG PagingContractLastStatus, PagingContractLastOperation;
+    volatile LONG PagingSilentRefusals;
     // Per-buffer private data owns commands; these counters track node routing only.
     volatile LONG PagingVirtualSubmits[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG PagingVirtualUnmapped;
@@ -2102,6 +2108,58 @@ void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device)
     ProgressExit(ProgressSitePagingDrain,(LONG)exitReason);
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-235 (lab flavour only): what the paging SDMA held when the paging deadline passed. In BD-235 the paging fence
+// stopped for 12 s and the log had only its number. Read only, at DISPATCH_LEVEL in the paging watchdog DPC,
+// outside wddm->Lock, once per start (PagingDiagnosticTaken). All registers are on the READ_REG list, and none of
+// them is banked by GRBM_GFX_INDEX, so no wave capture admission is needed.
+//   - The SDMA0 GFX queue carries the paging ring. RB_RPTR/WPTR are byte offsets in the ring; IB_BASE, IB_OFFSET,
+//     IB_RPTR and IB_SIZE describe the IB that the engine fetches now, which need not be the stopped submission.
+//   - The marker slot is the value of the last fence/poll barrier. A ring stopped on that poll shows a marker that
+//     differs from the value the poll waits for.
+static void WddmPagingTimeoutSnapshot(_Inout_ BC250_DEVICE* Device, ULONG Seq, UINT Fence)
+{
+    static const struct { const char* Name; ULONG Offset; } registers[] = {
+        { "SDMA0_RB_RPTR", BC250_REG_GC_SDMA0_GFX_RB_RPTR }, { "SDMA0_RB_RPTR_HI", BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI },
+        { "SDMA0_RB_WPTR", BC250_REG_GC_SDMA0_GFX_RB_WPTR }, { "SDMA0_RB_WPTR_HI", BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI },
+        { "SDMA0_IB_BASE_LO", BC250_REG_GC_SDMA0_GFX_IB_BASE_LO },
+        { "SDMA0_IB_BASE_HI", BC250_REG_GC_SDMA0_GFX_IB_BASE_HI },
+        { "SDMA0_IB_OFFSET", BC250_REG_GC_SDMA0_GFX_IB_OFFSET }, { "SDMA0_IB_RPTR", BC250_REG_GC_SDMA0_GFX_IB_RPTR },
+        { "SDMA0_IB_SIZE", BC250_REG_GC_SDMA0_GFX_IB_SIZE },
+        { "SDMA0_CONTEXT_STATUS", BC250_REG_GC_SDMA0_GFX_CONTEXT_STATUS },
+        { "SDMA0_STATUS", BC250_REG_GC_SDMA0_STATUS_REG }, { "SDMA0_STATUS1", BC250_REG_GC_SDMA0_STATUS1_REG },
+        { "GCVM_FAULT_STATUS", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_STATUS },
+        { "GCVM_FAULT_ADDR_LO32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_LO32 },
+        { "GCVM_FAULT_ADDR_HI32", BC250_REG_GC_GCVM_L2_PROTECTION_FAULT_ADDR_HI32 },
+    };
+    // 15 registers, three to a line: five lines, once per start.
+    ULONG values[15];
+    ULONG i, refused = 0, status, fenceSlot, markerSlot;
+    ULONGLONG page;
+    BOOLEAN slots;
+
+    C_ASSERT(RTL_NUMBER_OF(registers) == RTL_NUMBER_OF(values));
+    C_ASSERT(RTL_NUMBER_OF(values) % 3 == 0);
+    for (i = 0; i < RTL_NUMBER_OF(values); i++)
+        if (!NT_SUCCESS(MmioRead(Device, registers[i].Offset, &values[i]))) { values[i] = 0; refused++; }
+    slots = GfxPagingSlots(Device, &fenceSlot, &markerSlot);
+    for (i = 0; i < RTL_NUMBER_OF(values); i += 3)
+        GuardLog("wddm: paging timeout %s 0x%08X %s 0x%08X %s 0x%08X",
+                 registers[i].Name, values[i], registers[i + 1].Name, values[i + 1],
+                 registers[i + 2].Name, values[i + 2]);
+    // The fault latch, decoded as in WddmTimeoutSnapshot: ADDR_LO32/HI32 hold the page frame.
+    status = values[12];
+    page = (((ULONGLONG)values[14] << 32) | values[13]) << 12;
+    GuardLog("wddm: paging timeout fault cid %lu %s vmid %lu rw %lu page 0x%llX, %lu refused",
+             BC250_GCVM_FAULT_CID(status), Bc250GfxhubClientName(BC250_GCVM_FAULT_CID(status)),
+             BC250_GCVM_FAULT_VMID(status), BC250_GCVM_FAULT_RW(status), page, refused);
+    if (slots)
+        GuardLog("wddm: paging timeout seq %lu fence %u: fence slot 0x%08X, marker slot 0x%08X",
+                 Seq, Fence, fenceSlot, markerSlot);
+    else GuardLog("wddm: paging timeout seq %lu: fence and marker slots not readable", Seq);
+}
+#endif
+
 static KDEFERRED_ROUTINE WddmPagingSubmitDpcRoutine;
 static KDEFERRED_ROUTINE WddmPagingSubmitDpcCheck;
 static void WddmPagingSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In_opt_ PVOID Arg1, _In_opt_ PVOID Arg2)
@@ -2136,6 +2194,9 @@ static void WddmPagingSubmitDpcCheck(_In_ KDPC* Dpc, _In_opt_ PVOID Context, _In
     InterlockedIncrement(&wddm->PagingHwTimeouts);
     GuardLog("wddm: paging diagnostic v2 after %lu ms (sequence %u): fence %u pending, admission unchanged",
              wddm->SubmitBudgetMs, seq, fence);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    WddmPagingTimeoutSnapshot(device, seq, fence);   // BD-235: the SDMA state at the deadline
+#endif
     // No completion report for a fence that has not arrived.
 }
 
@@ -2965,6 +3026,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingDmaLastRoot,Wddm->PagingDmaLastPa,Wddm->PagingDmaLastCpu);
     GuardLog("wddm summary: BuildPagingBuffer: %ld transfers, %ld fills, %lld bytes, %ld insufficient-buffer",
              Wddm->PagingTransfersBuilt, Wddm->PagingFillsBuilt, Wddm->PagingBytesMoved, Wddm->PagingInsufficientBuffer);
+    GuardLog("wddm summary: BuildPagingBuffer: %ld statuses outside the DDI (last op%ld 0x%08lX), %ld silent refusals",
+             Wddm->PagingContractRefusals, Wddm->PagingContractLastOperation,
+             (ULONG)Wddm->PagingContractLastStatus, Wddm->PagingSilentRefusals);
     // BC250_LOG_TEXT is 160 bytes: count/bytes pairs keep realistic values (6-digit counts, 11-digit bytes) in one line.
     GuardLog("wddm summary: virtual transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld",
              Wddm->PagingXferCount[BC250WddmXferVirtualToSystem], Wddm->PagingXferBytes[BC250WddmXferVirtualToSystem],
@@ -6487,6 +6551,17 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         {
             InterlockedIncrement(&wddm->PagingUnsupported[unsupported]);
         }
+        else if (!NT_SUCCESS(pagingStatus) && pagingStatus != STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
+        {
+            // BD-235: an encoding, MC range or SDMA helper refusal. The OS still gets success below, and VidMm
+            // takes the entries as written: a later fill or transfer through them cannot translate.
+            LONG n = InterlockedIncrement(&wddm->PagingSilentRefusals);
+            if (n <= 16)
+                GuardLog("wddm: *** paging %s refused 0x%08X, nothing written (level %u start %u of %u #%ld) ***",
+                         update ? "update" : "flush", (ULONG)pagingStatus,
+                         update ? (ULONG)pBuildPagingBuffer->UpdatePageTable.PageTableLevel : 0u, startByte,
+                         update ? (ULONG)pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries : 0u, n);
+        }
         pBuildPagingBuffer->MultipassOffset = nextByte;
         if (pagingStatus == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
         {
@@ -6503,8 +6578,9 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
 static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGBUFFER* Build)
 {
     BC250_WDDM* wddm=WddmOf(hAdapter);
-    NTSTATUS status;
-    if (!wddm) return WddmBuildPagingBufferImpl(hAdapter,Build);
+    NTSTATUS status,built;
+    int refused;
+    if (!wddm) return (NTSTATUS)PagingDdiStatus(WddmBuildPagingBufferImpl(hAdapter,Build),&refused);
     ProgressEnterInput(ProgressSiteBuildPagingBuffer,(LONG)Build->Operation); // before the lock: a wait counts as inside
     KeEnterCriticalRegion();ExAcquirePushLockExclusive(&wddm->PagingBuildLock);
     if (Build->DmaBufferGpuVirtualAddress) {
@@ -6527,7 +6603,23 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGB
                 mapped && system && pa==cpu,Build->DmaBufferWriteOffset);
         }
     } else InterlockedIncrement64(&wddm->PagingDmaZeroVaBuilds);
-    status=WddmBuildPagingBufferImpl(hAdapter,Build);
+    built=WddmBuildPagingBufferImpl(hAdapter,Build);
+    // BD-235: a builder refusal that is not "out of space" stopped the machine (bug check 0x10E/0xB). The records
+    // published before the refusal are complete; the OS gets success for them, and the refusal is counted and
+    // logged here, the one place that sees every operation.
+    status=(NTSTATUS)PagingDdiStatus(built,&refused);
+    if (refused) {
+        LONG n=InterlockedIncrement(&wddm->PagingContractRefusals);
+        InterlockedExchange(&wddm->PagingContractLastStatus,(LONG)built);
+        InterlockedExchange(&wddm->PagingContractLastOperation,(LONG)Build->Operation);
+        if (n<=16)
+            GuardLog("wddm: *** paging build op%u status 0x%08X outside the DDI, sent as success (offset %u dma %u #%ld) ***",
+                     (ULONG)Build->Operation,(ULONG)built,Build->MultipassOffset,Build->DmaSize,n);
+        if (n<=16 && Build->Operation==DXGK_OPERATION_VIRTUAL_FILL)
+            GuardLog("wddm: *** the fill: VA 0x%llX bytes 0x%llX allocation %p ***",
+                     (ULONGLONG)Build->FillVirtual.DestinationVirtualAddress,
+                     (ULONGLONG)Build->FillVirtual.FillSizeInBytes,Build->FillVirtual.hAllocation);
+    }
     ExReleasePushLockExclusive(&wddm->PagingBuildLock);KeLeaveCriticalRegion();
     ProgressExit(ProgressSiteBuildPagingBuffer,(LONG)Build->Operation);
     return status;
