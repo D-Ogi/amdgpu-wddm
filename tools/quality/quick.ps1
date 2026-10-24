@@ -275,6 +275,10 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
 Check 'paging-ddi-status' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status" }
 Check 'paging-ddi-status-refusal-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-refusal-success" -Mutation refusal-success }
 Check 'paging-ddi-status-pending-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-pending-success" -Mutation pending-success }
+# BD-235: the BuildPagingBuffer statuses through wddm.c's own DDI code, and two negative controls (the rules before Q3).
+Check 'paging-build' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build" }
+Check 'paging-build-absorb-inner-failure' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-absorb-inner-failure" -Mutation absorb-inner-failure }
+Check 'paging-build-cpu-virtual-ignore' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_build.ps1" -Root $Workspace -Out "$Out\paging-build-cpu-virtual-ignore" -Mutation cpu-virtual-ignore }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
  Check 'dpm' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm" -Kits "$Kits" }
  Check 'cpu' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_cpu.ps1" -Out "$Out\cpu" -Kits "$Kits" }

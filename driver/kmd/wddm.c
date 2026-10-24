@@ -487,11 +487,12 @@ typedef struct _BC250_WDDM {
     volatile LONG64 PagingXferBytes[BC250WddmXferKinds];
     volatile LONG PagingInsufficientBuffer;
     volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
-    // BD-235: builds whose status the DDI does not permit (never reported to the OS as success), and GPU page table
-    // updates or TLB flushes that a builder refused with no BC250_WDDM_PAGING_UNSUPPORTED reason.
+    // BD-235: builds whose status the DDI does not permit (never reported to the OS as success), and page table
+    // updates or TLB flushes whose builder failed (each of them goes to the OS as that failure; a failure with a
+    // BC250_WDDM_PAGING_UNSUPPORTED reason is also counted in PagingUnsupported).
     volatile LONG PagingContractRefusals;
     volatile LONG PagingContractLastStatus, PagingContractLastOperation;
-    volatile LONG PagingSilentRefusals;
+    volatile LONG PagingInnerFailures;
     // Per-buffer private data owns commands; these counters track node routing only.
     volatile LONG PagingVirtualSubmits[BC250_WDDM_NODE_COUNT_MAX];
     volatile LONG PagingVirtualUnmapped;
@@ -3060,9 +3061,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
              Wddm->PagingDmaLastRoot,Wddm->PagingDmaLastPa,Wddm->PagingDmaLastCpu);
     GuardLog("wddm summary: BuildPagingBuffer: %ld transfers, %ld fills, %lld bytes, %ld insufficient-buffer",
              Wddm->PagingTransfersBuilt, Wddm->PagingFillsBuilt, Wddm->PagingBytesMoved, Wddm->PagingInsufficientBuffer);
-    GuardLog("wddm summary: BuildPagingBuffer: %ld statuses outside the DDI (last op%ld 0x%08lX), %ld silent refusals",
+    GuardLog("wddm summary: BuildPagingBuffer: %ld statuses outside the DDI (last op%ld 0x%08lX), %ld inner failures",
              Wddm->PagingContractRefusals, Wddm->PagingContractLastOperation,
-             (ULONG)Wddm->PagingContractLastStatus, Wddm->PagingSilentRefusals);
+             (ULONG)Wddm->PagingContractLastStatus, Wddm->PagingInnerFailures);
     // BC250_LOG_TEXT is 160 bytes: count/bytes pairs keep realistic values (6-digit counts, 11-digit bytes) in one line.
     GuardLog("wddm summary: virtual transfers (count/bytes) to system %ld/%lld, from system %ld/%lld, other %ld/%lld",
              Wddm->PagingXferCount[BC250WddmXferVirtualToSystem], Wddm->PagingXferBytes[BC250WddmXferVirtualToSystem],
@@ -6519,11 +6520,23 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
     }
     // Paging-process CPU_VIRTUAL initialization must be immediate, including when
     // pDmaBuffer is NULL. GPU_PHYSICAL updates use the ordered path below.
+    // BD-235: the journal records the update only when VidMmUpdatePageTable made it. It checks every entry before it
+    // writes one, so a failure leaves the table as it was; the failure goes to the OS (Bc250WddmBuildPagingBuffer).
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE &&
         pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_CPU_VIRTUAL) {
-        VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);
+        NTSTATUS status=VidMmUpdatePageTable(&pBuildPagingBuffer->UpdatePageTable);
+        if (status != STATUS_SUCCESS) {
+            LONG n = InterlockedIncrement(&wddm->PagingInnerFailures);
+            if (n <= 16)
+                GuardLog("wddm: *** paging CPU update failed 0x%08X, not recorded (level %u start %u count %u #%ld) ***",
+                         (ULONG)status,(ULONG)pBuildPagingBuffer->UpdatePageTable.PageTableLevel,
+                         (ULONG)pBuildPagingBuffer->UpdatePageTable.StartIndex,
+                         (ULONG)pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries,n);
+            return status;
+        }
         PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,0,pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries,
                             0,TRUE);
+        return STATUS_SUCCESS;
     }
 
     if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_COPY_PAGE_TABLE_ENTRIES) {
@@ -6535,7 +6548,7 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
         return WddmBuildPagingCopies((BC250_DEVICE*)hAdapter,context ? context->RootPhysical : 0,pBuildPagingBuffer);
     }
 
-    // Remaining GPU update/flush helpers retain the audited bootstrap/error policy.
+    // GPU_PHYSICAL updates and FLUSH_TLB: a builder status is a result (published) or a failure (returned), below.
     if (wddm != NULL && (pBuildPagingBuffer->Operation == DXGK_OPERATION_FLUSH_TLB ||
                          (pBuildPagingBuffer->Operation == DXGK_OPERATION_UPDATE_PAGE_TABLE &&
                           pBuildPagingBuffer->UpdatePageTable.UpdateMode == DXGK_PAGETABLEUPDATE_GPU_PHYSICAL)))
@@ -6568,6 +6581,25 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
                 (PUCHAR)record+PAGING_PRIVATE_HEADER_BYTES,pBuildPagingBuffer->DmaBufferWriteOffset,
                 dmaFree,&written,&unsupported);
         }
+        // BD-235: SUCCESS and INSUFFICIENT_DMA_BUFFER are the only results of this branch. Any other status is a
+        // failure of the builder (not ready, an encoding, MC range or SDMA helper refusal, or a status that is not a
+        // result at all): nothing of this call is published or journalled, the multipass position stays where the
+        // last published slice left it, and the status goes to Bc250WddmBuildPagingBuffer, which gives a failure to
+        // the OS unchanged (paging_ddi_status.h). The OS then stops the system; before, it got success and took
+        // entries that nothing wrote. A SUCCESS with no command words is a result: the CPU bootstrap update writes the
+        // table itself (GfxPagingBuildUpdate), and a flush with no VMID to invalidate has nothing to do.
+        if (pagingStatus != STATUS_SUCCESS && pagingStatus != STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
+        {
+            LONG n = InterlockedIncrement(&wddm->PagingInnerFailures);
+            if (unsupported > BC250PagingSupported && (ULONG)unsupported < RTL_NUMBER_OF(wddm->PagingUnsupported))
+                InterlockedIncrement(&wddm->PagingUnsupported[unsupported]);
+            if (n <= 16)
+                GuardLog("wddm: *** paging %s failed 0x%08X reason %u (level %u start %u/%u #%ld) ***",
+                         update ? "update" : "flush", (ULONG)pagingStatus, (ULONG)unsupported,
+                         update ? (ULONG)pBuildPagingBuffer->UpdatePageTable.PageTableLevel : 0u, startByte,
+                         update ? (ULONG)pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries : 0u, n);
+            return pagingStatus;
+        }
         if (written != 0)
         {
             if (!NT_SUCCESS(WddmPublishPagingRecord(pBuildPagingBuffer,written,update,startByte,nextByte)))
@@ -6580,21 +6612,6 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
                 PagingJournalUpdate(&pBuildPagingBuffer->UpdatePageTable,startByte,nextByte-startByte,
                                     WddmPagingBuildPosition(pBuildPagingBuffer),FALSE);
             else PagingJournalNote(BC250_PJ_FLUSH_TLB,0,NULL,0,WddmPagingBuildPosition(pBuildPagingBuffer),0);
-        }
-        else if (unsupported > BC250PagingSupported && unsupported < RTL_NUMBER_OF(wddm->PagingUnsupported))
-        {
-            InterlockedIncrement(&wddm->PagingUnsupported[unsupported]);
-        }
-        else if (!NT_SUCCESS(pagingStatus) && pagingStatus != STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)
-        {
-            // BD-235: an encoding, MC range or SDMA helper refusal. The OS still gets success below, and VidMm
-            // takes the entries as written: a later fill or transfer through them cannot translate.
-            LONG n = InterlockedIncrement(&wddm->PagingSilentRefusals);
-            if (n <= 16)
-                GuardLog("wddm: *** paging %s refused 0x%08X, nothing written (level %u start %u of %u #%ld) ***",
-                         update ? "update" : "flush", (ULONG)pagingStatus,
-                         update ? (ULONG)pBuildPagingBuffer->UpdatePageTable.PageTableLevel : 0u, startByte,
-                         update ? (ULONG)pBuildPagingBuffer->UpdatePageTable.NumPageTableEntries : 0u, n);
         }
         pBuildPagingBuffer->MultipassOffset = nextByte;
         if (pagingStatus == STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER)

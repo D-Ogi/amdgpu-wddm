@@ -346,6 +346,24 @@
         "clang-host"
       ]
     },
+    "paging-build": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "paging-build-absorb-inner-failure": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
+    "paging-build-cpu-virtual-ignore": {
+      "inputs": [
+        "host",
+        "clang-host"
+      ]
+    },
     "ih-consume": {
       "inputs": [
         "host"
