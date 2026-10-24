@@ -468,12 +468,19 @@ works like the DXVK script, with the same `Build Options:` gate and the submodul
 option sets are in [`tools/build/vkd3d-configs.json`](../tools/build/vkd3d-configs.json).
 
 What differs from the DXVK script:
-- vkd3d-proton also needs the IDL compiler `widl`. MSYS2 mingw64 ships one. `-Widl` names it, and the default is
-  the first `widl.exe` on PATH. The script gives that file to meson in a native file (`widl-native.ini` in the build
-  directory, `[binaries] widl`), so the order of PATH cannot select another widl.
+- vkd3d-proton also needs the IDL compiler `widl`. The default is
+  `<BC250_ROOT>\toolchain\mingw-w64-tools-14.0.0.r532\ucrt64\bin\widl.exe`, from the MSYS2 package
+  `mingw-w64-ucrt-x86_64-tools-14.0.0.r532.gdbbc8e99d-1` (Wine IDL Compiler 11.12). Extract the package with
+  `tar -xf` into that directory. It needs only the Universal C Runtime. `-Widl` names another widl. The script does
+  not look for widl on PATH, and it stops on a widl older than 2.14. It gives the file to meson in a native file
+  (`widl-native.ini` in the build directory, `[binaries] widl`), so the order of PATH cannot select another widl.
+  `recipe.json` records the path, the version and the SHA-256 of the file.
+  PROVENANCE: mingw-w64 tools (widl from Wine), LGPL-2.1-or-later and GPL-3.0-or-later. It is a build tool only.
+  Nothing from it is in the shipped files except the headers that it generates from the vkd3d-proton IDL.
 - `vkd3d_d3d12.idl` defines `WIDL_EXPLICIT_AGGREGATE_RETURNS`. The vkd3d-proton source implements each COM method that
-  returns a structure with a return pointer after `This`. A widl that does not know the macro, for example
-  version 1.6, writes the vtable with the structure as the return value. MSVC warns on that mismatch, and a call
+  returns a structure with a return pointer after `This`. Wine 1.7.27 writes this form in C vtables, and Wine 2.14
+  also in C++ under the macro. An older widl, for example version 1.6, writes the vtable with the structure as the
+  return value. MSVC warns on that mismatch, and a call
   through the vtable from C then passes no return pointer. clang 23 stops with
   `-Wincompatible-function-pointer-types`. Before configure, the script gives widl a probe interface with one such
   method and stops if the C vtable does not take the return pointer. After configure, it stops if an IDL step of

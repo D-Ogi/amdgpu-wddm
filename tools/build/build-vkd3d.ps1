@@ -19,11 +19,13 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
 
 The build is a native Windows build in the Visual Studio developer environment, like the M12 per-application
 packages: vcvars64.bat, meson from PYTHONPATH, ninja and glslang on PATH. vkd3d-proton also needs the IDL compiler
-widl (MSYS2 mingw64 ships one). A native file in the build directory names it to meson ([binaries] widl), so the
-order of PATH does not select it. Before configure the script gives widl a probe interface with a method that
-returns a structure: the C vtable must take the explicit return pointer (WIDL_EXPLICIT_AGGREGATE_RETURNS, which
-vkd3d_d3d12.idl defines and the vkd3d-proton source expects). widl 1.6 gives the implicit form, and the script stops.
-After configure, the "Program widl found" line of meson must name the same file, and recipe.json records it.
+widl, by default the one of the MSYS2 mingw-w64 tools package in <BC250_ROOT>\toolchain (Wine IDL Compiler 11.12;
+-Widl names another). The script does not look for widl on PATH. A native file in the build directory names it to
+meson ([binaries] widl), so the order of PATH does not select another one. Before configure the script stops on a
+widl older than 2.14 and gives widl a probe interface with a method that returns a structure: the C vtable must take
+the explicit return pointer (WIDL_EXPLICIT_AGGREGATE_RETURNS, which vkd3d_d3d12.idl defines and the vkd3d-proton
+source expects). widl 1.6 gives the implicit form. After configure, each IDL step of build.ninja must run the same
+file. recipe.json records its path, version, SHA-256 and the probe result.
 After configure the script also compares the new log's "Build Options:" line with the option set and
 stops on any difference. The set the script passes is the configured set plus the reproducible-build switches
 of Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB% for msvc. The
@@ -48,7 +50,7 @@ The source tree must be a vkd3d-proton checkout with its submodules initialized 
 --recursive); this script patches nothing and fetches nothing.
 
 .EXAMPLE
-pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine -Compiler msvc -Source P:\BC-250\scratch\m15\vkd3d -Build P:\BC-250\scratch\m15\vkd3d-ddi-engine -Widl C:\msys64\mingw64\bin\widl.exe
+pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine -Compiler msvc -Source P:\BC-250\scratch\m15\vkd3d -Build P:\BC-250\scratch\m15\vkd3d-ddi-engine -Widl P:\BC-250\toolchain\mingw-w64-tools-14.0.0.r532\ucrt64\bin\widl.exe
 
 .EXAMPLE
 pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Source <vkd3d-proton fork tree> -Build <dir>
@@ -69,7 +71,8 @@ param(
     [string]$Python,
     # Directory holding glslangValidator.exe (default <BC250_ROOT>\scratch\glslang\bin).
     [string]$Glslang,
-    # widl.exe; default: the first widl.exe on PATH. meson takes this file from a native file, not from PATH.
+    # widl.exe (default <BC250_ROOT>\toolchain\mingw-w64-tools-14.0.0.r532\ucrt64\bin\widl.exe). meson takes this
+    # file from a native file, not from PATH.
     [string]$Widl,
     # ninja.exe; its directory goes in front of PATH. Default: whatever PATH gives.
     [string]$Ninja,
@@ -176,10 +179,20 @@ if ($Config -like 'ddi-engine*' -and -not (Test-Path -LiteralPath (Join-Path $So
     throw "$Source has no libs\ddi: -Config ddi-engine needs the amdgpu-wddm/ddi-engine branch"
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Glslang 'glslangValidator.exe'))) { throw "glslangValidator.exe not found in ${Glslang}: pass -Glslang" }
-$widlExe = Resolve-Tool $Widl 'widl'
-if (-not $widlExe) { throw 'widl not found: put it on PATH or pass -Widl (MSYS2 mingw64 ships it)' }
-$widlExe = [IO.Path]::GetFullPath($widlExe)
+if (-not $Widl) { $Widl = Join-Path $root 'toolchain\mingw-w64-tools-14.0.0.r532\ucrt64\bin\widl.exe' }
+$widlExe = [IO.Path]::GetFullPath($Widl)
+if (-not (Test-Path -LiteralPath $widlExe -PathType Leaf)) {
+    throw "$widlExe does not exist: extract the MSYS2 mingw-w64-ucrt-x86_64-tools package there (docs/build.md) or pass -Widl"
+}
 if ($widlExe -match "'") { throw "-Widl $widlExe contains a quote: the meson native file cannot name it" }
+# Wine 1.7.27 writes the explicit return pointer in C vtables, and Wine 2.14 also in C++ under
+# WIDL_EXPLICIT_AGGREGATE_RETURNS. A mingw-w64 widl reports the Wine version that it follows.
+$widlMinimum = [version]'2.14'
+$widlVersionText = Get-ToolVersion $widlExe @('-V')
+$widlVersion = if ("$widlVersionText" -match 'Wine IDL Compiler version (\d+\.\d+(\.\d+)?)') { [version]$Matches[1] } else { $null }
+if (-not $widlVersion -or $widlVersion -lt $widlMinimum) {
+    throw "$widlExe is '$widlVersionText': vkd3d-proton needs widl $widlMinimum or newer (explicit aggregate returns)"
+}
 
 # vkd3d_d3d12.idl defines WIDL_EXPLICIT_AGGREGATE_RETURNS, and the source implements each COM method that returns a
 # structure with the explicit form: a return pointer after This, returned again. A widl that does not know the macro
@@ -235,9 +248,8 @@ try {
     # (an old MinGW) then cannot replace the one that the probe checked and recipe.json records.
     $widlProbe = Test-WidlAggregateReturns $widlExe (Join-Path $Build 'widl-probe')
     if (-not $widlProbe.explicit_aggregate_returns) {
-        throw ("widl probe: $widlExe ($(Get-ToolVersion $widlExe @('-V'))) writes no explicit aggregate return " +
-            "(WIDL_EXPLICIT_AGGREGATE_RETURNS) in the C vtable of $($widlProbe.probe)\probe.h. vkd3d-proton needs it: " +
-            'pass -Widl with a newer widl (MSYS2 mingw64 ships one)')
+        throw ("widl probe: $widlExe ($widlVersionText) writes no explicit aggregate return " +
+            "(WIDL_EXPLICIT_AGGREGATE_RETURNS) in the C vtable of $($widlProbe.probe)\probe.h. vkd3d-proton needs it")
     }
     $nativeFile = Join-Path $Build 'widl-native.ini'
     Set-Content -LiteralPath $nativeFile -Encoding ascii -Value @('[binaries]', "widl = '$($widlExe -replace '\\', '/')'")
@@ -327,7 +339,10 @@ try {
             lld_link         = if ($clangTools) { [ordered]@{ path = $clangTools['lld-link']; version = Get-ToolVersion $clangTools['lld-link'] } } else { $null }
             llvm_lib         = if ($clangTools) { [ordered]@{ path = $clangTools['llvm-lib'] } } else { $null }
             glslangValidator = [ordered]@{ path = $glslangExe; version = Get-ToolVersion $glslangExe }
-            widl             = [ordered]@{ path = $widlExe; version = Get-ToolVersion $widlExe @('-V'); probe = $widlProbe; idl_steps = $null }
+            widl             = [ordered]@{
+                path = $widlExe; version = $widlVersionText; minimum = "$widlMinimum"
+                sha256 = (Get-FileHash -LiteralPath $widlExe -Algorithm SHA256).Hash; probe = $widlProbe; idl_steps = $null
+            }
         }
         gate            = $null
     }
