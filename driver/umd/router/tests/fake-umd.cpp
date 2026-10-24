@@ -57,7 +57,10 @@ extern "C" __declspec(dllexport) void FakeRecordReset(void) { RecordUsed = 0; Re
 // The private device size the double asks for, and the byte it writes over all of it. The front places its own
 // record after this block, so the gate can check that the pattern survived the front's CreateDevice.
 static const SIZE_T FakeDeviceBytes = 512;
+#ifndef FAKE_FAIL
+// Only the CreateDevice of a double that opens an adapter writes it (FAKE_FAIL below).
 static const int FakeDevicePattern = 0x5D;
+#endif
 // The value in device-table slot i. Distinct, non-null, never called, and far from any code address.
 static const UINT_PTR FakeSlotBase = 0x0510000;
 extern "C" __declspec(dllexport) UINT_PTR FakeDeviceSlot(unsigned i) { return FakeSlotBase + i; }

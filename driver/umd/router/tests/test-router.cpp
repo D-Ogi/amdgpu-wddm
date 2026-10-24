@@ -2065,7 +2065,7 @@ static void Child(const std::string &s)
             sizeArgs.Interface = D3D10_0_DDI_INTERFACE_VERSION;
             sizeArgs.Version = D3D10_0_DDI_SUPPORTED & 0xFFFFFFFF;
             const SIZE_T size = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &sizeArgs);
-            CHECK(fakeSize && size == fakeSize(), "device size %Iu, expected the hosted driver's own", size);
+            CHECK(fakeSize && size == fakeSize(), "device size %Iu, expected the hosted driver's own", (size_t)size);
             return;
         }
         CHECK(o.funcs.pfnGetSupportedVersions && o.funcs.pfnGetCaps, "the 10_2 table is incomplete");
@@ -2161,8 +2161,8 @@ static void Child(const std::string &s)
             sizeArgs10.Version = D3D10_0_DDI_SUPPORTED & 0xFFFFFFFF;
             const SIZE_T size10 = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &sizeArgs10);
             CHECK(fakeSize && size10 == fakeSize(),
-                  "a D3D10.0 private device size is %Iu, expected the hosted driver's own %Iu", size10,
-                  fakeSize ? fakeSize() : 0);
+                  "a D3D10.0 private device size is %Iu, expected the hosted driver's own %Iu", (size_t)size10,
+                  (size_t)(fakeSize ? fakeSize() : 0));
             // The block is bigger than the hosted driver asked for, with a pattern behind it: a front record
             // written for a device the front does not front would show up there.
             std::vector<BYTE> block(size10 + 512, 0x3C);
@@ -2221,8 +2221,8 @@ static void Child(const std::string &s)
             realSize.Version = D3D11_1_DDI_SUPPORTED & 0xFFFFFFFF;
             const SIZE_T frontSize = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &realSize);
             CHECK(frontSize > sizeof(bc250front::Device),
-                  "the front's private device size over the real hosted UMD is %Iu", frontSize);
-            printf("  real hosted UMD: front private device size %Iu (the front's record is %Iu)\n", frontSize,
+                  "the front's private device size over the real hosted UMD is %Iu", (size_t)frontSize);
+            printf("  real hosted UMD: front private device size %Iu (the front's record is %Iu)\n", (size_t)frontSize,
                    sizeof(bc250front::Device));
             fflush(stdout);
             // The device create against the REAL hosted UMD needs the GPU: the Mesa frontend's CreateDevice
@@ -2304,7 +2304,7 @@ static void Child(const std::string &s)
         sizeArgs.Interface = D3D11_1_DDI_INTERFACE_VERSION;
         sizeArgs.Version = D3D11_1_DDI_SUPPORTED & 0xFFFFFFFF;
         const SIZE_T size = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &sizeArgs);
-        CHECK(size > fakeSize(), "device size %Iu, the hosted driver's own is %Iu", size, fakeSize());
+        CHECK(size > fakeSize(), "device size %Iu, the hosted driver's own is %Iu", (size_t)size, (size_t)fakeSize());
         CHECK(strstr(record(), "calc-private-device-size") != nullptr,
               "the front did not rewrite Interface to the D3D10.0 pair: %s", record());
         std::vector<BYTE> block(size, 0);

@@ -22,4 +22,5 @@
 #undef _MM_HINT_NTA
 #endif
 #include <intrin.h>
-static_assert(_MM_HINT_T0==3 && _MM_HINT_T1==2 && _MM_HINT_T2==1 && _MM_HINT_NTA==0);
+// With a message, so that C11 (the state client of the router) and C++11 take it as well.
+static_assert(_MM_HINT_T0==3 && _MM_HINT_T1==2 && _MM_HINT_T2==1 && _MM_HINT_NTA==0, "LLVM prefetch hints");

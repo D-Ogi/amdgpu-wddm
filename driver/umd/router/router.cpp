@@ -91,10 +91,13 @@
 
 using namespace bc250router;
 
+// Only the test loader overrides read the UMD path values; the shipped router takes its UMDs from the package.
 #ifdef _WIN64
+#ifdef BC250_ROUTER_TEST_LOADER_OVERRIDES
 static const wchar_t CpuUmdPathValue[] = L"CpuUmdPath";
 static const wchar_t HostedUmdPathValue[] = L"HostedUmdPath";
 static const wchar_t GpuUmdPathValue[] = L"GpuUmdPath";
+#endif
 static const REGSAM RegistryView = 0;
 #else
 // The 32-bit router (UserModeDriverNameWow, BD-064) reads the same keys and the same policy values as the 64-bit
@@ -103,9 +106,11 @@ static const REGSAM RegistryView = 0;
 // CpuUmdPathWow, HostedUmdPathWow and GpuUmdPathWow. An absent CpuUmdPathWow means bc250d3d.dll next to this DLL
 // (there is no lab path to default to); an absent HostedUmdPathWow means bc250d3d_zink.dll next to this DLL, as in
 // the 64-bit router. DWM is a 64-bit process, so the hosted route serves only 32-bit HostedClients entries.
+#ifdef BC250_ROUTER_TEST_LOADER_OVERRIDES
 static const wchar_t CpuUmdPathValue[] = L"CpuUmdPathWow";
 static const wchar_t HostedUmdPathValue[] = L"HostedUmdPathWow";
 static const wchar_t GpuUmdPathValue[] = L"GpuUmdPathWow";
+#endif
 static const REGSAM RegistryView = KEY_WOW64_64KEY;
 #endif
 static const wchar_t RouterKey[] = L"SOFTWARE\\amdgpu-wddm\\DesktopRouter";

@@ -447,8 +447,10 @@ passed. The test plays the UMD shell: it owns the Vulkan instance and device, al
 shaders in DDI form. The checks are listed under Validation in
 [the engine design note](design/d3d11-ddi-engine.md#validation).
 
-The D3D11 and D3D12 shell recipes (`build-umd-dxvk.ps1`, `build-umd-d3d12.ps1`) and the D3D12 native
-library recipe (`build-engine-ddi.ps1`) default to `-Compiler clang-cl`. They require LLVM 23.1.4 at
+The D3D11 and D3D12 shell recipes (`build-umd-dxvk.ps1`, `build-umd-d3d12.ps1`), the D3D12 native
+library recipe (`build-engine-ddi.ps1`) and the UMD router recipe (`build-umd-router.ps1`) default to
+`-Compiler clang-cl`. The router also makes `-Wcast-calling-convention` an error, because its x86 entry points are
+`__stdcall` and it is loaded into DWM and into every D3D process. They require LLVM 23.1.4 at
 `toolchain/llvm-23.1.4-win64/bin/clang-cl.exe` and print its version. The shipped objects use the x86-64-v3
 instruction set and tune for Zen 2. `-Arch x86` selects the Windows i686 target. Host ABI tests and the
 MSVC static-analysis control stay separate from those objects. Each output directory contains `compiler.json`.
