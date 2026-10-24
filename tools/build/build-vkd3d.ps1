@@ -19,8 +19,12 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
 
 The build is a native Windows build in the Visual Studio developer environment, like the M12 per-application
 packages: vcvars64.bat, meson from PYTHONPATH, ninja and glslang on PATH. vkd3d-proton also needs the IDL compiler
-widl (MSYS2 mingw64 ships one); its directory goes at the end of PATH, so that nothing else in it shadows the
-compiler tools. After configure the script compares the new log's "Build Options:" line with the option set and
+widl (MSYS2 mingw64 ships one). A native file in the build directory names it to meson ([binaries] widl), so the
+order of PATH does not select it. Before configure the script gives widl a probe interface with a method that
+returns a structure: the C vtable must take the explicit return pointer (WIDL_EXPLICIT_AGGREGATE_RETURNS, which
+vkd3d_d3d12.idl defines and the vkd3d-proton source expects). widl 1.6 gives the implicit form, and the script stops.
+After configure, the "Program widl found" line of meson must name the same file, and recipe.json records it.
+After configure the script also compares the new log's "Build Options:" line with the option set and
 stops on any difference. The set the script passes is the configured set plus the reproducible-build switches
 of Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB% for msvc. The
 switches go at the end of the c_args, cpp_args and cpp_link_args that ddi-engine-lto already has.
@@ -65,7 +69,7 @@ param(
     [string]$Python,
     # Directory holding glslangValidator.exe (default <BC250_ROOT>\scratch\glslang\bin).
     [string]$Glslang,
-    # widl.exe; default: whatever PATH gives.
+    # widl.exe; default: the first widl.exe on PATH. meson takes this file from a native file, not from PATH.
     [string]$Widl,
     # ninja.exe; its directory goes in front of PATH. Default: whatever PATH gives.
     [string]$Ninja,
@@ -174,6 +178,30 @@ if ($Config -like 'ddi-engine*' -and -not (Test-Path -LiteralPath (Join-Path $So
 if (-not (Test-Path -LiteralPath (Join-Path $Glslang 'glslangValidator.exe'))) { throw "glslangValidator.exe not found in ${Glslang}: pass -Glslang" }
 $widlExe = Resolve-Tool $Widl 'widl'
 if (-not $widlExe) { throw 'widl not found: put it on PATH or pass -Widl (MSYS2 mingw64 ships it)' }
+$widlExe = [IO.Path]::GetFullPath($widlExe)
+if ($widlExe -match "'") { throw "-Widl $widlExe contains a quote: the meson native file cannot name it" }
+
+# vkd3d_d3d12.idl defines WIDL_EXPLICIT_AGGREGATE_RETURNS, and the source implements each COM method that returns a
+# structure with the explicit form: a return pointer after This, returned again. A widl that does not know the macro
+# (1.6) writes the vtable with the structure as the return value. MSVC warns on that mismatch, and calls through
+# the vtable from C then pass no return pointer. clang 23 stops with -Wincompatible-function-pointer-types. The
+# probe is one interface with one such method; the C vtable that widl writes for it must take the return pointer.
+function Test-WidlAggregateReturns([string]$WidlExe, [string]$Dir) {
+    New-Item -ItemType Directory -Force $Dir | Out-Null
+    $idl = Join-Path $Dir 'probe.idl'
+    $header = Join-Path $Dir 'probe.h'
+    Remove-Item -LiteralPath $header -ErrorAction SilentlyContinue
+    Set-Content -LiteralPath $idl -Encoding ascii -Value @(
+        'typedef struct probe_luid { unsigned long low; long high; } probe_luid;',
+        '[object, local, uuid(5c3e3a2b-6f1d-4c8e-9a51-2b7d0e4f8a10)]',
+        'interface IProbe', '{', '    probe_luid GetLuid();', '}')
+    $r = Invoke-Capture $WidlExe @('-h', '-o', $header, $idl)
+    if ($r.Code -ne 0 -or -not (Test-Path -LiteralPath $header)) { throw "widl probe: $WidlExe exit $($r.Code)`n$($r.Err)" }
+    $text = Get-Content -LiteralPath $header -Raw
+    $explicit = $text -match 'probe_luid\s*\*\s*\(STDMETHODCALLTYPE \*GetLuid\)\(\s*IProbe \*This,\s*probe_luid \*__ret\)'
+    $implicit = $text -match 'probe_luid\s*\(STDMETHODCALLTYPE \*GetLuid\)\(\s*IProbe \*This\)'
+    return [ordered]@{ probe = $Dir; explicit_aggregate_returns = $explicit; implicit_vtable = $implicit }
+}
 $configured = Test-Path -LiteralPath (Join-Path $Build 'meson-private\coredata.dat')
 if ($configured -and -not $Reconfigure) { throw "$Build is already configured: pass -Reconfigure, or use a new build directory" }
 
@@ -203,8 +231,16 @@ try {
     $pathFront = @($Glslang)
     if ($Ninja) { $pathFront += (Split-Path -Parent (Resolve-Tool $Ninja 'ninja')) }
     Add-PathFront $pathFront
-    $widlDir = Split-Path -Parent $widlExe
-    $env:PATH = "$env:PATH;$widlDir"
+    # find_program('widl') of vkd3d-proton reads [binaries] of the native file before PATH. Another widl on PATH
+    # (an old MinGW) then cannot replace the one that the probe checked and recipe.json records.
+    $widlProbe = Test-WidlAggregateReturns $widlExe (Join-Path $Build 'widl-probe')
+    if (-not $widlProbe.explicit_aggregate_returns) {
+        throw ("widl probe: $widlExe ($(Get-ToolVersion $widlExe @('-V'))) writes no explicit aggregate return " +
+            "(WIDL_EXPLICIT_AGGREGATE_RETURNS) in the C vtable of $($widlProbe.probe)\probe.h. vkd3d-proton needs it: " +
+            'pass -Widl with a newer widl (MSYS2 mingw64 ships one)')
+    }
+    $nativeFile = Join-Path $Build 'widl-native.ini'
+    Set-Content -LiteralPath $nativeFile -Encoding ascii -Value @('[binaries]', "widl = '$($widlExe -replace '\\', '/')'")
     $env:PYTHONPATH = $PythonPath
     # meson takes the compilers, their linker and the static linker from these variables. Without them it would take
     # the first compiler it finds (gcc from a MinGW directory on PATH, the widl directory included), and a missing
@@ -250,7 +286,7 @@ try {
 
     $mesonArgs = @('-m', 'mesonbuild.mesonmain', 'setup')
     if ($configured) { $mesonArgs += '--reconfigure' }
-    $mesonArgs += @($Build, $Source) + $options
+    $mesonArgs += @($Build, $Source) + $options + @("--native-file=$nativeFile")
 
     $glslangExe = Join-Path $Glslang 'glslangValidator.exe'
     $recipe = [ordered]@{
@@ -275,7 +311,7 @@ try {
             vc_tools_version    = $env:VCToolsVersion
             windows_sdk_version = if ($env:WindowsSDKVersion) { $env:WindowsSDKVersion.TrimEnd('\') } else { $null }
             path_prepended      = $pathFront
-            path_appended       = @($widlDir)
+            native_file         = $nativeFile
             pythonpath          = $PythonPath
             cc                  = $env:CC
             cxx                 = $env:CXX
@@ -291,7 +327,7 @@ try {
             lld_link         = if ($clangTools) { [ordered]@{ path = $clangTools['lld-link']; version = Get-ToolVersion $clangTools['lld-link'] } } else { $null }
             llvm_lib         = if ($clangTools) { [ordered]@{ path = $clangTools['llvm-lib'] } } else { $null }
             glslangValidator = [ordered]@{ path = $glslangExe; version = Get-ToolVersion $glslangExe }
-            widl             = [ordered]@{ path = $widlExe; version = Get-ToolVersion $widlExe @('-V') }
+            widl             = [ordered]@{ path = $widlExe; version = Get-ToolVersion $widlExe @('-V'); probe = $widlProbe; idl_steps = $null }
         }
         gate            = $null
     }
@@ -306,7 +342,26 @@ try {
 
     Invoke-Checked $pythonExe $mesonArgs
 
-    $logged = Get-MesonBuildOptions $Build
+    # The Build Options line ends with the native file (meson cmdline.py); it is not an option of the set.
+    $logged = @(Get-MesonBuildOptions $Build | Where-Object { $_ -ne "--native-file=$nativeFile" })
+    # Each IDL step of build.ninja must run the widl of the native file, which the probe checked. meson logs no path
+    # for a program of a machine file, so the gate reads the commands that ninja runs.
+    $idlTools = @{}
+    $idlStep = $false
+    foreach ($line in Get-Content -LiteralPath (Join-Path $Build 'build.ninja')) {
+        if ($line -match '^build .*: CUSTOM_COMMAND \S+\.idl(\s|$)') { $idlStep = $true; continue }
+        if ($idlStep -and $line -match '^\s+COMMAND = "?([^" ]+)') {
+            $tool = [IO.Path]::GetFullPath($Matches[1])
+            $idlTools[$tool] = 1 + $(if ($idlTools.ContainsKey($tool)) { $idlTools[$tool] } else { 0 })
+            $idlStep = $false
+        }
+    }
+    $recipe.tools.widl.idl_steps = $idlTools
+    if ($idlTools.Count -ne 1 -or -not $idlTools.ContainsKey($widlExe)) {
+        Write-Recipe $recipePath $recipe
+        throw "the IDL steps of $Build\build.ninja run $(@($idlTools.Keys) -join ', '), not only $widlExe of $nativeFile"
+    }
+    Write-Host "widl: $widlExe ($($recipe.tools.widl.version)), explicit aggregate returns, in $($idlTools[$widlExe]) IDL step(s)"
     $missing = @($options | Where-Object { $logged -notcontains $_ })
     $extra = @($logged | Where-Object { $options -notcontains $_ })
     $recipe.gate = [ordered]@{

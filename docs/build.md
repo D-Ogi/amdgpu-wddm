@@ -468,8 +468,16 @@ works like the DXVK script, with the same `Build Options:` gate and the submodul
 option sets are in [`tools/build/vkd3d-configs.json`](../tools/build/vkd3d-configs.json).
 
 What differs from the DXVK script:
-- vkd3d-proton also needs the IDL compiler `widl`. MSYS2 mingw64 ships one. The script appends its directory to
-  PATH, so nothing else in it shadows the compiler tools.
+- vkd3d-proton also needs the IDL compiler `widl`. MSYS2 mingw64 ships one. `-Widl` names it, and the default is
+  the first `widl.exe` on PATH. The script gives that file to meson in a native file (`widl-native.ini` in the build
+  directory, `[binaries] widl`), so the order of PATH cannot select another widl.
+- `vkd3d_d3d12.idl` defines `WIDL_EXPLICIT_AGGREGATE_RETURNS`. The vkd3d-proton source implements each COM method that
+  returns a structure with a return pointer after `This`. A widl that does not know the macro, for example
+  version 1.6, writes the vtable with the structure as the return value. MSVC warns on that mismatch, and a call
+  through the vtable from C then passes no return pointer. clang 23 stops with
+  `-Wincompatible-function-pointer-types`. Before configure, the script gives widl a probe interface with one such
+  method and stops if the C vtable does not take the return pointer. After configure, it stops if an IDL step of
+  `build.ninja` runs another widl. `recipe.json` records the probe result and the widl of the IDL steps.
 - `-Compiler` has no default. `msvc` sets `CC` and `CXX` to `cl`, `CC_LD` and `CXX_LD` to `link` and `AR` to `lib`.
   `clang-cl` sets them to `clang-cl`, `lld-link` and `llvm-lib` of `-ClangToolchain` (default
   `<BC250_ROOT>\toolchain\llvm-23.1.4-win64`), and adds `/clang:-ffp-contract=off` (the `compilers` entry). The
