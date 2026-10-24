@@ -15,7 +15,7 @@
 #define IO_NO_INCREMENT 0
 #define STATUS_SUCCESS 0
 #define STATUS_TIMEOUT 0x102
-#define C_ASSERT(e) typedef char __C_ASSERT__[(e)?1:-1]    /* as winnt.h */
+#define C_ASSERT(e) _Static_assert(e, #e)    /* winnt.h has a typedef; the check is the same */
 #define TRUE 1
 #define FALSE 0
 #define BC250_WDDM_LOG_CALLS 8
@@ -75,7 +75,7 @@ static unsigned int completed,mock_seq,reported,ledger,reports,failures,bad,chec
 static int refuse, timer,mutex, armed=1, root_wait;
 /* KMD196's held submission: every phase-1 stall and every phase-2 wait is one step; the job blocking the ring
  * completes at step complete_on_step, with its end-of-pipe interrupt unless lost_interrupt is set. */
-static unsigned int steps, stalls, waits, complete_on_step, lost_interrupt, signals;
+static unsigned int steps, stalls, waits, complete_on_step, lost_interrupt;
 static KIRQL irql_now;
 static BC250_DEVICE* the_device;
 static LONGLONG due_time;
@@ -192,6 +192,7 @@ int main(void)
 {
     BC250_WDDM w={0}; BC250_DEVICE d={&w}; BC250_WDDM_OBJECT c={0x1000,4242,TRUE,FALSE};
     unsigned int i; ULONGLONG t0;
+    (void)GfxSubmitFail;    /* the stub of a call that this extraction of wddm.c need not hold */
     C_ASSERT(BC250_WDDM_HOLD_SPIN_US==25*BC250_WDDM_HOLD_SPIN_STEP_US);   /* the step counts below */
     /* BD-114: what WddmStart latches, with the lab's own configuration - TdrDelay 10 s (the GUI's default) and no
      * SubmitWatchdogMs - so the budget below is 12 s and the DPC looks for progress every 250 ms. The held

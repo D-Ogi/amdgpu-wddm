@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='',[string]$MesaSource=$(if ($env:BC250_RADV_SOURCE) { $env:BC250_RADV_SOURCE } else { '' }))
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\gfx-submit-pipeline\tests",[switch]$WithoutCapacity,[switch]$WithoutBoundaryPad,[switch]$EqualityFence,[switch]$SerializeGather,[switch]$IdleOnlyPresent,[switch]$KmdOnly,[string]$SourceRoot='',[string]$MesaSource=$(if ($env:BC250_RADV_SOURCE) { $env:BC250_RADV_SOURCE } else { '' }))
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp'; $env:TMP=$env:TEMP
@@ -25,6 +25,12 @@ if($SerializeGather){
 }
 $ring=Get-Content "$repo\driver\shim\bc250_ring.c" -Raw
 if($WithoutCapacity){$ring=$ring.Replace('if (ring->track_rptr && !bc250_ring_has_space(ring, ndw)) return -16;', '/* negative control: old allocator ignores CP read pointer */')}
+# BD-235 negative control: amdgpu_ring_alloc() inserts no pad before a reservation that straddles 2^30 dwords.
+if($WithoutBoundaryPad){
+    $anchor='pad = bc250_ring_boundary_pad_size(ring, ndw);'
+    if(([regex]::Matches($ring,[regex]::Escape($anchor))).Count -ne 1){throw 'boundary pad anchor not found once'}
+    $ring=$ring.Replace($anchor,'pad = 0; /* negative control: no boundary pad */')
+}
 [IO.File]::WriteAllText("$Out\bc250_ring_actual.c",$ring)
 $fence=Get-Content "$repo\driver\shim\include\bc250_fence_order.h" -Raw
 if($EqualityFence){$fence=$fence.Replace('(observed - requested) < 0x80000000u','observed == requested')}
@@ -33,8 +39,16 @@ $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c'
 $libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
-$cl=Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
-$flags=@('/nologo','/TC','/W4','/WX','/O2','/MT',"/I$Out","/I$repo\driver\kmd","/I$repo\driver\shim\include","/I$repo\driver\amdgpu-import","/I$repo\third_party\linux-amdgpu","/I$($msvc.FullName)\include","/I$sdk\Include\10.0.26100.0\ucrt","/Fo$Out\")
+# Host tests are user-mode code: clang-cl 23.1.4 from the workspace toolchain, named by path, no fallback. The MSVC
+# tree gives only the CRT headers and libraries.
+$cl=Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang-cl.exe'
+if(!(Test-Path -LiteralPath $cl)){throw "clang-cl not found: $cl"}
+$clVersion=@(& $cl --version); if($LASTEXITCODE -ne 0 -or $clVersion[0] -notmatch 'clang version 23\.1\.4\b'){throw "clang-cl 23.1.4 expected: $($clVersion[0])"}
+Write-Host "host compiler: $cl"; Write-Host "  $($clVersion[0])"
+$env:CL=$null; $env:_CL_=$null
+# The mocks keep counters that only their stubs write, and the tests start aggregates with {0} or a prefix: clang's
+# warnings for those two idioms are off. Every other /W4 warning stays an error.
+$flags=@('/nologo','--target=x86_64-pc-windows-msvc','-fuse-ld=lld','/clang:-Wno-missing-field-initializers','/clang:-Wno-unused-but-set-global','/TC','/W4','/WX','/O2','/MT',"/I$Out","/I$repo\driver\kmd","/I$repo\driver\shim\include","/I$repo\driver\amdgpu-import","/I$repo\third_party\linux-amdgpu","/imsvc$($msvc.FullName)\include","/imsvc$sdk\Include\10.0.26100.0\ucrt","/Fo$Out\")
 if((Get-Content "$Out\gfx_pipeline_actual.inc" -Raw) -notmatch 'WddmRecordFenceLedgerLocked'){$flags+='/DNO_RECOVERY_LEDGER'}
 $link=@('/link',"/LIBPATH:$($msvc.FullName)\lib\x64","/LIBPATH:$libs\ucrt\x64","/LIBPATH:$libs\um\x64")
 & $cl @flags "/Fe$Out\ring_test.exe" "$PSScriptRoot\gfx_ring_capacity_test.c" "$Out\bc250_ring_actual.c" @link

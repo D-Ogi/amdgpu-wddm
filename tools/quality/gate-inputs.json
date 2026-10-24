@@ -1000,7 +1000,8 @@
     },
     "gfx-pipeline": {
       "inputs": [
-        "host"
+        "host",
+        "clang-host"
       ]
     },
     "vmid-pool": {
@@ -1255,17 +1256,26 @@
     },
     "gfx-pipeline-idle-only": {
       "inputs": [
-        "host"
+        "host",
+        "clang-host"
       ]
     },
     "gfx-pipeline-no-capacity": {
       "inputs": [
-        "host"
+        "host",
+        "clang-host"
       ]
     },
     "gfx-pipeline-equal-fence": {
       "inputs": [
-        "host"
+        "host",
+        "clang-host"
+      ]
+    },
+    "gfx-pipeline-no-boundary-pad": {
+      "inputs": [
+        "host",
+        "clang-host"
       ]
     },
     "firmware-metadata-no-runtime": {
