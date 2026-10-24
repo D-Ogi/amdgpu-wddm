@@ -1,7 +1,10 @@
 # Compiler regression gate: no driver load, device creation, or GPU work.
-param([Parameter(Mandatory)][string]$OutputDir, [string]$VsInstall)
+param([Parameter(Mandatory)][string]$OutputDir, [string]$VsInstall,
+      # The LLVM Windows toolchain of the clang-cl recipes (default <BC250_ROOT>\toolchain\llvm-23.1.4-win64).
+      [string]$ClangToolchain)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/common.ps1"
+if (-not $ClangToolchain) { $ClangToolchain = Join-Path (Get-Bc250Root (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))) 'toolchain\llvm-23.1.4-win64' }
 $saved = Save-ProcessEnvironment
 $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 $null = New-Item -ItemType Directory -Force $OutputDir
@@ -58,6 +61,78 @@ try {
                 }
             }
         }
+        # clang-cl for x86: a recipe that does not name the i686 target is refused, and one that does gets the
+        # clang-cl policy in place of the MSVC one (common.ps1).
+        $refusedX86 = $false
+        try { $null = Add-ReproducibleMesonOptions @('-Dc_args=/O2') 'source' 'build' -Arch x86 -Compiler clang-cl } catch { $refusedX86 = $true }
+        if (-not $refusedX86) { throw 'clang-cl x86 without -ClangTarget was not refused' }
+        $checks++
+        $clangPolicy = @('/clang:-Werror=ignored-attributes', '/clang:-Werror=cast-calling-convention')
+        foreach ($arch in 'x86', 'x64') {
+            $opts = @(Add-ReproducibleMesonOptions @('-Dc_args=/O2', '-Dcpp_args=/O1') 'source' 'build' -Arch $arch -Compiler clang-cl -ClangTarget 'i686-pc-windows-msvc')
+            foreach ($kind in 'c_args', 'cpp_args') {
+                $option = @($opts | Where-Object { $_.StartsWith("-D$kind=") })
+                if ($option.Count -ne 1) { throw "Duplicate clang-cl $kind" }
+                foreach ($switch in $clangPolicy) {
+                    if (($option[0].Contains($switch)) -ne ($arch -eq 'x86')) { throw "Meson clang-cl $arch $kind policy $switch" }
+                    $checks++
+                }
+                if ($option[0] -match '/we4229|/we4440') { throw "Meson clang-cl $arch $kind has the MSVC policy" }
+                $checks++
+            }
+        }
+        # The same cases through the i686 clang-cl of the recipes. clang stops on its own where a calling convention
+        # changes on a redeclaration; the two warnings of the policy stop a convention that clang ignores (on data)
+        # and a cast of a function to a pointer of another convention. A convention after the * of a function
+        # pointer is not a case for clang: it applies to the function type (MSVC ignores it, C4229, and gives
+        # cdecl), which the code check below shows. A header in a system directory gets no warning, so the
+        # recipe refuses system directories (build-vkd3d.ps1); the control shows why.
+        $clang = Join-Path $ClangToolchain 'bin\clang-cl.exe'
+        if (-not (Test-Path -LiteralPath $clang)) { throw "$clang does not exist: -ClangToolchain takes the LLVM Windows toolchain of the recipes" }
+        $target = '--target=i686-pc-windows-msvc'
+        # clang-cl reads CL and _CL_ as cl.exe does: the MSVC policy (/external:W1) must not reach these compiles.
+        $env:CL = $null; $env:_CL_ = $null
+        Set-Content -Encoding ascii external/data.h 'int __stdcall data_value;'
+        $clangCases = @(
+            @{ Name='clang-data'; Ext='c'; Text='int __stdcall data_value;'; Diagnostic='-Werror,-Wignored-attributes'; Extra=@() },
+            @{ Name='clang-cast'; Ext='c'; Text='int __cdecl f(int a) { return a; } typedef int (__stdcall *g)(int); g p = (g)f;'; Diagnostic='-Werror,-Wcast-calling-convention'; Extra=@() },
+            @{ Name='clang-include'; Ext='c'; Text='#include <data.h>'; Diagnostic='-Werror,-Wignored-attributes'; Extra=@("/I$OutputDir/external") },
+            @{ Name='clang-system-include'; Ext='c'; Text='#include <data.h>'; Diagnostic=$null; Extra=@("/external:I$OutputDir/external") },
+            @{ Name='clang-pointer-c'; Ext='c'; Text=$bad; Diagnostic=$null; Extra=@() },
+            @{ Name='clang-valid-c'; Ext='c'; Text=$good; Diagnostic=$null; Extra=@() },
+            @{ Name='clang-valid-cpp'; Ext='cpp'; Text=$good; Diagnostic=$null; Extra=@() }
+        )
+        foreach ($case in $clangCases) {
+            $src = "$($case.Name).$($case.Ext)"
+            Set-Content -Encoding ascii $src $case.Text
+            foreach ($enabled in $false, $true) {
+                $switches = if ($enabled) { $clangPolicy } else { @() }
+                $log = "$($case.Name)-$enabled.log"
+                & $clang $target /nologo /c /W3 @switches @($case.Extra) $src "/Fo$($case.Name).obj" *> $log
+                $code = $LASTEXITCODE
+                $diagnostic = Get-Content -Raw $log
+                if ($enabled -and $case.Diagnostic) {
+                    if ($code -eq 0 -or -not $diagnostic.Contains($case.Diagnostic)) { throw "Expected $($case.Diagnostic) refusal: $log" }
+                } elseif ($code -ne 0) { throw "Positive/control compile failed: $log" }
+                $checks++
+            }
+        }
+        foreach ($case in @(@{ Name='clang-redefinition'; Ext='cpp'; Text=$redef },
+                            @{ Name='clang-redeclaration'; Ext='c'; Text='int __cdecl f(int); int __stdcall f(int a) { return a; }' })) {
+            $src = "$($case.Name).$($case.Ext)"
+            Set-Content -Encoding ascii $src $case.Text
+            $log = "$($case.Name).log"
+            & $clang $target /nologo /c /W0 $src "/Fo$($case.Name).obj" *> $log
+            if ($LASTEXITCODE -eq 0) { throw "Expected a clang error without the policy: $log" }
+            $checks++
+        }
+        # The pointer that MSVC refuses (C4229) is a stdcall pointer in clang: the caller does not pop the argument.
+        Set-Content -Encoding ascii clang-pointer-call.c "$bad int call(callback p) { return p(1) + 1; }"
+        & $clang $target /nologo /c /O2 /FA clang-pointer-call.c /Faclang-pointer-call.asm /Foclang-pointer-call.obj *> clang-pointer-call.log
+        if ($LASTEXITCODE -ne 0) { throw 'clang-cl pointer call compile failed: clang-pointer-call.log' }
+        $asm = Get-Content -Raw clang-pointer-call.asm
+        if ($asm -notmatch 'call\s+dword ptr' -or $asm -match 'add\s+esp,\s*4') { throw 'clang-cl did not give a stdcall pointer: clang-pointer-call.asm' }
+        $checks++
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }
 Write-Output "$checks calling-convention checks passed (x86 compiler; no GPU work)"

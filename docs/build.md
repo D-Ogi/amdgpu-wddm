@@ -242,8 +242,28 @@ limit.
 The meson sanity check gives the link switches to `clang-cl` without `/link`, and `clang-cl` reads an unknown `/`
 switch as an input file. It ignores an unknown `-` switch with a warning. `lld-link` accepts both forms.
 
-`-Compiler clang-cl` builds x64 only. clang-cl accepts the x86 policy switches `/we4229` and `/we4440`, but it only
-gives a warning where MSVC stops.
+`build-mesa.ps1` and `build-dxvk.ps1` with `-Compiler clang-cl` build x64 only. clang-cl accepts the x86 policy
+switches `/we4229` and `/we4440`, but it does not use them. Only `build-vkd3d.ps1` builds x86 with clang-cl
+([vkd3d-proton](#vkd3d-proton)): it names the i686 target in the compiler command and uses the clang-cl form of the
+policy. `Add-ReproducibleMesonOptions` refuses clang-cl for x86 when the recipe does not name that target.
+
+The clang-cl x86 policy is `-Werror=ignored-attributes -Werror=cast-calling-convention`. The controls are in
+`tools/build/test-x86-callconv.ps1` (quality gate `x86-callconv`):
+
+| Case | MSVC (`/we4229 /we4440`) | clang-cl i686 |
+|---|---|---|
+| A calling convention after the `*` of a function pointer: `int (* __stdcall f)(int)` | C4229, an error with the policy. Without it, MSVC ignores the convention and gives a cdecl pointer | No diagnostic. The convention applies to the function type: a stdcall pointer (the caller does not pop the argument) |
+| A typedef that changes the convention of a function type | C4440, an error with the policy | An error without the policy |
+| A redeclaration of a function with another convention | C2373, an error | An error without the policy |
+| A calling convention on data: `int __stdcall x;` | C4229, an error with the policy | `-Wignored-attributes`, an error with the policy |
+| A cast of a cdecl function to a stdcall pointer | No diagnostic | `-Wcast-calling-convention`, an error with the policy |
+
+The clang-cl policy is two warnings made errors. `/W0`, `-w` or a `-Wno-` switch for one of the two warnings removes
+it, and clang shows no warning in a system header (`/external:I`, `/imsvc`, `-isystem`, and the `INCLUDE`
+directories). Thus `build-vkd3d.ps1` reads `compile_commands.json` after configure. It stops if a compile command
+does not name the i686 target and the two switches, or if a compile command has a switch that removes the policy or
+makes a directory a system directory. The Windows SDK and C runtime headers stay system headers for clang. The MSVC
+x86 build checks them. clang-cl also reads the `CL` and `_CL_` variables, so the script clears them for clang-cl.
 
 ### RADV Vulkan ICD (`-Config radv`)
 
@@ -428,14 +448,21 @@ These recipes build and test artifacts. They do not select or install a driver.
 
 PROVENANCE: vkd3d-proton, LGPL-2.1.
 
-`tools/build/build-vkd3d.ps1 -Config <name> -Source <tree> -Build <dir> [-Widl <widl.exe>]` works like the DXVK
-script, with the same `Build Options:` gate and the submodule commits in `recipe.json`. The option sets are in
-[`tools/build/vkd3d-configs.json`](../tools/build/vkd3d-configs.json).
+`tools/build/build-vkd3d.ps1 -Config <name> -Compiler msvc|clang-cl -Source <tree> -Build <dir> [-Widl <widl.exe>]`
+works like the DXVK script, with the same `Build Options:` gate and the submodule commits in `recipe.json`. The
+option sets are in [`tools/build/vkd3d-configs.json`](../tools/build/vkd3d-configs.json).
 
 What differs from the DXVK script:
 - vkd3d-proton also needs the IDL compiler `widl`. MSYS2 mingw64 ships one. The script appends its directory to
-  PATH, so nothing else in it shadows the MSVC tools.
-- The script sets CC and CXX to `cl`.
+  PATH, so nothing else in it shadows the compiler tools.
+- `-Compiler` has no default. `msvc` sets `CC` and `CXX` to `cl`, `CC_LD` and `CXX_LD` to `link` and `AR` to `lib`.
+  `clang-cl` sets them to `clang-cl`, `lld-link` and `llvm-lib` of `-ClangToolchain` (default
+  `<BC250_ROOT>\toolchain\llvm-23.1.4-win64`), and adds `/clang:-ffp-contract=off` (the `compilers` entry). The
+  script prints the path and the version of the compiler and of the linker, and `recipe.json` records them.
+- `-Compiler clang-cl -Arch x86` puts `--target=i686-pc-windows-msvc` in `CC` and `CXX`, so that meson detects an
+  x86 host, and uses the clang-cl form of the x86 calling-convention policy ([clang-cl](#clang-cl--compiler-clang-cl)).
+- The engine links the static C runtime. After the build, the script stops if a target imports a C or C++ runtime
+  DLL (`msvcp*`, `vcruntime*`, `concrt*`, `ucrtbase`, `api-ms-win-crt-*`).
 - The tree must have its submodules initialized: `dxil-spirv` with its own nested submodules, and the Khronos
   headers.
 
@@ -452,13 +479,28 @@ All configs build with `-Dbuildtype=release -Denable_tests=false`.
 - `-Db_vscrt=mt`: the engine links the C runtime statically, and the branch's meson refuses anything else for it.
 
 `ddi-engine-lto` is `ddi-engine` followed by the optimisation options of the released engine: `-Db_ndebug=true`,
-whole-program optimisation (`-Db_lto=true -Db_lto_mode=default`), `/arch:AVX2`, `VKD3D_NO_DEBUG_MESSAGES` (WARN and
-FIXME compiled out) and a linker map (`/MAP`, which does not change the image).
+`-Db_lto=true`, `VKD3D_NO_DEBUG_MESSAGES` (WARN and FIXME compiled out), a PDB and a linker map, which does not
+change the image. The two compilers spell some of these options differently, so the config has a `compiler_options`
+entry for each compiler. The entry comes after the config's own `options`:
+
+| Option | `msvc` | `clang-cl` |
+|---|---|---|
+| Whole-program optimisation | `-Db_lto_mode=default`: `/GL` and `/LTCG` | `-Db_lto_mode=thin`: ThinLTO in `lld-link` |
+| Instruction set (`c_args`, `cpp_args`) | `/arch:AVX2` | `-march=x86-64-v3 -mtune=znver2` |
+| Linker map (`cpp_link_args`) | `/MAP` | `-map` |
+| Debug information | `-Ddebug=true`: `/Z7`, with the PDB | the same, with full types |
+
+A config that has `compiler_options` but no entry for `-Compiler` stops the script. The engine's clang-cl PDB has
+full types. The `lld-link` PDB defect of the Mesa builds (above) does not occur in this link: the ThinLTO link with
+the PDB takes about one minute. If a later commit makes the link stop, add `/clang:-gline-tables-only` to the
+clang-cl entry. The clang-cl `lld-link` has no `/release`, so the PE checksum is 0. The loader does not check the
+checksum of a user-mode DLL.
 
 `-Arch x86` builds the 32-bit engine for WoW64 processes with `vcvarsamd64_x86.bat`, as the DXVK and Mesa scripts
 do. The x86 engine of the release is `ddi-engine-lto` on branch `amdgpu-wddm/wow64-d3d12`: the x64 engine's commit
 plus one fix that only x86 needs (a calling convention on a function pointer). Its offline test passes on any x86
-Vulkan 1.3 driver, the same as the x64 one.
+Vulkan 1.3 driver, the same as the x64 one. With `-Compiler clang-cl` the x86 engine is an i686 clang-cl build with
+the same `compiler_options` as the x64 one.
 
 The branch is upstream vkd3d-proton plus `libs/ddi/` (MIT) and two small libvkd3d changes. It is published at
 <https://github.com/D-Ogi/vkd3d-proton/tree/amdgpu-wddm/ddi-engine>, together with the draft inline queue mode

@@ -304,17 +304,29 @@ function Add-MesonVariants([string[]]$Options, $ConfigsFile, [string]$Compiler, 
 # directory to the absolute one, so the PDB still names the real source files. -pdbsourcepath gives lld-link the same
 # token as the base of the relative paths of the C runtime objects and of the module names. The bytes are the same
 # only at the same relative path from the build to the source directory: ThinLTO hashes the source path of each
-# module, as the compile command spells it, into the names of promoted locals (docs/build.md). There is no x86
-# clang-cl recipe: clang-cl accepts /we4229 and /we4440 but only warns (-Wignored-attributes) where MSVC stops, so
-# the x86 policy below would be lost.
+# module, as the compile command spells it, into the names of promoted locals (docs/build.md).
+#
+# -Compiler clang-cl -Arch x86 needs -ClangTarget i686-pc-windows-msvc: the recipe names that target in the compiler
+# command itself (CC), so that meson detects an x86 host and every compile and link is i686. A recipe that does not
+# name the target is refused here, because its clang-cl would compile x64 objects in the x86 environment. The x86
+# calling-convention policy of clang-cl is not /we4229 /we4440, which clang-cl accepts and ignores. It is
+# -Werror=ignored-attributes, which stops a calling convention that clang ignores (on data, for example), and
+# -Werror=cast-calling-convention, which stops a cast of a function to a pointer of another convention (MSVC does not
+# diagnose that cast). The two cases of the MSVC policy are not open in clang: a convention after the * of a function
+# pointer applies to the function type (MSVC ignores it, C4229, and gives cdecl), and a typedef or a redeclaration
+# that changes the convention is an error of its own (C4440 and C2373 in MSVC). test-x86-callconv.ps1 holds the
+# controls of both compilers. The policy is a warning made an error, which /W0 or -w in a compile command, or a
+# system include directory, would remove: the recipe checks the compile commands after configure (build-vkd3d.ps1).
 function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build, [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
-                                      [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc') {
+                                      [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc', [string]$ClangTarget = '') {
     $token = 'X:\mesa-build'
     foreach ($dir in $Source, $Build) {
         if ($dir -match '\s') { throw "$dir contains white space: meson splits c_args at white space, so /d1trimfile cannot name it" }
     }
     if ($Compiler -eq 'clang-cl') {
-        if ($Arch -eq 'x86') { throw '-Compiler clang-cl builds x64 only: the x86 calling-convention policy (/we4229 /we4440) has no clang-cl equivalent yet' }
+        if ($Arch -eq 'x86' -and $ClangTarget -ne 'i686-pc-windows-msvc') {
+            throw '-Compiler clang-cl -Arch x86 needs a recipe that names the i686-pc-windows-msvc target in its compiler command (-ClangTarget): this recipe builds clang-cl for x64 only'
+        }
         $relative = [IO.Path]::GetRelativePath($Build, $Source)
         $prefixes = @($Source, $Build, $relative) | Select-Object -Unique
         $compile = '/Brepro' + (($prefixes | ForEach-Object { " /clang:-fmacro-prefix-map=$_=" }) -join '')
@@ -323,7 +335,8 @@ function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [stri
     } else {
         $compile = "/Brepro /FC /d1trimfile:$Source /d1trimfile:$Build"
     }
-    if ($Arch -eq 'x86') { $compile += ' /external:W1 /we4229 /we4440' }
+    if ($Arch -eq 'x86' -and $Compiler -eq 'clang-cl') { $compile += ' /clang:-Werror=ignored-attributes /clang:-Werror=cast-calling-convention' }
+    elseif ($Arch -eq 'x86') { $compile += ' /external:W1 /we4229 /we4440' }
     # meson's compiler sanity check passes c_link_args to the compiler driver without /link. cl.exe ignores an
     # unknown option with D9002, but clang-cl reads an unknown /option as an input file and stops. lld-link takes
     # either spelling, and clang-cl only warns on an unknown -option.

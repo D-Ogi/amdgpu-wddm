@@ -1,6 +1,15 @@
 {
   "schema": 1,
-  "note": "Meson option sets for build-vkd3d.ps1, the only copy it reads. Options are compared with the new meson log's 'Build Options:' line after configure; targets are the ninja targets built and hashed; 'ships' names, per target, the file names the release ships it as, and the build writes one copy per name next to the target and stamps each with its own version resource (BD-166, tools/build/versionstamp.py). A target no release ships has no entry.",
+  "note": "Meson option sets for build-vkd3d.ps1, the only copy it reads. Options are compared with the new meson log's 'Build Options:' line after configure; targets are the ninja targets built and hashed; 'ships' names, per target, the file names the release ships it as, and the build writes one copy per name next to the target and stamps each with its own version resource (BD-166, tools/build/versionstamp.py). A target no release ships has no entry. build-vkd3d.ps1 -Compiler adds the arguments of the compiler's 'compilers' entry to every set (Add-MesonVariants, tools/build/common.ps1). A config's 'compiler_options' holds the options of each compiler, which come after the config's 'options': a config that has the map must name every compiler of the script.",
+  "compilers": {
+    "msvc": {
+      "description": "cl.exe, link.exe and lib.exe of the Visual Studio developer environment: the compiler of every engine up to tester.32"
+    },
+    "clang-cl": {
+      "description": "clang-cl.exe, lld-link.exe and llvm-lib.exe of an LLVM Windows toolchain (build-vkd3d.ps1 -ClangToolchain, default LLVM 23.1.4), in the same Visual Studio environment for headers, libraries and rc.exe. /clang:-ffp-contract=off: a multiply and an add round separately, as with MSVC, whose /fp:precise does not contract them; with FMA in the instruction set (x86-64-v3), clang would fuse them into one FMA, which rounds once, and the engine's CPU-side float values (viewports, blend factors, format conversions in dxil-spirv) could then differ from the MSVC build",
+      "c_args": ["/clang:-ffp-contract=off"]
+    }
+  },
   "configs": {
     "per-app": {
       "description": "Upstream vkd3d-proton as application-local d3d12.dll and d3d12core.dll: the per-application D3D12 path of M12 and the comparison path for the proposed system D3D12 driver (G4)",
@@ -28,20 +37,31 @@
       "ships": {"libs/ddi/amdgpu_wddm_vkd3d.dll": ["amdgpu_wddm_vkd3d.dll"]}
     },
     "ddi-engine-lto": {
-      "description": "amdgpu_wddm_vkd3d.dll as released since b17: the ddi-engine options, byte for byte and in the same order, followed by b_ndebug, MSVC whole-program optimisation (/GL and /LTCG), /arch:AVX2, WARN and FIXME compiled out (VKD3D_NO_DEBUG_MESSAGES; TRACE is already out in release) and a linker map of the DLL for ETW attribution (the map does not change the image). The x64 engine of the release and its x86 (WoW64) build use this set. Debug information since rc5: -Ddebug=true, which adds /Z7 at compile and /DEBUG with /PDB: at link and nothing else, so the symbols of the shipped engine can be archived and matched. Measured on the release flavour x64: the image grows 512 bytes, .text keeps its virtual size, .rdata grows 208 bytes for the CODEVIEW record and the sections after it shift one page, and the instruction streams are identical, 783308 instructions each with the numbers masked",
+      "description": "amdgpu_wddm_vkd3d.dll as released since b17: the ddi-engine options, byte for byte and in the same order, followed by b_ndebug, whole-program optimisation, the instruction set, WARN and FIXME compiled out (VKD3D_NO_DEBUG_MESSAGES; TRACE is already out in release) and a linker map of the DLL for ETW attribution (the map does not change the image). The x64 engine of the release and its x86 (WoW64) build use this set. Debug information since rc5: -Ddebug=true, which adds /Z7 at compile and /DEBUG with /PDB: at link and nothing else, so the symbols of the shipped engine can be archived and matched. Measured on the release flavour x64 (msvc): the image grows 512 bytes, .text keeps its virtual size, .rdata grows 208 bytes for the CODEVIEW record and the sections after it shift one page, and the instruction streams are identical, 783308 instructions each with the numbers masked. The compilers spell three of these options differently (compiler_options). msvc: /GL and /LTCG (b_lto_mode=default), /arch:AVX2 and /MAP, the set of every engine up to tester.32. clang-cl: ThinLTO in lld-link (b_lto_mode=thin), -march=x86-64-v3 -mtune=znver2 (AVX, AVX2, BMI1, BMI2, F16C, FMA, LZCNT, MOVBE, the CPU requirement of the project; never -march=znver2, whose SSE4a Intel CPUs do not have) and -map, the lld-link spelling of /MAP that meson's link sanity check can give to clang-cl, which reads an unknown /option as an input file",
       "options": [
         "-Dbuildtype=release",
         "-Denable_tests=false",
         "-Denable_ddi_engine=true",
         "-Db_vscrt=mt",
         "-Db_ndebug=true",
-        "-Db_lto=true",
-        "-Db_lto_mode=default",
-        "-Dc_args=/arch:AVX2 -DVKD3D_NO_DEBUG_MESSAGES",
-        "-Dcpp_args=/arch:AVX2",
-        "-Dcpp_link_args=/MAP",
-        "-Ddebug=true"
+        "-Db_lto=true"
       ],
+      "compiler_options": {
+        "msvc": [
+          "-Db_lto_mode=default",
+          "-Dc_args=/arch:AVX2 -DVKD3D_NO_DEBUG_MESSAGES",
+          "-Dcpp_args=/arch:AVX2",
+          "-Dcpp_link_args=/MAP",
+          "-Ddebug=true"
+        ],
+        "clang-cl": [
+          "-Db_lto_mode=thin",
+          "-Dc_args=-march=x86-64-v3 -mtune=znver2 -DVKD3D_NO_DEBUG_MESSAGES",
+          "-Dcpp_args=-march=x86-64-v3 -mtune=znver2",
+          "-Dcpp_link_args=-map",
+          "-Ddebug=true"
+        ]
+      },
       "targets": [
         "libs/ddi/amdgpu_wddm_vkd3d.dll",
         "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"

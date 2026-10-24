@@ -103,26 +103,86 @@ class RecipeConfigs(unittest.TestCase):
                 self.assertNotIn(option, lab, config)
             self.assertIn("-Damdgpu-wddm-lab-flavour=true", lab)
             self.assertNotIn("-Damdgpu-wddm-lab-flavour=true", release)
-        # every config of every configs file, in both flavours; build-mesa.ps1 and build-dxvk.ps1 with each compiler,
-        # which has no default
+        # every config of every configs file, in both flavours, with each compiler of the three scripts, which has no
+        # default
         for script, configs, compilers in (("build-mesa.ps1", "mesa-configs.json", (" msvc", " clang-cl")),
                                            ("build-dxvk.ps1", "dxvk-configs.json", (" msvc", " clang-cl")),
-                                           ("build-vkd3d.ps1", "vkd3d-configs.json", ("",))):
+                                           ("build-vkd3d.ps1", "vkd3d-configs.json", (" msvc", " clang-cl"))):
             for config in json.loads(self.read(configs))["configs"]:
                 for flavour in ("release", "lab"):
                     for compiler in compilers:
                         self.assertIn("%s %s %s%s" % (script, config, flavour, compiler), resolved)
-                    if script in ("build-mesa.ps1", "build-dxvk.ps1"):
-                        self.assertNotIn("%s %s %s" % (script, config, flavour), resolved)
-        # BD-180: lab warning capture must survive the LTO recipe, while every release option stays intact.
-        release = resolved["build-vkd3d.ps1 ddi-engine-lto release"]
-        lab = resolved["build-vkd3d.ps1 ddi-engine-lto lab"]
-        release_c = next(option for option in release if option.startswith("-Dc_args="))
-        lab_c = next(option for option in lab if option.startswith("-Dc_args="))
-        self.assertIn("-DVKD3D_NO_DEBUG_MESSAGES", release_c.split())
-        self.assertNotIn("-DVKD3D_NO_DEBUG_MESSAGES", lab_c.split())
-        expected_lab = [option.replace(" -DVKD3D_NO_DEBUG_MESSAGES", "") for option in release]
-        self.assertEqual(expected_lab, [option for option in lab if option != "-Damdgpu-wddm-lab-flavour=true"])
+                    self.assertNotIn("%s %s %s" % (script, config, flavour), resolved)
+        # BD-180: lab warning capture must survive the LTO recipe, while every release option stays intact, with
+        # either compiler.
+        for compiler in ("msvc", "clang-cl"):
+            release = resolved["build-vkd3d.ps1 ddi-engine-lto release %s" % compiler]
+            lab = resolved["build-vkd3d.ps1 ddi-engine-lto lab %s" % compiler]
+            release_c = next(option for option in release if option.startswith("-Dc_args="))
+            lab_c = next(option for option in lab if option.startswith("-Dc_args="))
+            self.assertIn("-DVKD3D_NO_DEBUG_MESSAGES", release_c.split(), compiler)
+            self.assertNotIn("-DVKD3D_NO_DEBUG_MESSAGES", lab_c.split(), compiler)
+            expected_lab = [option.replace(" -DVKD3D_NO_DEBUG_MESSAGES", "") for option in release]
+            self.assertEqual(expected_lab, [option for option in lab if option != "-Damdgpu-wddm-lab-flavour=true"],
+                             compiler)
+
+    def test_the_engine_sets_resolve_per_compiler(self):
+        # The msvc set of the shipped engine stays the set every engine up to tester.32 was built with, in its order;
+        # clang-cl spells LTO, the instruction set and the linker map its own way and changes nothing else.
+        code, text, out = self.run_gate()
+        self.assertEqual(0, code, text)
+        with open(os.path.join(out, "resolved.json"), encoding="utf-8") as fh:
+            resolved = json.load(fh)
+        arguments = ("-Dc_args=", "-Dcpp_args=", "-Dc_link_args=", "-Dcpp_link_args=")
+
+        def value(options, key):
+            found = [x.split("=", 1)[1] for x in options if x.startswith("-D%s=" % key)]
+            self.assertEqual(1, len(found), key)
+            return found[0]
+
+        recorded = ["-Dbuildtype=release", "-Denable_tests=false", "-Denable_ddi_engine=true", "-Db_vscrt=mt",
+                    "-Db_ndebug=true", "-Db_lto=true", "-Db_lto_mode=default",
+                    "-Dc_args=/arch:AVX2 -DVKD3D_NO_DEBUG_MESSAGES", "-Dcpp_args=/arch:AVX2", "-Dcpp_link_args=/MAP",
+                    "-Ddebug=true"]
+        m = resolved["build-vkd3d.ps1 ddi-engine-lto release msvc"]
+        c = resolved["build-vkd3d.ps1 ddi-engine-lto release clang-cl"]
+        # msvc: the recorded set, each argument option with the reproducible-build switches at its end
+        self.assertEqual(len(recorded) + 1, len(m))
+        for want, got in zip(recorded, m):
+            self.assertTrue(got == want or (want.startswith(arguments) and got.startswith(want + " /Brepro")), got)
+        self.assertEqual("/Brepro /PDBALTPATH:%_PDB%", value(m, "c_link_args"))
+        # clang-cl: the same options, LTO in its ThinLTO mode
+        plain = [x for x in m if not x.startswith(arguments + ("-Db_lto_mode=",))]
+        self.assertEqual(plain, [x for x in c if not x.startswith(arguments + ("-Db_lto_mode=",))])
+        self.assertEqual("thin", value(c, "b_lto_mode"))
+        self.assertEqual(["-march=x86-64-v3", "-mtune=znver2", "-DVKD3D_NO_DEBUG_MESSAGES",
+                          "/clang:-ffp-contract=off", "/Brepro"], value(c, "c_args").split()[:5])
+        self.assertEqual(["-march=x86-64-v3", "-mtune=znver2", "/clang:-ffp-contract=off", "/Brepro"],
+                         value(c, "cpp_args").split()[:4])
+        for key in ("c_args", "cpp_args"):
+            words = value(c, key).split()
+            self.assertFalse([w for w in words if w.startswith(("/arch:", "-march=znver", "-march=native", "/FC",
+                                                                "/d1trimfile:"))], key)
+        # meson's sanity check gives the link options to clang-cl as compile options: no unknown /option
+        self.assertEqual("-map /Brepro -pdbaltpath:%_PDB% -pdbsourcepath:X:\\mesa-build", value(c, "cpp_link_args"))
+        self.assertEqual("/Brepro -pdbaltpath:%_PDB% -pdbsourcepath:X:\\mesa-build", value(c, "c_link_args"))
+        # the configs without compiler_options build one set with either compiler
+        for config in ("per-app", "ddi-engine"):
+            for flavour in ("release", "lab"):
+                m = resolved["build-vkd3d.ps1 %s %s msvc" % (config, flavour)]
+                c = resolved["build-vkd3d.ps1 %s %s clang-cl" % (config, flavour)]
+                self.assertEqual([x for x in m if not x.startswith(arguments)],
+                                 [x for x in c if not x.startswith(arguments)], config)
+
+    def test_compiler_options_without_an_entry_for_one_compiler_fail(self):
+        data = json.loads(self.read("vkd3d-configs.json"))
+        del data["configs"]["ddi-engine-lto"]["compiler_options"]["clang-cl"]
+        self.write("vkd3d-configs.json", json.dumps(data, indent=2))
+        code, text, _ = self.run_gate()
+        self.assertEqual(1, code, text)
+        self.assertIn("-Config ddi-engine-lto (release, clang-cl) does not resolve", text)
+        self.assertIn("-Config ddi-engine-lto has no compiler_options for -Compiler clang-cl (it has msvc)", text)
+        self.assertNotIn("(release, msvc) does not resolve", text)
 
     def test_the_defect_this_gate_exists_for_fails(self):
         self.edit("build-vkd3d.ps1", RELEASE_GUARDED, RELEASE_UNGUARDED)
@@ -130,11 +190,12 @@ class RecipeConfigs(unittest.TestCase):
         code, text, _ = self.run_gate()
         self.assertEqual(1, code, text)
         for config in ("per-app", "ddi-engine", "ddi-engine-lto"):
-            self.assertIn("build-vkd3d.ps1:%d: -Config %s (release) does not resolve: The property 'release_options' "
-                          "cannot be found" % (line, config), text)
+            for compiler in ("msvc", "clang-cl"):
+                self.assertIn("build-vkd3d.ps1:%d: -Config %s (release, %s) does not resolve: The property "
+                              "'release_options' cannot be found" % (line, config, compiler), text)
             self.assertIn("build-vkd3d.ps1:%d: $recipeConfig.release_options with -Config %s: The property "
                           "'release_options' cannot be found" % (line, config), text)
-        self.assertNotIn("(lab) does not resolve", text)
+        self.assertNotIn("(lab, ", text)
         self.assertNotIn("build-mesa.ps1", text)
         self.assertNotIn("build-dxvk.ps1", text)
 
@@ -298,14 +359,14 @@ class RecipeConfigs(unittest.TestCase):
         self.write("vkd3d-configs.json", json.dumps(data, indent=2))
         code, text, _ = self.run_gate()
         self.assertEqual(1, code, text)
-        self.assertIn("-Config per-app (release) does not resolve: The property 'per-app' cannot be found", text)
+        self.assertIn("-Config per-app (release, msvc) does not resolve: The property 'per-app' cannot be found", text)
 
     def test_a_release_flavour_that_never_takes_its_release_path_fails(self):
         self.edit("common.ps1", FLAVOUR_PROBE, "-SimpleMatch \"'amdgpu-wddm-lab-flavour-renamed'\"")
         code, text, _ = self.run_gate()
         self.assertEqual(1, code, text)
-        self.assertIn("build-vkd3d.ps1: -Config ddi-engine (release) resolved the none", text)
-        self.assertIn("build-vkd3d.ps1: -Config ddi-engine (lab) does not resolve in common.ps1:", text)
+        self.assertIn("build-vkd3d.ps1: -Config ddi-engine (release, msvc) resolved the none", text)
+        self.assertIn("build-vkd3d.ps1: -Config ddi-engine (lab, msvc) does not resolve in common.ps1:", text)
         self.assertIn("declares no amdgpu-wddm-lab-flavour option", text)
 
     def test_a_resolution_without_a_known_end_fails(self):

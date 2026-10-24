@@ -11,23 +11,43 @@ Configures and builds vkd3d-proton with a recorded meson option set (vkd3d-confi
               test; needs a checkout of the amdgpu-wddm/ddi-engine vkd3d-proton branch (enable_ddi_engine does
               not exist upstream)
   ddi-engine-lto
-              the ddi-engine options followed by the optimisation options of the released engine (LTO, AVX2,
-              WARN and FIXME compiled out in release, a linker map). Lab keeps WARN and FIXME.
+              the ddi-engine options followed by the optimisation options of the released engine (LTO, AVX2:
+              /arch:AVX2 with msvc, x86-64-v3 with clang-cl, WARN and FIXME compiled out in release, a linker
+              map). Lab keeps WARN and FIXME.
 
 -Arch x86 builds the 32-bit (WoW64) engine with vcvarsamd64_x86.bat (common.ps1), as build-dxvk.ps1 does.
 
-The build is a native MSVC build, like the M12 per-application packages: vcvars64.bat, meson from PYTHONPATH,
-ninja and glslang on PATH, CC and CXX set to cl. vkd3d-proton also needs the IDL compiler widl (MSYS2
-mingw64 ships one); its directory goes at the end of PATH, so that nothing else in it shadows the MSVC tools. After configure the script compares the new log's "Build Options:" line with the option set and
+The build is a native Windows build in the Visual Studio developer environment, like the M12 per-application
+packages: vcvars64.bat, meson from PYTHONPATH, ninja and glslang on PATH. vkd3d-proton also needs the IDL compiler
+widl (MSYS2 mingw64 ships one); its directory goes at the end of PATH, so that nothing else in it shadows the
+compiler tools. After configure the script compares the new log's "Build Options:" line with the option set and
 stops on any difference. The set the script passes is the configured set plus the reproducible-build switches
-of Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB%. The switches
-go at the end of the c_args, cpp_args and cpp_link_args that ddi-engine-lto already has.
+of Add-ReproducibleMesonOptions (common.ps1): /Brepro, /FC, /d1trimfile and /PDBALTPATH:%_PDB% for msvc. The
+switches go at the end of the c_args, cpp_args and cpp_link_args that ddi-engine-lto already has.
+
+-Compiler has no default: no build falls back to cl.exe without a word. msvc builds with cl, link and lib of the
+Visual Studio environment, as every engine up to tester.32 was built. clang-cl builds with clang-cl, lld-link and
+llvm-lib from -ClangToolchain (default LLVM 23.1.4), in the same Visual Studio environment for the headers, the
+libraries and rc.exe, and adds the arguments of its 'compilers' entry in vkd3d-configs.json. A config can hold a
+'compiler_options' map: the options of each compiler, after the config's own 'options' (ddi-engine-lto: LTO mode,
+instruction set and linker map, which the two compilers spell differently). The script prints the path and version
+of the compiler and the linker, and stops when one of them is missing. -Arch x86 with clang-cl names the
+i686-pc-windows-msvc target in the compiler command, so that meson detects an x86 host, and takes the clang-cl form of
+the x86 calling-convention policy from Add-ReproducibleMesonOptions (-Werror=ignored-attributes and
+-Werror=cast-calling-convention). After configure, every compile command must carry the target and the policy and no
+switch that turns warnings off or makes a directory a system directory; the script stops when one does not.
+
+The engine links the static C runtime (-Db_vscrt=mt): after the build, each target that imports a C or C++ runtime
+DLL (msvcp*, vcruntime*, concrt*, ucrtbase, api-ms-win-crt-*) stops the script, as in build-mesa.ps1.
 
 The source tree must be a vkd3d-proton checkout with its submodules initialized (git submodule update --init
 --recursive); this script patches nothing and fetches nothing.
 
 .EXAMPLE
-pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine -Source P:\BC-250\scratch\m15\vkd3d -Build P:\BC-250\scratch\m15\vkd3d-ddi-engine -Widl C:\msys64\mingw64\bin\widl.exe
+pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine -Compiler msvc -Source P:\BC-250\scratch\m15\vkd3d -Build P:\BC-250\scratch\m15\vkd3d-ddi-engine -Widl C:\msys64\mingw64\bin\widl.exe
+
+.EXAMPLE
+pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine-lto -Compiler clang-cl -Source <vkd3d-proton fork tree> -Build <dir>
 #>
 [CmdletBinding()]
 param(
@@ -62,7 +82,13 @@ param(
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     # BD-167: the lab flavour (-Damdgpu-wddm-lab-flavour=true). Without it the fork builds its release flavour,
     # which has no lookup of the override variables; the fork's own host test describes them.
-    [switch]$Lab
+    [switch]$Lab,
+    # The C and C++ compiler, which every caller names: msvc (cl, link, lib) or clang-cl (clang-cl, lld-link,
+    # llvm-lib of -ClangToolchain).
+    [Parameter(Mandatory)][ValidateSet('msvc', 'clang-cl')][string]$Compiler,
+    # -Compiler clang-cl: the LLVM Windows toolchain whose bin\ holds clang-cl.exe, lld-link.exe and llvm-lib.exe
+    # (default <BC250_ROOT>\toolchain\llvm-23.1.4-win64).
+    [string]$ClangToolchain
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -72,8 +98,18 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $configsPath = Join-Path $PSScriptRoot 'vkd3d-configs.json'
-$recipeConfig = (Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json).configs.$Config
+$configsFile = Get-Content -LiteralPath $configsPath -Raw | ConvertFrom-Json
+$recipeConfig = $configsFile.configs.$Config
 $options = @($recipeConfig.options)
+# The options of this compiler, after the config's own: the two compilers spell the LTO mode, the instruction set
+# and the linker map differently. A config with the map and no entry for this compiler is an error: it would build
+# something else than its name says. The key is looked up before it is read (Set-StrictMode, as release_options).
+if ($recipeConfig.PSObject.Properties['compiler_options']) {
+  if (-not $recipeConfig.compiler_options.PSObject.Properties[$Compiler]) {
+    throw "-Config $Config has no compiler_options for -Compiler $Compiler (it has $(@($recipeConfig.compiler_options.PSObject.Properties.Name) -join ', '))"
+  }
+  $options += @($recipeConfig.compiler_options.$Compiler | Where-Object { $_ })
+}
 if ($Lab) {
   # BD-180: VKD3D_DEBUG/VKD3D_SHADER_DEBUG cannot enable warnings that the compiler removed.
   # Keep the release recipe intact; remove only this complete c_args token for the lab flavour.
@@ -103,7 +139,26 @@ $forkFlavour = Get-AmdgpuWddmFlavour $Source -Lab:$Lab
 if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_options']) {
   $options += @($recipeConfig.release_options | Where-Object { $_ })
 }
-$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch
+# The compiler's own arguments: additions that leave the recorded set as it is.
+$options = Add-MesonVariants $options $configsFile $Compiler
+# clang-cl for x86 is the i686 target, named in the compiler command below (CC, CXX), so that meson detects an x86
+# host machine; common.ps1 then adds the clang-cl form of the x86 calling-convention policy.
+$clangTarget = if ($Compiler -eq 'clang-cl' -and $Arch -eq 'x86') { 'i686-pc-windows-msvc' } else { '' }
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler -ClangTarget $clangTarget
+$clangTools = $null
+if ($Compiler -eq 'clang-cl') {
+    if (-not $ClangToolchain) { $ClangToolchain = Join-Path $root 'toolchain\llvm-23.1.4-win64' }
+    $ClangToolchain = [IO.Path]::GetFullPath($ClangToolchain)
+    if ($ClangToolchain -match '\s') { throw "-ClangToolchain $ClangToolchain contains white space: meson splits CC at white space" }
+    $clangTools = [ordered]@{}
+    foreach ($t in 'clang-cl', 'lld-link', 'llvm-lib') {
+        $exe = Join-Path $ClangToolchain "bin\$t.exe"
+        if (-not (Test-Path -LiteralPath $exe)) { throw "$exe does not exist: -ClangToolchain takes an LLVM Windows toolchain directory" }
+        $clangTools[$t] = $exe
+    }
+}
+# A static C runtime build must import no C or C++ runtime DLL (docs/build.md, radv-system).
+$staticCrt = $options -contains '-Db_vscrt=mt'
 
 if (-not (Test-Path -LiteralPath (Join-Path $Source 'libs\vkd3d\vkd3d_private.h'))) { throw "$Source is not a vkd3d-proton source tree" }
 # An uninitialized submodule is an empty directory; meson would fail much later with a less useful message.
@@ -151,9 +206,36 @@ try {
     $widlDir = Split-Path -Parent $widlExe
     $env:PATH = "$env:PATH;$widlDir"
     $env:PYTHONPATH = $PythonPath
-    # Without these, meson may take gcc from a MinGW directory on PATH.
-    $env:CC = 'cl'
-    $env:CXX = 'cl'
+    # meson takes the compilers, their linker and the static linker from these variables. Without them it would take
+    # the first compiler it finds (gcc from a MinGW directory on PATH, the widl directory included), and a missing
+    # cl.exe would give a build with another compiler. -Compiler msvc names the tools of the Visual Studio environment
+    # as meson's own search finds them. -Compiler clang-cl names the tools of -ClangToolchain, inside the same Visual
+    # Studio environment, whose INCLUDE and LIB clang-cl and lld-link read. llvm-lib and not lib.exe, because the
+    # objects of a ThinLTO build are LLVM bitcode. For x86 the compiler command names the i686 target: meson takes the
+    # host machine from the target that the compiler reports, and the x86 Visual Studio environment does not change
+    # the target of clang-cl. CL and _CL_ go: clang-cl reads them, and the x86 environment puts the MSVC policy in
+    # _CL_, which clang-cl ignores at compile and appends after /link at a link, where lld-link reads each switch as a
+    # file. The clang-cl policy is in the option set (Add-ReproducibleMesonOptions).
+    if ($clangTools) {
+        $env:CC = (@($clangTools['clang-cl']) + @($clangTarget | Where-Object { $_ } | ForEach-Object { "--target=$_" })) -join ' '
+        $env:CXX = $env:CC
+        $env:CL = $null
+        $env:_CL_ = $null
+        $env:CC_LD = $clangTools['lld-link']
+        $env:CXX_LD = $clangTools['lld-link']
+        $env:AR = $clangTools['llvm-lib']
+    } else {
+        foreach ($t in 'cl', 'link', 'lib') {
+            if (-not (Get-Command "$t.exe" -CommandType Application -ErrorAction SilentlyContinue)) {
+                throw "-Compiler msvc: $t.exe is not on PATH after the Visual Studio environment ($vs)"
+            }
+        }
+        $env:CC = 'cl'
+        $env:CXX = 'cl'
+        $env:CC_LD = 'link'
+        $env:CXX_LD = 'link'
+        $env:AR = 'lib'
+    }
 
     $pythonExe = Resolve-Tool $Python 'python'
     if (-not $pythonExe) { throw 'python not found: put it on PATH or pass -Python' }
@@ -184,6 +266,7 @@ try {
         submodules      = Get-SubmoduleStatus $Source
         build_dir       = $Build
         meson_options   = $options
+        compiler        = $Compiler
         flavour         = $forkFlavour
         ninja_targets   = $targets
         environment     = [ordered]@{
@@ -202,13 +285,24 @@ try {
             python           = [ordered]@{ path = $pythonExe; version = Get-ToolVersion $pythonExe }
             meson            = $mesonVersion
             ninja            = [ordered]@{ path = $ninjaExe; version = Get-ToolVersion $ninjaExe }
-            cl               = [ordered]@{ path = (Get-Command cl.exe).Source; version = Get-ClVersion }
+            cl               = if ($clangTools) { $null } else { [ordered]@{ path = (Get-Command cl.exe).Source; version = Get-ClVersion } }
+            link             = if ($clangTools) { $null } else { [ordered]@{ path = (Get-Command link.exe).Source; version = Get-LinkVersion } }
+            clang_cl         = if ($clangTools) { [ordered]@{ path = $clangTools['clang-cl']; version = Get-ToolVersion $clangTools['clang-cl'] } } else { $null }
+            lld_link         = if ($clangTools) { [ordered]@{ path = $clangTools['lld-link']; version = Get-ToolVersion $clangTools['lld-link'] } } else { $null }
+            llvm_lib         = if ($clangTools) { [ordered]@{ path = $clangTools['llvm-lib'] } } else { $null }
             glslangValidator = [ordered]@{ path = $glslangExe; version = Get-ToolVersion $glslangExe }
             widl             = [ordered]@{ path = $widlExe; version = Get-ToolVersion $widlExe @('-V') }
         }
         gate            = $null
     }
     Write-Recipe $recipePath $recipe
+    if ($clangTools) {
+        Write-Host "compiler: clang-cl, $($recipe.tools.clang_cl.version) ($($clangTools['clang-cl']))"
+        Write-Host "linker: $($recipe.tools.lld_link.version) ($($clangTools['lld-link'])), archiver $($clangTools['llvm-lib'])"
+    } else {
+        Write-Host "compiler: msvc, cl $($recipe.tools.cl.version) ($($recipe.tools.cl.path))"
+        Write-Host "linker: link $($recipe.tools.link.version) ($($recipe.tools.link.path))"
+    }
 
     Invoke-Checked $pythonExe $mesonArgs
 
@@ -229,11 +323,55 @@ try {
     }
     Write-Host "configure gate: the Build Options line matches the $Config option set ($($options.Count) options)"
 
+    # The x86 calling-convention policy of clang-cl is two warnings made errors (common.ps1). A switch that turns all
+    # warnings off (/W0, -w) or these two off, in any compile command of the project or of a subproject, removes the
+    # policy from that file, where the MSVC policy (/we, through _CL_ after every other switch) would stay. clang
+    # also shows no warning in a system header, so a switch that makes a directory a system directory (/external:I,
+    # /imsvc, -isystem) removes the policy from the headers in it. Every compile command must name the i686 target and
+    # the policy, and none may carry such a switch. The Windows SDK and C runtime headers (INCLUDE) stay system
+    # headers for clang; the MSVC x86 build checks them.
+    if ($clangTarget) {
+        $policy = @("--target=$clangTarget", '/clang:-Werror=ignored-attributes', '/clang:-Werror=cast-calling-convention')
+        $off = '^(/clang:)?(-w|-Wno-everything|-Wno-(error=)?(ignored-attributes|cast-calling-convention))$|^/[Ww]0?$' +
+               '|^/external:|^[-/]imsvc|^(/clang:)?(-isystem|--system-header-prefix)'
+        $commands = @(Get-Content -LiteralPath (Join-Path $Build 'compile_commands.json') -Raw | ConvertFrom-Json)
+        $refused = @()
+        foreach ($c in $commands) {
+            $words = @([regex]::Matches($c.command, '"[^"]*"|\S+') | ForEach-Object { $_.Value.Trim('"') })
+            $lacks = @($policy | Where-Object { $words -cnotcontains $_ })
+            $drops = @($words | Where-Object { $_ -cmatch $off })
+            if ($lacks.Count -or $drops.Count) { $refused += "$($c.file): lacks [$($lacks -join ' ')] drops [$($drops -join ' ')]" }
+        }
+        $recipe.gate['x86_policy'] = [ordered]@{ compile_commands = $commands.Count; switches = $policy; refused = $refused }
+        Write-Recipe $recipePath $recipe
+        if (-not $commands.Count) { throw "x86 policy gate: $Build\compile_commands.json has no compile command" }
+        if ($refused.Count) { throw "x86 policy gate: $($refused.Count) compile command(s) without the clang-cl x86 policy:`n$($refused -join "`n")" }
+        Write-Host "x86 policy gate: all $($commands.Count) compile commands name $($policy -join ' ') and drop no warning"
+    }
+
     if ($ConfigureOnly) { Write-Host "configured only: $Build (recipe: $recipePath)"; return }
 
-    $ninjaArgs = @('-C', $Build)
+    # -d keeprsp: the response file of each link step stays in the build directory, as the record of what the link
+    # read. ninja deletes it after a link that succeeds; the outputs are the same with and without it.
+    $ninjaArgs = @('-C', $Build, '-d', 'keeprsp')
     if ($Jobs -gt 0) { $ninjaArgs += "-j$Jobs" }
     Invoke-Checked $ninjaExe ($ninjaArgs + $targets)
+
+    # The DLLs each target imports, the delay-loaded ones too. With the static C runtime, an import of a runtime DLL
+    # stops the build before anything is stamped: the engine runs inside every D3D12 game, and a game that ships an
+    # older msvcp140.dll beside its exe hands that copy to every DLL that imports the name (docs/build.md, radv-mt).
+    $imports = [ordered]@{}
+    foreach ($t in $targets) {
+        $f = Join-Path $Build ($t -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $f)) { throw "ninja succeeded but $f is missing" }
+        $deps = @(& dumpbin.exe /nologo /dependents $f)
+        if ($LASTEXITCODE -ne 0) { throw "dumpbin /dependents $f failed ($LASTEXITCODE)" }
+        $imports[$t] = @($deps | Where-Object { $_ -match '^\s+\S+\.dll\s*$' } | ForEach-Object { $_.Trim() })
+        $crt = @($imports[$t] | Where-Object { $_ -match '^(msvcp|vcruntime|concrt|ucrtbase|api-ms-win-crt-)' })
+        if ($staticCrt -and $crt.Count) {
+            throw "$t imports a C or C++ runtime DLL although -Config $Config links the static C runtime: $($crt -join ', ')"
+        }
+    }
 
     # BD-166: every artifact a release ships carries its version resource from this build, its last step before the
     # receipt; the release copies the file and rewrites none of it (tools\release\build-release.ps1). The option set
@@ -261,7 +399,7 @@ try {
     foreach ($t in $targets) {
         $f = Join-Path $Build ($t -replace '/', '\')
         if (-not (Test-Path -LiteralPath $f)) { throw "ninja succeeded but $f is missing" }
-        $artifacts[$t] = [ordered]@{ bytes = (Get-Item -LiteralPath $f).Length; sha256 = Get-FileSha256 $f }
+        $artifacts[$t] = [ordered]@{ bytes = (Get-Item -LiteralPath $f).Length; sha256 = Get-FileSha256 $f; imports = $imports[$t] }
     }
     foreach ($rel in $stamped.Keys) {
         $f = $stamped[$rel]
