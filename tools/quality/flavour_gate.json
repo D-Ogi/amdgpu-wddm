@@ -1510,6 +1510,46 @@
      "vulkan_radeon.dll"
     ]
    }
+  },
+  {
+   "name": "PAGINGRINGSTARTBYTES",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadPagingRingStart and GuardLabCommitPagingRingStart (lab flavour only), a REG_QWORD or REG_DWORD value under the driver's Parameters key or its internal persistent state; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-235 lab arm: the SDMA0 paging ring starts at this byte pointer at its first fresh bring-up, so that a run reaches ring byte 2^32 in seconds",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
+  },
+  {
+   "name": "PAGINGRINGSTARTNONCE",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadPagingRingStart and GuardLabCommitPagingRingStart (lab flavour only), a REG_QWORD or REG_DWORD value under the driver's Parameters key or its internal persistent state; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-235 lab arm: the one-shot key of PagingRingStartBytes; one start uses a seed once per nonce",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
+  },
+  {
+   "name": "PAGINGBOUNDARYMODE",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadPagingRingStart and GuardLabCommitPagingRingStart (lab flavour only), a REG_QWORD or REG_DWORD value under the driver's Parameters key or its internal persistent state; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-235 lab arm: 0 turns the ring boundary pad off on every ring (the control run, the behaviour before the fix); the release flavour always pads",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
+  },
+  {
+   "name": "LABPAGINGRINGSTARTNONCE",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadPagingRingStart and GuardLabCommitPagingRingStart (lab flavour only), a REG_QWORD or REG_DWORD value under the driver's Parameters key or its internal persistent state; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-235 lab arm: the marker in the internal persistent state that records the consumed nonce",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
   }
  ],
  "allowed": [

@@ -81,7 +81,14 @@ def pe_importing(*imports, strings=()):
 
 
 RELEASE_KMD = (K["flavour_markers"]["release"], "kmd: something every flavour logs")
-LAB_KMD = (K["flavour_markers"]["lab"],) + tuple(e["marker"] for e in K["lab_escape_markers"])
+KMD_FILE = K["file"].lower()
+# The forbidden names that only the lab KMD holds (lab.every names the KMD file): the synthetic lab KMD holds them,
+# and lab_items() leaves the KMD out, because every set has its KMD apart from the lab_slots() copies.
+KMD_NAMES = tuple(sorted(f["name"] for f in DECL["forbidden"] if KMD_FILE in f["lab"].get("every", [])))
+# How the KMD source spells them: REG_QWORD and REG_DWORD value names, UTF-16LE strings in the SYS (BD-235).
+KMD_SPELLING = {"PAGINGRINGSTARTBYTES": "PagingRingStartBytes", "PAGINGRINGSTARTNONCE": "PagingRingStartNonce",
+                "PAGINGBOUNDARYMODE": "PagingBoundaryMode", "LABPAGINGRINGSTARTNONCE": "LabPagingRingStartNonce"}
+LAB_KMD = (K["flavour_markers"]["lab"],) + tuple(e["marker"] for e in K["lab_escape_markers"]) + KMD_NAMES
 # A file that reads the game-log sink, as the release rule of AMDGPU_WDDM_LOG wants it: the marker name and the folder.
 LOG = ("AMDGPU_WDDM_LOG", "AMDGPU_WDDM_GAMELOG", "amdgpu-wddm\\logs\\games")
 MEMBER_OF = {source: member.split("/", 1)[1] for member, source in g.driverstore_members().items()}
@@ -92,7 +99,8 @@ def lab_items():
     items = {}
     for f in DECL["forbidden"]:
         for item in f["lab"].get("every", []):
-            items.setdefault(item, []).append(f["name"])
+            if item != KMD_FILE:
+                items.setdefault(item, []).append(f["name"])
     return items
 
 
@@ -671,6 +679,47 @@ class ReleaseFlavour(unittest.TestCase):
     def test_lab_kmd_only_skips_the_umd_names(self):
         kmd = self.write("bc250kmd.sys", pe(*LAB_KMD))
         self.assertEqual(self.run_gate("--flavour", "lab", "--kmd", str(kmd), "--kmd-only"), 0)
+
+    def test_kmd_registry_names_are_declared(self):
+        # BD-235: the lab-only registry values of the KMD are forbidden names whose lab build is the KMD.
+        self.assertEqual(sorted(KMD_SPELLING), list(KMD_NAMES))
+
+    def test_kmd_registry_name_fails_release_as_the_source_spells_it(self):
+        # The release KMD must not hold a lab registry name, in ASCII or as the UTF-16LE string of the source.
+        base = [s for s in LAB_KMD if s not in KMD_NAMES and s != K["flavour_markers"]["lab"] and
+                s not in [e["marker"] for e in K["lab_escape_markers"]]]
+        self.assertEqual(base, [])
+        for name, spelt in sorted(KMD_SPELLING.items()):
+            for encoding in ("ascii", "utf16"):
+                with self.subTest(name=spelt, encoding=encoding):
+                    data = pe(*RELEASE_KMD, utf16=(spelt,)) if encoding == "utf16" else pe(*RELEASE_KMD, spelt)
+                    kmd = self.write("bc250kmd.sys", data)
+                    out = self.dir / ("out-%s-%s" % (name, encoding))
+                    self.assertEqual(self.run_gate("--flavour", "release", "--kmd", str(kmd), "--kmd-only",
+                                                   "--out", str(out)), 1)
+                    record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
+                    hit = record["files"][0]["forbidden"][name]
+                    self.assertEqual(hit["variant"], {encoding: 1})
+        # Inside a longer text in another case the name is prose, as for every forbidden name.
+        kmd = self.write("bc250kmd.sys", pe(*RELEASE_KMD, "lab: PagingBoundaryMode absent, the default (pad)"))
+        self.assertEqual(self.run_gate("--flavour", "release", "--kmd", str(kmd), "--kmd-only"), 0)
+
+    def test_lab_kmd_holds_the_registry_names_as_the_source_spells_them(self):
+        lab = [s for s in LAB_KMD if s not in KMD_NAMES]
+        kmd = self.write("bc250kmd.sys", pe(*lab, utf16=tuple(KMD_SPELLING.values())))
+        self.assertEqual(self.run_gate("--flavour", "lab", "--kmd", str(kmd), "--kmd-only"), 0)
+        for name, spelt in sorted(KMD_SPELLING.items()):
+            with self.subTest(name=spelt):
+                kmd = self.write("bc250kmd.sys", pe(*lab, utf16=tuple(v for v in KMD_SPELLING.values() if v != spelt)))
+                self.assertEqual(self.run_gate("--flavour", "lab", "--kmd", str(kmd), "--kmd-only"), 1)
+
+    def test_lab_kmd_without_one_registry_name_fails_the_lab_set(self):
+        for name in KMD_NAMES:
+            with self.subTest(name=name):
+                self.setUp()
+                self.lab_set()
+                self.write("pkg/bc250kmd.sys", pe(*[s for s in LAB_KMD if s != name]))
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
 
     def test_every_forbidden_name_has_a_lab_expectation(self):
         for f in DECL["forbidden"]:

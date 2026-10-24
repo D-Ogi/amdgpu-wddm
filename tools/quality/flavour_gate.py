@@ -58,8 +58,9 @@ scanned file named in a forbidden entry's lab.every carries that name, with at l
 path item: a file at that path), no unlisted copy of a file named by path items carries it, no file carries a name
 whose entry says lab.none, and every prefixed identifier is declared. So a build that lost the lab switch, a marker
 list that no longer matches the handlers, or a path list that no longer matches the build lines, fails in the lab
-arm instead of passing in silence. --kmd-only checks the KMD alone. A lab set never passes as release and a release
-set never passes as lab.
+arm instead of passing in silence. --kmd-only checks the KMD alone; in the lab flavour the KMD must still hold
+each forbidden name whose lab.every names the KMD file (the BD-235 lab registry names, for example). A lab set never
+passes as release and a release set never passes as lab.
 
 --sources judges the files a flavour selection pins, before anything is copied: each row of
 release_flavour.py's output is read from --root at its own payload path, so a release row that pins a lab build
@@ -760,6 +761,13 @@ def check(decl, flavour, kmd_path, others, kmd_only=False, slots=None, blobs=Non
         for name in sorted(finding['out_of_scope']):
             notes.append('%s: %s (out of scope, recorded)' % (path, name))
 
+    if flavour == 'lab' and kmd_only:
+        # A KMD-only lab set has no UMD to judge, but the KMD's own lab-only names are still owed: a lab KMD built
+        # without the switch, or a lookup that moved, fails here and not first in the package arm.
+        for f in decl['forbidden']:
+            if k['file'].lower() in f['lab'].get('every', []) and f['name'] not in held[kmd_path]:
+                failures.append('%s: the lab KMD lacks %s (%s): it was built without the lab switch, or the lookup '
+                                'is gone and the declaration is stale' % (kmd_path, f['name'], f['where']))
     if flavour == 'lab' and not kmd_only:
         # A lab build that lost the switch has none of its lab-only names: each named file must be in the set, and
         # each copy of it must hold each name that names it. A path item names one copy; the other copies of that
