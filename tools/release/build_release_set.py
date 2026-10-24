@@ -68,11 +68,15 @@ ATTRIBUTION = [
     ("Copilot", r"\bcopilot\b"), ("DeepSeek", r"\bdeepseek\b"),
 ]
 ATTRIBUTION_RX = [(word, re.compile(rx, re.I)) for word, rx in ATTRIBUTION]
-# These model names are also English words or other products (a poem, an operating system, a story), so they are a hit
-# only in an attribution context: a trailer line ("<Something>-by:"), or a line that names the vendor or its product.
-# Mesa's util code names the Haiku operating system beside Windows and macOS, and that is not an author.
+# These model names are also English words or other products (a poem, an operating system, a story). In a message line
+# they are a hit only in an attribution context: a trailer line ("<Something>-by:"), a line that names the vendor or
+# its product, or a line with an authorship phrase ("written by", "generated with", ...). Mesa's util code names the
+# Haiku operating system beside Windows and macOS, and that is not an author. The author and committer fields are an
+# attribution context by themselves, so these words are always a hit there. The gate checks these documented
+# patterns; it is no general detector of authorship in prose.
 CONTEXT_WORDS = {"Opus", "Sonnet", "Haiku", "Fable"}
-CONTEXT_RX = re.compile(r"^\s*[a-z][a-z-]*-by\s*:|\bclaude\b|\banthropic\b", re.I)
+CONTEXT_RX = re.compile(r"^\s*[a-z][a-z-]*-by\s*:|\bclaude\b|\banthropic\b"
+                        r"|\b(?:written|generated|authored|recorded|assisted|created)\s+(?:by|with)\b", re.I)
 # A commit message states a requirement as the project's own, never as a quote of the repository owner or an
 # attribution with a date. The push gate of the workspace refuses such a message with this same pattern, so a
 # release set that names such a commit could not be pushed. Technical owners (SMU owner, file owner, owner lock)
@@ -456,13 +460,44 @@ def scan_attribution(checkout, base, commit, upstream=None):
         fields = [("author", author), ("committer", committer)]
         fields += [(f"message line {i + 1}", line) for i, line in enumerate(body.strip().splitlines())]
         for field, text in fields:
+            message = field.startswith("message")
             for word, rx in ATTRIBUTION_RX:
-                if rx.search(text) and (word not in CONTEXT_WORDS or CONTEXT_RX.search(text)):
+                if rx.search(text) and (not message or word not in CONTEXT_WORDS or CONTEXT_RX.search(text)):
                     hits.append({"commit": sha.strip(), "field": field, "word": word, "text": text.strip()[:160]})
             if field.startswith("message") and OWNER_RX.search(text):
                 hits.append({"commit": sha.strip(), "field": field, "word": "owner attribution",
                              "text": text.strip()[:160]})
     return count, hits, None
+
+
+def excluded_identities(checkout, base, commit, upstream, identities):
+    """The commits that the upstream rule leaves out of the scan, (ancestors(commit) - ancestors(base)) intersected
+    with ancestors(upstream), and those of them whose author or committer email is one of the fork's own identities.
+    The project sends no commit upstream, so a match means that the upstream-named history holds fork work.
+    Returns (count, matches, error); a match is {commit, field, email}."""
+    def revs(*spec):
+        r = subprocess.run(["git", "-C", str(checkout), "rev-list", *spec], capture_output=True)
+        if r.returncode != 0:
+            raise RuntimeError(r.stderr.decode("utf-8", "replace").strip())
+        return set(r.stdout.decode("ascii", "replace").split())
+    try:
+        left_out = revs(commit, f"^{base}") & revs(upstream)
+    except RuntimeError as e:
+        return None, [], str(e)
+    own = {i.strip().lower() for i in identities}
+    matches = []
+    if left_out:
+        r = subprocess.run(["git", "-C", str(checkout), "log", "--no-walk=unsorted", "--stdin",
+                            "--format=%H%x1f%ae%x1f%ce"], input="\n".join(sorted(left_out)).encode("ascii"),
+                           capture_output=True)
+        if r.returncode != 0:
+            return None, [], r.stderr.decode("utf-8", "replace").strip()
+        for line in r.stdout.decode("utf-8", "replace").splitlines():
+            sha, author, committer = (line.split("\x1f") + ["", ""])[:3]
+            for field, email in (("author", author), ("committer", committer)):
+                if email.strip().lower() in own:
+                    matches.append({"commit": sha.strip(), "field": field, "email": email.strip()})
+    return len(left_out), matches, None
 
 
 def compiler_findings(build, params):
@@ -588,7 +623,10 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
             failed = True
             continue
         # The upstream commit of a fork line: only a commit that a remote of the upstream project's URL holds may
-        # take its history out of the scan, so that a fork commit named as 'upstream' hides nothing.
+        # take its history out of the scan. The check reads the checkout's own remote configuration and fetched
+        # refs, offline, so it trusts the reviewed upstream URL of the manifest and the release workflow's fetch; it
+        # is no authentication of the remote. The fork-identity check below refuses an excluded set that holds a
+        # commit of the fork's own identities.
         upstream = table[repo].get("upstream")
         if upstream:
             if provenance.normalize_url(upstream["url"]) == provenance.normalize_url(table[repo]["url"]):
@@ -608,16 +646,22 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
             failed = True
             continue
         if upstream:
-            code, text = provenance.git(checkout, "rev-list", "--count", f"{base}..{commit}")
-            if code != 0:
-                att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: git rev-list failed: {text}")
+            skipped, own, error = excluded_identities(checkout, base, commit, upstream["commit"],
+                                                      upstream["fork_identities"])
+            if error:
+                att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: git rev-list failed: {error}")
                 failed = True
                 continue
-            skipped = int(text) - count
             left_out.append({"repo": repo, "range": f"{base[:8]}..{commit[:8]}", "upstream": upstream["commit"],
-                             "url": upstream["url"], "on": branches[0], "commits": skipped})
+                             "url": upstream["url"], "on": branches[0], "commits": skipped,
+                             "fork_identity_commits": own})
             att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: {count} commits, {len(found)} hits; {skipped} "
-                             f"commits of upstream {upstream['commit'][:8]} ({branches[0]}) left out")
+                             f"commits of upstream {upstream['commit'][:8]} ({branches[0]}) left out, "
+                             f"{len({m['commit'] for m in own})} of them with a fork identity")
+            for m in own:
+                att_lines.append(f"  {repo} {m['commit'][:8]} {m['field']} {m['email']}: a fork identity in the "
+                                 f"history that upstream {upstream['commit'][:8]} reaches; the scan may not leave it out")
+                failed = True
         else:
             att_lines.append(f"{repo} {base[:8]}..{commit[:8]}: {count} commits, {len(found)} hits")
         for h in found:

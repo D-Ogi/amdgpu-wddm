@@ -35,12 +35,14 @@
         "base": {"$ref": "#/$defs/commit", "description": "The commit the attribution scan starts from (exclusive): usually the commit the previous release pinned."},
         "upstream": {
           "type": "object",
-          "required": ["commit", "url"],
+          "required": ["commit", "url", "fork_identities"],
           "additionalProperties": false,
-          "description": "The upstream project's commit that this fork line merged. The attribution scan leaves out every commit it reaches (the upstream history, with its own authors and trailers) and counts them in the report. A remote of the checkout with this URL must hold the commit.",
+          "description": "The upstream project's commit that this fork line merged. The attribution scan leaves out every commit it reaches (the upstream history, with its own authors and trailers) and counts them in the report. A remote of the checkout with this URL must hold the commit, and no left-out commit may have an author or committer email of fork_identities.",
           "properties": {
             "commit": {"$ref": "#/$defs/commit"},
-            "url": {"type": "string", "minLength": 1}
+            "url": {"type": "string", "minLength": 1},
+            "fork_identities": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 3},
+                                "description": "The reviewed list of the fork's own commit emails and their aliases. The project sends no commit upstream, so none of them may appear in the left-out history."}
           }
         },
         "note": {"type": "string"}

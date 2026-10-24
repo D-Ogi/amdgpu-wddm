@@ -26,6 +26,11 @@ from test_provenance import git, remove_tree
 from test_symbols import msf_pdb_bytes, pe_bytes
 
 OUT = os.environ.get("BC250_TEST_OUT") or None
+# The fixture commits as test@example.com (test_provenance.git): that is the fork. A simulated upstream commit carries
+# an identity of its own.
+FORK_EMAIL = "test@example.com"
+FORK_ID = f"test <{FORK_EMAIL}>"
+UPSTREAM_ID = "Upstream Author <dev@upstream.example>"
 HERE = Path(__file__).resolve().parent
 TOOL = HERE / "build-release-set.ps1"
 GB = 10 ** 9
@@ -322,15 +327,30 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
         git(self.ws.repo, "fetch", "-q", "origin")
 
-    def upstream_merge(self, message):
-        """A commit of an upstream project (published on its own remote, another URL) merged into main and pushed.
-        Returns the upstream commit, the upstream URL and the merge."""
+    def commit_as(self, message, name="change.txt", author=UPSTREAM_ID, committer=UPSTREAM_ID):
+        """A commit with the given 'Name <email>' author and committer (the fixture's git() is test@example.com)."""
+        (self.ws.repo / name).write_text(f"{message}\n{author}\n{committer}\n", encoding="utf-8")
+        git(self.ws.repo, "add", "-A")
+        env = dict(os.environ)
+        for role, ident in (("AUTHOR", author), ("COMMITTER", committer)):
+            env[f"GIT_{role}_NAME"], env[f"GIT_{role}_EMAIL"] = ident.split(" <")[0], ident.split(" <")[1].rstrip(">")
+        r = subprocess.run(["git", "-C", str(self.ws.repo), "-c", "core.autocrlf=false", "commit", "-q", "-m", message],
+                           env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        return git(self.ws.repo, "rev-parse", "HEAD")
+
+    def upstream_spec(self, up, url):
+        return {"commit": up, "url": url, "fork_identities": [FORK_EMAIL, "alias@fork.example"]}
+
+    def upstream_merge(self, message, author=UPSTREAM_ID, committer=UPSTREAM_ID, start=None):
+        """A commit of an upstream project (published on its own remote, another URL, an upstream identity unless
+        named) merged into main and pushed. Returns the upstream commit, the upstream URL and the merge."""
         remote = self.ws.remotes / "upstream.git"
         if not remote.exists():
             git(self.ws.remotes, "init", "-q", "--bare", str(remote))
             git(self.ws.repo, "remote", "add", "upstream", str(remote))
-        git(self.ws.repo, "checkout", "-q", "-b", "up", self.ws.base_commit)
-        up = self.ws.commit(message, name="upstream.txt")
+        git(self.ws.repo, "checkout", "-q", "-B", "up", start or self.ws.base_commit)
+        up = self.commit_as(message, name="upstream.txt", author=author, committer=committer)
         git(self.ws.repo, "push", "-q", "upstream", "HEAD:refs/heads/main")
         git(self.ws.repo, "fetch", "-q", "upstream")
         git(self.ws.repo, "checkout", "-q", "main")
@@ -345,12 +365,12 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         _, gates = self.gates(manifest)
         self.assertEqual(gates["attribution"]["status"], "FAIL")
         self.assertEqual({h["commit"] for h in gates["attribution"]["hits"]}, {up})
-        manifest["repositories"]["recipes"]["upstream"] = {"commit": up, "url": url}
+        manifest["repositories"]["recipes"]["upstream"] = self.upstream_spec(up, url)
         result, gates = self.gates(manifest)
         self.assertEqual(gates["attribution"]["status"], "PASS", gates["attribution"]["lines"])
         self.assertEqual(result["status"], "PASS")
         left = gates["attribution"]["upstream_left_out"]
-        self.assertEqual([(x["upstream"], x["commits"]) for x in left], [(up, 1)])
+        self.assertEqual([(x["upstream"], x["commits"], x["fork_identity_commits"]) for x in left], [(up, 1, [])])
         self.assertIn("1 commits of upstream", " ".join(gates["attribution"]["lines"]))
 
     def test_a_fork_trailer_fails_beside_an_upstream_merge(self):
@@ -358,13 +378,13 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         fork = self.ws.commit("radv: a fix\n\nGenerated-by: Opus 5.5\n")
         self.publish()
         manifest = self.ws.manifest([self.ws.row("a", commit=fork)], recipe_commit=fork)
-        manifest["repositories"]["recipes"]["upstream"] = {"commit": up, "url": url}
+        manifest["repositories"]["recipes"]["upstream"] = self.upstream_spec(up, url)
         _, gates = self.gates(manifest)
         self.assertEqual(gates["attribution"]["status"], "FAIL", gates["attribution"]["lines"])
         self.assertEqual({(h["commit"], h["word"]) for h in gates["attribution"]["hits"]}, {(fork, "Opus")})
         # A fork commit named as the upstream hides nothing: the upstream remote does not hold it, and the fork's own
         # URL is no upstream URL.
-        for spec in ({"commit": fork, "url": url}, {"commit": fork, "url": str(self.ws.remote)}):
+        for spec in (self.upstream_spec(fork, url), self.upstream_spec(fork, str(self.ws.remote))):
             manifest["repositories"]["recipes"]["upstream"] = spec
             _, gates = self.gates(manifest)
             self.assertEqual(gates["attribution"]["status"], "FAIL", spec)
@@ -380,6 +400,68 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         self.publish()
         _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=trailer)], recipe_commit=trailer))
         self.assertEqual({(h["commit"], h["word"]) for h in gates["attribution"]["hits"]}, {(trailer, "Haiku")})
+
+    def test_an_authorship_phrase_is_an_attribution_context(self):
+        for text, word in (("Written by Opus", "Opus"), ("The tables were generated with Sonnet.", "Sonnet"),
+                           ("authored by fable", "Fable"), ("Recorded by Haiku in the lab.", "Haiku"),
+                           ("Assisted with Opus.", "Opus"), ("Created by Sonnet", "Sonnet")):
+            commit = self.ws.commit(f"util: a fix\n\n{text}\n")
+            self.publish()
+            _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit))
+            self.assertEqual({(h["commit"], h["word"]) for h in gates["attribution"]["hits"]}, {(commit, word)}, text)
+            self.ws.base_commit = commit  # the next case scans only its own commit
+        # No authorship phrase: the operating system and the plain words stay no hit.
+        commit = self.ws.commit("Haiku: fix the build\n\nThe file was written for Haiku by its port, "
+                                "created on Windows.\n")
+        self.publish()
+        _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit))
+        self.assertEqual(gates["attribution"]["status"], "PASS", gates["attribution"]["lines"])
+
+    def test_a_model_name_as_author_or_committer_is_always_a_hit(self):
+        for word in ("Opus", "Sonnet", "Haiku", "Fable"):
+            for field in ("author", "committer"):
+                ident = f"{word} <model@example.invalid>"
+                commit = self.commit_as(f"util: a fix of {field} {word}\n", author=ident if field == "author" else
+                                        FORK_ID, committer=ident if field == "committer" else FORK_ID)
+                self.publish()
+                _, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit))
+                self.assertEqual(gates["attribution"]["status"], "FAIL", (word, field))
+                self.assertEqual({(h["commit"], h["field"], h["word"]) for h in gates["attribution"]["hits"]},
+                                 {(commit, field, word)}, (word, field))
+                self.ws.base_commit = commit  # the next case scans only its own commit
+
+    def test_a_fork_identity_in_the_left_out_history_fails(self):
+        # Author only, then committer only: an upstream-named commit with a fork identity is not left out quietly.
+        for author, committer in ((FORK_ID, UPSTREAM_ID), (UPSTREAM_ID, "Alias <ALIAS@fork.example>")):
+            up, url, merge = self.upstream_merge("util: a faster path\n", author=author, committer=committer)
+            manifest = self.ws.manifest([self.ws.row("a", commit=merge)], recipe_commit=merge)
+            manifest["repositories"]["recipes"]["upstream"] = self.upstream_spec(up, url)
+            _, gates = self.gates(manifest)
+            att = gates["attribution"]
+            self.assertEqual(att["status"], "FAIL", att["lines"])
+            field = "author" if author == FORK_ID else "committer"
+            self.assertEqual([(m["commit"], m["field"]) for m in att["upstream_left_out"][0]["fork_identity_commits"]],
+                             [(up, field)])
+            self.assertIn("a fork identity", " ".join(att["lines"]))
+            self.ws.base_commit = merge  # the next case starts after this one
+
+    def test_a_fork_identity_before_the_release_range_is_not_read(self):
+        # The upstream history holds a fork-identity commit that the previous release (the base) already reaches:
+        # only (ancestors(commit) - ancestors(base)) & ancestors(upstream) is checked, so it is no finding.
+        old, url, base = self.upstream_merge("util: an old path\n", author=FORK_ID)
+        up, _, merge = self.upstream_merge("util: a faster path\n", start=old)
+        manifest = self.ws.manifest([self.ws.row("a", commit=merge)], recipe_commit=merge)
+        manifest["repositories"]["recipes"]["base"] = base
+        manifest["repositories"]["recipes"]["upstream"] = self.upstream_spec(up, url)
+        _, gates = self.gates(manifest)
+        att = gates["attribution"]
+        self.assertEqual(att["status"], "PASS", att["lines"])
+        self.assertEqual([(x["commits"], x["fork_identity_commits"]) for x in att["upstream_left_out"]], [(1, [])])
+
+    def test_an_upstream_entry_names_the_fork_identities(self):
+        manifest = self.ws.manifest([self.ws.row("a")])
+        manifest["repositories"]["recipes"]["upstream"] = {"commit": self.ws.head, "url": "https://example.org/u.git"}
+        self.assertTrue(any("fork_identities" in e for e in build_release_set.check_manifest(manifest)))
 
     def test_collect_takes_the_pdb_of_the_image(self):
         # The KMD build leaves its image in package\ and bc250kmd.pdb elsewhere; a PDB of the same name from another
