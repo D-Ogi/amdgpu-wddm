@@ -1,0 +1,2 @@
+discover: 0 gpu(s), 0 adapter entries, 0 display(s)
+PASS discover

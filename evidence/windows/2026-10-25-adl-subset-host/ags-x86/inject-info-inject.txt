@@ -1,0 +1,27 @@
+ags-client info, x86 build, 2026-10-24T23:36:02Z
+inject: test snapshot (2 GPUs, 3 entries, 3 displays) given to atiadlxy.dll
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\inject\amd_ags_x86.dll version 6.3.0
+agsInitialize(gpu info yes) = 0
+adl module after agsInitialize: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\inject\atiadlxy.dll
+gpuinfo: driverVersion "0.7.216.104" radeonSoftwareVersion "" numDevices 2
+gpuinfo: agsCheckDriverVersion(radeonSoftwareVersion, 23.1.1) = 2 (0 ok, 1 older, 2 undefined)
+device 0: "Test GPU zero" asicFamily Unknown isAPU 0 isPrimaryDevice 1 isExternal 0
+device 0: vendorId 0x1002 deviceId 0x13FE revisionId 0x00 adlAdapterIndex 0
+device 0: numCUs 0 numWGPs 0 numROPs 0 coreClock 0 memoryClock 0 memoryBandwidth 0 teraFlops 0.000
+device 0: localMemoryInBytes 8589934592 sharedMemoryInBytes 109803179212
+device 0: eyefinityEnabled 0 grid 0x0 resolution 0x0 bezel 0 numDisplays 3
+device 0 display 0: "Monitor A" on \\.\DISPLAY1 primary 1 HDR10 0 dolbyVision 0 freesync 0 freesyncHDR 0 eyefinityInGroup 0
+device 0 display 0: current 2560x1440 at 0,0 visible 2560x1440 at 0,0 59.950 Hz max 0x0 0.000 Hz adlAdapterIndex 0
+device 0 display 1: "Monitor B" on \\.\DISPLAY2 primary 0 HDR10 0 dolbyVision 0 freesync 0 freesyncHDR 0 eyefinityInGroup 0
+device 0 display 1: current 1080x1920 at 2560,0 visible 1080x1920 at 2560,0 60.000 Hz max 0x0 0.000 Hz adlAdapterIndex 1
+device 0 display 2: "Monitor C (clone of A)" on \\.\DISPLAY1 primary 0 HDR10 0 dolbyVision 0 freesync 0 freesyncHDR 0 eyefinityInGroup 0
+device 0 display 2: current 2560x1440 at 0,0 visible 2560x1440 at 0,0 59.950 Hz max 0x0 0.000 Hz adlAdapterIndex 0
+device 1: "Test GPU one" asicFamily Unknown isAPU 0 isPrimaryDevice 0 isExternal 0
+device 1: vendorId 0x1002 deviceId 0x73BF revisionId 0xC1 adlAdapterIndex 2
+device 1: numCUs 0 numWGPs 0 numROPs 0 coreClock 0 memoryClock 0 memoryBandwidth 0 teraFlops 0.000
+device 1: localMemoryInBytes 17179869184 sharedMemoryInBytes 109803179212
+device 1: eyefinityEnabled 0 grid 0x0 resolution 0x0 bezel 0 numDisplays 0
+callback allocations live before agsDeInitialize: 4
+agsDeInitialize = 0, callback allocations live after: 0 (of 10)
+adl module after agsDeInitialize: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\inject\atiadlxy.dll
+PASS ags-client info

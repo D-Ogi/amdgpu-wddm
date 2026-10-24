@@ -1,0 +1,9 @@
+ags-client info, x86 build, 2026-10-24T23:36:02Z
+inject: test snapshot (2 GPUs, 3 entries, 3 displays) given to atiadlxy.dll
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\inject\amd_ags_x86.dll version 6.3.0
+agsInitialize(gpu info no) = 0
+adl module after agsInitialize: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\inject\atiadlxy.dll
+callback allocations live before agsDeInitialize: 3
+agsDeInitialize = 0, callback allocations live after: 0 (of 3)
+adl module after agsDeInitialize: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\inject\atiadlxy.dll
+PASS ags-client info

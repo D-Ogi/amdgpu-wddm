@@ -1,0 +1,8 @@
+discover: 1 gpu(s), 1 adapter entry, 1 display(s)
+gpu 0: 10DE:2684 subsys F29710B0 rev A1 at 1:0.0 luid 00000000:00024DAC
+  name "NVIDIA GeForce RTX 4090" driver "32.0.15.9597" key "{4d36e968-e325-11ce-bfc1-08002be10318}\0001"
+  instance "PCI\VEN_10DE&DEV_2684&SUBSYS_F29710B0&REV_A1\4&8BD6E8D&0&0008"
+  memory dedicated video 25314721792, dedicated system 0, shared system 109803179212 bytes
+entry 0: gpu 0 "\\.\DISPLAY1" present 1 os index 0 source 0
+display 0: gpu 0 entry 0 index 0 target 4352 "DELL S3423DWC" maker "DEL" type 3 output 4 connector 10 3440x1440 at 0,0 59.973 Hz rotation 0
+PASS discover

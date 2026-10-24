@@ -1,0 +1,10 @@
+ags-client info, x64 build, 2026-10-24T23:35:45Z
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\shipped\amd_ags_x64.dll version 6.3.0
+agsInitialize(gpu info yes) = 0
+adl module after agsInitialize: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\shipped\atiadlxx.dll
+gpuinfo: driverVersion "" radeonSoftwareVersion "" numDevices 0
+gpuinfo: agsCheckDriverVersion(radeonSoftwareVersion, 23.1.1) = 2 (0 ok, 1 older, 2 undefined)
+callback allocations live before agsDeInitialize: 1
+agsDeInitialize = 0, callback allocations live after: 0 (of 1)
+adl module after agsDeInitialize: none loaded
+PASS ags-client info

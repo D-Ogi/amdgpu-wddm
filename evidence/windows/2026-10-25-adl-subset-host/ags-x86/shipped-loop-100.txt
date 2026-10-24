@@ -1,0 +1,16 @@
+ags-client loop, x86 build, 2026-10-24T23:36:00Z
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x86\stage\shipped\amd_ags_x86.dll version 6.3.0
+loop: after round 10 heap busy 159047 (+0) private 1646592 (+8192) handles 103
+loop: after round 20 heap busy 159047 (+0) private 1646592 (+8192) handles 103
+loop: after round 30 heap busy 159047 (+0) private 1646592 (+8192) handles 103
+loop: after round 40 heap busy 159047 (+0) private 1658880 (+20480) handles 103
+loop: after round 50 heap busy 159047 (+0) private 1658880 (+20480) handles 103
+loop: after round 60 heap busy 159047 (+0) private 1683456 (+45056) handles 103
+loop: after round 70 heap busy 159047 (+0) private 1683456 (+45056) handles 103
+loop: after round 80 heap busy 159047 (+0) private 1671168 (+32768) handles 103
+loop: after round 90 heap busy 159047 (+0) private 1671168 (+32768) handles 103
+loop: after round 100 heap busy 159047 (+0) private 1671168 (+32768) handles 103
+loop: 100 rounds, 0 failed, callback allocations 100 total 0 live
+loop: heap busy bytes after round 1 159047, after round 100 159047 (+0); private bytes 1638400 -> 1671168; handles 103 -> 103
+adl module after the loop: none loaded
+PASS ags-client loop

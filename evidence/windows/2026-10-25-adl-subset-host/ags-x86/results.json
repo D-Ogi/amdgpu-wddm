@@ -1,0 +1,139 @@
+{
+  "arch": "x86",
+  "utc": "2026-10-24T23:36:04Z",
+  "adl_name": "atiadlxy.dll",
+  "system_adl_libraries": [],
+  "inputs": [
+    {
+      "path": "P:\\BC-250\\scratch\\adl\\build\\x86\\ags-client.exe",
+      "sha256": "A5F800341171E7F87941E2ADAD7CF369D60498C17F465ABBB4A3B67A084C4B8D"
+    },
+    {
+      "path": "P:\\BC-250\\ref\\AGS_SDK-v6.3.0\\amd_ags_x86.dll",
+      "sha256": "D7A0122ABD8BE157AB838A88368BD3358C8483C6B23083A28832C19DC7698BF6"
+    },
+    {
+      "path": "P:\\BC-250\\scratch\\adl\\build\\x86\\atiadlxy.dll",
+      "sha256": "2353D36B586CD0DE81D89C27BAF2E8E602ED1C399844ED8675461BBAAA23850E"
+    },
+    {
+      "path": "P:\\BC-250\\scratch\\adl\\build\\x86\\test\\atiadl-test.dll",
+      "sha256": "BA5314DE2CB63DD30530E46C421D78A58C7E0797571EB9F776E2FDDE99E0A2C2"
+    },
+    {
+      "path": "P:\\BC-250\\scratch\\adl\\build\\x86\\test\\atiadl-test-host.dll",
+      "sha256": "39C7E5CE76719CBD4BBA5E7D5CEB9120E04C92C7075DDB6A6F40EB9BF2F02C98"
+    },
+    {
+      "path": "P:\\BC-250\\scratch\\adl\\build\\x86\\test\\atiadl-no-modes.dll",
+      "sha256": "C8A176863DF7507B7DF147A7D90F1BC78BFDD5D83E39C6F2F57469AEF74F7971"
+    }
+  ],
+  "runs": [
+    {
+      "case": "shipped",
+      "arguments": "info",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "shipped-info.txt"
+    },
+    {
+      "case": "shipped",
+      "arguments": "info --no-gpu-info",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "shipped-info-no-gpu-info.txt"
+    },
+    {
+      "case": "shipped",
+      "arguments": "loop 100",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "shipped-loop-100.txt"
+    },
+    {
+      "case": "shipped",
+      "arguments": "dx12 --any-adapter",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "shipped-dx12-any-adapter.txt"
+    },
+    {
+      "case": "inject",
+      "arguments": "info --inject",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "inject-info-inject.txt"
+    },
+    {
+      "case": "inject",
+      "arguments": "info --no-gpu-info --inject",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "inject-info-no-gpu-info-inject.txt"
+    },
+    {
+      "case": "inject",
+      "arguments": "loop 100 --inject",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "inject-loop-100-inject.txt"
+    },
+    {
+      "case": "inject",
+      "arguments": "dx12 --any-adapter --inject",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "inject-dx12-any-adapter-inject.txt"
+    },
+    {
+      "case": "host",
+      "arguments": "info",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "host-info.txt"
+    },
+    {
+      "case": "host",
+      "arguments": "loop 20",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "host-loop-20.txt"
+    },
+    {
+      "case": "host",
+      "arguments": "dx12 --any-adapter",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "host-dx12-any-adapter.txt"
+    },
+    {
+      "case": "none",
+      "arguments": "expect 6",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "none-expect-6.txt"
+    },
+    {
+      "case": "no-modes",
+      "arguments": "expect 5",
+      "exit": 0,
+      "expected": 0,
+      "pass": true,
+      "output": "no-modes-expect-5.txt"
+    }
+  ],
+  "failed": 0
+}

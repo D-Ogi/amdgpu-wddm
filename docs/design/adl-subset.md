@@ -132,6 +132,9 @@ these failures:
 `tools/quality/quick.ps1` runs both scripts for x64 and x86 (gate `umd-adl`) when the AGS SDK is in
 `<BC250_ROOT>\ref\AGS_SDK-v6.3.0`. The AGS SDK is not in the repository (`THIRD-PARTY.md`).
 
+The host run of 2026-10-25 (x64 and x86, 13 of 13 runs each as expected) is in
+[evidence/windows/2026-10-25-adl-subset-host](../../evidence/windows/2026-10-25-adl-subset-host/RESULT.md).
+
 ## Packaging proposal
 
 This part is not implemented. The INF and the installer do not change in this step.
