@@ -101,6 +101,16 @@
         ]
       }
     ],
+    "clang-host": [
+      {
+        "root": "workspace",
+        "globs": [
+          "toolchain/llvm-23.1.4-win64/bin/clang-cl.exe",
+          "toolchain/llvm-23.1.4-win64/bin/lld-link.exe",
+          "toolchain/llvm-23.1.4-win64/lib/clang/**/*"
+        ]
+      }
+    ],
     "blob-reader": [
       {
         "root": "repo",
@@ -320,12 +330,20 @@
     },
     "paging-ddi-status": {
       "inputs": [
-        "host"
+        "host",
+        "clang-host"
       ]
     },
-    "paging-ddi-status-refusal-passthrough": {
+    "paging-ddi-status-refusal-success": {
       "inputs": [
-        "host"
+        "host",
+        "clang-host"
+      ]
+    },
+    "paging-ddi-status-pending-success": {
+      "inputs": [
+        "host",
+        "clang-host"
       ]
     },
     "ih-consume": {

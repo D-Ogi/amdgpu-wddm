@@ -487,7 +487,7 @@ typedef struct _BC250_WDDM {
     volatile LONG64 PagingXferBytes[BC250WddmXferKinds];
     volatile LONG PagingInsufficientBuffer;
     volatile LONG PagingUnsupported[BC250PagingNotContiguous + 1]; // indexed by BC250_WDDM_PAGING_UNSUPPORTED
-    // BD-235: builds whose status the DDI does not permit (reported to the OS as success), and GPU page table
+    // BD-235: builds whose status the DDI does not permit (never reported to the OS as success), and GPU page table
     // updates or TLB flushes that a builder refused with no BC250_WDDM_PAGING_UNSUPPORTED reason.
     volatile LONG PagingContractRefusals;
     volatile LONG PagingContractLastStatus, PagingContractLastOperation;
@@ -6613,8 +6613,8 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGB
 {
     BC250_WDDM* wddm=WddmOf(hAdapter);
     NTSTATUS status,built;
-    int refused;
-    if (!wddm) return (NTSTATUS)PagingDdiStatus(WddmBuildPagingBufferImpl(hAdapter,Build),&refused);
+    int outside;
+    if (!wddm) return (NTSTATUS)PagingDdiStatus(WddmBuildPagingBufferImpl(hAdapter,Build),&outside);
     ProgressEnterInput(ProgressSiteBuildPagingBuffer,(LONG)Build->Operation); // before the lock: a wait counts as inside
     KeEnterCriticalRegion();ExAcquirePushLockExclusive(&wddm->PagingBuildLock);
     if (Build->DmaBufferGpuVirtualAddress) {
@@ -6638,17 +6638,17 @@ static NTSTATUS Bc250WddmBuildPagingBuffer(HANDLE hAdapter, DXGKARG_BUILDPAGINGB
         }
     } else InterlockedIncrement64(&wddm->PagingDmaZeroVaBuilds);
     built=WddmBuildPagingBufferImpl(hAdapter,Build);
-    // BD-235: a builder refusal that is not "out of space" stopped the machine (bug check 0x10E/0xB). The records
-    // published before the refusal are complete; the OS gets success for them, and the refusal is counted and
-    // logged here, the one place that sees every operation.
-    status=(NTSTATUS)PagingDdiStatus(built,&refused);
-    if (refused) {
+    // BD-235: a builder status outside the DDI is counted and logged here, the one place that sees every operation.
+    // It never becomes success: a failure goes to the OS unchanged, and the OS stops the system (bug check 0x10E/0xB)
+    // instead of using an allocation that the buffer did not fill. paging_ddi_status.h has the rules.
+    status=(NTSTATUS)PagingDdiStatus(built,&outside);
+    if (outside) {
         LONG n=InterlockedIncrement(&wddm->PagingContractRefusals);
         InterlockedExchange(&wddm->PagingContractLastStatus,(LONG)built);
         InterlockedExchange(&wddm->PagingContractLastOperation,(LONG)Build->Operation);
         if (n<=16)
-            GuardLog("wddm: *** paging build op%u status 0x%08X outside the DDI, sent as success (offset %u dma %u #%ld) ***",
-                     (ULONG)Build->Operation,(ULONG)built,Build->MultipassOffset,Build->DmaSize,n);
+            GuardLog("wddm: *** paging build op%u status 0x%08X outside the DDI, 0x%08X to the OS (offset %u dma %u #%ld) ***",
+                     (ULONG)Build->Operation,(ULONG)built,(ULONG)status,Build->MultipassOffset,Build->DmaSize,n);
         if (n<=16 && Build->Operation==DXGK_OPERATION_VIRTUAL_FILL)
             GuardLog("wddm: *** the fill: VA 0x%llX bytes 0x%llX allocation %p ***",
                      (ULONGLONG)Build->FillVirtual.DestinationVirtualAddress,

@@ -273,7 +273,8 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
    { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
 Check 'paging-ddi-status' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status" }
-Check 'paging-ddi-status-refusal-passthrough' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-refusal-passthrough" -Mutation refusal-passthrough }
+Check 'paging-ddi-status-refusal-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-refusal-success" -Mutation refusal-success }
+Check 'paging-ddi-status-pending-success' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status-pending-success" -Mutation pending-success }
  Check 'ih-consume' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_ih_consume.ps1" -Root $Workspace -Out "$Out\ih-consume" }
  Check 'dpm' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_dpm.ps1" -Out "$Out\dpm" -Kits "$Kits" }
  Check 'cpu' { & pwsh -NoProfile -File "$repo\driver\shim\test\run_cpu.ps1" -Out "$Out\cpu" -Kits "$Kits" }
