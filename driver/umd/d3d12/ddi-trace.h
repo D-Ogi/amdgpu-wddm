@@ -101,7 +101,12 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //     shader-model-68-off.
 //   scanout-flip-off: a swap-chain primary is always the composed one, never a scan-out primary
 //     (scanout-mode.h, M15.14 increment 3; trial 478).
-// All eleven off is the release and reporting behaviour of adapter106 with no ray tracing.
+//   raytracing-tier12-off: the adapter reports RaytracingTier 1.1 and shader model 6.8 at most, and the
+//     acceleration structure and state object slots refuse opacity micromaps, SERIALIZE and DESERIALIZE
+//     (adapter-caps.cpp, device-engine.cpp, engine-ddi set_raytracing_tier12_reporting and
+//     set_raytracing_tier12_commands). Lab builds only (ddi_raytracing_tier12_off): a release shell has no
+//     switch for it.
+// All twelve off is the release and reporting behaviour of adapter106 with no ray tracing.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl
@@ -226,6 +231,15 @@ inline bool ddi_experiment_listed(const char* list,const char* name) noexcept {
     return false;
 }
 inline bool ddi_experiment(const char* name) noexcept {return ddi_experiment_listed(ddi_experiment_name(),name);}
+// raytracing-tier12-off is a lab switch only: a release shell always reports tier 1.2 and shader model 6.9 where
+// the engine has them, and no source of the list (environment, profile, machine value) turns that off.
+inline bool ddi_raytracing_tier12_off() noexcept {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    return ddi_experiment("raytracing-tier12-off");
+#else
+    return false;
+#endif
+}
 // M15.14 increment 2 spelled the scan-out mode with the geometry it was for, as one token -
 // "scanout-flip-1920x1200" - because the kernel driver then admitted a flip at the POST geometry only.
 // Increment 3 compares the chain with the source mode the kernel driver publishes (scanout-mode.h), so the

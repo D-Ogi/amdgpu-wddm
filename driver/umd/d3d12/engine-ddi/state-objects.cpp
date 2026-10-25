@@ -198,6 +198,13 @@ constexpr UINT kStateObjectFlags = D3D12DDI_STATE_OBJECT_FLAG_ALLOW_LOCAL_DEPEND
                                    D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS;
 constexpr UINT kPipelineFlags = D3D12DDI_RAYTRACING_PIPELINE_FLAG_SKIP_TRIANGLES |
                                 D3D12DDI_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+// With tier 1.2 in the slots (DeviceContext::omm, set_raytracing_tier12_commands) a pipeline may also allow opacity
+// micromaps (rt12::kPipelineAllowOmms, the same value in the DDI and the API); the engine sets
+// VK_PIPELINE_CREATE_2_RAY_TRACING_OPACITY_MICROMAP_BIT_KHR (raytracing_pipeline.c). Without it the flag is refused
+// as before.
+UINT pipeline_flags(const DeviceContext* c) noexcept {
+    return c->omm ? kPipelineFlags | rt12::kPipelineAllowOmms : kPipelineFlags;
+}
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
 std::atomic<StateObjectObserver> state_object_observer{};
 std::atomic<void*> state_object_observer_user{};
@@ -543,7 +550,8 @@ HRESULT translate_one(DeviceContext* c, const D3D12DDI_STATE_SUBOBJECT_0054& s, 
         // _0075, the layout H:7731-7732 names for new drivers (INFERENCE for 0092); the engine takes it as type 12.
         const auto& in = *static_cast<const D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075*>(s.pDesc);
         text.add("; pipeline config depth %u flags 0x%x", in.MaxTraceRecursionDepth, static_cast<UINT>(in.Flags));
-        if (static_cast<UINT>(in.Flags) & ~kPipelineFlags) return refuse(index, "unknown pipeline flags", E_INVALIDARG);
+        if (static_cast<UINT>(in.Flags) & ~pipeline_flags(c))
+            return refuse(index, "unknown pipeline flags", E_INVALIDARG);
         d.pipeline_config = {in.MaxTraceRecursionDepth, static_cast<D3D12_RAYTRACING_PIPELINE_FLAGS>(in.Flags)};
         type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1;
         return S_OK;

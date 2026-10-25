@@ -270,6 +270,10 @@ public:
     BC250_VKD3D_ENGINE_FUNCS funcs{};
     uint32_t ddi_interface = 0;
     uint32_t ddi_version = 0;
+    // set_raytracing_tier12_commands turned tier 1.2 on and the engine device's own raytracing tier is 1_2: the
+    // acceleration structure slots read opacity micromap inputs and the state object slot admits
+    // ALLOW_OPACITY_MICROMAPS. False until set_raytracing_tier12_commands.
+    bool omm = false;
     UINT increments[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
     std::atomic<uint32_t> live{0};              // records holding references, plus pending releases
     std::atomic<uint32_t> pending{0};           // pending releases only

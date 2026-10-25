@@ -304,7 +304,7 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     engine_ddi::AdapterCaps* caps = query_stub(a12_0, info, "FL12_0 engine");
     if (!caps) return;
     check(g_queries == 19, "one batch of 19 features including the optional view contract (%u)", g_queries);
-    check(g_model_asked == D3D_SHADER_MODEL_6_8, "SHADER_MODEL is asked with 6_8 as the highest model (%x)",
+    check(g_model_asked == D3D_SHADER_MODEL_6_9, "SHADER_MODEL is asked with 6_9 as the highest model (%x)",
           static_cast<unsigned>(g_model_asked));
 
     // The two calls of M768, exact sizes.
@@ -987,12 +987,13 @@ void test_enhanced_barriers(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
 
 // 1012 as a list, read into a buffer of 12 entries: S_OK, the count, and the entries in order.
 struct ModelList { HRESULT hr; UINT count; D3D12DDI_SHADER_MODEL models[12]; };
-ModelList model_list(const engine_ddi::AdapterCaps* caps) {
+ModelList model_list(const engine_ddi::AdapterCaps* caps, uint32_t ddi = kDdi) {
     ModelList l;
     std::memset(&l, 0xEE, sizeof(l));
     l.count = 12;
     D3D12DDI_D3D12_SHADER_MODELS_DATA_0011 d{&l.count, l.models};
-    l.hr = get(caps, D3D12DDICAPS_TYPE_0011_SHADER_MODELS, d);
+    D3D12DDIARG_GETCAPS request{D3D12DDICAPS_TYPE_0011_SHADER_MODELS, nullptr, &d, sizeof(d)};
+    l.hr = engine_ddi::build_caps(caps, ddi, &request);
     return l;
 }
 
@@ -1002,7 +1003,7 @@ bool list_is(const ModelList& l, D3D12DDI_SHADER_MODEL highest) {
         D3D12DDI_SHADER_MODEL_5_1_RELEASE_0011, D3D12DDI_SHADER_MODEL_6_0_RELEASE_0011, D3D12DDI_SHADER_MODEL_6_1_RELEASE_0033,
         D3D12DDI_SHADER_MODEL_6_2_RELEASE_0042, D3D12DDI_SHADER_MODEL_6_3_RELEASE_0054, D3D12DDI_SHADER_MODEL_6_4_RELEASE_0062,
         D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093,
-        D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108};
+        D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, static_cast<D3D12DDI_SHADER_MODEL>(engine_ddi::rt12::kDdiShaderModel)};
     UINT n = 0;
     while (n < std::size(all) && all[n] <= highest) ++n;
     if (l.hr != S_OK || l.count != n) return false;
@@ -1054,7 +1055,7 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         // 1079: both FALSE even with both OPTIONS14 fields TRUE (integer border colours need DDI 0096).
         {D3D_SHADER_MODEL_6_7, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093, 0, 0, "engine at 6_7"},
         {D3D_SHADER_MODEL_6_8, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, 0, "engine at 6_8"},
-        {D3D_SHADER_MODEL_6_9, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, 0, "engine at 6_9 (asked 6_8)"},
+        {D3D_SHADER_MODEL_6_9, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108, 3, 0, "engine at 6_9, tier 1.2 switch off"},
     };
     for (const Case& k : cases) {
         const Answers a = engine_at(k.engine);
@@ -1142,12 +1143,16 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
 
         // Refused ceilings keep the one held before (6_8): a model between rows, one above the table, a null caps.
         const HRESULT bad52 = engine_ddi::set_shader_model_ceiling(caps, static_cast<D3D_SHADER_MODEL>(0x52));
-        const HRESULT bad69 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_9);
+        const HRESULT h69 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_9);
+        const bool at69 = list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108);
+        check(h69 == S_OK && at69, "ceiling 6_9 accepted; with the tier 1.2 switch off the list still ends at 6_8");
+        engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_8);
+        const HRESULT bad6a = engine_ddi::set_shader_model_ceiling(caps, static_cast<D3D_SHADER_MODEL>(0x6A));
         const HRESULT bad0 = engine_ddi::set_shader_model_ceiling(caps, static_cast<D3D_SHADER_MODEL>(0));
         const HRESULT null_caps = engine_ddi::set_shader_model_ceiling(nullptr, D3D_SHADER_MODEL_6_6);
-        check(bad52 == E_INVALIDARG && bad69 == E_INVALIDARG && bad0 == E_INVALIDARG && null_caps == E_INVALIDARG &&
+        check(bad52 == E_INVALIDARG && bad6a == E_INVALIDARG && bad0 == E_INVALIDARG && null_caps == E_INVALIDARG &&
                   list_is(model_list(caps), D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108),
-              "ceiling refused: 0x52, 6_9, 0 and a null caps; the ceiling held before stays");
+              "ceiling refused: 0x52, 0x6A, 0 and a null caps; the ceiling held before stays");
         engine_ddi::free_adapter_caps(caps);
     }
 
@@ -1160,8 +1165,8 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         engine_ddi::free_adapter_caps(caps);
     }
 
-    // An engine answer that is not an answer to the request: above 6_8, below 5_1, or between two models.
-    const UINT bad_answers[] = {D3D_SHADER_MODEL_6_9, 0x50, 0x52, 0x6A};
+    // An engine answer that is not an answer to the request: above 6_9, below 5_1, or between two models.
+    const UINT bad_answers[] = {0x50, 0x52, 0x6A};
     for (const UINT bad : bad_answers) {
         Answers b = engine_at(D3D_SHADER_MODEL_6_8);
         b.raw_model = bad;
@@ -1172,6 +1177,91 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         check(hr == E_UNEXPECTED && !out, "an engine answering shader model %x is refused (hr %08lx)", bad,
               static_cast<unsigned long>(hr));
     }
+}
+
+// Raytracing tier 1.2 and shader model 6.9: off in the library, and with the switch on only when every condition
+// holds (the engine at 6_9 and 1_2, the 6.9 floor of OPTIONS1 and OPTIONS4, raytracing reporting on, a negotiated
+// build version of 0094 or higher). At 0092 and 0093 the answers are 6_8 and 1_1. The shell turns the switch on
+// (adapter-caps.cpp).
+void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    constexpr auto kTier12 = static_cast<D3D12DDI_RAYTRACING_TIER>(engine_ddi::rt12::kTier);
+    constexpr auto kSm69 = static_cast<D3D12DDI_SHADER_MODEL>(engine_ddi::rt12::kDdiShaderModel);
+    struct Result { HRESULT hr; bool listed; D3D12DDI_RAYTRACING_TIER tier; };
+    const auto read = [](engine_ddi::AdapterCaps* caps, uint32_t ddi, D3D12DDI_SHADER_MODEL highest) {
+        D3D12DDI_D3D12_OPTIONS_DATA_0089 o{};
+        D3D12DDIARG_GETCAPS r{D3D12DDICAPS_TYPE_D3D12_OPTIONS, nullptr, &o, sizeof(o)};
+        const HRESULT hr = engine_ddi::build_caps(caps, ddi, &r);
+        return Result{hr, list_is(model_list(caps, ddi), highest), o.RaytracingTier};
+    };
+    const auto engine_12 = [] {
+        Answers a = fl12_0();
+        a.max_model = D3D_SHADER_MODEL_6_9;
+        a.options5.RaytracingTier = static_cast<D3D12_RAYTRACING_TIER>(engine_ddi::rt12::kTier);
+        return a;
+    };
+    engine_ddi::AdapterCaps* caps = query_stub(engine_12(), info, "engine at 6_9 and 1_2");
+    if (caps) {
+        const Result off = read(caps, kDdi, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108);
+        check(off.hr == S_OK && off.listed && off.tier == D3D12DDI_RAYTRACING_TIER_1_1,
+              "tier 1.2 switch off (the library default): 1012 ends at 6_8, 1006 reports 1_1 (%d)",
+              static_cast<int>(off.tier));
+        const HRESULT on = engine_ddi::set_raytracing_tier12_reporting(caps, true);
+        const Result at = read(caps, kDdi, kSm69);
+        check(on == S_OK && at.hr == S_OK && at.listed && at.tier == kTier12,
+              "tier 1.2 switch on, at 0094: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
+              static_cast<unsigned>(kSm69), static_cast<int>(at.tier));
+        // A runtime that negotiates 0092 or 0093 does not know tier 1.2: the 22621 system core negotiates 0092 and
+        // refuses opacity micromap pipelines.
+        for (const uint32_t ddi : {uint32_t{D3D12DDI_BUILD_VERSION_0092}, uint32_t{D3D12DDI_BUILD_VERSION_0093}}) {
+            const Result below = read(caps, ddi, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108);
+            check(below.hr == S_OK && below.listed && below.tier == D3D12DDI_RAYTRACING_TIER_1_1,
+                  "tier 1.2 switch on, at ddi_version %u: 1012 ends at 6_8, 1006 reports 1_1 (%d)",
+                  static_cast<unsigned>(ddi), static_cast<int>(below.tier));
+        }
+        engine_ddi::set_raytracing_tier_reporting(caps, false);
+        const Result rt_off = read(caps, kDdi, kSm69);
+        engine_ddi::set_raytracing_tier_reporting(caps, true);
+        check(rt_off.hr == S_OK && rt_off.tier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED,
+              "tier 1.2 switch on, raytracing reporting off: 1006 reports NOT_SUPPORTED (%d)",
+              static_cast<int>(rt_off.tier));
+        const HRESULT h68 = engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_8);
+        const Result ceiling = read(caps, kDdi, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108);
+        check(h68 == S_OK && ceiling.listed && ceiling.tier == D3D12DDI_RAYTRACING_TIER_1_1,
+              "tier 1.2 switch on, ceiling 6_8: 1012 ends at 6_8, 1006 reports 1_1 (%d)",
+              static_cast<int>(ceiling.tier));
+        engine_ddi::set_shader_model_ceiling(caps, D3D_SHADER_MODEL_6_9);
+        const HRESULT back = engine_ddi::set_raytracing_tier12_reporting(caps, false);
+        const Result again = read(caps, kDdi, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108);
+        check(back == S_OK && again.listed && again.tier == D3D12DDI_RAYTRACING_TIER_1_1,
+              "tier 1.2 switch off again: 6_8 and 1_1 (%d)", static_cast<int>(again.tier));
+        engine_ddi::free_adapter_caps(caps);
+    }
+    // Each missing condition keeps 1_1; a missing 6.9 floor or an engine below 6_9 also keeps 6_8.
+    struct Case { const char* what; void (*change)(Answers&); D3D12DDI_SHADER_MODEL highest; };
+    const Case cases[] = {
+        {"engine at 1_1", [](Answers& a) { a.options5.RaytracingTier = D3D12_RAYTRACING_TIER_1_1; }, kSm69},
+        {"engine at 6_8", [](Answers& a) { a.max_model = D3D_SHADER_MODEL_6_8; },
+         D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108},
+        {"no WaveOps", [](Answers& a) { a.options1.WaveOps = FALSE; }, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108},
+        {"no Int64ShaderOps", [](Answers& a) { a.options1.Int64ShaderOps = FALSE; },
+         D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108},
+        {"no Native16BitShaderOps", [](Answers& a) { a.options4.Native16BitShaderOpsSupported = FALSE; },
+         D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108},
+    };
+    for (const Case& k : cases) {
+        Answers a = engine_12();
+        k.change(a);
+        caps = query_stub(a, info, k.what);
+        if (!caps) continue;
+        const HRESULT on = engine_ddi::set_raytracing_tier12_reporting(caps, true);
+        const Result r = read(caps, kDdi, k.highest);
+        check(on == S_OK && r.hr == S_OK && r.listed && r.tier == D3D12DDI_RAYTRACING_TIER_1_1,
+              "tier 1.2 switch on, %s: 1012 ends at %x, 1006 reports 1_1 (%d)", k.what,
+              static_cast<unsigned>(k.highest), static_cast<int>(r.tier));
+        engine_ddi::free_adapter_caps(caps);
+    }
+    check(engine_ddi::set_raytracing_tier12_reporting(nullptr, true) == E_INVALIDARG,
+          "tier 1.2 switch refused: null caps");
 }
 
 void test_policy_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
@@ -1472,6 +1562,7 @@ int wmain(int argc, wchar_t** argv) {
         test_write_buffer_immediate(info);
         test_enhanced_barriers(info);
         test_shader_model(info);
+        test_raytracing_tier12(info);
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

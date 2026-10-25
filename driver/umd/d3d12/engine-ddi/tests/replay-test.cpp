@@ -29,10 +29,17 @@
 //      stretch, the summary at close 64 and at teardown, all through the policy's log hook.
 //  10. L68 pfnBarrier, with the policy off: the flat DDI array grouped by runs of one type, the values the
 //      translation produces, a call with more runs than one engine Barrier takes, and the refusals.
+//  11. Raytracing tier 1.2 in the command list slots: with it off the tier 1.2 calls are refused and the AABB and top
+//      level builds reach the engine; with it on every build and copy reaches the engine the same with the policy
+//      off and on (the deep copy of the build inputs, BuildInputs), and the refusals that stay.
+//  12. Raytracing tier 1.2 on the device: set_raytracing_tier12_commands from the engine's OPTIONS5, and off and on
+//      the prebuild information (D108), the driver matching identifier (D109) and ALLOW_OPACITY_MICROMAPS in a
+//      state object's pipeline configuration (D106).
 #include "internal.h"
 #include "replay.h"
 #include <atomic>
 #include <cstdarg>
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -240,6 +247,19 @@ public:
             return;
         }
         c.u(g->Type).u(g->Flags);
+        if (static_cast<UINT>(g->Type) == rt12::kOmmTrianglesType) {
+            const D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC* t = rt12::omm_triangles(*g).pTriangles;
+            const rt12::Linkage* k = rt12::omm_triangles(*g).pOmmLinkage;
+            if (!t || !k) {
+                c.s("null");
+                return;
+            }
+            c.x(t->Transform3x4).u(t->IndexFormat).u(t->VertexFormat).u(t->IndexCount).u(t->VertexCount)
+                .x(t->IndexBuffer).x(t->VertexBuffer.StartAddress).u(t->VertexBuffer.StrideInBytes)
+                .x(k->OpacityMicromapIndexBuffer.StartAddress).u(k->OpacityMicromapIndexBuffer.StrideInBytes)
+                .u(k->OpacityMicromapIndexFormat).u(k->OpacityMicromapBaseLocation).x(k->OpacityMicromapArray);
+            return;
+        }
         if (g->Type == D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES) {
             const D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC& t = g->Triangles;
             c.x(t.Transform3x4).u(t.IndexFormat).u(t.VertexFormat).u(t.IndexCount).u(t.VertexCount).x(t.IndexBuffer)
@@ -541,18 +561,32 @@ public:
         const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* desc, UINT n,
         const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info) override {
         Call c(this, "BuildRaytracingAccelerationStructure");
-        const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS& inputs = desc->Inputs;
-        c.x(desc->DestAccelerationStructureData).u(inputs.Type).u(inputs.Flags).u(inputs.NumDescs)
-            .u(inputs.DescsLayout);
+        c.x(desc->DestAccelerationStructureData);
+        build_inputs(c, desc->Inputs);
+        c.x(desc->SourceAccelerationStructureData).x(desc->ScratchAccelerationStructureData).u(n);
+        for (UINT k = 0; k < n; ++k) c.x(info[k].DestBuffer).u(info[k].InfoType);
+    }
+    // The inputs of a build or a prebuild query, with every CPU structure they point to.
+    static void build_inputs(Call& c, const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS& inputs) {
+        c.u(inputs.Type).u(inputs.Flags).u(inputs.NumDescs).u(inputs.DescsLayout);
         if (inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL) {
             for (UINT k = 0; k < inputs.NumDescs; ++k)
                 geometry(c, inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY ? &inputs.pGeometryDescs[k]
                                                                               : inputs.ppGeometryDescs[k]);
+        } else if (static_cast<UINT>(inputs.Type) == rt12::kOmmArrayType) {
+            const rt12::ArrayDesc* a = rt12::array_desc(inputs);
+            if (!a) {
+                c.s("null");
+            } else {
+                c.u(a->NumOmmHistogramEntries).x(a->InputBuffer).x(a->PerOmmDescs.StartAddress)
+                    .u(a->PerOmmDescs.StrideInBytes);
+                for (UINT k = 0; a->pOmmHistogram && k < a->NumOmmHistogramEntries; ++k)
+                    c.u(a->pOmmHistogram[k].Count).u(a->pOmmHistogram[k].SubdivisionLevel)
+                        .u(a->pOmmHistogram[k].Format);
+            }
         } else {
             c.x(inputs.InstanceDescs);
         }
-        c.x(desc->SourceAccelerationStructureData).x(desc->ScratchAccelerationStructureData).u(n);
-        for (UINT k = 0; k < n; ++k) c.x(info[k].DestBuffer).u(info[k].InfoType);
     }
     void STDMETHODCALLTYPE EmitRaytracingAccelerationStructurePostbuildInfo(
         const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* desc, UINT n,
@@ -745,10 +779,30 @@ private:
     std::vector<uint64_t> words_;
 };
 
-// The engine device: descriptor heaps, descriptor copies and command allocators. Anything else counts as unexpected.
-class FakeDevice final : public Object<ID3D12Device> {
+// The engine device: descriptor heaps, descriptor copies and command allocators, and for section 12 the OPTIONS5
+// query and the three ID3D12Device5 entries of raytracing tier 1.2 (prebuild, driver matching identifier, state
+// object). Anything else counts as unexpected.
+class FakeDevice final : public Object<ID3D12Device5> {
 public:
     bool fail_heaps = false;
+    // OPTIONS5: answered only with options5 set, with options5_hr and options5_tier; every query counted.
+    bool options5 = false;
+    HRESULT options5_hr = S_OK;
+    D3D12_RAYTRACING_TIER options5_tier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+    std::atomic<uint32_t> options5_queries{0};
+    // GetRaytracingAccelerationStructurePrebuildInfo: the inputs logged on prebuild_log's list, prebuild_answer given.
+    FakeList* prebuild_log = nullptr;
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_answer{};
+    std::atomic<uint32_t> prebuilds{0};
+    // CheckDriverMatchingIdentifier: what it was given, identifier_answer returned.
+    D3D12_DRIVER_MATCHING_IDENTIFIER_STATUS identifier_answer = D3D12_DRIVER_MATCHING_IDENTIFIER_COMPATIBLE_WITH_DEVICE;
+    std::atomic<uint32_t> identifiers{0};
+    D3D12_SERIALIZED_DATA_TYPE identifier_type{};
+    D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER identifier{};
+    // CreateStateObject: the subobject types and the flags of the pipeline config it was given (below FakeProperties).
+    std::atomic<uint32_t> state_objects{0};
+    std::vector<UINT> state_object_types;
+    UINT pipeline_flags = 0;
     std::atomic<uint32_t> heaps_made{0}, heaps_live{0};
     std::atomic<uint64_t> copies{0}, unexpected{0};
     FakeAllocator allocators[64];
@@ -787,7 +841,16 @@ public:
                                                 ID3D12PipelineState*, REFIID, void** out) override {
         return none(out);
     }
-    HRESULT STDMETHODCALLTYPE CheckFeatureSupport(D3D12_FEATURE, void*, UINT) override { return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CheckFeatureSupport(D3D12_FEATURE feature, void* data, UINT size) override {
+        if (feature != D3D12_FEATURE_D3D12_OPTIONS5 || !options5) return odd(E_NOTIMPL);
+        ++options5_queries;
+        if (FAILED(options5_hr)) return options5_hr;
+        if (!data || size != sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS5)) return E_INVALIDARG;
+        D3D12_FEATURE_DATA_D3D12_OPTIONS5 o{};
+        o.RaytracingTier = options5_tier;
+        std::memcpy(data, &o, sizeof(o));
+        return S_OK;
+    }
     HRESULT STDMETHODCALLTYPE CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC* d, REFIID riid,
                                                    void** out) override {
         *out = nullptr;
@@ -889,6 +952,96 @@ public:
         odd(0);
     }
     LUID STDMETHODCALLTYPE GetAdapterLuid() override { return odd(LUID{}); }
+    // ID3D12Device1
+    HRESULT STDMETHODCALLTYPE CreatePipelineLibrary(const void*, SIZE_T, REFIID, void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE SetEventOnMultipleFenceCompletion(ID3D12Fence* const*, const UINT64*, UINT,
+                                                                D3D12_MULTIPLE_FENCE_WAIT_FLAGS, HANDLE) override {
+        return odd(E_NOTIMPL);
+    }
+    HRESULT STDMETHODCALLTYPE SetResidencyPriority(UINT, ID3D12Pageable* const*,
+                                                   const D3D12_RESIDENCY_PRIORITY*) override {
+        return odd(E_NOTIMPL);
+    }
+    // ID3D12Device2
+    HRESULT STDMETHODCALLTYPE CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC*, REFIID,
+                                                  void** out) override {
+        return none(out);
+    }
+    // ID3D12Device3
+    HRESULT STDMETHODCALLTYPE OpenExistingHeapFromAddress(const void*, REFIID, void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE OpenExistingHeapFromFileMapping(HANDLE, REFIID, void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE EnqueueMakeResident(D3D12_RESIDENCY_FLAGS, UINT, ID3D12Pageable* const*,
+                                                  ID3D12Fence*, UINT64) override {
+        return odd(E_NOTIMPL);
+    }
+    // ID3D12Device4
+    HRESULT STDMETHODCALLTYPE CreateCommandList1(UINT, D3D12_COMMAND_LIST_TYPE, D3D12_COMMAND_LIST_FLAGS, REFIID,
+                                                 void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE CreateProtectedResourceSession(const D3D12_PROTECTED_RESOURCE_SESSION_DESC*, REFIID,
+                                                             void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE CreateCommittedResource1(const D3D12_HEAP_PROPERTIES*, D3D12_HEAP_FLAGS,
+                                                       const D3D12_RESOURCE_DESC*, D3D12_RESOURCE_STATES,
+                                                       const D3D12_CLEAR_VALUE*, ID3D12ProtectedResourceSession*,
+                                                       REFIID, void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE CreateHeap1(const D3D12_HEAP_DESC*, ID3D12ProtectedResourceSession*, REFIID,
+                                          void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE CreateReservedResource1(const D3D12_RESOURCE_DESC*, D3D12_RESOURCE_STATES,
+                                                      const D3D12_CLEAR_VALUE*, ID3D12ProtectedResourceSession*,
+                                                      REFIID, void** out) override {
+        return none(out);
+    }
+    D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE GetResourceAllocationInfo1(
+        UINT, UINT, const D3D12_RESOURCE_DESC*, D3D12_RESOURCE_ALLOCATION_INFO1*) override {
+        return odd(D3D12_RESOURCE_ALLOCATION_INFO{});
+    }
+    // ID3D12Device5
+    HRESULT STDMETHODCALLTYPE CreateLifetimeTracker(ID3D12LifetimeOwner*, REFIID, void** out) override {
+        return none(out);
+    }
+    void STDMETHODCALLTYPE RemoveDevice() override { odd(0); }
+    HRESULT STDMETHODCALLTYPE EnumerateMetaCommands(UINT*, D3D12_META_COMMAND_DESC*) override {
+        return odd(E_NOTIMPL);
+    }
+    HRESULT STDMETHODCALLTYPE EnumerateMetaCommandParameters(REFGUID, D3D12_META_COMMAND_PARAMETER_STAGE, UINT*,
+                                                             UINT*, D3D12_META_COMMAND_PARAMETER_DESC*) override {
+        return odd(E_NOTIMPL);
+    }
+    HRESULT STDMETHODCALLTYPE CreateMetaCommand(REFGUID, UINT, const void*, SIZE_T, REFIID, void** out) override {
+        return none(out);
+    }
+    HRESULT STDMETHODCALLTYPE CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, REFIID riid,
+                                                void** out) override;
+    void STDMETHODCALLTYPE GetRaytracingAccelerationStructurePrebuildInfo(
+        const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* inputs,
+        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO* info) override {
+        ++prebuilds;
+        if (prebuild_log) {
+            Call c(prebuild_log, "GetRaytracingAccelerationStructurePrebuildInfo");
+            FakeList::build_inputs(c, *inputs);
+        }
+        *info = prebuild_answer;
+    }
+    D3D12_DRIVER_MATCHING_IDENTIFIER_STATUS STDMETHODCALLTYPE CheckDriverMatchingIdentifier(
+        D3D12_SERIALIZED_DATA_TYPE type, const D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER* given) override {
+        ++identifiers;
+        identifier_type = type;
+        identifier = *given;
+        return identifier_answer;
+    }
 };
 
 void FakeHeap::final_release() {
@@ -957,6 +1110,36 @@ public:
         calls_at_set = watched ? watched->calls.load() : 0;
     }
 };
+
+// What FakeDevice::CreateStateObject hands out: a state object whose properties are its own FakeProperties.
+class FakeStateObject final : public Child<ID3D12StateObject> {
+public:
+    FakeProperties properties;
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** out) override {
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        if (riid != __uuidof(ID3D12StateObjectProperties)) return E_NOINTERFACE;
+        properties.AddRef();
+        *out = static_cast<ID3D12StateObjectProperties*>(&properties);
+        return S_OK;
+    }
+    void final_release() override { delete this; }
+};
+
+HRESULT FakeDevice::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, REFIID riid, void** out) {
+    ++state_objects;
+    *out = nullptr;
+    state_object_types.clear();
+    for (UINT k = 0; k < desc->NumSubobjects; ++k) {
+        const D3D12_STATE_SUBOBJECT& s = desc->pSubobjects[k];
+        state_object_types.push_back(static_cast<UINT>(s.Type));
+        if (s.Type == D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1)
+            pipeline_flags = static_cast<UINT>(static_cast<const D3D12_RAYTRACING_PIPELINE_CONFIG1*>(s.pDesc)->Flags);
+    }
+    if (riid != __uuidof(ID3D12StateObject)) return E_NOINTERFACE;
+    *out = static_cast<ID3D12StateObject*>(new FakeStateObject);
+    return S_OK;
+}
 #pragma warning(pop)
 
 // ---- Shell, tables and records ------------------------------------------------------------------------------------
@@ -1572,6 +1755,154 @@ std::string difference(const std::string& a, const std::string& b) {
 }
 bool starts(const std::string& line, const char* prefix) { return line.rfind(prefix, 0) == 0; }
 unsigned long long ull(uint64_t v) { return static_cast<unsigned long long>(v); }
+
+// Tier 1.2 sources: geometry descriptions of the three types, the triangles and linkages of the two OMM_TRIANGLES
+// geometries, an opacity micromap array with its histogram, and two AABB geometries. prepare(n) fills them with bytes
+// that depend on n and then makes valid what the slots validate; garble() overwrites them once the slot has
+// returned, so a pointer the copy did not follow shows up as a difference.
+struct OmmData {
+    D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054 geometries[3];
+    D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054 aabbs[2];
+    const D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054* geometry_pointers[3];
+    D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangles[2];
+    rt12::Linkage linkages[2];
+    rt12::ArrayDesc array;
+    rt12::HistogramEntry histogram[3];
+    D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC_0054 postbuild[2];
+};
+struct OmmSources {
+    OmmData d{};
+    OmmSources() { prepare(0); }
+    void prepare(uint32_t n) {
+        auto* bytes = reinterpret_cast<uint8_t*>(&d);
+        for (size_t k = 0; k < sizeof(d); ++k) bytes[k] = static_cast<uint8_t>(n * 97u + k * 29u + (k >> 4));
+        constexpr auto omm = static_cast<D3D12DDI_RAYTRACING_GEOMETRY_TYPE>(rt12::kOmmTrianglesType);
+        d.geometries[0].Type = omm;
+        rt12::set_omm_triangles(d.geometries[0], {&d.triangles[0], &d.linkages[0]});
+        d.geometries[1].Type = D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        d.geometries[2].Type = omm;
+        rt12::set_omm_triangles(d.geometries[2], {&d.triangles[1], &d.linkages[1]});
+        d.geometry_pointers[0] = &d.geometries[2];
+        d.geometry_pointers[1] = &d.geometries[1];
+        d.geometry_pointers[2] = &d.geometries[0];
+        for (D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054& g : d.aabbs)
+            g.Type = D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+        d.array.NumOmmHistogramEntries = 3;
+        d.array.pOmmHistogram = d.histogram;
+        for (UINT k = 0; k < 3; ++k) {
+            d.histogram[k].SubdivisionLevel = (n + k * 5) % 13;
+            d.histogram[k].Format = k % 2 ? rt12::kFormatOc1State4 : rt12::kFormatOc1State2;
+        }
+        d.postbuild[0].InfoType = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_CURRENT_SIZE;
+        d.postbuild[1].InfoType = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_SERIALIZATION;
+    }
+    void garble() { std::memset(&d, 0xA5, sizeof(d)); }
+};
+constexpr auto kOmmBuildFlags = static_cast<D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(
+    D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE | rt12::kBuildAllowOmmUpdate |
+    rt12::kBuildAllowDisableOmms);
+constexpr auto kOmmArrayType = static_cast<D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE>(rt12::kOmmArrayType);
+
+// The tier 1.2 calls: bottom levels from an array and from an array of pointers with OMM_TRIANGLES geometry, two
+// opacity micromap arrays (with a histogram, and with none), a serialize and a deserialize. Six engine calls.
+// Then two builds that tier 1.1 has too, a bottom level of AABBs and a top level: with tier 1.2 in the slots every
+// build goes through the deep copy of its inputs (BuildInputs), these two included. Eight engine calls in all.
+constexpr UINT kOmmOnlyCalls = 6, kOmmCalls = 8;
+void omm_sequence(D3D12DDI_HCOMMANDLIST h, OmmSources& s) {
+    OmmData& d = s.d;
+    UINT n = 0;
+    auto step = [&](auto call) {
+        s.prepare(++n);
+        call();
+        s.garble();
+    };
+    step([&] {
+        D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{};
+        a.DestAccelerationStructureData = 0x800000u + n;
+        a.Inputs.Type = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        a.Inputs.Flags = kOmmBuildFlags;
+        a.Inputs.NumDescs = 3;
+        a.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+        a.Inputs.pGeometryDescs = d.geometries;
+        a.ScratchAccelerationStructureData = 0x810000;
+        a.NumPostbuildInfoDescs = 2;
+        a.pPostbuildInfoDescs = d.postbuild;
+        g_list.pfnBuildRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{};
+        a.DestAccelerationStructureData = 0x820000u + n;
+        a.Inputs.Type = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        a.Inputs.Flags = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+        a.Inputs.NumDescs = 3;
+        a.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS;
+        a.Inputs.ppGeometryDescs = d.geometry_pointers;
+        a.SourceAccelerationStructureData = 0x830000;
+        a.ScratchAccelerationStructureData = 0x840000;
+        g_list.pfnBuildRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{};
+        a.DestAccelerationStructureData = 0x850000u + n;
+        a.Inputs.Type = kOmmArrayType;
+        a.Inputs.Flags = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        a.Inputs.NumDescs = 1;
+        a.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+        rt12::set_array_desc(a.Inputs, &d.array);
+        a.ScratchAccelerationStructureData = 0x860000;
+        a.NumPostbuildInfoDescs = 1;
+        a.pPostbuildInfoDescs = d.postbuild;
+        g_list.pfnBuildRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        d.array.NumOmmHistogramEntries = 0;
+        d.array.pOmmHistogram = nullptr;
+        D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{};
+        a.DestAccelerationStructureData = 0x870000u + n;
+        a.Inputs.Type = kOmmArrayType;
+        a.Inputs.NumDescs = 1;
+        a.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+        rt12::set_array_desc(a.Inputs, &d.array);
+        a.ScratchAccelerationStructureData = 0x880000;
+        g_list.pfnBuildRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        const D3D12DDIARG_COPY_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{
+            0x890000u + n, 0x8A0000, D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE};
+        g_list.pfnCopyRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        const D3D12DDIARG_COPY_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{
+            0x8B0000u + n, 0x8C0000, D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE};
+        g_list.pfnCopyRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{};
+        a.DestAccelerationStructureData = 0x8D0000u + n;
+        a.Inputs.Type = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        a.Inputs.Flags = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+        a.Inputs.NumDescs = 2;
+        a.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+        a.Inputs.pGeometryDescs = d.aabbs;
+        a.ScratchAccelerationStructureData = 0x8E0000;
+        a.NumPostbuildInfoDescs = 1;
+        a.pPostbuildInfoDescs = d.postbuild;
+        g_list.pfnBuildRaytracingAccelerationStructure(h, &a);
+    });
+    step([&] {
+        D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 a{};
+        a.DestAccelerationStructureData = 0x8F0000u + n;
+        a.Inputs.Type = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        a.Inputs.Flags = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+        a.Inputs.NumDescs = 5;
+        a.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+        a.Inputs.InstanceDescs = 0x8F8000u + n;
+        a.ScratchAccelerationStructureData = 0x8FC000;
+        a.NumPostbuildInfoDescs = 2;
+        a.pPostbuildInfoDescs = d.postbuild;
+        g_list.pfnBuildRaytracingAccelerationStructure(h, &a);
+    });
+}
 } // namespace
 
 int main() {
@@ -2833,6 +3164,310 @@ int main() {
         }
         f.close(l);
         check(!l.engine.unexpected && !l.engine.stale, "L68: no unexpected engine method, no released object named");
+    }
+
+    // 11. Raytracing tier 1.2 in the slots (DeviceContext::omm, which set_raytracing_tier12_commands sets from the
+    //     engine's OPTIONS5; set here directly, section 12 tests the query). Off: every tier 1.2 call is refused and
+    //     none reaches the engine, the AABB and top level builds do. On: the same calls with the policy off and on
+    //     reach the engine with the same arguments, the nested structures of every deferred build copied; the
+    //     refusals that stay.
+    {
+        Fixture f;
+        OmmSources s;
+        check(set_raytracing_tier12_commands(nullptr, true) == E_INVALIDARG && !f.context.omm,
+              "tier 1.2: a null context refused, off by default");
+        ListBox& off = f.list();
+        off.engine.caller = self;
+        f.reset(off);
+        const uint32_t errors_off = f.shell.list_errors.load();
+        const uint64_t calls_off = off.engine.calls.load();
+        omm_sequence(off.h, s);
+        const uint32_t refused_off = f.shell.list_errors.load() - errors_off;
+        const uint64_t engine_off = off.engine.calls.load() - calls_off;
+        check(refused_off == kOmmOnlyCalls && engine_off == kOmmCalls - kOmmOnlyCalls,
+              "tier 1.2 off: the six tier 1.2 calls are refused (%u), only the AABB and top level builds reach the "
+              "engine (%llu calls)", refused_off, ull(engine_off));
+        f.close(off);
+
+        f.context.omm = true;
+        ListBox& a = f.list();
+        ListBox& b = f.list();
+        a.engine.caller = self;
+        b.engine.caller = self;
+        f.reset(a);
+        omm_sequence(a.h, s);
+        f.close(a);
+        check(f.on(), "tier 1.2: policy on");
+        const HANDLE gate = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        f.reset(b);
+        b.engine.gate = gate;
+        const uint32_t errors_on = f.shell.list_errors.load();
+        omm_sequence(b.h, s);
+        const uint64_t held = b.engine.calls.load();
+        SetEvent(gate);
+        f.close(b);
+        const std::string where = difference(a.engine.log, b.engine.log);
+        const std::vector<std::string> lines = lines_of(b.engine.log);
+        size_t builds = 0, copies = 0;
+        for (const std::string& line : lines) {
+            builds += starts(line, "BuildRaytracingAccelerationStructure(");
+            copies += starts(line, "CopyRaytracingAccelerationStructure(");
+        }
+        check(where.empty() && builds == kOmmCalls - 2 && copies == 2 && held == 1 && f.shell.list_errors == errors_on,
+              "tier 1.2 on: six builds (the AABB and top level ones too) and two copies, the same with the policy "
+              "off and on, every call on the "
+              "worker after the sources were garbled, no refusal%s%s", where.empty() ? "" : "; first difference at ",
+              where.c_str());
+        check(b.engine.log.find("null") == std::string::npos,
+              "tier 1.2 on: every OMM_TRIANGLES geometry reached the engine with its triangles and its linkage");
+
+        // The refusals that stay with tier 1.2 on: ALLOW_DATA_ACCESS, an OMM_TRIANGLES geometry without its linkage,
+        // a histogram entry of an unknown format or above subdivision level 12, an array without its description,
+        // the tools visualization copy.
+        ListBox& r = f.list();
+        r.engine.caller = self;
+        f.reset(r);
+        const uint32_t errors = f.shell.list_errors.load();
+        const uint64_t calls = r.engine.calls.load();
+        auto build = [&](auto change) {
+            s.prepare(1);
+            D3D12DDIARG_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_0054 x{};
+            x.DestAccelerationStructureData = 0x900000;
+            x.Inputs.Type = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+            x.Inputs.NumDescs = 3;
+            x.Inputs.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+            x.Inputs.pGeometryDescs = s.d.geometries;
+            x.ScratchAccelerationStructureData = 0x910000;
+            change(x);
+            g_list.pfnBuildRaytracingAccelerationStructure(r.h, &x);
+        };
+        build([&](auto& x) {
+            x.Inputs.Flags = static_cast<D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(
+                rt12::kBuildAllowDataAccess);
+        });
+        auto drop = [](D3D12DDI_RAYTRACING_GEOMETRY_DESC_0054& g, bool triangles) {
+            rt12::OmmTriangles t = rt12::omm_triangles(g);
+            if (triangles) t.pTriangles = nullptr;
+            else t.pOmmLinkage = nullptr;
+            rt12::set_omm_triangles(g, t);
+        };
+        build([&](auto&) { drop(s.d.geometries[2], false); });
+        build([&](auto&) { drop(s.d.geometries[0], true); });
+        auto omm_array = [&](auto& x) {
+            x.Inputs.Type = kOmmArrayType;
+            x.Inputs.NumDescs = 1;
+            rt12::set_array_desc(x.Inputs, &s.d.array);
+        };
+        build([&](auto& x) {
+            omm_array(x);
+            s.d.histogram[1].Format = 3;
+        });
+        build([&](auto& x) {
+            omm_array(x);
+            s.d.histogram[2].SubdivisionLevel = 13;
+        });
+        build([&](auto& x) {
+            omm_array(x);
+            rt12::set_array_desc(x.Inputs, nullptr);
+        });
+        build([&](auto& x) {
+            omm_array(x);
+            s.d.array.pOmmHistogram = nullptr;
+        });
+        const D3D12DDIARG_COPY_RAYTRACING_ACCELERATION_STRUCTURE_0054 tools{
+            0x920000, 0x930000, D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_VISUALIZATION_DECODE_FOR_TOOLS};
+        g_list.pfnCopyRaytracingAccelerationStructure(r.h, &tools);
+        check(f.shell.list_errors == errors + 8 && r.engine.calls.load() == calls,
+              "tier 1.2 on: ALLOW_DATA_ACCESS, a geometry without its linkage or its triangles, an unknown format, "
+              "level 13, an array without a description or without its histogram, and the tools copy are refused "
+              "(%u), no engine call", f.shell.list_errors.load() - errors);
+        f.close(r);
+        check(!off.engine.unexpected && !a.engine.unexpected && !b.engine.unexpected && !r.engine.unexpected &&
+                  !b.engine.crossed && !b.engine.stale && !f.device.unexpected,
+              "tier 1.2: no unexpected engine method, one call at a time, no released object named");
+        check(f.off(), "tier 1.2: policy off");
+        CloseHandle(gate);
+    }
+
+    // 12. Raytracing tier 1.2 on the device: set_raytracing_tier12_commands on a context with a device, from the
+    //     engine's OPTIONS5; then, off and on, the three device slots it changes: D108 (prebuild information) refuses
+    //     or forwards OMM inputs, D109 (driver matching identifier) answers UNRECOGNIZED or forwards, D106
+    //     (CreateStateObject) refuses or admits ALLOW_OPACITY_MICROMAPS in a pipeline configuration.
+    {
+        Fixture f;
+        OmmSources s;
+        f.context.device5 = static_cast<ID3D12Device5*>(&f.device);
+        f.device.options5 = true;
+        auto tier12 = [&](bool on, D3D12_RAYTRACING_TIER tier, HRESULT hr, uint32_t queries) {
+            f.context.omm = !f.context.omm;                 // the call must set it either way
+            f.device.options5_tier = tier;
+            f.device.options5_hr = hr;
+            const uint32_t before = f.device.options5_queries.load();
+            const bool set = set_raytracing_tier12_commands(&f.context, on) == S_OK;
+            return set && f.device.options5_queries.load() == before + queries ? f.context.omm : !f.context.omm;
+        };
+        const bool admitted = tier12(true, D3D12_RAYTRACING_TIER_1_2, S_OK, 1);
+        const bool tier11 = tier12(true, D3D12_RAYTRACING_TIER_1_1, S_OK, 1);
+        const bool failed = tier12(true, D3D12_RAYTRACING_TIER_1_2, E_FAIL, 1);
+        const bool switched_off = tier12(false, D3D12_RAYTRACING_TIER_1_2, S_OK, 0);
+        check(admitted && !tier11 && !failed && !switched_off && !f.device.unexpected,
+              "tier 1.2 from OPTIONS5: admitted at engine tier 1_2 (%d), not at 1_1 (%d), not after a failed query "
+              "(%d), not when switched off, which queries nothing (%d)", admitted, tier11, failed, switched_off);
+
+        // D108. The engine's answer, and a reference list that logs what the engine must be given: the same inputs.
+        ListBox& p = f.list();
+        ListBox& ref = f.list();
+        p.engine.caller = self;
+        ref.engine.caller = self;
+        f.device.prebuild_log = &p.engine;
+        f.device.prebuild_answer = {0x12345, 0x6789, 0xABC};
+        auto prebuild = [&](const D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054& inputs) {
+            D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_0054 info{1, 2, 3};
+            g_core.pfnGetRaytracingAccelerationStructurePrebuildInfo(f.hdevice, &inputs, &info);
+            return info;
+        };
+        auto expect = [&](const D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054& inputs) {
+            Call c(&ref.engine, "GetRaytracingAccelerationStructurePrebuildInfo");
+            FakeList::build_inputs(c, *reinterpret_cast<const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS*>(
+                                          &inputs));
+        };
+        auto same = [](const D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO_0054& info, UINT64 a, UINT64 b,
+                       UINT64 c) {
+            return info.ResultDataMaxSizeInBytes == a && info.ScratchDataSizeInBytes == b &&
+                   info.UpdateScratchDataSizeInBytes == c;
+        };
+        auto bottom = [&](D3D12DDI_ELEMENTS_LAYOUT layout, UINT flags) {
+            D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054 in{};
+            in.Type = D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+            in.Flags = static_cast<D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS>(flags);
+            in.NumDescs = 3;
+            in.DescsLayout = layout;
+            if (layout == D3D12DDI_ELEMENTS_LAYOUT_ARRAY) in.pGeometryDescs = s.d.geometries;
+            else in.ppGeometryDescs = s.d.geometry_pointers;
+            return in;
+        };
+        auto omm_array = [&] {
+            D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054 in{};
+            in.Type = kOmmArrayType;
+            in.NumDescs = 1;
+            in.DescsLayout = D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
+            rt12::set_array_desc(in, &s.d.array);
+            return in;
+        };
+        D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054 plain = bottom(D3D12DDI_ELEMENTS_LAYOUT_ARRAY,
+                                                                                    kOmmBuildFlags |
+                                                                                        rt12::kBuildAllowDataAccess);
+        plain.NumDescs = 1;
+        plain.pGeometryDescs = &s.d.geometries[1];               // TRIANGLES
+
+        f.context.omm = false;
+        s.prepare(1);
+        {
+            const uint32_t errors = f.shell.device_errors.load();
+            const uint32_t before = f.device.prebuilds.load();
+            const auto a = prebuild(bottom(D3D12DDI_ELEMENTS_LAYOUT_ARRAY, kOmmBuildFlags));
+            const auto b = prebuild(bottom(D3D12DDI_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS, 0));
+            const auto c = prebuild(omm_array());
+            check(f.shell.device_errors == errors + 3 && f.shell.device_error == E_INVALIDARG &&
+                      f.device.prebuilds == before && same(a, 0, 0, 0) && same(b, 0, 0, 0) && same(c, 0, 0, 0),
+                  "D108 tier 1.2 off: OMM_TRIANGLES from an array and from pointers and an OMM array are refused "
+                  "(%u), the answers zeroed, none reaches the engine", f.shell.device_errors.load() - errors);
+            const auto d = prebuild(plain);
+            expect(plain);
+            check(f.shell.device_errors == errors + 3 && f.device.prebuilds == before + 1 &&
+                      same(d, 0x12345, 0x6789, 0xABC) && p.engine.log == ref.engine.log,
+                  "D108 tier 1.2 off: TRIANGLES with the OMM build flags and ALLOW_DATA_ACCESS reach the engine "
+                  "unchecked, as before tier 1.2, with the engine's answer");
+        }
+
+        f.context.omm = true;
+        p.engine.log.clear();
+        ref.engine.log.clear();
+        {
+            const uint32_t errors = f.shell.device_errors.load();
+            const uint32_t before = f.device.prebuilds.load();
+            bool answers = true;
+            for (UINT n = 2; n <= 4; ++n) {
+                s.prepare(n);
+                const D3D12DDI_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS_0054 in =
+                    n == 2 ? bottom(D3D12DDI_ELEMENTS_LAYOUT_ARRAY, kOmmBuildFlags)
+                    : n == 3 ? bottom(D3D12DDI_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS, 0) : omm_array();
+                answers = answers && same(prebuild(in), 0x12345, 0x6789, 0xABC);
+                expect(in);
+            }
+            check(answers && f.shell.device_errors == errors && f.device.prebuilds == before + 3 &&
+                      p.engine.log == ref.engine.log && p.engine.log.find("null") == std::string::npos,
+                  "D108 tier 1.2 on: OMM_TRIANGLES from an array and from pointers and an OMM array reach the engine "
+                  "with every structure they point to, and the engine's answer comes back");
+            const auto d = prebuild(plain);
+            check(f.shell.device_errors == errors + 1 && f.device.prebuilds == before + 3 && same(d, 0, 0, 0),
+                  "D108 tier 1.2 on: ALLOW_DATA_ACCESS is refused, the answer zeroed, no engine call");
+        }
+        f.device.prebuild_log = nullptr;
+
+        // D109.
+        D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054 id{};
+        for (size_t k = 0; k < sizeof(id); ++k) reinterpret_cast<uint8_t*>(&id)[k] = static_cast<uint8_t>(k * 7 + 3);
+        auto identify = [&](const D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054* given) {
+            return g_core.pfnCheckDriverMatchingIdentifier(
+                f.hdevice, D3D12DDI_SERIALIZED_DATA_RAYTRACING_ACCELERATION_STRUCTURE, given);
+        };
+        f.context.omm = false;
+        const D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS off_answer = identify(&id);
+        check(off_answer == D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED && f.device.identifiers == 0,
+              "D109 tier 1.2 off: UNRECOGNIZED (%d), no engine call", static_cast<int>(off_answer));
+        f.context.omm = true;
+        f.device.identifier_answer = D3D12_DRIVER_MATCHING_IDENTIFIER_COMPATIBLE_WITH_DEVICE;
+        const D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS compatible = identify(&id);
+        f.device.identifier_answer = D3D12_DRIVER_MATCHING_IDENTIFIER_INCOMPATIBLE_VERSION;
+        const D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS incompatible = identify(&id);
+        const bool given = f.device.identifier_type == D3D12_SERIALIZED_DATA_RAYTRACING_ACCELERATION_STRUCTURE &&
+                           std::memcmp(&f.device.identifier, &id, sizeof(id)) == 0;
+        const D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS none = identify(nullptr);
+        check(compatible == D3D12DDI_DRIVER_MATCHING_IDENTIFIER_COMPATIBLE_WITH_DEVICE &&
+                  incompatible == D3D12DDI_DRIVER_MATCHING_IDENTIFIER_INCOMPATIBLE_VERSION && given &&
+                  none == D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED && f.device.identifiers == 2,
+              "D109 tier 1.2 on: the engine's answer (%d, %d) for the type and identifier given, UNRECOGNIZED (%d) "
+              "for no identifier without an engine call", static_cast<int>(compatible), static_cast<int>(incompatible),
+              static_cast<int>(none));
+
+        // D106: a pipeline whose one subobject is its configuration (the _0075 layout), which reaches the engine as a
+        // RAYTRACING_PIPELINE_CONFIG1.
+        D3D12DDI_RAYTRACING_PIPELINE_CONFIG_0075 config{1, {}};
+        const D3D12DDI_STATE_SUBOBJECT_0054 subobject{D3D12DDI_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG,
+                                                      &config};
+        const D3D12DDIARG_CREATE_STATE_OBJECT_0054 pipeline{D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, 1,
+                                                            &subobject};
+        const SIZE_T record_size = g_core.pfnCalcPrivateStateObjectSize(f.hdevice, &pipeline);
+        std::vector<std::max_align_t> memory(record_size / sizeof(std::max_align_t) + 1);
+        auto create = [&](bool omm, UINT flags) {
+            f.context.omm = omm;
+            config.Flags = static_cast<D3D12DDI_RAYTRACING_PIPELINE_FLAGS>(flags);
+            f.device.pipeline_flags = 0;
+            const uint32_t before = f.device.state_objects.load();
+            const D3D12DDI_HSTATEOBJECT_0054 h{memory.data()};
+            const HRESULT hr = g_core.pfnCreateStateObject(f.hdevice, &pipeline, h, D3D12DDI_HRTSTATEOBJECT_0054{});
+            const bool reached = f.device.state_objects.load() == before + 1;
+            const std::vector<UINT>& types = f.device.state_object_types;
+            const bool config1 = reached && types.size() == 1 &&
+                                 types[0] == D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1 &&
+                                 f.device.pipeline_flags == flags;
+            g_core.pfnDestroyStateObject(f.hdevice, h);
+            return hr == S_OK && config1 ? 1 : hr != S_OK && !reached ? 0 : -1;
+        };
+        constexpr UINT kSkip = D3D12DDI_RAYTRACING_PIPELINE_FLAG_SKIP_PROCEDURAL_PRIMITIVES;
+        const auto live = f.context.live.load();
+        const int off_plain = create(false, kSkip);
+        const int off_omm = create(false, kSkip | rt12::kPipelineAllowOmms);
+        const int on_omm = create(true, kSkip | rt12::kPipelineAllowOmms);
+        const int on_unknown = create(true, kSkip | rt12::kPipelineAllowOmms | 0x800);
+        check(off_plain == 1 && off_omm == 0 && on_omm == 1 && on_unknown == 0 && f.context.live == live,
+              "D106: a pipeline config with SKIP_PROCEDURAL_PRIMITIVES reaches the engine (%d); "
+              "ALLOW_OPACITY_MICROMAPS is refused with tier 1.2 off (%d) and reaches the engine in a CONFIG1 with "
+              "it on (%d); 0x800 "
+              "is refused with tier 1.2 on (%d); every record destroyed", off_plain, off_omm, on_omm, on_unknown);
+        check(!f.device.unexpected && !p.engine.unexpected && !ref.engine.unexpected && !p.engine.stale,
+              "tier 1.2 on the device: no unexpected device or engine method");
     }
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

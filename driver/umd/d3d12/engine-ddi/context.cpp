@@ -438,6 +438,22 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
     return S_OK;
 }
 
+HRESULT set_raytracing_tier12_commands(DeviceContext* context, bool on) noexcept {
+    if (!context) {
+        log_refusal("set_raytracing_tier12_commands: refused (no context)");
+        return E_INVALIDARG;
+    }
+    // The engine reports 1_2 only with VK_EXT_opacity_micromap and SER on its Vulkan device (vkd3d-proton device.c,
+    // d3d12_device_determine_ray_tracing_tier). A failed query keeps the slots at tier 1.1.
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+    const bool engine = on && SUCCEEDED(context->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5,
+                                                                            sizeof(options5)));
+    context->omm = engine && static_cast<UINT>(options5.RaytracingTier) >= rt12::kTier;
+    log_line("raytracing tier 1.2 commands %s (engine tier %d): opacity micromaps %s", on ? "on" : "off",
+             engine ? static_cast<int>(options5.RaytracingTier) : -1, context->omm ? "admitted" : "refused");
+    return S_OK;
+}
+
 // ---- Context --------------------------------------------------------------------------------------------------
 namespace {
 template <class T> void release_ref(T*& p) noexcept {
@@ -653,9 +669,36 @@ template <class R, class... A, char Table, size_t Offset> struct FailSafe<R(APIE
     }
 };
 
+// D109. Without tier 1.2 in the slots engine-ddi serializes nothing (CopyRaytracingAccelerationStructure refuses
+// SERIALIZE and DESERIALIZE), so no identifier is its own. With it, the engine owns the serialized format and its
+// identifier (vkd3d-proton device.c, d3d12_device_CheckDriverMatchingIdentifier: the Vulkan driver UUID and
+// vkGetDeviceAccelerationStructureCompatibilityKHR). The DDI identifier and status have the API's layout and values.
+static_assert(sizeof(D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054) ==
+                  sizeof(D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER) &&
+                  offsetof(D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054, DriverOpaqueVersioningData) ==
+                      offsetof(D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER, DriverOpaqueVersioningData),
+              "driver matching identifier");
+static_assert(D3D12DDI_SERIALIZED_DATA_RAYTRACING_ACCELERATION_STRUCTURE ==
+                      static_cast<int>(D3D12_SERIALIZED_DATA_RAYTRACING_ACCELERATION_STRUCTURE) &&
+                  D3D12DDI_DRIVER_MATCHING_IDENTIFIER_COMPATIBLE_WITH_DEVICE ==
+                      static_cast<int>(D3D12_DRIVER_MATCHING_IDENTIFIER_COMPATIBLE_WITH_DEVICE) &&
+                  D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNSUPPORTED_TYPE ==
+                      static_cast<int>(D3D12_DRIVER_MATCHING_IDENTIFIER_UNSUPPORTED_TYPE) &&
+                  D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED ==
+                      static_cast<int>(D3D12_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED) &&
+                  D3D12DDI_DRIVER_MATCHING_IDENTIFIER_INCOMPATIBLE_VERSION ==
+                      static_cast<int>(D3D12_DRIVER_MATCHING_IDENTIFIER_INCOMPATIBLE_VERSION) &&
+                  D3D12DDI_DRIVER_MATCHING_IDENTIFIER_INCOMPATIBLE_TYPE ==
+                      static_cast<int>(D3D12_DRIVER_MATCHING_IDENTIFIER_INCOMPATIBLE_TYPE),
+              "serialized data type and identifier status");
 D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS APIENTRY unrecognized_identifier(
-    D3D12DDI_HDEVICE, D3D12DDI_SERIALIZED_DATA_TYPE, const D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054*) {
-    return D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED;
+    D3D12DDI_HDEVICE device, D3D12DDI_SERIALIZED_DATA_TYPE type,
+    const D3D12DDI_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER_0054* identifier) {
+    DeviceContext* c = identifier ? resolve(device) : nullptr;
+    if (!c || !c->omm) return D3D12DDI_DRIVER_MATCHING_IDENTIFIER_UNRECOGNIZED;
+    return static_cast<D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS>(c->device5->CheckDriverMatchingIdentifier(
+        static_cast<D3D12_SERIALIZED_DATA_TYPE>(type),
+        reinterpret_cast<const D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER*>(identifier)));
 }
 
 // No meta commands: an empty enumeration is the exact answer, not a failure.
