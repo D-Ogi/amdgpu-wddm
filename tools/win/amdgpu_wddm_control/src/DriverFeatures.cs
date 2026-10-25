@@ -79,6 +79,13 @@ namespace AmdgpuWddmControl
             return Shown(s, f) && On(s.P(f.ValueName)) != (v == FeatureOn);
         }
 
+        // Whether settings search may list the entry: the entry of a switch goes only where the window shows the
+        // switch, so that no search leads to a page without it. Every other entry stays.
+        public static bool Searchable(RecoverySnapshot s, string entryId)
+        {
+            return !All.Any(f => entryId == "graphics." + f.Id && !(s != null && Shown(s, f)));
+        }
+
         // Fills the plan for one of the four actions. The return value is the refusal, or null when the plan stands.
         public static string Fill(string action, RecoverySnapshot s, ActionPlan p)
         {

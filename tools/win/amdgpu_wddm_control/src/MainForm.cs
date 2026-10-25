@@ -848,7 +848,7 @@ namespace AmdgpuWddmControl
 
         void ShowResults()
         {
-            _hits = SettingsSearch.Find(_search.Text, Strings.Language);
+            _hits = SettingsSearch.Find(_search.Text, Strings.Language).Where(h => DriverFeatures.Searchable(_snap, h.Entry.Id)).ToList();
             _results.Items.Clear();
             foreach (var h in _hits)
                 _results.Items.Add(h.Entry.Name + "  -  " + Strings.T("nav." + h.Entry.Page) + (h.Entry.ComingLater ? "  (" + Strings.T("ui.later.short") + ")" : ""));
