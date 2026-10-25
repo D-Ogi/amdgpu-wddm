@@ -71,7 +71,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
+      "commit": "89815a7e4b99cef0d0fe4c4120f681082d0c3796",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -118,7 +118,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "b5ffae8cb2667f3caff299cf9481f4493a10f834",
+      "commit": "89815a7e4b99cef0d0fe4c4120f681082d0c3796",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
