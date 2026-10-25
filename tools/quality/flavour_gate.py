@@ -290,6 +290,7 @@ NDEBUG_RECIPES = {
 RELEASE_DEFINE = {'cl': "'/DNDEBUG'", 'clang': "'-DNDEBUG'"}
 RELEASE_OPTIMISE = {'cl': re.compile(r"(?<![\w/])/O[12x](?!\w)"), 'clang': re.compile(r"(?<![\w-])-O[123s](?!\w)")}
 RELEASE_COMPILES = {
+    'tools/build/build-umd-adl.ps1': (('tools/build/build-umd-adl.ps1', 'cl'),),
     'tools/build/build-umd-d3d12.ps1': (('tools/build/build-umd-d3d12.ps1', 'cl'),),
     'tools/build/build-umd-dxvk.ps1': (('tools/build/build-umd-dxvk.ps1', 'cl'),),
     'driver/umd/mft-h264/build.ps1': (('driver/umd/mft-h264/build.ps1', 'cl'),),
