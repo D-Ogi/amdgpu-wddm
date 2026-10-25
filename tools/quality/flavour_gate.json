@@ -124,14 +124,14 @@
   },
   {
    "name": "MESA_LOADER_DRIVER_OVERRIDE",
-   "where": "mesa-wddm src/gallium/auxiliary/driver_trace/tr_screen.c (CPU UMD, zink UMD, OpenGL ICD); src/loader/loader.c is not built on Windows",
+   "where": "mesa-wddm src/gallium/auxiliary/driver_trace/tr_screen.c (CPU UMD, zink UMD); src/loader/loader.c is not built on Windows",
    "does": "names another gallium driver; in these targets it selects which screen the trace wrapper takes",
    "lab": {
     "every": [
-     "amdgpu_wddm_gl.dll",
      "bc250d3d.dll",
      "bc250d3d_zink.dll"
-    ]
+    ],
+    "note": "opengl/amdgpu_wddm_gl.dll does not hold MESA_LOADER_DRIVER_OVERRIDE in either flavour: the wgl target creates its screen without debug_screen_wrap, so no code calls trace_screen_create, and the clang-cl build does not link the trace wrapper with its read. That is by build line, not by flavour"
    }
   },
   {
@@ -705,6 +705,66 @@
    "name": "AMDGPU_WDDM_VKD3D_PSO_LOG",
    "where": "vkd3d-proton libs/vkd3d/cache.c (vkd3d_driver_cache_init)",
    "does": "writes a log of every pipeline creation to <pipeline cache>.pso-log.txt",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_LAB_DDI_MAX",
+   "where": "bc250-win driver/umd/d3d12/adapter.cpp (offered_max)",
+   "does": "sets the newest D3D12 DDI build that the shell offers and accepts (92 to the newest build), so that one lab run finds the first build that a runtime refuses",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_LAB_DDI0102_LIMITS",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/caps.cpp (options0102)",
+   "does": "creation-gate probe: reports synthetic sample counts or sampler heap sizes in D3D12DDI_OPTIONS_DATA_0102 (samples, samplers, both, control), so that the runtime and not the shell refuses the values",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_DIVIDER",
+   "where": "vkd3d-proton libs/vkd3d/meta.c (work graph meta operations)",
+   "does": "with 1, the work graph distributor splits the workgroups of each node also on a device that does not need it, so that a test can run that path on any device",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_FAIL",
+   "where": "vkd3d-proton libs/vkd3d/workgraphs.c (d3d12_wg_fault_injected)",
+   "does": "fault injection: the creation of a work graph state object fails at a named point, or the retention and drain passes write an invalid state, so that a test can run the cleanup and error paths",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_LIMITS",
+   "where": "vkd3d-proton libs/vkd3d/workgraphs.c",
+   "does": "sets small payload ring sizes and packed offset limits of a work graph, and with canary=1 adds canary ranges to its backing memory, for tests",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_MULTI_INPUT",
+   "where": "vkd3d-proton libs/vkd3d/workgraphs.c",
+   "does": "sets the staging sizes, the large input size and the workgroup count of the multi-node GPU input passes of a work graph, so that a test crosses their limits with few records",
    "lab": {
     "every": [
      "amdgpu_wddm_vkd3d.dll"
@@ -1572,6 +1632,2121 @@
      "bc250kmd.sys"
     ]
    }
+  },
+  {
+   "name": "BC250PREIB_BEGIN",
+   "where": "mesa-wddm src/amd/vulkan/radv_cmd_buffer.c (hosted ICD)",
+   "does": "log tag of a lab-only trace, not an environment input: the release flavour compiles the trace out with its read",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250PREIB_BEGIN in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250PREIB_END",
+   "where": "mesa-wddm src/amd/vulkan/radv_cmd_buffer.c (hosted ICD)",
+   "does": "log tag of a lab-only trace, not an environment input: the release flavour compiles the trace out with its read",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250PREIB_END in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_ACE_QUEUES",
+   "where": "mesa-wddm src/amd/common/ac_gpu_info.c (hosted ICD, system ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "vulkan/vulkan_radeon.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_ACE_QUEUES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_ASYNC_COMPILE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_ASYNC_COMPILE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_ASYNC_NEVER_SWAP",
+   "where": "mesa-wddm src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_ASYNC_NEVER_SWAP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_BALANCED_SLICES",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_BALANCED_SLICES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_BARY_CORNER_ID",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_BARY_CORNER_ID in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_BARY_CORNER_ID_FORCE",
+   "where": "mesa-wddm src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_BARY_CORNER_ID_FORCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_BARY_IO16",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_BARY_IO16 in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_BARY_PRIVATE_ROT0",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_BARY_PRIVATE_ROT0 in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CACHE_PLAN",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CACHE_PLAN in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CAPTURE_MESH_CODE",
+   "where": "mesa-wddm src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CAPTURE_MESH_CODE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CAPTURE_POINTERS",
+   "where": "mesa-wddm src/amd/vulkan/radv_cmd_buffer.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CAPTURE_POINTERS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CAPTURE_POLICY_SHADERS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c; src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CAPTURE_POLICY_SHADERS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CAPTURE_RAW_IBS",
+   "where": "mesa-wddm src/util/bc250_env.h (hosted ICD)",
+   "does": "name that the DirectMesh preset of the lab flavour puts into the environment (util/bc250_env.h); no code of this line reads it, and the release flavour has neither the preset nor the name",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CAPTURE_RAW_IBS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CHAIN_ARGUMENTS_ONLY",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CHAIN_ARGUMENTS_ONLY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CHAIN_MESH_BLAKE3",
+   "where": "mesa-wddm src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CHAIN_MESH_BLAKE3 in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CHAIN_SAMPLE_OUTPUT",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CHAIN_SAMPLE_OUTPUT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CHAIN_SHADER_ONLY",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CHAIN_SHADER_ONLY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_CHAIN_TRACE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_CHAIN_TRACE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_COMPACT_VERTICES",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_COMPACT_VERTICES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_COMPUTE_QUEUE_COUNT",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_COMPUTE_QUEUE_COUNT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_COMPUTE_QUEUE_PRIORITY",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c; src/amd/vulkan/radv_queue.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_COMPUTE_QUEUE_PRIORITY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_DCC_32B",
+   "where": "mesa-wddm src/amd/common/ac_descriptors.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_DCC_32B in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DGC_DUMP",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250_dgc.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_DGC_DUMP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_DIAGNOSTIC_OMIT_LAUNCH",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_DIAGNOSTIC_OMIT_LAUNCH in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_DIAG_BARY_NO_REF",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_DIAG_BARY_NO_REF in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_EXPAND_PRIMITIVES",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_EXPAND_PRIMITIVES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_EXPERIMENTAL_COMPUTE_CU_MODE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_EXPERIMENTAL_COMPUTE_CU_MODE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_EXPERIMENTAL_CULL_COMPACT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_EXPERIMENTAL_CULL_COMPACT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_EXPERIMENTAL_DIRECT_SPLIT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_EXPERIMENTAL_DIRECT_SPLIT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_EXPERIMENTAL_PACK_TRIANGLE_VERTICES",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_EXPERIMENTAL_PACK_TRIANGLE_VERTICES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_EXPERIMENTAL_POST_MESH_VGT_FLUSH",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_EXPERIMENTAL_POST_MESH_VGT_FLUSH in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_EXPERIMENTAL_SKIP_INACTIVE_CHUNKS",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_EXPERIMENTAL_SKIP_INACTIVE_CHUNKS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_EXPOSE_DGC",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250_dgc.c; src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_EXPOSE_DGC in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_EXPOSE_FAST_BINDING",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_EXPOSE_FAST_BINDING in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_EXPOSE_MULTIVIEW_MESH",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_EXPOSE_MULTIVIEW_MESH in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_GPL_BINARY_LINK",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_GPL_BINARY_LINK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_GPL_SOURCE_LINK",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_GPL_SOURCE_LINK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_HYBRID_TASK",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_HYBRID_TASK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_IDX_DEBUG",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_IDX_DEBUG in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_IDX_POOL_BYTES",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_IDX_POOL_BYTES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_IDX_PRINT",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_IDX_PRINT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_IDX_TRACE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_IDX_TRACE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_LAUNCH_OMITTED",
+   "where": "mesa-wddm src/amd/vulkan/radv_cmd_buffer.c (hosted ICD)",
+   "does": "log tag of a lab-only trace, not an environment input: the release flavour compiles the trace out with its read",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_LAUNCH_OMITTED in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_LOCAL_BOS",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_LOCAL_BOS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_ALLOC_BARRIER",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_ALLOC_BARRIER in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_ALLOW_POS1",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c; src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_ALLOW_POS1 in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AMD",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AMD in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AMD_REUSE_OFF",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AMD_REUSE_OFF in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AMD_ROUTE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AMD_ROUTE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AMD_SIZE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AMD_SIZE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AUTOCULL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AUTOCULL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AUTOCULL_ALL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AUTOCULL_ALL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_AUTOCULL_WIDE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_AUTOCULL_WIDE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_CLIPCULL_CONST",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_CLIPCULL_CONST in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_COMPACT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_COMPACT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_COMPACT_LDS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_COMPACT_LDS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_CULLDIST_CULL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_CULLDIST_CULL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_DEAD_PAYLOAD",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_DEAD_PAYLOAD in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_DEALLOC_DIST",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_DEALLOC_DIST in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_DIRECT_READ",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_DIRECT_READ in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_FAIL_CLOSED",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_FAIL_CLOSED in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_FAST",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_FAST in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IDXPASS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_IDXPASS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IDXPASS_BATCH",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_IDXPASS_BATCH in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IMPLICIT_TRIS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_IMPLICIT_TRIS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_LDS_COVER",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_LDS_COVER in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_LDS_PLAN",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_LDS_PLAN in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_LEAN_CHECK",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_LEAN_CHECK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_MERGE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_MERGE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_MERGED_CHECK",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_MERGED_CHECK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_MERGE_INDIRECT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_MERGE_INDIRECT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_MERGE_PREP_L2_INV",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_MERGE_PREP_L2_INV in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_MIN2WAVES",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_MIN2WAVES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_MULTIVIEW_VTX",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_MULTIVIEW_VTX in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_NESTED_SLICE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_NESTED_SLICE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_MESH_NIR_DUMP",
+   "where": "mesa-wddm src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_MESH_NIR_DUMP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_NO_SPLIT",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_NO_SPLIT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_ONCE",
+   "where": "mesa-wddm src/util/bc250_env.h (hosted ICD)",
+   "does": "name that the DirectMesh preset of the lab flavour puts into the environment (util/bc250_env.h); no code of this line reads it, and the release flavour has neither the preset nor the name",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_ONCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_PIECES_65",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_PIECES_65 in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_PIECE_PRIMID",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_PIECE_PRIMID in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_PP_DIRECT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_PP_DIRECT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_PP_SHARE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_PP_SHARE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_REFERENCE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_REFERENCE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_REFERENCE_CULLDIST",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_REFERENCE_CULLDIST in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_ADAPTIVE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_ADAPTIVE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_AUTOCULL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_AUTOCULL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_BARY",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_BARY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_BARY_AFFINE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_BARY_AFFINE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_BARY_LAST",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_BARY_LAST in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_BARY_TINY",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_BARY_TINY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_CHECK",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_CHECK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_COMPACT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_COMPACT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_CORNERS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_CORNERS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_DIRECT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_DIRECT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_FAST",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_FAST in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_LOCAL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_LOCAL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_ORDERED",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_ORDERED in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_OWNED",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_OWNED in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_PARALLEL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_PARALLEL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_PIECES",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_PIECES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_PIECES_EXT",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_PIECES_EXT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_SPLIT_PIECES",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_SPLIT_PIECES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SAFE_STATS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SAFE_STATS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SPLIT_ANY",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SPLIT_ANY in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_SPLIT_STORES",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_SPLIT_STORES in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_MESH_TIMER",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_MESH_TIMER in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_VERT_GRP",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_VERT_GRP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_WAVE_SYNC",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_MESH_WAVE_SYNC in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_NATIVE_TASK",
+   "where": "mesa-wddm src/amd/common/ac_gpu_info.c; src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_NATIVE_TASK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_NATIVE_TASK_COMPILE",
+   "where": "mesa-wddm src/amd/common/ac_gpu_info.c; src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_NATIVE_TASK_COMPILE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_NATIVE_TASK_DIRECT",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_NATIVE_TASK_DIRECT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_NATIVE_TASK_INDIRECT",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_NATIVE_TASK_INDIRECT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_NGGC_WIDE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_NGGC_WIDE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_NO_BARYCENTRICS",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_NO_BARYCENTRICS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_ORDERED_NIR_DUMP",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_pipeline.c; src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_ORDERED_NIR_DUMP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_ORDERED_PRINT_NIR",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_ORDERED_PRINT_NIR in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_OUTPUT_REGIONS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_OUTPUT_REGIONS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_PARALLEL_CULL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_PARALLEL_CULL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_PERF_NO_SPLIT_L2_INV",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_PERF_NO_SPLIT_L2_INV in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_PERF_PIECE_PRIMS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_PERF_PIECE_PRIMS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_PIPELINE_PLAN",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_PIPELINE_PLAN in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SCRATCH_REUSE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SCRATCH_REUSE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SHADER_OBJECT_PLAN",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SHADER_OBJECT_PLAN in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_SINGLE_PIECE",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_SINGLE_PIECE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SPLIT_BATCH_PREP",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SPLIT_BATCH_PREP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SPLIT_BATCH_PRINT_NIR",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SPLIT_BATCH_PRINT_NIR in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SPLIT_BATCH_TRACE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SPLIT_BATCH_TRACE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SPLIT_LEAN_SETUP",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SPLIT_LEAN_SETUP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SPLIT_MESH",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SPLIT_MESH in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_SPLIT_PREP_FREE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_SPLIT_PREP_FREE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_GRID_FOLD",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_GRID_FOLD in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_MULTIVIEW",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_MULTIVIEW in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_PFP_SYNC",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_PFP_SYNC in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_STRICT_EXT",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_STRICT_EXT in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_TAIL",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_TAIL in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_WITNESS",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_WITNESS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_WITNESS_DRAWS",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_WITNESS_DRAWS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TASK_WITNESS_MS",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TASK_WITNESS_MS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_COMPILE",
+   "where": "mesa-wddm src/amd/common/nir/ac_nir_lower_ngg_mesh.c; src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_physical_device.c; src/amd/vulkan/radv_pipeline_cache.c; src/amd/vulkan/radv_pipeline_graphics.c; src/amd/vulkan/radv_shader.c; src/amd/vulkan/radv_shader_info.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_COMPILE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_TRACE_MEM",
+   "where": "mesa-wddm src/amd/vulkan/radv_device_memory.c; src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_TRACE_MEM in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_MERGE_NIR",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_MERGE_NIR in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_NATIVE_TASK",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_NATIVE_TASK in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_REGS",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_shader.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_REGS in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_SPLIT_NIR",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_SPLIT_NIR in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_STAGING",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_STAGING in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRACE_USAGE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRACE_USAGE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_TRANSIENT_ARENA",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "switch of the BC-250 DirectMesh route that the DirectMesh preset sets (util/bc250_env.h): the release flavour has no lookup and takes the preset value when a BC-250 is present, else the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_TRANSIENT_ARENA in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "BC250_USAGE",
+   "where": "mesa-wddm src/amd/vulkan/radv_queue.c (hosted ICD)",
+   "does": "log tag of a lab-only trace, not an environment input: the release flavour compiles the trace out with its read",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold BC250_USAGE in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
+   "name": "RADV_BC250_VRS_NOOP",
+   "where": "mesa-wddm src/amd/vulkan/radv_physical_device.c (hosted ICD)",
+   "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll, vulkan/vulkan_radeon.dll, wow64/vulkan/vulkan_radeon.dll do not hold RADV_BC250_VRS_NOOP in either flavour: their build lines have no lookup of it. That is by build line, not by flavour"
+   }
   }
  ],
  "allowed": [
@@ -1841,6 +4016,53 @@
    "name": "AMDGPU_WDDM_GL",
    "where": "mesa-amdgpu-wddm src/gallium/targets/amdgpu_wddm_gl (amdgpu_wddm_gl.dll: its BD-166 version resource)",
    "reason": "the file's own name in lower case, amdgpu_wddm_gl, which versionstamp.py writes as InternalName and OriginalFilename; not a lookup. The build pinned by rc1 to rc4 carried no version resource at all, so the name appeared with the stamp of rc5 and not with a new setting. It is declared because Windows reads environment names in any letter case"
+  },
+  {
+   "names": [
+    "BC250_API_BARRIERS",
+    "BC250_CHUNK",
+    "BC250_CULL_DESTINATION",
+    "BC250_CULL_PREFIX",
+    "BC250_CULL_SOURCE",
+    "BC250_DGC_PREPARE",
+    "BC250_EMPTY_FS",
+    "BC250_EXPANDED_VERTEX",
+    "BC250_HYBRID_TASK_PRODUCER",
+    "BC250_IDX_COUNT",
+    "BC250_IDX_DRAW",
+    "BC250_IDX_HI",
+    "BC250_IDX_LO",
+    "BC250_IDX_SETUP",
+    "BC250_IDX_WG",
+    "BC250_INDICES16",
+    "BC250_INDIRECT_SETUP",
+    "BC250_LOGICAL_VERTEX_MAP",
+    "BC250_MAP_CURSOR",
+    "BC250_MAP_NEXT",
+    "BC250_MERGE_COUNTS",
+    "BC250_MERGE_DIMS",
+    "BC250_MERGE_HOLE",
+    "BC250_MERGE_INSTANCE_COUNTS",
+    "BC250_MERGE_PREP",
+    "BC250_MESH_ONLY_AMPLIFIER",
+    "BC250_ORDERED_EXPORT",
+    "BC250_OWN_BARRIERS",
+    "BC250_PHYSICAL_VERTEX_COUNT",
+    "BC250_PRIMITIVE_COUNT",
+    "BC250_REPRESENTATIVES",
+    "BC250_SPLIT_ARGUMENTS",
+    "BC250_SPLIT_COUNT",
+    "BC250_SPLIT_PRIMITIVE",
+    "BC250_SPLIT_VERTEX_COUNT",
+    "BC250_UNIFORM_OUTPUT"
+   ],
+   "where": "mesa-wddm src/amd/common/nir/ac_nir_lower_ngg_mesh.c; src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_bc250_dgc.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "reason": "not an environment input: a NIR or shader label, the lower-case name of a NIR variable, intrinsic index or meta shader of the BC-250 Mesh route. It is part of the shader cache keys and of the lab flavour bytes, so it keeps its name in both flavours"
+  },
+  {
+   "name": "BC250_SPLIT_BATCH",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "reason": "not an environment input: bc250_split_batch is the NIR label of the split-batch setup shader (both flavours), and BC250_SPLIT_BATCH is the tag of the lab split-batch trace, which the release flavour compiles out"
   }
  ],
  "package": {
