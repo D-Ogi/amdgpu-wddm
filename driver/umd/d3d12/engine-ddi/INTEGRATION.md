@@ -160,8 +160,8 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 |---|---|---|---|---|
 | 1074 3DPIPELINESUPPORT1 | `D3D12DDI_3DPIPELINESUPPORT1_DATA_0081`, 8, H:10415-10420 | MaximumDriverSupportedFeatureLevel | min(L, HighestRuntimeSupportedFeatureLevel) | FEATURE_LEVELS; "highest ... that does not exceed what the runtime understands", H:10377-10378 |
 | 1007 3DPIPELINESUPPORT | `D3D12DDI_3DPIPELINELEVEL` itself, 4, H:2922-2933 | the level | L | FEATURE_LEVELS; never above 12_1, H:10373 |
-| 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, C, 6_8); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_8 gives M. C is the shell's ceiling, 6_8 unless an experiment sets one ("Shader model" below). Earlier revisions ended the list at min(M, 6_6) |
-| 1091 SHADER_MODEL_6_8_OPTIONS_0110 | `D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110`, 8, H:13671-13679 | SampleCmpGradientAndBiasSupported, ExtendedCommandInfoSupported | the OPTIONS21 fields when 1012 ends at 6_8, else FALSE. FALSE when the engine does not answer OPTIONS21 | OPTIONS21. Another DataSize is E_INVALIDARG |
+| 1012 SHADER_MODELS | `D3D12DDI_D3D12_SHADER_MODELS_DATA_0011`, 16, H:3502-3507 | `*pNumShaderModelsSupported`, `pShaderModelsSupported` | every release model from 5_1 to min(M, C, 6_9); the count is always written, the array when non-NULL, E_INVALIDARG when its count is smaller | SHADER_MODEL asked with 6_9 gives M. C is the shell's ceiling, 6_9 unless an experiment sets one ("Shader model" below). 6_9 needs the tier 1.2 switch, which the shell sets ("Raytracing tier 1.2" below). Without it the list ends at 6_8 at most. Earlier revisions ended the list at min(M, 6_6) |
+| 1091 SHADER_MODEL_6_8_OPTIONS_0110 | `D3D12DDI_SHADER_MODEL_6_8_OPTIONS_0110`, 8, H:13671-13679 | SampleCmpGradientAndBiasSupported, ExtendedCommandInfoSupported | the OPTIONS21 fields when 1012 ends at 6_8 or 6_9, else FALSE. FALSE when the engine does not answer OPTIONS21 | OPTIONS21. Another DataSize is E_INVALIDARG |
 | 1006 D3D12_OPTIONS | `D3D12DDI_D3D12_OPTIONS_DATA_0089`, 124, H:11078-11112 | ResourceBindingTier, ConservativeRasterizationTier, CrossNodeSharingTier, ResourceHeapTier, OutputMergerLogicOp, VPAndRTArrayIndexFromAnyShaderFeedingRasterizerSupportedWithoutGSEmulation | same value | OPTIONS; DDI and API enums are equal (static_assert in caps.cpp) |
 | 1006 | | TiledResourcesTier | OPTIONS tier, 4 reported as 3 | OPTIONS; no DDI tier 4 at 0092 (H:709-715). Reserved resources, GetMipPacking, CopyTiles and the engine parts of Q3 and Q4 are implemented ("Tiled resources" below); the queue slots need the shell's hook |
 | 1006 | | CopyQueueTimestampQueriesSupported, BarycentricsSupported | same value | OPTIONS3 |
@@ -172,7 +172,7 @@ which this revision reports as unsupported (fail-safe slots in SLOTS.md).
 | 1006 | | WriteBufferImmediateQueueFlags | the engine's list types as queue flags | OPTIONS3 `WriteBufferImmediateSupportFlags`. The pinned engine answers DIRECT, COMPUTE, COPY and BUNDLE with no condition (vkd3d-proton device.c, d3d12_device_caps_init_feature_options3). The engine's answer is a list-type mask. This field is a queue-flag mask (H:11091, values H:1435-1445). DIRECT, COMPUTE and COPY map one by one. The BUNDLE bit has no queue flag to go to. The result is narrowed to the queues engine-ddi creates. L56 `pfnWriteBufferImmediate` is filled in both command list tables, so every reported flag has a slot behind it. An engine that does not answer OPTIONS3 leaves the zeroed structure, which is NONE |
 | 1006 | | ViewInstancingTier | 2, or NOT_SUPPORTED for older engines | Requires optional full-domain contract revision 1, contract tier 2 and OPTIONS3 tier 2 or 3. The engine uses multiview where it fits and per-view draws elsewhere. It admits repeated layers, independent viewports and shader offsets. This path does not claim tier 3 |
 | 1006 | | RenderPassTier | the engine's tier, clamped to TIER_2 | OPTIONS5 `RenderPassesTier`. The pinned engine answers TIER_0 (vkd3d-proton device.c, "Currently not supported"). The DDI enumeration stops at TIER_2 (H:7645-7652, field H:11097). A later engine that answers a higher tier is reported as TIER_2, not as a value the runtime does not know. The shell publishes `D3D12DDI_TABLE_TYPE_0043_RENDER_PASS` only while this answer is above NOT_SUPPORTED, so the tier and the table agree. Below that the runtime emulates render passes over the ordinary slots |
-| 1006 | | RaytracingTier | the engine's 1_1 or higher as 1_1, else NOT_SUPPORTED | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), which the pinned engine traces up to the count (upstream traces the first record alone). One gap the tier promises: a collection imported with an export list is refused (E_NOTIMPL on the refusal line). The runtime's description of a collection import is measured on the development PC's WARP (fact M837), not yet on unit A's runtime. `set_raytracing_tier_reporting(caps,false)` takes the answer back to NOT_SUPPORTED (the shell's experiment raytracing-tier-off) |
+| 1006 | | RaytracingTier | the engine's 1_1 or higher as 1_1, else NOT_SUPPORTED. 1_2 when the engine is at 1_2 and the tier 1.2 switch is on, which the shell sets ("Raytracing tier 1.2" below) | the acceleration structure, state object, pfnSetPipelineState1 and pfnDispatchRays slots reach the engine, collections and pfnAddToStateObject included ("Acceleration structures" and "Ray tracing state objects" below), and so does indirect ray dispatch (a DISPATCH_RAYS command signature), which the pinned engine traces up to the count (upstream traces the first record alone). One gap the tier promises: a collection imported with an export list is refused (E_NOTIMPL on the refusal line). The runtime's description of a collection import is measured on the development PC's WARP (fact M837), not yet on unit A's runtime. `set_raytracing_tier_reporting(caps,false)` takes the answer back to NOT_SUPPORTED (the shell's experiment raytracing-tier-off) |
 | 1006 | | VariableShadingRateTier, PerPrimitiveShadingRateSupportedWithViewportIndexing, AdditionalShadingRatesSupported, ShadingRateImageTileSize, VariableRateShadingSumCombinerSupported, MeshShaderPerPrimitiveShadingRateSupported | NOT_SUPPORTED, FALSE, 0 | pfnRSSetShadingRate and pfnRSSetShadingRateImage are fail-safes |
 | 1006 | | MeshShaderTier | tier 1 when the engine answers tier 1 or higher and 1012 ends at 6_5 or higher, else NOT_SUPPORTED | OPTIONS7. The engine answers tier 1 exactly when its Vulkan device has VK_EXT_mesh_shader with meshShader and taskShader (vkd3d-proton device.c, d3d12_device_determine_mesh_shader_tier). An engine that does not answer OPTIONS7 leaves the zeroed structure, which is NOT_SUPPORTED. Tier 1 is the only tier at 0092 (H:9353-9357), so a higher answer is reported as 1. The shader model condition is the API side. A mesh or an amplification program is a DXIL program of shader model 6.5. Below 6_5 the tier would name a path no application can take. pfnDispatchMesh, pfnCreateMeshShader, pfnCreateAmplificationShader and mesh pipelines are implemented ("Shaders and pipelines" below) |
 | 1006 | | MeshShaderSupportsFullRangeRenderTargetArrayIndex | the engine answer, FALSE without mesh shaders | OPTIONS9 |
@@ -234,9 +234,10 @@ the one implementation in the references and what the engine can honour.
 
 ### Shader model
 
-engine-ddi asks the engine's SHADER_MODEL with 6_8 and lists in 1012 every release model from 5_1 up to the lowest
-of the engine's answer, the shell's ceiling and 6_8. The suffix of a DDI value (6_7 release 0093, 6_8 release 0108)
-names the DDI build that defined it. It is not a build the driver must negotiate. Fact M840 reads four runtime cores:
+engine-ddi asks the engine's SHADER_MODEL with 6_9 and lists in 1012 every release model from 5_1 up to the lowest
+of the engine's answer, the shell's ceiling and 6_9. 6_9 needs the tier 1.2 switch ("Raytracing tier 1.2" below).
+The suffix of a DDI value (6_7 release 0093, 6_8 release 0108, 6_9 release 0118) names the DDI build that defined
+it. It is not a build the driver must negotiate. Fact M840 reads four runtime cores:
 
 | Runtime core | 6_7 and 6_8 release values | What an application saw from the 0092 shell |
 |---|---|---|
@@ -253,11 +254,87 @@ only.
 HRESULT engine_ddi::set_shader_model_ceiling(engine_ddi::AdapterCaps* caps, D3D_SHADER_MODEL ceiling) noexcept;
 ```
 
-The call lowers the ceiling (default 6_8) before the first GetCaps. It never raises the list above the engine's
-answer. E_INVALIDARG for NULL caps or a model outside 5_1 to 6_8. The shell sets 6_7 under the experiment
+The call lowers the ceiling (default 6_9) before the first GetCaps. It never raises the list above the engine's
+answer. E_INVALIDARG for NULL caps or a model outside 5_1 to 6_9. The shell sets 6_7 under the experiment
 `shader-model-68-off` and 6_6 under `shader-model-67-off` (the second wins), for a bisection of a title that changes
 its shader path with the reported model. With `shader-model-67-off` the answer is that of earlier revisions: a list
 up to 6_6 and no 1091.
+
+### Raytracing tier 1.2
+
+Raytracing tier 1.2 adds opacity micromaps and needs shader model 6.9 (DirectX-Specs `d3d/Raytracing.md`, "Opacity
+micromaps"). engine-ddi has it in two halves. Both are OFF in the library. The shell turns both on, unless the
+experiment `raytracing-tier12-off` is set (adapter-caps.cpp and device-engine.cpp).
+
+```cpp
+HRESULT engine_ddi::set_raytracing_tier12_reporting(engine_ddi::AdapterCaps* caps, bool report) noexcept;
+HRESULT engine_ddi::set_raytracing_tier12_commands(engine_ddi::DeviceContext* context, bool on) noexcept;
+```
+
+The build uses the WDK and SDK 10.0.26100 headers, which have no opacity micromap item and no 6.9 release value.
+`raytracing-tier12.h` has the values and layouts that engine-ddi uses, with line references to the WDK 28000
+`d3d12umddi.h` and the Agility SDK 1.619 `d3d12.h`. A build with either of these headers checks each item against it
+(static_asserts at the end of the file). The DDI and the API have the same values and layouts for all of them, on
+x64 and on x86.
+
+Caps (`set_raytracing_tier12_reporting`):
+- The engine's SHADER_MODEL is asked with 6_9, and the ceiling is 6_9. With the switch off, 1012 ends at 6_8 at most.
+- With the switch on, 1012 lists 6_9 (the release value 0x00060095, `6_9_RELEASE_0118`) when the engine answers 6_9
+  and its OPTIONS1 WaveOps and Int64ShaderOps and its OPTIONS4 Native16BitShaderOpsSupported are all TRUE.
+- 1006 reports RaytracingTier 1_2 when, in addition, the engine's OPTIONS5 tier is 1_2 and raytracing reporting is
+  on (`set_raytracing_tier_reporting`). Else 1_1, as in the 1006 row above. The negotiated DDI version is not a
+  condition.
+- The engine reports 1_2 only when its Vulkan device has VK_EXT_opacity_micromap and SER (vkd3d-proton device.c,
+  `d3d12_device_determine_ray_tracing_tier`). Its 6_9 needs maintenance9, long vectors and SER
+  (`d3d12_device_caps_init_shader_model`).
+
+This is a deviation of the same class as 6_8 at 0094: the shell reports values of later DDI builds (0110 and 0118)
+while it negotiates 0094. The runtimes read for it check neither (list below). A later runtime or an HLK test can.
+
+Slots (`set_raytracing_tier12_commands`), when the switch is on and the engine device's OPTIONS5 tier is 1_2:
+- D108 and L60 take an opacity micromap array (structure type 2) and OMM_TRIANGLES geometry (geometry type 2), and
+  the build flags ALLOW_OMM_UPDATE (0x40) and ALLOW_DISABLE_OMMS (0x80). The DDI 0110 structures have the API's
+  members at the API's offsets, so they reach the engine in place.
+- An OMM_TRIANGLES geometry must have both pTriangles and pOmmLinkage: the engine reads both without a check
+  (`libs/vkd3d/opacity_micromap.c`). An array must have its description, a histogram for a nonzero count, and in
+  every histogram entry a format OC1_2_STATE or OC1_4_STATE and a subdivision level from 0 to 12.
+- ALLOW_DATA_ACCESS (0x100) stays refused. The DDI defines it, the API of Agility 1.619 does not, and the engine
+  translates no such flag.
+- With deferred replay on, a build's inputs are one deep copy (replay.h, `BuildInputs`): the geometry descriptions,
+  the triangles and the linkage of each OMM_TRIANGLES geometry, the array description and its histogram.
+- L62 takes SERIALIZE and DESERIALIZE (the engine's `vkd3d_acceleration_structure_copy`), and D109
+  CheckDriverMatchingIdentifier forwards to the engine's `ID3D12Device5::CheckDriverMatchingIdentifier` (the Vulkan
+  driver UUID and `vkGetDeviceAccelerationStructureCompatibilityKHR`). The tools visualization copy stays E_NOTIMPL.
+- L61 is unchanged. A source that is an opacity micromap array goes to the engine as an address, like any other.
+- D106 admits the pipeline flag ALLOW_OPACITY_MICROMAPS (0x400) in RAYTRACING_PIPELINE_CONFIG1. The state object
+  flag 0x800 stays refused.
+
+With the switch off, or with an engine below 1_2, every one of these is refused as at tier 1.1.
+
+What the runtime does, read on the development PC from the disassembly of the D3D12 cores of Agility 1.619.6 and
+1.721.3 and of the inbox core 10.0.26100.9549:
+- The runtime copies the driver's 1006 RaytracingTier to OPTIONS5 with no check of the negotiated version or of the
+  shader model.
+- The build, postbuild and copy command-list calls reach the driver unchanged. The runtime translates no opacity
+  micromap input.
+- The runtime admits ALLOW_OPACITY_MICROMAPS only when the driver reports tier 1_2, in a pipeline config subobject
+  and in a subobject of a DXIL library alike.
+- The runtime asks 1095 (OPTIONS_0118) only of a driver that negotiated 0118 or later, so a 0094 shell is never asked
+  it, and an application reads ShaderExecutionReorderingActuallyReorders FALSE. The inbox core 10.0.26100.9549 never
+  asks 1095.
+- That the runtimes map the 6_9 release value from a 0094 driver as they map 6_8 (fact M840) is INFERENCE until the
+  installed route is measured.
+
+The shader container checks only the major version of a DXIL program (shader-container.cpp, `CheckDxilProgram`), so
+a 6.9 program passes it like any other 6.x program.
+
+Development PC witness:
+- caps-test.exe `test_raytracing_tier12`: the switch off and on at 0092 and 0094, each missing condition, the
+  ceiling, and raytracing reporting off.
+- replay-test.exe section 11: with the switch off, the six tier 1.2 calls are refused. With it on, the engine gets
+  the same calls with the policy off and on, after the sources are garbled. The refusals that stay are refused.
+
+Not yet measured on unit A.
 
 ### Memory architecture policy
 
@@ -438,7 +515,7 @@ engine-ddi does not resolve yet. A placeholder is not completed integration.
 | GetDescriptorSizeInBytes | the engine's descriptor increment | engine answer |
 | CheckResourceAllocationInfo, CheckExistingResourceAllocationInfo | the engine's GetResourceAllocationInfo for the description (for a stored packed video format, the description of its storage); no additional data. A description CheckResourceAllocationInfo cannot size gets ResourceDataSize UINT64_MAX, the API's error answer, with the default alignment for its sample count. Measured on unit A (native-caps284, 285, 64 x 64 YUY2 and R8G8_B8G8_UNORM textures): with E_INVALIDARG reported instead, the runtime removed the device at GetResourceAllocationInfo (DXGI_ERROR_DRIVER_INTERNAL_ERROR, SizeInBytes 0); with UINT64_MAX it answered SizeInBytes 0xFFFFFFFFFFFF0000 (UINT64_MAX aligned down to 64 KiB, no wrap), CreateCommittedResource E_OUTOFMEMORY, CreatePlacedResource E_INVALIDARG, and the device stayed | engine answer |
 | EnumerateMetaCommands | count 0, S_OK | exact: engine-ddi has no meta commands |
-| CheckDriverMatchingIdentifier | UNRECOGNIZED | exact: engine-ddi serializes nothing |
+| CheckDriverMatchingIdentifier | UNRECOGNIZED. With tier 1.2 in the slots, the engine's answer ("Raytracing tier 1.2") | exact: without tier 1.2, engine-ddi serializes nothing |
 | ImplicitShaderCacheControl | no-op | exact: 1006 D3D12_OPTIONS reports DriverManagedShaderCachePresent FALSE, and the pipeline libraries of D85 to D90 are the application's cache, not one this slot could clear |
 | RetrieveShaderComment | the empty comment: a character count of 1 and the terminator alone | exact: engine-ddi puts no comment in a pipeline. A count without a buffer is the size query, a buffer with no room for the terminator is E_INVALIDARG with the needed count left in place |
 | CheckSubresourceInfo | a buffer answers the resource width as both strides. A linear primary answers its surface row pitch and a plane of Height rows. Any other image gets zeroes and no error code at all. The slot reports only when it has no answer to give, and the reference documents no error category for it. One log line names the format once. A malformed call has no answer and keeps E_INVALIDARG: an unknown handle, no out structure, or a subresource index the resource does not have | the layouts engine-ddi itself knows |
@@ -810,8 +887,10 @@ Refused, reported once on the list (D108: on the device, with the answer zeroed)
   unknown structure type, element layout, geometry type, postbuild type or copy mode, a geometry or source array
   missing for a nonzero count.
 - E_NOTIMPL: the tools visualization postbuild type, and the visualization, serialize and deserialize copy modes.
-  The engine copies by clone and compaction only and writes a zero or nothing for the others
-  (`libs/vkd3d/acceleration_structure.c`); engine-ddi serializes nothing.
+  engine-ddi serializes nothing. With tier 1.2 in the slots, serialize and deserialize go to the engine
+  ("Raytracing tier 1.2" above).
+- Opacity micromap arrays, OMM_TRIANGLES geometry and the OMM build flags are refused unless tier 1.2 is in the
+  slots ("Raytracing tier 1.2" above).
 
 GPU addresses are the application's, as in every other slot. RaytracingTier stays NOT_SUPPORTED (the 1006 row
 above); that the runtime passes these arguments as the harness does is INFERENCE.

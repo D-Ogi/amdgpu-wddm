@@ -96,7 +96,10 @@ public:
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
     bool report_raytracing_tier{true};          // the driver's default; set_raytracing_tier_reporting takes it back
-    D3D_SHADER_MODEL shader_model_ceiling{D3D_SHADER_MODEL_6_8};   // set_shader_model_ceiling lowers it
+    // Tier 1.2 and shader model 6.9: off in the library, set_raytracing_tier12_reporting turns them on (the shell
+    // does, unless the experiment raytracing-tier12-off). Off, the answers are 6_8 and 1_1 at most.
+    bool report_raytracing_tier12{false};
+    D3D_SHADER_MODEL shader_model_ceiling{D3D_SHADER_MODEL_6_9};   // set_shader_model_ceiling lowers it
 };
 
 namespace {
@@ -113,7 +116,7 @@ constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEV
 // that defined it, not a version the driver must negotiate: the runtimes read in INTEGRATION.md "Shader model"
 // (M840) take the highest release value of the 1012 list that they know, whatever build the driver negotiated.
 // The 22621 system runtime knows release values up to 6_6 and ignores 6_7 and 6_8; runtime 26100 and the Agility
-// SDK cores 1.615 and 1.619 map both. The engine is asked with 6_8 as the highest model of interest; its answer is
+// SDK cores 1.615 and 1.619 map both. The engine is asked with 6_9 as the highest model of interest; its answer is
 // what dxil-spirv implements on this adapter (vkd3d-proton device.c, d3d12_device_caps_init_shader_model).
 struct ShaderModel { D3D_SHADER_MODEL api; D3D12DDI_SHADER_MODEL ddi; };
 constexpr ShaderModel kShaderModels[] = {
@@ -122,8 +125,13 @@ constexpr ShaderModel kShaderModels[] = {
     {D3D_SHADER_MODEL_6_3, D3D12DDI_SHADER_MODEL_6_3_RELEASE_0054}, {D3D_SHADER_MODEL_6_4, D3D12DDI_SHADER_MODEL_6_4_RELEASE_0062},
     {D3D_SHADER_MODEL_6_5, D3D12DDI_SHADER_MODEL_6_5_RELEASE_0071}, {D3D_SHADER_MODEL_6_6, D3D12DDI_SHADER_MODEL_6_6_RELEASE_0082},
     {D3D_SHADER_MODEL_6_7, D3D12DDI_SHADER_MODEL_6_7_RELEASE_0093}, {D3D_SHADER_MODEL_6_8, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108},
+    // The release value 6_9_RELEASE_0118 (raytracing-tier12.h), which the 26100 header does not have. The runtimes
+    // map it as they map 6_8 (INTEGRATION.md, "Raytracing tier 1.2"); reported_shader_model lists it only with the
+    // tier 1.2 switch on.
+    {D3D_SHADER_MODEL_6_9, static_cast<D3D12DDI_SHADER_MODEL>(rt12::kDdiShaderModel)},
 };
-constexpr D3D_SHADER_MODEL kHighestShaderModel = D3D_SHADER_MODEL_6_8;
+constexpr D3D_SHADER_MODEL kHighestShaderModel = D3D_SHADER_MODEL_6_9;
+static_assert(rt12::kShaderModel == D3D_SHADER_MODEL_6_9, "shader model 6.9");
 static_assert(kShaderModels[std::size(kShaderModels) - 1].api == kHighestShaderModel, "the table ends at the ceiling");
 
 bool known_shader_model(D3D_SHADER_MODEL m) noexcept {
@@ -132,10 +140,35 @@ bool known_shader_model(D3D_SHADER_MODEL m) noexcept {
     return false;
 }
 
-// What 1012 and 1091 report: the engine's model, at most the shell's ceiling (6_8 unless lowered).
+// The shell's own floor under a 6_9 answer: the optional features that every shader model 6.9 program may use
+// without a check of its own (native 16-bit operations for the long vector types, 64-bit integers, wave
+// operations). The engine gives 6_9 for long vectors, maintenance9 and SER (vkd3d-proton device.c,
+// d3d12_device_caps_init_shader_model); this rule adds the three OPTIONS answers it reads elsewhere.
+bool sm69_floor(const AdapterCaps& c) noexcept {
+    return c.options1.WaveOps && c.options1.Int64ShaderOps && c.options4.Native16BitShaderOpsSupported;
+}
+
+// What 1012 and 1091 report: the engine's model, at most the shell's ceiling (6_9 unless lowered). 6_9 needs the
+// tier 1.2 switch and sm69_floor; else the answer is 6_8 at most.
 D3D_SHADER_MODEL reported_shader_model(const AdapterCaps& c) noexcept {
-    return c.shader_model.HighestShaderModel < c.shader_model_ceiling ? c.shader_model.HighestShaderModel
-                                                                      : c.shader_model_ceiling;
+    D3D_SHADER_MODEL m = c.shader_model.HighestShaderModel < c.shader_model_ceiling ? c.shader_model.HighestShaderModel
+                                                                                    : c.shader_model_ceiling;
+    if (m >= D3D_SHADER_MODEL_6_9 && !(c.report_raytracing_tier12 && sm69_floor(c))) m = D3D_SHADER_MODEL_6_8;
+    return m;
+}
+
+// Raytracing tier 1.2: opacity micromaps and SER (DirectX-Specs Raytracing.md, tier 1.2). All of these:
+//   - the switch (set_raytracing_tier12_reporting) and the general raytracing switch;
+//   - the engine's own tier 1_2 (VK_EXT_opacity_micromap and SER, d3d12_device_determine_ray_tracing_tier);
+//   - shader model 6_9 reported, because SER is a shader model 6.9 feature.
+// It does not depend on the negotiated DDI version: the runtimes copy the 1006 tier to the application at every
+// version, and ask type 1095 only at 0118 or higher (INTEGRATION.md, "Raytracing tier 1.2"). The acceleration
+// structure and state object slots have a switch of their own and read the engine device's own tier (context.cpp,
+// set_raytracing_tier12_commands).
+bool tier12_reported(const AdapterCaps& c) noexcept {
+    return c.report_raytracing_tier && c.report_raytracing_tier12 &&
+           static_cast<UINT>(c.options5.RaytracingTier) >= rt12::kTier &&
+           reported_shader_model(c) >= D3D_SHADER_MODEL_6_9;
 }
 
 // Whether 1006 and 1004 report mesh shaders. Two conditions, both of them the engine's own answer:
@@ -289,10 +322,11 @@ void fill_options(const AdapterCaps& c, D3D12DDI_D3D12_OPTIONS_DATA_0089& o) noe
     o.RenderPassTier = render_pass_tier(c);
     // The engine's 1_1 or higher as 1_1, never more than the engine says, and NOT_SUPPORTED below that
     // (tier 1_0 demands acceleration structure copy modes the engine drops). set_raytracing_tier_reporting
-    // takes the whole answer back to NOT_SUPPORTED.
+    // takes the whole answer back to NOT_SUPPORTED. 1_2 only by tier12_reported.
     o.RaytracingTier = c.report_raytracing_tier && c.options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1
                            ? D3D12DDI_RAYTRACING_TIER_1_1
                            : D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED;
+    if (tier12_reported(c)) o.RaytracingTier = static_cast<D3D12DDI_RAYTRACING_TIER>(rt12::kTier);
     o.VariableShadingRateTier = D3D12DDI_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
     // Mesh shaders: the engine's own tier, which it derives from VK_EXT_mesh_shader and the two features it needs
     // (vkd3d-proton device.c, d3d12_device_determine_mesh_shader_tier: meshShader and taskShader both VK_TRUE, else
@@ -481,6 +515,16 @@ HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept {
     caps->report_raytracing_tier = report;
     log_line("raytracing tier reporting %s (engine tier %d)", report ? "on" : "off",
              static_cast<int>(caps->options5.RaytracingTier));
+    return S_OK;
+}
+
+HRESULT set_raytracing_tier12_reporting(AdapterCaps* caps, bool report) noexcept {
+    if (!caps) return E_INVALIDARG;
+    caps->report_raytracing_tier12 = report;
+    log_line("raytracing tier 1.2 reporting %s (engine tier %d, engine shader model %x, 6.9 floor %d): reported %x, "
+             "tier 1.2 %d", report ? "on" : "off", static_cast<int>(caps->options5.RaytracingTier),
+             static_cast<unsigned>(caps->shader_model.HighestShaderModel), sm69_floor(*caps) ? 1 : 0,
+             static_cast<unsigned>(reported_shader_model(*caps)), tier12_reported(*caps) ? 1 : 0);
     return S_OK;
 }
 

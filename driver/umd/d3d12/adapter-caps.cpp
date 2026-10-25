@@ -142,6 +142,16 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
         amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier-off result=%08lx\n",static_cast<unsigned long>(hr));
         amdgpu_wddm_log::flush();
     }
+    // Raytracing tier 1.2 and shader model 6.9 (engine-ddi set_raytracing_tier12_reporting): on, each only where the
+    // engine has it. The experiment raytracing-tier12-off keeps 1_1 and 6_8, the answers of the shells before it.
+    if(SUCCEEDED(hr)){
+        const bool off=ddi_experiment("raytracing-tier12-off");
+        hr=engine_ddi::set_raytracing_tier12_reporting(owner.caps,!off);
+        if(off){
+            amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier12-off result=%08lx\n",static_cast<unsigned long>(hr));
+            amdgpu_wddm_log::flush();
+        }
+    }
     // The shader model is the engine's, at most 6_8 (engine-ddi). For a bisect, shader-model-68-off reports 6_7 at
     // most and shader-model-67-off 6_6 at most, the answer of every shell before 2026-10-07.
     if(SUCCEEDED(hr)){

@@ -101,7 +101,11 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //     shader-model-68-off.
 //   scanout-flip-off: a swap-chain primary is always the composed one, never a scan-out primary
 //     (scanout-mode.h, M15.14 increment 3; trial 478).
-// All eleven off is the release and reporting behaviour of adapter106 with no ray tracing.
+//   raytracing-tier12-off: the adapter reports RaytracingTier 1.1 and shader model 6.8 at most, and the
+//     acceleration structure and state object slots refuse opacity micromaps, SERIALIZE and DESERIALIZE
+//     (adapter-caps.cpp, device-engine.cpp, engine-ddi set_raytracing_tier12_reporting and
+//     set_raytracing_tier12_commands).
+// All twelve off is the release and reporting behaviour of adapter106 with no ray tracing.
 //
 // Two names are still opt-in, because no measurement admits them as defaults under the GPU compositor:
 //   present-cached: the swap-chain surface is placed in the Cached aperture (heap-import.cpp). dxgkrnl

@@ -97,6 +97,14 @@ struct Snap {
     D3D12_DESCRIPTOR_HEAP_TYPE type;
     BOOL range;
 };
+// The inputs of an acceleration structure build with every CPU structure they point to (raytracing tier 1.2): a
+// bottom level's geometry descriptions (an array, or an array of pointers), the triangles and the linkage of each
+// OMM_TRIANGLES geometry, an opacity micromap array's description and its histogram. The lambda gets the copied
+// inputs, every pointer in them pointing into the same copy; a null source pointer stays null. A top level's
+// instances are GPU memory, so its copy is the inputs alone. The slot validates the inputs before it records them.
+struct BuildInputs {
+    const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS* data;
+};
 
 // A ring's copies of CPU descriptors of one type: FIFO slots, each free again once the worker has passed the entry
 // that named it (free_after). Producer-owned.
@@ -340,6 +348,118 @@ template <> struct Arg<Snap> {
     }
     static type at(const uint8_t* entry, uint32_t offset) noexcept {
         return offset ? reinterpret_cast<const D3D12_CPU_DESCRIPTOR_HANDLE*>(entry + offset) : nullptr;
+    }
+};
+// The inputs, then for an opacity micromap array its description and histogram, or for a bottom level the pointer
+// table (ARRAY_OF_POINTERS only), the geometry descriptions, and the triangles and linkage of each OMM_TRIANGLES
+// geometry in geometry order. Every piece starts on 8 bytes. bytes and put walk the source the same way. The new
+// union members are read and written through raytracing-tier12.h.
+template <> struct Arg<BuildInputs> {
+    using Inputs = D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS;
+    using Geometry = D3D12_RAYTRACING_GEOMETRY_DESC;
+    using Triangles = D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC;
+    using Linkage = rt12::Linkage;
+    using OmmArray = rt12::ArrayDesc;
+    using Histogram = rt12::HistogramEntry;
+    using type = const Inputs*;
+    static constexpr size_t kAlign = 8;
+    static size_t piece(size_t bytes) noexcept { return align_up(bytes, 8); }
+    static bool omm_array(const Inputs& in) noexcept {
+        return static_cast<UINT>(in.Type) == rt12::kOmmArrayType && rt12::array_desc(in);
+    }
+    static bool pointers(const Inputs& in) noexcept {
+        return in.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS;
+    }
+    static bool geometries(const Inputs& in) noexcept {
+        return in.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL &&
+               (pointers(in) ? in.ppGeometryDescs != nullptr : in.pGeometryDescs != nullptr);
+    }
+    static const Geometry* geometry(const Inputs& in, size_t i) noexcept {
+        return pointers(in) ? in.ppGeometryDescs[i] : &in.pGeometryDescs[i];
+    }
+    static bool omm(const Geometry* g) noexcept { return g && static_cast<UINT>(g->Type) == rt12::kOmmTrianglesType; }
+    static bool bytes(const BuildInputs& a, size_t limit, size_t* out) noexcept {
+        *out = 0;
+        if (!a.data) return true;
+        const Inputs& in = *a.data;
+        size_t total = piece(sizeof(Inputs));
+        if (omm_array(in)) {
+            const OmmArray& d = *rt12::array_desc(in);
+            if (d.NumOmmHistogramEntries > limit / sizeof(Histogram)) return false;
+            total += piece(sizeof(OmmArray));
+            if (d.pOmmHistogram) total += piece(d.NumOmmHistogramEntries * sizeof(Histogram));
+        } else if (geometries(in)) {
+            if (in.NumDescs > limit / (sizeof(Geometry) + sizeof(const Geometry*))) return false;
+            if (pointers(in)) total += piece(in.NumDescs * sizeof(const Geometry*));
+            total += piece(in.NumDescs * sizeof(Geometry));
+            for (UINT i = 0; i < in.NumDescs && total <= limit; ++i) {
+                const Geometry* g = geometry(in, i);
+                if (!omm(g)) continue;
+                const rt12::OmmTriangles t = rt12::omm_triangles(*g);
+                if (t.pTriangles) total += piece(sizeof(Triangles));
+                if (t.pOmmLinkage) total += piece(sizeof(Linkage));
+            }
+        }
+        if (total > limit) return false;
+        *out = total;
+        return true;
+    }
+    static bool ready(ReplayRing*, const BuildInputs&) noexcept { return true; }
+    static bool present(const BuildInputs& a) noexcept { return a.data != nullptr; }
+    static type source(const BuildInputs& a) noexcept { return a.data; }
+    template <class T> static const T* copy(uint8_t*& cursor, const T* src) noexcept {
+        if (!src) return nullptr;
+        std::memcpy(cursor, src, sizeof(T));
+        const T* p = reinterpret_cast<const T*>(cursor);
+        cursor += piece(sizeof(T));
+        return p;
+    }
+    static void put(ReplayRing*, uint8_t* dst, const BuildInputs& a, uint64_t) noexcept {
+        const Inputs& src = *a.data;
+        Inputs in = src;
+        uint8_t* cursor = dst + piece(sizeof(Inputs));
+        if (omm_array(src)) {
+            OmmArray d = *rt12::array_desc(src);
+            uint8_t* desc = cursor;
+            cursor += piece(sizeof(OmmArray));
+            if (d.pOmmHistogram) {
+                const size_t n = d.NumOmmHistogramEntries * sizeof(Histogram);
+                if (n) std::memcpy(cursor, d.pOmmHistogram, n);
+                d.pOmmHistogram = reinterpret_cast<const Histogram*>(cursor);
+                cursor += piece(n);
+            }
+            std::memcpy(desc, &d, sizeof(d));
+            rt12::set_array_desc(in, reinterpret_cast<const OmmArray*>(desc));
+        } else if (geometries(src)) {
+            const size_t n = src.NumDescs;
+            uint8_t* table = nullptr;
+            if (pointers(src)) {
+                table = cursor;
+                cursor += piece(n * sizeof(const Geometry*));
+            }
+            uint8_t* items = cursor;
+            cursor += piece(n * sizeof(Geometry));
+            for (size_t i = 0; i < n; ++i) {
+                const Geometry* g = geometry(src, i);
+                const Geometry* p = nullptr;
+                if (g) {
+                    Geometry copied = *g;
+                    if (omm(g)) {
+                        const rt12::OmmTriangles t = rt12::omm_triangles(*g);
+                        rt12::set_omm_triangles(copied, {copy(cursor, t.pTriangles), copy(cursor, t.pOmmLinkage)});
+                    }
+                    std::memcpy(items + i * sizeof(Geometry), &copied, sizeof(copied));
+                    p = reinterpret_cast<const Geometry*>(items + i * sizeof(Geometry));
+                }
+                if (table) std::memcpy(table + i * sizeof(p), &p, sizeof(p));
+            }
+            if (table) in.ppGeometryDescs = reinterpret_cast<const Geometry* const*>(table);
+            else in.pGeometryDescs = reinterpret_cast<const Geometry*>(items);
+        }
+        std::memcpy(dst, &in, sizeof(in));
+    }
+    static type at(const uint8_t* entry, uint32_t offset) noexcept {
+        return offset ? reinterpret_cast<const Inputs*>(entry + offset) : nullptr;
     }
 };
 

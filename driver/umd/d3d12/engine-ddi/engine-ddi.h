@@ -40,6 +40,9 @@
 #include "bc250_vkd3d_engine.h"
 #include <cstdint>
 
+// Raytracing tier 1.2 (opacity micromaps) and shader model 6.9: the values and layouts that the 26100 headers lack.
+#include "raytracing-tier12.h"
+
 // BD-133: the shell's synchronization records of a Present copy (present-copy-sync.h), named here by reference only.
 namespace native12 {
 class PresentCopyListMark;
@@ -334,6 +337,16 @@ struct ReleasePolicy {
     uint32_t two_phase;                         // 0: one snapshot per release; 1: the second phase above
 };
 HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) noexcept;
+
+// Raytracing tier 1.2 in the command and state object slots, OFF in the library (the device half of
+// set_raytracing_tier12_reporting; the shell turns it on unless the experiment raytracing-tier12-off). With `on`
+// true and the engine device at tier 1_2 (OPTIONS5), the acceleration structure slots take opacity micromap arrays,
+// OMM_TRIANGLES geometry and the build flags ALLOW_OMM_UPDATE and ALLOW_DISABLE_OMMS, the copy slot takes SERIALIZE
+// and DESERIALIZE, D109 forwards to the engine, and a ray tracing pipeline may carry ALLOW_OPACITY_MICROMAPS.
+// ALLOW_DATA_ACCESS stays refused. With `on` false, or an engine below 1_2, the slots refuse all of these as at tier
+// 1.1. E_INVALIDARG for a null context. Call it like set_retire_policy: after create_device_context, before the
+// context is used on another thread or by any DDI.
+HRESULT set_raytracing_tier12_commands(DeviceContext* context, bool on) noexcept;
 
 // Deferred command-list replay. Off (enabled 0, the default) every recording slot calls the engine list on the
 // calling thread, as before this policy existed: no ring, no thread. On, a recording slot still validates,
@@ -795,11 +808,20 @@ HRESULT set_memory_architecture_policy(AdapterCaps* caps, const MemoryArchitectu
 // Same calling rule as set_memory_architecture_policy. E_INVALIDARG for a null caps.
 HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept;
 
-// The shader model build_caps reports (1012, and 1091 for 6_8) is the engine's answer to SHADER_MODEL asked with
-// 6_8, clamped to a ceiling that is 6_8 by default. This lowers the ceiling, for the experiments
+// Raytracing tier 1.2 and shader model 6.9, OFF in the library; the shell turns them on unless the experiment
+// raytracing-tier12-off. With `report` true, 1012 lists 6_9 when the engine answers 6_9 and its WaveOps,
+// Int64ShaderOps and Native16BitShaderOpsSupported are all TRUE, and 1006 answers 1_2 when, in addition, the
+// engine's tier is 1_2 and raytracing reporting is on. This is at every DDI version that build_caps takes. With
+// `report` false the answers are 6_8 and 1_1 at most. E_INVALIDARG for a null caps. Same calling rule as
+// set_memory_architecture_policy.
+HRESULT set_raytracing_tier12_reporting(AdapterCaps* caps, bool report) noexcept;
+
+// The shader model build_caps reports (1012, and 1091 for 6_8 and higher) is the engine's answer to SHADER_MODEL
+// asked with 6_9, clamped to a ceiling that is 6_9 by default. 6_9 is reported only under
+// set_raytracing_tier12_reporting; else the answer is 6_8 at most. This lowers the ceiling, for the experiments
 // shader-model-68-off (6_7) and shader-model-67-off (6_6, the answer before 2026-10-07); the engine's answer is
-// never raised. E_INVALIDARG for a null caps or a ceiling that is not a release model from 5_1 to 6_8. Same
-// calling rule as set_memory_architecture_policy.
+// never raised. E_INVALIDARG for a null caps or a ceiling that is not a release model from 5_1 to 6_9. Same calling
+// rule as set_memory_architecture_policy.
 HRESULT set_shader_model_ceiling(AdapterCaps* caps, D3D_SHADER_MODEL ceiling) noexcept;
 
 // ---- Private storage records ------------------------------------------------------------------------------------

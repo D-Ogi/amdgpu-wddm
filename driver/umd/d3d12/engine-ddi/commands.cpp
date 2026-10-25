@@ -843,22 +843,53 @@ static_assert(D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_COMPACTE
                       static_cast<int>(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_CURRENT_SIZE),
               "postbuild info types");
 
+// Opacity micromaps (tier 1.2): the DDI 0110 structures have the API's members at the API's offsets, so they too
+// reach the engine in place. raytracing-tier12.h has both and checks them against the headers that define them.
+
 namespace {
 const ApiInputs* api(const DdiInputs* in) noexcept { return reinterpret_cast<const ApiInputs*>(in); }
 
+// An opacity micromap array: its description, a histogram for its count, and in every entry a format and a
+// subdivision level the API defines (OC1, levels 0 to 12). The engine reads the description and the histogram at
+// the call (vkd3d-proton opacity_micromap.c) and takes neither NumDescs nor DescsLayout from the inputs.
+bool valid_omm_array(const DdiInputs& in) noexcept {
+    const rt12::ArrayDesc* d = rt12::array_desc(in);
+    if (!d || (d->NumOmmHistogramEntries && !d->pOmmHistogram)) return false;
+    for (UINT i = 0; i < d->NumOmmHistogramEntries; ++i) {
+        const rt12::HistogramEntry& e = d->pOmmHistogram[i];
+        if ((e.Format != rt12::kFormatOc1State2 && e.Format != rt12::kFormatOc1State4) ||
+            e.SubdivisionLevel > rt12::kMaxSubdivisionLevel)
+            return false;
+    }
+    return true;
+}
+
 // What the engine would read from the CPU: a known structure type and element layout, and for a bottom level every
-// geometry description of a known type. GPU addresses are the application's, as for every other slot.
-bool valid_inputs(const DdiInputs& in) noexcept {
+// geometry description of a known type. GPU addresses are the application's, as for every other slot. With tier 1.2
+// in the slots (DeviceContext::omm) also an opacity micromap array and OMM_TRIANGLES geometry with both of its
+// pointers (the engine reads both without a check, opacity_micromap.c), and never ALLOW_DATA_ACCESS: the API has no
+// such flag (it ends at ALLOW_DISABLE_OMMS) and the engine translates none. Without it, as at tier 1.1.
+bool valid_inputs(const DeviceContext& c, const DdiInputs& in) noexcept {
     const bool array = in.DescsLayout == D3D12DDI_ELEMENTS_LAYOUT_ARRAY;
     if (!array && in.DescsLayout != D3D12DDI_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS) return false;
+    if (c.omm) {
+        if (static_cast<UINT>(in.Flags) & rt12::kBuildAllowDataAccess) return false;
+        if (static_cast<UINT>(in.Type) == rt12::kOmmArrayType) return valid_omm_array(in);
+    }
     if (in.Type == D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL) return true;
     if (in.Type != D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL) return false;
     if (in.NumDescs && (array ? !in.pGeometryDescs : !in.ppGeometryDescs)) return false;
     for (UINT i = 0; i < in.NumDescs; ++i) {
         const DdiGeometry* g = array ? &in.pGeometryDescs[i] : in.ppGeometryDescs[i];
-        if (!g || (g->Type != D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES &&
-                   g->Type != D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS))
-            return false;
+        if (!g) return false;
+        if (g->Type == D3D12DDI_RAYTRACING_GEOMETRY_TYPE_TRIANGLES ||
+            g->Type == D3D12DDI_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS)
+            continue;
+        if (c.omm && static_cast<UINT>(g->Type) == rt12::kOmmTrianglesType) {
+            const rt12::OmmTriangles t = rt12::omm_triangles(*g);
+            if (t.pTriangles && t.pOmmLinkage) continue;
+        }
+        return false;
     }
     return true;
 }
@@ -892,7 +923,7 @@ void APIENTRY get_prebuild_info(D3D12DDI_HDEVICE device, const DdiInputs* inputs
     if (info) *info = DdiPrebuild{};
     DeviceContext* c = resolve(device);
     if (!c) return;
-    if (!inputs || !info || !valid_inputs(*inputs)) {
+    if (!inputs || !info || !valid_inputs(*c, *inputs)) {
         log_line("GetRaytracingAccelerationStructurePrebuildInfo: refused (inputs %s, info %s)",
                  inputs ? "given" : "null", info ? "given" : "null");
         return c->report(E_INVALIDARG);
@@ -907,7 +938,8 @@ void APIENTRY build_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
     CommandListRecord* l = list_of(h, kSlot);
     if (!l) return;
     HRESULT hr = E_INVALIDARG;
-    if (args && valid_inputs(args->Inputs) && (!args->NumPostbuildInfoDescs || args->pPostbuildInfoDescs)) {
+    if (args && valid_inputs(*l->h.device, args->Inputs) &&
+        (!args->NumPostbuildInfoDescs || args->pPostbuildInfoDescs)) {
         hr = S_OK;
         for (UINT i = 0; SUCCEEDED(hr) && i < args->NumPostbuildInfoDescs; ++i)
             hr = postbuild_type(args->pPostbuildInfoDescs[i].InfoType);
@@ -918,12 +950,29 @@ void APIENTRY build_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
     desc.Inputs = *api(&args->Inputs);
     desc.SourceAccelerationStructureData = args->SourceAccelerationStructureData;
     desc.ScratchAccelerationStructureData = args->ScratchAccelerationStructureData;
+    const UINT postbuild = args->NumPostbuildInfoDescs;
+    // Tier 1.2 in the slots: the inputs reach the call as one deep copy (replay.h, BuildInputs), because an
+    // OMM_TRIANGLES geometry and an opacity micromap array point at further CPU structures, which the engine reads
+    // at the call.
+    if (l->h.device->omm) {
+        if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
+            record(l,
+                   [=](ID3D12GraphicsCommandList*, const ApiInputs* inputs, const ApiPostbuild* info) {
+                       D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC d = desc;
+                       d.Inputs = *inputs;
+                       l4->BuildRaytracingAccelerationStructure(&d, postbuild, info);
+                       l4->Release();
+                   },
+                   BuildInputs{api(&args->Inputs)},
+                   in(postbuild ? reinterpret_cast<const ApiPostbuild*>(args->pPostbuildInfoDescs) : nullptr,
+                      postbuild));
+        return;
+    }
     // A bottom level's geometry descriptions are CPU memory the engine reads at this call (an array, or an array of
     // pointers); the call gets them through the arguments below, a top level's instances stay a GPU address.
     const bool bottom = desc.Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
     const bool pointers = desc.Inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS;
     const UINT geometries = bottom ? desc.Inputs.NumDescs : 0;
-    const UINT postbuild = args->NumPostbuildInfoDescs;
     using Geometry = D3D12_RAYTRACING_GEOMETRY_DESC;
     if (auto* l4 = list_as<ID3D12GraphicsCommandList4>(l))
         record(l,
@@ -965,9 +1014,11 @@ void APIENTRY emit_postbuild_info(D3D12DDI_HCOMMANDLIST h,
                in(args->pSourceAccelerationStructureData, sources));
 }
 
-// L62. The engine copies by clone and compaction only (acceleration_structure.c, convert_copy_mode) and drops the
-// other modes with a log line; they are refused here with E_NOTIMPL (engine-ddi serializes nothing:
-// CheckDriverMatchingIdentifier answers UNRECOGNIZED).
+// L62. Clone and compaction always. SERIALIZE and DESERIALIZE only with tier 1.2 in the slots: an engine at tier 1_2
+// serializes and deserializes (acceleration_structure.c, vkd3d_acceleration_structure_copy; command.c for
+// DESERIALIZE) and owns the identifier that D109 then forwards to it. Without it they are refused with E_NOTIMPL
+// (engine-ddi serializes nothing: CheckDriverMatchingIdentifier answers UNRECOGNIZED). The tools visualization is
+// refused with E_NOTIMPL either way.
 void APIENTRY copy_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
                                           const D3D12DDIARG_COPY_RAYTRACING_ACCELERATION_STRUCTURE_0054* args) {
     constexpr const char* kSlot = "CopyRaytracingAccelerationStructure";
@@ -978,9 +1029,11 @@ void APIENTRY copy_acceleration_structure(D3D12DDI_HCOMMANDLIST h,
         switch (args->Mode) {
         case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE:
         case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_COMPACT: hr = S_OK; break;
-        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_VISUALIZATION_DECODE_FOR_TOOLS:
         case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_SERIALIZE:
-        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE: hr = E_NOTIMPL; break;
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_DESERIALIZE:
+            hr = l->h.device->omm ? S_OK : E_NOTIMPL;
+            break;
+        case D3D12DDI_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_VISUALIZATION_DECODE_FOR_TOOLS: hr = E_NOTIMPL; break;
         default: break;
         }
     }
