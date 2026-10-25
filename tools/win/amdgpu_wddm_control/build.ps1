@@ -251,12 +251,12 @@ $csFlavour = @(if ($Lab) { '/define:AMDGPU_WDDM_LAB_FLAVOUR' })
 $appSources = @((Get-ChildItem "$here\src\*.cs").FullName | Sort-Object)
 # /debug:portable: the application ships, so it gets a portable PDB, which the release archives beside the
 # candidate and the manifest names by the GUID of the exe's own debug directory. csc has no /PDBALTPATH, and it
-# records the path it is given, so the call is made from the output directory with relative names: otherwise
-# the shipped exe would carry the absolute path of this build PC.
+# records the full path of the PDB even when it is given a relative name. /pathmap replaces the output directory with
+# '.' in that record: otherwise the shipped exe carries the absolute path of the build PC (tester.33 did).
 Push-Location -LiteralPath $Out
 try {
     & $csc /nologo /noconfig /nostdlib+ @refs /target:winexe /platform:x64 /optimize+ /warnaserror+ /langversion:7.3 /deterministic+ `
-        /debug:portable /pdb:amdgpu_wddm_control.pdb `
+        /debug:portable /pdb:amdgpu_wddm_control.pdb "/pathmap:$((Get-Location).Path.TrimEnd('\'))=." `
         @csFlavour "/win32manifest:$here\app.manifest" "/win32icon:$icon" "/out:amdgpu_wddm_control.exe" @resources @appSources
 } finally { Pop-Location }
 if ($LASTEXITCODE -ne 0) { throw "csc failed ($LASTEXITCODE)" }
