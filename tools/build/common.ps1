@@ -317,7 +317,7 @@ function Add-MesonVariants([string[]]$Options, $ConfigsFile, [string]$Compiler, 
 # that changes the convention is an error of its own (C4440 and C2373 in MSVC). test-x86-callconv.ps1 holds the
 # controls of both compilers. The policy is a warning made an error, which /W0 or -w in a compile command, or a
 # system include directory, would remove: the recipe checks the compile commands after configure
-# (Test-ClangX86Policy, used by build-vkd3d.ps1 and build-mesa.ps1).
+# (Test-ClangX86Policy, used by build-vkd3d.ps1, build-mesa.ps1 and build-dxvk.ps1).
 function Add-ReproducibleMesonOptions([string[]]$Options, [string]$Source, [string]$Build, [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
                                       [ValidateSet('msvc', 'clang-cl')][string]$Compiler = 'msvc', [string]$ClangTarget = '') {
     $token = 'X:\mesa-build'
