@@ -5,6 +5,10 @@
 #include "device-engine.h"
 #include "device-table.h"
 #include "ddi-entry.h"
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+#include "engine-ddi/ddi-modern-core.h"
+#include "engine-ddi/ddi-modern-list.h"
+#endif
 #include "ddi-trace.h"
 #include "entry-owner.h"
 #include "fence-ddi.h"
@@ -177,8 +181,8 @@ template<unsigned Table,class List> void time_list(List& t) noexcept {
     ENGINE_DDI_ENTRY_TIMED_LIST_CLASSES(N12_TIME_LIST)
 #undef N12_TIME_LIST
 }
-void time_core(D3D12DDI_DEVICE_FUNCS_CORE_0088& t) noexcept {
-#define N12_TIME_CORE(name) time_entry<engine_ddi::EntryClass::name,0>(t.pfn##name);
+template<unsigned Table,class Core> void time_core(Core& t) noexcept {
+#define N12_TIME_CORE(name) time_entry<engine_ddi::EntryClass::name,Table>(t.pfn##name);
     ENGINE_DDI_ENTRY_TIMED_CORE_CLASSES(N12_TIME_CORE)
 #undef N12_TIME_CORE
 }
@@ -465,7 +469,24 @@ struct ExtendedName_pfnGetSupportedExtendedFeatureVersions {static const char* n
 struct ExtendedName_pfnEnableExtendedFeature {static const char* name() noexcept {return "pfnEnableExtendedFeature";}};
 struct ExtendedName_pfnSetExtendedFeatureCallbacks {static const char* name() noexcept {return "pfnSetExtendedFeatureCallbacks";}};
 template<auto Member,class Name> struct ExtendedBinding {static const char* name() noexcept {return Name::name();} static auto original() noexcept {return extended_original().*Member;}};
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+using Extended96=D3D12DDI_EXTENDED_FEATURES_FUNCS_0096;
+const Extended96& extended96_original() noexcept {
+    static const Extended96 table=[]() noexcept {Extended96 value{};fill_native_extended_table(&value);return value;}();return table;
 }
+template<auto Member,class Name> struct Extended96Binding:Name {
+    static auto original() noexcept {return extended96_original().*Member;}
+};
+#endif
+}
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void APIENTRY modern_core_error(D3D12DDI_HDEVICE handle,HRESULT hr) {
+    if(auto* device=EntryPolicy::resolve(handle))report_device_error(*device,hr);
+}
+void APIENTRY modern_list_error(D3D12DDI_HCOMMANDLIST handle,HRESULT hr) {
+    engine_ddi::report_command_list_error(handle,hr);
+}
+#endif
 HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* output,SIZE_T size,
     UINT number,D3D12DDI_HRTTABLE runtime) noexcept {
     if(!output)return E_INVALIDARG;
@@ -473,8 +494,8 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
     switch(type){
     case D3D12DDI_TABLE_TYPE_DEVICE_CORE:{
         using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
-        if(number || size!=sizeof(Core))return E_INVALIDARG;
-        Core shell{},original{},wrapped{};
+        if(number)return E_INVALIDARG;
+        Core shell{},original{};
         install_native_queue_entries(shell);install_fence_entries(shell);
         install_shell_core_entries(shell);install_native_residency_entries(shell);
         shell.pfnGetPresentPrivateDriverDataSize=present_private_size;
@@ -487,53 +508,61 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         original.pfnCreateHeapAndResource=create_heap_and_resource;
         original.pfnDestroyHeapAndResource=destroy_heap_and_resource;
         original.pfnOpenHeapAndResource=open_heap_and_resource;
-        hr=DdiEntryTables<EntryPolicy>::wrap_core(original,&wrapped);if(hr!=S_OK)return hr;
-        if(engine_ddi::entry_stats_on())time_core(wrapped);
-        *static_cast<Core*>(output)=wrapped;return S_OK;
+        return with_ddi_layout(adapter.ddi_version.load(std::memory_order_acquire)>>16,[&](auto layout)->HRESULT {
+            using Layout=decltype(layout); using C=typename Layout::Core;
+            if(size!=sizeof(C))return E_INVALIDARG;
+            C table{},wrapped_table{};
+            if constexpr(std::is_same_v<C,Core>)table=original;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+            else if(!upgrade_core(original,&table,modern_core_error,engine_ddi::modern_core_entries()))return E_UNEXPECTED;
+#endif
+            const HRESULT result=DdiEntryTables<EntryPolicy>::wrap_core(table,&wrapped_table);
+            if(result!=S_OK)return result;
+            if(engine_ddi::entry_stats_on())time_core<Layout::version>(wrapped_table);
+            *static_cast<C*>(output)=wrapped_table;return S_OK;
+        });
     }
     case D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D:{
         using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
         using List94=D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
-        static_assert(sizeof(List94)==sizeof(List));
-        if(number>1 || size!=sizeof(List) || !runtime.handle)return E_INVALIDARG;
-        List original{};
-        HRESULT hr=compose_list_0092(&original,sizeof(original),number,present,fill);if(hr!=S_OK)return hr;
-        // The table takes the layout of the version the adapter's devices use (device-state.h): 0092 for builds
-        // 92 and 93, 0094 for build 94, whose L68 takes another argument layout. A table asked for before any
-        // device has none to follow, and is refused rather than given a layout by default.
-        const UINT version=adapter.ddi_version.load(std::memory_order_acquire);
-        auto publish=[&](auto& wrapped)->HRESULT {
-            using Wrapped=std::remove_reference_t<decltype(wrapped)>;
-            constexpr unsigned layout=std::is_same_v<Wrapped,List94>?2u:0u;
-            // The entry statistics' timed entries (engine-ddi.h, "Direct entry"), and the direct entries of the
-            // graphics table over the shell's own. Those write ring entries only for a device with the recording
-            // binding and deferred replay, so they are not installed when either default is off, nor under the full
-            // trace (mode 1), whose hooks only the shell's entry runs; direct-entry-off takes them back alone.
-            if(engine_ddi::entry_stats_on()){if(number)time_list<1+layout>(wrapped);else time_list<0+layout>(wrapped);}
-            if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
-               !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
-                (void)engine_ddi::install_direct_list(&wrapped,1);
+        if(number>1 || !runtime.handle)return E_INVALIDARG;
+        return with_ddi_layout(adapter.ddi_version.load(std::memory_order_acquire)>>16,[&](auto layout)->HRESULT {
+            using Layout=decltype(layout); using L=typename Layout::List;
+            if(size!=sizeof(L))return E_INVALIDARG;
+            List original{};
+            HRESULT hr=compose_list_0092(&original,sizeof(original),number,present,fill);if(hr!=S_OK)return hr;
+            L table{},wrapped{};
+            if constexpr(std::is_same_v<L,List>) {
+                if(!engine_ddi::select_barrier(&original,Layout::version))return E_UNEXPECTED;
+                table=original;
+            }else {
+                List94 base{};
+                if(!engine_ddi::make_list_0094(original,&base))return E_UNEXPECTED;
+                if constexpr(std::is_same_v<L,List94>)table=base;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+                else if(!upgrade_list(base,&table,number,modern_list_error,engine_ddi::modern_list_entries()))return E_UNEXPECTED;
+#endif
+            }
+            hr=DdiEntryTables<EntryPolicy>::wrap_list(number,table,&wrapped);if(hr!=S_OK)return hr;
+            if(engine_ddi::entry_stats_on()) {
+                if(number)time_list<2*Layout::version+1>(wrapped);else time_list<2*Layout::version>(wrapped);
+            }
+            // Older direct entries carry driver handles. Newer layouts keep their typed wrappers until a
+            // matching direct-entry implementation has been measured; never reinterpret an API handle.
+            if constexpr(std::is_same_v<L,List> || std::is_same_v<L,List94>) {
+                if(number==1 && !ddi_experiment_off("direct-entry") && !ddi_experiment_off("recording-bind") &&
+                   !ddi_experiment_off("deferred-replay") && ddi_trace_mode()!=1)
+                    (void)engine_ddi::install_direct_list(&wrapped,1);
+            }
             HRESULT result=S_OK;
             AcquireSRWLockExclusive(&adapter.tables_lock);
             auto& prior=adapter.list_tables[number];
             if(prior.handle && prior.handle!=runtime.handle)result=E_UNEXPECTED;
-            else{prior=runtime;*static_cast<Wrapped*>(output)=wrapped;}
+            else{prior=runtime;*static_cast<L*>(output)=wrapped;}
             ReleaseSRWLockExclusive(&adapter.tables_lock);return result;
-        };
-        if((version>>16)==D3D12DDI_BUILD_VERSION_0094){
-            List94 table{},wrapped{};
-            if(!engine_ddi::make_list_0094(original,&table))return E_UNEXPECTED;
-            hr=DdiEntryTables<EntryPolicy>::wrap_list(number,table,&wrapped);if(hr!=S_OK)return hr;
-            return publish(wrapped);
-        }
-        if(!engine_ddi::select_barrier(&original,version>>16)){
-            amdgpu_wddm_log::print("d3d12-ddi FillDDITable-list-refused version %u\n",version);
-            amdgpu_wddm_log::flush();return E_UNEXPECTED;
-        }
-        List wrapped{};
-        hr=DdiEntryTables<EntryPolicy>::wrap_list(number,original,&wrapped);if(hr!=S_OK)return hr;
-        return publish(wrapped);
+        });
     }
+
     case D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D:{
         if(number || size!=sizeof(Queue))return E_INVALIDARG;
         Queue wrapped{};
@@ -574,6 +603,22 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
 #undef WRAP_EXTENDED
         *static_cast<Extended*>(output)=wrapped;return S_OK;
     }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    case D3D12DDI_TABLE_TYPE_0096_EXTENDED_FEATURES:{
+        if(number || size!=sizeof(Extended96))return E_INVALIDARG;
+        if((adapter.ddi_version.load(std::memory_order_acquire)>>16)<D3D12DDI_BUILD_VERSION_0096)return E_NOTIMPL;
+        Extended96 wrapped{};
+        // Type 27 has its own typed source. The last three signatures and
+        // originals match 0021, including unknown-feature and device checks.
+#define WRAP_EXTENDED96(member) wrapped.member=&EntryThunk<decltype(wrapped.member),Extended96Binding<&Extended96::member,ExtendedName_##member>,EntryPolicy>::call;
+        WRAP_EXTENDED96(pfnGetSupportedExtendedFeatures)
+        WRAP_EXTENDED96(pfnGetSupportedExtendedFeatureVersions)
+        WRAP_EXTENDED96(pfnEnableExtendedFeature)
+        WRAP_EXTENDED96(pfnSetExtendedFeatureCallbacks)
+#undef WRAP_EXTENDED96
+        *static_cast<Extended96*>(output)=wrapped;return S_OK;
+    }
+#endif
     default:return E_NOTIMPL;
     }
 }

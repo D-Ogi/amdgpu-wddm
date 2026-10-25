@@ -34,7 +34,8 @@ void put(std::vector<uint8_t>& out, size_t offset, uint32_t value) noexcept {
 }
 } // namespace
 
-HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* rs, std::vector<uint8_t>& out) noexcept {
+template<class Root> HRESULT serialize_root_impl(const Root* rs, std::vector<uint8_t>& out,
+                                                UINT version, UINT sampler_bytes) noexcept {
     if (!rs || (rs->NumParameters && !rs->pRootParameters) || (rs->NumStaticSamplers && !rs->pStaticSamplers))
         return E_INVALIDARG;
     // Size first, in 64 bits: every count comes from the caller.
@@ -57,7 +58,7 @@ HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* rs, std::ve
         }
     }
     const uint64_t samplers_offset = size;
-    size += uint64_t{52} * rs->NumStaticSamplers;
+    size += uint64_t{sampler_bytes} * rs->NumStaticSamplers;
     constexpr uint64_t kContainer = 32 + 4 + 8;         // header, one part offset, part header
     if (size + kContainer > UINT32_MAX) return E_INVALIDARG;
 
@@ -75,7 +76,7 @@ HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* rs, std::ve
     put(out, 36, fourcc('R', 'T', 'S', '0'));
     put(out, 40, static_cast<uint32_t>(size));
 
-    put(out, base + 0, D3D_ROOT_SIGNATURE_VERSION_1_1);
+    put(out, base + 0, version);
     put(out, base + 4, rs->NumParameters);
     put(out, base + 8, 24);
     put(out, base + 12, rs->NumStaticSamplers);
@@ -108,9 +109,20 @@ HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* rs, std::ve
         }
     }
     if (rs->NumStaticSamplers)
-        std::memcpy(out.data() + base + samplers_offset, rs->pStaticSamplers, size_t{52} * rs->NumStaticSamplers);
+        std::memcpy(out.data() + base + samplers_offset, rs->pStaticSamplers, size_t{sampler_bytes} * rs->NumStaticSamplers);
     return S_OK;
 }
+
+HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* rs, std::vector<uint8_t>& out) noexcept {
+    return serialize_root_impl(rs, out, D3D_ROOT_SIGNATURE_VERSION_1_1, 52);
+}
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT serialize_root_signature_modern(const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0100* args,
+                                        std::vector<uint8_t>& out) noexcept {
+    if (!args || args->Version != D3D12DDI_ROOT_SIGNATURE_VERSION_1_2) return E_INVALIDARG;
+    return serialize_root_impl(args->pRootSignature_1_2, out, D3D_ROOT_SIGNATURE_VERSION_1_2, 56);
+}
+#endif
 
 namespace {
 // The record, and the shape of every parameter after it (ClearRootArguments, commands.cpp). create_root_signature
@@ -149,6 +161,35 @@ HRESULT APIENTRY create_root_signature(D3D12DDI_HDEVICE device, const D3D12DDIAR
     return S_OK;
 }
 
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+static_assert(sizeof(D3D12DDI_STATIC_SAMPLER_0100) == 56, "RTS0 1.2 static sampler includes flags");
+SIZE_T APIENTRY calc_root_modern(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0100* args) {
+    const UINT count = args && args->pRootSignature_1_2 ? args->pRootSignature_1_2->NumParameters : 0;
+    return sizeof(RootSignatureRecord) + size_t{count} * sizeof(RootParameterShape);
+}
+HRESULT APIENTRY create_root_modern(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0100* args,
+                                    D3D12DDI_HROOTSIGNATURE h) {
+    DeviceContext* c = resolve(device);
+    if (!c || !args || !h.pDrvPrivate || args->NodeMask > 1 ||
+        args->Version != D3D12DDI_ROOT_SIGNATURE_VERSION_1_2 || !args->pRootSignature_1_2) return E_INVALIDARG;
+    const auto& desc = *args->pRootSignature_1_2;
+    std::vector<uint8_t> blob;
+    HRESULT hr = serialize_root_signature_modern(args, blob);
+    if (FAILED(hr)) return hr;
+    ID3D12RootSignature* rs = nullptr;
+    hr = c->device->CreateRootSignature(0, blob.data(), blob.size(), __uuidof(ID3D12RootSignature), reinterpret_cast<void**>(&rs));
+    if (FAILED(hr)) return hr;
+    auto* r = new (h.pDrvPrivate) RootSignatureRecord{{Tag::RootSignature, 0, rs, c}, desc.NumParameters, desc.NumParameters};
+    for (UINT i = 0; i < r->shapes; ++i) {
+        const auto& p = desc.pRootParameters[i];
+        r->shape()[i] = {p.ParameterType,
+            p.ParameterType == D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS ? p.Constants.Num32BitValues : 0};
+    }
+    c->live.fetch_add(1);
+    return S_OK;
+}
+#endif
+
 void APIENTRY destroy_root_signature(D3D12DDI_HDEVICE device, D3D12DDI_HROOTSIGNATURE h) {
     DeviceContext* c = resolve(device);
     if (!c) return;
@@ -169,5 +210,11 @@ void fill_core_root_signatures(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCreateRootSignature = create_root_signature;
     t->pfnDestroyRootSignature = destroy_root_signature;
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void fill_modern_roots(native12::ModernCoreEntries* entries) noexcept {
+    entries->root_size = calc_root_modern; entries->root_create = create_root_modern;
+}
+#endif
 
 } // namespace engine_ddi

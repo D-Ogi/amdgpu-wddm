@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
+#include "ddi-ladder.h"
+#include <array>
 #include <windows.h>
 #include <d3d12umddi.h>
 #include <cassert>
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include "device-state.h"
@@ -43,6 +46,12 @@ static HRESULT APIENTRY query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* re
     return S_OK;
 }
 static void APIENTRY error(D3D10DDI_HRTDEVICE,HRESULT) {}
+// Required non-null callbacks in a refused CreateDevice must never run.
+// Keep their exact ABI instead of casting an unrelated function pointer.
+template<class Fn> struct UnexpectedCallback;
+template<class R,class... A> struct UnexpectedCallback<R(APIENTRY*)(A...)> {
+    static R APIENTRY call(A...) { std::abort(); }
+};
 static HRESULT APIENTRY create_context(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL* a) {a->hContext=reinterpret_cast<HANDLE>(UINT_PTR(1));return S_OK;}
 static HRESULT APIENTRY destroy_context(D3D12DDI_HRTCOMMANDQUEUE,const D3DDDICB_DESTROYCONTEXT*) {return E_FAIL;}
 // Exercise the exported DLL boundary, not the in-process composition helpers.
@@ -67,6 +76,12 @@ static T published_table(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPTER ad
     return storage.table;
 }
 static void publication_tests(const D3D12DDI_ADAPTERFUNCS& funcs,D3D12DDI_HADAPTER adapter) {
+    // Agility 721 has additional table types whose layouts are not in WDK 28000.2526.
+    // Unknown tables must fail with the entire destination and both canaries unchanged.
+    for(UINT type:{28u,29u,31u,32u,37u,38u,0xffffu})
+        for(SIZE_T size:{SIZE_T(0),SIZE_T(1),SIZE_T(8)})
+            for(UINT number:{0u,1u})
+                rejected_table<UINT64>(funcs,adapter,static_cast<D3D12DDI_TABLE_TYPE>(type),size,number,{},E_NOTIMPL);
     using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
     using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
     using Queue=D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001;
@@ -164,13 +179,56 @@ int main(int argc,char** argv) {
         assert(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && scanout.post_width==1920 &&
                scanout.post_height==1200 && scanout.version==BC250_SCANOUT_CAPS_VERSION);
     }
-    UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==3);
-    UINT64 guard[4]={0xabcdef,0x123456,0x777,0x888};count=2;
-    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
-    assert(count==3 && guard[0]==0xabcdef && guard[1]==0x123456 && guard[2]==0x777 && guard[3]==0x888);
-    // Newest first: 0094, 0093, then 0092 for a runtime that knows neither.
-    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,guard)==S_OK && guard[0]==D3D12DDI_SUPPORTED_0094 &&
-           guard[1]==D3D12DDI_SUPPORTED_0093 && guard[2]==D3D12DDI_SUPPORTED_0092 && guard[3]==0x888);
+    constexpr unsigned offered=native12::kDdiMax-91;
+    UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
+    std::array<UINT64,offered+1> versions{}; versions.fill(0xabcdef);
+    count=offered-1;
+    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,versions.data())==HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER));
+    assert(count==offered);for(auto v:versions)assert(v==0xabcdef);
+    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,versions.data())==S_OK);
+    for(unsigned i=0;i<offered;++i)
+        assert(versions[i]==((UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{native12::kDdiMax-i}<<16)));
+    assert(versions.back()==0xabcdef);
+    // The newest build offered: 0120 in a shell built with the WDK 10.0.28000 header (both flavours), 0094 otherwise.
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    static_assert(native12::kDdiMax==native12::kDdiBuild0120);
+    assert(versions[0]==native12::kDdiSupported0120 && versions[0]==0xC005000780000ull);
+    assert(versions[1]==D3D12DDI_SUPPORTED_0119 && versions[2]==D3D12DDI_SUPPORTED_0118 &&
+           versions[offered-1]==D3D12DDI_SUPPORTED_0092);
+    puts("the version list is 0120, 0119, 0118 ... 0092");
+#else
+    static_assert(native12::kDdiMax==94);
+    assert(versions[0]==D3D12DDI_SUPPORTED_0094 && versions[offered-1]==D3D12DDI_SUPPORTED_0092);
+    puts("the version list is 0094, 0093, 0092");
+#endif
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR) && defined(D3D12DDI_BUILD_VERSION_0119)
+    // Lab build: AMDGPU_WDDM_LAB_DDI_MAX sets the newest build offered and accepted; a value outside 92..kDdiMax is
+    // ignored.
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX","118"));
+    count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==118-91);
+    versions.fill(0xabcdef);
+    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,versions.data())==S_OK);
+    assert(versions[0]==D3D12DDI_SUPPORTED_0118 && versions[count-1]==D3D12DDI_SUPPORTED_0092 &&
+           versions[count]==0xabcdef);
+    {
+        D3D12DDIARG_CALCPRIVATEDEVICESIZE capped{};capped.Interface=D3D12DDI_INTERFACE_VERSION_R8;
+        capped.Version=D3D12DDI_BUILD_VERSION_0118<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&capped));
+        capped.Version=D3D12DDI_BUILD_VERSION_0119<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&capped)==0);
+    }
+    for(const char* value:{"91","121","1x","","12345678"}){
+        assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",value));
+        count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
+    }
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",nullptr));
+    puts("lab build: AMDGPU_WDDM_LAB_DDI_MAX=118 offers 0118 ... 0092 and refuses 0119; other values are ignored");
+#elif !defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // Release build: the variable has no effect.
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX","93"));
+    count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",nullptr));
+    puts("release build: AMDGPU_WDDM_LAB_DDI_MAX has no effect");
+#endif
+    UINT64 guard[4]={0xabcdef,0x123456,D3D12DDI_SUPPORTED_0092,0x888};
     assert(funcs.pfnCreateDevice(a.hAdapter,nullptr)==E_INVALIDARG);
     D3D12DDIARG_CALCPRIVATEDEVICESIZE sizeArgs{};
     assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
@@ -179,7 +237,7 @@ int main(int argc,char** argv) {
     sizeArgs.Version=D3D12DDI_BUILD_VERSION_0094<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs));
     sizeArgs.Version=D3D12DDI_BUILD_VERSION_0093<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs));
     sizeArgs.Version=D3D12DDI_BUILD_VERSION_0091<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
-    sizeArgs.Version=D3D12DDI_BUILD_VERSION_0095<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
+    sizeArgs.Version=(native12::kDdiMax+1)<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs)==0);
     sizeArgs.Interface=D3D12DDI_INTERFACE_VERSION_R8;sizeArgs.Version=D3D12DDI_BUILD_VERSION_0092<<16;
     SIZE_T size=funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&sizeArgs);assert(size);
     void* storage=::operator new(size);
@@ -212,10 +270,10 @@ int main(int argc,char** argv) {
     assert(!native12::adopt_ddi_version(state,D3D12DDI_BUILD_VERSION_0092<<16) &&
            state.ddi_version.load()==(D3D12DDI_BUILD_VERSION_0094<<16));
     // CreateDevice with every callback it checks and another version: refused before any engine is made.
-    um.pfnAllocateCb=reinterpret_cast<decltype(um.pfnAllocateCb)>(&error);
-    um.pfnDeallocateCb=reinterpret_cast<decltype(um.pfnDeallocateCb)>(&error);
-    um.pfnSetCommandListDDITableCb=reinterpret_cast<decltype(um.pfnSetCommandListDDITableCb)>(&error);
-    um.pfnSetCommandListErrorCb=reinterpret_cast<decltype(um.pfnSetCommandListErrorCb)>(&error);
+    um.pfnAllocateCb=&UnexpectedCallback<decltype(um.pfnAllocateCb)>::call;
+    um.pfnDeallocateCb=&UnexpectedCallback<decltype(um.pfnDeallocateCb)>::call;
+    um.pfnSetCommandListDDITableCb=&UnexpectedCallback<decltype(um.pfnSetCommandListDDITableCb)>::call;
+    um.pfnSetCommandListErrorCb=&UnexpectedCallback<decltype(um.pfnSetCommandListErrorCb)>::call;
     device.Version=D3D12DDI_BUILD_VERSION_0092<<16;
     assert(funcs.pfnCreateDevice(a.hAdapter,&device)==E_NOINTERFACE && state.devices.load()==0 &&
            state.ddi_version.load()==(D3D12DDI_BUILD_VERSION_0094<<16));
@@ -249,6 +307,87 @@ int main(int argc,char** argv) {
             assert(!memcmp(&a94_again,&a94,sizeof(List)) && !memcmp(&b92_again,&b92,sizeof(List)));
         }
         assert(funcs_b.pfnCloseAdapter(b.hAdapter)==S_OK);
+    }
+    // Reproduce the first Agility 1.619.6 / 0119 table requests in their observed order.
+    // The lab r1 trace stopped at type 27: refusing this table aborts CreateDevice.
+    // This is the known required prefix, not a claim about requests beyond that failure.
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    {
+        D3D12DDI_ADAPTERFUNCS f{};D3D12DDIARG_OPENADAPTER a2{};
+        a2.pAdapterFuncs=&f;a2.pAdapterCallbacks=&callbacks;a2.hRTAdapter=a.hRTAdapter;
+        assert(open(&a2)==S_OK);
+        auto& state2=*static_cast<native12::Adapter*>(a2.hAdapter.pDrvPrivate);
+        assert(native12::adopt_ddi_version(state2,119u<<16));
+        using C=D3D12DDI_DEVICE_FUNCS_CORE_0119;
+        using L=D3D12DDI_COMMAND_LIST_FUNCS_3D_0114;
+        using Q=D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001;
+        using E=D3D12DDI_EXTENDED_FEATURES_FUNCS_0096;
+        // Recorded x64 sizes were 1024,600,600,56,32. Typed sizeof also covers x86.
+#if defined(_WIN64)
+        static_assert(sizeof(C)==1024 && sizeof(L)==600 && sizeof(Q)==56 && sizeof(E)==32);
+#endif
+        auto core=published_table<C>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE);
+        assert(core.pfnCreatePipelineState && core.pfnCreateStateObject);
+        for(unsigned number=0;number!=2;++number) {
+            const D3D12DDI_HRTTABLE rt{reinterpret_cast<HANDLE>(UINT_PTR(0x71000000u+number))};
+            auto list=published_table<L>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,number,rt);
+            assert(list.pfnDispatch && list.pfnDrawInstanced);
+        }
+        auto queue=published_table<Q>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D);
+        assert(queue.pfnExecuteCommandLists);
+        auto ext=published_table<E>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_0096_EXTENDED_FEATURES);
+        assert(ext.pfnGetSupportedExtendedFeatures && ext.pfnGetSupportedExtendedFeatureVersions &&
+            ext.pfnEnableExtendedFeature && ext.pfnSetExtendedFeatureCallbacks);
+        assert(state2.devices.load()==0);
+        assert(f.pfnCloseAdapter(a2.hAdapter)==S_OK);
+        puts("Agility 1.619.6 / 0119 required table prefix 0,1#0,1#1,2,27 passed");
+    }
+#endif
+    // Every negotiated build selects its exact core/list layout. Surround each output with canaries,
+    // check every typed slot and refill, and reject wrong sizes without overwriting the destination.
+    for(unsigned build=92;build<=native12::kDdiMax;++build) {
+        D3D12DDI_ADAPTERFUNCS f{};D3D12DDIARG_OPENADAPTER a2{};
+        a2.pAdapterFuncs=&f;a2.pAdapterCallbacks=&callbacks;a2.hRTAdapter=a.hRTAdapter;
+        assert(open(&a2)==S_OK);
+        auto& state2=*static_cast<native12::Adapter*>(a2.hAdapter.pDrvPrivate);
+        assert(native12::adopt_ddi_version(state2,build<<16));
+        sizeArgs.Version=build<<16;assert(f.pfnCalcPrivateDeviceSize(a2.hAdapter,&sizeArgs));
+        assert(native12::with_ddi_layout(build,[&](auto layout)->HRESULT {
+            using C=typename decltype(layout)::Core;using L=typename decltype(layout)::List;
+            auto core=published_table<C>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE);
+            native12::DdiMembers<C>::each([&](auto m,auto){assert(core.*decltype(m)::value);});
+            rejected_table<C>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_DEVICE_CORE,sizeof(C)-1,0,{});
+            for(unsigned number=0;number!=2;++number) {
+                D3D12DDI_HRTTABLE rt{reinterpret_cast<HANDLE>(UINT_PTR(0x60000000u+build*16+number))};
+                auto list=published_table<L>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,number,rt);
+                native12::DdiMembers<L>::each([&](auto m,auto){assert(list.*decltype(m)::value);});
+                auto repeat=published_table<L>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,number,rt);
+                native12::DdiMembers<L>::each([&](auto m,auto){assert(list.*decltype(m)::value==repeat.*decltype(m)::value);});
+                rejected_table<L>(f,a2.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_LIST_3D,sizeof(L)-1,number,rt);
+            }
+            return S_OK;
+        })==S_OK);
+        auto queue=published_table<D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001>(
+            f,a2.hAdapter,D3D12DDI_TABLE_TYPE_COMMAND_QUEUE_3D);
+        assert(queue.pfnExecuteCommandLists);
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        using Extended96=D3D12DDI_EXTENDED_FEATURES_FUNCS_0096;
+        constexpr auto ext96Type=D3D12DDI_TABLE_TYPE_0096_EXTENDED_FEATURES;
+        if(build>=96) {
+            auto ext=published_table<Extended96>(f,a2.hAdapter,ext96Type);
+            assert(ext.pfnGetSupportedExtendedFeatures && ext.pfnGetSupportedExtendedFeatureVersions &&
+                ext.pfnEnableExtendedFeature && ext.pfnSetExtendedFeatureCallbacks);
+            rejected_table<Extended96>(f,a2.hAdapter,ext96Type,sizeof(Extended96)-1,0,{});
+            rejected_table<Extended96>(f,a2.hAdapter,ext96Type,sizeof(Extended96)+1,0,{});
+            rejected_table<Extended96>(f,a2.hAdapter,ext96Type,sizeof(Extended96),1,{});
+        } else {
+            rejected_table<Extended96>(f,a2.hAdapter,ext96Type,sizeof(Extended96),0,{},E_NOTIMPL);
+        }
+#endif
+        auto ext=published_table<D3D12DDI_EXTENDED_FEATURES_FUNCS_0021>(
+            f,a2.hAdapter,D3D12DDI_TABLE_TYPE_0020_EXTENDED_FEATURES);
+        assert(ext.pfnGetSupportedExtendedFeatures);
+        assert(f.pfnCloseAdapter(a2.hAdapter)==S_OK);
     }
     assert(funcs.pfnCloseAdapter(a.hAdapter)==S_OK);
     Sleep(200); // longer than a recent-launch worker takes on the host

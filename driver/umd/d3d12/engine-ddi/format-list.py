@@ -88,6 +88,15 @@ def main(path):
         out.write('    // %s may: %s\n' % (name, short(allowed)))
         out.write('    //%s must: %s\n' % (' ' * len(name), short(required)))
         out.write('    {DXGI_FORMAT_%s, 0x%08Xu, 0x%08Xu},\n' % (name, mask(allowed), mask(required)))
+    # VulkanOn12.md: A4B4G4R4 (191), mandatory at DDI0102, requires sampling/load/gather;
+    # render-target and UAV capabilities remain optional, as for B4G4R4A4.
+    extra_allowed = ['SHADER_SAMPLE', 'RENDERTARGET', 'BLENDABLE', 'MULTISAMPLE_RENDERTARGET',
+                     'MULTISAMPLE_LOAD', 'VERTEX_BUFFER', 'UAV_WRITES', 'BUFFER', 'SHADER_GATHER', 'TILED', 'UAV_READS']
+    extra_required = ['SHADER_SAMPLE', 'SHADER_GATHER']
+    out.write('    // VulkanOn12.md: A4B4G4R4_UNORM (191), DDI0102; sampling/load/gather required.\n')
+    out.write('    // Render-target, blend, multisample, buffer, tiled and UAV support stay engine-dependent.\n')
+    out.write('    {static_cast<DXGI_FORMAT>(191), 0x%08Xu, 0x%08Xu},\n' %
+              (mask(extra_allowed), mask(extra_required)))
     out.write('};\n\n} // namespace engine_ddi\n')
 
 

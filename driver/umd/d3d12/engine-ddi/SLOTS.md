@@ -1,9 +1,12 @@
 # engine-ddi slot ownership (boundary r3)
 
+The [DDI ladder](../../../../docs/design/d3d12-ddi-ladder.md) lists the typed adapters and new callbacks above 0094.
+The base slot ownership below remains unchanged.
+
 Who fills each DDI 0092 slot. `engine-ddi` slots are filled by `fill_device_core` / `fill_command_list`; `shell` slots
 by the native12 shell. A mixed slot names the owner and the boundary call it makes. Phase: P0 first pixel, P1 FL 11_x
 rendering, P2 FL 12_0/12_1 (tiled, conservative raster, ROV), P3 DXR, P4 other (fail-safe until needed). Until a slot
-is implemented, its entry is the fail-safe of `engine-ddi.h`; no slot is left NULL once the table is published.
+is implemented, its entry is the fail-safe of `engine-ddi.h`. No slot is left NULL once the table is published.
 
 A creation slot's fail-safe answers `E_OUTOFMEMORY`, not `E_NOTIMPL`. The runtime holds every creation function of
 a user-mode display driver in its AllowOutOfMemory category. Any other status is a critical driver failure, so the

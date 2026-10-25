@@ -1028,7 +1028,8 @@ size_t LibraryPayloadDwords(const UINT* payload)
     return payload[1];
 }
 
-Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* container)
+static Result BuildStateObjectContainer(const UINT* payload, size_t capacity, Container* container,
+                                       dxil::Signatures* metadata)
 {
     container->bytes.clear();
     container->output.clear();
@@ -1084,7 +1085,8 @@ Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* co
     uint32_t type = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_TYPE(version));
     uint32_t major = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_MAJOR_VERSION(version));
     uint32_t minor = uint32_t(DECODE_D3D10_SB_TOKENIZED_PROGRAM_MINOR_VERSION(version));
-    if (major != 6 || type != DxilLibraryKind)
+    if (major != 6 || (metadata ? !(type <= 5 || type == kDxilProgramKindMesh || type == kDxilProgramKindAmplification)
+                              : type != DxilLibraryKind))
         return Fail(Status::Unsupported, "DXIL program kind " + std::to_string(type) + ", shader model "
                 + std::to_string(major) + "." + std::to_string(minor) + " where a library was expected");
     if (length < 6 || length > programCapacity)
@@ -1107,12 +1109,95 @@ Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* co
     const uint8_t* bytes = reinterpret_cast<const uint8_t*>(program);
     code.insert(code.end(), bytes, bytes + codeSize);
     std::vector<std::vector<uint8_t>> chunks;
+    if (metadata)
+    {
+        std::string error;
+        if (!dxil::ReadSignatures(bitcode, bitcodeSize, metadata, &error))
+            return Fail(Status::InvalidArgument, error);
+        for (const auto* elements : {&metadata->input, &metadata->output, &metadata->patchConstant})
+            for (const auto& e : *elements) {
+                if (e.componentType < 1 || e.componentType > 16)
+                    return Fail(Status::Unsupported, "generic signature component type " + std::to_string(e.componentType));
+                if (e.startCol < -1 || e.startCol > 3 || (e.startCol >= 0 && uint32_t(e.startCol) + e.cols > 4) || e.stream > 3)
+                    return Fail(Status::InvalidArgument, "generic signature component or stream outside its register");
+            }
+        auto names = [native16 = metadata->nativeLowPrecision](const std::vector<dxil::Element>& elements) {
+            std::vector<Named> out;
+            for (const auto& e : elements) for (uint32_t row = 0; row < e.rows; ++row)
+            {
+                Named n{};
+                n.name = e.name; n.index = e.indices[row];
+                n.entry.Register = e.startRow < 0 ? ~0u : uint32_t(e.startRow) + row;
+                n.entry.Mask = BYTE(((1u << e.cols) - 1) << (e.startCol < 0 ? 0 : e.startCol));
+                n.entry.Stream = BYTE(e.stream);
+                // DXIL ComponentType (dxil-spirv dxil.hpp), preserving width in the container signature.
+                switch (e.componentType) {
+                case 1: case 5: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_UINT32; break;
+                case 2: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_SINT16; break;
+                case 3: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_UINT16; break;
+                case 4: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_SINT32; break;
+                case 6: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_SINT64; break;
+                case 7: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_UINT64; break;
+                case 8: case 11: case 12: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_FLOAT16; break;
+                case 10: case 15: case 16: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_FLOAT64; break;
+                default: n.entry.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_FLOAT32; break;
+                }
+                n.entry.MinPrecision = static_cast<D3D11_SB_OPERAND_MIN_PRECISION>(e.componentType == 2 ? D3D_MIN_PRECISION_SINT_16 : e.componentType == 3
+                    ? D3D_MIN_PRECISION_UINT_16 : e.componentType == 8 || e.componentType == 11 || e.componentType == 12
+                    ? D3D_MIN_PRECISION_FLOAT_16 : D3D_MIN_PRECISION_DEFAULT);
+                if (native16) n.entry.MinPrecision = D3D11_SB_OPERAND_MIN_PRECISION_DEFAULT;
+                for (uint32_t value = 0; value != 256; ++value) {
+                    const auto system = LookupSysval(value);
+                    if (system.name && !_stricmp(system.name, e.name.c_str())) { n.d3dName = system.d3dName; break; }
+                }
+                if (!_stricmp(e.name.c_str(), "SV_Target")) n.d3dName = D3D_NAME_TARGET;
+                else if (!_stricmp(e.name.c_str(), "SV_Depth")) n.d3dName = D3D_NAME_DEPTH;
+                else if (!_stricmp(e.name.c_str(), "SV_DepthLessEqual")) n.d3dName = D3D_NAME_DEPTH_LESS_EQUAL;
+                else if (!_stricmp(e.name.c_str(), "SV_DepthGreaterEqual")) n.d3dName = D3D_NAME_DEPTH_GREATER_EQUAL;
+                else if (!_stricmp(e.name.c_str(), "SV_Coverage")) n.d3dName = D3D_NAME_COVERAGE;
+                else if (!_stricmp(e.name.c_str(), "SV_StencilRef")) n.d3dName = D3D_NAME_STENCIL_REF;
+                else if (!_stricmp(e.name.c_str(), "SV_InnerCoverage")) n.d3dName = D3D_NAME_INNER_COVERAGE;
+                // Tessellation factors share semantic names across domains. The complete outer array has
+                // four quad, three triangle or two isoline factors; the inner array has two or one.
+                else if (!_stricmp(e.name.c_str(), "SV_TessFactor")) {
+                    if (e.rows == 3) n.d3dName = D3D_NAME_FINAL_TRI_EDGE_TESSFACTOR;
+                    else if (e.rows == 2) n.d3dName = n.index ? D3D_NAME_FINAL_LINE_DETAIL_TESSFACTOR : D3D_NAME_FINAL_LINE_DENSITY_TESSFACTOR;
+                }
+                else if (!_stricmp(e.name.c_str(), "SV_InsideTessFactor") && e.rows == 1)
+                    n.d3dName = D3D_NAME_FINAL_TRI_INSIDE_TESSFACTOR;
+                out.push_back(std::move(n));
+            }
+            // DXIL metadata is in declaration order; container signatures use the packed register order.
+            std::stable_sort(out.begin(), out.end(), [](const Named& a, const Named& b) {
+                if (a.entry.Stream != b.entry.Stream) return a.entry.Stream < b.entry.Stream;
+                return a.entry.Register < b.entry.Register;
+            });
+            return out;
+        };
+        chunks.push_back(WriteSignatureChunk("ISG1", names(metadata->input), true, nullptr));
+        const auto output_names = names(metadata->output);
+        chunks.push_back(WriteSignatureChunk("OSG1", output_names, false, nullptr));
+        for (const auto& n : output_names) container->output.push_back(n.entry);
+        if (!metadata->patchConstant.empty())
+            chunks.push_back(WriteSignatureChunk("PSG1", names(metadata->patchConstant), type == 4, nullptr));
+    }
     chunks.push_back(std::move(code));
     WriteContainer(chunks, container->bytes);
 
     container->programType = type;
     container->dxil = true;
     return {};
+}
+
+Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* container)
+{
+    return BuildStateObjectContainer(payload, capacity, container, nullptr);
+}
+
+Result BuildGenericContainer(const UINT* payload, size_t capacity, Container* container, dxil::Signatures* metadata)
+{
+    if (!metadata) return Fail(Status::InvalidArgument, "no generic program metadata output");
+    return BuildStateObjectContainer(payload, capacity, container, metadata);
 }
 
 Result InputLayoutSemantic(const SignatureView& vertexInput, UINT inputRegister, Semantic* semantic)

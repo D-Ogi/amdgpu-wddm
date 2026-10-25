@@ -186,6 +186,22 @@ public:
         const Md* entry = NodeAt(m_entryPoints[0]);
         if (!entry || entry->operands.size() < 3)
             return Fail("dx.entryPoints: first entry is not an entry point node");
+        const int64_t name = entry->operands[1];
+        if (name >= 0 && uint64_t(name) < m_md.size() && m_md[size_t(name)].kind == Md::String)
+            out->entryName = m_md[size_t(name)].string;
+        if (entry->operands.size() > 4 && entry->operands[4] >= 0) {
+            const Md* props = NodeAt(uint64_t(entry->operands[4]));
+            if (!props || props->operands.size() % 2) return Fail("entry point: malformed shader properties");
+            for (size_t i = 0; i != props->operands.size(); i += 2) {
+                int64_t tag, flags;
+                if (!Int(props->operands[i], &tag)) return Fail("entry point: invalid property tag");
+                // DXIL ShaderPropertyTag::ShaderFlags = 0, ShaderFlagNativeLowPrecision = 1 << 23.
+                if (!tag) {
+                    if (!Int(props->operands[i + 1], &flags)) return Fail("entry point: invalid shader flags");
+                    out->nativeLowPrecision = (uint64_t(flags) & (1u << 23)) != 0;
+                }
+            }
+        }
         if (entry->operands[2] < 0)
             return true;    // no signatures (compute)
         const Md* sigs = NodeAt(uint64_t(entry->operands[2]));
@@ -523,11 +539,12 @@ private:
             return false;
         e->name = m_md[size_t(name)].string;
 
-        int64_t kind, rows, cols, startRow, startCol;
-        if (!Int(op[3], &kind) || !Int(op[6], &rows) || !Int(op[7], &cols) || !Int(op[8], &startRow)
+        int64_t type, kind, rows, cols, startRow, startCol;
+        if (!Int(op[2], &type) || !Int(op[3], &kind) || !Int(op[6], &rows) || !Int(op[7], &cols) || !Int(op[8], &startRow)
                 || !Int(op[9], &startCol) || rows < 1 || rows > 64 || cols < 1 || cols > 4)
             return false;
         e->kind = uint32_t(kind);
+        e->componentType = uint32_t(type);
         e->rows = uint32_t(rows);
         e->cols = uint32_t(cols);
         e->startRow = int32_t(startRow);

@@ -10,6 +10,7 @@
 // answers (INTEGRATION.md, "GetCaps"), and the shell's memory architecture policy of 1002 (INTEGRATION.md,
 // "Memory architecture policy").
 #include "engine-ddi.h"
+#include "tight-alignment.h"
 #include <dxgi1_4.h>
 #include <cstdarg>
 #include <cstdio>
@@ -30,8 +31,14 @@ void check(bool ok, const char* format, ...) {
     failures += ok ? 0 : 1;
 }
 
-// The shell asks with the newest layout it offers (adapter-caps.cpp); 0092 is checked separately.
+// The shell asks with the newest layout it offers (adapter-caps.cpp); 0092 is checked separately. With the 0119
+// header that is 0120 (ddi-ladder.h), which uses the 0119 payloads.
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+constexpr uint32_t kDdi = native12::kDdiMax;
+static_assert(kDdi == native12::kDdiBuild0120);
+#else
 constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0094;
+#endif
 constexpr uint32_t kAbi12 = (1u << 16) | 2u;
 constexpr uint32_t kAbi = BC250_VKD3D_ENGINE_ABI_VERSION;   // what the shell asks the engine for
 
@@ -67,6 +74,10 @@ struct Answers {
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
     D3D12_FEATURE_DATA_D3D12_OPTIONS14 options14;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    D3D12_FEATURE_DATA_D3D12_OPTIONS19 options19;
+    engine_ddi::tight::Support tight_alignment{};
+#endif
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     UINT raw_model;                             // non-zero: SHADER_MODEL answers this whatever was asked
@@ -151,6 +162,9 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
             continue;
         }
         if (static_cast<int>(feature) == a.unsupported) continue;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        if (feature == engine_ddi::tight::feature) { answer(q, a.tight_alignment); continue; }
+#endif
         if (q.Feature == BC250_VKD3D_FEATURE_VIEW_INSTANCING_CONTRACT) {
             if (a.view_contract.Revision) answer(q, a.view_contract);
             continue;
@@ -190,6 +204,9 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
         case D3D12_FEATURE_D3D12_OPTIONS12: answer(q, a.options12); break;
         case D3D12_FEATURE_D3D12_OPTIONS13: answer(q, a.options13); break;
         case D3D12_FEATURE_D3D12_OPTIONS14: answer(q, a.options14); break;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        case D3D12_FEATURE_D3D12_OPTIONS19: answer(q, a.options19); break;
+#endif
         case D3D12_FEATURE_D3D12_OPTIONS21: answer(q, a.options21); break;
         case D3D12_FEATURE_SERIALIZATION: answer(q, a.serialization); break;
         default: break;
@@ -303,7 +320,11 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     const Answers a12_0 = fl12_0();
     engine_ddi::AdapterCaps* caps = query_stub(a12_0, info, "FL12_0 engine");
     if (!caps) return;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    check(g_queries == 21, "one batch of 21 features including tight alignment and OPTIONS19 (%u)", g_queries);
+#else
     check(g_queries == 19, "one batch of 19 features including the optional view contract (%u)", g_queries);
+#endif
     check(g_model_asked == D3D_SHADER_MODEL_6_9, "SHADER_MODEL is asked with 6_9 as the highest model (%x)",
           static_cast<unsigned>(g_model_asked));
 
@@ -364,9 +385,9 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     r = {D3D12DDICAPS_TYPE_3DPIPELINESUPPORT, nullptr, raw, 4};
     hr = engine_ddi::build_caps(caps, 91, &r);
     const bool refused91 = hr == E_INVALIDARG && untouched(raw, sizeof(raw));
-    hr = engine_ddi::build_caps(caps, 95, &r);
+    hr = engine_ddi::build_caps(caps, kDdi + 1, &r);
     check(refused91 && hr == E_INVALIDARG && untouched(raw, sizeof(raw)),
-          "a ddi_version outside 92 to 94 (91, 95): E_INVALIDARG");
+          "a ddi_version outside the compiled ladder: E_INVALIDARG");
     hr = engine_ddi::build_caps(caps, D3D12DDI_BUILD_VERSION_0093, &r);
     D3D12DDI_3DPIPELINELEVEL l93;
     std::memcpy(&l93, raw, sizeof(l93));
@@ -1208,8 +1229,24 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         const HRESULT on = engine_ddi::set_raytracing_tier12_reporting(caps, true);
         const Result at = read(caps, kDdi, kSm69);
         check(on == S_OK && at.hr == S_OK && at.listed && at.tier == kTier12,
-              "tier 1.2 switch on, at 0094: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
-              static_cast<unsigned>(kSm69), static_cast<int>(at.tier));
+              "tier 1.2 switch on, at ddi_version %u: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
+              static_cast<unsigned>(kDdi), static_cast<unsigned>(kSm69), static_cast<int>(at.tier));
+        const Result at94 = read(caps, D3D12DDI_BUILD_VERSION_0094, kSm69);
+        check(at94.hr == S_OK && at94.listed && at94.tier == kTier12,
+              "tier 1.2 switch on, at 0094: 1012 ends at 6_9, 1006 reports 1_2 (%d)", static_cast<int>(at94.tier));
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        // 0120 (ddi-ladder.h): the build from which the Agility runtime gives the application the 1012 answer
+        // without its 6_8 clamp. The answers are those of 0119, and no build after 0120 is taken.
+        const Result at120 = read(caps, native12::kDdiBuild0120, kSm69);
+        check(at120.hr == S_OK && at120.listed && at120.tier == kTier12,
+              "tier 1.2 switch on, at 0120: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
+              static_cast<unsigned>(kSm69), static_cast<int>(at120.tier));
+        const Result at121 = read(caps, native12::kDdiBuild0120 + 1, kSm69);
+        check(at121.hr == E_INVALIDARG && at121.tier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED,
+              "a build after 0120 is refused (%08lx)", static_cast<unsigned long>(at121.hr));
+        check(native12::kDdiMax == native12::kDdiBuild0120, "the shell offers 0120 first, in both flavours (%u)",
+              native12::kDdiMax);
+#endif
         // A runtime that negotiates 0092 or 0093 does not know tier 1.2: the 22621 system core negotiates 0092 and
         // refuses opacity micromap pipelines.
         for (const uint32_t ddi : {uint32_t{D3D12DDI_BUILD_VERSION_0092}, uint32_t{D3D12DDI_BUILD_VERSION_0093}}) {
@@ -1263,6 +1300,212 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     check(engine_ddi::set_raytracing_tier12_reporting(nullptr, true) == E_INVALIDARG,
           "tier 1.2 switch refused: null caps");
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void test_ladder_caps(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    constexpr auto probe_name = L"AMDGPU_WDDM_LAB_DDI0102_LIMITS";
+    wchar_t previous_probe[256]{};
+    const DWORD previous_length = GetEnvironmentVariableW(probe_name, previous_probe, 256);
+    if (previous_length >= 256) { check(false, "lab limit probe environment fits test guard"); return; }
+    SetEnvironmentVariableW(probe_name, nullptr);
+    Answers a = fl12_0();
+    a.options19.SupportedSampleCountsWithNoOutputs = 0x1d;
+    a.options19.MaxSamplerDescriptorHeapSize = 4096;
+    a.options19.MaxSamplerDescriptorHeapSizeWithStaticSamplers = 2048;
+    a.options19.MaxViewDescriptorHeapSize = 1000000;
+    a.options21.WorkGraphsTier = D3D12_WORK_GRAPHS_TIER_1_0;
+    a.options21.ExecuteIndirectTier = D3D12_EXECUTE_INDIRECT_TIER_1_1;
+    auto* caps = query_stub(a, info, "DDI ladder");
+    if (!caps) return;
+    for (const UINT tier : {0u, 1u, 2u}) {
+        a.tight_alignment.SupportTier = static_cast<D3D12_TIGHT_ALIGNMENT_TIER>(tier);
+        auto* trial = query_stub(a, info, "tight alignment tier");
+        if (trial) {
+            D3D12DDI_TIGHT_ALIGNMENT_TIER_DATA_0111 value{};
+            check(get(trial, D3D12DDICAPS_TYPE_TIGHT_ALIGNMENT_TIER_0111, value) == S_OK
+                  && UINT(value.SupportTier) == (tier == 1 ? 1u : 0u),
+                  "tight alignment engine tier %u maps only implemented tier 1", tier);
+            engine_ddi::free_adapter_caps(trial);
+        }
+    }
+    a.tight_alignment.SupportTier = D3D12_TIGHT_ALIGNMENT_TIER_1;
+    a.unsupported = int(engine_ddi::tight::feature);
+    if (auto* trial = query_stub(a, info, "unanswered tight alignment")) {
+        D3D12DDI_TIGHT_ALIGNMENT_TIER_DATA_0111 value{};
+        check(get(trial, D3D12DDICAPS_TYPE_TIGHT_ALIGNMENT_TIER_0111, value) == S_OK && !value.SupportTier,
+              "unanswered engine tight alignment reports no support");
+        engine_ddi::free_adapter_caps(trial);
+    }
+    a.unsupported = -1;
+    struct Row { D3D12DDICAPS_TYPE type; UINT size; UINT first; };
+    const Row rows[] = {
+        {D3D12DDICAPS_TYPE_OPTIONS_0098, sizeof(D3D12DDI_OPTIONS_DATA_0098), 98},
+        {D3D12DDICAPS_TYPE_OPTIONS_0101, sizeof(D3D12DDI_OPTIONS_DATA_0101), 101},
+        {D3D12DDICAPS_TYPE_OPTIONS_0102, sizeof(D3D12DDI_OPTIONS_DATA_0102), 102},
+        {D3D12DDICAPS_TYPE_OPTIONS1_0103, sizeof(D3D12DDI_OPTIONS_DATA_0103), 103},
+        {D3D12DDICAPS_TYPE_0103_WAVE_MMA, sizeof(D3D12DDI_WAVE_MMA_DATA_0103), 103},
+        {D3D12DDI_FEATURE_D3D12_PREDICATION_106, sizeof(D3D12DDI_FEATURE_DATA_PREDICATION_106), 106},
+        {D3D12DDI_FEATURE_PLACED_RESOURCE_SUPPORT_INFO_106,
+            sizeof(D3D12DDI_FEATURE_DATA_PLACED_RESOURCE_SUPPORT_INFO_106), 106},
+        {D3D12DDI_FEATURE_HARDWARE_COPY_106, sizeof(D3D12DDI_FEATURE_DATA_HARDWARE_COPY_106), 106},
+        {D3D12DDICAPS_TYPE_OPTIONS_0109, sizeof(D3D12DDI_OPTIONS_DATA_0109), 109},
+        {D3D12DDICAPS_TYPE_OPTIONS_0110, sizeof(D3D12DDI_OPTIONS_DATA_0110), 110},
+        {D3D12DDICAPS_TYPE_TIGHT_ALIGNMENT_TIER_0111, sizeof(D3D12DDI_TIGHT_ALIGNMENT_TIER_DATA_0111), 111},
+        {D3D12DDICAPS_TYPE_GUID_TEXTURE_LAYOUT_TIER_0111, sizeof(D3D12DDI_GUID_TEXTURE_LAYOUT_TIER_DATA_0111), 111},
+        {D3D12DDICAPS_TYPE_GUID_TEXTURE_LAYOUT_GUID_SUPPORT_0111,
+            sizeof(D3D12DDI_GUID_TEXTURE_LAYOUT_GUID_SUPPORT_DATA_0111), 111},
+        {D3D12DDICAPS_TYPE_0112_NATIVE_FENCE_SUPPORT, sizeof(D3D12DDICAPS_NATIVE_FENCE_SUPPORT_DATA_0112), 112},
+        {D3D12DDI_APPLICATION_SPECIFIC_DRIVER_STATE_113,
+            sizeof(D3D12DDI_FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113), 113},
+        {D3D12DDICAPS_TYPE_OPTIONS_0118, sizeof(D3D12DDI_OPTIONS_DATA_0118), 118},
+        {static_cast<D3D12DDICAPS_TYPE>(1110), sizeof(UINT32), 115},
+    };
+    for (const Row& row : rows) {
+        alignas(16) unsigned char bytes[64];
+        std::memset(bytes, 0xEE, sizeof(bytes));
+        D3D12DDIARG_GETCAPS r{row.type, nullptr, bytes, row.size};
+        const bool old_refused = engine_ddi::build_caps(caps, row.first - 1, &r) == E_INVALIDARG
+            && untouched(bytes, sizeof(bytes));
+        r.DataSize = row.size - 1;
+        const bool short_refused = engine_ddi::build_caps(caps, 119, &r) == E_INVALIDARG
+            && untouched(bytes, sizeof(bytes));
+        r.DataSize = row.size + 1;
+        const bool long_refused = engine_ddi::build_caps(caps, 119, &r) == E_INVALIDARG
+            && untouched(bytes, sizeof(bytes));
+        r.DataSize = row.size;
+        const bool first_answered = engine_ddi::build_caps(caps, row.first, &r) == S_OK
+            && untouched(bytes + row.size, sizeof(bytes) - row.size);
+        check(old_refused && short_refused && long_refused && first_answered,
+              "ladder cap %u: version and exact-size checks preserve memory; first version answers", UINT(row.type));
+    }
+    {
+        struct Guarded { UINT32 before, tier, after; } data{0xeeeeeeee, 0xeeeeeeee, 0xeeeeeeee};
+        D3D12DDIARG_GETCAPS r{static_cast<D3D12DDICAPS_TYPE>(1110), nullptr, &data.tier, sizeof(data.tier)};
+        check(engine_ddi::build_caps(caps, 119, &r) == S_OK && !data.tier
+              && data.before == 0xeeeeeeee && data.after == 0xeeeeeeee,
+              "Agility 721 linear algebra tier is zero with both canaries intact");
+        r.pData = nullptr;
+        check(engine_ddi::build_caps(caps, 119, &r) == E_INVALIDARG,
+              "Agility 721 linear algebra refuses a null payload");
+        for (const UINT type : {1100u, 1102u, 0xffffu}) {
+            unsigned char bytes[24]; std::memset(bytes, 0xEE, sizeof(bytes));
+            for (const UINT size : {0u, 7u, 8u, 9u}) {
+                r = {static_cast<D3D12DDICAPS_TYPE>(type), nullptr, bytes + 8, size};
+                check(engine_ddi::build_caps(caps, 119, &r) == E_NOTIMPL && untouched(bytes, sizeof(bytes)),
+                      "unsupported caps %u size %u refuse without writes", type, size);
+            }
+        }
+    }
+    D3D12DDI_OPTIONS_DATA_0103 graph{};
+    D3D12DDI_OPTIONS_DATA_0110 indirect{};
+    D3D12DDI_OPTIONS_DATA_0118 ser{};
+    D3D12DDI_OPTIONS_DATA_0102 limits{};
+    check(get(caps, D3D12DDICAPS_TYPE_OPTIONS1_0103, graph) == S_OK
+          && graph.WorkGraphsTier == D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED,
+          "engine work graphs tier 1 is clamped until state and dispatch translation exists");
+    check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0110, indirect) == S_OK
+          && indirect.ExecuteIndirectTier == D3D12DDI_EXECUTE_INDIRECT_TIER_1_1,
+          "incrementing constant support follows the engine OPTIONS21 answer");
+    check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0118, ser) == S_OK && !ser.ShaderExecutionReorderingActuallyReorders,
+          "SER stays false without an engine SER contract");
+    check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits) == S_OK
+          && limits.SupportedSampleCountsWithNoOutputs == 0x1d && limits.MaxSamplerDescriptorHeapSize == 4096
+          && limits.MaxSamplerDescriptorHeapSizeWithStaticSamplers == 2048 && limits.MaxViewDescriptorHeapSize == 1000000,
+          "descriptor and no-output sample limits come from the engine OPTIONS19 answer");
+    D3D12DDI_WAVE_MMA_DATA_0103 mma{};
+    mma.InputDataType = D3D12DDI_WAVE_MMA_INPUT_DATATYPE_FLOAT;
+    mma.M = D3D12DDI_WAVE_MMA_DIMENSION_16;
+    mma.N = D3D12DDI_WAVE_MMA_DIMENSION_64;
+    check(get(caps, D3D12DDICAPS_TYPE_0103_WAVE_MMA, mma) == S_OK && !mma.Supported
+          && mma.InputDataType == D3D12DDI_WAVE_MMA_INPUT_DATATYPE_FLOAT
+          && mma.M == D3D12DDI_WAVE_MMA_DIMENSION_16 && mma.N == D3D12DDI_WAVE_MMA_DIMENSION_64,
+          "unsupported wave MMA preserves the caller's input dimensions and type");
+    engine_ddi::free_adapter_caps(caps);
+
+    const auto valid_limits = a.options19;
+    for (unsigned invalid = 0; invalid != 5; ++invalid) {
+        a.options19 = valid_limits;
+        switch (invalid) {
+        case 0: a.options19.SupportedSampleCountsWithNoOutputs = 0x1; break;
+        case 1: a.options19.SupportedSampleCountsWithNoOutputs = 0x15; break; // Missing 8 samples.
+        case 2: a.options19.MaxSamplerDescriptorHeapSize = 3999; break;
+        case 3: a.options19.MaxSamplerDescriptorHeapSizeWithStaticSamplers = 2047; break;
+        case 4: a.options19.MaxViewDescriptorHeapSize = 999999; break;
+        }
+        caps = query_stub(a, info, "OPTIONS0102 below-minimum negative control");
+        if (!caps) continue;
+        std::memset(&limits, 0xEE, sizeof(limits));
+        check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits) == E_NOTIMPL && untouched(&limits, sizeof(limits)),
+              "0102 refuses below-minimum field %u before exposing any partial payload", invalid);
+        engine_ddi::free_adapter_caps(caps);
+    }
+    a.options19 = valid_limits;
+    a.options19.SupportedSampleCountsWithNoOutputs = 0x1f;
+    a.options19.MaxSamplerDescriptorHeapSize = 8192;
+    caps = query_stub(a, info, "OPTIONS0102 above-minimum positive control");
+    if (caps) {
+        check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits) == S_OK
+              && limits.SupportedSampleCountsWithNoOutputs == 0x1f && limits.MaxSamplerDescriptorHeapSize == 8192,
+              "0102 preserves extra supported sample counts and larger actual heap limits");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    a.options19 = valid_limits;
+    a.options19.SupportedSampleCountsWithNoOutputs = 0x1;
+    a.options19.MaxSamplerDescriptorHeapSize = 2048;
+    caps = query_stub(a, info, "OPTIONS0102 lab probe source");
+    if (caps) {
+        struct Probe { const wchar_t* arm; UINT mask; UINT samplers; };
+        for (const Probe probe : {Probe{L"control", 1, 2048}, Probe{L"samples", 0x1d, 2048},
+                                 Probe{L"samplers", 1, 4000}, Probe{L"both", 0x1d, 4000}}) {
+            SetEnvironmentVariableW(probe_name, probe.arm);
+            std::memset(&limits, 0xEE, sizeof(limits));
+            const HRESULT hr = get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            check(hr == S_OK && limits.SupportedSampleCountsWithNoOutputs == probe.mask
+                  && limits.MaxSamplerDescriptorHeapSize == probe.samplers
+                  && limits.MaxSamplerDescriptorHeapSizeWithStaticSamplers == 2048 && limits.MaxViewDescriptorHeapSize == 1000000,
+                  "lab probe %ls changes only its selected field(s), source otherwise preserved", probe.arm);
+#else
+            check(hr == E_NOTIMPL && untouched(&limits, sizeof(limits)),
+                  "release ignores diagnostic environment %ls and refuses the invalid source limits", probe.arm);
+#endif
+        }
+        for (const auto bad : {L"typo", L"both-extra-long-invalid-name"}) {
+            SetEnvironmentVariableW(probe_name, bad);
+            std::memset(&limits, 0xEE, sizeof(limits));
+            const HRESULT hr = get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            check(hr == E_INVALIDARG && untouched(&limits, sizeof(limits)), "lab invalid probe name fails without payload write");
+#else
+            check(hr == E_NOTIMPL && untouched(&limits, sizeof(limits)), "release does not parse lab probe names");
+#endif
+        }
+        SetEnvironmentVariableW(probe_name, nullptr);
+        std::memset(&limits, 0xEE, sizeof(limits));
+        check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits) == E_NOTIMPL && untouched(&limits, sizeof(limits)),
+              "lab probe is off by default and unsetting it restores mandatory limit validation");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    a.options19 = valid_limits;
+    a.unsupported = D3D12_FEATURE_D3D12_OPTIONS19;
+    caps = query_stub(a, info, "unanswered OPTIONS19");
+    if (caps) {
+        std::memset(&limits, 0xEE, sizeof(limits));
+        check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0102, limits) == E_NOTIMPL && untouched(&limits, sizeof(limits)),
+              "unanswered engine limit query preserves the payload rather than fabricating zero limits");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    a.unsupported = D3D12_FEATURE_D3D12_OPTIONS21;
+    caps = query_stub(a, info, "unanswered OPTIONS21");
+    if (caps) {
+        check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0110, indirect) == S_OK
+              && indirect.ExecuteIndirectTier == D3D12DDI_EXECUTE_INDIRECT_TIER_1_0,
+              "unanswered OPTIONS21 retains supported execute-indirect tier 1.0");
+        engine_ddi::free_adapter_caps(caps);
+    }
+    SetEnvironmentVariableW(probe_name, previous_length ? previous_probe : nullptr);
+}
+#endif
 
 void test_policy_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     // An engine with heap serialization tier 0, so that every field can be overridden alone: UMA TRUE,
@@ -1563,6 +1806,9 @@ int wmain(int argc, wchar_t** argv) {
         test_enhanced_barriers(info);
         test_shader_model(info);
         test_raytracing_tier12(info);
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        test_ladder_caps(info);
+#endif
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

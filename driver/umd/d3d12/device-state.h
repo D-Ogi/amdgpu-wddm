@@ -46,8 +46,8 @@ struct Device {
     QueueRegistry queues;
     MemoryRegistry memory;
     DeviceEngine* engine{};
-    // The D3D12DDIARG_CREATEDEVICE_0003 Version the runtime negotiated (build << 16): 0092, 0093 or 0094
-    // (adapter.cpp).
+    // The D3D12DDIARG_CREATEDEVICE_0003 Version the runtime negotiated (build << 16),
+    // bounded by the header-selected ladder in adapter.cpp.
     UINT ddi_version{};
     // ddi_trace_mode() of this device, read once when its engine is created (device-engine.cpp).
     int trace_mode{};

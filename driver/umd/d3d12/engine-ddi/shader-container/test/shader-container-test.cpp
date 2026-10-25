@@ -1324,6 +1324,24 @@ void RunCase(const Engine& mainEngine, const Engine* soEngine, const CaseDef& c,
             std::string detail;
             bool agree = MetadataMatches(s, &detail);
             Check(agree, c.name + ": " + stem + " dx.entryPoints signatures agree with dxc's ISG1/OSG1/PSG1: " + detail);
+            sc::Container generic;
+            dxil::Signatures metadata;
+            const auto result = sc::BuildGenericContainer(s.code.data(), s.code.size(), &generic, &metadata);
+            DdiShader genericBack;
+            const bool parsed = result && Strip(generic.bytes, &genericBack, &detail);
+            auto same = [](const std::vector<SigElement>& a, const std::vector<SigElement>& b) {
+                if (a.size() != b.size()) return false;
+                for (size_t i = 0; i != a.size(); ++i) {
+                    const auto& x = a[i]; const auto& y = b[i];
+                    if (_stricmp(x.name.c_str(), y.name.c_str()) || x.index != y.index || x.sysval != y.sysval ||
+                        x.type != y.type || x.reg != y.reg || x.mask != y.mask || x.stream != y.stream || x.precision != y.precision)
+                        return false;
+                }
+                return true;
+            };
+            Check(parsed && genericBack.code == s.code && same(s.origInput, genericBack.origInput) &&
+                  same(s.origOutput, genericBack.origOutput) && same(s.origPatch, genericBack.origPatch),
+                  c.name + ": " + stem + " generic raw-DXIL signatures match dxc, including tessellation domain");
         }
 
         sc::Container rebuilt;

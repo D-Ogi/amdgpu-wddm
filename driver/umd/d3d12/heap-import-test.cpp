@@ -308,6 +308,19 @@ int main(){
   events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==expected_type);
   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
  }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+ // From DDI 0115 a committed resource arrives with the IMPLICIT bit beside the heap's own flags: the lab saw
+ // 0xae on a committed buffer at DDI 0120. The bit changes nothing, so the same memory comes back.
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(heap.Flags)|unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT));
+ assert(unsigned(heap.Flags)==0xaeu);
+ for(expected_type=1;expected_type<=2;++expected_type){
+  heap.CPUPageProperty=expected_type==1?D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==expected_type);
+  assert(!owner.last_report().refusal);
+  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+ }
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(heap.Flags)&~unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT));
+#endif
  // A cached, visible type alone cannot fulfill COHERENT_SYSTEMWIDE. Nor can it
  // fulfill the existing upload policy, which already requires HOST_COHERENT.
  req.memory_type_bits=1u<<3;events.clear();const auto before_allocation=next_allocation;
@@ -353,7 +366,22 @@ int main(){
   resource.ResourceType=type;
   heap.Flags=flags;events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0);
   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+  // The same committed texture with the IMPLICIT bit of DDI 0115 and later.
+  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(flags)|unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT));events.clear();
+  assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0);
+  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+#endif
  }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+ // The committed GPU-only buffer of the same lab run: heap flags 0xa6 on L1.
+ resource.ResourceType=D3D12DDI_RT_BUFFER;
+ heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT)|unsigned(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)|
+     unsigned(D3D12DDI_HEAP_FLAG_BUFFERS)|unsigned(D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES));
+ assert(unsigned(heap.Flags)==0xa6u);
+ events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0);
+ assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+#endif
  resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
  // System-wide coherence alone refuses an otherwise admitted texture.
  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)|unsigned(D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE));

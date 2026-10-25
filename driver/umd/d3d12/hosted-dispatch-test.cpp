@@ -11,7 +11,8 @@ static HANDLE const device_handle=reinterpret_cast<HANDLE>(UINT64_C(0x1234567887
 static HANDLE const context_handle=reinterpret_cast<HANDLE>(UINT64_C(0x34567890abcdef12));
 static UINT64 fence=10;
 static char mapped[4096];
-static unsigned allocations=0,deallocations=0,context_creates=0,context_destroys=0,native_queue_calls=0,submitted=0,errors=0;
+static unsigned allocations=0,deallocations=0,context_creates=0,context_destroys=0,native_queue_calls=0,submitted=0,errors=0,
+    signalled=0,rewinds=0;
 static unsigned frees=0,evictions=0;
 static bool fail_destroy=false,fail_free=false,bad_fence=false;
 static bool immediate_resident=false,fail_sync_create=false,fail_sync_destroy=false;
@@ -47,6 +48,10 @@ static HRESULT APIENTRY destroy_context(HANDLE device,const D3DDDICB_DESTROYCONT
 static HRESULT APIENTRY wrong_native_queue(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL*){++native_queue_calls;return E_FAIL;}
 static HRESULT APIENTRY wait_gpu(HANDLE device,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a){assert(device==device_handle && a->hContext==context_handle && a->ObjectCount==1 && a->MonitoredFenceValueArray[0]==6);return S_OK;}
 static HRESULT APIENTRY submit(HANDLE device,const D3DDDICB_SUBMITCOMMAND* a){assert(device==device_handle && a->BroadcastContextCount==1 && a->BroadcastContext[0]==context_handle);++submitted;return S_OK;}
+static HRESULT APIENTRY signal_gpu(HANDLE device,const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2* a){
+    assert(device==device_handle && a->BroadcastContextCount==1 && a->BroadcastContextArray[0]==context_handle);
+    assert(a->ObjectCount==1 && a->MonitoredFenceValueArray[0]==6 && !(a->Flags.Value&~4u));
+    ++signalled;rewinds+=a->Flags.AllowFenceRewind;return S_OK;}
 static VOID APIENTRY removed(D3D12DDI_HRTDEVICE device,HRESULT result){assert(device.handle==device_handle && result==D3DDDIERR_DEVICEREMOVED);++errors;}
 // Address reuse across threads (trial 172). The runtime releases an address inside its free callback and
 // may hand it out again at once to another thread, before the freeing thread takes the bridge's lock again.
@@ -87,7 +92,7 @@ int main(){
  D3DDDI_DEVICECALLBACKS kt{};kt.pfnCreatePagingQueueCb=paging_create;kt.pfnDestroyPagingQueueCb=paging_destroy;kt.pfnMapGpuVirtualAddressCb=map_va;kt.pfnFreeGpuVirtualAddressCb=free_va;
  kt.pfnMakeResidentCb=resident;kt.pfnEvictCb=evict;kt.pfnLock2Cb=lock_memory;kt.pfnUnlock2Cb=unlock_memory;kt.pfnCreateContextVirtualCb=create_context;kt.pfnDestroyContextCb=destroy_context;
  kt.pfnCreateSynchronizationObject2Cb=create_sync;kt.pfnDestroySynchronizationObjectCb=destroy_sync;
- kt.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu;kt.pfnSubmitCommandCb=submit;
+ kt.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu;kt.pfnSubmitCommandCb=submit;kt.pfnSignalSynchronizationObjectFromGpu2Cb=signal_gpu;
  bc250::umd::RuntimeDomain domain;HostedDispatch bridge(domain,{device_handle},um,kt);
  const auto host=bridge.descriptor(42,&bridge);
  auto call=[&](uint32_t op,void* a=nullptr){return host.dispatch(host.userdata,op,a);};
@@ -149,6 +154,16 @@ int main(){
  sync_fence=0;
  D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU wait{};wait.hContext=context.hContext;wait.ObjectCount=1;wait.ObjectHandleArray=&paging.sync;wait.MonitoredFenceValueArray=&make.PagingFenceValue;
  assert(call(BC250_HOST_WaitForSynchronizationObjectFromGpu,&wait)==0);
+ // The hosted ICD signals with AllowFenceRewind (wait-before-signal); the flag reaches the runtime, any other
+ // flag is refused before it.
+ D3DKMT_HANDLE signal_context=context.hContext;
+ D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal{};signal.ObjectCount=1;signal.ObjectHandleArray=&paging.sync;
+ signal.BroadcastContextCount=1;signal.BroadcastContextArray=&signal_context;signal.MonitoredFenceValueArray=&make.PagingFenceValue;
+ assert(call(BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==0 && signalled==1 && !rewinds);
+ signal.Flags.AllowFenceRewind=1;
+ assert(call(BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==0 && signalled==2 && rewinds==1);
+ signal.Flags.EnqueueCpuEvent=1;
+ assert(call(BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)<0 && signalled==2);
  D3DKMT_SUBMITCOMMAND command{};command.BroadcastContextCount=1;command.BroadcastContext[0]=context.hContext;
  assert(call(BC250_HOST_SubmitCommand,&command)==0 && submitted==1);
  D3DKMT_DESTROYCONTEXT destroy{};destroy.hContext=context.hContext;wrapper.arguments=&destroy;

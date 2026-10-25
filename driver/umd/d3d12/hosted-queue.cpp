@@ -110,10 +110,14 @@ HRESULT APIENTRY HostedQueue::pinned(void* user,const QueueBindingView* view){
     }
     if(call.op==BC250_HOST_SignalSynchronizationObjectFromGpu2){
         const auto& a=*static_cast<D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2*>(call.argument);
-        if(a.Flags.Value || !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)return E_INVALIDARG;
+        // AllowFenceRewind only, passed through (wait-before-signal of the hosted ICD; hosted-dispatch.cpp).
+        D3DDDICB_SIGNALFLAGS rewind{};rewind.AllowFenceRewind=1;
+        if((a.Flags.Value&~rewind.Value) || !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)
+            return E_INVALIDARG;
         HANDLE context=view->context;D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 b{};
         b.BroadcastContextCount=1;b.BroadcastContextArray=&context;b.ObjectCount=a.ObjectCount;
         b.ObjectHandleArray=a.ObjectHandleArray;b.MonitoredFenceValueArray=a.MonitoredFenceValueArray;
+        b.Flags.AllowFenceRewind=a.Flags.AllowFenceRewind;
         return self.signal_?self.signal_(self.runtime_device_,&b):E_NOTIMPL;
     }
     if(call.op==BC250_HOST_SubmitCommand){

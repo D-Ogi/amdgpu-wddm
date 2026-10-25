@@ -27,9 +27,13 @@
 // with the vertex buffer alternating, and per call of ranged and simple descriptor copies. The figures are printed
 // ("measure" lines), not checked; the drawn image is.
 #include "harness.h"
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+#include "modern-core-harness.h"
+#endif
 #include "fixture-cs.h"
 #include "fixture-gfx.h"
 #include "fixture-tables.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -82,10 +86,12 @@ struct Pipeline {
     void* depth = nullptr;
     void* pso = nullptr;
     int pso_rt = 0;
+    DdiShader caller_vs, caller_ps;              // live-input control of the 0119 variant test
     D3D12DDI_HROOTSIGNATURE hrs() const { return D3D12DDI_HROOTSIGNATURE{rs}; }
     D3D12DDI_HPIPELINESTATE hpso() const { return D3D12DDI_HPIPELINESTATE{pso}; }
 
-    bool create(Env& env, Device& device, UINT count, const D3D12DDI_ROOT_PARAMETER_0013* params) {
+    bool create(Env& env, Device& device, UINT count, const D3D12DDI_ROOT_PARAMETER_0013* params,
+                bool lifetime_variant = false, bool release_caller = false) {
         rs = create_root_signature(env, device, count, params);
         DdiShader v, p;
         if (!rs || !ddi_form(g_fixture_vs, sizeof(g_fixture_vs), v) || !ddi_form(g_fixture_ps, sizeof(g_fixture_ps), p))
@@ -146,6 +152,39 @@ struct Pipeline {
         args.RTVFormats[0] = DXGI_FORMAT_R32_UINT;
         args.DSVFormat = DXGI_FORMAT_UNKNOWN;
         args.SampleDesc = {1, 0};
+        if (lifetime_variant) {
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+            // Duplicate locations are valid. state.c's validation selects its
+            // draw loop for them, and get_pipeline must request a late variant.
+            static const D3D12DDI_VIEW_INSTANCE_LOCATION locations[2] = {{0, 0}, {0, 0}};
+            args.ViewInstancingDesc = {2, locations, D3D12DDI_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING};
+            D3D12DDIARG_CREATE_PIPELINE_STATE_0119 modern_args{};
+#define COPY(name) modern_args.name = args.name
+            COPY(hVertexShader); COPY(hPixelShader); COPY(hRootSignature); COPY(hBlendState); COPY(SampleMask);
+            COPY(hRasterizerState); COPY(hDepthStencilState); COPY(hElementLayout); COPY(IBStripCutValue);
+            COPY(PrimitiveTopologyType); COPY(NumRenderTargets); COPY(DSVFormat); COPY(SampleDesc); COPY(ViewInstancingDesc);
+#undef COPY
+            modern_args.RTVFormats[0] = args.RTVFormats[0];
+            modern_args.pVertexShaderCode = v.code.data(); modern_args.pPixelShaderCode = p.code.data();
+            D3D12DDI_DEVICE_FUNCS_CORE_0119 modern{};
+            if (!modern_core_table(env, modern)) return false;
+            pso = env.storage.alloc(modern.pfnCalcPrivatePipelineStateSize(device.h(), &modern_args));
+            if (pso && modern.pfnCreatePipelineState(device.h(), &modern_args, hpso(), {&pso_rt}) != S_OK) pso = nullptr;
+            if (pso && release_caller) {
+                std::fill(v.code.begin(), v.code.end(), 0xddddddddu);
+                std::fill(p.code.begin(), p.code.end(), 0xddddddddu);
+                std::vector<UINT>().swap(v.code); std::vector<UINT>().swap(p.code);
+                modern.pfnDestroyShader(device.h(), {vs}); modern.pfnDestroyShader(device.h(), {ps});
+                vs = ps = nullptr;
+            } else {
+                caller_vs = std::move(v); caller_ps = std::move(p);
+            }
+            return pso != nullptr;
+#else
+            (void)release_caller;
+            return false;
+#endif
+        }
         pso = env.storage.alloc(env.core.pfnCalcPrivatePipelineStateSize(device.h(), &args));
         if (pso && env.core.pfnCreatePipelineState(device.h(), &args, hpso(), D3D12DDI_HRTPIPELINESTATE{&pso_rt}) != S_OK)
             pso = nullptr;
@@ -1254,6 +1293,103 @@ void measure_draw_path(Env& env, Device& device, Target& target, const Buffer& r
     destroy_buffer(env, device, source);
     pipeline.destroy(env, device);
 }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+// The pinned engine's state.c makes this an actual draw-time variant, not a
+// timing inference: duplicate locations select draw_loop (validate_view_instancing),
+// get_pipeline returns NULL for that mode, and get_or_create_pipeline builds the
+// view-id-specific key. The Vulkan observer counts successful pipeline creation
+// after the caller and shader objects have gone; release builds omit FIXME logs.
+// The readback checks both masks.
+void test_late_variant_lifetime(Env& env, Device& device, D3D12DDI_GPU_VIRTUAL_ADDRESS vertices,
+                                 const Buffer& readback) {
+    Pipeline pipelines[2];
+    Target targets[2];
+    D3D12DDI_ROOT_PARAMETER_0013 constant{};
+    constant.ParameterType = D3D12DDI_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    constant.Constants = {0, 0, 1}; constant.ShaderVisibility = D3D12DDI_SHADER_VISIBILITY_ALL;
+    bool made = true;
+    for (unsigned arm = 0; arm != 2; ++arm)
+        made = pipelines[arm].create(env, device, 1, &constant, true, arm == 1) && targets[arm].create(env, device) && made;
+    checkf(made && pipelines[0].vs && pipelines[0].ps && !pipelines[1].vs && !pipelines[1].ps,
+           "0119 late variant: control retains caller/shaders; test caller bytes poisoned/freed and both shaders destroyed before any draw");
+    BC250_VKD3D_COMMAND_QUEUE_DESC qdesc{sizeof(qdesc), D3D12_COMMAND_LIST_TYPE_DIRECT, 0, 0, 0};
+    engine_ddi::EngineQueue* queue = nullptr;
+    made = made && engine_ddi::create_engine_queue(device.context, &qdesc, &queue, &queue) == S_OK && queue;
+    VkInstance vk_instance = VK_NULL_HANDLE;
+    VkPhysicalDevice vk_physical = VK_NULL_HANDLE;
+    VkDevice vk_device = VK_NULL_HANDLE;
+    uint32_t vk_family = 0;
+    made = made && env.funcs.GetVulkanHandles(env.engine, &vk_instance, &vk_physical, &vk_device, &vk_family) == S_OK && vk_device;
+    UINT pixels[2][kSize * kSize]{};
+    bool completed[2]{};
+    for (unsigned arm = 0; made && arm != 2; ++arm) {
+        Recording rec;
+        const bool opened = open_recording(env, device, D3D12DDI_COMMAND_QUEUE_FLAG_3D, rec) == S_OK && rec.table == 1;
+        if (opened) {
+            const auto& t = env.lists[1]; const auto list = rec.hlist(); auto& target = targets[arm];
+            const auto to_target = transition(target.texture, D3D12DDI_RESOURCE_STATE_COMMON, D3D12DDI_RESOURCE_STATE_RENDER_TARGET);
+            t.pfnResourceBarrier(list, 1, &to_target);
+            const FLOAT clear[4]{};
+            t.pfnClearRenderTargetView(list, target.rtv, clear, 0, nullptr);
+            t.pfnOMSetRenderTargets(list, 1, &target.rtv, TRUE, nullptr);
+            const D3D12DDI_VIEWPORT viewport{0, 0, static_cast<FLOAT>(kSize), static_cast<FLOAT>(kSize), 0, 1};
+            t.pfnRsSetViewports(list, 1, &viewport);
+            t.pfnSetGraphicsRootSignature(list, pipelines[arm].hrs());
+            t.pfnSetPipelineState(list, pipelines[arm].hpso());
+            t.pfnSetGraphicsRoot32BitConstant(list, 0, kSeed, 0);
+            t.pfnIaSetTopology(list, D3D12DDI_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            const D3D12DDI_VERTEX_BUFFER_VIEW vb{vertices, 3 * sizeof(Vertex), sizeof(Vertex)};
+            t.pfnIASetVertexBuffers(list, 0, 1, &vb);
+            begin_graphics_pipeline_probe(vk_device);
+            std::fprintf(stderr, "DDI0119_VARIANT_BEGIN %s\n", arm ? "freed" : "control");
+            std::fflush(stderr);
+            for (UINT view = 0; view != 2; ++view) {
+                const D3D12DDI_RECT scissor{static_cast<LONG>(view * kSize / 2), 0,
+                                           static_cast<LONG>((view + 1) * kSize / 2), kSize};
+                t.pfnRsSetScissorRects(list, 1, &scissor);
+                t.pfnSetViewInstanceMask(list, 1u << view);
+                t.pfnDrawInstanced(list, 3, 1, 0, 0);
+            }
+            const auto to_source = transition(target.texture, D3D12DDI_RESOURCE_STATE_RENDER_TARGET, D3D12DDI_RESOURCE_STATE_COPY_SOURCE);
+            t.pfnResourceBarrier(list, 1, &to_source);
+            const D3D12DDIARG_PHYSICAL_SUBRESOURCE_PITCHED_LAYOUT footprint{DXGI_FORMAT_R32_UINT, kSize, kSize, 1, kPitch, kPitch * kSize};
+            D3D12DDIARG_BUFFER_PLACEMENT dst{}, src{};
+            dst.BaseAddress.UMD = {readback.hres(), 0}; src.BaseAddress.UMD = {target.texture.hres(), 0};
+            t.pfnCopyTextureRegion(list, &dst, {D3D12DDI_RL_PLACED_PHYSICAL_SUBRESOURCE_PITCHED, &footprint}, 0, 0, 0,
+                                   &src, {D3D12DDI_RL_SELECT_SUBRESOURCE, nullptr}, nullptr);
+            t.pfnCloseCommandList(list);
+            const D3D12DDI_HCOMMANDLIST lists[] = {list};
+            completed[arm] = engine_ddi::execute_command_lists(queue, 1, lists) == S_OK && wait_queue_idle(env, queue, "0119 late variant");
+            const auto witness = end_graphics_pipeline_probe();
+            checkf(witness.successful_pipelines >= 2,
+                   "0119 late variant %s: actual Vulkan graphics pipeline creation after first draw (%llu calls, %llu successful pipelines)",
+                   arm ? "freed" : "control", static_cast<unsigned long long>(witness.calls),
+                   static_cast<unsigned long long>(witness.successful_pipelines));
+            void* cpu = nullptr;
+            if (completed[arm] && env.core.pfnMapHeap(device.h(), readback.hheap(), &cpu) == S_OK && cpu) {
+                std::memcpy(pixels[arm], cpu, sizeof(pixels[arm]));
+                env.core.pfnUnmapHeap(device.h(), readback.hheap());
+            } else completed[arm] = false;
+            std::fprintf(stderr, "DDI0119_VARIANT_END %s\n", arm ? "freed" : "control");
+            std::fflush(stderr);
+        }
+        destroy_recording(env, device, rec);
+    }
+    UINT bad = 0;
+    for (UINT y = 0; y != kSize; ++y)
+        for (UINT x = 0; x != kSize; ++x) {
+            const UINT expected = expected_texel(kTags[A], x, y);
+            bad += pixels[0][y * kSize + x] != expected || pixels[1][y * kSize + x] != expected;
+        }
+    checkf(completed[0] && completed[1] && !bad && !std::memcmp(pixels[0], pixels[1], sizeof(pixels[0])) &&
+               !device.shell.device_errors && !device.shell.list_errors,
+           "0119 late variant: masks 1 and 2 after caller/shader destruction match live control and all 4096 expected texels (%u differ)", bad);
+    if (queue) check(engine_ddi::destroy_engine_queue(queue) == engine_ddi::QueueClose::Retired, "0119 late variant: queue retired");
+    for (unsigned arm = 0; arm != 2; ++arm) {
+        targets[arm].destroy(env, device); pipelines[arm].destroy(env, device);
+    }
+}
+#endif
 } // namespace
 
 void test_draw_path(Env& env, Device& device) {
@@ -1299,6 +1435,9 @@ void test_draw_path(Env& env, Device& device) {
         test_query_reuse(env, device, pipeline, target, a);
         test_read_barriers(env, device, pipeline, target, a, d);
         measure_draw_path(env, device, target, readback, a, ib_va);
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        test_late_variant_lifetime(env, device, a, readback);
+#endif
     }
     destroy_buffer(env, device, vb_a);
     destroy_buffer(env, device, vb_d);

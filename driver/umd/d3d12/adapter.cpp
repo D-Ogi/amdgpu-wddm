@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <d3d12umddi.h>
 #include <cstdio>
+#include <cstdlib>
 #include <new>
 #include <atomic>
 #include <cstdint>
@@ -11,6 +12,8 @@
 #include "native-tables.h"
 #include "adapter-caps.h"
 #include "ddi-0092-layout.h"
+#include "ddi-ladder.h"
+#include <array>
 #include "ddi-trace.h"
 #include <cstring>
 #include "stdio-log.h"
@@ -29,12 +32,41 @@ constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::
 // offered; with 0093 as the newest it asked caps type 1079 and reported no enhanced barriers, with 0094 it reports
 // them (OPTIONS12 EnhancedBarriersSupported 1). 0093 adds only the caps type OPTIONS_0093 (H:11251-11257); 0094
 // changes the L68 argument (resources.cpp, select_barrier). 0092 stays offered for a runtime that knows neither.
-constexpr UINT64 kSupportedVersions[]={D3D12DDI_SUPPORTED_0094,D3D12DDI_SUPPORTED_0093,D3D12DDI_SUPPORTED_0092};
+// Built with the WDK 10.0.28000 header, the shell offers every build from 0120 (no public header defines it,
+// ddi-ladder.h) down to 0092, in both flavours; with the 26100 header it offers 0094 to 0092 (native12::kDdiMax).
+constexpr auto kSupportedVersions=[] {
+    std::array<UINT64,native12::kDdiMax-91> result{};
+    for(unsigned i=0;i<result.size();++i)
+        result[i]=(UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{native12::kDdiMax-i}<<16);
+    return result;
+}();
+// The newest build the shell offers and accepts. A lab build reads AMDGPU_WDDM_LAB_DDI_MAX, a decimal build from 92 to
+// kDdiMax, at each call: the list then starts at that build, so that one lab run can find the first build at which a
+// runtime refuses the device. A value outside that range is ignored. A release build always uses kDdiMax.
+unsigned offered_max(bool log=false) noexcept {
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    char text[8]{};
+    const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",text,sizeof(text));
+    if(!n) return native12::kDdiMax;
+    char* end=nullptr;
+    const unsigned long value=n<sizeof(text)?std::strtoul(text,&end,10):0;
+    const bool valid=end && end!=text && !*end && value>=92 && value<=native12::kDdiMax;
+    if(log){
+        amdgpu_wddm_log::print("d3d12-ddi LAB ONLY AMDGPU_WDDM_LAB_DDI_MAX %s: newest offered build %lu\n",
+                               valid?"accepted":"ignored",valid?value:static_cast<unsigned long>(native12::kDdiMax));
+        amdgpu_wddm_log::flush();
+    }
+    return valid?static_cast<unsigned>(value):native12::kDdiMax;
+#else
+    (void)log;
+    return native12::kDdiMax;
+#endif
+}
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
     const UINT build=runtimeVersion>>16;
-    return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 && (build==D3D12DDI_BUILD_VERSION_0094 ||
-        build==D3D12DDI_BUILD_VERSION_0093 || build==D3D12DDI_BUILD_VERSION_0092);
+    return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 && build>=92 && build<=offered_max();
 }
+
 void trace(const char* operation,unsigned long long value=0) noexcept {
     amdgpu_wddm_log::print("d3d12-ddi %s %llu\n",operation,value);amdgpu_wddm_log::flush();
 }
@@ -91,12 +123,14 @@ HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
 }
 HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;
-    constexpr UINT32 n=static_cast<UINT32>(sizeof(kSupportedVersions)/sizeof(kSupportedVersions[0]));
-    const UINT32 capacity=*count;*count=n;trace("GetSupportedVersions",capacity);
+    const unsigned newest=offered_max(true);
+    const UINT32 skip=native12::kDdiMax-newest;
+    const UINT32 n=static_cast<UINT32>(kSupportedVersions.size())-skip;
+    const UINT32 capacity=*count;*count=n;trace("GetSupportedVersions",capacity);trace("GetSupportedVersions-newest",newest);
     if(!values) return S_OK;
     if(capacity<n) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
     // Unimplemented capability/table queries remain fail-closed.
-    for(UINT32 i=0;i<n;++i)values[i]=kSupportedVersions[i];
+    for(UINT32 i=0;i<n;++i)values[i]=kSupportedVersions[skip+i];
     return S_OK;
 }
 HRESULT APIENTRY caps(D3D12DDI_HADAPTER h,const D3D12DDIARG_GETCAPS* a) {

@@ -474,6 +474,13 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     unsigned allowed=D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES|D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES|
         D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE;
     if(primary)allowed|=D3D12DDI_HEAP_FLAG_PRIMARY;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    // From DDI 0115 the runtime sets the IMPLICIT bit on the heap of every committed resource
+    // (D3D12TightPlacedResourceAlignment.md, addendum "New Heap flag"). The bit only tells a committed resource
+    // from a heap for placed resources; the allocation it asks for is the same, so the shell admits it on every
+    // request.
+    allowed|=D3D12DDI_HEAP_FLAG_0115_IMPLICIT;
+#endif
     // The three admission checks of the heap description are kept apart, because their names are the answer to
     // a question a lab run has to settle once: which heap flags the D3D12 runtime adds for a shared heap. The
     // DDI defines no SHARED bit (d3d12umddi.h, D3D12DDI_HEAP_FLAGS, where 0x1 is the one gap), so the shell
