@@ -62,6 +62,10 @@ arm instead of passing in silence. --kmd-only checks the KMD alone; in the lab f
 each forbidden name whose lab.every names the KMD file (the BD-235 lab registry names, for example). A lab set never
 passes as release and a release set never passes as lab.
 
+The ADL snapshot-test hook family Bc250AdlTest_* is forbidden in both package flavours, including decorated
+x86 exports and any letter case. BC250_ADL_TEST_SERVICE is a retained marker of host-service discovery fixtures,
+also forbidden in both flavours. Packaged ADL uses real KMD discovery; host fixtures are separate test artifacts.
+
 --sources judges the files a flavour selection pins, before anything is copied: each row of
 release_flavour.py's output is read from --root at its own payload path, so a release row that pins a lab build
 fails at the first gate of the release instead of at the package scan after the whole build. One build pinned by
@@ -256,7 +260,7 @@ _MEMBERS = None
 def driverstore_members():
     """{DriverStore member path under payload: its input slot}, in lower case, from the packager's own table
     (tools/release/driver_package.py), with every optional member (the OpenGL ICD of both architectures, the
-    encoder MFT)."""
+    encoder MFT and ADL of both architectures)."""
     global _MEMBERS
     if _MEMBERS is None:
         sys.path.insert(0, str(HERE.parent / 'release'))
@@ -267,7 +271,8 @@ def driverstore_members():
         finally:
             sys.path.pop(0)
         rows = driver_package.members({'opengl_icd': {'register': True, 'architectures': ['x64', 'x86']},
-                                       'mft_h264': {'register': True}})
+                                       'mft_h264': {'register': True},
+                                       'adl': {'register': True, 'architectures': ['x64', 'x86']}})
         _MEMBERS = {r['path'].split('/', 1)[1].lower(): r['source'].split('/', 1)[1].lower() for r in rows}
     return _MEMBERS
 
@@ -285,6 +290,7 @@ NDEBUG_RECIPES = {
 RELEASE_DEFINE = {'cl': "'/DNDEBUG'", 'clang': "'-DNDEBUG'"}
 RELEASE_OPTIMISE = {'cl': re.compile(r"(?<![\w/])/O[12x](?!\w)"), 'clang': re.compile(r"(?<![\w-])-O[123s](?!\w)")}
 RELEASE_COMPILES = {
+    'tools/build/build-umd-adl.ps1': (('tools/build/build-umd-adl.ps1', 'cl'),),
     'tools/build/build-umd-d3d12.ps1': (('tools/build/build-umd-d3d12.ps1', 'cl'),),
     'tools/build/build-umd-dxvk.ps1': (('tools/build/build-umd-dxvk.ps1', 'cl'),),
     'driver/umd/mft-h264/build.ps1': (('driver/umd/mft-h264/build.ps1', 'cl'),),
@@ -682,6 +688,15 @@ def describe(hit):
 def file_failures(decl, flavour, path, finding, data):
     """The failures of one file's findings, the same for the real scan and for the negative control."""
     failures = []
+    # ADL fixtures are not a package flavour: both released and lab packages must discover our real KMD.
+    # Match the hook family independently of export decoration (_name@N on x86), case and adjacent bytes.
+    # Ordinary ADL_/ADL2_ exports do not match. Also catches a future hook before it is added to the list.
+    for encoding in ('ascii', 'utf-16-le'):
+        text = data.decode('latin-1') if encoding == 'ascii' else '\n'.join(
+            run.group(0).decode('utf-16-le') for run in UTF16_RUN.finditer(data))
+        hooks = sorted(set(re.findall(r'BC250ADLTEST_[A-Z0-9_]+', text, re.IGNORECASE)))
+        failures += ['%s: ADL test hook %s (%s) is forbidden in both package flavours' % (path, h, encoding)
+                     for h in hooks]
     if flavour == 'release':
         for name in sorted(finding['forbidden']):
             failures.append('%s: %s (%s)' % (path, name, describe(finding['forbidden'][name])))

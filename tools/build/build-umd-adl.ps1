@@ -12,6 +12,7 @@
 #                                 nvlddmkm) for ours, so that the discovery runs against a host GPU
 #   adl-unit-test.exe             the export contract against the test build (tests\adl-unit-test.cpp)
 #   ags-client.exe                the AGS 6.3 client of the host tests and the lab kit (tests\ags-client.cpp)
+#   adl-system-probe.exe          bare-name loading and resolved system-path acceptance probe (no ADL beside it)
 #   build.json                    compiler, flags and SHA256 of every output
 # Gates: the shipped DLL exports exactly the names of atiadl.def and imports only system DLLs (static CRT); the
 # image is of -Arch; the unit test passes; the discovery runs. test-umd-adl-ags.ps1 runs the AGS host tests.
@@ -21,7 +22,8 @@
 # -AgsSdk: the AGS SDK 6.3.0 headers for ags-client.exe (default <BC250_ROOT>\ref\AGS_SDK-v6.3.0, see THIRD-PARTY.md).
 param([ValidateSet('x64', 'x86')][string]$Arch = 'x64',
       [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl', [string]$MsvcReason = '',
-      [string]$OutputDir, [string]$VsInstall, [string]$AgsSdk, [string]$TestService = '', [string]$AdlSdk)
+      [string]$OutputDir, [string]$VsInstall, [string]$AgsSdk, [string]$TestService = '', [string]$AdlSdk,
+      [string]$Version = '', [ValidateSet('release','lab')][string]$Flavour = 'release')
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
 . "$PSScriptRoot\umd-compiler.ps1"
@@ -100,6 +102,9 @@ try {
         "/Fd$obj\client.pdb" "$src\tests\ags-client.cpp" "/Fe$(Join-Path $OutputDir 'ags-client.exe')" /link /Brepro `
         d3d12.lib dxgi.lib psapi.lib
     if ($LASTEXITCODE -ne 0) { throw 'ags-client build failed' }
+    Invoke-Bc250UmdCompiler $cc @flags "/Fo$obj\" "/Fd$obj\system-probe.pdb" "$src\tests\adl-system-probe.cpp" `
+        "/Fe$(Join-Path $OutputDir 'adl-system-probe.exe')" /link /Brepro
+    if ($LASTEXITCODE -ne 0) { throw 'adl-system-probe build failed' }
     Pop-Location
 
     Push-Location $OutputDir
@@ -138,10 +143,15 @@ try {
         }
     } finally { Pop-Location }
 
+    # Stamp only the public library, before its recorded digest. Diagnostic fixtures never ship.
+    Set-Bc250VersionStamp -Repo $repo -Files @((Join-Path $OutputDir $name)) -Names @($name) `
+        -Version $Version -Flavour $Flavour
     $outputs = @(Get-ChildItem -LiteralPath $OutputDir -Recurse -File -Include '*.dll', '*.exe' |
         Where-Object { $_.FullName -notlike "$obj\*" } | Sort-Object FullName)
     [ordered]@{
         arch = $Arch
+        flavour = $Flavour
+        version = $Version
         compiler = (Get-Content -LiteralPath (Join-Path $OutputDir 'compiler.json') -Raw | ConvertFrom-Json)
         flags = $flags
         windows_sdk_version = $env:WindowsSDKVersion

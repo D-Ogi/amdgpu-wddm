@@ -78,6 +78,17 @@ def members(sources: dict) -> list[dict]:
             pairs.append(("wow64/opengl/amdgpu_wddm_gl.dll", "wow64/opengl/amdgpu_wddm_gl32.dll"))
     if sources.get("mft_h264", {}).get("register"):
         pairs.append(("mft/amdgpu_wddm_mft_h264.dll", "mft/amdgpu_wddm_mft_h264.dll"))
+    adl = sources.get("adl", {})
+    arch = adl.get("architectures", [])
+    if not isinstance(arch, list) or any(a not in ("x64", "x86") for a in arch) or len(arch) != len(set(arch)):
+        raise ValueError("invalid ADL architectures")
+    if adl.get("register"):
+        if not arch:
+            raise ValueError("ADL registration requires an explicit architecture")
+        if "x64" in arch:
+            pairs.append(("adl/atiadlxx.dll", "adl/atiadlxx.dll"))
+        if "x86" in arch:
+            pairs.append(("wow64/adl/atiadlxy.dll", "wow64/adl/atiadlxy32.dll"))
     rows = [{"source": "payload/" + src, "member": relative(dst),
              "path": PREFIX + dst, "arch": "x86" if dst.startswith("wow64/") else "x64"}
             for src, dst in pairs]
@@ -113,6 +124,22 @@ def registrations(rows: list[dict], sources: dict | None = None) -> dict:
                     raise ValueError("invalid OpenGL registry DWORD")
                 result["OpenGL" + name + suffix] = {"kind": "DWord", "value": value}
     return result
+
+
+def subkey_registrations(rows: list[dict]) -> list[dict]:
+    """Non-DX runtime pairs are DriverStore-relative, not expanded DIRID paths.
+
+    Keep these separate from the existing root-value manifest contract: its
+    consumers expand %13% and must not expand either string of these pairs.
+    PROVENANCE: MicrosoftDocs/windows-driver-docs (CC-BY-4.0), display/container-non-dx.md.
+    """
+    files = {r["member"] for r in rows}
+    return [{"subkey": subkey, "name": "AmdgpuAdl", "kind": "MultiString",
+             "value": [member.replace("/", "\\"), target]}
+            for subkey, member, target in (
+                ("CopyToVmWhenNewer", "adl/atiadlxx.dll", "atiadlxx.dll"),
+                ("CopyToVmWhenNewerWow64", "wow64/adl/atiadlxy32.dll", "atiadlxy.dll"))
+            if member in files]
 
 
 def render_inf(text: str, rows: list[dict], sources: dict | None = None) -> str:
@@ -155,7 +182,11 @@ def render_inf(text: str, rows: list[dict], sources: dict | None = None) -> str:
     old_names = ["UserModeDriverName", "UserModeDriverNameWow", "VulkanDriverName", "VulkanDriverNameWow"]
     old_names += [name + suffix for suffix in ("", "Wow") for name in ("OpenGLDriverName", "OpenGLVersion", "OpenGLFlags")]
     lines = [text.rstrip(), "", "[Amdgpu_PreviousUserModeDriver]",
-             *[f"HKR,,{name}" for name in old_names], "", "[Amdgpu_UserModeDriver]"]
+             *[f"HKR,,{name}" for name in old_names],
+             # Remove only our named values, including a retired architecture.
+             'HKR,"CopyToVmWhenNewer",AmdgpuAdl',
+             'HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl',
+             "", "[Amdgpu_UserModeDriver]"]
     for name, row in registrations(rows, sources).items():
         if row["kind"] == "DWord":
             value = f'0x00010001,{row["value"]}'
@@ -163,6 +194,9 @@ def render_inf(text: str, rows: list[dict], sources: dict | None = None) -> str:
             values = row["value"] if row["kind"] == "MultiString" else [row["value"]]
             value = ("0x00010000" if row["kind"] == "MultiString" else "0x00000000") + "," + ",".join('"' + v + '"' for v in values)
         lines.append(f"HKR,,{name},{value}")
+    for row in subkey_registrations(rows):
+        values = ",".join('"' + value + '"' for value in row["value"])
+        lines.append(f'HKR,"{row["subkey"]}",{row["name"]},0x00010000,{values}')
     for name, files in sections.items():
         lines += ["", f"[{name}]", *files]
     return "\n".join(lines) + "\n"
@@ -194,7 +228,7 @@ def stage(package: Path, sources: dict, flavour: str = 'release') -> dict:
     expected = {r["source"] for r in rows}
     # No unused PE may silently stay in Program Files while the manifest claims
     # DriverStore isolation. HIP has its separate runtime contract and stays out.
-    adapter_dirs = {"desktop", "d3d11", "d3d12", "vulkan", "wow64", "opengl", "mft"}
+    adapter_dirs = {"desktop", "d3d11", "d3d12", "vulkan", "wow64", "opengl", "mft", "adl"}
     actual = {p for p in indexed if len(PurePosixPath(p).parts) > 2 and PurePosixPath(p).parts[1] in adapter_dirs}
     if actual != expected:
         raise ValueError(f"UMD payload mismatch: missing={sorted(expected-actual)}, extra={sorted(actual-expected)}")
@@ -235,7 +269,8 @@ def stage(package: Path, sources: dict, flavour: str = 'release') -> dict:
     # into a caller's directory to remove unrecognized or foreign payloads.
     for row in rows:
         (package / row["source"]).unlink()
-    return {"schema": SCHEMA, "flavour": flavour, "root": "payload/kmd", "members": rows, "registration": registrations(rows, sources)}
+    return {"schema": SCHEMA, "flavour": flavour, "root": "payload/kmd", "members": rows,
+            "registration": registrations(rows, sources), "subkey_registration": subkey_registrations(rows)}
 
 
 def main() -> int:

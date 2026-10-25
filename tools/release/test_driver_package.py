@@ -44,8 +44,8 @@ class DriverPackageTests(unittest.TestCase):
         return {"opengl_icd": {"register": True, "architectures": ["x64"]},
                 "mft_h264": {"register": True}, "files": []}
 
-    def fixture(self, root):
-        sources = self.sources()
+    def fixture(self, root, sources=None):
+        sources = self.sources() if sources is None else sources
         for row in package.members(sources):
             p = root / row["source"]
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -65,6 +65,66 @@ class DriverPackageTests(unittest.TestCase):
         inf.parent.mkdir(parents=True)
         inf.write_bytes((REPO / "driver/kmd/bc250kmd.inf").read_bytes())
         return sources
+
+    def test_adl_architecture_contract_and_inf_pairs(self):
+        source = self.sources()
+        self.assertEqual(package.subkey_registrations(package.members(source)), [])
+        unchanged = package.registrations(package.members(source), source)
+        source['adl'] = {'register': True, 'architectures': ['x64', 'x86']}
+        rows = package.members(source)
+        self.assertEqual(package.registrations(rows, source), unchanged)
+        self.assertEqual(package.subkey_registrations(rows), [
+            {'subkey': 'CopyToVmWhenNewer', 'name': 'AmdgpuAdl', 'kind': 'MultiString',
+             'value': ['adl\\atiadlxx.dll', 'atiadlxx.dll']},
+            {'subkey': 'CopyToVmWhenNewerWow64', 'name': 'AmdgpuAdl', 'kind': 'MultiString',
+             'value': ['wow64\\adl\\atiadlxy32.dll', 'atiadlxy.dll']}])
+        generated = package.render_inf((REPO / 'driver/kmd/bc250kmd.inf').read_text(), rows, source)
+        self.assertIn('HKR,"CopyToVmWhenNewer",AmdgpuAdl,0x00010000,"adl\\atiadlxx.dll","atiadlxx.dll"', generated)
+        self.assertIn('HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl,0x00010000,"wow64\\adl\\atiadlxy32.dll","atiadlxy.dll"', generated)
+        self.assertIn('Amdgpu_Files_wow64_adl = 13,wow64\\adl', generated)
+        self.assertIn('atiadlxy32.dll = 1,wow64\\adl', generated)
+        source['adl']['architectures'] = ['x64']
+        native_only = package.render_inf((REPO / 'driver/kmd/bc250kmd.inf').read_text(), package.members(source), source)
+        self.assertIn('HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl\n', native_only)
+        self.assertNotIn('HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl,', native_only)
+        for arch in ([], ['x64', 'x64'], ['arm64'], 'x64'):
+            with self.subTest(arch=arch), self.assertRaises(ValueError):
+                package.members(dict(source, adl={'register': True, 'architectures': arch}))
+
+    def test_adl_staging_pins_both_flavours_and_preserves_bytes(self):
+        for flavour in ('release', 'lab'):
+            with self.subTest(flavour=flavour), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                source = self.sources()
+                source['adl'] = {'register': True, 'architectures': ['x64', 'x86']}
+                source = self.fixture(root, source)
+                source['schema'] = 4
+                source['files'] = [dict(r, flavour=f, sha256=r['sha256'] if f == flavour else '0' * 64)
+                                   for r in source['files'] for f in ('release', 'lab')]
+                with patch.object(package, 'image_digest', return_value='A' * 64):
+                    report = package.stage(root, source, flavour)
+                self.assertEqual(len(report['members']), 28)
+                self.assertEqual(len(report['subkey_registration']), 2)
+                for member, original in (('adl/atiadlxx.dll', 'payload/adl/atiadlxx.dll'),
+                                         ('wow64/adl/atiadlxy32.dll', 'payload/wow64/adl/atiadlxy.dll')):
+                    self.assertEqual((root / 'payload/kmd' / member).read_bytes(), original.encode())
+                    self.assertFalse((root / original).exists())
+
+    def test_adl_undeclared_or_missing_source_refused_before_mutation(self):
+        for fault in ('undeclared', 'missing'):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                source = self.sources()
+                source['adl'] = {'register': True, 'architectures': ['x64', 'x86']}
+                source = self.fixture(root, source)
+                if fault == 'undeclared':
+                    del source['adl']
+                else:
+                    source['files'] = [r for r in source['files'] if r['path'] != 'payload/wow64/adl/atiadlxy.dll']
+                with self.assertRaisesRegex(ValueError, 'UMD payload mismatch'):
+                    package.stage(root, source)
+                self.assertTrue((root / 'payload/adl/atiadlxx.dll').exists())
+                self.assertFalse((root / 'payload/kmd/adl').exists())
 
     def test_unique_basenames_and_explicit_architectures(self):
         rows = package.members(self.sources())

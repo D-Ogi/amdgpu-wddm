@@ -1779,6 +1779,9 @@ if ($driverStoreUmd) {
         foreach ($row in @(Get-DriverPackageRegistration -Package $script:Manifest.driver_package -Root $graphicsRoot)) {
             Write-Info "INF $classKey $($row.name) [$($row.kind)] = $(@($row.value) -join ' | ')"
         }
+        foreach ($row in @(Get-DriverPackageSubkeyRegistration -Package $script:Manifest.driver_package)) {
+            Write-Info "INF $classKey\$($row.subkey) $($row.name) [$($row.kind)] = $(@($row.value) -join ' | ')"
+        }
     } else {
         $graphicsRoot = Get-DriverPackageRoot -ClassKey $classKey
         if (-not $graphicsRoot) { throw 'bound package lacks its DriverStore UMD identity' }

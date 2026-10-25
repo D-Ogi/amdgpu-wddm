@@ -177,9 +177,13 @@ these failures:
 The host run of 2026-10-25 (x64 and x86, 13 of 13 runs each as expected) is in
 [evidence/windows/2026-10-25-adl-subset-host](../../evidence/windows/2026-10-25-adl-subset-host/RESULT.md).
 
-## Packaging proposal
+## System packaging
 
-This part is not implemented. The INF and the installer do not change in this step.
+The package builder supports the explicit `adl.register` declaration with both x64 and x86 architectures.
+It stages both libraries in the DriverStore, generates the registrations below, and records them in
+`driver_package.subkey_registration` for installer verification. The installer never manually overwrites
+or deletes a system ADL DLL. Actual native-host copying and removal remain acceptance tests, not established
+by successful INF generation or by the app-local AGS tests.
 
 The library must be in a directory that `LoadLibrary` searches for a bare name, that is `System32` and
 `SysWOW64`. A `CopyFiles` directive to DIRID 11 is not isolated. InfVerif reports it as error 1322 in `/w` mode
@@ -187,7 +191,7 @@ The library must be in a directory that `LoadLibrary` searches for a bare name, 
 the `CopyToVmWhenNewer` and `CopyToVmWhenNewerWow64` subkeys of the adapter key. Windows copies each listed
 DriverStore file to `System32` or `SysWOW64` (WDK documentation, "Container support for non-DX APIs").
 
-Proposed package members and registrations:
+Package members and registrations:
 
 | DriverStore member | Copied to | Registration in the adapter key |
 |---|---|---|
@@ -199,19 +203,28 @@ the ADL name.
 
 Coexistence:
 
-- Only AMD's driver installs a file with these names. "When newer" compares the file version first. Our version
-  (0.7.x) is lower than the version that we expect in AMD's library (not checked), so Windows does not replace
-  AMD's file with ours. AMD's library then answers for AMD's adapters, and our adapter is not in its list. On a
-  system with both drivers, AGS then sees only the AMD adapter.
-- `CopyToVmOverwrite` would replace AMD's file at each start of our adapter. The proposal does not use it.
-- The library needs a version resource for the "newer" comparison. `tools/build/versioninfo.json` and
-  `version-stamp.ps1` must stamp it like the other user-mode files. The library has no version resource today.
+- "When newer" compares the file version first, then the timestamp when versions are equal. The library is
+  stamped with the package's mapped Windows file version (for example 40.7.216.104), not an assumed 0.7.x
+  comparison value. No relative ordering against an official AMD ADL version is assumed.
+- Coexistence with an installed AMD driver is unmeasured and cannot be tested on the single-driver unit A.
+  This is not a guarantee that either library can enumerate the other driver's adapter.
+- `CopyToVmOverwrite` is not used. Only this package's named `AmdgpuAdl` registration is replaced; other
+  values under the shared registry subkeys are left intact.
+- `build-umd-adl.ps1 -Version ... -Flavour release|lab` stamps the public DLL before its build receipt,
+  through `versioninfo.json` and the shared version-stamp helper. Test DLLs and test hooks are excluded
+  from both shipped flavours. Release package signing covers the DriverStore members before the catalog
+  is generated; the version resource still names `atiadlxy.dll` after the x86 DriverStore rename.
 
 Open questions for the packaging step, to be measured on the lab:
 
 1. Does Windows copy the files on the host as well as into a virtual machine, and at which time?
 2. Does Windows remove the copies when the driver is removed? The uninstall path of the installer must check this.
 3. Does the HLK INF test accept the two subkeys in the adapter key of our INF?
+
+The installation acceptance kit uses an x64/x86 bare-name loader probe and reports the resolved DLL path.
+AGS runs from directories containing no local ADL copy. A successful app-local test cannot satisfy these
+checks. Clean-install, upgrade and post-uninstall observations are separate phases. The kit does not infer
+absence from an arbitrary load failure or delete a foreign system library to make the check pass.
 
 ## Limits
 

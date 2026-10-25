@@ -1,6 +1,7 @@
 # Host package/registry gate. No device, service, UI or HKLM writes.
 param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$WorkRoot)
 $ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'test-adl-registration.ps1')
 . (Join-Path $PSScriptRoot 'installer\common.ps1')
 $manifest = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
 if (-not (Test-DriverStoreUmdPackage $manifest)) { throw 'DriverStore package expected' }
@@ -22,6 +23,7 @@ foreach ($row in $rows) {
         elseif ($row.member -match '/amdgpu_wddm_d3d11(?:32)?\.dll$') { $want = @('OpenAdapter10_2') }
         elseif ($row.member -match '/amdgpu_wddm_d3d12(?:32)?\.dll$') { $want = @('OpenAdapter12') }
         elseif ($row.member -match '/vulkan_radeon(?:32)?\.dll$') { $want = @('vk_icdGetInstanceProcAddr') }
+        elseif ($row.member -match '/atiadl(?:xx|xy32)\.dll$') { $want = @('ADL_Main_Control_Create', 'ADL2_Main_Control_Create', 'ADL_Adapter_AdapterInfo_Get') }
         else { $want = @() }
         foreach ($name in $want) { Check ($exports -contains $name) "undecorated $name in $($row.member)" }
     }
@@ -42,8 +44,18 @@ try {
     foreach ($row in @(Get-DriverPackageRegistration $manifest.driver_package $root)) {
         New-ItemProperty -LiteralPath "$key\class" -Name $row.name -Value $row.value -PropertyType $row.kind | Out-Null
     }
+    foreach ($row in @(Get-DriverPackageSubkeyRegistration $manifest.driver_package)) {
+        [void](New-Item -Path "$key\class\$($row.subkey)" -Force)
+        New-ItemProperty -LiteralPath "$key\class\$($row.subkey)" -Name $row.name -Value $row.value -PropertyType $row.kind | Out-Null
+    }
     $problems = @(Test-DriverPackageRegistration $manifest "$key\class" $root)
     Check ($problems.Count -eq 0) "INF registry round trip ($($problems -join '; '))"
+    foreach ($row in @(Get-DriverPackageSubkeyRegistration $manifest.driver_package)) {
+        Set-ItemProperty -LiteralPath "$key\class\$($row.subkey)" -Name $row.name -Value @('foreign.dll', $row.value[1])
+        $problems = @(Test-DriverPackageRegistration $manifest "$key\class" $root)
+        Check ($problems -contains "$($row.subkey)\$($row.name) differs from the bound package INF") 'wrong ADL CopyToVm source refused'
+        Set-ItemProperty -LiteralPath "$key\class\$($row.subkey)" -Name $row.name -Value $row.value
+    }
     # Wrong architecture and missing slot must fail, even though files exist.
     Set-ItemProperty -LiteralPath "$key\class" -Name UserModeDriverNameWow -Value @((Get-ItemProperty -LiteralPath "$key\class").UserModeDriverName)
     $problems = @(Test-DriverPackageRegistration $manifest "$key\class" $root)

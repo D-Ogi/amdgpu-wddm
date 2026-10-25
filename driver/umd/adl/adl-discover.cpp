@@ -457,6 +457,10 @@ void AddDisplays(AdlSnapshot* s)
 
 void AdlDiscover(AdlSnapshot* s)
 {
+#if defined(BC250_ADL_TEST_SERVICE)
+    // A retained binary marker lets the package gate reject a host-service fixture even after /OPT:REF.
+    OutputDebugStringA("BC250_ADL_TEST_SERVICE: host adapter discovery fixture\n");
+#endif
     memset(s, 0, sizeof(*s));
     Candidate* candidates =
         (Candidate*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, ADL_MODEL_MAX_GPUS * sizeof(Candidate));
