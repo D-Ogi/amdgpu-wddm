@@ -29,6 +29,7 @@ struct Element
     std::string name;
     std::vector<uint32_t> indices;      // semantic index of each row
     uint32_t kind = 0;                  // DXIL semantic kind (0 user, 1 SV_VertexID, ...)
+    uint32_t componentType = 0;         // DXIL ComponentType, retained for generic-program signature reconstruction
     uint32_t rows = 0;
     uint32_t cols = 0;
     int32_t startRow = -1;
@@ -38,6 +39,8 @@ struct Element
 
 struct Signatures
 {
+    std::string entryName;
+    bool nativeLowPrecision = false;
     std::vector<Element> input;
     std::vector<Element> output;
     std::vector<Element> patchConstant;

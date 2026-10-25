@@ -185,6 +185,19 @@ int main() {
     assert(native12::fill_native_queue_table(&queue,sizeof(queue)-8)==E_INVALIDARG && !std::memcmp(&queue,&unchanged,sizeof(queue)));
     auto ext_unchanged=ext;
     assert(native12::fill_native_extended_table(&ext,sizeof(ext)-8)==E_INVALIDARG && !std::memcmp(&ext,&ext_unchanged,sizeof(ext)));
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    D3D12DDI_EXTENDED_FEATURES_FUNCS_0096 ext96{};
+    assert(native12::fill_native_extended_table(&ext96)==S_OK);
+    assert(ext96.pfnGetSupportedExtendedFeatures &&
+        ext96.pfnGetSupportedExtendedFeatureVersions==ext.pfnGetSupportedExtendedFeatureVersions &&
+        ext96.pfnEnableExtendedFeature==ext.pfnEnableExtendedFeature &&
+        ext96.pfnSetExtendedFeatureCallbacks==ext.pfnSetExtendedFeatureCallbacks);
+    const auto ext96_unchanged=ext96;
+    for(SIZE_T bytes:{sizeof(ext96)-1,sizeof(ext96)+1})
+        assert(native12::fill_native_extended_table(&ext96,bytes)==E_INVALIDARG &&
+            !std::memcmp(&ext96,&ext96_unchanged,sizeof(ext96)));
+    assert(native12::fill_native_extended_table(static_cast<D3D12DDI_EXTENDED_FEATURES_FUNCS_0096*>(nullptr))==E_INVALIDARG);
+#endif
     const auto args=descriptor();
     {
         Fixture f;
@@ -296,5 +309,38 @@ int main() {
         assert(ext.pfnSetExtendedFeatureCallbacks(device,D3D12DDI_TABLE_TYPE_DEVICE_CORE,&core,sizeof(core))==E_NOTIMPL);
         assert(!f.device.lost && !f.engine_creates && !f.creates);
     }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    {
+        Fixture f;D3D12DDI_HDEVICE device{&f.device};
+        D3D12DDI_FEATURE_0020 features[]={D3D12DDI_FEATURE_0020_VIDEO,D3D12DDI_FEATURE_0021_SHADERCACHING};
+        const auto unknown=static_cast<D3D12DDI_FEATURE_0020>(0x7fffffffu);
+        for(auto highest:{static_cast<D3D12DDI_FEATURE_0020>(0),D3D12DDI_FEATURE_0020_VIDEO,unknown}) {
+            UINT32 count=0;
+            assert(ext96.pfnGetSupportedExtendedFeatures(device,highest,&count,nullptr)==S_OK && !count);
+            count=2;
+            assert(ext96.pfnGetSupportedExtendedFeatures(device,highest,&count,features)==S_OK && !count);
+            assert(features[0]==D3D12DDI_FEATURE_0020_VIDEO && features[1]==D3D12DDI_FEATURE_0021_SHADERCACHING);
+        }
+        UINT32 count=2,versions[]={123,456};
+        assert(ext96.pfnGetSupportedExtendedFeatureVersions(device,unknown,&count,versions)==E_NOTIMPL && !count);
+        assert(versions[0]==123 && versions[1]==456);
+        assert(ext96.pfnEnableExtendedFeature(device,unknown,123)==E_NOTIMPL);
+        const auto unknown_table=static_cast<D3D12DDI_TABLE_TYPE>(0x7fffffffu);
+        assert(ext96.pfnSetExtendedFeatureCallbacks(device,unknown_table,&core,sizeof(core))==E_NOTIMPL);
+        count=2;
+        assert(ext96.pfnGetSupportedExtendedFeatures({},unknown,&count,features)==E_INVALIDARG && count==2);
+#pragma warning(suppress:6387) // Intentional invalid-count negative control.
+        assert(ext96.pfnGetSupportedExtendedFeatures(device,unknown,nullptr,nullptr)==E_INVALIDARG);
+        assert(!f.device.lost && !f.engine_creates && !f.creates);
+        f.device.lost.store(true);
+        assert(ext96.pfnGetSupportedExtendedFeatures(device,unknown,&count,features)==D3DDDIERR_DEVICEREMOVED && count==2);
+        assert(ext96.pfnGetSupportedExtendedFeatureVersions(device,unknown,&count,versions)==D3DDDIERR_DEVICEREMOVED && count==2);
+        assert(ext96.pfnEnableExtendedFeature(device,unknown,123)==D3DDDIERR_DEVICEREMOVED);
+        assert(ext96.pfnSetExtendedFeatureCallbacks(device,unknown_table,&core,sizeof(core))==D3DDDIERR_DEVICEREMOVED);
+        assert(features[0]==D3D12DDI_FEATURE_0020_VIDEO && features[1]==D3D12DDI_FEATURE_0021_SHADERCACHING);
+        assert(versions[0]==123 && versions[1]==456);
+    }
+    std::puts("PASSED: 0096 extended features: zero count at every upper bound, untouched output buffers, unknown-feature refusals and invalid/lost devices");
+#endif
     std::puts("PASSED: native typed queue create/execute/Signal and Wait mask/close, actual registry ownership, foreign fence refusal, tile mappings to the engine queue, and empty extended features; host-only");
 }

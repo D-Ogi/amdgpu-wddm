@@ -150,6 +150,10 @@ size_t LibraryPayloadDwords(const UINT* payload);
 // for a DXIL program that is not a library. On failure the container is left empty.
 Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* container);
 
+namespace dxil { struct Signatures; }
+// Non-library SM6+ state-object exports. Rebuilds signature chunks with the names and types in DXIL metadata.
+Result BuildGenericContainer(const UINT* payload, size_t capacity, Container* container, dxil::Signatures* metadata);
+
 struct Semantic
 {
     std::string name;

@@ -11,6 +11,11 @@ template<class Owner> struct EntryOwner {
     static Owner* resolve(D3D12DDI_HCOMMANDLIST handle) noexcept {
         return static_cast<Owner*>(engine_ddi::command_list_shell(handle));
     }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    static Owner* resolve(D3D12DDI_API_HCOMMANDLIST handle) noexcept {
+        return handle.pDrvPrivate?resolve(GetDriverCommandListHandle(handle)):nullptr;
+    }
+#endif
     // The identifier and stack size slots of a state object carry no other handle.
     static Owner* resolve(D3D12DDI_HSTATEOBJECT_0054 handle) noexcept {
         return static_cast<Owner*>(engine_ddi::state_object_shell(handle));

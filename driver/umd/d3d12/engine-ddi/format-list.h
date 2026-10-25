@@ -355,6 +355,9 @@ inline constexpr FormatListEntry kFormatList[] = {
     // B4G4R4A4_UNORM may: sample rt blend msaa_rt msaa_load vb uav_w buffer gather tiled uav_r
     //               must: sample gather
     {DXGI_FORMAT_B4G4R4A4_UNORM, 0x0003471Fu, 0x00004001u},
+    // VulkanOn12.md: A4B4G4R4_UNORM (191), DDI0102; sampling/load/gather required.
+    // Render-target, blend, multisample, buffer, tiled and UAV support stay engine-dependent.
+    {static_cast<DXGI_FORMAT>(191), 0x0003471Fu, 0x00004001u},
 };
 
 } // namespace engine_ddi

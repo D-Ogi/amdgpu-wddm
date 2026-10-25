@@ -39,6 +39,10 @@
 #include <vulkan/vulkan_core.h>
 #include "bc250_vkd3d_engine.h"
 #include <cstdint>
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+#include "ddi-modern-core.h"
+#include "ddi-modern-list.h"
+#endif
 
 // Raytracing tier 1.2 (opacity micromaps) and shader model 6.9: the values and layouts that the 26100 headers lack.
 #include "raytracing-tier12.h"
@@ -51,6 +55,22 @@ struct PresentCopyPick;
 }
 
 namespace engine_ddi {
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void fill_modern_graphics(native12::ModernCoreEntries*) noexcept;
+void fill_modern_pipelines(native12::ModernCoreEntries*) noexcept;
+void fill_modern_descriptors(native12::ModernCoreEntries*) noexcept;
+void fill_modern_roots(native12::ModernCoreEntries*) noexcept;
+void fill_modern_state_object_entries(native12::ModernCoreEntries*, native12::ModernListEntries*) noexcept;
+native12::ModernListEntries modern_list_entries() noexcept;
+inline native12::ModernCoreEntries modern_core_entries() noexcept {
+    native12::ModernCoreEntries entries{};
+    fill_modern_graphics(&entries); fill_modern_pipelines(&entries);
+    fill_modern_descriptors(&entries); fill_modern_roots(&entries);
+    fill_modern_state_object_entries(&entries, nullptr);
+    return entries;
+}
+#endif
 
 inline constexpr uint32_t kBoundaryRevision = 5;
 
@@ -573,6 +593,7 @@ HRESULT fill_render_pass(D3D12DDI_RENDER_PASS_FUNCS_0053* table, SIZE_T table_si
 // calls of one command list, so a call made from a slot of that list, or while the shell otherwise knows the list
 // is not being created or destroyed, reads a stable record.
 void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept;
+void report_command_list_error(D3D12DDI_HCOMMANDLIST list,HRESULT hr) noexcept;
 
 // The owner of a ray tracing state object, for the slots whose only handle is the state object (GetShaderIdentifier,
 // GetShaderStackSize, GetPipelineStackSize, SetPipelineStackSize): ShellHooks::shell of the device context that

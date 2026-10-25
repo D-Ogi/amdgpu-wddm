@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
+#include "ddi-ladder.h"
 #include <windows.h>
 #include <d3d12umddi.h>
 #include <atomic>
@@ -17,6 +18,13 @@ template<class R> struct EntryFailureValue {
     static_assert(!std::is_enum_v<R>, "DDI status enum requires an explicit failure value");
     static R value() noexcept {return R{};}
 };
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+template<> struct EntryFailureValue<D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS> {
+    static D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS value() noexcept {
+        return D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_UNKNOWN;
+    }
+};
+#endif
 template<> struct EntryFailureValue<D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS> {
     static D3D12DDI_DRIVER_MATCHING_IDENTIFIER_STATUS value() noexcept {
         // WDK10.0.26100 d3d12umddi.h:8118: zero means COMPATIBLE_WITH_DEVICE.
@@ -437,8 +445,10 @@ template<class Policy> class DdiEntryTables final {
     using Core=D3D12DDI_DEVICE_FUNCS_CORE_0088;
     using List=D3D12DDI_COMMAND_LIST_FUNCS_3D_0092;
     using List94=D3D12DDI_COMMAND_LIST_FUNCS_3D_0094;
-    inline static Core core_{};
-    inline static std::atomic<bool> core_ready_{};
+    template<class C> struct CoreStore {
+        inline static C core{};
+        inline static std::atomic<bool> ready{};
+    };
     template<class L> struct ListStore {
         inline static L lists[2]{};
         inline static std::atomic<bool> ready[2]{};
@@ -457,7 +467,7 @@ template<class Policy> class DdiEntryTables final {
 #define N12_LIST_NAME(m) struct ListName_##m {static constexpr const char* name() noexcept {return #m;}};
     NATIVE12_LIST_0092_MEMBERS(N12_LIST_NAME)
 #undef N12_LIST_NAME
-    template<auto Member,class Name> struct CoreBinding:Name {
+    template<class C,auto Member,class Name> struct CoreBinding:Name {
         // The descriptor slots may take the policy's fast path (EntryThunk) as the recording slots do: a game fills
         // its tables between draws, thousands of calls a frame (Witcher 3, lab session 291: CopyDescriptors alone
         // 0.16 ms of the main thread's frame in the full entry). They write descriptor memory, report failures
@@ -484,8 +494,8 @@ template<class Policy> class DdiEntryTables final {
             ddi_same_name(Name::name(),"pfnCreateStateObject") ||
             ddi_same_name(Name::name(),"pfnAddToStateObject");
         static auto original() noexcept {
-            using Fn=std::remove_reference_t<decltype(core_.*Member)>;
-            return core_ready_.load(std::memory_order_acquire)?core_.*Member:Fn{};
+            using Fn=std::remove_reference_t<decltype(CoreStore<C>::core.*Member)>;
+            return CoreStore<C>::ready.load(std::memory_order_acquire)?CoreStore<C>::core.*Member:Fn{};
         }
     };
     template<class L,unsigned Index,auto Member,class Name> struct ListBinding:Name {
@@ -499,19 +509,22 @@ template<class Policy> class DdiEntryTables final {
         }
     };
     template<class L,unsigned Index> static HRESULT wrap_list_at(const L& source,L* out) noexcept {
-        if(!out) return E_INVALIDARG;
-        L wrapped{};
-#define N12_WRAP_LIST(m) wrapped.m=&EntryThunk<decltype(source.m),ListBinding<L,Index,&L::m,ListName_##m>,Policy>::call;
-        NATIVE12_LIST_0092_MEMBERS(N12_WRAP_LIST)
-#undef N12_WRAP_LIST
-#define N12_VALIDATE_LIST(m) if(!source.m || source.m==wrapped.m) return E_INVALIDARG;
-        NATIVE12_LIST_0092_MEMBERS(N12_VALIDATE_LIST)
-#undef N12_VALIDATE_LIST
+        if(!out)return E_INVALIDARG;
+        L wrapped{};bool valid=true;
+        DdiMembers<L>::each([&](auto member,auto name) {
+            constexpr auto m=decltype(member)::value;
+            using Fn=std::remove_cvref_t<decltype(source.*m)>;
+            wrapped.*m=&EntryThunk<Fn,ListBinding<L,Index,m,decltype(name)>,Policy>::call;
+            if(!(source.*m) || source.*m==wrapped.*m)valid=false;
+        });
+        if(!valid)return E_INVALIDARG;
         Lock guard;
         if(ListStore<L>::ready[Index].load(std::memory_order_acquire)) {
-#define N12_COMPARE_LIST(m) if(ListStore<L>::lists[Index].m!=source.m) return E_UNEXPECTED;
-            NATIVE12_LIST_0092_MEMBERS(N12_COMPARE_LIST)
-#undef N12_COMPARE_LIST
+            DdiMembers<L>::each([&](auto member,auto) {
+                constexpr auto m=decltype(member)::value;
+                if(ListStore<L>::lists[Index].*m!=source.*m)valid=false;
+            });
+            if(!valid)return E_UNEXPECTED;
         } else {
             ListStore<L>::lists[Index]=source;
             ListStore<L>::ready[Index].store(true,std::memory_order_release);
@@ -531,33 +544,33 @@ public:
     static_assert(core_slots==122 && list_slots==70);
     static_assert(sizeof(Core)==core_slots*sizeof(void*) && sizeof(List)==list_slots*sizeof(void*) &&
                   sizeof(List94)==list_slots*sizeof(void*));
-    static HRESULT wrap_core(const Core& source,Core* out) noexcept {
-        if(!out) return E_INVALIDARG;
-        Core wrapped{};
-#define N12_WRAP_CORE(m) wrapped.m=&EntryThunk<decltype(source.m),CoreBinding<&Core::m,CoreName_##m>,Policy>::call;
-        NATIVE12_CORE_0088_MEMBERS(N12_WRAP_CORE)
-#undef N12_WRAP_CORE
-#define N12_VALIDATE_CORE(m) if(!source.m || source.m==wrapped.m) return E_INVALIDARG;
-        NATIVE12_CORE_0088_MEMBERS(N12_VALIDATE_CORE)
-#undef N12_VALIDATE_CORE
+    template<class C> static HRESULT wrap_core(const C& source,C* out) noexcept {
+        if(!out)return E_INVALIDARG;
+        C wrapped{};bool valid=true;
+        DdiMembers<C>::each([&](auto member,auto name) {
+            constexpr auto m=decltype(member)::value;
+            using Fn=std::remove_cvref_t<decltype(source.*m)>;
+            wrapped.*m=&EntryThunk<Fn,CoreBinding<C,m,decltype(name)>,Policy>::call;
+            if(!(source.*m) || source.*m==wrapped.*m)valid=false;
+        });
+        if(!valid)return E_INVALIDARG;
         Lock guard;
-        if(core_ready_.load(std::memory_order_acquire)) {
-#define N12_COMPARE_CORE(m) if(core_.m!=source.m) return E_UNEXPECTED;
-            NATIVE12_CORE_0088_MEMBERS(N12_COMPARE_CORE)
-#undef N12_COMPARE_CORE
+        if(CoreStore<C>::ready.load(std::memory_order_acquire)) {
+            DdiMembers<C>::each([&](auto member,auto) {
+                constexpr auto m=decltype(member)::value;
+                if(CoreStore<C>::core.*m!=source.*m)valid=false;
+            });
+            if(!valid)return E_UNEXPECTED;
         } else {
-            core_=source;
-            core_ready_.store(true,std::memory_order_release);
+            CoreStore<C>::core=source;
+            CoreStore<C>::ready.store(true,std::memory_order_release);
         }
         *out=wrapped;return S_OK;
     }
-    // The 0092 layout (builds 92 and 93) and the 0094 layout, each with its own store.
-    static HRESULT wrap_list(unsigned index,const List& source,List* out) noexcept {
-        return wrap_list_of<List>(index,source,out);
+    template<class L> static HRESULT wrap_list(unsigned index,const L& source,L* out) noexcept {
+        return wrap_list_of<L>(index,source,out);
     }
-    static HRESULT wrap_list(unsigned index,const List94& source,List94* out) noexcept {
-        return wrap_list_of<List94>(index,source,out);
-    }
+
 };
 #undef NATIVE12_CORE_0088_MEMBERS
 #undef NATIVE12_LIST_0092_MEMBERS

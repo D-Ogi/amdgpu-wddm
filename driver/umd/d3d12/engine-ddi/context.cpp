@@ -580,6 +580,11 @@ void* command_list_shell(D3D12DDI_HCOMMANDLIST list) noexcept {
     return (r && r->h.device) ? r->h.device->hooks.shell : nullptr;
 }
 
+void report_command_list_error(D3D12DDI_HCOMMANDLIST list,HRESULT hr) noexcept {
+    const auto* r=list_of(list,"modern DDI refusal");
+    if(r && r->h.device)r->h.device->report_list(r->rt,hr);
+}
+
 bool reject_in_compute_table(const CommandListRecord* list) noexcept {
     if (list->table != 0) return false;
     list->h.device->report_list(list->rt, E_INVALIDARG);

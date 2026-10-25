@@ -400,8 +400,10 @@ void put_common_state(SubobjectStream& stream, const D3D12DDIARG_CREATE_PIPELINE
     if (ps.pShaderBytecode) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, ps);
     stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, blend ? blend->desc : default_blend());
     stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK, a.SampleMask);
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER, raster ? raster->desc : default_rasterizer());
-    stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, depth_stencil1(depth));
+    if (raster && raster->use_modern) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER2, raster->modern);
+    else stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER, raster ? raster->desc : default_rasterizer());
+    if (depth && depth->use_modern) stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL2, depth->modern);
+    else stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, depth_stencil1(depth));
     D3D12_RT_FORMAT_ARRAY formats{};
     formats.NumRenderTargets = a.NumRenderTargets;
     for (UINT i = 0; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i) formats.RTFormats[i] = a.RTVFormats[i];
@@ -606,10 +608,13 @@ HRESULT graphics_plan(DeviceContext* c, const D3D12DDIARG_CREATE_PIPELINE_STATE_
     return E_OUTOFMEMORY;
 }
 
-HRESULT APIENTRY create_pipeline(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075* args,
-                                 D3D12DDI_HPIPELINESTATE h, D3D12DDI_HRTPIPELINESTATE rt) {
+HRESULT create_pipeline_impl(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075* args,
+                             D3D12DDI_HPIPELINESTATE h, D3D12DDI_HRTPIPELINESTATE rt, UINT flags) try {
     DeviceContext* c = resolve(device);
     if (!c || !args || !h.pDrvPrivate || args->NodeMask > 1) return E_INVALIDARG;
+    constexpr UINT dynamic_flags = D3D12_PIPELINE_STATE_FLAG_DYNAMIC_DEPTH_BIAS |
+                                   D3D12_PIPELINE_STATE_FLAG_DYNAMIC_INDEX_BUFFER_STRIP_CUT;
+    if (flags & ~dynamic_flags) return E_INVALIDARG;
     // A LibraryReference that names a library turns this create into a load out of it, under the name of its
     // PipelineIndex (D85-D90, "Pipeline libraries"). A handle that is not a live library of this device is the
     // same mistake as any other bad handle in this payload.
@@ -628,6 +633,7 @@ HRESULT APIENTRY create_pipeline(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREA
                           args->hDomainShader.pDrvPrivate || args->hHullShader.pDrvPrivate ||
                           args->hGeometryShader.pDrvPrivate;
     if (graphics == (args->hComputeShader.pDrvPrivate != nullptr)) return E_INVALIDARG;    // exactly one kind
+    if (!graphics && flags) return E_INVALIDARG;
     auto* rs = record_of<RootSignatureRecord>(args->hRootSignature.pDrvPrivate, Tag::RootSignature, c);
     if (!rs) return E_INVALIDARG;
     auto* root = static_cast<ID3D12RootSignature*>(rs->h.engine);
@@ -638,6 +644,7 @@ HRESULT APIENTRY create_pipeline(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREA
                        : graphics ? graphics_plan(c, *args, root, plan)
                                   : compute_plan(c, *args, root, plan);
     if (FAILED(hr)) return hr;
+    if (flags) plan.stream.put(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, static_cast<D3D12_PIPELINE_STATE_FLAGS>(flags));
     ID3D12PipelineState* pso = nullptr;
     PsoJob* job = nullptr;
     if (!target.library && c->pso) job = pso_submit(c, std::move(plan));
@@ -649,7 +656,21 @@ HRESULT APIENTRY create_pipeline(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREA
     new (h.pDrvPrivate) PipelineRecord{{Tag::PipelineState, 0, pso, c}, rt, !graphics, job};
     c->live.fetch_add(1);
     return S_OK;
+} catch (const std::bad_alloc&) {
+    return E_OUTOFMEMORY;
 }
+
+HRESULT APIENTRY create_pipeline(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075* args,
+                                 D3D12DDI_HPIPELINESTATE h, D3D12DDI_HRTPIPELINESTATE rt) {
+    return create_pipeline_impl(device, args, h, rt, 0);
+}
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT APIENTRY create_pipeline_modern(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075* args,
+                                        D3D12DDI_HPIPELINESTATE h, D3D12DDI_HRTPIPELINESTATE rt, UINT flags) {
+    return create_pipeline_impl(device, args, h, rt, flags);
+}
+#endif
 
 // The engine pipeline of a record, on a DDI thread. With a job it waits for the compile, or makes it here when no
 // pool thread has started it; hr is the engine create's result and is S_OK whenever a pipeline comes back.
@@ -1203,6 +1224,12 @@ void fill_core_pipelines(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnSerializeLibrary = serialize_library;
     t->pfnRetrieveShaderComment = retrieve_shader_comment;
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void fill_modern_pipelines(native12::ModernCoreEntries* entries) noexcept {
+    entries->pipeline_create = create_pipeline_modern;
+}
+#endif
 
 void fill_list_pipelines(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t) noexcept {
     t->pfnDispatch = dispatch;

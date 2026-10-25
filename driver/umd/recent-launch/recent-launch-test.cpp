@@ -608,10 +608,12 @@ void test_app_container() {
     CHECK(allow_app_packages(g_self));
     // A process cannot start in an AppContainer that has no profile (CreateProcessW error 2). The profile is
     // removed again below.
-    const wchar_t* name=L"amdgpu-wddm.recent-launch-test";
+    // Concurrent x64/x86/flavour gates must not delete one another's profile
+    // between CreateAppContainerProfile and CreateProcessW.
+    const std::wstring name=L"amdgpu-wddm.recent-launch-test-"+std::to_wstring(GetCurrentProcessId());
     PSID sid=nullptr;
-    HRESULT hr=CreateAppContainerProfile(name,name,name,nullptr,0,&sid);
-    if(hr==HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))hr=DeriveAppContainerSidFromAppContainerName(name,&sid);
+    HRESULT hr=CreateAppContainerProfile(name.c_str(),name.c_str(),name.c_str(),nullptr,0,&sid);
+    if(hr==HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))hr=DeriveAppContainerSidFromAppContainerName(name.c_str(),&sid);
     CHECK(SUCCEEDED(hr) && sid);
     if(!sid)return;
     SECURITY_CAPABILITIES caps{};caps.AppContainerSid=sid;
@@ -626,7 +628,7 @@ void test_app_container() {
     std::printf("appcontainer: child exit %d (%s)\n",code,code>=0 && code<=8?rl::outcome_name(rl::Outcome(code)):"?");
     CHECK(code==int(rl::Outcome::AppContainer));
     DeleteProcThreadAttributeList(list);FreeSid(sid);
-    CHECK(SUCCEEDED(DeleteAppContainerProfile(name)));
+    CHECK(SUCCEEDED(DeleteAppContainerProfile(name.c_str())));
     // The same child without an AppContainer gathers its inputs.
     CHECK(run_child(cmd.c_str())==100);
 }

@@ -157,6 +157,15 @@ HRESULT APIENTRY extended_features(D3D12DDI_HDEVICE h, UINT32* count, D3D12DDI_F
     const HRESULT hr = device_status(h); if (hr != S_OK) return hr;
     *count = 0; return S_OK; // No extended-feature table is advertised.
 }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+// WDK 28000.2526 d3d12umddi.h:12029: 0096 adds an enumeration upper bound.
+// The empty feature set fits every bound. Preserve the original validation
+// and never write to the feature buffer, even with a nonzero input capacity.
+HRESULT APIENTRY extended_features_0096(D3D12DDI_HDEVICE h, D3D12DDI_FEATURE_0020,
+    UINT32* count, D3D12DDI_FEATURE_0020* features) {
+    return extended_features(h, count, features);
+}
+#endif
 HRESULT APIENTRY extended_versions(D3D12DDI_HDEVICE h, D3D12DDI_FEATURE_0020, UINT32* count, UINT32*) {
     if (!count) return E_INVALIDARG;
     const HRESULT hr = device_status(h); if (hr != S_OK) return hr;
@@ -203,4 +212,11 @@ HRESULT fill_native_extended_table(D3D12DDI_EXTENDED_FEATURES_FUNCS_0021* output
     *output = {extended_features, extended_versions, extended_enable, extended_callbacks};
     return S_OK;
 }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT fill_native_extended_table(D3D12DDI_EXTENDED_FEATURES_FUNCS_0096* output, SIZE_T size) noexcept {
+    if (!output || size != sizeof(*output)) return E_INVALIDARG;
+    *output = {extended_features_0096, extended_versions, extended_enable, extended_callbacks};
+    return S_OK;
+}
+#endif
 } // namespace native12

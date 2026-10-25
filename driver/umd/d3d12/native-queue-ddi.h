@@ -13,4 +13,8 @@ HRESULT fill_native_queue_table(D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001*,
     SIZE_T = sizeof(D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001)) noexcept;
 HRESULT fill_native_extended_table(D3D12DDI_EXTENDED_FEATURES_FUNCS_0021*,
     SIZE_T = sizeof(D3D12DDI_EXTENDED_FEATURES_FUNCS_0021)) noexcept;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT fill_native_extended_table(D3D12DDI_EXTENDED_FEATURES_FUNCS_0096*,
+    SIZE_T = sizeof(D3D12DDI_EXTENDED_FEATURES_FUNCS_0096)) noexcept;
+#endif
 } // namespace native12

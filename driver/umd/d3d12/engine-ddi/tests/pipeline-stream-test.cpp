@@ -38,6 +38,9 @@
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
 #include "pso-async.h"
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+#include "ddi-modern-core.h"
+#endif
 #include <cstdarg>
 #include <cstddef>
 #include <cstdio>
@@ -48,6 +51,25 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <cstdlib>
+#include <new>
+
+// Test-executable-only allocation fault: the target is this thread's next
+// allocation, armed only after all caller/record storage has been prepared.
+// Production code and pool threads do not contain an injection switch.
+thread_local bool fail_next_allocation = false;
+thread_local size_t failed_allocation_size = 0;
+void* operator new(size_t size) {
+    if (fail_next_allocation) {
+        fail_next_allocation = false;
+        failed_allocation_size = size;
+        throw std::bad_alloc();
+    }
+    if (void* p = std::malloc(size ? size : 1)) return p;
+    throw std::bad_alloc();
+}
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, size_t) noexcept { std::free(p); }
 
 using namespace engine_ddi;
 
@@ -695,6 +717,9 @@ void APIENTRY list_error(void*, D3D12DDI_HRTCOMMANDLIST, HRESULT) {}
 BOOL APIENTRY device_lost(void*) { return FALSE; }
 HRESULT APIENTRY bind_table(void*, D3D12DDI_HRTCOMMANDLIST, uint32_t) { return S_OK; }
 DeviceContext* APIENTRY resolve_device(D3D12DDI_HDEVICE) { return g_context; }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void APIENTRY modern_device_error(D3D12DDI_HDEVICE, HRESULT hr) { g_reported = hr; }
+#endif
 
 // A bare tokenized program of two DWORDs: the version token and the length, which is all the shader intake reads
 // of a DXBC program with no signature entry (shader-container.h, ProgramDesc; pipelines.cpp reads pShaderCode[1]).
@@ -756,6 +781,13 @@ public:
             check(false, "fixture: program of type %d created (reported %08lx)", static_cast<int>(type),
                   static_cast<unsigned long>(g_reported));
         return out;
+    }
+    const UINT* caller_code(size_t i) const { return codes_.at(i).data(); }
+    void destroy_caller_code() {
+        for (auto& code : codes_) {
+            std::fill(code.begin(), code.end(), 0xddddddddu);
+            std::vector<UINT>().swap(code);
+        }
     }
     D3D12DDI_HBLENDSTATE blend_state(D3D12DDI_LIBRARY_REFERENCE_0010 library = {}) {
         D3D12DDI_BLEND_DESC_0010 d{};
@@ -829,6 +861,22 @@ HRESULT create(Fixture& f, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& a, D3D1
     out.pDrvPrivate = f.storage(g_core.pfnCalcPrivatePipelineStateSize(f.h, &a));
     return g_core.pfnCreatePipelineState(f.h, &a, out, D3D12DDI_HRTPIPELINESTATE{});
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+D3D12DDIARG_CREATE_PIPELINE_STATE_0119 modern_args(const D3D12DDIARG_CREATE_PIPELINE_STATE_0075& s) {
+    D3D12DDIARG_CREATE_PIPELINE_STATE_0119 d{};
+#define COPY(name) d.name = s.name
+    COPY(hComputeShader); COPY(hVertexShader); COPY(hPixelShader); COPY(hDomainShader);
+    COPY(hHullShader); COPY(hGeometryShader); COPY(hRootSignature); COPY(hBlendState);
+    COPY(SampleMask); COPY(hRasterizerState); COPY(hDepthStencilState); COPY(hElementLayout);
+    COPY(IBStripCutValue); COPY(PrimitiveTopologyType); COPY(NumRenderTargets);
+    COPY(DSVFormat); COPY(SampleDesc); COPY(NodeMask); COPY(LibraryReference);
+    COPY(ViewInstancingDesc); COPY(hMeshShader); COPY(hAmplificationShader);
+#undef COPY
+    for (unsigned i = 0; i != 8; ++i) d.RTVFormats[i] = s.RTVFormats[i];
+    return d;
+}
+#endif
 
 // ---- BD-158: the asynchronous path -----------------------------------------------------------------------------
 // A gate the test shuts to hold every pool thread out of the compile it has claimed, so that a job can be seen
@@ -1020,6 +1068,66 @@ int main() {
 
     const FillInfo fill{sizeof(FillInfo), resolve_device};
     check(fill_device_core(&g_core, sizeof(g_core), &fill) == S_OK, "core table filled");
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    // Exercise the production resource query through the same fake COM boundary as the pipeline tests.
+    // The engine deliberately rounds to 256 and rejects nonzero API Alignment, exposing DDI floor translation.
+    {
+        class TightDevice final : public FakeDevice {
+        public:
+            UINT tier = 1, calls = 0; HRESULT support_result = S_OK;
+            D3D12_RESOURCE_DESC last{};
+            HRESULT STDMETHODCALLTYPE CheckFeatureSupport(D3D12_FEATURE f, void* p, UINT n) override {
+                if (UINT(f) != 54 || n != sizeof(UINT)) return E_INVALIDARG;
+                *static_cast<UINT*>(p) = tier; return support_result;
+            }
+            D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE GetResourceAllocationInfo(
+                UINT, UINT count, const D3D12_RESOURCE_DESC* d) override {
+                ++calls; last = *d;
+                if (count != 1 || d->Alignment) return {UINT64_MAX, 0};
+                return {(d->Width + 255) & ~UINT64(255), 256};
+            }
+        } device;
+        Fixture f(&device);
+        D3D12DDIARG_CREATERESOURCE_0088 r{};
+        r.ResourceType = D3D12DDI_RT_BUFFER; r.Width = 129; r.Height = 1;
+        r.DepthOrArraySize = 1; r.MipLevels = 1; r.SampleDesc.Count = 1;
+        r.Layout = D3D12DDI_TL_ROW_MAJOR; r.Flags = D3D12DDI_RESOURCE_FLAG_0111_USE_TIGHT_ALIGNMENT;
+        struct Guarded { UINT64 before; D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 value; UINT64 after; } out{};
+        out.before = 0x123456789abcdef0ull; out.after = 0xfedcba9876543210ull;
+        for (UINT floor : {0u, 8u, 16u, 128u, 256u, 4096u}) {
+            g_core.pfnCheckResourceAllocationInfo(f.h, &r, {}, floor, 1, &out.value);
+            check(out.value.ResourceDataSize == 129 && out.value.ResourceDataAlignment == (floor > 256 ? floor : 256)
+                  && (UINT(device.last.Flags) & 0x400) && !(UINT(device.last.Flags) & 0x8000)
+                  && !device.last.Alignment && out.before == 0x123456789abcdef0ull && out.after == 0xfedcba9876543210ull,
+                  "tight resource query: exact Width, translated flag, floor %u and canaries", floor);
+        }
+        for (UINT floor : {3u, 257u, 8192u}) {
+            g_core.pfnCheckResourceAllocationInfo(f.h, &r, {}, floor, 1, &out.value);
+            check(out.value.ResourceDataSize == UINT64_MAX, "tight resource invalid floor %u refused", floor);
+        }
+        for (UINT tier : {0u, 2u}) {
+            device.tier = tier; const auto before = device.calls;
+            g_core.pfnCheckResourceAllocationInfo(f.h, &r, {}, 0, 1, &out.value);
+            check(out.value.ResourceDataSize == UINT64_MAX && device.calls == before,
+                  "tight resource unsupported engine tier %u refused before sizing", tier);
+        }
+        device.tier = 1; device.support_result = E_NOTIMPL;
+        g_core.pfnCheckResourceAllocationInfo(f.h, &r, {}, 0, 1, &out.value);
+        check(out.value.ResourceDataSize == UINT64_MAX, "tight resource failed feature query refused");
+        device.support_result = S_OK;
+        for (auto layout : {D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE, D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE}) {
+            r.Layout = layout; const auto before = device.calls;
+            g_core.pfnCheckResourceAllocationInfo(f.h, &r, {}, 0, 1, &out.value);
+            check(out.value.ResourceDataSize == UINT64_MAX && device.calls == before, "tight swizzled resource refused");
+        }
+        r.Layout = D3D12DDI_TL_ROW_MAJOR;
+        D3D12DDI_HRESOURCE reserved{f.storage(sizeof(ResourceRecord))};
+        check(g_core.pfnCreateHeapAndResource(f.h, nullptr, {}, {}, &r, nullptr, {}, reserved) == E_OUTOFMEMORY,
+              "tight reserved resource refused before engine reservation");
+        check(!device.unexpected, "tight refusal paths use no unexpected COM entry");
+    }
+#endif
 
     // 1 to 4. A graphics pipeline: the stream entry, a stream the engine can read, and every state of the payload.
     {
@@ -1464,6 +1572,80 @@ int main() {
               static_cast<unsigned long>(off_hr), static_cast<unsigned long>(off_again), pso_pool_workers());
     }
 
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    // 0119: the caller's shader bytes stop existing immediately after the DDI
+    // create. Hold the worker before the engine sees its plan, destroy even the
+    // shader handles, and compare the late read with a synchronous control.
+    // This validates CPU ownership/async compilation, not a GPU draw variant.
+    for (bool compute : {false, true}) {
+        AsyncDevice device;
+        Fixture f(&device);
+        D3D12DDI_DEVICE_FUNCS_CORE_0119 modern{};
+        const bool upgraded = native12::upgrade_core(g_core, &modern, modern_device_error);
+        D3D12DDIARG_CREATE_PIPELINE_STATE_0075 old{};
+        if (compute) {
+            old.hRootSignature = f.root_signature();
+            old.hComputeShader = f.shader(D3D11_SB_COMPUTE_SHADER);
+        } else {
+            old = graphics_args(f, TRUE);
+        }
+        auto args = modern_args(old);
+        if (compute) args.pComputeShaderCode = f.caller_code(0);
+        else { args.pVertexShaderCode = f.caller_code(0); args.pPixelShaderCode = f.caller_code(1); }
+        D3D12DDI_HPIPELINESTATE control{f.storage(modern.pfnCalcPrivatePipelineStateSize(f.h, &args))};
+        const HRESULT control_hr = modern.pfnCreatePipelineState(f.h, &args, control, {});
+        if (SUCCEEDED(control_hr)) modern.pfnDestroyPipelineState(f.h, control);
+        Async async(&f.context, 1);
+        g_runs = 0;
+        g_gate.shut();
+        D3D12DDI_HPIPELINESTATE late{f.storage(modern.pfnCalcPrivatePipelineStateSize(f.h, &args))};
+        const HRESULT late_hr = modern.pfnCreatePipelineState(f.h, &args, late, {});
+        const bool held = until([] { return g_runs.load() == 1; });
+        f.destroy_caller_code();
+        if (compute) modern.pfnDestroyShader(f.h, args.hComputeShader);
+        else {
+            modern.pfnDestroyShader(f.h, args.hVertexShader);
+            modern.pfnDestroyShader(f.h, args.hPixelShader);
+        }
+        g_gate.release();
+        HRESULT resolve_hr = E_FAIL;
+        auto* record = static_cast<PipelineRecord*>(late.pDrvPrivate);
+        ID3D12PipelineState* resolved = SUCCEEDED(late_hr) ? pso_resolve(record->job, &resolve_hr) : nullptr;
+        check(upgraded && async.hr == S_OK && control_hr == S_OK && late_hr == S_OK && held && resolved &&
+                  resolve_hr == S_OK && device.digests.size() == 2 && device.digests[0].read &&
+                  device.digests[0] == device.digests[1],
+              "0119 %s lifetime: caller bytes overwritten/freed and shader handles destroyed before async engine "
+              "read; identical bytecode/state to live-input control", compute ? "compute" : "VS/PS");
+        if (SUCCEEDED(late_hr)) modern.pfnDestroyPipelineState(f.h, late);
+    }
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        D3D12DDI_DEVICE_FUNCS_CORE_0119 modern{};
+        const bool upgraded = native12::upgrade_core(g_core, &modern, modern_device_error);
+        D3D12DDIARG_CREATE_PIPELINE_STATE_0119 args{};
+        args.hRootSignature = f.root_signature(); args.hComputeShader = f.shader(D3D11_SB_COMPUTE_SHADER);
+        args.pComputeShaderCode = f.caller_code(0);
+        D3D12DDI_HPIPELINESTATE pso{f.storage(modern.pfnCalcPrivatePipelineStateSize(f.h, &args))};
+        const auto live_before = f.context.live.load();
+        const ULONG refs_before = device.root.refs.load();
+        // compute_plan's first allocation is the bytecode vector in take_code.
+        // No engine object or job exists at this point.
+        failed_allocation_size = 0;
+        fail_next_allocation = true;
+        const HRESULT failed = modern.pfnCreatePipelineState(f.h, &args, pso, {});
+        const bool consumed = !fail_next_allocation;
+        fail_next_allocation = false;
+        check(upgraded && consumed && failed_allocation_size > 0 && failed == E_OUTOFMEMORY &&
+                  device.creates.load() == 0 && f.context.live.load() == live_before && device.root.refs.load() == refs_before,
+              "0119 bytecode-copy allocation failure: E_OUTOFMEMORY, no engine create, live object or root reference leak");
+        const HRESULT retry = modern.pfnCreatePipelineState(f.h, &args, pso, {});
+        check(retry == S_OK && device.creates.load() == 1, "0119 bytecode-copy failure: subsequent create succeeds");
+        if (SUCCEEDED(retry)) modern.pfnDestroyPipelineState(f.h, pso);
+        modern.pfnDestroyShader(f.h, args.hComputeShader);
+    }
+
+#endif
     // 7b. The create answers before the engine has seen the pipeline, and the state that arrives on the pool
     // thread is the state the synchronous create of the same payload arrives with, view-instance locations and
     // program bytes included - all of it read after the DDI call that named them has returned.

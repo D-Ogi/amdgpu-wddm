@@ -16,6 +16,17 @@ void check(bool ok, const char* what);
 void checkf(bool ok, const char* format, ...);
 int failure_count();
 
+// Optional raw GPU readback evidence for deterministic cross-adapter comparisons.
+// The caller creates a fresh AMDGPU_WDDM_HARNESS_ARTIFACT_DIR. Existing files are never overwritten.
+void save_readback_artifact(const char* name, const void* data, UINT width, UINT height,
+                            UINT row_pitch, DXGI_FORMAT format);
+
+// Test-only Vulkan witness. Begin/end bracket a quiescent device's draws;
+// counters include only vkCreateGraphicsPipelines calls on that VkDevice.
+struct GraphicsPipelineProbe { uint64_t calls = 0, successful_pipelines = 0; };
+void begin_graphics_pipeline_probe(VkDevice device);
+GraphicsPipelineProbe end_graphics_pipeline_probe();
+
 // The log_refusal lines of the whole run so far that start with prefix, in order (engine_ddi::harness_set_log_observer,
 // installed before the first device). The once-only diagnostic lines are counted per process, as they are written.
 std::vector<std::string> refusal_lines(const char* prefix);
@@ -225,6 +236,11 @@ void test_shared_create(Env& env);
 void test_shared_open(Env& env);
 void test_raytracing(Env& env);
 void test_raytracing_pipeline(Env& env);
+void test_mandatory_states(Env& env);
+void test_mandatory_formats(Env& env);
+void test_no_output_samples(Env& env);
+void test_descriptor_limits(Env& env);
+void test_generic_programs(Env& env, Device& device);
 // GetCaps 1002 and the shell's memory architecture policy, on query_adapter_caps with the harness's create info.
 void test_memory_policy(const Env& env, const BC250_VKD3D_DEVICE_CREATE_INFO& create);
 // The engine's disk shader cache in INLINE: concurrent pipeline creation, no engine thread, whole archives.

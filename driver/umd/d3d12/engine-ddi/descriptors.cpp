@@ -407,6 +407,31 @@ void APIENTRY create_sampler(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_S
     c->device->CreateSampler(&d, D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
 }
 
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void APIENTRY create_sampler_modern(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_SAMPLER_0096* args,
+                                    D3D12DDI_CPU_DESCRIPTOR_HANDLE dest) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!args || !args->pSamplerDesc || !dest.ptr) { c->report(E_INVALIDARG); return; }
+    const auto& s = *args->pSamplerDesc;
+    D3D12_SAMPLER_DESC2 d{};
+    d.Filter = static_cast<D3D12_FILTER>(s.Filter);
+    d.AddressU = static_cast<D3D12_TEXTURE_ADDRESS_MODE>(s.AddressU);
+    d.AddressV = static_cast<D3D12_TEXTURE_ADDRESS_MODE>(s.AddressV);
+    d.AddressW = static_cast<D3D12_TEXTURE_ADDRESS_MODE>(s.AddressW);
+    d.MipLODBias = s.MipLODBias; d.MaxAnisotropy = s.MaxAnisotropy;
+    d.ComparisonFunc = static_cast<D3D12_COMPARISON_FUNC>(s.ComparisonFunc);
+    std::memcpy(d.FloatBorderColor, s.FloatBorderColor, sizeof(d.FloatBorderColor));
+    d.MinLOD = s.MinLOD; d.MaxLOD = s.MaxLOD;
+    d.Flags = static_cast<D3D12_SAMPLER_FLAGS>(s.Flags);
+    ID3D12Device11* modern = nullptr;
+    const HRESULT hr = c->device->QueryInterface(__uuidof(ID3D12Device11), reinterpret_cast<void**>(&modern));
+    if (FAILED(hr)) { c->report(hr); return; }
+    modern->CreateSampler2(&d, D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+    modern->Release();
+}
+#endif
+
 // Handles are the engine's own values and both handle types are one pointer-sized member (asserted above), so the
 // range arrays pass through as they are.
 void APIENTRY copy_descriptors(D3D12DDI_HDEVICE device, UINT dst_count, const D3D12DDI_CPU_DESCRIPTOR_HANDLE* dst,
@@ -544,6 +569,12 @@ void fill_core_descriptors(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     t->pfnCopyDescriptors = copy_descriptors;
     t->pfnCopyDescriptorsSimple = copy_descriptors_simple;
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void fill_modern_descriptors(native12::ModernCoreEntries* entries) noexcept {
+    entries->sampler = create_sampler_modern;
+}
+#endif
 
 void fill_list_descriptors(D3D12DDI_COMMAND_LIST_FUNCS_3D_0092* t, uint32_t table_index) noexcept {
     t->pfnSetDescriptorHeaps = set_descriptor_heaps;

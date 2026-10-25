@@ -11,6 +11,8 @@
 #include "native-tables.h"
 #include "adapter-caps.h"
 #include "ddi-0092-layout.h"
+#include "ddi-ladder.h"
+#include <array>
 #include "ddi-trace.h"
 #include <cstring>
 #include "stdio-log.h"
@@ -29,12 +31,17 @@ constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::
 // offered; with 0093 as the newest it asked caps type 1079 and reported no enhanced barriers, with 0094 it reports
 // them (OPTIONS12 EnhancedBarriersSupported 1). 0093 adds only the caps type OPTIONS_0093 (H:11251-11257); 0094
 // changes the L68 argument (resources.cpp, select_barrier). 0092 stays offered for a runtime that knows neither.
-constexpr UINT64 kSupportedVersions[]={D3D12DDI_SUPPORTED_0094,D3D12DDI_SUPPORTED_0093,D3D12DDI_SUPPORTED_0092};
+constexpr auto kSupportedVersions=[] {
+    std::array<UINT64,native12::kDdiMax-91> result{};
+    for(unsigned i=0;i<result.size();++i)
+        result[i]=(UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{native12::kDdiMax-i}<<16);
+    return result;
+}();
 bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
     const UINT build=runtimeVersion>>16;
-    return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 && (build==D3D12DDI_BUILD_VERSION_0094 ||
-        build==D3D12DDI_BUILD_VERSION_0093 || build==D3D12DDI_BUILD_VERSION_0092);
+    return interfaceVersion==D3D12DDI_INTERFACE_VERSION_R8 && build>=92 && build<=native12::kDdiMax;
 }
+
 void trace(const char* operation,unsigned long long value=0) noexcept {
     amdgpu_wddm_log::print("d3d12-ddi %s %llu\n",operation,value);amdgpu_wddm_log::flush();
 }
@@ -91,7 +98,7 @@ HRESULT APIENTRY close_adapter(D3D12DDI_HADAPTER h) {
 }
 HRESULT APIENTRY versions(D3D12DDI_HADAPTER h,UINT32* count,UINT64* values) {
     if(!h.pDrvPrivate || !count) return E_INVALIDARG;
-    constexpr UINT32 n=static_cast<UINT32>(sizeof(kSupportedVersions)/sizeof(kSupportedVersions[0]));
+    constexpr UINT32 n=static_cast<UINT32>(kSupportedVersions.size());
     const UINT32 capacity=*count;*count=n;trace("GetSupportedVersions",capacity);
     if(!values) return S_OK;
     if(capacity<n) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
