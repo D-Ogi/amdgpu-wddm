@@ -12,7 +12,11 @@ The header governs their exact C declarations.
 
 The default WDK 26100 build still offers versions 0092 through 0094.
 The explicit `-DdiInclude` argument selects the WDK 28000 UM headers for the shell and engine-ddi builds.
-Those headers enable versions through 0119. The build records the selected header path and SHA256.
+Those headers enable the layouts through 0119 and the build 0120, which uses the 0119 layouts.
+No public header defines 0120. A static analysis of D3D12Core 1.619.6 and 1.721.3 found no table, slot or caps payload change at 0120.
+At 0120 the runtime stops its 6_8 clamp of the shader model answer (caps type 1012).
+Both flavours offer the same versions: 0120 down to 0092 with the WDK 28000 header, 0094 down to 0092 without it.
+The build records the selected header path and SHA256.
 The ladder build also requires `-ApiInclude` with Agility 1.618 or newer API headers for tight alignment.
 Agility 1.619.6 is the tested header input. The build records its path and SHA256 separately from the DDI header.
 No automatic header upgrade changes the supported versions.
@@ -43,6 +47,7 @@ Each suffix selects the complete C structure, including all unchanged members.
 | 0114-0115 | 0113 | 0114 | H14375 | H14635 |
 | 0116-0118 | 0116 | 0114 | H14752 | H14635 |
 | 0119 | 0119 | 0114 | H15055 | H14635 |
+| 0120 | 0119 | 0114 | H15055 | H14635 |
 
 [`ddi-ladder.h`](../../driver/umd/d3d12/ddi-ladder.h) contains the typed member lists and the version selection.
 The compiler checks each member assignment. Size assertions detect table growth.

@@ -31,6 +31,8 @@ constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::
 // offered; with 0093 as the newest it asked caps type 1079 and reported no enhanced barriers, with 0094 it reports
 // them (OPTIONS12 EnhancedBarriersSupported 1). 0093 adds only the caps type OPTIONS_0093 (H:11251-11257); 0094
 // changes the L68 argument (resources.cpp, select_barrier). 0092 stays offered for a runtime that knows neither.
+// Built with the WDK 10.0.28000 header, the shell offers every build from 0120 (no public header defines it,
+// ddi-ladder.h) down to 0092, in both flavours; with the 26100 header it offers 0094 to 0092 (native12::kDdiMax).
 constexpr auto kSupportedVersions=[] {
     std::array<UINT64,native12::kDdiMax-91> result{};
     for(unsigned i=0;i<result.size();++i)

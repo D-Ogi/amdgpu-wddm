@@ -189,6 +189,18 @@ int main(int argc,char** argv) {
     for(unsigned i=0;i<offered;++i)
         assert(versions[i]==((UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{native12::kDdiMax-i}<<16)));
     assert(versions.back()==0xabcdef);
+    // The newest build offered: 0120 in a shell built with the WDK 10.0.28000 header (both flavours), 0094 otherwise.
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    static_assert(native12::kDdiMax==native12::kDdiBuild0120);
+    assert(versions[0]==native12::kDdiSupported0120 && versions[0]==0xC005000780000ull);
+    assert(versions[1]==D3D12DDI_SUPPORTED_0119 && versions[2]==D3D12DDI_SUPPORTED_0118 &&
+           versions[offered-1]==D3D12DDI_SUPPORTED_0092);
+    puts("the version list is 0120, 0119, 0118 ... 0092");
+#else
+    static_assert(native12::kDdiMax==94);
+    assert(versions[0]==D3D12DDI_SUPPORTED_0094 && versions[offered-1]==D3D12DDI_SUPPORTED_0092);
+    puts("the version list is 0094, 0093, 0092");
+#endif
     UINT64 guard[4]={0xabcdef,0x123456,D3D12DDI_SUPPORTED_0092,0x888};
     assert(funcs.pfnCreateDevice(a.hAdapter,nullptr)==E_INVALIDARG);
     D3D12DDIARG_CALCPRIVATEDEVICESIZE sizeArgs{};

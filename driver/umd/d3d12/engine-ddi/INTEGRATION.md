@@ -348,6 +348,9 @@ What the runtime does, read on the development PC from the disassembly of the D3
   the index of 0120 (the index is checked at 18 points: the OPTIONS layout size it asks at 16 builds, and two caps
   types that it asks only from their builds on). No public header
   defines 0120: the d3d12umddi.h of WDK 10.0.28000.2526 ends at 0119.
+- A shell built with the WDK 10.0.28000 header offers 0120 first, in both flavours (`kDdiBuild0120` in ddi-ladder.h,
+  the 0119 layouts). With the 26100 header it offers 0094 to 0092. caps-test checks 6_9 and 1_2 at 0120 and the
+  refusal of a later build. adapter-test checks the order of the version list.
 
 The shader container checks only the major version of a DXIL program (shader-container.cpp, `CheckDxilProgram`), so
 a 6.9 program passes it like any other 6.x program.

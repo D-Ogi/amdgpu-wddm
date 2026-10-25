@@ -31,9 +31,11 @@ void check(bool ok, const char* format, ...) {
     failures += ok ? 0 : 1;
 }
 
-// The shell asks with the newest layout it offers (adapter-caps.cpp); 0092 is checked separately.
+// The shell asks with the newest layout it offers (adapter-caps.cpp); 0092 is checked separately. With the 0119
+// header that is 0120 (ddi-ladder.h), which uses the 0119 payloads.
 #if defined(D3D12DDI_BUILD_VERSION_0119)
-constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0119;
+constexpr uint32_t kDdi = native12::kDdiMax;
+static_assert(kDdi == native12::kDdiBuild0120);
 #else
 constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0094;
 #endif
@@ -1227,8 +1229,24 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         const HRESULT on = engine_ddi::set_raytracing_tier12_reporting(caps, true);
         const Result at = read(caps, kDdi, kSm69);
         check(on == S_OK && at.hr == S_OK && at.listed && at.tier == kTier12,
-              "tier 1.2 switch on, at 0094: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
-              static_cast<unsigned>(kSm69), static_cast<int>(at.tier));
+              "tier 1.2 switch on, at ddi_version %u: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
+              static_cast<unsigned>(kDdi), static_cast<unsigned>(kSm69), static_cast<int>(at.tier));
+        const Result at94 = read(caps, D3D12DDI_BUILD_VERSION_0094, kSm69);
+        check(at94.hr == S_OK && at94.listed && at94.tier == kTier12,
+              "tier 1.2 switch on, at 0094: 1012 ends at 6_9, 1006 reports 1_2 (%d)", static_cast<int>(at94.tier));
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        // 0120 (ddi-ladder.h): the build from which the Agility runtime gives the application the 1012 answer
+        // without its 6_8 clamp. The answers are those of 0119, and no build after 0120 is taken.
+        const Result at120 = read(caps, native12::kDdiBuild0120, kSm69);
+        check(at120.hr == S_OK && at120.listed && at120.tier == kTier12,
+              "tier 1.2 switch on, at 0120: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
+              static_cast<unsigned>(kSm69), static_cast<int>(at120.tier));
+        const Result at121 = read(caps, native12::kDdiBuild0120 + 1, kSm69);
+        check(at121.hr == E_INVALIDARG && at121.tier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED,
+              "a build after 0120 is refused (%08lx)", static_cast<unsigned long>(at121.hr));
+        check(native12::kDdiMax == native12::kDdiBuild0120, "the shell offers 0120 first, in both flavours (%u)",
+              native12::kDdiMax);
+#endif
         // A runtime that negotiates 0092 or 0093 does not know tier 1.2: the 22621 system core negotiates 0092 and
         // refuses opacity micromap pipelines.
         for (const uint32_t ddi : {uint32_t{D3D12DDI_BUILD_VERSION_0092}, uint32_t{D3D12DDI_BUILD_VERSION_0093}}) {

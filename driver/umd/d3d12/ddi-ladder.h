@@ -2424,8 +2424,16 @@ template<> struct DdiMembers<D3D12DDI_DEVICE_FUNCS_CORE_0119> {
 };
 #endif
 template<class C,class L,unsigned V> struct DdiLayout { using Core=C; using List=L; static constexpr unsigned version=V; };
+// DDI build 0120. No public header defines it: WDK 10.0.28000 ends at 0119. A static analysis of D3D12Core
+// ("D3D12 DDI 0120: what the Agility runtime requires beyond 0119", 2026-10-25) found no table, slot or caps
+// payload change from 0119 to 0120. The runtime changes one answer: below 0120 it clamps the shader model of
+// caps type 1012 to 6_8 (the compare of the negotiated index with 0x50 at 0x1802907a0 in Agility 1.619.6 and at
+// 0x1801c5d79 in 1.721.3). So 0120 uses the 0119 layouts. Both cores list 0120 as 0xC005000780000.
 #if defined(D3D12DDI_BUILD_VERSION_0119)
-inline constexpr unsigned kDdiMax=119;
+inline constexpr unsigned kDdiBuild0120=120;
+inline constexpr UINT64 kDdiSupported0120=(UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{kDdiBuild0120}<<16);
+static_assert(kDdiSupported0120==0xC005000780000ull);
+inline constexpr unsigned kDdiMax=kDdiBuild0120;
 #else
 inline constexpr unsigned kDdiMax=94;
 #endif
@@ -2460,6 +2468,7 @@ template<class F> HRESULT with_ddi_layout(unsigned version,F&& f) {
     case 117: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0116,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,117>{});
     case 118: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0116,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,118>{});
     case 119: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0119,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,119>{});
+    case 120: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0119,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,120>{});
 #endif
     default: return E_UNEXPECTED;
     }

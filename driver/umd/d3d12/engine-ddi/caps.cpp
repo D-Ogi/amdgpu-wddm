@@ -116,7 +116,10 @@ constexpr uint32_t kAbi12 = (1u << 16) | 2u;
 // no caps type and changes only the L68 barrier argument (H:11262-11301).
 constexpr uint32_t kDdiVersionMin = 92;                  // D3D12DDI_BUILD_VERSION_0092, H:11156
 #if defined(D3D12DDI_BUILD_VERSION_0119)
-constexpr uint32_t kDdiVersionMax = D3D12DDI_BUILD_VERSION_0119;
+// 0120 (ddi-ladder.h, no public header defines it) changes no caps payload of 0119: the newest build that the
+// ladder knows is the newest layout build_caps takes.
+constexpr uint32_t kDdiVersionMax = native12::kDdiMax;
+static_assert(kDdiVersionMax == native12::kDdiBuild0120, "the ladder ends at 0120");
 #else
 constexpr uint32_t kDdiVersionMax = 94;                  // D3D12DDI_BUILD_VERSION_0094, H:11265
 #endif
