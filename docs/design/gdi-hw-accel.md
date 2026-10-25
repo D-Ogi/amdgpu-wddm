@@ -78,6 +78,20 @@ instead. So the absent `DxgkDdiPatch` and the unconditional
 allocation list entries carry each allocation's GPU virtual address, and the driver writes those
 addresses into the commands directly.
 
+`DxgkDdiRenderKm` is in the table all the same. d3dkmddi.h describes
+`SupportKernelModeCommandBuffer` as "Driver supports RenderKm DDI", and an adapter that set the bit
+with a NULL `DxgkDdiRenderKm` did not start on the lab: `CM_PROB_FAILED_POST_START`, 4 ms after the
+`DRIVERCAPS` reply and before any segment query (2026-10-25). `Bc250WddmRenderKm` translates
+nothing. No context of this adapter is without virtual addressing, so no call is expected. A call
+is counted, logged and dropped with an empty DMA buffer, and the stop line
+`wddm: gdi renderkm calls<n> dropped` reports it.
+
+The interop answer does not change the desktop route. The `DXGK_PRESENTATIONCAPS` page says: "If
+the display miniport driver supports GDI hardware acceleration, DriverSupportsCddDwmInterop is
+ignored. In this case the driver must support present CDD operations to DWM texture allocations
+that are created by the user-mode driver." The driver clears the bit while acceleration is on, and
+its CDD-to-DWM present path stays as `InteropStart` set it.
+
 ## What the contract requires
 
 `DXGK_RENDERKM_COMMAND` is a variable size structure. `OpCode` names the operation and
@@ -855,7 +869,8 @@ driver's own caps, not the operating system:
   call. That is a statement about those two source trees, not about an rc5 artifact that was never
   built from them.
 
-This branch is not the same shape. It fills the `DxgkDdiRenderGdi` member unconditionally, and sets
+This branch is not the same shape. It fills the `DxgkDdiRenderGdi` member unconditionally (and
+`DxgkDdiRenderKm`, which translates nothing, see above), and sets
 the cap only while `GdiHwAccel` is on, which is the feature switch. So the function exists in the
 table of every build of this branch, and the guard that is actually established is two-fold: the
 canonical display driver learns from the cap whether it may build these commands at all, and the

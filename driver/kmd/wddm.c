@@ -910,6 +910,7 @@ typedef struct _BC250_WDDM {
     //   Overflow                     a command buffer that did not fit one DMA buffer: dropped work
     //   KernelWanted/Kernels[]       operations that need increment 2's compute kernels
     //   ColorFillRedFirst            the one case where the header and the page disagree about Color
+    //   RenderKmCalls                calls of DxgkDdiRenderKm, which no context of this adapter expects
     BOOLEAN GdiHwAccelGate;
     BOOLEAN GdiHwAccel;
     volatile LONG64 GdiRenderCalls, GdiRenderCommands, GdiRenderItems, GdiRenderDwords;
@@ -917,6 +918,7 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderKernels[Bc250GdiKernels];
     volatile LONG64 GdiRenderRefusedCall, GdiRenderMalformed, GdiRenderOutside, GdiRenderEmpty;
     volatile LONG64 GdiRenderOverflow, GdiRenderItemRefused, GdiRenderColorFillRedFirst;
+    volatile LONG64 GdiRenderKmCalls;
     // HLK gap G1: the batch capacity contract of gdi_batch.h. BatchRefused counts the calls whose
     // sub-rectangles could not all be guaranteed and that were therefore translated to an empty DMA
     // buffer; Fallback counts the items that gave up the per-row engine path for a dispatch. The two
@@ -4504,6 +4506,9 @@ void WddmStop(_Inout_ BC250_DEVICE* Device)
                 GuardLog("wddm: gdi refusal class %d count %lld", klass,
                          wddm->GdiRenderRefused[klass]);
     }
+    // Bc250WddmRenderKm drops every call it gets, so a nonzero count is GDI drawing that was lost.
+    if (wddm->GdiRenderKmCalls != 0)
+        GuardLog("wddm: gdi renderkm calls%lld dropped", wddm->GdiRenderKmCalls);
     ExFreePoolWithTag(wddm->ObjectIndex.Buckets, BC250_WDDM_TAG);
     ExFreePoolWithTag(wddm, BC250_WDDM_TAG);
 }
@@ -4833,10 +4838,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // for a full graphics and for a render-only driver in the feature caps table
     // (display/wddm-driver-and-feature-caps.md:40) and tested by the HLK job "GDIHW_Functional test
     // for GDI HW ACC (v1.1)". docs/design/gdi-hw-accel.md; the translator is Bc250WddmRenderGdi.
-    //   DriverSupportsCddDwmInterop is the alternative to it and not a companion: d3dkmddi.h reads
-    // that bit as "Driver does not support hardware GDI acceleration, but supports Cdd-Dwm interop",
-    // so the two are answered as the exclusive pair they are, and today's deployed answer (interop,
-    // no acceleration) is what a start without the kernels keeps.
+    //   DriverSupportsCddDwmInterop: d3dkmddi.h reads that bit as "Driver does not support hardware
+    // GDI acceleration, but supports Cdd-Dwm interop", and the DXGK_PRESENTATIONCAPS page says "If the
+    // display miniport driver supports GDI hardware acceleration, DriverSupportsCddDwmInterop is
+    // ignored. In this case the driver must support present CDD operations to DWM texture allocations
+    // that are created by the user-mode driver." So acceleration keeps the interop duty: the
+    // CddDwmInterop route of this adapter stays as InteropStart set it, and only the bit is cleared,
+    // because it is ignored. A start without the kernels keeps today's answer (interop, no acceleration).
+    //   SupportKernelModeCommandBuffer needs DxgkDdiRenderKm in the table ("Driver supports RenderKm
+    // DDI"). Bc250WddmRenderKm is there for that reason; the translator is still RenderGdi.
     //   The gdi-hardware-acceleration page adds one condition of its own: "The driver should report
     // this type of support only if the cache-coherent GPU aperture segment exists and there's no
     // significant performance penalty when the CPU accesses GPU memory." The aperture segment is
@@ -9336,6 +9346,32 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     return STATUS_SUCCESS;
 }
 
+// DxgkDdiRenderKm is in the table because SupportKernelModeCommandBuffer requires it: d3dkmddi.h
+// describes that bit as "Driver supports RenderKm DDI", and an adapter that set the bit with a NULL
+// DxgkDdiRenderKm did not start on the lab (CM_PROB_FAILED_POST_START 4 ms after the DRIVERCAPS
+// reply, before any segment query, 2026-10-25). It is not the translator. The GDI commands of a
+// context with virtual addressing go to DxgkDdiRenderGdi (DXGKDDI_RENDERGDI), and every context of
+// this adapter has virtual addressing, so no call is expected here. DXGKARG_RENDER is the
+// physical-addressing form, with a patch-location list and a physical DMA address, and this adapter
+// has no DxgkDdiPatch, so a call cannot be translated. It is counted, logged and dropped:
+// pDmaBuffer and pPatchLocationListOut come back unchanged, which describes an empty DMA buffer,
+// and STATUS_SUCCESS is the row "The entire command buffer was translated". That is the same
+// answer RenderGdi gives a call it refuses, and the stop line reports the count as lost drawing.
+static DXGKDDI_RENDERKM Bc250WddmRenderKm;
+static NTSTATUS Bc250WddmRenderKm(_In_ const HANDLE hContext, _Inout_ DXGKARG_RENDER* pRenderKm)
+{
+    BC250_WDDM_OBJECT* context = WddmObject(hContext, BC250_WDDM_MAGIC_CONTEXT);
+    BC250_WDDM* wddm = context != NULL ? (BC250_WDDM*)context->Device->Wddm : NULL;
+    LONG64 call;
+
+    if (wddm == NULL) return STATUS_SUCCESS;
+    call = InterlockedIncrement64(&wddm->GdiRenderKmCalls);
+    if (call <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: RenderKm%lld ctx%p bytes%u dropped, not a virtual-addressing GDI call",
+                 call, (void*)context, pRenderKm != NULL ? pRenderKm->CommandLength : 0u);
+    return STATUS_SUCCESS;
+}
+
 static DXGKDDI_PRESENT Bc250WddmPresent;
 static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRESENT* pPresent)
 {
@@ -10775,6 +10811,8 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // It is in the table whatever the capability answer is, and reports nothing while the
     // capability bit is clear, because dxgkrnl calls it only for a driver that set the bit.
     Data->DxgkDdiRenderGdi = Bc250WddmRenderGdi;
+    // dxgkrnl refuses SupportKernelModeCommandBuffer without it; no call is expected (Bc250WddmRenderKm).
+    Data->DxgkDdiRenderKm = Bc250WddmRenderKm;
     Data->DxgkDdiSetVidPnSourceAddress = Bc250WddmSetVidPnSourceAddress;
     // The other half of the flip contract. Claiming FlipOnVSyncMmIo without these two leaves dxgkrnl no way to
     // switch the VSync on and no way to ask where the beam is, and a queued flip is then never retired.
@@ -10782,8 +10820,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiGetScanLine = Bc250WddmGetScanLine;
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
-    // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat, RenderKm
-    // (the physical-addressing GDI entry point; RenderGdi above is its virtual-addressing form, HLK gap G1),
+    // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat,
     // ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
     // UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and everything the 2.1-3.1 headers append
     // after SetStablePowerState: the hardware-queue and hardware-scheduling DDIs (no HWS), the native-fence and
