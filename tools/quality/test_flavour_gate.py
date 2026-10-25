@@ -180,10 +180,12 @@ class ReleaseFlavour(unittest.TestCase):
                         if flavour == "release":
                             kmd, dll = self.release_set(blob)
                             failures, _, _ = g.check(DECL, flavour, kmd, [dll])
+                            dll.unlink()
                         else:
                             self.write("pkg/adl/atiadlxy.dll", blob)
-                            kmd, dlls = g.collect(str(self.dir / "pkg"), "", [], K["file"])
-                            failures, _, _ = g.check(DECL, flavour, kmd, dlls)
+                            slots = {}
+                            kmd, dlls = g.collect(str(self.dir / "pkg"), "", [], K["file"], slots)
+                            failures, _, _ = g.check(DECL, flavour, kmd, dlls, slots=slots)
                         self.assertTrue(any("ADL test hook" in failure for failure in failures), failures)
 
     def test_adl_public_exports_are_not_test_hooks(self):
@@ -191,19 +193,23 @@ class ReleaseFlavour(unittest.TestCase):
                  "_ADL2_Adapter_AdapterInfo_Get@12", "bc250kmd")
         kmd, dll = self.release_set(pe(*names))
         self.assertEqual(g.check(DECL, "release", kmd, [dll])[0], [])
+        dll.unlink()  # The release-only D3D11 fixture must not become part of the lab set.
         self.lab_set(extra={"adl/atiadlxx.dll": list(names), "wow64/adl/atiadlxy.dll": list(names)})
-        kmd, dlls = g.collect(str(self.dir / "pkg"), "", [], K["file"])
-        self.assertEqual(g.check(DECL, "lab", kmd, dlls)[0], [])
+        slots = {}
+        kmd, dlls = g.collect(str(self.dir / "pkg"), "", [], K["file"], slots)
+        self.assertEqual(g.check(DECL, "lab", kmd, dlls, slots=slots)[0], [])
 
     def test_adl_test_service_marker_fails_release_and_lab(self):
         marker = "BC250_ADL_TEST_SERVICE: host adapter discovery fixture\n"
         kmd, dll = self.release_set(pe(marker))
         self.assertTrue(any("BC250_ADL_TEST_SERVICE" in failure
                             for failure in g.check(DECL, "release", kmd, [dll])[0]))
+        dll.unlink()
         self.lab_set(extra={"adl/atiadlxx.dll": [marker]})
-        kmd, dlls = g.collect(str(self.dir / "pkg"), "", [], K["file"])
+        slots = {}
+        kmd, dlls = g.collect(str(self.dir / "pkg"), "", [], K["file"], slots)
         self.assertTrue(any("BC250_ADL_TEST_SERVICE" in failure
-                            for failure in g.check(DECL, "lab", kmd, dlls)[0]))
+                            for failure in g.check(DECL, "lab", kmd, dlls, slots=slots)[0]))
 
     def test_adl_test_service_marker_is_retained_only_in_fixture_branch(self):
         source = (REPO / "driver/umd/adl/adl-discover.cpp").read_text(encoding="utf-8")
