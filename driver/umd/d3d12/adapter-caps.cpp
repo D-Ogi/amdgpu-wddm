@@ -200,9 +200,14 @@ HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) no
     AdapterCapsOwner* owner{};
     HRESULT hr=ensure_caps(adapter,&owner);
     if(FAILED(hr))return hr;
-    // GetCaps is adapter-scoped and comes before CreateDevice picks a version: answer with the newest layout the
-    // adapter offers. 0093 changes no 0092 payload, and a runtime asks 1079 only after it negotiated 0093.
-    return engine_ddi::build_caps(owner->caps,D3D12DDI_BUILD_VERSION_0094,request);
+    // GetCaps is adapter-scoped. Before the first CreateDevice records the negotiated build (adopt_ddi_version), the
+    // answers use the newest layout the adapter offers; the runtimes ask only 1074 there. The feature types (1006,
+    // 1012 and the later ones) come after CreateDevice and get the answers of the negotiated build: tier 1.2 and
+    // 6_9 only at 0094, because a runtime that negotiates 0092 refuses opacity micromap pipelines. 0093 changes no
+    // 0092 payload, and a runtime asks 1079 only after it negotiated 0093.
+    const UINT adopted=adapter.ddi_version.load(std::memory_order_acquire);
+    const uint32_t build=adopted?(adopted>>16)&0xFFFFu:D3D12DDI_BUILD_VERSION_0094;
+    return engine_ddi::build_caps(owner->caps,build,request);
 }
 HRESULT adapter_render_pass_supported(Adapter& adapter,bool* supported) noexcept {
     if(!supported)return E_INVALIDARG;

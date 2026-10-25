@@ -814,9 +814,10 @@ HRESULT set_raytracing_tier_reporting(AdapterCaps* caps, bool report) noexcept;
 // Raytracing tier 1.2 and shader model 6.9, OFF in the library; the shell turns them on, and only a lab-flavour
 // shell has an off switch, the experiment raytracing-tier12-off. With `report` true, 1012 lists 6_9 when the
 // engine answers 6_9 and its WaveOps, Int64ShaderOps and Native16BitShaderOpsSupported are all TRUE, and 1006
-// answers 1_2 when, in addition, the engine's tier is 1_2 and raytracing reporting is on. This is at every DDI
-// version that build_caps takes. With `report` false the answers are 6_8 and 1_1 at most. E_INVALIDARG for a
-// null caps. Same calling rule as set_memory_architecture_policy.
+// answers 1_2 when, in addition, the engine's tier is 1_2 and raytracing reporting is on. Both only at a negotiated
+// build version of 94 or higher: at 92 and 93 the answers are 6_8 and 1_1 at most (a runtime that negotiates no
+// higher than 92 refuses opacity micromap pipelines). With `report` false the answers are 6_8 and 1_1 at most.
+// E_INVALIDARG for a null caps. Same calling rule as set_memory_architecture_policy.
 HRESULT set_raytracing_tier12_reporting(AdapterCaps* caps, bool report) noexcept;
 
 // The shader model build_caps reports (1012, and 1091 for 6_8 and higher) is the engine's answer to SHADER_MODEL

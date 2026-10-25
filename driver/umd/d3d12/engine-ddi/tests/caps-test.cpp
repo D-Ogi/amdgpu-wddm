@@ -987,12 +987,13 @@ void test_enhanced_barriers(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
 
 // 1012 as a list, read into a buffer of 12 entries: S_OK, the count, and the entries in order.
 struct ModelList { HRESULT hr; UINT count; D3D12DDI_SHADER_MODEL models[12]; };
-ModelList model_list(const engine_ddi::AdapterCaps* caps) {
+ModelList model_list(const engine_ddi::AdapterCaps* caps, uint32_t ddi = kDdi) {
     ModelList l;
     std::memset(&l, 0xEE, sizeof(l));
     l.count = 12;
     D3D12DDI_D3D12_SHADER_MODELS_DATA_0011 d{&l.count, l.models};
-    l.hr = get(caps, D3D12DDICAPS_TYPE_0011_SHADER_MODELS, d);
+    D3D12DDIARG_GETCAPS request{D3D12DDICAPS_TYPE_0011_SHADER_MODELS, nullptr, &d, sizeof(d)};
+    l.hr = engine_ddi::build_caps(caps, ddi, &request);
     return l;
 }
 
@@ -1179,8 +1180,9 @@ void test_shader_model(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
 }
 
 // Raytracing tier 1.2 and shader model 6.9: off in the library, and with the switch on only when every condition
-// holds (the engine at 6_9 and 1_2, the 6.9 floor of OPTIONS1 and OPTIONS4, raytracing reporting on), at both DDI
-// versions that build_caps takes. The shell turns the switch on (adapter-caps.cpp).
+// holds (the engine at 6_9 and 1_2, the 6.9 floor of OPTIONS1 and OPTIONS4, raytracing reporting on, a negotiated
+// build version of 0094 or higher). At 0092 and 0093 the answers are 6_8 and 1_1. The shell turns the switch on
+// (adapter-caps.cpp).
 void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     constexpr auto kTier12 = static_cast<D3D12DDI_RAYTRACING_TIER>(engine_ddi::rt12::kTier);
     constexpr auto kSm69 = static_cast<D3D12DDI_SHADER_MODEL>(engine_ddi::rt12::kDdiShaderModel);
@@ -1189,7 +1191,7 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
         D3D12DDI_D3D12_OPTIONS_DATA_0089 o{};
         D3D12DDIARG_GETCAPS r{D3D12DDICAPS_TYPE_D3D12_OPTIONS, nullptr, &o, sizeof(o)};
         const HRESULT hr = engine_ddi::build_caps(caps, ddi, &r);
-        return Result{hr, list_is(model_list(caps), highest), o.RaytracingTier};
+        return Result{hr, list_is(model_list(caps, ddi), highest), o.RaytracingTier};
     };
     const auto engine_12 = [] {
         Answers a = fl12_0();
@@ -1205,11 +1207,17 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               static_cast<int>(off.tier));
         const HRESULT on = engine_ddi::set_raytracing_tier12_reporting(caps, true);
         const Result at = read(caps, kDdi, kSm69);
-        const Result at92 = read(caps, D3D12DDI_BUILD_VERSION_0092, kSm69);
-        check(on == S_OK && at.hr == S_OK && at.listed && at.tier == kTier12 && at92.hr == S_OK && at92.listed &&
-                  at92.tier == kTier12,
-              "tier 1.2 switch on: 1012 ends at 6_9 (%x), 1006 reports 1_2 at 0094 (%d) and at 0092 (%d)",
-              static_cast<unsigned>(kSm69), static_cast<int>(at.tier), static_cast<int>(at92.tier));
+        check(on == S_OK && at.hr == S_OK && at.listed && at.tier == kTier12,
+              "tier 1.2 switch on, at 0094: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
+              static_cast<unsigned>(kSm69), static_cast<int>(at.tier));
+        // A runtime that negotiates 0092 or 0093 does not know tier 1.2: the 22621 system core negotiates 0092 and
+        // refuses opacity micromap pipelines.
+        for (const uint32_t ddi : {uint32_t{D3D12DDI_BUILD_VERSION_0092}, uint32_t{D3D12DDI_BUILD_VERSION_0093}}) {
+            const Result below = read(caps, ddi, D3D12DDI_SHADER_MODEL_6_8_RELEASE_0108);
+            check(below.hr == S_OK && below.listed && below.tier == D3D12DDI_RAYTRACING_TIER_1_1,
+                  "tier 1.2 switch on, at ddi_version %u: 1012 ends at 6_8, 1006 reports 1_1 (%d)",
+                  static_cast<unsigned>(ddi), static_cast<int>(below.tier));
+        }
         engine_ddi::set_raytracing_tier_reporting(caps, false);
         const Result rt_off = read(caps, kDdi, kSm69);
         engine_ddi::set_raytracing_tier_reporting(caps, true);

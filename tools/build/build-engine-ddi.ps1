@@ -5,7 +5,8 @@
 #      the same checkout (khronos/Vulkan-Headers/include) unless -VulkanInclude says otherwise.
 #   1. Header gate: engine-ddi-header-test.cpp (static layout checks of the boundary), built and run; and
 #      tests\raytracing-tier12-header-test.cpp, the checks of raytracing-tier12.h against d3d12.h of Agility SDK
-#      1.619.6 and d3d12umddi.h of WDK 10.0.28000 (toolchain\nuget), built and run for -Arch.
+#      1.619.6 and d3d12umddi.h of WDK 10.0.28000 (toolchain\nuget), built and run for -Arch. Both are built with the
+#      explicit compiler of the library (-Compiler, clang-cl 23.1.4 by default).
 #   2. Native library engine-ddi.lib, as the shell's DLL links it: no harness macro, /analyze. Its symbols must contain
 #      no harness_ entry point; native-policy-test.exe must see EnginePrivateTest refused and both tables filled,
 #      caps-test.exe must pass the GetCaps checks against its stub engine, and pipeline-stream-test.exe,
@@ -122,6 +123,9 @@ try {
                    '/external:W0', "/external:I$rt12Api", "/external:I$rt12Ddi", "/external:I$wdk\..\shared", "/I$src")
     $nativeFlags=$flags
     if($Compiler -eq 'clang-cl'){$nativeFlags=ConvertTo-Bc250ClangFlags $flags $Arch @($repo,$EngineSource,$VulkanInclude)}
+    # The test is user-mode code like the library, so the same explicit compiler builds it. /external:I comes before
+    # the %INCLUDE% roots in the search order, so d3d12.h of the Agility SDK hides the one of the 26100 SDK.
+    if($Compiler -eq 'clang-cl'){$rt12Flags=ConvertTo-Bc250ClangFlags $rt12Flags $Arch @($repo)}
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
 
     # A native step's verdict is its exit code. Windows PowerShell 5.1 turns every stderr line of a native command
@@ -147,9 +151,18 @@ try {
         if($Compiler -eq 'clang-cl'){Test-Bc250ClangSdk $compilerExe $nativeFlags $OutputDir}
         foreach ($d in @('native', 'harness', 'analysis')) { New-Item -ItemType Directory -Force (Join-Path $OutputDir $d) | Out-Null }
 
-        Invoke-Step 'header gate build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:engine-ddi-header-test.exe (Join-Path $src 'engine-ddi-header-test.cpp') }
+        Invoke-Step 'header gate build' {
+            Invoke-Bc250UmdCompiler $compilerExe @nativeFlags /Fo:native\ /Fd:native\ /Fe:engine-ddi-header-test.exe `
+                (Join-Path $src 'engine-ddi-header-test.cpp')
+        }
         Invoke-Step 'header gate' { & .\engine-ddi-header-test.exe }
-        Invoke-Step 'raytracing tier 1.2 header test build' { & cl.exe @rt12Flags /Fo:native\ /Fd:native\ /Fe:raytracing-tier12-header-test.exe (Join-Path $src 'tests\raytracing-tier12-header-test.cpp') }
+        Invoke-Step 'raytracing tier 1.2 header test build' {
+            Write-Host "Compiler: $compilerExe"
+            if($Compiler -eq 'clang-cl'){Invoke-Bc250UmdCompiler $compilerExe @($rt12Flags -like '--target=*') `
+                --version}
+            Invoke-Bc250UmdCompiler $compilerExe @rt12Flags /Fo:native\ /Fd:native\ `
+                /Fe:raytracing-tier12-header-test.exe (Join-Path $src 'tests\raytracing-tier12-header-test.cpp')
+        }
         Invoke-Step 'raytracing tier 1.2 header test' { & .\raytracing-tier12-header-test.exe }
 
         # Native build. /analyze runs with the same /WX, so a finding fails the build.
