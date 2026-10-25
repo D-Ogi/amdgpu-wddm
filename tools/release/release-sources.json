@@ -2727,6 +2727,114 @@
       "size": 235008,
       "authenticode_sha256": "FAC191A896869F8D152F85EDDEC1780F210BFF41D72295CE0429A554F7F58F37",
       "flavour": "lab"
+    },
+    {
+      "component": "adl",
+      "path": "payload/adl/atiadlxx.dll",
+      "source": "scratch/adl/system-build/x64-release/atiadlxx.dll",
+      "sha256": "CDDA9B78FD09ED905B2B576BB842CAE46433FB7DCDE88BC814B9B6D01F5948B5",
+      "size": 133632,
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+        "recipe": "tools/build/build-umd-adl.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x64",
+          "-Compiler",
+          "clang-cl",
+          "-Flavour",
+          "release",
+          "-Version",
+          "0.7.216.104-tester.32"
+        ],
+        "output": "atiadlxx.dll"
+      },
+      "flavour": "release",
+      "role": "Public ADL subset with no test exports; system placement is subject to lab installation acceptance."
+    },
+    {
+      "component": "adl",
+      "path": "payload/wow64/adl/atiadlxy.dll",
+      "source": "scratch/adl/system-build/x86-release/atiadlxy.dll",
+      "sha256": "0987E77F26A9BB9B49686240F45B162C82B1DFAB9C10FB371E7E6D84D0778807",
+      "size": 108032,
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+        "recipe": "tools/build/build-umd-adl.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Compiler",
+          "clang-cl",
+          "-Flavour",
+          "release",
+          "-Version",
+          "0.7.216.104-tester.32"
+        ],
+        "output": "atiadlxy.dll"
+      },
+      "flavour": "release",
+      "role": "Public ADL subset with no test exports; system placement is subject to lab installation acceptance."
+    },
+    {
+      "component": "adl",
+      "path": "payload/adl/atiadlxx.dll",
+      "source": "scratch/adl/system-build/x64-lab/atiadlxx.dll",
+      "sha256": "15DBA713D8C9E0119E1CDE429C811EAE459B38A63A037336AE9396D6C68D243C",
+      "size": 133632,
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+        "recipe": "tools/build/build-umd-adl.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x64",
+          "-Compiler",
+          "clang-cl",
+          "-Flavour",
+          "lab",
+          "-Version",
+          "0.7.216.104-tester.32"
+        ],
+        "output": "atiadlxx.dll"
+      },
+      "flavour": "lab",
+      "role": "Public ADL subset with no test exports; system placement is subject to lab installation acceptance."
+    },
+    {
+      "component": "adl",
+      "path": "payload/wow64/adl/atiadlxy.dll",
+      "source": "scratch/adl/system-build/x86-lab/atiadlxy.dll",
+      "sha256": "1D46D134F6825293511993699EECEC4B93C723DA680A08B8EBA665820BED75C5",
+      "size": 108032,
+      "built_from": {
+        "repo": "amdgpu-wddm",
+        "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+        "recipe": "tools/build/build-umd-adl.ps1",
+        "args": [
+          "-OutputDir",
+          "{out}",
+          "-Arch",
+          "x86",
+          "-Compiler",
+          "clang-cl",
+          "-Flavour",
+          "lab",
+          "-Version",
+          "0.7.216.104-tester.32"
+        ],
+        "output": "atiadlxy.dll"
+      },
+      "flavour": "lab",
+      "role": "Public ADL subset with no test exports; system placement is subject to lab installation acceptance."
     }
   ],
   "firmware": {
@@ -2914,5 +3022,13 @@
       "ref": "v6.18 7d0a66e4bb9081d75c82ec4957c50034cb0ea449",
       "sha256": "55ED31A97F6B6470B0CC1F1BC905036EEEB578255ACE9CA6F69889D7D0352233"
     }
-  ]
+  ],
+  "adl": {
+    "register": true,
+    "architectures": [
+      "x64",
+      "x86"
+    ],
+    "note": "DriverStore-owned ADL libraries registered through CopyToVmWhenNewer. Native-host installation and removal require the system acceptance kit; AMD-driver coexistence is unmeasured."
+  }
 }

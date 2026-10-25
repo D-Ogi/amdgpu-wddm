@@ -2022,6 +2022,142 @@
         }
       ],
       "note": "vkd3d-proton fork amdgpu-wddm/compile-exempt f5fda151 = the tester.32 engine line b69df5fb plus one commit: a draw-time pipeline variant passes the compile limiter's bound (BD-226)."
+    },
+    {
+      "id": "adl-x64-release",
+      "component": "adl",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-adl.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Compiler",
+        "clang-cl",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.1,
+      "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
+      "outputs": [
+        {
+          "file": "atiadlxx.dll",
+          "path": "payload/adl/atiadlxx.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "adl-x86-release",
+      "component": "adl",
+      "flavour": "release",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-adl.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Compiler",
+        "clang-cl",
+        "-Flavour",
+        "release",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.1,
+      "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
+      "outputs": [
+        {
+          "file": "atiadlxy.dll",
+          "path": "payload/wow64/adl/atiadlxy.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "adl-x64-lab",
+      "component": "adl",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-adl.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x64",
+        "-Compiler",
+        "clang-cl",
+        "-Flavour",
+        "lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.1,
+      "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
+      "outputs": [
+        {
+          "file": "atiadlxx.dll",
+          "path": "payload/adl/atiadlxx.dll",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "adl-x86-lab",
+      "component": "adl",
+      "flavour": "lab",
+      "arch": "x86",
+      "repo": "amdgpu-wddm",
+      "commit": "c906d8b401eca954987c8acd3b7fc3250ca8595d",
+      "tree": "shared",
+      "recipe": "tools/build/build-umd-adl.ps1",
+      "args": [
+        "-OutputDir",
+        "{out}",
+        "-Arch",
+        "x86",
+        "-Compiler",
+        "clang-cl",
+        "-Flavour",
+        "lab",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.1,
+      "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
+      "outputs": [
+        {
+          "file": "atiadlxy.dll",
+          "path": "payload/wow64/adl/atiadlxy.dll",
+          "authenticode": true
+        }
+      ]
     }
   ]
 }
