@@ -1839,7 +1839,6 @@
    "setup.exe"
   ],
   "slots": [
-   "adl/atiadlxx.dll",
    "control/amdgpu_wddm_control.exe",
    "control/bc250control.dll",
    "d3d11/amdgpu_wddm_d3d11.dll",
@@ -1867,7 +1866,6 @@
    "tools/hip/vadd.exe",
    "tools/vulkaninfo.exe",
    "vulkan/vulkan_radeon.dll",
-   "wow64/adl/atiadlxy.dll",
    "wow64/d3d11/amdgpu_wddm_d3d11.dll",
    "wow64/d3d11/amdgpu_wddm_dxvk.dll",
    "wow64/d3d11/amdgpu_wddm_radv.dll",
