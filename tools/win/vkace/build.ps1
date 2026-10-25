@@ -6,7 +6,7 @@
 # compute-only queue family (skipped when there is none), and the SHA-256 of the program, which a lab kit pins.
 #
 #   pwsh tools\win\vkace\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget
-#   pwsh tools\win\vkace\build.ps1 -Kits ... -Out P:\BC-250\scratch\build\vkace -SkipSelfTest
+#   pwsh tools\win\vkace\build.ps1 -Kits ... -Out $env:BC250_ROOT\scratch\build\vkace -SkipSelfTest
 
 param(
     [Parameter(Mandatory)][string]$Kits,
