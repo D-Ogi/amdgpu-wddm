@@ -37,6 +37,11 @@ namespace AmdgpuWddmControl
             _snap.GameProfiles["ascent.exe"] = "recording-bind-off,retire-handoff-off,deferred-replay-off";
             if (_snap.DefaultApplications == null) _snap.DefaultApplications = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _snap.DefaultApplications["witcher3.exe"] = "raytracing-tier-off";
+            // The driver's own switches as a start answers them: the compute queue runs but is turned off for the next
+            // start (the line that waits for the restart is drawn), and the GDI programs are present but turned off.
+            _snap.Features = new Dictionary<string, long> { { "ComputeQueue", 1 }, { "GdiHwAccel", 2 } };
+            _snap.Parameters["EnableComputeQueue"] = 0;
+            _snap.Parameters["EnableGdiHwAccel"] = 0;
             var now = DateTime.UtcNow;
             _recent = new List<RecentLaunch>
             {
@@ -306,6 +311,10 @@ namespace AmdgpuWddmControl
                             w.AppendLine(where + ": board capability admission does not match the tuning controls");
                         if (!admitted && !Texts(built, false).Contains(Strings.T("board.unsupported")))
                             w.AppendLine(where + ": the unsupported board has no explanation");
+                        foreach (var f in DriverFeatures.All)
+                            if (!_anchors.ContainsKey("graphics." + f.Id)) w.AppendLine(where + ": the driver switch is missing: " + f.Id);
+                        if (!Texts(built, false).Contains(Strings.T("graphics.feature.pending")))
+                            w.AppendLine(where + ": the switch that waits for the restart does not say so");
                     }
                     if (_fixture && page == "system")
                         foreach (var anchor in new[] { "system.background", "system.updates", "system.drivers", "system.drive" })

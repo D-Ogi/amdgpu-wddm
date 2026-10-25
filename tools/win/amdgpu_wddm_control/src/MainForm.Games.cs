@@ -488,6 +488,11 @@ namespace AmdgpuWddmControl
             if (result != null) save.Add(result);
             p.Controls.Add(save);
 
+            // The driver's own switches (DriverFeatures.cs): their own action each, at once, like the start screen
+            // picture; no card where the driver can use neither of them.
+            var features = BuildDriverFeatures(width);
+            if (features != null) p.Controls.Add(features);
+
             // The tuning cards (docs/design/tuner.md): their own Apply, because they write no setting that a restart
             // would keep - the driver holds each trial and takes it back by itself.
             AddTuning(p, width, installed);

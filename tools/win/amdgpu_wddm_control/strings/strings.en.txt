@@ -1296,3 +1296,28 @@ plan.line.boot-logo-off|src|-|The start screen stays as Windows draws it.
 search.display.boot-logo|src|-|Picture on the start screen
 search.display.boot-logo.terms|src|-|boot|start screen|logo|picture|mascot|nagi|splash|spinner
 help.setting.boot-logo|src|-|Lets the driver draw the mascot on the screen while Windows starts, over the black background of the spinning ring. It is on from the start. Switch it off if you want the start screen exactly as Windows draws it; a new setting works after you restart Windows.
+
+# ---- the driver's own switches of the Graphics page (DriverFeatures.cs, docs/design/compute-node.md) ----
+graphics.features.title|src|-|Driver features
+graphics.compute|src|-|Second queue for calculations
+graphics.compute.help|src|-|Vulkan games and apps can do calculations on a second queue of the graphics chip, at the same time as they draw. It is on from the start. Switch it off if a Vulkan game stops or shows wrong pictures with it. A new setting works after you restart Windows.
+graphics.gdi|src|-|Hardware acceleration of classic Windows drawing
+graphics.gdi.help|src|-|Many Windows programs draw their windows, text and pictures in the classic Windows way. With this on, the graphics chip does much of that drawing instead of the processor. It is on from the start. Switch it off if the windows or text of a program look wrong. A new setting works after you restart Windows.
+graphics.feature.pending|src|-|Restart Windows to use your new choice.
+graphics.feature.refuse.on-already|src|-|This is on already.
+graphics.feature.refuse.off-already|src|-|This is off already.
+graphics.feature.refuse.unavailable|src|-|The installed driver cannot use this setting on this computer.
+plan.title.compute-queue-on|src|-|Turn the second queue for calculations on
+plan.title.compute-queue-off|src|-|Turn the second queue for calculations off
+plan.title.gdi-accel-on|src|-|Turn hardware acceleration of classic Windows drawing on
+plan.title.gdi-accel-off|src|-|Turn hardware acceleration of classic Windows drawing off
+plan.line.compute-queue-on|src|-|Vulkan games and apps can do calculations on a second queue of the graphics chip.
+plan.line.compute-queue-off|src|-|Vulkan games and apps do all their work on one queue of the graphics chip.
+plan.line.gdi-accel-on|src|-|The graphics chip draws the windows and text of classic Windows programs.
+plan.line.gdi-accel-off|src|-|The processor draws the windows and text of classic Windows programs.
+search.graphics.compute|src|-|Second queue for calculations
+search.graphics.compute.terms|src|-|compute|async compute|asynchronous|queue|vulkan|calculations|parallel
+search.graphics.gdi|src|-|Hardware acceleration of classic drawing
+search.graphics.gdi.terms|src|-|gdi|hardware acceleration|acceleration|2d|classic|drawing|text|windows
+help.setting.compute|src|-|Lets Vulkan games and apps do calculations on a second hardware queue of the graphics chip while they draw, which can make them faster. It is on from the start. Switch it off if a Vulkan game stops responding or shows wrong pictures; a new setting works after you restart Windows.
+help.setting.gdi|src|-|Lets the graphics chip do the classic Windows drawing of many programs: their windows, text and pictures. The processor then has less work. It is on from the start. Switch it off if the windows or text of a program look wrong; a new setting works after you restart Windows.

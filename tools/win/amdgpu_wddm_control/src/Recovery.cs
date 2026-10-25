@@ -98,8 +98,17 @@ namespace AmdgpuWddmControl
         // The Graphics and Vulkan settings keys (GraphicsSettings.cs): every existing key of the two roots and of their
         // games, with all their values. Null: the read failed.
         public List<GfxKey> GfxKeys { get; set; }
+        // What the driver wrote at this start about its own switches (DriverFeatures.cs): the volatile records under
+        // Features, absent when the driver wrote none. An older snapshot has no member, which reads as none.
+        public Dictionary<string, long> Features { get; set; }
 
         public RecoverySnapshot() { Parameters = new Dictionary<string, long>(); DwmRoute = "unknown"; }
+
+        public uint? Feature(string name)
+        {
+            long v;
+            return Features != null && Features.TryGetValue(name, out v) ? (uint?)(uint)v : null;
+        }
 
         public CuStored StoredCu()
         {
@@ -413,7 +422,8 @@ namespace AmdgpuWddmControl
         // its access is "driver", the state client refuses a delete from user mode, and the driver deletes it by
         // itself at the next start that reads a DpmMode other than 0 (driver/kmd/dpm.c, clear_closed). The catalog
         // test (ClosureTests) holds this list to the catalog's access rules.
-        public static readonly string[] ParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost", BootLogoSetting.ValueName };
+        public static readonly string[] ParameterNames = new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost", BootLogoSetting.ValueName }
+            .Concat(DriverFeatures.ValueNames).ToArray();
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
         public static readonly string[] DefaultParameterNames = { "EnableGpuPresentBlit", "EnableCddDwmInterop", "DpmMode", "DpmMaxMHz" };
@@ -449,7 +459,10 @@ namespace AmdgpuWddmControl
             // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079).
             "tdr-delay",
             // "Record game logs" (GameLog.cs): the timed diagnostic switch of the Help page.
-            "game-log-on", "game-log-off" };
+            "game-log-on", "game-log-off",
+            // The driver's own switches of the Graphics page (DriverFeatures.cs): the second queue for calculations
+            // and the hardware acceleration of classic Windows drawing.
+            "compute-queue-on", "compute-queue-off", "gdi-accel-on", "gdi-accel-off" };
 
         public static bool Allowed(string path, string name)
         {
@@ -1445,7 +1458,12 @@ namespace AmdgpuWddmControl
                     if (s.DefaultGraphicsDrivers != null && s.DefaultGraphicsDrivers.TryGetValue(TdrSetting.ValueName, out tdrDefault) &&
                         tdrDefault >= 0 && tdrDefault <= uint.MaxValue && TdrSetting.IsValid((uint)tdrDefault) && s.TdrError == null)
                         p.Writes.AddRange(TdrSetting.PlanWrites(s.Tdr(), (uint)tdrDefault));
-                    int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k) && !SetterParameterNames.Contains(k));
+                    // The driver's own switches (DriverFeatures.cs) go back to the installation default the way their
+                    // "on" action does: the person's value is removed. A value that is not there needs no step.
+                    foreach (var name in DriverFeatures.ValueNames)
+                        if (s.StateSchema == 2 && s.P(name) != null) p.Writes.Add(RegWrite.Remove(ParametersPath, name));
+                    int others = s.DefaultParameters.Keys.Count(k => !DefaultParameterNames.Contains(k) && !SetterParameterNames.Contains(k) &&
+                        !(s.StateSchema == 2 && DriverFeatures.ValueNames.Contains(k)));
                     if (others > 0) p.Notes.Add("The other " + others + " driver settings of the release are left to the installer: run it again to reset them.");
                     // The tuning page's settings are not in manifest.json, because the driver stores them itself
                     // (DpmCurve*, CpuMaxMHz, CpuUvSteps, CpuTempC, CoreMask). WU-042 asks for one control that puts
@@ -1743,6 +1761,16 @@ namespace AmdgpuWddmControl
                 case "boot-logo-off":
                 {
                     var why = BootLogoSetting.Fill(action, s, p);
+                    if (why != null) return Refuse(p, why);
+                    break;
+                }
+
+                case "compute-queue-on":
+                case "compute-queue-off":
+                case "gdi-accel-on":
+                case "gdi-accel-off":
+                {
+                    var why = DriverFeatures.Fill(action, s, p);
                     if (why != null) return Refuse(p, why);
                     break;
                 }

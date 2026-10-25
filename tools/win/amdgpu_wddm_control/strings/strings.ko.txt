@@ -1277,3 +1277,28 @@ plan.line.boot-logo-off|mt|225caa0e|시작 화면은 Windows가 그리는 그대
 search.display.boot-logo|mt-safe|778d098c|시작 화면의 그림
 search.display.boot-logo.terms|mt-safe|0baabdd9|부팅|시작 화면|로고|그림|마스코트|nagi|스플래시|고리
 help.setting.boot-logo|mt|84cc314f|Windows가 시작하는 동안 회전하는 고리의 검은 배경 위에 드라이버가 마스코트를 그리도록 허용합니다. 처음부터 켜져 있습니다. 시작 화면을 Windows가 그리는 그대로 두려면 끄십시오. 새 설정은 Windows를 다시 시작한 후에 적용됩니다.
+
+# ---- the driver's own switches of the Graphics page (DriverFeatures.cs, docs/design/compute-node.md) ----
+graphics.features.title|mt-safe|64ba08b9|드라이버 기능
+graphics.compute|mt-safe|33ea933b|계산용 두 번째 대기열
+graphics.compute.help|mt|ee3dec36|Vulkan 게임과 앱은 그리는 동시에 그래픽 칩의 두 번째 대기열에서 계산을 할 수 있습니다. 처음부터 켜져 있습니다. Vulkan 게임이 멈추거나 잘못된 화면을 보이면 끄십시오. 새 설정은 Windows를 다시 시작한 후에 적용됩니다.
+graphics.gdi|mt-safe|ea06b4ca|기존 Windows 그리기의 하드웨어 가속
+graphics.gdi.help|mt|52ad8280|많은 Windows 프로그램은 창, 텍스트, 그림을 기존 Windows 방식으로 그립니다. 이 설정을 켜면 그 그리기의 많은 부분을 프로세서 대신 그래픽 칩이 합니다. 처음부터 켜져 있습니다. 프로그램의 창이나 텍스트가 잘못 보이면 끄십시오. 새 설정은 Windows를 다시 시작한 후에 적용됩니다.
+graphics.feature.pending|mt|f11a2ffa|새 선택을 사용하려면 Windows를 다시 시작하십시오.
+graphics.feature.refuse.on-already|mt|aeded930|이미 켜져 있습니다.
+graphics.feature.refuse.off-already|mt|7bbfb381|이미 꺼져 있습니다.
+graphics.feature.refuse.unavailable|mt|e2b9777f|설치된 드라이버는 이 컴퓨터에서 이 설정을 사용할 수 없습니다.
+plan.title.compute-queue-on|mt|6efee15e|계산용 두 번째 대기열 켜기
+plan.title.compute-queue-off|mt|16273546|계산용 두 번째 대기열 끄기
+plan.title.gdi-accel-on|mt|01cd15f9|기존 Windows 그리기의 하드웨어 가속 켜기
+plan.title.gdi-accel-off|mt|d6c344a3|기존 Windows 그리기의 하드웨어 가속 끄기
+plan.line.compute-queue-on|mt|c24b2655|Vulkan 게임과 앱은 그래픽 칩의 두 번째 대기열에서 계산을 할 수 있습니다.
+plan.line.compute-queue-off|mt|e6c79e7d|Vulkan 게임과 앱은 모든 작업을 그래픽 칩의 대기열 하나에서 합니다.
+plan.line.gdi-accel-on|mt|b664324a|기존 Windows 프로그램의 창과 텍스트를 그래픽 칩이 그립니다.
+plan.line.gdi-accel-off|mt|454d80c5|기존 Windows 프로그램의 창과 텍스트를 프로세서가 그립니다.
+search.graphics.compute|mt-safe|33ea933b|계산용 두 번째 대기열
+search.graphics.compute.terms|mt-safe|17f67293|계산|대기열|비동기|병렬|컴퓨트|vulkan
+search.graphics.gdi|mt-safe|1cea1d53|기존 그리기의 하드웨어 가속
+search.graphics.gdi.terms|mt-safe|e9dfeb26|gdi|하드웨어 가속|가속|그리기|텍스트|창|2d
+help.setting.compute|mt|9c34d158|Vulkan 게임과 앱이 그리는 동안 그래픽 칩의 두 번째 하드웨어 대기열에서 계산을 하도록 허용하며, 이로써 더 빨라질 수 있습니다. 처음부터 켜져 있습니다. Vulkan 게임이 응답하지 않거나 잘못된 화면을 보이면 끄십시오. 새 설정은 Windows를 다시 시작한 후에 적용됩니다.
+help.setting.gdi|mt|57b5fd27|많은 프로그램의 기존 Windows 그리기(창, 텍스트, 그림)를 그래픽 칩이 하도록 허용합니다. 그만큼 프로세서의 일이 줄어듭니다. 처음부터 켜져 있습니다. 프로그램의 창이나 텍스트가 잘못 보이면 끄십시오. 새 설정은 Windows를 다시 시작한 후에 적용됩니다.

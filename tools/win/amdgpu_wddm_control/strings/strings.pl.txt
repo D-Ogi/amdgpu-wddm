@@ -1279,3 +1279,28 @@ plan.line.boot-logo-off|mt|225caa0e|Ekran startowy zostaje taki, jaki rysuje go 
 search.display.boot-logo|mt-safe|778d098c|Obrazek na ekranie startowym
 search.display.boot-logo.terms|mt-safe|0baabdd9|rozruch|ekran startowy|logo|obrazek|maskotka|nagi|powitanie|kółko
 help.setting.boot-logo|mt|84cc314f|Pozwala sterownikowi rysować maskotkę na ekranie podczas uruchamiania Windows, na czarnym tle obracającego się kółka. Jest włączone od początku. Wyłącz to, jeśli chcesz ekran startowy dokładnie taki, jaki rysuje go Windows; nowe ustawienie działa po ponownym uruchomieniu Windows.
+
+# ---- the driver's own switches of the Graphics page (DriverFeatures.cs, docs/design/compute-node.md) ----
+graphics.features.title|mt-safe|64ba08b9|Funkcje sterownika
+graphics.compute|mt-safe|33ea933b|Druga kolejka do obliczeń
+graphics.compute.help|mt|ee3dec36|Gry i aplikacje Vulkan mogą wykonywać obliczenia w drugiej kolejce układu graficznego, w tym samym czasie, gdy rysują. Jest włączona od początku. Wyłącz ją, jeśli gra Vulkan przestaje działać albo pokazuje z nią błędny obraz. Nowe ustawienie działa po ponownym uruchomieniu Windows.
+graphics.gdi|mt-safe|ea06b4ca|Sprzętowa akceleracja klasycznego rysowania Windows
+graphics.gdi.help|mt|52ad8280|Wiele programów Windows rysuje swoje okna, tekst i obrazy w klasyczny sposób Windows. Gdy to jest włączone, dużą część tego rysowania wykonuje układ graficzny zamiast procesora. Jest włączone od początku. Wyłącz to, jeśli okna lub tekst jakiegoś programu wyglądają źle. Nowe ustawienie działa po ponownym uruchomieniu Windows.
+graphics.feature.pending|mt|f11a2ffa|Uruchom ponownie Windows, aby użyć nowego wyboru.
+graphics.feature.refuse.on-already|mt|aeded930|To jest już włączone.
+graphics.feature.refuse.off-already|mt|7bbfb381|To jest już wyłączone.
+graphics.feature.refuse.unavailable|mt|e2b9777f|Zainstalowany sterownik nie może użyć tego ustawienia na tym komputerze.
+plan.title.compute-queue-on|mt|6efee15e|Włącz drugą kolejkę do obliczeń
+plan.title.compute-queue-off|mt|16273546|Wyłącz drugą kolejkę do obliczeń
+plan.title.gdi-accel-on|mt|01cd15f9|Włącz sprzętową akcelerację klasycznego rysowania Windows
+plan.title.gdi-accel-off|mt|d6c344a3|Wyłącz sprzętową akcelerację klasycznego rysowania Windows
+plan.line.compute-queue-on|mt|c24b2655|Gry i aplikacje Vulkan mogą wykonywać obliczenia w drugiej kolejce układu graficznego.
+plan.line.compute-queue-off|mt|e6c79e7d|Gry i aplikacje Vulkan wykonują całą pracę w jednej kolejce układu graficznego.
+plan.line.gdi-accel-on|mt|b664324a|Okna i tekst klasycznych programów Windows rysuje układ graficzny.
+plan.line.gdi-accel-off|mt|454d80c5|Okna i tekst klasycznych programów Windows rysuje procesor.
+search.graphics.compute|mt-safe|33ea933b|Druga kolejka do obliczeń
+search.graphics.compute.terms|mt-safe|17f67293|obliczenia|kolejka|asynchroniczne|równoległe|compute|vulkan
+search.graphics.gdi|mt-safe|1cea1d53|Sprzętowa akceleracja klasycznego rysowania
+search.graphics.gdi.terms|mt-safe|e9dfeb26|gdi|akceleracja|przyspieszenie sprzętowe|rysowanie|tekst|okna|2d
+help.setting.compute|mt|9c34d158|Pozwala grom i aplikacjom Vulkan wykonywać obliczenia w drugiej sprzętowej kolejce układu graficznego, gdy rysują, co może je przyspieszyć. Jest włączona od początku. Wyłącz ją, jeśli gra Vulkan przestaje odpowiadać albo pokazuje błędny obraz; nowe ustawienie działa po ponownym uruchomieniu Windows.
+help.setting.gdi|mt|57b5fd27|Pozwala układowi graficznemu wykonywać klasyczne rysowanie Windows w wielu programach: ich okna, tekst i obrazy. Procesor ma wtedy mniej pracy. Jest włączone od początku. Wyłącz to, jeśli okna lub tekst jakiegoś programu wyglądają źle; nowe ustawienie działa po ponownym uruchomieniu Windows.
