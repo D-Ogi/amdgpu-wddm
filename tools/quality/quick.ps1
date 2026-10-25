@@ -611,6 +611,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='submit-watchdog-log-the-constant';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-LogTheConstant');Fails=$true}
   @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
+  @{n='vmid-pool-ignore-compute-ring';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreComputeRing');Fails=$true}
   # The gfx-pipeline controls check their own pinned CHECK failure counts (run_gfx_pipeline.ps1) and exit 0 when the
   # control failed as required; a crash, a deadline or a build error fails them.
   @{n='gfx-pipeline-idle-only';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-IdleOnlyPresent')}

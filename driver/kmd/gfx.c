@@ -111,6 +111,11 @@ static const struct { const char* Name; BC250_GFX_STAGE_FUNCTION Run; } g_Stages
 // M15.12 stage 1: how long GfxSoftRecover re-issues the wave kill while waiting for the newest sequence to retire.
 // amdgpu_ring_soft_recovery uses 10000 us (10 ms); we match it. Bounded so DxgkDdiResetEngine returns promptly.
 #define BC250_SOFT_RECOVER_US 10000ul
+// WDDM node 2 (docs/design/compute-node.md): one MEC compute ring of the eight that the CP brings up. compute_ring[0]
+// is the high-priority queue (bc250_is_high_priority_compute_queue, MEASURED in the Linux MQD dumps), so node 2 takes
+// compute_ring[1]. Its fence slot is the one after node 0's submission slot, on the same gfx fence page.
+#define BC250_COMPUTE_RING_INDEX 1u
+#define BC250_COMPUTE_FENCE_SLOT 11u
 
 // ADR 0008 stage D (docs/design/paging-node.md): node 1, DXGK_ENGINE_TYPE_COPY on SDMA0, the paging node.
 // Its own fence slot on the SDMA fence page (BC250_SDMA_FENCE_SLOTS = 16, bc250_sdma.h): 0/1 are the ring
@@ -190,6 +195,15 @@ typedef struct _BC250_GFX {
     volatile LONG VmidRuleLogged;
     volatile LONG VmidFlushes;      // FLUSH_TLB operations built with the pool open
     volatile LONG VmidFlushVmids;   // the VMID invalidations they carried
+    // ---- WDDM node 2: one compute ring (docs/design/compute-node.md) ----
+    // The same shape as the node 0 fields above, on compute_ring[1] and fence slot 11. The VMID table is shared: a
+    // root keeps one VMID on both rings, and Vmid.LiveSeqCompute holds what the compute ring owes each VMID.
+    BOOLEAN ComputeGate;            // EnableComputeNode (absent = on, 0 = off) and every gate node 2 rests on; GfxStart
+    volatile LONG ComputeFailed;    // sticky like SubmitFailed, node 2's own: a fault of node 2 leaves node 0 open
+    volatile LONG ComputeInFlight;  // newest outstanding compute sequence; the CAS rule of SubmitInFlight
+    ULONG ComputeSeq;               // its sequence, 0 when none was ever emitted
+    struct amdgpu_device* ComputeAdev; // the device pointer the DPC reads slot 11 through, the SubmitAdev rule
+    volatile LONG ComputeSubmits;   // jobs committed to the compute ring
     // ADR 0013: the two VRAM scratch regions BC250_ESCAPE_RUN_SDMACOPY copies between. Allocated once from the
     // same VRAM pool the rest of this file's memory comes from (gpumem.c), on the first call, and freed with
     // everything else in TearDown - not by the escape itself, so that two calls in a row need not pay for the
@@ -392,6 +406,7 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     GfxAccessClose(Gfx->Sequence.Device);
     if (!Gfx->SetUp) return;
     Gfx->SubmitAdev = NULL;             // first: GfxFenceArrived reads the fence page through it, without a lock
+    Gfx->ComputeAdev = NULL;            // the same for GfxComputeFenceArrived
     // The caller holds GfxPagingLock exclusively before touching engine state.
     // All admitted builders have exited and no new builder can enter. The DPC
     // readers require their separate interrupt/timer rundown; this lock is passive.
@@ -417,6 +432,8 @@ static void TearDown(_Inout_ BC250_GFX* Gfx, _In_ struct amdgpu_device* Adev)
     // the whole device start by design, and a teardown is not a reason to trust the path again.
     Gfx->SubmitSeq = 0;
     InterlockedExchange(&Gfx->SubmitInFlight, 0);
+    Gfx->ComputeSeq = 0;                // ComputeFailed stays, as SubmitFailed does
+    InterlockedExchange(&Gfx->ComputeInFlight, 0);
     // PagingSubmitFailed is left exactly like SubmitFailed above, for the same reason and on its own hardware.
     Gfx->PagingSubmitSeq = 0;
     InterlockedExchange(&Gfx->PagingSubmitInFlight, 0);
@@ -1010,7 +1027,9 @@ static BOOLEAN GfxSubmitBusyAccess(_In_ const BC250_DEVICE* Device)
 
     // Outstanding GPU work. The UMD path may still enqueue into available ring
     // and completion slots, or wait for capacity/root-switch retirement.
-    return GfxSubmitArmed(gfx) && gfx->SubmitInFlight != 0;
+    // Node 2: a compute job holds its VMID as a gfx job does, so a node 0 submission that the VMID pool refused can
+    // also be waiting for a compute retirement. Both rings signal the same retirement event.
+    return GfxSubmitArmed(gfx) && (gfx->SubmitInFlight != 0 || gfx->ComputeInFlight != 0);
 }
 
 BOOLEAN GfxSubmitBusy(_In_ const BC250_DEVICE* Device)
@@ -1132,13 +1151,14 @@ typedef struct _GFX_KILL_CONTEXT {
     struct amdgpu_device* Adev;
     ULONG Seq;
     ULONG Vmid;
+    ULONG Slot;                         // the fence slot of the ring being recovered: node 0's or node 2's
     ULONGLONG Deadline;
 } GFX_KILL_CONTEXT;
 
 static int GfxKillRetired(void* Context)
 {
     GFX_KILL_CONTEXT* c = (GFX_KILL_CONTEXT*)Context;
-    return bc250_fence_reached((ULONG)bc250_gfx_fence_read(c->Adev, BC250_SUBMIT_FENCE_SLOT), c->Seq);
+    return bc250_fence_reached((ULONG)bc250_gfx_fence_read(c->Adev, c->Slot), c->Seq);
 }
 
 // KeQueryInterruptTime is 100 ns units. KeStallExecutionProcessor, not KeDelayExecutionThread: the kill must be
@@ -1166,10 +1186,17 @@ static void GfxKillStall(void* Context)
 
 static const BC250_HANG_KILL_OPS g_GfxKillOps = { GfxKillRetired, GfxKillExpired, GfxKillIssue, GfxKillStall };
 
-ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
-                     _Out_ ULONG* Micros)
+// Compute TRUE is node 2: the newest sequence of the compute ring, against its own slot. The kill is the same
+// broadcast SQ_CMD on the VMID, so it also ends any wave of that VMID on the gfx ring. One VMID is one page-table
+// root, which is one process, and dxgkrnl puts the whole device of that process into the removed state after a
+// TDR, so no other process loses work by it.
+static ULONG GfxSoftRecoverRing(_Inout_ BC250_DEVICE* Device, ULONG Vmid, BOOLEAN Compute, _Out_ ULONG* Seq,
+                                _Out_ ULONG* Kills, _Out_ ULONG* Micros)
 {
     BC250_GFX* gfx;
+    const char* ringName = Compute ? "compute" : "gfx";
+    ULONG ringSeq;
+    struct amdgpu_device* ringAdev;
     struct amdgpu_device* adev = NULL;
     void* previousBackend;
     BOOLEAN gartEnabled = FALSE;
@@ -1205,19 +1232,23 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         GuardLog("gfx: soft recovery found no ring to kill on (0x%08lX); nothing changed", (ULONG)status);
         return BC250_HANG_VERDICT_NOT_DRAINED;
     }
-    *Seq = gfx->SubmitSeq;
+    ringSeq = Compute ? gfx->ComputeSeq : gfx->SubmitSeq;
+    ringAdev = Compute ? gfx->ComputeAdev : gfx->SubmitAdev;
+    *Seq = ringSeq;
     // SubmitAdev is the adev of the last submission, which SubmitIbLocked got from GartDevice: the same object.
-    if (gfx->SubmitSeq == 0 || gfx->SubmitAdev != adev)
+    // ComputeAdev is SubmitComputeLocked's, by the same rule.
+    if (ringSeq == 0 || ringAdev != adev)
     {
         ExReleaseFastMutex(&Device->GartLock);
-        GuardLog("gfx: soft recovery found no submission to retire (seq %lu); nothing changed", *Seq);
+        GuardLog("gfx: soft recovery found no %s submission to retire (seq %lu); nothing changed", ringName, *Seq);
         return BC250_HANG_VERDICT_NOT_DRAINED;
     }
 
     kill.Gfx = gfx;
     kill.Adev = adev;
-    kill.Seq = gfx->SubmitSeq;
+    kill.Seq = ringSeq;
     kill.Vmid = Vmid;
+    kill.Slot = Compute ? BC250_COMPUTE_FENCE_SLOT : BC250_SUBMIT_FENCE_SLOT;
     // amdgpu's own 10 ms budget (amdgpu_ring_soft_recovery: ktime_add_us(.., 10000)).
     start = KeQueryInterruptTime();
     kill.Deadline = start + (ULONGLONG)BC250_SOFT_RECOVER_US * 10ull;
@@ -1241,12 +1272,24 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
         GuardLog("gfx: soft recovery kill refused: register 0x%05lX (0x%08lX) after %lu kill(s) of VMID %lu",
                  faultOffset, (ULONG)fault, *Kills, Vmid);
     if (verdict != BC250_HANG_VERDICT_NOT_DRAINED)
-        GuardLog("gfx: soft recovery: seq %lu retired after %lu kill(s) of VMID %lu waves in %lu us; awaiting commit",
-                 *Seq, *Kills, Vmid, *Micros);
+        GuardLog("gfx: soft recovery %s: seq %lu retired after %lu kill(s) of VMID %lu in %lu us; awaiting commit",
+                 ringName, *Seq, *Kills, Vmid, *Micros);
     else
-        GuardLog("gfx: soft recovery of seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
-                 *Seq, *Kills, Vmid, *Micros);
+        GuardLog("gfx: soft recovery %s seq %lu did not drain: %lu kill(s) of VMID %lu in %lu us; ring stays closed",
+                 ringName, *Seq, *Kills, Vmid, *Micros);
     return verdict;
+}
+
+ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
+                     _Out_ ULONG* Micros)
+{
+    return GfxSoftRecoverRing(Device, Vmid, FALSE, Seq, Kills, Micros);
+}
+
+ULONG GfxComputeSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
+                            _Out_ ULONG* Micros)
+{
+    return GfxSoftRecoverRing(Device, Vmid, TRUE, Seq, Kills, Micros);
 }
 
 // Wave observation never uses the live submission sequence: a refused debug read
@@ -1483,7 +1526,10 @@ static BOOLEAN GfxFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
         if (pending && bc250_fence_reached(observed, (ULONG)pending) &&
             InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
         {
-            DpmBusyEnd(&Device->Dpm);     // the ring went idle: the DPM governor's busy share (dpm.h)
+            // The ring went idle: the end of the DPM governor's busy share (dpm.h), unless the compute ring is still
+            // busy. Both CASes are full barriers and each side reads the other after its own, so when the two rings
+            // go idle together at least one of them ends the share; a second end finds BusySince 0 and adds nothing.
+            if (InterlockedCompareExchange(&gfx->ComputeInFlight, 0, 0) == 0) DpmBusyEnd(&Device->Dpm);
             // KMD196: this CAS is the one place that turns "a job is in flight" into "none is", which is exactly
             // the condition SubmitIbLocked refuses a foreign root on. Whoever observed the fence - the IH DPC,
             // the watchdog, a submit - the waiters are woken from here.
@@ -1558,7 +1604,8 @@ BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
     idle = pending == 0 ||
            bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_SUBMIT_FENCE_SLOT), (ULONG)pending);
     if (idle && pending != 0 &&
-        InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending)
+        InterlockedCompareExchange(&gfx->SubmitInFlight, 0, pending) == pending &&
+        InterlockedCompareExchange(&gfx->ComputeInFlight, 0, 0) == 0)
         DpmBusyEnd(&Device->Dpm);       // the ring went idle: the share the normal fence path would have ended
     if (idle)
     {
@@ -1646,7 +1693,7 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
                                _Out_opt_ ULONG* VmidUsed)
 {
     struct amdgpu_ring* ring = &Adev->gfx.gfx_ring[0];      // BC250_FENCE_RING_GFX; the only ring that takes an IB here
-    ULONG seq, previousSeq, observed;
+    ULONG seq, previousSeq, observed, observedCompute;
     LONG previousPending;
     BOOLEAN inFlight;
     BC250_VMID_DECISION decision;
@@ -1690,12 +1737,13 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
     address = bc250_gfx_fence_addr(Adev, BC250_SUBMIT_FENCE_SLOT);
     if (address == 0) return STATUS_INSUFFICIENT_RESOURCES;
 
-    // The VMID. One read of the fence slot answers "has the last job of VMID v retired" for every v, because the
-    // fence is global and in order (vmid_pool.h).
+    // The VMID. One read of each ring's fence slot answers "has the last job of VMID v retired" for every v, because
+    // each ring's fence is in order (vmid_pool.h). With node 2 closed nothing is live on the compute ring.
     observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
-    Bc250VmidSweep(&Gfx->Vmid, observed);
+    observedCompute = (ULONG)bc250_gfx_fence_read(Adev, BC250_COMPUTE_FENCE_SLOT);
+    Bc250VmidSweep(&Gfx->Vmid, observed, observedCompute);
     decision = Bc250VmidAdmit(&Gfx->Vmid, Gfx->VmidMembers, Gfx->VmidPoolGate, Vmid, RootPhysical, inFlight,
-                              Gfx->SubmitVmid, observed);
+                              Gfx->SubmitVmid, observed, observedCompute);
     if (decision.Verdict == BC250_VMID_REFUSE_PARAM) return STATUS_INVALID_PARAMETER;
     if (decision.Verdict == BC250_VMID_REFUSE_BUSY)
     {
@@ -1709,9 +1757,10 @@ static NTSTATUS SubmitIbLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* 
         // Refused before the write, logged once, counted always; the caller sees the old wait.
         InterlockedIncrement(&Gfx->VmidRuleRefusals);
         if (InterlockedExchange(&Gfx->VmidRuleLogged, 1) == 0)
-            GuardLog("gfx: VMID %lu root 0x%llX -> 0x%llX REFUSED: its job %lu has not retired (fence %lu)",
+            GuardLog("gfx: VMID %lu root 0x%llX -> 0x%llX REFUSED: job %lu/%lu not retired (fence %lu/%lu)",
                      (ULONG)decision.Vmid, Gfx->Vmid.Root[decision.Vmid], RootPhysical,
-                     (ULONG)Gfx->Vmid.LiveSeq[decision.Vmid], observed);
+                     (ULONG)Gfx->Vmid.LiveSeq[decision.Vmid], (ULONG)Gfx->Vmid.LiveSeqCompute[decision.Vmid],
+                     observed, observedCompute);
         return STATUS_DEVICE_BUSY;
     }
     Vmid = decision.Vmid;
@@ -1876,6 +1925,311 @@ NTSTATUS GfxSubmitIb(_Inout_ BC250_DEVICE* Device, ULONG Vmid, ULONGLONG RootPhy
         SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
         GpuMemBeginSequence(Device, NULL, 0);
         status = SubmitIbLocked(Device, gfx, adev, Vmid, RootPhysical, GpuAddress, SizeBytes, Identity, Seq, VmidUsed);
+        (void)GpuMemEndSequence(Device, &vram, &gtt);
+        adev->backend = previousBackend;
+    }
+    ExReleaseFastMutex(&Device->GartLock);
+    ProgressExit(ProgressSiteGfxSubmit, (LONG)*Seq);
+    return status;
+}
+
+// ---- WDDM node 2: the compute ring (docs/design/compute-node.md) ----
+//
+// The same contract as node 0's submission above, on compute_ring[1] and fence slot 11. What the two rings share,
+// and why:
+//   - FenceSeq. One counter numbers the jobs of both rings, so a VMID's FirstSeq and LastSeq still name one job each.
+//     Each ring's fence is in order on its own slot; nothing compares a sequence of one ring with the other's slot.
+//   - The VMID table. A root keeps one VMID on both rings, and a VMID is free only when its last job retired on both
+//     (Bc250VmidRetired). A claim on either ring writes the root pair that both rings read.
+//   - GfxRetireEvent. A retirement on either ring can free the VMID that a submission on the other one waits for.
+//   - The DPM busy share. It is one interval: it ends when neither ring has a job in flight.
+// What node 2 has of its own: ComputeFailed, so a fault or reset of node 2 leaves node 0 open and the reverse, its
+// invalidation engine (BC250_INV_ENG_COMPUTE_RING), and its fence slot.
+
+static BOOLEAN GfxComputeArmed(_In_ const BC250_GFX* gfx)
+{
+    // GfxSubmitArmed without SubmitFailed: node 0's recovery does not close node 2. ComputeGate holds SubmitGate.
+    return gfx != NULL && gfx->ComputeGate && gfx->SetUp && !gfx->PowerSuspended && !gfx->Failed &&
+           gfx->ComputeFailed == 0 && gfx->StagesDone >= BC250_GFX_STAGE_INTERRUPTS;
+}
+
+BOOLEAN GfxComputeReady(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = GfxAccessAcquire(Device);
+    BOOLEAN result;
+
+    if (gfx == NULL) return FALSE;
+    result = GfxComputeArmed(gfx) && gfx->ComputeInFlight == 0;
+    GfxAccessRelease(Device);
+    return result;
+}
+
+// The mirror of GfxSubmitBusyAccess: a node 2 submission that the VMID pool refused can be waiting for a gfx job.
+BOOLEAN GfxComputeBusy(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = GfxAccessAcquire(Device);
+    BOOLEAN result;
+
+    if (gfx == NULL) return FALSE;
+    result = GfxComputeArmed(gfx) && (gfx->ComputeInFlight != 0 || gfx->SubmitInFlight != 0);
+    GfxAccessRelease(Device);
+    return result;
+}
+
+// Node 2's gate as WddmStart sees it. Fixed for the life of the start: GfxStart latched it.
+BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = GfxAccessAcquire(Device);
+    BOOLEAN result;
+
+    if (gfx == NULL) return FALSE;
+    result = gfx->ComputeGate;
+    GfxAccessRelease(Device);
+    return result;
+}
+
+// GfxSubmitClose for node 2. No StartHealthFault, also on a real fault: the start's health is node 0's witness, and
+// a compute job that faults says nothing about whether the desktop runs. Node 2's fault stays in its own gate.
+void GfxComputeClose(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx = GfxAccessAcquire(Device);
+
+    if (gfx == NULL) return;
+    if (InterlockedExchange(&gfx->ComputeFailed, 1) == 0)
+        GuardLog("gfx: compute gate closed pending recovery (seq %lu in flight, slot 0x%X)", gfx->ComputeSeq,
+                 gfx->ComputeAdev != NULL ? (ULONG)bc250_gfx_fence_read(gfx->ComputeAdev, BC250_COMPUTE_FENCE_SLOT) : 0);
+    GfxRetireSignal(Device);
+    GfxAccessRelease(Device);
+}
+
+static BOOLEAN GfxComputeFenceArrivedAccess(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+{
+    BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
+
+    // GfxFenceArrivedAccess on slot 11, with the same lifetime argument for ComputeAdev.
+    if (gfx == NULL || gfx->ComputeAdev == NULL || Seq == 0) return FALSE;
+    {
+        ULONG observed = (ULONG)bc250_gfx_fence_read(gfx->ComputeAdev, BC250_COMPUTE_FENCE_SLOT);
+        LONG pending = InterlockedCompareExchange(&gfx->ComputeInFlight, 0, 0);
+        if (!bc250_fence_reached(observed, Seq)) return FALSE;
+        if (pending && bc250_fence_reached(observed, (ULONG)pending) &&
+            InterlockedCompareExchange(&gfx->ComputeInFlight, 0, pending) == pending)
+        {
+            // The rule of GfxFenceArrivedAccess, from the other side: end the busy share only when the gfx ring is
+            // idle too.
+            if (InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0) == 0) DpmBusyEnd(&Device->Dpm);
+            GfxRetireSignal(Device);
+        }
+    }
+    return TRUE;
+}
+
+BOOLEAN GfxComputeFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq)
+{
+    BOOLEAN result;
+
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    result = GfxComputeFenceArrivedAccess(Device, Seq);
+    GfxAccessRelease(Device);
+    return result;
+}
+
+// GfxFenceObserved for slot 11: the raw value, no side effects.
+BOOLEAN GfxComputeFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value)
+{
+    BC250_GFX* gfx;
+    BOOLEAN observed;
+
+    *Value = 0;
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    observed = gfx != NULL && gfx->ComputeAdev != NULL;
+    if (observed)
+        *Value = (ULONG)bc250_gfx_fence_read(gfx->ComputeAdev, BC250_COMPUTE_FENCE_SLOT);
+    GfxAccessRelease(Device);
+    return observed;
+}
+
+// GfxReopenAfterAbort for node 2: the final stage of a successful ResetEngine of node 2, under the WDDM Lock, with
+// the same refusal: a ring that still holds work is never reopened.
+BOOLEAN GfxComputeReopenAfterAbort(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev;
+    LONG pending;
+    BOOLEAN idle;
+
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    adev = (gfx != NULL) ? gfx->ComputeAdev : NULL;
+    if (gfx == NULL || adev == NULL) { GfxAccessRelease(Device); return FALSE; }
+    pending = InterlockedCompareExchange(&gfx->ComputeInFlight, 0, 0);
+    idle = pending == 0 ||
+           bc250_fence_reached((ULONG)bc250_gfx_fence_read(adev, BC250_COMPUTE_FENCE_SLOT), (ULONG)pending);
+    if (idle && pending != 0 &&
+        InterlockedCompareExchange(&gfx->ComputeInFlight, 0, pending) == pending &&
+        InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0) == 0)
+        DpmBusyEnd(&Device->Dpm);
+    if (idle)
+    {
+        InterlockedExchange(&gfx->ComputeFailed, 0);
+        GuardLog("gfx: compute ring reopened after an aborted fence (seq %lu was in flight, slot 0x%X)",
+                 (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_COMPUTE_FENCE_SLOT));
+    }
+    else
+        GuardLog("gfx: compute ring NOT reopened: seq %lu is still in flight (slot 0x%X)",
+                 (ULONG)pending, (ULONG)bc250_gfx_fence_read(adev, BC250_COMPUTE_FENCE_SLOT));
+    GfxAccessRelease(Device);
+    return idle;
+}
+
+// SubmitIbLocked for node 2, with the same locks held. Always the VMID pool (ComputeGate holds VmidPoolGate) and
+// always the flush on the ring (it holds RingVmFlushGate): the compute ring has no MMIO root path of its own, and
+// the CPU path's engine 17 belongs to node 0's MMIO arm.
+static NTSTATUS SubmitComputeLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_GFX* Gfx,
+                                    _In_ struct amdgpu_device* Adev, ULONGLONG RootPhysical, ULONGLONG GpuAddress,
+                                    ULONG SizeBytes, _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity,
+                                    _Out_ ULONG* Seq, _Out_opt_ ULONG* VmidUsed)
+{
+    struct amdgpu_ring* ring;
+    ULONG seq, previousSeq, observed, observedCompute, vmid;
+    LONG previousPending;
+    BOOLEAN gfxInFlight;
+    BC250_VMID_DECISION decision;
+    KIRQL irql;
+    u64 address;
+    long result;
+
+    *Seq = 0;
+    if (VmidUsed != NULL) *VmidUsed = 0;
+    if (Gfx->ComputeFailed) return STATUS_DEVICE_HARDWARE_ERROR;
+    if (!Gfx->ComputeGate) return STATUS_ACCESS_DENIED;
+    if (Gfx->Failed || !Gfx->SetUp || Gfx->StagesDone < BC250_GFX_STAGE_INTERRUPTS) return STATUS_INVALID_DEVICE_STATE;
+    if (Adev->gfx.num_compute_rings <= BC250_COMPUTE_RING_INDEX) return STATUS_INVALID_DEVICE_STATE;
+    if (SizeBytes == 0 || (SizeBytes & 3) != 0) return STATUS_INVALID_PARAMETER;
+    ring = &Adev->gfx.compute_ring[BC250_COMPUTE_RING_INDEX];
+
+    // The gfx ring's state, for the one thing the admission takes from it: a VMID 0 diagnostic in flight there
+    // holds compute jobs off too (vmid_pool.h).
+    gfxInFlight = Gfx->SubmitInFlight != 0 && !GfxFenceArrived(Device, Gfx->SubmitSeq);
+    (void)GfxComputeFenceArrivedAccess(Device, Gfx->ComputeSeq);
+    if (!bc250_ring_has_space(ring, ring->funcs->align_mask + 1u)) return STATUS_DEVICE_BUSY;
+    GfxVmidProbe(Gfx, Adev);
+    ring->track_rptr = true;
+
+    if (!Gfx->FencePage)
+    {
+        result = bc250_gfx_fence_page_alloc(Adev);
+        if (result != 0) return STATUS_INSUFFICIENT_RESOURCES;
+        Gfx->FencePage = TRUE;
+    }
+    address = bc250_gfx_fence_addr(Adev, BC250_COMPUTE_FENCE_SLOT);
+    if (address == 0) return STATUS_INSUFFICIENT_RESOURCES;
+
+    observed = (ULONG)bc250_gfx_fence_read(Adev, BC250_SUBMIT_FENCE_SLOT);
+    observedCompute = (ULONG)bc250_gfx_fence_read(Adev, BC250_COMPUTE_FENCE_SLOT);
+    Bc250VmidSweep(&Gfx->Vmid, observed, observedCompute);
+    decision = Bc250VmidAdmit(&Gfx->Vmid, Gfx->VmidMembers, TRUE, BC250_VMID_AUTO, RootPhysical, gfxInFlight,
+                              Gfx->SubmitVmid, observed, observedCompute);
+    if (decision.Verdict == BC250_VMID_REFUSE_PARAM) return STATUS_INVALID_PARAMETER;
+    if (decision.Verdict == BC250_VMID_REFUSE_BUSY)
+    {
+        InterlockedIncrement(&Gfx->VmidBusy);
+        return STATUS_DEVICE_BUSY;
+    }
+    if (decision.Verdict == BC250_VMID_REFUSE_RULE)
+    {
+        InterlockedIncrement(&Gfx->VmidRuleRefusals);
+        if (InterlockedExchange(&Gfx->VmidRuleLogged, 1) == 0)
+            GuardLog("gfx: compute VMID %lu root 0x%llX -> 0x%llX REFUSED: job %lu/%lu not retired (fence %lu/%lu)",
+                     (ULONG)decision.Vmid, Gfx->Vmid.Root[decision.Vmid], RootPhysical,
+                     (ULONG)Gfx->Vmid.LiveSeq[decision.Vmid], (ULONG)Gfx->Vmid.LiveSeqCompute[decision.Vmid],
+                     observed, observedCompute);
+        return STATUS_DEVICE_BUSY;
+    }
+    vmid = decision.Vmid;
+    if (vmid == 0 || vmid >= BC250_VMID_COUNT) return STATUS_INVALID_PARAMETER;   // the chooser never gives VMID 0
+    if (Gfx->HotSubmitLog) GuardLog("gfx: compute VMID %lu root 0x%llX flush on the ring", vmid, RootPhysical);
+    else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
+    if (decision.Claim)
+    {
+        KeAcquireSpinLock(&Gfx->VmidLock, &irql);
+        Bc250VmidClaim(&Gfx->Vmid, &Gfx->VmidHistory, vmid, RootPhysical);
+        KeReleaseSpinLock(&Gfx->VmidLock, irql);
+        InterlockedIncrement(&Gfx->VmidClaims);
+    }
+    else InterlockedIncrement(&Gfx->VmidReuses);
+
+    seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);
+    if (seq == 0) seq = (ULONG)InterlockedIncrement(&Gfx->FenceSeq);
+    previousSeq = Gfx->ComputeSeq;
+    previousPending = InterlockedCompareExchange(&Gfx->ComputeInFlight, 0, 0);
+    Gfx->ComputeSeq = seq;
+    Gfx->ComputeAdev = Adev;
+    InterlockedExchange(&Gfx->ComputeInFlight, (LONG)seq);
+
+    if (Gfx->HotSubmitLog && Identity != NULL)
+        GuardLog("gfx: compute job seq %lu vmid %lu fence %lu ib 0x%llX x%lu ctx 0x%llX pid %lu", seq, vmid,
+                 Identity->Fence, GpuAddress, SizeBytes / 4, Identity->Context, Identity->ProcessId);
+    else InterlockedIncrement(&Gfx->HotSubmitLinesSkipped);
+    // The root pair and the invalidation on engine 4, then the IB with INDIRECT_BUFFER_VALID, then the fence with
+    // the interrupt: upstream's compute frame (gfx_v10_0_ring_emit_vm_flush, emit_ib_compute, emit_fence).
+    result = bc250_gfx_submit_job_compute(ring, GpuAddress, SizeBytes / 4, vmid, address, seq,
+                                          AMDGPU_FENCE_FLAG_INT, 1, RootPhysical, BC250_INV_ENG_COMPUTE_RING);
+    if (result != 0 || !NT_SUCCESS(Gfx->Sequence.Fault))
+    {
+        // Nothing was committed (the emitter undoes its allocation). A claim stands with no live job, and the next
+        // job of this VMID writes the root again, as on node 0.
+        (void)InterlockedCompareExchange(&Gfx->ComputeInFlight, previousPending, (LONG)seq);
+        Gfx->ComputeSeq = previousSeq;
+        GuardLog("gfx: compute IB 0x%llX x%lu dwords at VMID %lu refused, result %d", GpuAddress, SizeBytes / 4,
+                 vmid, result);
+        return NT_SUCCESS(Gfx->Sequence.Fault) ? STATUS_INVALID_PARAMETER : Gfx->Sequence.Fault;
+    }
+
+    KeAcquireSpinLock(&Gfx->VmidLock, &irql);
+    Bc250VmidSubmittedCompute(&Gfx->Vmid, vmid, seq, Identity != NULL ? Identity->ProcessId : 0);
+    KeReleaseSpinLock(&Gfx->VmidLock, irql);
+    InterlockedIncrement(&Gfx->RingVmFlushes);
+    if (!decision.Claim) InterlockedIncrement(&Gfx->RingVmFlushSame);
+    if (VmidUsed != NULL) *VmidUsed = vmid;
+    if (Identity != NULL)
+        PagingJournalGfxSubmit(seq, Identity->Fence, GpuAddress, RootPhysical, Identity->Context, Identity->Node,
+                               Identity->ProcessId, Identity->ContextFlags, vmid);
+    DpmBusyBegin(&Device->Dpm);
+    if (InterlockedIncrement(&Gfx->ComputeSubmits) <= 4)
+        GuardLog("gfx: compute queued seq%lu prior%lu vmid%lu claim%d", seq, previousSeq, vmid, decision.Claim);
+    *Seq = seq;
+    return STATUS_SUCCESS;
+}
+
+// GfxSubmitIb for node 2: the same locks, the same sequence backend and the same GpuMem sequence.
+NTSTATUS GfxSubmitCompute(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes,
+                          _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq,
+                          _Out_opt_ ULONG* VmidUsed)
+{
+    BC250_GFX* gfx;
+    struct amdgpu_device* adev = NULL;
+    void* previousBackend = NULL;
+    BOOLEAN gartEnabled = FALSE;
+    NTSTATUS status;
+    ULONG vram, gtt;
+
+    *Seq = 0;
+    if (VmidUsed != NULL) *VmidUsed = 0;
+    ProgressEnter(ProgressSiteGfxSubmit);
+    ExAcquireFastMutex(&Device->GartLock);
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL || Device->GpuMem == NULL) status = STATUS_DEVICE_NOT_READY;
+    else status = GartDevice(Device, &adev, &gartEnabled);
+    if (NT_SUCCESS(status) && !gartEnabled) status = STATUS_INVALID_DEVICE_STATE;
+    if (NT_SUCCESS(status))
+    {
+        previousBackend = adev->backend;
+        adev->backend = &gfx->Sequence;
+        SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);
+        GpuMemBeginSequence(Device, NULL, 0);
+        status = SubmitComputeLocked(Device, gfx, adev, RootPhysical, GpuAddress, SizeBytes, Identity, Seq, VmidUsed);
         (void)GpuMemEndSequence(Device, &vram, &gtt);
         adev->backend = previousBackend;
     }
@@ -4541,6 +4895,12 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                                 0.7.216.24 ahead of the frame, byte for byte: the rollback. Independent of
     //                                 EnableVmidPool; both on is the recommended pair and the default.
     gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 1) != 0);
+    // Node 2, the compute ring (docs/design/compute-node.md): open in the release flavour. The lab flavour closes it
+    // for a control run (GuardComputeNodeSelector, EnableComputeNode 0, not a catalog setting). Node 2 also needs
+    // every gate it rests on: EnableGpuSubmit (the ring), the paging node (node 2 is ordinal 2), the VMID pool (a job
+    // needs a VMID of its own) and the ring VM flush (the compute ring has no MMIO root write path).
+    gfx->ComputeGate = GuardComputeNodeSelector() && gfx->SubmitGate && gfx->PagingGate && gfx->VmidPoolGate &&
+                       gfx->RingVmFlushGate;
     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
     KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
@@ -4555,6 +4915,8 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     GuardLog("gfx: VMID pool %s", gfx->VmidPoolGate ? "on (EnableVmidPool)" : "off (EnableVmidPool 0): every job at VMID 1");
     GuardLog("gfx: VM flush %s", gfx->RingVmFlushGate ? "on the ring (EnableRingVmFlush), engine 1" :
              "by MMIO before the frame (EnableRingVmFlush 0), engine 17");
+    GuardLog("gfx: compute node %s", gfx->ComputeGate ? "open: node 2 on compute ring 1, fence slot 11, engine 4" :
+             GuardComputeNodeSelector() ? "closed (a gate it rests on is closed)" : "closed (the lab selector)");
     return STATUS_SUCCESS;
 }
 

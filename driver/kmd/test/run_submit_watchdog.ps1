@@ -98,14 +98,17 @@ Ordered (Body $wddm 'static NTSTATUS Bc250WddmResetEngine(') 'Bc250WddmResetEngi
     'Bc250HangAbortCompletedFence(&snapshot, onRing, completionPending,',
     'verdict = BC250_HANG_VERDICT_ABORT_REPORTED;',
     'KeAcquireSpinLock(&wddm->Lock, &irql);',
-    'GfxReopenAfterAbort(device)',
+    # Node 2 reopens its own ring (compute-node.md section 6); the other nodes reopen the gfx ring.
+    'GfxComputeReopenAfterAbort(device) : GfxReopenAfterAbort(device)',
     # The waiters are woken after the node is open in both files. A wake while WatchdogFaulted or RefusalPending
     # is still set is refused, and WddmFailSubmission then latches the refusal the recovery has just cleared.
-    'wddm->RefusalPending[BC250_WDDM_NODE_3D] = FALSE;',
+    'wddm->RefusalPending[node] = FALSE;',
     'KeReleaseSpinLock(&wddm->Lock, irql);',
     'GfxRetireSignal(device);')
-if((Get-Content "$repo\driver\kmd\gfx.c" -Raw) -match '(?s)BOOLEAN GfxReopenAfterAbort\(.{0,2000}?GfxRetireSignal'){
-    Write-Output 'FAIL source check: GfxReopenAfterAbort wakes the waiters itself, before wddm.c reopens the node (BD-114 7.4)';exit 1
+foreach($reopen in @('GfxReopenAfterAbort','GfxComputeReopenAfterAbort')){
+    if((Get-Content "$repo\driver\kmd\gfx.c" -Raw) -match ('(?s)BOOLEAN '+$reopen+'\([^{]*\{(?:(?!\n\}).){0,3000}?GfxRetireSignal')){
+        Write-Output "FAIL source check: $reopen wakes the waiters itself, before wddm.c reopens the node (BD-114 7.4)";exit 1
+    }
 }
 foreach($ddi in @('static NTSTATUS Bc250WddmSubmitCommand(','static NTSTATUS Bc250WddmSubmitCommandVirtual(')){
     Ordered (Body $wddm $ddi) $ddi.Trim('(') @(

@@ -211,9 +211,9 @@ int bc250_gfx_ring_test(struct amdgpu_ring *ring);
  * that involves a page table of VidMm's. The long form of what is emitted and what upstream emits
  * around it is at the head of the implementation in bc250_gfx.c.
  *
- * The gfx ring only. gfx_v10_0_ring_emit_ib_compute() is a different packet (it sets
- * INDIRECT_BUFFER_VALID) and nothing here submits an IB on a compute ring, so it is not
- * transcribed and the functions below refuse any other ring type.
+ * The functions below are for the gfx ring only and refuse any other ring type.
+ * gfx_v10_0_ring_emit_ib_compute() is a different packet (it sets INDIRECT_BUFFER_VALID); it is
+ * bc250_gfx_emit_ib_compute(), with the compute job further down.
  * ------------------------------------------------------------------------------------------- */
 
 /* How many dwords bc250_gfx_emit_ib() writes: 4 on a gfx ring, 0 on anything else, which is also
@@ -268,6 +268,30 @@ int bc250_gfx_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u
  * PFP_SYNC_ME to SWITCH_BUFFER, is the same dwords as bc250_gfx_submit_job() writes. */
 int bc250_gfx_submit_job_vm(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
 			    u64 fence_addr, u64 seq, unsigned int flags, u64 root_phys, u32 eng);
+
+/* ---------------------------------------------------------------------------------------------
+ * A job on a compute (MEC) ring, at a VMID with page tables of its own (WDDM node 2)
+ *
+ * The same flush as above, with the compute form of WRITE_DATA (no PFP: engine select 0), and the
+ * compute form of the IB packet. `eng` must be the compute rings' own engine
+ * (BC250_INV_ENG_COMPUTE_RING, bc250_gmc.h).
+ * ------------------------------------------------------------------------------------------- */
+
+/* The dwords of bc250_gfx_emit_ib_compute(): the header, the two address halves, the control. */
+#define BC250_GFX_COMPUTE_IB_DWORDS	4u
+
+/* bc250_gfx_emit_vm_flush() for a compute ring; refuses every ring that is not a compute ring. */
+int bc250_gfx_emit_vm_flush_compute(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng);
+
+/* gfx_v10_0_ring_emit_ib_compute(): control = INDIRECT_BUFFER_VALID | length | vmid << 24. The
+ * refusals of bc250_gfx_emit_ib(), with "not a compute ring" in place of "not a gfx ring". */
+int bc250_gfx_emit_ib_compute(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid);
+
+/* alloc + [flush] + IB + fence + commit on a compute ring. `flush` 0 leaves the VMID's root and
+ * TLB as they are (root_phys and eng are then not read). VMID 0 is refused. */
+int bc250_gfx_submit_job_compute(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+				 u64 fence_addr, u64 seq, unsigned int flags, int flush,
+				 u64 root_phys, u32 eng);
 
 /* The first SET_SH_REG of COMPUTE_PGM_LO in a PM4 dword stream. *hi_written is 0 when the
  * packet stored only LO, which leaves COMPUTE_PGM_HI at whatever the preamble wrote.

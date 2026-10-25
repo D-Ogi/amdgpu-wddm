@@ -8,7 +8,11 @@
  * every step: exhaustively over every interleaving of submits and retirements up to a depth, and over seeded
  * random runs with the sequence counter crossing its wrap. Then the parts one at a time: the bring-up read, reuse,
  * least recently used among retired VMIDs, BUSY when none is free, the FLUSH_TLB fan-out, the history, and the
- * EnableVmidPool 0 decision against 0.7.213.1's predicate, case by case. */
+ * EnableVmidPool 0 decision against 0.7.213.1's predicate, case by case.
+ *
+ * The model has two rings, as the driver with WDDM node 2 has: the gfx ring and the compute ring each retire in
+ * order against a fence slot of their own, and both draw sequences from one counter. The property is checked for
+ * the jobs of both rings, and the interleavings include out-of-order retirement ACROSS the rings. */
 #include <stdio.h>
 #include <string.h>
 #include "vmid_pool.h"
@@ -35,6 +39,9 @@ typedef struct {
     unsigned long Completed;                /* the fence slot: the newest retired sequence, 0 before any */
     MODEL_JOB Pending[MODEL_DEPTH_MAX];
     unsigned PendingCount;
+    unsigned long CompletedCompute;         /* the compute ring's fence slot */
+    MODEL_JOB PendingCompute[MODEL_DEPTH_MAX];
+    unsigned PendingComputeCount;
     unsigned LastVmid;
     unsigned long Claims, Reuses, Busy;
 } MODEL;
@@ -47,46 +54,68 @@ static void ModelInit(MODEL* m, unsigned members, unsigned long firstSeq)
     m->Completed = 0;
 }
 
-/* The safety property: every job in flight still has its root at its VMID. */
+/* The safety property: every job in flight on either ring still has its root at its VMID. */
 static int ModelSafe(const MODEL* m)
 {
     unsigned i;
     for (i = 0; i < m->PendingCount; i++)
         if (m->Table.Root[m->Pending[i].Vmid] != m->Pending[i].Root) return 0;
+    for (i = 0; i < m->PendingComputeCount; i++)
+        if (m->Table.Root[m->PendingCompute[i].Vmid] != m->PendingCompute[i].Root) return 0;
     return 1;
 }
 
-/* One submission at AUTO with the pool open, as SubmitIbLocked runs it. Returns the verdict. */
-static int ModelSubmit(MODEL* m, unsigned long long root, unsigned* vmidOut)
+/* Is a job of either ring in flight at Vmid with a root other than Root? */
+static int ModelLiveOther(const MODEL* m, unsigned vmid, unsigned long long root)
+{
+    unsigned i;
+    for (i = 0; i < m->PendingCount; i++)
+        if (m->Pending[i].Vmid == vmid && m->Pending[i].Root != root) return 1;
+    for (i = 0; i < m->PendingComputeCount; i++)
+        if (m->PendingCompute[i].Vmid == vmid && m->PendingCompute[i].Root != root) return 1;
+    return 0;
+}
+
+static int ModelLive(const MODEL* m, unsigned vmid)
+{
+    unsigned i;
+    for (i = 0; i < m->PendingCount; i++) if (m->Pending[i].Vmid == vmid) return 1;
+    for (i = 0; i < m->PendingComputeCount; i++) if (m->PendingCompute[i].Vmid == vmid) return 1;
+    return 0;
+}
+
+/* One submission at AUTO with the pool open, as SubmitIbLocked (compute 0) or SubmitComputeLocked (compute 1) runs
+ * it. Both pass the InFlight and LastVmid of the gfx ring. Returns the verdict. */
+static int ModelSubmitRing(MODEL* m, int compute, unsigned long long root, unsigned* vmidOut)
 {
     BC250_VMID_DECISION d;
-    unsigned i;
+    unsigned count = compute ? m->PendingComputeCount : m->PendingCount;
+    MODEL_JOB* queue = compute ? m->PendingCompute : m->Pending;
 
-    if (m->PendingCount >= MODEL_PENDING_MAX) return -1;    /* refused above gfx.c; not a VMID question */
-    Bc250VmidSweep(&m->Table, m->Completed);
+    if (count >= MODEL_PENDING_MAX) return -1;              /* refused above gfx.c; not a VMID question */
+    Bc250VmidSweep(&m->Table, m->Completed, m->CompletedCompute);
     d = Bc250VmidAdmit(&m->Table, m->Members, 1, BC250_VMID_AUTO, root, m->PendingCount != 0, m->LastVmid,
-                       m->Completed);
+                       m->Completed, m->CompletedCompute);
     CHECK(d.Verdict != BC250_VMID_REFUSE_RULE);            /* the chooser never proposes a live VMID */
     CHECK(d.Verdict != BC250_VMID_REFUSE_PARAM);
     if (d.Verdict == BC250_VMID_REFUSE_BUSY) {
         /* BUSY only when it has to be: no member holds the root, and every member has a job in flight. */
         unsigned v;
         m->Busy++;
-        CHECK(m->PendingCount != 0);
+        CHECK(m->PendingCount + m->PendingComputeCount != 0);
         for (v = 0; v < BC250_VMID_COUNT; v++) {
-            int live = 0;
             if (!(m->Members & BC250_VMID_CANDIDATES & (1u << v))) continue;
             CHECK(m->Table.Root[v] != root);
-            for (i = 0; i < m->PendingCount; i++) if (m->Pending[i].Vmid == v) live = 1;
-            CHECK(live);
+            CHECK(ModelLive(m, v));
         }
         return d.Verdict;
     }
     CHECK(d.Vmid < BC250_VMID_COUNT && (m->Members & BC250_VMID_CANDIDATES & (1u << d.Vmid)));
     CHECK(d.Vmid != BC250_VMID_GART && d.Vmid != BC250_VMID_SDMA_PAGING);
     if (d.Claim) {
-        /* Independent of the table's own LiveSeq: the model's queue says no job is live at this VMID. */
-        for (i = 0; i < m->PendingCount; i++) CHECK(m->Pending[i].Vmid != d.Vmid || m->Pending[i].Root == root);
+        /* Independent of the table's own live sequences: the model's queues say no job of another root is live at
+         * this VMID on either ring. */
+        CHECK(!ModelLiveOther(m, d.Vmid, root));
         Bc250VmidClaim(&m->Table, &m->History, d.Vmid, root);
         m->Claims++;
     } else {
@@ -94,14 +123,25 @@ static int ModelSubmit(MODEL* m, unsigned long long root, unsigned* vmidOut)
         m->Reuses++;
     }
     if (++m->NextSeq == 0) m->NextSeq = 1;                  /* SubmitIbLocked: 0 means nothing in flight */
-    Bc250VmidSubmitted(&m->Table, d.Vmid, m->NextSeq, (unsigned long)(root & 0xFFFFu));
-    m->Pending[m->PendingCount].Seq = m->NextSeq;
-    m->Pending[m->PendingCount].Vmid = d.Vmid;
-    m->Pending[m->PendingCount].Root = root;
-    m->PendingCount++;
-    m->LastVmid = d.Vmid;
+    if (compute) Bc250VmidSubmittedCompute(&m->Table, d.Vmid, m->NextSeq, (unsigned long)(root & 0xFFFFu));
+    else Bc250VmidSubmitted(&m->Table, d.Vmid, m->NextSeq, (unsigned long)(root & 0xFFFFu));
+    queue[count].Seq = m->NextSeq;
+    queue[count].Vmid = d.Vmid;
+    queue[count].Root = root;
+    if (compute) m->PendingComputeCount++;
+    else { m->PendingCount++; m->LastVmid = d.Vmid; }
     if (vmidOut) *vmidOut = d.Vmid;
     return d.Verdict;
+}
+
+static int ModelSubmit(MODEL* m, unsigned long long root, unsigned* vmidOut)
+{
+    return ModelSubmitRing(m, 0, root, vmidOut);
+}
+
+static int ModelSubmitCompute(MODEL* m, unsigned long long root, unsigned* vmidOut)
+{
+    return ModelSubmitRing(m, 1, root, vmidOut);
 }
 
 /* The oldest job's fence arrives: in order, as the gfx ring retires them. */
@@ -111,6 +151,17 @@ static int ModelRetire(MODEL* m)
     m->Completed = m->Pending[0].Seq;
     memmove(&m->Pending[0], &m->Pending[1], (m->PendingCount - 1u) * sizeof(m->Pending[0]));
     m->PendingCount--;
+    return 1;
+}
+
+/* The same for the compute ring, against its own slot. */
+static int ModelRetireCompute(MODEL* m)
+{
+    if (m->PendingComputeCount == 0) return 0;
+    m->CompletedCompute = m->PendingCompute[0].Seq;
+    memmove(&m->PendingCompute[0], &m->PendingCompute[1],
+            (m->PendingComputeCount - 1u) * sizeof(m->PendingCompute[0]));
+    m->PendingComputeCount--;
     return 1;
 }
 
@@ -154,6 +205,75 @@ static void TestExhaustive(void)
     }
 }
 
+/* Two rings: every root may be submitted to either ring, and either ring may retire, so the gfx ring can retire a
+ * VMID's job while the compute ring still owes one at the same VMID, and the other way round. */
+static void ExploreTwo(const MODEL* m, unsigned depth, unsigned roots)
+{
+    unsigned op;
+    if (depth == 0) { g_leaves++; return; }
+    for (op = 0; op < 2u * roots + 2u; op++) {
+        MODEL next = *m;
+        if (op == 2u * roots) { if (!ModelRetire(&next)) continue; }
+        else if (op == 2u * roots + 1u) { if (!ModelRetireCompute(&next)) continue; }
+        else if (ModelSubmitRing(&next, (int)(op & 1u), g_roots[op >> 1], NULL) < 0) continue;
+        CHECK(ModelSafe(&next));
+        if (bad > 20) return;
+        ExploreTwo(&next, depth - 1u, roots);
+    }
+}
+
+static void TestExhaustiveTwoRings(void)
+{
+    static const struct { unsigned Members, Roots, Depth; } cases[] = {
+        { (1u << 1), 2, 8 },                        /* one VMID shared by both rings */
+        { (1u << 1) | (1u << 3), 2, 8 },
+        { (1u << 1) | (1u << 3), 3, 7 },
+        { (1u << 1) | (1u << 3) | (1u << 4), 3, 6 },
+    };
+    unsigned i;
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        MODEL m;
+        unsigned long before = checks;
+        ModelInit(&m, cases[i].Members, 1);
+        g_leaves = 0;
+        ExploreTwo(&m, cases[i].Depth, cases[i].Roots);
+        printf("exhaustive two rings: pool 0x%04X, %u roots, depth %u: %lu interleavings, %lu checks\n",
+               cases[i].Members, cases[i].Roots, cases[i].Depth, g_leaves, checks - before);
+        CHECK(g_leaves > 1000);
+    }
+}
+
+/* The case the second live sequence exists for, step by step: the gfx ring has retired the job of VMID 1, the
+ * compute ring has not. A new root must not get VMID 1. */
+static void TestComputeOwes(void)
+{
+    MODEL m;
+    unsigned v = 99, w = 99;
+
+    ModelInit(&m, (1u << 1), 1);
+    CHECK(ModelSubmit(&m, 0xA000, &v) == BC250_VMID_ADMIT && v == 1);
+    CHECK(ModelSubmitCompute(&m, 0xA000, &w) == BC250_VMID_ADMIT && w == 1);    /* the same root keeps its VMID */
+    CHECK(ModelRetire(&m));                         /* the gfx job retires; the compute job is still live */
+    CHECK(ModelSubmit(&m, 0xB000, NULL) == BC250_VMID_REFUSE_BUSY);
+    CHECK(ModelSubmitCompute(&m, 0xB000, NULL) == BC250_VMID_REFUSE_BUSY);
+    CHECK(ModelSubmit(&m, 0xA000, &v) == BC250_VMID_ADMIT && v == 1);          /* the owner itself still runs */
+    CHECK(ModelRetire(&m) && ModelRetireCompute(&m));
+    CHECK(ModelSubmit(&m, 0xB000, &v) == BC250_VMID_ADMIT && v == 1 && ModelSafe(&m));
+    /* The rule check, with the gfx slot past the job and the compute slot not. */
+    {
+        BC250_VMID_TABLE t;
+        memset(&t, 0, sizeof(t));
+        t.Root[3] = 0xB000; t.LiveSeq[3] = 40; t.LiveSeqCompute[3] = 41;
+        CHECK(!Bc250VmidMayProgram(&t, 3, 0xC000, 50, 40));
+        CHECK(!Bc250VmidMayProgram(&t, 3, 0xC000, 39, 50));
+        CHECK(Bc250VmidMayProgram(&t, 3, 0xC000, 40, 41));
+        Bc250VmidSweep(&t, 50, 40);
+        CHECK(t.LiveSeq[3] == 0 && t.LiveSeqCompute[3] == 41);
+        Bc250VmidSweep(&t, 50, 41);
+        CHECK(t.LiveSeqCompute[3] == 0);
+    }
+}
+
 /* ---- seeded random runs ------------------------------------------------------------------------------------ */
 
 static unsigned long g_rng;
@@ -178,15 +298,17 @@ static void TestRandom(void)
             ModelInit(&m, pools[p], 0xFFFFFFFFul - 1000ul);
             g_rng = seed * 2654435761ul + p;
             for (i = 0; i < 40000ul; i++) {
-                unsigned roots = 2u + Rand(16);
-                if (Rand(3) == 0) (void)ModelRetire(&m);
-                else (void)ModelSubmit(&m, 0x10000ull * (1u + Rand(roots)), NULL);
+                unsigned roots = 2u + Rand(16), op = Rand(6);
+                if (op == 0) (void)ModelRetire(&m);
+                else if (op == 1) (void)ModelRetireCompute(&m);
+                else (void)ModelSubmitRing(&m, op == 2, 0x10000ull * (1u + Rand(roots)), NULL);
                 CHECK(ModelSafe(&m));
                 if (bad > 20) return;
             }
             steps += i; claims += m.Claims; reuses += m.Reuses; busy += m.Busy;
             /* Drain: with nothing in flight every root must be admitted at once. */
             while (ModelRetire(&m)) {}
+            while (ModelRetireCompute(&m)) {}
             CHECK(ModelSubmit(&m, 0x77770000ull, NULL) == BC250_VMID_ADMIT);
         }
     printf("random: %lu steps, %lu claims, %lu reuses, %lu busy\n", steps, claims, reuses, busy);
@@ -262,9 +384,9 @@ static void TestChooser(void)
         BC250_VMID_TABLE t;
         int claim = 7;
         memset(&t, 0, sizeof(t));
-        CHECK(Bc250VmidChoose(&t, BC250_VMID_CANDIDATES, 0, 0, &claim) == 1 && claim == 1);
+        CHECK(Bc250VmidChoose(&t, BC250_VMID_CANDIDATES, 0, 0, 0, &claim) == 1 && claim == 1);
         /* Reserved VMIDs are masked off whatever the caller passes. */
-        CHECK(Bc250VmidChoose(&t, (1u << 0) | (1u << 2), 0x1000, 0, &claim) == BC250_VMID_NONE && claim == 0);
+        CHECK(Bc250VmidChoose(&t, (1u << 0) | (1u << 2), 0x1000, 0, 0, &claim) == BC250_VMID_NONE && claim == 0);
     }
 }
 
@@ -276,26 +398,26 @@ static void TestRule(void)
     memset(&t, 0, sizeof(t));
     t.Root[3] = 0xB000; t.LiveSeq[3] = 50;
     /* VMID 3 holds B with job 50 live, fence at 49. Giving it another root is the bug. */
-    CHECK(!Bc250VmidMayProgram(&t, 3, 0xC000, 49));
-    CHECK(Bc250VmidMayProgram(&t, 3, 0xB000, 49));                  /* same root: nothing changes */
-    CHECK(Bc250VmidMayProgram(&t, 3, 0xC000, 50));                  /* retired */
-    CHECK(Bc250VmidMayProgram(&t, 3, 0xC000, 0x80000040ul) == 0);   /* more than half a wrap ahead reads as behind */
-    CHECK(!Bc250VmidMayProgram(&t, 16, 0xB000, 50));
+    CHECK(!Bc250VmidMayProgram(&t, 3, 0xC000, 49, 0));
+    CHECK(Bc250VmidMayProgram(&t, 3, 0xB000, 49, 0));               /* same root: nothing changes */
+    CHECK(Bc250VmidMayProgram(&t, 3, 0xC000, 50, 0));               /* retired */
+    CHECK(Bc250VmidMayProgram(&t, 3, 0xC000, 0x80000040ul, 0) == 0);    /* more than half a wrap ahead: behind */
+    CHECK(!Bc250VmidMayProgram(&t, 16, 0xB000, 50, 0));
     /* An explicit request (the IB_AT escape) for that VMID with another root, with nothing in flight according to
      * the caller: the predicate admits it, the rule does not. */
-    d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, 3, 0xC000, 0, 3, 49);
+    d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, 3, 0xC000, 0, 3, 49, 0);
     CHECK(d.Verdict == BC250_VMID_REFUSE_RULE && d.Vmid == 3 && d.Claim == 1 && !d.Pool);
     /* The sweep clears what the fence passed and nothing else, across the wrap as well. */
     t.LiveSeq[4] = 0xFFFFFFF0ul; t.LiveSeq[5] = 5;
-    Bc250VmidSweep(&t, 2);
+    Bc250VmidSweep(&t, 2, 0);
     CHECK(t.LiveSeq[4] == 0 && t.LiveSeq[5] == 5 && t.LiveSeq[3] == 50);
-    Bc250VmidSweep(&t, 0);                                          /* no fence yet: nothing has retired */
+    Bc250VmidSweep(&t, 0, 0);                                       /* no fence yet: nothing has retired */
     CHECK(t.LiveSeq[5] == 5);
     /* With the pool, a VMID 0 diagnostic in flight still holds every job off. */
     memset(&t, 0, sizeof(t));
-    d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, BC250_VMID_AUTO, 0xA000, 1, 0, 0);
+    d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, BC250_VMID_AUTO, 0xA000, 1, 0, 0, 0);
     CHECK(d.Verdict == BC250_VMID_REFUSE_BUSY);
-    d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, 17, 0xA000, 0, 1, 0);
+    d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, 17, 0xA000, 0, 1, 0, 0);
     CHECK(d.Verdict == BC250_VMID_REFUSE_PARAM);
 }
 
@@ -318,7 +440,7 @@ static void TestGateClosedIdentity(void)
         /* A consistent state: when nothing is in flight, nothing is live. In flight, the newest job is live at
          * LastVmid. */
         if (f && last[l] != 0) t.LiveSeq[last[l]] = 9;
-        d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 0, requested[r], roots[k], f, last[l], f ? 8 : 9);
+        d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 0, requested[r], roots[k], f, last[l], f ? 8 : 9, 0);
         oldBusy = f && (vmid != 1 || last[l] != 1 || t.Root[vmid] != roots[k]);
         CHECK(!d.Pool && d.Vmid == vmid);
         CHECK(d.Verdict == (oldBusy ? BC250_VMID_REFUSE_BUSY : BC250_VMID_ADMIT));
@@ -332,7 +454,7 @@ static void TestGateClosedIdentity(void)
         BC250_VMID_DECISION d;
         int oldBusy = f && (requested[r] != 1 || last[l] != 1 || 0 != 0xA000);
         memset(&t, 0, sizeof(t));
-        d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, requested[r], 0xA000, f, last[l], 9);
+        d = Bc250VmidAdmit(&t, BC250_VMID_CANDIDATES, 1, requested[r], 0xA000, f, last[l], 9, 0);
         CHECK(!d.Pool && d.Vmid == requested[r] && d.Verdict == (oldBusy ? BC250_VMID_REFUSE_BUSY : BC250_VMID_ADMIT));
     }
 }
@@ -421,7 +543,8 @@ static void TestHistory(void)
     i = h.Next;
     Bc250VmidResetAll(&t, &h);
     CHECK(h.Next == i + 1);                     /* VMID 3; 4 and 9 ran no job since their last claim */
-    { unsigned v; for (v = 0; v < 16; v++) CHECK(t.Root[v] == 0 && t.LiveSeq[v] == 0 && t.Order[v] == 0); }
+    { unsigned v; for (v = 0; v < 16; v++)
+        CHECK(t.Root[v] == 0 && t.LiveSeq[v] == 0 && t.LiveSeqCompute[v] == 0 && t.Order[v] == 0); }
     CHECK(t.Clock == 0);
     Bc250VmidDescribe(&t, &h, 3, &live, &haveLive, &before, &haveBefore);
     CHECK(!haveLive && haveBefore && before.Root == 0xB000 && before.Process == 777);
@@ -435,7 +558,9 @@ int main(void)
     TestGateClosedIdentity();
     TestFlushMask();
     TestHistory();
+    TestComputeOwes();
     TestExhaustive();
+    TestExhaustiveTwoRings();
     TestRandom();
     printf("vmid pool: %u checks, %u failed\n", checks, bad);
     return bad ? 1 : 0;

@@ -31,6 +31,20 @@ int main(void)
     CHECK(baked->size == UMD_CAPS_BYTES);
     CHECK(baked->submittable_node_mask == 0x1u);
     CHECK(offsetof(struct bc250_umd_private, submittable_node_mask) == BC250_UMD_PRIVATE_SIZE_V2);
+    CHECK(offsetof(struct bc250_umd_private, submittable_node_mask) == UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET);
+    // Node 2 opened on a copy: bit 2 joins bit 0, and nothing else in the blob moves.
+    {
+        static unsigned char copy[UMD_CAPS_BYTES];
+        const struct bc250_umd_private* view = (const struct bc250_umd_private*)copy;
+        unsigned i, changed = 0;
+        memcpy(copy, umd_caps_blob, UMD_CAPS_BYTES);
+        UmdCapsOpenNode(copy, UMD_CAPS_BYTES, 2u);
+        CHECK(view->submittable_node_mask == 0x5u);
+        for (i = 0; i < UMD_CAPS_BYTES; i++) changed += copy[i] != umd_caps_blob[i];
+        CHECK(changed == 1u);
+        UmdCapsOpenNode(copy, UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET + 3u, 3u);   // too short: no write
+        CHECK(view->submittable_node_mask == 0x5u);
+    }
 
     // The CU fields cumode.c patches at QueryAdapterInfo, and the stock the template holds there: what
     // bc250_cu_info_from_wgps() yields for WGPs 0-2 of every shader array (cu_mode_test.c checks that side).

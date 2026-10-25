@@ -32,7 +32,7 @@ def extract(marker):
     return source[a:i]
 code=sub(code,' LONG PagingQueueBorrowed,', ''' LONG SubmittedNode[2],PreemptionNode[2],CompletionPending[2],SubmittedFence[2],ActiveSubmissions[2],LastReportedFence[2],PreemptionFence[2];
  LONG LastCompletedFence,LastSubmittedFence[2];
- BOOLEAN HwPending,ReportActive,ReportAgain,RejectedPending[2],RefusalPending[2],LastReportedValid[2],LastSubmittedValid[2];
+ BOOLEAN HwPending,ComputeHwPending,ReportActive,ReportAgain,RejectedPending[2],RefusalPending[2],LastReportedValid[2],LastSubmittedValid[2];
  UINT RejectedFence[2]; KDPC* ReportDpc;
  BOOLEAN NotifyDpcInReport;
  LONG CompletionRetries[2],CompletionsDropped[2],PreemptionReportsLost;
@@ -81,7 +81,11 @@ prefix,suffix=extra.split('/* ACTUAL_FUNCTIONS */')
 # fence that the report pass then completes. The body itself is the harness's stand-in.
 submit=(extract('static void WddmNoteSubmittedLocked(')+'\n'+extract('static BOOLEAN WddmBeginSubmissionLocked(')+'\n'+
         extract('static NTSTATUS Bc250WddmSubmitCommandVirtual(')+'\n')
-code=sub(code,'static void legacy(void)',prefix+'\n'+extract('static void WddmPreemptFence(')+'\n'+extract('static void WddmReportDpcPublish(')+'\n'+extract('static void WddmReportDpcRoutine(')+'\n'+submit+suffix+'\nstatic void legacy(void)')
+# The compute node (docs/design/compute-node.md) gave nodes 0 and 2 one ring-pending answer, WddmRingPendingLocked,
+# which the preemption and the report pass read for every node except node 1. The harness has two nodes, so node 2
+# is out of its range, but the answer is the actual one.
+ring='#define BC250_WDDM_NODE_COMPUTE 2u\n'+extract('static BOOLEAN WddmRingPendingLocked(')+'\n'
+code=sub(code,'static void legacy(void)',prefix+'\n'+ring+extract('static void WddmPreemptFence(')+'\n'+extract('static void WddmReportDpcPublish(')+'\n'+extract('static void WddmReportDpcRoutine(')+'\n'+submit+suffix+'\nstatic void legacy(void)')
 code=sub(code,' legacy();borrowed();retention();built_records();',' legacy();borrowed();retention();built_records();preemption();rejected_fence();')
 if len(sys.argv)>3:
     if sys.argv[3]=='--old-drain':
@@ -90,7 +94,7 @@ if len(sys.argv)>3:
         # The rejected id completed at once, before the packets ahead of it on the node have finished.
         code=sub(code,'        if (wddm->RejectedPending[node] && !wddm->RefusalPending[node] &&\n'
                       '            wddm->ActiveSubmissions[node] == 0 && wddm->CompletionPending[node] == 0 &&\n'
-                      '            !(node == BC250_WDDM_NODE_COPY ? (wddm->PagingHead != NULL) : wddm->HwPending))\n',
+                      '            !(node == BC250_WDDM_NODE_COPY ? (wddm->PagingHead != NULL) : WddmRingPendingLocked(wddm, node)))\n',
                  '        if (wddm->RejectedPending[node] && !wddm->RefusalPending[node])\n')
     else: fail('unknown mutation %r' % sys.argv[3])
 out.write_text(code)

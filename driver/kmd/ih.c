@@ -261,7 +261,8 @@ static BOOLEAN Consume(_In_ const BC250_DEVICE* Device, _Inout_ BC250_IH* ih)
             GuardLog("ih: CP %s fault, vmid %lu ring 0x%lX src %lu, %lu this round; closing gfx node for recovery",
                      Bc250IhCpPrivFaultName(cpFaultSrc), cpFaultVmid, cpFaultRing, cpFaultSrc, cpFaultCount);
             GfxVmidReport(Device, "ih: CP fault vector", cpFaultVmid);
-            WddmReportEngineFault(Device, Bc250IhCpPrivFaultName(cpFaultSrc));
+            WddmReportEngineFault(Device, Bc250IhCpPrivFaultName(cpFaultSrc),
+                                  (BOOLEAN)Bc250IhCpFaultIsCompute(cpFaultRing));
         }
         if (ih->Active == 0) return FALSE;
         ih->Rptr = rptr;

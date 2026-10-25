@@ -65,15 +65,15 @@ if ($DropAdmissionReason) {
 }
 [IO.File]::WriteAllText((Join-Path $Out 'hang_recovery.h'), $header)
 # BD-120 negative controls over the witness wiring. The first one is the code before the fix.
-$reopenLive = '            witness = StartHealthRecovered(device, &witnessEpoch);'
+$reopenLive = '            if (node == BC250_WDDM_NODE_3D) witness = StartHealthRecovered(device, &witnessEpoch);'
 $tailLive = '    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);'
 if ($DropWitnessReopen) {
     if (!$source.Contains($reopenLive)) { throw 'witness reopen anchor changed' }
-    $source = $source.Replace($reopenLive, '            witness = BC250_START_HEALTH_RECOVERY_STICKY;')
+    $source = $source.Replace($reopenLive, '            if (node == BC250_WDDM_NODE_3D) witness = BC250_START_HEALTH_RECOVERY_STICKY;')
 }
 if ($ReopenWitnessOnRefusal) {
     if (!$source.Contains($reopenLive)) { throw 'witness reopen anchor changed' }
-    $source = $source.Replace($reopenLive, '            witness = BC250_START_HEALTH_RECOVERY_STICKY;')
+    $source = $source.Replace($reopenLive, '            if (node == BC250_WDDM_NODE_3D) witness = BC250_START_HEALTH_RECOVERY_STICKY;')
     # Written with explicit newlines: the sources are stored with LF and this script with CRLF.
     $anchor = "refuseReset:`n"
     if (!$source.Contains($anchor)) { throw 'refusal tail anchor changed' }
@@ -103,17 +103,20 @@ typedef struct { long long QuadPart; } LARGE_INTEGER;
 #define KernelMode 0
 #define STATUS_NOT_SUPPORTED 1
 #define BC250_WDDM_NODE_3D 0
+#define BC250_WDDM_NODE_COMPUTE 2u
 #define BC250_SUBMIT_FENCE_SLOT 0
-typedef struct { void *SubmitAdev; LONG SubmitFailed; ULONG SubmitSeq; } BC250_GFX;
+#define BC250_COMPUTE_FENCE_SLOT 11
+typedef struct { void *SubmitAdev; LONG SubmitFailed; ULONG SubmitSeq;
+                 void *ComputeAdev; LONG ComputeFailed; ULONG ComputeSeq; } BC250_GFX;
 /* BD-120: HealthPendingReset says whether the witness close is the one a recovered ResetEngine owns, and
  * HealthReopens counts the reopen attempts, so the refusal tail can be checked for making none. */
 typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault, HealthPendingReset; unsigned HealthReopens;
                  unsigned Wakes, DrainWakes; } BC250_DEVICE;
 typedef struct {
-    int Stopping, Lock, SubmitTimer;
-    BC250_HANG_NODE_STATE Recovery[2];
+    int Stopping, Lock, SubmitTimer, ComputeTimer;
+    BC250_HANG_NODE_STATE Recovery[3];
     struct { int SnapshotTaken; } SubmitWatchdog;
-    int WatchdogFaulted[2], DeferredValid, CompletionPending[2], ActiveSubmissions[2];
+    int WatchdogFaulted[3], DeferredValid, CompletionPending[3], ActiveSubmissions[3];
     unsigned NoteCalls, NotedFence[2];
 } BC250_WDDM;
 static BC250_WDDM *MockWddm;
@@ -175,7 +178,7 @@ static void WddmNoteSubmittedLocked(BC250_WDDM *w, unsigned node, UINT fence) {
 }
 '@
 # Extract actual closure and health-fault wrapper, not a mock of the distinction.
-foreach($name in @('GfxSubmitFailAccess','GfxSubmitClose','GfxSubmitFail')) {
+foreach($name in @('GfxSubmitFailAccess','GfxSubmitClose','GfxSubmitFail','GfxComputeClose')) {
     $body=(Function-Body $gfxSource $name).Text
     $body=$body.Replace('_Inout_ ','').Replace('_In_ ','')
     $mock += "`nstatic void $body`n"

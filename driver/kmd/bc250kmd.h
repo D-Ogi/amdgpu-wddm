@@ -654,6 +654,8 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 // consumed once per nonce at StartDevice
 // through LabPagingRingStartNonce in the internal persistent state, written and flushed before the seed is used.
 void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
+// Lab flavour only: EnableComputeNode (REG_DWORD under Parameters, read only in DriverEntry), 0 closes node 2.
+void GuardLabReadComputeNode(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run
@@ -664,6 +666,9 @@ extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 
 // DriverEntry; absent is 1); the release flavour uses this constant.
 #define BC250_PAGING_BOUNDARY_RELEASE_MODE 1u
 ULONG GuardPagingBoundaryMode(void);    // any IRQL: a value fixed at DriverEntry
+// Node 2 (docs/design/compute-node.md): FALSE only in the lab flavour with EnableComputeNode 0; the release flavour
+// always returns TRUE. Any IRQL: a value fixed at DriverEntry.
+BOOLEAN GuardComputeNodeSelector(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
@@ -1091,6 +1096,29 @@ ULONG GfxSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq,
 //                    in the same critical section, then signals after releasing the lock.
 BOOLEAN GfxFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
 BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
+// WDDM node 2, the compute ring (docs/design/compute-node.md). Each function is its node 0 counterpart above, on
+// compute ring 1 and fence slot 11, with the same IRQL and lock rules:
+//   GfxSubmitCompute            GfxSubmitIb with the VMID always chosen by the pool and the flush always on the ring.
+//   GfxComputeFenceArrived      GfxFenceArrived. The DPM busy share ends only when both rings are idle.
+//   GfxComputeReady/Busy        GfxSubmitReady/Busy. Busy also counts a gfx job, because a compute submission that
+//                               the VMID pool refused can wait for a gfx retirement (and GfxSubmitBusy the reverse).
+//   GfxComputeClose             GfxSubmitClose, without a StartHealth fault: node 2 does not witness the start.
+//   GfxComputeSoftRecover       GfxSoftRecover on the compute ring's newest sequence.
+//   GfxComputeFenceObserved     GfxFenceObserved for slot 11.
+//   GfxComputeReopenAfterAbort  GfxReopenAfterAbort for node 2.
+//   GfxComputeNodeGate          the node 2 selector and its gates, latched at GfxStart: whether node 2 exists.
+NTSTATUS GfxSubmitCompute(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes,
+                          _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq,
+                          _Out_opt_ ULONG* VmidUsed);
+BOOLEAN GfxComputeFenceArrived(_Inout_ BC250_DEVICE* Device, ULONG Seq);
+BOOLEAN GfxComputeReady(_In_ const BC250_DEVICE* Device);
+BOOLEAN GfxComputeBusy(_In_ const BC250_DEVICE* Device);
+void GfxComputeClose(_Inout_ BC250_DEVICE* Device);
+ULONG GfxComputeSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULONG* Seq, _Out_ ULONG* Kills,
+                            _Out_ ULONG* Micros);
+BOOLEAN GfxComputeFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
+BOOLEAN GfxComputeReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
+BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);
@@ -1330,7 +1358,8 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
 void WddmStop(_Inout_ BC250_DEVICE* Device);
-void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why);   // BD-167 (G3): CP fault -> close gfx node
+// BD-167 (G3): CP fault -> close the node of the faulting ring (Compute: a MEC queue, node 2 when it exists).
+void WddmReportEngineFault(_In_ const BC250_DEVICE* Device, _In_z_ const char* Why, BOOLEAN Compute);
 // The writers' primary transaction (the flip DDI's PrimarySequence) at PASSIVE_LEVEL: modeset.c, connector_link.c,
 // hdmi_link.c and wddm.c's destroy restore. Begin publishes WriterActive under L, then proves retirement onto
 // reserved storage at PASSIVE_LEVEL before it sets WriterReady. Long work may use only driver-owned storage.
@@ -1363,6 +1392,7 @@ void WddmGpuFence(_Inout_ BC250_DEVICE* Device);    // stage C: has the packet i
 // ADR 0008 stage D: node 1's own twin of WddmGpuFence above, same call sites, same IRQL bound - see pnp.c's
 // Bc250DpcRoutine and docs/design/paging-node.md section 5.
 void WddmGpuFencePaging(_Inout_ BC250_DEVICE* Device);
+void WddmGpuFenceCompute(_Inout_ BC250_DEVICE* Device);  // node 2's WddmGpuFence, from the same DPC
 // vidmm.c: VidMm's page tables (ADR 0008 stage B). EnableGpuVa 0 = plan and log, 1 = write the entries.
 // The VRAM pages above the leaf that a start with Device->LargePages maps: 2 MiB at level 1, 1 GiB at level 2.
 // vidmm.c checks both against bc250_pte.h, which wddm.c does not include.

@@ -43,6 +43,7 @@ static void IhDpc(BC250_DEVICE*d){(void)d;}
 static BOOLEAN IhTakeVsync(BC250_DEVICE*d){int old=vector_pending;(void)d;vector_pending=0;return old!=0;}
 static void WddmGpuFence(BC250_DEVICE*d){(void)d;}
 static void WddmGpuFencePaging(BC250_DEVICE*d){(void)d;}
+static void WddmGpuFenceCompute(BC250_DEVICE*d){(void)d;}
 static void WddmDcnVsync(BC250_DEVICE*d){if(InterlockedExchange(&d->DcnVsyncAcked,0))reports++;}
 static void WddmDpc(BC250_DEVICE*d){(void)d;}
 /* BD-170 r6: E5's notification runs in every DPC and returns at once unless E5 queued it (wddm.c). */

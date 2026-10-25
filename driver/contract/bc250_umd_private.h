@@ -269,7 +269,11 @@ struct bc250_umd_private {
      * topology (that node 1 exists and is DXGK_ENGINE_TYPE_COPY), not whether it is safe to submit
      * to from user mode. See docs/design/umd-contract-stage-d.md for the recommendation this
      * follows: node 1 is not exposed to RADV as a queue family (ADR 0013 point 3 deferred) until a
-     * VMID-addressed SubmitCommandVirtual path for it exists, symmetric to node 0's. */
+     * VMID-addressed SubmitCommandVirtual path for it exists, symmetric to node 0's.
+     *
+     * Node 2 (DXGK_ENGINE_TYPE_OTHER, one MEC compute queue) has bit 2 set when the adapter reports
+     * three nodes. The template holds bit 0 only; bc250kmd sets bit 2 at query time
+     * (UmdCapsOpenNode, docs/design/compute-node.md section 8). Node 2 accepts COMPUTE work only. */
     __u32 submittable_node_mask;
 
     __u32 reserved_v3[15];

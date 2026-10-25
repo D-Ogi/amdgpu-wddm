@@ -45,6 +45,7 @@
 #define UMD_BLOB_IP_COMPUTE     1u
 #define UMD_BLOB_IP_DMA         2u
 #define UMD_BLOB_NODE_3D        0u
+#define UMD_BLOB_NODE_COMPUTE   2u            // WDDM node 2, the MEC compute ring (wddm.c BC250_WDDM_NODE_COMPUTE)
 
 #define UMD_BLOB_A_EXACT_VA     0x00000001u
 #define UMD_BLOB_A_SPARSE       0x00000002u
@@ -110,11 +111,13 @@ struct umd_context_view {
     int compute;
 };
 
-// ib_va / ib_bytes are ib[0]. single_ib is 1 only when num_ibs is 1: the one shape the gfx ring
-// submit runs. Two IBs still return UMD_BLOB_OK with single_ib 0, so the caller can say "not run"
-// instead of "malformed".
+// ib_va / ib_bytes are ib[0]. single_ib is 1 only when num_ibs is 1: the one shape the ring submit
+// runs. Two IBs still return UMD_BLOB_OK with single_ib 0, so the caller can say "not run" instead of
+// "malformed". ip_type is the blob's IP, GFX or COMPUTE; every IB names the same IP. Which node may
+// run which IP is the caller's check (UmdBlobIpRunsOnNode), because the submit blob names no node.
 struct umd_submit_view {
     unsigned num_ibs;
+    unsigned long ip_type;
     unsigned long long ib_va;
     unsigned long ib_bytes;
     int single_ib;
@@ -153,8 +156,12 @@ struct umd_placement {
 int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram, unsigned long aperture,
                      int shared, struct umd_placement* out);
 
+// The one IP each UMD node runs: GFX on UMD_BLOB_NODE_3D, COMPUTE on UMD_BLOB_NODE_COMPUTE. 1 when Ip
+// may run on Node. Whether node 2 exists is the caller's question (CreateContext checks the node count).
+int UmdBlobIpRunsOnNode(unsigned long Ip, unsigned Node);
+
 // ddi_node is the node DxgkDdiCreateContext was asked for. The blob's node_ordinal must name that
-// same node, and that node must be UMD_BLOB_NODE_3D.
+// same node, and the blob's IP must run on it (UmdBlobIpRunsOnNode): GFX on node 0, COMPUTE on node 2.
 int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, struct umd_context_view* out);
 
 // len is the UMD's own byte count, not the KMD buffer it was copied into. The blob's size word must

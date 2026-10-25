@@ -20,6 +20,8 @@
 #define FALSE 0
 #define BC250_WDDM_LOG_CALLS 8
 #define BC250_WDDM_NODE_COPY 1u
+#define BC250_WDDM_NODE_COMPUTE 2u        /* wddm.c, above the extracted region */
+#define RtlZeroMemory(p,n) memset((p),0,(n))
 #define BC250_VMID_AUTO 0xFFFFFFFEu   /* vmid_pool.h: the WDDM path lets gfx.c choose (KMD214) */
 #define STATUS_DEVICE_BUSY (-1)
 #define NT_SUCCESS(x) ((x)>=0)
@@ -38,7 +40,7 @@ typedef struct {
     FAST_MUTEX GfxSubmitMutex;
     BC250_GFX_COMPLETION_QUEUE GfxPending;
     int Lock, Stopping, SubmitTimer, SubmitDpc;
-    int HwPending, DeferredValid, WatchdogFaulted[2];
+    int HwPending, DeferredValid, WatchdogFaulted[3];
     UINT HwSeq,HwFence,HwNode,DeferredFence;
     ULONGLONG HwEpoch;
     struct { ULONGLONG Epoch; } FenceLedger[2];
@@ -52,7 +54,14 @@ typedef struct {
     ULONGLONG PagingDeadline;
     LONG PagingHwTimeouts;
     BC250_SUBMIT_WATCHDOG SubmitWatchdog;
-    BC250_HANG_NODE_STATE Recovery[2];
+    BC250_HANG_NODE_STATE Recovery[3];
+    /* Node 2's channel (compute-node.md), types as in wddm.c. NodeCount is latched in WddmStart. */
+    UINT NodeCount;
+    FAST_MUTEX ComputeSubmitMutex;
+    BC250_GFX_COMPLETION_QUEUE ComputePending;
+    int ComputeHwPending, ComputeDeferredValid, ComputeTimer, ComputeDpc;
+    UINT ComputeDeferredFence;
+    volatile LONG ComputeHwSubmitted, ComputeHwCompleted, ComputeHwRefused, ComputePolls;
     volatile LONG SubmitActivityChanges, SubmitPrimes, SubmitGapResets;
     volatile LONG SubmitRearms, SubmitChecks, SubmitHeadMaxMs, SubmitQueueMaxMs;
     /* KMD196: the held-submission counters, types as in wddm.c */
@@ -72,6 +81,10 @@ static ULONGLONG mock_now;
 #define EXPECT_LEDGER(v) (ledger==(v))
 #endif
 static unsigned int completed,mock_seq,reported,ledger,reports,failures,bad,checks,dispatches;
+/* Node 2's model: its own sequence and completion, so a gfx completion never retires a compute job. */
+static unsigned int ccompleted,cmock_seq,cdispatches,reported_node;
+static int crefuse, ctimer;
+static int* compute_timer;
 static int refuse, timer,mutex, armed=1, root_wait;
 /* KMD196's held submission: every phase-1 stall and every phase-2 wait is one step; the job blocking the ring
  * completes at step complete_on_step, with its end-of-pipe interrupt unless lost_interrupt is set. */
@@ -85,8 +98,9 @@ static void KeReleaseSpinLock(int* l,KIRQL i) { (void)l; (void)i; }
 static void ExAcquireFastMutex(FAST_MUTEX* m) { (void)m; CHECK(!mutex); mutex=1; }
 static void ExReleaseFastMutex(FAST_MUTEX* m) { (void)m; CHECK(mutex); mutex=0; }
 static ULONGLONG KeQueryInterruptTime(void) { return mock_now; }
-static void KeSetTimer(int* t,LARGE_INTEGER d,int* p) { (void)t; (void)p; timer=1; due_time=d.QuadPart; }
-static void KeCancelTimer(int* t) { (void)t; timer=0; }
+static void KeSetTimer(int* t,LARGE_INTEGER d,int* p)
+{ (void)p; if(t==compute_timer){ ctimer=1; return; } timer=1; due_time=d.QuadPart; }
+static void KeCancelTimer(int* t) { if(t==compute_timer){ ctimer=0; return; } timer=0; }
 static LONG InterlockedIncrement(volatile LONG* n) { return ++*n; }
 static LONG InterlockedCompareExchange(volatile LONG* p,LONG v,LONG c) { LONG x=*p; if(x==c) *p=v; return x; }
 static LONG64 InterlockedCompareExchange64(volatile LONG64* p,LONG64 v,LONG64 c) { LONG64 x=*p; if(x==c) *p=v; return x; }
@@ -138,7 +152,7 @@ static void WddmGpuFencePaging(BC250_DEVICE* d)
 static void WddmRecordFenceLedgerLocked(BC250_WDDM* w,UINT n,ULONGLONG e,UINT f,BOOLEAN hw)
 { (void)w; (void)n; (void)e; (void)hw; ledger=f; }
 #endif
-static void WddmRecordCompletionLocked(BC250_WDDM* w,UINT f,UINT n) { (void)w; (void)n; reported=f; }
+static void WddmRecordCompletionLocked(BC250_WDDM* w,UINT f,UINT n) { (void)w; reported=f; reported_node=n; }
 static void WddmQueueReport(BC250_WDDM* w) { (void)w; ++reports; }
 /* The ring-gap instrument (ring_gap.h, KMD 0.7.213): WddmGfxHeadLocked calls one edge of it, and the gap
  * arithmetic itself is driven by run_ring_gap.ps1 with a clock of its own. Here it is a counted stub, so this
@@ -147,7 +161,7 @@ static void WddmQueueReport(BC250_WDDM* w) { (void)w; ++reports; }
 #define BC250_WDDM_NODE_3D 0u
 static unsigned int ringGapEdges, ringGapBusy;
 static void WddmRingGapEdgeLocked(BC250_WDDM* w,UINT node,BOOLEAN busy)
-{ (void)w; CHECK(node==BC250_WDDM_NODE_3D); ++ringGapEdges; if(busy) ++ringGapBusy; }
+{ (void)w; CHECK(node==BC250_WDDM_NODE_3D || node==BC250_WDDM_NODE_COMPUTE); ++ringGapEdges; if(busy) ++ringGapBusy; }
 static BC250_GFX_SUBMIT_IDENTITY last_identity;
 /* KMD214: wddm.c asks for BC250_VMID_AUTO and keeps the VMID gfx.c chose; the model chooses 3 + seq % 5. */
 static ULONG ModelVmid(ULONG seq) { return 3u + seq % 5u; }
@@ -181,8 +195,19 @@ static ULONG lastJournalSeq;
 static void HipJournalSubmitted(ULONGLONG id,ULONG seq,ULONG vmid,ULONGLONG root)
 { (void)vmid; (void)root; ++journalSubmitted; lastJournalSubmitted=id; lastJournalSeq=seq; }
 static void HipJournalComplete(ULONGLONG id) { ++journalCompleted; lastJournalCompleted=id; }
-static int GfxSubmitReady(BC250_DEVICE* d) { (void)d; return armed && completed==mock_seq; }
-static int GfxSubmitBusy(BC250_DEVICE* d) { (void)d; return armed && completed!=mock_seq; }
+static int GfxSubmitReady(const BC250_DEVICE* d) { (void)d; return armed && completed==mock_seq; }
+static int GfxSubmitBusy(const BC250_DEVICE* d) { (void)d; return armed && completed!=mock_seq; }
+/* gfx.c's node 2 answers. The fence order is a plain wrap-aware difference, not bc250_fence_order.h, so that the
+ * EqualityFence control of node 0 leaves these cases alone. */
+static int GfxComputeFenceArrived(BC250_DEVICE* d,ULONG v) { (void)d; return (int)(ccompleted - v) >= 0; }
+static int GfxComputeReady(const BC250_DEVICE* d) { (void)d; return armed && ccompleted==cmock_seq; }
+static int GfxComputeBusy(const BC250_DEVICE* d) { (void)d; return armed && ccompleted!=cmock_seq; }
+static NTSTATUS GfxSubmitCompute(BC250_DEVICE* d,ULONGLONG root,ULONGLONG va,ULONG bytes,
+                                 const BC250_GFX_SUBMIT_IDENTITY* id,ULONG* s,ULONG* used)
+{ (void)d; (void)root; (void)va; (void)bytes; CHECK(id!=0); if(id) last_identity=*id;
+  if(used) *used=0;
+  if(crefuse) return STATUS_DEVICE_BUSY; *s=++cmock_seq; ++cdispatches;
+  if(used) *used=ModelVmid(*s); return 0; }
 /* No KeDelayExecutionThread: KMD196 removed the bare 1 ms sleep from both hold phases, and a return of it fails
  * this build rather than pass unnoticed. */
 #include "gfx_pipeline_actual.inc"
@@ -379,6 +404,58 @@ int main(void)
     w.Stopping=0; w.Recovery[1].ResetActive=1;
     WddmPagingSubmitDpcCheck(NULL,&d,NULL,NULL);
     CHECK(!w.PagingDiagnosticTaken && w.PagingHwTimeouts==1);
+    /* Node 2 (compute-node.md): its own queue, fence and poll timer, with the rules of node 0. */
+    memset(&w,0,sizeof(w)); w.NodeCount=3; w.SubmitTickMs=250; compute_timer=&w.ComputeTimer;
+    mock_seq=completed=reported=dispatches=failures=0; mock_now=100; armed=1; refuse=0;
+    cmock_seq=ccompleted=cdispatches=0; ctimer=0; timer=0;
+    for(i=1;i<=7;i++) CHECK(WddmRingSubmit(&d,&w,&c,0x9000,256,i,BC250_WDDM_NODE_COMPUTE,0));
+    CHECK(w.ComputePending.Count==7 && w.ComputeHwPending && ctimer && !timer && cdispatches==7 && dispatches==0);
+    CHECK(w.GfxPending.Count==0 && !w.HwPending && last_identity.Node==BC250_WDDM_NODE_COMPUTE);
+    CHECK(w.ComputeHwSubmitted==7 && w.ComputePending.Items[w.ComputePending.Head].Vmid==ModelVmid(1));
+    CHECK(!WddmRingSubmit(&d,&w,&c,0x9000,256,8,BC250_WDDM_NODE_COMPUTE,0));      /* the queue is full */
+    CHECK(cdispatches==7 && reported==0);
+    completed=1000; WddmGpuFence(&d);                 /* a gfx completion retires no compute job */
+    CHECK(w.ComputePending.Count==7 && reported==0);
+    ccompleted=2; WddmGpuFenceCompute(&d);            /* a coalesced interrupt retires 1 and 2 */
+    CHECK(w.ComputePending.Count==5 && reported==2 && reported_node==BC250_WDDM_NODE_COMPUTE && ctimer);
+    /* A software fence after the tail belongs to the tail, never to the new job. */
+    w.ComputeDeferredValid=1; w.ComputeDeferredFence=8;
+    CHECK(WddmRingSubmit(&d,&w,&c,0x9000,256,9,BC250_WDDM_NODE_COMPUTE,0));
+    CHECK(!w.ComputeDeferredValid && w.ComputePending.Count==6);
+    ccompleted=7; WddmGpuFenceCompute(&d);
+    CHECK(reported==8 && w.ComputePending.Count==1);
+    /* A lost interrupt: the poll timer's DPC reads the slot, retires the job and stops polling. */
+    WddmComputeDpcRoutine(NULL,&d,NULL,NULL);
+    CHECK(w.ComputePending.Count==1 && ctimer && w.ComputePolls==1);     /* nothing arrived: it polls again */
+    ccompleted=cmock_seq; WddmComputeDpcRoutine(NULL,&d,NULL,NULL);
+    CHECK(reported==9 && w.ComputePending.Count==0 && !w.ComputeHwPending && !ctimer && w.ComputePolls==2);
+    /* A reset in progress on node 2 retires nothing and does not poll. */
+    CHECK(WddmRingSubmit(&d,&w,&c,0x9000,256,10,BC250_WDDM_NODE_COMPUTE,0));
+    w.Recovery[BC250_WDDM_NODE_COMPUTE].ResetActive=1; ccompleted=cmock_seq; ctimer=0;
+    WddmComputeDpcRoutine(NULL,&d,NULL,NULL);
+    CHECK(reported==9 && w.ComputePending.Count==1 && !ctimer);
+    w.Recovery[BC250_WDDM_NODE_COMPUTE].ResetActive=0; WddmGpuFenceCompute(&d);
+    CHECK(reported==10 && w.ComputePending.Count==0);
+    /* The shared paths (the UMD hold, ResetEngine) reach each node's own answers. */
+    ccompleted=cmock_seq; completed=mock_seq;
+    CHECK(WddmRingAdmits(&d,BC250_WDDM_NODE_COMPUTE) && !WddmRingBusy(&d,BC250_WDDM_NODE_COMPUTE));
+    CHECK(WddmRingSubmit(&d,&w,&c,0x9000,256,11,BC250_WDDM_NODE_COMPUTE,0));
+    CHECK(WddmRingBusy(&d,BC250_WDDM_NODE_COMPUTE) && !WddmRingBusy(&d,BC250_WDDM_NODE_3D));
+    CHECK(WddmRingQueue(&w,BC250_WDDM_NODE_COMPUTE)==&w.ComputePending);
+    CHECK(WddmRingQueue(&w,BC250_WDDM_NODE_3D)==&w.GfxPending);
+    WddmRingFence(&d,BC250_WDDM_NODE_3D); CHECK(w.ComputePending.Count==1);
+    ccompleted=cmock_seq; WddmRingFence(&d,BC250_WDDM_NODE_COMPUTE);
+    CHECK(w.ComputePending.Count==0 && reported==11);
+    /* The head step of ResetEngine: an empty compute queue stops the poll and leaves node 0 alone. */
+    ctimer=1; timer=1; WddmRingHeadLocked(&w,BC250_WDDM_NODE_COMPUTE);
+    CHECK(!ctimer && timer && !w.ComputeHwPending); timer=0;
+    /* A busy compute ring completes nothing and is not counted as a refusal. */
+    crefuse=1; CHECK(!WddmRingSubmit(&d,&w,&c,0x9000,256,12,BC250_WDDM_NODE_COMPUTE,0));
+    CHECK(w.ComputePending.Count==0 && reported==11 && w.ComputeHwRefused==0); crefuse=0;
+    /* With two nodes the compute fence read touches nothing. */
+    w.NodeCount=2; w.ComputePending.Count=1; w.ComputePending.Items[w.ComputePending.Head].Seq=cmock_seq;
+    WddmGpuFenceCompute(&d);
+    CHECK(w.ComputePending.Count==1 && reported==11);
     printf("GFX WDDM actual submit/completion/watchdog: %u checks, %u failures\n",checks,bad);
     return bad ? 1:0;
 }

@@ -1,16 +1,24 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\vmid-pool",[switch]$IgnoreRetirement)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\vmid-pool",[switch]$IgnoreRetirement,[switch]$IgnoreComputeRing)
 $ErrorActionPreference='Stop'
+if($IgnoreComputeRing -and !$PSBoundParameters.ContainsKey('Out')){$Out+='-compute-ring'}
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
 # The header under test is copied next to the build, so that the negative control changes the copy and never the
 # tree. -IgnoreRetirement is that control: a chooser that recycles a VMID without asking whether its last job has
 # retired, with the rule check left in place and the model checking the safety property. It must fail by a check.
+# -IgnoreComputeRing is the second one: "retired" asks the gfx ring only, as it did before the compute node, so a
+# VMID whose compute job is still live reads as free. The two-ring model must fail by a check.
 $pool=Get-Content "$repo\driver\kmd\vmid_pool.h" -Raw
 if($IgnoreRetirement){
-    $live='if (!(Members & (1u << v)) || !Bc250VmidRetired(Table, v, Observed)) continue;'
+    $live='if (!(Members & (1u << v)) || !Bc250VmidRetired(Table, v, Observed, ObservedCompute)) continue;'
     if(!$pool.Contains($live)){throw 'negative control: the chooser line moved'}
-    $pool=$pool.Replace($live,'if (!(Members & (1u << v)) || (Observed & 0u)) continue;')
+    $pool=$pool.Replace($live,'if (!(Members & (1u << v)) || ((Observed | ObservedCompute) & 0u)) continue;')
+}
+if($IgnoreComputeRing){
+    $live='           (Table->LiveSeqCompute[Vmid] == 0 ||'
+    if(!$pool.Contains($live)){throw 'negative control: the compute retirement line moved'}
+    $pool=$pool.Replace($live,'           (((ObservedCompute & 0u) == 0u) || Table->LiveSeqCompute[Vmid] == 0 ||')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'vmid_pool.h'),$pool)
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath

@@ -7,7 +7,8 @@ things on WDDM.
 open. This document covers the rest of the surface - allocation, address space, contexts,
 submission, synchronisation - and `bc250_umd_submit.h` is the shape it produces.
 
-**Status: the kernel reads the three blobs** (`driver/kmd/umd_blob.c`, node 0 only, host-tested).
+**Status: the kernel reads the three blobs** (`driver/kmd/umd_blob.c`, nodes 0 and 2, host-tested).
+GFX work runs on node 0 and COMPUTE work on node 2 (`docs/design/compute-node.md`).
 The winsys that fills them is `driver/icd/mesa-wddm2-bc250.patch` (RADV's wddm2 winsys, not yet
 run on unit A). A busy gfx ring is waited out by bc250kmd 0.7.42; more than one IB is still
 packed into one by that winsys, because the ring runs one.
@@ -38,7 +39,7 @@ Narrowing this hard is what makes the surface tractable:
   notice, since fact M50 already has it dropping compute queues and running everything on the gfx
   ring on this chip. The caps blob's `submittable_node_mask` (version 3) says so in a form a winsys
   can check rather than assume: bit 1 (node 1) is clear until a VMID-addressed submit path for it
-  exists.
+  exists. Bit 2 is set while node 2, the compute node, is open (`docs/design/compute-node.md`).
 
 ## The call set, from RADV's own source
 

@@ -538,6 +538,8 @@ void Bc250DpcRoutine(_In_ const PVOID MiniportDeviceContext)
     // ADR 0008 stage D: node 1's own poll, unconditional like the one above - which vector woke this DPC does not
     // matter to either read, only whether the fence slot it polls now holds the value it is waiting for.
     WddmGpuFencePaging((BC250_DEVICE*)MiniportDeviceContext);
+    // Node 2 (docs/design/compute-node.md): the compute ring's fence slot, by the same rule.
+    WddmGpuFenceCompute((BC250_DEVICE*)MiniportDeviceContext);
     // ADR 0011 point 3 step 3: the hardware vsync's own report, same shape - a no-op unless Device->DcnVsyncAcked
     // says an interrupt found a real VUPDATE_NO_LOCK event since the last time this ran.
     if (IhTakeVsync((BC250_DEVICE*)MiniportDeviceContext))
