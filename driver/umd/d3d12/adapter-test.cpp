@@ -201,6 +201,33 @@ int main(int argc,char** argv) {
     assert(versions[0]==D3D12DDI_SUPPORTED_0094 && versions[offered-1]==D3D12DDI_SUPPORTED_0092);
     puts("the version list is 0094, 0093, 0092");
 #endif
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR) && defined(D3D12DDI_BUILD_VERSION_0119)
+    // Lab build: AMDGPU_WDDM_LAB_DDI_MAX sets the newest build offered and accepted; a value outside 92..kDdiMax is
+    // ignored.
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX","118"));
+    count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==118-91);
+    versions.fill(0xabcdef);
+    assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,versions.data())==S_OK);
+    assert(versions[0]==D3D12DDI_SUPPORTED_0118 && versions[count-1]==D3D12DDI_SUPPORTED_0092 &&
+           versions[count]==0xabcdef);
+    {
+        D3D12DDIARG_CALCPRIVATEDEVICESIZE capped{};capped.Interface=D3D12DDI_INTERFACE_VERSION_R8;
+        capped.Version=D3D12DDI_BUILD_VERSION_0118<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&capped));
+        capped.Version=D3D12DDI_BUILD_VERSION_0119<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&capped)==0);
+    }
+    for(const char* value:{"91","121","1x","","12345678"}){
+        assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",value));
+        count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
+    }
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",nullptr));
+    puts("lab build: AMDGPU_WDDM_LAB_DDI_MAX=118 offers 0118 ... 0092 and refuses 0119; other values are ignored");
+#elif !defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // Release build: the variable has no effect.
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX","93"));
+    count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",nullptr));
+    puts("release build: AMDGPU_WDDM_LAB_DDI_MAX has no effect");
+#endif
     UINT64 guard[4]={0xabcdef,0x123456,D3D12DDI_SUPPORTED_0092,0x888};
     assert(funcs.pfnCreateDevice(a.hAdapter,nullptr)==E_INVALIDARG);
     D3D12DDIARG_CALCPRIVATEDEVICESIZE sizeArgs{};
