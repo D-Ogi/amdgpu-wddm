@@ -22,8 +22,10 @@ link and lib of the Visual Studio environment, as every engine up to tester.31v3
 same set with clang-cl, lld-link and llvm-lib from -ClangToolchain (default LLVM 23.1.4), in the same Visual
 Studio environment, and adds the arguments of its 'compilers' entry in dxvk-configs.json. Its PDB keeps the full
 CodeView types (DXVK's /Z7), which dump analysis of the engine needs. The script prints the path and version of
-the compiler and the linker, and stops when one of them is missing. clang-cl builds x64 only: the x86 policy of
-Add-ReproducibleMesonOptions has no clang-cl equivalent yet, so the WoW64 engine stays an msvc build.
+the compiler and the linker, and stops when one of them is missing. clang-cl -Arch x86 names the
+i686-pc-windows-msvc target in the compiler command (CC, CXX), so that meson detects an x86 host, and takes the
+clang-cl form of the x86 calling-convention policy (Add-ReproducibleMesonOptions). After configure, every compile
+command must carry the target and the policy and no switch that removes them (Test-ClangX86Policy).
 
 The source tree must be a DXVK checkout with its submodules initialized (git submodule update --init
 --recursive); this script patches nothing and fetches nothing.
@@ -106,7 +108,11 @@ if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_o
 }
 # The compiler's own arguments: additions that leave the recorded set as it is.
 $options = Add-MesonVariants $options $configsFile $Compiler
-$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler
+# clang-cl for x86 is the i686 target, named in the compiler command below (CC, CXX), so that meson detects an x86
+# host machine. common.ps1 then adds the clang-cl form of the x86 calling-convention policy.
+$clangTarget = if ($Compiler -eq 'clang-cl' -and $Arch -eq 'x86') { 'i686-pc-windows-msvc' } else { '' }
+$targetSwitch = if ($clangTarget) { "/clang:--target=$clangTarget" } else { '' }
+$options = Add-ReproducibleMesonOptions $options $Source $Build -Arch $Arch -Compiler $Compiler -ClangTarget $clangTarget
 $clangTools = $null
 if ($Compiler -eq 'clang-cl') {
     if (-not $ClangToolchain) { $ClangToolchain = Join-Path $root 'toolchain\llvm-23.1.4-win64' }
@@ -162,10 +168,17 @@ try {
     # the first compiler it finds, and a missing cl.exe would give a build with another compiler. -Compiler msvc
     # names the tools of the Visual Studio environment as meson's own search finds them. -Compiler clang-cl names
     # the tools of -ClangToolchain, inside the same Visual Studio environment, whose INCLUDE and LIB clang-cl and
-    # lld-link read, and whose rc.exe compiles DXVK's version resources.
+    # lld-link read, and whose rc.exe compiles DXVK's version resources. For x86 the compiler command names the i686
+    # target: meson takes the host machine from the target that the compiler reports, and the x86 Visual Studio
+    # environment does not change the target of clang-cl. The target is /clang:--target=<target>, as in
+    # build-mesa.ps1: meson's resource compiler wrapper (rc.py) would give a word that starts with - to rc.exe. CL and
+    # _CL_ go: clang-cl reads them, and the x86 environment puts the MSVC policy in _CL_, which clang-cl appends after
+    # /link at a link, where lld-link reads each switch as a file.
     if ($clangTools) {
-        $env:CC = $clangTools['clang-cl']
-        $env:CXX = $clangTools['clang-cl']
+        $env:CC = (@($clangTools['clang-cl']) + @($targetSwitch | Where-Object { $_ })) -join ' '
+        $env:CXX = $env:CC
+        $env:CL = $null
+        $env:_CL_ = $null
         $env:CC_LD = $clangTools['lld-link']
         $env:CXX_LD = $clangTools['lld-link']
         $env:AR = $clangTools['llvm-lib']
@@ -263,6 +276,14 @@ try {
         throw "meson recorded different options. Missing: $($missing -join ' ') Extra: $($extra -join ' ')"
     }
     Write-Host "configure gate: the Build Options line matches the $Config option set ($($options.Count) options)"
+
+    # Every compile command names the i686 target and the clang-cl x86 policy, and none removes the policy
+    # (Test-ClangX86Policy, common.ps1).
+    if ($clangTarget) {
+        $recipe.gate['x86_policy'] = Test-ClangX86Policy $Build $clangTarget @() $targetSwitch
+        Write-Recipe $recipePath $recipe
+        Assert-ClangX86Policy $recipe.gate['x86_policy'] $Build
+    }
 
     if ($ConfigureOnly) { Write-Host "configured only: $Build (recipe: $recipePath)"; return }
 
