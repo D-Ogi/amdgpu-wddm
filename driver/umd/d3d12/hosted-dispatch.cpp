@@ -405,8 +405,14 @@ HRESULT HostedDispatch::internal_queue(uint32_t op,void* argument) noexcept {
     }
     if(op==BC250_HOST_SignalSynchronizationObjectFromGpu2){
         auto& a=*static_cast<D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2*>(argument);
-        if(!a.BroadcastContextCount || a.BroadcastContextCount>D3DDDI_MAX_BROADCAST_CONTEXT || a.Flags.Value ||
-           !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)return E_INVALIDARG;
+        // The hosted ICD sets AllowFenceRewind on every GPU signal: a Vulkan timeline lets a queue that waits for N
+        // and signals N+1 be submitted before the queue that signals N (wait-before-signal). The flag lets the
+        // kernel queue a value behind one already queued (d3dukmdt.h, D3DDDICB_SIGNALFLAGS). It goes to the
+        // runtime callback unchanged; every other flag is refused.
+        D3DDDICB_SIGNALFLAGS rewind{};rewind.AllowFenceRewind=1;
+        if(!a.BroadcastContextCount || a.BroadcastContextCount>D3DDDI_MAX_BROADCAST_CONTEXT ||
+           (a.Flags.Value&~rewind.Value) || !a.ObjectCount || !a.ObjectHandleArray || !a.MonitoredFenceValueArray)
+            return E_INVALIDARG;
         HANDLE handles[D3DDDI_MAX_BROADCAST_CONTEXT]{};Context* named[D3DDDI_MAX_BROADCAST_CONTEXT]{};
         Held held(lock_);
         for(UINT i=0;i<a.BroadcastContextCount;++i){
@@ -418,6 +424,7 @@ HRESULT HostedDispatch::internal_queue(uint32_t op,void* argument) noexcept {
         held.release();note_shared(shared);
         D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 b{};b.ObjectCount=a.ObjectCount;b.ObjectHandleArray=a.ObjectHandleArray;
         b.BroadcastContextCount=a.BroadcastContextCount;b.BroadcastContextArray=handles;b.MonitoredFenceValueArray=a.MonitoredFenceValueArray;
+        b.Flags.AllowFenceRewind=a.Flags.AllowFenceRewind;
         HRESULT hr=KT_QUEUE(SignalSynchronizationObjectFromGpu2,&b);
         held.acquire();for(UINT i=0;i<a.BroadcastContextCount;++i)give(*named[i]);
         return hr;
