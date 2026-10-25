@@ -36,6 +36,12 @@ typedef struct {
     long long GdiRenderBatchRefused,GdiRenderFallback;
     long long GdiRenderPeakSubRects,GdiRenderPeakDwords;
     long long GdiRenderRefused[Bc250GdiRefusals];
+    /* The capacity, scope and DMA-placement counters of the stop's later GDI lines. */
+    long long GdiRenderDwordsCommitted,GdiRenderCapacityShort,GdiRenderPeakCommandLength,GdiRenderOmittedSubRects;
+    long long GdiRenderIbFull,GdiRenderIbOverflow,GdiRenderDmaShort,GdiRenderAboveProducer,GdiRenderScopeRefused;
+    long long GdiRenderDmaAppend,GdiRenderDmaSubmitted,GdiRenderDmaRaced;
+    long long GdiRenderDmaUnknown,GdiRenderDmaFull,GdiRenderDmaSmall,GdiRenderDmaLost;
+    long GdiCmdBytesWanted;
 } BC250_WDDM;
 typedef struct _BC250_DEVICE {
     BC250_WDDM *Wddm;
