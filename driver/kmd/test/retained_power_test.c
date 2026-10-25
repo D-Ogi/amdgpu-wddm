@@ -18,14 +18,16 @@ typedef struct {long long QuadPart;} LARGE_INTEGER;
 #define STATUS_DEVICE_NOT_READY -2
 #define STATUS_DEVICE_BUSY -3
 #define NT_SUCCESS(x) ((x)>=0)
-#define BC250_WDDM_NODE_COUNT_MAX 2
+#define BC250_WDDM_NODE_COUNT_MAX 3
 #define BC250_WDDM_VSYNC_MS 16
 typedef struct {
  int Lock,Stopping,RetainedPowerPause,HwPending,DeferredValid,PagingHwPending;
  void *PagingHead,*PagingTail;
  int PagingDeferredValid,ReportActive,ReportAgain;
- int ActiveSubmissions[2],CompletionPending[2],PreemptionPending[2];
- int RefusalPending[2],RejectedPending[2],WatchdogFaulted[2];
+ /* Node 2's channel (compute-node.md): a job on the compute ring or a fence held for it is outstanding work. */
+ int ComputeHwPending,ComputeDeferredValid,ComputeTimer,ComputeDpc;
+ int ActiveSubmissions[3],CompletionPending[3],PreemptionPending[3];
+ int RefusalPending[3],RejectedPending[3],WatchdogFaulted[3];
  int PrimaryNeedsRestore;
  int VSyncArmed,VSyncEnabled,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
  int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
@@ -71,16 +73,18 @@ static void retained(BC250_WDDM*w,const BC250_WDDM*before){
 }
 int main(void){
  BC250_DEVICE d;BC250_WDDM w,before;unsigned i;
- const size_t scalar[]={offsetof(BC250_WDDM,HwPending),offsetof(BC250_WDDM,DeferredValid),offsetof(BC250_WDDM,PagingHwPending),offsetof(BC250_WDDM,PagingDeferredValid),offsetof(BC250_WDDM,ReportActive),offsetof(BC250_WDDM,ReportAgain)};
+ const size_t scalar[]={offsetof(BC250_WDDM,HwPending),offsetof(BC250_WDDM,DeferredValid),offsetof(BC250_WDDM,PagingHwPending),offsetof(BC250_WDDM,PagingDeferredValid),offsetof(BC250_WDDM,ReportActive),offsetof(BC250_WDDM,ReportAgain),
+                         offsetof(BC250_WDDM,ComputeHwPending),offsetof(BC250_WDDM,ComputeDeferredValid)};
  const size_t arrays[]={offsetof(BC250_WDDM,ActiveSubmissions),offsetof(BC250_WDDM,CompletionPending),offsetof(BC250_WDDM,PreemptionPending),offsetof(BC250_WDDM,RefusalPending),offsetof(BC250_WDDM,RejectedPending),offsetof(BC250_WDDM,WatchdogFaulted)};
  setup(&d,&w);before=w;
  d.DcnPlaneFormats=1;d.DcnPlaneFormat=BC250_PLANE_FORMAT_ABGR8888;
  CHECK(WddmSuspendRetained(&d)==0 && w.Stopping && w.RetainedPowerPause && w.PrimaryNeedsRestore);
  /* M15.14: the format registers may change with the address over power loss, so the next flip writes them. */
  CHECK(d.DcnPlaneFormat==BC250_PLANE_FORMAT_NONE);
- CHECK(d.Wddm==&w && !d.DcnVsyncArmed && flushes==2 && cancels==4 && removes==5); // KMD172: + paging drain timer
+ // KMD172: + paging drain timer; the compute node: + its poll timer and DPC.
+ CHECK(d.Wddm==&w && !d.DcnVsyncArmed && flushes==2 && cancels==5 && removes==6);
  retained(&w,&before);
- CHECK(WddmSuspendRetained(&d)==0 && cancels==4 && removes==5);
+ CHECK(WddmSuspendRetained(&d)==0 && cancels==5 && removes==6);
  gfxReady=0;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY && w.Stopping);gfxReady=1;
  pagingReady=0;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY && w.Stopping);pagingReady=1;
  d.SourceVisible=1;CHECK(WddmResumeRetained(&d)==STATUS_DEVICE_NOT_READY);d.SourceVisible=0;
@@ -94,7 +98,7 @@ int main(void){
   setup(&d,&w);*(int*)((char*)&w+scalar[i])=1;before=w;
   CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY);CHECK(!memcmp(&w,&before,sizeof(w)) && !cancels && !mmio);
  }
- for(i=0;i<sizeof(arrays)/sizeof(arrays[0]);i++){unsigned n;for(n=0;n<2;n++){
+ for(i=0;i<sizeof(arrays)/sizeof(arrays[0]);i++){unsigned n;for(n=0;n<3;n++){
   setup(&d,&w);((int*)((char*)&w+arrays[i]))[n]=1;before=w;
   CHECK(WddmSuspendRetained(&d)==STATUS_DEVICE_BUSY);CHECK(!memcmp(&w,&before,sizeof(w)) && !removes);
  }}

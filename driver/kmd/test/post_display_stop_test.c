@@ -20,6 +20,7 @@ typedef struct {BOOLEAN BoardAllowed;} BOARD_BLOCK;
 typedef struct {
     int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
     int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
+    int ComputeHwPending,ComputeTimer,ComputeDpc;       /* node 2's channel (compute-node.md) */
     long LastCompletedFence,VSyncTicks;
     BC250_PAGING_JOB *PagingHead,*PagingTail;
     LIST_ENTRY Objects;
@@ -81,6 +82,7 @@ static int AdapterOwnerIs(void* identity){return identity && identity==ownerIden
 static struct {unsigned joined,smu,restores,vidmm,objects,unmaps,dpm,hdmiStops;NTSTATUS result,hdmiResult;} model;
 static void WddmGpuFence(BC250_DEVICE*d){(void)d;}
 static void WddmGpuFencePaging(BC250_DEVICE*d){(void)d;}
+static void WddmGpuFenceCompute(BC250_DEVICE*d){(void)d;}
 static void KeDelayExecutionThread(int k,int a,LARGE_INTEGER*t){(void)k;(void)a;(void)t;}
 static void KeAcquireSpinLock(int*l,KIRQL*i){(void)l;*i=0;}
 static void KeReleaseSpinLock(int*l,KIRQL i){(void)l;(void)i;}

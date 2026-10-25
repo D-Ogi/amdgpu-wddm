@@ -63,7 +63,9 @@ typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
 // start publishes the DirectFlip handshake. WddmStart computes it from the operator's switch ANDed with
 // every start-latched fact the flip path needs; here it is set directly, which is what lets the test
 // drive both answers of the branch.
-typedef struct {BOOLEAN DirectFlipHandshake;} BC250_WDDM;
+// NodeCount is latched at WddmStart; with three nodes the branch opens node 2 in submittable_node_mask.
+#define BC250_WDDM_NODE_COMPUTE 2u
+typedef struct {BOOLEAN DirectFlipHandshake;unsigned NodeCount;} BC250_WDDM;
 static BC250_WDDM wddmStorage;
 static BC250_WDDM* wddm=&wddmStorage;
 static NTSTATUS SmuReadFirmwareVersion(int* smu,ULONG* version)
@@ -144,6 +146,14 @@ int main(int argc,char**argv)
     CHECK(!memcmp(out+UMD_CAPS_CU_ACTIVE_OFFSET,&cuActive,4));
     CHECK(!memcmp(out+UMD_CAPS_FIRMWARE_OFFSET,expected+UMD_CAPS_FIRMWARE_OFFSET,sizeof(fw)));
     cuActive=0;CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && !memcmp(out,expected,sizeof(out)));
+    // Node 2 (compute-node.md section 8): with three nodes the mask gets bit 2 and no other byte changes. With two
+    // nodes the answer is the template, as above.
+    wddm->NodeCount=3;
+    CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS);
+    CHECK(out[UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET]==(unsigned char)(expected[UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET]|4u));
+    for(i=0;i<sizeof(out);i++) if(i!=UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET) CHECK(out[i]==expected[i]);
+    wddm->NodeCount=2;
+    CHECK(QueryCaps(&d,&q)==STATUS_SUCCESS && !memcmp(out,expected,sizeof(out)));
     // The actual QueryAdapterInfo branch preserves the old prefix, writes no
     // partial identity, and does not overwrite caller-owned bytes after it.
     {

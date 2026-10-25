@@ -29,7 +29,9 @@ def main():
         "GuardRecordHangRecovery(BC250_HANG_VERDICT_PENDING, seq, hungFence, 0, 0, wddm->HangRecoveryWaves);",
         "if (wddm->HangRecoveryWaves) GfxRecordWavesBeforeKill(device, seq, hungFence, vmid);",
         'GuardLog("wddm: soft recovery admit-to-kill',
-        "verdict = GfxSoftRecover(device, vmid, &seq, &kills, &micros);",
+        # Node 2 recovers its own ring with the same frame (compute-node.md section 6).
+        "verdict = node == BC250_WDDM_NODE_COMPUTE ? GfxComputeSoftRecover(device, vmid, &seq, &kills, &micros) :",
+        "GfxSoftRecover(device, vmid, &seq, &kills, &micros);",
     ]
     position = -1
     for marker in ordered:

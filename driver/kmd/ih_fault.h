@@ -38,6 +38,20 @@ static __inline int Bc250IhIsCpPrivFault(unsigned long ClientId, unsigned long S
             SourceId == BC250_IH_CP_PRIV_INSTR_FAULT);
 }
 
+// Which ring the CP fault came from: the vector's ring_id, decoded as gfx_v10_0_handle_priv_fault does
+// (me = (ring_id & 0x0c) >> 2, pipe = ring_id & 0x03, queue = (ring_id & 0x70) >> 4). ME 0 is the gfx ring, ME 1 and
+// 2 are the MEC compute queues. 1 when the fault is of a compute queue.
+static __inline unsigned Bc250IhCpFaultMe(unsigned long RingId)
+{
+    return (unsigned)((RingId & 0x0Cu) >> 2);
+}
+
+static __inline int Bc250IhCpFaultIsCompute(unsigned long RingId)
+{
+    unsigned me = Bc250IhCpFaultMe(RingId);
+    return me == 1u || me == 2u;
+}
+
 static __inline const char* Bc250IhCpPrivFaultName(unsigned long SourceId)
 {
     if (SourceId == BC250_IH_CP_PRIV_REG_FAULT) return "privileged register";

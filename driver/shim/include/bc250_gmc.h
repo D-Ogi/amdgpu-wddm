@@ -45,6 +45,8 @@
  *   1     the gfx ring, in PM4 packets (bc250_gfx_emit_vm_flush(), the EnableRingVmFlush gate of
  *         the miniport: on unless the value is 0)
  *   2, 3  firmware, as upstream
+ *   4     the compute (MEC) ring of WDDM node 2, in PM4 packets (bc250_gfx_emit_vm_flush_compute()).
+ *         One compute ring submits user jobs, so no two rings share this engine
  *   17    every CPU MMIO flush (bc250_gmc_flush_gpu_tlb()), which the miniport serializes under
  *         one lock at PASSIVE_LEVEL
  *
@@ -53,6 +55,7 @@
  */
 #define BC250_INV_ENG_SDMA_PAGING	0u
 #define BC250_INV_ENG_GFX_RING		1u
+#define BC250_INV_ENG_COMPUTE_RING	4u
 #define BC250_INV_ENG_CPU		17u
 #define BC250_INV_ENG_COUNT		18u
 

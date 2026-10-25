@@ -425,6 +425,88 @@ static void case_refusals(void)
 	check(tail_untouched(0) && g_ring.wptr == 0, "it wrote nothing");
 }
 
+/* The compute (MEC) ring job of the lab ACE probe: the same flush with the compute WRITE_DATA
+ * (gfx_v10_0_ring_emit_wreg's default arm: WR_CONFIRM, engine select 0), the compute IB packet
+ * (gfx_v10_0_ring_emit_ib_compute: INDIRECT_BUFFER_VALID = 1 << 23 in the control word) and the
+ * same RELEASE_MEM. Nothing of the gfx frame: no PFP_SYNC_ME, CONTEXT_CONTROL, FRAME_CONTROL or
+ * SWITCH_BUFFER. */
+static void case_compute_job(void)
+{
+	static struct amdgpu_ring_funcs compute_funcs = { AMDGPU_RING_TYPE_COMPUTE, 255u, 0x80000000u };
+	static const u32 ib_and_fence[] = {
+		0xC0023F00u, 0x23456000u, 0x00000001u, 0x01800100u, /* INDIRECT_BUFFER, VALID, VMID 1 */
+		0xC0064900u, 0x06603514u, 0x20000000u,              /* RELEASE_MEM, 32-bit data, no interrupt */
+		0xABCDE000u, 0x00000000u, 0x00001234u, 0x00000000u, 0x00000000u,
+	};
+	const unsigned int tail = (unsigned int)(sizeof(ib_and_fence) / sizeof(ib_and_fence[0]));
+	struct expected_flush e;
+	u32 want[BC250_GFX_VM_FLUSH_DWORDS];
+	unsigned int i;
+
+	printf("\nthe compute ring job: compute flush, compute IB, fence\n");
+	check(tail == BC250_GFX_COMPUTE_IB_DWORDS + 8u, "the IB is 4 dwords and the fence 8");
+
+	ring_reset();
+	g_ring.funcs = &compute_funcs;
+	check(bc250_gfx_submit_job_compute(&g_ring, TEST_IB_ADDR, TEST_IB_LENGTH_DW, TEST_VMID,
+					   TEST_FENCE_ADDR, TEST_SEQ, 0, 1, TEST_ROOT,
+					   BC250_INV_ENG_COMPUTE_RING) == 0,
+	      "the compute job with a flush is accepted");
+	expected_flush_of(&e, TEST_VMID, TEST_ROOT, BC250_INV_ENG_COMPUTE_RING);
+	expected_flush_dwords(&e, want);
+	for (i = 0; i < 3; i++)
+		want[1 + 5 * i] = 0x00100000u;  /* WR_CONFIRM alone: no PFP on a compute ring */
+	check(same_dwords(g_ring_memory, want, BC250_GFX_VM_FLUSH_DWORDS, "compute flush"),
+	      "the flush is the gfx one with the compute WRITE_DATA engine select");
+	check(same_dwords(g_ring_memory + BC250_GFX_VM_FLUSH_DWORDS, ib_and_fence, tail, "compute frame"),
+	      "the IB carries INDIRECT_BUFFER_VALID and the VMID, the fence follows at once");
+	check(g_ring.wptr == RESERVATION_DWORDS && tail_untouched(RESERVATION_DWORDS),
+	      "one reservation, nothing written past it");
+
+	ring_reset();
+	g_ring.funcs = &compute_funcs;
+	check(bc250_gfx_submit_job_compute(&g_ring, TEST_IB_ADDR, TEST_IB_LENGTH_DW, TEST_VMID,
+					   TEST_FENCE_ADDR, TEST_SEQ, 0, 0, 0, 0) == 0,
+	      "the compute job without a flush is accepted");
+	check(same_dwords(g_ring_memory, ib_and_fence, tail, "compute frame, no flush"),
+	      "without a flush the IB is the first dword");
+
+	ring_reset();
+	g_ring.funcs = &compute_funcs;
+	check(bc250_gfx_submit_job_compute(&g_ring, TEST_IB_ADDR, TEST_IB_LENGTH_DW, 0,
+					   TEST_FENCE_ADDR, TEST_SEQ, 0, 1, TEST_ROOT,
+					   BC250_INV_ENG_COMPUTE_RING) == BC250_EINVAL,
+	      "a compute job at VMID 0 is refused");
+	check(bc250_gfx_submit_job_compute(&g_ring, TEST_IB_ADDR, TEST_IB_LENGTH_DW, TEST_VMID,
+					   TEST_FENCE_ADDR, TEST_SEQ, 0, 1, TEST_ROOT | 0x800ULL,
+					   BC250_INV_ENG_COMPUTE_RING) == BC250_EINVAL,
+	      "a compute job with a root that is not page aligned is refused");
+	check(bc250_gfx_emit_ib_compute(&g_ring, TEST_IB_ADDR | 2u, 3u, TEST_VMID) == BC250_EINVAL &&
+	      bc250_gfx_emit_ib_compute(&g_ring, TEST_IB_ADDR, 0x100000u, TEST_VMID) == BC250_EINVAL &&
+	      bc250_gfx_emit_ib_compute(&g_ring, TEST_IB_ADDR, 3u, AMDGPU_NUM_VMID) == BC250_EINVAL,
+	      "the compute IB refuses what the gfx IB refuses");
+	check(bc250_gfx_emit_vm_flush(&g_ring, TEST_VMID, TEST_ROOT, BC250_INV_ENG_COMPUTE_RING) ==
+	      BC250_EINVAL, "the gfx flush refuses a compute ring");
+	check(tail_untouched(0) && g_ring.wptr == 0, "none of those refusals wrote a dword");
+
+	g_ring.funcs = &g_gfx_funcs;
+	check(bc250_gfx_submit_job_compute(&g_ring, TEST_IB_ADDR, TEST_IB_LENGTH_DW, TEST_VMID,
+					   TEST_FENCE_ADDR, TEST_SEQ, 0, 1, TEST_ROOT,
+					   BC250_INV_ENG_COMPUTE_RING) == BC250_EINVAL &&
+	      bc250_gfx_emit_vm_flush_compute(&g_ring, TEST_VMID, TEST_ROOT,
+					      BC250_INV_ENG_COMPUTE_RING) == BC250_EINVAL &&
+	      bc250_gfx_emit_ib_compute(&g_ring, TEST_IB_ADDR, 3u, TEST_VMID) == BC250_EINVAL,
+	      "the three compute functions refuse the gfx ring");
+	check(tail_untouched(0) && g_ring.wptr == 0, "and wrote nothing");
+
+	check(BC250_INV_ENG_COMPUTE_RING != BC250_INV_ENG_GFX_RING &&
+	      BC250_INV_ENG_COMPUTE_RING != BC250_INV_ENG_CPU &&
+	      BC250_INV_ENG_COMPUTE_RING != BC250_INV_ENG_SDMA_PAGING &&
+	      BC250_INV_ENG_COMPUTE_RING != 2u && BC250_INV_ENG_COMPUTE_RING != 3u &&
+	      BC250_INV_ENG_COMPUTE_RING < BC250_INV_ENG_COUNT,
+	      "the compute engine has no other owner and is not a firmware engine");
+}
+
 int main(int argc, char **argv)
 {
 	int i;
@@ -443,6 +525,7 @@ int main(int argc, char **argv)
 	case_fields_against_reference();
 	case_engine_ownership();
 	case_refusals();
+	case_compute_job();
 
 	printf("\n== verdict ==\n");
 	printf("  %u checks, %u failures\n", g_checks, g_failures);

@@ -282,9 +282,24 @@ int main(void)
     FillContext(&ctx, AMDGPU_HW_IP_GFX, 0);
     CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_OK);
     CHECK(cv.ip_type == UMD_BLOB_IP_GFX && cv.node_ordinal == 0 && cv.priority == 2);
+    // COMPUTE runs on node 2 and on no other node; GFX runs on node 0 only.
     FillContext(&ctx, AMDGPU_HW_IP_COMPUTE, 0);
-    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_BAD_IP);
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_BAD_NODE);
     CHECK(cv.ip_type == 0);
+    FillContext(&ctx, AMDGPU_HW_IP_COMPUTE, UMD_BLOB_NODE_COMPUTE);
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), UMD_BLOB_NODE_COMPUTE, &cv) == UMD_BLOB_OK);
+    CHECK(cv.ip_type == UMD_BLOB_IP_COMPUTE && cv.node_ordinal == UMD_BLOB_NODE_COMPUTE);
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_BAD_NODE);
+    FillContext(&ctx, AMDGPU_HW_IP_GFX, UMD_BLOB_NODE_COMPUTE);
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), UMD_BLOB_NODE_COMPUTE, &cv) == UMD_BLOB_BAD_NODE);
+    FillContext(&ctx, AMDGPU_HW_IP_COMPUTE, 1);
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 1, &cv) == UMD_BLOB_BAD_NODE);
+    FillContext(&ctx, AMDGPU_HW_IP_COMPUTE, UMD_BLOB_NODE_COMPUTE);
+    ctx.ring = 1;
+    CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), UMD_BLOB_NODE_COMPUTE, &cv) == UMD_BLOB_BAD_IP);
+    CHECK(UmdBlobIpRunsOnNode(UMD_BLOB_IP_GFX, UMD_BLOB_NODE_3D) && UmdBlobIpRunsOnNode(UMD_BLOB_IP_COMPUTE, 2));
+    CHECK(!UmdBlobIpRunsOnNode(UMD_BLOB_IP_GFX, 2) && !UmdBlobIpRunsOnNode(UMD_BLOB_IP_COMPUTE, 0));
+    CHECK(!UmdBlobIpRunsOnNode(UMD_BLOB_IP_DMA, 1) && !UmdBlobIpRunsOnNode(UMD_BLOB_IP_COMPUTE, 1));
     FillContext(&ctx, AMDGPU_HW_IP_DMA, 0);
     CHECK(UmdBlobParseContext(&ctx, sizeof(ctx), 0, &cv) == UMD_BLOB_BAD_IP);
     FillContext(&ctx, AMDGPU_HW_IP_GFX, 0);
@@ -416,8 +431,19 @@ int main(void)
     submit.ib[1].ip_type = AMDGPU_HW_IP_DMA;
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
     CHECK(sv.num_ibs == 0);
+    // A COMPUTE blob whose IB says GFX: the IPs must agree, so it is a bad IB now, not a bad IP.
     FillSubmit(&submit, 1);
     submit.ip_type = AMDGPU_HW_IP_COMPUTE;
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IB);
+    CHECK(sv.ip_type == 0);
+    // COMPUTE throughout is a submission for node 2; the view says which IP it is.
+    submit.ib[0].ip_type = AMDGPU_HW_IP_COMPUTE;
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_OK);
+    CHECK(sv.ip_type == UMD_BLOB_IP_COMPUTE && sv.single_ib == 1);
+    FillSubmit(&submit, 1);
+    CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_OK && sv.ip_type == UMD_BLOB_IP_GFX);
+    submit.ip_type = AMDGPU_HW_IP_DMA;
+    submit.ib[0].ip_type = AMDGPU_HW_IP_DMA;
     CHECK(UmdBlobParseSubmit(&submit, sizeof(submit), &sv) == UMD_BLOB_BAD_IP);
     FillSubmit(&submit, 1);
     submit.magic = BC250_UMD_ALLOC_MAGIC;

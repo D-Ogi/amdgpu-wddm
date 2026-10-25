@@ -77,9 +77,9 @@ if(!$KmdOnly){
 # a Mesa tree (not -KmdOnly) and a failure of the gather test alone, with the ring and pipeline tests clean.
 . "$PSScriptRoot\host_native.ps1"
 $controls=[ordered]@{WithoutCapacity=@(3,0);WithoutBoundaryPad=@(15,0);WithoutPadCapacity=@(4,0);EqualityFence=@(2,53);IdleOnlyPresent=@(0,46);SerializeGather=@(0,0)}
-# The checks of the positive run (2026-10-24): ring 10066, pipeline 2674. A control may run more (a failing
-# wait loops longer: EqualityFence 4529, IdleOnlyPresent 28009 pipeline checks), never fewer.
-$minChecks=@{Ring=10066;Pipeline=2674}
+# The checks of the positive run (2026-10-25, with the node 2 cases): ring 10066, pipeline 2763. A control may run more (a failing
+# wait loops longer: EqualityFence 4618, IdleOnlyPresent 28098 pipeline checks), never fewer.
+$minChecks=@{Ring=10066;Pipeline=2763}
 $chosen=@($controls.Keys | Where-Object { $PSBoundParameters.ContainsKey($_) })
 if($chosen.Count -gt 1){throw "one negative control at a time: $($chosen -join ', ')"}
 $ring=Invoke-HostTest "$Out\ring_test.exe" "$Out\ring_test.log" '^GFX ring capacity/fence order: (?<checks>\d+) checks, (?<failures>\d+) failures$'

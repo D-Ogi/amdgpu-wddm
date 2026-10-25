@@ -153,13 +153,15 @@ int main(void)
     struct record r = { 0, 0, 0, 0, 0 };
     unsigned vmid;
 
-    /* The gate: attempt only with the switch on AND only for node 0 (3D/compute). Node 1 (paging) and any
-     * higher ordinal are never soft-recovered; the switch off is today's behaviour for every node. */
+    /* The gate: attempt only with the switch on AND only for an IB node, node 0 (3D) or node 2 (compute). Node 1
+     * (paging) and any higher ordinal are never soft-recovered; the switch off is today's behaviour for every node. */
     CHECK(!Bc250SoftRecoveryWanted(0, 0));      /* switch off: never, even on node 0 */
     CHECK(!Bc250SoftRecoveryWanted(0, 1));
-    CHECK(Bc250SoftRecoveryWanted(1, 0));       /* switch on, node 0: the one case we act on */
+    CHECK(!Bc250SoftRecoveryWanted(0, 2));
+    CHECK(Bc250SoftRecoveryWanted(1, 0));       /* switch on, node 0 */
     CHECK(!Bc250SoftRecoveryWanted(1, 1));      /* switch on, node 1 (paging): refuse */
-    CHECK(!Bc250SoftRecoveryWanted(1, 2));      /* switch on, any other node: refuse */
+    CHECK(Bc250SoftRecoveryWanted(1, 2));       /* switch on, node 2 (compute) */
+    CHECK(!Bc250SoftRecoveryWanted(1, 3));      /* switch on, any other node: refuse */
 
     /* The 0x119 guard: LastAbortedFenceId must be in [lastCompleted, lastSubmitted]. */
     CHECK(Bc250AbortedFenceValid(100, 100, 100));   /* the empty-queue special case: all three equal */

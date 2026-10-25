@@ -18,23 +18,27 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $gfx=Get-Content "$repo\driver\kmd\gfx.c" -Raw
 if($NoBackendSwitch){
     $live='    adev->backend = &gfx->Sequence;'
-    $at=$gfx.IndexOf('ULONG GfxSoftRecover(')
-    if($at -lt 0 -or $gfx.IndexOf($live,$at) -lt 0){throw 'negative control: the backend switch of GfxSoftRecover moved'}
+    $at=$gfx.IndexOf('static ULONG GfxSoftRecoverRing(')
+    if($at -lt 0 -or $gfx.IndexOf($live,$at) -lt 0){throw 'negative control: the backend switch of GfxSoftRecoverRing moved'}
     $cut=$gfx.IndexOf($live,$at)
     $gfx=$gfx.Remove($cut,$live.Length).Insert($cut,'    /* no backend switch */')
 }
 # The source check. The host model below proves that the loop is right over the GFX table, but it cannot compile
 # gfx.c. So gfx.c's GfxSoftRecover must hold GartLock, install and begin the gfx sequence before the kill loop and
-# put the previous backend back after it - the shape of GfxSubmitIb, and what 0.7.216.16 lacked.
-$at=$gfx.IndexOf('ULONG GfxSoftRecover(')
-if($at -lt 0){throw 'source check: GfxSoftRecover is not in gfx.c'}
+# put the previous backend back after it - the shape of GfxSubmitIb, and what 0.7.216.16 lacked. The body is
+# GfxSoftRecoverRing, which GfxSoftRecover (node 0) and GfxComputeSoftRecover (node 2) both call.
+foreach($w in @('GfxSoftRecoverRing(Device, Vmid, FALSE,','GfxSoftRecoverRing(Device, Vmid, TRUE,')){
+    if(!$gfx.Contains($w)){Write-Output "FAIL source check: no '$w' in gfx.c";exit 1}
+}
+$at=$gfx.IndexOf('static ULONG GfxSoftRecoverRing(')
+if($at -lt 0){throw 'source check: GfxSoftRecoverRing is not in gfx.c'}
 $end=$gfx.IndexOf("`n}",$at)
 $body=$gfx.Substring($at,$end-$at)
 $steps=@('ExAcquireFastMutex(&Device->GartLock);','adev->backend = &gfx->Sequence;','SequenceBegin(&gfx->Sequence, Device, FALSE, NULL, 0);','Bc250HangKillLoop(','adev->backend = previousBackend;','ExReleaseFastMutex(&Device->GartLock);')
 $pos=0
 foreach($s in $steps){
     $i=$body.IndexOf($s,$pos)
-    if($i -lt 0){Write-Output "FAIL source check: GfxSoftRecover lacks '$s' after the step before it (gfx.c)";exit 1}
+    if($i -lt 0){Write-Output "FAIL source check: GfxSoftRecoverRing lacks '$s' after the step before it (gfx.c)";exit 1}
     $pos=$i+$s.Length
 }
 $header=Get-Content "$repo\driver\kmd\hang_recovery.h" -Raw

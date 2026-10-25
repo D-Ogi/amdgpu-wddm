@@ -12,13 +12,14 @@
  * target of a wave kill. Naming them here instead would be a second copy of those constants. */
 #include "vmid_pool.h"
 
-/* Attempt a soft recovery only with the switch on and only for the 3D/compute node (ordinal 0). The paging node
- * (ordinal 1) is never soft-recovered: a successful reset of a paging packet makes dxgkrnl follow with an
- * adapter-wide reset (TDR changes in Windows 8, step 9), which on this part is the 0x116 path anyway, and the
- * hang class never involves node 1. */
+/* Attempt a soft recovery only with the switch on and only for a node that runs IBs at a VMID: the 3D node
+ * (ordinal 0) and the compute node (ordinal 2, docs/design/compute-node.md). The paging node (ordinal 1) is never
+ * soft-recovered: a successful reset of a paging packet makes dxgkrnl follow with an adapter-wide reset (TDR
+ * changes in Windows 8, step 9), which on this part is the 0x116 path anyway, and the hang class never involves
+ * node 1. Whether node 2 exists is not this function's question: dxgkrnl resets only nodes the adapter reported. */
 static __inline int Bc250SoftRecoveryWanted(int hangRecoveryMode, unsigned nodeOrdinal)
 {
-    return hangRecoveryMode != 0 && nodeOrdinal == 0u;
+    return hangRecoveryMode != 0 && (nodeOrdinal == 0u || nodeOrdinal == 2u);
 }
 
 /* The engine-reset contract: the LastAbortedFenceId returned from DxgkDdiResetEngine must be in

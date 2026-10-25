@@ -30,7 +30,19 @@
 // instead of a second literal.
 #define UMD_CAPS_GPU_COUNTER_FREQ_OFFSET 44u
 
+// offsetof(bc250_umd_private, submittable_node_mask), checked by umd_caps_test.c. The template says node 0 only;
+// WDDM sets the bit of each further node a UMD may submit to at query time (wddm.c, node 2).
+#define UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET 1408u
+
 extern const unsigned char umd_caps_blob[UMD_CAPS_BYTES];
+
+// Set Node's bit in submittable_node_mask of a caps copy of Bytes bytes (little-endian, as the UMD reads it).
+static __inline void UmdCapsOpenNode(void* Caps, unsigned long Bytes, unsigned Node)
+{
+    unsigned char* p = (unsigned char*)Caps + UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET;
+    if (Caps == 0 || Node >= 32u || Bytes < UMD_CAPS_SUBMITTABLE_NODE_MASK_OFFSET + 4u) return;
+    p[Node / 8u] |= (unsigned char)(1u << (Node % 8u));
+}
 
 // device.gpu_counter_freq in Hz (the blob is little-endian, as the UMD reads it).
 static __inline unsigned long long UmdCapsGpuCounterHz(void)

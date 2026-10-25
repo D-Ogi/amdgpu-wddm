@@ -18,6 +18,12 @@
  * that job's sequence, the fence is global and in order, so one read of the fence slot answers it for every VMID.
  * Bc250VmidMayProgram is the same rule restated as a check the claim path makes before every register write.
  *
+ * Two rings. WDDM node 2 runs jobs on an MEC compute ring at the same VMIDs: a root keeps one VMID on both rings,
+ * because the root registers and the TLB of a VMID are shared by every engine. Each ring retires in order against
+ * its own fence slot, so a VMID has a live sequence per ring (LiveSeq for the gfx ring, LiveSeqCompute for the
+ * compute ring) and has retired only when both have. Every function that asks "retired?" takes both fence reads;
+ * with node 2 closed LiveSeqCompute stays 0 and the answer is the one-ring answer, bit for bit.
+ *
  * Least recently USED, not least recently claimed (the design note said claimed): a VMID's order is bumped by every
  * job, so a process that keeps submitting keeps its VMID, and a recycled VMID is one nobody has used for longest.
  * By claim order DWM's VMID, claimed at boot, would be the first one recycled once the pool had gone round once.
@@ -45,7 +51,8 @@ typedef struct BC250_VMID_TABLE {
     unsigned long long Root[BC250_VMID_COUNT];   /* the page directory root the VMID was last given */
     unsigned long long Order[BC250_VMID_COUNT];  /* Clock at the VMID's last claim or job; 0 = never used */
     unsigned long long Clock;
-    unsigned long LiveSeq[BC250_VMID_COUNT];     /* newest job at this VMID not yet seen retired; 0 = none */
+    unsigned long LiveSeq[BC250_VMID_COUNT];     /* newest gfx-ring job at this VMID not yet seen retired; 0 = none */
+    unsigned long LiveSeqCompute[BC250_VMID_COUNT]; /* the same for the compute ring, against its own fence slot */
     unsigned long FirstSeq[BC250_VMID_COUNT];    /* the current tenant's first job; 0 = none submitted yet */
     unsigned long LastSeq[BC250_VMID_COUNT];     /* the current tenant's newest job, kept after it retired */
     unsigned long Process[BC250_VMID_COUNT];     /* the process of the current tenant's newest job */
@@ -88,30 +95,38 @@ static __inline unsigned Bc250VmidCount(unsigned Mask)
     return n;
 }
 
-/* Has the last job submitted at Vmid retired? Observed is the fence slot as read once by the caller. */
-static __inline int Bc250VmidRetired(const BC250_VMID_TABLE* Table, unsigned Vmid, unsigned long Observed)
+/* Has the last job submitted at Vmid retired on both rings? Observed and ObservedCompute are the gfx and the compute
+ * fence slot as read once by the caller. */
+static __inline int Bc250VmidRetired(const BC250_VMID_TABLE* Table, unsigned Vmid, unsigned long Observed,
+                                     unsigned long ObservedCompute)
 {
-    return Table->LiveSeq[Vmid] == 0 || bc250_fence_reached((unsigned)Observed, (unsigned)Table->LiveSeq[Vmid]);
+    return (Table->LiveSeq[Vmid] == 0 || bc250_fence_reached((unsigned)Observed, (unsigned)Table->LiveSeq[Vmid])) &&
+           (Table->LiveSeqCompute[Vmid] == 0 ||
+            bc250_fence_reached((unsigned)ObservedCompute, (unsigned)Table->LiveSeqCompute[Vmid]));
 }
 
 /* Forget every live sequence the fence has passed. Every submit calls it, so a sequence of a VMID nobody uses any
  * more is cleared long before it could age 2^31 submissions into the wrap window of bc250_fence_reached, where an
  * old retired job would read as live again (safe, but a VMID lost to the pool). */
-static __inline void Bc250VmidSweep(BC250_VMID_TABLE* Table, unsigned long Observed)
+static __inline void Bc250VmidSweep(BC250_VMID_TABLE* Table, unsigned long Observed, unsigned long ObservedCompute)
 {
     unsigned v;
-    for (v = 0; v < BC250_VMID_COUNT; v++)
+    for (v = 0; v < BC250_VMID_COUNT; v++) {
         if (Table->LiveSeq[v] != 0 && bc250_fence_reached((unsigned)Observed, (unsigned)Table->LiveSeq[v]))
             Table->LiveSeq[v] = 0;
+        if (Table->LiveSeqCompute[v] != 0 &&
+            bc250_fence_reached((unsigned)ObservedCompute, (unsigned)Table->LiveSeqCompute[v]))
+            Table->LiveSeqCompute[v] = 0;
+    }
 }
 
 /* THE RULE as a check: may Vmid be given Root now? Yes when it already holds Root (no change, nothing to
  * redirect) or when its last job has retired. The claim path asks this before every register write. */
 static __inline int Bc250VmidMayProgram(const BC250_VMID_TABLE* Table, unsigned Vmid, unsigned long long Root,
-                                        unsigned long Observed)
+                                        unsigned long Observed, unsigned long ObservedCompute)
 {
     if (Vmid >= BC250_VMID_COUNT) return 0;
-    return Table->Root[Vmid] == Root || Bc250VmidRetired(Table, Vmid, Observed);
+    return Table->Root[Vmid] == Root || Bc250VmidRetired(Table, Vmid, Observed, ObservedCompute);
 }
 
 /* The chooser. Members is the pool (reserved VMIDs are masked off here whatever the caller passes). Returns the
@@ -119,7 +134,7 @@ static __inline int Bc250VmidMayProgram(const BC250_VMID_TABLE* Table, unsigned 
  * already; BC250_VMID_NONE when no member is free, which the caller answers with STATUS_DEVICE_BUSY. A root of 0 is
  * never "resident": an unused VMID has Root 0 too. */
 static __inline unsigned Bc250VmidChoose(const BC250_VMID_TABLE* Table, unsigned Members, unsigned long long Root,
-                                         unsigned long Observed, int* Claim)
+                                         unsigned long Observed, unsigned long ObservedCompute, int* Claim)
 {
     unsigned v, best = BC250_VMID_NONE;
 
@@ -129,7 +144,7 @@ static __inline unsigned Bc250VmidChoose(const BC250_VMID_TABLE* Table, unsigned
         for (v = 0; v < BC250_VMID_COUNT; v++)
             if ((Members & (1u << v)) && Table->Root[v] == Root) return v;
     for (v = 0; v < BC250_VMID_COUNT; v++) {
-        if (!(Members & (1u << v)) || !Bc250VmidRetired(Table, v, Observed)) continue;
+        if (!(Members & (1u << v)) || !Bc250VmidRetired(Table, v, Observed, ObservedCompute)) continue;
         if (best == BC250_VMID_NONE || Table->Order[v] < Table->Order[best]) best = v;
     }
     if (best != BC250_VMID_NONE) *Claim = 1;
@@ -143,6 +158,10 @@ static __inline unsigned Bc250VmidChoose(const BC250_VMID_TABLE* Table, unsigned
  *              single-VMID path of 0.7.213.1 exactly: the refusal below is that driver's predicate, unchanged.
  *   InFlight   a job is in flight and its fence has not arrived (Gfx->SubmitInFlight, GfxFenceArrived).
  *   LastVmid   the VMID of the newest job submitted (Gfx->SubmitVmid).
+ *   Observed, ObservedCompute  the gfx and the compute fence slot, each read once.
+ *
+ * The compute ring (node 2) asks with AUTO, the pool open and the InFlight and LastVmid of the gfx ring: a VMID 0
+ * diagnostic on the gfx ring holds compute jobs off as well, and a compute job never runs at VMID 0.
  *
  * An explicit VMID always takes the single-VMID predicate: the escape is a diagnostic and stays exclusive. With the
  * pool, a VMID 0 job in flight still holds everything off (VMID 0 diagnostics stay exclusive, as before). The rule
@@ -162,7 +181,8 @@ typedef struct BC250_VMID_DECISION {
 
 static __inline BC250_VMID_DECISION Bc250VmidAdmit(const BC250_VMID_TABLE* Table, unsigned Members, int PoolGate,
                                                    unsigned Requested, unsigned long long Root, int InFlight,
-                                                   unsigned LastVmid, unsigned long Observed)
+                                                   unsigned LastVmid, unsigned long Observed,
+                                                   unsigned long ObservedCompute)
 {
     BC250_VMID_DECISION d;
 
@@ -180,10 +200,11 @@ static __inline BC250_VMID_DECISION Bc250VmidAdmit(const BC250_VMID_TABLE* Table
         d.Claim = d.Vmid != 0 && Table->Root[d.Vmid] != Root;
     } else {
         if (InFlight && LastVmid == 0) { d.Verdict = BC250_VMID_REFUSE_BUSY; return d; }
-        d.Vmid = Bc250VmidChoose(Table, Members, Root, Observed, &d.Claim);
+        d.Vmid = Bc250VmidChoose(Table, Members, Root, Observed, ObservedCompute, &d.Claim);
         if (d.Vmid == BC250_VMID_NONE) { d.Verdict = BC250_VMID_REFUSE_BUSY; return d; }
     }
-    if (d.Vmid != 0 && !Bc250VmidMayProgram(Table, d.Vmid, Root, Observed)) d.Verdict = BC250_VMID_REFUSE_RULE;
+    if (d.Vmid != 0 && !Bc250VmidMayProgram(Table, d.Vmid, Root, Observed, ObservedCompute))
+        d.Verdict = BC250_VMID_REFUSE_RULE;
     return d;
 }
 
@@ -212,11 +233,23 @@ static __inline void Bc250VmidClaim(BC250_VMID_TABLE* Table, BC250_VMID_HISTORY_
     Table->Order[Vmid] = ++Table->Clock;
 }
 
-/* A job of the current tenant reached the ring as Seq. */
+/* A job of the current tenant reached the gfx ring as Seq. */
 static __inline void Bc250VmidSubmitted(BC250_VMID_TABLE* Table, unsigned Vmid, unsigned long Seq,
                                         unsigned long Process)
 {
     Table->LiveSeq[Vmid] = Seq;
+    Table->LastSeq[Vmid] = Seq;
+    if (Table->FirstSeq[Vmid] == 0) Table->FirstSeq[Vmid] = Seq;
+    Table->Process[Vmid] = Process;
+    Table->Order[Vmid] = ++Table->Clock;
+}
+
+/* A job of the current tenant reached the compute ring as Seq. The two rings take their sequences from one counter
+ * (gfx.c FenceSeq), so FirstSeq and LastSeq still name one job each for the fault reports. */
+static __inline void Bc250VmidSubmittedCompute(BC250_VMID_TABLE* Table, unsigned Vmid, unsigned long Seq,
+                                               unsigned long Process)
+{
+    Table->LiveSeqCompute[Vmid] = Seq;
     Table->LastSeq[Vmid] = Seq;
     if (Table->FirstSeq[Vmid] == 0) Table->FirstSeq[Vmid] = Seq;
     Table->Process[Vmid] = Process;

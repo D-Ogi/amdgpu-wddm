@@ -87,7 +87,8 @@ KMD_FILE = K["file"].lower()
 KMD_NAMES = tuple(sorted(f["name"] for f in DECL["forbidden"] if KMD_FILE in f["lab"].get("every", [])))
 # How the KMD source spells them: REG_QWORD and REG_DWORD value names, UTF-16LE strings in the SYS (BD-235).
 KMD_SPELLING = {"PAGINGRINGSTARTBYTES": "PagingRingStartBytes", "PAGINGRINGSTARTNONCE": "PagingRingStartNonce",
-                "PAGINGBOUNDARYMODE": "PagingBoundaryMode", "LABPAGINGRINGSTARTNONCE": "LabPagingRingStartNonce"}
+                "PAGINGBOUNDARYMODE": "PagingBoundaryMode", "LABPAGINGRINGSTARTNONCE": "LabPagingRingStartNonce",
+                "ENABLECOMPUTENODE": "EnableComputeNode"}
 LAB_KMD = (K["flavour_markers"]["lab"],) + tuple(e["marker"] for e in K["lab_escape_markers"]) + KMD_NAMES
 # A file that reads the game-log sink, as the release rule of AMDGPU_WDDM_LOG wants it: the marker name and the folder.
 LOG = ("AMDGPU_WDDM_LOG", "AMDGPU_WDDM_GAMELOG", "amdgpu-wddm\\logs\\games")

@@ -1854,11 +1854,16 @@ int bc250_gfx_submit_ib(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u
  * so a register offset above this does not fit the packet and is refused. */
 #define BC250_GFX_MMREG_FIELD_MAX	0x3FFFFu
 
-/* gfx_v10_0_ring_emit_wreg(), the AMDGPU_RING_TYPE_GFX arm of its switch. */
+/* gfx_v10_0_ring_emit_wreg(): the AMDGPU_RING_TYPE_GFX arm of its switch writes through the PFP
+ * (engine select 1), the default arm, which is the compute rings', has no PFP and writes through
+ * the ME (engine select 0). The callers below admit no other ring type. */
 static void bc250_gfx_vm_wreg(struct amdgpu_ring *ring, u32 reg, u32 value)
 {
+	u32 cmd = (ring->funcs->type == AMDGPU_RING_TYPE_GFX) ? (WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM) :
+								 WR_CONFIRM;
+
 	amdgpu_ring_write(ring, PACKET3(PACKET3_WRITE_DATA, 3));
-	amdgpu_ring_write(ring, WRITE_DATA_ENGINE_SEL(1) | WR_CONFIRM);
+	amdgpu_ring_write(ring, cmd);
 	amdgpu_ring_write(ring, reg);
 	amdgpu_ring_write(ring, 0);
 	amdgpu_ring_write(ring, value);
@@ -1879,18 +1884,14 @@ static void bc250_gfx_vm_reg_wait(struct amdgpu_ring *ring, u32 reg, u32 value, 
 	amdgpu_ring_write(ring, 0x20);
 }
 
-int bc250_gfx_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng)
+/* The flush for a gfx or a compute ring; the two public functions below say which. The packets
+ * are the same on both except the WRITE_DATA engine select (bc250_gfx_vm_wreg). */
+static int bc250_gfx_emit_vm_flush_ring(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng)
 {
 	const struct amdgpu_vmhub *hub;
 	u64 lo, hi, req, ack;
 	u32 request;
 
-	/* Every refusal below happens before a single dword is written, so that it leaves the ring
-	 * exactly as it was, as bc250_gfx_emit_ib() and bc250_gfx_emit_fence() do. */
-	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
-		return BC250_EINVAL;
-	if (ring->funcs->type != AMDGPU_RING_TYPE_GFX)
-		return BC250_EINVAL;
 	/* VMID 0 is the GART aperture, whose root is not ours to move: the same refusal
 	 * bc250_gmc_set_vmid_pd() makes. */
 	if (vmid == 0 || vmid >= AMDGPU_NUM_VMID)
@@ -1931,6 +1932,102 @@ int bc250_gfx_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u
 	bc250_gfx_vm_wreg(ring, (u32)req, request);
 	bc250_gfx_vm_reg_wait(ring, (u32)req, 0, 0);
 	bc250_gfx_vm_reg_wait(ring, (u32)ack, 1u << vmid, 1u << vmid);
+	return 0;
+}
+
+int bc250_gfx_emit_vm_flush(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng)
+{
+	/* Every refusal happens before a single dword is written, so that it leaves the ring
+	 * exactly as it was, as bc250_gfx_emit_ib() and bc250_gfx_emit_fence() do. */
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_GFX)
+		return BC250_EINVAL;
+	return bc250_gfx_emit_vm_flush_ring(ring, vmid, root_phys, eng);
+}
+
+int bc250_gfx_emit_vm_flush_compute(struct amdgpu_ring *ring, u32 vmid, u64 root_phys, u32 eng)
+{
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE)
+		return BC250_EINVAL;
+	return bc250_gfx_emit_vm_flush_ring(ring, vmid, root_phys, eng);
+}
+
+/* gfx_v10_0_ring_emit_ib_compute() without its GDS_COMPUTE_MAX_WAVE_ID arm, which only an IB
+ * with AMDGPU_IB_FLAG_RESET_GDS_MAX_WAVE_ID asks for. The control word differs from the gfx
+ * ring's by INDIRECT_BUFFER_VALID. */
+int bc250_gfx_emit_ib_compute(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid)
+{
+	u32 control;
+
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE)
+		return BC250_EINVAL;
+	if ((gpu_addr & 0x3u) != 0)             /* upstream: BUG_ON(ib->gpu_addr & 0x3) */
+		return BC250_EINVAL;
+	if (length_dw == 0 || !bc250_ib_length_fits(length_dw))
+		return BC250_EINVAL;
+	if (vmid >= AMDGPU_NUM_VMID)
+		return BC250_EINVAL;
+
+	control = INDIRECT_BUFFER_VALID | PACKET3_INDIRECT_BUFFER__IB_SIZE(length_dw) |
+		  PACKET3_INDIRECT_BUFFER__VMID(vmid);
+
+	amdgpu_ring_write(ring, PACKET3(PACKET3_INDIRECT_BUFFER, 2));
+	amdgpu_ring_write(ring, lower_32_bits(gpu_addr));
+	amdgpu_ring_write(ring, upper_32_bits(gpu_addr));
+	amdgpu_ring_write(ring, control);
+	return 0;
+}
+
+/* A job on a compute ring: amdgpu_ib_schedule's order for a compute ring. The VM flush (when
+ * asked for), the IB, the fence. A compute ring has no PFP, no CONTEXT_CONTROL, no FRAME_CONTROL
+ * and no SWITCH_BUFFER: gfx_v10_0_ring_funcs_compute names none of those emitters. */
+int bc250_gfx_submit_job_compute(struct amdgpu_ring *ring, u64 gpu_addr, u32 length_dw, u32 vmid,
+				 u64 fence_addr, u64 seq, unsigned int flags, int flush,
+				 u64 root_phys, u32 eng)
+{
+	unsigned int ndw;
+	int r;
+
+	if (ring == NULL || ring->adev == NULL || ring->funcs == NULL || ring->ring == NULL)
+		return BC250_EINVAL;
+	if (ring->funcs->type != AMDGPU_RING_TYPE_COMPUTE)
+		return BC250_EINVAL;
+	/* A job without a VMID has no page tables of its own; the escapes that run the driver's
+	 * own buffers at VMID 0 do not come here. */
+	if (vmid == 0)
+		return BC250_EINVAL;
+
+	ndw = BC250_GFX_COMPUTE_IB_DWORDS + bc250_gfx_fence_size(ring, flags);
+	if (flush)
+		ndw += BC250_GFX_VM_FLUSH_DWORDS;
+
+	r = amdgpu_ring_alloc(ring, ndw);
+	if (r)
+		return r;
+
+	if (flush) {
+		r = bc250_gfx_emit_vm_flush_compute(ring, vmid, root_phys, eng);
+		if (r) {
+			amdgpu_ring_undo(ring);
+			return r;
+		}
+	}
+	r = bc250_gfx_emit_ib_compute(ring, gpu_addr, length_dw, vmid);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+	r = bc250_gfx_emit_fence(ring, fence_addr, seq, flags);
+	if (r) {
+		amdgpu_ring_undo(ring);
+		return r;
+	}
+	amdgpu_ring_commit(ring);
 	return 0;
 }
 

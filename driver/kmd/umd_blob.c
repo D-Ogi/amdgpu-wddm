@@ -80,6 +80,7 @@ static void ClearSubmit(struct umd_submit_view* out)
 {
     if (out == 0) return;
     out->num_ibs = 0;
+    out->ip_type = 0;
     out->ib_va = 0;
     out->ib_bytes = 0;
     out->single_ib = 0;
@@ -198,6 +199,12 @@ int UmdBlobPlacement(const struct umd_alloc_view* allocation, unsigned long vram
     return second != 0;
 }
 
+int UmdBlobIpRunsOnNode(unsigned long Ip, unsigned Node)
+{
+    return (Ip == UMD_BLOB_IP_GFX && Node == UMD_BLOB_NODE_3D) ||
+           (Ip == UMD_BLOB_IP_COMPUTE && Node == UMD_BLOB_NODE_COMPUTE);
+}
+
 int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, struct umd_context_view* out)
 {
     const unsigned char* p = (const unsigned char*)bytes;
@@ -221,8 +228,8 @@ int UmdBlobParseContext(const void* bytes, unsigned len, unsigned ddi_node, stru
     ring = Rd32(p + 24);
     priority = Rd32(p + 28);
     node = Rd32(p + UMD_BLOB_CONTEXT_V1);
-    if (ip != UMD_BLOB_IP_GFX || instance != 0 || ring != 0) return UMD_BLOB_BAD_IP;
-    if (node != ddi_node || node != UMD_BLOB_NODE_3D) return UMD_BLOB_BAD_NODE;
+    if ((ip != UMD_BLOB_IP_GFX && ip != UMD_BLOB_IP_COMPUTE) || instance != 0 || ring != 0) return UMD_BLOB_BAD_IP;
+    if (node != ddi_node || !UmdBlobIpRunsOnNode(ip, node)) return UMD_BLOB_BAD_NODE;
     if (out != 0)
     {
         out->ip_type = ip;
@@ -258,7 +265,7 @@ int UmdBlobParseSubmit(const void* bytes, unsigned len, struct umd_submit_view* 
     // Equality, not ">=". The contract's size word is the used prefix, not the reserved tail of the
     // struct, so a winsys that writes sizeof(the whole struct) is a malformed blob and not a submit.
     if (size != expect || len < size) return UMD_BLOB_BAD_SIZE;
-    if (ip != UMD_BLOB_IP_GFX) return UMD_BLOB_BAD_IP;
+    if (ip != UMD_BLOB_IP_GFX && ip != UMD_BLOB_IP_COMPUTE) return UMD_BLOB_BAD_IP;
     for (i = 0; i < num; i++)
     {
         const unsigned char* ib = p + UMD_BLOB_SUBMIT_PREFIX + i * UMD_BLOB_IB_BYTES;
@@ -270,12 +277,13 @@ int UmdBlobParseSubmit(const void* bytes, unsigned len, struct umd_submit_view* 
 
         if (va == 0 || (va & 3ull) != 0) return UMD_BLOB_BAD_IB;
         if (bytesIb == 0 || (bytesIb & 3ul) != 0 || bytesIb / 4ul > UMD_BLOB_IB_MAX_DWORDS) return UMD_BLOB_BAD_IB;
-        if (ipIb != UMD_BLOB_IP_GFX || instance != 0 || ring != 0) return UMD_BLOB_BAD_IB;
+        if (ipIb != ip || instance != 0 || ring != 0) return UMD_BLOB_BAD_IB;
         if (i == 0) { firstVa = va; firstBytes = bytesIb; }
     }
     if (out != 0)
     {
         out->num_ibs = num;
+        out->ip_type = ip;
         out->ib_va = firstVa;
         out->ib_bytes = firstBytes;
         out->single_ib = (num == 1);

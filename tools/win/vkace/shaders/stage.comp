@@ -1,0 +1,36 @@
+#version 450
+// One stage of vkace: data[i] = rounds of mix over (input ^ seed), where the input is i (mode 0) or
+// data[i] (mode 1). vkace.c Stage() is the same function on the CPU, the oracle of every check.
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform Params {
+    uint seed;
+    uint count;
+    uint rounds;
+    uint mode;
+} p;
+
+layout(std430, set = 0, binding = 0) buffer Data {
+    uint data[];
+} b;
+
+uint mixw(uint x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352du;
+    x ^= x >> 15;
+    x *= 0x846ca68bu;
+    x ^= x >> 16;
+    return x;
+}
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= p.count)
+        return;
+    uint v = (p.mode == 0u ? i : b.data[i]) ^ p.seed;
+    for (uint r = 0u; r < p.rounds; r++)
+        v = mixw(v + r);
+    b.data[i] = v;
+}

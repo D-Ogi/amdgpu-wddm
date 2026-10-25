@@ -110,6 +110,13 @@ static void CpPrivFaultClassify(void)
     CHECK(!Bc250IhIsCpPrivFault(BC250_IH_UTCL2_CLIENT, GFX_10_1__SRCID__CP_PRIV_REG_FAULT));    /* right src, wrong client */
     CHECK(!Bc250IhIsCpPrivFault(SOC15_IH_CLIENTID_GRBM_CP, 0u));
 
+    /* The ring of the fault, decoded as gfx_v10_0_handle_priv_fault does: ME 0 is the gfx ring, ME 1 and 2 the MEC. */
+    CHECK(Bc250IhCpFaultMe(0x00u) == 0u && !Bc250IhCpFaultIsCompute(0x00u));   /* gfx ring 0 */
+    CHECK(Bc250IhCpFaultMe(0x14u) == 1u && Bc250IhCpFaultIsCompute(0x14u));    /* ME 1 pipe 0 queue 1, a MEC queue */
+    CHECK(Bc250IhCpFaultMe(0x0Bu) == 2u && Bc250IhCpFaultIsCompute(0x0Bu));    /* ME 2 pipe 3 */
+    CHECK(Bc250IhCpFaultMe(0x0Cu) == 3u && !Bc250IhCpFaultIsCompute(0x0Cu));   /* ME 3 is not a MEC */
+    CHECK(!Bc250IhCpFaultIsCompute(0x73u));                                     /* queue and pipe bits only */
+
     /* The witness names each fault. */
     CHECK(strcmp(Bc250IhCpPrivFaultName(BC250_IH_CP_PRIV_REG_FAULT), "privileged register") == 0);
     CHECK(strcmp(Bc250IhCpPrivFaultName(BC250_IH_CP_PRIV_INSTR_FAULT), "privileged instruction") == 0);

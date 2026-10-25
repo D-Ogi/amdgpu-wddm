@@ -229,6 +229,28 @@ static void admission_paths(void)
     CHECK(w.Recovery[0].ResetActive && w.WatchdogFaulted[0] && g.SubmitFailed);
 }
 
+/* Node 2 (compute-node.md section 6): its admission closes the compute gate and timer only. The gfx gate, its
+ * timer and the start witness stay as they were, because node 2 does not witness the start. */
+static void admission_compute(void)
+{
+    BC250_DEVICE d;
+    BC250_WDDM w;
+    BC250_GFX g;
+    admission_setup(&d, &w, &g);
+    g.ComputeAdev = &g;
+    w.SubmitTimer = 1; w.ComputeTimer = 1;
+    CHECK(TestResetAdmit(&d, &w, BC250_WDDM_NODE_COMPUTE) == 0);
+    CHECK(w.Recovery[2].ResetActive && w.WatchdogFaulted[2] && g.ComputeFailed && !w.ComputeTimer);
+    CHECK(!w.Recovery[0].ResetActive && !w.WatchdogFaulted[0] && !g.SubmitFailed && w.SubmitTimer);
+    CHECK(!d.HealthFault && d.Calls == 0 && d.Wakes == 1 && MockLockDepth == 0);
+    /* A node 2 refusal reason refuses node 2 only. */
+    admission_setup(&d, &w, &g);
+    w.CompletionPending[2] = 1;
+    CHECK(TestResetAdmit(&d, &w, BC250_WDDM_NODE_COMPUTE) == 2u);
+    CHECK(!g.ComputeFailed && !w.WatchdogFaulted[2] && !w.Recovery[2].ResetActive);
+    CHECK(TestResetAdmit(&d, &w, 0) == 0 && g.SubmitFailed && !g.ComputeFailed);
+}
+
 /* Diagnostic sampling must not create a close for ResetEngine to recover. */
 static void witness_ownership(void)
 {
@@ -288,6 +310,7 @@ int main(void)
     test_timeout_latch();
     admission_reasons();
     admission_paths();
+    admission_compute();
     witness_ownership();
     submission_freeze();
     printf("recovery protocol: %u checks, %u failures\n", checks, failures);

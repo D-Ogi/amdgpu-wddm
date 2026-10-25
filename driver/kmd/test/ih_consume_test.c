@@ -77,10 +77,10 @@ static void bc250_ih_set_rptr(struct amdgpu_device *a,u32 r) {
 }
 /* BD-167 (G3): Consume now logs, names the VMID and closes the gfx node on a CP privilege/decode fault. Model
  * the three KMD calls; WddmReportEngineFault records that the fault path fired and that it ran outside the lock. */
-static int cp_faults_reported;
+static int cp_faults_reported, cp_fault_compute;
 static void GuardLog(const char *f,...) { (void)f; }
 static void GfxVmidReport(const BC250_DEVICE *d,const char *who,unsigned long vmid) { (void)d;(void)who;(void)vmid; }
-static void WddmReportEngineFault(const BC250_DEVICE *d,const char *why) { (void)d;(void)why;if(fixture.StatsLock) abort();cp_faults_reported++; }
+static void WddmReportEngineFault(const BC250_DEVICE *d,const char *why,BOOLEAN compute) { (void)d;(void)why;if(fixture.StatsLock) abort();cp_faults_reported++;cp_fault_compute=compute; }
 #include "ih_consume_actual.inc"
 #define CHECK(c) do { if(!(c)) { printf("FAIL line %d: %s\n",__LINE__,#c); return 1; } } while(0)
 static struct amdgpu_device dev;
@@ -133,7 +133,10 @@ int main(void) {
     reset();cp_faults_reported=0;wp=32;vector_client=0x14;vector_source=184;Consume(&device,&fixture);
     CHECK(cp_faults_reported==1);
     reset();cp_faults_reported=0;wp=32;vector_client=0x14;vector_source=185;Consume(&device,&fixture);
-    CHECK(cp_faults_reported==1);
+    CHECK(cp_faults_reported==1 && !cp_fault_compute);
+    /* ring_id 0x14: ME 1, pipe 0, queue 1, a MEC queue: the fault is reported as the compute ring's. */
+    reset();cp_faults_reported=0;wp=32;vector_client=0x14;vector_source=184;vector_ring=0x14;Consume(&device,&fixture);
+    CHECK(cp_faults_reported==1 && cp_fault_compute);
     reset();cp_faults_reported=0;wp=32;vector_client=0x14;vector_source=183;Consume(&device,&fixture);
     CHECK(cp_faults_reported==1);
     reset();cp_faults_reported=0;wp=32;vector_client=0x14;vector_source=181;Consume(&device,&fixture);
