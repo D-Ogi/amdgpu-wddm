@@ -4129,6 +4129,17 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
         wddm->NodeCount = BC250_WDDM_NODE_COMPUTE + 1u;
     GuardLog("wddm: %u nodes: 3D%s%s", wddm->NodeCount, wddm->NodeCount > BC250_WDDM_NODE_COPY ? ", paging" : "",
              wddm->NodeCount > BC250_WDDM_NODE_COMPUTE ? ", compute (MEC ring 1)" : "");
+    // What this start can do with node 2, for the control app ("Compute queue" shows only where the switch has an
+    // effect): Features\ComputeQueue, volatile, 1 open, 2 closed by EnableComputeQueue 0 alone, 0 closed by a gate
+    // the person cannot open. A failed write leaves the switch hidden; the node itself does not depend on it.
+    {
+        ULONG feature = (wddm->NodeCount > BC250_WDDM_NODE_COMPUTE) ? 1u :
+                        (wddm->NodeCount == BC250_WDDM_NODE_COPY + 1u && GfxComputeNodeOffBySetting(Device)) ? 2u : 0u;
+        NTSTATUS written = GuardVolatileStore(L"Features", L"ComputeQueue", feature);
+
+        if (!NT_SUCCESS(written))
+            GuardLog("wddm: Features\\ComputeQueue %lu not written (0x%08X)", feature, written);
+    }
     // M15.12: start-latched hang-recovery switch (docs/design/hang-recovery.md). On by default from 0.7.216.18
     // (absent = 1, lab-proven in trial D1 of 0.7.216.17); 0 is the switch-off and leaves every TDR DDI exactly as
     // it was before 0.7.216.13. Any other value is on, as for the other finished features (EnableVmidPool).

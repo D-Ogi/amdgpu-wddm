@@ -32,7 +32,8 @@ The declaration (flavour_gate.json next to this file) holds:
     exact: a copy of a file named by path items that is not listed must not hold the name, and lab.note says why
     those copies lack it (for example another build line);
   - the ALLOWED names, each with the reason it stays, and the OUT-OF-SCOPE names, each with the reason. Neither
-    list fails a set; out-of-scope hits are recorded. A name in two lists is an error. An allowed entry can carry a
+    list fails a set; out-of-scope hits are recorded. One out-of-scope entry can declare a class of names that has
+    one reason ("names", a list, in place of "name"). A name in two lists is an error. An allowed entry can carry a
     release_rule: in a release set, every file that holds the name must also hold each text of "requires" and no
     whole C string of "refuses" (any letter case). An allowed reason that starts with "BD-167 follow-up" is an open
     decision, and a release set fails while one is open;
@@ -48,7 +49,8 @@ and AMDGPU_WDDM_) that a scanned file holds, in ASCII or UTF-16LE, must be in on
 the upper-case form of a whole C string that matches those prefixes in another case. An undeclared one fails
 either flavour, so a new lookup cannot ship without a decision. The search has no left boundary, so that no
 neighbouring byte can hide a name: a longer identifier that only ends in such a name shows up as that name and must
-be declared too.
+be declared too. A declared longer name declares that end where the end occurs only inside it (RADV_BC250_FOO,
+declared, also covers BC250_FOO when no other occurrence of BC250_FOO is in the file).
 
 --flavour release passes when the KMD carries the release line, not the lab line and no escape marker, no
 scanned PE (the KMD included) carries a forbidden name as a whole word, in ASCII or UTF-16LE, every prefixed
@@ -164,6 +166,8 @@ def load_declaration(path):
         if e['marker'] in seen:
             raise GateError('declaration: escape marker listed twice: %s' % e['marker'])
         seen.add(e['marker'])
+    if isinstance(d.get('out_of_scope'), list):
+        d['out_of_scope'] = expand_out_of_scope_classes(d['out_of_scope'])
     lists = {}
     for kind, field in (('forbidden', 'does'), ('allowed', 'reason'), ('out_of_scope', 'reason')):
         entries = d.get(kind, [] if kind == 'out_of_scope' else None)
@@ -208,6 +212,24 @@ def load_declaration(path):
     if kmd_slots != ['kmd/' + kmd['file'].lower()]:
         raise GateError('declaration: package.slots must hold kmd/%s and no other .sys' % kmd['file'].lower())
     return d
+
+
+def expand_out_of_scope_classes(entries):
+    """An out_of_scope entry can declare a class of names with one reason: "names" (a list) in place of "name". The
+    class gives one entry per name, which the checks of a single entry then judge, so a name of a class is also
+    refused in a second list or twice."""
+    out = []
+    for e in entries:
+        if not isinstance(e, dict) or 'names' not in e:
+            out.append(e)
+            continue
+        names = e['names']
+        if ('name' in e or not isinstance(names, list) or not names or len(set(map(str, names))) != len(names) or
+                not all(isinstance(n, str) for n in names)):
+            raise GateError('declaration: an out_of_scope class needs distinct "names" and no "name": %r'
+                            % (e.get('where'),))
+        out.extend(dict({k: v for k, v in e.items() if k != 'names'}, name=n) for n in names)
+    return out
 
 
 def check_lab_field(e):
@@ -290,6 +312,7 @@ NDEBUG_RECIPES = {
 RELEASE_DEFINE = {'cl': "'/DNDEBUG'", 'clang': "'-DNDEBUG'"}
 RELEASE_OPTIMISE = {'cl': re.compile(r"(?<![\w/])/O[12x](?!\w)"), 'clang': re.compile(r"(?<![\w-])-O[123s](?!\w)")}
 RELEASE_COMPILES = {
+    'tools/build/build-umd-adl.ps1': (('tools/build/build-umd-adl.ps1', 'cl'),),
     'tools/build/build-umd-d3d12.ps1': (('tools/build/build-umd-d3d12.ps1', 'cl'),),
     'tools/build/build-umd-dxvk.ps1': (('tools/build/build-umd-dxvk.ps1', 'cl'),),
     'driver/umd/mft-h264/build.ps1': (('driver/umd/mft-h264/build.ps1', 'cl'),),
@@ -522,6 +545,51 @@ def has_name(data, name):
     return tuple(counts)
 
 
+_CONTINUES = re.compile(r'[A-Z0-9_]*[A-Z0-9]')
+
+
+def _find_all(data, needle, unit):
+    found, start = set(), 0
+    while True:
+        i = data.find(needle, start)
+        if i < 0:
+            return found
+        found.add(i)
+        start = i + unit
+
+
+def covered_tails(data, names, declared):
+    """The prefixed identifiers of names that a longer declared name covers: every occurrence of the identifier, in
+    ASCII and in UTF-16LE, is the end of an occurrence of a declared name that ends in it, and that occurrence is not
+    part of a longer identifier on its left (the rule of has_name). So RADV_BC250_FOO, declared, also declares
+    BC250_FOO where BC250_FOO occurs only inside it; one more occurrence of BC250_FOO anywhere else, or one
+    occurrence inside XRADV_BC250_FOO, leaves it undeclared."""
+    covered = set()
+    for name in names:
+        longer = [d for d in declared if len(d) > len(name) and d.endswith(name)]
+        if not longer:
+            continue
+        seen = False
+        for enc, unit in (('ascii', 1), ('utf-16-le', 2)):
+            # An occurrence that PREFIXED would read as a longer identifier (BC250_FOO in BC250_FOO_BAR) is not one.
+            size = len(name) * unit
+            starts = {i for i in _find_all(data, name.encode(enc), unit)
+                      if not _CONTINUES.match(data[i + size:i + size + 64 * unit].decode(enc, 'replace'))}
+            ends = set()
+            for d in longer:
+                for i in _find_all(data, d.encode(enc), unit):
+                    c, far = _char(data, i - unit, unit), _char(data, i - 2 * unit, unit)
+                    if not (c and WORD.fullmatch(c) and far and 0x20 <= far[0] <= 0x7e):
+                        ends.add(i + (len(d) - len(name)) * unit)
+            if not starts <= ends:
+                break
+            seen = seen or bool(starts)
+        else:
+            if seen:
+                covered.add(name)
+    return covered
+
+
 def whole_strings(data):
     """{(text, 'ascii' or 'utf16'): count} of the whole C strings of a file, each also without its first character
     (which can be a stray byte before the string)."""
@@ -671,7 +739,8 @@ def scan_file(decl, data, forbidden, out_of_scope, declared):
                 into[name] = {'ascii': a, 'utf16': u}
                 if v:
                     into[name]['variant'] = dict(sorted(v.items()))
-    undeclared = set(prefixed_names(data))
+    undeclared = set(prefixed_names(data)) - set(declared)
+    undeclared -= covered_tails(data, undeclared, declared)
     undeclared.update(u for u in variants if PREFIXED.fullmatch(u))
     return {'forbidden': hits, 'out_of_scope': outside, 'undeclared': sorted(undeclared - declared),
             'strings_lower': lowered}

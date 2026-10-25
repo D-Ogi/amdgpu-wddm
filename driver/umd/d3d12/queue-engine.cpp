@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "queue-engine.h"
 #include "present-copy-sync.h"
+#include <d3dkmthk.h>
 #include <limits>
 #include <new>
 
@@ -8,6 +9,10 @@ namespace native12 {
 struct QueueEngineOwner {
     QueueContext context;
     D3D12DDI_HRTCOMMANDQUEUE runtime;
+    // The request the context was, or for a COMPUTE or COPY queue will be, opened with (bind_context).
+    D3D12DDIARG_CREATECOMMANDQUEUE_0050 desc{};
+    ContextRequest request;
+    bool opened_at_bind{};
     engine_ddi::EngineQueue* engine{};
     QueueEngineOwner* next{};
     QueueEngineState state{QueueEngineState::Creating};
@@ -79,16 +84,22 @@ HRESULT QueueEngineRegistry::create(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& a
     if (serial_ == std::numeric_limits<UINT64>::max()) {
         ReleaseSRWLockExclusive(&lock_); delete q; return E_OUTOFMEMORY;
     }
+    q->desc = args; q->opened_at_bind = ContextRequest::opened_at_bind(args);
+    (void)q->request.prepare(args);   // the same arguments that request.prepare admitted
     q->serial = ++serial_; q->operation_thread = GetCurrentThreadId();
     q->next = head_; head_ = q;
     ReleaseSRWLockExclusive(&lock_);
-    hr = q->context.open(request.args);
-    if (hr != S_OK) {
-        if (q->context.handle()) release_context(q); else erase(q);
-        return FAILED(hr) ? hr : E_UNEXPECTED;
+    // A DIRECT queue runs on GFX, node 0, and opens its context now. A COMPUTE or COPY queue opens its
+    // context at the engine's bind of its VkQueue below, on the node of the family the engine took for it.
+    if (!q->opened_at_bind) {
+        hr = q->context.open(q->request.args);
+        if (hr != S_OK) {
+            if (q->context.handle()) release_context(q); else erase(q);
+            return FAILED(hr) ? hr : E_UNEXPECTED;
+        }
+        AcquireSRWLockExclusive(&lock_); q->binding_context = q->context.handle();
+        ReleaseSRWLockExclusive(&lock_);
     }
-    AcquireSRWLockExclusive(&lock_); q->binding_context = q->context.handle();
-    ReleaseSRWLockExclusive(&lock_);
     BC250_VKD3D_COMMAND_QUEUE_DESC desc{};
     desc.Size = sizeof(desc);
     desc.Type = (args.QueueFlags & D3D12DDI_COMMAND_QUEUE_FLAG_3D) ? D3D12_COMMAND_LIST_TYPE_DIRECT :
@@ -110,6 +121,21 @@ HRESULT QueueEngineRegistry::create(const D3D12DDIARG_CREATECOMMANDQUEUE_0050& a
             release_context(q);
         }
         return failure;
+    }
+    // An engine queue that never bound its VkQueue has no context to submit on: refuse the queue, as a
+    // failed engine create is refused.
+    if (!q->context.handle()) {
+        ddi_chain_failure("queue-unbound", E_UNEXPECTED);
+        AcquireSRWLockExclusive(&lock_); q->state = QueueEngineState::Destroying;
+        ReleaseSRWLockExclusive(&lock_);
+        const HRESULT close_hr = ops_.close(&q->engine);
+        if (close_hr == S_OK && !q->engine) release_context(q);
+        else {
+            q->context.invalidate_runtime();
+            AcquireSRWLockExclusive(&lock_); q->state = QueueEngineState::Retired;
+            ReleaseSRWLockExclusive(&lock_); device_.remove();
+        }
+        return E_UNEXPECTED;
     }
     if (device_.lost.load() || ops_.check_health(ops_.health_cookie) != S_OK) {
         device_.remove();
@@ -298,6 +324,39 @@ HRESULT QueueEngineRegistry::with_binding(void* cookie, Device& expected_device,
     HRESULT hr = callback(user, &view);
     AcquireSRWLockExclusive(&lock_); --q->pins; ReleaseSRWLockExclusive(&lock_);
     return hr;
+}
+HRESULT QueueEngineRegistry::bind_context(void* cookie, Device& expected_device,
+    const ::_D3DKMT_CREATECONTEXTVIRTUAL& request) noexcept {
+    if (!cookie || &expected_device != &device_) return E_INVALIDARG;
+    AcquireSRWLockExclusive(&lock_);
+    auto q = find(cookie, 0);
+    if (!q || q->state == QueueEngineState::Retired) {
+        ReleaseSRWLockExclusive(&lock_); return E_INVALIDARG;
+    }
+    if (q->binding_context) {
+        const bool same = q->request.matches(request);
+        ReleaseSRWLockExclusive(&lock_);
+        return same ? S_OK : E_NOTIMPL;
+    }
+    if (!q->opened_at_bind || q->state != QueueEngineState::Creating || q->operation_thread != GetCurrentThreadId()) {
+        ReleaseSRWLockExclusive(&lock_); return E_INVALIDARG;
+    }
+    ReleaseSRWLockExclusive(&lock_);
+    // Only this thread runs the queue's create (state Creating), so the request and the context change
+    // here alone, and the owner stays: create alone erases it, after this bind has returned.
+    ContextRequest& own = q->request;
+    if (!own.matches(request) && (own.prepare(q->desc, true) != S_OK || !own.matches(request))) {
+        (void)own.prepare(q->desc);
+        return E_NOTIMPL;
+    }
+    const HRESULT hr = q->context.open(own.args);
+    if (hr != S_OK) return FAILED(hr) ? hr : E_UNEXPECTED;
+    if (ddi_trace_enabled())
+        amdgpu_wddm_log::print("d3d12-ddi queue context at bind: node %u ip %u\n", own.args.NodeOrdinal,
+            own.blob.ip_type);
+    AcquireSRWLockExclusive(&lock_); q->binding_context = q->context.handle();
+    ReleaseSRWLockExclusive(&lock_);
+    return S_OK;
 }
 HRESULT QueueEngineRegistry::discard_retired_metadata(unsigned& unresolved_contexts) noexcept {
     unresolved_contexts = 0;

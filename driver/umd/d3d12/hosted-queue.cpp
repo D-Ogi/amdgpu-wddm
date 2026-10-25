@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "hosted-queue.h"
 #include <d3dkmthk.h>
-#include <cstring>
 
 namespace native12 {
 struct HostedQueue::Call {HostedQueue* self;Alias* alias;uint32_t op;void* argument;};
@@ -36,13 +35,11 @@ HRESULT HostedQueue::invoke(uint32_t op,void* argument) noexcept {
         if(!wrapper.queue || !wrapper.arguments)return E_INVALIDARG;
         cookie=wrapper.queue;payload=wrapper.arguments;
         if(create){
-            const auto& a=*static_cast<D3DKMT_CREATECONTEXTVIRTUAL*>(payload);
-            // Current registry contexts all use this exact GFX BC2C request.
+            // The exact BC2C request of the queue's context, or for a COMPUTE or COPY queue inside its
+            // create the GFX/node 0 or COMPUTE/node 2 request that opens it (QueueEngineRegistry::bind_context).
             // Aliasing cannot silently change node/engine/context policy.
-            ContextRequest expected;D3D12DDIARG_CREATECOMMANDQUEUE_0050 desc{};desc.QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;
-            if(expected.prepare(desc)!=S_OK || a.hContext || a.NodeOrdinal!=expected.args.NodeOrdinal ||
-               a.EngineAffinity!=expected.args.EngineAffinity || a.Flags.Value || !a.pPrivateDriverData ||
-               a.PrivateDriverDataSize!=sizeof(expected.blob) || std::memcmp(a.pPrivateDriverData,&expected.blob,sizeof(expected.blob)))return E_NOTIMPL;
+            const HRESULT admitted=registry_.bind_context(cookie,device_,*static_cast<D3DKMT_CREATECONTEXTVIRTUAL*>(payload));
+            if(admitted!=S_OK)return admitted;
         }else token=static_cast<D3DKMT_DESTROYCONTEXT*>(payload)->hContext;
     }else if(op==BC250_HOST_PUBLISH_PROGRESS)token=static_cast<bc250_host_progress*>(payload)->context;
     else if(op==BC250_HOST_WaitForSynchronizationObjectFromGpu)token=static_cast<D3DKMT_WAITFORSYNCHRONIZATIONOBJECTFROMGPU*>(payload)->hContext;

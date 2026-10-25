@@ -202,11 +202,11 @@ struct bc250_umd_context_private {
     __u32 size;
     __u32 flags;                        /* BC250_UMD_C_* */
 
-    __u32 ip_type;                      /* AMDGPU_HW_IP_GFX. On GFX1013 this is the only choice:
-                                         * ac_gpu_info.c:501-504 drops AMD_IP_COMPUTE for this
-                                         * chip, so a compute workload runs on the gfx ring
-                                         * (fact M50). AMDGPU_HW_IP_COMPUTE here is a bug, not a
-                                         * preference, and the KMD should refuse it. */
+    __u32 ip_type;                      /* AMDGPU_HW_IP_GFX on node 0, or AMDGPU_HW_IP_COMPUTE on
+                                         * node 2, the compute ring, when the KMD offers that node
+                                         * (bit 2 of submittable_node_mask in the caps blob;
+                                         * docs/design/compute-node.md). The KMD refuses any other
+                                         * IP and an IP on the node of the other one. */
     __u32 ip_instance;                  /* 0; HW_IP_COUNT measured 1 for GFX */
     __u32 ring;                         /* 0; available_rings measured 0x1 for GFX */
     __u32 priority;                     /* AMDGPU_CTX_PRIORITY_*. radv_amdgpu_winsys.h:92-98
@@ -226,9 +226,9 @@ struct bc250_umd_context_private {
      * bug where ip_type (AMDGPU_HW_IP_GFX/_DMA, chosen from RADV's own IP type) and the node the
      * caller actually opened have drifted apart - the two must name the same queue family. See
      * docs/design/umd-contract-stage-d.md. */
-    __u32 node_ordinal;                 /* BC250_WDDM_NODE_3D or BC250_WDDM_NODE_COPY, matching
-                                         * the value the UMD is about to pass, or already passed,
-                                         * to D3DKMTCreateContextVirtual's own NodeOrdinal. */
+    __u32 node_ordinal;                 /* 0 for GFX or 2 for COMPUTE (UmdBlobIpRunsOnNode),
+                                         * matching the value the UMD is about to pass, or already
+                                         * passed, to D3DKMTCreateContextVirtual's own NodeOrdinal. */
     __u32 reserved_v2[3];
 };
 

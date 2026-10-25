@@ -654,8 +654,6 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 // consumed once per nonce at StartDevice
 // through LabPagingRingStartNonce in the internal persistent state, written and flushed before the seed is used.
 void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
-// Lab flavour only: EnableComputeNode (REG_DWORD under Parameters, read only in DriverEntry), 0 closes node 2.
-void GuardLabReadComputeNode(_In_ PDRIVER_OBJECT DriverObject);
 // Lab flavour only: LabGdiHwAccel (REG_DWORD under Parameters, read only in DriverEntry), 1 opens the GDI gate, 2
 // opens it with the engine path only.
 void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject);
@@ -669,9 +667,6 @@ extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 
 // DriverEntry; absent is 1); the release flavour uses this constant.
 #define BC250_PAGING_BOUNDARY_RELEASE_MODE 1u
 ULONG GuardPagingBoundaryMode(void);    // any IRQL: a value fixed at DriverEntry
-// Node 2 (docs/design/compute-node.md): FALSE only in the lab flavour with EnableComputeNode 0; the release flavour
-// always returns TRUE. Any IRQL: a value fixed at DriverEntry.
-BOOLEAN GuardComputeNodeSelector(void);
 // GDI hardware acceleration (docs/design/gdi-hw-accel.md): TRUE only in the lab flavour with LabGdiHwAccel 1; the
 // release flavour always returns FALSE. Any IRQL: a value fixed at DriverEntry.
 BOOLEAN GuardLabGdiHwAccel(void);
@@ -1114,7 +1109,8 @@ BOOLEAN GfxReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 //   GfxComputeSoftRecover       GfxSoftRecover on the compute ring's newest sequence.
 //   GfxComputeFenceObserved     GfxFenceObserved for slot 11.
 //   GfxComputeReopenAfterAbort  GfxReopenAfterAbort for node 2.
-//   GfxComputeNodeGate          the node 2 selector and its gates, latched at GfxStart: whether node 2 exists.
+//   GfxComputeNodeGate          EnableComputeQueue and its gates, latched at GfxStart: whether node 2 exists.
+//   GfxComputeNodeOffBySetting  EnableComputeQueue 0 is the only closed gate of node 2 (GfxStart).
 NTSTATUS GfxSubmitCompute(_Inout_ BC250_DEVICE* Device, ULONGLONG RootPhysical, ULONGLONG GpuAddress, ULONG SizeBytes,
                           _In_opt_ const BC250_GFX_SUBMIT_IDENTITY* Identity, _Out_ ULONG* Seq,
                           _Out_opt_ ULONG* VmidUsed);
@@ -1127,6 +1123,7 @@ ULONG GfxComputeSoftRecover(_Inout_ BC250_DEVICE* Device, ULONG Vmid, _Out_ ULON
 BOOLEAN GfxComputeFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value);
 BOOLEAN GfxComputeReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device);
+BOOLEAN GfxComputeNodeOffBySetting(_In_ const BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);

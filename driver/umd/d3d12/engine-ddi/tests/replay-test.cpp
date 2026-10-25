@@ -35,6 +35,11 @@
 //  12. Raytracing tier 1.2 on the device: set_raytracing_tier12_commands from the engine's OPTIONS5, and off and on
 //      the prebuild information (D108), the driver matching identifier (D109) and ALLOW_OPACITY_MICROMAPS in a
 //      state object's pipeline configuration (D106).
+//  13. Work graphs (work-graphs.cpp): a WORK_GRAPH subobject in an EXECUTABLE (D106) reaches the engine as the API
+//      description with every node explicit, its final properties as overrides and the DDI order of the entry
+//      points; the program identifier and the memory requirements (CORE_0108) are the engine's; SetProgram and
+//      DispatchGraph in the four modes (COMMAND_LIST_3D_0108) reach the engine list the same with the policy off and
+//      on, with the CPU inputs copied at the call; the refusals.
 #include "internal.h"
 #include "replay.h"
 #include <atomic>
@@ -175,7 +180,7 @@ private:
     bool text_;
 };
 
-class FakeList final : public Child<ID3D12GraphicsCommandList7> {
+class FakeList final : public Child<ID3D12GraphicsCommandList10> {
 public:
     static constexpr UINT kLatchStencil = 0xBAD;            // OMSetStencilRef(kLatchStencil) makes the next Close fail
     static constexpr size_t kBarrierCalls = 8;              // Barrier calls whose group count is kept
@@ -215,9 +220,10 @@ public:
             riid == __uuidof(ID3D12GraphicsCommandList1) || riid == __uuidof(ID3D12GraphicsCommandList2) ||
             riid == __uuidof(ID3D12GraphicsCommandList3) || riid == __uuidof(ID3D12GraphicsCommandList4) ||
             riid == __uuidof(ID3D12GraphicsCommandList5) || riid == __uuidof(ID3D12GraphicsCommandList6) ||
-            riid == __uuidof(ID3D12GraphicsCommandList7)) {
+            riid == __uuidof(ID3D12GraphicsCommandList7) || riid == __uuidof(ID3D12GraphicsCommandList8) ||
+            riid == __uuidof(ID3D12GraphicsCommandList9) || riid == __uuidof(ID3D12GraphicsCommandList10)) {
             AddRef();
-            *out = static_cast<ID3D12GraphicsCommandList7*>(this);
+            *out = static_cast<ID3D12GraphicsCommandList10*>(this);
             return S_OK;
         }
         *out = nullptr;
@@ -227,6 +233,56 @@ public:
     void odd(const char* name) {
         Call(this, name);
         ++unexpected;
+    }
+    // Work graphs (ID3D12GraphicsCommandList10). DispatchGraph logs each CPU record by content, with the record size
+    // of its entry point from graph_record_sizes.
+    UINT graph_record_sizes[2]{};
+    void STDMETHODCALLTYPE OMSetFrontAndBackStencilRef(UINT, UINT) override { odd("OMSetFrontAndBackStencilRef"); }
+    void STDMETHODCALLTYPE RSSetDepthBias(FLOAT, FLOAT, FLOAT) override { odd("RSSetDepthBias"); }
+    void STDMETHODCALLTYPE IASetIndexBufferStripCutValue(D3D12_INDEX_BUFFER_STRIP_CUT_VALUE) override {
+        odd("IASetIndexBufferStripCutValue");
+    }
+    void STDMETHODCALLTYPE SetProgram(const D3D12_SET_PROGRAM_DESC* d) override {
+        Call c(this, "SetProgram");
+        if (!d) {
+            c.s("null");
+            return;
+        }
+        c.u(d->Type);
+        if (d->Type != D3D12_PROGRAM_TYPE_WORK_GRAPH) return;
+        const D3D12_SET_WORK_GRAPH_DESC& w = d->WorkGraph;
+        for (const UINT64 v : w.ProgramIdentifier.OpaqueData) c.x(v);
+        c.u(w.Flags).x(w.BackingMemory.StartAddress).u(w.BackingMemory.SizeInBytes);
+        c.x(w.NodeLocalRootArgumentsTable.StartAddress).u(w.NodeLocalRootArgumentsTable.SizeInBytes);
+        c.u(w.NodeLocalRootArgumentsTable.StrideInBytes);
+    }
+    void graph_input(Call& c, const D3D12_NODE_CPU_INPUT& in) {
+        c.u(in.EntrypointIndex).u(in.NumRecords).u(in.RecordStrideInBytes);
+        const UINT size = in.EntrypointIndex < std::size(graph_record_sizes) ? graph_record_sizes[in.EntrypointIndex] : 0;
+        for (UINT r = 0; r < in.NumRecords; ++r)
+            c.raw(in.pRecords ? static_cast<const uint8_t*>(in.pRecords) + r * in.RecordStrideInBytes : nullptr, size);
+    }
+    void STDMETHODCALLTYPE DispatchGraph(const D3D12_DISPATCH_GRAPH_DESC* d) override {
+        Call c(this, "DispatchGraph");
+        if (!d) {
+            c.s("null");
+            return;
+        }
+        c.u(d->Mode);
+        switch (d->Mode) {
+        case D3D12_DISPATCH_MODE_NODE_CPU_INPUT: graph_input(c, d->NodeCPUInput); break;
+        case D3D12_DISPATCH_MODE_NODE_GPU_INPUT: c.x(d->NodeGPUInput); break;
+        case D3D12_DISPATCH_MODE_MULTI_NODE_CPU_INPUT: {
+            const D3D12_MULTI_NODE_CPU_INPUT& m = d->MultiNodeCPUInput;
+            c.u(m.NumNodeInputs);
+            for (UINT k = 0; k < m.NumNodeInputs; ++k)
+                graph_input(c, *reinterpret_cast<const D3D12_NODE_CPU_INPUT*>(
+                                   reinterpret_cast<const uint8_t*>(m.pNodeInputs) + k * m.NodeInputStrideInBytes));
+            break;
+        }
+        case D3D12_DISPATCH_MODE_MULTI_NODE_GPU_INPUT: c.x(d->MultiNodeGPUInput); break;
+        default: c.s("unknown"); break;
+        }
     }
     static void location(Call& c, const D3D12_TEXTURE_COPY_LOCATION* l) {
         if (!l) {
@@ -782,6 +838,7 @@ private:
 // The engine device: descriptor heaps, descriptor copies and command allocators, and for section 12 the OPTIONS5
 // query and the three ID3D12Device5 entries of raytracing tier 1.2 (prebuild, driver matching identifier, state
 // object). Anything else counts as unexpected.
+class FakeWorkGraph;
 class FakeDevice final : public Object<ID3D12Device5> {
 public:
     bool fail_heaps = false;
@@ -803,6 +860,11 @@ public:
     std::atomic<uint32_t> state_objects{0};
     std::vector<UINT> state_object_types;
     UINT pipeline_flags = 0;
+    // CreateStateObject of an EXECUTABLE: the work graph description it was given (describe_graph) and the object it
+    // handed out (FakeWorkGraph), and how many of those are alive.
+    std::string graph_desc;
+    FakeWorkGraph* last_graph = nullptr;
+    std::atomic<uint32_t> graphs_live{0};
     std::atomic<uint32_t> heaps_made{0}, heaps_live{0};
     std::atomic<uint64_t> copies{0}, unexpected{0};
     FakeAllocator allocators[64];
@@ -1126,6 +1188,126 @@ public:
     void final_release() override { delete this; }
 };
 
+// A work graph description as text: the program, the flags, the entry points in order, then every explicitly defined
+// node with its overrides.
+std::string narrow(LPCWSTR w) {
+    if (!w) return "-";
+    std::string s;
+    for (; *w; ++w) s += static_cast<char>(*w);
+    return s;
+}
+std::string node_id(const D3D12_NODE_ID* id) {
+    return id ? narrow(id->Name) + "[" + std::to_string(id->ArrayIndex) + "]" : "-";
+}
+std::string value(const UINT* p) { return p ? std::to_string(*p) : "-"; }
+std::string grid(const UINT* p) {
+    return p ? std::to_string(p[0]) + "," + std::to_string(p[1]) + "," + std::to_string(p[2]) : "-";
+}
+template <class O> std::string common_overrides(const O& o) {
+    return " table " + value(o.pLocalRootArgumentsTableIndex) + " entry " +
+           (o.pProgramEntry ? std::to_string(*o.pProgramEntry) : "-") + " name " + node_id(o.pNewName) + " share " +
+           node_id(o.pShareInputOf);
+}
+std::string output_overrides(UINT count, const D3D12_NODE_OUTPUT_OVERRIDES* o) {
+    std::string s;
+    for (UINT k = 0; k < count; ++k)
+        s += " out " + std::to_string(o[k].OutputIndex) + " " + node_id(o[k].pNewName) + " sparse " +
+             (o[k].pAllowSparseNodes ? std::to_string(*o[k].pAllowSparseNodes) : "-") + " max " +
+             value(o[k].pMaxRecords) + " shared " + value(o[k].pMaxRecordsSharedWithOutputIndex);
+    return s;
+}
+std::string describe_graph(const D3D12_WORK_GRAPH_DESC& g) {
+    char flags[16];
+    snprintf(flags, sizeof(flags), "%x", static_cast<unsigned>(g.Flags));
+    std::string s = narrow(g.ProgramName) + " flags " + flags + " entries";
+    for (UINT k = 0; k < g.NumEntrypoints; ++k) s += " " + node_id(&g.pEntrypoints[k]);
+    for (UINT k = 0; k < g.NumExplicitlyDefinedNodes; ++k) {
+        const D3D12_NODE& node = g.pExplicitlyDefinedNodes[k];
+        const D3D12_SHADER_NODE& n = node.Shader;
+        s += " | " + narrow(n.Shader) + " type " + std::to_string(n.OverridesType);
+        if (n.OverridesType == D3D12_NODE_OVERRIDES_TYPE_BROADCASTING_LAUNCH && n.pBroadcastingLaunchOverrides) {
+            const D3D12_BROADCASTING_LAUNCH_OVERRIDES& o = *n.pBroadcastingLaunchOverrides;
+            s += common_overrides(o) + " grid " + grid(o.pDispatchGrid) + " maxgrid " + grid(o.pMaxDispatchGrid) +
+                 output_overrides(o.NumOutputOverrides, o.pOutputOverrides);
+        } else if ((n.OverridesType == D3D12_NODE_OVERRIDES_TYPE_COALESCING_LAUNCH ||
+                    n.OverridesType == D3D12_NODE_OVERRIDES_TYPE_THREAD_LAUNCH) && n.pCoalescingLaunchOverrides) {
+            const D3D12_COALESCING_LAUNCH_OVERRIDES& o = *n.pCoalescingLaunchOverrides;
+            s += common_overrides(o) + output_overrides(o.NumOutputOverrides, o.pOutputOverrides);
+        }
+    }
+    return s;
+}
+
+// What FakeDevice::CreateStateObject hands out for an EXECUTABLE: one work graph, program, with the entry points of
+// its description; entry point e has records of 8 * (e + 1) bytes. Its program identifier is {7, this, 0, 0}.
+class FakeWorkGraph final : public Child<ID3D12StateObject> {
+public:
+    static constexpr D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS kMemory{0x10000, 0x40000, 0x100};
+    FakeDevice* device = nullptr;
+    std::wstring program;
+    UINT entries = 0;
+    struct Properties final : Unknown<ID3D12StateObjectProperties1> {
+        FakeWorkGraph* o = nullptr;
+        void* STDMETHODCALLTYPE GetShaderIdentifier(LPCWSTR) override { return nullptr; }
+        UINT64 STDMETHODCALLTYPE GetShaderStackSize(LPCWSTR) override { return 0; }
+        UINT64 STDMETHODCALLTYPE GetPipelineStackSize() override { return 0; }
+        void STDMETHODCALLTYPE SetPipelineStackSize(UINT64) override {}
+        D3D12_PROGRAM_IDENTIFIER STDMETHODCALLTYPE GetProgramIdentifier(LPCWSTR name) override {
+            D3D12_PROGRAM_IDENTIFIER id{};
+            if (name && o->program == name) {
+                id.OpaqueData[0] = 7;
+                id.OpaqueData[1] = reinterpret_cast<UINT64>(o);
+            }
+            return id;
+        }
+    } properties;
+    struct Graphs final : Unknown<ID3D12WorkGraphProperties> {
+        FakeWorkGraph* o = nullptr;
+        UINT STDMETHODCALLTYPE GetNumWorkGraphs() override { return 1; }
+        LPCWSTR STDMETHODCALLTYPE GetProgramName(UINT g) override { return g ? nullptr : o->program.c_str(); }
+        UINT STDMETHODCALLTYPE GetWorkGraphIndex(LPCWSTR name) override {
+            return name && o->program == name ? 0 : UINT_MAX;
+        }
+        UINT STDMETHODCALLTYPE GetNumNodes(UINT) override { return 0; }
+        D3D12_NODE_ID STDMETHODCALLTYPE GetNodeID(UINT, UINT) override { return {}; }
+        UINT STDMETHODCALLTYPE GetNodeIndex(UINT, D3D12_NODE_ID) override { return UINT_MAX; }
+        UINT STDMETHODCALLTYPE GetNodeLocalRootArgumentsTableIndex(UINT, UINT) override { return UINT_MAX; }
+        UINT STDMETHODCALLTYPE GetNumEntrypoints(UINT g) override { return g ? 0 : o->entries; }
+        D3D12_NODE_ID STDMETHODCALLTYPE GetEntrypointID(UINT, UINT) override { return {}; }
+        UINT STDMETHODCALLTYPE GetEntrypointIndex(UINT, D3D12_NODE_ID) override { return UINT_MAX; }
+        UINT STDMETHODCALLTYPE GetEntrypointRecordSizeInBytes(UINT g, UINT e) override {
+            return !g && e < o->entries ? 8 * (e + 1) : 0;
+        }
+        void STDMETHODCALLTYPE GetWorkGraphMemoryRequirements(UINT g, D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS* out) override {
+            *out = g ? D3D12_WORK_GRAPH_MEMORY_REQUIREMENTS{} : kMemory;
+        }
+        UINT STDMETHODCALLTYPE GetEntrypointRecordAlignmentInBytes(UINT, UINT) override { return 4; }
+    } graphs;
+    FakeWorkGraph() {
+        properties.o = this;
+        graphs.o = this;
+    }
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** out) override {
+        if (!out) return E_POINTER;
+        *out = nullptr;
+        if (riid == __uuidof(ID3D12StateObjectProperties) || riid == __uuidof(ID3D12StateObjectProperties1)) {
+            properties.AddRef();
+            *out = static_cast<ID3D12StateObjectProperties1*>(&properties);
+            return S_OK;
+        }
+        if (riid == __uuidof(ID3D12WorkGraphProperties)) {
+            graphs.AddRef();
+            *out = static_cast<ID3D12WorkGraphProperties*>(&graphs);
+            return S_OK;
+        }
+        return E_NOINTERFACE;
+    }
+    void final_release() override {
+        --device->graphs_live;
+        delete this;
+    }
+};
+
 HRESULT FakeDevice::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, REFIID riid, void** out) {
     ++state_objects;
     *out = nullptr;
@@ -1137,6 +1319,23 @@ HRESULT FakeDevice::CreateStateObject(const D3D12_STATE_OBJECT_DESC* desc, REFII
             pipeline_flags = static_cast<UINT>(static_cast<const D3D12_RAYTRACING_PIPELINE_CONFIG1*>(s.pDesc)->Flags);
     }
     if (riid != __uuidof(ID3D12StateObject)) return E_NOINTERFACE;
+    if (desc->Type == D3D12_STATE_OBJECT_TYPE_EXECUTABLE) {
+        graph_desc.clear();
+        auto* graph = new FakeWorkGraph;
+        graph->device = this;
+        for (UINT k = 0; k < desc->NumSubobjects; ++k) {
+            const D3D12_STATE_SUBOBJECT& s = desc->pSubobjects[k];
+            if (s.Type != D3D12_STATE_SUBOBJECT_TYPE_WORK_GRAPH) continue;
+            const auto& g = *static_cast<const D3D12_WORK_GRAPH_DESC*>(s.pDesc);
+            graph_desc = describe_graph(g);
+            graph->program = g.ProgramName;
+            graph->entries = g.NumEntrypoints;
+        }
+        last_graph = graph;
+        ++graphs_live;
+        *out = static_cast<ID3D12StateObject*>(graph);
+        return S_OK;
+    }
     *out = static_cast<ID3D12StateObject*>(new FakeStateObject);
     return S_OK;
 }
@@ -3469,6 +3668,240 @@ int main() {
         check(!f.device.unexpected && !p.engine.unexpected && !ref.engine.unexpected && !p.engine.stale,
               "tier 1.2 on the device: no unexpected device or engine method");
     }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    // 13. Work graphs: D106 with a WORK_GRAPH subobject in an EXECUTABLE, the CORE_0108 entries, then SetProgram and
+    //     DispatchGraph with the policy off and on against a reference list that is given what the engine must get.
+    {
+        Fixture f;
+        f.context.device5 = static_cast<ID3D12Device5*>(&f.device);
+        f.context.work_graphs = true;
+        const native12::ModernCoreEntries core = modern_core_entries();
+        const native12::ModernListEntries lists = modern_list_entries();
+        // Three nodes: nodeA broadcasting, an entry point, grid 2,1,1, table index 3, one output to B with at most 4
+        // records; nodeB coalescing, an entry point; nodeC thread launch, no entry point. pEntrypoints lists B
+        // before A, the reverse of the node list: the engine must take them in that order.
+        const UINT table = 3, max_records = 4, dispatch_grid[3]{2, 1, 1};
+        D3D12DDI_NODE_OUTPUT_0108 output{};
+        output.FinalName = {L"B", 0};
+        output.RecordSizeInBytes = 8;
+        output.pMaxRecords = &max_records;
+        D3D12DDI_BROADCASTING_LAUNCH_NODE_PROPERTIES_0108 pa{};
+        pa.FinalName = {L"A", 0};
+        pa.bProgramEntry = TRUE;
+        pa.InputRecordSizeInBytes = 16;
+        pa.pLocalRootArgumentsTableIndex = &table;
+        pa.pDispatchGrid = dispatch_grid;
+        pa.NumOutputs = 1;
+        pa.pOutputs = &output;
+        D3D12DDI_COALESCING_LAUNCH_NODE_PROPERTIES_0108 pb{};
+        pb.FinalName = {L"B", 0};
+        pb.bProgramEntry = TRUE;
+        pb.InputRecordSizeInBytes = 8;
+        D3D12DDI_THREAD_LAUNCH_NODE_PROPERTIES_0108 pc{};
+        pc.FinalName = {L"C", 0};
+        D3D12DDI_NODE_0108 a{}, b{}, c{};
+        a.NodeType = b.NodeType = c.NodeType = D3D12DDI_NODE_TYPE_SHADER_0108;
+        a.Shader.Shader = L"nodeA";
+        a.Shader.PropertiesType = D3D12DDI_NODE_PROPERTIES_TYPE_BROADCASTING_LAUNCH_0108;
+        a.Shader.pBroadcastingLaunchNodeProperties = &pa;
+        b.Shader.Shader = L"nodeB";
+        b.Shader.PropertiesType = D3D12DDI_NODE_PROPERTIES_TYPE_COALESCING_LAUNCH_0108;
+        b.Shader.pCoalescingLaunchNodeProperties = &pb;
+        c.Shader.Shader = L"nodeC";
+        c.Shader.PropertiesType = D3D12DDI_NODE_PROPERTIES_TYPE_THREAD_LAUNCH_0108;
+        c.Shader.pThreadLaunchNodeProperties = &pc;
+        const D3D12DDI_NODE_LIST_ENTRY_0108 nc{&c, nullptr}, nb{&b, &nc}, na{&a, &nb};
+        const D3D12DDI_NODE_LIST_ENTRY_0108 ea{&a, nullptr}, eb{&b, &ea};
+        D3D12DDI_WORK_GRAPH_DESC_0108 graph{L"graph", 0, D3D12DDI_WORK_GRAPH_FLAG_NONE, 3, &na, 2, &eb};
+        const D3D12DDI_STATE_SUBOBJECT_0054 subobject{D3D12DDI_STATE_SUBOBJECT_TYPE_WORK_GRAPH, &graph};
+        const D3D12DDIARG_CREATE_STATE_OBJECT_0054 executable{D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE, 1, &subobject};
+        const SIZE_T record_size = g_core.pfnCalcPrivateStateObjectSize(f.hdevice, &executable);
+        std::vector<std::max_align_t> memory(record_size / sizeof(std::max_align_t) + 1);
+        const D3D12DDI_HSTATEOBJECT_0054 h{memory.data()};
+        const auto live = f.context.live.load();
+
+        // Refusals first: each leaves an inert record and reaches no engine.
+        auto refused = [&](const char* what) {
+            const uint32_t before = f.device.state_objects.load();
+            const HRESULT hr = g_core.pfnCreateStateObject(f.hdevice, &executable, h, D3D12DDI_HRTSTATEOBJECT_0054{});
+            const bool reached = f.device.state_objects.load() != before;
+            g_core.pfnDestroyStateObject(f.hdevice, h);
+            check(hr != S_OK && !reached && f.context.live == live, "D106 work graph refused: %s (hr %08lx)", what,
+                  static_cast<unsigned long>(hr));
+        };
+        graph.Flags = D3D12DDI_WORK_GRAPH_FLAG_ADD_TO_EXISTING_WORK_GRAPH;
+        refused("an addition to an existing work graph");
+        graph.Flags = D3D12DDI_WORK_GRAPH_FLAG_NONE;
+        graph.NumNodes = 2;
+        refused("a node list longer than NumNodes");
+        graph.NumNodes = 3;
+        graph.NumEntrypoints = 3;
+        refused("an entry point list shorter than NumEntrypoints");
+        graph.NumEntrypoints = 2;
+        f.context.work_graphs = false;
+        refused("an engine device without work graphs");
+        f.context.work_graphs = true;
+
+        const uint32_t before = f.device.state_objects.load();
+        const HRESULT created = g_core.pfnCreateStateObject(f.hdevice, &executable, h, D3D12DDI_HRTSTATEOBJECT_0054{});
+        const std::string expected_desc =
+            "graph flags 80000000 entries B[0] A[0]"
+            " | nodeA type 1 table 3 entry 1 name A[0] share - grid 2,1,1 maxgrid - out 0 B[0] sparse 0 max 4 shared -"
+            " | nodeB type 2 table - entry 1 name B[0] share -"
+            " | nodeC type 3 table - entry 0 name C[0] share -";
+        check(created == S_OK && f.device.state_objects == before + 1 && f.device.graph_desc == expected_desc &&
+                  f.device.graphs_live == 1,
+              "D106 work graph: the engine gets every node explicit with its final properties, the entry points in "
+              "the DDI order and the DDI order flag (%s)", f.device.graph_desc.c_str());
+
+        // CORE_0108.
+        const D3D12DDI_PROGRAM_IDENTIFIER_0108 id = core.pfnGetProgramIdentifier(h, L"graph");
+        const D3D12DDI_PROGRAM_IDENTIFIER_0108 unknown = core.pfnGetProgramIdentifier(h, L"other");
+        check(id.OpaqueData[0] == 7 && id.OpaqueData[1] == reinterpret_cast<UINT64>(f.device.last_graph) &&
+                  !id.OpaqueData[2] && !id.OpaqueData[3] && !unknown.OpaqueData[0] && !unknown.OpaqueData[1],
+              "GetProgramIdentifier: the engine's identifier of the work graph, zero for an unknown program");
+        D3D12DDI_WORK_GRAPH_MEMORY_REQUIREMENTS_0108 m{1, 2, 3}, none{1, 2, 3};
+        core.pfnGetWorkGraphMemoryRequirements(h, L"graph", &m);
+        core.pfnGetWorkGraphMemoryRequirements(h, L"other", &none);
+        check(m.MinSizeInBytes == FakeWorkGraph::kMemory.MinSizeInBytes &&
+                  m.MaxSizeInBytes == FakeWorkGraph::kMemory.MaxSizeInBytes &&
+                  m.SizeGranularityInBytes == FakeWorkGraph::kMemory.SizeGranularityInBytes && !none.MinSizeInBytes &&
+                  !none.MaxSizeInBytes && !none.SizeGranularityInBytes,
+              "GetWorkGraphMemoryRequirements: the engine's answer, zero for an unknown program");
+
+        // COMMAND_LIST_3D_0108. Entry point 0 (B) has records of 8 bytes, entry point 1 (A) of 16 (FakeWorkGraph).
+        D3D12_SET_PROGRAM_DESC api_set{};
+        api_set.Type = D3D12_PROGRAM_TYPE_WORK_GRAPH;
+        std::memcpy(&api_set.WorkGraph.ProgramIdentifier, &id, sizeof(id));
+        api_set.WorkGraph.Flags = D3D12_SET_WORK_GRAPH_FLAG_INITIALIZE;
+        api_set.WorkGraph.BackingMemory = {0x100000, 0x40000};
+        api_set.WorkGraph.NodeLocalRootArgumentsTable = {0x200000, 0x100, 0x20};
+        uint8_t source[96];
+        auto pattern = [&](uint8_t seed) {
+            for (size_t k = 0; k < sizeof(source); ++k) source[k] = static_cast<uint8_t>(seed + k * 3);
+        };
+        ListBox& ref = f.list();
+        ref.engine.graph_record_sizes[0] = 8;
+        ref.engine.graph_record_sizes[1] = 16;
+        {
+            ref.engine.SetProgram(&api_set);
+            D3D12_DISPATCH_GRAPH_DESC d{};
+            pattern(1);
+            d.Mode = D3D12_DISPATCH_MODE_NODE_CPU_INPUT;
+            d.NodeCPUInput = {0, 3, source, 32};
+            ref.engine.DispatchGraph(&d);
+            pattern(2);
+            const D3D12_NODE_CPU_INPUT inputs[2]{{1, 2, source, 16}, {0, 1, source + 64, 0}};
+            d.Mode = D3D12_DISPATCH_MODE_MULTI_NODE_CPU_INPUT;
+            d.MultiNodeCPUInput = {2, inputs, sizeof(inputs[0])};
+            ref.engine.DispatchGraph(&d);
+            d.Mode = D3D12_DISPATCH_MODE_NODE_GPU_INPUT;
+            d.NodeGPUInput = 0x300000;
+            ref.engine.DispatchGraph(&d);
+            d.Mode = D3D12_DISPATCH_MODE_MULTI_NODE_GPU_INPUT;
+            d.MultiNodeGPUInput = 0x400000;
+            ref.engine.DispatchGraph(&d);
+        }
+        auto sequence = [&](ListBox& l) {
+            l.engine.graph_record_sizes[0] = 8;
+            l.engine.graph_record_sizes[1] = 16;
+            f.reset(l);
+            l.engine.log.clear();
+            D3D12DDI_SET_PROGRAM_DESC_0108 set{};
+            set.Type = D3D12DDI_PROGRAM_TYPE_WORK_GRAPH_0108;
+            set.WorkGraph.ProgramIdentifier = id;
+            set.WorkGraph.Flags = D3D12DDI_SET_WORK_GRAPH_FLAG_INITIALIZE_0108;
+            set.WorkGraph.BackingMemory = {0x100000, 0x40000};
+            set.WorkGraph.NodeLocalRootArgumentsTable = {0x200000, 0x100, 0x20};
+            lists.pfnSetProgram(l.h, &set);
+            D3D12DDI_DISPATCH_GRAPH_DESC_0108 d{};
+            pattern(1);
+            d.Mode = D3D12DDI_DISPATCH_MODE_NODE_CPU_INPUT_0108;
+            d.NodeCPUInput = {0, 3, source, 32};
+            lists.pfnDispatchGraph(l.h, &d);
+            std::memset(source, 0xEE, sizeof(source));      // the slot copied the records at the call
+            pattern(2);
+            D3D12DDI_NODE_CPU_INPUT_0108 inputs[2]{{1, 2, source, 16}, {0, 1, source + 64, 0}};
+            d.Mode = D3D12DDI_DISPATCH_MODE_MULTI_NODE_CPU_INPUT_0108;
+            d.MultiNodeCPUInput = {2, inputs, sizeof(inputs[0])};
+            lists.pfnDispatchGraph(l.h, &d);
+            std::memset(source, 0xEE, sizeof(source));
+            std::memset(inputs, 0xEE, sizeof(inputs));
+            d.Mode = D3D12DDI_DISPATCH_MODE_NODE_GPU_INPUT_0108;
+            d.NodeGPUInput = 0x300000;
+            lists.pfnDispatchGraph(l.h, &d);
+            d.Mode = D3D12DDI_DISPATCH_MODE_MULTI_NODE_GPU_INPUT_0108;
+            d.MultiNodeGPUInput = 0x400000;
+            lists.pfnDispatchGraph(l.h, &d);
+            f.close(l);
+            const std::string log = l.engine.log;
+            const size_t close = log.rfind("Close(");
+            return close == std::string::npos ? log : log.substr(0, close);
+        };
+        const uint32_t errors = f.shell.list_errors.load();
+        ListBox& off = f.list();
+        const std::string off_log = sequence(off);
+        check(off_log == ref.engine.log && f.shell.list_errors == errors,
+              "work graph slots, policy off: SetProgram and DispatchGraph in the four modes reach the engine as "
+              "the reference list got them:\n%s", off_log.c_str());
+        check(f.on(), "work graph slots: policy on");
+        ListBox& on = f.list();
+        const std::string on_log = sequence(on);
+        check(on_log == ref.engine.log && f.shell.list_errors == errors,
+              "work graph slots, policy on: the same calls, the CPU records and inputs as they were at the call");
+        check(f.off(), "work graph slots: policy off again");
+
+        // Refusals on a list: each reports to the runtime and makes no engine call.
+        ListBox& r = f.list();
+        r.engine.graph_record_sizes[0] = 8;
+        r.engine.graph_record_sizes[1] = 16;
+        f.reset(r);
+        const uint64_t calls = r.engine.calls.load();
+        D3D12DDI_DISPATCH_GRAPH_DESC_0108 d{};
+        d.Mode = D3D12DDI_DISPATCH_MODE_NODE_CPU_INPUT_0108;
+        d.NodeCPUInput = {0, 1, source, 8};
+        lists.pfnDispatchGraph(r.h, &d);                     // no SetProgram on this list yet
+        D3D12DDI_SET_PROGRAM_DESC_0108 set{};
+        set.Type = D3D12DDI_PROGRAM_TYPE_WORK_GRAPH_0108;
+        set.WorkGraph.ProgramIdentifier = id;
+        set.WorkGraph.ProgramIdentifier.OpaqueData[1] += 8;
+        lists.pfnSetProgram(r.h, &set);                     // an identifier the engine did not give
+        set.WorkGraph.ProgramIdentifier = id;
+        set.WorkGraph.Flags = static_cast<D3D12DDI_SET_WORK_GRAPH_FLAGS_0108>(2);
+        lists.pfnSetProgram(r.h, &set);                     // an unknown flag
+        const uint64_t refused_calls = r.engine.calls.load();
+        set.WorkGraph.Flags = D3D12DDI_SET_WORK_GRAPH_FLAG_NONE_0108;
+        lists.pfnSetProgram(r.h, &set);
+        const uint64_t set_calls = r.engine.calls.load();
+        d.NodeCPUInput = {2, 1, source, 8};
+        lists.pfnDispatchGraph(r.h, &d);                     // entry point 2 of 2
+        d.NodeCPUInput = {0, 1, nullptr, 8};
+        lists.pfnDispatchGraph(r.h, &d);                     // no records
+        d.Mode = static_cast<D3D12DDI_DISPATCH_MODE_0108>(7);
+        lists.pfnDispatchGraph(r.h, &d);                     // an unknown mode
+        check(f.shell.list_errors == errors + 6 && f.shell.list_error == E_INVALIDARG && refused_calls == calls &&
+                  set_calls == calls + 1 && r.engine.calls.load() == set_calls,
+              "work graph slots: DispatchGraph without SetProgram, SetProgram of an unknown identifier or with an "
+              "unknown flag, an entry point out of range, records missing and an unknown mode are refused (%u), "
+              "no engine call", f.shell.list_errors.load() - errors);
+        f.close(r);
+
+        g_core.pfnDestroyStateObject(f.hdevice, h);
+        ListBox& after = f.list();
+        f.reset(after);
+        const uint64_t after_calls = after.engine.calls.load();
+        set.WorkGraph.Flags = D3D12DDI_SET_WORK_GRAPH_FLAG_NONE_0108;
+        lists.pfnSetProgram(after.h, &set);
+        check(f.device.graphs_live == 0 && f.context.live == live && f.shell.list_errors == errors + 7 &&
+                  after.engine.calls.load() == after_calls,
+              "DestroyStateObject: the engine work graph released, its identifier refused by SetProgram");
+        f.close(after);
+        check(!f.device.unexpected && !ref.engine.unexpected && !off.engine.unexpected && !on.engine.unexpected &&
+                  !r.engine.unexpected && !on.engine.stale,
+              "work graphs: no unexpected device or engine method");
+    }
+#endif
 
     std::printf("%s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;

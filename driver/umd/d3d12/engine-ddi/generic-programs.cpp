@@ -8,6 +8,7 @@
 #include "ddi-modern-list.h"
 #include "pso-async.h"
 #include "replay.h"
+#include "work-graphs.h"
 #include <map>
 #include <memory>
 #include <mutex>
@@ -287,7 +288,13 @@ HRESULT compile(GenericStateObject& object, const D3D12DDI_GENERIC_PROGRAM_DESC_
 }
 
 bool generic_state_description(const D3D12DDIARG_CREATE_STATE_OBJECT_0054& args) noexcept {
-    if (args.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE) return true;
+    // An EXECUTABLE with a WORK_GRAPH subobject is a work graph (state-objects.cpp, work-graphs.cpp).
+    if (args.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE) {
+        if (!gp::valid_count(args.NumSubobjects, args.pSubobjects)) return true;
+        for (UINT i = 0; i != args.NumSubobjects; ++i)
+            if (args.pSubobjects[i].Type == D3D12DDI_STATE_SUBOBJECT_TYPE_WORK_GRAPH) return false;
+        return true;
+    }
     if (args.Type != D3D12DDI_STATE_OBJECT_TYPE_COLLECTION || !gp::valid_count(args.NumSubobjects, args.pSubobjects)) return false;
     try {
         for (UINT i = 0; i != args.NumSubobjects; ++i) {
@@ -433,6 +440,7 @@ constexpr UINT64 generic_magic = 0x4750524f4752414dull;
 D3D12DDI_PROGRAM_IDENTIFIER_0108 APIENTRY generic_identifier(D3D12DDI_HSTATEOBJECT_0054 handle, LPCWSTR name) {
     D3D12DDI_PROGRAM_IDENTIFIER_0108 id{};
     auto* record = record_of<StateObjectRecord>(handle.pDrvPrivate, Tag::StateObject);
+    if (record && record->work_graph) return work_graph_identifier(*record, name);
     if (!record || !record->generic || !gp::name_ok(name)) return id;
     const auto it = record->generic->programs.find(name);
     if (it != record->generic->programs.end()) { id.OpaqueData[0] = it->second->id; id.OpaqueData[1] = generic_magic; }
@@ -440,6 +448,7 @@ D3D12DDI_PROGRAM_IDENTIFIER_0108 APIENTRY generic_identifier(D3D12DDI_HSTATEOBJE
 }
 void APIENTRY generic_set_program(D3D12DDI_HCOMMANDLIST handle, const D3D12DDI_SET_PROGRAM_DESC_0108* desc) {
     auto* list = list_of(handle, "SetProgram"); if (!list) return;
+    if (desc && desc->Type == D3D12DDI_PROGRAM_TYPE_WORK_GRAPH_0108) return work_graph_set_program(list, desc->WorkGraph);
     HRESULT hr = E_INVALIDARG;
     std::shared_ptr<gp::Program> program;
     if (desc && desc->Type == D3D12DDI_PROGRAM_TYPE_GENERIC_PIPELINE_0108) {
@@ -461,6 +470,7 @@ void APIENTRY generic_set_program(D3D12DDI_HCOMMANDLIST handle, const D3D12DDI_S
 void fill_modern_state_object_entries(native12::ModernCoreEntries* core, native12::ModernListEntries* lists) noexcept {
     if (core) core->pfnGetProgramIdentifier = generic_identifier;
     if (lists) lists->pfnSetProgram = generic_set_program;
+    fill_work_graph_entries(core, lists);
 }
 }
 #endif

@@ -78,6 +78,22 @@ namespace AmdgpuWddmControl
                 }
             }
             catch (Exception) { s.CuBadValues.Add("(the driver's settings key cannot be read)"); s.ReadFailed = true; }
+            // The driver's own switches (DriverFeatures.cs): what this start wrote under Features. A failed read
+            // leaves them out, which hides the switches; it is not a failure of the snapshot.
+            try
+            {
+                using (var k = batch == null ? DriverStateKey.Open(DriverFeatures.FeaturePath) : batch.Open(DriverFeatures.FeaturePath))
+                    if (k != null)
+                    {
+                        s.Features = new Dictionary<string, long>();
+                        foreach (var name in k.GetValueNames())
+                        {
+                            object value = k.GetValue(name);
+                            if (value is int) s.Features[name] = (uint)(int)value;
+                        }
+                    }
+            }
+            catch (Exception) { s.Features = null; }
             try { s.GameProfiles = new Dictionary<string, string>(SettingsStore.ReadProfiles(), StringComparer.OrdinalIgnoreCase); }
             catch (Exception) { s.GameProfiles = null; }
             try { s.GfxKeys = SettingsStore.ReadGfxKeys(); }

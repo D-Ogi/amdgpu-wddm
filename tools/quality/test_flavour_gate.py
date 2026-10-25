@@ -5,13 +5,15 @@
 Synthetic PE images: a release set must pass as release and fail as lab, a lab set the other way round. One
 escape marker, one forbidden name in ASCII or in UTF-16LE (each declared name in turn, with or without the driver's
 prefixes, and the record names it), or the wrong flavour line must fail the release set; a
-longer identifier that only contains a forbidden name must not, and an out-of-scope name is recorded, not failed.
+longer identifier that only contains a forbidden name must not, and an out-of-scope name is recorded, not failed. An
+out-of-scope class ("names") declares each of its names with its one reason.
 A lab set fails when one named file lacks one of its lab-only names or is missing, so a build that lost the lab
 switch cannot pass in silence. An item of lab.every with a payload path names that copy only, and an unlisted copy of
 the same file that holds the name fails the lab set. Every input the gate cannot judge must fail closed. The declaration next to the gate must load, and every KMD marker in it must still be a literal of the
 driver source, so that a renamed log line fails here and not first on the lab. Coverage: one identifier of the
 driver's own prefixes that no list declares fails either flavour (the negative control), in ASCII, in UTF-16LE and
-in the KMD, and a declared one passes.
+in the KMD, and a declared one passes. A declared longer name (RADV_BC250_FOO) covers its end (BC250_FOO) only where
+the end occurs inside it.
 
 Letter case: a forbidden name or a prefixed identifier as a whole C string in another case counts, inside prose it
 does not, and file names match in any case. A lab.none name in a lab file fails the lab set. The release rule of the
@@ -88,7 +90,7 @@ KMD_NAMES = tuple(sorted(f["name"] for f in DECL["forbidden"] if KMD_FILE in f["
 # How the KMD source spells them: REG_QWORD and REG_DWORD value names, UTF-16LE strings in the SYS (BD-235).
 KMD_SPELLING = {"PAGINGRINGSTARTBYTES": "PagingRingStartBytes", "PAGINGRINGSTARTNONCE": "PagingRingStartNonce",
                 "PAGINGBOUNDARYMODE": "PagingBoundaryMode", "LABPAGINGRINGSTARTNONCE": "LabPagingRingStartNonce",
-                "ENABLECOMPUTENODE": "EnableComputeNode", "LABGDIHWACCEL": "LabGdiHwAccel"}
+                "LABGDIHWACCEL": "LabGdiHwAccel"}
 LAB_KMD = (K["flavour_markers"]["lab"],) + tuple(e["marker"] for e in K["lab_escape_markers"]) + KMD_NAMES
 # A file that reads the game-log sink, as the release rule of AMDGPU_WDDM_LOG wants it: the marker name and the folder.
 LOG = ("AMDGPU_WDDM_LOG", "AMDGPU_WDDM_GAMELOG", "amdgpu-wddm\\logs\\games")
@@ -217,15 +219,17 @@ class ReleaseFlavour(unittest.TestCase):
         self.assertRegex(source, r'#if defined\(BC250_ADL_TEST_SERVICE\)\s*'
                                 r'//[^\n]*\n\s*OutputDebugStringA\("BC250_ADL_TEST_SERVICE:')
 
-    def lab_set(self, drop_name=None, drop_file=None, extra=None, upper=False):
+    def lab_set(self, drop_name=None, drop_file=None, extra=None, upper=False, drop_names=None):
         """A lab package (lab_slots() under pkg/files/payload): the lab KMD and every file a lab.every item names,
-        each holding its names, less one name of one copy ((payload path, name)) or every copy an item names when
-        asked; extra adds {payload path: names}; upper writes every file name in upper case."""
+        each holding its names, less one name of one copy ((payload path, name)), less some names of one copy
+        (drop_names: (payload path, names)) or every copy an item names when asked; extra adds {payload path:
+        names}; upper writes every file name in upper case."""
         self.write("pkg/BC250KMD.SYS" if upper else "pkg/bc250kmd.sys", pe(*LAB_KMD))
         for s, names in sorted(dict(lab_slots(), **(extra or {})).items()):
             if drop_file in (s, s.rsplit("/", 1)[1]):
                 continue
-            held = [n for n in names if drop_name != (s, n)]
+            held = [n for n in names if drop_name != (s, n) and not (drop_names and drop_names[0] == s and
+                                                                      n in drop_names[1])]
             self.write("pkg/files/payload/%s" % (s.upper() if upper else s), pe(*LOG, *held))
 
     def package(self, flavour, layout="driverstore", drop=None, extra=None):
@@ -682,12 +686,21 @@ class ReleaseFlavour(unittest.TestCase):
 
     def test_lab_file_without_one_lab_name_fails(self):
         # One build of the set lost the lab switch for one lookup (or the lookup moved): the lab arm must fail.
+        # One gate run for each item: the copy loses every name of the item, and each name must give its own
+        # failure. A run for each name took four minutes with the hosted ICD declared, over the 180 s of the gate.
         for item, names in sorted(lab_items().items()):
-            for n in names:
-                with self.subTest(item=item, name=n):
-                    self.setUp()
-                    self.lab_set(drop_name=(slot_of(item), n))
-                    self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+            with self.subTest(item=item):
+                self.setUp()
+                self.lab_set(drop_names=(slot_of(item), set(names)))
+                out = self.dir / "out"
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg"),
+                                               "--out", str(out)), 1)
+                failures = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))["failures"]
+                self.assertEqual(len(failures), len(names), failures)
+                for n in names:
+                    with self.subTest(item=item, name=n):
+                        self.assertEqual(len([x for x in failures if ": the lab build lacks %s (" % n in x]), 1,
+                                         failures)
 
     def test_lab_set_without_a_named_file_fails(self):
         for item in sorted(lab_items()):
@@ -710,20 +723,31 @@ class ReleaseFlavour(unittest.TestCase):
     def test_unlisted_copy_with_a_path_listed_name_fails(self):
         # The list of paths is exact: another copy of the same file that holds the name means the build lines
         # changed and the declaration (and its note) is stale. Without the name, that copy passes.
+        # One copy for each file name that path items list, holding every such name at once: each name must give
+        # its own failure (a gate run for each name took two minutes with the hosted ICD declared).
+        listed = {}
         for f in DECL["forbidden"]:
             paths = [i for i in f["lab"].get("every", []) if "/" in i]
-            if not paths:
-                continue
-            base = paths[0].rsplit("/", 1)[1]
+            if paths:
+                listed.setdefault(paths[0].rsplit("/", 1)[1], []).append(f["name"])
+        for base, path_names in sorted(listed.items()):
             other = "unlisted/" + base
             needs = sorted({n for item, names in lab_items().items() if item == base for n in names})
-            with self.subTest(name=f["name"]):
+            with self.subTest(file=base):
                 self.setUp()
                 self.lab_set(extra={other: needs})
                 self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 0)
                 self.setUp()
-                self.lab_set(extra={other: needs + [f["name"]]})
-                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+                self.lab_set(extra={other: needs + path_names})
+                out = self.dir / "out"
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg"),
+                                               "--out", str(out)), 1)
+                failures = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))["failures"]
+                self.assertEqual(len(failures), len(path_names), failures)
+                for n in path_names:
+                    with self.subTest(file=base, name=n):
+                        self.assertEqual(len([x for x in failures if "): holds %s, but lab.every lists only" % n in x]),
+                                         1, failures)
 
     def test_lab_kmd_only_skips_the_umd_names(self):
         kmd = self.write("bc250kmd.sys", pe(*LAB_KMD))
@@ -783,6 +807,23 @@ class ReleaseFlavour(unittest.TestCase):
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg"), "--out", str(out)), 0)
         record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
         self.assertIn(name, [n for f in record["files"] for n in f["out_of_scope"]])
+
+    def test_out_of_scope_class_declares_each_of_its_names(self):
+        # A class entry ("names") gives one out-of-scope entry per name, with the class's where and reason. Its
+        # names pass a release set in the letter case of a label (a whole C string in lower case) and are recorded.
+        raw = json.loads(g.DECLARATION.read_text(encoding="utf-8"))
+        classes = [e for e in raw.get("out_of_scope", []) if "names" in e]
+        self.assertTrue(classes, "the declaration has no out-of-scope class to test with")
+        for c in classes:
+            entries = [e for e in DECL["out_of_scope"] if e["name"] in c["names"]]
+            self.assertEqual([e["name"] for e in entries], c["names"])
+            self.assertTrue(all(e["reason"] == c["reason"] and e["where"] == c["where"] for e in entries))
+        names = [n for c in classes for n in c["names"]]
+        self.release_set(pe(*LOG, *[n.lower() for n in names]))
+        out = self.dir / "out"
+        self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg"), "--out", str(out)), 0)
+        record = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))
+        self.assertEqual(set(names) - {n for f in record["files"] for n in f["out_of_scope"]}, set())
 
     def test_one_escape_marker_fails_release(self):
         for e in K["lab_escape_markers"]:
@@ -859,6 +900,20 @@ class ReleaseFlavour(unittest.TestCase):
         self.write("pkg/bc250kmd.sys", pe(*RELEASE_KMD, "RowCount must be 1..BC250_NOT_DECLARED_ANYWHERE"))
         self.write("pkg/a.dll", pe("x"))
         self.assertEqual(self.run_gate("--flavour", "release", "--package", str(self.dir / "pkg")), 1)
+
+    def test_declared_longer_name_covers_its_end(self):
+        # RADV_BC250_FOO, declared, covers BC250_FOO where BC250_FOO occurs only inside it. One more occurrence of
+        # the end alone, or one inside a longer identifier on the left, leaves it undeclared.
+        longer = next(e["name"] for e in DECL["forbidden"] if e["name"].startswith("RADV_BC250_"))
+        end = longer[len("RADV_"):]
+        self.assertFalse(any(end == e["name"] for k in ("forbidden", "allowed", "out_of_scope") for e in DECL.get(k, [])))
+        declared = {e["name"] for k in ("forbidden", "allowed", "out_of_scope") for e in DECL.get(k, [])}
+        def undeclared(data):
+            return g.scan_file(DECL, data, [], [], declared)["undeclared"]
+        self.assertEqual(undeclared(pe(longer + "=1", longer + "_BAR_x", utf16=(longer,))), [end + "_BAR"])
+        self.assertEqual(undeclared(pe(longer, end)), [end])
+        self.assertEqual(undeclared(pe(longer, "QQ" + longer)), [end])
+        self.assertEqual(undeclared(pe(longer, utf16=(end,))), [end])
 
     def test_declared_prefixed_names_pass(self):
         allowed = [e["name"] for e in DECL["allowed"] if g.PREFIXED.fullmatch(e["name"])]
@@ -940,6 +995,17 @@ class ReleaseFlavour(unittest.TestCase):
             "lab.none without reason": lambda d: d["forbidden"][0].update(lab={"none": " "}),
             "forbidden and out of scope": lambda d: d["out_of_scope"].append(
                 {"name": d["forbidden"][0]["name"], "where": "x", "reason": "x"}),
+            "forbidden and in an out-of-scope class": lambda d: d["out_of_scope"].append(
+                {"names": ["BC250_CLASS_A", d["forbidden"][0]["name"]], "where": "x", "reason": "x"}),
+            "class with name and names": lambda d: d["out_of_scope"].append(
+                {"name": "BC250_CLASS_A", "names": ["BC250_CLASS_B"], "where": "x", "reason": "x"}),
+            "class without names": lambda d: d["out_of_scope"].append({"names": [], "where": "x", "reason": "x"}),
+            "class with a name twice": lambda d: d["out_of_scope"].append(
+                {"names": ["BC250_CLASS_A", "BC250_CLASS_A"], "where": "x", "reason": "x"}),
+            "class with a bad name": lambda d: d["out_of_scope"].append(
+                {"names": ["bc250_class_a"], "where": "x", "reason": "x"}),
+            "class without reason": lambda d: d["out_of_scope"].append(
+                {"names": ["BC250_CLASS_A"], "where": "x", "reason": " "}),
             "no package slots": lambda d: d.pop("package"),
             "package slot in upper case": lambda d: d["package"]["slots"].append("TOOLS/X.EXE"),
             "package slot twice": lambda d: d["package"]["slots"].append(d["package"]["slots"][0]),

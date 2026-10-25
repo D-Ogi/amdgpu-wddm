@@ -308,33 +308,6 @@ void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
     GuardLog("lab: paging ring start 0x%llX nonce 0x%llX read (read only), for this start", g_LabSeed, g_LabNonce);
 }
 
-// The compute node selector, lab flavour only, not a catalog setting: a lab arm swaps the KMD image only, and the
-// installed catalog stays that of the installed package (docs/design/compute-node.md). EnableComputeNode (REG_DWORD,
-// Parameters, read only at DriverEntry): 0 closes node 2, for a control run. Absent or any other value opens it.
-static BOOLEAN g_LabComputeNode = TRUE;
-
-void GuardLabReadComputeNode(_In_ PDRIVER_OBJECT DriverObject)
-{
-    HANDLE key;
-    NTSTATUS status;
-    ULONG value = 0;
-
-    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
-    if (!NT_SUCCESS(status)) {
-        GuardLog("lab: compute node selector: Parameters key not opened for reading (0x%08X), node 2 open", status);
-        return;
-    }
-    status = LabQueryDword(key, L"EnableComputeNode", &value);
-    ZwClose(key);
-    if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
-        GuardLog("lab: compute node selector absent, node 2 open (the default)");
-        return;
-    }
-    g_LabComputeNode = !(NT_SUCCESS(status) && value == 0);
-    GuardLog("lab: compute node selector read (read only; value %lu, 0x%08X): node 2 %s", value, status,
-             g_LabComputeNode ? "open" : "closed (control)");
-}
-
 // The GDI hardware acceleration selector, lab flavour only, not a catalog setting: a lab arm swaps the KMD image
 // only, and the installed catalog stays that of the installed package (docs/design/gdi-hw-accel.md). LabGdiHwAccel
 // (REG_DWORD, Parameters, read only at DriverEntry): 1 opens the GDI gate whatever EnableGdiHwAccel says. 2 opens it
@@ -427,16 +400,6 @@ ULONG GuardPagingBoundaryMode(void)
     return g_LabBoundaryMode;
 #else
     return BC250_PAGING_BOUNDARY_RELEASE_MODE;
-#endif
-}
-
-// Node 2: the lab flavour takes the arm's selector; the release flavour always opens it.
-BOOLEAN GuardComputeNodeSelector(void)
-{
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    return g_LabComputeNode;
-#else
-    return TRUE;
 #endif
 }
 

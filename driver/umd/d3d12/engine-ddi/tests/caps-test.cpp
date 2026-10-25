@@ -1401,8 +1401,24 @@ void test_ladder_caps(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     D3D12DDI_OPTIONS_DATA_0118 ser{};
     D3D12DDI_OPTIONS_DATA_0102 limits{};
     check(get(caps, D3D12DDICAPS_TYPE_OPTIONS1_0103, graph) == S_OK
-          && graph.WorkGraphsTier == D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED,
-          "engine work graphs tier 1 is clamped until state and dispatch translation exists");
+          && graph.WorkGraphsTier == D3D12DDI_WORK_GRAPHS_TIER_1_0,
+          "engine work graphs tier 1.0 is forwarded");
+    {
+        D3D12DDIARG_GETCAPS before{D3D12DDICAPS_TYPE_OPTIONS1_0103, nullptr, &graph, sizeof(graph)};
+        graph.WorkGraphsTier = static_cast<D3D12DDI_WORK_GRAPHS_TIER>(0xee);
+        check(engine_ddi::build_caps(caps, 107, &before) == S_OK
+              && graph.WorkGraphsTier == D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED,
+              "work graphs tier is not reported below DDI 0108, which has no work graph slots");
+        Answers none = a;
+        none.options21.WorkGraphsTier = D3D12_WORK_GRAPHS_TIER_NOT_SUPPORTED;
+        if (auto* trial = query_stub(none, info, "no work graphs")) {
+            graph.WorkGraphsTier = static_cast<D3D12DDI_WORK_GRAPHS_TIER>(0xee);
+            check(get(trial, D3D12DDICAPS_TYPE_OPTIONS1_0103, graph) == S_OK
+                  && graph.WorkGraphsTier == D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED,
+                  "an engine without work graphs keeps the tier not supported");
+            engine_ddi::free_adapter_caps(trial);
+        }
+    }
     check(get(caps, D3D12DDICAPS_TYPE_OPTIONS_0110, indirect) == S_OK
           && indirect.ExecuteIndirectTier == D3D12DDI_EXECUTE_INDIRECT_TIER_1_1,
           "incrementing constant support follows the engine OPTIONS21 answer");

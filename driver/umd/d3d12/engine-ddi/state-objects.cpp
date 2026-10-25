@@ -21,7 +21,11 @@
 //                          configuration, naming every export the summary gives it by the name resolve_exports
 //                          chooses (a listed name, else a unique unmangled one, else a unique mangled one);
 //   EXISTING_COLLECTION  the engine object of a live COLLECTION of this device, NumExports 0 only (an export list is
-//                        E_NOTIMPL for now, translate); any other type is E_INVALIDARG, never passed through.
+//                        E_NOTIMPL for now, translate);
+//   WORK_GRAPH  in an EXECUTABLE only: the API description that work-graphs.cpp rebuilds (translate_work_graph);
+// any other type is E_INVALIDARG, never passed through.
+// An EXECUTABLE with a WORK_GRAPH subobject comes here; every other EXECUTABLE is a generic program
+// (generic-programs.cpp, generic_state_description).
 // Every refusal of either slot is reported to the runtime as E_OUTOFMEMORY (admitted_create_failure, create_record),
 // with the real code on a log_refusal line: a create DDI that reports another code costs the application its device.
 // INFERENCE until a lab run logs a real description (one line per create, below): that a 0092 driver gets
@@ -67,6 +71,7 @@
 #include "internal.h"
 #include "generic-programs.h"
 #include "replay.h"
+#include "work-graphs.h"
 #include <climits>
 #include <cstdarg>
 #include <cstdio>
@@ -115,7 +120,8 @@ static_assert(D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG ==
               "subobject types passed with their DDI number");
 static_assert(D3D12DDI_STATE_OBJECT_TYPE_COLLECTION == static_cast<int>(D3D12_STATE_OBJECT_TYPE_COLLECTION) &&
                   D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE ==
-                      static_cast<int>(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE),
+                      static_cast<int>(D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE) &&
+                  D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE == static_cast<int>(D3D12_STATE_OBJECT_TYPE_EXECUTABLE),
               "state object types");
 static_assert(D3D12DDI_STATE_OBJECT_FLAG_ALLOW_LOCAL_DEPENDENCIES_ON_EXTERNAL_DEFINITIONS ==
                       static_cast<int>(D3D12_STATE_OBJECT_FLAG_ALLOW_LOCAL_DEPENDENCIES_ON_EXTERNAL_DEFINITIONS) &&
@@ -147,11 +153,20 @@ struct StateObjectTranslation {
         D3D12_HIT_GROUP_DESC hit_group;
         D3D12_EXISTING_COLLECTION_DESC collection;
         D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        D3D12_WORK_GRAPH_DESC work_graph;
+#endif
     };
     std::vector<Desc> descs;                        // one per API subobject
     std::vector<D3D12_STATE_SUBOBJECT> subobjects;  // the DDI's in order, less the summaries, then the associations
     std::vector<LPCWSTR> names;                     // the exports of every association, association after association
     std::vector<sc::Container> libraries;           // the rebuilt DXIL libraries
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    std::vector<WorkGraphTranslation> work_graphs;  // what each WORK_GRAPH subobject's API description points to
+    // The programs of a work graph state object, known to SetProgram and DispatchGraph. DestroyStateObject removes
+    // them before it releases the engine object.
+    std::unique_ptr<WorkGraphPrograms> programs;
+#endif
     // One engine reference to each imported collection and to the parent of a grown state object, released after the
     // engine's own object (DestroyStateObject releases that first).
     std::vector<IUnknown*> held;
@@ -303,7 +318,7 @@ ID3D12RootSignature* root_signature(DeviceContext* c, D3D12DDI_HROOTSIGNATURE h)
 const StateObjectRecord* collection_of(DeviceContext* c, const void* desc) noexcept {
     const auto& in = *static_cast<const D3D12DDI_EXISTING_COLLECTION_DESC_0054*>(desc);
     const auto* r = record_of<StateObjectRecord>(in.hExistingCollection.pDrvPrivate, Tag::StateObject, c);
-    return (r && r->properties && r->h.engine && r->translation && !r->executable) ? r : nullptr;
+    return (r && r->properties && r->h.engine && r->translation && !r->executable && !r->work_graph) ? r : nullptr;
 }
 
 // The context's empty local root signature (no parameters, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE), created
@@ -605,7 +620,7 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     // Pass 1: types, and what the summaries associate.
     std::vector<size_t> counts(n, 0);
     size_t names = 0, exports = 0, unlocal = 0;
-    UINT summaries = 0, libraries = 0, locals = 0, imports = 0, groups = 0, configs = 0, config_flags = 0;
+    UINT summaries = 0, libraries = 0, locals = 0, imports = 0, groups = 0, configs = 0, config_flags = 0, graphs = 0;
     bool imports_allow_additions = true;
     text.add("; types");
     for (UINT i = 0; i < n; ++i) {
@@ -644,8 +659,19 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
             if (exports > kMaxCount) return refuse(i, "more summary exports than the bound", E_INVALIDARG);
             break;
         }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        case D3D12DDI_STATE_SUBOBJECT_TYPE_WORK_GRAPH:
+            if (a.Type != D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE)
+                return refuse(i, "a work graph outside an executable", E_INVALIDARG);
+            ++graphs;
+            break;
+#endif
         default: return refuse(i, "unknown subobject type", E_INVALIDARG);
         }
+    }
+    if (a.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE && !graphs) {
+        log_refusal("CreateStateObject: an executable without a work graph: refused");
+        return E_INVALIDARG;
     }
     std::vector<LPCWSTR> identity;
     size_t kinds[kIdentities]{};
@@ -697,11 +723,13 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     t.held.reserve(size_t{imports} + (parent ? 1 : 0));
     size_t targets = 0;                        // counts[i] <= kMaxAssociatedNames, within an association's UINT
     for (size_t k : counts) targets += k ? 1 : 0;
-    // An executable pipeline declaring a local root signature, with a summary export associated with none: the empty
-    // local root signature and its explicit default association keep the engine's declared default away from it.
-    // Not for a collection, whose absent association may be an unresolved dependency still to be met.
+    // An executable pipeline or work graph declaring a local root signature, with a summary export associated with
+    // none: the empty local root signature and its explicit default association keep the engine's declared default
+    // away from it (the work graph engine resolves associations by the same priorities, workgraphs.c). Not for a
+    // collection, whose absent association may be an unresolved dependency still to be met.
     ID3D12RootSignature* empty_local = nullptr;
-    if (a.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE && locals && unlocal) {
+    if ((a.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE || a.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE) &&
+        locals && unlocal) {
         text.add("; %zu exports without a local root signature: empty explicit default", unlocal);
         const HRESULT hr = empty_local_root_signature(c, &empty_local);
         if (FAILED(hr)) return hr;
@@ -714,6 +742,10 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
     t.subobjects.resize(total);
     t.names.resize(names);
     t.libraries.resize(libraries);
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    t.work_graphs.resize(graphs);
+    UINT graph = 0;
+#endif
     std::vector<size_t> api(n, SIZE_MAX);
     size_t out = 0;
     UINT library = 0;
@@ -722,9 +754,22 @@ HRESULT translate(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& 
         if (s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY) continue;
         StateObjectTranslation::Desc& d = t.descs[out];
         D3D12_STATE_SUBOBJECT_TYPE type{};
+        HRESULT hr = S_OK;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        if (s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_WORK_GRAPH) {
+            const auto& in = *static_cast<const D3D12DDI_WORK_GRAPH_DESC_0108*>(s.pDesc);
+            text.add("; work graph of %u nodes, %u entry points", in.NumNodes, in.NumEntrypoints);
+            type = D3D12_STATE_SUBOBJECT_TYPE_WORK_GRAPH;
+            hr = translate_work_graph(in, t.work_graphs[graph++], d.work_graph);
+            if (FAILED(hr)) return refuse(i, "work graph not translated", hr);
+            t.subobjects[out] = {type, &d};
+            api[i] = out++;
+            continue;
+        }
+#endif
         sc::Container* container =
             s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY ? &t.libraries[library++] : nullptr;
-        const HRESULT hr = translate_one(c, s, i, d, type, container, text);
+        hr = translate_one(c, s, i, d, type, container, text);
         if (FAILED(hr)) return hr;
         if (s.Type == D3D12DDI_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION) {
             t.held.push_back(d.collection.pExistingCollection);         // within the reserved capacity
@@ -803,17 +848,25 @@ HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_00
     Text text;
     text.add("type %u, %u subobjects", static_cast<UINT>(args.Type), args.NumSubobjects);
     const bool executable = args.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+    // An EXECUTABLE reaches here only with a work graph (generic_state_description takes every other one).
+    const bool work_graph = args.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE;
     HRESULT hr = S_OK;
     const StateObjectRecord* parent = nullptr;
-    if (grow_from) {
+    if (grow_from && work_graph) {
+        // An addition to a work graph state object is not implemented (work-graphs.cpp); the runtime asks only when
+        // the application allowed additions, which the engine refuses at the create.
+        hr = E_NOTIMPL;
+    } else if (grow_from) {
         // A live RAYTRACING_PIPELINE of this device grows into another (Raytracing.md:3781-3787; the engine refuses
         // any other type, raytracing_pipeline.c:2865-2870). The parent's own flags are the engine's check (:2867).
         parent = record_of<StateObjectRecord>(grow_from->pDrvPrivate, Tag::StateObject, c);
         if (!parent || !parent->properties || !parent->translation || !parent->executable) parent = nullptr;
         text.add("; grows %s", parent ? "a live pipeline" : "no live pipeline of this device");
         hr = !parent || !executable ? E_INVALIDARG : !c->device7 ? E_NOTIMPL : S_OK;
-    } else if (!executable && args.Type != D3D12DDI_STATE_OBJECT_TYPE_COLLECTION) {
-        hr = args.Type == D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE ? E_NOTIMPL : E_INVALIDARG;   // work graphs
+    } else if (!executable && !work_graph && args.Type != D3D12DDI_STATE_OBJECT_TYPE_COLLECTION) {
+        hr = E_INVALIDARG;
+    } else if (work_graph && !c->work_graphs) {
+        hr = E_NOTIMPL;                         // the engine device reports no work graph tier (caps.cpp)
     } else if (!c->device5) {
         hr = E_NOTIMPL;
     }
@@ -838,6 +891,12 @@ HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_00
             hr = so->QueryInterface(__uuidof(ID3D12StateObjectProperties), reinterpret_cast<void**>(&properties));
         if (SUCCEEDED(hr) && !properties) hr = E_UNEXPECTED;
     }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    if (SUCCEEDED(hr) && work_graph) {
+        t->programs = register_work_graphs(c, so, &hr);
+        text.add("; %zu work graph programs", t->programs ? t->programs->identifiers.size() : size_t{0});
+    }
+#endif
     if (SUCCEEDED(hr) && parent) {
         // Deviation from bare forwarding: the new state object starts with its parent's pipeline stack size
         // (Raytracing.md:3777), and the engine gives it the computed default instead (raytracing_pipeline.c:2749-2752,
@@ -866,6 +925,7 @@ HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_00
     r->properties = properties;
     r->translation = t;
     r->executable = executable;
+    r->work_graph = work_graph;
     c->live.fetch_add(1);
     return S_OK;
 }
@@ -908,6 +968,9 @@ void APIENTRY destroy_state_object(D3D12DDI_HDEVICE device, D3D12DDI_HSTATEOBJEC
         return;
     }
     drain_all(c, Drain::Destroy);
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    if (r->translation) r->translation->programs.reset();   // no SetProgram finds the engine object from here on
+#endif
     const bool held = r->h.engine != nullptr || r->generic != nullptr;
     if (r->properties) r->properties->Release();
     r->properties = nullptr;

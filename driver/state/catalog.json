@@ -1346,6 +1346,30 @@
     },
     {
       "path": "",
+      "name": "EnableComputeQueue",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4917"
+      ]
+    },
+    {
+      "path": "",
       "name": "EnableDcnWrite",
       "kind": "setting",
       "type": "dword",
@@ -1589,6 +1613,30 @@
       "migration": "raw-once",
       "source": [
         "driver/kmd/mmio.c:150"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGdiHwAccel",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3988"
       ]
     },
     {
@@ -3307,6 +3355,48 @@
       "migration": "never",
       "source": [
         "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "Features",
+      "name": "ComputeQueue",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/wddm.c:4132"
+      ]
+    },
+    {
+      "path": "Features",
+      "name": "GdiHwAccel",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/wddm.c:3997"
       ]
     },
     {
