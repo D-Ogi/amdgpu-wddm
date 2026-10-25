@@ -92,6 +92,19 @@ dxbc-spirv. Deviations from the D3D11 code:
 
 ## The offline control
 
+`tools/build/build-generic-signature-test.ps1` is the tracked, GPU-independent generic-program gate. The
+standard `build-engine-ddi.ps1` recipe runs it, including with `-NativeOnly`. It compiles 23 DXC fixtures and
+compares original signatures and DXIL bytes with reconstruction from both a raw DXIL part and a whole container.
+The cases include signed/unsigned integer and float minimum precision, native 16-bit types, all three tessellation
+domains, geometry streams, clip/cull distances, coverage, and depth outputs. Four compiler controls require DXC to
+reject signed/unsigned 64-bit integer and double shader interfaces. Those controls do not claim GPU support.
+
+The gate records compiler identity, DXC hashes, exact shader arguments, source hashes and output hashes in
+`generic-signature-manifest.json`. `test/hlsl/generic-widths.hlsl` and `generic-system-values.hlsl` supply the
+width and system-value cases. The comparison includes names, indices, system values, component types, registers,
+masks, streams and minimum precision. It excludes read/write usage masks because the reconstruction deliberately
+uses conservative masks.
+
 `test/shader-container-test.cpp`, run by `scratch\m15\shader-container\build-run.ps1` (outside the repo) with the
 D3D12 shell's flags (`/std:c++20 /W4 /WX`), on the development PC through the Vulkan loader, no window:
 

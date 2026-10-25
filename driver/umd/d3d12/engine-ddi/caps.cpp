@@ -5,7 +5,9 @@
 // otherwise a documented constant; for 1002 the shell's memory architecture policy on top
 // (set_memory_architecture_policy). Layout references are WDK 10.0.26100 um\d3d12umddi.h ("H:line").
 #include "internal.h"
+#include "tight-alignment.h"
 #include <cstring>
+#include <cwchar>
 #include <iterator>
 
 namespace engine_ddi {
@@ -92,6 +94,11 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12;
     D3D12_FEATURE_DATA_D3D12_OPTIONS13 options13;
     D3D12_FEATURE_DATA_D3D12_OPTIONS14 options14;   // logged only: 1079 reports both FALSE (caps.cpp)
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    D3D12_FEATURE_DATA_D3D12_OPTIONS19 options19;
+    tight::Support tight_alignment{};
+    bool options19_answered{};
+#endif
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;   // 1091
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
@@ -104,7 +111,11 @@ constexpr uint32_t kAbi12 = (1u << 16) | 2u;
 // The payload layouts build_caps writes: 0093 adds type 1079 and changes no 0092 layout (H:11247-11259); 0094 adds
 // no caps type and changes only the L68 barrier argument (H:11262-11301).
 constexpr uint32_t kDdiVersionMin = 92;                  // D3D12DDI_BUILD_VERSION_0092, H:11156
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+constexpr uint32_t kDdiVersionMax = D3D12DDI_BUILD_VERSION_0119;
+#else
 constexpr uint32_t kDdiVersionMax = 94;                  // D3D12DDI_BUILD_VERSION_0094, H:11265
+#endif
 
 constexpr D3D_FEATURE_LEVEL kLevels[] = {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_12_0,
                                          D3D_FEATURE_LEVEL_12_1, D3D_FEATURE_LEVEL_12_2};
@@ -389,6 +400,56 @@ template <class T> T* payload(const D3D12DDIARG_GETCAPS& r) noexcept {
              r.DataSize, r.pData ? "set" : "null", sizeof(T));
     return nullptr;
 }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT options0102(const D3D12_FEATURE_DATA_D3D12_OPTIONS19& source, D3D_FEATURE_LEVEL level,
+                    D3D12DDI_OPTIONS_DATA_0102* output) noexcept {
+    D3D12DDI_OPTIONS_DATA_0102 value{};
+    value.SupportedSampleCountsWithNoOutputs = source.SupportedSampleCountsWithNoOutputs;
+    value.MaxSamplerDescriptorHeapSize = source.MaxSamplerDescriptorHeapSize;
+    value.MaxSamplerDescriptorHeapSizeWithStaticSamplers = source.MaxSamplerDescriptorHeapSizeWithStaticSamplers;
+    value.MaxViewDescriptorHeapSize = source.MaxViewDescriptorHeapSize;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // Process-local, lab-only creation-gate probes. These values are deliberately synthetic.
+    // Each arm bypasses minimum validation so the runtime, not this check, discriminates the fields.
+    wchar_t arm[16]{};
+    const DWORD length = GetEnvironmentVariableW(L"AMDGPU_WDDM_LAB_DDI0102_LIMITS", arm, 16);
+    if (length) {
+        if (length >= 16) return E_INVALIDARG;
+        const bool samples = std::wcscmp(arm, L"samples") == 0 || std::wcscmp(arm, L"both") == 0;
+        const bool samplers = std::wcscmp(arm, L"samplers") == 0 || std::wcscmp(arm, L"both") == 0;
+        const bool control = std::wcscmp(arm, L"control") == 0;
+        if (!samples && !samplers && !control) return E_INVALIDARG;
+        if (samples) value.SupportedSampleCountsWithNoOutputs |= 0x1du;
+        if (samplers && value.MaxSamplerDescriptorHeapSize < 4000u) value.MaxSamplerDescriptorHeapSize = 4000u;
+        if (samples && samplers) {
+            if (value.MaxSamplerDescriptorHeapSizeWithStaticSamplers < 2048u)
+                value.MaxSamplerDescriptorHeapSizeWithStaticSamplers = 2048u;
+            if (value.MaxViewDescriptorHeapSize < 1000000u) value.MaxViewDescriptorHeapSize = 1000000u;
+        }
+        log_line("LAB ONLY synthetic OPTIONS0102 probe samples=%u samplers=%u control=%u: source=%x/%u/%u/%u reported=%x/%u/%u/%u",
+                 unsigned(samples), unsigned(samplers), unsigned(control), source.SupportedSampleCountsWithNoOutputs,
+                 source.MaxSamplerDescriptorHeapSize, source.MaxSamplerDescriptorHeapSizeWithStaticSamplers,
+                 source.MaxViewDescriptorHeapSize, value.SupportedSampleCountsWithNoOutputs,
+                 value.MaxSamplerDescriptorHeapSize, value.MaxSamplerDescriptorHeapSizeWithStaticSamplers,
+                 value.MaxViewDescriptorHeapSize);
+        *output = value;
+        return S_OK;
+    }
+#endif
+    // DirectX-Specs VulkanOn12.md:909,1122-1128. These minima are implied by DDI0102,
+    // not optional feature bits. Preserve the caller's payload when the backend cannot meet them.
+    if ((level >= D3D_FEATURE_LEVEL_11_1 && (value.SupportedSampleCountsWithNoOutputs & 0x1du) != 0x1du) ||
+        value.MaxSamplerDescriptorHeapSize < 4000u || value.MaxSamplerDescriptorHeapSizeWithStaticSamplers < 2048u ||
+        value.MaxViewDescriptorHeapSize < 1000000u) {
+        log_line("OPTIONS0102 refused: backend limits samples=%x sampler=%u static=%u view=%u, feature level=%x",
+                 value.SupportedSampleCountsWithNoOutputs, value.MaxSamplerDescriptorHeapSize,
+                 value.MaxSamplerDescriptorHeapSizeWithStaticSamplers, value.MaxViewDescriptorHeapSize, unsigned(level));
+        return E_NOTIMPL;
+    }
+    *output = value;
+    return S_OK;
+}
+#endif
 } // namespace
 
 HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VKD3D_DEVICE_CREATE_INFO* info,
@@ -423,6 +484,10 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         {D3D12_FEATURE_D3D12_OPTIONS12, &c->options12, sizeof(c->options12), false},
         {D3D12_FEATURE_D3D12_OPTIONS13, &c->options13, sizeof(c->options13), false},
         {D3D12_FEATURE_D3D12_OPTIONS14, &c->options14, sizeof(c->options14), false},
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        {D3D12_FEATURE_D3D12_OPTIONS19, &c->options19, sizeof(c->options19), false},
+        {tight::feature, &c->tight_alignment, sizeof(c->tight_alignment), false},
+#endif
         {D3D12_FEATURE_D3D12_OPTIONS21, &c->options21, sizeof(c->options21), false},
         {D3D12_FEATURE_SERIALIZATION, &c->serialization, sizeof(c->serialization), false},
     };
@@ -437,6 +502,10 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         return hr;
     }
     for (size_t i = 0; i < kCount; ++i) {
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        if (entries[i].feature == D3D12_FEATURE_D3D12_OPTIONS19)
+            c->options19_answered = SUCCEEDED(queries[i].Result);
+#endif
         if (SUCCEEDED(queries[i].Result)) continue;
         log_line("QueryAdapterCaps: feature %u (%s) answered %08lx%s", static_cast<unsigned>(entries[i].feature),
                  feature_name(entries[i].feature), static_cast<unsigned long>(queries[i].Result),
@@ -534,6 +603,17 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
     if (!caps || !request || ddi_version < kDdiVersionMin || ddi_version > kDdiVersionMax) return E_INVALIDARG;
     const AdapterCaps& c = *caps;
     const D3D12DDIARG_GETCAPS& r = *request;
+    if (static_cast<UINT>(r.Type) == 1110) {
+        // Agility 1.721.3-preview device-init query: linear algebra tier, one UINT32,
+        // gated at DDI 0115. Local SCOPE-721 section 2.3 records the runtime contract;
+        // WDK 28000.2526 has no named type. No later DDI structure is inferred here.
+        static_assert(sizeof(UINT32) == 4);
+        if (ddi_version < 115) return E_INVALIDARG;
+        auto* d = payload<UINT32>(r);
+        if (!d) return E_INVALIDARG;
+        *d = 0; // No linear algebra tier is implemented.
+        return S_OK;
+    }
     switch (r.Type) {
     case D3D12DDICAPS_TYPE_0081_3DPIPELINESUPPORT1: {
         auto* d = payload<D3D12DDI_3DPIPELINESUPPORT1_DATA_0081>(r);
@@ -721,6 +801,131 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         d->WriteableMSAATexturesSupported = FALSE;
         return S_OK;
     }
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    // New payloads are exact WDK 10.0.28000 layouts. A higher negotiated DDI does not enable a feature whose
+    // resource/state/command translation is absent. Keep those gates closed even if the engine supports it.
+    case D3D12DDICAPS_TYPE_OPTIONS_0098: {
+        if (ddi_version < 98) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0098>(r);
+        if (!d) return E_INVALIDARG;
+        d->L1MemoryFullyCpuAccessible = FALSE; // no shell GPU-upload heap contract
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_OPTIONS_0101: {
+        if (ddi_version < 101) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0101>(r);
+        if (!d) return E_INVALIDARG;
+        d->ComputeOnlyCustomHeapSupported = FALSE; // this adapter is not an FL1_0 compute-only device
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_OPTIONS_0102: {
+        if (ddi_version < 102) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0102>(r);
+        if (!d) return E_INVALIDARG;
+        // These are limits, not optional BOOLs. An unanswered engine query must not manufacture zero limits.
+        if (!c.options19_answered) return E_NOTIMPL;
+        return options0102(c.options19, c.levels.MaxSupportedFeatureLevel, d);
+    }
+    case D3D12DDICAPS_TYPE_OPTIONS1_0103: {
+        if (ddi_version < 103) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0103>(r);
+        if (!d) return E_INVALIDARG;
+        // OPTIONS21.WorkGraphsTier is queried above, but the shell has no work-graph state object translator.
+        d->WorkGraphsTier = D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0103_WAVE_MMA: {
+        if (ddi_version < 103) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_WAVE_MMA_DATA_0103>(r);
+        if (!d) return E_INVALIDARG;
+        // InputDataType, M and N are input fields. Preserve them when declining this experimental feature.
+        d->Supported = FALSE;
+        d->K = d->RequiredWaveLaneCountMin = d->RequiredWaveLaneCountMax = 0;
+        d->AccumDataTypes = D3D12DDI_WAVE_MMA_ACCUM_DATATYPE_NONE;
+        return S_OK;
+    }
+    case D3D12DDI_FEATURE_D3D12_PREDICATION_106: {
+        if (ddi_version < 106) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_FEATURE_DATA_PREDICATION_106>(r);
+        if (!d) return E_INVALIDARG;
+        d->Supported = FALSE; // optional FL1_0 contract is not queried from this engine
+        return S_OK;
+    }
+    case D3D12DDI_FEATURE_PLACED_RESOURCE_SUPPORT_INFO_106: {
+        if (ddi_version < 106) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_FEATURE_DATA_PLACED_RESOURCE_SUPPORT_INFO_106>(r);
+        if (!d) return E_INVALIDARG;
+        d->Supported = FALSE; // preserve the format, pool, page properties and node-mask inputs
+        return S_OK;
+    }
+    case D3D12DDI_FEATURE_HARDWARE_COPY_106: {
+        if (ddi_version < 106) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_FEATURE_DATA_HARDWARE_COPY_106>(r);
+        if (!d) return E_INVALIDARG;
+        d->Supported = FALSE; // optional FL1_0 contract is not queried from this engine
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_OPTIONS_0109: {
+        if (ddi_version < 109) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0109>(r);
+        if (!d) return E_INVALIDARG;
+        d->RecreateAtTier = D3D12DDI_RECREATE_AT_TIER_NOT_SUPPORTED;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_OPTIONS_0110: {
+        if (ddi_version < 110) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0110>(r);
+        if (!d) return E_INVALIDARG;
+        // commands.cpp translates INCREMENTING_CONSTANT and the engine executes the signature.
+        d->ExecuteIndirectTier = c.options21.ExecuteIndirectTier == D3D12_EXECUTE_INDIRECT_TIER_1_1
+            ? D3D12DDI_EXECUTE_INDIRECT_TIER_1_1 : D3D12DDI_EXECUTE_INDIRECT_TIER_1_0;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_TIGHT_ALIGNMENT_TIER_0111: {
+        if (ddi_version < 111) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_TIGHT_ALIGNMENT_TIER_DATA_0111>(r);
+        if (!d) return E_INVALIDARG;
+        d->SupportTier = c.tight_alignment.SupportTier == D3D12_TIGHT_ALIGNMENT_TIER_1 ? D3D12DDI_TIGHT_ALIGNMENT_TIER_1
+                                                   : D3D12DDI_TIGHT_ALIGNMENT_TIER_NOT_SUPPORTED;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_GUID_TEXTURE_LAYOUT_TIER_0111: {
+        if (ddi_version < 111) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_GUID_TEXTURE_LAYOUT_TIER_DATA_0111>(r);
+        if (!d) return E_INVALIDARG;
+        d->GuidTextureLayoutTier = D3D12DDI_GUID_TEXTURE_LAYOUT_TIER_NOT_SUPPORTED;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_GUID_TEXTURE_LAYOUT_GUID_SUPPORT_0111: {
+        if (ddi_version < 111) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_GUID_TEXTURE_LAYOUT_GUID_SUPPORT_DATA_0111>(r);
+        if (!d) return E_INVALIDARG;
+        d->GuidSupported = FALSE; // pCreateResource and AllowedAccess are inputs
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_0112_NATIVE_FENCE_SUPPORT: {
+        if (ddi_version < 112) return E_INVALIDARG;
+        auto* d = payload<D3D12DDICAPS_NATIVE_FENCE_SUPPORT_DATA_0112>(r);
+        if (!d) return E_INVALIDARG;
+        d->NativeGpuFenceSupported = FALSE;
+        return S_OK;
+    }
+    case D3D12DDI_APPLICATION_SPECIFIC_DRIVER_STATE_113: {
+        if (ddi_version < 113) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113>(r);
+        if (!d) return E_INVALIDARG;
+        d->Supported = FALSE;
+        return S_OK;
+    }
+    case D3D12DDICAPS_TYPE_OPTIONS_0118: {
+        if (ddi_version < 118) return E_INVALIDARG;
+        auto* d = payload<D3D12DDI_OPTIONS_DATA_0118>(r);
+        if (!d) return E_INVALIDARG;
+        // The current SDK/engine caps contract has no SER answer. SM6.9 is also absent from kShaderModels.
+        d->ShaderExecutionReorderingActuallyReorders = FALSE;
+        return S_OK;
+    }
+#endif
     case D3D12DDICAPS_TYPE_SHADER_MODEL_6_8_OPTIONS_0110: {
         // A 0110 type, asked by runtimes that map 6_8 whenever 1012 lists 6_8, with no DDI version check (runtime
         // 26100: QueryShaderModel66AndLater; M840). It is answered here although the shell negotiates 0092: an
@@ -734,7 +939,8 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         return S_OK;
     }
     default:
-        // Every other type defined at 0093 is left unanswered on purpose (INTEGRATION.md, "GetCaps mapping").
+        // Unknown contracts, including Agility 721 MLIR queries 1100/1102 (8 bytes),
+        // fail without changing the caller's payload.
         log_line("GetCaps type %u (DataSize %u, pInfo %s): not answered in this revision", static_cast<unsigned>(r.Type),
                  r.DataSize, r.pInfo ? "set" : "null");
         return E_NOTIMPL;

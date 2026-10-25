@@ -51,8 +51,8 @@
 // export (priority 6) would tie with a hit group's there and keep the empty one, so the default is the form used.
 // A COLLECTION is left as it is: there an absent association may be an unresolved dependency, not an absence.
 //
-// Lifetime: the runtime owns the DDI description and its bytecode for the life of the state object
-// (Raytracing.md:9555), so names and export arrays are used in place. What engine-ddi rebuilds (the API subobjects,
+// Lifetime: input names and export arrays are borrowed only during CreateStateObject. DDI 0119 explicitly
+// removes the runtime's bytecode copy (WDK 28000 d3d12umddi.h:15008-15010). What engine-ddi rebuilds (the API subobjects,
 // the association arrays, the library containers) is its own allocation and must stay put until the engine's
 // CreateStateObject returns; the engine deep-copies what it keeps (raytracing_pipeline.c,
 // d3d12_state_object_pipeline_data_defer). Keeping it until DestroyStateObject is a conservative choice, not an engine
@@ -65,6 +65,7 @@
 // creation description), so a record keeps their addresses (StateObjectTranslation::described).
 #include "shader-container/shader-container.h"      // first: it selects the D3D12 tokenized program format header
 #include "internal.h"
+#include "generic-programs.h"
 #include "replay.h"
 #include <climits>
 #include <cstdarg>
@@ -774,6 +775,23 @@ HRESULT create_record(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OBJECT_00
     auto* r = new (h.pDrvPrivate) StateObjectRecord{{Tag::StateObject, kRecordInvalid, nullptr, c}, nullptr, nullptr, rt,
                                                     false};
     const char* const slot = grow_from ? "AddToStateObject" : "CreateStateObject";
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    if (generic_state_description(args)) {
+        const auto* parent = grow_from ? record_of<StateObjectRecord>(grow_from->pDrvPrivate, Tag::StateObject, c) : nullptr;
+        HRESULT status = grow_from && (!parent || !parent->generic) ? E_INVALIDARG :
+            create_generic_state(c, args, parent ? parent->generic : nullptr, &r->generic);
+        if (FAILED(status)) {
+            const HRESULT admitted = admitted_create_failure(status);
+            log_refusal("%s: generic executable, %u subobjects; hr %08lx reported as %08lx", slot, args.NumSubobjects,
+                static_cast<unsigned long>(status), static_cast<unsigned long>(admitted));
+            return admitted;
+        }
+        r->h.flags = 0;
+        c->live.fetch_add(1);
+        log_line("%s: generic executable, %u subobjects; hr 00000000", slot, args.NumSubobjects);
+        return S_OK;
+    }
+#endif
     Text text;
     text.add("type %u, %u subobjects", static_cast<UINT>(args.Type), args.NumSubobjects);
     const bool executable = args.Type == D3D12DDI_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
@@ -882,12 +900,16 @@ void APIENTRY destroy_state_object(D3D12DDI_HDEVICE device, D3D12DDI_HSTATEOBJEC
         return;
     }
     drain_all(c, Drain::Destroy);
-    const bool held = r->h.engine != nullptr;
+    const bool held = r->h.engine != nullptr || r->generic != nullptr;
     if (r->properties) r->properties->Release();
     r->properties = nullptr;
     release_engine(r->h);
     delete r->translation;                      // after the engine's final reference
     r->translation = nullptr;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    destroy_generic_state(r->generic);
+    r->generic = nullptr;
+#endif
     poison(r->h);
     if (held) c->live.fetch_sub(1);
 }

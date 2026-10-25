@@ -31,6 +31,9 @@ param(
     [string]$VulkanInclude,
     # The engine DLL the runs load; default: engine_dll in engine_dll_dir of engine-abi.json.
     [string]$EngineDll,
+    # Explicit ABI input for candidate validation; the default remains the tracked engine-abi.json.
+    # Header and flavour-specific DLL hash checks apply to either input.
+    [string]$EngineAbiPin,
     # Substring of the DXGI adapter description to run on.
     [string]$Adapter,
     [switch]$Vvl,
@@ -48,7 +51,7 @@ param(
     # the entry path knobs (BC250_ENTRY_*). Without it, the release flavour, which has no lookup of those names.
     [switch]$Lab,
     [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',
-    [string]$MsvcReason=''
+    [string]$DdiInclude, [string]$ApiInclude, [string]$MsvcReason=''
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -59,10 +62,11 @@ $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $root = Get-Bc250Root $repo
 $src = Join-Path $repo 'driver\umd\d3d12\engine-ddi'
-$pinPath = Join-Path $src 'engine-abi.json'
+$pinPath = if ($EngineAbiPin) { [IO.Path]::GetFullPath($EngineAbiPin) } else { Join-Path $src 'engine-abi.json' }
+$pinSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $pinPath).Hash
 $selector = Join-Path $PSScriptRoot 'engine_abi.py'
 $selected = & python -I $selector --pin $pinPath --flavour $Flavour 2>&1
-if ($LASTEXITCODE -ne 0) { throw "engine-abi.json: no $Flavour pin ($selector): $($selected -join ' ')" }
+if ($LASTEXITCODE -ne 0) { throw "${pinPath}: no $Flavour pin ($selector): $($selected -join ' ')" }
 $pin = $selected -join "`n" | ConvertFrom-Json
 if (-not $OutputDir) { $OutputDir = Join-Path $root 'scratch\build\d3d12-engine-ddi' }
 # Default locations under the workspace root, from the pin: the fork checkout and the engine DLL's build directory.
@@ -86,18 +90,36 @@ Write-Host "engine ABI $($pin.abi_version) $($pin.header_revision): $engineHeade
 
 # Object files are named after the source's leaf, so no two sources here may share one.
 $libSources = @('context.cpp', 'caps.cpp', 'queue.cpp', 'commands.cpp', 'resources.cpp', 'descriptors.cpp',
-                'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp', 'tiles.cpp', 'state-objects.cpp', 'state-object-shell.cpp',
+                'root-signature.cpp', 'pipelines.cpp', 'graphics.cpp', 'queries.cpp', 'tiles.cpp', 'state-objects.cpp', 'state-object-shell.cpp', 'generic-programs.cpp',
                 'replay.cpp', 'pso-async.cpp', 'entry.cpp', 'shader-container\shader-container.cpp', 'shader-container\dxil-metadata.cpp') | ForEach-Object { Join-Path $src $_ }
 $harnessSources = @(Get-ChildItem -LiteralPath (Join-Path $src 'tests') -Filter '*.cpp' |
     Where-Object { $_.Name -like 'harness*.cpp' -or $_.Name -like 'test-*.cpp' } | ForEach-Object FullName)
 
 New-Item -ItemType Directory -Force $OutputDir | Out-Null
+[ordered]@{
+    engine_abi_pin = $pinPath
+    engine_abi_pin_sha256 = $pinSha
+    engine_flavour = $Flavour
+    selected_pin = $pin
+} | ConvertTo-Json -Depth 16 | Set-Content (Join-Path $OutputDir 'engine-abi-selection.json')
 $saved = Save-ProcessEnvironment
 try {
     $env:TEMP = $OutputDir; $env:TMP = $OutputDir
     $null = Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
     $compilerExe=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir $Arch
     $wdk = Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
+    # DDI-only headers may override the SDK/WDK while shared headers and tools stay pinned.
+    if($DdiInclude){
+        $DdiInclude=[IO.Path]::GetFullPath($DdiInclude)
+        if(!(Test-Path -LiteralPath (Join-Path $DdiInclude 'd3d12umddi.h'))){throw 'DdiInclude lacks d3d12umddi.h'}
+        Write-Host ("DDI header: "+$DdiInclude+" SHA256 "+(Get-FileHash (Join-Path $DdiInclude 'd3d12umddi.h')).Hash)
+    }
+    if($ApiInclude){
+        $ApiInclude=[IO.Path]::GetFullPath($ApiInclude)
+        if(!(Test-Path -LiteralPath (Join-Path $ApiInclude 'd3d12.h'))){throw 'ApiInclude lacks d3d12.h'}
+        Write-Host ("D3D12 API header: "+$ApiInclude+" SHA256 "+(Get-FileHash (Join-Path $ApiInclude 'd3d12.h')).Hash)
+    }
+
     # /O2: the library holds the hot per-draw DDIs (draw, submit, descriptor copy, barriers) and compiled at the
     # default /Od until now, while the shell around it was already optimised. No /GL here: the harness-symbol
     # gate below reads the library with dumpbin, which cannot read /GL objects. /FC with /d1trimfile: __FILE__ and
@@ -107,6 +129,8 @@ try {
                "/external:I$wdk", "/external:I$wdk\..\shared", "/external:I$VulkanInclude", "/external:I$EngineInclude",
                "/I$src")
     if ($Lab) { $flags += '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }
+    if($DdiInclude){$flags=@("/external:I$DdiInclude")+$flags}
+    if($ApiInclude){$flags=@("/external:I$ApiInclude")+$flags}
     $nativeFlags=$flags
     if($Compiler -eq 'clang-cl'){$nativeFlags=ConvertTo-Bc250ClangFlags $flags $Arch @($repo,$EngineSource,$VulkanInclude)}
     $harnessFlag = '/DAMDGPU_WDDM_ENGINE_DDI_HARNESS'
@@ -136,6 +160,11 @@ try {
 
         Invoke-Step 'header gate build' { & cl.exe @flags /Fo:native\ /Fd:native\ /Fe:engine-ddi-header-test.exe (Join-Path $src 'engine-ddi-header-test.cpp') }
         Invoke-Step 'header gate' { & .\engine-ddi-header-test.exe }
+
+        Invoke-Step 'generic DXIL signature oracle' {
+            & "$PSScriptRoot\build-generic-signature-test.ps1" -OutputDir (Join-Path $OutputDir 'generic-signatures') `
+                -VsInstall $VsInstall -Arch $Arch -DdiInclude $DdiInclude
+        }
 
         # Native build. /analyze runs with the same /WX, so a finding fails the build.
         # MSVC is a static-analysis control; its objects are never linked into the shipped library.
@@ -172,6 +201,9 @@ try {
     if ($NoRun) { Write-Host 'build only (-NoRun)'; return }
     if (-not (Test-Path -LiteralPath $EngineDll)) { throw "engine DLL $EngineDll does not exist" }
     $engineSha = (Get-FileHash -Algorithm SHA256 -LiteralPath $EngineDll).Hash
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $pinPath).Hash -ne $pinSha) {
+        throw "engine ABI pin changed during the build: $pinPath"
+    }
     # The same selection decides the verdict (engine_abi.py check_engine_dll): the DLL is the one this
     # flavour pins, or the run stops here. A flavour with no DLL built yet (pending) also stops here.
     $verdict = & python -I $selector --pin $pinPath --flavour $Flavour --engine-dll $EngineDll 2>&1
@@ -185,6 +217,9 @@ try {
         try {
             $env:VKD3D_DEBUG = 'warn'
             $env:AMDGPU_WDDM_LOG = 'stderr' # the UMD stack prints nothing on stdio without it (stdio-log.h)
+            $artifactDir = Join-Path $runDir 'readback'
+            New-Item -ItemType Directory -Path $artifactDir | Out-Null
+            $env:AMDGPU_WDDM_HARNESS_ARTIFACT_DIR = $artifactDir
             if ($WithVvl) {
                 $env:VK_LAYER_PATH = Join-Path $root 'toolchain\vvl\bin'
                 $env:VK_INSTANCE_LAYERS = 'VK_LAYER_KHRONOS_validation'
@@ -197,7 +232,7 @@ try {
             if ($Adapter) { $argList += '--adapter', "`"$Adapter`"" }
             $argList += $Extra
             $p = Start-Process -FilePath (Join-Path $OutputDir $Exe) -ArgumentList $argList `
-                -WorkingDirectory $runDir -NoNewWindow -PassThru `
+                -WorkingDirectory $runDir -WindowStyle Hidden -PassThru `
                 -RedirectStandardOutput "$runDir\stdout.txt" -RedirectStandardError "$runDir\stderr.txt"
             # Windows PowerShell 5.1: unless the process handle is opened while the process runs, ExitCode reads
             # $null after it exits, and a failed run would pass. A missing exit code fails the run below.
@@ -228,6 +263,8 @@ try {
             validation_first  = @($validation | Select-Object -First 5 | ForEach-Object Line)
             adapter_line      = ($stdout | Select-String -Pattern '^adapter:' | Select-Object -First 1).Line
             engine_abi        = "$($pin.abi_version) $($pin.header_revision), commit $($pin.commit)"
+            engine_abi_pin    = $pinPath
+            engine_abi_pin_sha256 = $pinSha
             engine_flavour    = $Flavour
             engine_sha256     = $engineSha
             executable_sha256 = (Get-FileHash -Algorithm SHA256 (Join-Path $OutputDir $Exe)).Hash
@@ -238,6 +275,7 @@ try {
         if ($null -eq $exitCode) { throw "$Exe ($Tag): exit code unavailable" }
         if ($exitCode -ne 0) { throw "$Exe ($Tag) failed with exit code $exitCode" }
         if ($summary.result -ne 'PASSED') { throw "$Exe ($Tag) exited 0 without its PASSED line" }
+        if ($summary.fail_lines.Count) { throw "$Exe ($Tag) reported FAIL lines" }
         if ($WithVvl) {
             if (-not $insert.Count) { throw 'VVL run without the loader line that inserts VK_LAYER_KHRONOS_validation' }
             if ($validation.Count) { throw "VVL run reported $($validation.Count) validation messages" }

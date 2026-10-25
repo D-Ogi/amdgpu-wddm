@@ -1,3 +1,4 @@
+#include "ddi-ladder.h"
 // SPDX-License-Identifier: MIT
 #include "adapter-caps.h"
 #include "../../contract/amdgpu_driver_package.h"
@@ -191,7 +192,7 @@ HRESULT get_adapter_caps(Adapter& adapter,const D3D12DDIARG_GETCAPS* request) no
     if(FAILED(hr))return hr;
     // GetCaps is adapter-scoped and comes before CreateDevice picks a version: answer with the newest layout the
     // adapter offers. 0093 changes no 0092 payload, and a runtime asks 1079 only after it negotiated 0093.
-    return engine_ddi::build_caps(owner->caps,D3D12DDI_BUILD_VERSION_0094,request);
+    return engine_ddi::build_caps(owner->caps,kDdiMax,request);
 }
 HRESULT adapter_render_pass_supported(Adapter& adapter,bool* supported) noexcept {
     if(!supported)return E_INVALIDARG;

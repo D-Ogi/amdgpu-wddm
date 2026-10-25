@@ -17,6 +17,9 @@
 // subject; the raytracing tier engine-ddi reports stays NOT_SUPPORTED (INTEGRATION.md). If the engine reports no
 // raytracing tier 1.1 on this GPU, the round trip says so in one SKIP line.
 #include "harness.h"
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+#include "modern-core-harness.h"
+#endif
 #include "fixture-raylib.h"
 #include "fixture-raylib-b.h"
 #include "fixture-rayquery.h"
@@ -30,6 +33,7 @@
 #include <new>
 #include <string>
 #include <vector>
+#include "test-deferred-rdat.h"
 
 namespace harness {
 
@@ -597,8 +601,8 @@ constexpr UINT32 kTrapValue = 0xB0253CFFu;         // a word no shader should re
 // The UPLOAD buffer: vertices at 0, the instance at kInstanceOffset, then the shader table, its records 32-byte and its
 // tables 64-byte aligned (D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
 // the tables of the later pipelines kTable2 to kTable9 bytes after the first.
-constexpr UINT64 kUploadBytes = 9216, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
-                 kTable7 = 6144, kTable8 = 7168, kTable9 = 8192;
+constexpr UINT64 kUploadBytes = 11264, kTable2 = 1024, kTable3 = 2048, kTable4 = 3072, kTable5 = 4096, kTable6 = 5120,
+                 kTable7 = 6144, kTable8 = 7168, kTable9 = 8192, kTableControl = 9216, kTableAddControl = 10240;
 constexpr UINT64 kRaygenOffset = 512, kMissOffset = 576, kHitOffset = 640;
 constexpr UINT64 kRecordBytes = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
 constexpr UINT64 kHitStride = 64;                   // identifier, the constants, padding to the record alignment
@@ -610,9 +614,10 @@ static_assert(kRaygenOffset % kTableAlignment == 0 && kMissOffset % kTableAlignm
                   kHitOffset + kHitStride <= kTable2 && kTable2 % kTableAlignment == 0 &&
                   kTable3 - kTable2 == kTable2 && kTable4 - kTable3 == kTable2 && kTable5 - kTable4 == kTable2 &&
                   kTable6 - kTable5 == kTable2 && kTable7 - kTable6 == kTable2 && kTable8 - kTable7 == kTable2 &&
-                  kTable9 - kTable8 == kTable2 && kTable9 + kHitOffset + kHitStride <= kUploadBytes,
+                  kTable9 - kTable8 == kTable2 && kTableAddControl - kTableControl == kTable2 &&
+                  kTableAddControl + kHitOffset + kHitStride <= kUploadBytes,
               "shader table layout");
-constexpr UINT64 kPipelineOutBytes = 9 * 256;      // one 64-word result per pipeline, 256 bytes apart
+constexpr UINT64 kPipelineOutBytes = 11 * 256;     // nine pipelines and two bytecode-lifetime controls
 // The indirect dispatches (9): a command signature of one DISPATCH_RAYS argument, its stride above the record's 104
 // bytes. Their UPLOAD buffer: the two records kRaysStride apart, the count words at kCountsOffset (the first
 // kIndirectArgsBytes bytes, which the list also copies into a DEFAULT buffer), and the output's prefill at
@@ -1026,6 +1031,39 @@ HRESULT create_state_object(Env& env, Device& device, const D3D12DDIARG_CREATE_S
                                          D3D12DDI_HRTSTATEOBJECT_0054{rt});
 }
 
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+constexpr const char* kLifetimeDdi = "0119";
+#else
+constexpr const char* kLifetimeDdi = "legacy";
+#endif
+HRESULT create_state_object_lifetime(Env& env, Device& device, const D3D12DDIARG_CREATE_STATE_OBJECT_0054& args,
+                                 void** storage, int* rt) {
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    D3D12DDI_DEVICE_FUNCS_CORE_0119 core{};
+    if (!modern_core_table(env, core)) return E_FAIL;
+    *storage = env.storage.alloc(core.pfnCalcPrivateStateObjectSize(device.h(), &args));
+    if (!*storage) return E_OUTOFMEMORY;
+    return core.pfnCreateStateObject(device.h(), &args, D3D12DDI_HSTATEOBJECT_0054{*storage},
+                                      D3D12DDI_HRTSTATEOBJECT_0054{rt});
+#else
+    return create_state_object(env, device, args, storage, rt);
+#endif
+}
+
+HRESULT add_to_state_object_lifetime(Env& env, Device& device, const D3D12DDIARG_ADD_TO_STATE_OBJECT_0072& args,
+                                    void** storage, int* rt) {
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    D3D12DDI_DEVICE_FUNCS_CORE_0119 core{};
+    if (!modern_core_table(env, core)) return E_FAIL;
+    *storage = env.storage.alloc(core.pfnCalcPrivateAddToStateObjectSize(device.h(), &args));
+    if (!*storage) return E_OUTOFMEMORY;
+    return core.pfnAddToStateObject(device.h(), &args, D3D12DDI_HSTATEOBJECT_0054{*storage},
+                                   D3D12DDI_HRTSTATEOBJECT_0054{rt});
+#else
+    return add_to_state_object(env, device, args, storage, rt);
+#endif
+}
+
 // The API description of the last create that reached the engine, copied by the state object observer
 // (harness_set_state_object_observer) immediately before the engine's CreateStateObject.
 struct Captured {
@@ -1142,6 +1180,7 @@ void test_raytracing_pipeline(Env& env) {
                     static_cast<int>(options5.RaytracingTier), static_cast<unsigned long>(hr_options));
         return;
     }
+    deferred_rdat::run(env);
     UINT32 expected[kWords];
     expected_words(expected);
     UINT hits = 0;
@@ -1215,13 +1254,26 @@ void test_raytracing_pipeline(Env& env) {
     const RootSignatures rs = create_pipeline_root_signatures(env, device);
     DdiShader library;
     const bool stripped = ddi_form(g_fixture_raylib, sizeof(g_fixture_raylib), library);
+    // Positive control keeps its caller bytecode alive. The second create uses
+    // a distinct allocation, poisoned and freed before any properties/dispatch.
+    // The persistent descriptions stay alive as required for associations.
+    PipelineDesc control_desc;
+    describe(control_desc, rs.global, rs.local, library.code.data(), true);
+    void* control_storage = nullptr;
+    int control_rt = 0;
+    const HRESULT control_hr = rs.hr == S_OK && stripped
+        ? create_state_object_lifetime(env, device, control_desc.args, &control_storage, &control_rt) : E_FAIL;
+    const D3D12DDI_HSTATEOBJECT_0054 control_so{control_storage};
+    std::vector<UINT> caller_code = library.code;
     PipelineDesc desc;
-    describe(desc, rs.global, rs.local, library.code.data(), true);
+    describe(desc, rs.global, rs.local, caller_code.data(), true);
     CaptureScope capture;
     void* so_storage = nullptr;
     int so_rt = 0;
-    const HRESULT hr_so = rs.hr == S_OK && stripped ? create_state_object(env, device, desc.args, &so_storage, &so_rt)
+    const HRESULT hr_so = rs.hr == S_OK && stripped ? create_state_object_lifetime(env, device, desc.args, &so_storage, &so_rt)
                                                     : E_FAIL;
+    std::fill(caller_code.begin(), caller_code.end(), 0xddddddddu);
+    std::vector<UINT>().swap(caller_code);
     const D3D12DDI_HSTATEOBJECT_0054 hso{so_storage};
     checkf(hr_so == S_OK && !device.shell.device_errors,
            "raytracing pipeline: CreateStateObject from the DDI form: global and local root signature by handle, the "
@@ -1254,6 +1306,7 @@ void test_raytracing_pipeline(Env& env) {
     // 2. Identifiers and stack sizes.
     const wchar_t* const id_names[3] = {L"raygen", L"miss", L"hitgroup"};
     const void* ids[3]{};
+    const void* control_ids[3]{};
     bool ids_ok = hr_so == S_OK;
     for (int i = 0; ids_ok && i < 3; ++i) {
         ids[i] = env.core.pfnGetShaderIdentifier(hso, id_names[i]);
@@ -1262,6 +1315,13 @@ void test_raytracing_pipeline(Env& env) {
     }
     ids_ok = ids_ok && std::memcmp(ids[0], ids[1], kRecordBytes) && std::memcmp(ids[0], ids[2], kRecordBytes) &&
              std::memcmp(ids[1], ids[2], kRecordBytes);
+    bool control_ok = control_hr == S_OK;
+    for (int i = 0; control_ok && i < 3; ++i) {
+        control_ids[i] = env.core.pfnGetShaderIdentifier(control_so, id_names[i]);
+        control_ok = control_ids[i] != nullptr;
+    }
+    checkf(control_ok && ids_ok && caller_code.empty(),
+           "%s state-object lifetime: independent live-bytecode control and overwritten/freed caller input both yield shader identifiers", kLifetimeDdi);
     checkf(ids_ok,
            "raytracing pipeline: GetShaderIdentifier of raygen, miss and hitgroup: %u bytes each, not all zero, all "
            "three different",
@@ -1278,7 +1338,7 @@ void test_raytracing_pipeline(Env& env) {
            "raytracing pipeline: stack sizes raygen %u, miss %u, hitgroup::closesthit %u bytes, UINT_MAX for an "
            "unknown export; pipeline stack size %u, set to %u and read back as %u",
            stack_raygen, stack_miss, stack_closest, pipeline_stack, pipeline_stack + 64, pipeline_stack_set);
-    if (hr_so != S_OK || !ids_ok) return;
+    if (hr_so != S_OK || !ids_ok || !control_ok) return;
 
     // 4, the state object: dxc's whole container, every export, and the decoy with a mangled name of its own.
     std::vector<UINT> container((sizeof(g_fixture_raylib) + sizeof(UINT) - 1) / sizeof(UINT), 0u);
@@ -1749,12 +1809,35 @@ void test_raytracing_pipeline(Env& env) {
            "(hr %08lx)",
            parent_stack, static_cast<unsigned long>(hr_parent));
     if (!parent_ok) return;
+    // The control retains its caller bytecode through dispatch. The other addition loses its caller allocation
+    // immediately after creation, before any identifier lookup, parent destruction or command recording.
+    const ULONG parent_references = public_references(parent_storage);
+    AdditionDesc add_control_desc;
+    describe_addition(add_control_desc, rs.global, library_b.code.data(), L"miss_far", kMissFarMangled, parent_storage);
+    void* add_control_storage = nullptr;
+    int add_control_rt = 0;
+    const HRESULT hr_add_control = add_to_state_object_lifetime(env, device, add_control_desc.args,
+                                                               &add_control_storage, &add_control_rt);
+    const D3D12DDI_HSTATEOBJECT_0054 hadd_control{add_control_storage};
+    BYTE add_control_ids[3][kRecordBytes]{};
+    const LPCWSTR add_control_names[] = {L"raygen", L"miss_far", L"hitgroup"};
+    bool add_control_ok = hr_add_control == S_OK;
+    for (int i = 0; add_control_ok && i < 3; ++i) {
+        const void* id = env.core.pfnGetShaderIdentifier(hadd_control, add_control_names[i]);
+        add_control_ok = id != nullptr;
+        if (id) std::memcpy(add_control_ids[i], id, kRecordBytes);
+    }
+    checkf(add_control_ok, "raytracing pipeline: DDI %s AddToStateObject retained-bytecode control creates with three "
+                          "identifiers (hr %08lx)", kLifetimeDdi, static_cast<unsigned long>(hr_add_control));
+    if (!add_control_ok) return;
+    std::vector<UINT> addition_caller_code = library_b.code;
     AdditionDesc addition;
-    describe_addition(addition, rs.global, library_b.code.data(), L"miss_far", kMissFarMangled, parent_storage);
+    describe_addition(addition, rs.global, addition_caller_code.data(), L"miss_far", kMissFarMangled, parent_storage);
     void* child_storage = nullptr;
     int child_rt = 0;
-    const ULONG parent_references = public_references(parent_storage);
-    const HRESULT hr_child = add_to_state_object(env, device, addition.args, &child_storage, &child_rt);
+    const HRESULT hr_child = add_to_state_object_lifetime(env, device, addition.args, &child_storage, &child_rt);
+    std::fill(addition_caller_code.begin(), addition_caller_code.end(), 0xddddddddu);
+    std::vector<UINT>().swap(addition_caller_code);
     const D3D12DDI_HSTATEOBJECT_0054 hchild{child_storage};
     const Captured add_seen = capture.captured;
     const UINT child_stack = hr_child == S_OK ? env.core.pfnGetPipelineStackSize(hchild) : 0;   // before any set
@@ -1808,8 +1891,8 @@ void test_raytracing_pipeline(Env& env) {
     refused_growth("with an export named miss, as the parent's", parent_storage, library.code.data(), L"miss",
                    kMissMangled, false);
     const ULONG parent_held = public_references(parent_storage);
-    checkf(parent_references && parent_held == parent_references + 1,
-           "raytracing pipeline: the child's record holds one reference to the parent's engine object, the refused "
+    checkf(parent_references && parent_held == parent_references + 2,
+           "raytracing pipeline: each child's record holds one reference to the parent's engine object, the refused "
            "growth none (public references %lu, then %lu)",
            parent_references, parent_held);
     env.core.pfnDestroyStateObject(device.h(), hparent);
@@ -1864,11 +1947,12 @@ void test_raytracing_pipeline(Env& env) {
         const BYTE* miss;
         const BYTE* hit;
         UINT32 value;
-    } later_tables[4] = {
+    } later_tables[5] = {
         {kTable6, importer_ids[0], importer_ids[1], importer_ids[2], kImportValue},
         {kTable7, parent_ids[0], miss_far, parent_ids[2], kGrowValue},
         {kTable8, ue_ids[0], ue_ids[1], ue_ids[2], kUeValue},
         {kTable9, ue_add_ids[0], ue_add_ids[1], ue_add_ids[2], kUeAddValue},
+        {kTableAddControl, add_control_ids[0], add_control_ids[1], add_control_ids[2], kGrowValue},
     };
     for (const auto& later : later_tables) {
         std::memcpy(bytes + later.table + kRaygenOffset, later.raygen, kRecordBytes);
@@ -1876,6 +1960,10 @@ void test_raytracing_pipeline(Env& env) {
         std::memcpy(bytes + later.table + kHitOffset, later.hit, kRecordBytes);
         std::memcpy(bytes + later.table + kHitOffset + kRecordBytes, &later.value, sizeof(UINT32));
     }
+    std::memcpy(bytes + kTableControl + kRaygenOffset, control_ids[0], kRecordBytes);
+    std::memcpy(bytes + kTableControl + kMissOffset, control_ids[1], kRecordBytes);
+    std::memcpy(bytes + kTableControl + kHitOffset, control_ids[2], kRecordBytes);
+    std::memcpy(bytes + kTableControl + kHitOffset + kRecordBytes, &kRecordValue, sizeof(UINT32));
     env.core.pfnUnmapHeap(device.h(), upload.hheap());
 
     // 9, the command signature of one DISPATCH_RAYS argument (no root signature: it changes no root argument) and the
@@ -1967,6 +2055,13 @@ void test_raytracing_pipeline(Env& env) {
     rays.Height = kGrid;
     rays.Depth = 1;
     t.pfnDispatchRays(rec.hlist(), &rays);
+    t.pfnSetPipelineState1(rec.hlist(), control_so);
+    t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 9 * 256);
+    D3D12DDIARG_DISPATCH_RAYS_0054 control_rays = rays;
+    control_rays.RayGenerationShaderRecord.StartAddress += kTableControl;
+    control_rays.MissShaderTable.StartAddress += kTableControl;
+    control_rays.HitGroupTable.StartAddress += kTableControl;
+    t.pfnDispatchRays(rec.hlist(), &control_rays);
     // 4, the dispatch: the second pipeline over its own table, into the second half of the output.
     t.pfnSetPipelineState1(rec.hlist(), hso2);
     t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 256);
@@ -1997,10 +2092,10 @@ void test_raytracing_pipeline(Env& env) {
     // 7, 8, 7b and 7c, the dispatches: the collection-only executable after its collection's destroy, the child after
     // its parent's, the UE 4.26 link after its collections', and UE 4.26's addition after its new collections', into
     // the sixth to ninth results.
-    const D3D12DDI_HSTATEOBJECT_0054 later_objects[4] = {himporter, hchild, hue, hue_add};
-    for (int k = 0; k < 4; ++k) {
+    const D3D12DDI_HSTATEOBJECT_0054 later_objects[5] = {himporter, hchild, hue, hue_add, hadd_control};
+    for (int k = 0; k < 5; ++k) {
         t.pfnSetPipelineState1(rec.hlist(), later_objects[k]);
-        t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + 1280 + 256 * k);
+        t.pfnSetComputeRootUnorderedAccessView(rec.hlist(), 1, out_va + (k == 4 ? 10 * 256 : 1280 + 256 * k));
         D3D12DDIARG_DISPATCH_RAYS_0054 later_rays = rays;
         later_rays.RayGenerationShaderRecord.StartAddress += later_tables[k].table;
         later_rays.MissShaderTable.StartAddress += later_tables[k].table;
@@ -2080,6 +2175,11 @@ void test_raytracing_pipeline(Env& env) {
             const auto* words = static_cast<const UINT32*>(mapped);
             UINT first = 0, first2 = 0;
             const UINT bad = mismatches(words, expected, &first);
+            const auto* control_words = words + 9 * 256 / sizeof(UINT32);
+            UINT control_first = 0;
+            const UINT control_bad = mismatches(control_words, expected, &control_first);
+            checkf(bad == 0 && control_bad == 0 && std::memcmp(words, control_words, sizeof(expected)) == 0,
+                   "%s state-object lifetime: DispatchRays after caller overwrite/free matches live-bytecode control, all 64 expected words", kLifetimeDdi);
             checkf(bad == 0,
                    "raytracing pipeline: DispatchRays writes the 64 expected words, %u hits with the hit group's local "
                    "root constant %08x and %u misses with %u (%u differ, first at %u)",
@@ -2133,6 +2233,14 @@ void test_raytracing_pipeline(Env& env) {
                    "of the parent's raygen and hit group identifiers and the new miss_far's writes its 64 expected "
                    "words, %u hits with %08x and %u misses with miss_far's %u (%u differ, first at %u)",
                    hits, kGrowValue, kWords - hits, kMissFar, bad_grown, first_grown);
+            UINT first_add_control = 0;
+            const UINT32* add_control_words = words + 10 * 256 / sizeof(UINT32);
+            const UINT bad_add_control = mismatches(add_control_words, expected_grown, &first_add_control);
+            checkf(bad_grown == 0 && bad_add_control == 0 &&
+                       !std::memcmp(add_control_words, words + 1536 / sizeof(UINT32), sizeof(expected_grown)),
+                   "raytracing pipeline: DDI %s AddToStateObject after caller bytecode poison/free and parent destroy "
+                   "matches the retained-bytecode control and all 64 expected words (%u control differences, first %u)",
+                   kLifetimeDdi, bad_add_control, first_add_control);
             UINT32 expected_ue[kWords];
             for (UINT i = 0; i < kWords; ++i) expected_ue[i] = expected[i] == kRecordValue ? kUeValue : expected[i];
             UINT first_ue = 0;
@@ -2323,10 +2431,12 @@ void test_raytracing_pipeline(Env& env) {
            "raytracing pipeline: state_object_shell names the device's shell for a live state object, none after "
            "DestroyStateObject");
     env.core.pfnDestroyStateObject(device.h(), hso2);
+    env.core.pfnDestroyStateObject(device.h(), control_so);
     env.core.pfnDestroyStateObject(device.h(), hso3);
     for (void* storage : mixed_storage) env.core.pfnDestroyStateObject(device.h(), D3D12DDI_HSTATEOBJECT_0054{storage});
     env.core.pfnDestroyStateObject(device.h(), himporter);
     env.core.pfnDestroyStateObject(device.h(), hchild);
+    env.core.pfnDestroyStateObject(device.h(), hadd_control);
     env.core.pfnDestroyStateObject(device.h(), hue);        // the base before the object grown from it
     env.core.pfnDestroyStateObject(device.h(), hue_add);
     if (hr_rays_signature == S_OK) env.core.pfnDestroyCommandSignature(device.h(), hrays_signature);

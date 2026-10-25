@@ -7,6 +7,7 @@
 #include "fence-ddi.h"
 #include "ddi-entry.h"
 #include "entry-owner.h"
+#include "engine-ddi/ddi-modern-list.h"
 #include "engine-ddi/internal.h"        // StateObjectRecord and DeviceContext, to stand in for a created state object
 #include <cassert>
 #include <cstdio>
@@ -66,7 +67,11 @@ template<class T> bool all_nonzero(const T& table) {
 // the state object as their only handle. The entry thunk resolves their owner from it through the production
 // overloads of entry-owner.h, which native-tables.cpp's EntryPolicy uses, and the real engine_ddi::state_object_shell;
 // this policy adds no resolver of its own. The originals record that they ran in the owner's scope.
-struct Owner { unsigned calls{}; };
+struct Owner {
+    unsigned calls{}, list_errors{};
+    D3D12DDI_HRTCOMMANDLIST last_list{};
+    HRESULT list_error{};
+};
 thread_local Owner* current{};
 unsigned denials{}, stray{};
 HRESULT last_denial{};
@@ -89,7 +94,7 @@ void APIENTRY set_pipeline_stack_size(D3D12DDI_HSTATEOBJECT_0054, UINT) { entere
 // A failed expectation ends the test with exit code 1 and a FAILED line, never an abort dialog.
 void expect(bool condition, const char* what) {
     if (condition) return;
-    std::printf("FAILED: state object slots: %s (calls outside a scope %u, denials %u)\n", what, stray, denials);
+    std::printf("FAILED: device table entries: %s (calls outside a scope %u, denials %u)\n", what, stray, denials);
     std::exit(1);
 }
 
@@ -144,6 +149,101 @@ void test_state_object_entries(const D3D12DDI_DEVICE_FUNCS_CORE_0088& composed) 
               "for a live and an inert record (state_object_shell), denied with E_INVALIDARG for a destroyed record, zeroed "
               "storage and a null handle; no runtime/GPU");
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+engine_ddi::CommandListRecord* expected_list{};
+void APIENTRY scoped_draw(D3D12DDI_HCOMMANDLIST list, UINT vertices, UINT instances, UINT first_vertex,
+                         UINT first_instance) {
+    expect(list.pDrvPrivate == expected_list, "0114 original receives the driver record, not the API header");
+    expect(vertices == 3 && instances == 5 && first_vertex == 7 && first_instance == 11,
+           "0114 draw preserves all scalar arguments");
+    entered();
+}
+void APIENTRY scoped_list_error(void* shell, D3D12DDI_HRTCOMMANDLIST list, HRESULT hr) {
+    auto* owner = static_cast<Owner*>(shell);
+    expect(current == owner, "0114 refusal reaches the runtime hook within its owner's scope");
+    expect(expected_list && list.handle == expected_list->rt.handle,
+           "0114 refusal reports the command list's runtime handle");
+    ++owner->list_errors;
+    owner->last_list = list;
+    owner->list_error = hr;
+}
+void APIENTRY modern_list_error(D3D12DDI_HCOMMANDLIST list, HRESULT hr) {
+    // Same bridge as native-tables.cpp: the real engine library selects the
+    // owning context and forwards the runtime list handle to its shell hook.
+    engine_ddi::report_command_list_error(list, hr);
+}
+
+void test_api_command_list_entries(const engine_ddi::FillInfo& info) {
+    D3D12DDI_COMMAND_LIST_FUNCS_3D_0092 legacy{};
+    expect(native12::compose_list_0092(&legacy, sizeof(legacy), 1, present, info) == S_OK,
+           "compose source for API command-list test");
+    D3D12DDI_COMMAND_LIST_FUNCS_3D_0094 base{};
+    expect(engine_ddi::make_list_0094(legacy, &base), "make typed 0094 source");
+    base.pfnDrawInstanced = scoped_draw;
+    D3D12DDI_COMMAND_LIST_FUNCS_3D_0114 source{}, wrapped{};
+    expect(native12::upgrade_list(base, &source, 1, modern_list_error), "make typed 0114 source");
+    expect(native12::DdiEntryTables<StateObjectPolicy>::wrap_list(1, source, &wrapped) == S_OK,
+           "wrap 0114 with production EntryOwner resolver");
+    expect(wrapped.pfnDrawInstanced && wrapped.pfnSetProgram && wrapped.pfnDispatchGraph,
+           "0114 wrapper supplies all tested entries");
+    if (!wrapped.pfnDrawInstanced || !wrapped.pfnSetProgram || !wrapped.pfnDispatchGraph) return;
+    D3D12DDI_SET_PROGRAM_DESC_0108 program{};
+    D3D12DDI_DISPATCH_GRAPH_DESC_0108 graph{};
+
+    Owner owner;
+    engine_ddi::DeviceContext context;
+    context.hooks.shell = &owner;
+    context.hooks.report_list_error = scoped_list_error;
+    int live_runtime{}, inert_runtime{};
+    engine_ddi::CommandListRecord live{}, inert{}, destroyed{}, orphan{};
+    live.h = {engine_ddi::Tag::CommandList, 0, nullptr, &context};
+    live.rt = {&live_runtime};
+    inert.h = {engine_ddi::Tag::CommandList, engine_ddi::kRecordInvalid, nullptr, &context};
+    inert.rt = {&inert_runtime};
+    destroyed.h = live.h;
+    engine_ddi::poison(destroyed.h);
+    orphan.h = {engine_ddi::Tag::CommandList, 0, nullptr, nullptr};
+    const unsigned starting_denials = denials;
+    for (auto* record : {&live, &inert}) {
+        expected_list = record;
+        D3D12DDI_RUNTIME_BYPASS_HEADER api_object{nullptr, record};
+        const D3D12DDI_API_HCOMMANDLIST api{&api_object};
+        expect(native12::EntryOwner<Owner>::resolve(api) == &owner,
+               "API command-list handle resolves its live or inert record's owner");
+        const unsigned before = owner.calls, errors_before = owner.list_errors;
+        wrapped.pfnDrawInstanced(api, 3, 5, 7, 11);
+        expect(owner.calls == before + 1 && !current && !stray && denials == starting_denials,
+               "wrapped 0114 draw enters and exits the resolved owner's scope");
+        wrapped.pfnSetProgram(api, &program);
+        wrapped.pfnDispatchGraph(api, &graph);
+        expect(owner.list_errors == errors_before + 2 && owner.list_error == E_NOTIMPL &&
+                   owner.last_list.handle == record->rt.handle && !current && denials == starting_denials,
+               "unsupported 0114 commands report E_NOTIMPL through the real engine list-error bridge");
+    }
+
+    alignas(engine_ddi::CommandListRecord) unsigned char zeroed[sizeof(engine_ddi::CommandListRecord)]{};
+    D3D12DDI_RUNTIME_BYPASS_HEADER destroyed_api{nullptr, &destroyed};
+    D3D12DDI_RUNTIME_BYPASS_HEADER zeroed_api{nullptr, zeroed};
+    D3D12DDI_RUNTIME_BYPASS_HEADER orphan_api{nullptr, &orphan};
+    D3D12DDI_RUNTIME_BYPASS_HEADER null_driver_api{nullptr, nullptr};
+    for (auto* api_object : {&destroyed_api, &zeroed_api, &orphan_api, &null_driver_api,
+                            static_cast<D3D12DDI_RUNTIME_BYPASS_HEADER*>(nullptr)}) {
+        const D3D12DDI_API_HCOMMANDLIST api{api_object};
+        expect(!native12::EntryOwner<Owner>::resolve(api), "invalid API command-list handle resolves no owner");
+        const unsigned before = owner.calls, errors_before = owner.list_errors, denials_before = denials;
+        wrapped.pfnDrawInstanced(api, 3, 5, 7, 11);
+        wrapped.pfnSetProgram(api, &program);
+        wrapped.pfnDispatchGraph(api, &graph);
+        expect(owner.calls == before && owner.list_errors == errors_before && denials == denials_before + 3 &&
+                   last_denial == E_INVALIDARG && !current && !stray,
+               "invalid API handle is denied before conversion, engine calls or list-error callbacks");
+    }
+    expected_list = nullptr;
+    std::puts("PASSED: wrapped 0114 API command lists use production ownership and engine list-error reporting; "
+              "live/inert records enter scope, destroyed/zeroed/orphan/null records are denied; no runtime/GPU");
+}
+#endif
 } // namespace
 
 int main() {
@@ -204,4 +304,8 @@ int main() {
     }
     std::puts("PASSED: core122/list70x2 composition,18 missing shell entries refused, output preserved on failure; no runtime/GPU");
     test_state_object_entries(completed);
+    assert(!other_resolve_calls);
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    test_api_command_list_entries(info);
+#endif
 }

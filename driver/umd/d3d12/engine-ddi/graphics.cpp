@@ -260,6 +260,77 @@ void APIENTRY destroy_rasterizer(D3D12DDI_HDEVICE device, D3D12DDI_HRASTERIZERST
     poison(r->h);
 }
 
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+SIZE_T APIENTRY calc_depth_modern(D3D12DDI_HDEVICE, const D3D12DDI_DEPTH_STENCIL_DESC_0095*) {
+    return sizeof(DepthStencilStateRecord);
+}
+void APIENTRY create_depth_modern(D3D12DDI_HDEVICE device, const D3D12DDI_DEPTH_STENCIL_DESC_0095* in,
+                                  D3D12DDI_HDEPTHSTENCILSTATE h) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!h.pDrvPrivate) { c->report(E_INVALIDARG); return; }
+    auto* r = new (h.pDrvPrivate) DepthStencilStateRecord{{Tag::StateDepth, kRecordInvalid, nullptr, c}, {}, FALSE};
+    if (!in || !valid_library_reference(c, in->LibraryReference)) { c->report(E_INVALIDARG); return; }
+    auto& d = r->modern;
+    d.DepthEnable = in->DepthEnable;
+    d.DepthWriteMask = static_cast<D3D12_DEPTH_WRITE_MASK>(in->DepthWriteMask);
+    d.DepthFunc = static_cast<D3D12_COMPARISON_FUNC>(in->DepthFunc);
+    d.StencilEnable = in->StencilEnable;
+    const auto face = [](D3D12_DEPTH_STENCILOP_DESC1& dst, BOOL enabled,
+                         const D3D12DDI_DEPTH_STENCILOP_DESC& src, UINT8 read, UINT8 write) {
+        const auto ops = stencil_face(enabled, src);
+        dst.StencilFailOp = ops.StencilFailOp; dst.StencilDepthFailOp = ops.StencilDepthFailOp;
+        dst.StencilPassOp = ops.StencilPassOp; dst.StencilFunc = ops.StencilFunc;
+        dst.StencilReadMask = read; dst.StencilWriteMask = enabled ? write : 0;
+    };
+    face(d.FrontFace, in->FrontEnable, in->FrontFace, in->FrontFaceStencilReadMask, in->FrontFaceStencilWriteMask);
+    face(d.BackFace, in->BackEnable, in->BackFace, in->BackFaceStencilReadMask, in->BackFaceStencilWriteMask);
+    d.DepthBoundsTestEnable = in->DepthBoundsTestEnable;
+    r->use_modern = true; r->h.flags = 0;
+}
+template<class T> SIZE_T APIENTRY calc_raster_modern(D3D12DDI_HDEVICE, const T*) {
+    return sizeof(RasterizerStateRecord);
+}
+template<class T> void APIENTRY create_raster_modern(D3D12DDI_HDEVICE device, const T* in,
+                                                   D3D12DDI_HRASTERIZERSTATE h) {
+    DeviceContext* c = resolve(device);
+    if (!c) return;
+    if (!h.pDrvPrivate) { c->report(E_INVALIDARG); return; }
+    auto* r = new (h.pDrvPrivate) RasterizerStateRecord{{Tag::StateRaster, kRecordInvalid, nullptr, c}, {}};
+    if (!in || !valid_library_reference(c, in->LibraryReference)) { c->report(E_INVALIDARG); return; }
+    auto& d = r->modern;
+    d.FillMode = static_cast<D3D12_FILL_MODE>(in->FillMode); d.CullMode = static_cast<D3D12_CULL_MODE>(in->CullMode);
+    d.FrontCounterClockwise = in->FrontCounterClockwise; d.DepthBias = in->DepthBias;
+    d.DepthBiasClamp = in->DepthBiasClamp; d.SlopeScaledDepthBias = in->SlopeScaledDepthBias;
+    d.DepthClipEnable = in->DepthClipEnable; d.ForcedSampleCount = in->ForcedSampleCount;
+    d.ConservativeRaster = static_cast<D3D12_CONSERVATIVE_RASTERIZATION_MODE>(in->ConservativeRasterizationMode);
+    if constexpr (std::is_same_v<T, D3D12DDI_RASTERIZER_DESC_0099>)
+        d.LineRasterizationMode = in->MultisampleEnable ? D3D12_LINE_RASTERIZATION_MODE_QUADRILATERAL_WIDE :
+            in->AntialiasedLineEnable ? D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED : D3D12_LINE_RASTERIZATION_MODE_ALIASED;
+    else d.LineRasterizationMode = static_cast<D3D12_LINE_RASTERIZATION_MODE>(in->LineRasterizationMode);
+    r->use_modern = true; r->h.flags = 0;
+}
+
+void APIENTRY set_stencil_modern(D3D12DDI_HCOMMANDLIST h, UINT front, UINT back) {
+    if (auto* l = list_of(h, "OmSetFrontAndBackStencilRef"))
+        if (auto* engine = list_as<ID3D12GraphicsCommandList8>(l))
+            record(l, [=](ID3D12GraphicsCommandList*) { engine->OMSetFrontAndBackStencilRef(front, back); engine->Release(); });
+}
+void APIENTRY set_bias_modern(D3D12DDI_HCOMMANDLIST h, FLOAT bias, FLOAT clamp, FLOAT slope) {
+    if (auto* l = list_of(h, "RSSetDepthBias"))
+        if (auto* engine = list_as<ID3D12GraphicsCommandList9>(l))
+            record(l, [=](ID3D12GraphicsCommandList*) { engine->RSSetDepthBias(bias, clamp, slope); engine->Release(); });
+}
+void APIENTRY set_strip_modern(D3D12DDI_HCOMMANDLIST h, D3D12DDI_INDEX_BUFFER_STRIP_CUT_VALUE value) {
+    if (auto* l = list_of(h, "IASetIndexBufferStripCutValue"))
+        if (auto* engine = list_as<ID3D12GraphicsCommandList9>(l))
+            record(l, [=](ID3D12GraphicsCommandList*) {
+                engine->IASetIndexBufferStripCutValue(static_cast<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE>(value));
+                engine->Release();
+            });
+}
+#endif
+
 // ---- Command-list slots (graphics table) --------------------------------------------------------------------------
 void invalid(CommandListRecord* l) noexcept { l->h.device->report_list(l->rt, E_INVALIDARG); }
 
@@ -670,5 +741,23 @@ bool install_direct_list(D3D12DDI_COMMAND_LIST_FUNCS_3D_0094* t, uint32_t table_
 void set_direct_entry(DeviceContext* context, bool on) noexcept {
     if (context) context->direct.store(on, std::memory_order_release);
 }
+
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+void fill_modern_graphics(native12::ModernCoreEntries* entries) noexcept {
+    entries->depth_size = calc_depth_modern; entries->depth_create = create_depth_modern;
+    entries->raster_size99 = calc_raster_modern<D3D12DDI_RASTERIZER_DESC_0099>;
+    entries->raster_create99 = create_raster_modern<D3D12DDI_RASTERIZER_DESC_0099>;
+    entries->raster_size102 = calc_raster_modern<D3D12DDI_RASTERIZER_DESC_0102>;
+    entries->raster_create102 = create_raster_modern<D3D12DDI_RASTERIZER_DESC_0102>;
+}
+native12::ModernListEntries modern_list_entries() noexcept {
+    native12::ModernListEntries entries{};
+    entries.pfnOmSetFrontAndBackStencilRef = set_stencil_modern;
+    entries.pfnRSSetDepthBias = set_bias_modern;
+    entries.pfnIASetIndexBufferStripCutValue = set_strip_modern;
+    fill_modern_state_object_entries(nullptr, &entries);
+    return entries;
+}
+#endif
 
 } // namespace engine_ddi

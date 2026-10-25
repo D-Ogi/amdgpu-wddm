@@ -3,6 +3,11 @@
 What the shell (namespace `native12`, the rest of `driver/umd/d3d12`) builds, calls and when. The boundary itself
 is `engine-ddi.h`, revision 3.
 
+This page describes the default WDK 26100 build through DDI 0094.
+The explicit WDK 28000 build adds the typed versions and caps in
+[DDI version negotiation through 0119](../../../../docs/design/d3d12-ddi-ladder.md).
+That document also states the bytecode ownership and validation limits.
+
 ## Build and dependencies
 
 - Recipe: `tools/build/build-engine-ddi.ps1 -NativeOnly`. It produces `engine-ddi.lib` (static, `/MT`, `/analyze`
@@ -12,11 +17,11 @@ is `engine-ddi.h`, revision 3.
   `um` and `shared` directories, the engine ABI header's directory and the Vulkan headers below.
 - Engine ABI header, included by path and not vendored into this repository:
   - file `libs/ddi/bc250_vkd3d_engine.h` of the project's vkd3d-proton fork, branch
-    `amdgpu-wddm/ddi-engine-1.3`, commit `66c98e7246c024964e97b05575de0cacdfefdee7`;
-  - revision r5-draft, ABI 1.3, NOT FROZEN in the header's own words; r4 added the instance mode (V12,
+    `amdgpu-wddm/ddi-engine-1.3`, commit `66c98e7246c024964e97b05575de0cacdfefdee7`.
+  - revision r5-draft, ABI 1.3, NOT FROZEN in the header's own words. r4 added the instance mode (V12,
     `CreateInfo.InstanceMode` at offset 40, CreateInfo 48 bytes on x64), r5 adds linear images (V13,
-    `QueryLinearImage` and `CreateLinearPlacedResource`, function table 80 bytes on x64);
-  - SHA-256 `9F77137FA26FBD1BA840BCB25B2B8BA998720E76A893B68327882085A9672AED`;
+    `QueryLinearImage` and `CreateLinearPlacedResource`, function table 80 bytes on x64).
+  - SHA-256 `9F77137FA26FBD1BA840BCB25B2B8BA998720E76A893B68327882085A9672AED`.
   - default checkout `<workspace>\scratch\m15\vkd3d-1.3-src` (`-EngineSource`, `source_checkout` in the pin).
     The shell's build must include the same header: `tools/build/build-umd-d3d12.ps1` defaults to the r3
     checkout `scratch\m15\vkd3d-1.2-src` until it moves.

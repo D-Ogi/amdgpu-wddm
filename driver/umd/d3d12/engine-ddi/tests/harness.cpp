@@ -28,7 +28,48 @@ bool g_replay = false;                  // --deferred-replay
 constexpr SIZE_T kCanaryBytes = 32;
 constexpr uint8_t kFill = 0xCD;
 constexpr uint8_t kCanary = 0xA5;
+PFN_vkGetInstanceProcAddr g_loader_gipa = nullptr;
+PFN_vkGetDeviceProcAddr g_loader_gdpa = nullptr;
+std::atomic<VkDevice> g_graphics_probe_device{VK_NULL_HANDLE};
+std::atomic<uint64_t> g_graphics_probe_calls{0}, g_graphics_probe_successes{0};
+
+VKAPI_ATTR VkResult VKAPI_CALL observe_graphics_pipelines(VkDevice device, VkPipelineCache cache, uint32_t count,
+    const VkGraphicsPipelineCreateInfo* info, const VkAllocationCallbacks* allocator, VkPipeline* pipelines) {
+    // Resolve with the loader for this device, never a pointer captured from
+    // another VkDevice. No engine code, descriptions or return values change.
+    const auto original = reinterpret_cast<PFN_vkCreateGraphicsPipelines>(g_loader_gdpa(device, "vkCreateGraphicsPipelines"));
+    const bool observe = device == g_graphics_probe_device.load(std::memory_order_acquire);
+    const VkResult result = original(device, cache, count, info, allocator, pipelines);
+    if (observe) {
+        g_graphics_probe_calls.fetch_add(1, std::memory_order_relaxed);
+        if (result == VK_SUCCESS) g_graphics_probe_successes.fetch_add(count, std::memory_order_relaxed);
+    }
+    return result;
+}
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL observe_gdpa(VkDevice device, const char* name) {
+    const auto original = g_loader_gdpa(device, name);
+    if (original && !std::strcmp(name, "vkCreateGraphicsPipelines"))
+        return reinterpret_cast<PFN_vkVoidFunction>(observe_graphics_pipelines);
+    return original;
+}
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL observe_gipa(VkInstance instance, const char* name) {
+    const auto original = g_loader_gipa(instance, name);
+    if (original && !std::strcmp(name, "vkGetDeviceProcAddr")) return reinterpret_cast<PFN_vkVoidFunction>(observe_gdpa);
+    if (original && !std::strcmp(name, "vkCreateGraphicsPipelines"))
+        return reinterpret_cast<PFN_vkVoidFunction>(observe_graphics_pipelines);
+    return original;
+}
 } // namespace
+
+void begin_graphics_pipeline_probe(VkDevice device) {
+    g_graphics_probe_calls.store(0, std::memory_order_relaxed);
+    g_graphics_probe_successes.store(0, std::memory_order_relaxed);
+    g_graphics_probe_device.store(device, std::memory_order_release);
+}
+GraphicsPipelineProbe end_graphics_pipeline_probe() {
+    g_graphics_probe_device.store(VK_NULL_HANDLE, std::memory_order_release);
+    return {g_graphics_probe_calls.load(std::memory_order_relaxed), g_graphics_probe_successes.load(std::memory_order_relaxed)};
+}
 
 void check(bool ok, const char* what) {
     std::printf("%s  %s\n", ok ? "ok  " : "FAIL", what);
@@ -45,6 +86,47 @@ void checkf(bool ok, const char* format, ...) {
 }
 
 int failure_count() { return g_failures; }
+
+void save_readback_artifact(const char* name, const void* data, UINT width, UINT height,
+                            UINT row_pitch, DXGI_FORMAT format) {
+    wchar_t directory[4096]{};
+    const DWORD length = GetEnvironmentVariableW(L"AMDGPU_WDDM_HARNESS_ARTIFACT_DIR", directory, 4096);
+    if (!length) return;
+    const bool supported = format == DXGI_FORMAT_R8G8B8A8_UNORM || format == DXGI_FORMAT_R32_UINT ||
+                           format == DXGI_FORMAT_R32_FLOAT;
+    if (length >= 4096 || !name || !*name || !data || !width || !height || !supported ||
+        width > 4096 || height > 4096 || row_pitch < width * 4) {
+        check(false, "readback artifact: invalid destination or layout"); return;
+    }
+    std::wstring stem(directory, length);
+    stem += L'\\';
+    for (const char* c = name; *c; ++c) {
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-' || *c == '_')) {
+            check(false, "readback artifact: invalid tag"); return;
+        }
+        stem += static_cast<wchar_t>(*c);
+    }
+    std::vector<BYTE> packed(static_cast<size_t>(width) * height * 4);
+    for (UINT y = 0; y < height; ++y)
+        std::memcpy(packed.data() + static_cast<size_t>(y) * width * 4,
+                    static_cast<const BYTE*>(data) + static_cast<size_t>(y) * row_pitch, width * 4);
+    const auto write = [&](const wchar_t* extension, const void* bytes, DWORD count) {
+        const std::wstring path = stem + extension;
+        HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file == INVALID_HANDLE_VALUE) return false;
+        DWORD written = 0;
+        const bool ok = WriteFile(file, bytes, count, &written, nullptr) && written == count;
+        const bool closed = CloseHandle(file) != FALSE;
+        return ok && closed;
+    };
+    const std::string metadata = "{\"schema\":1,\"width\":" + std::to_string(width) +
+        ",\"height\":" + std::to_string(height) + ",\"format\":" + std::to_string(static_cast<UINT>(format)) +
+        ",\"bytes_per_pixel\":4,\"byte_order\":\"little\",\"row_padding_removed\":true}\n";
+    const bool raw_ok = write(L".bin", packed.data(), static_cast<DWORD>(packed.size()));
+    const bool metadata_ok = raw_ok && write(L".json", metadata.data(), static_cast<DWORD>(metadata.size()));
+    checkf(raw_ok && metadata_ok, "readback artifact: %s (%u x %u, DXGI format %u)", name, width, height,
+           static_cast<UINT>(format));
+}
 
 namespace {
 SRWLOCK g_lines_lock = SRWLOCK_INIT;
@@ -515,6 +597,10 @@ int wmain(int argc, wchar_t** argv) {
     auto gipa = vulkan ? reinterpret_cast<PFN_vkGetInstanceProcAddr>(
                              reinterpret_cast<void*>(GetProcAddress(vulkan, "vkGetInstanceProcAddr")))
                        : nullptr;
+    g_loader_gipa = gipa;
+    g_loader_gdpa = vulkan ? reinterpret_cast<PFN_vkGetDeviceProcAddr>(
+        reinterpret_cast<void*>(GetProcAddress(vulkan, "vkGetDeviceProcAddr"))) : nullptr;
+    if (g_loader_gipa && g_loader_gdpa) gipa = observe_gipa;
     auto get_funcs = engine_dll ? reinterpret_cast<PFN_BC250_VKD3D_ENGINE_GET_FUNCS>(reinterpret_cast<void*>(
                                       GetProcAddress(engine_dll, BC250_VKD3D_ENGINE_GET_FUNCS_NAME)))
                                 : nullptr;
@@ -594,6 +680,7 @@ int wmain(int argc, wchar_t** argv) {
         test_graphics(env, device);
         test_draw_path(env, device);
         test_device_queries(env, device);
+        test_generic_programs(env, device);
         uint32_t live = UINT32_MAX;
         hr = engine_ddi::destroy_device_context(device.context, &live);
         checkf(hr == S_OK && live == 0, "destroy_device_context: S_OK with no live object (hr %08lx, live %u)",
@@ -613,6 +700,10 @@ int wmain(int argc, wchar_t** argv) {
     test_shared_open(env);
     test_raytracing(env);
     test_raytracing_pipeline(env);
+    test_mandatory_states(env);
+    test_mandatory_formats(env);
+    test_no_output_samples(env);
+    test_descriptor_limits(env);
     test_memory_policy(env, create);
     test_disk_cache(env, create, engine_dll);
     // With the direct arm, replay and the statistics on, the round trips' value-only calls went through the direct

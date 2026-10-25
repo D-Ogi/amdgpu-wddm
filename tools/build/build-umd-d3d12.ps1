@@ -9,7 +9,7 @@ param([string]$OutputDir,[string]$VsInstall,[string]$MesaSource,[string]$VulkanI
       # release this build is for. Without -Version nothing is stamped and the
       # build says so; the release reads every resource back before it ships.
       [string]$Version='',[ValidateSet('release','lab')][string]$Flavour='release',[switch]$Lab,
-      [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',[string]$MsvcReason='')
+      [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',[string]$DdiInclude,[string]$ApiInclude, [string]$MsvcReason='')
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
@@ -40,6 +40,8 @@ $engineSource=Split-Path -Parent (Split-Path -Parent $EngineInclude)
 $engineBuild=Join-Path $OutputDir 'engine-ddi'
 $engineArgs=@('-NoProfile','-File',"$PSScriptRoot\build-engine-ddi.ps1",'-OutputDir',$engineBuild,'-EngineSource',$engineSource,'-VulkanInclude',$VulkanInclude,'-NativeOnly','-Arch',$Arch)
 $engineArgs+=@('-Compiler',$Compiler)
+if($DdiInclude){$engineArgs+=@('-DdiInclude',$DdiInclude)}
+if($ApiInclude){$engineArgs+=@('-ApiInclude',$ApiInclude)}
 if($MsvcReason){$engineArgs+=@('-MsvcReason',$MsvcReason)}
 if($VsInstall){$engineArgs+=@('-VsInstall',$VsInstall)}
 if($Lab){$engineArgs+='-Lab'}
@@ -59,12 +61,30 @@ try {
  $null=Import-VsDevEnvironment -VsInstall $VsInstall -TempDir $OutputDir -Arch $Arch
   $compilerExe=Resolve-Bc250UmdCompiler $root $Compiler $MsvcReason $OutputDir $Arch
  $wdk=Join-Path $root 'toolchain\nuget\microsoft.windows.wdk.x64\c\Include\10.0.26100.0\um'
+    # DDI-only headers may override the SDK/WDK while shared headers and tools stay pinned.
+    if($DdiInclude){
+        $DdiInclude=[IO.Path]::GetFullPath($DdiInclude)
+        if(!(Test-Path -LiteralPath (Join-Path $DdiInclude 'd3d12umddi.h'))){throw 'DdiInclude lacks d3d12umddi.h'}
+        Write-Host ("DDI header: "+$DdiInclude+" SHA256 "+(Get-FileHash (Join-Path $DdiInclude 'd3d12umddi.h')).Hash)
+        if(Select-String -LiteralPath (Join-Path $DdiInclude 'd3d12umddi.h') -Pattern '^#define D3D12DDI_BUILD_VERSION_0119 ' -Quiet){
+            & python -I "$PSScriptRoot\gen-ddi-ladder.py" --header (Join-Path $DdiInclude 'd3d12umddi.h') --check
+            if($LASTEXITCODE){throw 'DDI member map differs from the selected header'}
+        }
+    }
+
  # /O2: the DLL and its host gates are optimised builds (until 2026-09-30 the line had no /O flag, so cl.exe
  # compiled at /Od; trial 164 attributed 4.3 ms/frame to scope bookkeeping alone).
  # /GL and /arch:AVX2 (the DLL links with /LTCG): restored 2026-10-10 by design decision, trial 171 corruption watched in the b29 lab acceptance.
  # /FC with /d1trimfile: __FILE__ and the anonymous-namespace names see the path below each tree only.
  $flags=@('/nologo','/std:c++20','/EHsc','/W4','/WX','/O2','/GL','/arch:AVX2',("/external:W" + $(if ($Arch -eq 'x86') { 1 } else { 0 })),'/MT','/DNOMINMAX','/Brepro','/Zi','/FC',"/d1trimfile:$repo","/d1trimfile:$MesaSource","/d1trimfile:$VulkanInclude","/d1trimfile:$EngineInclude","/external:I$VulkanInclude","/external:I$EngineInclude","/external:I$MesaSource\src\util","/external:I$wdk","/external:I$wdk\..\shared", "/I$repo\driver\contract\third_party", "/I$repo\driver\contract\uapi-shim")
  if($Lab){$flags+='/DAMDGPU_WDDM_LAB_FLAVOUR=1'}
+  if($DdiInclude){$flags=@("/external:I$DdiInclude")+$flags}
+  if($ApiInclude){
+      $ApiInclude=[IO.Path]::GetFullPath($ApiInclude)
+      if(!(Test-Path -LiteralPath (Join-Path $ApiInclude 'd3d12.h'))){throw 'ApiInclude lacks d3d12.h'}
+      Write-Host ("D3D12 API header: "+$ApiInclude+" SHA256 "+(Get-FileHash (Join-Path $ApiInclude 'd3d12.h')).Hash)
+      $flags=@("/external:I$ApiInclude")+$flags
+  }
   $dllFlags=$flags
   if($Compiler -eq 'clang-cl'){$dllFlags=ConvertTo-Bc250ClangFlags $flags $Arch @($repo,$MesaSource,$VulkanInclude,$EngineInclude)}
   $ltoLink=@(if($Compiler -eq 'msvc'){'/LTCG'})
@@ -90,7 +110,7 @@ try {
   # Static C runtime, as the D3D11 shell's recipe checks it: a game's own older msvcp140.dll must not reach the shell.
   $crt=@(& dumpbin.exe /nologo /dependents .\amdgpu_wddm_d3d12.dll|Where-Object{$_ -match '^\s+(msvcp|vcruntime|concrt|ucrtbase|api-ms-win-crt-)\S*\.dll\s*$'})
   if($crt.Count){throw ('Shell imports a dynamic C/C++ runtime: '+(($crt|ForEach-Object{$_.Trim()}) -join ', '))}
-  & cl.exe @flags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
+  & $compilerExe @dllFlags /Fe:adapter-test.exe "$repo\driver\umd\d3d12\adapter-test.cpp"
   if($LASTEXITCODE){throw 'Test build failed'}
   & .\adapter-test.exe (Join-Path $OutputDir 'amdgpu_wddm_d3d12.dll')
   if($LASTEXITCODE){throw 'Adapter tests failed'}
@@ -209,10 +229,18 @@ try {
   if($LASTEXITCODE){throw 'native-residency-ddi test build failed'}
   & .\native-residency-ddi-test.exe
   if($LASTEXITCODE){throw 'native-residency-ddi tests failed'}
-  & cl.exe @flags /Fe:ddi-entry-test.exe "$repo\driver\umd\d3d12\ddi-entry-test.cpp"
+  & $compilerExe @dllFlags /Fe:ddi-entry-test.exe "$repo\driver\umd\d3d12\ddi-entry-test.cpp"
   if($LASTEXITCODE){throw 'DDI entry scope test build failed'}
   & .\ddi-entry-test.exe
   if($LASTEXITCODE){throw 'DDI entry scope tests failed'}
+  if($DdiInclude -and (Select-String -LiteralPath (Join-Path $DdiInclude 'd3d12umddi.h') -Pattern '^#define D3D12DDI_BUILD_VERSION_0119 ' -Quiet)){
+   foreach($test in @(@('modern-core-test','tests\modern-core-test.cpp'),@('ddi-modern-list-test','ddi-modern-list-test.cpp'))){
+    & $compilerExe @dllFlags "/Fe:$($test[0]).exe" "$repo\driver\umd\d3d12\engine-ddi\$($test[1])"
+    if($LASTEXITCODE){throw "Modern DDI adapter test build failed: $($test[0])"}
+    & ".\$($test[0]).exe"
+    if($LASTEXITCODE){throw "Modern DDI adapter test failed: $($test[0])"}
+   }
+  }
   & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" "/external:I$EngineInclude" /Fe:adapter-caps-probe.exe "$repo\driver\umd\d3d12\adapter-caps-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Adapter caps probe build failed'}
   & .\adapter-caps-probe.exe --help

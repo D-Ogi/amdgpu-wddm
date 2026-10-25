@@ -761,6 +761,30 @@ int main() {
         assert(barrier88_seen==&arg88);                  // no 0094 call reached the 0088 entry
     }
 
+    // All modern layouts publish typed stores and reject mutation independently of older layouts.
+    for(unsigned build=92;build<=native12::kDdiMax;++build) {
+        assert(native12::with_ddi_layout(build,[&](auto layout)->HRESULT {
+            using C=typename decltype(layout)::Core;using L=typename decltype(layout)::List;
+            struct LadderPolicy:Policy {};
+            using T=native12::DdiEntryTables<LadderPolicy>;
+            C c{},wc{};L l{},wl{};
+            native12::DdiMembers<C>::each([&](auto m,auto){
+                constexpr auto member=decltype(m)::value;
+                using Fn=std::remove_reference_t<decltype(c.*member)>;c.*member=&Dummy<Fn>::call;
+            });
+            native12::DdiMembers<L>::each([&](auto m,auto){
+                constexpr auto member=decltype(m)::value;
+                using Fn=std::remove_reference_t<decltype(l.*member)>;l.*member=&Dummy<Fn>::call;
+            });
+            assert(T::wrap_core(c,&wc)==S_OK && T::wrap_list(0,l,&wl)==S_OK);
+            assert(T::wrap_list(1,l,&wl)==S_OK);
+            C again{};assert(T::wrap_core(c,&again)==S_OK);
+            native12::DdiMembers<C>::each([&](auto m,auto){assert(wc.*decltype(m)::value==again.*decltype(m)::value);});
+            L bad=l;bad.pfnCloseCommandList=nullptr;L untouched{};
+            assert(T::wrap_list(1,bad,&untouched)==E_INVALIDARG && !untouched.pfnCloseCommandList);
+            return S_OK;
+        })==S_OK);
+    }
     std::thread call_a([&]{for(unsigned i=0;i<1000;++i){UINT v{};wrapped_core.pfnCheckFormatSupport(ha,DXGI_FORMAT_UNKNOWN,&v);assert(v==17 && !current);}});
     std::thread call_b([&]{for(unsigned i=0;i<1000;++i){wrapped_compute.pfnDispatch({&b},2,3,4);assert(!current);}});
     std::thread refill([&]{for(unsigned i=0;i<1000;++i){Core c{};List l{};assert(Tables::wrap_core(source,&c)==S_OK);assert(Tables::wrap_list(i%2,list_source,&l)==S_OK);assert(Tables::wrap_core(changed,&c)==E_UNEXPECTED);}});

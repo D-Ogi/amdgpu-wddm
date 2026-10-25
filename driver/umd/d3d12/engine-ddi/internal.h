@@ -612,10 +612,14 @@ struct DepthStencilStateRecord {
     RecordHeader h;
     D3D12_DEPTH_STENCIL_DESC desc;
     BOOL depth_bounds;                          // DepthBoundsTestEnable (0025): the pipeline's DEPTH_STENCIL1 (L52)
+    D3D12_DEPTH_STENCIL_DESC2 modern{};
+    bool use_modern = false;
 };
 struct RasterizerStateRecord {
     RecordHeader h;
     D3D12_RASTERIZER_DESC desc;
+    D3D12_RASTERIZER_DESC2 modern{};
+    bool use_modern = false;
 };
 
 // With the compile pool off (set_pso_policy), h.engine holds the pipeline and job is null, as before the policy
@@ -718,12 +722,14 @@ struct CommandSignatureRecord {
 // Ray tracing state objects (state-objects.cpp). A create that fails leaves an inert record (no engine object,
 // kRecordInvalid), which DestroyStateObject accepts.
 struct StateObjectTranslation;                  // state-objects.cpp: the API description rebuilt for the engine
+struct GenericStateObject;                      // generic-programs.cpp: owned named graphics pipelines and definitions
 struct StateObjectRecord {
     RecordHeader h;                             // engine: ID3D12StateObject
     ID3D12StateObjectProperties* properties;    // one reference; null for an inert record
     StateObjectTranslation* translation;        // engine-ddi's own allocation, freed by DestroyStateObject
     D3D12DDI_HRTSTATEOBJECT_0054 rt;
     bool executable;                            // a RAYTRACING_PIPELINE, which SetPipelineState1 takes; not a COLLECTION
+    GenericStateObject* generic = nullptr;
 };
 
 // ---- Slot groups: each fills its part of the tables -------------------------------------------------------------
@@ -778,6 +784,10 @@ template <class I> I* list_as(CommandListRecord* l) noexcept {
 
 // Root signature serialization (root-signature.cpp): a DXBC container with one RTS0 part, version 1.1.
 HRESULT serialize_root_signature(const D3D12DDI_ROOT_SIGNATURE_0013* desc, std::vector<uint8_t>& out) noexcept;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT serialize_root_signature_modern(const D3D12DDIARG_CREATE_ROOT_SIGNATURE_0100* desc,
+                                        std::vector<uint8_t>& out) noexcept;
+#endif
 
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
 // Harness-only entry points. The shell's DLL build never defines the macro, so none of these exist there.

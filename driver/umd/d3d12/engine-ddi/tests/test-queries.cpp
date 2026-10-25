@@ -3,6 +3,7 @@
 // INTEGRATION.md). Each answer is compared with the engine's own answer to the same question.
 #include "harness.h"
 #include "format-list.h"
+#include "tight-alignment.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -462,7 +463,100 @@ void test_castable_sizing(Env& env, Device& device) {
 
 } // namespace
 
+void test_tight_alignment(Env& env, Device& device) {
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    if (!engine_ddi::tight::supported(env.engine)) {
+        check(true, "tight alignment: engine reports no tier, positive resource cases not applicable");
+        return;
+    }
+    D3D12DDIARG_CREATERESOURCE_0088 res{};
+    res.ResourceType = D3D12DDI_RT_BUFFER; res.Width = 129; res.Height = 1;
+    res.DepthOrArraySize = 1; res.MipLevels = 1; res.SampleDesc.Count = 1;
+    res.Layout = D3D12DDI_TL_ROW_MAJOR; res.Flags = D3D12DDI_RESOURCE_FLAG_0111_USE_TIGHT_ALIGNMENT;
+    res.InitialBarrierLayout = D3D12DDI_BARRIER_LAYOUT_UNDEFINED;
+    for (UINT width : {1u, 129u, 257u, 4097u}) {
+        res.Width = width;
+        for (UINT floor : {0u, 8u, 256u, 4096u}) {
+            struct Guarded { UINT64 before; D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 info; UINT64 after; } out{};
+            out.before = 0x123456789abcdef0ull; out.after = 0xfedcba9876543210ull;
+            env.core.pfnCheckResourceAllocationInfo(device.h(), &res, {}, floor, 1, &out.info);
+            checkf(out.info.ResourceDataSize == width && out.info.ResourceDataAlignment >= (floor ? floor : 8)
+                   && out.info.ResourceDataAlignment <= (floor > 256 ? floor : 256)
+                   && out.before == 0x123456789abcdef0ull && out.after == 0xfedcba9876543210ull,
+                   "tight buffer %u floor %u: exact size, bounded alignment and intact canaries", width, floor);
+        }
+    }
+    res.Width = 129;
+    const auto props = env.engine->GetCustomHeapProperties(0, D3D12_HEAP_TYPE_UPLOAD);
+    D3D12DDIARG_CREATEHEAP_0001 heap{};
+    heap.ByteSize = UINT64_MAX; heap.Alignment = 4096;
+    heap.CPUPageProperty = static_cast<D3D12DDI_CPU_PAGE_PROPERTY>(props.CPUPageProperty - 1);
+    heap.MemoryPool = static_cast<D3D12DDI_MEMORY_POOL>(props.MemoryPoolPreference - 1);
+    heap.Flags = D3D12DDI_HEAP_FLAG_BUFFERS | D3D12DDI_HEAP_FLAG_0115_IMPLICIT;
+    heap.CreationNodeMask = heap.VisibleNodeMask = 1;
+    for (bool implicit : {false, true}) {
+        heap.Flags = D3D12DDI_HEAP_FLAG_BUFFERS;
+        if (implicit) heap.Flags |= D3D12DDI_HEAP_FLAG_0115_IMPLICIT;
+        res.ReuseBufferGPUVA = {};
+        Buffer base;
+        const auto sizes = env.core.pfnCalcPrivateHeapAndResourceSizes(device.h(), &heap, &res, {});
+        base.heap = env.storage.alloc(sizes.Heap); base.resource = env.storage.alloc(sizes.Resource);
+        HRESULT hr = env.core.pfnCreateHeapAndResource(device.h(), &heap, base.hheap(), {&base.rt}, &res, nullptr, {}, base.hres());
+        checkf(hr == S_OK, "tight committed buffer: 4 KiB heap, IMPLICIT=%u (hr %08lx)", unsigned(implicit), static_cast<unsigned long>(hr));
+        if (FAILED(hr)) return;
+        D3D12DDI_RESOURCE_ALLOCATION_INFO_0022 existing{};
+        env.core.pfnCheckExistingResourceAllocationInfo(device.h(), base.hres(), &existing);
+        const auto* base_record = static_cast<engine_ddi::ResourceRecord*>(base.resource);
+        check(existing.ResourceDataSize == 129 && existing.ResourceDataAlignment == 4096
+              && base_record->backing->desc.ByteSize == 4096,
+              "tight committed record: Width bytes and 4 KiB allocation floor survive existing-resource query");
+        Buffer placed;
+        res.ReuseBufferGPUVA.BaseAddress.UMD = {base.hres(), 256};
+        placed.resource = env.storage.alloc(sizes.Resource);
+        hr = env.core.pfnCreateHeapAndResource(device.h(), nullptr, {}, {&placed.rt}, &res, nullptr, {}, placed.hres());
+        checkf(hr == S_OK, "tight placed buffer: non-64-KiB offset 256 (hr %08lx)", static_cast<unsigned long>(hr));
+        if (SUCCEEDED(hr)) {
+            env.core.pfnCheckExistingResourceAllocationInfo(device.h(), placed.hres(), &existing);
+            check(existing.ResourceDataSize == 129 && existing.ResourceDataAlignment <= 256,
+                  "tight placed record: exact Width and tight alignment survive existing-resource query");
+            void* cpu = nullptr;
+            const HRESULT mapped = env.core.pfnMapHeap(device.h(), base.hheap(), &cpu);
+            check(mapped == S_OK && cpu, "tight allocation maps for last-byte and adjacent-byte witnesses");
+            if (mapped == S_OK && cpu) {
+                auto* bytes = static_cast<unsigned char*>(cpu);
+                std::memset(bytes, 0xa5, 4096);
+                auto* first = static_cast<ID3D12Resource*>(base_record->h.engine);
+                auto* second = static_cast<ID3D12Resource*>(static_cast<engine_ddi::ResourceRecord*>(placed.resource)->h.engine);
+                void* first_cpu = nullptr; void* second_cpu = nullptr;
+                const D3D12_RANGE no_reads{0, 0};
+                const HRESULT map_first = first->Map(0, &no_reads, &first_cpu);
+                const HRESULT map_second = second->Map(0, &no_reads, &second_cpu);
+                check(map_first == S_OK && map_second == S_OK && first_cpu && second_cpu,
+                      "tight resources expose their actual mapped views");
+                if (map_first == S_OK && map_second == S_OK && first_cpu && second_cpu) {
+                    static_cast<unsigned char*>(first_cpu)[128] = 0x11;
+                    static_cast<unsigned char*>(second_cpu)[0] = 0x22;
+                    static_cast<unsigned char*>(second_cpu)[128] = 0x33;
+                    check(bytes[128] == 0x11 && bytes[256] == 0x22 && bytes[384] == 0x33
+                          && bytes[129] == 0xa5 && bytes[255] == 0xa5 && bytes[385] == 0xa5 && bytes[4095] == 0xa5
+                          && second->GetGPUVirtualAddress() - first->GetGPUVirtualAddress() == 256,
+                          "tight resource views map exact first/last bytes at GPUVA offset 256 without overwriting padding");
+                }
+                if (map_second == S_OK) second->Unmap(0, nullptr);
+                if (map_first == S_OK) first->Unmap(0, nullptr);
+                env.core.pfnUnmapHeap(device.h(), base.hheap());
+            }
+            destroy_buffer(env, device, placed);
+        }
+        destroy_buffer(env, device, base);
+    }
+#else
+    (void)env; (void)device;
+#endif
+}
+
 void test_device_queries(Env& env, Device& device) {
+    test_tight_alignment(env, device);
     const uint32_t errors_before = device.shell.device_errors;
 
     // CheckMultisampleQualityLevels: the engine's D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, 1:1.

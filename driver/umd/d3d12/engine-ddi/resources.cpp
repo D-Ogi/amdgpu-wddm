@@ -5,6 +5,7 @@
 #include "internal.h"
 #include "replay.h"
 #include "format-list.h"
+#include "tight-alignment.h"
 #include "../../../contract/amdgpu_wddm_surface_format.h"
 #include "../../../contract/bc250_shared_surface.h"
 #include "../present-copy.h"
@@ -58,7 +59,7 @@ constexpr uint64_t kSizeOfResource = UINT64_MAX;
 constexpr uint32_t kCategoryMask =
     D3D12DDI_HEAP_FLAG_BUFFERS | D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES | D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES;
 
-HRESULT to_api_desc(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DESC1& out) noexcept {
+HRESULT to_api_desc(DeviceContext* c, const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DESC1& out) noexcept {
     out = D3D12_RESOURCE_DESC1{};
     if (in.ResourceType < D3D12DDI_RT_BUFFER || in.ResourceType > D3D12DDI_RT_TEXTURE3D) return E_INVALIDARG;
     if (in.Layout > D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE) return E_INVALIDARG;
@@ -100,6 +101,14 @@ HRESULT to_api_desc(const D3D12DDIARG_CREATERESOURCE_0088& in, D3D12_RESOURCE_DE
     if (f & D3D12DDI_RESOURCE_FLAG_0088_RAYTRACING_ACCELERATION_STRUCTURE)
         flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
     out.Flags = flags;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    if (f & D3D12DDI_RESOURCE_FLAG_0111_USE_TIGHT_ALIGNMENT) {
+        out.Flags |= tight::flag;
+        if (!tight::layout_valid(out) || !tight::supported(c->device)) return E_INVALIDARG;
+    }
+#else
+    (void)c;
+#endif
     out.SamplerFeedbackMipRegion = {in.SamplerFeedbackMipRegion.Width, in.SamplerFeedbackMipRegion.Height,
                                     in.SamplerFeedbackMipRegion.Depth};
     return S_OK;
@@ -129,6 +138,8 @@ std::atomic<bool> castable_refusal_logged{false};
 D3D12_RESOURCE_ALLOCATION_INFO engine_allocation_info(DeviceContext* c, const D3D12_RESOURCE_DESC1& desc,
                                                       uint64_t alignment, UINT castable_count,
                                                       const DXGI_FORMAT* castable) noexcept {
+    const bool tight_alignment = tight::enabled(desc);
+    D3D12_RESOURCE_ALLOCATION_INFO result{};
     if (castable_count) {
         if (!castable || !c->device12) {
             if (!castable_refusal_logged.exchange(true, std::memory_order_relaxed))
@@ -140,16 +151,19 @@ D3D12_RESOURCE_ALLOCATION_INFO engine_allocation_info(DeviceContext* c, const D3
         castable_sizing_calls.fetch_add(1, std::memory_order_relaxed);
 #endif
         D3D12_RESOURCE_DESC1 d1 = desc;
-        d1.Alignment = alignment;
+        d1.Alignment = tight_alignment ? 0 : alignment;
         const UINT32 count = castable_count;
-        return c->device12->GetResourceAllocationInfo3(0, 1, &d1, &count, &castable, nullptr);
-    }
+        result = c->device12->GetResourceAllocationInfo3(0, 1, &d1, &count, &castable, nullptr);
+    } else {
 #ifdef AMDGPU_WDDM_ENGINE_DDI_HARNESS
     legacy_sizing_calls.fetch_add(1, std::memory_order_relaxed);
 #endif
     D3D12_RESOURCE_DESC d0 = to_desc0(desc);
-    d0.Alignment = alignment;
-    return c->device->GetResourceAllocationInfo(0, 1, &d0);
+    d0.Alignment = tight_alignment ? 0 : alignment;
+    result = c->device->GetResourceAllocationInfo(0, 1, &d0);
+    }
+    if (!tight::normalize(desc, alignment, result)) return {UINT64_MAX, 0};
+    return result;
 }
 
 } // namespace
@@ -257,13 +271,15 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
         d0.Alignment = alignment;
         info = engine_allocation_info(c, desc, alignment, castable_count, castable);
         if (info.SizeInBytes == UINT64_MAX || !info.Alignment || offset % info.Alignment) continue;
-        if (alignment && info.Alignment != alignment) continue;          // not granted
+        if (alignment && !tight::enabled(desc) && info.Alignment != alignment) continue; // exact legacy alignment
         if (offset > b->desc.ByteSize || info.SizeInBytes > b->desc.ByteSize - offset) continue;  // a smaller may fit
         fits = true;
         break;
     }
     if (!fits) return E_INVALIDARG;
     desc.Alignment = d0.Alignment;
+    D3D12_RESOURCE_DESC1 engine_desc = desc;
+    if (tight::enabled(desc)) engine_desc.Alignment = 0; // The DDI floor is checked above; engine owns its alignment.
     const D3D12_CLEAR_VALUE* cv = clear_value(desc, clear);
     D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON;
     const HRESULT legacy = initial_layout(desc, &layout, &state);
@@ -273,10 +289,10 @@ HRESULT place(DeviceContext* c, Backing* b, uint64_t offset, D3D12_RESOURCE_DESC
             log_line("placed resource: %u castable formats with a legacy initial state: E_NOTIMPL", castable_count);
             return E_NOTIMPL;
         }
-        return c->device8->CreatePlacedResource1(b->heap, offset, &desc, state, cv, __uuidof(ID3D12Resource),
+        return c->device8->CreatePlacedResource1(b->heap, offset, &engine_desc, state, cv, __uuidof(ID3D12Resource),
                                                  reinterpret_cast<void**>(out));
     }
-    return c->device10->CreatePlacedResource2(b->heap, offset, &desc, static_cast<D3D12_BARRIER_LAYOUT>(layout), cv,
+    return c->device10->CreatePlacedResource2(b->heap, offset, &engine_desc, static_cast<D3D12_BARRIER_LAYOUT>(layout), cv,
                                               castable_count, castable, __uuidof(ID3D12Resource),
                                               reinterpret_cast<void**>(out));
 }
@@ -543,7 +559,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
     D3D12_RESOURCE_DESC1 desc{};
     if (res_desc) {
         if (!hres.pDrvPrivate) return E_INVALIDARG;
-        HRESULT hr = to_api_desc(*res_desc, desc);
+        HRESULT hr = to_api_desc(c, *res_desc, desc);
         if (FAILED(hr)) return hr;
         if (res_desc->NumCastableFormats && !res_desc->pCastableFormats) return E_INVALIDARG;
     }
@@ -567,6 +583,7 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             if (res_desc->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate || hheap.pDrvPrivate)
                 return E_INVALIDARG;
             // Reserved: no heap and no base resource (engine-ddi.h, "Reserved resources"). No memory is allocated.
+            if (tight::enabled(desc)) return E_INVALIDARG;
             ID3D12Resource* engine = nullptr;
             HRESULT hr = reserve(c, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
                                  res_desc->pCastableFormats, &engine);
@@ -623,9 +640,13 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             D3D12_RESOURCE_DESC d0 = to_desc0(desc);
             if (sized.Alignment && sized.Alignment < D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT)
                 d0.Alignment = sized.Alignment;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+            const bool implicit_tight = tight::enabled(desc) && (sized.Flags & D3D12DDI_HEAP_FLAG_0115_IMPLICIT);
+            if (implicit_tight) d0.Alignment = std::max<UINT64>(d0.Alignment, 4096);
+#endif
             D3D12_RESOURCE_ALLOCATION_INFO info = engine_allocation_info(
                 c, desc, d0.Alignment, res_desc->NumCastableFormats, res_desc->pCastableFormats);
-            if (info.SizeInBytes == UINT64_MAX && d0.Alignment) {
+            if (info.SizeInBytes == UINT64_MAX && d0.Alignment && !tight::enabled(desc)) {
                 d0.Alignment = 0;
                 info = engine_allocation_info(c, desc, 0, res_desc->NumCastableFormats, res_desc->pCastableFormats);
             }
@@ -633,6 +654,15 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             desc.Alignment = d0.Alignment;              // the image is placed with the alignment its memory has
             need = info.SizeInBytes;
             align = info.Alignment;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+            // A new backing is a VidMM allocation even before 0115 can identify an implicit heap.
+            // Its resource data remains Width bytes; its storage must cover whole 4 KiB pages.
+            if (tight::enabled(desc)) {
+                if (need > UINT64_MAX - 4095) return E_INVALIDARG;
+                need = (need + 4095) & ~UINT64(4095);
+                align = std::max<UINT64>(align, 4096);
+            }
+#endif
         }
         if (sized.ByteSize == kSizeOfResource) {
             sized.ByteSize = need;                      // committed: the heap is as large as its one resource
@@ -1176,7 +1206,7 @@ void no_additional_data(D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out) noexcept {
 HRESULT allocation_info(DeviceContext* c, D3D12_RESOURCE_DESC1 desc, D3D12DDI_RESOURCE_ALLOCATION_INFO_0022* out,
                         UINT castable_count = 0, const DXGI_FORMAT* castable = nullptr) noexcept {
     D3D12_RESOURCE_ALLOCATION_INFO info = engine_allocation_info(c, desc, desc.Alignment, castable_count, castable);
-    if (info.SizeInBytes == UINT64_MAX && desc.Alignment)
+    if (info.SizeInBytes == UINT64_MAX && desc.Alignment && !tight::enabled(desc))
         info = engine_allocation_info(c, desc, 0, castable_count, castable);
     if (info.SizeInBytes == UINT64_MAX || info.Alignment > UINT32_MAX) return E_INVALIDARG;
     out->ResourceDataSize = info.SizeInBytes;
@@ -1235,7 +1265,7 @@ void APIENTRY check_resource_allocation_info(D3D12DDI_HDEVICE device, const D3D1
         return;
     }
     D3D12_RESOURCE_DESC1 desc{};
-    HRESULT hr = to_api_desc(*in, desc);
+    HRESULT hr = to_api_desc(c, *in, desc);
     if (SUCCEEDED(hr)) {
         if (c->mode == MemoryMode::RuntimeBacked && (optimization & D3D12DDI_RESOURCE_OPTIMIZATION_FLAG_PRIMARY) &&
             linear_surface_shape(desc, *in)) {
@@ -1359,8 +1389,8 @@ UINT engine_quality_levels(DeviceContext* c, DXGI_FORMAT format, UINT sample_cou
 }
 
 // The D3D12DDI_FORMAT_SUPPORT bits the format list allows for format (format-list.h), 0 for a value it does not
-// list: R1_UNORM, the formats DXGI gained after the list (P208, V208, V408, the sampler feedback formats,
-// A4B4G4R4_UNORM) and anything past the enum.
+// list: R1_UNORM, P208, V208, V408, the sampler feedback formats and anything past the enum.
+// The generated list includes the VulkanOn12 A4B4G4R4_UNORM extension to the original D3D11.3 table.
 UINT format_list_allowed(DXGI_FORMAT format) noexcept {
     for (const FormatListEntry& e : kFormatList)
         if (e.format == format) return e.allowed;
@@ -1981,7 +2011,9 @@ constexpr EnumPair kBarrierLayouts[] = {
     {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_SHADER_RESOURCE, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_SHADER_RESOURCE},
     {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_SOURCE, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_SOURCE},
     {D3D12DDI_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_DEST, D3D12_BARRIER_LAYOUT_COMPUTE_QUEUE_COPY_DEST},
-    {D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON, D3D12_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON},
+    // SDK 26100 and the pinned engine vkd3d_d3d12.idl retain VIDEO_QUEUE_COMMON=30.
+    // Agility 1.619 removes its API spelling; preserve the existing engine wire contract.
+    {D3D12DDI_BARRIER_LAYOUT_VIDEO_QUEUE_COMMON, static_cast<D3D12_BARRIER_LAYOUT>(30)},
 };
 static_assert(agree(kBarrierLayouts), "barrier layouts");
 // VIDEO_QUEUE_COMMON is the last layout the API has, and the DDI's first own layout is the next value
@@ -2516,7 +2548,7 @@ HRESULT make_present_copy(DeviceContext* c, ResourceRecord* r, const native12::P
     native12::present_copy_description(shape, &request);
     if (primary) native12::present_copy_as_primary(&request);
     D3D12_RESOURCE_DESC1 desc{};
-    HRESULT hr = to_api_desc(request.resource, desc);
+    HRESULT hr = to_api_desc(c, request.resource, desc);
     if (FAILED(hr)) return hr;
     LinearSurface surface{};
     // The copy's own row (present-copy.h, present_copy_format): the composed row of every other linear surface,
