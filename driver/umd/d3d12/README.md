@@ -148,11 +148,19 @@ a create does not put the serial chain back.
 ## Queues and fences
 
 `queue-request.h` builds the BC2C v2 context request for the supported single-node
-3D, compute and copy queues. `QueueContext` preserves the full runtime queue
-handle and callback-owned context. `QueueEngineRegistry` associates this context
-with an engine queue; `HostedQueue` aliases it for RADV submission instead of
-creating another context for the same application queue. Internal engine queues
-use device-owned KT contexts through `HostedDispatch`.
+3D, compute and copy queues. A 3D (DIRECT) queue runs on GFX, node 0, and opens its
+context when it is created. A compute or copy queue runs where the hosted ICD binds
+the engine's VkQueue for it: on the compute ring, node 2 (BC2C COMPUTE), when the
+ICD shows a compute queue family, and otherwise on GFX, node 0. Its context is
+opened at that bind, inside the queue's creation, with the request of the ICD
+when it is one of these two (`QueueEngineRegistry::bind_context`). The ICD hides
+the compute family when the kernel driver has no node 2 or when
+`RADV_BC250_ACE_QUEUES=0` is set, and the engine then takes the graphics family.
+`QueueContext` preserves the full runtime queue handle and callback-owned context.
+`QueueEngineRegistry` associates this context with an engine queue; `HostedQueue`
+aliases it for RADV submission instead of creating another context for the same
+application queue. Internal engine queues use device-owned KT contexts through
+`HostedDispatch`.
 
 INLINE execution submits work on the bound context. `fence-ddi.h` copies the
 runtime's GPU fence placements into private state without interpreting them as
@@ -161,9 +169,11 @@ mask 1 for the runtime to queue its fence operation on that context. It creates
 no separate engine fence and writes no completion value on the CPU. Runtime
 fence ordering still requires execution validation.
 
-Queue `Wait`, tile mapping and tile-copy operations are unsupported and report
-failure through the shell. A failed queue teardown retains ownership and prevents
-callbacks through the expired runtime queue handle.
+The wait DDI also selects mask 1, and the runtime queues the wait on the queue's
+context. A monitored fence belongs to the adapter, so a queue on node 2 waits for
+a value that a queue on node 0 signals, and the reverse. Tile mapping and tile-copy
+operations go to the engine queue. A failed queue teardown retains ownership and
+prevents callbacks through the expired runtime queue handle.
 
 ## Heap imports and residency
 

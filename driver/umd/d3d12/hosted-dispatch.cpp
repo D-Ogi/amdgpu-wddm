@@ -823,7 +823,13 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
     }
     case BC250_HOST_SignalSynchronizationObjectFromCpu:{
         auto& a=*static_cast<D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMCPU*>(argument);
-        if(a.Flags.Value)return E_NOTIMPL;
+        // The hosted ICD sets AllowFenceRewind on every CPU signal (vkSignalSemaphore), as on its GPU signals.
+        // The callback's D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMCPU has no flags member, and needs none here:
+        // the ICD signals only a value above the fence's current one (VUID-VkSemaphoreSignalInfo-value-03258),
+        // which rewinds nothing ("the fence can be rewound to a queued fence that is behind the current one",
+        // D3DDDICB_SIGNALFLAGS). Every other flag is refused.
+        D3DDDICB_SIGNALFLAGS rewind{};rewind.AllowFenceRewind=1;
+        if(a.Flags.Value&~rewind.Value)return E_NOTIMPL;
         D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMCPU b{};b.ObjectCount=a.ObjectCount;
         b.ObjectHandleArray=a.ObjectHandleArray;b.FenceValueArray=a.FenceValueArray;return KT_CALL(SignalSynchronizationObjectFromCpu,&b);
     }

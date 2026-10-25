@@ -3,6 +3,8 @@
 #include "device-state.h"
 #include "engine-ddi/engine-ddi.h"
 
+struct _D3DKMT_CREATECONTEXTVIRTUAL;   // d3dkmthk.h, which this header does not include
+
 namespace native12 {
 enum class QueueEngineState { Creating, Live, Executing, Destroying, Retired };
 struct QueueBindingView {
@@ -100,6 +102,12 @@ public:
     // an application queue and is deliberately refused here.
     HRESULT with_binding(void* cookie, Device& expected_device,
         QueueBindingCallback callback, void* user) noexcept;
+    // The hosted ICD's CREATE_QUEUE_CONTEXT for the queue that cookie names (HostedQueue), before its alias.
+    // A queue with an open context admits only the request it was opened with (E_NOTIMPL otherwise). A
+    // COMPUTE or COPY queue has none before the engine's bind inside create (ContextRequest::opened_at_bind):
+    // in state Creating, on the creating thread, the GFX/node 0 or the COMPUTE/node 2 request opens it here
+    // with pfnCreateContextVirtualCb, outside the registry lock. Nothing else can open it.
+    HRESULT bind_context(void* cookie, Device& expected_device, const ::_D3DKMT_CREATECONTEXTVIRTUAL& request) noexcept;
 
     // Terminal cleanup of failed, detached queue metadata only. Never calls an
     // expired runtime queue handle or claims that OS context storage was freed.
