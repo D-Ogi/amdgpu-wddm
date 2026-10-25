@@ -7,6 +7,7 @@
 // Do not edit umd_caps.c by hand. Regenerate it with that script's -Generate switch.
 #pragma once
 #include "../contract/bc250_adapter_identity.h"
+#include "../contract/bc250_caps_query.h"
 
 #define UMD_CAPS_BYTES 1472u
 // offsetof(bc250_umd_private, firmware), checked by umd_caps_test.c.
