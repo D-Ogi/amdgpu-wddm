@@ -79,6 +79,20 @@ static partial class UnitTests
         Check(DriverFeatures.Pending(FeatureSnapshot(2, 2, 1, 1), DriverFeatures.Gdi), "turned on, still off in this start: waits for the restart");
         Check(DriverFeatures.On(null) && DriverFeatures.On(1) && DriverFeatures.On(5) && !DriverFeatures.On(0), "only the exact value 0 is off");
 
+        // ---- settings search lists a switch only where the window shows it ------------------------------------
+        foreach (var f in DriverFeatures.All)
+        {
+            var id = "graphics." + f.Id;
+            Check(!DriverFeatures.Searchable(null, id) && !DriverFeatures.Searchable(none, id) && !DriverFeatures.Searchable(zero, id) &&
+                !DriverFeatures.Searchable(odd, id), f.Id + ": no search leads to the switch where the window does not show it");
+            Check(DriverFeatures.Searchable(on, id) && DriverFeatures.Searchable(offBySetting, id), f.Id + ": records 1 and 2 keep the switch in the search");
+        }
+        var gdiTerm = Strings.In("en", "search.graphics.gdi");
+        Check(SettingsSearch.Find(gdiTerm, "en").Any(h => h.Entry.Id == "graphics.gdi"), "the GDI switch has its search entry");
+        Check(!SettingsSearch.Find(gdiTerm, "en").Any(h => h.Entry.Id == "graphics.gdi" && DriverFeatures.Searchable(FeatureSnapshot(1, null), h.Entry.Id)),
+            "a driver without GDI programs (no record) gives no GDI hit");
+        Check(DriverFeatures.Searchable(none, "graphics.fps") && DriverFeatures.Searchable(null, "graphics.clock-auto"), "the other settings stay in the search");
+
         // ---- the plans --------------------------------------------------------------------------------------------
         foreach (var f in DriverFeatures.All)
         {
