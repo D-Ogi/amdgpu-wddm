@@ -4584,6 +4584,10 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
         // firmware replies with this session's successful load/start snapshot.
         // Both helpers only copy caches; no file or mailbox I/O in this DDI.
         if (QueryAdapterInfo->pOutputData == NULL) { status = STATUS_INVALID_PARAMETER; break; }
+        if (!Bc250CapsQueryExtentSupported(QueryAdapterInfo->OutputDataSize)) {
+            status = STATUS_INVALID_PARAMETER;
+            break;
+        }
         if (QueryAdapterInfo->OutputDataSize < UMD_CAPS_BYTES) { status = STATUS_BUFFER_TOO_SMALL; break; }
         status=PspReadFirmware(device,&firmware);
         if(!NT_SUCCESS(status))break;

@@ -149,7 +149,7 @@ int main(int argc,char**argv)
     {
         unsigned char extended[BC250_ADAPTER_CAPS_BYTES+8];
         struct bc250_adapter_identity identity;
-        QUERY extendedQuery={extended,sizeof(extended)};
+        QUERY extendedQuery={extended,BC250_ADAPTER_CAPS_BYTES};
         d.StartInfo.AdapterLuid.LowPart=0x12345678u;
         d.StartInfo.AdapterLuid.HighPart=-123;
         memset(extended,0xA5,sizeof(extended));
@@ -187,7 +187,7 @@ int main(int argc,char**argv)
         unsigned char extended[BC250_SCANOUT_CAPS_TOTAL+8];
         struct bc250_scanout_caps scanout;
         struct bc250_adapter_identity identity;
-        QUERY extendedQuery={extended,sizeof(extended)};
+        QUERY extendedQuery={extended,BC250_SCANOUT_CAPS_TOTAL};
         unsigned int length,j;
         d.Post.Width=1920;d.Post.Height=1200;
         // (1) With the switch off nothing is written here at all, at any buffer size: a start with the
@@ -302,7 +302,7 @@ int main(int argc,char**argv)
         }
         // A geometry of zero never reaches a reader: WddmStart refuses to publish the flag without a POST
         // mode, so the branch is asked only with one. Kept here as the state the rest of the test wants.
-        extendedQuery.OutputDataSize=sizeof(extended);
+        extendedQuery.OutputDataSize=BC250_SCANOUT_CAPS_TOTAL;
         wddm->DirectFlipHandshake=0;
         d.Post.Width=0;d.Post.Height=0;
     }
@@ -325,6 +325,19 @@ int main(int argc,char**argv)
     CHECK(QueryCaps(&d,&q)==STATUS_BUFFER_TOO_SMALL && locks==before);
     q.OutputDataSize=sizeof(out);q.pOutputData=NULL;
     CHECK(QueryCaps(&d,&q)==STATUS_INVALID_PARAMETER && locks==before);
+    // Foreign private protocols must receive no BC25 bytes or backend work.
+    // In AGS, offset 8 of a successful response is an adapter count, not our size.
+    {
+        static const unsigned int foreign[]={1521,1528,3008,0x4360,0x5c0*0x3a00+0x960,0xffffffffu};
+        unsigned int k;
+        q.pOutputData=out;
+        for(k=0;k<sizeof(foreign)/sizeof(foreign[0]);k++) {
+            memset(out,0xA5,sizeof(out));memcpy(expected,out,sizeof(out));
+            q.OutputDataSize=foreign[k];before=smuReads;
+            CHECK(QueryCaps(&d,&q)==STATUS_INVALID_PARAMETER);
+            CHECK(smuReads==before && !memcmp(out,expected,sizeof(out)));
+        }
+    }
     for(i=0;i<BC250_FILE_COUNT;i++)free(files.Data[i]);
     printf("firmware metadata/query: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
