@@ -530,6 +530,14 @@ HRESULT create_device_context(const ContextCreateInfo* info, DeviceContext** out
     c->funcs = *info->engine_funcs;
     c->ddi_interface = info->ddi_interface;
     c->ddi_version = info->ddi_version;
+    // The engine device's own work graph tier. The engine reports tier 1.0 only in a process where work graphs are
+    // on (vkd3d-proton device.c, d3d12_device_supports_workgraphs: the descriptor heap path and the work graph
+    // switch), so a device of any other process keeps the state object slot and the caps answer as before.
+    D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21{};
+    c->work_graphs = SUCCEEDED(c->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS21, &options21,
+                                                              sizeof(options21))) &&
+                     options21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0;
+    if (c->work_graphs) log_line("work graphs: engine tier %d", static_cast<int>(options21.WorkGraphsTier));
     for (UINT t = 0; t < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++t)
         c->increments[t] = c->device->GetDescriptorHandleIncrementSize(static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(t));
     *out = c;

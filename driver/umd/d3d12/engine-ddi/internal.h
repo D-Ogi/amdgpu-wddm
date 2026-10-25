@@ -274,6 +274,10 @@ public:
     // acceleration structure slots read opacity micromap inputs and the state object slot admits
     // ALLOW_OPACITY_MICROMAPS. False until set_raytracing_tier12_commands.
     bool omm = false;
+    // The engine device reports work graphs tier 1.0 (OPTIONS21; vkd3d-proton device.c,
+    // d3d12_device_supports_workgraphs): the caps answer forwards it and the state object slot admits a work graph
+    // (work-graphs.cpp). Set at the context's creation.
+    bool work_graphs = false;
     UINT increments[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES]{};
     std::atomic<uint32_t> live{0};              // records holding references, plus pending releases
     std::atomic<uint32_t> pending{0};           // pending releases only
@@ -709,6 +713,9 @@ struct CommandListRecord {
     // the list's next successful Reset and by its destroy, which remove the device when it was never executed (rule
     // D). The list's own record, so no other list or device can push it out.
     native12::PresentCopyListMark present_copy;
+    // The program identifier of the last work graph SetProgram on this list (work-graphs.cpp): DispatchGraph reads
+    // the record sizes of its entry points from it. Recording thread only.
+    UINT64 work_graph[4]{};
     ID3D12GraphicsCommandList* list() const noexcept { return static_cast<ID3D12GraphicsCommandList*>(h.engine); }
 };
 
@@ -734,6 +741,7 @@ struct StateObjectRecord {
     D3D12DDI_HRTSTATEOBJECT_0054 rt;
     bool executable;                            // a RAYTRACING_PIPELINE, which SetPipelineState1 takes; not a COLLECTION
     GenericStateObject* generic = nullptr;
+    bool work_graph = false;                    // an EXECUTABLE with work graphs (work-graphs.cpp)
 };
 
 // ---- Slot groups: each fills its part of the tables -------------------------------------------------------------

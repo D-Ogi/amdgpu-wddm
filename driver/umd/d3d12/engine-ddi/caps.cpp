@@ -890,8 +890,12 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         if (ddi_version < 103) return E_INVALIDARG;
         auto* d = payload<D3D12DDI_OPTIONS_DATA_0103>(r);
         if (!d) return E_INVALIDARG;
-        // OPTIONS21.WorkGraphsTier is queried above, but the shell has no work-graph state object translator.
-        d->WorkGraphsTier = D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED;
+        // The engine's own answer (OPTIONS21, queried above): tier 1.0 only in a process where the engine has work
+        // graphs on (vkd3d-proton device.c, d3d12_device_supports_workgraphs). The DDI work graph slots (CORE_0108,
+        // COMMAND_LIST_3D_0108) exist at build version 0108 and later (work-graphs.cpp).
+        d->WorkGraphsTier = ddi_version >= 108 && c.options21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0
+                                ? D3D12DDI_WORK_GRAPHS_TIER_1_0
+                                : D3D12DDI_WORK_GRAPHS_TIER_NOT_SUPPORTED;
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_0103_WAVE_MMA: {
