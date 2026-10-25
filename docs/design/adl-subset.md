@@ -7,11 +7,45 @@ on our driver it stopped with "Failed to initialize AMDAGS: 6" before any featur
 2026-10-24).
 
 `driver/umd/adl` is our own ADL library. It implements the subset of ADL that AGS 6.3 needs, and it reports
-only facts that the operating system gives for adapters that run our driver. With it, `agsInitialize` succeeds.
+only facts that the operating system gives for adapters that run our driver. The KMD must also reject foreign
+private-capability query extents. ADL alone does not make `agsInitialize` safe with our driver.
 `agsDriverExtensionsDX12_CreateDevice` then makes a plain D3D12 device with no extension bit, because our driver
 has no AMD driver extension.
 
-## File names
+## Private KMD query compatibility
+
+AGS 6.3 queries `KMTQAITYPE_UMDRIVERPRIVATE` itself while it builds GPU information. This is a separate
+protocol from the public ADL structures. It first asks for 608 bytes, then for 17248 after
+`STATUS_BUFFER_TOO_SMALL`. A successful reply makes it interpret offset 8 as an adapter count. Our BC25
+reply has the byte count 1472 at that offset. Returning that reply caused a stack overwrite in a host
+replay with the real AGS DLL, in both x64 and x86.
+
+The KMD now rejects output capacities above `BC250_SCANOUT_CAPS_TOTAL` (1520) with
+`STATUS_INVALID_PARAMETER`, before any write or firmware query. It preserves the legacy 1472-byte
+reply, the 1496-byte identity reply, the 1520-byte scan-out reply and intermediate partial-trailer
+queries. Smaller capacities still get `STATUS_BUFFER_TOO_SMALL`. The real AGS DLL continues through
+ADL after the rejected 17248-byte retry and returns `AGS_SUCCESS` in the controlled host test.
+
+This is an extent check, not caller authentication or a complete private-protocol namespace. It does
+not identify an unrelated protocol with the same capacity. A future request-header protocol needs a
+versioned migration that preserves the older UMDs kept in DriverStore.
+
+Current readers remain compatible: the RADV WDDM2 BC25 path and `compute/hip/bc250hsa/kmt_device.c`
+ask for 1472 bytes. D3D12 `adapter-contract.h`, D3D11 `dxvk/adapter-identity.h` and the router's
+`ReadScanoutCaps` ask for 1520. The D3D12 KMT probe forwards that same contract. RADV's separate AMD
+private path asks for 3008 and 17248 only after its BC25 identification fails. These are foreign
+formats and must not receive a BC25 response.
+
+The AGS client has test-only `--kmt-fixture` and `--kmt-legacy` modes. They replace two dynamic KMT
+lookups in the client's loaded AGS image, without changing a system DLL or driver. Both use the
+injected AMD snapshot. The first uses the KMD extent rule and passes. The second replays the old
+unbounded reply and must be run under a debugger because it crashes. `--guard-allocations` adds a
+no-access page after each callback allocation, allowing up to 15 alignment bytes. The host test
+also checks the returned AMD identities, display count and VRAM, rather than only the exit status.
+
+Hardware confirmation of the new KMD remains a separate lab gate. Host replay does not replace it.
+
+## Library names
 
 | Process | File name | AGS library | Search order of AGS 6.3 |
 |---|---|---|---|

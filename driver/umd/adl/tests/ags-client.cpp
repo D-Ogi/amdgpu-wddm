@@ -32,6 +32,7 @@
 
 #include "amd_ags.h"
 #include "test-snapshot.h"
+#include "ags-kmt-fixture.h"
 
 namespace {
 
@@ -54,10 +55,54 @@ void Say(const char* fmt, ...)
 
 LONG g_live;
 LONG g_total;
+bool g_guard_allocations;
+bool g_expect_injected;
+
+constexpr bool GuardLayout(size_t bytes, size_t* aligned, size_t* pages)
+{
+    const size_t maximum = (size_t)-1;
+    if (bytes == 0) bytes = 1;
+    if (bytes > maximum - 15) return false;
+    *aligned = (bytes + 15) & ~(size_t)15;
+    if (*aligned > maximum - 4095) return false;
+    *pages = (*aligned + 4095) & ~(size_t)4095;
+    return *pages <= maximum - 4096;
+}
+
+constexpr bool CheckGuardLayout(size_t bytes, bool valid, size_t aligned = 0, size_t pages = 0)
+{
+    size_t actual_aligned = 0, actual_pages = 0;
+    bool actual = GuardLayout(bytes, &actual_aligned, &actual_pages);
+    return actual == valid && (!actual || (actual_aligned == aligned && actual_pages == pages));
+}
+// Compile in both architectures: rounding and the final guard-page addition must not wrap size_t.
+static_assert(CheckGuardLayout(0, true, 16, 4096));
+static_assert(CheckGuardLayout(1, true, 16, 4096));
+static_assert(CheckGuardLayout(15, true, 16, 4096));
+static_assert(CheckGuardLayout(16, true, 16, 4096));
+static_assert(CheckGuardLayout(17, true, 32, 4096));
+static_assert(CheckGuardLayout(4096, true, 4096, 4096));
+static_assert(CheckGuardLayout(4097, true, 4112, 8192));
+static_assert(CheckGuardLayout((size_t)-1 - 8191, true, (size_t)-1 - 8191, (size_t)-1 - 8191));
+static_assert(CheckGuardLayout((size_t)-1 - 8190, false));
+static_assert(CheckGuardLayout((size_t)-1 - 4095, false));
+static_assert(CheckGuardLayout((size_t)-1 - 15, false));
+static_assert(CheckGuardLayout((size_t)-1 - 14, false));
+static_assert(CheckGuardLayout((size_t)-1, false));
 
 void* __stdcall AgsAlloc(size_t bytes)
 {
-    void* p = malloc(bytes ? bytes : 1);
+    void* p = nullptr;
+    if (g_guard_allocations) {
+        // Keep the ABI's 16-byte alignment, followed by at most 15 bytes of padding
+        // and a no-access page. VirtualQuery lets free find the allocation base.
+        size_t aligned = 0, pages = 0;
+        if (!GuardLayout(bytes, &aligned, &pages)) return nullptr;
+        BYTE* base = (BYTE*)VirtualAlloc(nullptr, pages + 4096, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        DWORD old;
+        if (base && VirtualProtect(base + pages, 4096, PAGE_NOACCESS, &old)) p = base + pages - aligned;
+        else if (base) VirtualFree(base, 0, MEM_RELEASE);
+    } else p = malloc(bytes ? bytes : 1);
     if (p) {
         InterlockedIncrement(&g_live);
         InterlockedIncrement(&g_total);
@@ -68,7 +113,10 @@ void* __stdcall AgsAlloc(size_t bytes)
 void __stdcall AgsFree(void* p)
 {
     if (p) {
-        free(p);
+        if (g_guard_allocations) {
+            MEMORY_BASIC_INFORMATION memory = {};
+            if (!VirtualQuery(p, &memory, sizeof(memory)) || !VirtualFree(memory.AllocationBase, 0, MEM_RELEASE)) abort();
+        } else free(p);
         InterlockedDecrement(&g_live);
     }
 }
@@ -224,11 +272,16 @@ int RunInfo(const Ags& a, bool gpu_info)
     if (gpu_info) {
         SayGpuInfo(a, info);
     }
+    bool contents = !gpu_info || !g_expect_injected ||
+        (info.numDevices == 2 && info.devices && info.devices[0].vendorId == 0x1002 &&
+         info.devices[0].deviceId == 0x13fe && info.devices[0].numDisplays == 3 &&
+         info.devices[0].localMemoryInBytes == (8ull << 30) && info.devices[1].vendorId == 0x1002);
+    if (!contents) Say("FAIL injected AMD GPU information differs from the fixture\n");
     Say("callback allocations live before agsDeInitialize: %ld\n", g_live);
     AGSReturnCode d = a.deinit(ctx);
     Say("agsDeInitialize = %d, callback allocations live after: %ld (of %ld)\n", (int)d, g_live, g_total);
     SayAdlModule("after agsDeInitialize");
-    return (d == AGS_SUCCESS && g_live == 0) ? 0 : 1;
+    return (contents && d == AGS_SUCCESS && g_live == 0) ? 0 : 1;
 }
 
 int RunExpect(const Ags& a, int expected)
@@ -596,15 +649,21 @@ bool InjectSnapshot()
 int main(int argc, char** argv)
 {
     const char* mode = argc > 1 ? argv[1] : "info";
-    bool gpu_info = true, any_adapter = false, inject = false;
+    bool gpu_info = true, any_adapter = false, inject = false, kmt_fixture = false, kmt_legacy = false;
     int number = 0;
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--no-gpu-info") == 0) {
             gpu_info = false;
         } else if (strcmp(argv[i], "--inject") == 0) {
             inject = true;
+        } else if (strcmp(argv[i], "--kmt-fixture") == 0 || strcmp(argv[i], "--kmt-legacy") == 0) {
+            kmt_fixture = true;
+            kmt_legacy = strcmp(argv[i], "--kmt-legacy") == 0;
+            inject = true;
         } else if (strcmp(argv[i], "--any-adapter") == 0) {
             any_adapter = true;
+        } else if (strcmp(argv[i], "--guard-allocations") == 0) {
+            g_guard_allocations = true;
         } else if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) {
             fopen_s(&g_out, argv[++i], "w");
         } else {
@@ -616,8 +675,13 @@ int main(int argc, char** argv)
     Say("ags-client %s, %s build, %04u-%02u-%02uT%02u:%02u:%02uZ\n", mode, sizeof(void*) == 8 ? "x64" : "x86",
         t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond);
     Ags a = {};
+    g_expect_injected = inject;
     int rc = 1;
     if ((!inject || InjectSnapshot()) && LoadAgs(&a)) {
+        if (kmt_fixture && !ags_kmt_fixture::Install(a.dll, kmt_legacy)) {
+            Say("FAIL could not install the test-only KMT boundary\n");
+            return 1;
+        }
         if (strcmp(mode, "info") == 0) {
             rc = RunInfo(a, gpu_info);
         } else if (strcmp(mode, "expect") == 0) {
@@ -631,6 +695,11 @@ int main(int argc, char** argv)
                 " [--out <file>]\n");
             rc = 2;
         }
+    }
+    if (kmt_fixture) {
+        Say("KMT fixture: private=%u refused=%u segments=%u\n", ags_kmt_fixture::private_queries,
+            ags_kmt_fixture::foreign_refusals, ags_kmt_fixture::segment_queries);
+        if (gpu_info && (!ags_kmt_fixture::private_queries || !ags_kmt_fixture::foreign_refusals)) rc = 1;
     }
     Say("%s ags-client %s\n", rc == 0 ? "PASS" : "FAIL", mode);
     if (g_out) {

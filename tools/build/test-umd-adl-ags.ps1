@@ -49,6 +49,8 @@ $runs = @(
     @('shipped', 'dx12 --any-adapter', 0),
     @('inject', 'info --inject', 0), @('inject', 'info --no-gpu-info --inject', 0), @('inject', 'loop 100 --inject', 0),
     @('inject', 'dx12 --any-adapter --inject', 0),
+    @('inject', 'info --kmt-fixture --guard-allocations', 0),
+    @('inject', 'loop 20 --kmt-fixture --guard-allocations', 0),
     @('host', 'info', 0), @('host', 'loop 20', 0), @('host', 'dx12 --any-adapter', 0),
     @('none', 'expect 6', 0), @('no-modes', 'expect 5', 0)
 )
