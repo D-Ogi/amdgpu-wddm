@@ -46,6 +46,10 @@ static HRESULT APIENTRY unlock_memory(HANDLE device,const D3DDDICB_UNLOCK2* a){a
 static HRESULT APIENTRY create_context(HANDLE device,D3DDDICB_CREATECONTEXTVIRTUAL* a){assert(device==device_handle);++context_creates;a->hContext=context_handle;return S_OK;}
 static HRESULT APIENTRY destroy_context(HANDLE device,const D3DDDICB_DESTROYCONTEXT* a){assert(device==device_handle && a->hContext==context_handle);++context_destroys;return fail_destroy?E_FAIL:S_OK;}
 static HRESULT APIENTRY wrong_native_queue(D3D12DDI_HRTCOMMANDQUEUE,D3DDDICB_CREATECONTEXTVIRTUAL*){++native_queue_calls;return E_FAIL;}
+static unsigned cpu_signals=0;
+static HRESULT APIENTRY signal_cpu(HANDLE device,const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMCPU* a){
+ assert(device==device_handle && a->ObjectCount==1 && a->ObjectHandleArray[0]==71 && a->FenceValueArray[0]==9);++cpu_signals;return S_OK;
+}
 static HRESULT APIENTRY wait_gpu(HANDLE device,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a){assert(device==device_handle && a->hContext==context_handle && a->ObjectCount==1 && a->MonitoredFenceValueArray[0]==6);return S_OK;}
 static HRESULT APIENTRY submit(HANDLE device,const D3DDDICB_SUBMITCOMMAND* a){assert(device==device_handle && a->BroadcastContextCount==1 && a->BroadcastContext[0]==context_handle);++submitted;return S_OK;}
 static HRESULT APIENTRY signal_gpu(HANDLE device,const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2* a){
@@ -93,6 +97,7 @@ int main(){
  kt.pfnMakeResidentCb=resident;kt.pfnEvictCb=evict;kt.pfnLock2Cb=lock_memory;kt.pfnUnlock2Cb=unlock_memory;kt.pfnCreateContextVirtualCb=create_context;kt.pfnDestroyContextCb=destroy_context;
  kt.pfnCreateSynchronizationObject2Cb=create_sync;kt.pfnDestroySynchronizationObjectCb=destroy_sync;
  kt.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu;kt.pfnSubmitCommandCb=submit;kt.pfnSignalSynchronizationObjectFromGpu2Cb=signal_gpu;
+ kt.pfnSignalSynchronizationObjectFromCpuCb=signal_cpu;
  bc250::umd::RuntimeDomain domain;HostedDispatch bridge(domain,{device_handle},um,kt);
  const auto host=bridge.descriptor(42,&bridge);
  auto call=[&](uint32_t op,void* a=nullptr){return host.dispatch(host.userdata,op,a);};
@@ -435,8 +440,21 @@ int main(){
   assert(healthy.complete_operation(BC250_HOST_Unlock2,E_FAIL)==static_cast<int32_t>(0xc0000001u));
   assert(!healthy.lost() && errors==reported);
  }
+ {
+  // The CPU signal of the hosted ICD carries AllowFenceRewind (vkSignalSemaphore); the callback has no flags
+  // member, so the signal reaches it plainly. Any other flag is refused before it.
+  HostedDispatch cpu(domain,{device_handle},um,kt);
+  const auto chost=cpu.descriptor(43,&cpu);
+  D3DKMT_HANDLE cpu_object=71;UINT64 cpu_value=9;D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMCPU cpu_signal{};
+  cpu_signal.ObjectCount=1;cpu_signal.ObjectHandleArray=&cpu_object;cpu_signal.FenceValueArray=&cpu_value;
+  assert(chost.dispatch(chost.userdata,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)==0 && cpu_signals==1);
+  cpu_signal.Flags.AllowFenceRewind=1;
+  assert(chost.dispatch(chost.userdata,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)==0 && cpu_signals==2);
+  cpu_signal.Flags.EnqueueCpuEvent=1;
+  assert(chost.dispatch(chost.userdata,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)<0 && cpu_signals==2);
+ }
  std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, "
            "cleanup retries, destroy of a mapped allocation with its retry and the lost range of a refused one, scope, "
            "loss, a fence at UINT64_MAX that proves no retirement, address reuse inside a free and inside a destroy, "
-           "replay worker scope, imported-heap error propagation");
+           "replay worker scope, imported-heap error propagation, CPU signal with AllowFenceRewind");
 }
