@@ -21,7 +21,7 @@ struct Fixture {
  RuntimeQueue runtime[2];
  native12::QueueEngineSlot slots[2]{};
  UINT tokens[2]{};
- unsigned creates{},destroys{},submits{},waits{},signals{},updates{};
+ unsigned creates{},destroys{},submits{},waits{},signals{},updates{},rewinds{};
  bool fail_submit{},reentrant{};
  Fixture():registry(device,reinterpret_cast<engine_ddi::DeviceContext*>(this),{make,execute,close,healthy,this}){
   runtime[0]={this,reinterpret_cast<HANDLE>(UINT_PTR{0x10000001})};runtime[1]={this,reinterpret_cast<HANDLE>(UINT_PTR{0x20000002})};
@@ -47,7 +47,8 @@ struct Fixture {
    auto f=static_cast<Fixture*>(h);assert((a->hContext==f->runtime[0].context || a->hContext==f->runtime[1].context) && a->ObjectCount==1 && a->ObjectHandleArray[0]==71 && a->MonitoredFenceValueArray[0]==9);++f->waits;return S_OK;};
   device.kernel_callbacks.pfnSignalSynchronizationObjectFromGpu2Cb=[](HANDLE h,const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2* a)->HRESULT{
    auto f=static_cast<Fixture*>(h);assert(a->BroadcastContextCount==1 && (a->BroadcastContextArray[0]==f->runtime[0].context || a->BroadcastContextArray[0]==f->runtime[1].context));
-   assert(a->ObjectCount==1 && a->ObjectHandleArray[0]==71 && a->MonitoredFenceValueArray[0]==9);++f->signals;return S_OK;};
+   assert(a->ObjectCount==1 && a->ObjectHandleArray[0]==71 && a->MonitoredFenceValueArray[0]==9);
+   assert(!(a->Flags.Value&~4u));f->rewinds+=a->Flags.AllowFenceRewind;++f->signals;return S_OK;};
   device.kernel_callbacks.pfnUpdateGpuVirtualAddressCb=[](HANDLE h,const D3DDDICB_UPDATEGPUVIRTUALADDRESS* a)->HRESULT{
    auto f=static_cast<Fixture*>(h);assert(a->hContext==f->runtime[0].context || a->hContext==f->runtime[1].context);
    assert(a->hFenceObject==71 && a->NumOperations==2 && a->Operations && a->FenceValue==9 && !a->Reserved0 && !a->Reserved1 && !a->Flags.Value);
@@ -85,6 +86,13 @@ int main(){
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_WaitForSynchronizationObjectFromGpu,&wait)==S_OK);
   D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal{};signal.BroadcastContextCount=1;signal.BroadcastContextArray=&f.tokens[i];signal.ObjectCount=1;signal.ObjectHandleArray=&object;signal.MonitoredFenceValueArray=&value;
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==S_OK);
+  // The wait-before-signal flag of the hosted ICD reaches the runtime; any other flag is refused before it.
+  signal.Flags.AllowFenceRewind=1;
+  assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==S_OK);
+  assert(f.rewinds==i+1);
+  signal.Flags.SignalAtSubmission=1;
+  assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==E_INVALIDARG);
+  assert(f.signals==2*(i+1) && f.rewinds==i+1);
   // The update names the queue by its token; the runtime gets the queue's full context.
   D3DDDI_UPDATEGPUVIRTUALADDRESS_OPERATION ops[2]{};D3DKMT_UPDATEGPUVIRTUALADDRESS update{};update.hContext=f.tokens[i];
   update.hFenceObject=object;update.NumOperations=2;update.Operations=ops;update.FenceValue=value;
@@ -97,7 +105,7 @@ int main(){
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_PUBLISH_PROGRESS,&progress)==S_OK);
   assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_PUBLISH_PROGRESS,&progress)==E_INVALIDARG);
  }
- assert(f.submits==2 && f.waits==2 && f.signals==2 && !f.destroys);
+ assert(f.submits==2 && f.waits==2 && f.signals==4 && f.rewinds==2 && !f.destroys);
  std::thread worker([&]{assert(native12::HostedQueue::dispatch(f.bridge.get(),BC250_HOST_CHECK_STATUS,&dummy)==E_INVALIDARG);});worker.join();
  native12::Device foreign;foreign.runtime.handle=&foreign;native12::HostedQueue wrong(f.domain,f.registry,foreign);
  native12::ContextRequest request;assert(request.prepare(desc)==S_OK);D3DKMT_CREATECONTEXTVIRTUAL create{};create.EngineAffinity=1;create.pPrivateDriverData=&request.blob;create.PrivateDriverDataSize=sizeof(request.blob);
