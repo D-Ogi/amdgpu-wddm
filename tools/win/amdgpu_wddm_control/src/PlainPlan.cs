@@ -40,6 +40,10 @@ namespace AmdgpuWddmControl
                 // The picture on the start screen (boot-logo.md). On is the driver's default, so the delete form
                 // is the "on" sentence here as well.
                 case "BootLogo": return w.Delete || w.Number != 0 ? "plan.line.boot-logo-on" : "plan.line.boot-logo-off";
+                // The driver's own switches (DriverFeatures.cs). On is the installation default, so the delete form
+                // is the "on" sentence here as well.
+                case "EnableComputeQueue": return w.Delete || w.Number != 0 ? "plan.line.compute-queue-on" : "plan.line.compute-queue-off";
+                case "EnableGdiHwAccel": return w.Delete || w.Number != 0 ? "plan.line.gdi-accel-on" : "plan.line.gdi-accel-off";
                 // The waiting time for the graphics (TdrSetting.cs). The app only ever writes a number; the delete
                 // form is here for an undo of a backup taken before the value existed.
                 case TdrSetting.ValueName: return w.Delete ? "plan.line.tdr-default" : "plan.line.tdr";
@@ -128,7 +132,7 @@ namespace AmdgpuWddmControl
             new Regex(@"\b(KMD|UMD|ICD|DWM|DDI|WDDM|SMU|DPM|IOCTL|HKLM|HKCU|HKEY_\w+)\b"),
             new Regex(@"(?i)\b(fence|escapes?|exit code|error code|dxgkrnl|registry)\b"),
             new Regex(@"0x[0-9A-Fa-f]+"),
-            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*)\b"),
+            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd|ComputeQueue|GdiHwAccel)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*)\b"),
             new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };

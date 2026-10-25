@@ -1624,16 +1624,6 @@
    }
   },
   {
-   "name": "ENABLECOMPUTENODE",
-   "where": "bc250-win driver/kmd/guard.c GuardLabReadComputeNode (lab flavour only), a REG_DWORD value under the driver's Parameters key; the KMD holds the CamelCase name as a UTF-16LE string",
-   "does": "compute node lab arm: 0 closes WDDM node 2 (the control run); the release flavour always opens node 2",
-   "lab": {
-    "every": [
-     "bc250kmd.sys"
-    ]
-   }
-  },
-  {
    "name": "BC250PREIB_BEGIN",
    "where": "mesa-wddm src/amd/vulkan/radv_cmd_buffer.c (hosted ICD)",
    "does": "log tag of a lab-only trace, not an environment input: the release flavour compiles the trace out with its read",

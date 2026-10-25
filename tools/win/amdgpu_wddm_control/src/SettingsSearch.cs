@@ -32,6 +32,8 @@ namespace AmdgpuWddmControl
             E("graphics.fps", "graphics"), E("graphics.vsync", "graphics"), E("graphics.af", "graphics"), E("graphics.latency", "graphics"),
             // graphics.vk-memory comes back with its row (GraphicsSettings.AwaitingIcd).
             E("graphics.overlay", "graphics"), E("graphics.vk-present", "graphics"),
+            // The driver's own switches (DriverFeatures.cs). The card shows them only where the driver can use them.
+            E("graphics.compute", "graphics"), E("graphics.gdi", "graphics"),
             E("games.rt", "games"), E("games.present", "games"), E("games.cpu", "games"), E("games.sm", "games"), E("games.cpu-render", "games"),
             E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.scaling", "display"), E("display.identify", "display"), E("display.scale", "display"),
