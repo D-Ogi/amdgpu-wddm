@@ -13,7 +13,7 @@ Status: implemented in the KMD, host tests pass. The lab proof of the product pa
 |---|---|---|---|---|
 | 0 | `DXGK_ENGINE_TYPE_3D` | BC-250 GFX | gfx ring 0 | always |
 | 1 | `DXGK_ENGINE_TYPE_COPY` | BC-250 SDMA0 | SDMA0, the paging node | `EnablePagingNode` |
-| 2 | `DXGK_ENGINE_TYPE_OTHER` | BC-250 Compute0 | MEC compute ring 1 | node 1 (lab flavour: also a selector) |
+| 2 | `DXGK_ENGINE_TYPE_OTHER` | BC-250 Compute0 | MEC compute ring 1 | node 1 and `EnableComputeQueue` |
 
 The engine type enum has no compute value, and an adapter has exactly one 3-D engine. A compute-only engine is
 therefore `OTHER`, and `OTHER` requires a friendly name (`d3dkmdt.h`, `DXGK_ENGINE_TYPE` remarks).
@@ -25,19 +25,30 @@ Compute ring 0 is the high-priority queue. Node 2 uses compute ring 1, at normal
 
 ## 2. The gate
 
-In the release flavour, node 2 is always open. The driver reads no setting for it.
+`EnableComputeQueue` is the switch for node 2. It is a catalog setting (`driver/state/catalog.json`), a `REG_DWORD`
+of the driver state, in the release and the lab flavour. The driver reads it once, at `GfxStart`.
 
-The lab flavour has a selector for control runs: `EnableComputeNode`, a `REG_DWORD` under the service `Parameters`
-key. The driver reads it once, at `DriverEntry`, and latches it at `GfxStart`.
+- Absent or not 0: node 2 is open. The INF writes 1 as the installation default.
+- 0: node 2 is closed. The adapter reports two nodes, as before node 2.
 
-- Absent or not 0: node 2 is open. This is the default.
-- 0: node 2 is closed. The adapter reports two nodes, as before this change.
+The control application shows it as "Compute queue" on the Graphics page. A change applies at the next start of
+the driver, so the application offers a restart of Windows. A lab control run uses the same setting:
+`bc250kmd_cli state set EnableComputeQueue 0`, then a restart.
 
-The selector is not a catalog setting. Thus a lab arm can replace the KMD image only, and the installed catalog
-stays that of the installed package. A catalog change needs a package install. The INF writes no value for it.
+Until 2026-10-25 the lab flavour had a selector `EnableComputeNode` under `Parameters` instead, read at
+`DriverEntry`. It was not a catalog setting, because a lab arm that replaced only the KMD image with a new catalog
+stopped at `DriverEntry`: lab arm A1 got `CM_PROB_FAILED_DRIVER_ENTRY` with status `0xC0000059`
+(`STATUS_REVISION_MISMATCH`). The installed state generation had the catalog of the installed package, and the KMD
+refuses a generation of another catalog when no package handoff is pending (`state_kernel.c`, `LoadActive`). A catalog
+change therefore needs a package install, which makes the handoff. The setting replaces the selector.
 
-To stop applications from using node 2, use the user-mode driver: RADV does not show the compute queue family when
-`RADV_BC250_ACE_QUEUES=0` is set.
+For each start the driver also writes the volatile record `Features\ComputeQueue`: 1 node 2 is open, 2 node 2 is
+closed by `EnableComputeQueue` 0 alone, 0 node 2 is closed by a gate that the setting cannot open. The control
+application shows the switch only when the record is 1 or 2.
+
+The RADV ICD follows the KMD caps (section 8). A lab flavour ICD also reads `RADV_BC250_ACE_QUEUES` from the process
+environment: 0 hides the compute queue family from that process. A release ICD takes the default of every
+`RADV_BC250_*` value, so for a person the setting is the only switch.
 
 Node 2 also needs every gate that its submit path rests on. These are `EnableGpuSubmit`, the paging node, the VMID
 pool (`EnableVmidPool`) and the ring VM flush (`EnableRingVmFlush`). When one of them is closed, node 2 is closed.
@@ -119,7 +130,7 @@ and COMPUTE runs on node 2 only. A submit blob must name the IP of its node.
 
 - Closed 2026-10-25: the lab proof of the product path. The lab KMD opened three nodes. One dispatch on node 2
   gave the same words as node 0. Node 0 and node 2 ran in parallel with fence dependencies each way. Two threads
-  with one node each overlapped (24 submits on each node). The control run with the selector at 0 showed two
+  with one node each overlapped (24 submits on each node). The control run with the lab selector at 0 showed two
   nodes and no node 2. The run had no bugcheck, no TDR and no dump.
 - Whether `GRBM_STATUS` shows a load on the MEC only. The DPM governor samples it.
 - A MEC queue reset (`reset_kcq`). Without it, a compute hang that the wave kill does not drain ends in 0x116.

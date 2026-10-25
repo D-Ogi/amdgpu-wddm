@@ -198,7 +198,8 @@ typedef struct _BC250_GFX {
     // ---- WDDM node 2: one compute ring (docs/design/compute-node.md) ----
     // The same shape as the node 0 fields above, on compute_ring[1] and fence slot 11. The VMID table is shared: a
     // root keeps one VMID on both rings, and Vmid.LiveSeqCompute holds what the compute ring owes each VMID.
-    BOOLEAN ComputeGate;            // EnableComputeNode (absent = on, 0 = off) and every gate node 2 rests on; GfxStart
+    BOOLEAN ComputeGate;            // EnableComputeQueue (absent = on, 0 = off) and every gate node 2 rests on; GfxStart
+    BOOLEAN ComputeOffBySetting;    // EnableComputeQueue 0 is the only gate that keeps node 2 closed; GfxStart
     volatile LONG ComputeFailed;    // sticky like SubmitFailed, node 2's own: a fault of node 2 leaves node 0 open
     volatile LONG ComputeInFlight;  // newest outstanding compute sequence; the CAS rule of SubmitInFlight
     ULONG ComputeSeq;               // its sequence, 0 when none was ever emitted
@@ -1984,6 +1985,18 @@ BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device)
 
     if (gfx == NULL) return FALSE;
     result = gfx->ComputeGate;
+    GfxAccessRelease(Device);
+    return result;
+}
+
+// Whether EnableComputeQueue 0 alone keeps node 2 closed for this start (GfxStart latched it).
+BOOLEAN GfxComputeNodeOffBySetting(_In_ const BC250_DEVICE* Device)
+{
+    const BC250_GFX* gfx = GfxAccessAcquire(Device);
+    BOOLEAN result;
+
+    if (gfx == NULL) return FALSE;
+    result = gfx->ComputeOffBySetting;
     GfxAccessRelease(Device);
     return result;
 }
@@ -4895,12 +4908,18 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     //                                 0.7.216.24 ahead of the frame, byte for byte: the rollback. Independent of
     //                                 EnableVmidPool; both on is the recommended pair and the default.
     gfx->RingVmFlushGate = (GuardReadSetting(L"EnableRingVmFlush", 1) != 0);
-    // Node 2, the compute ring (docs/design/compute-node.md): open in the release flavour. The lab flavour closes it
-    // for a control run (GuardComputeNodeSelector, EnableComputeNode 0, not a catalog setting). Node 2 also needs
-    // every gate it rests on: EnableGpuSubmit (the ring), the paging node (node 2 is ordinal 2), the VMID pool (a job
-    // needs a VMID of its own) and the ring VM flush (the compute ring has no MMIO root write path).
-    gfx->ComputeGate = GuardComputeNodeSelector() && gfx->SubmitGate && gfx->PagingGate && gfx->VmidPoolGate &&
-                       gfx->RingVmFlushGate;
+    // Node 2, the compute ring (docs/design/compute-node.md). EnableComputeQueue is the person's switch, in both
+    // flavours ("Compute queue" in the control app): absent or 1 = open, 0 = closed, read once for this start.
+    // Node 2 also needs every gate it rests on: EnableGpuSubmit (the ring), the paging node (node 2 is ordinal 2),
+    // the VMID pool (a job needs a VMID of its own) and the ring VM flush (the compute ring has no MMIO root write
+    // path).
+    {
+        BOOLEAN setting = (GuardReadSetting(L"EnableComputeQueue", 1) != 0);
+        BOOLEAN rests = gfx->SubmitGate && gfx->PagingGate && gfx->VmidPoolGate && gfx->RingVmFlushGate;
+
+        gfx->ComputeGate = setting && rests;
+        gfx->ComputeOffBySetting = !setting && rests;
+    }
     gfx->VmidMembers = (USHORT)(1u << BC250_VMID_LEGACY);
     KeInitializeSpinLock(&gfx->VmidLock);
     KeInitializeSpinLock(&gfx->Sdma0RingLock);
@@ -4916,7 +4935,7 @@ NTSTATUS GfxStart(_Inout_ BC250_DEVICE* Device)
     GuardLog("gfx: VM flush %s", gfx->RingVmFlushGate ? "on the ring (EnableRingVmFlush), engine 1" :
              "by MMIO before the frame (EnableRingVmFlush 0), engine 17");
     GuardLog("gfx: compute node %s", gfx->ComputeGate ? "open: node 2 on compute ring 1, fence slot 11, engine 4" :
-             GuardComputeNodeSelector() ? "closed (a gate it rests on is closed)" : "closed (the lab selector)");
+             gfx->ComputeOffBySetting ? "closed (EnableComputeQueue 0)" : "closed (a gate it rests on is closed)");
     return STATUS_SUCCESS;
 }
 
