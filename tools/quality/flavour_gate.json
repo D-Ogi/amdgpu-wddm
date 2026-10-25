@@ -124,14 +124,14 @@
   },
   {
    "name": "MESA_LOADER_DRIVER_OVERRIDE",
-   "where": "mesa-wddm src/gallium/auxiliary/driver_trace/tr_screen.c (CPU UMD, zink UMD, OpenGL ICD); src/loader/loader.c is not built on Windows",
+   "where": "mesa-wddm src/gallium/auxiliary/driver_trace/tr_screen.c (CPU UMD, zink UMD); src/loader/loader.c is not built on Windows",
    "does": "names another gallium driver; in these targets it selects which screen the trace wrapper takes",
    "lab": {
     "every": [
-     "amdgpu_wddm_gl.dll",
      "bc250d3d.dll",
      "bc250d3d_zink.dll"
-    ]
+    ],
+    "note": "opengl/amdgpu_wddm_gl.dll does not hold MESA_LOADER_DRIVER_OVERRIDE in either flavour: the wgl target creates its screen without debug_screen_wrap, so no code calls trace_screen_create, and the clang-cl build does not link the trace wrapper with its read. That is by build line, not by flavour"
    }
   },
   {
@@ -705,6 +705,66 @@
    "name": "AMDGPU_WDDM_VKD3D_PSO_LOG",
    "where": "vkd3d-proton libs/vkd3d/cache.c (vkd3d_driver_cache_init)",
    "does": "writes a log of every pipeline creation to <pipeline cache>.pso-log.txt",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_LAB_DDI_MAX",
+   "where": "bc250-win driver/umd/d3d12/adapter.cpp (offered_max)",
+   "does": "sets the newest D3D12 DDI build that the shell offers and accepts (92 to the newest build), so that one lab run finds the first build that a runtime refuses",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_LAB_DDI0102_LIMITS",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/caps.cpp (options0102)",
+   "does": "creation-gate probe: reports synthetic sample counts or sampler heap sizes in D3D12DDI_OPTIONS_DATA_0102 (samples, samplers, both, control), so that the runtime and not the shell refuses the values",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_DIVIDER",
+   "where": "vkd3d-proton libs/vkd3d/meta.c (work graph meta operations)",
+   "does": "with 1, the work graph distributor splits the workgroups of each node also on a device that does not need it, so that a test can run that path on any device",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_FAIL",
+   "where": "vkd3d-proton libs/vkd3d/workgraphs.c (d3d12_wg_fault_injected)",
+   "does": "fault injection: the creation of a work graph state object fails at a named point, or the retention and drain passes write an invalid state, so that a test can run the cleanup and error paths",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_LIMITS",
+   "where": "vkd3d-proton libs/vkd3d/workgraphs.c",
+   "does": "sets small payload ring sizes and packed offset limits of a work graph, and with canary=1 adds canary ranges to its backing memory, for tests",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_vkd3d.dll"
+    ]
+   }
+  },
+  {
+   "name": "AMDGPU_WDDM_WG_MULTI_INPUT",
+   "where": "vkd3d-proton libs/vkd3d/workgraphs.c",
+   "does": "sets the staging sizes, the large input size and the workgroup count of the multi-node GPU input passes of a work graph, so that a test crosses their limits with few records",
    "lab": {
     "every": [
      "amdgpu_wddm_vkd3d.dll"
