@@ -599,7 +599,7 @@ static void Step2(void)
     free(expect);
 }
 
-/* ---- step 3: graphics -> compute -> graphics -> CPU ---------------------------------------------- */
+/* ---- step 3: A -> B -> C -> CPU over the two queues, both directions ------------------------------ */
 
 static void Step3(void)
 {
@@ -610,8 +610,15 @@ static void Step3(void)
     if (!expect) Exit(3, "out of host memory");
     VkSemaphore t = MakeTimeline();
     VkCommandPool gp = MakePool(gfxFam), cp = MakePool(cmpFam);
-    for (uint32_t iter = 0; iter < 8; iter++) {
-        const int early = iter & 1;
+    /* Bit 0: the middle stage B is submitted first, so its wait comes before the signal it waits for.
+     * Bit 1: the swapped direction, compute -> graphics -> compute, so graphics waits for compute. */
+    for (uint32_t iter = 0; iter < 16; iter++) {
+        const int early = iter & 1, swapped = (iter >> 1) & 1;
+        VkQueue qa = swapped ? cmpQ : gfxQ, qb = swapped ? gfxQ : cmpQ;
+        VkCommandPool pa_pool = swapped ? cp : gp, pb_pool = swapped ? gp : cp;
+        const char *nameA = swapped ? "vkQueueSubmit compute stage A" : "vkQueueSubmit graphics stage A";
+        const char *nameB = swapped ? "vkQueueSubmit graphics stage B" : "vkQueueSubmit compute stage B";
+        const char *nameC = swapped ? "vkQueueSubmit compute stage C" : "vkQueueSubmit graphics stage C";
         const uint64_t base = (uint64_t)iter * 3;
         const Params pa = { Seed(300 + iter * 3), 0, rounds[0], 0 };
         const Params pb = { Seed(301 + iter * 3), 0, rounds[1], 1 };
@@ -620,7 +627,7 @@ static void Step3(void)
         for (uint32_t i = 0; i < n; i++)
             expect[i] = Stage(Stage(Stage(i, pa.seed, pa.rounds), pb.seed, pb.rounds), pc.seed, pc.rounds);
 
-        VkCommandBuffer ca = BeginCmd(gp), cb = BeginCmd(cp), cc = BeginCmd(gp);
+        VkCommandBuffer ca = BeginCmd(pa_pool), cb = BeginCmd(pb_pool), cc = BeginCmd(pa_pool);
         RecordStage(ca, &x, pa, VK_NULL_HANDLE);
         EndCmd(ca, 0);
         RecordStage(cb, &x, pb, VK_NULL_HANDLE);
@@ -628,18 +635,19 @@ static void Step3(void)
         RecordStage(cc, &x, pc, VK_NULL_HANDLE);
         EndCmd(cc, 1);
         double t0 = NowMs();
-        if (early) Submit(cmpQ, cb, t, base + 1, t, base + 2, VK_NULL_HANDLE, "vkQueueSubmit compute stage B");
-        Submit(gfxQ, ca, VK_NULL_HANDLE, 0, t, base + 1, VK_NULL_HANDLE, "vkQueueSubmit graphics stage A");
-        if (!early) Submit(cmpQ, cb, t, base + 1, t, base + 2, VK_NULL_HANDLE, "vkQueueSubmit compute stage B");
-        Submit(gfxQ, cc, t, base + 2, t, base + 3, VK_NULL_HANDLE, "vkQueueSubmit graphics stage C");
+        if (early) Submit(qb, cb, t, base + 1, t, base + 2, VK_NULL_HANDLE, nameB);
+        Submit(qa, ca, VK_NULL_HANDLE, 0, t, base + 1, VK_NULL_HANDLE, nameA);
+        if (!early) Submit(qb, cb, t, base + 1, t, base + 2, VK_NULL_HANDLE, nameB);
+        Submit(qa, cc, t, base + 2, t, base + 3, VK_NULL_HANDLE, nameC);
         WaitTimeline(t, base + 3, fenceMs, "the chain");
         const double ms = NowMs() - t0;
         uint64_t value = 0;
         VK(vkGetSemaphoreCounterValue(dev, t, &value));
         uint32_t first, bad = Compare(&x, expect, &first);
-        Check(!bad && value == base + 3,
-              "chain %u (%s): timeline %llu, %u of %u words differ from graphics->compute->graphics (first %d), %.1f ms",
-              iter, early ? "compute wait submitted first" : "in order", (unsigned long long)value, bad, n, (int)first, ms);
+        Check(!bad && value == base + 3, "chain %u (%s, %s): timeline %llu, %u of %u words differ (first %d), %.1f ms",
+              iter, swapped ? "compute->graphics->compute" : "graphics->compute->graphics",
+              early ? (swapped ? "graphics wait submitted first" : "compute wait submitted first") : "in order",
+              (unsigned long long)value, bad, n, (int)first, ms);
     }
     VK(vkDeviceWaitIdle(dev));
     vkDestroySemaphore(dev, t, NULL);

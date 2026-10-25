@@ -13,7 +13,7 @@ wait gives wrong words, not only a hang.
 |---|---|---|
 | 1 | families | Family 0 has graphics, compute and transfer. One compute-only family has one queue, compute and transfer only, timestamps, and no presentation. |
 | 2 | same | The same dispatch on both families gives the oracle words in both buffers. Then a read-modify-write stage on the compute family. |
-| 3 | chain | Graphics, then compute, then graphics, then the CPU, on one timeline semaphore, eight times. In half of the runs the compute stage is submitted first, so its wait comes before the signal. |
+| 3 | chain | Three stages on one timeline semaphore, then the CPU, sixteen times: graphics, compute, graphics in eight runs, and compute, graphics, compute in the other eight. In half of the runs of each direction the middle stage is submitted first, so its wait comes before the signal. |
 | 4 | overlap | One long dispatch on each queue, alone and together, with timestamps. It gives the GPU times, the wall time and the overlap of the two dispatches. Sampled words of the run together are checked. |
 | 5 | threads | Two threads, one per queue, walk one timeline in turns. Each stage reads the result of the stage before it. Both threads submit all their work before the GPU completes it. |
 | 6 | absent | The negative control: no compute-only family, and the graphics family still gives the oracle words. |
