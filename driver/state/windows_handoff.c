@@ -183,7 +183,7 @@ static DWORD ReadLeaf(HANDOFF_DIRECTORY *d,PCWSTR leaf,void **out,DWORD *bytes,H
     if(file==INVALID_HANDLE_VALUE)return GetLastError();
     error=Secure(file,FALSE);if(error)goto done;
     if(!GetFileSizeEx(file,&size)){error=GetLastError();goto done;}
-    if(size.QuadPart<sizeof(AMDGPU_TRANSFER_HEADER) || size.QuadPart>AMDGPU_TRANSFER_MAX_BYTES){error=ERROR_INVALID_DATA;goto done;}
+    if(size.QuadPart<(LONGLONG)sizeof(AMDGPU_TRANSFER_HEADER) || size.QuadPart>AMDGPU_TRANSFER_MAX_BYTES){error=ERROR_INVALID_DATA;goto done;}
     data=HeapAlloc(GetProcessHeap(),0,(SIZE_T)size.QuadPart);if(!data){error=ERROR_NOT_ENOUGH_MEMORY;goto done;}
     if(!ReadFile(file,data,(DWORD)size.QuadPart,&got,NULL)){error=GetLastError();goto done;}
     if(got!=(DWORD)size.QuadPart || AmdgpuTransferCheck(data,got,NULL)){error=ERROR_INVALID_DATA;goto done;}
@@ -310,7 +310,7 @@ DWORD AmdgpuWindowsRollbackRead(const BYTE tx[16],BOOL complete,void **data,DWOR
     if(file==INVALID_HANDLE_VALUE){error=GetLastError();goto done;}
     error=Secure(file,FALSE);if(error)goto done;
     if(!GetFileSizeEx(file,&size)){error=GetLastError();goto done;}
-    if(size.QuadPart<AMDGPU_ROLLBACK_PREFIX+sizeof(AMDGPU_TRANSFER_HEADER) || size.QuadPart>AMDGPU_ROLLBACK_MAX){error=ERROR_INVALID_DATA;goto done;}
+    if(size.QuadPart<(LONGLONG)(AMDGPU_ROLLBACK_PREFIX+sizeof(AMDGPU_TRANSFER_HEADER)) || size.QuadPart>AMDGPU_ROLLBACK_MAX){error=ERROR_INVALID_DATA;goto done;}
     out=HeapAlloc(GetProcessHeap(),0,(SIZE_T)size.QuadPart);if(!out){error=ERROR_NOT_ENOUGH_MEMORY;goto done;}
     if(!ReadFile(file,out,(DWORD)size.QuadPart,&got,NULL)){error=GetLastError();goto done;}
     error=got!=(DWORD)size.QuadPart?ERROR_READ_FAULT:AmdgpuRollbackCheck(out,got);

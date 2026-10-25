@@ -1,8 +1,9 @@
 # Compiler-explicit user-mode DLL builds. Host MSVC ABI/static-analysis controls remain separate.
-function Resolve-Bc250UmdCompiler([string]$Root,[string]$Compiler,[string]$MsvcReason,[string]$Out,[string]$Arch) {
+# -MsvcPath names the cl.exe of a recipe that does not load the Visual Studio environment.
+function Resolve-Bc250UmdCompiler([string]$Root,[string]$Compiler,[string]$MsvcReason,[string]$Out,[string]$Arch,[string]$MsvcPath='') {
     if($Compiler -eq 'msvc') {
         if([string]::IsNullOrWhiteSpace($MsvcReason)){throw '-Compiler msvc requires a concrete -MsvcReason'}
-        $path=(Get-Command cl.exe -ErrorAction Stop).Source
+        $path=if($MsvcPath){$MsvcPath}else{(Get-Command cl.exe -ErrorAction Stop).Source}
         $version=(& $path 2>&1 | Out-String).Trim()
         Write-Host "Explicit MSVC exception: $MsvcReason"
     } else {

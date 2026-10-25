@@ -8,7 +8,7 @@ typedef struct value {WCHAR path[128],name[128];DWORD type,bytes;BYTE data[65536
 static VALUE Values[256];static DWORD Count,Calls,FailAt,Checks,Failures,BoardError;
 static WCHAR CurrentPath[128];
 static BOOL RootMissing;
-#define CHECK(x) do{Checks++;if(!(x)){printf("FAIL %u line %u: %s\n",Checks,__LINE__,#x);Failures++;}}while(0)
+#define CHECK(x) do{Checks++;if(!(x)){printf("FAIL %lu line %u: %s\n",Checks,__LINE__,#x);Failures++;}}while(0)
 static BOOL Fault(void){return ++Calls==FailAt;}
 static VALUE *Value(PCWSTR name)
 {DWORD i;for(i=0;i<Count;i++)if(!wcscmp(Values[i].path,CurrentPath) && !wcscmp(Values[i].name,name))return &Values[i];

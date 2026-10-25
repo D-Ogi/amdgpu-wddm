@@ -88,7 +88,7 @@ pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc2
 ```
 
 `-Compiler clang-cl` is the default. It builds the router, its doubles and its harness with clang-cl of LLVM 23.1.4
-and links them with `link.exe`, as the D3D11 and D3D12 shells do (`tools/build/umd-compiler.ps1`). The clang-cl
+and links them with `lld-link` of the same LLVM, as the D3D11 and D3D12 shells do (`tools/build/umd-compiler.ps1`). The clang-cl
 flags are the msvc flags in clang-cl form, with x86-64-v3, the system-header SDK and WDK, and
 `-Werror=cast-calling-convention`. `-Compiler msvc` needs `-MsvcReason`. The msvc recipe is the recipe of
 `674AD261`: Visual Studio 2022 `vcvars64` (MSVC 14.44.35207, cl

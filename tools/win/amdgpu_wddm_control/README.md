@@ -413,8 +413,10 @@ product id or UUID are replaced. Versions, hashes, LUIDs and PnP hardware ids st
 pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits <BC250_ROOT>\toolchain\nuget -Out <BC250_ROOT>\scratch\release\control-app\build\app
 ```
 
-Compilers from the installed Visual Studio (Roslyn `csc` for .NET Framework 4.8, which Windows 10 and 11 carry, and
-`cl` for the DLL and the CLI), headers and import libraries from the SDK NuGet packages. Deterministic output. The gates, each of
+Roslyn `csc` of the installed Visual Studio builds the application for .NET Framework 4.8, which Windows 10 and 11
+carry. clang-cl of LLVM 23.1.4 builds the DLL and the CLI (`-Compiler clang-cl`, the default), and `lld-link` of the
+same LLVM links them. `-Compiler msvc` builds them with `cl` and needs `-MsvcReason`. Headers and import
+libraries come from the SDK NuGet packages. Deterministic output. The gates, each of
 which stops the build: `test/UnitTests.cs` (reply offsets computed from the text of `driver/kmd/bc250kmd_escape.h`,
 the profile catalog against every `ddi_experiment("...")` call in `driver/umd/d3d12`, profile editing, DPM ranges
 against `docs/design/dpm.md`, redaction, the manifest, and every Recovery rule and refusal, with its constants checked

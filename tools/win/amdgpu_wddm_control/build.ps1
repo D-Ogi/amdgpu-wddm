@@ -1,7 +1,11 @@
 # Builds the amdgpu-wddm control application: amdgpu_wddm_control.exe (.NET Framework 4.8, part of Windows 10/11,
 # nothing to install on a tester's PC) and bc250control.dll (tools/win/bc250kmd_cli/bc250kmd_cli.c with
-# BC250_CONTROL_DLL), and bc250kmd_cli.exe from the same file for the release's tools folder. Compilers from the installed Visual Studio, headers and import libraries from the SDK NuGet
-# packages under -Kits. Deterministic: the same sources give the same bytes (csc /deterministic, cl/link /Brepro).
+# BC250_CONTROL_DLL), and bc250kmd_cli.exe from the same file for the release's tools folder. csc comes from the
+# installed Visual Studio. The native files are built by clang-cl and lld-link of LLVM 23.1.4 (-Compiler clang-cl, the
+# default) or by cl and link of that Visual Studio (-Compiler msvc with -MsvcReason). The headers and import libraries
+# come from the SDK NuGet packages under -Kits. Deterministic: the same sources give the same bytes (csc
+# /deterministic, compiler and link /Brepro). A clang-cl build in another output directory differs in the per-build
+# fields only (tools\build\pe_compare.py).
 #
 #   pwsh tools\win\amdgpu_wddm_control\build.ps1 -Kits P:\BC-250\toolchain\nuget -Out P:\BC-250\scratch\release\control-app\build\app
 #        [-StartConfirmCore <release installer's start-confirm-core.ps1>] [-Oracle <directory of the review oracles>] [-Lab]
@@ -59,7 +63,12 @@ param(
     # amdgpu_wddm_control.exe is managed and carries its version from its own compile, so no stamp touches it.
     [string]$Version = '',
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
-    [switch]$Lab
+    [switch]$Lab,
+    # The compiler of the two native files and of the state client objects in them. clang-cl of LLVM 23.1.4 is the
+    # default (tools\build\umd-compiler.ps1), and lld-link of the same LLVM links its objects. -Compiler
+    # msvc builds with cl.exe and needs a concrete -MsvcReason (compiler policy).
+    [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
+    [string]$MsvcReason = ''
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
@@ -71,6 +80,7 @@ $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $csc = Join-Path $vs 'MSBuild\Current\Bin\Roslyn\csc.exe'
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
 $cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
+. (Join-Path $repo 'tools\build\umd-compiler.ps1')
 $fx = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
 $sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
@@ -123,19 +133,61 @@ if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 
 # 2. bc250control.dll, the same translation unit and flags as tools\win\bc250kmd_cli\build.ps1.
 $env:INCLUDE = ''; $env:LIB = ''
+$sdkIncludes = @((Join-Path $msvc.FullName 'include'), "$sdk\Include\$KitVersion\ucrt", "$sdk\Include\$KitVersion\um",
+    "$sdk\Include\$KitVersion\shared")
+$cc = Resolve-Bc250UmdCompiler (Split-Path (Split-Path $Kits -Parent) -Parent) $Compiler $MsvcReason $Out 'x64' $cl
+if ($Compiler -eq 'clang-cl') {
+    # clang-cl reads the CRT and SDK directories from INCLUDE as system headers, so /W4 /WX diagnose this code only.
+    # INCLUDE and LIB are not empty, so clang-cl adds no headers or libraries of an installed Visual Studio or SDK.
+    # The cl.exe and dumpbin.exe of the SDK boundary control come from the Visual Studio of this recipe.
+    $env:INCLUDE = $sdkIncludes -join ';'
+    $env:LIB = "$(Join-Path $msvc.FullName 'lib\x64');$sdkLib\ucrt\x64;$sdkLib\um\x64"
+    $env:PATH = "$(Join-Path $msvc.FullName 'bin\Hostx64\x64');$env:PATH"
+}
+# The compile switches of one cl line in the selected compiler's form: the clang-cl form gives the CRT and SDK as
+# system headers in place of /I.
+function ConvertTo-ControlFlags([string[]]$Flags) {
+    if ($Compiler -ne 'clang-cl') { return $Flags }
+    $own = @($Flags | Where-Object { -not ($_ -like '/I*' -and $sdkIncludes -contains $_.Substring(2)) })
+    # The debug information of an object records the compile directory, which is the directory the build is started
+    # from. A fixed name keeps it out of the bytes.
+    return @(ConvertTo-Bc250ClangFlags $own 'x64' @($repo)) + @('/clang:-ffile-compilation-dir=.', '/clang:-fuse-ld=lld')
+}
+# clang-cl links with lld-link of the same LLVM, named above. lld-link makes the relative source paths of the C
+# runtime objects absolute in the PDB, against the current directory unless /pdbsourcepath names a base. The PDB GUID
+# of a /Brepro link is a hash of the PDB, so without a fixed base the bytes depend on the directory the build is
+# started from.
+$clangLink = @(if ($Compiler -eq 'clang-cl') { '/pdbsourcepath:X:\bc250-build' })
+if ($Compiler -eq 'clang-cl') {
+    # The SDK boundary control of the shells. Its MSVC caller takes the WDK as /external:I, as the shells give it.
+    $wdk = Join-Path $Kits "microsoft.windows.wdk.x64\c\Include\$KitVersion"
+    $probeFlags = ConvertTo-ControlFlags @('/nologo', '/std:c++20', '/EHsc', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/DNOMINMAX')
+    Test-Bc250ClangSdk $cc ($probeFlags + @("/external:I$wdk\um", "/external:I$wdk\shared")) $obj
+}
 # /Z7 on the state client and on both products below: the debug information rides in the objects, so the two
 # shipped native files get a PDB from /DEBUG at the link and no compiler database is written beside them.
 # BD-167: the release flavour compiles the shipped objects with NDEBUG, so an assert() added to them later is gone
 # from the release and live in the lab build.
 $releaseDefine = @(if (-not $Lab) { '/DNDEBUG' })
-$stateFlags = @('/O2','/MT','/Brepro','/Z7',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
-    "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared") + $releaseDefine
-$stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cl -Out "$obj\state" -Flags $stateFlags -Exports
+$stateFlags = ConvertTo-ControlFlags (@('/O2','/MT','/Brepro','/Z7',"/I$($msvc.FullName)\include","/I$sdk\Include\$KitVersion\ucrt",
+    "/I$sdk\Include\$KitVersion\um","/I$sdk\Include\$KitVersion\shared") + $releaseDefine)
+# build-objects.ps1 runs the compiler itself: clang-cl reads CL and _CL_ as Invoke-Bc250UmdCompiler says.
+$previousCl = $env:CL, $env:_CL_
+if ($Compiler -eq 'clang-cl') { $env:CL = $null; $env:_CL_ = $null }
+try { $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cc -Out "$obj\state" -Flags $stateFlags -Exports }
+finally { $env:CL, $env:_CL_ = $previousCl }
 $flavourDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }) + $releaseDefine
-& $cl @flavourDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
+$dllFlags = ConvertTo-ControlFlags ($flavourDefine + @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
-    "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250control.obj", "/Fe$Out\bc250control.dll",
-    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
+    "/I$sdk\Include\$KitVersion\shared"))
+# clang-cl takes an object file name only for one input, and the state objects are inputs too, so it gets a directory.
+function Get-ObjectSwitch([string]$Name) {
+    if ($Compiler -ne 'clang-cl') { return "/Fo$obj\$Name.obj" }
+    New-Item -ItemType Directory -Force "$obj\$Name" | Out-Null
+    return "/Fo$obj\$Name\"
+}
+Invoke-Bc250UmdCompiler $cc @dllFlags @((Get-ObjectSwitch 'bc250control'), "/Fe$Out\bc250control.dll",
+    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG') @clangLink @(
     '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%', "/IMPLIB:$obj\bc250control.lib",
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
@@ -151,10 +203,11 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the
 # KMD branch without health, clock, telemetry, vram and sdmaib). Without arguments it prints its usage and exits 2.
-& $cl @flavourDefine @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
+$cliFlags = ConvertTo-ControlFlags ($flavourDefine + @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
-    "/I$sdk\Include\$KitVersion\shared", "/Fo$obj\bc250kmd_cli.obj", "/Fe$Out\bc250kmd_cli.exe",
-    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG',
+    "/I$sdk\Include\$KitVersion\shared"))
+Invoke-Bc250UmdCompiler $cc @cliFlags @((Get-ObjectSwitch 'bc250kmd_cli'), "/Fe$Out\bc250kmd_cli.exe",
+    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG') @clangLink @(
     '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |

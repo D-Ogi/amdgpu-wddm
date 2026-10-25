@@ -11,7 +11,7 @@
 #                                         [-Compiler clang-cl|msvc] [-MsvcReason <reason>]
 #
 # -Compiler clang-cl (the default) builds the DLL, the test fixtures, the doubles and the host tests with clang-cl of
-# LLVM 23.1.4 (umd-compiler.ps1), which links them with link.exe of the Visual Studio environment, as the D3D11 and
+# LLVM 23.1.4 (umd-compiler.ps1), which links them with lld-link of the same LLVM, as the D3D11 and
 # D3D12 shells do. It writes compiler.json into -OutputDir. The flags are the msvc flags converted by
 # ConvertTo-Bc250ClangFlags (x86-64-v3, tuned for Zen 2, SDK and WDK headers as system headers, the path prefix map
 # in place of /FC and /d1trimfile, no /GL and /LTCG), plus -Werror=cast-calling-convention: the router is loaded into
