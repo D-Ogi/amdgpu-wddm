@@ -302,62 +302,62 @@ int main(void)
     // BGP1 burst: the second job must enter while the first is outstanding.
     memset(&w,0,sizeof(w)); w.FenceLedger[0].Epoch=1;
     mock_seq=completed=reported=dispatches=failures=0; mock_now=0;
-    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x4000,128,1,0));
-    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x4000,128,2,0));
+    CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x4000,128,1,0,"present"));
+    CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x4000,128,2,0,"present"));
     CHECK(dispatches==2 && reported==0 && steps==0 && w.GfxPending.Count==2 && w.SubmitHolds==0);
     // Root-switch pressure clears only when genuine completion is observed. KMD196: the blocking job has ~0.13 ms
     // left at the refusal, so phase 1 catches it: two 20 us stalls, no wait, one hold counted as spin-only.
     the_device=&d; root_wait=1; complete_on_step=2;
-    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,3,0));
+    CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,3,0,"present"));
     CHECK(stalls==2 && waits==0 && dispatches==3 && reported==2 && w.GfxPending.Count==1);
     CHECK(w.SubmitHolds==1 && w.SubmitHoldSpinOnly==1 && w.SubmitHoldSpins==2);
     CHECK(w.SubmitHoldEventWakes==0 && w.SubmitHoldTimeoutWakes==0);
     CHECK(w.SubmitHeldUs==40 && w.SubmitHeldMaxUs==40 && w.SubmitHeldHistogram[0]==1);
     root_wait=0; complete_on_step=0;
     // Fill remaining completion slots; bounded admission waits for capacity.
-    for(i=4;i<=9;i++) CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0));
+    for(i=4;i<=9;i++) CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,i,0,"present"));
     CHECK(w.GfxPending.Count==7 && steps==2);
     complete_on_step=steps+1;
-    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,10,0));
+    CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,10,0,"present"));
     CHECK(steps==3 && reported==9 && dispatches==10 && w.GfxPending.Count==1 && w.SubmitHolds==2);
     // Past the spin budget: 25 stalls (500 us), then waits on the retirement event. Two time out, the completion
     // interrupt ends the third half-way: 0.5 + 2 + 0.5 ms held, the 2k-5k bucket.
-    for(i=11;i<=16;i++) CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0));
+    for(i=11;i<=16;i++) CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,i,0,"present"));
     CHECK(w.GfxPending.Count==7 && steps==3);
     complete_on_step=steps+BC250_WDDM_HOLD_SPIN_US/BC250_WDDM_HOLD_SPIN_STEP_US+3;
-    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,17,0));
+    CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,17,0,"present"));
     CHECK(stalls==3+25 && waits==3 && reported==16 && dispatches==17 && w.GfxPending.Count==1);
     CHECK(w.SubmitHolds==3 && w.SubmitHoldSpinOnly==2 && w.SubmitHoldEventWakes==1 && w.SubmitHoldTimeoutWakes==2);
     CHECK(w.SubmitHeldMaxUs==3000 && w.SubmitHeldHistogram[5]==1);
     // A lost end-of-pipe interrupt: nobody signals, the 1 ms timeout ends the wait and the retry's own fence read
     // retires the job.
-    for(i=18;i<=23;i++) CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0));
+    for(i=18;i<=23;i++) CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,i,0,"present"));
     complete_on_step=steps+25+1; lost_interrupt=1;
-    CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,24,0));
+    CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,24,0,"present"));
     CHECK(waits==4 && reported==23 && dispatches==24 && w.SubmitHolds==4 && w.SubmitHoldTimeoutWakes==3);
     CHECK(w.SubmitHoldSpinOnly==2 && w.SubmitHoldEventWakes==1);   /* a timeout wake is no spin-only hold */
     CHECK(w.SubmitHeldMaxUs==3000 && w.SubmitHeldHistogram[4]==1);    /* 0.5 + 1 ms */
     complete_on_step=0; lost_interrupt=0;
     // A stopping adapter and a caller at DISPATCH_LEVEL do not wait at all: one terminal attempt, refused.
-    for(i=25;i<=30;i++) CHECK(WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,i,0));
+    for(i=25;i<=30;i++) CHECK(WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,i,0,"present"));
     CHECK(w.GfxPending.Count==7);
     i=steps; w.Stopping=1;
-    CHECK(!WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,31,0));
+    CHECK(!WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,31,0,"present"));
     CHECK(steps==i && dispatches==30 && w.SubmitHolds==4);
     w.Stopping=0; irql_now=DISPATCH_LEVEL;
-    CHECK(!WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,31,0));
+    CHECK(!WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,31,0,"present"));
     CHECK(steps==i && dispatches==30 && w.SubmitHolds==4);
     irql_now=0;
     // No progress: the wait is the deadline plus at most one 1 ms wait, with no new dispatch or fabricated
     // retirement.
     refuse=1; i=waits; t0=mock_now;
-    CHECK(!WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,31,0));
+    CHECK(!WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,31,0,"present"));
     CHECK(mock_now-t0>=10000ull*BC250_WDDM_HOLD_DEADLINE_MS && mock_now-t0<=10000ull*BC250_WDDM_HOLD_DEADLINE_MS+10000);
     CHECK(waits>i && reported==23 && dispatches==30 && w.SubmitHolds==5 && w.SubmitHoldEventWakes==1);
     CHECK(w.SubmitHoldTimeoutWakes==3+(LONG64)(waits-i) && w.SubmitHeldHistogram[8]==1);
     // Closed hardware does not wait or submit even with an outstanding job.
     armed=0; i=steps;
-    CHECK(!WddmSubmitPresentHardware(&d,&w,&c,0x8000,128,31,0));
+    CHECK(!WddmSubmitHeldHardware(&d,&w,&c,0x8000,128,31,0,"present"));
     CHECK(steps==i && reported==23 && dispatches==30);
     // Every hold is counted once, in one bucket; every retirement signalled the waiters.
     CHECK(HistogramTotal(&w)==w.SubmitHolds && d.GfxRetireGeneration!=0);

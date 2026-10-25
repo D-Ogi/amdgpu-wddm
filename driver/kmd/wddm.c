@@ -2124,8 +2124,12 @@ static void WddmHoldReport(_In_opt_ BC250_WDDM* Wddm, _In_ const BC250_WDDM_HOLD
 // Idle is not a submission prerequisite: the lower layer admits same-root jobs
 // and reports temporary ring/root-switch pressure. Match the UMD ready-or-busy
 // policy, with a wall-clock deadline and no completion synthesized on failure.
-static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
-    _In_ const BC250_WDDM_OBJECT* Context, ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node)
+// The driver-built DMA buffers of stage C (GDI hardware acceleration) take the same path: a RenderGdi buffer
+// arrives while DWM's job is still on the ring, and an idle-only test refused it and closed node 0 until the
+// next TDR. What names the caller in the held-submission line.
+static BOOLEAN WddmSubmitHeldHardware(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm,
+    _In_ const BC250_WDDM_OBJECT* Context, ULONGLONG GpuVa, ULONG Bytes, UINT FenceId, UINT Node,
+    _In_z_ const char* What)
 {
     BC250_WDDM_HOLD hold;
 
@@ -2133,7 +2137,7 @@ static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ B
     for (;;) {
         if ((GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
             WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node, 0)) {
-            WddmHoldReport(Wddm, &hold, FenceId, "present");
+            WddmHoldReport(Wddm, &hold, FenceId, What);
             return TRUE;
         }
         // Refresh retirement before the terminal retry: a completion can race
@@ -2142,7 +2146,7 @@ static BOOLEAN WddmSubmitPresentHardware(_Inout_ BC250_DEVICE* Device, _Inout_ B
         if (!GfxSubmitBusy(Device) || !WddmHoldWait(Device, Wddm, &hold)) {
             BOOLEAN submitted = (GfxSubmitReady(Device) || GfxSubmitBusy(Device)) &&
                 WddmSubmitHardware(Device, Wddm, Context, GpuVa, Bytes, FenceId, Node, 0);
-            WddmHoldReport(Wddm, &hold, FenceId, "present");
+            WddmHoldReport(Wddm, &hold, FenceId, What);
             return submitted;
         }
     }
@@ -7472,7 +7476,7 @@ static NTSTATUS WddmSubmitUmdImpl(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_W
                              ib.ib_va, ib.ib_bytes);
                 return STATUS_SUCCESS;
             }
-            // Refresh retirement before the terminal retry, the same reason WddmSubmitPresentHardware does it:
+            // Refresh retirement before the terminal retry, the same reason WddmSubmitHeldHardware does it:
             // a completion can race the separate ready/busy observations or release the last queue slot.
             WddmRingFence(Device, Node);
             // Not busy: either the ring will not take an IB, or the one it held finished between
@@ -7631,9 +7635,9 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
             }
             return STATUS_INVALID_PARAMETER;
         }
-        if (WddmSubmitPresentHardware(device,wddm,context,
+        if (WddmSubmitHeldHardware(device,wddm,context,
                 pSubmitCommand->DmaBufferVirtualAddress,pSubmitCommand->DmaBufferSize,
-                pSubmitCommand->SubmissionFenceId,node)) {
+                pSubmitCommand->SubmissionFenceId,node,"present")) {
             if (InterlockedIncrement64(&wddm->GpuPresentSubmits)<=16)
             {
                 GuardLog("wddm: GPU Present submit ctx%p fence%llu va%llX bytes%u",
@@ -7701,10 +7705,13 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
     // A refused nonempty command remains outstanding for recovery; only empty work completes in software.
     // node == BC250_WDDM_NODE_3D: this hardware path is GfxSubmitIb's, the gfx ring at a VMID gfx.c chooses, and it stays
     // node 0's alone - node 1 has its own arm above, its own ring (SDMA0, no VMID) and its own failure counters.
+    // Ready or busy, through the held submission, as a Present: the ring may hold another job (DWM's composition
+    // or an earlier GDI buffer) when this packet arrives, and that is pressure to wait out, not a refusal.
     if (node == BC250_WDDM_NODE_3D && pSubmitCommand->DmaBufferSize != 0 && context != NULL && context->RootPhysical != 0 &&
-        device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL && GfxSubmitReady(device) &&
-        WddmSubmitHardware(device, (BC250_WDDM*)device->Wddm, context, (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress,
-                           pSubmitCommand->DmaBufferSize, pSubmitCommand->SubmissionFenceId, node, 0))
+        device->Wddm != NULL && KeGetCurrentIrql() <= APC_LEVEL &&
+        WddmSubmitHeldHardware(device, (BC250_WDDM*)device->Wddm, context,
+                               (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize,
+                               pSubmitCommand->SubmissionFenceId, node, "kernel"))
         return STATUS_SUCCESS;
     if (pSubmitCommand->DmaBufferSize != 0)
         WddmFailSubmission(device,pSubmitCommand->SubmissionFenceId,node);

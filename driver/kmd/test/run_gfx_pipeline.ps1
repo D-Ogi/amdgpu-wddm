@@ -12,7 +12,7 @@ if($KmdOnly){$MesaSource=''}
 if($LASTEXITCODE -ne 0){throw 'extraction failed'}
 if($IdleOnlyPresent){
     $actual=Get-Content "$Out\gfx_pipeline_actual.inc" -Raw
-    $marker='static BOOLEAN WddmSubmitPresentHardware('
+    $marker='static BOOLEAN WddmSubmitHeldHardware('
     $at=$actual.IndexOf($marker)
     if($at -lt 0){throw 'Present admission extraction missing'}
     $actual=$actual.Substring(0,$at)+$actual.Substring($at).Replace('(GfxSubmitReady(Device) || GfxSubmitBusy(Device))','GfxSubmitReady(Device)')

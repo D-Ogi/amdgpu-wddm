@@ -6,7 +6,8 @@ source=Path(sys.argv[2]) if len(sys.argv)>2 else repo
 def function(s,sig):
     start=s.index(sig);return s[start:s.index('\n}\n',start)+3]
 s=(source/'driver/kmd/wddm.c').read_text()
-assert 'if (WddmSubmitPresentHardware(device,wddm,context,' in s, 'BGP1 must use tested bounded admission'
+assert 'if (WddmSubmitHeldHardware(device,wddm,context,' in s, 'BGP1 must use tested bounded admission'
+assert s.count('WddmSubmitHeldHardware(device, (BC250_WDDM*)device->Wddm, context,')==1, 'stage C must use the held submission'
 a=s.index('static void WddmGfxHeadLocked(')
 b=s.index('// ---- ADR 0008 stage D:',a)
 # KMD196: the held submission's bucket count sizes a BC250_WDDM field, so it goes ahead of the harness's struct;
