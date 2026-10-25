@@ -143,9 +143,10 @@ HRESULT load_caps(Adapter& adapter,AdapterCapsOwner& owner) {
         amdgpu_wddm_log::flush();
     }
     // Raytracing tier 1.2 and shader model 6.9 (engine-ddi set_raytracing_tier12_reporting): on, each only where the
-    // engine has it. The experiment raytracing-tier12-off keeps 1_1 and 6_8, the answers of the shells before it.
+    // engine has it. In a lab build the experiment raytracing-tier12-off keeps 1_1 and 6_8, the answers of the
+    // shells before it; a release build has no switch.
     if(SUCCEEDED(hr)){
-        const bool off=ddi_experiment("raytracing-tier12-off");
+        const bool off=ddi_raytracing_tier12_off();
         hr=engine_ddi::set_raytracing_tier12_reporting(owner.caps,!off);
         if(off){
             amdgpu_wddm_log::print("d3d12-caps experiment raytracing-tier12-off result=%08lx\n",static_cast<unsigned long>(hr));

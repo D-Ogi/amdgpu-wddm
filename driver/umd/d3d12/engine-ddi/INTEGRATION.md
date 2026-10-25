@@ -263,8 +263,9 @@ up to 6_6 and no 1091.
 ### Raytracing tier 1.2
 
 Raytracing tier 1.2 adds opacity micromaps and needs shader model 6.9 (DirectX-Specs `d3d/Raytracing.md`, "Opacity
-micromaps"). engine-ddi has it in two halves. Both are OFF in the library. The shell turns both on, unless the
-experiment `raytracing-tier12-off` is set (adapter-caps.cpp and device-engine.cpp).
+micromaps"). engine-ddi has it in two halves. Both are OFF in the library. The shell turns both on
+(adapter-caps.cpp and device-engine.cpp). Only a lab build has an off switch, the experiment
+`raytracing-tier12-off`. A release build has none (ddi-trace.h `ddi_raytracing_tier12_off`).
 
 ```cpp
 HRESULT engine_ddi::set_raytracing_tier12_reporting(engine_ddi::AdapterCaps* caps, bool report) noexcept;
