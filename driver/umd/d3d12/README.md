@@ -154,8 +154,10 @@ the engine's VkQueue for it: on the compute ring, node 2 (BC2C COMPUTE), when th
 ICD shows a compute queue family, and otherwise on GFX, node 0. Its context is
 opened at that bind, inside the queue's creation, with the request of the ICD
 when it is one of these two (`QueueEngineRegistry::bind_context`). The ICD hides
-the compute family when the kernel driver has no node 2 or when
-`RADV_BC250_ACE_QUEUES=0` is set, and the engine then takes the graphics family.
+the compute family when the kernel driver's caps show no node 2: the kernel
+driver's compute queue setting keeps the node closed. A lab-flavour ICD also
+hides it when `RADV_BC250_ACE_QUEUES=0` is set. The engine then takes the
+graphics family for the compute and copy queues.
 `QueueContext` preserves the full runtime queue handle and callback-owned context.
 `QueueEngineRegistry` associates this context with an engine queue; `HostedQueue`
 aliases it for RADV submission instead of creating another context for the same

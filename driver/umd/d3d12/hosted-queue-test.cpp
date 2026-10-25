@@ -86,8 +86,9 @@ HRESULT close(engine_ddi::EngineQueue** engine) noexcept{
 }
 }
 // A D3D12 COMPUTE or COPY queue has no context before the engine binds its VkQueue; the ICD's request opens it there,
-// on node 2 for a VkQueue of the compute family (the MEC) and on node 0 for a GENERAL one (no compute family, as with
-// RADV_BC250_ACE_QUEUES=0). A DIRECT queue keeps its node 0 context and refuses the node 2 request.
+// on node 2 for a VkQueue of the compute family (the MEC) and on node 0 for a GENERAL one (no compute family: node 2
+// closed, or RADV_BC250_ACE_QUEUES=0 in a lab-flavour ICD). A DIRECT queue keeps its node 0 context and refuses the
+// node 2 request.
 void compute_queues(){
  Fixture g;bc250::umd::RuntimeDomain::Scope scope(g.domain);
  D3D12DDIARG_CREATECOMMANDQUEUE_0050 direct{};direct.QueueFlags=D3D12DDI_COMMAND_QUEUE_FLAG_3D;

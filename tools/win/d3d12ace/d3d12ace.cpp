@@ -5,12 +5,13 @@
  * Why this client exists. bc250kmd runs COMPUTE work on WDDM node 2, a MEC compute queue
  * (docs/design/compute-node.md). The hosted Vulkan driver of the D3D12 route shows a compute queue family when
  * that node is open, the D3D12 engine puts every D3D12 COMPUTE and COPY queue on that family, and the shell
- * opens the context of such a queue on node 2. RADV_BC250_ACE_QUEUES=0 hides the family: then every queue runs
- * on the graphics node 0, as before. This client checks both through the standard D3D12 runtime, before a game
- * does: that a compute queue computes the same words as the direct queue, that fences order work across the
- * queues in both directions, also when a Wait is queued before the Signal it waits for, that the queues run at
- * the same time, that several threads can drive several queues, and that the work of the compute and copy
- * queues ran on the node that the run expects.
+ * opens the context of such a queue on node 2. With node 2 closed (the kernel driver's compute queue setting) the
+ * caps show no compute node and the family is hidden, and so does RADV_BC250_ACE_QUEUES=0 in a lab-flavour ICD:
+ * then every queue runs on the graphics node 0, as before. This client checks both through the standard D3D12
+ * runtime, before a game does: that a compute queue computes the same words as the direct queue, that fences
+ * order work across the queues in both directions, also when a Wait is queued before the Signal it waits for,
+ * that the queues run at the same time, that several threads can drive several queues, and that the work of the
+ * compute and copy queues ran on the node that the run expects.
  *
  * Every check is a word-by-word comparison with a CPU oracle. One compute shader (stage.hlsl) does all the GPU
  * work, with the function of tools/win/vkace: data[i] = rounds of a mixing function over (i ^ seed) in mode 0, or
@@ -964,7 +965,7 @@ void Step6()
             "  --step N          run step N only: 1 queues, 2 same, 3 chain, 4 overlap, 5 threads, 6 node.\n"
             "                    Default: steps 1 to 6\n"
             "  --expect-node X   where the compute and copy queues run: 2 (the compute node), 0 (the graphics node:\n"
-            "                    RADV_BC250_ACE_QUEUES=0) or any (no check). Default: 2 on a BC-250, else any\n"
+            "                    node 2 closed, or RADV_BC250_ACE_QUEUES=0 in a lab-flavour ICD) or any (no check). Default: 2 on a BC-250, else any\n"
             "  --threads T       the threads of step 5, 2 to 8 (default 4)\n"
             "  --any-device      use the first hardware adapter when no BC-250 is present; exit 5 when there is none\n"
             "  --deadline S      end the process after S seconds, 5 to 170 (default 170)\n"

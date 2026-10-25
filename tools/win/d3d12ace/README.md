@@ -3,8 +3,9 @@
 bc250kmd runs COMPUTE work on WDDM node 2, a MEC compute queue (`docs/design/compute-node.md`). On the D3D12 route
 the hosted Vulkan driver then shows a compute queue family, the D3D12 engine puts each D3D12 COMPUTE and COPY queue
 on it, and the shell opens the context of that queue on node 2 (`driver/umd/d3d12/README.md`, "Queues and fences").
-With `RADV_BC250_ACE_QUEUES=0` the family is hidden and all queues run on node 0. d3d12ace checks both cases through
-the D3D12 runtime of System32, before an application uses the queues.
+When the kernel driver's compute queue setting keeps node 2 closed, the caps show no compute node, the family is
+hidden and all queues run on node 0. In a lab-flavour ICD, `RADV_BC250_ACE_QUEUES=0` does the same. d3d12ace
+checks both cases through the D3D12 runtime of System32, before an application uses the queues.
 
 One compute shader (`stage.hlsl`) does all the GPU work. It has the function of `tools/win/vkace`: `data[i]` gets
 rounds of a mixing function over `i ^ seed` (mode 0) or over `data[i] ^ seed` (mode 1). The same function in
@@ -24,8 +25,8 @@ order of its stages, so a broken cross-queue wait gives wrong words, not only a 
 
 - `2` (the default on a BC-250): the compute and the copy work ran on node 2, the direct work on node 0 and not on
   node 2.
-- `0` (the kill switch, `RADV_BC250_ACE_QUEUES=0`): the compute and the copy work ran on node 0, none on node 2, and
-  the whole run put no packet on node 2.
+- `0` (node 2 closed, or `RADV_BC250_ACE_QUEUES=0` in a lab-flavour ICD): the compute and the copy work ran on
+  node 0, none on node 2, and the whole run put no packet on node 2.
 - `any` (the default on another adapter): the packets are reported and not checked.
 
 The `module` lines name the D3D12 runtime and the driver modules in the process, with their SHA-256. Every line is
