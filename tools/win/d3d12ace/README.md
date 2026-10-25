@@ -16,10 +16,10 @@ order of its stages, so a broken cross-queue wait gives wrong words, not only a 
 |---|---|---|
 | 1 | queues | A DIRECT, a COMPUTE and a COPY queue, their timestamp frequencies, and the nodes of the adapter by name. With `--expect-node 2`, the adapter has node 2. |
 | 2 | same | The same dispatch on the DIRECT and the COMPUTE queue gives the oracle words on both. Then direct, compute (read-modify-write), copy and direct (readback), each behind a fence value of the stage before it. |
-| 3 | chain | Three stages on one fence, then the CPU: direct, compute, direct (8 runs); compute, direct, compute (8 runs); compute, copy, direct (4 runs). In half of the runs the middle stage is submitted first, so its Wait comes before the Signal that it waits for. |
+| 3 | chain | Three stages on one fence, then the CPU. The orders are direct-compute-direct (8 runs), compute-direct-compute (8 runs) and compute-copy-direct (4 runs). In half of the runs the middle stage is submitted first, so its Wait comes before the Signal that it waits for. |
 | 4 | overlap | One long dispatch on each queue, alone and together: GPU times, wall time, and the overlap when both queues give a clock calibration. Sampled words of the run together are checked. |
-| 5 | threads | `--threads` threads (default 4), each with its own queue created in the thread (thread 0 DIRECT, the others COMPUTE), walk one fence in turns. Each stage reads the result of the stage before it, and each thread also runs a private chain. All threads record at the same time and then submit all their work. |
-| 6 | node | The packets of this process per node (`D3DKMTQueryStatistics`) around 16 dispatches on the COMPUTE queue only, 16 copies on the COPY queue only and 16 dispatches on the DIRECT queue only. |
+| 5 | threads | `--threads` threads (default 4) walk one fence in turns. Each thread creates its own queue: thread 0 a DIRECT queue, the others a COMPUTE queue. Each stage reads the result of the stage before it, and each thread also runs a private chain. All threads record at the same time and then submit all their work. |
+| 6 | node | The packets of this process per node (`D3DKMTQueryStatistics`), in three windows. The windows are 16 dispatches on the COMPUTE queue only, 16 copies on the COPY queue only and 16 dispatches on the DIRECT queue only. |
 
 `--expect-node` sets the node checks of steps 1 and 6 and of the end of the run:
 
