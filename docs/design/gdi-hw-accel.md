@@ -22,12 +22,13 @@ Increment 2 carries the six compute kernels for the blends, the stretch, the tra
 ClearType blend, as gfx1013 machine code inside the driver image, and the dispatch that runs them.
 `Bc250GdiKernelsPresent` in [gdi_dispatch.c](../../driver/kmd/gdi_dispatch.c) is the one place that
 reports their presence. The capability bit, the start log line and the operator gate all read that
-function, and the gate `EnableGdiHwAccel` is on when the registry says nothing.
+function, and the gate `EnableGdiHwAccel`, a setting of the driver state catalog, is on at its
+factory value.
 
 So this driver now sets `SupportKernelModeCommandBuffer`, which promises all seven operations, and
 clears `DriverSupportsCddDwmInterop`.
 
-This work goes to the train after tester.31. The reason is the capacity question of the review.
+This work was held back from tester.31 and tester.32. The reason is the capacity question of the review.
 [Where the bound comes from](#where-the-bound-comes-from) answers it from what one indirect buffer
 can carry, which is the hardware's own limit on any translation here, [Which DMA buffer a call lies
 in](#which-dma-buffer-a-call-lies-in) says how the dwords already in a buffer are established rather
@@ -972,12 +973,13 @@ staging surface to read pixels.
 
 | Increment | Content | State |
 |---|---|---|
-| 1 | the contract layer, the reference model, the DMA_DATA copy and fill, the host tests, the registry gate, the DDI function, the caps arm behind `Bc250GdiKernelsPresent` | in the driver |
+| 1 | the contract layer, the reference model, the DMA_DATA copy and fill, the host tests, the off switch, the DDI function, the caps arm behind `Bc250GdiKernelsPresent` | in the driver |
 | 2 | `gdi_kernels.cl` for gfx1013, its reproducible build, the dispatch emitter, the code object in the driver image, and `Bc250GdiKernelsPresent` returning 1 | in the driver |
 
-The registry gate is `EnableGdiHwAccel`. The release default is 1, which follows the rule that a new
-feature of a train ships on. The gate is the field off switch and the driver reads it once at a
-start. The capability follows the gate and the kernels together: with the gate at 0, or with an
+The gate is `EnableGdiHwAccel`, a setting of the driver state catalog
+([driver/state/catalog.json](../../driver/state/catalog.json)). The factory value is 1, which follows
+the rule that a new feature ships on. The gate is the field off switch and the driver reads it once
+at a start. The capability follows the gate and the kernels together: with the gate at 0, or with an
 image that lost its kernels, a start reports the feature exactly as the release before this work
 did, and `DxgkDdiRenderGdi` returns at once without touching the DMA buffer.
 

@@ -2,7 +2,7 @@
 
 This page is the lab plan for the GDI acceleration of [docs/design/gdi-hw-accel.md](../design/gdi-hw-accel.md).
 Both increments are in the driver, the kernels are in the image, and the driver reports the
-capability, so this plan applies to a build of `feat/gdi-hw-accel`. Nothing of it has run yet.
+capability, so this plan applies to every build that carries this series. Nothing of it has run yet.
 
 Run it only on a build whose start log says `kernels 1`. On an image without the kernels
 `Bc250GdiKernelsPresent` returns 0, the driver reports the caps of the previous release, and nothing
@@ -27,8 +27,8 @@ the host tests cannot answer. Every trial outside the HLK job ends inside three 
 5. Compare that hash with `BC250_GDI_CODE_SHA256` of
    [driver/kmd/gdi_kernels.generated.h](../../driver/kmd/gdi_kernels.generated.h). A different hash
    means the installed driver is not the build under test.
-6. Check the registry value. `EnableGdiHwAccel` must be 1 under the adapter's `Parameters` key,
-   where the package INF writes it with NOCLOBBER.
+6. Check the switch. `bc250kmd_cli state get EnableGdiHwAccel` must give 1. The switch is a
+   setting of the driver state catalog with the factory value 1, so the package install writes it.
 7. Start the thermal guard for the whole pass, and the camera watch beside it where the operator's
    own lab rules allow a camera.
 
@@ -94,9 +94,10 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
 4. Take a screenshot with `mon.py screenshot` and compare it with what the camera sees. Both must
    show an ordinary desktop: no torn window, no black rectangle, no stale content.
 5. Read the driver's GDI lines again, and the totals of the stop. The stop writes
-   `wddm: gdi totals` into the log ring, so the log file of the stop (`KeepLog`) carries it over the
-   restart that stopped the driver. A stop of the device on purpose is not needed, and it would
-   leave the processor slower until the next restart (K137).
+   `wddm: gdi totals` into the log ring. With the state setting `KeepLog` at 1
+   (`bc250kmd_cli state set KeepLog 1`), the log file of the stop carries it over the restart that
+   stopped the driver. `bc250kmd_cli state paths` names the folder of the kept logs. A stop of the
+   device on purpose is not needed, and it would leave the processor slower until the next restart.
 6. Check the counters of that line: `item-refused`, `batch-refused` and `fallback`. The first two
    must be 0 in an ordinary desktop session.
 7. Record `wddm: gdi capacity-short<n> peak cmdlen<bytes> want<bytes>`. `peak cmdlen` is the largest
@@ -127,9 +128,10 @@ closes what it opened. The owner sees all of it happen on the lab's screen.
 
 ## Trial 4: the off switch
 
-Set `EnableGdiHwAccel` to 0, restart the machine, and repeat trial 3 in two minutes. The driver must
-then report no GDI acceleration, write `gate 0` in its start line, and draw the desktop through the
-present path as the previous release does. This trial proves the field off switch.
+Set the switch to 0 with `bc250kmd_cli state set EnableGdiHwAccel 0`, restart the machine, and
+repeat trial 3 in two minutes. The driver must then report no GDI acceleration, write `gate 0` in
+its start line, and draw the desktop through the present path as the previous release does. Set
+the switch back to 1 and restart after the trial. This trial proves the field off switch.
 
 ## Trial 5: what the processor pays for a CPU-visible surface
 
