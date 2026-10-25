@@ -337,9 +337,11 @@ void GuardLabReadComputeNode(_In_ PDRIVER_OBJECT DriverObject)
 
 // The GDI hardware acceleration selector, lab flavour only, not a catalog setting: a lab arm swaps the KMD image
 // only, and the installed catalog stays that of the installed package (docs/design/gdi-hw-accel.md). LabGdiHwAccel
-// (REG_DWORD, Parameters, read only at DriverEntry): 1 opens the GDI gate whatever EnableGdiHwAccel says. Absent
+// (REG_DWORD, Parameters, read only at DriverEntry): 1 opens the GDI gate whatever EnableGdiHwAccel says. 2 opens it
+// too, with the engine path only: no compute dispatch is submitted (the bisection arm of the GDI timeouts). Absent
 // or any other value leaves the gate to EnableGdiHwAccel. The selector can open the gate, never close it.
 static BOOLEAN g_LabGdiHwAccel = FALSE;
+static BOOLEAN g_LabGdiEngineOnly = FALSE;
 
 void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject)
 {
@@ -358,8 +360,10 @@ void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject)
         GuardLog("lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)");
         return;
     }
-    g_LabGdiHwAccel = (BOOLEAN)(NT_SUCCESS(status) && value == 1);
+    g_LabGdiHwAccel = (BOOLEAN)(NT_SUCCESS(status) && (value == 1 || value == 2));
+    g_LabGdiEngineOnly = (BOOLEAN)(NT_SUCCESS(status) && value == 2);
     GuardLog("lab: GDI selector read (read only; value %lu, 0x%08X): %s", value, status,
+             g_LabGdiEngineOnly ? "gate open, engine path only (no dispatch)" :
              g_LabGdiHwAccel ? "gate open" : "not used, the gate is EnableGdiHwAccel");
 }
 
@@ -440,6 +444,15 @@ BOOLEAN GuardLabGdiHwAccel(void)
 {
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     return g_LabGdiHwAccel;
+#else
+    return FALSE;
+#endif
+}
+
+BOOLEAN GuardLabGdiEngineOnly(void)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return g_LabGdiEngineOnly;
 #else
     return FALSE;
 #endif

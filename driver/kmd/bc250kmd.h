@@ -656,7 +656,8 @@ ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and 
 void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
 // Lab flavour only: EnableComputeNode (REG_DWORD under Parameters, read only in DriverEntry), 0 closes node 2.
 void GuardLabReadComputeNode(_In_ PDRIVER_OBJECT DriverObject);
-// Lab flavour only: LabGdiHwAccel (REG_DWORD under Parameters, read only in DriverEntry), 1 opens the GDI gate.
+// Lab flavour only: LabGdiHwAccel (REG_DWORD under Parameters, read only in DriverEntry), 1 opens the GDI gate, 2
+// opens it with the engine path only.
 void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
@@ -674,6 +675,8 @@ BOOLEAN GuardComputeNodeSelector(void);
 // GDI hardware acceleration (docs/design/gdi-hw-accel.md): TRUE only in the lab flavour with LabGdiHwAccel 1; the
 // release flavour always returns FALSE. Any IRQL: a value fixed at DriverEntry.
 BOOLEAN GuardLabGdiHwAccel(void);
+// TRUE only in the lab flavour with LabGdiHwAccel 2: RenderGdi submits no compute dispatch. Any IRQL.
+BOOLEAN GuardLabGdiEngineOnly(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer

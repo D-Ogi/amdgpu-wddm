@@ -7532,6 +7532,103 @@ static NTSTATUS WddmSubmitUmd(_Inout_ BC250_DEVICE* Device, _In_opt_ BC250_WDDM*
     return status;
 }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// Lab flavour only: the inputs of the first RenderGdi calls, written so that a host replay can build the same DMA
+// buffer through the same translation code, and the FNV-1a 64 hash of the dwords the call wrote, which the replay
+// must reproduce. With the GPU addresses of the window, the code block and every bound surface in the log, the
+// fault page and the IB1 base of a timeout snapshot can be placed. The release flavour compiles none of this.
+#define BC250_GDI_DIAG_CALLS 12
+#define BC250_GDI_DIAG_RECTS 32u
+#define BC250_GDI_DIAG_SUBMITS 16
+static volatile LONG64 g_LabGdiKernelSkips;     // LabGdiHwAccel 2: kernel items not offered to the batch
+static volatile LONG64 g_LabGdiDispatchDrops;   // LabGdiHwAccel 2: calls dropped because a fallback dispatched
+static volatile LONG g_LabGdiSubmits;
+
+static ULONGLONG WddmGdiDiagHash(_In_reads_(Dwords) const unsigned int* Out, unsigned int Dwords)
+{
+    ULONGLONG hash = 0xCBF29CE484222325ull;
+    unsigned int i, b;
+    for (i = 0; i < Dwords; i++)
+        for (b = 0; b < 4u; b++) { hash ^= (Out[i] >> (8u * b)) & 0xFFu; hash *= 0x100000001B3ull; }
+    return hash;
+}
+
+// Each line stays inside the log ring's 159 characters at the widest printing of its fields (BD-070,
+// tools/quality/guardlog_width.py), so a call takes two lines and a command five plus its surfaces and rectangles.
+static void WddmGdiDiagCall(LONG64 Call, ULONGLONG Ib, const void* Out, UINT DmaSize, int Place,
+                            const BC250_GDI_DMA_CLAIM* Claim, unsigned int Capacity, UINT Bytes,
+                            unsigned int Planned, UINT ListSize)
+{
+    if (Call > BC250_GDI_DIAG_CALLS) return;
+    GuardLog("wddm: gdi diag c%lu ib 0x%llX lo 0x%X dma %u place %d ahead %u room %u", (ULONG)Call, Ib,
+             (UINT)((ULONG_PTR)Out & 0xFFFu), DmaSize, Place, Claim->Ahead, Claim->Room);
+    GuardLog("wddm: gdi diag c%lu cap %u len %u subs %u list %u", (ULONG)Call, Capacity, Bytes, Planned, ListSize);
+}
+
+// One drawn command: the flattened operation with its allocation-list indices as the call gave them, each bound
+// surface with the list entry's segment and write bit, and the sub-rectangles two to a line.
+static void WddmGdiDiagCommand(LONG64 Call, UINT Index, const BC250_GDI_OP* Raw, const BC250_GDI_OP* Bound,
+                               const DXGK_ALLOCATIONLIST* List, UINT ListSize, const BC250_GDI_SURFACE* Surfaces,
+                               const ULONGLONG* Vas, UINT Slots, const RECT* SubRects, UINT SubCount)
+{
+    UINT originals[BC250_GDI_BIND_SLOTS] = {0}, have[BC250_GDI_BIND_SLOTS] = {0}, i;
+    ULONG c = (ULONG)Call;
+
+    if (Call > BC250_GDI_DIAG_CALLS) return;
+    GuardLog("wddm: gdi diag c%lu k%u op %u ix %u %u %u %u rop 0x%X r3 0x%X col 0x%X 0x%X", c, Index, Raw->OpCode,
+             Raw->DstAllocationIndex, Raw->SrcAllocationIndex, Raw->AlphaSurfAllocationIndex,
+             Raw->GammaSurfAllocationIndex, Raw->Rop, Raw->Rop3, Raw->Color, Raw->Color2);
+    GuardLog("wddm: gdi diag c%lu k%u D %d %d %d %d S %d %d %d %d", c, Index, Raw->DstRect.Left, Raw->DstRect.Top,
+             Raw->DstRect.Right, Raw->DstRect.Bottom, Raw->SrcRect.Left, Raw->SrcRect.Top, Raw->SrcRect.Right,
+             Raw->SrcRect.Bottom);
+    GuardLog("wddm: gdi diag c%lu k%u gam %u ao %d %d sca %u sha %u ha %u", c, Index, Raw->Gamma,
+             Raw->DstToAlphaOffsetX, Raw->DstToAlphaOffsetY, Raw->SourceConstantAlpha, Raw->SourceHasAlpha,
+             Raw->HonorAlpha);
+    GuardLog("wddm: gdi diag c%lu k%u mode %u mx %u my %u sp %u dp %u ap %u n %u", c, Index, Raw->Mode, Raw->MirrorX,
+             Raw->MirrorY, Raw->SrcPitch, Raw->DstPitch, Raw->AlphaSurfPitch, SubCount);
+    // Which list index each slot came from: the bind rewrote the indices of Bound to slots.
+    if (Bound->DstAllocationIndex < BC250_GDI_BIND_SLOTS)
+    { originals[Bound->DstAllocationIndex] = Raw->DstAllocationIndex; have[Bound->DstAllocationIndex] = 1; }
+    if (Bc250GdiOpHasSource(Raw->OpCode) && Bound->SrcAllocationIndex < BC250_GDI_BIND_SLOTS)
+    { originals[Bound->SrcAllocationIndex] = Raw->SrcAllocationIndex; have[Bound->SrcAllocationIndex] = 1; }
+    if (Raw->OpCode == BC250_GDIOP_CLEARTYPEBLEND && Bound->AlphaSurfAllocationIndex < BC250_GDI_BIND_SLOTS)
+    { originals[Bound->AlphaSurfAllocationIndex] = Raw->AlphaSurfAllocationIndex; have[Bound->AlphaSurfAllocationIndex] = 1; }
+    if (Raw->OpCode == BC250_GDIOP_CLEARTYPEBLEND && Raw->Gamma != BC250_GDI_INVALID_GAMMA &&
+        Bound->GammaSurfAllocationIndex < BC250_GDI_BIND_SLOTS)
+    { originals[Bound->GammaSurfAllocationIndex] = Raw->GammaSurfAllocationIndex; have[Bound->GammaSurfAllocationIndex] = 1; }
+    for (i = 0; i < Slots && i < BC250_GDI_BIND_SLOTS; i++)
+    {
+        UINT seg = 0, write = 0;
+        if (have[i] && originals[i] < ListSize) { seg = List[originals[i]].SegmentId; write = List[originals[i]].WriteOperation; }
+        GuardLog("wddm: gdi diag c%lu k%u s%u ix %u seg %u wr %u type %u %ux%u pitch %u", c, Index, i,
+                 have[i] ? originals[i] : 0xFFFFFFFFu, seg, write, Surfaces[i].Type, Surfaces[i].Width,
+                 Surfaces[i].Height, Surfaces[i].Pitch);
+        GuardLog("wddm: gdi diag c%lu k%u s%u bpp %u rf %u bytes %llu va 0x%llX", c, Index, i, Surfaces[i].Bpp,
+                 Surfaces[i].RedFirst, Surfaces[i].Bytes, Vas[i]);
+    }
+    for (i = 0; i < SubCount && i < BC250_GDI_DIAG_RECTS; i += 2u)
+    {
+        RECT r[2] = {{0}};
+        UINT j, n = SubCount - i < 2u ? SubCount - i : 2u;
+        for (j = 0; j < n; j++) r[j] = SubRects[i + j];
+        GuardLog("wddm: gdi diag c%lu k%u r%u %u %d %d %d %d %d %d %d %d", c, Index, i, n, r[0].left, r[0].top,
+                 r[0].right, r[0].bottom, r[1].left, r[1].top, r[1].right, r[1].bottom);
+    }
+    if (SubCount > BC250_GDI_DIAG_RECTS)
+        GuardLog("wddm: gdi diag c%lu k%u %u sub-rectangles not logged", c, Index, SubCount - BC250_GDI_DIAG_RECTS);
+}
+
+static void WddmGdiDiagEnd(LONG64 Call, const BC250_GDI_BATCH* Batch, unsigned int Used, ULONGLONG Hash,
+                           unsigned int Committed, LONG64 Skipped)
+{
+    if (Call > BC250_GDI_DIAG_CALLS) return;
+    GuardLog("wddm: gdi diag c%lu end used %u committed %u code 0x%llX disp %u rows %u fall %u", (ULONG)Call, Used,
+             Committed, Batch->CodeVa, Batch->Dispatches, Batch->RowItems, Batch->Fallbacks);
+    GuardLog("wddm: gdi diag c%lu hash 0x%016llX lab-skipped %lld lab-dropped %lld", (ULONG)Call, Hash, Skipped,
+             g_LabGdiDispatchDrops);
+}
+#endif
+
 static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
                                               _In_ const DXGKARG_SUBMITCOMMANDVIRTUAL* pSubmitCommand)
 {
@@ -7570,6 +7667,17 @@ static NTSTATUS Bc250WddmSubmitCommandVirtualImpl(_In_ const HANDLE hAdapter,
         // A buffer this submission names with a RenderGdi call of ours still translating into it.
         // The slot stays, so that call's publication cannot land in another buffer's record.
         if (claimed != 0) InterlockedAdd64(&wddm->GdiRenderDmaRaced, (LONG64)claimed);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        {
+            LONG n = InterlockedIncrement(&g_LabGdiSubmits);
+            // Lab flavour: each early GDI submission and whether its address range released a RenderGdi window.
+            if (n <= BC250_GDI_DIAG_SUBMITS)
+                GuardLog("wddm: gdi diag submit%ld fence %u node %u flags 0x%08X va 0x%llX size %u freed %u raced %u",
+                         n, pSubmitCommand->SubmissionFenceId, node, pSubmitCommand->Flags.Value,
+                         (ULONGLONG)pSubmitCommand->DmaBufferVirtualAddress, pSubmitCommand->DmaBufferSize, freed,
+                         claimed);
+        }
+#endif
     }
     if (first)
         GuardLog("wddm: SubmitCommandVirtual fence %u node %u flags 0x%08X va 0x%llX size %u",
@@ -9023,6 +9131,7 @@ static void WddmGdiGiveBackClaim(_Inout_ BC250_WDDM_OBJECT* Context,
     KeReleaseSpinLock(&Context->GdiDmaLock, irql);
 }
 
+
 static DXGKDDI_RENDERGDI Bc250WddmRenderGdi;
 static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_RENDERGDI* pRenderGdi)
 {
@@ -9037,6 +9146,11 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     ULONGLONG ib;
     LONG64 call;
     int overflow = 0, place;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    const BOOLEAN engineOnly = GuardLabGdiEngineOnly();
+    LONG64 skipped = 0;
+    ULONGLONG diagHash = 0;
+#endif
 
     // Nothing here may fail the call (the return table above), so an argument that would make the
     // translation unsafe ends it with an empty DMA buffer instead: dxgkrnl then submits no work of
@@ -9156,6 +9270,9 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         GuardLog("wddm: RenderGdi%lld len%u over capacity: needs%u of%u ahead%u", call, bytes,
                  needed, capacity, claim.Ahead);
     }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    WddmGdiDiagCall(call, ib, out, pRenderGdi->DmaSize, place, &claim, capacity, bytes, planned, listSize);
+#endif
     // The capacity of the whole call, settled before the first packet. The guaranteed contract gives
     // one DMA buffer for one command buffer and no second pass, and RenderGdi has no status for a
     // short buffer, so a call whose sub-rectangles cannot all be guaranteed is translated to an
@@ -9181,6 +9298,9 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         BC250_GDI_SURFACE surfaces[BC250_GDI_BIND_SLOTS];
         ULONGLONG vas[BC250_GDI_BIND_SLOTS];
         BC250_GDI_OP op;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        BC250_GDI_OP raw;
+#endif
         const RECT* subRects;
         UINT subCount, next, slots, sub, why, start = offset;
         unsigned int pattern = 0;
@@ -9211,12 +9331,19 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
             else InterlockedIncrement64(&wddm->GdiRenderOutside);
             continue;
         }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        raw = op;
+#endif
         if (!WddmGdiBind(wddm, context, pRenderGdi->pAllocationList, listSize, &op,
                          surfaces, vas, &slots))
         {
             InterlockedIncrement64(&wddm->GdiRenderRefused[Bc250GdiBadIndex]);
             continue;
         }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        WddmGdiDiagCommand(call, index, &raw, &op, pRenderGdi->pAllocationList, listSize, surfaces, vas, slots,
+                           subRects, subCount);
+#endif
         for (sub = 0; sub < slots; sub++)
             if (!WddmGdiDisjoint(ib, pRenderGdi->DmaSize, vas[sub], surfaces[sub].Bytes)) disjoint = 0;
         if (!disjoint)
@@ -9251,6 +9378,15 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
                 continue;
             }
             if (item.DstWidth == 0 || item.DstHeight == 0) continue;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            // LabGdiHwAccel 2: the engine path only. A kernel item draws nothing and is counted.
+            if (engineOnly && item.Work == (unsigned int)Bc250GdiWorkKernel)
+            {
+                skipped++;
+                InterlockedIncrement64(&g_LabGdiKernelSkips);
+                continue;
+            }
+#endif
             if (item.Work == (unsigned int)Bc250GdiWorkKernel)
                 InterlockedIncrement64(&wddm->GdiRenderKernels[item.Kernel <
                     (unsigned int)Bc250GdiKernels ? item.Kernel : 0u]);
@@ -9282,6 +9418,16 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
         if (overflow) break;
     }
     used = Bc250GdiBatchEnd(&batch);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    diagHash = used != 0 ? WddmGdiDiagHash(out, used) : 0;
+    // LabGdiHwAccel 2: a copy or fill whose rows did not fit took the dispatch, so the whole call is dropped.
+    if (engineOnly && batch.Dispatches != 0 && !overflow)
+    {
+        InterlockedIncrement64(&g_LabGdiDispatchDrops);
+        WddmGdiDropCall(wddm, call, "lab-engine-only", bytes, planned, used, capacity, claim.Ahead);
+        used = 0;
+    }
+#endif
     // What the batch generated, which is not yet what left: the two checks below can still drop all
     // of it, and GdiRenderDwordsCommitted is the account of what was handed to the submitter.
     InterlockedAdd64(&wddm->GdiRenderDwords, (LONG64)batch.Dwords);
@@ -9346,6 +9492,9 @@ static NTSTATUS Bc250WddmRenderGdi(_In_ const HANDLE hContext, _Inout_ DXGKARG_R
     // A call that wrote nothing gives its claim back, so the buffer it was offered is free for the
     // calls behind it instead of holding a slot that no submission would ever release.
     if (used == 0) WddmGdiGiveBackClaim(context, &claim);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    WddmGdiDiagEnd(call, &batch, batch.Used, diagHash, used, skipped);
+#endif
     if (call <= BC250_WDDM_LOG_CALLS || overflow)
         GuardLog("wddm: RenderGdi%lld ctx%p commands%u bytes%u dwords%u rects%u fall%u over%u",
                  call, (void*)context, index, bytes, used, planned, batch.Fallbacks,
