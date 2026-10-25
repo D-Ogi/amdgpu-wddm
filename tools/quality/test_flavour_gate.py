@@ -219,15 +219,17 @@ class ReleaseFlavour(unittest.TestCase):
         self.assertRegex(source, r'#if defined\(BC250_ADL_TEST_SERVICE\)\s*'
                                 r'//[^\n]*\n\s*OutputDebugStringA\("BC250_ADL_TEST_SERVICE:')
 
-    def lab_set(self, drop_name=None, drop_file=None, extra=None, upper=False):
+    def lab_set(self, drop_name=None, drop_file=None, extra=None, upper=False, drop_names=None):
         """A lab package (lab_slots() under pkg/files/payload): the lab KMD and every file a lab.every item names,
-        each holding its names, less one name of one copy ((payload path, name)) or every copy an item names when
-        asked; extra adds {payload path: names}; upper writes every file name in upper case."""
+        each holding its names, less one name of one copy ((payload path, name)), less some names of one copy
+        (drop_names: (payload path, names)) or every copy an item names when asked; extra adds {payload path:
+        names}; upper writes every file name in upper case."""
         self.write("pkg/BC250KMD.SYS" if upper else "pkg/bc250kmd.sys", pe(*LAB_KMD))
         for s, names in sorted(dict(lab_slots(), **(extra or {})).items()):
             if drop_file in (s, s.rsplit("/", 1)[1]):
                 continue
-            held = [n for n in names if drop_name != (s, n)]
+            held = [n for n in names if drop_name != (s, n) and not (drop_names and drop_names[0] == s and
+                                                                      n in drop_names[1])]
             self.write("pkg/files/payload/%s" % (s.upper() if upper else s), pe(*LOG, *held))
 
     def package(self, flavour, layout="driverstore", drop=None, extra=None):
@@ -684,12 +686,21 @@ class ReleaseFlavour(unittest.TestCase):
 
     def test_lab_file_without_one_lab_name_fails(self):
         # One build of the set lost the lab switch for one lookup (or the lookup moved): the lab arm must fail.
+        # One gate run for each item: the copy loses every name of the item, and each name must give its own
+        # failure. A run for each name took four minutes with the hosted ICD declared, over the 180 s of the gate.
         for item, names in sorted(lab_items().items()):
-            for n in names:
-                with self.subTest(item=item, name=n):
-                    self.setUp()
-                    self.lab_set(drop_name=(slot_of(item), n))
-                    self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+            with self.subTest(item=item):
+                self.setUp()
+                self.lab_set(drop_names=(slot_of(item), set(names)))
+                out = self.dir / "out"
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg"),
+                                               "--out", str(out)), 1)
+                failures = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))["failures"]
+                self.assertEqual(len(failures), len(names), failures)
+                for n in names:
+                    with self.subTest(item=item, name=n):
+                        self.assertEqual(len([x for x in failures if ": the lab build lacks %s (" % n in x]), 1,
+                                         failures)
 
     def test_lab_set_without_a_named_file_fails(self):
         for item in sorted(lab_items()):
@@ -712,20 +723,31 @@ class ReleaseFlavour(unittest.TestCase):
     def test_unlisted_copy_with_a_path_listed_name_fails(self):
         # The list of paths is exact: another copy of the same file that holds the name means the build lines
         # changed and the declaration (and its note) is stale. Without the name, that copy passes.
+        # One copy for each file name that path items list, holding every such name at once: each name must give
+        # its own failure (a gate run for each name took two minutes with the hosted ICD declared).
+        listed = {}
         for f in DECL["forbidden"]:
             paths = [i for i in f["lab"].get("every", []) if "/" in i]
-            if not paths:
-                continue
-            base = paths[0].rsplit("/", 1)[1]
+            if paths:
+                listed.setdefault(paths[0].rsplit("/", 1)[1], []).append(f["name"])
+        for base, path_names in sorted(listed.items()):
             other = "unlisted/" + base
             needs = sorted({n for item, names in lab_items().items() if item == base for n in names})
-            with self.subTest(name=f["name"]):
+            with self.subTest(file=base):
                 self.setUp()
                 self.lab_set(extra={other: needs})
                 self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 0)
                 self.setUp()
-                self.lab_set(extra={other: needs + [f["name"]]})
-                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg")), 1)
+                self.lab_set(extra={other: needs + path_names})
+                out = self.dir / "out"
+                self.assertEqual(self.run_gate("--flavour", "lab", "--package", str(self.dir / "pkg"),
+                                               "--out", str(out)), 1)
+                failures = json.loads((out / "flavour-gate.json").read_text(encoding="utf-8"))["failures"]
+                self.assertEqual(len(failures), len(path_names), failures)
+                for n in path_names:
+                    with self.subTest(file=base, name=n):
+                        self.assertEqual(len([x for x in failures if "): holds %s, but lab.every lists only" % n in x]),
+                                         1, failures)
 
     def test_lab_kmd_only_skips_the_umd_names(self):
         kmd = self.write("bc250kmd.sys", pe(*LAB_KMD))
