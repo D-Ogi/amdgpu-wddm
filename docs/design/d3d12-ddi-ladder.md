@@ -131,7 +131,7 @@ The existing SM6.8 options reply retains its cross-version behavior.
 | 1080 | OPTIONS_DATA_0098, H12059 | L1MemoryFullyCpuAccessible FALSE. The shell has no complete GPU-upload heap contract. |
 | 1081 | OPTIONS_DATA_0101, H12619 | ComputeOnlyCustomHeapSupported FALSE. This is not an FL1_0 compute-only adapter. |
 | 1082 | OPTIONS_DATA_0102, H12632 | Check the mandatory minima against engine API OPTIONS19, then copy its sample mask and descriptor limits. Failure leaves the payload unchanged. |
-| 1013 | OPTIONS_DATA_0103, H12840 | WorkGraphsTier NOT_SUPPORTED. Engine OPTIONS21 cannot enable an absent state-object and dispatch path. |
+| 1013 | OPTIONS_DATA_0103, H12840 | WorkGraphsTier: TIER_1_0 when the negotiated build is 0108 or later and the engine's OPTIONS21 answers tier 1.0, else NOT_SUPPORTED. The work graph slots are in engine-ddi `work-graphs.cpp`. |
 | 1075 | WAVE_MMA_DATA_0103, H12868 | Unsupported. Preserve input data type and dimensions. Clear output support, sizes and accumulator flags. |
 | 1084 | FEATURE_DATA_PREDICATION_106, H12900 | Optional FL1_0 feature FALSE. Existing FL12 predication remains separate. |
 | 1085 | FEATURE_DATA_PLACED_RESOURCE_SUPPORT_INFO_106, H12905 | Optional FL1_0 feature FALSE. Preserve placement inputs. |
@@ -206,7 +206,7 @@ Global root handles and global serialized-root descriptions are supported.
 Runtime-resolved associations select the root signature. Different engine interface pointers do not imply different root definitions.
 Collections may retain unresolved summary flags. Executable summaries must be resolved.
 Local root-signature subobjects and work-graph subobjects are not implemented by this generic translator.
-WorkGraphsTier remains NOT_SUPPORTED, and DispatchGraph remains a reported error.
+An executable with a WORK_GRAPH subobject goes to the work graph translator (engine-ddi `INTEGRATION.md`, "Work graphs").
 Generic-program support does not advertise work-graph support.
 
 The tracked generic signature gate compares both raw-DXIL and whole-container intake against original DXC containers.

@@ -956,8 +956,8 @@ records, which the engine reads as they are. vkd3d-proton upstream traces the fi
 count buffer; the fork's fix (vkd3d-proton fork 4e572c10 and e1ce3e7e, on d0c089a1) unrolls one
 `vkCmdTraceRaysIndirect2KHR` per record and, with a count buffer, first copies the records into scratch, those at or
 past the count with zero dimensions over a zeroed, aligned table region. Refused:
-an existing collection imported with an export list (E_NOTIMPL, temporarily, below) and work graphs (state object type
-EXECUTABLE). Both slots are creation functions of the AllowOutOfMemory category (engine-ddi.h,
+an existing collection imported with an export list (E_NOTIMPL, temporarily, below). An EXECUTABLE with a WORK_GRAPH
+subobject is a work graph ("Work graphs", below). Both slots are creation functions of the AllowOutOfMemory category (engine-ddi.h,
 `admitted_create_failure`): every refusal reaches the runtime as E_OUTOFMEMORY, and its real code is on a
 `log_refusal` line. Any other code makes the runtime remove the device. The Ascent (lab trial 465, Unreal Engine
 4.26) stopped with DXGI_ERROR_DEVICE_REMOVED for that reason, after an E_INVALIDARG from CreateStateObject. The shell needs no new
@@ -1215,6 +1215,47 @@ E_INVALIDARG on one refusal line), DispatchRays on a closed list and SetPipeline
 state object (one E_INVALIDARG on the list). `state_object_shell` names the device's shell for a
 live state object and for a refused create's inert record, and nothing once either is destroyed. VVL with
 synchronization validation clean.
+
+### Work graphs
+
+Work graphs tier 1.0 (DirectX-Specs WorkGraphs.md; WDK 10.0.28000 d3d12umddi.h, build 0108) are engine-ddi slots in
+`work-graphs.cpp`, on the engine's `ID3D12Device5::CreateStateObject`, `ID3D12StateObjectProperties1`,
+`ID3D12WorkGraphProperties` and `ID3D12GraphicsCommandList10`:
+- 1013 OPTIONS1_0103 WorkGraphsTier is the engine's own OPTIONS21 answer at a negotiated build of 0108 or later
+  (caps.cpp). The engine answers tier 1.0 only in a process where it has work graphs on: the descriptor heap path and
+  the work graph switch (vkd3d-proton device.c, `d3d12_device_supports_workgraphs`). In every other process the answer
+  and the state object slot stay as before. The context reads the same answer at its creation (`work_graphs`); a work
+  graph state object on a context without it is refused.
+- D106 CreateStateObject of an EXECUTABLE with a WORK_GRAPH subobject (every other EXECUTABLE is a generic program).
+  The runtime gives the final graph: every node with its final properties, and the entry points. The index of an
+  entry point, also in GPU input records, is its position in pEntrypoints. So the API description that the engine gets
+  has every DDI node as an explicitly defined node, with its final properties as overrides (final name, program
+  entry, local root arguments table index, shared input, dispatch grids, and per output the final target name, sparse
+  nodes and record budgets), pEntrypoints in the DDI order, and the engine's private flag
+  `VKD3D_WORK_GRAPH_FLAG_DDI_ORDER_AMDGPU_WDDM` (0x80000000). With the flag the engine takes the entry points in that
+  order, assigns no table index, and refuses a rename, a shared input or an output override that differs from the
+  shader (E_NOTIMPL): it applies none of them. NODE_MASK 0 or 1 and the root signature associations are accepted as
+  for a ray tracing pipeline. ADD_TO_EXISTING_WORK_GRAPH and AddToStateObject of a work graph are E_NOTIMPL, and so is
+  a state object configuration with ALLOW_STATE_OBJECT_ADDITIONS (the engine).
+- CORE_0108 pfnGetProgramIdentifier (generic-programs.cpp dispatches a work graph record here) and
+  pfnGetWorkGraphMemoryRequirements are the engine's `GetProgramIdentifier` and `GetWorkGraphMemoryRequirements`.
+  After the create, the record registers each program of the state object by its engine identifier, with the record
+  size of each entry point; DestroyStateObject removes them before it releases the engine object.
+- COMMAND_LIST_3D_0108 pfnSetProgram of type WORK_GRAPH and pfnDispatchGraph in the four modes go to the engine list.
+  SetProgram admits only an identifier of a live work graph of the same device context, and the replay entry holds a
+  reference to the engine state object. DispatchGraph reads its CPU inputs during the call (WorkGraphs.md), so the
+  slot copies them: per input the bytes that its records span, (NumRecords - 1) * stride plus the entry point's record
+  size, at most 256 MiB in all. The GPU modes pass the address. DispatchGraph without a SetProgram of a live work graph
+  on the list, an entry point out of range, missing records and an unknown mode are E_INVALIDARG on the list.
+
+Release drain rounds stay 0: an overflow of the engine's queues abandons the excess records, as before
+(scratch\workgraphs\REPORT.md 8.1-8.6 measured the conformance items). The meta pipelines of work graphs are created
+at CreateDevice only when the engine has work graphs on, so a process without them (DWM, every other application)
+does not pay for them.
+
+Host witness: tests\replay-test.cpp section 13 (fake engine) checks the API description, the identifier and the
+memory requirements, the four DispatchGraph modes with deferred replay off and on, the copies of the CPU inputs and the
+refusals; tests\caps-test.cpp checks the tier at 0119, below 0108 and without engine support.
 
 ### Offline witness
 

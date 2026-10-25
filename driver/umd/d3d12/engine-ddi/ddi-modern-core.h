@@ -14,6 +14,7 @@
 namespace native12 {
 struct ModernCoreEntries {
     PFND3D12DDI_GET_PROGRAM_IDENTIFIER_0108 pfnGetProgramIdentifier{};
+    PFND3D12DDI_GET_WORK_GRAPH_MEMORY_REQUIREMENTS_0108 pfnGetWorkGraphMemoryRequirements{};
     PFND3D12DDI_CALCPRIVATEDEPTHSTENCILSTATESIZE_0095 depth_size{};
     PFND3D12DDI_CREATEDEPTHSTENCILSTATE_0095 depth_create{};
     PFND3D12DDI_CREATE_SAMPLER_0096 sampler{};
@@ -253,8 +254,9 @@ template<class Core> struct Bridge {
     static D3D12DDI_PROGRAM_IDENTIFIER_0108 APIENTRY program(D3D12DDI_HSTATEOBJECT_0054 h, LPCWSTR name) {
         return modern.pfnGetProgramIdentifier ? modern.pfnGetProgramIdentifier(h, name) : D3D12DDI_PROGRAM_IDENTIFIER_0108{};
     }
-    static void APIENTRY memory(D3D12DDI_HSTATEOBJECT_0054, LPCWSTR, D3D12DDI_WORK_GRAPH_MEMORY_REQUIREMENTS_0108* o) {
-        if (o) *o = {};
+    static void APIENTRY memory(D3D12DDI_HSTATEOBJECT_0054 h, LPCWSTR name, D3D12DDI_WORK_GRAPH_MEMORY_REQUIREMENTS_0108* o) {
+        if (modern.pfnGetWorkGraphMemoryRequirements) modern.pfnGetWorkGraphMemoryRequirements(h, name, o);
+        else if (o) *o = {};
     }
     static void APIENTRY layouts(D3D12DDI_HDEVICE h, const D3D12DDIARG_CREATERESOURCE_0111*, D3D12DDI_BARRIER_ACCESS,
         D3D12DDI_BARRIER_ACCESS, UINT* count, GUID*) {
