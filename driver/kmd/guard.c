@@ -335,6 +335,34 @@ void GuardLabReadComputeNode(_In_ PDRIVER_OBJECT DriverObject)
              g_LabComputeNode ? "open" : "closed (control)");
 }
 
+// The GDI hardware acceleration selector, lab flavour only, not a catalog setting: a lab arm swaps the KMD image
+// only, and the installed catalog stays that of the installed package (docs/design/gdi-hw-accel.md). LabGdiHwAccel
+// (REG_DWORD, Parameters, read only at DriverEntry): 1 opens the GDI gate whatever EnableGdiHwAccel says. Absent
+// or any other value leaves the gate to EnableGdiHwAccel. The selector can open the gate, never close it.
+static BOOLEAN g_LabGdiHwAccel = FALSE;
+
+void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: GDI selector: Parameters key not opened for reading (0x%08X), not used", status);
+        return;
+    }
+    status = LabQueryDword(key, L"LabGdiHwAccel", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
+        GuardLog("lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)");
+        return;
+    }
+    g_LabGdiHwAccel = (BOOLEAN)(NT_SUCCESS(status) && value == 1);
+    GuardLog("lab: GDI selector read (read only; value %lu, 0x%08X): %s", value, status,
+             g_LabGdiHwAccel ? "gate open" : "not used, the gate is EnableGdiHwAccel");
+}
+
 // StartDevice, after the boot-loop guard passed: the seed for this start's first fresh SDMA0 bring-up, or 0. The
 // nonce is written and flushed first; any failure on the way gives 0. Without a seed, a marker of an earlier seed is
 // deleted, so the internal state holds nothing once the lab script has removed the seed.
@@ -405,6 +433,15 @@ BOOLEAN GuardComputeNodeSelector(void)
     return g_LabComputeNode;
 #else
     return TRUE;
+#endif
+}
+
+BOOLEAN GuardLabGdiHwAccel(void)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return g_LabGdiHwAccel;
+#else
+    return FALSE;
 #endif
 }
 

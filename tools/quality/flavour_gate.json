@@ -1572,6 +1572,16 @@
      "bc250kmd.sys"
     ]
    }
+  },
+  {
+   "name": "LABGDIHWACCEL",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadGdiHwAccel (lab flavour only), a REG_DWORD value under the driver's Parameters key; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "GDI hardware acceleration swap arm: 1 opens the GDI gate whatever EnableGdiHwAccel says; the release flavour has only EnableGdiHwAccel",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
   }
  ],
  "allowed": [

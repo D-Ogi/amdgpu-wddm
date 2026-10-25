@@ -3983,10 +3983,22 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // return table bugchecks on any status but STATUS_SUCCESS). So the bit follows the translator,
     // not the gate: Bc250GdiKernelsPresent is the six gfx1013 compute kernels of gdi_kernels.cl,
     // and an image without them reports the capability exactly as the release before them did.
-    wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0);
+    //   The lab flavour also reads LabGdiHwAccel (guard.c), which can only open the gate: an arm that swaps
+    // the KMD image into an installed package whose catalog does not have EnableGdiHwAccel yet.
+    wddm->GdiHwAccelGate = (BOOLEAN)(GuardReadSetting(L"EnableGdiHwAccel", 1) != 0 || GuardLabGdiHwAccel());
     wddm->GdiHwAccel = (BOOLEAN)(wddm->GdiHwAccelGate && Bc250GdiKernelsPresent());
     GuardLog("wddm: GDI hardware acceleration gate %u, kernels %u, capability %u",
              (UINT)wddm->GdiHwAccelGate, (UINT)Bc250GdiKernelsPresent(), (UINT)wddm->GdiHwAccel);
+    // What this start can do with GDI acceleration, for the control app (the switch shows only where it has an
+    // effect): Features\GdiHwAccel, volatile, 1 on, 2 off by the switch alone (the kernels are in the image),
+    // 0 not possible (no kernels). A failed write leaves the switch hidden; the capability does not depend on it.
+    {
+        ULONG feature = wddm->GdiHwAccel ? 1u : Bc250GdiKernelsPresent() ? 2u : 0u;
+        NTSTATUS written = GuardVolatileStore(L"Features", L"GdiHwAccel", feature);
+
+        if (!NT_SUCCESS(written))
+            GuardLog("wddm: Features\\GdiHwAccel %lu not written (0x%08X)", feature, written);
+    }
     if (wddm->GdiHwAccel)
         GuardLog("wddm: gdi code %u kernels, %u bytes, sha256 %s", Bc250GdiCodeKernelCount(),
                  Bc250GdiCodeBytes(), Bc250GdiCodeHash());
