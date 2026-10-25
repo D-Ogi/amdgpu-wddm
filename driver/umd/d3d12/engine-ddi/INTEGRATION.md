@@ -310,7 +310,10 @@ Slots (`set_raytracing_tier12_commands`), when the switch is on and the engine d
 - D106 admits the pipeline flag ALLOW_OPACITY_MICROMAPS (0x400) in RAYTRACING_PIPELINE_CONFIG1. The state object
   flag 0x800 stays refused.
 
-With the switch off, or with an engine below 1_2, every one of these is refused as at tier 1.1.
+With the switch off, or with an engine below 1_2, the slots are as at tier 1.1. They refuse the opacity micromap
+array, OMM_TRIANGLES geometry, SERIALIZE and DESERIALIZE, and ALLOW_OPACITY_MICROMAPS, and D109 answers UNRECOGNIZED.
+The build flags are not checked in that state: ALLOW_OMM_UPDATE, ALLOW_DISABLE_OMMS and ALLOW_DATA_ACCESS (0x40, 0x80,
+0x100) reach the engine as before tier 1.2 (`valid_inputs` in commands.cpp).
 
 What the runtime does, read on the development PC from the disassembly of the D3D12 cores of Agility 1.619.6 and
 1.721.3 and of the inbox core 10.0.26100.9549:
@@ -332,8 +335,15 @@ a 6.9 program passes it like any other 6.x program.
 Development PC witness:
 - caps-test.exe `test_raytracing_tier12`: the switch off and on at 0092 and 0094, each missing condition, the
   ceiling, and raytracing reporting off.
-- replay-test.exe section 11: with the switch off, the six tier 1.2 calls are refused. With it on, the engine gets
-  the same calls with the policy off and on, after the sources are garbled. The refusals that stay are refused.
+- replay-test.exe section 11: with the switch off, the six tier 1.2 calls are refused, and an AABB bottom level and
+  a top level build reach the engine. With it on, the engine gets the same eight calls with the policy off and on,
+  after the sources are garbled: every build goes through the deep copy of its inputs. The refusals that stay are
+  refused.
+- replay-test.exe section 12: `set_raytracing_tier12_commands` on a context with a device, from the engine's OPTIONS5
+  (tier 1_2, tier 1_1, a failed query, the switch off without a query). Off and on: D108 with OMM inputs and with
+  the OMM build flags, D109, and D106 with ALLOW_OPACITY_MICROMAPS in a pipeline configuration.
+- raytracing-tier12-header-test.exe (build-engine-ddi.ps1, step 1, x64 and x86): the checks at the end of
+  raytracing-tier12.h, compiled against d3d12.h of Agility SDK 1.619.6 and d3d12umddi.h of WDK 10.0.28000.
 
 Not yet measured on unit A.
 
@@ -890,8 +900,9 @@ Refused, reported once on the list (D108: on the device, with the answer zeroed)
 - E_NOTIMPL: the tools visualization postbuild type, and the visualization, serialize and deserialize copy modes.
   engine-ddi serializes nothing. With tier 1.2 in the slots, serialize and deserialize go to the engine
   ("Raytracing tier 1.2" above).
-- Opacity micromap arrays, OMM_TRIANGLES geometry and the OMM build flags are refused unless tier 1.2 is in the
-  slots ("Raytracing tier 1.2" above).
+- Opacity micromap arrays and OMM_TRIANGLES geometry are refused unless tier 1.2 is in the slots ("Raytracing tier
+  1.2" above). The OMM build flags are checked only with tier 1.2 in the slots. Without it they reach the engine
+  unchecked, as before tier 1.2.
 
 GPU addresses are the application's, as in every other slot. RaytracingTier stays NOT_SUPPORTED (the 1006 row
 above); that the runtime passes these arguments as the harness does is INFERENCE.

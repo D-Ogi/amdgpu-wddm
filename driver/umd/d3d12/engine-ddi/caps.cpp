@@ -97,7 +97,8 @@ public:
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
     bool report_raytracing_tier{true};          // the driver's default; set_raytracing_tier_reporting takes it back
     // Tier 1.2 and shader model 6.9: off in the library, set_raytracing_tier12_reporting turns them on (the shell
-    // does, unless the experiment raytracing-tier12-off). Off, the answers are 6_8 and 1_1 at most.
+    // does; only a lab-flavour shell has an off switch, the experiment raytracing-tier12-off). Off, the answers are
+    // 6_8 and 1_1 at most.
     bool report_raytracing_tier12{false};
     D3D_SHADER_MODEL shader_model_ceiling{D3D_SHADER_MODEL_6_9};   // set_shader_model_ceiling lowers it
 };

@@ -3,7 +3,7 @@
 // headers of the build (WDK and SDK 10.0.26100) do not have. The shell reports tier 1.2 at its own negotiated DDI
 // version (INTEGRATION.md, "Raytracing tier 1.2"), so it names the new members here instead of in the headers.
 //
-// H = d3d12umddi.h of WDK 10.0.28000 (DDI 0110 and 0118), A = d3d12.h of Agility SDK 1.619. The DDI and the API
+// H = d3d12umddi.h of WDK 10.0.28000 (DDI 0110 and 0118), A = d3d12.h of Agility SDK 1.619.6. The DDI and the API
 // have the same values and the same layouts for all of these. A build with either header checks every item below
 // against it (the static_asserts at the end of this file).
 #pragma once
@@ -20,8 +20,8 @@ constexpr UINT kShaderModel = 0x69;               // D3D_SHADER_MODEL_6_9 A:2868
 constexpr UINT kDdiShaderModel = 0x00060095;      // D3D12DDI_SHADER_MODEL_6_9_RELEASE_0118 H:3510
 constexpr UINT kOmmArrayType = 2;                 // ACCELERATION_STRUCTURE_TYPE_OPACITY_MICROMAP_ARRAY A:15645, H:8115
 constexpr UINT kOmmTrianglesType = 2;             // GEOMETRY_TYPE_OMM_TRIANGLES A:15508, H:7971
-constexpr UINT kBuildAllowOmmUpdate = 0x40;       // BUILD_FLAG_ALLOW_OMM_UPDATE A:15626, H:8096
-constexpr UINT kBuildAllowDisableOmms = 0x80;     // BUILD_FLAG_ALLOW_DISABLE_OMMS A:15627, H:8097
+constexpr UINT kBuildAllowOmmUpdate = 0x40;       // BUILD_FLAG_ALLOW_OMM_UPDATE A:15625, H:8096
+constexpr UINT kBuildAllowDisableOmms = 0x80;     // BUILD_FLAG_ALLOW_DISABLE_OMMS A:15626, H:8097
 constexpr UINT kBuildAllowDataAccess = 0x100;     // BUILD_FLAG_ALLOW_DATA_ACCESS H:8098 (DDI only, shader model 6.10)
 constexpr UINT kInstanceForceOmm2State = 0x10;    // INSTANCE_FLAG_FORCE_OMM_2_STATE A:15519, H:7981
 constexpr UINT kInstanceDisableOmms = 0x20;       // INSTANCE_FLAG_DISABLE_OMMS A:15520, H:7982
