@@ -8,7 +8,8 @@
 //
 // Memory: arrays returned to the caller come from the caller's allocation callback, and the caller frees them, as
 // the ADL contract says. Context memory is ours: Destroy frees it. One lock serializes every call, so the
-// threading model of ADL2_Main_ControlX3_Create needs no other handling.
+// threading model of ADL2_Main_ControlX3_Create needs no other handling. Caller allocation callbacks run outside
+// that lock, against a private snapshot, so they can query, refresh or destroy their context.
 #include <windows.h>
 #include <string.h>
 
@@ -85,12 +86,12 @@ void CopyText(char* dst, size_t cap, const char* src)
 }
 
 // The caller's memory, zeroed. Null when the callback fails or the size does not fit its int argument.
-void* CallerBlock(const AdlContext* c, size_t count, size_t size)
+void* CallerBlock(ADL_MAIN_MALLOC_CALLBACK alloc, size_t count, size_t size)
 {
     if (count == 0 || size == 0 || count > (size_t)0x7fffffff / size) {
         return nullptr;
     }
-    void* p = c->alloc((int)(count * size));
+    void* p = alloc((int)(count * size));
     if (p) {
         memset(p, 0, count * size);
     }
@@ -109,6 +110,35 @@ AdlContext* Resolve(ADL_CONTEXT_HANDLE handle)
     }
     return nullptr;
 }
+
+// Do not retain a context pointer across an application callback. The callback may re-enter ADL, including
+// Destroy or Refresh. Copy the snapshot under the context lock, then release the lock before any callback.
+// The snapshot is on our heap, not the caller's stack or allocation callback.
+struct CallSnapshot {
+    AdlSnapshot* snap = nullptr;
+    ADL_MAIN_MALLOC_CALLBACK alloc = nullptr;
+    int status = ADL_ERR;
+
+    explicit CallSnapshot(ADL_CONTEXT_HANDLE handle)
+    {
+        snap = (AdlSnapshot*)HeapBlock(sizeof(*snap));
+        if (!snap) {
+            return;
+        }
+        Lock lock;
+        AdlContext* context = Resolve(handle);
+        if (!context) {
+            status = ADL_ERR_NOT_INIT;
+            return;
+        }
+        *snap = context->snap;
+        alloc = context->alloc;
+        status = ADL_OK;
+    }
+    ~CallSnapshot() { FreeBlock(snap); }
+    CallSnapshot(const CallSnapshot&) = delete;
+    CallSnapshot& operator=(const CallSnapshot&) = delete;
+};
 
 AdlContext* NewContext(ADL_MAIN_MALLOC_CALLBACK alloc, int enum_connected, int threading)
 {
@@ -285,20 +315,19 @@ int AdapterInfoArray(ADL_CONTEXT_HANDLE handle, AdapterInfo** out)
         return ADL_ERR_NULL_POINTER;
     }
     *out = nullptr;
-    Lock lock;
-    AdlContext* c = Resolve(handle);
-    if (!c) {
-        return ADL_ERR_NOT_INIT;
+    CallSnapshot call(handle);
+    if (call.status != ADL_OK) {
+        return call.status;
     }
-    if (c->snap.entry_count == 0) {
+    if (call.snap->entry_count == 0) {
         return ADL_OK;  // no adapter of ours: nothing allocated
     }
-    AdapterInfo* a = (AdapterInfo*)CallerBlock(c, (size_t)c->snap.entry_count, sizeof(AdapterInfo));
+    AdapterInfo* a = (AdapterInfo*)CallerBlock(call.alloc, (size_t)call.snap->entry_count, sizeof(AdapterInfo));
     if (!a) {
         return ADL_ERR;
     }
-    for (int i = 0; i < c->snap.entry_count; i++) {
-        FillAdapterInfo(&c->snap, i, &a[i]);
+    for (int i = 0; i < call.snap->entry_count; i++) {
+        FillAdapterInfo(call.snap, i, &a[i]);
     }
     *out = a;
     return ADL_OK;
@@ -392,12 +421,11 @@ int DisplayInfo(ADL_CONTEXT_HANDLE handle, int index, int* count, ADLDisplayInfo
     }
     *count = 0;
     *out = nullptr;
-    Lock lock;
-    AdlContext* c = Resolve(handle);
-    if (!c) {
-        return ADL_ERR_NOT_INIT;
+    CallSnapshot call(handle);
+    if (call.status != ADL_OK) {
+        return call.status;
     }
-    const AdlSnapshot* s = &c->snap;
+    const AdlSnapshot* s = call.snap;
     int gpu = GpuOf(s, index);
     if (gpu == -2) {
         return ADL_ERR_INVALID_ADL_IDX;
@@ -409,7 +437,7 @@ int DisplayInfo(ADL_CONTEXT_HANDLE handle, int index, int* count, ADLDisplayInfo
     if (n == 0) {
         return ADL_OK;
     }
-    ADLDisplayInfo* info = (ADLDisplayInfo*)CallerBlock(c, (size_t)n, sizeof(ADLDisplayInfo));
+    ADLDisplayInfo* info = (ADLDisplayInfo*)CallerBlock(call.alloc, (size_t)n, sizeof(ADLDisplayInfo));
     if (!info) {
         return ADL_ERR;
     }
@@ -444,12 +472,11 @@ int Modes(ADL_CONTEXT_HANDLE handle, int index, int display, int* count, ADLMode
     }
     *count = 0;
     *out = nullptr;
-    Lock lock;
-    AdlContext* c = Resolve(handle);
-    if (!c) {
-        return ADL_ERR_NOT_INIT;
+    CallSnapshot call(handle);
+    if (call.status != ADL_OK) {
+        return call.status;
     }
-    const AdlSnapshot* s = &c->snap;
+    const AdlSnapshot* s = call.snap;
     int gpu = GpuOf(s, index);
     if (gpu == -2) {
         return ADL_ERR_INVALID_ADL_IDX;
@@ -461,7 +488,7 @@ int Modes(ADL_CONTEXT_HANDLE handle, int index, int display, int* count, ADLMode
             if (n == 0) {
                 return display == -1 ? ADL_OK : ADL_ERR_INVALID_DIPLAY_IDX;
             }
-            modes = (ADLMode*)CallerBlock(c, (size_t)n, sizeof(ADLMode));
+            modes = (ADLMode*)CallerBlock(call.alloc, (size_t)n, sizeof(ADLMode));
             if (!modes) {
                 return ADL_ERR;
             }
@@ -500,12 +527,11 @@ int DisplayMapConfig(ADL_CONTEXT_HANDLE handle, int index, int* map_count, ADLDi
     *maps = nullptr;
     *target_count = 0;
     *targets = nullptr;
-    Lock lock;
-    AdlContext* c = Resolve(handle);
-    if (!c) {
-        return ADL_ERR_NOT_INIT;
+    CallSnapshot call(handle);
+    if (call.status != ADL_OK) {
+        return call.status;
     }
-    const AdlSnapshot* s = &c->snap;
+    const AdlSnapshot* s = call.snap;
     int gpu = GpuOf(s, index);
     if (gpu == -2) {
         return ADL_ERR_INVALID_ADL_IDX;
@@ -525,14 +551,14 @@ int DisplayMapConfig(ADL_CONTEXT_HANDLE handle, int index, int* map_count, ADLDi
     if (nmaps == 0) {
         return ADL_OK;
     }
-    ADLDisplayMap* m = (ADLDisplayMap*)CallerBlock(c, (size_t)nmaps, sizeof(ADLDisplayMap));
+    ADLDisplayMap* m = (ADLDisplayMap*)CallerBlock(call.alloc, (size_t)nmaps, sizeof(ADLDisplayMap));
     if (!m) {
         return ADL_ERR;
     }
     // The map array is the caller's from here on, even if the target array fails: the caller frees both.
     *maps = m;
     *map_count = nmaps;
-    ADLDisplayTarget* t = (ADLDisplayTarget*)CallerBlock(c, (size_t)ntargets, sizeof(ADLDisplayTarget));
+    ADLDisplayTarget* t = (ADLDisplayTarget*)CallerBlock(call.alloc, (size_t)ntargets, sizeof(ADLDisplayTarget));
     if (!t) {
         return ADL_ERR;
     }

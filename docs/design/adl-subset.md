@@ -101,7 +101,12 @@ export the functions that give them.
   This is the ADL contract.
 - The `ADL_*` functions use one shared context with a reference count. `ADL_Main_Control_Create` and
   `ADL_Main_Control_Destroy` change the count.
-- One lock serializes all calls. The discovery runs outside the lock, because it calls the operating system.
+- One lock protects context state. Discovery and caller allocation callbacks run outside that lock. Array queries
+  copy the snapshot and callback while locked, then use that private copy until the query returns. A callback can
+  query, refresh or destroy its context without a recursive lock or use of freed context memory.
+- `DisplayMapConfig_Get` needs two caller allocations. If the second fails, it returns an error with the first
+  array and its count still set. The caller owns that array and must free it even on error. ADL has no caller
+  deallocation callback, so the library must not free it with a different allocator.
 - When the process unloads the library, the library frees the contexts that are still open.
 
 ## Build and gates
@@ -117,6 +122,9 @@ these failures:
   list, on an empty list and with bad arguments. It counts the callback allocations and the context blocks, and
   it makes 1000 Create and Destroy cycles. On x86 it measures the stack bytes that each export removes, which
   must be 0 (`__cdecl`).
+- The compile-only SDK gate compares 15 structure sizes and alignments, and selected offsets, against the public
+  `adl_structures.h` (`-AdlSdk` selects its include directory). The callback tests have a five-second bound and
+  cover queries, refresh and destruction from an allocator, plus failure of the second map allocation.
 
 `tools/build/test-umd-adl-ags.ps1` then runs the real AGS 6.3 library of the requested architecture with
 `ags-client.exe` (`driver/umd/adl/tests/ags-client.cpp`):

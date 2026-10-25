@@ -175,6 +175,96 @@ void CheckCdecl(const char* name, const int* args, int count)
 }
 #endif
 
+ADL_CONTEXT_HANDLE g_reentry_context;
+int g_reentry_action;
+int g_reentry_calls;
+
+void* __stdcall ReentrantAlloc(int bytes)
+{
+    if (++g_reentry_calls == 1) {
+        int count = -1;
+        CHECK(Get<PFN_Count>("ADL2_Adapter_NumberOfAdapters_Get")(g_reentry_context, &count) == ADL_OK && count == 3);
+        if (g_reentry_action == 1) {
+            static AdlSnapshot empty = {};
+            Get<PFN_SetSnapshot>("Bc250AdlTest_SetSnapshot")(&empty);
+            CHECK(Get<PFN_Refresh>("ADL2_Main_Control_Refresh")(g_reentry_context) == ADL_OK);
+            CHECK(Get<PFN_Count>("ADL2_Adapter_NumberOfAdapters_Get")(g_reentry_context, &count) == ADL_OK && count == 0);
+        } else if (g_reentry_action == 2) {
+            CHECK(Get<PFN_Destroy>("ADL2_Main_Control_Destroy")(g_reentry_context) == ADL_OK);
+        }
+    }
+    return CountingAlloc(bytes);
+}
+
+DWORD WINAPI ReentryTests(void*)
+{
+    static AdlSnapshot original;
+    MakeSnapshot(&original);
+    for (int action = 0; action < 3; action++) {
+        for (int api = 0; api < 4; api++) {
+            Get<PFN_SetSnapshot>("Bc250AdlTest_SetSnapshot")(&original);
+            g_reentry_calls = 0;
+            g_reentry_action = action;
+            CHECK(Get<PFN_Create>("ADL2_Main_Control_Create")(ReentrantAlloc, 1, &g_reentry_context) == ADL_OK);
+            if (api == 0) {
+                AdapterInfo* out = nullptr;
+                CHECK(Get<PFN_InfoX2>("ADL2_Adapter_AdapterInfoX2_Get")(g_reentry_context, &out) == ADL_OK);
+                CHECK(out && out[2].iAdapterIndex == 2 && strcmp(out[0].strAdapterName, "Test GPU zero") == 0);
+                CallerFree(out);
+            } else if (api == 1) {
+                int n = 0;
+                ADLDisplayInfo* out = nullptr;
+                CHECK(Get<PFN_DisplayInfo>("ADL2_Display_DisplayInfo_Get")(g_reentry_context, 0, &n, &out, 0) == ADL_OK);
+                CHECK(n == 3 && out && strcmp(out[0].strDisplayName, "Monitor A") == 0);
+                CallerFree(out);
+            } else if (api == 2) {
+                int n = 0;
+                ADLMode* out = nullptr;
+                CHECK(Get<PFN_Modes>("ADL2_Display_Modes_Get")(g_reentry_context, 0, -1, &n, &out) == ADL_OK);
+                CHECK(n == 2 && out && out[0].iXRes == 2560);
+                CallerFree(out);
+            } else {
+                int nm = 0, nt = 0;
+                ADLDisplayMap* maps = nullptr;
+                ADLDisplayTarget* targets = nullptr;
+                CHECK(Get<PFN_MapConfig>("ADL2_Display_DisplayMapConfig_Get")(g_reentry_context, 0, &nm, &maps, &nt, &targets, 0) == ADL_OK);
+                CHECK(nm == 2 && nt == 3 && maps && targets && maps[0].iNumDisplayTarget == 2);
+                CallerFree(maps);
+                CallerFree(targets);
+            }
+            CHECK(g_reentry_calls == (api == 3 ? 2 : 1));
+            if (action != 2) {
+                CHECK(Get<PFN_Destroy>("ADL2_Main_Control_Destroy")(g_reentry_context) == ADL_OK);
+            }
+            CHECK(Get<PFN_LiveBlocks>("Bc250AdlTest_LiveBlocks")() == 0 && g_outstanding == 0);
+        }
+    }
+    Get<PFN_SetSnapshot>("Bc250AdlTest_SetSnapshot")(&original);
+    return 0;
+}
+
+void CheckReentryBounded()
+{
+    HANDLE thread = CreateThread(nullptr, 0, ReentryTests, nullptr, 0, nullptr);
+    CHECK(thread != nullptr);
+    if (!thread) {
+        return;
+    }
+    if (WaitForSingleObject(thread, 5000) != WAIT_OBJECT_0) {
+        // A recursive-lock regression must fail the gate, not hang the build or leave a blocked worker alive.
+        puts("FAIL allocation callback reentry exceeded 5 seconds");
+        fflush(stdout);
+        ExitProcess(1);
+    }
+    CloseHandle(thread);
+}
+
+int g_failure_call;
+void* __stdcall FailSecondAlloc(int bytes)
+{
+    return ++g_failure_call == 2 ? nullptr : CountingAlloc(bytes);
+}
+
 int RunUnit()
 {
     auto create = Get<PFN_Create>("ADL2_Main_Control_Create");
@@ -217,6 +307,7 @@ int RunUnit()
     static AdlSnapshot snap;
     MakeSnapshot(&snap);
     setSnapshot(&snap);
+    CheckReentryBounded();
 
     // Create: argument checks.
     ADL_CONTEXT_HANDLE ctx = (ADL_CONTEXT_HANDLE)1;
@@ -368,6 +459,16 @@ int RunUnit()
     CHECK(createX3(FailingAlloc, 1, &starving, ADL_THREADING_LOCKED, 0) == ADL_OK);
     ai = (AdapterInfo*)1;
     CHECK(infoX2(starving, &ai) == ADL_ERR && ai == nullptr);
+    CHECK(destroy(starving) == ADL_OK);
+
+    // ADL supplies no deallocator: if the second callback allocation fails, the first remains caller-owned.
+    g_failure_call = 0;
+    CHECK(create(FailSecondAlloc, 1, &starving) == ADL_OK);
+    maps = nullptr;
+    targets = nullptr;
+    CHECK(mapConfig(starving, 0, &nmaps, &maps, &ntargets, &targets, 0) == ADL_ERR);
+    CHECK(nmaps == 2 && maps && ntargets == 0 && !targets && g_failure_call == 2);
+    CallerFree(maps);
     CHECK(destroy(starving) == ADL_OK);
 
     // Refresh takes a new snapshot.

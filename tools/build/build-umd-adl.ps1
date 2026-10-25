@@ -21,7 +21,7 @@
 # -AgsSdk: the AGS SDK 6.3.0 headers for ags-client.exe (default <BC250_ROOT>\ref\AGS_SDK-v6.3.0, see THIRD-PARTY.md).
 param([ValidateSet('x64', 'x86')][string]$Arch = 'x64',
       [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl', [string]$MsvcReason = '',
-      [string]$OutputDir, [string]$VsInstall, [string]$AgsSdk, [string]$TestService = '')
+      [string]$OutputDir, [string]$VsInstall, [string]$AgsSdk, [string]$TestService = '', [string]$AdlSdk)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\common.ps1"
 . "$PSScriptRoot\umd-compiler.ps1"
@@ -32,6 +32,8 @@ $OutputDir = [IO.Path]::GetFullPath($OutputDir)
 if ($OutputDir.Contains(' ')) { throw "OutputDir must not contain spaces: $OutputDir" }
 if (-not $AgsSdk) { $AgsSdk = Join-Path $root 'ref\AGS_SDK-v6.3.0' }
 if (-not (Test-Path -LiteralPath (Join-Path $AgsSdk 'amd_ags.h'))) { throw "no amd_ags.h in -AgsSdk $AgsSdk" }
+if (-not $AdlSdk) { $AdlSdk = Join-Path $root 'ref\display-library__WARN-EULA-in-docs-only-headers-MIT\include' }
+if (-not (Test-Path -LiteralPath (Join-Path $AdlSdk 'adl_structures.h'))) { throw "no adl_structures.h in -AdlSdk $AdlSdk" }
 if ($TestService -and $TestService -notmatch '^[A-Za-z0-9_]+$') { throw "-TestService takes a service name: $TestService" }
 $src = Join-Path $repo 'driver\umd\adl'
 $name = if ($Arch -eq 'x86') { 'atiadlxy.dll' } else { 'atiadlxx.dll' }
@@ -70,6 +72,10 @@ try {
     # The debug information records the working directory, and the PDB signature (and so the image bytes) follows
     # it. From the repository root, -ffile-prefix-map makes it ".", the same for every caller.
     Push-Location $repo
+
+    Invoke-Bc250UmdCompiler $cc @flags /Zs "/imsvc$AdlSdk" "$src\tests\adl-sdk-layout-test.cpp"
+    if ($LASTEXITCODE -ne 0) { throw 'public ADL SDK layout gate failed' }
+    Write-Host 'PASS public ADL SDK layout gate: 15 sizes, alignments and selected offsets'
 
     function Build-Dll([string]$Out, [string]$Def, [string]$ObjDir, [string[]]$Defines) {
         New-Item -ItemType Directory -Force $ObjDir | Out-Null
