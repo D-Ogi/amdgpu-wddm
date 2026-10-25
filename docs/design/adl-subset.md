@@ -182,7 +182,7 @@ The host run of 2026-10-25 (x64 and x86, 13 of 13 runs each as expected) is in
 The package builder supports the explicit `adl.register` declaration with both x64 and x86 architectures.
 It stages both libraries in the DriverStore, generates the registrations below, and records them in
 `driver_package.subkey_registration` for installer verification. The installer never manually overwrites
-or deletes a system ADL DLL. Actual native-host copying and removal remain acceptance tests, not established
+or removes a system ADL DLL. Actual native-host copying and removal remain acceptance tests, not established
 by successful INF generation or by the app-local AGS tests.
 
 The library must be in a directory that `LoadLibrary` searches for a bare name, that is `System32` and
@@ -208,12 +208,12 @@ Coexistence:
   comparison value. No relative ordering against an official AMD ADL version is assumed.
 - Coexistence with an installed AMD driver is unmeasured and cannot be tested on the single-driver unit A.
   This is not a guarantee that either library can enumerate the other driver's adapter.
-- `CopyToVmOverwrite` is not used. Only this package's named `AmdgpuAdl` registration is replaced; other
+- `CopyToVmOverwrite` is not used. Only this package's named `AmdgpuAdl` registration is replaced. Other
   values under the shared registry subkeys are left intact.
 - `build-umd-adl.ps1 -Version ... -Flavour release|lab` stamps the public DLL before its build receipt,
   through `versioninfo.json` and the shared version-stamp helper. Test DLLs and test hooks are excluded
   from both shipped flavours. Release package signing covers the DriverStore members before the catalog
-  is generated; the version resource still names `atiadlxy.dll` after the x86 DriverStore rename.
+  is generated. The version resource still names `atiadlxy.dll` after the x86 DriverStore rename.
 
 Open questions for the packaging step, to be measured on the lab:
 
@@ -224,7 +224,7 @@ Open questions for the packaging step, to be measured on the lab:
 The installation acceptance kit uses an x64/x86 bare-name loader probe and reports the resolved DLL path.
 AGS runs from directories containing no local ADL copy. A successful app-local test cannot satisfy these
 checks. Clean-install, upgrade and post-uninstall observations are separate phases. The kit does not infer
-absence from an arbitrary load failure or delete a foreign system library to make the check pass.
+absence from an arbitrary load failure or remove a foreign system library to make the check pass.
 
 ## Limits
 
