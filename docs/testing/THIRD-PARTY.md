@@ -12,6 +12,7 @@ and NOTICE in the package root).
 
 | File (`payload\`) | Source |
 |---|---|
+| `adl\atiadlxx.dll`, `wow64\adl\atiadlxy.dll` | amdgpu-wddm `c906d8b401eca954987c8acd3b7fc3250ca8595d` (`driver/umd/adl`), public ADL subset. The x86 DriverStore member is renamed `atiadlxy32.dll` |
 | `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f` (branch `train/b35`); the .sys also contains the Linux amdgpu code in the next table |
 | `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `b0ad6a30a74408f2dd7a49cfbde62963fd5bbc6f` (branch `train/b35`, `driver/umd/d3d12`), against the `src/util` host contract of Mesa `66986af442c97653cd6046b01d27bb555ff39fd4`, the commit of `d3d12\amdgpu_wddm_radv.dll` |
 | `desktop\bc250d3d_router.dll` | amdgpu-wddm `5c8c15cc6d7c1f625900a65f960f90a219f7fd90` (branch `train/b35`, `driver/umd/router`) |

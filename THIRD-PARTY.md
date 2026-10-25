@@ -15,6 +15,7 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 |---|---|---|
 | Alpine Linux 3.24 "standard" ISO and packages (`python3`, `pciutils` and dependencies) | `tools/diagusb/build_usb.py` | Various free software licenses, see alpinelinux.org. Includes the Linux kernel (GPL-2.0) and `linux-firmware` blobs under their vendors' redistribution licenses |
 | `segno` (pure-Python QR encoder) | `tools/diagusb` payload | BSD-3-Clause |
+| AMD GPU Services (AGS) SDK 6.3.0: `amd_ags.h`, `amd_ags_x64.dll`, `amd_ags_x86.dll` (GPUOpen-LibrariesAndSDKs/AGS_SDK, tag v6.3.0) | `tools/build/build-umd-adl.ps1` (`-AgsSdk`, the header of the test client) and `tools/build/test-umd-adl-ags.ps1` (the libraries) | MIT |
 
 ## Referenced, never copied
 
@@ -22,6 +23,7 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 |---|---|
 | AMD GPU firmware (`cyan_skillfish2_*.bin`) | AMD redistributable-binary license. The user obtains it from `linux-firmware` |
 | `ZEROAESQUERDA/BC250-windowsDriverTest` | No license granted |
+| GPUOpen-LibrariesAndSDKs/display-library (ADL SDK) @ 84c881cb: `include/adl_sdk.h`, `adl_defines.h`, `adl_structures.h` | The headers are MIT, but the repository has no top-level license and its documents and samples are under an AMD license. `driver/umd/adl/adl-abi.h` declares again only the types and constants that the library uses, from the three MIT headers (PROVENANCE line there). No sample code is used |
 | `bc250-encoding-decoding-fix` (GPL-3.0-only): read for its per-stage profile of a compute H.264 encoder on this silicon, while writing `driver/umd/mft-h264` | GPL-3.0-only, which our license cannot take. No code, no shader and no table of it is here. The shared tables are the published values of ITU-T Rec. H.264 clauses 9.1.2, 9.2 and 8-16/8-17, entered from the standard. Recorded in `driver/umd/mft-h264/PROVENANCE.md` |
 
 ## Candidates for borrowing later (not yet imported)

@@ -1,0 +1,71 @@
+{
+  "arch": "x86",
+  "compiler": {
+    "arch": "x86",
+    "path": "P:\\BC-250\\toolchain\\llvm-23.1.4-win64\\bin\\clang-cl.exe",
+    "compiler": "clang",
+    "msvc_reason": "",
+    "version": "clang version 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)\r\nTarget: x86_64-pc-windows-msvc\r\nThread model: posix\r\nInstalledDir: P:\\BC-250\\toolchain\\llvm-23.1.4-win64\\bin\r\nBuild config: +alloc:rpmalloc"
+  },
+  "flags": [
+    "/nologo",
+    "/O2",
+    "/MT",
+    "/W4",
+    "/WX",
+    "/Zi",
+    "/GS",
+    "/std:c++17",
+    "/DNDEBUG",
+    "/DWIN32_LEAN_AND_MEAN",
+    "/Brepro",
+    "--target=i686-pc-windows-msvc",
+    "/FIP:\\BC-250\\scratch\\adl\\wt\\tools\\build\\clang-windows.h",
+    "/clang:-march=x86-64-v3",
+    "/clang:-mtune=znver2",
+    "/clang:-Werror=ignored-attributes",
+    "/clang:-Werror=ignored-qualifiers",
+    "/imsvcC:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include",
+    "/imsvcC:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\VS\\include",
+    "/imsvcC:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\ucrt",
+    "/imsvcC:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\um",
+    "/imsvcC:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\shared",
+    "/imsvcC:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\winrt",
+    "/imsvcC:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\cppwinrt",
+    "/imsvcC:\\Program Files (x86)\\Windows Kits\\NETFXSDK\\4.8\\include\\um",
+    "/clang:-Wno-system-headers",
+    "/clang:-Wno-missing-field-initializers",
+    "/clang:-ffile-prefix-map=P:\\BC-250\\scratch\\adl\\wt=.",
+    "/clang:-Werror=cast-calling-convention"
+  ],
+  "windows_sdk_version": "10.0.26100.0\\",
+  "msvc_tools_version": "14.44.35207",
+  "test_service": "nvlddmkm",
+  "ags_sdk": "P:\\BC-250\\ref\\AGS_SDK-v6.3.0",
+  "outputs": [
+    {
+      "path": "adl-unit-test.exe",
+      "sha256": "04CB65BCC2F7C212285E24FD8031507A5FAB04E69E0D27CA522A654D20EF2813"
+    },
+    {
+      "path": "ags-client.exe",
+      "sha256": "A5F800341171E7F87941E2ADAD7CF369D60498C17F465ABBB4A3B67A084C4B8D"
+    },
+    {
+      "path": "atiadlxy.dll",
+      "sha256": "2353D36B586CD0DE81D89C27BAF2E8E602ED1C399844ED8675461BBAAA23850E"
+    },
+    {
+      "path": "test\\atiadl-no-modes.dll",
+      "sha256": "C8A176863DF7507B7DF147A7D90F1BC78BFDD5D83E39C6F2F57469AEF74F7971"
+    },
+    {
+      "path": "test\\atiadl-test-host.dll",
+      "sha256": "39C7E5CE76719CBD4BBA5E7D5CEB9120E04C92C7075DDB6A6F40EB9BF2F02C98"
+    },
+    {
+      "path": "test\\atiadl-test.dll",
+      "sha256": "BA5314DE2CB63DD30530E46C421D78A58C7E0797571EB9F776E2FDDE99E0A2C2"
+    }
+  ]
+}

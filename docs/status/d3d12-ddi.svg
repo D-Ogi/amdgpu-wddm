@@ -2,7 +2,7 @@
 <title>D3D12 user-mode DDI: 186 of 211 slots done (88.15%)</title>
 <rect x="0.5" y="0.5" width="859" height="423" rx="6" fill="#161b22" stroke="#30363d"/>
 <text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">D3D12 user-mode DDI: 186 of 211 slots done (88.15%)</text>
-<text x="10" y="39" font-size="12" fill="#9198a1">Tables given to the D3D12 runtime at DDI build 0092. Done: the function of the slot does work. A fail-safe entry is not done.</text>
+<text x="10" y="39" font-size="12" fill="#9198a1">Tables given to the D3D12 runtime at DDI build 0094. Done: the function of the slot does work. A fail-safe entry is not done.</text>
 <rect x="11.5" y="47.5" width="482.69" height="327" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Device core: 109/122</title>
 <rect x="13.5" y="49.5" width="34.19" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckFormatSupport: done - does work</title></rect>
@@ -193,7 +193,7 @@
 <rect x="601.06" y="300.72" width="33.96" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnRSSetShadingRate: done - does work</title></rect>
 <rect x="635.02" y="300.72" width="33.96" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnRSSetShadingRateImage: done - does work</title></rect>
 <rect x="668.98" y="300.72" width="33.96" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnDispatchMesh: done - does work</title></rect>
-<rect x="702.94" y="300.72" width="33.96" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnBarrier: done - does work</title></rect>
+<rect x="702.94" y="300.72" width="33.96" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnBarrier: done - forwards to barrier_of: does work</title></rect>
 <rect x="736.9" y="300.72" width="33.96" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnBlt: missing - fail-safe entry of engine-ddi</title></rect>
 <rect x="499.19" y="336.61" width="33.96" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnSetMarker: missing - only logs, counts, reads or writes zeros</title></rect>
 <rect x="533.15" y="336.61" width="33.96" height="35.89" fill="#3d444d" stroke="#161b22" stroke-width="0.75"><title>pfnAtomicCopyBufferRegion: missing - fail-safe entry of engine-ddi</title></rect>

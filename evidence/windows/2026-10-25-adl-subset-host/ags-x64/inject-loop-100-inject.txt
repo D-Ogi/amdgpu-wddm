@@ -1,0 +1,17 @@
+ags-client loop, x64 build, 2026-10-24T23:35:46Z
+inject: test snapshot (2 GPUs, 3 entries, 3 displays) given to atiadlxx.dll
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\inject\amd_ags_x64.dll version 6.3.0
+loop: after round 10 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 20 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 30 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 40 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 50 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 60 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 70 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 80 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 90 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: after round 100 heap busy 242461 (+0) private 1568768 (+0) handles 91
+loop: 100 rounds, 0 failed, callback allocations 650 total 0 live
+loop: heap busy bytes after round 1 242461, after round 100 242461 (+0); private bytes 1568768 -> 1568768; handles 91 -> 91
+adl module after the loop: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\inject\atiadlxx.dll
+PASS ags-client loop

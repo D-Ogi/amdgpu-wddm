@@ -1,0 +1,21 @@
+ags-client dx12, x64 build, 2026-10-24T23:35:46Z
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\shipped\amd_ags_x64.dll version 6.3.0
+agsInitialize = 0
+gpuinfo: driverVersion "" radeonSoftwareVersion "" numDevices 0
+gpuinfo: agsCheckDriverVersion(radeonSoftwareVersion, 23.1.1) = 2 (0 ok, 1 older, 2 undefined)
+dxgi adapter 0: "NVIDIA GeForce RTX 4090" 10DE:2684 rev A1 luid 00000000:00024DAC dedicated video 25314721792
+agsDriverExtensionsDX12_CreateDevice = 0, device set, extensionsSupported 0x00000000
+module: C:\WINDOWS\SYSTEM32\dxgi.dll
+module: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\shipped\amd_ags_x64.dll
+module: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\shipped\atiadlxx.dll
+module: C:\WINDOWS\SYSTEM32\d3d12.dll
+module: C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvldumdx.dll
+module: C:\WINDOWS\SYSTEM32\D3D12Core.dll
+module: C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvwgf2umx.dll
+dx12: max feature level 0xC200
+dx12: device luid 00000000:00024DAC
+dx12: fence wait done (completed value 1)
+dx12: readback pixel (0,0) = 64 127 191 255, 0 of 4096 pixels wrong
+agsDriverExtensionsDX12_DestroyDevice = 0, remaining references 0
+agsDeInitialize = 0, callback allocations live after: 0
+PASS ags-client dx12

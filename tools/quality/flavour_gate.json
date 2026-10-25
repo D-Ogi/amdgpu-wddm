@@ -78,6 +78,18 @@
  },
  "forbidden": [
   {
+   "name": "BC250_ADL_TEST_HOOKS",
+   "where": "driver/umd/adl/adl-main.cpp; tools/build/build-umd-adl.ps1",
+   "does": "compiles ADL snapshot injection and test diagnostics; separate fixture DLLs only",
+   "lab": {"none": "The packaged ADL DLL is production discovery in both flavours; only host-test fixture DLLs may have test hooks."}
+  },
+  {
+   "name": "BC250_ADL_TEST_SERVICE",
+   "where": "driver/umd/adl/adl-discover.cpp; retained discovery marker",
+   "does": "substitutes a host GPU service for our KMD in ADL discovery",
+   "lab": {"none": "Host-service discovery fixtures never belong in either package flavour."}
+  },
+  {
    "name": "MESA_SPIRV_READ_PATH",
    "where": "mesa-wddm src/compiler/spirv/spirv_to_nir.c (RADV ICDs, zink UMD, OpenGL ICD)",
    "does": "replaces each SPIR-V module with a file of the same hash from that directory",
@@ -1827,6 +1839,7 @@
    "setup.exe"
   ],
   "slots": [
+   "adl/atiadlxx.dll",
    "control/amdgpu_wddm_control.exe",
    "control/bc250control.dll",
    "d3d11/amdgpu_wddm_d3d11.dll",
@@ -1854,6 +1867,7 @@
    "tools/hip/vadd.exe",
    "tools/vulkaninfo.exe",
    "vulkan/vulkan_radeon.dll",
+   "wow64/adl/atiadlxy.dll",
    "wow64/d3d11/amdgpu_wddm_d3d11.dll",
    "wow64/d3d11/amdgpu_wddm_dxvk.dll",
    "wow64/d3d11/amdgpu_wddm_radv.dll",

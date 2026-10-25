@@ -1,0 +1,17 @@
+ags-client info, x64 build, 2026-10-24T23:35:46Z
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\host\amd_ags_x64.dll version 6.3.0
+agsInitialize(gpu info yes) = 0
+adl module after agsInitialize: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\host\atiadlxx.dll
+gpuinfo: driverVersion "32.0.15.9597" radeonSoftwareVersion "" numDevices 1
+gpuinfo: agsCheckDriverVersion(radeonSoftwareVersion, 23.1.1) = 2 (0 ok, 1 older, 2 undefined)
+device 0: "NVIDIA GeForce RTX 4090" asicFamily Unknown isAPU 0 isPrimaryDevice 1 isExternal 0
+device 0: vendorId 0x10DE deviceId 0x2684 revisionId 0xA1 adlAdapterIndex 0
+device 0: numCUs 0 numWGPs 0 numROPs 0 coreClock 0 memoryClock 0 memoryBandwidth 0 teraFlops 0.000
+device 0: localMemoryInBytes 25314721792 sharedMemoryInBytes 109803179212
+device 0: eyefinityEnabled 0 grid 0x0 resolution 0x0 bezel 0 numDisplays 1
+device 0 display 0: "DELL S3423DWC" on \\.\DISPLAY1 primary 1 HDR10 0 dolbyVision 0 freesync 0 freesyncHDR 0 eyefinityInGroup 0
+device 0 display 0: current 3440x1440 at 0,0 visible 3440x1440 at 0,0 59.973 Hz max 0x0 0.000 Hz adlAdapterIndex 0
+callback allocations live before agsDeInitialize: 4
+agsDeInitialize = 0, callback allocations live after: 0 (of 8)
+adl module after agsDeInitialize: none loaded
+PASS ags-client info

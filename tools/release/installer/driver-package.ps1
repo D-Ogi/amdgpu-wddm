@@ -57,6 +57,45 @@ function Get-DriverPackageRegistration {
         [pscustomobject]@{name=$p.Name; kind=[string]$v.kind; value=$value}
     }
 }
+# CopyToVm pairs intentionally remain DriverStore-relative. They are not root
+# adapter values and must never pass through the %13% expansion above.
+function Get-DriverPackageSubkeyRegistration {
+    param([Parameter(Mandatory)]$Package)
+    $expected = @()
+    foreach ($spec in @(
+        @('CopyToVmWhenNewer', 'adl/atiadlxx.dll', 'atiadlxx.dll', 'x64'),
+        @('CopyToVmWhenNewerWow64', 'wow64/adl/atiadlxy32.dll', 'atiadlxy.dll', 'x86'))) {
+        $member = @($Package.members | Where-Object { $_.member -ceq $spec[1] })
+        if ($member.Count) {
+            if ($member.Count -ne 1 -or $member[0].arch -cne $spec[3]) { throw 'invalid ADL member architecture' }
+            $expected += [pscustomobject]@{subkey=$spec[0]; name='AmdgpuAdl'; kind='MultiString';
+                value=[string[]]@(($spec[1] -replace '/', '\'), $spec[2])}
+        }
+    }
+    $actual = @()
+    if ($Package.PSObject.Properties['subkey_registration']) { $actual = @($Package.subkey_registration) }
+    if ($actual.Count -ne $expected.Count) { throw 'ADL CopyToVm registration count differs from its members' }
+    foreach ($want in $expected) {
+        $match = @($actual | Where-Object { $_.subkey -ceq $want.subkey })
+        if ($match.Count -ne 1) { throw 'missing or duplicate ADL CopyToVm subkey' }
+        $row = $match[0]
+        if ($row.name -cne $want.name -or $row.kind -cne $want.kind -or
+            @($row.value).Count -ne 2 -or $row.value[0] -cne $want.value[0] -or $row.value[1] -cne $want.value[1]) {
+            throw 'invalid ADL CopyToVm source/destination pair'
+        }
+    }
+    $expected
+}
+function Test-DriverPackageSubkeyRegistration {
+    param([Parameter(Mandatory)]$Package, [Parameter(Mandatory)][string]$ClassKey)
+    foreach ($row in @(Get-DriverPackageSubkeyRegistration -Package $Package)) {
+        $label = "$($row.subkey)\$($row.name)"
+        $key = Get-Item -LiteralPath (Join-Path $ClassKey $row.subkey) -ErrorAction SilentlyContinue
+        if (-not $key -or $key.GetValueNames() -notcontains $row.name) { "$label is missing"; continue }
+        if ($key.GetValueKind($row.name).ToString() -ne $row.kind) { "$label has the wrong registry type" }
+        if (-not (Test-RegistryValueSame $key.GetValue($row.name) $row.value)) { "$label differs from the bound package INF" }
+    }
+}
 function Test-DriverPackageRegistration {
     param([Parameter(Mandatory)]$Manifest, [Parameter(Mandatory)][string]$ClassKey,
         [Parameter(Mandatory)][string]$Root)
@@ -67,6 +106,7 @@ function Test-DriverPackageRegistration {
         if ($key.GetValueKind($row.name).ToString() -ne $row.kind) { "$($row.name) has the wrong registry type" }
         if (-not (Test-RegistryValueSame $key.GetValue($row.name) $row.value)) { "$($row.name) differs from the bound package INF" }
     }
+    Test-DriverPackageSubkeyRegistration -Package $Manifest.driver_package -ClassKey $ClassKey
     foreach ($row in @($Manifest.driver_package.members)) {
         $relative = [AmdgpuWddm.PackageStage]::MemberPath([string]$row.member)
         $path = Join-Path $Root $relative

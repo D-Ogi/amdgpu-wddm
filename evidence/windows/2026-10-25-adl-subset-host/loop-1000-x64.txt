@@ -1,0 +1,16 @@
+ags-client loop, x64 build, 2026-10-24T23:36:04Z
+ags: P:\BC-250\scratch\adl\evidence\leak-stage\amd_ags_x64.dll version 6.3.0
+loop: after round 100 heap busy 177532 (+0) private 1654784 (+233472) handles 81
+loop: after round 200 heap busy 177532 (+0) private 1654784 (+233472) handles 81
+loop: after round 300 heap busy 177532 (+0) private 1654784 (+233472) handles 81
+loop: after round 400 heap busy 177532 (+0) private 1654784 (+233472) handles 81
+loop: after round 500 heap busy 177532 (+0) private 1802240 (+380928) handles 81
+loop: after round 600 heap busy 177532 (+0) private 1654784 (+233472) handles 81
+loop: after round 700 heap busy 177532 (+0) private 1802240 (+380928) handles 81
+loop: after round 800 heap busy 177532 (+0) private 1875968 (+454656) handles 81
+loop: after round 900 heap busy 177532 (+0) private 1724416 (+303104) handles 81
+loop: after round 1000 heap busy 177532 (+0) private 1724416 (+303104) handles 81
+loop: 1000 rounds, 0 failed, callback allocations 1000 total 0 live
+loop: heap busy bytes after round 1 177532, after round 1000 177532 (+0); private bytes 1421312 -> 1724416; handles 81 -> 81
+adl module after the loop: none loaded
+PASS ags-client loop

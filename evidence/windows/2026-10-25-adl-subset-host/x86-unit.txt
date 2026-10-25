@@ -1,0 +1,3 @@
+x86 calling convention: every export measured as cdecl
+unit: 3144 checks, 0 failed, 1022 caller allocations, 0 outstanding
+PASS unit

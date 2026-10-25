@@ -1,0 +1,4 @@
+ags-client expect, x64 build, 2026-10-24T23:35:47Z
+ags: P:\BC-250\scratch\adl\wt\evidence\windows\2026-10-25-adl-subset-host\ags-x64\stage\none\amd_ags_x64.dll version 6.3.0
+agsInitialize = 6, expected 6, context null, callback allocations live 0
+PASS ags-client expect
