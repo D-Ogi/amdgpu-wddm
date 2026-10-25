@@ -32,3 +32,21 @@ The host reproduction faults at RVA 0x19969 with the same caller. The AGS memset
 entry at 0x19970 dispatches to REP STOSB at 0x19969 or the AVX store loop at
 0x19aa0. In x86, the host faults at 0x6fec and the lab at 0x7030. Both are
 paths in memset starting at 0x6fb0. No fixed-KMD lab result is claimed here.
+
+## Lab result with the fixed KMD, 2026-10-25
+
+KMD: lab flavour 49FB25E1, built from source b5ffae8c plus this change, loaded on unit A (device OK). The ADL kit ran
+steps s1 to s6 by hand, outside a debugger:
+
+- s1 to s6 PASS. agsInitialize with GPU info returns 0 in x64 and in x86.
+- AGS reports numDevices 1, vendor 0x1002, device 0x13FE, driverVersion 40.7.216.104 and localMemoryInBytes
+  8511750144.
+- A loop of 100 initialisations gives 0 failures.
+- agsDriverExtensionsDX12_CreateDevice returns 0, with extensionsSupported 0. A D3D12 readback gives 0 wrong values
+  of 4096.
+- OMMSample D3D12 with app-local Agility gets past AGS. It then shows "DXR 1.2 Support Required", which is correct,
+  because the device reports raytracing tier 1.1.
+
+The warm restart after the KMD swap did not reach the operating system; Windows had shut down cleanly before it. An
+AC power cycle gave a normal cold boot. A source audit found no lab-only teardown in the stop path. The cause is
+not known and is not attributed to this change. The lab was then restored to the release KMD.
