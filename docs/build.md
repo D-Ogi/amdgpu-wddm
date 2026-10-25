@@ -242,9 +242,10 @@ limit.
 The meson sanity check gives the link switches to `clang-cl` without `/link`, and `clang-cl` reads an unknown `/`
 switch as an input file. It ignores an unknown `-` switch with a warning. `lld-link` accepts both forms.
 
-`build-dxvk.ps1` with `-Compiler clang-cl` builds x64 only. clang-cl accepts the x86 policy switches `/we4229` and
-`/we4440`, but it does not use them. `build-vkd3d.ps1` ([vkd3d-proton](#vkd3d-proton)) and `build-mesa.ps1` build x86 with
-clang-cl: they name the i686 target in the compiler command and use the clang-cl form of the policy.
+clang-cl accepts the x86 policy switches `/we4229` and `/we4440`, but it does not use them. `build-vkd3d.ps1`
+([vkd3d-proton](#vkd3d-proton)), `build-mesa.ps1` and `build-dxvk.ps1` build x86 with clang-cl: they name the i686
+target in the compiler command and use the clang-cl form of the policy. `build-mesa.ps1` and `build-dxvk.ps1` name it
+as `/clang:--target=`, because meson's resource compiler wrapper would give `--target=` to `rc.exe`.
 `Add-ReproducibleMesonOptions` refuses clang-cl for x86 when the recipe does not name that target.
 
 The clang-cl x86 policy is `-Werror=ignored-attributes -Werror=cast-calling-convention`. The controls are in
@@ -260,7 +261,7 @@ The clang-cl x86 policy is `-Werror=ignored-attributes -Werror=cast-calling-conv
 
 The clang-cl policy is two warnings made errors. `/W0`, `-w` or a `-Wno-` switch for one of the two warnings removes
 it, and clang shows no warning in a system header (`/external:I`, `/imsvc`, `-isystem`, and the `INCLUDE`
-directories). Thus `build-vkd3d.ps1` and `build-mesa.ps1` read `compile_commands.json` after configure (`Test-ClangX86Policy` in
+directories). Thus `build-vkd3d.ps1`, `build-mesa.ps1` and `build-dxvk.ps1` read `compile_commands.json` after configure (`Test-ClangX86Policy` in
 `common.ps1`). It stops if a compile command
 does not name the i686 target and the two switches, or if a compile command has a switch that removes the policy or
 makes a directory a system directory. The Windows SDK and C runtime headers stay system headers for clang. The MSVC
