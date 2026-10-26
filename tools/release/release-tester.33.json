@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "The component builds of tester.33 that build-release-set.ps1 rebuilds: the KMD, the D3D12 and D3D11 shells, the D3D11 engine, the Mesa ICD rows, the desktop router, the control application and the state worker, both flavours. Every bc250-win row is main 37518825 (BD-228 DPM recall, BD-235 paging status, ring pad and paging journal failure records (Q3/Q3a/Q4a/R1-R2), BD-232 Stage B evidence, the private-caps bound a9b744d3, the clang-cl router recipe ae7235d5, the ADL system packaging 49af51b2, the clang-cl control and state worker recipes 76112a2c the x86 clang-cl DXVK recipe a8b041da, with the ADL flavour gate declarations deferred to the release record), except the D3D12 shell rows, which are 6530d93e (the merge of feat/d3d12-ddi0120-sm69 e9bb7a52 on the compute merge 39d40c52: the shell offers DDI builds up to 0120, reports shader model 6.9 and raytracing tier 1.2 at 0120, admits the IMPLICIT heap flag and passes AllowFenceRewind of hosted GPU signals, built with the WDK 10.0.28000 DDI header and the Agility SDK 1.619.6 API header; 37518825 is an ancestor) and the KMD rows, which are 6530d93e (the 0120 shell merge, whose KMD is the merge of feat/ace-compute-node 3c5cef3c: WDDM node 2 on MEC compute ring 1, always open in the release flavour, the EnableComputeNode selector in the lab flavour; 37518825 is an ancestor); the rows of the other repositories build with the recipe tree main d3d917d8, which has the release tools of tester.33, the x86 clang-cl Mesa builds (d8b88dd9) and the toolchain widl with its probe in build-vkd3d.ps1 (e4422819, d3d917d8). The D3D12/D3D11 ICD rows (hosted x64 and x86) move to feat/bd232-no16-hosted-t33 0a08ccf1 (the hosted line 50b10e3b with the compute queue family and wait-before-signal (bb65187e) and the release-flavour no-output 16-sample route (26e7bde9)), and the Mesa input of the D3D12 shell (src/util/bc250_host_bootstrap.h, the same in both) to the release line amdgpu-wddm/upstream-2026-10-23 at d97c4a06: upstream Mesa main a0ef4c88, BD-226 command streams in CPU-visible VRAM with the r2 terminal-error fix, the gfx1013 mesh and task port, BD-232 point rounding (default off), key padding and perspective offsets. The D3D12 engine rows move to vkd3d-proton 82b4b165 (the tester.33 engine 7ce87400 with the OPTIONS19 sample counts and ForcedSampleCount for rendering without outputs (888867bf) and a 4096-entry sampler heap with an honest cap (57e872b2, 82b4b165)), and the engine input of the D3D12 shell (libs/ddi, the same in both) to vkd3d-proton 8b4ac9b8 (BD-233 small layout on f5fda151 and the casts that clang-cl needs; with the null control-point hull DXIL fix of BD-180), built with clang-cl in both flavours and both architectures. The six Mesa sync lines of 2026-10-23, each with upstream Mesa a0ef4c88 merged, are in this set: system Vulkan 17b967ef (feat/bd232-no16-system-t33, the system line d49519f2 with the compute queue family and wait-before-signal, the BD-240 MSAA port a7759d43 (f45f369c) and the release-flavour no-output 16-sample route (3f6536ad)), desktop 07421fb8, wow64 Vulkan 0aace3d3, and new rows for the zink UMD 411f70e4, the CPU UMD 2057d4cf (x64 and x86) and the OpenGL ICD e0d424ff. The DXVK rows move from the tester.32 commit c271e0e0 to acb78320, which changes only the engine host test (its thread census waits up to 10 s for new engine threads to name themselves, and its worker check requires queued translations, not translations that a worker did before the draws); the DLL bytes are those of c271e0e0. The rows of the release that this release set does not build (data files, third-party files, components carried from an earlier release) stay as release-sources.json has them. The ADL subset (atiadlxx.dll x64, atiadlxy.dll x86, both flavours) is new in tester.33: bc250-win 37518825 builds it with build-umd-adl.ps1 (clang-cl), and the INF package carries it as DIRID13 members that CopyToVmWhenNewer and CopyToVmWhenNewerWow64 copy to System32 and SysWOW64. Round 5 (2026-10-26): the final rows of the tester.33 integration.",
+  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. Hosted Mesa uses 1f8e1e60, system x64 Mesa aecf0012, and the D3D12 engine c9d4082f. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -1025,7 +1025,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 0aace3d3 (the tester.32 line 771f8413 with upstream Mesa a0ef4c88 merged), built x86 with clang-cl, while the 64-bit row is the system line 17b967ef (the system line d49519f2 with the compute queue family and wait-before-signal, the BD-240 MSAA port a7759d43 (f45f369c) and the release-flavour no-output 16-sample route (3f6536ad)). The lines stay diverged as in tester.32: the BD-197 DXGI present work, its BD-217 fix and the later work of the 64-bit line have no 32-bit build or measured arm. This sentence stops covering the pair as soon as either pin moves."
+          "pair_skew": "The x86 system Vulkan row remains on wow64 0aace3d3, with upstream Mesa a0ef4c88 merged. The x64 system row is aecf0012, which adds the BD-167 environment-read helper to 17b967ef. That change removes RADV_BC250_ACE_QUEUES lookup in the release flavour; an unset lab environment and the release default both follow the KMD compute-node capability. It does not port the x64 DXGI present or compute work to x86. The retained difference is deliberate: the BD-197 present route, BD-217 fix, compute queue and later x64 work have no measured x86 build. The x86 row passed the retained 864-case fill check; x64 still requires the final installed Vulkan and compute gates. Neither result proves feature parity. This note covers only 0aace3d3 and aecf0012 and must be reviewed when either pin changes."
         }
       ],
       "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611"
@@ -1384,7 +1384,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The 32-bit system Vulkan slot is the wow64 line 0aace3d3 (the tester.32 line 771f8413 with upstream Mesa a0ef4c88 merged), built x86 with clang-cl, while the 64-bit row is the system line 17b967ef (the system line d49519f2 with the compute queue family and wait-before-signal, the BD-240 MSAA port a7759d43 (f45f369c) and the release-flavour no-output 16-sample route (3f6536ad)). The lines stay diverged as in tester.32: the BD-197 DXGI present work, its BD-217 fix and the later work of the 64-bit line have no 32-bit build or measured arm. This sentence stops covering the pair as soon as either pin moves."
+          "pair_skew": "The x86 system Vulkan row remains on wow64 0aace3d3, with upstream Mesa a0ef4c88 merged. The x64 system row is aecf0012, which adds the BD-167 environment-read helper to 17b967ef. That change removes RADV_BC250_ACE_QUEUES lookup in the release flavour; an unset lab environment and the release default both follow the KMD compute-node capability. It does not port the x64 DXGI present or compute work to x86. The retained difference is deliberate: the BD-197 present route, BD-217 fix, compute queue and later x64 work have no measured x86 build. The x86 row passed the retained 864-case fill check; x64 still requires the final installed Vulkan and compute gates. Neither result proves feature parity. This note covers only 0aace3d3 and aecf0012 and must be reviewed when either pin changes."
         }
       ],
       "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611"
@@ -1978,7 +1978,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "375188253d576c9495079e66118ae2aa4227907f",
+      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2011,7 +2011,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "375188253d576c9495079e66118ae2aa4227907f",
+      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2096,7 +2096,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "375188253d576c9495079e66118ae2aa4227907f",
+      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2129,7 +2129,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "375188253d576c9495079e66118ae2aa4227907f",
+      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
