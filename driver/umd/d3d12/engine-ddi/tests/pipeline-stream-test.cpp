@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // The pipeline subobject stream of pfnCreatePipelineState (D34, pipelines.cpp), linked against the native
 // engine-ddi.lib (no harness macro), the way the shell's DLL links it. No engine and no GPU: the engine device is a
-// fake ID3D12Device4 that keeps the bytes of every D3D12_PIPELINE_STATE_STREAM_DESC it is handed and counts the
+// fake ID3D12Device10 that keeps the bytes of every D3D12_PIPELINE_STATE_STREAM_DESC it is handed and counts the
 // older pipeline entries, and the checks walk the stream the way the engine walks it (vkd3d-proton state.c,
 // vkd3d_pipeline_state_desc_from_d3d12_stream_desc: a type word, its value, the pair's size rounded up to a
 // pointer). What this proves:
@@ -453,7 +453,7 @@ public:
 
 // The engine device: root signatures, the stream entry of ID3D12Device2, the compute entry, and a count of the
 // older graphics entry. Anything else of ID3D12Device4 is unexpected on this path and counted.
-class FakeDevice : public Object<ID3D12Device4> {
+class FakeDevice : public Object<ID3D12Device10> {
 public:
     FakeRootSignature root;
     FakePipeline pipeline;
@@ -694,6 +694,28 @@ public:
                                           void** out) override {
         return none(out);
     }
+    HRESULT STDMETHODCALLTYPE CreateLifetimeTracker(ID3D12LifetimeOwner *pOwner, REFIID riid, void **ppvTracker) override { (void)pOwner; (void)riid; (void)ppvTracker; return odd(E_NOTIMPL); }
+    void STDMETHODCALLTYPE RemoveDevice(void) override { ++unexpected; }
+    HRESULT STDMETHODCALLTYPE EnumerateMetaCommands(UINT *pNumMetaCommands, D3D12_META_COMMAND_DESC *pDescs) override { (void)pNumMetaCommands; (void)pDescs; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE EnumerateMetaCommandParameters(REFGUID CommandId, D3D12_META_COMMAND_PARAMETER_STAGE Stage, UINT *pTotalStructureSizeInBytes, UINT *pParameterCount, D3D12_META_COMMAND_PARAMETER_DESC *pParameterDescs) override { (void)CommandId; (void)Stage; (void)pTotalStructureSizeInBytes; (void)pParameterCount; (void)pParameterDescs; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreateMetaCommand(REFGUID CommandId, UINT NodeMask, const void *pCreationParametersData, SIZE_T CreationParametersDataSizeInBytes, REFIID riid, void **ppMetaCommand) override { (void)CommandId; (void)NodeMask; (void)pCreationParametersData; (void)CreationParametersDataSizeInBytes; (void)riid; (void)ppMetaCommand; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreateStateObject(const D3D12_STATE_OBJECT_DESC *pDesc, REFIID riid, void **ppStateObject) override { (void)pDesc; (void)riid; (void)ppStateObject; return odd(E_NOTIMPL); }
+    void STDMETHODCALLTYPE GetRaytracingAccelerationStructurePrebuildInfo(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS *pDesc, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO *pInfo) override { (void)pDesc; (void)pInfo; ++unexpected; }
+    D3D12_DRIVER_MATCHING_IDENTIFIER_STATUS STDMETHODCALLTYPE CheckDriverMatchingIdentifier(D3D12_SERIALIZED_DATA_TYPE SerializedDataType, const D3D12_SERIALIZED_DATA_DRIVER_MATCHING_IDENTIFIER *pIdentifierToCheck) override { (void)SerializedDataType; (void)pIdentifierToCheck; return odd(D3D12_DRIVER_MATCHING_IDENTIFIER_STATUS{}); }
+    HRESULT STDMETHODCALLTYPE SetBackgroundProcessingMode(D3D12_BACKGROUND_PROCESSING_MODE Mode, D3D12_MEASUREMENTS_ACTION MeasurementsAction, HANDLE hEventToSignalUponCompletion, BOOL *pbFurtherMeasurementsDesired) override { (void)Mode; (void)MeasurementsAction; (void)hEventToSignalUponCompletion; (void)pbFurtherMeasurementsDesired; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE AddToStateObject(const D3D12_STATE_OBJECT_DESC *pAddition, ID3D12StateObject *pStateObjectToGrowFrom, REFIID riid, void **ppNewStateObject) override { (void)pAddition; (void)pStateObjectToGrowFrom; (void)riid; (void)ppNewStateObject; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreateProtectedResourceSession1(const D3D12_PROTECTED_RESOURCE_SESSION_DESC1 *pDesc, REFIID riid, void **ppSession) override { (void)pDesc; (void)riid; (void)ppSession; return odd(E_NOTIMPL); }
+    D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE GetResourceAllocationInfo2(UINT visibleMask, UINT numResourceDescs, const D3D12_RESOURCE_DESC1 *pResourceDescs, D3D12_RESOURCE_ALLOCATION_INFO1 *pResourceAllocationInfo1) override { (void)visibleMask; (void)numResourceDescs; (void)pResourceDescs; (void)pResourceAllocationInfo1; return odd(D3D12_RESOURCE_ALLOCATION_INFO{}); }
+    HRESULT STDMETHODCALLTYPE CreateCommittedResource2(const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC1 *pDesc, D3D12_RESOURCE_STATES InitialResourceState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession *pProtectedSession, REFIID riidResource, void **ppvResource) override { (void)pHeapProperties; (void)HeapFlags; (void)pDesc; (void)InitialResourceState; (void)pOptimizedClearValue; (void)pProtectedSession; (void)riidResource; (void)ppvResource; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreatePlacedResource1(ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1 *pDesc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, REFIID riid, void **ppvResource) override { (void)pHeap; (void)HeapOffset; (void)pDesc; (void)InitialState; (void)pOptimizedClearValue; (void)riid; (void)ppvResource; return odd(E_NOTIMPL); }
+    void STDMETHODCALLTYPE CreateSamplerFeedbackUnorderedAccessView(ID3D12Resource *pTargetedResource, ID3D12Resource *pFeedbackResource, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) override { (void)pTargetedResource; (void)pFeedbackResource; (void)DestDescriptor; ++unexpected; }
+    void STDMETHODCALLTYPE GetCopyableFootprints1(const D3D12_RESOURCE_DESC1 *pResourceDesc, UINT FirstSubresource, UINT NumSubresources, UINT64 BaseOffset, D3D12_PLACED_SUBRESOURCE_FOOTPRINT *pLayouts, UINT *pNumRows, UINT64 *pRowSizeInBytes, UINT64 *pTotalBytes) override { (void)pResourceDesc; (void)FirstSubresource; (void)NumSubresources; (void)BaseOffset; (void)pLayouts; (void)pNumRows; (void)pRowSizeInBytes; (void)pTotalBytes; ++unexpected; }
+    HRESULT STDMETHODCALLTYPE CreateShaderCacheSession(const D3D12_SHADER_CACHE_SESSION_DESC *pDesc, REFIID riid, void **ppvSession) override { (void)pDesc; (void)riid; (void)ppvSession; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE ShaderCacheControl(D3D12_SHADER_CACHE_KIND_FLAGS Kinds, D3D12_SHADER_CACHE_CONTROL_FLAGS Control) override { (void)Kinds; (void)Control; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreateCommandQueue1(const D3D12_COMMAND_QUEUE_DESC *pDesc, REFIID CreatorID, REFIID riid, void **ppCommandQueue) override { (void)pDesc; (void)CreatorID; (void)riid; (void)ppCommandQueue; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreateCommittedResource3(const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC1 *pDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession *pProtectedSession, UINT32 NumCastableFormats, const DXGI_FORMAT *pCastableFormats, REFIID riidResource, void **ppvResource) override { (void)pHeapProperties; (void)HeapFlags; (void)pDesc; (void)InitialLayout; (void)pOptimizedClearValue; (void)pProtectedSession; (void)NumCastableFormats; (void)pCastableFormats; (void)riidResource; (void)ppvResource; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreatePlacedResource2(ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1 *pDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE *pOptimizedClearValue, UINT32 NumCastableFormats, const DXGI_FORMAT *pCastableFormats, REFIID riid, void **ppvResource) override { (void)pHeap; (void)HeapOffset; (void)pDesc; (void)InitialLayout; (void)pOptimizedClearValue; (void)NumCastableFormats; (void)pCastableFormats; (void)riid; (void)ppvResource; return odd(E_NOTIMPL); }
+    HRESULT STDMETHODCALLTYPE CreateReservedResource2(const D3D12_RESOURCE_DESC *pDesc, D3D12_BARRIER_LAYOUT InitialLayout, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession *pProtectedSession, UINT32 NumCastableFormats, const DXGI_FORMAT *pCastableFormats, REFIID riid, void **ppvResource) override { (void)pDesc; (void)InitialLayout; (void)pOptimizedClearValue; (void)pProtectedSession; (void)NumCastableFormats; (void)pCastableFormats; (void)riid; (void)ppvResource; return odd(E_NOTIMPL); }
     HRESULT STDMETHODCALLTYPE CreateReservedResource1(const D3D12_RESOURCE_DESC*, D3D12_RESOURCE_STATES,
                                                       const D3D12_CLEAR_VALUE*, ID3D12ProtectedResourceSession*,
                                                       REFIID, void** out) override {
@@ -741,6 +763,7 @@ public:
                          nullptr};
         context.device = &device;
         context.device4 = &device;
+        context.device10 = &device;
         for (UINT& n : context.increments) n = 32;
         h.pDrvPrivate = &context;
         g_context = &context;
@@ -1075,11 +1098,18 @@ int main() {
     {
         class TightDevice final : public FakeDevice {
         public:
-            UINT tier = 1, calls = 0; HRESULT support_result = S_OK;
+            UINT tier = 1, calls = 0, reservations = 0; HRESULT support_result = S_OK;
             D3D12_RESOURCE_DESC last{};
             HRESULT STDMETHODCALLTYPE CheckFeatureSupport(D3D12_FEATURE f, void* p, UINT n) override {
                 if (UINT(f) != 54 || n != sizeof(UINT)) return E_INVALIDARG;
                 *static_cast<UINT*>(p) = tier; return support_result;
+            }
+            HRESULT STDMETHODCALLTYPE CreateReservedResource2(const D3D12_RESOURCE_DESC* d,
+                D3D12_BARRIER_LAYOUT layout, const D3D12_CLEAR_VALUE*, ID3D12ProtectedResourceSession*,
+                UINT32 count, const DXGI_FORMAT*, REFIID, void** out) override {
+                check(layout == D3D12_BARRIER_LAYOUT_UNDEFINED && count == 0, "reserved buffer layout and formats");
+                ++reservations; last = *d; *out = nullptr;
+                return E_OUTOFMEMORY; // Deliberate engine failure after observing the forwarded description.
             }
             D3D12_RESOURCE_ALLOCATION_INFO STDMETHODCALLTYPE GetResourceAllocationInfo(
                 UINT, UINT count, const D3D12_RESOURCE_DESC* d) override {
@@ -1123,8 +1153,18 @@ int main() {
         }
         r.Layout = D3D12DDI_TL_ROW_MAJOR;
         D3D12DDI_HRESOURCE reserved{f.storage(sizeof(ResourceRecord))};
-        check(g_core.pfnCreateHeapAndResource(f.h, nullptr, {}, {}, &r, nullptr, {}, reserved) == E_OUTOFMEMORY,
-              "tight reserved resource refused before engine reservation");
+        for (UINT width : {25600u, 65536u}) {
+            r.Width = width; const auto before = device.reservations;
+            check(g_core.pfnCreateHeapAndResource(f.h, nullptr, {}, {}, &r, nullptr, {}, reserved) == E_OUTOFMEMORY
+                  && device.reservations == before + 1 && device.last.Width == width
+                  && device.last.Layout == D3D12_TEXTURE_LAYOUT_ROW_MAJOR && (UINT(device.last.Flags) & 0x400),
+                  "tight ROW_MAJOR reserved buffer reaches engine, width %u", width);
+        }
+        for (auto layout : {D3D12DDI_TL_64KB_TILE_UNDEFINED_SWIZZLE, D3D12DDI_TL_64KB_TILE_STANDARD_SWIZZLE}) {
+            r.Layout = layout; const auto before = device.reservations;
+            check(g_core.pfnCreateHeapAndResource(f.h, nullptr, {}, {}, &r, nullptr, {}, reserved) == E_OUTOFMEMORY
+                  && device.reservations == before, "tight swizzled reserved resource refused before engine");
+        }
         check(!device.unexpected, "tight refusal paths use no unexpected COM entry");
     }
 #endif

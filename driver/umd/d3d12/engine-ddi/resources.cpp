@@ -583,7 +583,8 @@ HRESULT create_heap_and_resource(DeviceContext* c, const D3D12DDIARG_CREATEHEAP_
             if (res_desc->ReuseBufferGPUVA.BaseAddress.UMD.hResource.pDrvPrivate || hheap.pDrvPrivate)
                 return E_INVALIDARG;
             // Reserved: no heap and no base resource (engine-ddi.h, "Reserved resources"). No memory is allocated.
-            if (tight::enabled(desc)) return E_INVALIDARG;
+            // Tight ROW_MAJOR reserved buffers are valid. Swizzled tight layouts
+            // have already been rejected by to_api_desc; the engine owns sparse sizing.
             ID3D12Resource* engine = nullptr;
             HRESULT hr = reserve(c, desc, res_desc->InitialBarrierLayout, clear, res_desc->NumCastableFormats,
                                  res_desc->pCastableFormats, &engine);
