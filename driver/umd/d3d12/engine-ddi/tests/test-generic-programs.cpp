@@ -93,10 +93,10 @@ void test_generic_programs(Env& env, Device& device) {
     D3D12DDI_GLOBAL_SERIALIZED_ROOT_SIGNATURE_0114 serialized_roots[2]{};
     for (auto& s : serialized_roots) { s.RootSignature.Version = D3D12DDI_ROOT_SIGNATURE_VERSION_1_2; s.RootSignature.pRootSignature_1_2 = &serialized_root_desc; }
     subobjects[8].pDesc = &serialized_roots[0]; subobjects[9].pDesc = &serialized_roots[1];
-    const D3D12DDI_STATE_SUBOBJECT_0054* roots_a[] = {&subobjects[8]}, *roots_b[] = {&subobjects[9]};
+    const D3D12DDI_STATE_SUBOBJECT_0054* roots_a[] = {&subobjects[8], nullptr}, *roots_b[] = {&subobjects[9], nullptr};
     const D3D12DDI_FUNCTION_SUMMARY_NODE_0054 root_nodes[] = {
-        {L"vertex", L"vertex", 1, roots_a, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE},
-        {L"pixel", L"pixel", 1, roots_b, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE}};
+        {L"vertex", L"vertex", 2, roots_a, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE},
+        {L"pixel", L"pixel", 2, roots_b, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE}};
     const D3D12DDI_FUNCTION_SUMMARY_0054 root_summary{2, root_nodes, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE};
     D3D12DDIARG_CREATE_STATE_OBJECT_0054 desc{D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE, 10, subobjects};
     auto create_state = [&](const D3D12DDIARG_CREATE_STATE_OBJECT_0054& d) {
@@ -105,16 +105,34 @@ void test_generic_programs(Env& env, Device& device) {
         records.states.push_back(h); return h;
     };
     constexpr auto unresolved_bindings = D3D12DDI_EXPORT_SUMMARY_FLAG_UNRESOLVED_RESOURCE_BINDINGS;
-    const D3D12DDI_FUNCTION_SUMMARY_NODE_0054 collection_nodes[] = {
+    D3D12DDI_FUNCTION_SUMMARY_NODE_0054 collection_nodes[] = {
         {L"collection_vertex", L"collection_vertex", 0, nullptr, D3D12DDI_EXPORT_SUMMARY_FLAG_NONE},
         {L"collection_pixel", L"collection_pixel", 0, nullptr, unresolved_bindings}};
     const D3D12DDI_FUNCTION_SUMMARY_0054 collection_summary{2, collection_nodes, unresolved_bindings};
+    D3D12DDI_STATE_OBJECT_CONFIG_0054 collection_config{D3D12DDI_STATE_OBJECT_FLAG_ALLOW_EXTERNAL_DEPENDENCIES_ON_LOCAL_DEFINITIONS};
     D3D12DDI_STATE_SUBOBJECT_0054 collection_objects[] = {{D3D12DDI_STATE_SUBOBJECT_TYPE_SHADER_EXPORT_SUMMARY, &collection_summary},
-        {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &vs_lib}, {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &ps_lib}};
-    const D3D12DDIARG_CREATE_STATE_OBJECT_0054 collection_desc{D3D12DDI_STATE_OBJECT_TYPE_COLLECTION, 3, collection_objects};
+        {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &vs_lib}, {D3D12DDI_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &ps_lib},
+        {D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &collection_config}};
+    const D3D12DDI_STATE_SUBOBJECT_0054* collection_associations[] = {&collection_objects[3]};
+    for (auto& node : collection_nodes) { node.NumAssociatedSubobjects = 1; node.ppAssociatedSubobjects = collection_associations; }
+    const D3D12DDIARG_CREATE_STATE_OBJECT_0054 collection_desc{D3D12DDI_STATE_OBJECT_TYPE_COLLECTION, 4, collection_objects};
+    // A valid-looking config outside the submitted array is not a valid association.
+    const D3D12DDI_STATE_SUBOBJECT_0054 foreign_config{
+        D3D12DDI_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &collection_config};
+    collection_associations[0] = &foreign_config;
+    D3D12DDI_HSTATEOBJECT_0054 rejected{
+        env.storage.alloc(core.pfnCalcPrivateStateObjectSize(device.h(), &collection_desc))};
+    check(rejected.pDrvPrivate != nullptr, "generic programs: negative association allocation");
+    if (!rejected.pDrvPrivate) return;
+    hr = core.pfnCreateStateObject(device.h(), &collection_desc, rejected, {});
+    // The DDI admits a restricted failure set; invalid descriptions map to E_OUTOFMEMORY.
+    check(hr == E_OUTOFMEMORY, "generic programs: foreign config association rejected");
+    env.core.pfnDestroyStateObject(device.h(), rejected);
+    collection_associations[0] = &collection_objects[3];
     auto collection = create_state(collection_desc);
     checkf(hr == S_OK, "generic programs: raw DXIL/container collection with unresolved root bindings (hr %08lx)", static_cast<unsigned long>(hr));
     if (FAILED(hr)) return;
+    roots_a[1] = roots_b[1] = &collection_objects[3];
     std::fill(vs.begin(), vs.end(), 0xddddddddu); std::vector<UINT>().swap(vs);
     std::fill(ps.begin(), ps.end(), 0xddddddddu); std::vector<UINT>().swap(ps);
     D3D12DDI_EXPORT_DESC_0054 imports[] = {{L"vertex", L"collection_vertex", D3D12DDI_EXPORT_FLAG_NONE}, {L"pixel", L"collection_pixel", D3D12DDI_EXPORT_FLAG_NONE}};

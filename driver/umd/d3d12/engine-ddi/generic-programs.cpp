@@ -36,7 +36,13 @@ struct State {
     ~State() { if (root) root->Release(); }
 };
 struct Shader { sc::Container container; sc::dxil::Signatures metadata; };
-struct Export { std::shared_ptr<Shader> shader; std::shared_ptr<State> root; };
+struct Export {
+    std::shared_ptr<Shader> shader;
+    std::shared_ptr<State> root;
+    // Runtime summaries can retain associations from the collection that owns this export.
+    // These are validated identities, never pointers that we dereference after the create call.
+    std::set<const D3D12DDI_STATE_SUBOBJECT_0054*> configs;
+};
 struct Program;
 std::mutex registry_lock;
 std::map<UINT64, std::weak_ptr<Program>> registry;
@@ -333,6 +339,7 @@ HRESULT create_generic_state(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OB
         bool ambiguous_root = false;
         std::vector<const D3D12DDI_GENERIC_PROGRAM_DESC_0108*> programs;
         std::vector<const D3D12DDI_FUNCTION_SUMMARY_0054*> summaries;
+        std::set<const D3D12DDI_STATE_SUBOBJECT_0054*> validated_configs;
         for (UINT i = 0; i != args.NumSubobjects; ++i) {
             const auto& s = args.pSubobjects[i]; if (!s.pDesc) return E_INVALIDARG;
             switch (s.Type) {
@@ -342,6 +349,7 @@ HRESULT create_generic_state(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OB
                     D3D12DDI_STATE_OBJECT_FLAG_ALLOW_LOCAL_DEPENDENCIES_ON_EXTERNAL_DEFINITIONS |
                     D3D12DDI_STATE_OBJECT_FLAG_ALLOW_EXTERNAL_DEPENDENCIES_ON_LOCAL_DEFINITIONS;
                 if (flags & ~allowed) return E_NOTIMPL;
+                validated_configs.insert(&s);
                 object->additions = !!(flags & D3D12DDI_STATE_OBJECT_FLAG_ALLOW_STATE_OBJECT_ADDITIONS); break;
             }
             case D3D12DDI_STATE_SUBOBJECT_TYPE_NODE_MASK: object->node_mask = static_cast<const D3D12DDI_NODE_MASK_0054*>(s.pDesc)->NodeMask; break;
@@ -379,7 +387,7 @@ HRESULT create_generic_state(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OB
                     const LPCWSTR exported = a.NumExports ? a.pExports[j].Name : original.c_str();
                     if (!gp::name_ok(exported) || (a.NumExports && a.pExports[j].Flags)) return E_INVALIDARG;
                     // WorkGraphs: DDI Name is authoritative for non-library shaders; ExportToRename is ignored.
-                    if (!object->exports.emplace(exported, gp::Export{shader, {}}).second) return E_INVALIDARG;
+                    if (!object->exports.emplace(exported, gp::Export{shader, {}, {}}).second) return E_INVALIDARG;
                 }
                 break;
             }
@@ -412,6 +420,14 @@ HRESULT create_generic_state(DeviceContext* c, const D3D12DDIARG_CREATE_STATE_OB
                 if (e == object->exports.end()) return E_INVALIDARG;
                 std::shared_ptr<gp::State> root;
                 for (UINT j = 0; j != a.NumAssociatedSubobjects; ++j) {
+                    // The runtime includes STATE_OBJECT_CONFIG in collection export associations.
+                    // Its flags were validated above and apply to this object, not to root bindings.
+                    // Match local identities before dereferencing; unknown associations still fail.
+                    if (validated_configs.contains(a.ppAssociatedSubobjects[j])) {
+                        e->second.configs.insert(a.ppAssociatedSubobjects[j]);
+                        continue;
+                    }
+                    if (e->second.configs.contains(a.ppAssociatedSubobjects[j])) continue;
                     auto state = object->states.find(a.ppAssociatedSubobjects[j]);
                     if (state != object->states.end() && state->second->root) {
                         if (!root) root = state->second;
