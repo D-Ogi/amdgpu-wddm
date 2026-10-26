@@ -341,6 +341,14 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     }
     if ($missing.Count) { Stop-Package ("rows not registered in tools\release\release-sources.json (run the set with -Register, commit, push): " + ($missing -join ', ')) }
     "$(Get-Utc) package: $($rowsDoc.files.Count) rows registered at $($head.Substring(0, 8)), version $version"
+    # Check every registered first-party PE, including rows carried from older
+    # sets, before paying for setup, signing and catalog generation.
+    foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+        & $python -I (Join-Path $PSScriptRoot 'check_source_versions.py') `
+            --sources (Join-Path $PSScriptRoot 'release-sources.json') --root $Root --repo $repo `
+            --version $version --flavour $flavour
+        if ($LASTEXITCODE) { Stop-Package "source version resources failed ($flavour)" }
+    }
     foreach ($p in $UmdSource, $UmdBuild) { if (-not (Test-Path -LiteralPath $p)) { Stop-Package "user-mode driver tree missing: $p" } }
     $env:BC250_UMD_SOURCE = [IO.Path]::GetFullPath($UmdSource)
     $env:BC250_UMD_BUILD = [IO.Path]::GetFullPath($UmdBuild)

@@ -145,6 +145,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # failed build fails the release set and keeps its log. Its end-to-end runs start pwsh processes, hence 600 s.
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
+ Check 'release-source-versions' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-source-versions").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_source_versions.py' }
+ Check 'sdk-compiler-arguments' { & pwsh -NoProfile -File "$repo\tools\build\test-sdk-compiler.ps1" }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
  # BD-167: the source lookup of the flavour byte check (tools/release/flavour_bytes.py) on a throwaway repository. A
  # commit or a checkout that Git cannot read is an error, never the absence of a lab string.
