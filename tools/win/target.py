@@ -386,6 +386,14 @@ def boot_wait(probes, want, bound, first=0, every=30, after=None, wrong_rounds=2
             else:
                 states.append(f"{name} up, boot {utc(epoch)}")
                 up.append((name, epoch))
+                # Once the requested OS has answered with a new boot, do not wait
+                # for stale addresses of the other OS before reporting success.
+                if want in ("any", name):
+                    elapsed = clock() - start
+                    out(f"boot-wait {elapsed:.0f}s: " + ", ".join(states), flush=True)
+                    out(f"BOOT UP {name} boot {utc(epoch)} after {elapsed:.0f}s", flush=True)
+                    return "up", name
+        elapsed = clock() - start
         out(f"boot-wait {elapsed:.0f}s: " + ", ".join(states), flush=True)
         for name, epoch in up:
             if want in ("any", name):

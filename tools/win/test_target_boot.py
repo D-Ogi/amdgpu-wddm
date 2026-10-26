@@ -61,6 +61,28 @@ class BootWaitTest(unittest.TestCase):
         self.assertEqual(verdict, ("up", "windows"))
         self.assertIn("old boot", lines[0])
 
+    def test_expected_boot_does_not_wait_for_other_os(self):
+        calls = []
+        def stale_linux():
+            calls.append("linux")
+            return DOWN
+        verdict, _, _ = self.run_wait([
+            ("windows", script((BOOT_NEW, "answers"))), ("linux", stale_linux)
+        ], "windows", after=BOOT_OLD)
+        self.assertEqual(verdict, ("up", "windows"))
+        self.assertEqual(calls, [])
+
+    def test_success_elapsed_includes_probe_duration(self):
+        clock, lines = FakeClock(), []
+        def slow_windows():
+            clock.sleep(7)
+            return BOOT_NEW, "answers"
+        verdict = target.boot_wait([("windows", slow_windows)], "windows", 60,
+            clock=clock.clock, sleep=clock.sleep,
+            out=lambda text, flush=False: lines.append(text))
+        self.assertEqual(verdict, ("up", "windows"))
+        self.assertIn("after 7s", lines[-1])
+
     def test_linux_up_is_seen_by_any(self):
         # The miss of 2026-10-10: Linux was up and the wait did not notice.
         probes = [("windows", script(DOWN)), ("linux", script((BOOT_NEW, "answers")))]
