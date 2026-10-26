@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). Hosted Mesa uses 1bbb4dca (DirectMesh auto RDNA 1 port with descriptor heap ABI preserved in private Task, Mesh and IDX producers), system x64 Mesa aecf0012, and the D3D12 engine c9d4082f. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
+  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). Hosted Mesa uses 502cd45a (DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa aecf0012, and the D3D12 engine c75e5bd8 with dxil-spirv dcb954d5 HitObject value semantics. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -853,7 +853,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "1bbb4dcaa8cf12738ffc808e12c2df7abc3a0786",
+      "commit": "502cd45ab316a28f65dcda9ea6a30f563e35a022",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -937,7 +937,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "1bbb4dcaa8cf12738ffc808e12c2df7abc3a0786",
+      "commit": "502cd45ab316a28f65dcda9ea6a30f563e35a022",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1209,7 +1209,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "1bbb4dcaa8cf12738ffc808e12c2df7abc3a0786",
+      "commit": "502cd45ab316a28f65dcda9ea6a30f563e35a022",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1294,7 +1294,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "1bbb4dcaa8cf12738ffc808e12c2df7abc3a0786",
+      "commit": "502cd45ab316a28f65dcda9ea6a30f563e35a022",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2284,7 +2284,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "c9d4082f9c7e30cfdd3c64d1dd287d4fe20d3e1d",
+      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2330,7 +2330,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c9d4082f: 82b4b165 with the work graph heap default (d3db4849, 6d2a1ee0, 1acac652, c9d4082f), dxil-spirv cdd12bda.",
+      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2339,7 +2339,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "c9d4082f9c7e30cfdd3c64d1dd287d4fe20d3e1d",
+      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2385,7 +2385,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c9d4082f: 82b4b165 with the work graph heap default (d3db4849, 6d2a1ee0, 1acac652, c9d4082f), dxil-spirv cdd12bda.",
+      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2394,7 +2394,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "c9d4082f9c7e30cfdd3c64d1dd287d4fe20d3e1d",
+      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2440,7 +2440,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c9d4082f: 82b4b165 with the work graph heap default (d3db4849, 6d2a1ee0, 1acac652, c9d4082f), dxil-spirv cdd12bda.",
+      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2449,7 +2449,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "c9d4082f9c7e30cfdd3c64d1dd287d4fe20d3e1d",
+      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2495,7 +2495,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c9d4082f: 82b4b165 with the work graph heap default (d3db4849, 6d2a1ee0, 1acac652, c9d4082f), dxil-spirv cdd12bda.",
+      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
