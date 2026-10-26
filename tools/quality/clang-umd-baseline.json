@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "reviewed": "2026-10-26",
+  "source_commit": "411f70e4d1a03b067285c05e311821720bab22f9",
+  "translation_unit": "src/gallium/frontends/d3d10umd/Device.cpp",
+  "translation_unit_sha256": "b2f0dfb54df79fb1998711854e121dc083ff8cad6a7c18e34f4c14a0c64203f5",
+  "diagnostics": [
+    {
+      "check_name": "deadcode.DeadStores",
+      "description": "Value stored to 'count' during its initialization is never read",
+      "issue_context": "pipe_reference_described",
+      "issue_hash_content_of_line_in_context": "2f9e838dfa1eadba3836d745bc477331",
+      "file": "src/gallium/auxiliary/util/u_inlines.h",
+      "file_sha256": "9133c16a1322a8919f4f174095404f33be40675907324f9a941f4b03a066857e",
+      "line": 82,
+      "col": 27,
+      "reason": "The count returned by the reference increment is used only by assert(count != 1). NDEBUG removes that assertion. The increment itself is still executed."
+    },
+    {
+      "check_name": "deadcode.DeadStores",
+      "description": "Value stored to 'count' during its initialization is never read",
+      "issue_context": "pipe_reference_described_nonatomic",
+      "issue_hash_content_of_line_in_context": "0c6d30b9c36f3839cf856bb1667ea290",
+      "file": "src/gallium/auxiliary/util/u_inlines.h",
+      "file_sha256": "9133c16a1322a8919f4f174095404f33be40675907324f9a941f4b03a066857e",
+      "line": 113,
+      "col": 27,
+      "reason": "The count returned by the reference increment is used only by assert(count != 1). NDEBUG removes that assertion. The increment itself is still executed."
+    },
+    {
+      "check_name": "core.NullDereference",
+      "description": "Access to field 'next' results in a dereference of a null pointer (loaded from variable 'res')",
+      "issue_context": "pipe_resource_destroy",
+      "issue_hash_content_of_line_in_context": "dc20e07f4b7811cc59fca1740521cbbf",
+      "file": "src/gallium/auxiliary/util/u_inlines.h",
+      "file_sha256": "9133c16a1322a8919f4f174095404f33be40675907324f9a941f4b03a066857e",
+      "line": 181,
+      "col": 36,
+      "reason": "The analyzer path assumes old_dst == NULL and src == NULL, then assumes pipe_reference_described returns true without entering it. Its actual body first tests dst != src, and returns false for these equal NULL arguments. pipe_resource_destroy is unreachable on that path; no checker is disabled."
+    },
+    {
+      "check_name": "deadcode.DeadStores",
+      "description": "Value stored to 's' during its initialization is never read",
+      "issue_context": "Bc250AuditPresent",
+      "issue_hash_content_of_line_in_context": "4e7e2eeb9b642f7cc2e41a9cf88d62e4",
+      "file": "src/gallium/frontends/d3d10umd/Device.cpp",
+      "file_sha256": "b2f0dfb54df79fb1998711854e121dc083ff8cad6a7c18e34f4c14a0c64203f5",
+      "line": 421,
+      "col": 10,
+      "reason": "The release flavour sets enabled=false. The following early return makes the local hosted_state pointer unused; no write or allocation is lost."
+    }
+  ]
+}

@@ -464,7 +464,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  CheckIf 'umd-analysis' "$umdBuild\compile_commands.json" `
    { $wdk=Join-Path $Kits 'microsoft.windows.wdk.x64\c\Include\10.0.26100.0'
      $env:INCLUDE=((@((Join-Path $wdk 'um'), (Join-Path $wdk 'shared')) + @($env:INCLUDE)) -join ';')
-     & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" }
+     & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" --clang-baseline "$PSScriptRoot\clang-umd-baseline.json" }
  # Host suites (DEFECTS BD-053): the rest of driver\*\test, each building its fixture from this tree into its own
  # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
  # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
