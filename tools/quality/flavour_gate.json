@@ -2213,6 +2213,60 @@
    }
   },
   {
+   "name": "BC250_IDX_CAPTURE_BATCH",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "writes a diagnostic capture of the index setup batch; the release flavour compiles out its environment lookup and capture",
+   "lab": {
+    "every": ["d3d11/amdgpu_wddm_radv.dll", "d3d12/amdgpu_wddm_radv.dll", "wow64/d3d11/amdgpu_wddm_radv.dll", "wow64/d3d12/amdgpu_wddm_radv.dll"],
+    "note": "Only the hosted build line contains this DirectMesh diagnostic. Desktop and system Vulkan build lines have no lookup."
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_CORNER_ALIAS",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (hosted ICD)",
+   "does": "selects the optional corner-alias path; release keeps the false code default without an environment lookup",
+   "lab": {
+    "every": ["d3d11/amdgpu_wddm_radv.dll", "d3d12/amdgpu_wddm_radv.dll", "wow64/d3d11/amdgpu_wddm_radv.dll", "wow64/d3d12/amdgpu_wddm_radv.dll"],
+    "note": "Only the hosted build line contains this DirectMesh switch. Desktop and system Vulkan build lines have no lookup."
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IDXPASS_BATCH_TRIM",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "controls index-pass batch trimming; release keeps the true code default without an environment lookup",
+   "lab": {
+    "every": ["d3d11/amdgpu_wddm_radv.dll", "d3d12/amdgpu_wddm_radv.dll", "wow64/d3d11/amdgpu_wddm_radv.dll", "wow64/d3d12/amdgpu_wddm_radv.dll"],
+    "note": "Only the hosted build line contains this DirectMesh switch. Desktop and system Vulkan build lines have no lookup."
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IDXPASS_PRUNE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "controls stored-index pruning; release keeps the true code default without an environment lookup",
+   "lab": {
+    "every": ["d3d11/amdgpu_wddm_radv.dll", "d3d12/amdgpu_wddm_radv.dll", "wow64/d3d11/amdgpu_wddm_radv.dll", "wow64/d3d12/amdgpu_wddm_radv.dll"],
+    "note": "Only the hosted build line contains this DirectMesh switch. Desktop and system Vulkan build lines have no lookup."
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IDXPASS_SETUP_BATCH",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "selects shared GPU setup batches; release keeps the false code default without an environment lookup",
+   "lab": {
+    "every": ["d3d11/amdgpu_wddm_radv.dll", "d3d12/amdgpu_wddm_radv.dll", "wow64/d3d11/amdgpu_wddm_radv.dll", "wow64/d3d12/amdgpu_wddm_radv.dll"],
+    "note": "Only the hosted build line contains this DirectMesh switch. Desktop and system Vulkan build lines have no lookup."
+   }
+  },
+  {
+   "name": "RADV_BC250_MESH_IDXPASS_STORE",
+   "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
+   "does": "overrides automatic stored-index selection; release keeps the NULL string default and automatic qualification without an environment lookup",
+   "lab": {
+    "every": ["d3d11/amdgpu_wddm_radv.dll", "d3d12/amdgpu_wddm_radv.dll", "wow64/d3d11/amdgpu_wddm_radv.dll", "wow64/d3d12/amdgpu_wddm_radv.dll"],
+    "note": "Only the hosted build line contains this DirectMesh switch. Desktop and system Vulkan build lines have no lookup."
+   }
+  },
+  {
    "name": "BC250_IDX_PRINT",
    "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
    "does": "BC-250 Mesh, task, queue or diagnostic switch: the release flavour has no lookup and takes the code default",
@@ -4033,6 +4087,7 @@
     "BC250_IDX_HI",
     "BC250_IDX_LO",
     "BC250_IDX_SETUP",
+    "BC250_IDX_SETUP_BATCH",
     "BC250_IDX_STORED_VS",
     "BC250_IDX_WG",
     "BC250_INDICES16",
