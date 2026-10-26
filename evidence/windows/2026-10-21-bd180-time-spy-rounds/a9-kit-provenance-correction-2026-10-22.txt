@@ -1,0 +1,40 @@
+A9 kit identity correction, 2026-10-22
+
+Scope: the A9 heading in a9-a28-diagnostics.txt names kit r2b (0D11A47E).
+The retained deployment record and dump extraction identify kit r1 instead.
+The original transcription remains unchanged. This correction supersedes only
+its A9 kit label. It does not change the recorded timeout result.
+
+Checked artifact SHA-256 values:
+  r1 ZIP: 243b8c1e2491a7eed25a14825b3d6eb0b0f9662d38ee463d946af41fbb8ae07c
+  r1 pins: dc95921a3605c5f3a2c5e90d3103d38ca790015499cfd57ae8837ce799d0c4e0
+  r1 KMD: 88fa121dff75ae9dfe0f955b459d3aecaccd1b65833a1a40fb05fa2e4e675a49
+  r1 PDB: 82722d703e3ef36abc041d878a60b6b1070714c1e84e76dea21a139e431cf65e
+  r1 MAP: 3e8faf6531882c6fe10d8190ec1ec7db3c9b2780f597faceded814cd8e1a4e37
+  r2b ZIP: 0d11a47ea56beb57ad0f742dac26673d438a2cdda2e2d696b77f5e1068a430be
+  r2b pins: bd435486c477a7aff079642b61ba589bf9413b91436c9364fe5dccc5a6ffbafd
+
+Retained primary records, paths relative to the private workspace:
+  scratch/gh38/a9/RESULT.md, Step 2, Route and admission:
+    r1 ZIP 243B8C1E, pins DC95921A, installed KMD 88FA121D.
+  scratch/gh38/a9/decode/a9-dump-result.json:
+    image_verified records five matching 32-byte function entries.
+    input_hashes records the r1 KMD, PDB and MAP hashes above.
+    journal records 7178 captures and 7177 completions.
+    dump SHA-256: 0c05475179af086b5c60a713ccdd6cf1199501d10eccdcd08a38984f309bd3b9
+    dump size: 805625062 bytes.
+  scratch/bd180/a9-extraction-layout-signed-r1.json:
+    image, PDB and MAP hashes match those extraction inputs.
+  scratch/bd180/a9-lab-state.json:
+    the independent extraction records the same five function byte checks.
+  scratch/bd180/a9-kit-r1-receipt.json and a9-kit-r2b-receipt.json:
+    distinct archives and pins. The r2b receipt says kmd_unchanged=false.
+
+Verification on 2026-10-22:
+The retained ZIPs, pins, r1 KMD, PDB and MAP were hashed again.
+Their hashes match the receipts and extraction records as applicable.
+The dump byte comparisons are retained results, not a new dump extraction.
+The pre-run receipt field lab_tested=false is not a later test verdict.
+No claim is made here that r2b was deployed in A9.
+This correction does not revalidate the command-stream decoder or later rounds.
+The raw dumps and proprietary bytes remain outside the public repository.

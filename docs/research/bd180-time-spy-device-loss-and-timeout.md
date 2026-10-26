@@ -99,6 +99,8 @@ Each of these rounds ran one benchmark pass with a lab-only diagnostic build and
 diagnostic code adds no GPU packet and no wait to the submission that it observes. The counters of every
 round are in the evidence directory.
 
+The [A9 kit correction](../../evidence/windows/2026-10-21-bd180-time-spy-rounds/a9-kit-provenance-correction-2026-10-22.txt) identifies the tested kit.
+
 **A9, the command stream.** A job journal in the kernel driver retained the pending job whole: 452 packets
 over three command buffers. It holds 2 indexed draws, 9 indirect draws, 13 direct dispatches and 11
 release-and-wait pairs on one counter. The three conditional blocks hold no draw. The argument values of
