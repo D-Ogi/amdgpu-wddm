@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). Hosted Mesa uses 502cd45a (DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa 6e09fe76 (bounded diagnostic logging) and WOW64 b83c092c (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine c75e5bd8 with dxil-spirv dcb954d5 HitObject value semantics. The D3D12 shell uses 5aa711e5 for tight reserved-resource alignment and validated Generic Programs collection associations. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
+  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). Hosted Mesa uses 502cd45a (DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa 6e09fe76 (bounded diagnostic logging) and WOW64 b83c092c (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine db6d7de0 with dxil-spirv fcd06d03 HitObject value semantics and exact native-half structured bounds/dimensions. The D3D12 shell uses 5aa711e5 for tight reserved-resource alignment and validated Generic Programs collection associations. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -2284,7 +2284,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
+      "commit": "db6d7de0f60cfd52850f29dde7d0759d2783bff7",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2330,7 +2330,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
+      "note": "vkd3d-proton db6d7de0: work graph heap default and tested HitObject value semantics and exact native-half structured bounds/dimensions, dxil-spirv fcd06d03; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2339,7 +2339,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
+      "commit": "db6d7de0f60cfd52850f29dde7d0759d2783bff7",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2385,7 +2385,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
+      "note": "vkd3d-proton db6d7de0: work graph heap default and tested HitObject value semantics and exact native-half structured bounds/dimensions, dxil-spirv fcd06d03; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2394,7 +2394,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
+      "commit": "db6d7de0f60cfd52850f29dde7d0759d2783bff7",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2440,7 +2440,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
+      "note": "vkd3d-proton db6d7de0: work graph heap default and tested HitObject value semantics and exact native-half structured bounds/dimensions, dxil-spirv fcd06d03; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2449,7 +2449,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "c75e5bd8ef86b8aa82b424f5f12c0c5112cb1f68",
+      "commit": "db6d7de0f60cfd52850f29dde7d0759d2783bff7",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2495,7 +2495,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c75e5bd8: work graph heap default and tested HitObject value semantics, dxil-spirv dcb954d5; SER and long-vector regression clients included.",
+      "note": "vkd3d-proton db6d7de0: work graph heap default and tested HitObject value semantics and exact native-half structured bounds/dimensions, dxil-spirv fcd06d03; SER and long-vector regression clients included.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
