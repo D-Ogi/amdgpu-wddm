@@ -4033,6 +4033,7 @@
     "BC250_IDX_HI",
     "BC250_IDX_LO",
     "BC250_IDX_SETUP",
+    "BC250_IDX_STORED_VS",
     "BC250_IDX_WG",
     "BC250_INDICES16",
     "BC250_INDIRECT_SETUP",
@@ -4056,7 +4057,7 @@
     "BC250_SPLIT_VERTEX_COUNT",
     "BC250_UNIFORM_OUTPUT"
    ],
-   "where": "mesa-wddm src/amd/common/nir/ac_nir_lower_ngg_mesh.c; src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_bc250_dgc.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
+   "where": "mesa-wddm src/amd/common/nir/ac_nir_lower_ngg_mesh.c; src/amd/vulkan/radv_bc250.c; src/amd/vulkan/radv_bc250_dgc.c; src/amd/vulkan/radv_bc250_idx.c; src/amd/vulkan/radv_pipeline_graphics.c (hosted ICD)",
    "reason": "not an environment input: a NIR or shader label, the lower-case name of a NIR variable, intrinsic index or meta shader of the BC-250 Mesh route. It is part of the shader cache keys and of the lab flavour bytes, so it keeps its name in both flavours"
   },
   {
