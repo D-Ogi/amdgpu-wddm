@@ -19,6 +19,18 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 class DriverPackageTests(unittest.TestCase):
+    def test_registered_sources_declare_every_adapter_payload(self):
+        from release_flavour import select_sources
+        sources = json.loads((REPO / 'tools/release/release-sources.json').read_text())
+        adapter_dirs = {'desktop', 'd3d11', 'd3d12', 'vulkan', 'wow64', 'opengl', 'mft', 'adl'}
+        for flavour in ('release', 'lab'):
+            with self.subTest(flavour=flavour):
+                selected = select_sources(sources, flavour)
+                actual = {row['path'] for row in selected['files']
+                          if len(Path(row['path']).parts) > 2
+                          and Path(row['path']).parts[1] in adapter_dirs}
+                self.assertEqual(actual, {row['source'] for row in package.members(selected)})
+
     def test_lab_staging_selects_its_own_pins(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
