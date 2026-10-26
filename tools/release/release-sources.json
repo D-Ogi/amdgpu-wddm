@@ -62,13 +62,16 @@
   "driver_date": "10/22/2026",
   "supersedes": {
     "note": "BD-150: build-release.ps1 stamps DriverVer = driver_date,<-DriverVer> and refuses a package that does not rank above this release's DriverVer, because PnP keeps the installed package on an equal date and version.",
-    "release": "0.7.216.103-tester.31v3",
-    "driver_ver": "10/20/2026,40.7.216.103"
+    "release": "0.7.216.104-tester.32",
+    "driver_ver": "10/22/2026,40.7.216.104"
   },
   "control_app_exe": "amdgpu_wddm_control.exe",
   "adl": {
     "register": true,
-    "architectures": ["x64", "x86"]
+    "architectures": [
+      "x64",
+      "x86"
+    ]
   },
   "mft_h264": {
     "note": "The H.264 encoder Media Foundation transform (M15.11). register true: the installer copies payload/mft/amdgpu_wddm_mft_h264.dll to <install root>\\mft\\ and writes route A of driver/umd/mft-h264/INSTALL.md machine wide. register false: the installer installs and registers nothing, and takes away what an earlier install of this release family wrote. The value travels into manifest.json, so the package itself says what it does. This is the bisect lever of the encoder wagon.",
@@ -101,7 +104,7 @@
     "vulkan_icd": "Current tester.33 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm aecf0012472c9f68497f11f36c42fb3ddc3d5541; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm aecf0012472c9f68497f11f36c42fb3ddc3d5541; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.33 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/control/bc250control.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/control/bc250control.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.33 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 2057d4cffc81ce573611ed84c0ab20a5bf4822da; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 2057d4cffc81ce573611ed84c0ab20a5bf4822da; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 375188253d576c9495079e66118ae2aa4227907f; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 375188253d576c9495079e66118ae2aa4227907f; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk acb783204e2637d892a9f3a7a34926af35c83b8b; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk acb783204e2637d892a9f3a7a34926af35c83b8b; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 1f8e1e60a26459ac6f7e9e56851c7236f0ff7332; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 1f8e1e60a26459ac6f7e9e56851c7236f0ff7332; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton c9d4082f9c7e30cfdd3c64d1dd287d4fe20d3e1d; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton c9d4082f9c7e30cfdd3c64d1dd287d4fe20d3e1d; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 1f8e1e60a26459ac6f7e9e56851c7236f0ff7332; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 1f8e1e60a26459ac6f7e9e56851c7236f0ff7332; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 0aace3d375cd1654d2b789d43c5e2da3ceb7edb6; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 0aace3d375cd1654d2b789d43c5e2da3ceb7edb6; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "mft_h264": "Current tester.32 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 1750f50535a79e49878298c6078df8745ce1068f. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "mft_h264": "Current tester.33 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 21983d3210b0c955f2e2a9896341c075bffb17cd; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 21983d3210b0c955f2e2a9896341c075bffb17cd. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer",
     "control_app": "Current tester.33 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_router": "Current tester.33 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2. File rows retain exact recipes, hashes, dependencies and validation limits."
@@ -2120,53 +2123,58 @@
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/train/b35-build/stamped/release/7f830dc36c858d24c638/amdgpu_wddm_d3d12caps.exe",
-      "sha256": "D56541C897C982B928768B4FC090356AC5CB791A1EB81AE98D9655E8634CBD33",
+      "source": "scratch/build-train/tester.33/artifacts/release/extra-caps-release/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "05AA179941393E472D9464CF568F4A00A15A003F29B480E03406FB5EB6754B60",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "0d82a0597e3180ead2ab7519fef7e26be1f30ffd",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "tools/win/d3d12caps/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "release"
         ],
         "output": "amdgpu_wddm_d3d12caps.exe"
       },
-      "unverified": "Built at 0d82a059 without /Brepro (the recipe has it from f7aabf05). A rebuild at that commit differs only in the COFF time stamp and the time stamp of the debug directory entry (tools/build/pe_compare.py, exit 0).",
-      "size": 313856,
-      "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify",
-      "flavour": "release",
-      "authenticode_sha256": "37EBDDB9303B69F8A12E6D0A6B52C93C719770BC4EC14D1D50E43F4ECE9632D7"
+      "size": 515072,
+      "authenticode_sha256": "093094A3AC28A99288FA8FD1631A16CA1CA1AC4B2417238313B62E26BE34F5CC",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/train/b35-build/stamped/lab/52cecbd1b990720d74fe/amdgpu_wddm_d3d12caps.exe",
-      "sha256": "1190AE83C5FFC71DDF31B99511D65DAFCDF97D30F2DA3C00FA35A8FFACC93880",
+      "source": "scratch/build-train/tester.33/artifacts/lab/extra-caps-lab/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "C98F0BB51BD016C26F74B4F6B73C05470CF143FD221081AA65C730B50983C0EF",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "0d82a0597e3180ead2ab7519fef7e26be1f30ffd",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "tools/win/d3d12caps/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "lab"
         ],
         "output": "amdgpu_wddm_d3d12caps.exe"
       },
-      "unverified": "Built at 0d82a059 without /Brepro (the recipe has it from f7aabf05). A rebuild at that commit differs only in the COFF time stamp and the time stamp of the debug directory entry (tools/build/pe_compare.py, exit 0).",
-      "size": 313856,
-      "role": "D3D12 capability dump (tools/win/d3d12caps), used by verify",
-      "flavour": "lab",
-      "note": "the caps tool: no lab-only name",
-      "authenticode_sha256": "956965B9B8420EF8C6048DC21595DF3446858502D37EB5784974830DF7AE698A"
+      "size": 515072,
+      "authenticode_sha256": "8659A498992D65FA41E7013932D4C04B021896E39BA81E577A284A7A8110F8F5",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
     },
     {
       "component": "control",
@@ -2372,127 +2380,142 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/b35-build/stamped/release/63558149b1573e4eae51/amdgpu_wddm_mft_h264.dll",
-      "sha256": "9F1312656B271DD0D4FCBD4EC312C67A0076E279EF89CF62D4C95AF6EE9E140D",
+      "source": "scratch/build-train/tester.33/artifacts/release/extra-mft-release/amdgpu_wddm_mft_h264.dll",
+      "sha256": "D5840D74E0FB30D9C4804460BE9C26DC8498FE81E6F996C83756376696F77C8A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "driver/umd/mft-h264/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "release",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "release"
         ],
         "output": "amdgpu_wddm_mft_h264.dll"
       },
-      "size": 483840,
-      "role": "The H.264 encoder MFT, release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree and the package version stamped (M15.11, video encoding on the GPU). BD-167: the image reads none of BC250_MFT_DEBLOCK, BC250_MFT_SERIAL_DEBLOCK, BC250_MFT_DEPTH, BC250_MFT_STAGE_TIMING and BC250_MFT_TRACE, which the lab build of the same checkout reads; rc1 to rc4 pinned the b27 build, which read all five. 483840 bytes against the lab build's 513536. Carried from 0.7.216.100-tester.24: H.264 encoder Media Foundation transform (bc250-win 689852a8, train/b20-setup, which carries e52/encoder-perf e4d1f630). The respin does not rebuild it: no commit of the respin touches driver/umd/mft-h264 or the contract headers it includes, so this is the file the tester.14 build staged, and the lab kit of E52 pins it. The encoder holds two pictures at once, it filters a whole picture in one dispatch, and its rate control reads the quantiser the content needs. A client that asks for low latency still gets one picture at a time. BC250_MFT_DEPTH=1, BC250_MFT_DEBLOCK=waves and BC250_MFT_SERIAL_DEBLOCK each select an older part. The conformance sweep is 76 of 76, and 60 of 60 pictures stay bit exact against the inbox decoder. The build matches the hash the wagon recorded",
+      "size": 496128,
+      "authenticode_sha256": "7B4DFA2A8F9CD3565259AA468E313B36B7E68717A9A9AF34FD5A4EDB2F4ED1D9",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/train/b35-build/stamped/lab/c336a8f1a874ed6f3320/amdgpu_wddm_mft_h264.dll",
-      "sha256": "0BF666663BD5B1CCDF29CEAF35611AF40FB357B18C27F35EAB35ECF452FFE9C7",
+      "source": "scratch/build-train/tester.33/artifacts/lab/extra-mft-lab/amdgpu_wddm_mft_h264.dll",
+      "sha256": "980757C222FD9BE672925E9FE5CB540C59682939730E0A62A6C333F5E318AEA5",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "driver/umd/mft-h264/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Flavour",
-          "lab",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "lab"
         ],
         "output": "amdgpu_wddm_mft_h264.dll"
       },
-      "size": 513536,
-      "role": "The H.264 encoder MFT, release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree and the package version stamped (M15.11, video encoding on the GPU). BD-167: the image reads none of BC250_MFT_DEBLOCK, BC250_MFT_SERIAL_DEBLOCK, BC250_MFT_DEPTH, BC250_MFT_STAGE_TIMING and BC250_MFT_TRACE, which the lab build of the same checkout reads; rc1 to rc4 pinned the b27 build, which read all five. 483840 bytes against the lab build's 513536. Carried from 0.7.216.100-tester.24: H.264 encoder Media Foundation transform (bc250-win 689852a8, train/b20-setup, which carries e52/encoder-perf e4d1f630). The respin does not rebuild it: no commit of the respin touches driver/umd/mft-h264 or the contract headers it includes, so this is the file the tester.14 build staged, and the lab kit of E52 pins it. The encoder holds two pictures at once, it filters a whole picture in one dispatch, and its rate control reads the quantiser the content needs. A client that asks for low latency still gets one picture at a time. BC250_MFT_DEPTH=1, BC250_MFT_DEBLOCK=waves and BC250_MFT_SERIAL_DEBLOCK each select an older part. The conformance sweep is 76 of 76, and 60 of 60 pictures stay bit exact against the inbox decoder. The build matches the hash the wagon recorded",
-      "flavour": "lab",
-      "note": "the encoder MFT, lab flavour: the five BC250_MFT_ switches"
+      "size": 526336,
+      "authenticode_sha256": "857E26E18BA3B04EA899A7F7CCD0DCA23D09020B316826C364066AC8F6C52A72",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/train/b35-build/stamped/release/a158e3d9b80d93bec5fd/d3d11bench.exe",
-      "sha256": "1F3D05C4CC1B8E15938046CD504DEA64A43DD6A074F54EE4740CEF7ACF246460",
+      "source": "scratch/build-train/tester.33/artifacts/release/extra-bench-release/d3d11bench.exe",
+      "sha256": "F8F88EA68719FF0B66B6E650A1FF240E12BD32D6362F49F8322D14BFDD2C1289",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1884b33d8bb7ff98d2864d9b5fd5c6de1ffceb5b",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "tools/win/d3d11bench/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "release"
         ],
         "output": "d3d11bench.exe"
       },
-      "unverified": "Built at 1884b33d, where this recipe has no /Brepro at all (f7aabf05 of this branch adds it with /FC and /d1trimfile): the image carries a COFF and a debug directory time stamp of its build, and the MSVC name of each anonymous namespace holds a hash of the absolute source path, which reorders the functions. Not rebuilt in the b26 repro lane, which rebuilt the kernel driver and the system Vulkan ICD. tools/release/rebuild-check.ps1 -Entry <path> builds this entry again from the commit above.",
-      "size": 280064,
-      "role": "D3D11 self-test (tools/win/d3d11bench, bc250-win 1884b33d, train/b24): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it. Built with /W4 /WX after the compare.py and imgdiff.py tests. Carried from 0.7.216.100-tester.21: D3D11 self-test (tools/win/d3d11bench, bc250-win 0d6b3299, train/b23): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it; the verify step and the support report do not run it yet. Built with /W4 /WX after the compare.py and imgdiff.py tests",
-      "flavour": "release",
-      "authenticode_sha256": "8EBBE8C562F42223965701BEC8B9648A0CCDC900FC87C74692D3C3801F312D73"
+      "size": 367616,
+      "authenticode_sha256": "143C3A7DBD5B533F23F71B2CE6B465DFDA218CC1502A53611F11933BEEAE8ADD",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/train/b35-build/stamped/lab/dfe06ffe6b483cdab28c/d3d11bench.exe",
-      "sha256": "89B964BCFF8A1D99B5ABD5E66A2724C68F762B4AC932BEF465D4D1C4399F35A9",
+      "source": "scratch/build-train/tester.33/artifacts/lab/extra-bench-lab/d3d11bench.exe",
+      "sha256": "812F66AEF3BDD09D9027544AC66D3CF1EEB8DDCCA6D6A33C0F20F1D76498CBFD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1884b33d8bb7ff98d2864d9b5fd5c6de1ffceb5b",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "tools/win/d3d11bench/build.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "lab"
         ],
         "output": "d3d11bench.exe"
       },
-      "unverified": "Built at 1884b33d, where this recipe has no /Brepro at all (f7aabf05 of this branch adds it with /FC and /d1trimfile): the image carries a COFF and a debug directory time stamp of its build, and the MSVC name of each anonymous namespace holds a hash of the absolute source path, which reorders the functions. Not rebuilt in the b26 repro lane, which rebuilt the kernel driver and the system Vulkan ICD. tools/release/rebuild-check.ps1 -Entry <path> builds this entry again from the commit above.",
-      "size": 280064,
-      "role": "D3D11 self-test (tools/win/d3d11bench, bc250-win 1884b33d, train/b24): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it. Built with /W4 /WX after the compare.py and imgdiff.py tests. Carried from 0.7.216.100-tester.21: D3D11 self-test (tools/win/d3d11bench, bc250-win 0d6b3299, train/b23): the scenes draws, fill and shaders, each with an FNV-1a checksum of its last frame, so a wrong picture shows as a checksum change. The lab settings check (settings-lab.ps1) runs it; the verify step and the support report do not run it yet. Built with /W4 /WX after the compare.py and imgdiff.py tests",
-      "flavour": "lab",
-      "note": "our benchmark: no lab-only name",
-      "authenticode_sha256": "2E0593B230011C16825A8D4EFD84DB24892B0B8DDE30738F5096B7AE0C94CD59"
+      "size": 367616,
+      "authenticode_sha256": "0E5AA9941DE3ABE156E679121C177F68445B6C0F3C9D7DB3C73B1CDC38442335",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/train/b35-build/stamped/release/bfd744a2aee9e5c72116/amdhip64.dll",
-      "sha256": "66210E3EE81EBE6C941F792CA6D2A0CE3A86805723D88FCEF9046990A60D21C5",
+      "source": "scratch/build-train/tester.33/artifacts/release/extra-hip-release/amdhip64.dll",
+      "sha256": "7EFC770C3A9AA6F3E3BCD322863C30DACFE269373ADAFCB764F5DB62D33FE051",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-Bc250hsaLib",
-          "{input:layer1}/bc250hsa.lib",
-          "-ClangBin",
-          "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.105-tester.33",
           "-Flavour",
           "release",
-          "-Version",
-          "0.7.216.104-tester.32"
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-ClangBin",
+          "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+          "-BuildBlas"
         ],
         "inputs": {
           "layer1": {
@@ -2501,33 +2524,38 @@
         },
         "output": "amdhip64.dll"
       },
-      "size": 289792,
-      "role": "The HIP runtime (M16 layer 2), release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree and the package version stamped. BD-167: the image reads none of the twelve measurement and log names the lab build of the same checkout reads (BC250_HIP_BATCH and its bounds, BC250_HIP_BARRIER, BC250_HIP_PM4_STATE_CACHE, BC250_HIP_GPU_COPY, BC250_HIP_GPU_COPY_MIN, BC250_HIP_GPU_FILL, the two wait bounds and BC250_HIP_LOG with its level); rc1 to rc4 pinned the b32 build, which read all twelve. 289792 bytes against the lab build's 304640. Layer 1 is the same static library the earlier rows pinned. The host tests of this build pass on both flavours: 735 checks of the mock runtime, 126 of the batch arm, 48 of the thread arm and 27 of the journal packing, 0 failures. Carried from the b32 rows before this repin: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win perf/hip-gpu-copy 1b1566bf, merged into train/b30), with GPU execution on. New: device-to-host, device-to-device copies and fills run on the command processor of a copy context, with a staging ring and the switch BC250_HIP_GPU_COPY=0 back to the processor copy; BD-123: a host buffer that starts where another ends is found (half-open ranges), so copies and hipMemset on it take the right route. The 55 exports are the tester.27 names; vadd.exe, bc250hipblas.dll and the ggml-hip.dll of the llama.cpp extra import nothing it lacks. Lab, unit A, 2026-10-11: round 2, Gemma 4 12B tg128 39.0 against 30.9 t/s (+26.1 %), TinyLlama 1.1B +28.3 %, pp512 unchanged, KLD on/off equal; round 3 (BD-123) vadd ok, bench 7/7 with 3 abutting pairs, the omit-tail fault control fails as required. Carried from 0.7.216.100-tester.27: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win 3737b075 on train/b29), with GPU execution on. It carries the BD-110 fix: the device header hip_runtime.h gave gridDim in work-items instead of workgroups. The dispatch journal of the kernel driver named the faulting kernel, soft_max_f32<true,512,512,float>, whose stride with the old header is 512 MiB instead of 1 MiB and reaches the first fault page exactly. The same change corrects byte selectors, atomic scopes, floating-point exchange, masked ballot, cooperative geometry, half NaN and zero behaviour, direct binary64 conversion and packed bfloat alignment (compute/hip/DEVICE-CONTRACT.md). Before each submission the runtime hands the kernel driver a journal record of the dispatch through escape command 35. The -DisableGpu build option of 9dbf860b stays in the recipe and is not used here. Lab 2026-10-11 on the journal KMD: vadd, geometry, builtins, hipBLAS, half/block and hipbench controls pass; TinyLlama 1.1B Q4_0 pp512 1868.00 t/s and tg128 122.31 t/s, one repetition, with 16 greedy tokens identical to the CPU output. A dense 12B model does not load: its single 6960120064-byte allocation is refused by CreateAllocation2 with C000000D at the 8192 MiB carve-out, cause not established (BD-117). It is installed to <install root>\\tools\\hip, which the installer appends to the machine PATH.",
-      "flavour": "release",
-      "authenticode_sha256": "ACC5DD3197198C0508202615B414219C75866BB7BE3EB435C970EA4BDC5659E5"
+      "size": 300544,
+      "authenticode_sha256": "AEC6A9E033E32319ECA0AE998CA5C8E54BECCA6D4BC55B85E65F93E3409EB0E6",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/train/b35-build/stamped/lab/416b61319da742bc38d1/amdhip64.dll",
-      "sha256": "B6C1441C90DA163646F22D2C0C34AFF6E66A3CAF808C0965017F99C46BE42064",
+      "source": "scratch/build-train/tester.33/artifacts/lab/extra-hip-lab/amdhip64.dll",
+      "sha256": "12F84D4A4F08026B9FD3A4CAAA209E49E19D471DF103FDE6D3DDDBD6CFBFDBFD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
           "-Bc250hsaLib",
           "{input:layer1}/bc250hsa.lib",
           "-ClangBin",
           "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
-          "-Flavour",
-          "lab",
-          "-Version",
-          "0.7.216.104-tester.32"
+          "-BuildBlas"
         ],
         "inputs": {
           "layer1": {
@@ -2536,149 +2564,170 @@
         },
         "output": "amdhip64.dll"
       },
-      "size": 304640,
-      "role": "The HIP runtime (M16 layer 2), release flavour, rebuilt in this lane from bc250-win main 1750f505 with a clean work tree and the package version stamped. BD-167: the image reads none of the twelve measurement and log names the lab build of the same checkout reads (BC250_HIP_BATCH and its bounds, BC250_HIP_BARRIER, BC250_HIP_PM4_STATE_CACHE, BC250_HIP_GPU_COPY, BC250_HIP_GPU_COPY_MIN, BC250_HIP_GPU_FILL, the two wait bounds and BC250_HIP_LOG with its level); rc1 to rc4 pinned the b32 build, which read all twelve. 289792 bytes against the lab build's 304640. Layer 1 is the same static library the earlier rows pinned. The host tests of this build pass on both flavours: 735 checks of the mock runtime, 126 of the batch arm, 48 of the thread arm and 27 of the journal packing, 0 failures. Carried from the b32 rows before this repin: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win perf/hip-gpu-copy 1b1566bf, merged into train/b30), with GPU execution on. New: device-to-host, device-to-device copies and fills run on the command processor of a copy context, with a staging ring and the switch BC250_HIP_GPU_COPY=0 back to the processor copy; BD-123: a host buffer that starts where another ends is found (half-open ranges), so copies and hipMemset on it take the right route. The 55 exports are the tester.27 names; vadd.exe, bc250hipblas.dll and the ggml-hip.dll of the llama.cpp extra import nothing it lacks. Lab, unit A, 2026-10-11: round 2, Gemma 4 12B tg128 39.0 against 30.9 t/s (+26.1 %), TinyLlama 1.1B +28.3 %, pp512 unchanged, KLD on/off equal; round 3 (BD-123) vadd ok, bench 7/7 with 3 abutting pairs, the omit-tail fault control fails as required. Carried from 0.7.216.100-tester.27: Experimental: our own HIP runtime for gfx1013 (compute/hip, bc250-win 3737b075 on train/b29), with GPU execution on. It carries the BD-110 fix: the device header hip_runtime.h gave gridDim in work-items instead of workgroups. The dispatch journal of the kernel driver named the faulting kernel, soft_max_f32<true,512,512,float>, whose stride with the old header is 512 MiB instead of 1 MiB and reaches the first fault page exactly. The same change corrects byte selectors, atomic scopes, floating-point exchange, masked ballot, cooperative geometry, half NaN and zero behaviour, direct binary64 conversion and packed bfloat alignment (compute/hip/DEVICE-CONTRACT.md). Before each submission the runtime hands the kernel driver a journal record of the dispatch through escape command 35. The -DisableGpu build option of 9dbf860b stays in the recipe and is not used here. Lab 2026-10-11 on the journal KMD: vadd, geometry, builtins, hipBLAS, half/block and hipbench controls pass; TinyLlama 1.1B Q4_0 pp512 1868.00 t/s and tg128 122.31 t/s, one repetition, with 16 greedy tokens identical to the CPU output. A dense 12B model does not load: its single 6960120064-byte allocation is refused by CreateAllocation2 with C000000D at the 8192 MiB carve-out, cause not established (BD-117). It is installed to <install root>\\tools\\hip, which the installer appends to the machine PATH.",
-      "flavour": "lab",
-      "note": "the HIP runtime, lab flavour: the twelve BC250_HIP_ measurement and log names",
-      "authenticode_sha256": "93F80451EDCE2F19E9F981E7180E9BFB321D67548C63CB6FAEDE10F308C8F94C"
+      "size": 316416,
+      "authenticode_sha256": "43C6DF7187CAF3905BE99B0E1D21700F18079BC9C26EFBC88B00BC1E3C2D4D16",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/train/b35-build/stamped/release/bfd744a2aee9e5c72116/vadd.exe",
-      "sha256": "9FEB737CFB0F0F9BB26757BD5ED9A4C024E8E8EE937A749E3EA3C2AD3DDD6CAF",
+      "source": "scratch/build-train/tester.33/artifacts/release/extra-hip-release/vadd.exe",
+      "sha256": "F946FADD08AAE82E33DE9E707A1C4F053946A9815FC968E56A8BA95FA3E89260",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
           "-Bc250hsaLib",
           "{input:layer1}/bc250hsa.lib",
           "-ClangBin",
           "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
-          "-Flavour",
-          "release",
-          "-Version",
-          "0.7.216.104-tester.32"
+          "-BuildBlas"
         ],
         "inputs": {
           "layer1": {
             "workspace": "scratch/train/b32-build/rc29v2/hip/bc250hsa"
           }
         },
-        "output": "vadd.exe"
+        "output": "controls/vadd.exe"
       },
-      "unverified": "Built offline by compute/hip/build-rebuilt-controls.ps1 from the same working tree as tools\\hip\\amdhip64.dll, linked against the import library of the enabled runtime build in scratch/hip-dispatch-journal/runtime-enabled (amdhip64.lib F549FF9F, the same 55 exports). The hashes of every input are in scratch/hip-dispatch-journal/rebuilt-controls/final-r2/build.json (48BB900A). The release rebuild check has not rebuilt it from the commit.",
       "size": 162304,
-      "role": "The HIP vector-add sample, release flavour, from the same build as the runtime it links against (bc250-win main 1750f505): the runtime's recipe builds it and it follows the flavour of the product DLL, which is why the row's recipe is now compute/hip/build-runtime.ps1 instead of compute/hip/build-rebuilt-controls.ps1. The two cannot drift apart any more: before this, the sample came from the hip-dispatch journal and was linked against another import library of the same DLL. BD-167: the image reads no BC250_HIP_WAIT_TOTAL_MS, which the lab build reads. 161280 bytes against the lab build's 165376.",
-      "flavour": "release",
-      "authenticode_sha256": "21E8701BAE415E80EBFAC5A9DE3E6644DB893323553C0A5BB72FA5BA55563482"
+      "authenticode_sha256": "F815092AD36775D47E513F7F1CFA9E88C35EEA89F96041B812B00A9106D53C19",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/train/b35-build/stamped/lab/416b61319da742bc38d1/vadd.exe",
-      "sha256": "01139340E21AF7E1CC32965C79AE967EF49F8E1A2EB650D708DA1DDD7129A8A7",
+      "source": "scratch/build-train/tester.33/artifacts/lab/extra-hip-lab/vadd.exe",
+      "sha256": "8616906155C614862054EFFFA9383FD549BBA75426A3D1022437D9093689E364",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "1750f50535a79e49878298c6078df8745ce1068f",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
           "{root}/toolchain/nuget",
           "-Out",
           "{out}",
+          "-Compiler",
+          "clang-cl",
+          "-Version",
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
           "-Bc250hsaLib",
           "{input:layer1}/bc250hsa.lib",
           "-ClangBin",
           "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
-          "-Flavour",
-          "lab",
-          "-Version",
-          "0.7.216.104-tester.32"
+          "-BuildBlas"
         ],
         "inputs": {
           "layer1": {
             "workspace": "scratch/train/b32-build/rc29v2/hip/bc250hsa"
           }
         },
-        "output": "vadd.exe"
+        "output": "controls/vadd.exe"
       },
-      "unverified": "Built offline by compute/hip/build-rebuilt-controls.ps1 from the same working tree as tools\\hip\\amdhip64.dll, linked against the import library of the enabled runtime build in scratch/hip-dispatch-journal/runtime-enabled (amdhip64.lib F549FF9F, the same 55 exports). The hashes of every input are in scratch/hip-dispatch-journal/rebuilt-controls/final-r2/build.json (48BB900A). The release rebuild check has not rebuilt it from the commit.",
       "size": 166400,
-      "role": "The HIP vector-add sample, release flavour, from the same build as the runtime it links against (bc250-win main 1750f505): the runtime's recipe builds it and it follows the flavour of the product DLL, which is why the row's recipe is now compute/hip/build-runtime.ps1 instead of compute/hip/build-rebuilt-controls.ps1. The two cannot drift apart any more: before this, the sample came from the hip-dispatch journal and was linked against another import library of the same DLL. BD-167: the image reads no BC250_HIP_WAIT_TOTAL_MS, which the lab build reads. 161280 bytes against the lab build's 165376.",
-      "flavour": "lab",
-      "note": "the HIP sample, lab flavour: BC250_HIP_WAIT_TOTAL_MS, from the same build as the lab runtime",
-      "authenticode_sha256": "31C52C7A5B9A867543FBF2F341A199C2E285D8FC1DF58B4CE38AA2BBA2D0A70A"
+      "authenticode_sha256": "228BE15601706B2DEFBE304888CC81590FE2DEB39CB6079FEA811BA7999469B3",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/train/b35-build/stamped/release/fae7344921e9bf0cc593/bc250hipblas.dll",
-      "sha256": "04DEBF56B44E0C0DA847C87FA604D81527605B21D4EC8D97DCD46083BD82D4BD",
+      "source": "scratch/build-train/tester.33/artifacts/release/extra-hip-release/bc250hipblas.dll",
+      "sha256": "EAE944F65A1C05FB7616A9A65D8DB4573875A71DE96457CDD2C4D9EC57AFF417",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "3737b075a607147c9937d0504ed6b8ec1cbd5865",
-        "recipe": "compute/hip/build-rebuilt-controls.ps1",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "recipe": "compute/hip/build-runtime.ps1",
         "args": [
-          "-Root",
-          "{root}",
+          "-Kits",
+          "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-ImportLibrary",
-          "{input:runtime}/amdhip64.lib",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "release",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-ClangBin",
+          "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+          "-BuildBlas"
         ],
         "inputs": {
-          "runtime": {
-            "workspace": "scratch/hip-dispatch-journal/runtime-enabled"
+          "layer1": {
+            "workspace": "scratch/train/b32-build/rc29v2/hip/bc250hsa"
           }
         },
-        "output": "hipblas/bc250hipblas.dll"
+        "output": "controls/hipblas/bc250hipblas.dll"
       },
-      "unverified": "Built offline by compute/hip/build-rebuilt-controls.ps1 from the same working tree as tools\\hip\\amdhip64.dll, linked against the import library of the enabled runtime build in scratch/hip-dispatch-journal/runtime-enabled (amdhip64.lib F549FF9F, the same 55 exports). The hashes of every input are in scratch/hip-dispatch-journal/rebuilt-controls/final-r2/build.json (48BB900A). The release rebuild check has not rebuilt it from the commit.",
       "size": 157696,
-      "role": "Experimental: our hipBLAS subset for gfx1013 (compute/hipblas, the GEMM entry points that llama.cpp's HIP backend calls), rebuilt at 3737b075 with the corrected device headers, next to tools\\hip\\amdhip64.dll. No program of this package loads it. Lab 2026-10-11: gemm_check passes 532 checks and detects a deliberate corruption.",
-      "flavour": "release",
-      "authenticode_sha256": "35BE073F15B89F96C7191C51803A1455ACC0EACA091A6B90DE258B0BB039EB26"
+      "authenticode_sha256": "4164C3E3B26FABC5F9A559881B01A7F1A992776F60ABA11FEA2EF85DBD810A94",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/train/b35-build/stamped/lab/1daae4f32b6d5f8ec9c9/bc250hipblas.dll",
-      "sha256": "935C2AB7B4F73BAD439F988078592E23B70DBEB06092C942B395E0D7D20D7400",
+      "source": "scratch/build-train/tester.33/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
+      "sha256": "6DA1038B401E8C35DF11DE3191196B52D5B7A1FDD4A64FEE418E3196B59B6CAD",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "3737b075a607147c9937d0504ed6b8ec1cbd5865",
-        "recipe": "compute/hip/build-rebuilt-controls.ps1",
+        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "recipe": "compute/hip/build-runtime.ps1",
         "args": [
-          "-Root",
-          "{root}",
+          "-Kits",
+          "{root}/toolchain/nuget",
           "-Out",
           "{out}",
-          "-ImportLibrary",
-          "{input:runtime}/amdhip64.lib",
+          "-Compiler",
+          "clang-cl",
           "-Version",
-          "0.7.216.104-tester.32"
+          "0.7.216.105-tester.33",
+          "-Flavour",
+          "lab",
+          "-Root",
+          "{root}",
+          "-Bc250hsaLib",
+          "{input:layer1}/bc250hsa.lib",
+          "-ClangBin",
+          "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+          "-BuildBlas"
         ],
         "inputs": {
-          "runtime": {
-            "workspace": "scratch/hip-dispatch-journal/runtime-enabled"
+          "layer1": {
+            "workspace": "scratch/train/b32-build/rc29v2/hip/bc250hsa"
           }
         },
-        "output": "hipblas/bc250hipblas.dll"
+        "output": "controls/hipblas/bc250hipblas.dll"
       },
-      "unverified": "Built offline by compute/hip/build-rebuilt-controls.ps1 from the same working tree as tools\\hip\\amdhip64.dll, linked against the import library of the enabled runtime build in scratch/hip-dispatch-journal/runtime-enabled (amdhip64.lib F549FF9F, the same 55 exports). The hashes of every input are in scratch/hip-dispatch-journal/rebuilt-controls/final-r2/build.json (48BB900A). The release rebuild check has not rebuilt it from the commit.",
       "size": 157696,
-      "role": "Experimental: our hipBLAS subset for gfx1013 (compute/hipblas, the GEMM entry points that llama.cpp's HIP backend calls), rebuilt at 3737b075 with the corrected device headers, next to tools\\hip\\amdhip64.dll. No program of this package loads it. Lab 2026-10-11: gemm_check passes 532 checks and detects a deliberate corruption.",
-      "flavour": "lab",
-      "note": "the hipBLAS shim: no lab-only name. It is not rebuilt with the runtime either; check-hipblas-abi.py shows its eight imports are all exported by the new amdhip64.dll",
-      "authenticode_sha256": "2BFF125194CCC5D2928D0F477DA6615FB731E40A69B4D12FB827F8BC3F2CDE42"
+      "authenticode_sha256": "68B0101C3DCC517ADB3EABFE61F68EB46E810F471A70E9B6210C4FCEE5E074E7",
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "flavour": "lab"
     },
     {
       "component": "opengl-icd",
