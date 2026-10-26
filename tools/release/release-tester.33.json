@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. Hosted Mesa uses 1f8e1e60, system x64 Mesa aecf0012, and the D3D12 engine c9d4082f. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication.",
+  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. Hosted Mesa uses 1f8e1e60, system x64 Mesa aecf0012, and the D3D12 engine c9d4082f. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -2633,6 +2633,336 @@
           "authenticode": true
         }
       ]
+    },
+    {
+      "id": "extra-caps-release",
+      "component": "tool",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "tools/win/d3d12caps/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "release"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d12caps.exe",
+          "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "extra-bench-release",
+      "component": "tool",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "tools/win/d3d11bench/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "release"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "d3d11bench.exe",
+          "path": "payload/tools/d3d11bench.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "extra-mft-release",
+      "component": "mft-h264",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "driver/umd/mft-h264/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "release"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_mft_h264.dll",
+          "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
+          "component": "mft-h264",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "extra-hip-release",
+      "component": "tool",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "compute/hip/build-runtime.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "release",
+        "-Root",
+        "{root}",
+        "-Bc250hsaLib",
+        "{input:layer1}/bc250hsa.lib",
+        "-ClangBin",
+        "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+        "-BuildBlas"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "amdhip64.dll",
+          "path": "payload/tools/hip/amdhip64.dll",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "controls/vadd.exe",
+          "path": "payload/tools/hip/vadd.exe",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "controls/hipblas/bc250hipblas.dll",
+          "path": "payload/tools/hip/bc250hipblas.dll",
+          "component": "tool",
+          "authenticode": true
+        }
+      ],
+      "inputs": {
+        "layer1": {
+          "workspace": "scratch/train/b32-build/rc29v2/hip/bc250hsa"
+        }
+      },
+      "note": "clang-cl builds the host runtime. HIP device programs and HIPBLAS use the explicitly pinned AMDGPU Clang 22.1.8 toolchain; its gfx1013 fixtures and CPU tests are part of this recipe."
+    },
+    {
+      "id": "extra-caps-lab",
+      "component": "tool",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "tools/win/d3d12caps/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "lab"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_d3d12caps.exe",
+          "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "extra-bench-lab",
+      "component": "tool",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "tools/win/d3d11bench/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "lab"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "d3d11bench.exe",
+          "path": "payload/tools/d3d11bench.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "extra-mft-lab",
+      "component": "mft-h264",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "driver/umd/mft-h264/build.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "lab"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "amdgpu_wddm_mft_h264.dll",
+          "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
+          "component": "mft-h264",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "extra-hip-lab",
+      "component": "tool",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+      "tree": "worktree",
+      "recipe": "compute/hip/build-runtime.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "lab",
+        "-Root",
+        "{root}",
+        "-Bc250hsaLib",
+        "{input:layer1}/bc250hsa.lib",
+        "-ClangBin",
+        "{root}/toolchain/llvm-amdgpu-22.1.8/mingw64/bin",
+        "-BuildBlas"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "amdhip64.dll",
+          "path": "payload/tools/hip/amdhip64.dll",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "controls/vadd.exe",
+          "path": "payload/tools/hip/vadd.exe",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "controls/hipblas/bc250hipblas.dll",
+          "path": "payload/tools/hip/bc250hipblas.dll",
+          "component": "tool",
+          "authenticode": true
+        }
+      ],
+      "inputs": {
+        "layer1": {
+          "workspace": "scratch/train/b32-build/rc29v2/hip/bc250hsa"
+        }
+      },
+      "note": "clang-cl builds the host runtime. HIP device programs and HIPBLAS use the explicitly pinned AMDGPU Clang 22.1.8 toolchain; its gfx1013 fixtures and CPU tests are part of this recipe."
     }
   ]
 }
