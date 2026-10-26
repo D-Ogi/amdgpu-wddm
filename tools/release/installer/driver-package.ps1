@@ -57,14 +57,15 @@ function Get-DriverPackageRegistration {
         [pscustomobject]@{name=$p.Name; kind=[string]$v.kind; value=$value}
     }
 }
-# CopyToVm pairs intentionally remain DriverStore-relative. They are not root
-# adapter values and must never pass through the %13% expansion above.
+# CopyToVm pairs apply to GPU-P guests only, not the physical host's DLL search.
+# The host uses the two verified ADL-only DriverStore directories on PATH.
+# These pairs remain relative and must not pass through the %13% expansion.
 function Get-DriverPackageSubkeyRegistration {
     param([Parameter(Mandatory)]$Package)
     $expected = @()
     foreach ($spec in @(
         @('CopyToVmWhenNewer', 'adl/atiadlxx.dll', 'atiadlxx.dll', 'x64'),
-        @('CopyToVmWhenNewerWow64', 'wow64/adl/atiadlxy32.dll', 'atiadlxy.dll', 'x86'))) {
+        @('CopyToVmWhenNewerWow64', 'wow64/adl/atiadlxy.dll', 'atiadlxy.dll', 'x86'))) {
         $member = @($Package.members | Where-Object { $_.member -ceq $spec[1] })
         if ($member.Count) {
             if ($member.Count -ne 1 -or $member[0].arch -cne $spec[3]) { throw 'invalid ADL member architecture' }
@@ -96,6 +97,39 @@ function Test-DriverPackageSubkeyRegistration {
         if (-not (Test-RegistryValueSame $key.GetValue($row.name) $row.value)) { "$label differs from the bound package INF" }
     }
 }
+# Both names are unique, so the x86 member keeps the name AGS loads by name.
+# No system DLL is overwritten; an existing vendor DLL in System32 wins.
+function Get-AdlSearchPaths {
+    param([Parameter(Mandatory)]$Package, [Parameter(Mandatory)][string]$Root)
+    foreach ($spec in @(@('adl/atiadlxx.dll','x64'), @('wow64/adl/atiadlxy.dll','x86'))) {
+        $rows = @($Package.members | Where-Object { $_.member -ceq $spec[0] })
+        if (-not $rows.Count) { continue }
+        if ($rows.Count -ne 1 -or $rows[0].arch -cne $spec[1]) { throw 'Invalid host ADL architecture' }
+        Split-Path (Join-Path $Root ($spec[0] -replace '/', '\'))
+    }
+}
+
+# State can remove only our exact ADL directories, never an arbitrary PATH entry.
+# Files may already be gone at uninstall, so this validates names, not existence.
+function Assert-AdlSearchPath([string]$Entry) {
+    $prefix = [IO.Path]::GetFullPath((Join-Path $env:windir 'System32\DriverStore\FileRepository')).TrimEnd('\') + '\'
+    if (-not $Entry.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+        $Entry.Substring($prefix.Length) -notmatch '\Abc250kmd\.inf_[a-z0-9_]+\\(?:wow64\\)?adl\z') {
+        throw 'ADL search path is outside the package ADL directories'
+    }
+}
+
+function Get-AdlMachinePathPlan {
+    param([string]$Current, [string[]]$Previous = @(), [string[]]$Desired = @())
+    foreach ($entry in @($Previous) + @($Desired)) { Assert-AdlSearchPath $entry }
+    $next = $Current
+    foreach ($entry in $Previous) {
+        if ($Desired -notcontains $entry) { $next = Remove-PathEntry $next $entry }
+    }
+    foreach ($entry in $Desired) { $next = Add-PathEntry $next $entry }
+    $next
+}
+
 function Test-DriverPackageRegistration {
     param([Parameter(Mandatory)]$Manifest, [Parameter(Mandatory)][string]$ClassKey,
         [Parameter(Mandatory)][string]$Root)

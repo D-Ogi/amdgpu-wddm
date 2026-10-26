@@ -180,46 +180,49 @@ The host run of 2026-10-25 (x64 and x86, 13 of 13 runs each as expected) is in
 ## System packaging
 
 The package builder supports the explicit `adl.register` declaration with both x64 and x86 architectures.
-It stages both libraries in the DriverStore, generates the registrations below, and records them in
-`driver_package.subkey_registration` for installer verification. The installer never manually overwrites
-or removes a system ADL DLL. Actual native-host copying and removal remain acceptance tests, not established
-by successful INF generation or by the app-local AGS tests.
+It stages both libraries in the DriverStore and verifies their hashes after the package binds. The installer
+adds the two ADL directories to the end of the machine `PATH`. The configuration restart makes the entries
+available to new processes. The installer never overwrites or removes a system ADL DLL.
 
-The library must be in a directory that `LoadLibrary` searches for a bare name, that is `System32` and
-`SysWOW64`. A `CopyFiles` directive to DIRID 11 is not isolated. InfVerif reports it as error 1322 in `/w` mode
-(driver package isolation), so the package does not use it. The display INF has a registered mechanism instead:
-the `CopyToVmWhenNewer` and `CopyToVmWhenNewerWow64` subkeys of the adapter key. Windows copies each listed
-DriverStore file to `System32` or `SysWOW64` (WDK documentation, "Container support for non-DX APIs").
+Bare-name `LoadLibrary` searches `PATH` after the system directories. A `CopyFiles` directive to DIRID 11 is
+not isolated: InfVerif reports error 1322 in `/w` mode. The package therefore keeps both files in DIRID 13.
+The `CopyToVmWhenNewer` subkeys below apply to GPU-P guests. They do not install ADL in the physical host's
+system directories. The native-host acceptance test found no system ADL after installation and two restarts.
+See [GPU paravirtualization](https://learn.microsoft.com/en-us/windows-hardware/drivers/display/gpu-paravirtualization),
+"Copying files to %windir%\\system32 and %windir%\\syswow64 in the VM".
 
 Package members and registrations:
 
-| DriverStore member | Copied to | Registration in the adapter key |
+| DriverStore member | Guest copy destination | Registration in the adapter key |
 |---|---|---|
 | `adl\atiadlxx.dll` (x64) | `System32\atiadlxx.dll` | `CopyToVmWhenNewer`, value `AmdgpuAdl` = `adl\atiadlxx.dll`, `atiadlxx.dll` |
-| `wow64\adl\atiadlxy32.dll` (x86) | `SysWOW64\atiadlxy.dll` | `CopyToVmWhenNewerWow64`, value `AmdgpuAdl` = `wow64\adl\atiadlxy32.dll`, `atiadlxy.dll` |
+| `wow64\adl\atiadlxy.dll` (x86) | `SysWOW64\atiadlxy.dll` | `CopyToVmWhenNewerWow64`, value `AmdgpuAdl` = `wow64\adl\atiadlxy.dll`, `atiadlxy.dll` |
 
-The x86 member name ends in `32` and stays below `wow64`, as `driverstore-package.md` requires. The copy gives it
-the ADL name.
+The two basenames are already unique. The x86 member retains the name that AGS loads and stays below `wow64`.
+After a package change, the installer removes its recorded old ADL directories from `PATH` and adds the new
+directories. It saves both generations before the update so a partial install can be removed. Uninstall removes
+only the recorded ADL entries. The same cleanup applies when returning to a legacy package.
 
 Coexistence:
 
-- "When newer" compares the file version first, then the timestamp when versions are equal. The library is
+- In a guest, "when newer" compares the file version first, then the timestamp when versions are equal. The library is
   stamped with the package's mapped Windows file version (for example 40.7.216.104), not an assumed 0.7.x
   comparison value. No relative ordering against an official AMD ADL version is assumed.
-- Coexistence with an installed AMD driver is unmeasured and cannot be tested on the single-driver unit A.
+- On the host, an ADL DLL in a system directory or an earlier `PATH` entry retains precedence.
+  Coexistence with an installed AMD driver is unmeasured and cannot be tested on the single-driver unit A.
   This is not a guarantee that either library can enumerate the other driver's adapter.
 - `CopyToVmOverwrite` is not used. Only this package's named `AmdgpuAdl` registration is replaced. Other
   values under the shared registry subkeys are left intact.
 - `build-umd-adl.ps1 -Version ... -Flavour release|lab` stamps the public DLL before its build receipt,
   through `versioninfo.json` and the shared version-stamp helper. Test DLLs and test hooks are excluded
   from both shipped flavours. Release package signing covers the DriverStore members before the catalog
-  is generated. The version resource still names `atiadlxy.dll` after the x86 DriverStore rename.
+  is generated. The x86 file and its version resource both name `atiadlxy.dll`.
 
 Open questions for the packaging step, to be measured on the lab:
 
-1. Does Windows copy the files on the host as well as into a virtual machine, and at which time?
-2. Does Windows remove the copies when the driver is removed? The uninstall path of the installer must check this.
-3. Does the HLK INF test accept the two subkeys in the adapter key of our INF?
+1. Do both architectures load the exact DriverStore files after clean install and upgrade without process overrides?
+2. Does uninstall remove the recorded search entries and make the bare-name loads fail with file-not-found?
+3. Does the HLK INF test accept the two guest-copy subkeys in the adapter key of our INF?
 
 The installation acceptance kit uses an x64/x86 bare-name loader probe and reports the resolved DLL path.
 AGS runs from directories containing no local ADL copy. A successful app-local test cannot satisfy these

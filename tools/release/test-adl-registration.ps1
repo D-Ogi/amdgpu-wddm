@@ -9,10 +9,10 @@ function Check([bool]$Ok, [string]$Name) {
 }
 function Fixture {
     @'
-{"members":[{"member":"adl/atiadlxx.dll","arch":"x64"},{"member":"wow64/adl/atiadlxy32.dll","arch":"x86"}],
+{"members":[{"member":"adl/atiadlxx.dll","arch":"x64"},{"member":"wow64/adl/atiadlxy.dll","arch":"x86"}],
  "subkey_registration":[
  {"subkey":"CopyToVmWhenNewer","name":"AmdgpuAdl","kind":"MultiString","value":["adl\\atiadlxx.dll","atiadlxx.dll"]},
- {"subkey":"CopyToVmWhenNewerWow64","name":"AmdgpuAdl","kind":"MultiString","value":["wow64\\adl\\atiadlxy32.dll","atiadlxy.dll"]}]}
+ {"subkey":"CopyToVmWhenNewerWow64","name":"AmdgpuAdl","kind":"MultiString","value":["wow64\\adl\\atiadlxy.dll","atiadlxy.dll"]}]}
 '@ | ConvertFrom-Json
 }
 Check (@(Get-DriverPackageSubkeyRegistration ([pscustomobject]@{members=@()})).Count -eq 0) 'legacy manifest remains supported'
@@ -56,5 +56,23 @@ try {
 } finally {
     if ($key -notmatch '^HKCU:\\Software\\amdgpu-adl-registration-test-[0-9a-f]{32}$') { throw 'test cleanup escaped scope' }
     if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
+}
+$base = Join-Path $env:windir 'System32\DriverStore\FileRepository'
+$old = Join-Path $base 'bc250kmd.inf_amd64_0001\adl'
+$fresh = Join-Path $base 'bc250kmd.inf_amd64_0002'
+$entries = @(Get-AdlSearchPaths (Fixture) $fresh)
+Check ($entries.Count -eq 2) 'both host ADL directories'
+Check ($entries[1] -eq "$fresh\wow64\adl") 'x86 host directory'
+$foreign = 'C:\Vendor\bin;%SystemRoot%\System32'
+$next = Get-AdlMachinePathPlan -Current "$foreign;$old" -Previous @($old) -Desired $entries
+Check ($next -ceq ($foreign + ';' + ($entries -join ';'))) 'upgrade replaces exact old entry and keeps vendor precedence'
+Check ((Get-AdlMachinePathPlan -Current $next -Previous $entries -Desired $entries) -ceq $next) 'repair is idempotent'
+Check ((Get-AdlMachinePathPlan -Current $next -Previous $entries) -ceq $foreign) 'uninstall preserves foreign PATH'
+Check ((Get-AdlMachinePathPlan -Current "$foreign;$old" -Previous @($old) -Desired @()) -ceq $foreign) 'package without ADL removes old entry'
+Check ((Get-AdlMachinePathPlan -Current "$foreign;" -Desired $entries).StartsWith($foreign)) 'environment expansion remains literal'
+foreach ($bad in @('C:\Vendor\bin', "$fresh\adl\..\", "$fresh\d3d12", "$base\foreign.inf_1\adl", "$fresh\adl;C:\bad")) {
+    $refused = $false
+    try { Get-AdlMachinePathPlan -Current $foreign -Previous @($bad) | Out-Null } catch { $refused = $true }
+    Check $refused "reject foreign or escaping PATH $bad"
 }
 "ADL registration: $checks checks passed"

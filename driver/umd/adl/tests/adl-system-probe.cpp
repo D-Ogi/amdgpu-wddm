@@ -13,8 +13,9 @@ static int Fail(const wchar_t* message, DWORD error = 0)
 int wmain(int argc, wchar_t** argv)
 {
     const bool absent = argc == 2 && wcscmp(argv[1], L"--expect-absent") == 0;
-    if (!absent && !(argc == 2 && wcscmp(argv[1], L"--expect-system") == 0))
-        return Fail(L"usage: --expect-system | --expect-absent");
+    const bool file = argc == 3 && wcscmp(argv[1], L"--expect-file") == 0;
+    if (!absent && !file && !(argc == 2 && wcscmp(argv[1], L"--expect-system") == 0))
+        return Fail(L"usage: --expect-system | --expect-file ABSOLUTE_PATH | --expect-absent");
 #ifdef _WIN64
     const wchar_t* name = L"atiadlxx.dll";
     const wchar_t* architecture = L"x64";
@@ -30,6 +31,12 @@ int wmain(int argc, wchar_t** argv)
     UINT n = GetWindowsDirectoryW(windows, MAX_PATH);
     if (!n || n >= MAX_PATH) return Fail(L"GetWindowsDirectory", GetLastError());
     if (swprintf_s(expected, L"%ls\\%ls\\%ls", windows, system, name) < 0) return Fail(L"system path too long");
+    if (file) {
+        if (wcslen(argv[2]) < 3 || argv[2][1] != L':' || argv[2][2] != L'\\')
+            return Fail(L"expected file must be an absolute drive path");
+        DWORD length = GetFullPathNameW(argv[2], MAX_PATH, expected, nullptr);
+        if (!length || length >= MAX_PATH) return Fail(L"expected file path too long");
+    }
     DWORD count = GetModuleFileNameW(nullptr, application, MAX_PATH);
     if (!count || count >= MAX_PATH) return Fail(L"GetModuleFileName application", GetLastError());
     wchar_t* slash = wcsrchr(application, L'\\');

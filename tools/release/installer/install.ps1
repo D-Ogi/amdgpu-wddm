@@ -866,6 +866,9 @@ function Invoke-Verify {
             $verifiedGraphicsRoot = Get-DriverPackageRoot -ClassKey $gpuSwKey
             if (-not $verifiedGraphicsRoot) { throw 'bound adapter has no DriverStore UMD package identity' }
             $packageProblems = @(Test-DriverPackageRegistration -Manifest $script:Manifest -ClassKey $gpuSwKey -Root $verifiedGraphicsRoot)
+            foreach ($adlPath in @(Get-AdlSearchPaths -Package $script:Manifest.driver_package -Root $verifiedGraphicsRoot)) {
+                if (-not (Test-PathEntry (Get-MachinePath).value $adlPath)) { $packageProblems += 'ADL directory missing from machine PATH' }
+            }
             $packageProblems += @(Get-LegacyUmdValues -InstallRoot $InstallRoot | ForEach-Object { "legacy UMD override or duplicate ICD: $($_.name)" })
             Add-Result 'DriverStore UMD set' ($packageProblems.Count -eq 0) $(if ($packageProblems.Count) { $packageProblems -join '; ' } else { 'INF registration and every installed member match the package manifest' })
         } catch { Add-Result 'DriverStore UMD set' $false $_.Exception.Message; $verifiedGraphicsRoot = $InstallRoot }
@@ -1788,6 +1791,19 @@ if ($driverStoreUmd) {
         $problems = @(Test-DriverPackageRegistration -Manifest $script:Manifest -ClassKey $classKey -Root $graphicsRoot)
         if ($problems.Count) { throw ($problems -join '; ') }
     }
+    Invoke-Change 'expose the verified ADL directories to new processes after restart' {
+        $desired = @(Get-AdlSearchPaths -Package $script:Manifest.driver_package -Root $graphicsRoot)
+        $previous = @()
+        if ($state.PSObject.Properties['adl_path_entries']) { $previous = @($state.adl_path_entries) }
+        $path = Get-MachinePath
+        $next = Get-AdlMachinePathPlan -Current $path.value -Previous $previous -Desired $desired
+        # Save the union before writing PATH so a partial install can remove both generations.
+        Set-StateValue $state 'adl_path_entries' @(@($previous + $desired) | Select-Object -Unique)
+        Save-InstallState $state
+        if ($next -cne $path.value) { Set-MachinePath $next $path.kind }
+        Set-StateValue $state 'adl_path_entries' $desired
+        Save-InstallState $state
+    } | Out-Null
     $mftDll = Join-Path $graphicsRoot $mft.install_path
     $legacyUmd = @(Get-LegacyUmdValues -InstallRoot $InstallRoot)
     if (-not $state.PSObject.Properties['umd_migration']) {
@@ -1803,6 +1819,15 @@ if ($driverStoreUmd) {
 } else {
 # Graphics registration in the GPU's software key: the D3D9 slot '<>' (D3D9On12 on our D3D12 driver), the D3D10/11
 # slots, the D3D12 slot, Vulkan.
+if ($state.PSObject.Properties['adl_path_entries'] -and @($state.adl_path_entries).Count) {
+    Invoke-Change 'remove ADL search entries when returning to a legacy package' {
+        $path = Get-MachinePath
+        $next = Get-AdlMachinePathPlan -Current $path.value -Previous @($state.adl_path_entries)
+        if ($next -cne $path.value) { Set-MachinePath $next $path.kind }
+        Set-StateValue $state 'adl_path_entries' @()
+        Save-InstallState $state
+    } | Out-Null
+}
 Invoke-Change 'clear the DriverStore UMD marker for the bound legacy rollback package' {
     # An older INF has no DelReg for a value introduced by a newer package.
     # This executes after its binding/restart boundary, before legacy paths.

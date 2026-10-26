@@ -9,7 +9,8 @@ Windows assigns a new DriverStore directory when the package changes.
 `tools/release/driver_package.py` maps the pinned release inputs to `payload/kmd` before catalog generation.
 The source and destination subdirectories match.
 Every INF basename is unique.
-The x86 names end in `32` and stay below `wow64`.
+The x86 names stay below `wow64` and normally end in `32`. ADL keeps `atiadlxy.dll`, which is already unique
+and is the bare name that applications load.
 
 | Directory below the package root | Contents |
 |---|---|

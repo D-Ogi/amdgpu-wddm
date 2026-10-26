@@ -300,6 +300,15 @@ Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey
 } | Out-Null
 
 Write-Step 'Files'
+if ($state -and $state.PSObject.Properties['adl_path_entries'] -and @($state.adl_path_entries).Count) {
+    Invoke-Change 'remove the recorded ADL directories from machine PATH' {
+        $path = Get-MachinePath
+        $next = Get-AdlMachinePathPlan -Current $path.value -Previous @($state.adl_path_entries)
+        if ($next -cne $path.value) { Set-MachinePath $next $path.kind }
+        Set-StateValue $state 'adl_path_entries' @()
+        Save-InstallState $state
+    } | Out-Null
+}
 # The HIP folder's entry of the machine PATH that install.ps1 appended, and no other entry (common.ps1).
 $hipEntries = @(@((Get-HipPathEntry $root), $(if ($state -and $state.PSObject.Properties['hip_path_entry']) { [string]$state.hip_path_entry })) | Where-Object { $_ } | Select-Object -Unique)
 $hipOnPath = @($hipEntries | Where-Object { Test-PathEntry (Get-MachinePath).value $_ })

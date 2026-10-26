@@ -89,12 +89,12 @@ class DriverPackageTests(unittest.TestCase):
             {'subkey': 'CopyToVmWhenNewer', 'name': 'AmdgpuAdl', 'kind': 'MultiString',
              'value': ['adl\\atiadlxx.dll', 'atiadlxx.dll']},
             {'subkey': 'CopyToVmWhenNewerWow64', 'name': 'AmdgpuAdl', 'kind': 'MultiString',
-             'value': ['wow64\\adl\\atiadlxy32.dll', 'atiadlxy.dll']}])
+             'value': ['wow64\\adl\\atiadlxy.dll', 'atiadlxy.dll']}])
         generated = package.render_inf((REPO / 'driver/kmd/bc250kmd.inf').read_text(), rows, source)
         self.assertIn('HKR,"CopyToVmWhenNewer",AmdgpuAdl,0x00010000,"adl\\atiadlxx.dll","atiadlxx.dll"', generated)
-        self.assertIn('HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl,0x00010000,"wow64\\adl\\atiadlxy32.dll","atiadlxy.dll"', generated)
+        self.assertIn('HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl,0x00010000,"wow64\\adl\\atiadlxy.dll","atiadlxy.dll"', generated)
         self.assertIn('Amdgpu_Files_wow64_adl = 13,wow64\\adl', generated)
-        self.assertIn('atiadlxy32.dll = 1,wow64\\adl', generated)
+        self.assertIn('atiadlxy.dll = 1,wow64\\adl', generated)
         source['adl']['architectures'] = ['x64']
         native_only = package.render_inf((REPO / 'driver/kmd/bc250kmd.inf').read_text(), package.members(source), source)
         self.assertIn('HKR,"CopyToVmWhenNewerWow64",AmdgpuAdl\n', native_only)
@@ -118,7 +118,7 @@ class DriverPackageTests(unittest.TestCase):
                 self.assertEqual(len(report['members']), 28)
                 self.assertEqual(len(report['subkey_registration']), 2)
                 for member, original in (('adl/atiadlxx.dll', 'payload/adl/atiadlxx.dll'),
-                                         ('wow64/adl/atiadlxy32.dll', 'payload/wow64/adl/atiadlxy.dll')):
+                                         ('wow64/adl/atiadlxy.dll', 'payload/wow64/adl/atiadlxy.dll')):
                     self.assertEqual((root / 'payload/kmd' / member).read_bytes(), original.encode())
                     self.assertFalse((root / original).exists())
 

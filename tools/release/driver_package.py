@@ -88,7 +88,7 @@ def members(sources: dict) -> list[dict]:
         if "x64" in arch:
             pairs.append(("adl/atiadlxx.dll", "adl/atiadlxx.dll"))
         if "x86" in arch:
-            pairs.append(("wow64/adl/atiadlxy.dll", "wow64/adl/atiadlxy32.dll"))
+            pairs.append(("wow64/adl/atiadlxy.dll", "wow64/adl/atiadlxy.dll"))
     rows = [{"source": "payload/" + src, "member": relative(dst),
              "path": PREFIX + dst, "arch": "x86" if dst.startswith("wow64/") else "x64"}
             for src, dst in pairs]
@@ -138,7 +138,7 @@ def subkey_registrations(rows: list[dict]) -> list[dict]:
              "value": [member.replace("/", "\\"), target]}
             for subkey, member, target in (
                 ("CopyToVmWhenNewer", "adl/atiadlxx.dll", "atiadlxx.dll"),
-                ("CopyToVmWhenNewerWow64", "wow64/adl/atiadlxy32.dll", "atiadlxy.dll"))
+                ("CopyToVmWhenNewerWow64", "wow64/adl/atiadlxy.dll", "atiadlxy.dll"))
             if member in files]
 
 
