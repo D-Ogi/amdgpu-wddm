@@ -318,7 +318,12 @@ def find_functions(src: Source) -> dict[str, list[Function]]:
                 continue
         if before.endswith("->") or (before.endswith(".") and not before.endswith("..")):
             continue
-        prev = re.search(r"([A-Za-z_]\w*)\s*$", before)
+        # Search only the trailing word. An unanchored search over the complete
+        # prefix backtracks quadratically through long generated shader arrays.
+        word_start = len(before)
+        while word_start and (before[word_start - 1].isalnum() or before[word_start - 1] == '_'):
+            word_start -= 1
+        prev = re.search(r"([A-Za-z_]\w*)$", before[word_start:])
         if prev and prev.group(1) in NOT_RET:
             continue
         if not prev and not before.endswith(("*", "&", ">", "::")):

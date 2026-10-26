@@ -31,6 +31,15 @@ void Partly(Dev* d, int k) { if (k == 2) { report(d, E_NOTIMPL); return; } Engin
 
 
 class VerdictTests(unittest.TestCase):
+    def test_functions_after_long_generated_data(self):
+        text = 'static const char data[] = "' + 'a' * 20000 + '";\n'
+        text += 'int RealWork(void) { return Engine(); }\n'
+        text += 'void Calls(void) { callback(); p->method(); }\n'
+        source = sm.Source(sm.REPO / 'driver/kmd/generated-test.c', text)
+        functions = sm.find_functions(source)
+        self.assertEqual(set(functions), {'RealWork', 'Calls'})
+        self.assertEqual(functions['RealWork'][0].ret, 'int')
+
     @classmethod
     def setUpClass(cls):
         src = sm.Source(Path("sample.c"), SAMPLE)
