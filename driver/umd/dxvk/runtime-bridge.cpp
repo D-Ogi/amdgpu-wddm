@@ -198,6 +198,10 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
    }
    case BC250_HOST_SignalSynchronizationObjectFromCpu: {
       auto *a=(D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMCPU *)argument;
+      // The CPU callback has no flags member. The ICD signals a value above the current
+      // timeline value; its AllowFenceRewind bit needs no callback equivalent here.
+      D3DDDICB_SIGNALFLAGS rewind = {}; rewind.AllowFenceRewind=1;
+      if (a->Flags.Value & ~rewind.Value) return E_NOTIMPL;
       D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMCPU b = {};
       b.ObjectCount=a->ObjectCount; b.ObjectHandleArray=a->ObjectHandleArray; b.FenceValueArray=a->FenceValueArray;
       return HOST_CALL(SignalSynchronizationObjectFromCpu, &b);
@@ -212,7 +216,11 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
    }
    case BC250_HOST_SignalSynchronizationObjectFromGpu2: {
       auto *a=(D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 *)argument;
-      if (a->BroadcastContextCount > D3DDDI_MAX_BROADCAST_CONTEXT || a->Flags.Value) return E_NOTIMPL;
+      // Vulkan timeline wait-before-signal submits may queue a smaller value after a
+      // larger one. Preserve the WDK AllowFenceRewind flag, as the D3D12 bridge does.
+      D3DDDICB_SIGNALFLAGS rewind = {}; rewind.AllowFenceRewind=1;
+      if (a->BroadcastContextCount > D3DDDI_MAX_BROADCAST_CONTEXT ||
+          (a->Flags.Value & ~rewind.Value)) return E_NOTIMPL;
       HANDLE contexts[D3DDDI_MAX_BROADCAST_CONTEXT] = {};
       for (UINT i=0;i<a->BroadcastContextCount;++i) {
          contexts[i]=Bc250HostContext(s,a->BroadcastContextArray[i]); if (!contexts[i]) return E_INVALIDARG;
@@ -221,6 +229,7 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
       b.ObjectCount=a->ObjectCount; b.ObjectHandleArray=a->ObjectHandleArray;
       b.BroadcastContextCount=a->BroadcastContextCount; b.BroadcastContextArray=contexts;
       b.MonitoredFenceValueArray=a->MonitoredFenceValueArray;
+      b.Flags.AllowFenceRewind=a->Flags.AllowFenceRewind;
       return HOST_CALL(SignalSynchronizationObjectFromGpu2, &b);
    }
    case BC250_HOST_UpdateGpuVirtualAddress: {

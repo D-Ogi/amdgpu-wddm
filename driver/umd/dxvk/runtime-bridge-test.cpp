@@ -10,6 +10,18 @@ static int identity, context;
 static unsigned hostReports; static HRESULT hostReported;
 static void APIENTRY count_host_error(D3D10DDI_HRTCORELAYER, HRESULT hr) { ++hostReports; hostReported=hr; }
 static unsigned allocated, created, destroyed, submitted, waited, updated;
+static unsigned gpu_signals, gpu_rewinds, cpu_signals;
+static HRESULT APIENTRY signal_gpu(HANDLE device, const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 *a) {
+    require(device==&identity && a->BroadcastContextCount==1 && a->BroadcastContextArray[0]==&context);
+    require(a->ObjectCount==2 && a->ObjectHandleArray[0]==45 && a->ObjectHandleArray[1]==46);
+    require(a->MonitoredFenceValueArray[0]==9 && a->MonitoredFenceValueArray[1]==10);
+    ++gpu_signals; gpu_rewinds+=a->Flags.AllowFenceRewind; return S_OK;
+}
+static HRESULT APIENTRY signal_cpu(HANDLE device, const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROMCPU *a) {
+    require(device==&identity && a->ObjectCount==2 && a->ObjectHandleArray[0]==45 && a->ObjectHandleArray[1]==46);
+    require(a->FenceValueArray[0]==9 && a->FenceValueArray[1]==10);
+    ++cpu_signals; return S_OK;
+}
 static HRESULT APIENTRY allocate(HANDLE device, D3DDDICB_ALLOCATE *a) {
     require(device==&identity && a->NumAllocations==1 && a->PrivateDriverDataSize==4);
     ++allocated; a->hKMResource=91; a->pAllocationInfo2[0].hAllocation=37; return S_OK;
@@ -68,6 +80,8 @@ int main() {
     device.KTCallbacks.pfnDestroyContextCb=destroy_context;
     device.KTCallbacks.pfnSubmitCommandCb=submit;
     device.KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu;
+    device.KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb=signal_gpu;
+    device.KTCallbacks.pfnSignalSynchronizationObjectFromCpuCb=signal_cpu;
     device.KTCallbacks.pfnMakeResidentCb=resident;
     device.KTCallbacks.pfnUpdateGpuVirtualAddressCb=update_va;
     device.KTCallbacks.pfnDeallocateCb=deallocate;
@@ -91,6 +105,25 @@ int main() {
     D3DKMT_CREATECONTEXTVIRTUAL create{}; create.NodeOrdinal=2; create.EngineAffinity=1;
     require(host_dispatch(&bridge, BC250_HOST_CreateContextVirtual, &create)==0);
     require(create.hContext==1 && created==1);
+    D3DKMT_HANDLE signal_objects[]={45,46}; UINT64 signal_values[]={9,10};
+    D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMGPU2 signal{};
+    signal.ObjectCount=2; signal.ObjectHandleArray=signal_objects;
+    signal.BroadcastContextCount=1; signal.BroadcastContextArray=&create.hContext;
+    signal.MonitoredFenceValueArray=signal_values;
+    require(host_dispatch(&bridge,BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==0);
+    signal.Flags.AllowFenceRewind=1;
+    require(host_dispatch(&bridge,BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)==0);
+    require(gpu_signals==2 && gpu_rewinds==1);
+    signal.Flags.SignalAtSubmission=1;
+    require(host_dispatch(&bridge,BC250_HOST_SignalSynchronizationObjectFromGpu2,&signal)<0 && gpu_signals==2);
+    require(bridge.submission_failed); bridge.submission_failed=false;
+    D3DKMT_SIGNALSYNCHRONIZATIONOBJECTFROMCPU cpu_signal{};
+    cpu_signal.ObjectCount=2; cpu_signal.ObjectHandleArray=signal_objects; cpu_signal.FenceValueArray=signal_values;
+    require(host_dispatch(&bridge,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)==0);
+    cpu_signal.Flags.AllowFenceRewind=1;
+    require(host_dispatch(&bridge,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)==0 && cpu_signals==2);
+    cpu_signal.Flags.SignalAtSubmission=1;
+    require(host_dispatch(&bridge,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)<0 && cpu_signals==2);
     D3DKMT_SUBMITCOMMAND command{}; command.Commands=4096; command.CommandLength=64;
     command.BroadcastContextCount=1; command.BroadcastContext[0]=create.hContext;
     require(host_dispatch(&bridge, BC250_HOST_SubmitCommand, &command)==0 && submitted==1);
