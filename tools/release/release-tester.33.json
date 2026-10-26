@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). Hosted Mesa uses 502cd45a (DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa aecf0012, and the D3D12 engine c75e5bd8 with dxil-spirv dcb954d5 HitObject value semantics. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
+  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). Hosted Mesa uses 502cd45a (DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa 11729f97 and WOW64 b83c092c (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine c75e5bd8 with dxil-spirv dcb954d5 HitObject value semantics. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -163,7 +163,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+      "commit": "813c026337af2a5dbb4e915d6e9551e89144f45f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -230,7 +230,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+      "commit": "813c026337af2a5dbb4e915d6e9551e89144f45f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -297,7 +297,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+      "commit": "813c026337af2a5dbb4e915d6e9551e89144f45f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -364,7 +364,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+      "commit": "813c026337af2a5dbb4e915d6e9551e89144f45f",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -989,7 +989,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "0aace3d375cd1654d2b789d43c5e2da3ceb7edb6",
+      "commit": "b83c092c17f1052f0d4e9c693e02ea9f36a5d777",
       "base": "771f84136ef41d7403ff05360e27773db6e77d8d",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1036,7 +1036,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "aecf0012472c9f68497f11f36c42fb3ddc3d5541",
+      "commit": "11729f97b546ba78e769cbc1c04ca44a5fa14e03",
       "base": "055dbb9f7595502418354b75816788e4e0461cd5",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1347,7 +1347,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "0aace3d375cd1654d2b789d43c5e2da3ceb7edb6",
+      "commit": "b83c092c17f1052f0d4e9c693e02ea9f36a5d777",
       "base": "771f84136ef41d7403ff05360e27773db6e77d8d",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1395,7 +1395,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "aecf0012472c9f68497f11f36c42fb3ddc3d5541",
+      "commit": "11729f97b546ba78e769cbc1c04ca44a5fa14e03",
       "base": "055dbb9f7595502418354b75816788e4e0461cd5",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
