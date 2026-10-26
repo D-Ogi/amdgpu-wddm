@@ -50,6 +50,26 @@ function Invoke-Bc250UmdCompiler {
     } finally {$env:CL=$previousCl;$env:_CL_=$previousTrailingCl}
 }
 
+# Standalone SDK recipes pass explicit header roots and can invoke the linker in
+# the same command. Keep compiler flags before /link and leave linker inputs intact.
+function Invoke-Bc250SdkCompiler {
+    param([string]$Exe,[string[]]$Arguments,[string]$Arch='x64',[string[]]$Roots=@())
+    $converted=@($Arguments)
+    if([IO.Path]::GetFileName($Exe) -ieq 'clang-cl.exe') {
+        $cut=[Array]::IndexOf($converted,'/link')
+        $compile=if($cut -ge 0){@($converted | Select-Object -First $cut)}else{$converted}
+        $tail=if($cut -ge 0){@($converted | Select-Object -Skip $cut)}else{@()}
+        $compile=@($compile | ForEach-Object {
+            if($_ -cmatch '^/I' -and ($_ -match '[\\/]MSVC[\\/]|[\\/]microsoft\.windows\.sdk\.cpp[\\/]')) {
+                '/imsvc'+$_.Substring(2)
+            } elseif($_ -notin @('/we4229','/we4440')) { $_ }
+        })
+        $converted=@(ConvertTo-Bc250ClangFlags -Flags $compile -Arch $Arch -Roots $Roots)+$tail
+    }
+    Invoke-Bc250UmdCompiler $Exe @converted
+    $global:LASTEXITCODE=$LASTEXITCODE
+}
+
 function Test-Bc250ClangSdk([string]$CompilerExe,[string[]]$Flags,[string]$Out) {
     $probe=Join-Path $PSScriptRoot 'umd-compiler-sdk-test.cpp'
     $obj=Join-Path $Out 'clang-sdk-probe.obj'

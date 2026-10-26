@@ -91,9 +91,13 @@ try {
     # BD-166: the two files of this build that a release ships carry their version resource from here;
     # the samples beside them are lab artifacts, which -OnlyIfShipped leaves alone.
     $stampTool = Join-Path (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path 'tools\build\version-stamp.ps1'
-    & pwsh -NoProfile -File $stampTool -Version $Version -Flavour $Flavour -Names @($outputs | ForEach-Object { Split-Path -Leaf $_ }) `
-        -OnlyIfShipped @($outputs | ForEach-Object { Join-Path $Out $_ })
-    if ($LASTEXITCODE -ne 0) { throw 'the version stamp of the shipped samples failed' }
+    # Native PowerShell -File cannot bind a string[] parameter from multiple argv
+    # values reliably. Stamp each named output in its own isolated invocation.
+    foreach ($output in $outputs) {
+        & pwsh -NoProfile -File $stampTool -Version $Version -Flavour $Flavour -Names (Split-Path -Leaf $output) `
+            -OnlyIfShipped (Join-Path $Out $output)
+        if ($LASTEXITCODE -ne 0) { throw "the version stamp failed: $output" }
+    }
     $artifacts = @($outputs | ForEach-Object {
         $path = Join-Path $Out $_
         [ordered]@{path=$path; bytes=(Get-Item -LiteralPath $path).Length; sha256=(Get-FileHash -LiteralPath $path).Hash}

@@ -1,3 +1,6 @@
+// The SDK compatibility prelude includes RPC's legacy type macro; this test
+// uses small as a local byte count and does not use RPC declarations.
+#undef small
 // test_hip_mock.cpp - layer 2 over the mock bc250hsa backend (M16 route B).
 //
 // It checks what design docs/design/m16-hip-route-b.md section 5.4 asks of this test:

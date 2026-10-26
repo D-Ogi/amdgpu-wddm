@@ -152,7 +152,7 @@ int DoShow()
             printf("            ");
             PrintGuid(key);
             if (v.vt == VT_UI4) {
-                printf(" = %u\n", v.ulVal);
+                printf(" = %lu\n", v.ulVal);
             } else if (v.vt == VT_LPWSTR) {
                 printf(" = \"%ls\"\n", v.pwszVal);
             } else {

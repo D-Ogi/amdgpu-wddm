@@ -1,5 +1,5 @@
 # Builds d3d11bench.exe without a WDK or SDK installation: headers and import libraries come from the SDK NuGet
-# packages unpacked under -Kits, the compiler from the installed Visual Studio. Same flow as
+# packages unpacked under -Kits, with an explicit compiler (clang-cl by default). Same flow as
 # tools\win\redirblt-probe\build.ps1. The tests of the Python tools run first; the build ends with --help and a SHA-256 of
 # the artifact, the receipt a lab runner pins against.
 #
@@ -9,6 +9,8 @@
 # it because the D3D11 shell has two architectures, and both clients must come from this one source (BD-099).
 
 param(
+    [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
+    [string]$MsvcReason = '',
     [Parameter(Mandatory)][string]$Kits,
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
     [string]$Out,
@@ -34,7 +36,12 @@ $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
 $cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 New-Item -ItemType Directory -Force $Out | Out-Null
-$root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
+$compilerRoot = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $Kits '..\..')).Path }
+$compilerRepo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+. (Join-Path $compilerRepo 'tools\build\umd-compiler.ps1')
+$cl = Resolve-Bc250UmdCompiler -Root $compilerRoot -Compiler $Compiler -MsvcReason $MsvcReason -Out $Out -Arch $Arch -MsvcPath $cl
+
+$root = $compilerRoot
 $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
@@ -64,14 +71,15 @@ $repro = @('/Brepro', '/FC', "/d1trimfile:$((Resolve-Path (Join-Path $here '..\.
 # BD-167: the release flavour compiles with NDEBUG, so an assert() added later is gone from the release and live in
 # the lab build.
 $releaseDefine = @(if ($Flavour -ne 'lab') { '/DNDEBUG' })
-& $cl @repro @releaseDefine @('/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/Z7', '/DUNICODE', '/D_UNICODE',
+$compileArgs = $repro + $releaseDefine + @('/DNOMINMAX=', '/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/Z7', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\d3d11bench.obj",
     "/Fe$Out\d3d11bench.exe", (Join-Path $here 'd3d11bench.cpp'), '/link', '/Brepro',
     # The shipped tool gets a PDB (archived beside the candidate, named in the manifest by GUID and age).
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
-    'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib') |
+    'd3d11.lib', 'dxgi.lib', 'd3dcompiler.lib', 'user32.lib', 'psapi.lib', 'bcrypt.lib', 'kernel32.lib')
+Invoke-Bc250SdkCompiler -Exe $cl -Arguments $compileArgs -Arch $Arch -Roots @($compilerRepo) |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 

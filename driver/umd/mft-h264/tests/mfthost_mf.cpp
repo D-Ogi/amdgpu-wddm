@@ -369,7 +369,7 @@ namespace {
 
 // The class factory MFTRegisterLocal needs. Same object as the DLL's, built here so the test
 // exercises the registration path and not a private back door.
-class TestFactory : public IClassFactory {
+class TestFactory final : public IClassFactory {
 public:
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override
     {

@@ -11,7 +11,7 @@
 
 namespace {
 
-class ClassFactory : public IClassFactory {
+class ClassFactory final : public IClassFactory {
 public:
     ClassFactory() { bc250h264::ModuleLock(); }
 

@@ -40,7 +40,6 @@ namespace {
 std::mutex g_log_lock;
 std::FILE* g_stream = nullptr;     // nullptr with g_on set means stderr
 bool       g_on = false;
-bool       g_own_stream = false;
 uint32_t   g_level = BC250HSA_LOG_INFO;
 
 // BD-167: the switch is a lab build's (build-runtime.ps1 -Lab). A release runtime reads neither variable, installs
@@ -127,7 +126,6 @@ void start() {
                                  " for appending; the log goes to the error stream\n", text);
         } else {
             g_stream = file;
-            g_own_stream = true;
         }
     }
     g_on = true;

@@ -92,7 +92,7 @@ struct DeviceLease {
 // taken before the encoder exists has nothing to compare against.
 HRESULT LeaseDeviceCheck(IUnknown* leased, ID3D11Device* encoder);
 
-class Bc250H264Mft : public IMFTransform,
+class Bc250H264Mft final : public IMFTransform,
                      public IMFMediaEventGenerator,
                      public IMFShutdown,
                      public IMFAttributes,
@@ -287,7 +287,6 @@ private:
     bool m_lockInit = false;
     bool m_shutdown = false;
     bool m_streaming = false;
-    bool m_haveOutput = false;
     // True while a METransformNeedInput we queued has not been answered by a ProcessInput. The
     // asynchronous contract gives one credit per free input slot and we hold exactly one slot, so
     // this stops a second credit being issued; a drain or a flush makes the client drop whatever

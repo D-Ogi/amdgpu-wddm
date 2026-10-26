@@ -1,4 +1,6 @@
 param(
+    [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
+    [string]$MsvcReason = '',
     [Parameter(Mandatory)][string]$Kits,
     [string]$Out = "$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path })\scratch\m15\d3d12caps\build",
     [string]$KitVersion = '10.0.26100.0',
@@ -29,7 +31,12 @@ $msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object N
 $cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
 $dumpbin = Join-Path $msvc.FullName 'bin\Hostx64\x64\dumpbin.exe'
 New-Item -ItemType Directory -Force $Out | Out-Null
-$root = (Resolve-Path (Join-Path $here '..\..\..\..')).Path
+$compilerRoot = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $Kits '..\..')).Path }
+$compilerRepo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+. (Join-Path $compilerRepo 'tools\build\umd-compiler.ps1')
+$cl = Resolve-Bc250UmdCompiler -Root $compilerRoot -Compiler $Compiler -MsvcReason $MsvcReason -Out $Out -Arch $Arch -MsvcPath $cl
+
+$root = $compilerRoot
 $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
@@ -71,7 +78,7 @@ if ($Tool -eq 'd3d12sm68') {
 }
 # d3d12.dll and dxgi.dll are loaded at run time by name, so that an application-local runtime (the per-application
 # route) is used exactly as the game would use it; neither import library is linked.
-& $cl @repro @($variant + '/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/Z7', '/DUNICODE', '/D_UNICODE',
+$compileArgs = $repro + @($variant + '/nologo', '/W4', '/we4229', '/we4440', '/WX', '/O2', '/MT', '/EHsc', '/std:c++20', '/Z7', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$name.obj",
     "/Fe$Out\$name.exe", (Join-Path $here "$Tool.cpp"), '/link', '/Brepro',
@@ -80,7 +87,8 @@ if ($Tool -eq 'd3d12sm68') {
     # written beside the tool and the linker still produces the program database.
     '/DEBUG', '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
-    'version.lib', 'kernel32.lib') |
+    'version.lib', 'kernel32.lib')
+Invoke-Bc250SdkCompiler -Exe $cl -Arguments $compileArgs -Arch $Arch -Roots @($compilerRepo) |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.cpp$|^\s*Creating library|\.exp$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 

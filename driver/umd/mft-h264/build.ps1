@@ -1,6 +1,6 @@
 # Builds the BC-250 H.264 encoder MFT and its host test without a WDK or SDK installation: headers and
-# import libraries come from the SDK NuGet packages under -Kits, the compiler from the installed Visual
-# Studio. Same flow as tools\win\d3d11bench\build.ps1.
+# import libraries come from the SDK NuGet packages under -Kits. The compiler is explicit (clang-cl by default);
+# Visual Studio supplies its CRT and linker. Same flow as tools\win\d3d11bench\build.ps1.
 #
 #   pwsh driver\umd\mft-h264\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget
 #
@@ -22,6 +22,8 @@
 # The workspace root: BC250_ROOT when the caller set it, else four levels up from this script
 # (driver\umd\mft-h264 -> the repository -> the workspace). Nothing of the build lands on C:.
 param(
+    [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
+    [string]$MsvcReason = '',
     [string]$Kits,
     [string]$Out,
     [string]$KitVersion = '10.0.26100.0',
@@ -59,6 +61,11 @@ $link = Join-Path $msvc.FullName 'bin\Hostx64\x64\link.exe'
 $dumpbin = Join-Path $msvc.FullName 'bin\Hostx64\x64\dumpbin.exe'
 
 New-Item -ItemType Directory -Force $Out | Out-Null
+$compilerRoot = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $Kits '..\..')).Path }
+$compilerRepo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+. (Join-Path $compilerRepo 'tools\build\umd-compiler.ps1')
+$cl = Resolve-Bc250UmdCompiler -Root $compilerRoot -Compiler $Compiler -MsvcReason $MsvcReason -Out $Out -Arch 'x64' -MsvcPath $cl
+
 New-Item -ItemType Directory -Force $gen | Out-Null
 # Nothing of ours lands on drive C:, including the compiler's temporary files.
 $env:TEMP = Join-Path $root 'scratch\tmp'; $env:TMP = $env:TEMP
@@ -137,7 +144,7 @@ $libs = @('mfplat.lib', 'mfuuid.lib', 'mf.lib', 'mfreadwrite.lib', 'd3d11.lib', 
           'bcrypt.lib', 'wmcodecdspuuid.lib')
 
 function Invoke-Tool([string]$exe, [string[]]$toolArgs, [string]$what) {
-    $log = & $exe @toolArgs 2>&1
+    $log = if ($exe -eq $cl) { Invoke-Bc250SdkCompiler -Exe $exe -Arguments $toolArgs -Roots @($compilerRepo) 2>&1 } else { & $exe @toolArgs 2>&1 }
     $log | ForEach-Object { "$_" } |
         Where-Object { $_ -and $_ -notmatch '^Microsoft \(R\)|^Copyright \(C\)|^\s*$|^\S+\.cpp$|^   Creating library' } |
         ForEach-Object { Write-Host "  $_" }

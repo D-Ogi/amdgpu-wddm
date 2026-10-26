@@ -4,7 +4,7 @@
 # Design: docs/design/m16-hip-route-b.md, sections 4, 5 and 9.
 #
 # Nothing is installed and nothing is written to drive C:. The compiler comes from the
-# installed Visual Studio toolset, the headers and import libraries from the SDK NuGet packages
+# explicitly selected toolset (clang-cl by default), the headers and import libraries from the SDK NuGet packages
 # under -Kits, exactly as tools\win\monfence\build.ps1 does. The portable AMDGPU clang is used
 # for device-side artifacts only (the import library through llvm-dlltool, and the HIP sample);
 # the script says so and goes on when it is absent.
@@ -33,6 +33,8 @@
 # both as itself and as worktrees under scratch, so the depth from this script to the workspace
 # is not fixed: the default walks up until it finds the toolchain, as build.ps1 of layer 1 does.
 param(
+    [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
+    [string]$MsvcReason = '',
     [string]$Root = $(
         if ($env:BC250_ROOT) { $env:BC250_ROOT } else {
             $probe = $PSScriptRoot
@@ -50,6 +52,7 @@ param(
     [string]$DeviceLibPath = '',
     [switch]$DisableGpu,
     [switch]$SkipClang,
+    [switch]$BuildBlas,
     [switch]$SkipTests,
     [switch]$Rebuild,
     # BD-166: the version resource this build writes into the file it ships, as its last step. -Version is the
@@ -82,6 +85,11 @@ $cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
 $dumpbin = Join-Path $msvc.FullName 'bin\Hostx64\x64\dumpbin.exe'
 if (-not (Test-Path $cl)) { throw "cl.exe not found at $cl" }
 New-Item -ItemType Directory -Force $Out | Out-Null
+$compilerRoot = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $Kits '..\..')).Path }
+$compilerRepo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+. (Join-Path $compilerRepo 'tools\build\umd-compiler.ps1')
+$cl = Resolve-Bc250UmdCompiler -Root $compilerRoot -Compiler $Compiler -MsvcReason $MsvcReason -Out $Out -Arch 'x64' -MsvcPath $cl
+
 New-Item -ItemType Directory -Force (Join-Path $Out 'mock') | Out-Null
 # Compiler temporaries stay off drive C: of the development PC.
 $env:TEMP = Join-Path $Root 'scratch\tmp'; $env:TMP = $env:TEMP
@@ -135,7 +143,7 @@ $warn = $warn + @($labFlag)
 function Invoke-Cl([string[]]$Arguments, [string]$What) {
     $env:INCLUDE = ''; $env:LIB = ''
     $spoken = @()
-    & $cl @Arguments | ForEach-Object {
+    Invoke-Bc250SdkCompiler -Exe $cl -Arguments $Arguments -Roots @($compilerRepo) | ForEach-Object {
         $spoken += $_
         if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.(c|cpp)$|^\s+Creating library') { Write-Host "  $_" }
     }
@@ -696,4 +704,11 @@ foreach ($file in @((Join-Path $Out 'mock\amdhip64.dll'), (Join-Path $Out 'amdhi
     $item = Get-Item $file
     $label = $item.FullName.Substring($Out.Length).TrimStart('\')
     '{0,9}  {1,-26}  sha256 {2}' -f $item.Length, $label, (Get-FileHash -Algorithm SHA256 $item.FullName).Hash
+}
+
+if ($BuildBlas) {
+    if ($SkipClang) { throw '-BuildBlas requires the HIP device compiler' }
+    & (Join-Path $PSScriptRoot 'build-rebuilt-controls.ps1') -Root $Root -Out (Join-Path $Out 'controls') `
+        -ImportLibrary (Join-Path $Out 'amdhip64.lib') -ClangBin $ClangBin -Version $Version -Flavour $Flavour
+    if ($LASTEXITCODE -ne 0) { throw 'HIPBLAS build failed' }
 }
