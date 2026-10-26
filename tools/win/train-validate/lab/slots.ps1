@@ -50,8 +50,10 @@ $ok = 0; $bad = 0; $absent = 0
 $rows = @()
 foreach ($e in ($m.files | Where-Object { $_.path -like 'payload/*' } | Sort-Object path)) {
     $rel = $e.path.Substring('payload/'.Length) -replace '/', '\'
-    # the kernel driver goes to the driver store, not under the install root
-    if ($rel -like 'kmd\*') { continue }
+    # These have no install-root destination (installer/common.ps1,
+    # Get-InstalledPathOfPackageFile): KMD/firmware use the driver store,
+    # the certificate goes to certificate stores and the VC runtime is executed.
+    if ($rel -match '^(kmd|firmware|cert|redist)\\') { continue }
     $p = Join-Path $inst $rel
     if (-not (Test-Path -LiteralPath $p)) { $rows += ('ABSENT {0,-44} want {1}' -f $rel, $e.sha256.Substring(0,8)); $absent++; continue }
     $got = (Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash

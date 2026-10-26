@@ -27,7 +27,14 @@ $health = (& $cli health read 2>&1) -join ' '
 if ($health -notmatch 'flags=(15|31) ') { $bad += 'start health is not flags=15 (31 with QUIET)' }
 $p = Read-DriverStateValues -Cli $cli
 "params: CuMode=$($p.CuMode) CuModeLastApplied=$($p.CuModeLastApplied) CuModeConfirmed=$($p.CuModeConfirmed) DpmMode=$($p.DpmMode) DpmMaxMHz=$($p.DpmMaxMHz) DpmIdleMHz=$($p.DpmIdleMHz) HangRecoveryMode=$($p.HangRecoveryMode)"
-if ([int]$p.CuModeConfirmed -ne $Cu) { $bad += "CuModeConfirmed is $($p.CuModeConfirmed), wanted $Cu" }
+# CuModeConfirmed records an encoded unlocked request, not the current CU count.
+# A stock start does not rewrite it (cumode.c / bc250_cu_decide). Require the
+# applied count and healthy start above; an unlocked 40-CU start also needs its confirmation.
+if ($null -eq $p.CuModeLastApplied -or [int]$p.CuModeLastApplied -ne $Cu) {
+    $bad += "CuModeLastApplied is $($p.CuModeLastApplied), wanted $Cu"
+}
+if ($Cu -eq 40 -and [uint32]$p.CuModeConfirmed -ne 40) { $bad += '40-CU request is not confirmed' }
+if ($null -ne $p.CuModePending -and [uint32]$p.CuModePending -ne 0) { $bad += 'CU request is still pending' }
 if ($null -ne $p.DpmMode -and [int]$p.DpmMode -eq 0) { $bad += 'DpmMode is 0: the clock control is switched off (a bugcheck leaves it so)' }
 $dpm = (((& $cli dpm read 2>&1) -join ' | ') -split '\|' | Select-Object -Last 1).Trim()
 "dpm: $dpm"
