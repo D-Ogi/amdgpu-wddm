@@ -633,7 +633,7 @@ function Update-Measure {
 try {
     # The shared trees, once, before the builds that read them.
     foreach ($s in $planData.shared_trees) {
-        if (Test-Path -LiteralPath $s.path) { Remove-Item -LiteralPath $s.path -Recurse -Force }
+        Remove-SharedBuildTree $ctx $s.repo $s.commit $s.path $Work
         New-Tree $ctx $s.repo $s.commit $s.path
         $sharedBytes += Get-TreeBytes $s.path
     }

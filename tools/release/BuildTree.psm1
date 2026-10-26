@@ -202,5 +202,54 @@ function Remove-Trees($Context) {
     $Context.Trees.Clear()
 }
 
+function Remove-SharedBuildTree($Context, [string]$Name, [string]$Commit, [string]$Dest, [string]$WorkRoot) {
+    $rootPath = [IO.Path]::GetFullPath($WorkRoot).TrimEnd('\', '/')
+    $destPath = [IO.Path]::GetFullPath($Dest).TrimEnd('\', '/')
+    if (-not $destPath.StartsWith($rootPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Shared tree is outside the build work directory: $destPath"
+    }
+    # Refuse redirection through junctions as well as lexical path escapes.
+    $cursor = $destPath
+    while ($cursor) {
+        if (Test-Path -LiteralPath $cursor) {
+            if ((Get-Item -LiteralPath $cursor -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "Shared tree path traverses a reparse point: $cursor"
+            }
+        }
+        $cursor = [IO.Path]::GetDirectoryName($cursor)
+    }
+    $checkout = Get-Checkout $Context $Name $Commit
+    Invoke-Locked $Context {
+        $listing = @(& git -C $checkout worktree list --porcelain)
+        if ($LASTEXITCODE) { throw 'Cannot enumerate registered worktrees' }
+        $registered = $false
+        $inTarget = $false
+        $locked = $false
+        foreach ($line in $listing) {
+            if ($line.StartsWith('worktree ')) {
+                $p = [IO.Path]::GetFullPath($line.Substring(9)).TrimEnd('\', '/')
+                $inTarget = $p.Equals($destPath, [StringComparison]::OrdinalIgnoreCase)
+                if ($inTarget) { $registered = $true }
+            } elseif ($inTarget -and ($line -eq 'locked' -or $line.StartsWith('locked '))) {
+                $locked = $true
+            }
+        }
+        if ($locked) { throw "Shared worktree is locked: $destPath" }
+        if (-not $registered) {
+            if (Test-Path -LiteralPath $destPath) { throw "Unregistered directory at shared tree destination: $destPath" }
+            return
+        }
+        if (Test-Path -LiteralPath $destPath) {
+            $dirty = @(& git -C $destPath status --porcelain --untracked-files=all)
+            if ($LASTEXITCODE -or $dirty.Count) { throw "Shared tree has changes or cannot be inspected: $destPath" }
+            & git -C $checkout worktree remove -- $destPath 2>&1 | Out-Null
+        } else {
+            # Delete only this stale registration, never prune unrelated worktrees.
+            & git -C $checkout worktree remove --force -- $destPath 2>&1 | Out-Null
+        }
+        if ($LASTEXITCODE) { throw "Could not remove shared worktree: $destPath" }
+    }
+}
+
 Export-ModuleMember -Function New-BuildContext, Invoke-Locked, Get-Checkout, New-Tree, Initialize-Submodules,
-    Export-Input, Resolve-Inputs, Resolve-ToolPath, Expand-Arg, Get-Digest, Remove-Trees
+    Export-Input, Resolve-Inputs, Resolve-ToolPath, Expand-Arg, Get-Digest, Remove-Trees, Remove-SharedBuildTree
