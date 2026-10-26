@@ -517,9 +517,11 @@ class ReleaseFlavour(unittest.TestCase):
         self.assertEqual(sum(len(t) for t in tables), len(used), "a recipe in two tables")
         self.assertTrue(all(g.NOT_COMPILED.values()) and all(r for _, r in g.NDEBUG_PENDING.values()),
                         "an entry without a reason")
-        # build-rebuilt-controls.ps1 has bc250hipblas.dll compiled by build-hipblas.ps1, so both files are checked.
+        # The runtime recipe delegates samples and hipBLAS; all three compiling files are checked.
+        self.assertIn(("compute/hip/build-rebuilt-controls.ps1", "clang"),
+                      g.RELEASE_COMPILES["compute/hip/build-runtime.ps1"])
         self.assertIn(("compute/hipblas/build-hipblas.ps1", "clang"),
-                      g.RELEASE_COMPILES["compute/hip/build-rebuilt-controls.ps1"])
+                      g.RELEASE_COMPILES["compute/hip/build-runtime.ps1"])
         # The two shells compile with one flag set, in code and not only in a comment: the D3D11 shell built at /Od
         # until tester.31.
         for shell in ("tools/build/build-umd-d3d12.ps1", "tools/build/build-umd-dxvk.ps1"):

@@ -320,9 +320,9 @@ RELEASE_COMPILES = {
     'tools/win/d3d11bench/build.ps1': (('tools/win/d3d11bench/build.ps1', 'cl'),),
     'tools/win/d3d12caps/build.ps1': (('tools/win/d3d12caps/build.ps1', 'cl'),),
     'driver/state/installer-build.ps1': (('driver/state/installer-build.ps1', 'cl'),),
-    'compute/hip/build-runtime.ps1': (('compute/hip/build-runtime.ps1', 'cl'),),
-    'compute/hip/build-rebuilt-controls.ps1': (('compute/hip/build-rebuilt-controls.ps1', 'clang'),
-                                               ('compute/hipblas/build-hipblas.ps1', 'clang')),
+    'compute/hip/build-runtime.ps1': (('compute/hip/build-runtime.ps1', 'cl'),
+                                    ('compute/hip/build-rebuilt-controls.ps1', 'clang'),
+                                    ('compute/hipblas/build-hipblas.ps1', 'clang')),
     'driver/kmd/build.ps1': (('driver/kmd/build.ps1', 'cl'),),
     'tools/build/build-umd-router.ps1': (('tools/build/build-umd-router.ps1', 'cl'),),
 }
