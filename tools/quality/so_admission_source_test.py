@@ -45,8 +45,13 @@ def generate(source):
     prefix = '''#include <cstdint>
 #include <cstdio>
 #include <vector>
+#ifdef _WIN32
+// The release build force-includes the Windows headers, so take HRESULT and its codes from them.
+#include <windows.h>
+#else
 using UINT=unsigned; using HRESULT=int32_t;
 constexpr HRESULT E_INVALIDARG=(HRESULT)0x80070057, E_NOINTERFACE=(HRESULT)0x80004002;
+#endif
 constexpr UINT D3D12_SO_NO_RASTERIZED_STREAM=~0u, D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES=2048;
 enum { ENUMS };
 struct State { std::vector<UINT> strides; UINT value; };
