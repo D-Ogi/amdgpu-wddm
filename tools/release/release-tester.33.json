@@ -853,7 +853,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+      "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -929,7 +929,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
+      "note": "mesa-amdgpu-wddm cf46ce17 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs, and the GS copy shader exports the stream 0 position when no stream is rasterized. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "hosted-x86-rel",
@@ -937,7 +937,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+      "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -981,7 +981,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
+      "note": "mesa-amdgpu-wddm cf46ce17 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs, and the GS copy shader exports the stream 0 position when no stream is rasterized. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "wow64-x86-rel",
@@ -1209,7 +1209,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+      "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1286,7 +1286,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
+      "note": "mesa-amdgpu-wddm cf46ce17 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs, and the GS copy shader exports the stream 0 position when no stream is rasterized. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "hosted-x86-lab",
@@ -1294,7 +1294,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+      "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1339,7 +1339,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
+      "note": "mesa-amdgpu-wddm cf46ce17 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs, and the GS copy shader exports the stream 0 position when no stream is rasterized. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "wow64-x86-lab",
