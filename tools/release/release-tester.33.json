@@ -1025,7 +1025,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The x86 system Vulkan row remains on wow64 0aace3d3, with upstream Mesa a0ef4c88 merged. The x64 system row is aecf0012, which adds the BD-167 environment-read helper to 17b967ef. That change removes RADV_BC250_ACE_QUEUES lookup in the release flavour; an unset lab environment and the release default both follow the KMD compute-node capability. It does not port the x64 DXGI present or compute work to x86. The retained difference is deliberate: the BD-197 present route, BD-217 fix, compute queue and later x64 work have no measured x86 build. The x86 row passed the retained 864-case fill check; x64 still requires the final installed Vulkan and compute gates. Neither result proves feature parity. This note covers only 0aace3d3 and aecf0012 and must be reviewed when either pin changes."
+          "pair_skew": "The x86 system Vulkan row 20d7c8c9 is the wow64 ICD line 0aace3d3 (upstream Mesa a0ef4c88) with the ray-query lifetime, inverse trigonometry and GFX10 late-Z writer fixes of the x64 line. The x64 system row ad130cc2 has the same three fixes and in addition the release-flavour environment-read helper (aecf0012) and the bounded log sink of the system diagnostics (6e09fe76). The release default of both builds follows the KMD compute-node capability; the x86 build does not port the x64 DXGI present or compute work."
         }
       ],
       "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611"
@@ -1384,7 +1384,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The x86 system Vulkan row remains on wow64 0aace3d3, with upstream Mesa a0ef4c88 merged. The x64 system row is aecf0012, which adds the BD-167 environment-read helper to 17b967ef. That change removes RADV_BC250_ACE_QUEUES lookup in the release flavour; an unset lab environment and the release default both follow the KMD compute-node capability. It does not port the x64 DXGI present or compute work to x86. The retained difference is deliberate: the BD-197 present route, BD-217 fix, compute queue and later x64 work have no measured x86 build. The x86 row passed the retained 864-case fill check; x64 still requires the final installed Vulkan and compute gates. Neither result proves feature parity. This note covers only 0aace3d3 and aecf0012 and must be reviewed when either pin changes."
+          "pair_skew": "The x86 system Vulkan row 20d7c8c9 is the wow64 ICD line 0aace3d3 (upstream Mesa a0ef4c88) with the ray-query lifetime, inverse trigonometry and GFX10 late-Z writer fixes of the x64 line. The x64 system row ad130cc2 has the same three fixes and in addition the release-flavour environment-read helper (aecf0012) and the bounded log sink of the system diagnostics (6e09fe76). The release default of both builds follows the KMD compute-node capability; the x86 build does not port the x64 DXGI present or compute work."
         }
       ],
       "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611"
