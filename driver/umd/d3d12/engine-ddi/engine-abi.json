@@ -5,8 +5,8 @@
   "header_revision": "Reusable partial graphics programs, ABI 1.9",
   "repository": "vkd3d-proton fork of this project",
   "branch": "",
-  "commit": "f1501f9252096785cdda3c09b61932a76eda9491",
-  "source_checkout": "scratch/ddi-ladder/partial-engine-wt",
+  "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+  "source_checkout": "scratch/forksync/vkd3d-proton",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
   "header_sha256": "618523d5d2da11082eb88bedfa6455c7e6e9cdb4fb4ceda86b44ccf35f65d404",
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
@@ -14,14 +14,14 @@
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
   "flavours": {
     "release": {
-      "engine_dll_dir": "",
-      "engine_dll_sha256": "pending",
-      "engine_dll_recipe": "Release ABI 1.9 build pending; no release DLL hash claimed."
+      "engine_dll_dir": "scratch/build-train/tester.33/artifacts/release/engine12-x64-rel",
+      "engine_dll_sha256": "0328886aa4d16e22d4b20ddaac907318a6ea9a61c5ae48c9a1e1ad239c939b65",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 216c5d9080d4983fb7986201e18fef690c976d18"
     },
     "lab": {
-      "engine_dll_dir": "scratch/ddi-ladder/partial-engine-abi14-build-r1/libs/ddi",
-      "engine_dll_sha256": "2290a2b6c51072f252761c460804fef7f667318118e62e2839c8183bc1ee14cd",
-      "engine_dll_recipe": "partial-tir-scope-cache-engine-build.log"
+      "engine_dll_dir": "scratch/build-train/tester.33/artifacts/lab/engine12-x64-lab",
+      "engine_dll_sha256": "c28e2408408abb556e83e64ba4483d30502f80ef75412766197e7c98286bdbfc",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 216c5d9080d4983fb7986201e18fef690c976d18"
     }
   }
 }
