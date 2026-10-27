@@ -681,7 +681,7 @@ HRESULT compile_linked_exports(GenericStateObject& object, const D3D12DDI_GENERI
     std::vector<std::shared_ptr<Program>> libraries;
     std::map<D3D12DDI_STATE_SUBOBJECT_TYPE, std::shared_ptr<State>> states;
     std::set<const PartialProgram*> seen;
-    bool has_preraster = false, late_input_allowed = true;
+    bool has_preraster = false, late_input_allowed = true, excludes_pixel = false;
     bool has_pixel = false, late_blend_allowed = true;
     bool late_rt_formats_allowed = true;
     bool late_sample_mask_allowed = true;
@@ -738,7 +738,7 @@ HRESULT compile_linked_exports(GenericStateObject& object, const D3D12DDI_GENERI
             if (kind == 39) continue; // Validated against the PS at collection creation.
             if (state->type == D3D12DDI_STATE_SUBOBJECT_TYPE_BLEND) part_blend = state.get();
             if (state->type == D3D12DDI_STATE_SUBOBJECT_TYPE_RASTERIZER) part_raster = state.get();
-            if (kind == 40) { part_late_input = !!state->preraster_fields.late_input_layout; continue; }
+            if (kind == 40) { part_late_input = !!state->preraster_fields.late_input_layout; excludes_pixel |= !!state->preraster_fields.exclude_ps; continue; }
             if (kind == 41) {
                 has_pixel_fields = true;
                 const auto& f = state->pixel_fields;
@@ -802,6 +802,10 @@ HRESULT compile_linked_exports(GenericStateObject& object, const D3D12DDI_GENERI
             late_depth_stencil_allowed = late_depth_stencil_allowed && part_late_depth_stencil;
         }
     }
+    if (excludes_pixel && has_pixel) return E_INVALIDARG;
+    // With no PS partial there are no PS compile-time defaults to override.
+    // Final depth/stencil and output state still apply to depth-only rendering.
+    const bool depth_only = has_preraster && !has_pixel;
     if (explicit_output && (!linked_pixel ||
             !partial::output_linkage_matches_pixel(*explicit_output, linked_pixel->metadata)))
         return E_INVALIDARG;
@@ -814,31 +818,31 @@ HRESULT compile_linked_exports(GenericStateObject& object, const D3D12DDI_GENERI
         const auto& state = found->second;
         switch (state->type) {
         case D3D12DDI_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT:
-            if (!has_pixel || !late_depth_format_allowed) return E_INVALIDARG;
+            if ((!depth_only && (!has_pixel || !late_depth_format_allowed))) return E_INVALIDARG;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL:
-            if (!has_pixel || !late_depth_stencil_allowed) return E_INVALIDARG;
+            if ((!depth_only && (!has_pixel || !late_depth_stencil_allowed))) return E_INVALIDARG;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_SAMPLE_DESC:
-            if (!has_pixel || !late_sample_desc_allowed || !state->samples.Count ||
+            if ((!depth_only && (!has_pixel || !late_sample_desc_allowed)) || !state->samples.Count ||
                     state->samples.Count > 64 || (state->samples.Count & (state->samples.Count - 1)))
                 return E_INVALIDARG;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_RASTERIZER:
-            if (!has_pixel || !late_rasterizer_allowed ||
+            if (!depth_only && (!has_pixel || !late_rasterizer_allowed ||
                     static_cast<UINT>(state->raster.LineRasterizationMode) != pixel_line_mode ||
-                    state->raster.ForcedSampleCount != pixel_forced_samples) return E_INVALIDARG;
+                    state->raster.ForcedSampleCount != pixel_forced_samples)) return E_INVALIDARG;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_SAMPLE_MASK:
-            if (!has_pixel || !late_sample_mask_allowed) return E_INVALIDARG;
+            if ((!depth_only && (!has_pixel || !late_sample_mask_allowed))) return E_INVALIDARG;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS:
-            if (!has_pixel || !late_rt_formats_allowed || state->formats.NumRenderTargets > 8)
+            if ((!depth_only && (!has_pixel || !late_rt_formats_allowed)) || state->formats.NumRenderTargets > 8)
                 return E_INVALIDARG;
             break;
         case D3D12DDI_STATE_SUBOBJECT_TYPE_BLEND:
-            if (!has_pixel || !late_blend_allowed ||
-                    !!state->blend.AlphaToCoverageEnable != pixel_alpha_to_coverage) return E_INVALIDARG;
+            if (!depth_only && (!has_pixel || !late_blend_allowed ||
+                    !!state->blend.AlphaToCoverageEnable != pixel_alpha_to_coverage)) return E_INVALIDARG;
             // SRC1 factors require a PS compiled with dual-source exports.
             for (const auto& rt : state->blend.RenderTarget) if (rt.BlendEnable) {
                 const auto dual = [](D3D12_BLEND factor) {
