@@ -806,8 +806,10 @@ HRESULT compile_linked_exports(GenericStateObject& object, const D3D12DDI_GENERI
     // With no PS partial there are no PS compile-time defaults to override.
     // Final depth/stencil and output state still apply to depth-only rendering.
     const bool depth_only = has_preraster && !has_pixel;
-    if (explicit_output && (!linked_pixel ||
-            !partial::output_linkage_matches_pixel(*explicit_output, linked_pixel->metadata)))
+    // Producer linkage was validated when the partial was compiled. With no
+    // pixel stage there is no consumer signature to match (including depth-only MS).
+    if (explicit_output && linked_pixel &&
+            !partial::output_linkage_matches_pixel(*explicit_output, linked_pixel->metadata))
         return E_INVALIDARG;
     if (representative_mesh && (!linked_mesh ||
             !partial::representative_outputs_match(representative_mesh->metadata, linked_mesh->metadata)))
