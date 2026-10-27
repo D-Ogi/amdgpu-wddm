@@ -2,7 +2,7 @@
 <title>D3D12 user-mode DDI: 187 of 215 slots done (86.98%)</title>
 <rect x="0.5" y="0.5" width="859" height="423" rx="6" fill="#161b22" stroke="#30363d"/>
 <text x="10" y="22" font-size="16" font-weight="600" fill="#e6edf3">D3D12 user-mode DDI: 187 of 215 slots done (86.98%)</text>
-<text x="10" y="39" font-size="12" fill="#9198a1">Tables given to the D3D12 runtime at DDI build 0120. Done: the function of the slot does work. A fail-safe entry is not done.</text>
+<text x="10" y="39" font-size="12" fill="#9198a1">Tables given to the D3D12 runtime at DDI build 0122. Done: the function of the slot does work. A fail-safe entry is not done.</text>
 <rect x="11.5" y="47.5" width="473.65" height="327" rx="3" fill="#161b22" stroke="#30363d"/>
 <g><title>Device core: 110/122</title>
 <rect x="13.5" y="49.5" width="33.55" height="35.89" fill="#2ea043" stroke="#161b22" stroke-width="0.75"><title>pfnCheckFormatSupport: done - does work</title></rect>

@@ -812,19 +812,22 @@ def kmd_metric(kits: Path | None, prior: dict | None) -> dict:
 def offered_build(ladder: str, htext: str | None, prior_build: str | None) -> str | None:
     """The newest DDI build the shell offers: native12::kDdiMax of ddi-ladder.h, as the header that this script reads
     selects it. Without the header (no --kits), the build that status.json records."""
-    m = re.search(r"#\s*if\s+defined\((\w+)\)\s*\n(?:(?!#\s*(?:if|else|endif)).*\n)*?"
-                  r"inline\s+constexpr\s+unsigned\s+kDdiMax\s*=\s*(\w+)\s*;\s*\n#\s*else\s*\n"
-                  r"inline\s+constexpr\s+unsigned\s+kDdiMax\s*=\s*(\d+)\s*;", ladder)
-    if not m:
+    # One "#if defined(<macro>) ... #else ... #endif" block without nested conditionals sets kDdiMax in both
+    # branches, to a number or to a constant of the same branch (for example kDdiMax=kDdiDefault).
+    body = r"((?:(?!#\s*(?:if|else|endif)).*\n)*?)"
+    m = re.search(r"#\s*if\s+defined\((\w+)\)\s*\n" + body + r"#\s*else\s*\n" + body + r"#\s*endif", ladder)
+    if not m or not all(re.search(r"\bkDdiMax\s*=", b) for b in (m.group(2), m.group(3))):
         raise SystemExit("status_map: kDdiMax not found in driver/umd/d3d12/ddi-ladder.h; "
                          "the source layout changed, update this script")
     if htext is None:
         return prior_build
-    value = m.group(2) if re.search(r"#\s*define\s+" + m.group(1) + r"\b", htext) else m.group(3)
-    if not value.isdigit():
-        named = re.search(r"inline\s+constexpr\s+unsigned\s+" + value + r"\s*=\s*(\d+)\s*;", ladder)
-        if not named:
+    branch = m.group(2) if re.search(r"#\s*define\s+" + m.group(1) + r"\b", htext) else m.group(3)
+    value, seen = "kDdiMax", set()
+    while not value.isdigit():
+        named = re.search(r"inline\s+constexpr\s+unsigned\s+" + value + r"\s*=\s*(\w+)\s*;", branch)
+        if not named or value in seen:
             raise SystemExit(f"status_map: {value} not found in driver/umd/d3d12/ddi-ladder.h")
+        seen.add(value)
         value = named.group(1)
     return f"{int(value):04d}"
 

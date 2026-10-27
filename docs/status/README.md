@@ -12,7 +12,7 @@ Slots of `DRIVER_INITIALIZATION_DATA` (`km/dispmprt.h`, WDK 10.0.26100) up to WD
 
 <img src="d3d12-ddi.svg" width="860" alt="Treemap of the D3D12 user-mode DDI slots">
 
-Tables at DDI build 0120: `D3D12DDI_ADAPTERFUNCS`, `D3D12DDI_DEVICE_FUNCS_CORE_0088`, `D3D12DDI_COMMAND_LIST_FUNCS_3D_0092`, `D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001`, `D3D12DDI_RENDER_PASS_FUNCS_0053`, `D3D12DDI_EXTENDED_FEATURES_FUNCS_0021`, `D3D12DDI_EXTENDED_FEATURES_FUNCS_0096` (for command lists, the graphics table). 10 of the missing slots hold a fail-safe entry of engine-ddi.
+Tables at DDI build 0122: `D3D12DDI_ADAPTERFUNCS`, `D3D12DDI_DEVICE_FUNCS_CORE_0088`, `D3D12DDI_COMMAND_LIST_FUNCS_3D_0092`, `D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001`, `D3D12DDI_RENDER_PASS_FUNCS_0053`, `D3D12DDI_EXTENDED_FEATURES_FUNCS_0021`, `D3D12DDI_EXTENDED_FEATURES_FUNCS_0096` (for command lists, the graphics table). 10 of the missing slots hold a fail-safe entry of engine-ddi.
 
 ## Counting rule
 
