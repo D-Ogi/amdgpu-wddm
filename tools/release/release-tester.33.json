@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). All Mesa rows include the GFX10 late-Z helper coverage repair, including coverage input retention and discard state. Hosted Mesa uses a05289ed (DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa ad130cc2 (bounded diagnostic logging) and WOW64 20d7c8c9 (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine db6d7de0 with dxil-spirv fcd06d03 HitObject value semantics and exact native-half structured bounds/dimensions. The D3D12 shell uses 5aa711e5 for tight reserved-resource alignment and validated Generic Programs collection associations. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
+  "note": "tester.33 final component set. Each row records the exact source, recipe, architecture and flavour. The KMD, D3D12 shell, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). All Mesa rows include the GFX10 late-Z helper coverage repair, including coverage input retention and discard state. Hosted Mesa uses 39122af7 (validated target-independent rasterization with render targets, DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa ad130cc2 (bounded diagnostic logging) and WOW64 20d7c8c9 (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine db6d7de0 with dxil-spirv fcd06d03 HitObject value semantics and exact native-half structured bounds/dimensions. The D3D12 shell uses 5aa711e5 for tight reserved-resource alignment and validated Generic Programs collection associations. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -853,7 +853,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "a05289ed5ded5e19b2ee281b4129f304c16a3415",
+      "commit": "39122af7c462c6dbcb65cc2b1f7bf64e1a5608b0",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -884,7 +884,7 @@
       "kind": "user",
       "deterministic": false,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-      "disk_peak_gb": 3,
+      "disk_peak_gb": 1.073741824,
       "outputs": [
         {
           "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
@@ -929,7 +929,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers."
+      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
     },
     {
       "id": "hosted-x86-rel",
@@ -937,7 +937,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "a05289ed5ded5e19b2ee281b4129f304c16a3415",
+      "commit": "39122af7c462c6dbcb65cc2b1f7bf64e1a5608b0",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -968,7 +968,7 @@
       "kind": "user",
       "deterministic": false,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-      "disk_peak_gb": 3,
+      "disk_peak_gb": 1.073741824,
       "outputs": [
         {
           "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
@@ -981,7 +981,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers."
+      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
     },
     {
       "id": "wow64-x86-rel",
@@ -1209,7 +1209,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "a05289ed5ded5e19b2ee281b4129f304c16a3415",
+      "commit": "39122af7c462c6dbcb65cc2b1f7bf64e1a5608b0",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1241,7 +1241,7 @@
       "kind": "user",
       "deterministic": false,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-      "disk_peak_gb": 3,
+      "disk_peak_gb": 1.073741824,
       "outputs": [
         {
           "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
@@ -1286,7 +1286,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers."
+      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
     },
     {
       "id": "hosted-x86-lab",
@@ -1294,7 +1294,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "a05289ed5ded5e19b2ee281b4129f304c16a3415",
+      "commit": "39122af7c462c6dbcb65cc2b1f7bf64e1a5608b0",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1326,7 +1326,7 @@
       "kind": "user",
       "deterministic": false,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
-      "disk_peak_gb": 3,
+      "disk_peak_gb": 1.073741824,
       "outputs": [
         {
           "file": "src/amd/vulkan/amdgpu_wddm_radv.dll",
@@ -1339,7 +1339,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers."
+      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
     },
     {
       "id": "wow64-x86-lab",
