@@ -32,10 +32,14 @@ void check(bool ok, const char* format, ...) {
 }
 
 // The shell asks with the newest layout it offers (adapter-caps.cpp); 0092 is checked separately. With the 0119
-// header that is 0120 (ddi-ladder.h), which uses the 0119 payloads.
+// header that is 0122 in both flavours.
 #if defined(D3D12DDI_BUILD_VERSION_0119)
 constexpr uint32_t kDdi = native12::kDdiMax;
-static_assert(kDdi == native12::kDdiBuild0120);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+static_assert(kDdi == 122);
+#else
+static_assert(kDdi == 122);
+#endif
 #else
 constexpr uint32_t kDdi = D3D12DDI_BUILD_VERSION_0094;
 #endif
@@ -1236,16 +1240,23 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               "tier 1.2 switch on, at 0094: 1012 ends at 6_9, 1006 reports 1_2 (%d)", static_cast<int>(at94.tier));
 #if defined(D3D12DDI_BUILD_VERSION_0119)
         // 0120 (ddi-ladder.h): the build from which the Agility runtime gives the application the 1012 answer
-        // without its 6_8 clamp. The answers are those of 0119, and no build after 0120 is taken.
+        // without its 6_8 clamp. Diagnostic builds can also negotiate 0121/0122.
         const Result at120 = read(caps, native12::kDdiBuild0120, kSm69);
         check(at120.hr == S_OK && at120.listed && at120.tier == kTier12,
               "tier 1.2 switch on, at 0120: 1012 ends at 6_9 (%x), 1006 reports 1_2 (%d)",
               static_cast<unsigned>(kSm69), static_cast<int>(at120.tier));
-        const Result at121 = read(caps, native12::kDdiBuild0120 + 1, kSm69);
-        check(at121.hr == E_INVALIDARG && at121.tier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED,
-              "a build after 0120 is refused (%08lx)", static_cast<unsigned long>(at121.hr));
-        check(native12::kDdiMax == native12::kDdiBuild0120, "the shell offers 0120 first, in both flavours (%u)",
-              native12::kDdiMax);
+        const Result beyond = read(caps, native12::kDdiMax + 1, kSm69);
+        check(beyond.hr == E_INVALIDARG && beyond.tier == D3D12DDI_RAYTRACING_TIER_NOT_SUPPORTED,
+              "a build beyond the supported range is refused (%08lx)", static_cast<unsigned long>(beyond.hr));
+        check(native12::kDdiDefault == 122, "the default is 0122 in both flavours (%u)",
+              native12::kDdiDefault);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        for (uint32_t version : {121u,122u}) {
+            const Result diagnostic = read(caps, version, kSm69);
+            check(diagnostic.hr == S_OK && diagnostic.listed && diagnostic.tier == kTier12,
+                  "diagnostic DDI %u preserves shader/RT caps", version);
+        }
+#endif
 #endif
         // A runtime that negotiates 0092 or 0093 does not know tier 1.2: the 22621 system core negotiates 0092 and
         // refuses opacity micromap pipelines.
@@ -1302,6 +1313,46 @@ void test_raytracing_tier12(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
 }
 
 #if defined(D3D12DDI_BUILD_VERSION_0119)
+HRESULT APIENTRY partial_create_stub(void*, const BC250_VKD3D_PARTIAL_GRAPHICS_DESC*, void**) { return E_FAIL; }
+void APIENTRY partial_ref_stub(void*) {}
+HRESULT APIENTRY partial_link_stub(void*, const D3D12_PIPELINE_STATE_STREAM_DESC*, void*const*, UINT32, BOOL, REFIID, void**) { return E_FAIL; }
+void test_partial_caps(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    Answers a=fl12_0();g_answers=&a;
+    for(unsigned variant=0;variant<6;++variant) {
+        auto funcs=stub_funcs();funcs.AbiVersion=(1u<<16)|(variant==1?8u:9u);
+        funcs.CreatePartialGraphicsLibrary=partial_create_stub;
+        funcs.AddRefPartialGraphicsLibrary=partial_ref_stub;
+        funcs.ReleasePartialGraphicsLibrary=partial_ref_stub;
+        funcs.CreateLinkedGraphicsPipeline=partial_link_stub;
+        if(variant==2)funcs.CreatePartialGraphicsLibrary=nullptr;
+        if(variant==3)funcs.AddRefPartialGraphicsLibrary=nullptr;
+        if(variant==4)funcs.ReleasePartialGraphicsLibrary=nullptr;
+        if(variant==5)funcs.CreateLinkedGraphicsPipeline=nullptr;
+        engine_ddi::AdapterCaps* caps=nullptr;
+        check(engine_ddi::query_adapter_caps(&funcs,&info,&caps)==S_OK && caps,"partial caps fixture %u",variant);
+        if(!caps)continue;
+        for(const char* env:{"0","1"}) {
+            SetEnvironmentVariableA("AMDGPU_WDDM_PARTIAL_NEGOTIATION",env);
+            UINT data[3]={0xcccccccc,0xcccccccc,0xcccccccc};
+            D3D12DDIARG_GETCAPS r{static_cast<D3D12DDICAPS_TYPE>(1099),nullptr,&data[1],sizeof(UINT)};
+            check(engine_ddi::build_caps(caps,122,&r)==S_OK && data[1]==(variant?0u:10u) &&
+                data[0]==0xcccccccc && data[2]==0xcccccccc,"partial caps native tier, ABI/functions %u env %s",variant,env);
+            for(unsigned invalid=0;invalid<5;++invalid) {
+                data[1]=0xcccccccc;r.pData=&data[1];r.DataSize=sizeof(UINT);r.pInfo=nullptr;
+                unsigned ddi=122;
+                if(invalid==0)ddi=121;
+                if(invalid==1)r.DataSize=sizeof(UINT)-1;
+                if(invalid==2)r.DataSize=sizeof(UINT)+1;
+                if(invalid==3)r.pInfo=&data[0];
+                if(invalid==4)r.pData=nullptr;
+                check(engine_ddi::build_caps(caps,ddi,&r)==E_INVALIDARG && data[1]==0xcccccccc &&
+                    data[0]==0xcccccccc && data[2]==0xcccccccc,"partial caps reject %u before write",invalid);
+            }
+        }
+        engine_ddi::free_adapter_caps(caps);
+    }
+    SetEnvironmentVariableA("AMDGPU_WDDM_PARTIAL_NEGOTIATION",nullptr);
+}
 void test_ladder_caps(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     constexpr auto probe_name = L"AMDGPU_WDDM_LAB_DDI0102_LIMITS";
     wchar_t previous_probe[256]{};
@@ -1824,6 +1875,7 @@ int wmain(int argc, wchar_t** argv) {
         test_raytracing_tier12(info);
 #if defined(D3D12DDI_BUILD_VERSION_0119)
         test_ladder_caps(info);
+        test_partial_caps(info);
 #endif
     }
     std::printf("%s\n", failures ? "FAILED" : "PASSED");

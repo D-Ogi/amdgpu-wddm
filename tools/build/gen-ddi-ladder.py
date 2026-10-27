@@ -38,9 +38,12 @@ lines+=['template<class C,class L,unsigned V> struct DdiLayout { using Core=C; u
         '#if defined(D3D12DDI_BUILD_VERSION_0119)','inline constexpr unsigned kDdiBuild0120=120;',
         'inline constexpr UINT64 kDdiSupported0120=(UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{kDdiBuild0120}<<16);',
         'static_assert(kDdiSupported0120==0xC005000780000ull);',
-        'inline constexpr unsigned kDdiMax=kDdiBuild0120;','#else','inline constexpr unsigned kDdiMax=94;','#endif',
+        'inline constexpr unsigned kDdiDefault=122;',
+        '// 0122 uses the measured 0119/0114 tables and the separately translated descriptor layouts.',
+        'inline constexpr unsigned kDdiMax=kDdiDefault;',
+        '#else','inline constexpr unsigned kDdiDefault=94;', 'inline constexpr unsigned kDdiMax=kDdiDefault;','#endif',
         'template<class F> HRESULT with_ddi_layout(unsigned version,F&& f) {','    switch(version) {']
-for v in range(92,121):
+for v in range(92,123):
     if v==95: lines.append('#if defined(D3D12DDI_BUILD_VERSION_0119)')
     core=max((ver,n) for n,(ver,f,_) in tables.items() if f=='DEVICE_FUNCS_CORE' and ver<=v)[1]
     lis=max((ver,n) for n,(ver,f,_) in tables.items() if f=='COMMAND_LIST_FUNCS_3D' and ver<=v)[1]

@@ -1,27 +1,27 @@
 {
   "schema": 2,
   "description": "The engine ABI engine-ddi builds against. tools/build/build-engine-ddi.ps1 refuses a header whose SHA-256 differs, and an engine DLL that is not the one its -Flavour pins. The release and the lab flavour (BD-167) are two builds of one source line, so each pins its own DLL; tools/build/engine_abi.py selects one, with the semantics of tools/release/release_flavour.py.",
-  "abi_version": "1.3",
-  "header_revision": "r5-draft with optional view-instancing contract revision 1",
+  "abi_version": "1.9",
+  "header_revision": "Reusable partial graphics programs, ABI 1.9",
   "repository": "vkd3d-proton fork of this project",
-  "branch": "amdgpu-wddm/compile-exempt",
-  "commit": "f5fda15126faa9cbb8392035b965d4b7d968ae45",
-  "source_checkout": "scratch/shader-stall/engine-wt",
+  "branch": "",
+  "commit": "f1501f9252096785cdda3c09b61932a76eda9491",
+  "source_checkout": "scratch/ddi-ladder/partial-engine-wt",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
-  "header_sha256": "F6830E64CB3BE369B09EC8353725B099595E56D6DD24EE345795F3C606E4ACD4",
+  "header_sha256": "618523d5d2da11082eb88bedfa6455c7e6e9cdb4fb4ceda86b44ccf35f65d404",
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
   "vulkan_headers_commit": "ee2ec5fd83dafce291024683b50dc89219333076",
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
   "flavours": {
     "release": {
-      "engine_dll_dir": "scratch/build-train/tester.32-r4/artifacts/release/engine12-x64-rel",
-      "engine_dll_sha256": "83974B071DB827A5EFC25751F3D17D5E4D7CB322ECDD17FBA127D9C9B94C3681",
-      "engine_dll_recipe": "tester.32 unsigned build artifact; raw SHA-256 verified against scratch/build-train/tester.32-r4/artifacts/release/engine12-x64-rel/record/recipe.json. Pin precedes signing; engine_abi.py does not normalize PE signatures."
+      "engine_dll_dir": "",
+      "engine_dll_sha256": "pending",
+      "engine_dll_recipe": "Release ABI 1.9 build pending; no release DLL hash claimed."
     },
     "lab": {
-      "engine_dll_dir": "scratch/build-train/tester.32-r4/artifacts/lab/engine12-x64-lab",
-      "engine_dll_sha256": "73F3705E943211ECB3B640C3902ACD9A862E7CBEF1D28701E6CDD993E6D4D3E3",
-      "engine_dll_recipe": "tester.32 unsigned build artifact; raw SHA-256 verified against scratch/build-train/tester.32-r4/artifacts/lab/engine12-x64-lab/record/recipe.json. Pin precedes signing; engine_abi.py does not normalize PE signatures."
+      "engine_dll_dir": "scratch/ddi-ladder/partial-engine-abi14-build-r1/libs/ddi",
+      "engine_dll_sha256": "2290a2b6c51072f252761c460804fef7f667318118e62e2839c8183bc1ee14cd",
+      "engine_dll_recipe": "partial-tir-scope-cache-engine-build.log"
     }
   }
 }

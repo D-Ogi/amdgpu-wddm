@@ -32,8 +32,9 @@ constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::
 // offered; with 0093 as the newest it asked caps type 1079 and reported no enhanced barriers, with 0094 it reports
 // them (OPTIONS12 EnhancedBarriersSupported 1). 0093 adds only the caps type OPTIONS_0093 (H:11251-11257); 0094
 // changes the L68 argument (resources.cpp, select_barrier). 0092 stays offered for a runtime that knows neither.
-// Built with the WDK 10.0.28000 header, the shell offers every build from 0120 (no public header defines it,
-// ddi-ladder.h) down to 0092, in both flavours; with the 26100 header it offers 0094 to 0092 (native12::kDdiMax).
+// Built with the WDK 10.0.28000 header, the shell offers every build from 0122 (no public header defines it,
+// ddi-ladder.h) down to 0092 by default; with the 26100 header it offers 0094 to 0092.
+// Both flavours offer 0122; lab overrides can select an older negotiated contract.
 constexpr auto kSupportedVersions=[] {
     std::array<UINT64,native12::kDdiMax-91> result{};
     for(unsigned i=0;i<result.size();++i)
@@ -47,16 +48,16 @@ unsigned offered_max(bool log=false) noexcept {
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     char text[8]{};
     const DWORD n=GetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",text,sizeof(text));
-    if(!n) return native12::kDdiMax;
+    if(!n) return native12::kDdiDefault;
     char* end=nullptr;
     const unsigned long value=n<sizeof(text)?std::strtoul(text,&end,10):0;
     const bool valid=end && end!=text && !*end && value>=92 && value<=native12::kDdiMax;
     if(log){
         amdgpu_wddm_log::print("d3d12-ddi LAB ONLY AMDGPU_WDDM_LAB_DDI_MAX %s: newest offered build %lu\n",
-                               valid?"accepted":"ignored",valid?value:static_cast<unsigned long>(native12::kDdiMax));
+                               valid?"accepted":"ignored",valid?value:static_cast<unsigned long>(native12::kDdiDefault));
         amdgpu_wddm_log::flush();
     }
-    return valid?static_cast<unsigned>(value):native12::kDdiMax;
+    return valid?static_cast<unsigned>(value):native12::kDdiDefault;
 #else
     (void)log;
     return native12::kDdiMax;

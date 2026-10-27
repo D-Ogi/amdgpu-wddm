@@ -167,22 +167,22 @@ static_assert(std::is_same_v<PFND3D12DDI_COPYTILEMAPPINGS,
                                               const D3D12DDI_TILED_RESOURCE_COORDINATE*,
                                               const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_TILE_MAPPING_FLAGS)>,
               "Q4 slot the shell forwards");
-// The engine header this revision is built against is ABI 1.3 (linear images, V13).
-static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 3u), "engine ABI 1.3 header");
+// The engine header this revision is built against is ABI 1.4 (partial graphics libraries; the ABI 1.3 prefix is retained).
+static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 9u), "engine ABI 1.9 fixed partial pixel fields contract");
 #ifdef _WIN64
-static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 80 &&
+static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 112 && BC250_VKD3D_ENGINE_FUNCS_SIZE_1_3 == 80 &&
                   sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,
-              "ABI 1.3 x64 sizes");
+              "ABI 1.4 x64 sizes and 1.3 prefix");
 // r4 (V12): the create info carries InstanceMode, which engine-ddi's callers set to PRIVATE.
 static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 48 &&
                   offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 40 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,
               "ABI 1.2 r4 create info");
 #else
 // The x86 engine (WoW64) is built from the same header, which pins its sizes only for x64. The function table is
-// two UINT32 and nine pointers.
-static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 20 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 44 &&
+// two UINT32 and thirteen pointers.
+static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 20 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 60 && BC250_VKD3D_ENGINE_FUNCS_SIZE_1_3 == 44 &&
                   sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,
-              "ABI 1.3 x86 sizes");
+              "ABI 1.4 x86 sizes and 1.3 prefix");
 static_assert(sizeof(BC250_VKD3D_DEVICE_CREATE_INFO) == 36 &&
                   offsetof(BC250_VKD3D_DEVICE_CREATE_INFO, InstanceMode) == 32 && BC250_VKD3D_INSTANCE_MODE_PRIVATE == 1u,
               "ABI 1.2 r4 create info, x86");

@@ -2433,9 +2433,12 @@ template<class C,class L,unsigned V> struct DdiLayout { using Core=C; using List
 inline constexpr unsigned kDdiBuild0120=120;
 inline constexpr UINT64 kDdiSupported0120=(UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{kDdiBuild0120}<<16);
 static_assert(kDdiSupported0120==0xC005000780000ull);
-inline constexpr unsigned kDdiMax=kDdiBuild0120;
+inline constexpr unsigned kDdiDefault=122;
+// 0122 uses the measured 0119/0114 tables and the separately translated descriptor layouts.
+inline constexpr unsigned kDdiMax=kDdiDefault;
 #else
-inline constexpr unsigned kDdiMax=94;
+inline constexpr unsigned kDdiDefault=94;
+inline constexpr unsigned kDdiMax=kDdiDefault;
 #endif
 template<class F> HRESULT with_ddi_layout(unsigned version,F&& f) {
     switch(version) {
@@ -2469,6 +2472,8 @@ template<class F> HRESULT with_ddi_layout(unsigned version,F&& f) {
     case 118: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0116,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,118>{});
     case 119: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0119,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,119>{});
     case 120: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0119,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,120>{});
+    case 121: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0119,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,121>{});
+    case 122: return f(DdiLayout<D3D12DDI_DEVICE_FUNCS_CORE_0119,D3D12DDI_COMMAND_LIST_FUNCS_3D_0114,122>{});
 #endif
     default: return E_UNEXPECTED;
     }

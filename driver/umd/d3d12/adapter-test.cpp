@@ -179,7 +179,7 @@ int main(int argc,char** argv) {
         assert(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && scanout.post_width==1920 &&
                scanout.post_height==1200 && scanout.version==BC250_SCANOUT_CAPS_VERSION);
     }
-    constexpr unsigned offered=native12::kDdiMax-91;
+    constexpr unsigned offered=native12::kDdiDefault-91;
     UINT32 count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
     std::array<UINT64,offered+1> versions{}; versions.fill(0xabcdef);
     count=offered-1;
@@ -187,15 +187,16 @@ int main(int argc,char** argv) {
     assert(count==offered);for(auto v:versions)assert(v==0xabcdef);
     assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,versions.data())==S_OK);
     for(unsigned i=0;i<offered;++i)
-        assert(versions[i]==((UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{native12::kDdiMax-i}<<16)));
+        assert(versions[i]==((UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{native12::kDdiDefault-i}<<16)));
     assert(versions.back()==0xabcdef);
-    // The newest build offered: 0120 in a shell built with the WDK 10.0.28000 header (both flavours), 0094 otherwise.
+    // The newest build offered: 0122 in a shell built with the WDK 10.0.28000 header (both flavours), 0094 otherwise.
 #if defined(D3D12DDI_BUILD_VERSION_0119)
-    static_assert(native12::kDdiMax==native12::kDdiBuild0120);
-    assert(versions[0]==native12::kDdiSupported0120 && versions[0]==0xC005000780000ull);
-    assert(versions[1]==D3D12DDI_SUPPORTED_0119 && versions[2]==D3D12DDI_SUPPORTED_0118 &&
+    static_assert(native12::kDdiDefault==122);
+    assert(versions[0]==0xC0050007a0000ull);
+    assert(versions[1]==0xC005000790000ull && versions[2]==native12::kDdiSupported0120 &&
+           versions[3]==D3D12DDI_SUPPORTED_0119 && versions[4]==D3D12DDI_SUPPORTED_0118 &&
            versions[offered-1]==D3D12DDI_SUPPORTED_0092);
-    puts("the version list is 0120, 0119, 0118 ... 0092");
+    puts("the version list is 0122, 0121, 0120 ... 0092");
 #else
     static_assert(native12::kDdiMax==94);
     assert(versions[0]==D3D12DDI_SUPPORTED_0094 && versions[offered-1]==D3D12DDI_SUPPORTED_0092);
@@ -215,11 +216,25 @@ int main(int argc,char** argv) {
         capped.Version=D3D12DDI_BUILD_VERSION_0118<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&capped));
         capped.Version=D3D12DDI_BUILD_VERSION_0119<<16;assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&capped)==0);
     }
-    for(const char* value:{"91","121","1x","","12345678"}){
+    for(const char* value:{"91","123","1x","","12345678"}){
         assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",value));
         count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
     }
+    for(const char* value:{"121","122"}) {
+        assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",value));
+        std::array<UINT64,native12::kDdiMax-90> diagnostic{};
+        diagnostic.fill(0xabcdef);
+        count=static_cast<UINT32>(diagnostic.size());
+        assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,diagnostic.data())==S_OK);
+        const unsigned newest=static_cast<unsigned>(std::strtoul(value,nullptr,10));
+        assert(count==newest-91 && diagnostic[count]==0xabcdef);
+        assert(diagnostic[0]==((UINT64{D3D12DDI_INTERFACE_VERSION_R8}<<32)|(UINT64{newest}<<16)));
+        D3D12DDIARG_CALCPRIVATEDEVICESIZE selected{};
+        selected.Interface=D3D12DDI_INTERFACE_VERSION_R8;selected.Version=newest<<16;
+        assert(funcs.pfnCalcPrivateDeviceSize(a.hAdapter,&selected));
+    }
     assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",nullptr));
+    count=0;assert(funcs.pfnGetSupportedVersions(a.hAdapter,&count,nullptr)==S_OK && count==offered);
     puts("lab build: AMDGPU_WDDM_LAB_DDI_MAX=118 offers 0118 ... 0092 and refuses 0119; other values are ignored");
 #elif !defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // Release build: the variable has no effect.
@@ -346,6 +361,10 @@ int main(int argc,char** argv) {
     // Every negotiated build selects its exact core/list layout. Surround each output with canaries,
     // check every typed slot and refill, and reject wrong sizes without overwriting the destination.
     for(unsigned build=92;build<=native12::kDdiMax;++build) {
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR) && defined(D3D12DDI_BUILD_VERSION_0119)
+        char selected[8]{};sprintf_s(selected,"%u",build);
+        assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",selected));
+#endif
         D3D12DDI_ADAPTERFUNCS f{};D3D12DDIARG_OPENADAPTER a2{};
         a2.pAdapterFuncs=&f;a2.pAdapterCallbacks=&callbacks;a2.hRTAdapter=a.hRTAdapter;
         assert(open(&a2)==S_OK);
@@ -389,6 +408,7 @@ int main(int argc,char** argv) {
         assert(ext.pfnGetSupportedExtendedFeatures);
         assert(f.pfnCloseAdapter(a2.hAdapter)==S_OK);
     }
+    assert(SetEnvironmentVariableA("AMDGPU_WDDM_LAB_DDI_MAX",nullptr));
     assert(funcs.pfnCloseAdapter(a.hAdapter)==S_OK);
     Sleep(200); // longer than a recent-launch worker takes on the host
     assert(GetFileAttributesA(store.c_str())==INVALID_FILE_ATTRIBUTES);

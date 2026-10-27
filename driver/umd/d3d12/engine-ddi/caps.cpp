@@ -102,6 +102,7 @@ public:
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;   // 1091
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
+    bool partial_graphics_programs{};
     bool report_raytracing_tier{true};          // the driver's default; set_raytracing_tier_reporting takes it back
     // Tier 1.2 and shader model 6.9: off in the library, set_raytracing_tier12_reporting turns them on (the shell
     // does; only a lab-flavour shell has an off switch, the experiment raytracing-tier12-off). Off, the answers are
@@ -119,7 +120,7 @@ constexpr uint32_t kDdiVersionMin = 92;                  // D3D12DDI_BUILD_VERSI
 // 0120 (ddi-ladder.h, no public header defines it) changes no caps payload of 0119: the newest build that the
 // ladder knows is the newest layout build_caps takes.
 constexpr uint32_t kDdiVersionMax = native12::kDdiMax;
-static_assert(kDdiVersionMax == native12::kDdiBuild0120, "the ladder ends at 0120");
+static_assert(kDdiVersionMax == 122, "both flavours implement the 0122 contract");
 #else
 constexpr uint32_t kDdiVersionMax = 94;                  // D3D12DDI_BUILD_VERSION_0094, H:11265
 #endif
@@ -511,6 +512,9 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
         return E_INVALIDARG;
     auto* c = make_new<AdapterCaps>();
     if (!c) return E_OUTOFMEMORY;
+    c->partial_graphics_programs = funcs->AbiVersion >= ((1u << 16) | 9u) &&
+        funcs->CreatePartialGraphicsLibrary && funcs->AddRefPartialGraphicsLibrary &&
+        funcs->ReleasePartialGraphicsLibrary && funcs->CreateLinkedGraphicsPipeline;
     c->levels.NumFeatureLevels = static_cast<UINT>(std::size(kLevels));
     c->levels.pFeatureLevelsRequested = kLevels;
     c->shader_model.HighestShaderModel = kHighestShaderModel;
@@ -672,6 +676,16 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         auto* d = payload<UINT32>(r);
         if (!d) return E_INVALIDARG;
         *d = 0; // No linear algebra tier is implemented.
+        return S_OK;
+    }
+    // Agility 1.721.3-preview: one UINT tier, no input payload. The adapter
+    // implementation and the pinned ABI 1.9 engine jointly implement this tier.
+    if (static_cast<UINT>(r.Type) == 1099) {
+        if (ddi_version < 122 || r.pInfo || !r.pData || r.DataSize != sizeof(UINT)) return E_INVALIDARG;
+        *static_cast<UINT*>(r.pData) = c.partial_graphics_programs ? 10u : 0u;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        log_line("PGP_PROBE caps1099 tier%u production partial-program contract", c.partial_graphics_programs ? 10u : 0u);
+#endif
         return S_OK;
     }
     switch (r.Type) {

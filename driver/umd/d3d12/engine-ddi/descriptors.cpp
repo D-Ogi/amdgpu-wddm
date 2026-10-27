@@ -7,6 +7,7 @@
 // back to the engine unchanged.
 #include "internal.h"
 #include "replay.h"
+#include "byte-offset-view.h"
 
 namespace engine_ddi {
 
@@ -130,6 +131,21 @@ void APIENTRY create_uav(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_UNORD
     D3D12_UNORDERED_ACCESS_VIEW_DESC d{};
     d.Format = view_format(r, args->Format);
     ID3D12Resource* counter = nullptr;
+    if (static_cast<UINT>(args->ResourceDimension) == 7) {
+        // Never read the larger union from a caller using the old contract.
+        if (c->ddi_version < 122) { c->report(E_INVALIDARG); return; }
+        const auto b = byte_offset_view::read(args);
+        d.ViewDimension = D3D12_UAV_DIMENSION_BUFFER_BYTE_OFFSET;
+        d.BufferByteOffset = byte_offset_view::translate(b);
+        if (b.counter.pDrvPrivate) {
+            ResourceRecord* cr = view_resource(c, b.counter);
+            if (!cr) { c->report(E_INVALIDARG); return; }
+            counter = static_cast<ID3D12Resource*>(cr->h.engine);
+        }
+        c->device->CreateUnorderedAccessView(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr,
+            counter, &d, D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+        return;
+    }
     switch (args->ResourceDimension) {
     case D3D12DDI_RD_BUFFER:
         d.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
@@ -255,6 +271,14 @@ void APIENTRY create_srv(D3D12DDI_HDEVICE device, const D3D12DDIARG_CREATE_SHADE
     D3D12_SHADER_RESOURCE_VIEW_DESC d{};
     d.Format = view_format(r, args->Format);
     d.Shader4ComponentMapping = args->Shader4ComponentMapping;
+    if (static_cast<UINT>(args->ResourceDimension) == 7) {
+        if (c->ddi_version < 122) { c->report(E_INVALIDARG); return; }
+        d.ViewDimension = D3D12_SRV_DIMENSION_BUFFER_BYTE_OFFSET;
+        d.BufferByteOffset = byte_offset_view::translate(byte_offset_view::read(args));
+        c->device->CreateShaderResourceView(r ? static_cast<ID3D12Resource*>(r->h.engine) : nullptr,
+            &d, D3D12_CPU_DESCRIPTOR_HANDLE{dest.ptr});
+        return;
+    }
     const bool ms = r && r->desc.SampleDesc.Count > 1;
     switch (args->ResourceDimension) {
     case D3D12DDI_RD_BUFFER:
