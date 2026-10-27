@@ -168,7 +168,7 @@ static_assert(std::is_same_v<PFND3D12DDI_COPYTILEMAPPINGS,
                                               const D3D12DDI_TILE_REGION_SIZE*, D3D12DDI_TILE_MAPPING_FLAGS)>,
               "Q4 slot the shell forwards");
 // The engine header this revision is built against is ABI 1.4 (partial graphics libraries; the ABI 1.3 prefix is retained).
-static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 9u), "engine ABI 1.9 fixed partial pixel fields contract");
+static_assert(BC250_VKD3D_ENGINE_ABI_VERSION == ((1u << 16) | 10u), "engine ABI 1.10 partial Stream Output contract");
 #ifdef _WIN64
 static_assert(sizeof(BC250_VKD3D_FEATURE_QUERY) == 24 && sizeof(BC250_VKD3D_ENGINE_FUNCS) == 112 && BC250_VKD3D_ENGINE_FUNCS_SIZE_1_3 == 80 &&
                   sizeof(BC250_VKD3D_LINEAR_IMAGE_INFO) == 48,

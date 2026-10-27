@@ -1,27 +1,27 @@
 {
   "schema": 2,
   "description": "The engine ABI engine-ddi builds against. tools/build/build-engine-ddi.ps1 refuses a header whose SHA-256 differs, and an engine DLL that is not the one its -Flavour pins. The release and the lab flavour (BD-167) are two builds of one source line, so each pins its own DLL; tools/build/engine_abi.py selects one, with the semantics of tools/release/release_flavour.py.",
-  "abi_version": "1.9",
-  "header_revision": "Reusable partial graphics programs, ABI 1.9",
+  "abi_version": "1.10",
+  "header_revision": "Stream output for partial graphics programs, ABI 1.10",
   "repository": "vkd3d-proton fork of this project",
   "branch": "",
-  "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+  "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
   "source_checkout": "scratch/forksync/vkd3d-proton",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
-  "header_sha256": "618523d5d2da11082eb88bedfa6455c7e6e9cdb4fb4ceda86b44ccf35f65d404",
+  "header_sha256": "ff73803fe25cca6959732a32ead124f5440aaeafcf37d52f24d712b8852049d6",
   "vulkan_headers_path": "khronos/Vulkan-Headers/include",
   "vulkan_headers_commit": "ee2ec5fd83dafce291024683b50dc89219333076",
   "engine_dll": "amdgpu_wddm_vkd3d.dll",
   "flavours": {
     "release": {
       "engine_dll_dir": "scratch/build-train/tester.33/artifacts/release/engine12-x64-rel",
-      "engine_dll_sha256": "0328886aa4d16e22d4b20ddaac907318a6ea9a61c5ae48c9a1e1ad239c939b65",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 216c5d9080d4983fb7986201e18fef690c976d18"
+      "engine_dll_sha256": "bac75232e167c4ef307708edb213b7ee27e97dbe041a7cfab026ec04c96220e4",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 c1ff01249961c2a8ba63d7653ef71db849cd89ac"
     },
     "lab": {
       "engine_dll_dir": "scratch/build-train/tester.33/artifacts/lab/engine12-x64-lab",
-      "engine_dll_sha256": "c28e2408408abb556e83e64ba4483d30502f80ef75412766197e7c98286bdbfc",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 216c5d9080d4983fb7986201e18fef690c976d18"
+      "engine_dll_sha256": "e171ffe8c9af99059ada2ca0a467b4f3b8f938d746b506ecfcec82c9ebd59d41",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 c1ff01249961c2a8ba63d7653ef71db849cd89ac"
     }
   }
 }

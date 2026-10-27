@@ -180,6 +180,17 @@ try {
                 (Join-Path $src 'engine-ddi-header-test.cpp')
         }
         Invoke-Step 'header gate' { & .\engine-ddi-header-test.exe }
+        Invoke-Step 'Stream Output actual-source admission fixture' {
+            & python (Join-Path $PSScriptRoot '..\quality\test_so_admission_source.py')
+            if ($LASTEXITCODE) { throw 'Stream Output extraction controls failed' }
+            & python -I (Join-Path $PSScriptRoot '..\quality\so_admission_source_test.py') `
+                --source (Join-Path $src 'generic-programs.cpp') --output 'native\so-admission-test.cpp'
+        }
+        Invoke-Step 'Stream Output admission host test build' {
+            Invoke-Bc250UmdCompiler $compilerExe @nativeFlags /Fo:native\ /Fd:native\ `
+                /Fe:so-admission-test.exe 'native\so-admission-test.cpp'
+        }
+        Invoke-Step 'Stream Output admission host test' { & .\so-admission-test.exe }
         Invoke-Step 'raytracing tier 1.2 header test build' {
             Write-Host "Compiler: $compilerExe"
             if($Compiler -eq 'clang-cl'){Invoke-Bc250UmdCompiler $compilerExe @($rt12Flags -like '--target=*') `

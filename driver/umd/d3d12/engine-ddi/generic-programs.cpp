@@ -861,6 +861,17 @@ HRESULT compile_linked_exports(GenericStateObject& object, const D3D12DDI_GENERI
         case D3D12DDI_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE:
             // This value may be supplied at final linking if absent in the partial.
             break;
+        case D3D12DDI_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT:
+            // The declaration belongs to the final program, never to a partial.
+            // ABI 1.10 selects an already compiled capture-capable producer and
+            // supplies its immutable output mapping without shader translation.
+            if ((object.device->funcs.AbiVersion & 0xffffu) < 10) return E_NOINTERFACE;
+            if (!has_preraster || linked_mesh || state->strides.size() > 4 ||
+                    (state->value != D3D12_SO_NO_RASTERIZED_STREAM && state->value >= 4))
+                return E_INVALIDARG;
+            for (UINT stride : state->strides)
+                if (stride > D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES || (stride & 3u)) return E_INVALIDARG;
+            break;
         default: return E_NOTIMPL; // Other late-state contracts still need validation.
         }
         if (!states.emplace(state->type, state).second) return E_INVALIDARG;
