@@ -43,7 +43,7 @@ and attach the support file that the installer or the control app makes.
 |---|---|---|
 | Desktop | DWM composes on the GPU. Hardware acceleration for supported GDI drawing operations. DisplayPort, and HDMI through a passive adapter | Modes above 300 MHz pixel clock (144 Hz and more at 1440p). Some GPU hangs (paging engine, 3DMark Time Spy) still stop Windows. Resume from hibernation |
 | Direct3D 12 | System runtime, feature level 12_1. The Windows 11 23H2 runtime gets shader model 6.6 and DXR 1.1. The Witcher 3 Remaster with ray tracing | Conformance suites |
-| Direct3D 12 with Agility SDK 1.619 / 1.721 | Shader model 6.9, shader execution reordering and DXR 1.2 with opacity micromaps. Mesh and amplification shaders, work graphs tier 1.0, enhanced barriers | Full conformance. Work graphs in 32-bit programs, measured |
+| Direct3D 12 with Agility SDK 1.619 / 1.721 | Shader model 6.9, shader execution reordering and DXR 1.2 with opacity micromaps. Mesh and amplification shaders, work graphs tier 1.0, enhanced barriers. Partial graphics programs (driver interface 0122) | Full conformance. Work graphs in 32-bit programs, measured |
 | Direct3D 11 | System runtime, feature level 12_1. Direct3D 10.0 and 10.1 programs also run on the GPU | - |
 | Direct3D 9 | D3D9On12 of Windows on our Direct3D 12 driver, for 64-bit and 32-bit programs | - |
 | Vulkan | Mesa RADV with ray tracing. Quake II RTX path-traces | Full conformance (CTS) run |

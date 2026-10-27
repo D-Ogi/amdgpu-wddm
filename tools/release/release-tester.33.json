@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.33",
   "version": "0.7.216.105-tester.33",
-  "note": "tester.33 candidate component set, not yet accepted for publication. Each row records the exact source, recipe, architecture and flavour. The KMD, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). All Mesa rows include the GFX10 late-Z helper coverage repair, including coverage input retention and discard state. Hosted Mesa uses e51f92be (validated partial-program multisample linkage, smooth-line coverage, AS library ownership, target-independent rasterization with render targets, DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa ad130cc2 (bounded diagnostic logging) and WOW64 20d7c8c9 (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine 216c5d90 with dxil-spirv dcf361ca HitObject value semantics and exact native-half structured bounds/dimensions. The D3D12 shell uses 3dc9b330 for tight reserved-resource alignment and validated Generic Programs collection associations. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources. PGP final Stream Output is still under implementation; these pins do not claim its acceptance.",
+  "note": "tester.33 candidate component set, not yet accepted for publication. Each row records the exact source, recipe, architecture and flavour. The KMD, control app, state worker and desktop routers use b689e250, including catalog 55ac2dce and the compute/GDI settings. Router code and its recipe are unchanged from 37518825; the router rebuild is required by its embedded state-catalog identity. The D3D11 shell uses ce946478 (monitored-fence rewind flags). All Mesa rows include the GFX10 late-Z helper coverage repair, including coverage input retention and discard state. Hosted Mesa uses e51f92be (validated partial-program multisample linkage, smooth-line coverage, AS library ownership, target-independent rasterization with render targets, DirectMesh descriptor heap coexistence, ray-query CFG lifetime repair and accurate inverse trigonometric lowering), system x64 Mesa ad130cc2 (bounded diagnostic logging) and WOW64 20d7c8c9 (ray-query lifetime and inverse-trigonometric repairs, ABI preserved), and the D3D12 engine 216c5d90 with dxil-spirv dcf361ca HitObject value semantics and exact native-half structured bounds/dimensions. The D3D12 shell uses 3dc9b330 for tight reserved-resource alignment and validated Generic Programs collection associations. Other component rows retain their individual pins. The x86/x64 system Vulkan difference is explained by the exact-pair note on the wow64 outputs. Data and third-party rows outside this build set remain in release-sources.json. All new bytes require the final installed-package gates before publication. Eight extra rows rebuild the caps/benchmark tools, H.264 MFT and HIP outputs for the current version instead of carrying tester.32 resources. Stream output for partial graphics programs ships from the r5 sources (contract revision 4).",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
   "repositories": {
@@ -163,7 +163,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "3dc9b3301dc0dd2270cc1b6e68aafda0f768b52f",
+      "commit": "9525d2fc79ef15fd88b6e81853290e9de0d893ad",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -191,7 +191,7 @@
       "inputs": {
         "mesa": {
           "repo": "mesa-amdgpu-wddm",
-          "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+          "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
           "paths": [
             "src/util/bc250_host_bootstrap.h"
           ]
@@ -205,7 +205,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
           "paths": [
             "libs/ddi"
           ]
@@ -222,7 +222,7 @@
           "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell with reusable partial-program state and exact ABI 1.9 flavour pins. Final installed-package acceptance remains pending."
+      "note": "D3D12 shell 9525d2fc: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of c1ff0124. Final installed-package acceptance pending."
     },
     {
       "id": "d3d12-x86-rel",
@@ -230,7 +230,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "3dc9b3301dc0dd2270cc1b6e68aafda0f768b52f",
+      "commit": "9525d2fc79ef15fd88b6e81853290e9de0d893ad",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -258,7 +258,7 @@
       "inputs": {
         "mesa": {
           "repo": "mesa-amdgpu-wddm",
-          "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+          "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
           "paths": [
             "src/util/bc250_host_bootstrap.h"
           ]
@@ -272,7 +272,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
           "paths": [
             "libs/ddi"
           ]
@@ -289,7 +289,7 @@
           "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell with reusable partial-program state and exact ABI 1.9 flavour pins. Final installed-package acceptance remains pending."
+      "note": "D3D12 shell 9525d2fc: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of c1ff0124. Final installed-package acceptance pending."
     },
     {
       "id": "d3d12-x64-lab",
@@ -297,7 +297,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "3dc9b3301dc0dd2270cc1b6e68aafda0f768b52f",
+      "commit": "9525d2fc79ef15fd88b6e81853290e9de0d893ad",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -325,7 +325,7 @@
       "inputs": {
         "mesa": {
           "repo": "mesa-amdgpu-wddm",
-          "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+          "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
           "paths": [
             "src/util/bc250_host_bootstrap.h"
           ]
@@ -339,7 +339,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
           "paths": [
             "libs/ddi"
           ]
@@ -356,7 +356,7 @@
           "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell with reusable partial-program state and exact ABI 1.9 flavour pins. Final installed-package acceptance remains pending."
+      "note": "D3D12 shell 9525d2fc: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of c1ff0124. Final installed-package acceptance pending."
     },
     {
       "id": "d3d12-x86-lab",
@@ -364,7 +364,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "3dc9b3301dc0dd2270cc1b6e68aafda0f768b52f",
+      "commit": "9525d2fc79ef15fd88b6e81853290e9de0d893ad",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -392,7 +392,7 @@
       "inputs": {
         "mesa": {
           "repo": "mesa-amdgpu-wddm",
-          "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+          "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
           "paths": [
             "src/util/bc250_host_bootstrap.h"
           ]
@@ -406,7 +406,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
           "paths": [
             "libs/ddi"
           ]
@@ -423,7 +423,7 @@
           "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell with reusable partial-program state and exact ABI 1.9 flavour pins. Final installed-package acceptance remains pending."
+      "note": "D3D12 shell 9525d2fc: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of c1ff0124. Final installed-package acceptance pending."
     },
     {
       "id": "dxvk-x64-rel",
@@ -853,7 +853,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -929,7 +929,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
+      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "hosted-x86-rel",
@@ -937,7 +937,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -981,7 +981,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
+      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "wow64-x86-rel",
@@ -1209,7 +1209,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1286,7 +1286,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
+      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "hosted-x86-lab",
@@ -1294,7 +1294,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "e51f92be9ae4a638d8d08d32f9a74e45b557b4bb",
+      "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
       "base": "66986af442c97653cd6046b01d27bb555ff39fd4",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1339,7 +1339,7 @@
         }
       ],
       "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
-      "note": "mesa-amdgpu-wddm integrate/tester33-hosted 3b5811fa: descriptor heaps hidden on the hybrid Task path; d1388f0d (BD-167 environment reads) with the compute queue of ace 7a07bc3d91b and the table of BC-250 reads at the new line numbers. TIR input/output coverage contract and single-cluster export passed paired BC-250 mask, broadcast and extended controls. Reservation 1 GiB: previous canonical per-row measured peaks 669-682 MB; sequential builds only."
+      "note": "mesa-amdgpu-wddm c44e34a5 (feat/pgp-so-t33 on integrate/tester33-hosted e51f92be): hosted stream output contract revision 4 for partial graphics programs. Reservation 1 GiB; sequential builds only."
     },
     {
       "id": "wow64-x86-lab",
@@ -2284,7 +2284,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2330,7 +2330,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton 216c5d90: reusable graphics state, deferred partial-library vertex-input validation and API viewport-index limits; dxil-spirv dcf361ca. Full engine host tests remain required.",
+      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2339,7 +2339,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2385,7 +2385,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton 216c5d90: reusable graphics state, deferred partial-library vertex-input validation and API viewport-index limits; dxil-spirv dcf361ca. Full engine host tests remain required.",
+      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2394,7 +2394,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2440,7 +2440,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton 216c5d90: reusable graphics state, deferred partial-library vertex-input validation and API viewport-index limits; dxil-spirv dcf361ca. Full engine host tests remain required.",
+      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2449,7 +2449,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "216c5d9080d4983fb7986201e18fef690c976d18",
+      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2495,7 +2495,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton 216c5d90: reusable graphics state, deferred partial-library vertex-input validation and API viewport-index limits; dxil-spirv dcf361ca. Full engine host tests remain required.",
+      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
