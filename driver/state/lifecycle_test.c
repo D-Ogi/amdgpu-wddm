@@ -430,6 +430,104 @@ static void RootAclCases(void)
     writes=shared_security_writes;CHECK(InitReadOnly()==STATUS_ACCESS_DENIED);
     CHECK(shared_security_writes==writes && !DriverStateReady());NoLeaks();
 }
+// The hang recovery record (docs/design/hang-recovery.md, "The record") is the only evidence of the GPU state before
+// a 0x116. It is a set of records in the state store, so the transfers of the installer carry it: an update in place
+// reads it from the old generation when the new package first starts, and an uninstall puts it into the removal
+// archive, which the next install hands to the driver. HangAttempts is the count that the capture gives.
+static ULONG HangAttempts;
+static const ULONGLONG HangTime=0x01DD4729A1B2C3D4ull;
+static void HangWaves(BYTE out[64]){unsigned i;for(i=0;i<64;++i)out[i]=(BYTE)(i*7+3);}
+static unsigned int CaptureHang(void *context,unsigned int source,const AMDGPU_STATE_SPEC *spec,
+    AMDGPU_STATE_VALUE *value,void *data,unsigned int capacity)
+{
+    ULONG number;
+    if(!strcmp(spec->path,"HangRecovery\\Waves") && !strcmp(spec->name,"Snapshot")) {
+        CHECK(capacity>=64);if(capacity<64)return AMDGPU_STATE_BUFFER;
+        HangWaves(data);value->type=REG_BINARY;value->bytes=64;return AMDGPU_STATE_OK;
+    }
+    if(strcmp(spec->path,"HangRecovery"))return CaptureLegacy(context,source,spec,value,data,capacity);
+    if(!strcmp(spec->name,"LastTime")) {
+        CHECK(capacity>=8);if(capacity<8)return AMDGPU_STATE_BUFFER;
+        value->type=REG_QWORD;value->bytes=8;memcpy(data,&HangTime,8);return AMDGPU_STATE_OK;
+    }
+    if(!strcmp(spec->name,"Attempts"))number=HangAttempts;
+    else if(!strcmp(spec->name,"NotDrained"))number=HangAttempts;
+    else if(!strcmp(spec->name,"LastVerdict"))number=2;
+    else if(!strcmp(spec->name,"LastKills"))number=100;
+    else return AMDGPU_STATE_ABSENT;
+    CHECK(capacity>=4);if(capacity<4)return AMDGPU_STATE_BUFFER;
+    value->type=REG_DWORD;value->bytes=4;memcpy(data,&number,4);return AMDGPU_STATE_OK;
+}
+// The record as the capture gives it, in the generation whose data key is Data.
+static void SetHangRecord(PCWSTR data,ULONG attempts)
+{
+    WCHAR path[256];unsigned key;BYTE waves[64];
+    CHECK(SUCCEEDED(StringCchPrintfW(path,256,L"%s\\HangRecovery",data)));key=Key(path,TRUE);
+    SetNumber(key,L"Attempts",attempts);SetNumber(key,L"NotDrained",attempts);SetNumber(key,L"LastVerdict",2);
+    SetNumber(key,L"LastKills",100);SetValue(key,L"LastTime",REG_QWORD,&HangTime,8);
+    CHECK(SUCCEEDED(StringCchPrintfW(path,256,L"%s\\HangRecovery\\Waves",data)));key=Key(path,TRUE);
+    HangWaves(waves);SetValue(key,L"Snapshot",REG_BINARY,waves,64);
+}
+static void HangRecordKept(PCWSTR data,ULONG attempts)
+{
+    WCHAR path[256];unsigned key,v;BYTE waves[64];
+    CHECK(SUCCEEDED(StringCchPrintfW(path,256,L"%s\\HangRecovery",data)));key=Key(path,FALSE);CHECK(key!=0);
+    v=Value(key,L"Attempts",FALSE);CHECK(v && values[v].type==REG_DWORD && *(DWORD*)values[v].data==attempts);
+    v=Value(key,L"NotDrained",FALSE);CHECK(v && values[v].type==REG_DWORD && *(DWORD*)values[v].data==attempts);
+    v=Value(key,L"LastVerdict",FALSE);CHECK(v && values[v].type==REG_DWORD && *(DWORD*)values[v].data==2);
+    v=Value(key,L"LastKills",FALSE);CHECK(v && values[v].type==REG_DWORD && *(DWORD*)values[v].data==100);
+    v=Value(key,L"LastTime",FALSE);CHECK(v && values[v].type==REG_QWORD && values[v].bytes==8 && !memcmp(values[v].data,&HangTime,8));
+    CHECK(!Value(key,L"Refused",FALSE) && !Value(key,L"Recovered",FALSE));
+    CHECK(SUCCEEDED(StringCchPrintfW(path,256,L"%s\\HangRecovery\\Waves",data)));key=Key(path,FALSE);CHECK(key!=0);
+    HangWaves(waves);v=Value(key,L"Snapshot",FALSE);
+    CHECK(v && values[v].type==REG_BINARY && values[v].bytes==64 && !memcmp(values[v].data,waves,64));
+}
+static void HangRecordCases(void)
+{
+    static const WCHAR old[]=L"S\\StateV2\\Generations\\02000000000000000000000000000000\\Data";
+    BYTE good[32]={42};AMDGPU_TRANSFER_HEADER h,receipt;WCHAR wide[65];unsigned bytes=0,root,gen2,meta2,j;
+
+    // Reinstall after an uninstall: SCM deleted the service key, so there is no StateV2. The installer gives the
+    // removal archive to the new package as an ARCHIVE handoff.
+    Fresh("a reinstall after an uninstall keeps the hang recovery record");
+    memset(&h,0,sizeof(h));h.origin=AMDGPU_TRANSFER_ARCHIVE;h.source_schema=AmdgpuStateSchema();
+    h.board_kind=AMDGPU_BOARD_UNPROVEN;h.transaction[0]=1;h.source_generation[0]=2;h.device_hash[0]=42;
+    AmdgpuStateBootToken(123,h.source_boot);memcpy(h.catalog,AmdgpuStateCatalogId(),64);
+    strcpy_s(h.source_version,32,"0.7.216.102");strcpy_s(h.destination_version,32,"0.7.216.102");
+    HangAttempts=3;CHECK(AmdgpuTransferCapture(&h,CaptureHang,NULL,handoff,sizeof(handoff),&bytes)==0);handoff_bytes=bytes;
+    CHECK(DriverStateInit((PDRIVER_OBJECT)1)==0);CHECK(Candidate!=NULL && !DriverStateReady());
+    CHECK(DriverStateActivate(good)==0);Accepted();CheckNumber(L"CuMode",40);HangRecordKept(DataPath,3);
+    DriverStateClose();NoLeaks();
+    // The next start of the same package reads the published generation, not the handoff again.
+    CHECK(DriverStateInit((PDRIVER_OBJECT)1)==0 && Candidate==NULL);
+    CHECK(DriverStateActivate(good)==0);Accepted();HangRecordKept(DataPath,3);DriverStateClose();NoLeaks();
+
+    // Update in place: the worker captured the old generation at prepare (3 attempts), and a hang before the
+    // restart added a fourth. The first start of the new package takes the records from the stopped old
+    // generation, so the newer record is the one that is kept.
+    Reset("an update in place keeps the newest hang recovery record");
+    root=Key(L"S\\StateV2",TRUE);SetString(root,L"Active",L"02000000000000000000000000000000");
+    SetNumber(root,L"Frozen",1);SetString(root,L"FrozenBy",L"01000000000000000000000000000000");
+    gen2=Key(L"S\\StateV2\\Generations\\02000000000000000000000000000000",TRUE);Key(old,TRUE);
+    meta2=Key(L"S\\StateV2\\Generations\\02000000000000000000000000000000\\Migration",TRUE);
+    SetNumber(gen2,L"Ready",AmdgpuStateSchema());
+    for(j=0;j<65;++j)wide[j]=(BYTE)AmdgpuStateCatalogId()[j];SetString(gen2,L"CatalogId",wide);
+    SetNumber(Key(old,FALSE),L"CuMode",40);SetNumber(Key(old,FALSE),L"DpmMode",0);
+    SetNumber(Key(old,FALSE),L"EnableFullWddm",1);SetHangRecord(old,4);
+    memset(&receipt,0,sizeof(receipt));receipt.magic=AMDGPU_TRANSFER_MAGIC;receipt.version=AMDGPU_TRANSFER_VERSION;
+    receipt.origin=AMDGPU_TRANSFER_LEGACY;receipt.source_schema=1;receipt.board_kind=AMDGPU_BOARD_UNPROVEN;
+    receipt.transaction[0]=2;receipt.device_hash[0]=42;AmdgpuStateBootToken(100,receipt.source_boot);
+    strcpy_s(receipt.source_version,32,"0.7.216.100");strcpy_s(receipt.destination_version,32,"0.7.216.101");
+    memcpy(receipt.catalog,AmdgpuStateCatalogId(),64);SetValue(meta2,L"Transfer",REG_BINARY,&receipt,sizeof(receipt));
+    memset(&h,0,sizeof(h));h.origin=AMDGPU_TRANSFER_CURRENT;h.source_schema=AmdgpuStateSchema();
+    h.transaction[0]=1;h.source_generation[0]=2;h.device_hash[0]=42;AmdgpuStateBootToken(123,h.source_boot);
+    memcpy(h.catalog,AmdgpuStateCatalogId(),64);
+    strcpy_s(h.source_version,32,"0.7.216.101");strcpy_s(h.destination_version,32,"0.7.216.102");
+    HangAttempts=3;CHECK(AmdgpuTransferCapture(&h,CaptureHang,NULL,handoff,sizeof(handoff),&bytes)==0);handoff_bytes=bytes;
+    CHECK(DriverStateInit((PDRIVER_OBJECT)1)==0);CHECK(Candidate!=NULL && !DriverStateReady());
+    CHECK(DriverStateActivate(good)==0);Accepted();CheckNumber(L"CuMode",40);HangRecordKept(DataPath,4);
+    HangRecordKept(old,4);DriverStateClose();NoLeaks();
+}
 int main(void)
 {
     BYTE good[32]={42},wrong[32]={43},unbound[32]={0},factory_id[16];
@@ -627,6 +725,7 @@ int main(void)
         CHECK(DriverStateActivate(good)==0);Accepted();CheckNumber(L"CuMode",40);
         DriverStateClose();NoLeaks();
     }
+    HangRecordCases();
     printf("state lifecycle: %u scenarios, %u checks, %u failures; actual kernel+transaction, no registry/GPU\n",scenarios,checks,failures);
     return failures?1:0;
 }

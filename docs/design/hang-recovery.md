@@ -128,10 +128,10 @@ device dxgkrnl is about to put into the error state, so nobody else's work is cu
 
 ## The record
 
-Each stage-1 call leaves its verdict in the registry, under
-`<service key>\Parameters\HangRecovery`, a non-volatile subkey. `GuardRecordHangRecovery` (`guard.c`) writes it
-and flushes it with `ZwFlushKey`. The log ring is about 1024 lines and lives in memory, so it does not survive the
-0x116 that follows a refusal. The registry record does.
+Each stage-1 call leaves its verdict in the driver state store ([driver-state.md](driver-state.md)), in the
+`HangRecovery` records of the active generation. `GuardRecordHangRecovery` (`guard.c`) writes them and flushes them
+with `ZwFlushKey`. The log ring is about 1024 lines and lives in memory, so it does not survive the 0x116 that
+follows a refusal. The registry record does.
 
 - Counters: `Attempts`, `Recovered` (verdicts 1, 5 and 7), `NotDrained` (2) and `Refused` (3, 4, 6 and 8). The
   driver never resets them.
@@ -149,9 +149,31 @@ counts its own attempt in that one write, because no pending entry counted one f
 machine survives, `Attempts == Recovered + NotDrained + Refused`. If `Attempts` is one ahead and `LastVerdict` is 0,
 the machine went down during the kill. `test/hang_recovery_test.c` checks this arithmetic.
 
-The record is a subkey and not a set of values on `Parameters` because of the deploy kit. The kit compares the
-value names of `Parameters` with its capture, and its recovery writes the captured values back. Neither looks at
-subkeys. A write failure is logged and otherwise ignored: the record is evidence, never a gate.
+The record is in the shared persistent state of the service (`DriverRegKeySharedPersistentState`), under
+`StateV2\Generations\<active>\Data\HangRecovery`. It is not in `Parameters\HangRecovery`. A reader that opens
+that key finds nothing, and that does not prove that the record is gone. Read the record with the state reader of
+the installation (`Read-DriverStateValues -Path HangRecovery`, `tools/release/installer/state-reader.ps1`), and the
+wave snapshot with `bc250kmd_cli waves saved`.
+
+The reader finds `bc250kmd_cli.exe` in this order: the `-Cli` argument, then `$script:DriverStateCli`, then
+`tools\bc250kmd_cli.exe` below `$InstallRoot`, then the directory of the reader. In an installation the reader is in
+`installer\` and the CLI is in `tools\`. Thus a script that dot-sources only the reader fails with "shared state could
+not be read". Set `$script:DriverStateCli` to the installed `tools\bc250kmd_cli.exe`, or set `$InstallRoot` to the
+installation directory, after the dot-source and before the first read.
+
+The record survives the installer:
+
+- An update in place: the first start of the new package reads the records from the stopped old generation. Thus
+  the record of a hang after the installer prepared the update is also kept.
+- An uninstall: the uninstaller archives all records of the stopped driver in
+  `%DriverData%\amdgpu-wddm\StateV2\removed.bin` before it removes the service key.
+- The next install: the installer gives that archive to the new package, which writes the records into its first
+  generation.
+
+`driver/state/lifecycle_test.c` and `driver/state/installer_worker_test.c` check the three steps. The archive is
+strict: after an uninstall, an install of a package with another state catalog refuses the archive and stops.
+
+A write failure is logged and otherwise ignored: the record is evidence, never a gate.
 
 ## The contract, read again against today's code
 

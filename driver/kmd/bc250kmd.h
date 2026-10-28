@@ -700,7 +700,7 @@ void GuardRecordStartFailed(NTSTATUS Status);
 void GuardRecordStartStarted(void);
 void GuardRecordStopBegin(BC250_DEVICE* Device);
 void GuardRecordStopDone(void);
-// M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
+// M15.12: one ResetEngine verdict (hang_recovery.h) into the HangRecovery state records, counters and Last*, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
 void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
 // TDR recovery S1: the same record with LastPath (BC250_HANG_PATH_*; GuardRecordHangRecovery writes the engine path),

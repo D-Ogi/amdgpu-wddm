@@ -73,7 +73,7 @@ no code from Microsoft's MS-PL sample.
 - **Hang recovery** (0.7.216.13, M15.12 stage 1). `HangRecoveryMode` lets `DxgkDdiResetEngine` kill the waves
   of a hung node-0 job, on that job's own VMID, and, if its fence then retires, report the engine reset as done
   instead of refusing it, so that only the guilty process loses its device. Every call leaves a flushed verdict
-  in `Parameters\HangRecovery`, which outlives the 0x116 of a refusal. On by default from 0.7.216.18 (absent = 1,
+  in the `HangRecovery` records of the state store, which outlive the 0x116 of a refusal. On by default from 0.7.216.18 (absent = 1,
   the INF writes 1 with NOCLOBBER). 0 is the switch-off. In lab trial D (2026-10-07) the fence guard of 0.7.216.13
   compared the hung node-0 fence with the newest fence of either node and refused. 0.7.216.16 compares it with the
   last reported fence of node 0 only. In trial D1 the kill of 0.7.216.16 used the GART register path, which
@@ -109,7 +109,7 @@ no code from Microsoft's MS-PL sample.
   or touches the hardware. See
   [docs/adr/0021-board-chip-adapter-separation.md](../../docs/adr/0021-board-chip-adapter-separation.md).
 - **Wave snapshots** (0.7.216.29). `GET_WAVES`, command 34, reads the live GFX10 wave registers for an
-  administrator, and `DxgkDdiResetEngine` saves a snapshot under `Parameters\HangRecovery\Waves` before its
+  administrator, and `DxgkDdiResetEngine` saves a snapshot in the `HangRecovery\Waves` state record before its
   first kill (`HangRecoveryWaves`, absent = 1). The reads do not stop a wave and are not atomic. See
   [docs/design/wave-snapshot.md](../../docs/design/wave-snapshot.md).
 - **The submit watchdog's budget** (0.7.216.27, BD-114). `SubmitWatchdogMs` is how long node 0 may make no
