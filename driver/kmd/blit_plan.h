@@ -40,3 +40,25 @@ BC250_BLIT_RESULT Bc250PlanBlt(const BC250_BLIT_SURFACE* Source,
     const BC250_BLIT_SURFACE* Destination, const BC250_BLIT_RECT* SourceRect,
     const BC250_BLIT_RECT* DestinationRect, const BC250_BLIT_RECT* Dirty,
     BC250_BLIT_PLAN* Plan);
+
+/* Present geometry (DXGKARG_PRESENT). SourceRect and DestinationRect only give the
+ * mapping ("used to calculate the stretch factor"); the copy writes the Dirty
+ * sub-rectangle (NULL = the whole destination surface) clipped to DestinationRect.
+ * SourceRect must be inside the source and Dirty inside the destination, but
+ * DestinationRect may extend past the destination surface: dxgkrnl gives
+ * 0,-1,390,685 for a 390x685 redirected window of GOG Galaxy. Destination pixel x takes
+ * source column SourceRect.Left + floor((2(x-DestinationRect.Left)+1) * SourceWidth /
+ * (2 DestinationWidth)), and the same for rows: point sampling at pixel centres,
+ * which is the 1:1 copy of Bc250PlanBlt when the two sizes are equal.
+ * Each call gives the plan of the next run, the largest rectangle whose rows and
+ * columns map to consecutive source rows and columns, in row-major run order. Run
+ * starts zeroed (Started 0). Copy: Plan is that run. Empty: no run is left. Invalid:
+ * the geometry is refused, with no partial work. */
+typedef struct BC250_PRESENT_RUN {
+    int Started, X, Y, YEnd;
+} BC250_PRESENT_RUN;
+
+BC250_BLIT_RESULT Bc250PlanPresentRun(const BC250_BLIT_SURFACE* Source,
+    const BC250_BLIT_SURFACE* Destination, const BC250_BLIT_RECT* SourceRect,
+    const BC250_BLIT_RECT* DestinationRect, const BC250_BLIT_RECT* Dirty,
+    BC250_PRESENT_RUN* Run, BC250_BLIT_PLAN* Plan);

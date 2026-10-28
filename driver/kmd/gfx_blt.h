@@ -55,7 +55,10 @@ int Bc250GfxPresentSubmitMatches(const void* Record, unsigned int Capacity,
 /* Complete Present IB: acquire before every pass, copies, full NOP padding.
  * Capacity must be a multiple of eight DWORDs and at least16. Offset counts
  * copy packets only. Invalid/no-space never writes Buffer. Residency and
- * cross-queue producer completion remain caller obligations. */
+ * cross-queue producer completion remain caller obligations. The rectangles
+ * follow the Present geometry of Bc250PlanPresentRun: DestinationRect may extend
+ * past the destination and may differ in size from SourceRect (point sampled);
+ * Dirty must be inside the destination. */
 BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
     const BC250_BLIT_SURFACE* Source, const BC250_BLIT_SURFACE* Destination,
     const BC250_BLIT_RECT* SourceRect, const BC250_BLIT_RECT* DestinationRect,
