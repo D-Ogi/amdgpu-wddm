@@ -139,6 +139,28 @@ class FactsGate(unittest.TestCase):
         self.write(GOOD.replace('  - id: M2', '\n  - id: M2'))  # blank line: valid, but not canonical
         self.assertFails('FAIL stale: docs')
 
+    def test_one_write_is_enough(self):
+        # Facts out of ID order and edges out of the canonical order: one --write must give pages that
+        # --check accepts, not pages rendered from the order of the file before it was normalised.
+        self.write(GOOD + '''\
+  - id: M5
+    status: MEASURED
+    date: "2026-09-25"
+    claim: "Supports M3, uses M1"
+    edges:
+      - {"type": "supports", "to": "M3"}
+      - {"type": "uses", "to": "M1"}
+  - id: M4
+    status: MEASURED
+    date: "2026-09-24"
+    claim: "Uses M3 and M1"
+    edges:
+      - {"type": "uses", "to": "M3"}
+      - {"type": "uses", "to": "M1"}
+''')
+        self.assertEqual(self.run_gen('--write'), 0)
+        self.assertEqual(self.run_gen('--check'), 0, self.output.getvalue())
+
     def test_not_the_subset(self):
         self.write(GOOD.replace('claim: "Corrects M2"', 'claim: Corrects M2'))
         self.assertFails('FAIL data')

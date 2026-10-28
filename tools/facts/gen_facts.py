@@ -136,6 +136,12 @@ def q(text):
     return json.dumps(text, ensure_ascii=False)
 
 
+def edge_order(e):
+    """Canonical order of the edges of one fact, as dump_area writes them."""
+    return (EDGE_TYPES.index(e['type']) if e.get('type') in EDGE_TYPES else 9,
+            id_key(e.get('to', '')), e.get('cue_in', ''))
+
+
 def dump_area(area):
     """The canonical text of a data file."""
     out = [
@@ -155,8 +161,7 @@ def dump_area(area):
                 out.append(f'    {key}: {q(f[key])}')
         if f.get('edges'):
             out.append('    edges:')
-            for e in sorted(f['edges'], key=lambda e: (EDGE_TYPES.index(e['type']) if e.get('type') in EDGE_TYPES else 9,
-                                                       id_key(e.get('to', '')), e.get('cue_in', ''))):
+            for e in sorted(f['edges'], key=edge_order):
                 ordered = {k: e[k] for k in EDGE_KEYS if k in e}
                 ordered.update({k: v for k, v in e.items() if k not in ordered})
                 out.append('      - ' + json.dumps(ordered, ensure_ascii=False))
@@ -329,14 +334,16 @@ class Graph:
         self.areas = areas
         self.facts = {}
         self.area_of = {}
+        # Facts and edges in the order of the canonical data file, so that the views of one --write
+        # do not depend on the order of the file before --write normalised it.
         for a in areas:
-            for f in a['facts']:
+            for f in sorted(a['facts'], key=lambda f: id_key(f['id'])):
                 self.facts[f['id']] = f
                 self.area_of[f['id']] = a['area']
         self.out = {fid: [] for fid in self.facts}
         self.inc = {fid: [] for fid in self.facts}
         for fid, f in self.facts.items():
-            for e in f.get('edges', []):
+            for e in sorted(f.get('edges', []), key=edge_order):
                 self.out[fid].append(e)
                 self.inc[e['to']].append(dict(e, to=fid))
 
