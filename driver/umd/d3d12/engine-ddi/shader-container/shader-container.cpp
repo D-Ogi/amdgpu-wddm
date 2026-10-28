@@ -905,14 +905,16 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     std::vector<Named> outputNames = NameSignature(output.data(), UINT(output.size()), isPixel);
     std::vector<Named> patchNames = NameSignature(desc.patchConstant.entries, desc.patchConstant.count, false);
 
-    // A mesh or amplification program is linked by semantic name (shader-container.h, Slot).
-    if (desc.slot != Slot::Standard)
+    // A DXIL program is linked by semantic name (shader-container.h, Slot). The inputs of a vertex program keep
+    // their synthetic names, which are what InputLayoutSemantic gives the input layout.
+    if (program.dxil)
     {
         dxil::Signatures signatures;
         if (Result r = ReadDxilSignatures(reinterpret_cast<const uint8_t*>(desc.code), program.length * 4u,
                 &signatures); !r)
             return r;
-        MetadataNames(signatures.input, inputNames);
+        if (desc.slot != Slot::Standard || program.type != U(D3D10_SB_VERTEX_SHADER))
+            MetadataNames(signatures.input, inputNames);
         MetadataNames(signatures.output, outputNames);
         MetadataNames(signatures.patchConstant, patchNames);
     }
