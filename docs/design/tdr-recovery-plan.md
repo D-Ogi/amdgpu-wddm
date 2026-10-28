@@ -239,8 +239,8 @@ stage S3 uses the engine steps only.
 - **HLK.** Row R1 of `docs/testing/hlk-certification.md:187` keeps hang recovery pending. The TDR
   jobs are in `docs/testing/hlk-certification.md:78` and in `ref/web-docs/hlk-graphics/INDEX.md`.
   They include "TDR2 - Multiple TDR Compute Lockout and Recovery Test (Enumerated Adapter)" and
-  "Standard Two Device Test Graphics (Uninterrupted when another app TDRs)". The HLK lane belongs to
-  another agent. This plan only names the jobs that stage S5 makes possible.
+  "Standard Two Device Test Graphics (Uninterrupted when another app TDRs)". The HLK runs are a separate
+  work lane (docs/testing/hlk-certification.md). This plan only names the jobs that stage S5 makes possible.
 
 ### 4.2 Hang generators
 
