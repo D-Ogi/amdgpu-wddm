@@ -299,7 +299,7 @@ function Invoke-Preflight {
         else { Add-Check 'existing installation' 'fail' "a development-lab installation ($($lab -join ', ')) is present. The release installer does not change a lab machine." 'lab-install.present' }
     }
     $st = Read-InstallState
-    $script:State = $st
+    $script:state = $st
     if ($st) { Add-Check 'installer state' 'ok' "phase $($st.phase) since $($st.updated_utc)" 'state.ok' }
     elseif ($script:DeviceService -eq $script:ServiceName -and -not $Force) { Add-Check 'existing installation' 'fail' 'bc250kmd is already installed without installer state; run uninstall.cmd first' 'existing.no-state' }
 
@@ -507,7 +507,7 @@ if ($failed.Count) {
     Exit-Engine -Code 2 -Outcome 'refused' -MessageId 'result.preflight-refused' -Detail (($failed | ForEach-Object { "$($_.check): $($_.detail)" }) -join ' | ')
 }
 
-$state = $script:State
+$state = $script:state
 if (-not $state) { $state = [pscustomobject]@{ schema = 1; phase = 'new'; created_utc = [DateTime]::UtcNow.ToString('o'); updated_utc = $null } }
 }
 function Save-Phase([string]$Phase) {
@@ -535,8 +535,8 @@ function Request-Restart([string]$Why, [string]$ReasonId) {
     # either. A key press during the countdown puts the restart off, Enter starts it at once.
     $go = (Wait-RestartCountdown -Seconds $script:RestartCountdownSeconds) -eq 'now'
     if ($go) {
-        $why = Request-PlannedRestart
-        if ($why) { Write-Warn2 "Windows did not start the restart ($why): restart the computer yourself; the installer continues after you log on again" }
+        $failure = Request-PlannedRestart
+        if ($failure) { Write-Warn2 "Windows did not start the restart ($failure): restart the computer yourself; the installer continues after you log on again" }
     } else { Write-Info 'restart later; the installer continues after you log on again' }
 }
 

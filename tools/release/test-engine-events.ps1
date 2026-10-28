@@ -312,15 +312,15 @@ if ($null -ne $bootId) {
     # An installed release B (another version and ABI) under a test install root; package A (this package) runs Verify.
     $instB = Join-Path $work 'installed-b'
     [void][IO.Directory]::CreateDirectory($instB)
-    $mB = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
-    $mB.version = '0.0.1.100-other.1'; $mB.name = 'amdgpu-wddm-tester-0.0.1.100-other.1'; $mB.kmd_abi = '0x000700AA'
-    [IO.File]::WriteAllText((Join-Path $instB 'manifest.json'), ($mB | ConvertTo-Json -Depth 8))
+    $manifestB = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
+    $manifestB.version = '0.0.1.100-other.1'; $manifestB.name = 'amdgpu-wddm-tester-0.0.1.100-other.1'; $manifestB.kmd_abi = '0x000700AA'
+    [IO.File]::WriteAllText((Join-Path $instB 'manifest.json'), ($manifestB | ConvertTo-Json -Depth 8))
     $shaB = (Get-FileHash -LiteralPath (Join-Path $instB 'manifest.json') -Algorithm SHA256).Hash
-    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $mB.version; install_root = $instB; updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
+    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $manifestB.version; install_root = $instB; updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
     $r = Invoke-Engine 'verify of another installed release' @('-DryRun', '-Verify') -State $st
     $rep = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
     $vr = $(if ($rep.Count -eq 1) { Get-Content -LiteralPath $rep[0].FullName -Raw | ConvertFrom-Json })
-    Check (($r.code -eq 3) -and $vr -and ($vr.package_version -eq $mB.version) -and ($vr.release -eq $mB.name) -and ($vr.manifest_sha256 -eq $shaB) -and ($vr.manifest_source -eq 'install-root') -and ($vr.kmd_abi -eq '0x000700AA') -and ($r.text -match [regex]::Escape("verifies against $instB\manifest.json (install-root): $($mB.version)"))) "package $pkgVersion verifies installed $($mB.version): checks and report both name the installed manifest ($(if ($vr) { "$($vr.package_version), $($vr.manifest_source)" } else { 'no report' }))"
+    Check (($r.code -eq 3) -and $vr -and ($vr.package_version -eq $manifestB.version) -and ($vr.release -eq $manifestB.name) -and ($vr.manifest_sha256 -eq $shaB) -and ($vr.manifest_source -eq 'install-root') -and ($vr.kmd_abi -eq '0x000700AA') -and ($r.text -match [regex]::Escape("verifies against $instB\manifest.json (install-root): $($manifestB.version)"))) "package $pkgVersion verifies installed $($manifestB.version): checks and report both name the installed manifest ($(if ($vr) { "$($vr.package_version), $($vr.manifest_source)" } else { 'no report' }))"
 } else { '  (skipped: BootId not readable on this PC)' }
 
 '[G-STAGE] deadline: the run stops at the first stop point after -DeadlineUtc (interfaces-setup.md section 10)'

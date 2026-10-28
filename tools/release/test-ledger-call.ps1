@@ -91,9 +91,9 @@ foreach ($c in $calls) {
                       "`$$manifestVariable`: it judges another build than this one")
     }
     if ($c.tool -eq 'release_flavour.py') {
-        $out = Get-Flag $call '--out'
-        if (-not $out) { $problems += 'the flavour selection has no --out with a variable for its value' }
-        elseif ($manifestVariable -and $out -eq $manifestVariable) {
+        $flavourOut = Get-Flag $call '--out'
+        if (-not $flavourOut) { $problems += 'the flavour selection has no --out with a variable for its value' }
+        elseif ($manifestVariable -and $flavourOut -eq $manifestVariable) {
             $problems += 'the flavour selection writes its subset over the whole manifest'
         }
     }

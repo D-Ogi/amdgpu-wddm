@@ -63,13 +63,13 @@ function Get-AppPolicyDesired {
  $v = [ordered]@{}
  $v['Mode'] = @{kind='String'; value=$Mode}
  if ($Mode -eq 'cpu') { return @{partial=$true; values=$v} }
- $deny = ConvertTo-AppList ((@($Deny) + @($Manifest.deny_always)) -join ',')
- $allow = ConvertTo-AppList (@($Allow) -join ',')
- if ($Mode -eq 'allowlist' -and !$allow.Count) { throw 'allowlist needs at least one -Allow name' }
+ $Deny = ConvertTo-AppList ((@($Deny) + @($Manifest.deny_always)) -join ',')
+ $Allow = ConvertTo-AppList (@($Allow) -join ',')
+ if ($Mode -eq 'allowlist' -and !$Allow.Count) { throw 'allowlist needs at least one -Allow name' }
  if (!$InstalledPackage) { $v['GpuUmdPath'] = @{kind='String'; value=(Join-Path (Join-Path $Root $Manifest.gpu.dir) $Manifest.gpu.shell)} }
  $v['RouteLogDirectory'] = @{kind='String'; value=(Join-Path $Root 'logs')}
- if ($allow.Count) { $v['Allow'] = @{kind='MultiString'; value=$allow} }
- if ($deny.Count) { $v['Deny'] = @{kind='MultiString'; value=$deny} }
+ if ($Allow.Count) { $v['Allow'] = @{kind='MultiString'; value=$Allow} }
+ if ($Deny.Count) { $v['Deny'] = @{kind='MultiString'; value=$Deny} }
  return @{partial=$false; values=$v}
 }
 

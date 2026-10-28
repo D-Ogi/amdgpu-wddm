@@ -179,12 +179,12 @@ try {
         Check ((Get-BitLockerState) -ceq 'off') "$($sample.tag) fully decrypted"
         $script:Conversion = [uint32]1
         Check ((Get-BitLockerState) -ceq 'suspended') "$($sample.tag) encrypted but unprotected"
-        foreach ($conversion in @(2, 3, 4, 5, 99)) {
-            $script:Conversion = [uint32]$conversion
-            Check ((Get-BitLockerState) -ceq 'unknown') "$($sample.tag) conversion $conversion requires handling"
+        foreach ($conversionCode in @(2, 3, 4, 5, 99)) {
+            $script:Conversion = [uint32]$conversionCode
+            Check ((Get-BitLockerState) -ceq 'unknown') "$($sample.tag) conversion $conversionCode requires handling"
         }
-        foreach ($protection in @(2, 99, $null)) {
-            $script:Protection = $protection
+        foreach ($protectionCode in @(2, 99, $null)) {
+            $script:Protection = $protectionCode
             Check ((Get-BitLockerState) -ceq 'unknown') "$($sample.tag) unknown/invalid protection"
         }
         Reset-BitLocker; $script:ProtectionReturn = [uint32]5

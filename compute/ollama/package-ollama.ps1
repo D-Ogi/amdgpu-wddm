@@ -62,9 +62,9 @@ Copy-Item "$sourceRoot/LICENSE" "$Staging/LICENSE" -Force
 if ($LASTEXITCODE) { throw "the import check refused the staging tree: $LASTEXITCODE" }
 
 New-Item -ItemType Directory -Force $OutputDirectory | Out-Null
-$zipName = if ($ZipName) { $ZipName } else { "bc250-ollama-$Version.zip" }
-if ($zipName -notmatch '\.zip$') { throw "the asset name must end in .zip: $zipName" }
-$zipPath = "$OutputDirectory/$zipName"
+$ZipName = if ($ZipName) { $ZipName } else { "bc250-ollama-$Version.zip" }
+if ($ZipName -notmatch '\.zip$') { throw "the asset name must end in .zip: $ZipName" }
+$zipPath = "$OutputDirectory/$ZipName"
 Remove-Item $zipPath -ErrorAction SilentlyContinue
 
 # One directory inside the zip. Compress-Archive of the staging directory itself gives exactly
@@ -78,7 +78,7 @@ Compress-Archive -Path "$layout/ollama" -DestinationPath $zipPath -CompressionLe
 $hash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
 $record = [ordered]@{
     id       = 'ollama'
-    file     = $zipName
+    file     = $ZipName
     version  = $Version
     train    = $Train
     size     = (Get-Item $zipPath).Length
@@ -86,7 +86,7 @@ $record = [ordered]@{
     backends = $present
     utc      = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 }
-$record | ConvertTo-Json -Depth 4 | Set-Content "$OutputDirectory/$zipName.json" -Encoding utf8
+$record | ConvertTo-Json -Depth 4 | Set-Content "$OutputDirectory/$ZipName.json" -Encoding utf8
 Remove-Item -Recurse -Force $layout -ErrorAction SilentlyContinue
 
 $record | ConvertTo-Json -Depth 4

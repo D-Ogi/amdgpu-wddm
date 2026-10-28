@@ -25,7 +25,7 @@ param(
 #        -Vkd3dD3d12 <package>\d3d12.dll -Vkd3dCore <package>\d3d12core.dll `
 #        -DxvkD3d11 <per-app>\d3d11.dll -DxvkDxgi <per-app>\dxgi.dll
 $ErrorActionPreference = 'Stop'
-$exe = (Resolve-Path -LiteralPath $Exe).Path
+$Exe = (Resolve-Path -LiteralPath $Exe).Path
 $logs = (New-Item -ItemType Directory -Force $Out).FullName
 $run = (New-Item -ItemType Directory -Force (Join-Path $logs 'appdirs')).FullName
 
@@ -48,7 +48,7 @@ $dirs = [ordered]@{
 $manifest = [ordered]@{
     utc = (Get-Date).ToUniversalTime().ToString('o')
     host = 'development PC, headless console process, composition swap chain without HWND target'
-    presenttest_sha256 = (Get-FileHash -LiteralPath $exe).Hash
+    presenttest_sha256 = (Get-FileHash -LiteralPath $Exe).Hash
     app_local = [ordered]@{}
     system_modules = [ordered]@{}
     runs = [ordered]@{}
@@ -62,7 +62,7 @@ foreach ($scenario in $dirs.Keys) {
     $ready += $scenario
     $d = (New-Item -ItemType Directory -Force (Join-Path $run $scenario)).FullName
     Get-ChildItem -LiteralPath $d -File | Remove-Item -Force
-    Copy-Item -LiteralPath $exe -Destination $d -Force
+    Copy-Item -LiteralPath $Exe -Destination $d -Force
     $manifest.app_local[$scenario] = @()
     foreach ($pair in $dirs[$scenario]) {
         Copy-Item -LiteralPath $pair[0] -Destination (Join-Path $d $pair[1]) -Force
@@ -96,9 +96,9 @@ foreach ($mode in $Modes) {
     $finished = $p.WaitForExit($TimeoutSeconds * 1000)
     if (-not $finished) { $p.Kill($true); $p.WaitForExit() }
     $watch.Stop()
-    $out = $outTask.Result; $err = $errTask.Result
-    [IO.File]::WriteAllText((Join-Path $logs "$mode.txt"), $out + $(if ($err) { "`n--- stderr`n$err" } else { '' }))
-    $result = ($out -split "`n" | Where-Object { $_ -like 'RESULT*' } | Select-Object -Last 1)
+    $stdout = $outTask.Result; $err = $errTask.Result
+    [IO.File]::WriteAllText((Join-Path $logs "$mode.txt"), $stdout + $(if ($err) { "`n--- stderr`n$err" } else { '' }))
+    $result = ($stdout -split "`n" | Where-Object { $_ -like 'RESULT*' } | Select-Object -Last 1)
     $manifest.runs[$mode] = [ordered]@{
         exit = $(if ($finished) { $p.ExitCode } else { 'timeout-killed' })
         seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 3)

@@ -29,9 +29,9 @@ function Check([string]$what, [scriptblock]$body) {
 }
 # A check that needs the built client: skipped with a line of its own where the binary is not there.
 function CheckExe([string]$what, [scriptblock]$body) {
-    if (-not (Test-Path -LiteralPath $script:exe)) {
+    if (-not (Test-Path -LiteralPath $script:Exe)) {
         $script:skipped++
-        "skip  $what (no client at $script:exe)"
+        "skip  $what (no client at $script:Exe)"
         return
     }
     Check $what $body
@@ -56,7 +56,6 @@ $work = if ($env:BC250_FRAMELOOP_WORK) { $env:BC250_FRAMELOOP_WORK } elseif ($ro
 if (-not $Exe) {
     $Exe = if ($work) { Join-Path $work 'build\amdgpu_wddm_frameloop.exe' } else { 'amdgpu_wddm_frameloop.exe' }
 }
-$exe = $Exe
 # The C48 repro analyser is analysis scaffolding of one ETW session, so it stays in the workspace.
 $c48repro = if ($root) { Join-Path $root 'scratch\m15\etw\c48\c48repro.py' } else { '' }
 $tmp = Join-Path $env:TEMP ('frameloop-host-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -117,7 +116,7 @@ try {
         # a value nobody checked could close its own quote. Brackets around the echo make a stray space visible.
         $log = Join-Path $tmp 'knob.txt'
         $cmdFile = Join-Path $tmp 'knob.cmd'
-        $lines = New-FrameloopCmdLines -Exe $exe -ArgLine '--help' -Out (Join-Path $tmp 'knob.json') -Log $log `
+        $lines = New-FrameloopCmdLines -Exe $Exe -ArgLine '--help' -Out (Join-Path $tmp 'knob.json') -Log $log `
             -Env @('BC250_SELF_WAIT=elide')
         Assert-FrameloopCmdLines -Lines $lines
         # Keep the knob lines, replace the client with an echo of what cmd made of them.
@@ -139,7 +138,7 @@ try {
         $cmdFile = Join-Path $tmp 'selftest.cmd'
         # --selftest needs no device and opens no window, so this is the one client run that is safe to make
         # part of a gate on the development PC.
-        $lines = New-FrameloopCmdLines -Exe $exe -ArgLine '--selftest' -Out (Join-Path $tmp 'selftest.json') -Log $log
+        $lines = New-FrameloopCmdLines -Exe $Exe -ArgLine '--selftest' -Out (Join-Path $tmp 'selftest.json') -Log $log
         Assert-FrameloopCmdLines -Lines $lines
         Set-Content -LiteralPath $cmdFile -Value $lines -Encoding ASCII
         & cmd.exe /c "`"$cmdFile`""
@@ -153,7 +152,7 @@ try {
     CheckExe 'a failing client comes back as the wrapper''s exit code' {
         $log = Join-Path $tmp 'bad.txt'
         $cmdFile = Join-Path $tmp 'bad.cmd'
-        $lines = New-FrameloopCmdLines -Exe $exe -ArgLine '--nonsense' -Out (Join-Path $tmp 'bad.json') -Log $log
+        $lines = New-FrameloopCmdLines -Exe $Exe -ArgLine '--nonsense' -Out (Join-Path $tmp 'bad.json') -Log $log
         Set-Content -LiteralPath $cmdFile -Value $lines -Encoding ASCII
         & cmd.exe /c "`"$cmdFile`""
         if ($LASTEXITCODE -ne 2) { throw "the wrapper exited $LASTEXITCODE, not the client's 2" }
@@ -417,7 +416,7 @@ try {
         # these four runs only.
         $ErrorActionPreference = 'Continue'
         foreach ($case in $cases) {
-            & $exe @($case.Args) 2>&1 | Out-Null
+            & $Exe @($case.Args) 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 2) {
                 throw "$($case.Why) was not refused (exit $LASTEXITCODE)"
             }
