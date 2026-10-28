@@ -135,10 +135,14 @@ if (-not $HipLib -or -not (Test-Path (Join-Path $HipLib 'amdhip64.lib'))) {
 }
 $dll = Join-Path $Out 'bc250hipblas.dll'
 $implibFromLink = Join-Path $Out 'bc250hipblas.link.lib'
+# The release ships the DLL with bc250hipblas.pdb beside it (symbols.py). -Xarch_host -g gives debug information to the
+# host pass only, so the gfx1013 code object stays that of a build without it. /DEBUG turns /OPT:REF and /OPT:ICF off,
+# so they are named again; /PDBALTPATH:%_PDB% keeps the build directory out of the image.
 Invoke-Clang ($common + $hipFlags + @(if ($Flavour -ne 'lab') { '-DNDEBUG' }) + @('-DBC250_HIPBLAS_BUILD_DLL=1', '-shared',
-    '-o', $dll, (Join-Path $hipblas 'src\bc250hipblas.hip'),
+    '-Xarch_host', '-g', '-o', $dll, (Join-Path $hipblas 'src\bc250hipblas.hip'),
     "-L$HipLib", '-Xlinker', "/DEF:$def", '-Xlinker', "/IMPLIB:$implibFromLink",
-    '-Xlinker', '/Brepro')) 'bc250hipblas.dll'
+    '-Xlinker', '/Brepro', '-Xlinker', '/DEBUG', '-Xlinker', '/OPT:REF', '-Xlinker', '/OPT:ICF',
+    '-Xlinker', '/PDBALTPATH:%_PDB%')) 'bc250hipblas.dll'
 
 # The import library comes from the definition file through llvm-dlltool, as amdhip64.lib does:
 # the library has to hold the jump thunks as well as the __imp_ symbols, and its name has to be

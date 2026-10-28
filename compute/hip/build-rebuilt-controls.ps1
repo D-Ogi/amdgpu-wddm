@@ -64,9 +64,15 @@ try {
     # BD-167: the release flavour compiles with NDEBUG, so an assert() added later is gone from the release and live
     # in the lab build.
     if ($Lab) { $flags += '-DAMDGPU_WDDM_LAB_FLAVOUR=1' } else { $flags += '-DNDEBUG' }
+    # The release ships vadd.exe with its PDB (symbols.py). -Xarch_host -g gives debug information to the host pass only,
+    # so the gfx1013 code object stays that of a build without it. /DEBUG at the link writes <name>.pdb beside the
+    # file and turns /OPT:REF and /OPT:ICF off, so they are named again; /PDBALTPATH:%_PDB% keeps the build directory
+    # out of the image.
+    $debugLink = @('-Xarch_host', '-g', '-Xlinker', '/DEBUG', '-Xlinker', '/OPT:REF', '-Xlinker', '/OPT:ICF',
+        '-Xlinker', '/PDBALTPATH:%_PDB%')
     foreach ($name in @('vadd', 'hipbench')) {
         $exe = Join-Path $Out "$name.exe"
-        & $clang @flags (Join-Path $PSScriptRoot "samples/$name.hip") "-L$importDir" -o $exe
+        & $clang @flags @debugLink (Join-Path $PSScriptRoot "samples/$name.hip") "-L$importDir" -o $exe
         if ($LASTEXITCODE -ne 0) { throw "HIP compilation failed: $name" }
         $imports = & $readobj --coff-imports $exe
         if ($LASTEXITCODE -ne 0) { throw "Import inspection failed: $name" }

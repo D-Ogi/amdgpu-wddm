@@ -344,9 +344,14 @@ if ($Bc250hsaLib -and (Test-Path $Bc250hsaLib)) {
     # /MT, so a /MD link of this DLL pulls LIBCMT and MSVCRT into one module: the linker says
     # LNK4098 and the module gets two C runtimes, each with its own heap. Second, the DLL goes
     # to the lab beside a program: a /MT module needs no Visual C runtime on the target.
-    Invoke-Cl ($productWarn + $productFlags + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\", "/Fe$productDll") +
-        $includes + $runtimeSources + @($dllSource, $Bc250hsaLib) +
-        @('/link', "/DEF:$def") + $libpaths + @('gdi32.lib')) 'amdhip64.dll (bc250hsa)'
+    #
+    # /Z7 and /DEBUG give the DLL its amdhip64.pdb beside it, which the release archives (symbols.py). /DEBUG alone
+    # turns the linker's /OPT:REF and /OPT:ICF off, so they are named again: the code of the DLL stays that of a link
+    # without debug information. /PDBALTPATH:%_PDB% keeps the build directory out of the image.
+    $debugCompile = @('/Z7') + @(if ($Compiler -eq 'clang-cl') { '/clang:-ffile-compilation-dir=.' })
+    Invoke-Cl ($productWarn + $productFlags + $debugCompile + @('/LD', '/MT', '/std:c++17', '/EHsc', "/Fo$productObjDir\",
+        "/Fe$productDll") + $includes + $runtimeSources + @($dllSource, $Bc250hsaLib) +
+        @('/link', "/DEF:$def", '/DEBUG', '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%') + $libpaths + @('gdi32.lib')) 'amdhip64.dll (bc250hsa)'
 } else {
     Write-Host '  amdhip64.dll over bc250hsa: skipped, -Bc250hsaLib names no library of layer 1'
 }
