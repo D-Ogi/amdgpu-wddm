@@ -387,22 +387,25 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         BC250_WDDM_ALLOCATION_PRIVATE metadata{}; D3D11_TEXTURE2D_DESC1 desc{};
         HRESULT hr=decode_open_resource(*args,metadata,desc);
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
-        // BD-253, lab flavour: each OpenResource of this device, at most 32 lines per process: the step it reached,
-        // its status, and what the opener asked for (Qt opens Chromium's shared texture here).
-        // The allocation blob is named by its size and its first two words (the LB7A magic and version), and by
-        // the GDI1 type when it has the trailer.
+        // BD-253, lab flavour: each OpenResource of this device, at most 32 lines per process for opens with a
+        // resource record and 16 for opens without one (window redirection surfaces; Chromium's texture pool used
+        // all 32 lines in arm 5 before the main window's surfaces were opened): the step it reached, its status,
+        // and what the opener asked for (Qt opens Chromium's shared texture here). The allocation blob is named by
+        // its size and its first two words (the LB7A magic and version), and by the GDI1 type when it has the
+        // trailer. The allocation handle is the one the Present lines name.
         auto opened=[&](const char *step,HRESULT status) {
-            static std::atomic_uint notes{32};
+            static std::atomic_uint recorded{32},bare{16};
+            auto &notes=args->PrivateDriverDataSize ? recorded : bare;
             const auto &info=args->pOpenAllocationInfo2 ? args->pOpenAllocationInfo2[0] : D3DDDI_OPENALLOCATIONINFO2{};
             unsigned long words[12]{};
             if (info.pPrivateDriverData)
                 std::memcpy(words,info.pPrivateDriverData,std::min<size_t>(info.PrivateDriverDataSize,sizeof(words)));
             device_life_note(notes,"BC250 BD-253: OpenResource %s hr=%08X runtime=%p allocations=%u private=%u "
                 "allocation-private=%u %08lX/%lu d3dddi=%lu gdi=%08lX/%lu km-resource=%u format=%u %ux%u bind=%08X "
-                "misc=%08X thread=%lu\n",step,unsigned(status),owner.runtime().hDevice,args->NumAllocations,
+                "misc=%08X allocation=%u thread=%lu\n",step,unsigned(status),owner.runtime().hDevice,args->NumAllocations,
                 args->PrivateDriverDataSize,info.PrivateDriverDataSize,words[0],words[1],words[5],words[8],words[9],
                 unsigned(args->hKMResource.handle),unsigned(desc.Format),desc.Width,desc.Height,desc.BindFlags,
-                desc.MiscFlags,(unsigned long)GetCurrentThreadId());
+                desc.MiscFlags,unsigned(info.hAllocation),(unsigned long)GetCurrentThreadId());
         };
         if (FAILED(hr)) opened("decode",hr);
 #endif

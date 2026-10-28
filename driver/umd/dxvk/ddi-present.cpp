@@ -2,6 +2,7 @@
 #include "ddi-present.h"
 #include "present-contract.h"
 #include "ddi-experiment.h"
+#include "present-probe.h"
 #include <atomic>
 #include <cstdio>
 namespace bc250::umd {
@@ -122,8 +123,10 @@ HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
         Submission submission{&owner,source->object,args->SrcSubResourceIndex};
         D3DKMT_HANDLE presented=source->present_allocation;
         PresentShadowSlot *shadow=nullptr;
+        const DXGI_FORMAT destinationFormat=destination && destination->runtime_surface ?
+            destination->runtime_surface->desc.Format : DXGI_FORMAT_UNKNOWN;
         const DXGI_FORMAT shadowFormat=source->runtime_surface ?
-            present_shadow_format(args->Flags,destination!=nullptr,source->blt_model_buffer,
+            present_shadow_format(args->Flags,destination!=nullptr,destinationFormat,source->blt_model_buffer,
                 source->runtime_surface->desc.Format) : DXGI_FORMAT_UNKNOWN;
         if (shadowFormat!=DXGI_FORMAT_UNKNOWN) {
             HRESULT hr=write_present_shadow(owner,*source,args->SrcSubResourceIndex,shadowFormat,shadow);
@@ -163,6 +166,31 @@ HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
             shadow->retire=owner.bridge().present_value;
             owner.present_shadows().next^=1u;
         }
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+        // BD-253, lab flavour: a few Presents of the process with what each one read and wrote. After the Present
+        // fence the kernel driver's copy is done, so the destination texels are what the copy wrote.
+        static std::atomic_uint presents{0};
+        unsigned index=0;
+        if (probe_due(presents,index)) {
+            char buffer[64]="-",shown[64]="-",target[64]="-";
+            if (SUCCEEDED(hr) && SUCCEEDED(wait_present_value(owner.bridge(),owner.bridge().present_value))) {
+                probe_texels(owner,source->object,args->SrcSubResourceIndex,buffer,sizeof(buffer));
+                if (shadow) probe_texels(owner,submission.resource,0,shown,sizeof(shown));
+                if (destination) probe_texels(owner,destination->object,args->DstSubResourceIndex,target,sizeof(target));
+            }
+            unsigned sf,sw,sh,df,dw,dh;
+            probe_shape(source,sf,sw,sh); probe_shape(destination,df,dw,dh);
+            char text[640];
+            std::snprintf(text,sizeof(text),"BC250 BD-253: Present #%u flags=%08X interval=%u src=%u fmt=%u %ux%u "
+                "blt-model=%u dst=%u fmt=%u %ux%u shadow=%u presented=%u step=%c callback=%08X hr=%08X texels: buffer %s "
+                "shadow %s destination %s thread=%lu\n",index,unsigned(args->Flags.Value),unsigned(args->FlipInterval),
+                unsigned(source->present_allocation),sf,sw,sh,unsigned(source->blt_model_buffer),
+                destination ? unsigned(destination->present_allocation) : 0u,df,dw,dh,unsigned(shadowFormat),
+                unsigned(presented),outcome.step ? outcome.step : '-',unsigned(outcome.callback),unsigned(hr),
+                buffer,shown,target,(unsigned long)GetCurrentThreadId());
+            present_note(text);
+        }
+#endif
         if (SUCCEEDED(hr)) {
             // At most N Presents queued ahead of the GPU: wait for the one N back to retire, as DXVK's own
             // swap chain does for its frame latency. Only a lost device makes this Present fail.
