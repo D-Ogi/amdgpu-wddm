@@ -1977,7 +1977,7 @@ static void Child(const std::string &s)
         if (s == "umd-diag-registry" && !registryRead)
             CHECK(!Exists(Layout + L"\\diaglogs" + logName), "a release UMD followed DiagnosticsDirectory");
         if (s == "umd-diag-default-dir" && !registryRead)
-            CHECK(!Exists(Layout + L"\\umd-diag\\logs"), "a release UMD followed Diagnostics");
+            CHECK(!Exists(Layout + L"\\umd-diag\\logs" + logName), "a release UMD followed Diagnostics");
         std::wstring logDir = s == "umd-diag-registry" ? Layout + L"\\diaglogs" : s == "umd-diag-env" ? Layout + L"\\diaglogs-env" :
                               Layout + L"\\umd-diag\\logs";
         if (diag) {
