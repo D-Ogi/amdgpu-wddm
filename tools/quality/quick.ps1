@@ -12,12 +12,15 @@ $Kits = $context.kits
 $context.profile = $Profile
 $icd=if($env:BC250_RADV_SOURCE){$env:BC250_RADV_SOURCE}else{Join-Path $Workspace 'scratch\m12\mesa-current-src'}
 $radvBuild=if($env:BC250_RADV_BUILD){$env:BC250_RADV_BUILD}else{Join-Path $Workspace 'scratch\m12\mesa-current-build'}
-# The user-mode driver's own Mesa tree and its build database, neither of which is in this repository. The default
-# names the tree the current release is built from; BC250_UMD_SOURCE and BC250_UMD_BUILD name another one. The old
-# default (scratch\m13-native-zink-src and -build) went with the M13 work and left the three gates that read these
-# two paths failing on a missing file, or reading a build database of an older train whose include paths are gone.
-$umdSource=if($env:BC250_UMD_SOURCE){$env:BC250_UMD_SOURCE}else{Join-Path $Workspace 'scratch\train\b34-build\mesa\zinkumd'}
-$umdBuild=if($env:BC250_UMD_BUILD){$env:BC250_UMD_BUILD}else{Join-Path $Workspace 'scratch\train\b34-build\icd\zink-x64'}
+# The user-mode driver's own Mesa tree and its build database, neither of which is in this repository.
+# BC250_UMD_SOURCE and BC250_UMD_BUILD name them: the umd-gate tree of the release (Mesa at the commit of its zink-umd
+# row, configured with that row's arguments; build-release-set.ps1 -Package sets both from -UmdSource and -UmdBuild).
+# There is no default. Each default so far named the tree of one train (scratch\m13-native-zink-src, then
+# scratch\train\b34-build), and a cleanup removed part of it: the three gates then failed on a missing file that
+# named no input. Without the variables, or with a tree that lacks a file that the gates read, those gates fail and
+# give that reason (CheckUmd).
+$umdSource=$env:BC250_UMD_SOURCE
+$umdBuild=$env:BC250_UMD_BUILD
 # Three host gates compile a fixture with cl.exe out of the environment. In a shell that is not a developer shell
 # there is no cl.exe, and they died on a FileNotFoundError that named no input. This is the input they need.
 $clExe=if($c=Get-Command cl.exe -ErrorAction SilentlyContinue){$c.Source}else{'cl.exe (the MSVC compiler is not in this environment)'}
@@ -39,6 +42,19 @@ function CheckIf([string]$name,[string]$needs,[scriptblock]$action) {
     if(Test-Path -LiteralPath $needs){ Check $name $action; return }
     $script:results+=@{name=$name;status='SKIP';reason="missing input: $needs"}
     Write-Host "$name SKIP (missing input: $needs)"
+}
+# A gate on the user-mode driver tree. It is a release gate, so a missing input is a failure, not a skip: the
+# reason names the input and the two variables.
+function CheckUmd([string]$name,[string[]]$needs,[scriptblock]$action) {
+    $reason=if(!$umdSource -or !$umdBuild){
+        'BC250_UMD_SOURCE and BC250_UMD_BUILD are not set: set them to the umd-gate tree of the release (Mesa at the zink-umd row commit and its configured build)'
+    } else {
+        $absent=@($needs | Where-Object { !(Test-Path -LiteralPath $_) })
+        if($absent){ "missing input: $($absent -join ', ') (BC250_UMD_SOURCE=$umdSource, BC250_UMD_BUILD=$umdBuild)" }
+    }
+    if(!$reason){ Check $name $action; return }
+    $script:results+=@{name=$name;status='FAIL';reason=$reason}
+    Write-Host "$name FAIL ($reason)"
 }
 try {
  # A named early gate makes a regression in link input order fail before builds.
@@ -294,7 +310,7 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  CheckIf 'radv-contract' "$radvBuild\compile_commands.json" `
    { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$radvBuild\compile_commands.json" --out "$Out\radv-contract" }
  # The same case as radv-contract above: the user-mode driver's build database is not in the repository.
- CheckIf 'umd-contract' "$umdBuild\compile_commands.json" `
+ CheckUmd 'umd-contract' @("$umdBuild\compile_commands.json") `
    { & python "$repo\tools\quality\prototype_gate.py" --compile-commands "$umdBuild\compile_commands.json" --match '/src/gallium/(frontends/d3d10umd|targets/d3d10umd|drivers/zink)/' --out "$Out\umd-contract" }
  Check 'vsync-vector' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vsync_vector.ps1" -Root $Workspace -Out "$Out\vsync-vector" }
 Check 'paging-ddi-status' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_paging_ddi_status.ps1" -Root $Workspace -Out "$Out\paging-ddi-status" }
@@ -481,7 +497,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'blob-abi' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi" -Kits "$Kits" }
  CheckIf 'blob-abi-producer' "$icd\src\amd\vulkan\winsys\wddm2\radv_wddm2_bc250.h" `
    { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_umd_blob.ps1" -Out "$Out\blob-abi-producer" -Kits "$Kits" -ProducerRoot $icd }
- CheckIf 'surface-control' $umdSource { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
+ CheckUmd 'surface-control' @("$umdSource\src\gallium\auxiliary\util\u_inlines.h") { & python "$PSScriptRoot\check_surface.py" --mesa "$umdSource" --out "$Out\surface-control" }
  # kmd-analysis reads the database the kmd-compile gate of this same run writes, so it has no missing-input case:
  # a gate that ran before it in this profile either wrote the file or failed itself.
  Check 'kmd-analysis' { & python "$PSScriptRoot\msvc_analysis.py" --database "$Out\kmd\compile_commands.json" --match '/umd_blob.c$' --out "$Out\analysis-kmd" }
@@ -489,7 +505,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # (tools\build\build-mesa.ps1 puts them there). A gate that replays one of those commands needs them there too,
  # or it dies on a missing d3d10umddi.h and says nothing about the code it was to judge, which is what it did in
  # train b34 rc1 to rc4. The kit of this workspace is the one the build used.
- CheckIf 'umd-analysis' "$umdBuild\compile_commands.json" `
+ CheckUmd 'umd-analysis' @("$umdBuild\compile_commands.json", "$umdSource\src\gallium\frontends\d3d10umd\Device.cpp") `
    { $wdk=Join-Path $Kits 'microsoft.windows.wdk.x64\c\Include\10.0.26100.0'
      $env:INCLUDE=((@((Join-Path $wdk 'um'), (Join-Path $wdk 'shared')) + @($env:INCLUDE)) -join ';')
      & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" --clang-baseline "$PSScriptRoot\clang-umd-baseline.json" }
