@@ -18,14 +18,14 @@ CATALOG = {'values': [
 ]}
 
 
-def run_gate(source, header=''):
+def run_gate(source, header='', catalog=CATALOG):
     """A throwaway tree with one catalog, one kernel source file and one header; returns (exit, output)."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / 'driver/state').mkdir(parents=True)
         (root / 'driver/kmd/sub').mkdir(parents=True)
         (root / 'driver/kmd/test').mkdir(parents=True)
-        (root / 'driver/state/catalog.json').write_text(json.dumps(CATALOG), encoding='utf-8')
+        (root / 'driver/state/catalog.json').write_text(json.dumps(catalog), encoding='utf-8')
         (root / 'driver/kmd/bc250kmd.h').write_text(
             'ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);\n'
             'BOOLEAN GuardConsumeSetting (_In_z_ PCWSTR Name, ULONG Default);\n' + header, encoding='utf-8')
@@ -86,6 +86,22 @@ class CheckSettingsTests(unittest.TestCase):
             code, out = run_gate(source)
             self.assertEqual(code, 1, out)
             self.assertRegex(out, r'call not understood|used without a call')
+
+    def test_source_references_name_a_file_that_names_the_value(self):
+        source = '#define NAME_MACRO L"Known"\nstatic void f(void) {\n    GuardReadSetting(NAME_MACRO, 1);\n}\n'
+        good = {'values': [dict(CATALOG['values'][0], source=['driver/kmd/sub/probe.c']),
+                           dict(CATALOG['values'][1], path='Sub', source=[])] + CATALOG['values'][2:]}
+        code, out = run_gate(source, catalog=good)
+        self.assertEqual(code, 0, out)
+        self.assertIn('1 catalog source references, 0 failures', out)
+        bad = {'values': [dict(CATALOG['values'][0], source=['driver/kmd/sub/probe.c:2', 'driver/kmd/missing.c',
+                                                             'driver/kmd/bc250kmd.h'])] + CATALOG['values'][1:]}
+        code, out = run_gate(source, catalog=bad)
+        self.assertEqual(code, 1, out)
+        self.assertIn('source driver/kmd/sub/probe.c:2 has a line number', out)
+        self.assertIn('source driver/kmd/missing.c is not a file of the repository', out)
+        self.assertIn('source driver/kmd/bc250kmd.h does not name the value', out)
+        self.assertIn('3 catalog source references, 3 failures', out)
 
 
 if __name__ == '__main__':
