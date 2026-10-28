@@ -286,6 +286,16 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                 if (surface) owner.release_surface_handle(*surface);
                 report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return;
             }
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+            // BD-253, lab flavour: each runtime surface that this device creates, at most 32 lines per process.
+            // A shared texture of another device of the process (Qt and Chromium) starts here.
+            static std::atomic_uint created{32};
+            device_life_note(created,"BC250 BD-253: runtime surface created: runtime=%p primary=%u shared=%u "
+                "displayable=%u format=%u %ux%u bind=%08X misc=%08X allocation=%u thread=%lu\n",
+                owner.runtime().hDevice,unsigned(request.primary),unsigned(request.shared),unsigned(request.displayable),
+                unsigned(texture.Format),texture.Width,texture.Height,desc->BindFlags,desc->MiscFlags,
+                unsigned(surface->allocation.allocation),(unsigned long)GetCurrentThreadId());
+#endif
             s->runtime_surface=surface; s->object=surface->texture.texture;
             s->dimension=D3D10DDIRESOURCE_TEXTURE2D;
             s->present_allocation=surface->allocation.allocation; s->present_subresource=0;
@@ -333,11 +343,32 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         if (!s || !args || !runtimeHandle.handle) { report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return; }
         BC250_WDDM_ALLOCATION_PRIVATE metadata{}; D3D11_TEXTURE2D_DESC1 desc{};
         HRESULT hr=decode_open_resource(*args,metadata,desc);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+        // BD-253, lab flavour: each OpenResource of this device, at most 32 lines per process: the step it reached,
+        // its status, and what the opener asked for (Qt opens Chromium's shared texture here).
+        auto opened=[&](const char *step,HRESULT status) {
+            static std::atomic_uint notes{32};
+            device_life_note(notes,"BC250 BD-253: OpenResource %s hr=%08X runtime=%p allocations=%u private=%u "
+                "km-resource=%u format=%u %ux%u bind=%08X misc=%08X thread=%lu\n",step,unsigned(status),
+                owner.runtime().hDevice,args->NumAllocations,args->PrivateDriverDataSize,
+                unsigned(args->hKMResource.handle),unsigned(desc.Format),desc.Width,desc.Height,desc.BindFlags,
+                desc.MiscFlags,(unsigned long)GetCurrentThreadId());
+        };
+        if (FAILED(hr)) opened("decode",hr);
+#endif
         if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
         RuntimeSurfaceAllocation allocation{reinterpret_cast<HANDLE>(runtimeHandle.handle),args->pOpenAllocationInfo2[0].hAllocation,args->hKMResource.handle};
         RuntimeSurface *surface=nullptr;
         hr=owner.adopt_surface(allocation,metadata,desc,surface);
-        if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+        if (FAILED(hr)) opened("adopt",hr);
+#endif
+        if (SUCCEEDED(hr)) {
+            hr=owner.wait_surface(*surface);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+            opened(hr==S_OK ? "done" : "wait",hr);
+#endif
+        }
         if (hr!=S_OK) {
             if (surface) owner.release_surface_handle(*surface);
             report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return;
