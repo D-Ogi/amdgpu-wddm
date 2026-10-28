@@ -118,7 +118,8 @@ For each engine, from the highest to the lowest:
 Notes:
 
 - The per-application settings of the control application ([per-app-graphics-settings.md](per-app-graphics-settings.md))
-  win over the files. In DXVK they arrive through `DXVK_CONFIG`. The Mesa drivers and vkd3d-proton take them from
+  win over the files. In DXVK they arrive through `DXVK_CONFIG`. `Config::getProcessConfig` makes the DXVK chain,
+  and the engine export of the `dxgi.*` options that the shells read uses the same function. The Mesa drivers and vkd3d-proton take them from
   their own variables (for example `RADV_TEX_ANISO` and `VKD3D_SAMPLER_ANISOTROPY`), not from a profile option, so a
   profile file cannot change them.
 - vkd3d-proton applies its table after `VKD3D_CONFIG`, so upstream already lets the table clear a flag that
