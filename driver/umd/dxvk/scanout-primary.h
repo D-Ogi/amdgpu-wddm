@@ -10,11 +10,12 @@
 //
 // The decision is the D3D12 shell's, through the rule both shells share
 // (driver/contract/bc250_scanout_primary.h), plus the clauses that only this shell has:
-//   Off          the operator's switch is off. This shell's default is OFF until a D3D11 game is measured
-//                with the request (the train rule: a feature is on by default only after its lab
-//                measurement). AMDGPU_WDDM_D3D11_SCANOUT=1 in the environment (a lab build only, BD-167),
-//                or the REG_DWORD ScanoutPrimary=1 under HKLM\SOFTWARE\amdgpu-wddm\D3D11 (64-bit view), asks
-//                for it; the environment wins over the machine value, and any value that is not "1" is off.
+//   Off          the operator's switch is off. This shell's default is ON from tester.34, as the D3D12
+//                shell's (BD-256: no installer, GUI or tool wrote the machine value, so with the default off
+//                no D3D11 game could flip). AMDGPU_WDDM_D3D11_SCANOUT in the environment (a lab build only,
+//                BD-167), or the REG_DWORD ScanoutPrimary under HKLM\SOFTWARE\amdgpu-wddm\D3D11 (64-bit
+//                view), sets it: "1" or 1 asks, any other value is off (ScanoutPrimary=0 is the rollback).
+//                The environment wins over the machine value.
 //   NotPrimary   the swap-chain buffer came without a primary descriptor (a DISPLAYABLE surface of a
 //                windowed flip-model chain, M746). The record's PRIMARY bit and the video present source
 //                come from that descriptor, and both the kernel driver's SCANOUT policy and the front's
@@ -33,7 +34,7 @@
 #include "../../kmd/surface_resource_private.h"
 #include <cstring>
 namespace bc250::umd {
-inline constexpr bool kScanoutPrimaryDefaultOn=false;
+inline constexpr bool kScanoutPrimaryDefaultOn=true;
 enum class ScanoutPrimaryReason : unsigned {
     Admitted,Off,NotPrimary,VidPnSource,ForceCpu,DesktopRoute,CapsClosed,SourceGeometry,Format,Pitch
 };

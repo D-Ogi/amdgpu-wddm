@@ -312,9 +312,9 @@ changes these items:
   30 s while the compositor asks, and once more at the destroy of the device, a
   `check_direct_flip summary` line gives all the counters.
 - **The D3D11 shell can ask for scan-out.** `driver/umd/dxvk/scanout-primary.h` sets the SCANOUT bit
-  under the same shared rule. It is off by default until a lab arm measures it:
-  `AMDGPU_WDDM_D3D11_SCANOUT=1` in the process environment, or `ScanoutPrimary` (REG_DWORD 1) under
-  `HKLM\SOFTWARE\amdgpu-wddm\D3D11`, turns it on. The runtime creates some D3D11 window buffers as
+  under the same shared rule. It is on by default from tester.34 (BD-256). `ScanoutPrimary` (REG_DWORD 0)
+  under `HKLM\SOFTWARE\amdgpu-wddm\D3D11`, or `AMDGPU_WDDM_D3D11_SCANOUT=0` in the process environment of a
+  lab build, turns it off. The runtime creates some D3D11 window buffers as
   DISPLAYABLE without a primary description (M746). These buffers cannot ask, and the shell logs them
   as `not-primary`.
 - **The analyser has a kernel witness.** Win32k marks most game frames of trial 478 with

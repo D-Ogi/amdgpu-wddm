@@ -239,8 +239,9 @@ The switch exists for the release train, not for the feature: b18 carries three 
 revision and one lab session checks them together, so a failure must point to one of them
 without a rebuild (`scratch/train/TRAIN-b18.md` rule 4). It is not the whole lever for this wagon. From
 M15.14 increment 3 the D3D12 shell asks for scan-out by default, and the experiment `scanout-flip-off`
-turns that off for an application or, as the machine value, for every application. The D3D11 shell asks
-only when the operator turns it on (`AMDGPU_WDDM_D3D11_SCANOUT=1`). This value turns the path off for the
+turns that off for an application or, as the machine value, for every application. From tester.34 the
+D3D11 shell asks by default too, and the machine value `ScanoutPrimary` 0 under
+`HKLM\SOFTWARE\amdgpu-wddm\D3D11` turns that off (BD-256). This value turns the path off for the
 driver, including for anything that asks without being told to.
 
 The flip gates of `driver/kmd/mmio.c` - `EnableMmio`, `EnableDcnWrite`, `EnableVidPnFlip` - are not this

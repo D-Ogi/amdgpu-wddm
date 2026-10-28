@@ -274,10 +274,12 @@ swap chain is an RGB10A2 primary.
 
 M15.14 increment 3 (`scanout-primary.h`) lets an 8-bit primary ask for scan-out. The
 E26R v3 record then carries `SCANOUT` next to `PRIMARY`, and the kernel driver places
-the buffer in the local segment, which the display core can read. The request is off by
-default until a D3D11 game is measured with it. `AMDGPU_WDDM_D3D11_SCANOUT=1` in the
-environment, or the REG_DWORD `ScanoutPrimary=1` under `HKLM\SOFTWARE\amdgpu-wddm\D3D11`,
-turns it on. The environment wins over the machine value, and any other value is off.
+the buffer in the local segment, which the display core can read. The request is on by
+default from tester.34, as in the D3D12 shell (BD-256: nothing wrote the machine value, so
+with the default off no D3D11 game could flip). The REG_DWORD `ScanoutPrimary=0` under
+`HKLM\SOFTWARE\amdgpu-wddm\D3D11` turns it off, and `AMDGPU_WDDM_D3D11_SCANOUT=0` in the
+environment of a lab build does the same. The environment wins over the machine value. A
+value of 1 asks, and any other value is off.
 The clauses are those of the D3D12 shell (`driver/contract/bc250_scanout_primary.h`):
 source mode geometry from the scan-out caps trailer of each create, the format row,
 the pitch and the router's DwmForceCpu. The runtime creates the primary of a mode
