@@ -7,8 +7,9 @@ The script reads three sources at exact commits and writes one Markdown page:
               stages, function attributes). The script imports it the way DXC's hctdb_instrhelp.py does.
   dxil-spirv  dxil.hpp (the DXIL::Op enumeration), opcodes/opcodes_dxil_builtins.cpp (the dispatch table of
               emit_dxil_instruction and the analysis passes) and the handler sources under opcodes/.
-  this repo   driver/umd/d3d12/engine-ddi/caps.cpp and state-objects.cpp (the shader model and the feature
-              caps that the installed D3D12 driver reports), and three evidence files with the lab answers.
+  this repo   driver/umd/d3d12/engine-ddi/caps.cpp, state-objects.cpp and adapter-caps.cpp (the shader model
+              and the feature caps that the installed D3D12 driver reports), and three evidence files with the
+              lab answers.
 
 Status of an operation:
   translated          the dispatch table has a handler for the opcode.
@@ -18,8 +19,9 @@ Status of an operation:
   missing             the opcode has no handler: emit_dxil_instruction stops with an error, or the opcode number
                       falls on an internal opcode of dxil-spirv (the note names it).
 
-Reach (installed route) says if an application can give the operation to the driver today: the shader model
-that the shell reports admits the operation, and the feature cap that the operation needs is reported.
+Reach says if an application can give the operation to the installed driver today, once for the Agility SDK
+route and once for the System32 runtime of build 22621: the shader model that the shell reports on that route
+admits the operation, and the feature cap that the operation needs is reported.
 This is a static reading. A translated operation can still be wrong; the page lists candidates for runtime tests.
 
   python -I tools/docs/dxil_op_coverage.py --dxc <dxc> --dxil-spirv <repo> --dxil-spirv-rev <rev> \\
@@ -41,6 +43,7 @@ OUT = REPO / "docs" / "status" / "dxil-op-coverage.md"
 
 CAPS_CPP = "driver/umd/d3d12/engine-ddi/caps.cpp"
 STATE_OBJECTS_CPP = "driver/umd/d3d12/engine-ddi/state-objects.cpp"
+ADAPTER_CAPS_CPP = "driver/umd/d3d12/adapter-caps.cpp"
 DEVICE_C = "libs/vkd3d/device.c"
 
 # Lab answers of the engine that the shell passes through. Each value is read from the file, not typed here.
@@ -53,6 +56,11 @@ EVIDENCE = {
     "sm68": ("evidence/windows/2026-10-08-sm68-lab-unit-a/sm68-agility-driver-log.txt",
              r"QueryAdapterCaps: shader model (\d+);.*SampleCmpGradientAndBias (\d), ExtendedCommandInfo (\d)", None),
 }
+
+# Optional: evidence of the engine's shader model 6.9 answer ("engine_sm69") and work graph tier ("engine_wg"),
+# as (path, pattern). The engine log line "QueryAdapterCaps: shader model 69" and "work graphs: engine tier 10" are
+# the patterns to use.
+ENGINE_EVIDENCE: dict[str, tuple[str, str]] = {}
 
 SHADER_MODELS = [(6, m) for m in range(0, 12)]
 
@@ -241,9 +249,14 @@ def read_caps():
         m = src.find(pattern)
         return m, f"{src.path}:{src.line_of(m.start())}"
 
+    shell = Source(ADAPTER_CAPS_CPP, (REPO / ADAPTER_CAPS_CPP).read_text(encoding="utf-8"))
     m, sm_line = at(caps, r"constexpr D3D_SHADER_MODEL kHighestShaderModel = D3D_SHADER_MODEL_(\d+)_(\d+);")
     r = dict(sm=(int(m.group(1)), int(m.group(2))), sm_line=sm_line)
-    _, r["rt_line"] = at(caps, r"\? D3D12DDI_RAYTRACING_TIER_1_1")
+    m, r["tier12_ddi_line"] = at(caps, r"constexpr uint32_t kTier12DdiVersion = (\d+);")
+    r["tier12_ddi"] = int(m.group(1))
+    _, r["sm69_gate_line"] = at(caps, r"if \(m >= D3D_SHADER_MODEL_6_9 && !\(c\.report_raytracing_tier12 && sm69_floor\(c\)\)\)")
+    _, r["tier12_switch_line"] = at(shell, r"engine_ddi::set_raytracing_tier12_reporting\(owner\.caps,!off\)")
+    _, r["rt_line"] = at(caps, r"if \(tier12_reported\(c, ddi_version\)\) o\.RaytracingTier =")
     _, r["sfb_line"] = at(caps, r"o\.SamplerFeedbackTier = D3D12DDI_SAMPLER_FEEDBACK_TIER_NOT_SUPPORTED;")
     _, r["ato_line"] = at(caps, r"d->AdvancedTextureOpsSupported = FALSE;")
     _, r["msaa_line"] = at(caps, r"d->WriteableMSAATexturesSupported = FALSE;")
@@ -252,7 +265,11 @@ def read_caps():
     _, r["vi_line"] = at(caps, r"o\.ViewInstancingTier = ")
     _, r["sm68opt_line"] = at(caps, r"d->SampleCmpGradientAndBiasSupported = sm68 &&")
     _, r["eci_line"] = at(caps, r"d->ExtendedCommandInfoSupported = sm68 &&")
-    _, r["wg_line"] = at(so, r"D3D12DDI_STATE_OBJECT_TYPE_EXECUTABLE \? E_NOTIMPL")
+    m, r["wg_line"] = at(caps, r"d->WorkGraphsTier = ddi_version >= (\d+) && c\.options21\.WorkGraphsTier")
+    r["wg_ddi"] = int(m.group(1))
+    _, r["wg_so_line"] = at(so, r"case D3D12DDI_STATE_SUBOBJECT_TYPE_WORK_GRAPH:")
+    m, r["ddi_max_line"] = at(caps, r"static_assert\(kDdiVersionMax == (\d+),")
+    r["ddi_max"] = int(m.group(1))
 
     lab = {}
     for key, (path, pattern, extra) in EVIDENCE.items():
@@ -268,20 +285,45 @@ def read_caps():
     r["crt"] = int(lab["conformance_extra"][0])
     r["mesh_tier"] = int(lab["mesh"][0])
     r["sm68_engine"], r["scgb"], r["eci"] = lab["sm68"]
+    # The engine answers that a 6.9 program and a work graph need on the Agility route. No committed evidence gives
+    # them yet. An entry here (path, pattern) turns the cond rows into yes rows.
+    for key in ("engine_sm69", "engine_wg"):
+        r[key] = False
+        if key in ENGINE_EVIDENCE:
+            path, pattern = ENGINE_EVIDENCE[key]
+            r[key] = bool(re.search(pattern, (REPO / path).read_text(encoding="utf-8", errors="replace")))
     return r
 
 
-def reach(op, caps):
-    """yes / no / cond, and the reason, for the installed route."""
+def routes(caps):
+    """The two runtime routes of the installed driver: what each one lets an application use."""
+    agility = dict(name="Agility", ddi=caps["ddi_max"], sm=caps["sm"], wg=caps["ddi_max"] >= caps["wg_ddi"])
+    if caps["ddi_max"] < caps["tier12_ddi"]:
+        agility["sm"] = min(caps["sm"], (6, 8))
+    system = dict(name="System32 22621", ddi=92, sm=tuple(int(x) for x in caps["sys_sm"].split("_")), wg=False)
+    return agility, system
+
+
+def reach(op, caps, route):
+    """yes / no / cond, and the reason, for one route of the installed driver."""
     if op["reserved"]:
         return "-", ""
     if op["table"] != "CoreOps":
         return "no", "The experimental table needs an experimental shader model."
-    if op["eff_sm"] > caps["sm"]:
-        return "no", f"SM {sm_text(op['eff_sm'])} is above the reported {sm_text(caps['sm'])} ({caps['sm_line']})."
+    if op["eff_sm"] > route["sm"]:
+        where = caps["sm_line"] if route["name"] == "Agility" else EVIDENCE["conformance"][0]
+        return "no", f"SM {sm_text(op['eff_sm'])} is above {sm_text(route['sm'])} ({where})."
     cat, name = op["category"], op["name"]
     if op["stages"] and set(op["stages"]) <= {"node"}:
-        return "no", f"Node shaders only. The shell refuses work graph state objects ({caps['wg_line']})."
+        if not route["wg"]:
+            return "no", (f"Node shaders only. Work graphs need DDI build {caps['wg_ddi']}, and this route "
+                          f"negotiates {route['ddi']} ({caps['wg_line']}).")
+        if not caps["engine_wg"]:
+            return "cond", f"WorkGraphsTier is the engine answer ({caps['wg_line']}). The evidence has no value."
+        return "yes", ""
+    if op["eff_sm"] >= (6, 9) and not caps["engine_sm69"]:
+        return "cond", (f"6.9 needs the engine answer and the shell floor ({caps['sm69_gate_line']}). "
+                        "The evidence has no value.")
     if cat == "Sampler Feedback":
         return "no", f"SamplerFeedbackTier is not reported ({caps['sfb_line']})."
     if name in ("TextureGatherRaw", "SampleCmpLevel"):
@@ -303,7 +345,7 @@ def reach(op, caps):
     rt_stages = {"raygeneration", "intersection", "anyhit", "closesthit", "miss", "callable"}
     if cat == "Inline Ray Query" or "aytracing" in cat or "Ray " in cat or name in ("TraceRay", "ReportHit",
             "CallShader", "AcceptHitAndEndSearch", "IgnoreHit") or (op["stages"] and set(op["stages"]) - {"library"} <= rt_stages):
-        return ("yes" if caps["rt_tier"] in ("1.1", "1.2") else "no"), f"RaytracingTier {caps['rt_tier']} ({caps['rt_line']})."
+        return ("yes" if caps["rt_tier"] in ("1.1", "1.2") else "no"), f"RaytracingTier {caps['rt_tier']} or higher."
     return "yes", ""
 
 
@@ -344,7 +386,9 @@ def build(args):
     table, side_effects, out_of_range_line, no_handler_line = parse_dispatch(builtins)
     index = index_functions(sources)
     caps = read_caps()
-    device = Source(DEVICE_C, git(vk, "show", f"{args.vkd3d_rev}:{DEVICE_C}"))
+    agility, system = routes(caps)
+    caps["agility"], caps["system"] = agility, system
+    device =Source(DEVICE_C, git(vk, "show", f"{args.vkd3d_rev}:{DEVICE_C}"))
     sm69_line = device.line_of(device.find(r"Enabling experimental support for SM 6\.9").start())
     first_internal = min(v for k, v in enum.items() if k.startswith("Extended"))
 
@@ -356,7 +400,8 @@ def build(args):
     rows, cands, collisions, dce = [], [], [], []
     for op in ops:
         row = dict(op)
-        row["reach"], row["reach_why"] = reach(op, caps)
+        row["reach"], row["reach_why"] = reach(op, caps, agility)
+        row["reach_sys"], row["reach_sys_why"] = reach(op, caps, system)
         row["note"] = ""
         if op["reserved"]:
             row["status"] = "reserved"
@@ -464,7 +509,8 @@ def render(rows, cands, meta):
     w(f"- dxil-spirv at `{meta['fork']}`: `dxil.hpp`, `opcodes/opcodes_dxil_builtins.cpp` and the handlers under "
       "`opcodes/`.")
     w(f"- vkd3d-proton at `{meta['vk']}`: `{DEVICE_C}`, the shader model gate of the engine.")
-    w(f"- This repository: `{CAPS_CPP}`, `{STATE_OBJECTS_CPP}` and the evidence files that the reach column names.")
+    w(f"- This repository: `{CAPS_CPP}`, `{ADAPTER_CAPS_CPP}`, `{STATE_OBJECTS_CPP}` and the evidence files that "
+      "the reach columns name.")
     w("")
     w("PROVENANCE: the opcode, class, category and shader model columns come from DXC hctdb.py "
       "(University of Illinois/NCSA Open Source License).")
@@ -485,45 +531,57 @@ def render(rows, cands, meta):
       "handler that it runs.")
     w("- The SM column is the hctdb value. Some operations have only vector overloads. Such an operation exists only "
       "on a native vector, and DXIL has native vectors from shader model 6.9. The SM* column gives 6.9 for these "
-      "operations. The totals and the reach column use SM*.")
-    w("- **Reach** is for the installed route: the D3D12 shell and the engine behind it. `yes`: the reported shader "
-      "model and the reported caps admit the operation. `no`: they do not admit it. `cond`: the cap is an engine "
-      "answer, and the evidence here does not give its value.")
+      "operations. The totals and the reach columns use SM*.")
+    w("- **Reach** is for the installed driver: the D3D12 shell and the engine behind it. There is one column for "
+      "each runtime route. **Agility** is an application that loads an Agility SDK core. **22621** is an "
+      "application on the System32 runtime of build 22621. `yes`: the reported shader model and the reported caps "
+      "admit the operation. `no`: they do not admit it. `cond`: the cap is an engine answer, and the evidence here "
+      "does not give its value.")
     w("")
     w("A static matrix finds a missing case. It cannot find a wrong translation. The candidate list names the "
       "operations that have a case but doubtful semantics. Use it to select runtime tests.")
     w("")
     w("## Reported shader model and caps")
     w("")
+    ag, sy = caps["agility"], caps["system"]
     w(f"- The shell reports the engine's shader model, at most {sm_text(caps['sm'])} (`{caps['sm_line']}`). On unit "
-      f"A the engine gave {caps['sm68_engine'][0]}.{caps['sm68_engine'][1:]} to that request "
+      f"A the engine gave {caps['sm68_engine'][0]}.{caps['sm68_engine'][1:]} to a 6.8 request "
       f"(`{EVIDENCE['sm68'][0]}`).")
-    w(f"- The System32 runtime 22621 maps shader models only to 6.6. The conformance run reports HighestShaderModel "
-      f"{caps['sys_sm'].replace('_', '.')} (`{EVIDENCE['conformance'][0]}`). On that runtime, 6.7 and 6.8 need an "
-      "Agility SDK core (facts M840, M841).")
-    w(f"- The engine can give 6.9 (`{DEVICE_C}:{meta['sm69_line']}`). The shell ceiling keeps the installed route "
-      f"at {sm_text(caps['sm'])}.")
-    w(f"- RaytracingTier {caps['rt_tier']}, ConservativeRasterizationTier {caps['crt']}: `{EVIDENCE['conformance'][0]}`.")
+    w(f"- The shell lists 6.9 only at a negotiated DDI build of {caps['tier12_ddi']} or higher. It also needs the "
+      f"raytracing tier 1.2 switch and the 6.9 floor of the engine (`{caps['sm69_gate_line']}`). The release "
+      f"shell sets the switch (`{caps['tier12_switch_line']}`).")
+    w(f"- The engine can give 6.9 (`{DEVICE_C}:{meta['sm69_line']}`). No committed evidence gives that answer. "
+      "Thus the 6.9 rows of the Agility column are `cond`.")
+    w(f"- The Agility route negotiates DDI build {ag['ddi']} (`{caps['ddi_max_line']}`). The shell reports "
+      f"WorkGraphsTier from DDI build {caps['wg_ddi']} with the engine tier (`{caps['wg_line']}`). It admits work "
+      f"graph state objects (`{caps['wg_so_line']}`). No committed evidence gives the engine tier. Thus the node "
+      "rows are `cond`.")
+    w(f"- The System32 runtime 22621 negotiates DDI build {sy['ddi']} and maps shader models only to 6.6. The "
+      f"conformance run reports HighestShaderModel {caps['sys_sm'].replace('_', '.')} "
+      f"(`{EVIDENCE['conformance'][0]}`). On that runtime, 6.7 and higher need an Agility SDK core (facts M840, "
+      f"M841). Work graphs need DDI build {caps['wg_ddi']}, so that route has no work graphs.")
+    w(f"- RaytracingTier {caps['rt_tier']}, ConservativeRasterizationTier {caps['crt']}: `{EVIDENCE['conformance'][0]}`. "
+      f"On the Agility route, the shell can report tier 1.2 (`{caps['rt_line']}`).")
     w(f"- MeshShaderTier {caps['mesh_tier']}: `{EVIDENCE['mesh'][0]}`.")
     w(f"- SampleCmpGradientAndBias {caps['scgb']}, ExtendedCommandInfo {caps['eci']}: `{EVIDENCE['sm68'][0]}`.")
     w(f"- Not reported: sampler feedback (`{caps['sfb_line']}`), AdvancedTextureOps (`{caps['ato_line']}`), "
-      f"WriteableMSAATextures (`{caps['msaa_line']}`). The shell refuses work graph state objects "
-      f"(`{caps['wg_line']}`).")
+      f"WriteableMSAATextures (`{caps['msaa_line']}`).")
     w("")
 
     w("## Totals per shader model")
     w("")
     w("Counts of the core table, by the SM* column. Reserved opcodes are not counted.")
     w("")
-    w("| SM | Operations | Translated | Partial | Refused | Missing | Reach yes | Reach cond |")
-    w("|---|---:|---:|---:|---:|---:|---:|---:|")
-    tot = [0] * 7
+    w("| SM | Operations | Translated | Partial | Refused | Missing | Agility yes | Agility cond | 22621 yes |")
+    w("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    tot = [0] * 8
     for sm in SHADER_MODELS:
         group = [r for r in core if r["eff_sm"] == sm]
         if not group:
             continue
         vals = [len(group)] + [sum(r["status"] == s for r in group) for s in STATUSES] + \
-               [sum(r["reach"] == "yes" for r in group), sum(r["reach"] == "cond" for r in group)]
+               [sum(r["reach"] == "yes" for r in group), sum(r["reach"] == "cond" for r in group),
+                sum(r["reach_sys"] == "yes" for r in group)]
         tot = [a + b for a, b in zip(tot, vals)]
         w(f"| {sm_text(sm)} | " + " | ".join(str(v) for v in vals) + " |")
     w("| all | " + " | ".join(str(v) for v in tot) + " |")
@@ -580,13 +638,19 @@ def render(rows, cands, meta):
 
     w("## Matrix")
     w("")
-    w("| Opcode | Name | Class | SM | SM* | Status | Reach | Note |")
-    w("|---:|---|---|---|---|---|---|---|")
+    w("The note gives the reason for an Agility value that is not `yes`. A 22621 value that differs from the "
+      "Agility value has its reason too.")
+    w("")
+    w("| Opcode | Name | Class | SM | SM* | Status | Agility | 22621 | Note |")
+    w("|---:|---|---|---|---|---|---|---|---|")
     for r in live:
         opc = r["index"] if r["table"] == "CoreOps" else f"{r['opid']:#x}"
-        note = " ".join(x for x in (r["note"], r["reach_why"] if r["reach"] != "yes" else "") if x)
+        parts = [r["note"], r["reach_why"] if r["reach"] != "yes" else ""]
+        if r["reach_sys"] != r["reach"]:
+            parts.append(f"22621: {r['reach_sys_why']}")
+        note = " ".join(x for x in parts if x)
         w(f"| {opc} | `{r['name']}` | {r['cls']} | {sm_text(r['sm'])} | {sm_text(r['eff_sm'])} | {r['status']} | "
-          f"{r['reach']} | {note.replace('|', '/')} |")
+          f"{r['reach']} | {r['reach_sys']} | {note.replace('|', '/')} |")
     w("")
     return "\n".join(out)
 
