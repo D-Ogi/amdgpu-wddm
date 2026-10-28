@@ -87,7 +87,7 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 #define BC250_HANG_VERDICT_ADAPTER_BUSY    10u  /* a witness busy: failure returned (0x116), LastSeq is the
                                                    BC250_ADAPTER_BUSY_* mask, not a hardware sequence */
 
-/* Which DDI wrote the record: Parameters\HangRecovery LastPath. */
+/* Which DDI wrote the record: HangRecovery\LastPath of the state store. */
 #define BC250_HANG_PATH_ENGINE   1u     /* DxgkDdiResetEngine, stage 1 of hang-recovery.md */
 #define BC250_HANG_PATH_ADAPTER  2u     /* DxgkDdiResetFromTimeout, TDR recovery S1 */
 

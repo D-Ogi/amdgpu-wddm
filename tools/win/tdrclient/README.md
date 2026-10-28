@@ -34,7 +34,8 @@ accepts is not measured yet. The program prints the status of the call in both c
 ## Output and exit codes
 
 One `RESULT=` line. `TDR-REQUESTED` (exit 0) means only that `D3DKMTEscape` returned success: the TDR itself runs
-asynchronously in dxgkrnl, and the kernel driver's log and `Parameters\HangRecovery` record say what happened.
+asynchronously in dxgkrnl, and the kernel driver's log and the `HangRecovery` records of the driver state store
+(`bc250kmd_cli state get <name> HangRecovery`) say what happened.
 
 | Exit | RESULT |
 |---|---|

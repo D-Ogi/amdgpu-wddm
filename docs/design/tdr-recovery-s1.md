@@ -36,7 +36,9 @@ The pages, in `ref/windows-driver-docs-ddi/wdk-ddi-src/content/d3dkmddi/` and
 
 ### 2.1 The switch
 
-`Parameters\AdapterRecoveryMode`, a DWORD in the state catalog, read at the device start:
+`AdapterRecoveryMode`, a DWORD setting of the state catalog (code default 2, no installation default), read at the
+device start. Change it with `bc250kmd_cli state set AdapterRecoveryMode <value>` and remove the override with
+`bc250kmd_cli state clear AdapterRecoveryMode`. A value written directly into the `Parameters` key has no effect.
 
 | Value | Behaviour |
 |---|---|
@@ -133,7 +135,9 @@ close of the start witness.
 
 ## 3. The record
 
-`Parameters\HangRecovery` (`guard.c`) has two new values:
+The `HangRecovery` records of the driver state store (`guard.c`, [driver-state.md](driver-state.md)) have two new
+values. Both are record entries of `driver/state/catalog.json`, so the state reader (`bc250kmd_cli state get`) reads
+them and an update in place keeps them. The record is not in `Parameters\HangRecovery`.
 
 | Value | Meaning |
 |---|---|

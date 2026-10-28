@@ -40,7 +40,7 @@ static __inline unsigned Bc250AdapterRecoveryMode(int hangRecoveryMode, unsigned
     return BC250_ADAPTER_RECOVERY_KILL;
 }
 
-/* Why ResetFromTimeout refused. Stable on-disk bits: Parameters\HangRecovery LastSeq of verdict
+/* Why ResetFromTimeout refused. Stable on-disk bits: HangRecovery\LastSeq of the state store, verdict
  * BC250_HANG_VERDICT_ADAPTER_BUSY. More than one bit can be set. */
 #define BC250_ADAPTER_BUSY_GFX_RING       0x0001u /* the newest sequence on the GFX ring (node 0) did not retire */
 #define BC250_ADAPTER_BUSY_COMPUTE_RING   0x0002u /* the newest sequence on the compute ring (node 2) did not retire */
