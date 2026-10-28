@@ -249,6 +249,14 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # Every variable a build recipe reads is written somewhere in that recipe (tools\quality\check-unassigned.ps1,
  # PowerShell's own parser). This is the rule the lost assignment broke, and it reads all 105 recipes in 3 s.
  Check 'script-variables' { & pwsh -NoProfile -File "$repo\tools\quality\check-unassigned.ps1" -Recipes -Repo $repo }
+ # One variable has one spelling in each scope that writes it (tools\quality\check-variable-case.ps1, PowerShell's own
+ # parser). PowerShell variable names ignore case, so $report = @{...} wrote a table into the [string]$Report
+ # parameter of build-release-set.ps1 and 4 of its 32 tests failed while a package was cut. It reads every tracked
+ # .ps1 and .psm1 of the repository except the records, about 580 files in 12 s on the idle development PC and 42 s
+ # under load. Its deadline is its own 300 s in gate-inputs.json, outside quality-controls, which runs only its
+ # planted controls. It declares no inputs: it reads the file list of git and scripts in every directory, which no
+ # input group covers, so it runs in every suite.
+ Check 'variable-case' { & pwsh -NoProfile -File "$repo\tools\quality\check-variable-case.ps1" -Repo $repo }
  # Every read of one of the four lab-only settings in the control application's sources is inside its flavour
  # guard (tools\quality\flavour_sources.py). The build proves the same thing on the built image; this names the
  # file and the line without a compiler. Both gates' planted controls run in quality-controls.
