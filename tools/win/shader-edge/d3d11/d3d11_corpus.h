@@ -1,0 +1,30 @@
+// The DXBC programs of d3d11shaderedge.cpp, one header per program from gen\ (build.ps1 -Regenerate makes them;
+// gen\shaders.txt records the compiler and command of each).
+#pragma once
+
+#include "fu_fxc.h"
+#include "fu_fxc2.h"
+#include "loop_fxc.h"
+#include "loop_fxc2.h"
+#include "switch_fxc.h"
+#include "switch_fxc2.h"
+#include "indexed_fxc.h"
+#include "indexed_fxc2.h"
+#include "bits_fxc.h"
+#include "bits_fxc2.h"
+
+#include "tess_vs_fxc.h"
+#include "tess_hs_array_fxc.h"
+#include "tess_hs_direct_fxc.h"
+#include "tess_ds_fxc.h"
+#include "tess_ps_fxc.h"
+#include "tess_vs_fxc2.h"
+#include "tess_hs_array_fxc2.h"
+#include "tess_hs_direct_fxc2.h"
+#include "tess_ds_fxc2.h"
+#include "tess_ps_fxc2.h"
+#include "tess_vs_fxc2no64.h"
+#include "tess_hs_array_fxc2no64.h"
+#include "tess_hs_direct_fxc2no64.h"
+#include "tess_ds_fxc2no64.h"
+#include "tess_ps_fxc2no64.h"

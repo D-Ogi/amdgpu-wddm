@@ -1,0 +1,49 @@
+compiler dxc <BC250_ROOT>\scratch\shader-edge-tests\tools\dxc\dxc.exe
+compiler dxc sha256 AA7965B3763D9C710BAAA5A28CEDCC633449962A75D1391D161A85304A41B3E2
+compiler dxc version dxcompiler.dll: 1.9(5512-01b62ad4)(1.9.2609.5) - 1.9.2609.5 (01b62ad47)
+compiler fxc <BC250_ROOT>\toolchain\nuget\microsoft.windows.sdk.cpp\c\bin\10.0.26100.0\x64\fxc.exe
+compiler fxc sha256 05DCA4E48CE764234F045D7CCD5687398564D762823955DC81624BA5C6F3F3C4
+compiler fxc version Windows SDK 10.0.26100.0
+compiler fxc2 <BC250_ROOT>\scratch\shader-edge-tests\tools\fxc2\fxc2.exe
+compiler fxc2 sha256 4CEF7E7A6BA605A45B3E03BF646A646035BEEE6730CF6A31215D55F15700573B
+compiler fxc2 version fxc2 f8ad188f0877a944237488b1d0a323ebaa0cc9fa; vkd3d vkd3d-2.1-93-gcfcb4833 + 65 FXC2 patches; compiler clang version 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)
+compiler fxc2no64 <BC250_ROOT>\scratch\shader-edge-tests\tools\fxc2-no64\fxc2.exe
+compiler fxc2no64 sha256 218B938CC7F3ACF3E80474C14E03B511314A952D85997A3FD99FE56AD0FC0860
+compiler fxc2no64 version fxc2 f8ad188f0877a944237488b1d0a323ebaa0cc9fa; vkd3d vkd3d-2.1-93-gcfcb4833 + 65 FXC2 patches without 0064-vkd3d-shader-ir-A-relative-index-from-a-temp.patch; compiler clang version 23.1.4 (https://github.com/llvm/llvm-project 7a941dfb2877a0b8cf30323fefa85ad019e0b0f5)
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -E exact_main -Vn g_vk_atomic_exact_ssbo -Fh gen\vk_atomic_exact_ssbo.h vk\shaders\atomics.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -E exact_main -D ROUTE_BDA -Vn g_vk_atomic_exact_bda -Fh gen\vk_atomic_exact_bda.h vk\shaders\atomics.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -E mp_main -Vn g_vk_atomic_mp_ssbo -Fh gen\vk_atomic_mp_ssbo.h vk\shaders\atomics.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -E mp_main -D ROUTE_BDA -Vn g_vk_atomic_mp_bda -Fh gen\vk_atomic_mp_bda.h vk\shaders\atomics.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -E clock_main -D SCOPE=3 -Vn g_vk_clock_subgroup -Fh gen\vk_clock_subgroup.h vk\shaders\clock.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -E clock_main -D SCOPE=1 -Vn g_vk_clock_device -Fh gen\vk_clock_device.h vk\shaders\clock.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -enable-16bit-types -E half_main -D N=3 -D VECTOR=0 -Vn g_vk_half3_scalar -Fh gen\vk_half3_scalar.h vk\shaders\half_bda.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -enable-16bit-types -E half_main -D N=3 -D VECTOR=1 -Vn g_vk_half3_vector -Fh gen\vk_half3_vector.h vk\shaders\half_bda.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -enable-16bit-types -E half_main -D N=5 -D VECTOR=0 -Vn g_vk_half5_scalar -Fh gen\vk_half5_scalar.h vk\shaders\half_bda.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -enable-16bit-types -E half_main -D N=5 -D VECTOR=1 -Vn g_vk_half5_vector -Fh gen\vk_half5_vector.h vk\shaders\half_bda.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -enable-16bit-types -E half_main -D N=7 -D VECTOR=0 -Vn g_vk_half7_scalar -Fh gen\vk_half7_scalar.h vk\shaders\half_bda.hlsl
+dxc -nologo -spirv -T cs_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -enable-16bit-types -E half_main -D N=7 -D VECTOR=1 -Vn g_vk_half7_vector -Fh gen\vk_half7_vector.h vk\shaders\half_bda.hlsl
+fxc -nologo -T cs_5_0 -E fu_main -Vn g_fu_fxc -Fh gen\fu_fxc.h d3d11\shaders\corpus_cs.hlsl
+fxc -nologo -T cs_5_0 -E loop_main -Vn g_loop_fxc -Fh gen\loop_fxc.h d3d11\shaders\corpus_cs.hlsl
+fxc -nologo -T cs_5_0 -E switch_main -Vn g_switch_fxc -Fh gen\switch_fxc.h d3d11\shaders\corpus_cs.hlsl
+fxc -nologo -T cs_5_0 -E indexed_main -Vn g_indexed_fxc -Fh gen\indexed_fxc.h d3d11\shaders\corpus_cs.hlsl
+fxc -nologo -T cs_5_0 -E bits_main -Vn g_bits_fxc -Fh gen\bits_fxc.h d3d11\shaders\corpus_cs.hlsl
+fxc2 -nologo -T cs_5_0 -E fu_main -Vn g_fu_fxc2 -Fh gen\fu_fxc2.h d3d11\shaders\corpus_cs.hlsl
+fxc2 -nologo -T cs_5_0 -E loop_main -Vn g_loop_fxc2 -Fh gen\loop_fxc2.h d3d11\shaders\corpus_cs.hlsl
+fxc2 -nologo -T cs_5_0 -E switch_main -Vn g_switch_fxc2 -Fh gen\switch_fxc2.h d3d11\shaders\corpus_cs.hlsl
+fxc2 -nologo -T cs_5_0 -E indexed_main -Vn g_indexed_fxc2 -Fh gen\indexed_fxc2.h d3d11\shaders\corpus_cs.hlsl
+fxc2 -nologo -T cs_5_0 -E bits_main -Vn g_bits_fxc2 -Fh gen\bits_fxc2.h d3d11\shaders\corpus_cs.hlsl
+fxc -nologo -T vs_5_0 -E vs_main -Vn g_tess_vs_fxc -Fh gen\tess_vs_fxc.h d3d11\shaders\tess_cpid.hlsl
+fxc -nologo -T hs_5_0 -E hs_main -D HS_DIRECT=0 -Vn g_tess_hs_array_fxc -Fh gen\tess_hs_array_fxc.h d3d11\shaders\tess_cpid.hlsl
+fxc -nologo -T hs_5_0 -E hs_main -D HS_DIRECT=1 -Vn g_tess_hs_direct_fxc -Fh gen\tess_hs_direct_fxc.h d3d11\shaders\tess_cpid.hlsl
+fxc -nologo -T ds_5_0 -E ds_main -Vn g_tess_ds_fxc -Fh gen\tess_ds_fxc.h d3d11\shaders\tess_cpid.hlsl
+fxc -nologo -T ps_5_0 -E ps_main -Vn g_tess_ps_fxc -Fh gen\tess_ps_fxc.h d3d11\shaders\tess_cpid.hlsl
+fxc2 -nologo -T vs_5_0 -E vs_main -Vn g_tess_vs_fxc2 -Fh gen\tess_vs_fxc2.h d3d11\shaders\tess_cpid.hlsl
+fxc2 -nologo -T hs_5_0 -E hs_main -D HS_DIRECT=0 -Vn g_tess_hs_array_fxc2 -Fh gen\tess_hs_array_fxc2.h d3d11\shaders\tess_cpid.hlsl
+fxc2 -nologo -T hs_5_0 -E hs_main -D HS_DIRECT=1 -Vn g_tess_hs_direct_fxc2 -Fh gen\tess_hs_direct_fxc2.h d3d11\shaders\tess_cpid.hlsl
+fxc2 -nologo -T ds_5_0 -E ds_main -Vn g_tess_ds_fxc2 -Fh gen\tess_ds_fxc2.h d3d11\shaders\tess_cpid.hlsl
+fxc2 -nologo -T ps_5_0 -E ps_main -Vn g_tess_ps_fxc2 -Fh gen\tess_ps_fxc2.h d3d11\shaders\tess_cpid.hlsl
+fxc2no64 -nologo -T vs_5_0 -E vs_main -Vn g_tess_vs_fxc2no64 -Fh gen\tess_vs_fxc2no64.h d3d11\shaders\tess_cpid.hlsl
+fxc2no64 -nologo -T hs_5_0 -E hs_main -D HS_DIRECT=0 -Vn g_tess_hs_array_fxc2no64 -Fh gen\tess_hs_array_fxc2no64.h d3d11\shaders\tess_cpid.hlsl
+fxc2no64 -nologo -T hs_5_0 -E hs_main -D HS_DIRECT=1 -Vn g_tess_hs_direct_fxc2no64 -Fh gen\tess_hs_direct_fxc2no64.h d3d11\shaders\tess_cpid.hlsl
+fxc2no64 -nologo -T ds_5_0 -E ds_main -Vn g_tess_ds_fxc2no64 -Fh gen\tess_ds_fxc2no64.h d3d11\shaders\tess_cpid.hlsl
+fxc2no64 -nologo -T ps_5_0 -E ps_main -Vn g_tess_ps_fxc2no64 -Fh gen\tess_ps_fxc2no64.h d3d11\shaders\tess_cpid.hlsl
