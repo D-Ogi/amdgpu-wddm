@@ -232,7 +232,7 @@ void planar_views() {
           view.Texture2DArray.FirstArraySlice==1 && view.Texture2DArray.ArraySize==2);
     // No other view dimension has a plane field, so no plane leaves such an argument, and a plane
     // the runtime cannot have sent is refused before the engine sees it.
-    srv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; srv.BufferEx={0,4,0};
+    srv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; srv.BufferEx.FirstElement=0; srv.BufferEx.NumElements=4; srv.BufferEx.Flags=0;
     convert_wddm2_srv(srv,srv11,plane);
     CHECK(!plane && convert_srv(srv11,1,1,1,view)==E_INVALIDARG);
     // A planar resource is never multisampled, and a multisampled view has no plane field.
@@ -296,7 +296,7 @@ void plane_from_view_format() {
     CHECK(plan_srv(srv,1,4,ddi_plane_from_view_format,request)==S_OK && request.derive_plane &&
           request.legacy.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2DMS);
     // A buffer view has no plane field in either description, and the derive request still works.
-    srv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; srv.BufferEx={2,4,D3D11_DDI_BUFFEREX_SRV_FLAG_RAW};
+    srv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; srv.BufferEx.FirstElement=2; srv.BufferEx.NumElements=4; srv.BufferEx.Flags=D3D11_DDI_BUFFEREX_SRV_FLAG_RAW;
     CHECK(plan_srv(srv,1,1,ddi_plane_from_view_format,request)==S_OK && request.derive_plane &&
           request.legacy.ViewDimension==D3D11_SRV_DIMENSION_BUFFEREX &&
           request.legacy.BufferEx.FirstElement==2 && request.legacy.BufferEx.NumElements==4 &&

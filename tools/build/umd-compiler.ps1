@@ -36,6 +36,17 @@ function ConvertTo-Bc250ClangFlags([string[]]$Flags,[string]$Arch,[string[]]$Roo
     return $result
 }
 
+# Host test builds (tools/build/test-umd-*.ps1): the cl flags of a test plus the header roots that it reads as
+# system headers. clang-cl gets the shell conversion and /imsvc for each root; cl gets /external:I and /external:W0.
+function Get-Bc250HostTestFlags([string]$Compiler,[string[]]$Flags,[string[]]$Headers,[string]$Arch,[string[]]$Roots) {
+    $Headers=@($Headers | Where-Object { $_ })
+    if($Compiler -eq 'clang-cl') {
+        return @(ConvertTo-Bc250ClangFlags $Flags $Arch $Roots)+@($Headers | ForEach-Object { "/imsvc$_" })
+    }
+    if($Headers.Count){return @($Flags)+@('/external:W0')+@($Headers | ForEach-Object { "/external:I$_" })}
+    return @($Flags)
+}
+
 function Invoke-Bc250UmdCompiler {
     # _CL_ is appended after /link by clang-cl and reaches the linker as input
     # files. Pass the Clang policy explicitly; leave MSVC's own controls intact.

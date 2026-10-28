@@ -235,9 +235,9 @@ void member_tests() {
 void tear_tests() {
     const std::string path=root()+"\\tear.log";
     DeleteFileA(path.c_str());
-    const int lines=2000;
-    const int width=64;                 // 63 characters of one writer and the newline
-    const auto writer=[&path,lines,width](char mark){
+    constexpr int lines=2000;
+    constexpr int width=64;             // 63 characters of one writer and the newline
+    const auto writer=[&path](char mark){
         FILE* const file=detail::open_append(path.c_str());
         if(!file)return;
         char text[65];

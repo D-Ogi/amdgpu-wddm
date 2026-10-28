@@ -40,7 +40,7 @@ void VKAPI_CALL image_layout(VkDevice,VkImage,const VkImageSubresource *sub,VkSu
 }
 namespace {
 HRESULT textureWait=S_OK,textureWrap=S_OK; ULONG remainingRefs=0;
-unsigned waits=0,releases=0;
+unsigned releases=0;
 VkFormat describedFormat=VK_FORMAT_R8G8B8A8_UNORM;
 HRESULT describe_texture(void *,const D3D11_TEXTURE2D_DESC1 *,VkImageCreateInfo *i) {
     *i={VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO}; i->imageType=VK_IMAGE_TYPE_2D; i->format=describedFormat;
@@ -55,7 +55,7 @@ HRESULT wrap_texture(void *,const D3D11_TEXTURE2D_DESC1 *,const VkImageCreateInf
     check(createdInfo.pNext==info->pNext && createdInfo.flags==info->flags && createdInfo.tiling==info->tiling);
     if (SUCCEEDED(textureWrap)) *t=reinterpret_cast<ID3D11Texture2D *>(uintptr_t(9)); return textureWrap;
 }
-HRESULT wait_texture(void *,ID3D11Texture2D *) { ++waits; return textureWait; }
+HRESULT wait_texture(void *,ID3D11Texture2D *) { return textureWait; }
 ULONG release_texture(ID3D11Texture2D *) { ++releases; return remainingRefs; }
 }
 namespace {
