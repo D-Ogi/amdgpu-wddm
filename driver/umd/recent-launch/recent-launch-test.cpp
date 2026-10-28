@@ -418,7 +418,8 @@ void test_allocation_failure() {
 
 void test_off_clear_in_flight() {
     const std::wstring exe=L"C:\\Games\\inflight.exe",old=L"C:\\Games\\old.exe";
-    struct Ctx {std::wstring store;bool off;std::thread app;std::atomic<bool> cleared{false},switched{false};bool clear_ok{};};
+    struct Ctx {std::wstring store;bool off;std::thread app;std::atomic<bool> cleared{false},switched{false},probed{false},
+        writer_done{false};bool clear_ok{},busy{};};
     // a) The writer saw "on", then the user turned the list off and cleared it before the writer took the lock.
     {
         Ctx c{fresh(L"inflight-a"),true};delete_switch();
@@ -457,14 +458,25 @@ void test_off_clear_in_flight() {
         Ctx c{fresh(L"inflight-c"),false};delete_switch();
         CHECK(rl::commit(inputs(c.store,old,65),rl::ApiD3D12)==rl::Outcome::Recorded);
         rl::Inputs in=inputs(c.store,exe,66);in.hook_context=&c;
+        // Two sync points, no timing: Clear finds the lock busy while the writer holds it, and starts its own wait
+        // only when the writer has returned. A Clear that started to wait inside the lock depended on the writer's
+        // file operations, which took more than Clear's 2 s on a loaded machine.
         in.inside_lock=[](void* p){
             auto* c=static_cast<Ctx*>(p);
-            c->app=std::thread([c]{c->clear_ok=clear(c->store,false);});
-            Sleep(30);
+            c->app=std::thread([c]{
+                {rl::StoreLock probe;rl::Outcome why{};c->busy=!probe.acquire(c->store,0,why) && why==rl::Outcome::Busy;}
+                c->probed=true;
+                const auto t0=std::chrono::steady_clock::now();
+                while(!c->writer_done && ms_since(t0)<60000)Sleep(1);
+                c->clear_ok=clear(c->store,false);
+            });
+            const auto t0=std::chrono::steady_clock::now();
+            while(!c->probed && ms_since(t0)<10000)Sleep(1);
         };
         CHECK(rl::commit(in,rl::ApiD3D12)==rl::Outcome::Recorded);
+        c.writer_done=true;
         c.app.join();
-        CHECK(c.clear_ok && !exists(c.store+L'\\'+rl::kStoreName));
+        CHECK(c.busy && c.clear_ok && !exists(c.store+L'\\'+rl::kStoreName));
     }
     // d) Clear alone before the writer takes the lock: the list then holds the new launch only.
     {
