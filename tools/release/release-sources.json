@@ -93,21 +93,21 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win b689e250812a338b396333e57b7f8e551514a4e2 (KMD 0.7.216.65): the tester.33 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
-    "d3d12_shell": "Current tester.33 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c8ae2a66fd4afed0629e51eb0ddb78a277bcf038; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c8ae2a66fd4afed0629e51eb0ddb78a277bcf038. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "d3d12_engine": "Current tester.33 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "d3d12_icd": "Current tester.33 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "d3d11_shell": "Current tester.33 payload sources. release payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm ce9464780003e5d01a24a05fff1033ad97a6ad97; lab payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm ce9464780003e5d01a24a05fff1033ad97a6ad97. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "d3d11_engine": "Current tester.33 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk acb783204e2637d892a9f3a7a34926af35c83b8b; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk acb783204e2637d892a9f3a7a34926af35c83b8b. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "d3d11_icd": "Current tester.33 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "desktop_umd": "Current tester.33 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 411f70e4d1a03b067285c05e311821720bab22f9; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 411f70e4d1a03b067285c05e311821720bab22f9; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 07421fb8f07292e226d5b7469cc0f4e7cc7a53f1; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 07421fb8f07292e226d5b7469cc0f4e7cc7a53f1; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 2057d4cffc81ce573611ed84c0ab20a5bf4822da; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 2057d4cffc81ce573611ed84c0ab20a5bf4822da. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "vulkan_icd": "Current tester.33 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm ad130cc22883fc80ff36926ac5eebfdfbaefcdbc; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm ad130cc22883fc80ff36926ac5eebfdfbaefcdbc; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "control": "Current tester.33 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/control/bc250control.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/control/bc250control.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "wow64": "Current tester.33 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 2057d4cffc81ce573611ed84c0ab20a5bf4822da; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 2057d4cffc81ce573611ed84c0ab20a5bf4822da; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm ce9464780003e5d01a24a05fff1033ad97a6ad97; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm ce9464780003e5d01a24a05fff1033ad97a6ad97; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk acb783204e2637d892a9f3a7a34926af35c83b8b; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk acb783204e2637d892a9f3a7a34926af35c83b8b; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c8ae2a66fd4afed0629e51eb0ddb78a277bcf038; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c8ae2a66fd4afed0629e51eb0ddb78a277bcf038; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm cf46ce17e9a8888f53efb3a58e55f0989642071c; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 20d7c8c95669fe94122cb948c75037f98b2583e7; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 20d7c8c95669fe94122cb948c75037f98b2583e7; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "mft_h264": "Current tester.33 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 21983d3210b0c955f2e2a9896341c075bffb17cd; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm 21983d3210b0c955f2e2a9896341c075bffb17cd. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "kmd": "bc250-win c281df214cde2c008a8a6e26827b494a76d22e29 (KMD 0.7.216.65): the tester.34 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
+    "d3d12_shell": "Current tester.34 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d12_engine": "Current tester.34 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 98e7a56a39166d8ef4e1711b1b34d6942e32c7da; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 98e7a56a39166d8ef4e1711b1b34d6942e32c7da. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d12_icd": "Current tester.34 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d11_shell": "Current tester.34 payload sources. release payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d11_engine": "Current tester.34 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "d3d11_icd": "Current tester.34 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "desktop_umd": "Current tester.34 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 49962ef736bc4ff8d577e046a6549a633da5fe59; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 49962ef736bc4ff8d577e046a6549a633da5fe59; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm db0834b83075c0908166635e261761cda423edbf; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm db0834b83075c0908166635e261761cda423edbf; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "vulkan_icd": "Current tester.34 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm d12fb4fd8c1a9736b259d5f355a6393b6f585635; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm d12fb4fd8c1a9736b259d5f355a6393b6f585635; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "control": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; release payload/control/bc250control.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/control/bc250control.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "wow64": "Current tester.34 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 98e7a56a39166d8ef4e1711b1b34d6942e32c7da; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 98e7a56a39166d8ef4e1711b1b34d6942e32c7da; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 4968dff327a9dacc39cb9627a4b1a20eb7d21f76; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 53ccb05f2045c9f1be014c0d6e8263b01f00ec27; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 53ccb05f2045c9f1be014c0d6e8263b01f00ec27; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "mft_h264": "Current tester.34 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer",
-    "control_app": "Current tester.33 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "desktop_router": "Current tester.33 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm b689e250812a338b396333e57b7f8e551514a4e2. File rows retain exact recipes, hashes, dependencies and validation limits."
+    "control_app": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "desktop_router": "Current tester.34 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits."
   },
   "public_commits": {
     "note": "Built commit -> commit on a public branch, for every pair that differs. The b19 part of this release is published: D-Ogi/amdgpu-wddm holds 85ac47b6 and 3ef45a0f on branch train/b19-setup, and D-Ogi/mesa-amdgpu-wddm holds 31844893 on amdgpu-wddm/b19-icd, 76ab2c27 on amdgpu-wddm/b19-desktop-umd and 7117b189 on amdgpu-wddm/b19-hosted-umd. D-Ogi/dxvk, D-Ogi/vkd3d-proton and D-Ogi/dxil-spirv keep branch amdgpu-wddm/upstream-2026-10-05. The system Vulkan ICD is the build of 2732f9c8, which the fork publishes on branch amdgpu-wddm/gdi-immediate-quiet (597fc6e2), as in 0.7.205.100-tester.11. The hosted ICD of the desktop route is the build of 48546c73. The b20 part is NOT published yet. One commit of bc250-win branch train/b20-setup built every rebuilt file of this respin: bc1b00a9, the head of the respin (the release notes of 0.7.213.100-tester.15). Its working tree held one uncommitted file while the builds ran, this manifest itself, which is no source of any binary. Four later commits of the branch touch no binary of this package. f457ff5f changes the lab overlay's absent-value table (tools/win/bc250mon, which the release does not install) and 1897bdd6 changes a release gate. The review pass is two commits: 88d60534 rewrites RELEASE-NOTES.md, three documents, one comment of driver/kmd/wddm.c and one lab script, and c4b05b61 makes the kernel recipe delete the debug information of an earlier build with its objects, so that the driver reproduces in a directory that already holds a build and not only in an empty one. The package is assembled at c4b05b61, so its RELEASE-NOTES.md is that commit's. The kernel driver was rebuilt at both commits and gave the same bytes, and so did the control application, its DLL and the CLI, which is how this manifest knows that neither commit changes a binary. The H.264 transform and the two caps records are not rebuilt: the transform is the tester.14 build of 689852a8, and the records are byte for byte the b19 ones, because b20 reuses the b19 engines and ICDs. Push train/b20-setup to D-Ogi/amdgpu-wddm before this release goes to a tester. Each b20 wagon is an ancestor of the branch head: train/b19-repro-kmd edae6987, kmd209-iflip2 b03da3a7, fan/read-nct6686 9d1aff7c, c48/notifydpc-in-report 677709c2, tuner/vf-cpu dabdd949, m15/router-iflip-front 99ba8cd8, bd075/capshare-trace 3325c555, bd075/d3d12-shared-real 1fa1cfb6, e52/encoder-perf e4d1f630, dpm/thermal-soft-zone 846ad919, kmd/confirm-soft 01cee34c, m14/d3d11-iflip2 0b325308 and m15/d3d12-iflip2 ef63bab3, on main af76883c. Two files come from a build of a b19 wagon, not from a b20 commit: the desktop CPU and hosted UMDs, from their Mesa branches. tester.17 also carried payload/syswow64/bc250umd.dll from train/b19-wow64-x86 a748e78e and payload/system32/bc250umd.dll; the release after it ships no D3D9 stub (branch installer/d3d9on12: the D3D9 slot of UserModeDriverName and UserModeDriverNameWow is empty, so D3D9 goes through D3D9On12). The x86 patches of the earlier releases are gone (BD-064). Both b19 RADV files report git-3184489333 as their Mesa version, which is 31844893. 0.7.213.101-tester.16 is tester.15 with one file rebuilt: payload/desktop/bc250d3d_zink.dll, from D-Ogi/mesa-amdgpu-wddm 7eb7861d on amdgpu-wddm/b19-hosted-umd (pushed), built by scratch/train/b20-build/umd-fix/build-zink.ps1 with the b19 recipe; its host test passed. 0.7.213.102-tester.17 is tester.16 with both routers rebuilt from bc250-win 17eb11bd (train/b20-setup): the Windows component rule is gone, so Windows components get the GPU UMD and FL 12_1. The installer and its defaults table come from the same branch (BD-089: an install over an older release removes its files and driver packages, the uninstaller leaves a clean slate; Allow and Deny ship empty, no witcher3.exe profile). 0.7.215.100-tester.18 (b21) is NOT published yet: push bc250-win branch train/b21 to D-Ogi/amdgpu-wddm before this release goes to a tester. One commit of train/b21 built every rebuilt file of it: 9bc5818f. The release commit on top of it changes tools/release and the release notes only, and the package is assembled at that commit, so its RELEASE-NOTES.md is that commit's. Rebuilt from b21: the kernel driver and its INF, both routers (BD-081: a Direct3D 10.0 application arrives at OpenAdapter10_2), the control application, bc250control.dll and bc250kmd_cli.exe. The two D3D12 shells were rebuilt at the same head and gave the bytes already registered (477373C1 x64, 077104FE x86). The D3D11 shells, the engines, the ICDs, the desktop UMDs, the H.264 transform and the caps records are the tester.17 files: no b21 commit touches their sources. Each b21 wagon is an ancestor of the branch head: fan/write-nct6686 (merge a68facc2), kmd/vmid-pool (81c69ba9), kmd/dp-audio (9b634a3b), installer/d3d9on12 (1237ad9a), umd/wow64-d3d12 (3936561b), gui/tuner-page (1779265b), umd/bd081-d3d10-gpu (6401747e) and kmd/smu-metrics (53db83fc and 9bc5818f), on the tester.17 merge ab037b6f. The x86 D3D12 engine branch amdgpu-wddm/wow64-d3d12 bdec00f3 is published on D-Ogi/vkd3d-proton. 0.7.216.100-tester.19 (the b21 respin) replaces tester.18 and is NOT published yet either: push bc250-win branch train/b21 to D-Ogi/amdgpu-wddm before this release goes to a tester. One commit of train/b21 built every file it rebuilds: d0fef4ee. The release commit on top of it changes tools/release and the release notes only. Rebuilt for tester.19: the kernel driver and its INF, the control application, bc250control.dll and bc250kmd_cli.exe. Every other file is the tester.18 file: no commit after 9bc5818f touches the sources of the routers, the shells, the UMDs, the engines, the ICDs or the H.264 transform. The tester.19 wagons on the tester.18 release commit 4a10bdef: fan/lease-ends-durable (merge f0174b80: a fan lease ends with the durable mode from before it), the control application file version 0.6.0.0 (f096c5c3), fan/standard-curve-earlier (4a189470: the Standard curve at 100 % from 80 C), the CLI trial line (5af1f355), CpuTune 1 by default (6a041012), kmd/dp-audio-stream (merge 959befec of d3a47e12: DP audio step 2, the stream half, EnableDpAudioStream, RUN_DPAUDIO ABI 2), the monitor's absent-defaults table (6f7cbec5) and gui/confirmed-by-guard (merge d0fef4ee of d6b23edb: a start that the boot-loop guard counts as confirmed is not offered for confirmation again). Each is an ancestor of the branch head. 0.7.216.100-tester.20 (the b22 train) replaces tester.19, and it IS published: D-Ogi/amdgpu-wddm holds a00da18c on branch train/b22 and bbdc4c3e on main, and every b22 wagon on its own branch: kmd/bd090-stop-restart b24bcee7, kmd/audio-controller-reads 084c2bf8, kmd/dpm-c62 9e62b3f2, kmd/memmgr-stage1 a5cb4a2b, installer/hda-msi-gates c252b0ec, docs/facts-2026-10-07 ab4441ba and docs/style-gate 23e1da05 (git ls-remote origin, 2026-10-07). Each wagon head is an ancestor of a00da18c. The b21 part of the package is public now too: main carries train/b21 at merge c3795c49. One commit of train/b22 built every file this release rebuilds: a00da18c. The release commit on top of it changes tools/release and the release notes only, and the package is assembled at that commit, so its RELEASE-NOTES.md is that commit's. Rebuilt for tester.20: the kernel driver 0.7.216.14 and its INF, the control application, bc250control.dll and bc250kmd_cli.exe. Every other file is the tester.19 file. No commit between d0fef4ee and a00da18c touches driver/umd, so the two D3D12 shells, the two D3D11 shells, both routers, the two shell configuration blobs and the WoW64 files keep their registered bytes; the engines, the ICDs and the desktop UMDs come from the fork repositories, which b22 does not move; the H.264 transform keeps its tester.14 build of 689852a8. Outside driver/kmd, b22 changes driver/shim (bc250_dpm.c, its header and two host tests). Only driver/kmd/build.ps1 and the lab tool monfence compile driver/shim, so the kernel rebuild covers it. tools/win/d3d12caps/build.ps1 gains the -Tool d3d12oversub target and its two gate runs, and d3d12caps.cpp does not change, so payload/tools/amdgpu_wddm_d3d12caps.exe is not rebuilt. The b22 wagons on the tester.19 release commit 72163d3b, in the order of the first-parent history: main at 91c95d5a (train/b21 at merge c3795c49, then docs/facts-2026-10-07), kmd/bd090-stop-restart (merge b0b338f2 of b24bcee7: BD-090, a runtime restart of the GPU inside a confirmed boot), kmd/audio-controller-reads (merge ef0c951c of 084c2bf8: the Azalia, DIO and DCCG reads, and DIO_MEM_PWR_CTRL 0 before the stream enable, after Linux dcn201_init_hw), kmd/dpm-c62 (merge 35cc68cb of 6fe211fb and 9e62b3f2: the idle point hysteresis DpmIdleLeavePermille 150, and the C62 joint power arm behind DpmJointGovernor, which this release leaves at 0), one comment commit 50cdda6e, kmd/memmgr-stage1 (merge 6ef7b22b of 829000ff, a5141187, 5508394b, 5d0e94e2 and a5cb4a2b: the 384 MiB OS aperture ApertureSegmentMegabytes, shared residency EnableSharedResidency, the vidmm and paging counters, the CLI budget verb and the d3d12oversub probe; the INF names none of these switches, so each one is on when its value is absent), installer/hda-msi-gates (merge 292df90f of 0f184795, fb8f299f, c91225c0, 9093f1e5 and c252b0ec: BD-091, the INF gate values from installer/registry-defaults.json with NOCLOBBER and EnableNativeSmu named, no SMU owner without BAR5, one kept log file per start and per stop with 200-file pruning, and BD-092, MSISupported 1 on the GPU HD Audio function PCI\\VEN_1002&DEV_13FF), one host-test commit 840c7605, main again at merge a2c9ac93 (docs/style-gate 23e1da05: the writing standard, the glossary and the ratcheted doclint gate) and the doclint pass a00da18c. 0.7.216.100-tester.21 (train b23) replaces tester.20 and is NOT published yet: before this release goes to a tester, push bc250-win branch train/b23 to D-Ogi/amdgpu-wddm, the mesa branches amdgpu-wddm/b23-icd (8c110468) and amdgpu-wddm/b23-system-icd (308a5e33) to D-Ogi/mesa-amdgpu-wddm, and the branches amdgpu-wddm/per-app-graphics-settings of D-Ogi/dxvk (0898891f, the x64 and x86 engines) and D-Ogi/vkd3d-proton (41bd52c8, the x64 engine) and amdgpu-wddm/per-app-graphics-settings-x86 of D-Ogi/vkd3d-proton (b477495e, the x86 engine: 41bd52c8 plus the pick of bdec00f3); both vkd3d-proton commits are the corresponding source of an LGPL file. ea876500 (b19-hosted-umd) and 9ddfcbe2 (radv-wddm2-hosted-main) were pushed on 2026-10-07. The train starts at bc250-win main 9c03c35c (published), which already carries the M15.12 hang recovery on by default (KMD 0.7.216.18), M15.14 increment 2, d3d11bench and the kmd-deploy release layout. One commit of train/b23 built every amdgpu-wddm file this release rebuilds: 0d6b3299. The release commit on top of it changes tools/release and docs/testing only. The b23 wagons in the order of the first-parent history: integ/display-modes-scanout-formats (merge cb9f1b10 of 75420d23: display modes stage A, DP audio step 4, RGBA8 and RGB10A2 scan-out, KMD 0.7.216.20, the BD-095 state object fixes of m15/ascent-rt-state-objects through 67ef42a5), kmd/bd097-telemetry-cadence (merge 23f9d8ff of e3c7afac: BD-097), kmd/bd098-confirmed-generation (merge 226fc6f5 of 62908d63: BD-098), m15/shader-model-68 (merge 9ca7accc of da9c4bef: BD-095 additions and shader model 6.7/6.8; fact M837 of main renumbered M842), umd/per-app-graphics-settings with gui/per-app-graphics-settings (one merge ae74d87b of 4338d14c and 28bd93c9: the per-application graphics settings and ReportAmdDriverVersion 64474fcd), the driver version 099da45a (0.7.216.21), a68afe19 (no catalog switch awaits a shell), f50821dc (control file version 0.7.0.0), 0f71caac (the two Vulkan settings wait for their ICD), kmd/k137-cpu-baseline (5d324cb8, the cherry-pick of 424b2945 only: BD-094, the CPU restore baseline is the firmware boost; not e0e01993, which moves RUN_DPM to ABI 4), 2c801991 (build-umd-d3d12.ps1 starts its host gates as the invoker, no UAC prompt), the driver version fffc75e7 (0.7.216.22) and fix/bd099-d3d11-vsync (merge 0d6b3299 of 6c2ebcfa, wagon 14: BD-099, the D3D11 shell waits for the vertical blanks of the per-application VSync and gives the runtime the VSync override for VSync 0 only). Wagon 15 moves the x86 engines to the per-application branches (no bc250-win commit). Left out of b23: the mesa vk-wsi-dxgi line, 68af0f56 (the per-application WsiRoute and MemoryOverflow keys) and the documents wagon wsi/bd096-mem-overflow; their control rows are hidden until a train carries that ICD line. Round 4 (BD-100) rebuilds the three ICDs from two new branches of D-Ogi/mesa-amdgpu-wddm, both pushed: amdgpu-wddm/rottr486-null-vs aca2c81b (the triplet line, a descendant of 8c110468) for the x64 and x86 builds, and amdgpu-wddm/rottr486-null-vs-system 468ca20d (a descendant of 308a5e33) for the system x64 Vulkan ICD. The Mesa licence files are the same blobs at 31844893, aca2c81b and 468ca20d, so the licence refs do not move. No other source of the release changes in round 4. The b24 part is published as branches: bc250-win train/b24 1884b33d on D-Ogi/amdgpu-wddm, mesa amdgpu-wddm/b24-icd 83f812d6 and amdgpu-wddm/b24-system-icd a4de891c on D-Ogi/mesa-amdgpu-wddm. One commit of train/b24, 1884b33d, built every rebuilt file of this release, and its working tree was clean while the builds ran. The commit that records this manifest sits on top of it and is no source of any binary. The engine forks keep their b23 commits: D-Ogi/dxvk 0898891f, D-Ogi/vkd3d-proton 41bd52c8 and b477495e, D-Ogi/dxil-spirv d2d82332, all on branch amdgpu-wddm/upstream-2026-10-05 or the per-application branches named above. The desktop route files are the b23 ones and keep their published commits. Round 3 of 0.7.216.100-tester.22 takes C70 out of the train and puts both ICD lines back to bytes that already carry a lab proof: the triplet slots to mesa amdgpu-wddm/rottr486-null-vs aca2c81b (the tester.21 files, pushed to D-Ogi/mesa-amdgpu-wddm) and the system Vulkan slot to mesa amdgpu-wddm/bd102-system 31d3f390 (pushed likewise), which is the Quake II RTX proof of 2026-10-08. The branches amdgpu-wddm/b24-icd 83f812d6 and amdgpu-wddm/b24-system-icd a4de891c stay on the fork but ship nothing, because of BD-103. The two caps records are built again from the shipped engine and ICD of each architecture and are byte-identical to the b23 round-4 records. No bc250-win binary moves in round 3: the kernel driver, the shells, the routers, the control application and d3d11bench are the files of the round-2 package, built from train/b24 1884b33d. Two commits of train/b24 record round 3, and neither is the source of any binary: the manifest commit and the release-notes commit. 0.7.216.100-tester.23 is train b25, cut from bc250-win main 2958dde6 (the tester.22 release commit) as branch train/b25, pushed to D-Ogi/amdgpu-wddm. Five wagons ride, each as one --no-ff merge: fix/bd104-video-key f38d8c40, kmd/bd097-paging-log 88714846, fix/bd094-boost-baseline f82a00cc, fix/control-smoke-width c312a33d and build/b25-radv-system-ndebug a2ffa26c, which is also what puts the radv-system option set on main for the first time. The system Vulkan ICD comes from mesa amdgpu-wddm/b25-system-icd d3da6d0a, pushed to D-Ogi/mesa-amdgpu-wddm: amdgpu-wddm/b25-system aa1bd395 with amdgpu-wddm/b25-gen-x86 eca7adc9 merged onto it. The triplet ICD line is untouched by this train: the five triplet and wow64 ICD slots keep the tester.22 files of mesa amdgpu-wddm/rottr486-null-vs aca2c81b (x64 20A593DC, x86 887A08E5), which is what keeps the Rise of the Tomb Raider proof of sessions 499 and 511, and the triplet half of the generator fix (amdgpu-wddm/b25-gen-x86-triplet f7ad1ed0) stays off the train for that reason. The x86 build of the system line, which the generator merge makes possible for the first time, is built and gated outside the package as a candidate for a later train. The engine forks are unchanged: dxvk 0898891f, vkd3d-proton 41bd52c8 and b477495e, dxil-spirv d2d82332, so the engines are the tester.21 binaries. The shells, both routers, d3d11bench, the H.264 transform, vulkaninfo, the capability dump, the desktop route's four files and both caps records are the tester.22 files, because no wagon of this train touches their sources. The ICD of the shipped system Vulkan slot was built with the recipe tree build/radv-system-ndebug 998f4130, which carries the same radv-system option set as train/b25 and the four reproducible-build switches (/Brepro, /FC, /d1trimfile, /PDBALTPATH) that main does not have yet, so the file is comparable with every system Vulkan ICD this project has released; Add-ReproducibleMesonOptions belongs to the repro wagon, which does not ride this train. 0.7.216.100-tester.24 is train b26, cut from bc250-win main 5fc83d67 (the tester.23 release commit) as branch train/b26, pushed to D-Ogi/amdgpu-wddm. Five wagons ride, each as one --no-ff merge, the recipes first and the Vulkan route last: build/b26-repro 502659c1 (the provenance gate over every payload file, built_from in this manifest, rebuild-check.ps1 and the reproducible switches in the recipes), kmd/b26-idle-telemetry-cadence 07af3aec (BD-097, the long-idle row), kmd/b26-ring-vm-flush 66b9fbf7 (option (b) of the gfx submit root serialization, release default off), kmd/b26-dp-audio bfe639b3 (DP audio step 4, the container ID's port ID in the ELD, escape ABI 3) and wsi/b26-vk-dxgi 5e79ac74 (the design, the M15.14 row for Vulkan and the WSI route test of the Vulkan flip over DXGI, whose Mesa build left the package in round 2). The system Vulkan ICD is the tester.23 file of mesa amdgpu-wddm/b25-system-icd d3da6d0a. Round 1b of this package carried the route build amdgpu-wddm/b26-vk-wsi-dxgi 18e0f56b (89436E4F) in that slot, and the lab validation of 2026-10-09 found that the route completes no present at all (BD-105), which fails the Quake II RTX release gate. Round 2 therefore puts the proven file 4E3F393F back, and that one file is the whole difference between the two rounds, beside the manifest, the release notes and this record. Both Mesa branches stay pushed to D-Ogi/mesa-amdgpu-wddm, and the route continues as amdgpu-wddm/b27-vk-wsi-dxgi 8f0bfdfb with bc250-win wsi/b27-vk-dxgi 5565ed7f, which no release carries. The repository content of the wsi/b26-vk-dxgi wagon stays in this train: the design note, the M15.14 row and the route test are source, not payload. The triplet ICD line is untouched by this train: the five triplet and wow64 ICD slots keep the tester.21 files of mesa amdgpu-wddm/rottr486-null-vs aca2c81b (x64 20A593DC, x86 887A08E5), which is what keeps the Rise of the Tomb Raider proof, so a 32-bit Vulkan application keeps the GDI present path in this release. The engine forks are unchanged: dxvk 0898891f, vkd3d-proton 41bd52c8 and b477495e, dxil-spirv d2d82332. The shells, both routers, d3d11bench, the H.264 transform, vulkaninfo, the capability dump, the desktop route's four files and both caps records are the tester.23 files, because no wagon of this train touches their sources; where the repro wagon's recipes would now give other bytes for such a file, the tester.23 bytes are carried anyway and the rebuild hash is information only. Round 1b of this package held the first system Vulkan ICD built from the recipe of the repository itself (the train worktree), which is what the repro wagon settles. That build is also where the repository recipe was measured against the outside tree build/radv-system-ndebug 998f4130, on mesa 18e0f56b. Round 2 ships the tester.23 file in that slot instead, which 998f4130 built, so this release claims no bit-identical rebuild for it and the files row of payload/vulkan/vulkan_radeon.dll gives the reason. The three recipe files of 998f4130 are byte-identical to the ones at this head, so a rebuild would run the same recipe on the same source. 0.7.216.100-tester.25 is train b27, cut from bc250-win main 488b7d8a as branch train/b27, pushed to D-Ogi/amdgpu-wddm. Nothing is merged into the train branch: main already carries both lanes, and the branch holds the kernel revision, the release notes and this manifest alone. The lanes are round 2 of the four-day audit (49471933 the kernel findings K1 to K4 with the fan finding F1 and the CPU finding F3, 8846c07b the user-mode findings A2/UMD-1, A5/UMD-2 and A11/UMD-3, b6f78f43 and 46949bc4 the documents and the gates) and the fan load feed-forward (488b7d8a, rule 10 of docs/design/fan.md with the control application's check box and the CLI's fields). No Vulkan ICD and no engine is rebuilt: the system Vulkan ICD keeps the tester.23 file 4E3F393F, which is where BD-105 left it, the five triplet and wow64 ICD slots keep the tester.21 files of mesa amdgpu-wddm/rottr486-null-vs aca2c81b (x64 20A593DC, x86 887A08E5), and the engine forks stay dxvk 0898891f, vkd3d-proton 41bd52c8 and b477495e, dxil-spirv d2d82332. Both D3D11 caps records therefore stand, and the Rise of the Tomb Raider and Quake II RTX proofs of tester.24 carry to the files they were measured on. Six slots that b24 shipped as unverified are rebuilt at this head, where the recipes carry /Brepro, /FC and /d1trimfile: both routers and all four shells. Five of them now claim a bit-identical rebuild; the x86 D3D12 shell keeps its unverified field, because its MesaSource tree is a loose copy and not a checkout of the commit the manifest pins. 0.7.216.100-tester.26 is train b28, cut from bc250-win main e3cbecf6 as branch train/b28, pushed to D-Ogi/amdgpu-wddm. Two wagons are merged into the train branch, because neither was in main: kmd/bd114-watchdog 7f6ddbf6 (the private submit watchdog that follows TdrDelay, BD-114, GitHub issue #36) and fix/b26-traced-no-descriptor-scope 6e9e90a4 (the DP audio review finding F2, log lines only). The branch then holds the kernel revision 0.7.216.27, the release notes of 0.7.216.100-tester.26 and this manifest. The system Vulkan ICD moves for the first time since 0.7.216.100-tester.23: mesa amdgpu-wddm/b28-system-icd d85c5a74, four commits over the shipped d3da6d0a, which carry the sliced fence wait of BD-114 item 7.5 with its device-liveness rule and the seg0 paging dependency. Nothing else is rebuilt: the five triplet and wow64 ICD slots keep the tester.21 files of mesa amdgpu-wddm/rottr486-null-vs aca2c81b (x64 20A593DC, x86 887A08E5), the engine forks stay dxvk 0898891f, vkd3d-proton 41bd52c8 and b477495e, dxil-spirv d2d82332, and the four shells, both routers, the H.264 MFT and the control application with its DLL and the CLI keep the tester.25 files of train/b27 349f1236. Both D3D11 caps records therefore stand. The Rise of the Tomb Raider proof of tester.24 carries to the files it was measured on; the Quake II RTX ray-tracing gate was measured on the ICD bytes this release replaces, so it has to be measured again on d85c5a74 before this package ships. The Vulkan flip over DXGI is in no release and continues as mesa amdgpu-wddm/b27-vk-wsi-dxgi with bc250-win wsi/b27-vk-dxgi (BD-105). 0.7.216.100-tester.27 is train b29, cut from bc250-win main f46dfd2c as branch train/b29, pushed to D-Ogi/amdgpu-wddm. Two wagons are merged into the train branch, because main carries neither: fix/vram-caps 87f6b775 (the private UMD caps carry the application segment's size in the local and the CPU-visible word) and feature/uma-windows-control 9f5c7d59 (the board memory size in the control application, BC-250 only, with the guarded kernel transaction, the protected backup and the four-language card; the six commits 98778a82, 5a33ee0e, 4d2cdbf0, 434d2f42, aba00a46 and 9f5c7d59 on main e3cbecf6). The one merge conflict was tools/quality/quick.ps1, where both sides changed the cu-mode gate line; the resolution keeps main's resolved kit path and all ten new board-memory gates of the branch. The branch then holds the kernel revision 0.7.216.28, the regenerated status map, the release notes of 0.7.216.100-tester.27, the two new arms of the train validation suite and this manifest. The system Vulkan ICD moves to mesa amdgpu-wddm/vram-caps b96cfa1b, two commits over the shipped d85c5a74, which carry the OS shared-memory size across the BC250 caps blob and the Win32 semaphore ownership and export attributes. Nothing else is rebuilt: the five triplet and wow64 ICD slots keep the tester.21 files of mesa amdgpu-wddm/rottr486-null-vs aca2c81b (x64 20A593DC, x86 887A08E5), the engine forks stay dxvk 0898891f, vkd3d-proton 41bd52c8 and b477495e, dxil-spirv d2d82332, and the four shells, both routers, the H.264 MFT, the capability dump, vulkaninfo and d3d11bench keep the files they shipped with. Both D3D11 caps records therefore stand. The Rise of the Tomb Raider proof of tester.24 carries to the files it was measured on; the Quake II RTX ray-tracing gate was last measured on the ICD bytes of tester.24, so it has to be measured again on b96cfa1b before this package ships, and so does the dense language model arm of BD-114 on this kernel driver. The board memory control has no hardware acceptance at all yet. The Vulkan flip over DXGI is in no release and continues as mesa amdgpu-wddm/b27-vk-wsi-dxgi with bc250-win wsi/b27-vk-dxgi (BD-105). Round two of this train adds the merge of fix/dpm-default-2000 9e313fe9 (off the same main f46dfd2c): the release default of DpmMaxMHz is 2000 MHz, the kernel default behind it is 2000 MHz, the installer moves a stored 1500 MHz ceiling and the release notes name the change. The merge was clean. The kernel driver and the control application are therefore rebuilt at the train head this manifest records; the kernel CLI and both copies of bc250control.dll rebuild to the same bytes as round one, and no other slot moves. 0.7.216.100-tester.28 is train b30, branch train/b30 of bc250-win from train/b30-pre 8aae71df (board provider, Windows tuning, wave snapshots), with main fca09554 merged first so that the train descends from the tester.27 release commits, pushed to D-Ogi/amdgpu-wddm. Merged into the train: fix/board-memory-transport 7df00e2b (BD-116), build/x86-callconv-gates 65b44205, feature/q2rtx-benchmark-card 1c405a70, fix/bd105-dxgi-fence 8dd13f27 (the client and kit side of BD-105), feature/llm-components 302dedd4 (llama.cpp and Ollama as optional installer components) and feature/d3d12-view-instancing 491daf98 (the vi-r2 shell). The engines are vkd3d-proton amdgpu-wddm/view-instancing 997bff9e on b477495e with dxil-spirv amdgpu-wddm/view-instancing 064a1aa4 on d2d82332. The d3d12 and d3d11 ICD slots of both architectures move to mesa amdgpu-wddm/d3d12-gaps-contract a8853405 on aca2c81b, the wow64 Vulkan ICD with them (one x86 RADV build), and the system Vulkan ICD to mesa amdgpu-wddm/bd105-dxgi-fence b54b820e on b96cfa1b. The DXVK engines, the D3D11 shells, both routers, the processor and desktop UMDs, the H.264 MFT, the capability dump, vulkaninfo, d3d11bench and the HIP files keep the tester.27 bytes. Release r2 of 0.7.216.100-tester.28 is train/b30 a01f9a75: release r1 with perf/hip-gpu-copy 1b1566bf (the HIP runtime: GPU device-to-host copies and BD-123), the setup window as a required part of the package, and fix/bd124-tmds-inherited-b30 0102c36b (the kernel driver 0.7.216.32: BD-122 and BD-124) merged. The system Vulkan ICD moves to mesa amdgpu-wddm/vk-combo-r1 38ee64d4 on b54b820e."
@@ -116,11 +116,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
-      "source": "scratch/build-train/tester.33/artifacts/release/kmd-rel/bc250kmd.inf",
-      "sha256": "F397C346E63C3625B957FFE056B35B5C43DB2FDA06117EF8E864FAEA82E6BB6E",
+      "source": "scratch/t34/release/set/artifacts/release/kmd-rel/bc250kmd.inf",
+      "sha256": "59692302761B24F657F1F5E7C4DB8B5907256CF0E8F394C0C5687F7B2E7DA58E",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -132,7 +132,7 @@
           "-Flavour",
           "release",
           "-PackageVersion",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "package/bc250kmd.inf"
       },
@@ -143,11 +143,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/build-train/tester.33/artifacts/release/kmd-rel/bc250kmd.sys",
-      "sha256": "D7C12A3C5ECDFD92224D56E0738D07C38CA1201E57F414AD15DF217AA2005722",
+      "source": "scratch/t34/release/set/artifacts/release/kmd-rel/bc250kmd.sys",
+      "sha256": "92A2CA6F5042014E49EA5A8D72DF09CC9FDB15A735641A89C3EA4AA34DF645C6",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -159,24 +159,24 @@
           "-Flavour",
           "release",
           "-PackageVersion",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1131408,
-      "unsigned_sha256": "B3E387A23BD584766B8AF36B4AEE942B71FAE33F383DC1037CCAEC33BF77ECF5",
-      "authenticode_sha256": "8D8F9BA36C9FE86FB7D915B9B541EF484D9846DC3F7F60B6B8BBD3BA0BD463EE",
+      "size": 1147792,
+      "unsigned_sha256": "07498D7D1E370F4B3A1FC835573E7B1C30D4B00DE6CBC7A78D4AE43863B6265D",
+      "authenticode_sha256": "B58860346BE096C68F8FB1FE5125BB8D806A4B11077CEE02C4CBEEEEC64205D2",
       "flavour": "release"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
-      "source": "scratch/build-train/tester.33/artifacts/lab/kmd-lab/bc250kmd.sys",
-      "sha256": "DE38B319CCD26F72DFEE46D871E644CB36E1C3F32AE6D261FBC3068F23CC4753",
+      "source": "scratch/t34/release/set/artifacts/lab/kmd-lab/bc250kmd.sys",
+      "sha256": "4AAD2B5A4AD0351FC82619868E6DA9037FA500F33F49FB00D6618E7BD19F287D",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -188,24 +188,24 @@
           "-Flavour",
           "lab",
           "-PackageVersion",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1167760,
-      "unsigned_sha256": "B84A57837826C0B9E48C840BD272E80D48D89AD5E1C663BF8F19282A1003E3EE",
-      "authenticode_sha256": "669B86F2416CF6790C4B8CF21DC7388E91863AC0107732B620F23A87538260E1",
+      "size": 1186704,
+      "unsigned_sha256": "F7C64CF1A53ADCC7219021094E0C559C0561E68CA0A3199113B2AA5D06E210DD",
+      "authenticode_sha256": "AA985CDEE4F11BD953076612ADD73AC0F4E690559B1A064DAD6BCF593F664B71",
       "flavour": "lab"
     },
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
-      "sha256": "CB7EC413A3DC10AAC991C1704813BA05255A925D6918722DBE4286F6C0D6F29C",
+      "source": "scratch/t34/release/set/artifacts/release/d3d12-x64-rel/amdgpu_wddm_d3d12.dll",
+      "sha256": "C2F1C95C2539CBA5C05BED0FA32289D743A39FC9ED39104C9192553D2D1CB502",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -223,7 +223,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-DdiInclude",
           "{root}/toolchain/nuget/wdk-28000.2526-um/c/Include/10.0.28000.0/um",
           "-ApiInclude",
@@ -232,7 +232,7 @@
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
-            "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+            "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
             "paths": [
               "src/util/bc250_host_bootstrap.h"
             ]
@@ -246,7 +246,7 @@
           },
           "engine": {
             "repo": "vkd3d-proton",
-            "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
+            "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
             "paths": [
               "libs/ddi"
             ]
@@ -254,18 +254,18 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 4659712,
+      "size": 4671488,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-shell",
       "path": "payload/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
-      "sha256": "29FA60907CB5CD69FE9029C716C87510D79C0BB31F104A032BECF1A50F0F46C1",
+      "source": "scratch/t34/release/set/artifacts/lab/d3d12-x64-lab/amdgpu_wddm_d3d12.dll",
+      "sha256": "0705AC1B0A7FC0CF2395038FA8AC452D7C32D8DFD99A65C3681A063327B67D9E",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -283,7 +283,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-DdiInclude",
           "{root}/toolchain/nuget/wdk-28000.2526-um/c/Include/10.0.28000.0/um",
           "-ApiInclude",
@@ -292,7 +292,7 @@
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
-            "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+            "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
             "paths": [
               "src/util/bc250_host_bootstrap.h"
             ]
@@ -306,7 +306,7 @@
           },
           "engine": {
             "repo": "vkd3d-proton",
-            "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
+            "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
             "paths": [
               "libs/ddi"
             ]
@@ -314,19 +314,19 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 4766720,
+      "size": 4781056,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/engine12-x64-rel/amdgpu_wddm_vkd3d.dll",
-      "sha256": "74D9A96D7F4244FB8EAED44943E8C66F5E0C5C59B10D6F139703A01F0CD61FD6",
+      "source": "scratch/t34/release/set/artifacts/release/engine12-x64-rel/amdgpu_wddm_vkd3d.dll",
+      "sha256": "06F70330008B2B11375B18708E4F338090262F5578C00BCF2F0F039AB5DDE143",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -346,23 +346,23 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "size": 4579328,
+      "size": 4598272,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-engine",
       "path": "payload/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/engine12-x64-lab/amdgpu_wddm_vkd3d.dll",
-      "sha256": "E872950E1FBEAC1600EDA551B9618AB5BA16B3B2A96417E8E0B024A476540003",
+      "source": "scratch/t34/release/set/artifacts/lab/engine12-x64-lab/amdgpu_wddm_vkd3d.dll",
+      "sha256": "2BE13E25270F3C972674A849F7BBFD259A587AB042558E4B2E22BDF73FC0E871",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -382,23 +382,23 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "size": 4708352,
+      "size": 4729344,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
-      "sha256": "D321CD8C55624AF1610CBC68DFF85465F178EA0DF3E7442052BC7A12B2F8FDD9",
+      "source": "scratch/t34/release/set/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "3636FE58823E1B8EC4355085B1ED1ED7A841B18104698CF8DE93F4AF6481814F",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -422,23 +422,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 18420736,
+      "size": 19008000,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-icd",
       "path": "payload/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
-      "sha256": "85C4E869082FEC1448E6DC78E72E56F1ADC2D23F1ED858F7551BA6F646D46C97",
+      "source": "scratch/t34/release/set/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "872F7B31B3CF3FA82C981F4E4D8B6C5B764A5B48B3F798069860C986FDEDBDD8",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -463,22 +463,22 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 18511872,
+      "size": 19121152,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/router-x64-rel/bc250d3d_router.dll",
-      "sha256": "F92B7A8E31C06337C4B0A3029D1BCA47F731FA8E38529858BCE79DB887221AD1",
+      "source": "scratch/t34/release/set/artifacts/release/router-x64-rel/bc250d3d_router.dll",
+      "sha256": "024E464DF86DD037879256503F00830136D35B66955ABEFC606FEE5360631C31",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-Compiler",
@@ -490,22 +490,22 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250d3d_router.dll"
       },
-      "size": 97792,
-      "authenticode_sha256": "CFED409299D0FA93A7720FCFE8FB3F43F266397FCC7A6876AD88BBD7E87F5B08",
+      "size": 99328,
+      "authenticode_sha256": "09E3B8DCF8022EB450E47C01E518724B9FD7CADB3BEE2C90E7D71AA9FA3900E5",
       "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
-      "sha256": "E66932F1799203805CCD0BB762AB94FB179BE50BD63A76529ECD9349E92E48F2",
+      "source": "scratch/t34/release/set/artifacts/lab/router-x64-lab/bc250d3d_router.dll",
+      "sha256": "5C61E3A5C84708014E07FD28DF6795C8C984EE42E4A4E40FCC9839CEEE77BD8A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-Compiler",
@@ -517,23 +517,23 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250d3d_router.dll"
       },
-      "size": 97792,
-      "authenticode_sha256": "FA1465BD10ADDE87C521796BA9C13C4D7CA24AD5FC719C5F4AB32A3CF03507F9",
+      "size": 99328,
+      "authenticode_sha256": "5DB26BD478669FD40F442F5D8069DC0B2B089AF48402DF038000B2559F561B95",
       "flavour": "lab"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/zink-x64-rel/bc250d3d_zink.dll",
-      "sha256": "97F05BCA202BD79EBC9D7927E2E968BE55FE8CE07220D0C6F80D10289B3A00D3",
+      "source": "scratch/t34/release/set/artifacts/release/zink-x64-rel/bc250d3d_zink.dll",
+      "sha256": "AE2A3CD514898F507453C4B7D4D11423BE577285CAD45C1438D17304D3CB4DD5",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "411f70e4d1a03b067285c05e311821720bab22f9",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "49962ef736bc4ff8d577e046a6549a633da5fe59",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -557,24 +557,24 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
       },
-      "size": 11799552,
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the zink UMD line 471a7487 of tester.32 with upstream Mesa a0ef4c88 merged (72cb1017), the gallium video stubs (eb90a5d2) and the clang-cl interlocked forms (411f70e4).",
+      "size": 11806208,
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36).",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/zink-x64-lab/bc250d3d_zink.dll",
-      "sha256": "FD99DDD817ECB18D2C84F217B28BCB13275B010F5DF239DCE2B57C8CBDC7EA61",
+      "source": "scratch/t34/release/set/artifacts/lab/zink-x64-lab/bc250d3d_zink.dll",
+      "sha256": "BFE04A010798AC5CC9B4BD4F66C6BC516FB7485B7F0E93D6826FE4896447927B",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "411f70e4d1a03b067285c05e311821720bab22f9",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "49962ef736bc4ff8d577e046a6549a633da5fe59",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -599,24 +599,24 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
       },
-      "size": 13344768,
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the zink UMD line 471a7487 of tester.32 with upstream Mesa a0ef4c88 merged (72cb1017), the gallium video stubs (eb90a5d2) and the clang-cl interlocked forms (411f70e4).",
+      "size": 13353472,
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36).",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
-      "sha256": "CFB826D3EDBC8C977EF92631EEB5671BBA385F69D9BF4F66D01360E31613F8E0",
+      "source": "scratch/t34/release/set/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "336B37E9745DCC533EC4FB0D61251DFF8EF093A3C485603AC8D2491BB87C58EF",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "07421fb8f07292e226d5b7469cc0f4e7cc7a53f1",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "db0834b83075c0908166635e261761cda423edbf",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -640,23 +640,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 17353728,
+      "size": 17369600,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
-      "sha256": "88439FFF9A38F05CFDEE5053EA10274A4AAEAA6503E34D72A1D88963E9752609",
+      "source": "scratch/t34/release/set/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "B01F97B137E2B408B178C766673CCF345D75859E5711ADEEE508AFF8114BC45D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "07421fb8f07292e226d5b7469cc0f4e7cc7a53f1",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "db0834b83075c0908166635e261761cda423edbf",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -681,23 +681,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 17366016,
+      "size": 17402880,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/cpu-x64-rel/bc250d3d.dll",
-      "sha256": "F0147E5AFA8026BF8D4E93F1F336FDDFC7D1FA835ED13E91DD08A490FBB4B996",
+      "source": "scratch/t34/release/set/artifacts/release/cpu-x64-rel/bc250d3d.dll",
+      "sha256": "4BF4AFEA6079321D282511349EBABDE00FAE07311792DF71868BA503775074AE",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "2057d4cffc81ce573611ed84c0ab20a5bf4822da",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -723,7 +723,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "llvm": {
@@ -732,20 +732,20 @@
         },
         "output": "src/gallium/targets/d3d10umd/bc250d3d.dll"
       },
-      "size": 52833792,
-      "role": "The CPU D3D11 UMD of the desktop route (LLVM 23.1.2, scratch/llvm2312-build): the CPU UMD line fa5f386e of tester.32 with upstream Mesa a0ef4c88 merged (2bb519fa) and the clang-cl interlocked forms (2057d4cf).",
+      "size": 52834304,
+      "role": "The CPU D3D11 UMD of the desktop route (LLVM 23.1.2, scratch/llvm2312-build): the tester.33 CPU UMD line 2057d4cf with the Windows driconf fixes (regular expressions 85ec5c43, sections with an invalid pattern 1c869c91, a build check of the static table 8f22ba25), the process name at any path length (3ed732ef) and driver options read from the environment only in the lab flavour (bd42fb19).",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation. It links an LLVM build in the workspace that no commit pins.",
       "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/cpu-x64-lab/bc250d3d.dll",
-      "sha256": "339CFB6F1D6463A0C4C3D8B16701C691FF80274EA584DD418A94B075FE43301C",
+      "source": "scratch/t34/release/set/artifacts/lab/cpu-x64-lab/bc250d3d.dll",
+      "sha256": "84A088C897C1C5855CAC787FAC1ED6ABBD56DB6FAF135BEB25F4575742A6ED2F",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "2057d4cffc81ce573611ed84c0ab20a5bf4822da",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -772,7 +772,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "llvm": {
@@ -781,19 +781,19 @@
         },
         "output": "src/gallium/targets/d3d10umd/bc250d3d.dll"
       },
-      "size": 53555712,
-      "role": "The CPU D3D11 UMD of the desktop route (LLVM 23.1.2, scratch/llvm2312-build): the CPU UMD line fa5f386e of tester.32 with upstream Mesa a0ef4c88 merged (2bb519fa) and the clang-cl interlocked forms (2057d4cf).",
+      "size": 53556224,
+      "role": "The CPU D3D11 UMD of the desktop route (LLVM 23.1.2, scratch/llvm2312-build): the tester.33 CPU UMD line 2057d4cf with the Windows driconf fixes (regular expressions 85ec5c43, sections with an invalid pattern 1c869c91, a build check of the static table 8f22ba25), the process name at any path length (3ed732ef) and driver options read from the environment only in the lab flavour (bd42fb19).",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation. It links an LLVM build in the workspace that no commit pins.",
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
-      "sha256": "D526CE60B0D039D05DDAF29872965219653CE57B2CDD447B559BDDFC36471B10",
+      "source": "scratch/t34/release/set/artifacts/release/d3d11-x64-rel/amdgpu_wddm_d3d11.dll",
+      "sha256": "AA47B7E35DD4C0CFE074286703FB9ED526FDD96C6F4B96B51AC1378013EF02D5",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "ce9464780003e5d01a24a05fff1033ad97a6ad97",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -811,27 +811,27 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "dxvk": {
             "repo": "dxvk",
-            "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+            "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
           }
         },
         "output": "amdgpu_wddm_d3d11.dll"
       },
-      "size": 555520,
+      "size": 580096,
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
-      "sha256": "AB3A6BBF72EE770B4F5BB2EE0DF6275456BFCEF1F05CD96A14E14A8A9604548B",
+      "source": "scratch/t34/release/set/artifacts/lab/d3d11-x64-lab/amdgpu_wddm_d3d11.dll",
+      "sha256": "C1CEAFFFC3A3BBAAD6FF532B165F03271A4BC8E25BC71465BD4296399323E99A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "ce9464780003e5d01a24a05fff1033ad97a6ad97",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -849,24 +849,24 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "dxvk": {
             "repo": "dxvk",
-            "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+            "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
           }
         },
         "output": "amdgpu_wddm_d3d11.dll"
       },
-      "size": 555520,
+      "size": 589824,
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/build-train/tester.33/configs/release/x64/amdgpu_wddm_d3d11.config",
-      "sha256": "F7CE38A1C189C006A6DD76946225217F05896B811479C092050E22917CC7049C",
+      "source": "scratch/t34/release/set/configs/release/x64/amdgpu_wddm_d3d11.config",
+      "sha256": "C694BB2DBB5DA8F04EA40A95E8DBBDFB9635C6DF783FE4397983E74C58DB7A3B",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
@@ -900,24 +900,24 @@
               "tiled_resources_tier": 3,
               "conservative_tier": 3,
               "vp_rt_index_any_shader": 1,
-              "engine_sha256": "B5DFCFF6CC61F26B4BC40D65EC3773C61C79B82F8C4388DB0422334D51635237",
-              "icd_sha256": "D321CD8C55624AF1610CBC68DFF85465F178EA0DF3E7442052BC7A12B2F8FDD9",
+              "engine_sha256": "AC91B01E5BF2AD25EA67E3F99F62A9A748F6F73A1EBF159A89997A40CFB89FBA",
+              "icd_sha256": "3636FE58823E1B8EC4355085B1ED1ED7A841B18104698CF8DE93F4AF6481814F",
               "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
-              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.106-tester.34: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
             }
           }
         },
         "output": "amdgpu_wddm_d3d11.config"
       },
       "size": 132,
-      "role": "M14C deployment record rebound to the 0.7.216.105-tester.33 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
+      "role": "M14C deployment record rebound to the 0.7.216.106-tester.34 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/build-train/tester.33/configs/lab/x64/amdgpu_wddm_d3d11.config",
-      "sha256": "39F28F19861C485FF712B8E0C6F9551A73E5BEDD5001580CB9E9D9A35BAD4506",
+      "source": "scratch/t34/release/set/configs/lab/x64/amdgpu_wddm_d3d11.config",
+      "sha256": "59BCDA13CBAA545718EB5B3AA908B3A0EF812F1497628C282C1FC7B193885154",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
@@ -951,29 +951,29 @@
               "tiled_resources_tier": 3,
               "conservative_tier": 3,
               "vp_rt_index_any_shader": 1,
-              "engine_sha256": "976B9EF0F5DC169C7AAC97E2EB8C5AC7C9C1D7BE7B7460ED54293AD722A3134C",
-              "icd_sha256": "85C4E869082FEC1448E6DC78E72E56F1ADC2D23F1ED858F7551BA6F646D46C97",
+              "engine_sha256": "32EA2F45E7E5BF20D8D7F087904103131CE95CF918FBB69ADD4F2C4DB37D3635",
+              "icd_sha256": "872F7B31B3CF3FA82C981F4E4D8B6C5B764A5B48B3F798069860C986FDEDBDD8",
               "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
-              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; ICD hash replaced again for ICD 72E1D192 (b15); engine and ICD hashes replaced again for the b18 x64 pair (engine C242BA6A, ICD 013DA4B0), capabilities not re-measured; ICD hash replaced back to the b17 ICD for b18r1, capabilities not re-measured; b19: engine pin kept (C242BA6A), ICD pin moved to the b19 x64 ICD 822134D0 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b23: engine pin moved to the per-application x64 engine D4C4BE86 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f), ICD pin moved to the b23 x64 ICD 60214F51 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x64 ICD 20A593DC (mesa amdgpu-wddm/rottr486-null-vs aca2c81b), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x64 control ICD F43E4392 (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 120F7BAA (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD EF863272 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD F0B190EC (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine 9F7DE3C8 (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.106-tester.34: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
             }
           }
         },
         "output": "amdgpu_wddm_d3d11.config"
       },
       "size": 132,
-      "role": "M14C deployment record rebound to the 0.7.216.105-tester.33 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
+      "role": "M14C deployment record rebound to the 0.7.216.106-tester.34 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
       "flavour": "lab",
       "note": "M14C record of the lab flavour: pins the lab engine 16BE5F7E and the lab triplet ICD"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
-      "sha256": "B5DFCFF6CC61F26B4BC40D65EC3773C61C79B82F8C4388DB0422334D51635237",
+      "source": "scratch/t34/release/set/artifacts/release/dxvk-x64-rel/amdgpu_wddm_dxvk.dll",
+      "sha256": "AC91B01E5BF2AD25EA67E3F99F62A9A748F6F73A1EBF159A89997A40CFB89FBA",
       "built_from": {
         "repo": "dxvk",
-        "commit": "acb783204e2637d892a9f3a7a34926af35c83b8b",
-        "recipe_commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
@@ -993,22 +993,22 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
-      "size": 5603328,
+      "size": 5652480,
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
-      "sha256": "976B9EF0F5DC169C7AAC97E2EB8C5AC7C9C1D7BE7B7460ED54293AD722A3134C",
+      "source": "scratch/t34/release/set/artifacts/lab/dxvk-x64-lab/amdgpu_wddm_dxvk.dll",
+      "sha256": "32EA2F45E7E5BF20D8D7F087904103131CE95CF918FBB69ADD4F2C4DB37D3635",
       "built_from": {
         "repo": "dxvk",
-        "commit": "acb783204e2637d892a9f3a7a34926af35c83b8b",
-        "recipe_commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
@@ -1029,22 +1029,22 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
-      "size": 5861376,
+      "size": 5914624,
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
-      "sha256": "D321CD8C55624AF1610CBC68DFF85465F178EA0DF3E7442052BC7A12B2F8FDD9",
+      "source": "scratch/t34/release/set/artifacts/release/hosted-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "3636FE58823E1B8EC4355085B1ED1ED7A841B18104698CF8DE93F4AF6481814F",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1068,23 +1068,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 18420736,
+      "size": 19008000,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd",
       "path": "payload/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
-      "sha256": "85C4E869082FEC1448E6DC78E72E56F1ADC2D23F1ED858F7551BA6F646D46C97",
+      "source": "scratch/t34/release/set/artifacts/lab/hosted-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "872F7B31B3CF3FA82C981F4E4D8B6C5B764A5B48B3F798069860C986FDEDBDD8",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1109,23 +1109,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 18511872,
+      "size": 19121152,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/system-x64-rel/vulkan_radeon.dll",
-      "sha256": "595B7CBBFDDBA1C469067788E2FBC73EB994E0F0FEAAA1A17D2561D22CA98B0A",
+      "source": "scratch/t34/release/set/artifacts/release/system-x64-rel/vulkan_radeon.dll",
+      "sha256": "A5B5EF60868E57038F217BE364A17AF5069EB54B71287F150599D68673552BEB",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "ad130cc22883fc80ff36926ac5eebfdfbaefcdbc",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "d12fb4fd8c1a9736b259d5f355a6393b6f585635",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1137,7 +1137,7 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "2",
+          "8",
           "-Compiler",
           "clang-cl",
           "-Temp",
@@ -1149,23 +1149,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 17960448,
+      "size": 18538496,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
-      "sha256": "0060A69947F2EB506F088596864E898693DA2E149AF603A67A6DE17817637AA1",
+      "source": "scratch/t34/release/set/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
+      "sha256": "25EFF268DCA0B4FF01D9BF3445FFB4D22DD979A1F39E97915F6352DBE0EA1E8D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "ad130cc22883fc80ff36926ac5eebfdfbaefcdbc",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "d12fb4fd8c1a9736b259d5f355a6393b6f585635",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1177,7 +1177,7 @@
           "-Arch",
           "x64",
           "-Jobs",
-          "2",
+          "8",
           "-Compiler",
           "clang-cl",
           "-Temp",
@@ -1190,11 +1190,11 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 17976320,
+      "size": 18575872,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -1215,11 +1215,11 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/router-x86-rel/bc250d3d_router.dll",
-      "sha256": "697A72A97D5688C085D86B2F8BB61A74E1A55B3823782518923FBE7CB61D2125",
+      "source": "scratch/t34/release/set/artifacts/release/router-x86-rel/bc250d3d_router.dll",
+      "sha256": "B0E24CFBCCD5C15A4FC27B0AC890683B6BB63EA38F84BE164DA8DD190A431E0C",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-Compiler",
@@ -1231,22 +1231,22 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250d3d_router.dll"
       },
-      "size": 200192,
-      "authenticode_sha256": "00C6E1BD73D56D1AA4DCA07158332515F8D48EF23E49000244BD202F5A3C3B95",
+      "size": 200704,
+      "authenticode_sha256": "9402B6924BBD5ED5434FC0F65D09221CBE59B995EAA509C52940E359B625C46E",
       "flavour": "release"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d_router.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
-      "sha256": "5BBC231EEBD8DC236DE8FCDDC0BF28913A6A8D9674F9C83EADD5CB6C95694BF1",
+      "source": "scratch/t34/release/set/artifacts/lab/router-x86-lab/bc250d3d_router.dll",
+      "sha256": "452F4A4288DAE0C8A6AA26E464F895615E40881DB74527FADC49FB97C714F5FB",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-router.ps1",
         "args": [
           "-Compiler",
@@ -1258,23 +1258,23 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250d3d_router.dll"
       },
-      "size": 200192,
-      "authenticode_sha256": "7537709B7DE3C553B54DB01EDB7A60884A89472A32E974AF4AE454E5595FFC73",
+      "size": 200704,
+      "authenticode_sha256": "079A87A738C9C13829112C9809DFDC77793B82563986925F9DD15DA0CCFFAF94",
       "flavour": "lab"
     },
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/cpu-x86-rel/bc250d3d.dll",
-      "sha256": "6B94EACAC5B3092909F34109F5576A337B8382D54190FF7C821CA71C6CC99D31",
+      "source": "scratch/t34/release/set/artifacts/release/cpu-x86-rel/bc250d3d.dll",
+      "sha256": "DC0A68A42B516B9CDFC85283794060AC028E331586AD1D576FC9396194A82B05",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "2057d4cffc81ce573611ed84c0ab20a5bf4822da",
-        "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611",
+        "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1286,7 +1286,7 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "24",
+          "8",
           "-Llvm",
           "{input:llvm}",
           "-Compiler",
@@ -1300,7 +1300,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "llvm": {
@@ -1309,7 +1309,7 @@
         },
         "output": "src/gallium/targets/d3d10umd/bc250d3d.dll"
       },
-      "size": 45390848,
+      "size": 45391360,
       "role": "The 32-bit CPU D3D11 UMD of the desktop route (LLVM 23.1.2 x86, scratch/wow64/llvm2312-x86-build), the same commit as the 64-bit row.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation. It links an LLVM build in the workspace that no commit pins.",
       "flavour": "release"
@@ -1317,12 +1317,12 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/cpu-x86-lab/bc250d3d.dll",
-      "sha256": "C53C748ED12F981632686A3040FD4C333412BEE82B12C5EFA37B36238E15A8DE",
+      "source": "scratch/t34/release/set/artifacts/lab/cpu-x86-lab/bc250d3d.dll",
+      "sha256": "FAED855274B4A12F424E773E70BE9777E1C3B462AEEE84B845C545925EC7D0A2",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "2057d4cffc81ce573611ed84c0ab20a5bf4822da",
-        "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611",
+        "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1334,7 +1334,7 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "24",
+          "8",
           "-Llvm",
           "{input:llvm}",
           "-Compiler",
@@ -1349,7 +1349,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "llvm": {
@@ -1358,7 +1358,7 @@
         },
         "output": "src/gallium/targets/d3d10umd/bc250d3d.dll"
       },
-      "size": 46095872,
+      "size": 46096384,
       "role": "The 32-bit CPU D3D11 UMD of the desktop route (LLVM 23.1.2 x86, scratch/wow64/llvm2312-x86-build), the same commit as the 64-bit row.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation. It links an LLVM build in the workspace that no commit pins.",
       "flavour": "lab"
@@ -1366,11 +1366,11 @@
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
-      "sha256": "B44A8EED2800C92635B7C9C96DE06971E4511B6A55FA0388CF59E78198992642",
+      "source": "scratch/t34/release/set/artifacts/release/d3d11-x86-rel/amdgpu_wddm_d3d11.dll",
+      "sha256": "144A24F3B3AE47C54018A6DF4EBFDC55CD890C0E3FBEC8D6AF7FC1BB21073829",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "ce9464780003e5d01a24a05fff1033ad97a6ad97",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -1388,27 +1388,27 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "dxvk": {
             "repo": "dxvk",
-            "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+            "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
           }
         },
         "output": "amdgpu_wddm_d3d11.dll"
       },
-      "size": 471040,
+      "size": 493056,
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
-      "sha256": "1989A9A34490EE31484F9E197632AC96A0D0CF1EF702E942DC84EE1770F23070",
+      "source": "scratch/t34/release/set/artifacts/lab/d3d11-x86-lab/amdgpu_wddm_d3d11.dll",
+      "sha256": "E06150C3121B8F9DBAE27E0B7483FE67F13986C26241F417E32C78D31B884109",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "ce9464780003e5d01a24a05fff1033ad97a6ad97",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-dxvk.ps1",
         "args": [
           "-DxvkSource",
@@ -1426,24 +1426,24 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "inputs": {
           "dxvk": {
             "repo": "dxvk",
-            "commit": "c271e0e005936223683d7ecb7200816b6a2405e1"
+            "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
           }
         },
         "output": "amdgpu_wddm_d3d11.dll"
       },
-      "size": 470528,
+      "size": 501760,
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/build-train/tester.33/configs/release/x86/amdgpu_wddm_d3d11.config",
-      "sha256": "521BCB8D52BA9EBD7A939D1A2F17190D612BA58623F74A05BE7BC0F6C76E9109",
+      "source": "scratch/t34/release/set/configs/release/x86/amdgpu_wddm_d3d11.config",
+      "sha256": "9FDCB52F16FA5BFE07B260514B6897BBFF103A681022534EB5BFC308AF619B0B",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
@@ -1477,24 +1477,24 @@
               "tiled_resources_tier": 3,
               "conservative_tier": 3,
               "vp_rt_index_any_shader": 1,
-              "engine_sha256": "005EE4B42B6FAC273F1F76FD261129392AAADBD9DB4ACD65FAB54EC4D790B00E",
-              "icd_sha256": "70DD1D8F1DA510542B67951C7223A45355B2DF88E30574F6C246B50B6107DA9F",
+              "engine_sha256": "8DB6EF56CF1C19219BF7D47BB5BF3A84D7716423D456DED45F2048F6A6844E99",
+              "icd_sha256": "32956E978DDA76C5C7C9BB567C7F140406ED72D479DA593B3C16CFB2F53DEE3E",
               "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
-              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; engine and ICD hashes replaced by the x86 builds (BD-064), capabilities not re-measured on x86; ICD hash replaced by the b19 x86 ICD F6392B51 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b19: engine pin moved to the b19 x86 engine A42ADB6E (the record of 2026-10-06 04:05Z still pinned the b17 x86 engine 0D4AE659), ICD pin kept (F6392B51), capabilities not re-measured; b23: engine pin moved to the per-application x86 engine BD1900C7 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f, built -Arch x86), ICD pin moved to the b23 x86 ICD 85286DD6 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x86 control ICD E719735D (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, -Arch x86, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 4E51D73F (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD 2C1242F9 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD 62BAF7AF (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine EDA82EEC (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; engine and ICD hashes replaced by the x86 builds (BD-064), capabilities not re-measured on x86; ICD hash replaced by the b19 x86 ICD F6392B51 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b19: engine pin moved to the b19 x86 engine A42ADB6E (the record of 2026-10-06 04:05Z still pinned the b17 x86 engine 0D4AE659), ICD pin kept (F6392B51), capabilities not re-measured; b23: engine pin moved to the per-application x86 engine BD1900C7 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f, built -Arch x86), ICD pin moved to the b23 x86 ICD 85286DD6 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x86 control ICD E719735D (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, -Arch x86, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 4E51D73F (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD 2C1242F9 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD 62BAF7AF (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine EDA82EEC (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.106-tester.34: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
             }
           }
         },
         "output": "amdgpu_wddm_d3d11.config"
       },
       "size": 132,
-      "role": "M14C deployment record rebound to the 0.7.216.105-tester.33 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
+      "role": "M14C deployment record rebound to the 0.7.216.106-tester.34 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_d3d11.config",
-      "source": "scratch/build-train/tester.33/configs/lab/x86/amdgpu_wddm_d3d11.config",
-      "sha256": "B0D481C1E7EA913E1ED299BBA7B0D2276CFE3432CB19A09C0E5515869E2AA68C",
+      "source": "scratch/t34/release/set/configs/lab/x86/amdgpu_wddm_d3d11.config",
+      "sha256": "22FB3BE9D20F5CF7505351765EBD29F06FBE0F5FC021EA8D1701B20D304D5A31",
       "built_from": {
         "repo": "amdgpu-wddm",
         "commit": "97b0f39ebc04f8c23c1b2110b9ee0d15034713f6",
@@ -1528,29 +1528,29 @@
               "tiled_resources_tier": 3,
               "conservative_tier": 3,
               "vp_rt_index_any_shader": 1,
-              "engine_sha256": "2C60044A3000651315FC9E712DEC5BCF0C0DB250EA2F03BD20CC7BF8D5B9C951",
-              "icd_sha256": "24EABFF9D3A62469118AF6101470AE8B47CA8E690900822257053D8DA86DCA6D",
+              "engine_sha256": "CFA9548395927BE04AD84596AEE31FB47C58FC6FF5887F2B026D15420A2B784F",
+              "icd_sha256": "24F8ACC509A3832DCDCB5D2E5C90B8375C1E27F1703C9E465DBFB5F3F726D3AA",
               "engine_test_sha256": "CE29F846CF170593209DD3EA2CFD6857CD97358BEFC8F39199D4F310CE5E4908",
-              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; engine and ICD hashes replaced by the x86 builds (BD-064), capabilities not re-measured on x86; ICD hash replaced by the b19 x86 ICD F6392B51 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b19: engine pin moved to the b19 x86 engine A42ADB6E (the record of 2026-10-06 04:05Z still pinned the b17 x86 engine 0D4AE659), ICD pin kept (F6392B51), capabilities not re-measured; b23: engine pin moved to the per-application x86 engine BD1900C7 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f, built -Arch x86), ICD pin moved to the b23 x86 ICD 85286DD6 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x86 control ICD E719735D (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, -Arch x86, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 4E51D73F (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD 2C1242F9 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD 62BAF7AF (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine EDA82EEC (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
+              "carried_from": "fl12caps001 (engine 8E9B3187, ICD D672813F); engine and ICD hashes replaced, capabilities not re-measured; ICD hash replaced again for app-route-dp5; engine and ICD hashes replaced by the x86 builds (BD-064), capabilities not re-measured on x86; ICD hash replaced by the b19 x86 ICD F6392B51 (mesa amdgpu-wddm/b19-icd 31844893), capabilities not re-measured; b19: engine pin moved to the b19 x86 engine A42ADB6E (the record of 2026-10-06 04:05Z still pinned the b17 x86 engine 0D4AE659), ICD pin kept (F6392B51), capabilities not re-measured; b23: engine pin moved to the per-application x86 engine BD1900C7 (dxvk amdgpu-wddm/per-app-graphics-settings 0898891f, built -Arch x86), ICD pin moved to the b23 x86 ICD 85286DD6 (mesa amdgpu-wddm/b23-icd 8c110468), capabilities not re-measured; b23 round 4: ICD pin moved to the round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86, BD-100), engine pin kept, capabilities not re-measured; b24 round 3 (C70 out of the train, BD-103): ICD pin back to the b23 round-4 x86 ICD 887A08E5 (mesa amdgpu-wddm/rottr486-null-vs aca2c81b, -Arch x86), engine pin kept, capabilities not re-measured; b30: ICD pin moved to the x86 control ICD E719735D (mesa amdgpu-wddm/d3d12-gaps-contract a8853405, radv-mt, -Arch x86, the ICD that answers the D3D12 shell's host-contract query), engine pin kept, capabilities not re-measured; b32: ICD pin moved to the x64 triplet ICD 4E51D73F (mesa amdgpu-wddm/b32-triplet 1c0099b9, radv-mt, the a8853405 ICD with the BD-074 ACO spill fix), engine pin kept, capabilities not re-measured; b33: ICD pin moved to the triplet ICD 2C1242F9 (mesa fix/bd149-device-stop 3dd45d97, radv-mt: the 1c0099b9 ICD with the BD-136 compiler stack and BD-149), engine pin kept, capabilities not re-measured; b34: ICD pin moved to the triplet ICD 62BAF7AF (mesa fix/bd149-device-stop 3dd45d97 with the game-log sink, radv-mt), engine pin kept, capabilities not re-measured; rc5 of tester.31: engine pin moved to the r9 shader-cache engine EDA82EEC (dxvk amdgpu-wddm/tester31-dxvk b4f080f7), the shell rebuilt against it, capabilities not re-measured; rc5 round 2 of tester.31: the ICD pin moved to the round-2 triplet ICD of mesa amdgpu-wddm/tester31-triplet 2dea401c (radv-mt, with the BD-178 allocation-removal fix), and in the lab rows the engine pin moved to the lab-flavour r9 engine of the same dxvk pin b4f080f7, which the lab record on disk already carried; capabilities not re-measured; rc5 of tester.31: the engine and the ICD carry this candidate's version resource (BD-182), so their hashes moved; final tester.31 resource-only stamp: engine/ICD hashes rebound to final PE copies; capability words unchanged and not re-measured; 0.7.216.102-tester.31v2 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.103-tester.31v3 resource-only stamp: engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.104-tester.32 resource-only stamp of the rebuilt engine (dxvk c271e0e0) and hosted ICD (mesa 66986af4): engine/ICD hashes rebound to the stamped PE copies; capability words unchanged and not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.105-tester.33: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured; 0.7.216.106-tester.34: engine and ICD hashes rebound to the files of this release set by build-release-set.ps1, capabilities not re-measured"
             }
           }
         },
         "output": "amdgpu_wddm_d3d11.config"
       },
       "size": 132,
-      "role": "M14C deployment record rebound to the 0.7.216.105-tester.33 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
+      "role": "M14C deployment record rebound to the 0.7.216.106-tester.34 engine and ICD. The first 68 bytes (header and capability words) are unchanged; capabilities were not re-measured.",
       "flavour": "lab",
       "note": "M14C record of the lab flavour, x86: pins the lab engine 34AE58A0 and the lab x86 triplet ICD"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
-      "sha256": "005EE4B42B6FAC273F1F76FD261129392AAADBD9DB4ACD65FAB54EC4D790B00E",
+      "source": "scratch/t34/release/set/artifacts/release/dxvk-x86-rel/amdgpu_wddm_dxvk.dll",
+      "sha256": "8DB6EF56CF1C19219BF7D47BB5BF3A84D7716423D456DED45F2048F6A6844E99",
       "built_from": {
         "repo": "dxvk",
-        "commit": "acb783204e2637d892a9f3a7a34926af35c83b8b",
-        "recipe_commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
@@ -1570,22 +1570,22 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
-      "size": 4853760,
+      "size": 4898816,
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_dxvk.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
-      "sha256": "2C60044A3000651315FC9E712DEC5BCF0C0DB250EA2F03BD20CC7BF8D5B9C951",
+      "source": "scratch/t34/release/set/artifacts/lab/dxvk-x86-lab/amdgpu_wddm_dxvk.dll",
+      "sha256": "CFA9548395927BE04AD84596AEE31FB47C58FC6FF5887F2B026D15420A2B784F",
       "built_from": {
         "repo": "dxvk",
-        "commit": "acb783204e2637d892a9f3a7a34926af35c83b8b",
-        "recipe_commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "86ca97b2eedaf4554a6c8db11b598ce58d04e643",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-dxvk.ps1",
         "args": [
           "-Config",
@@ -1606,22 +1606,22 @@
           "lab",
           "-Lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/ddi/amdgpu_wddm_dxvk.dll"
       },
-      "size": 5079040,
+      "size": 5124096,
       "flavour": "lab"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
-      "sha256": "70DD1D8F1DA510542B67951C7223A45355B2DF88E30574F6C246B50B6107DA9F",
+      "source": "scratch/t34/release/set/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
+      "sha256": "32956E978DDA76C5C7C9BB567C7F140406ED72D479DA593B3C16CFB2F53DEE3E",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1645,23 +1645,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 17868288,
+      "size": 18455552,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d11-umd-wow64",
       "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
-      "sha256": "24EABFF9D3A62469118AF6101470AE8B47CA8E690900822257053D8DA86DCA6D",
+      "source": "scratch/t34/release/set/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
+      "sha256": "24F8ACC509A3832DCDCB5D2E5C90B8375C1E27F1703C9E465DBFB5F3F726D3AA",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1686,22 +1686,22 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 17951744,
+      "size": 18561536,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
-      "sha256": "87E625218FADC059970701CB8EF299948805DBD6CED5B8D2F662AEB8AC89760D",
+      "source": "scratch/t34/release/set/artifacts/release/d3d12-x86-rel/amdgpu_wddm_d3d12.dll",
+      "sha256": "06D6D5E07BE03521A51C4FF0D13554B8D2F48225952B71EC6B00B2EB648C1A0E",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -1719,7 +1719,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-DdiInclude",
           "{root}/toolchain/nuget/wdk-28000.2526-um/c/Include/10.0.28000.0/um",
           "-ApiInclude",
@@ -1728,7 +1728,7 @@
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
-            "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+            "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
             "paths": [
               "src/util/bc250_host_bootstrap.h"
             ]
@@ -1742,7 +1742,7 @@
           },
           "engine": {
             "repo": "vkd3d-proton",
-            "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
+            "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
             "paths": [
               "libs/ddi"
             ]
@@ -1750,18 +1750,18 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 4112896,
+      "size": 4123648,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
-      "sha256": "A2643C324373EAC43A9764CE239B77715BD9FDEE9B38DEC061184B7E554F0450",
+      "source": "scratch/t34/release/set/artifacts/lab/d3d12-x86-lab/amdgpu_wddm_d3d12.dll",
+      "sha256": "6E098BD50A9A571CDD02E8E1E85D87F2BFCC58AD8570746EA5CD9068EDC6D407",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-d3d12.ps1",
         "args": [
           "-OutputDir",
@@ -1779,7 +1779,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-DdiInclude",
           "{root}/toolchain/nuget/wdk-28000.2526-um/c/Include/10.0.28000.0/um",
           "-ApiInclude",
@@ -1788,7 +1788,7 @@
         "inputs": {
           "mesa": {
             "repo": "mesa-amdgpu-wddm",
-            "commit": "c44e34a5b2074eb3a2c261e89ae42b311a7c9d20",
+            "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
             "paths": [
               "src/util/bc250_host_bootstrap.h"
             ]
@@ -1802,7 +1802,7 @@
           },
           "engine": {
             "repo": "vkd3d-proton",
-            "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
+            "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
             "paths": [
               "libs/ddi"
             ]
@@ -1810,19 +1810,19 @@
         },
         "output": "amdgpu_wddm_d3d12.dll"
       },
-      "size": 4203008,
+      "size": 4216320,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/engine12-x86-rel/amdgpu_wddm_vkd3d.dll",
-      "sha256": "2C8C298DC91779A700B5DB3A6FC38F10C4D1C8A3816263994D31A2153EEC8CC9",
+      "source": "scratch/t34/release/set/artifacts/release/engine12-x86-rel/amdgpu_wddm_vkd3d.dll",
+      "sha256": "7BC8737E19EE236BA3864C88A6EDF21791A29A81E023CA1EF9A5E523F0473F8B",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -1842,23 +1842,23 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "size": 4143616,
+      "size": 4161024,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/engine12-x86-lab/amdgpu_wddm_vkd3d.dll",
-      "sha256": "DDC15B8C1D534B3B0793B529563621D34068FC1FF0101A8412E20B49CF56AA2F",
+      "source": "scratch/t34/release/set/artifacts/lab/engine12-x86-lab/amdgpu_wddm_vkd3d.dll",
+      "sha256": "E4E3DC2BF15A86C7C442E34FB26FBF1D36D5C275FD706D0956542BC22EF6D976",
       "built_from": {
         "repo": "vkd3d-proton",
-        "commit": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "98e7a56a39166d8ef4e1711b1b34d6942e32c7da",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-vkd3d.ps1",
         "args": [
           "-Config",
@@ -1878,23 +1878,23 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "libs/ddi/amdgpu_wddm_vkd3d.dll"
       },
-      "size": 4262400,
+      "size": 4279808,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
-      "sha256": "70DD1D8F1DA510542B67951C7223A45355B2DF88E30574F6C246B50B6107DA9F",
+      "source": "scratch/t34/release/set/artifacts/release/hosted-x86-rel/amdgpu_wddm_radv.dll",
+      "sha256": "32956E978DDA76C5C7C9BB567C7F140406ED72D479DA593B3C16CFB2F53DEE3E",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1918,23 +1918,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 17868288,
+      "size": 18455552,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "d3d12-umd-wow64",
       "path": "payload/wow64/d3d12/amdgpu_wddm_radv.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
-      "sha256": "24EABFF9D3A62469118AF6101470AE8B47CA8E690900822257053D8DA86DCA6D",
+      "source": "scratch/t34/release/set/artifacts/lab/hosted-x86-lab/amdgpu_wddm_radv.dll",
+      "sha256": "24F8ACC509A3832DCDCB5D2E5C90B8375C1E27F1703C9E465DBFB5F3F726D3AA",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
-        "recipe_commit": "d3d917d80123c2ae7d2ebfff905390c220ac629e",
+        "commit": "4968dff327a9dacc39cb9627a4b1a20eb7d21f76",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1959,23 +1959,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
-      "size": 17951744,
+      "size": 18561536,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
-      "sha256": "81709110A9C85876D93B26A34606276397614880CB6451605936A1BE54290A55",
+      "source": "scratch/t34/release/set/artifacts/release/wow64-x86-rel/vulkan_radeon.dll",
+      "sha256": "7A865BC757073575D633495562D4FBDC688A38BAB7DAAAE14CDF648E377BA772",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "20d7c8c95669fe94122cb948c75037f98b2583e7",
-        "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611",
+        "commit": "53ccb05f2045c9f1be014c0d6e8263b01f00ec27",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -1987,7 +1987,7 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "2",
+          "8",
           "-Compiler",
           "clang-cl",
           "-Temp",
@@ -1999,24 +1999,24 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 17200128,
-      "pair_skew": "The x86 system Vulkan row 20d7c8c9 is the wow64 ICD line 0aace3d3 (upstream Mesa a0ef4c88) with the ray-query lifetime, inverse trigonometry and GFX10 late-Z writer fixes of the x64 line. The x64 system row ad130cc2 has the same three fixes and in addition the release-flavour environment-read helper (aecf0012) and the bounded log sink of the system diagnostics (6e09fe76). The release default of both builds follows the KMD compute-node capability; the x86 build does not port the x64 DXGI present or compute work.",
+      "size": 17789440,
+      "pair_skew": "The x86 system Vulkan row 53ccb05f is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b) and the fixes it shares with the x64 system row d12fb4fd (tester.33 line ad130cc2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "vulkan-icd-wow64",
       "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
-      "sha256": "9CB1BFBAD689F61708BEAD1B5BE0F525B8DAEC002DE74112E479295618AE75DA",
+      "source": "scratch/t34/release/set/artifacts/lab/wow64-x86-lab/vulkan_radeon.dll",
+      "sha256": "7E8D296A82D163FBD129DEAE0BDA9281F5C4BCCB97FC0EAC477B550EE13C1878",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "20d7c8c95669fe94122cb948c75037f98b2583e7",
-        "recipe_commit": "d8b88dd924654317b4ee99d49e47e761715f6611",
+        "commit": "53ccb05f2045c9f1be014c0d6e8263b01f00ec27",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -2028,7 +2028,7 @@
           "-Arch",
           "x86",
           "-Jobs",
-          "2",
+          "8",
           "-Compiler",
           "clang-cl",
           "-Temp",
@@ -2041,12 +2041,12 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 17241600,
-      "pair_skew": "The x86 system Vulkan row 20d7c8c9 is the wow64 ICD line 0aace3d3 (upstream Mesa a0ef4c88) with the ray-query lifetime, inverse trigonometry and GFX10 late-Z writer fixes of the x64 line. The x64 system row ad130cc2 has the same three fixes and in addition the release-flavour environment-read helper (aecf0012) and the bounded log sink of the system diagnostics (6e09fe76). The release default of both builds follows the KMD compute-node capability; the x86 build does not port the x64 DXGI present or compute work.",
+      "size": 17853952,
+      "pair_skew": "The x86 system Vulkan row 53ccb05f is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b) and the fixes it shares with the x64 system row d12fb4fd (tester.33 line ad130cc2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -2067,11 +2067,11 @@
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/build-train/tester.33/artifacts/release/control-rel/bc250kmd_cli.exe",
-      "sha256": "9AE968C1677C782D4372A37968C753808FEF56224C6077AD6958F97798C267A0",
+      "source": "scratch/t34/release/set/artifacts/release/control-rel/bc250kmd_cli.exe",
+      "sha256": "8B7DAD88DE310C0EE2A50B1B371B170B1296F4CE832F487A15217FFCF6A3DF45",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2084,22 +2084,22 @@
           "release",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250kmd_cli.exe"
       },
-      "size": 323072,
-      "authenticode_sha256": "41F023D2350CD7444048E04455430EADBEA322A5E468EA2F4D9A69D118A86A9A",
+      "size": 326144,
+      "authenticode_sha256": "6025F369EDCCD8D5123CF5F1D591940B955C290AD0AD6A7C6A63E3E61776B3C4",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250kmd_cli.exe",
-      "source": "scratch/build-train/tester.33/artifacts/lab/control-lab/bc250kmd_cli.exe",
-      "sha256": "670FF546A36C2E21B799D5361F003A0FDAA2C5340AC61BEF7A959191164588DD",
+      "source": "scratch/t34/release/set/artifacts/lab/control-lab/bc250kmd_cli.exe",
+      "sha256": "E64ADCB16ACC53D3F7A743C4DB5874BF8DEC56A0B3E88A72A6F85BA798F5EA37",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2112,22 +2112,22 @@
           "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250kmd_cli.exe"
       },
-      "size": 375296,
-      "authenticode_sha256": "872784238F0B990112DD535BA9E03F734A962ED8C6CAA8089A166613131CF792",
+      "size": 378368,
+      "authenticode_sha256": "9A8295E118C8EB5D7597B4F413F9638E8B2E325E0622D80C0C40EC7827241EF5",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/build-train/tester.33/artifacts/release/extra-caps-release/amdgpu_wddm_d3d12caps.exe",
-      "sha256": "05AA179941393E472D9464CF568F4A00A15A003F29B480E03406FB5EB6754B60",
+      "source": "scratch/t34/release/set/artifacts/release/extra-caps-release/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "53CD3ADEA11B40A690B96E89DD9CCEA74209D419F4BEEE6171EAC6A0FFAB2D4F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/d3d12caps/build.ps1",
         "args": [
           "-Kits",
@@ -2137,25 +2137,25 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release"
         ],
         "output": "amdgpu_wddm_d3d12caps.exe"
       },
       "size": 515072,
-      "authenticode_sha256": "093094A3AC28A99288FA8FD1631A16CA1CA1AC4B2417238313B62E26BE34F5CC",
+      "authenticode_sha256": "DF4BEA5906BAA0DF89A9EC8135313FE615978FBFD881C596B42452E7F29C905F",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu_wddm_d3d12caps.exe",
-      "source": "scratch/build-train/tester.33/artifacts/lab/extra-caps-lab/amdgpu_wddm_d3d12caps.exe",
-      "sha256": "C98F0BB51BD016C26F74B4F6B73C05470CF143FD221081AA65C730B50983C0EF",
+      "source": "scratch/t34/release/set/artifacts/lab/extra-caps-lab/amdgpu_wddm_d3d12caps.exe",
+      "sha256": "765CF4A7ADA4868628E0DB1DC2F1FE9491DF9C2CF02604CEC7F774A914C08768",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/d3d12caps/build.ps1",
         "args": [
           "-Kits",
@@ -2165,25 +2165,25 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab"
         ],
         "output": "amdgpu_wddm_d3d12caps.exe"
       },
       "size": 515072,
-      "authenticode_sha256": "8659A498992D65FA41E7013932D4C04B021896E39BA81E577A284A7A8110F8F5",
+      "authenticode_sha256": "B470A275412DEE7CCE07E5251E97050ADB1BEC5A3307590AE0E496C07E5186C6",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/build-train/tester.33/artifacts/release/control-rel/amdgpu_wddm_control.exe",
-      "sha256": "C50991673F412AEC2EFDBB8B2FA9CF356C084AF46C1D4D41A10CFC99BB534727",
+      "source": "scratch/t34/release/set/artifacts/release/control-rel/amdgpu_wddm_control.exe",
+      "sha256": "0968247E292D2067013E64C65C6AB08D0B03F94C0E7FB82D8A0E2AB5091A63A4",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2196,22 +2196,22 @@
           "release",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "amdgpu_wddm_control.exe"
       },
-      "size": 2624000,
-      "authenticode_sha256": "9BFCD38CABCF6ED52A91EB52B2F0C729FFBAC0506D4F652C95DAB6B2AA8799C0",
+      "size": 2662400,
+      "authenticode_sha256": "F3FCEA9FA222A670ED70FD8D3783A0771772DBB441DE1E24C20BE4FCCA37C7BC",
       "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/build-train/tester.33/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
-      "sha256": "FE463C0DE8E8EB0D2A809D520247C7C8817800DE0B33395E69FD143A49C230A8",
+      "source": "scratch/t34/release/set/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
+      "sha256": "EFE9BE76C67DE25E0561D847C4C4CC02DE6872CC3543BAE6F119AB9C72715FDF",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2224,22 +2224,22 @@
           "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "amdgpu_wddm_control.exe"
       },
-      "size": 2624512,
-      "authenticode_sha256": "AA741C3A336085F1B936161D8AE904B788B45ABD2A6DEFB5051C125FB35CFAF9",
+      "size": 2662912,
+      "authenticode_sha256": "ACEA457CF78E73964384EA6EEC9B861C3315B981CC4494A4A9C33F7ED474BA8B",
       "flavour": "lab"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/control-rel/bc250control.dll",
-      "sha256": "F60CB1760C8E80C0B9E82CB2D0B797611B39B316ADC6E992AE98D2E6DBACD781",
+      "source": "scratch/t34/release/set/artifacts/release/control-rel/bc250control.dll",
+      "sha256": "46C52925AFC3C3387BB6E017CC346390548B292609673716F3AACE399BE87F2F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2252,22 +2252,22 @@
           "release",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250control.dll"
       },
-      "size": 225792,
-      "authenticode_sha256": "F5B8EE40C2464B4D43C2B5688458031631EA2A7BD7A97FE15353132F4BBEF6A4",
+      "size": 227840,
+      "authenticode_sha256": "638BEE8C1372F736616E98CD57C127A211F82B893B5E14AACB4BCF1A07CB60CD",
       "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/bc250control.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/control-lab/bc250control.dll",
-      "sha256": "F77F21886653F82C493C023400242A7CEE20BED1C1B3197DC975F55475B6ECAF",
+      "source": "scratch/t34/release/set/artifacts/lab/control-lab/bc250control.dll",
+      "sha256": "3A63386C58A0DD44E52B114B55DF938DF1C9E19C2477DE8B4B709F7480076C5B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2280,22 +2280,22 @@
           "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250control.dll"
       },
-      "size": 238080,
-      "authenticode_sha256": "EC90678B42042D14171080F9E41CF414547FD7F57FE3E6571CC6EC2F945CF687",
+      "size": 239616,
+      "authenticode_sha256": "067F9D79CA79B4C6DEFCD8F2D35ECCE2757CB06265C3ADB62E5C23E3470740A4",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/control-rel/bc250control.dll",
-      "sha256": "F60CB1760C8E80C0B9E82CB2D0B797611B39B316ADC6E992AE98D2E6DBACD781",
+      "source": "scratch/t34/release/set/artifacts/release/control-rel/bc250control.dll",
+      "sha256": "46C52925AFC3C3387BB6E017CC346390548B292609673716F3AACE399BE87F2F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2308,22 +2308,22 @@
           "release",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250control.dll"
       },
-      "size": 225792,
-      "authenticode_sha256": "F5B8EE40C2464B4D43C2B5688458031631EA2A7BD7A97FE15353132F4BBEF6A4",
+      "size": 227840,
+      "authenticode_sha256": "638BEE8C1372F736616E98CD57C127A211F82B893B5E14AACB4BCF1A07CB60CD",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/bc250control.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/control-lab/bc250control.dll",
-      "sha256": "F77F21886653F82C493C023400242A7CEE20BED1C1B3197DC975F55475B6ECAF",
+      "source": "scratch/t34/release/set/artifacts/lab/control-lab/bc250control.dll",
+      "sha256": "3A63386C58A0DD44E52B114B55DF938DF1C9E19C2477DE8B4B709F7480076C5B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2336,12 +2336,12 @@
           "lab",
           "-NoSmoke",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "bc250control.dll"
       },
-      "size": 238080,
-      "authenticode_sha256": "EC90678B42042D14171080F9E41CF414547FD7F57FE3E6571CC6EC2F945CF687",
+      "size": 239616,
+      "authenticode_sha256": "067F9D79CA79B4C6DEFCD8F2D35ECCE2757CB06265C3ADB62E5C23E3470740A4",
       "flavour": "lab"
     },
     {
@@ -2380,11 +2380,11 @@
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/extra-mft-release/amdgpu_wddm_mft_h264.dll",
-      "sha256": "D5840D74E0FB30D9C4804460BE9C26DC8498FE81E6F996C83756376696F77C8A",
+      "source": "scratch/t34/release/set/artifacts/release/extra-mft-release/amdgpu_wddm_mft_h264.dll",
+      "sha256": "AF64C22B77851D7DBFF62C616708D649AA1B4A2EF84B6A2600D3647E4AE886F2",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/umd/mft-h264/build.ps1",
         "args": [
           "-Kits",
@@ -2394,25 +2394,25 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release"
         ],
         "output": "amdgpu_wddm_mft_h264.dll"
       },
       "size": 496128,
-      "authenticode_sha256": "7B4DFA2A8F9CD3565259AA468E313B36B7E68717A9A9AF34FD5A4EDB2F4ED1D9",
+      "authenticode_sha256": "41456A9B52254FA5A0B57048DC0D2B191BF8EB1413160FE49338D52BF04DCA61",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "mft-h264",
       "path": "payload/mft/amdgpu_wddm_mft_h264.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/extra-mft-lab/amdgpu_wddm_mft_h264.dll",
-      "sha256": "980757C222FD9BE672925E9FE5CB540C59682939730E0A62A6C333F5E318AEA5",
+      "source": "scratch/t34/release/set/artifacts/lab/extra-mft-lab/amdgpu_wddm_mft_h264.dll",
+      "sha256": "9BB30E2463D65CFE278DD8F37782978254209464237E7A139E139561059492B9",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/umd/mft-h264/build.ps1",
         "args": [
           "-Kits",
@@ -2422,25 +2422,25 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab"
         ],
         "output": "amdgpu_wddm_mft_h264.dll"
       },
       "size": 526336,
-      "authenticode_sha256": "857E26E18BA3B04EA899A7F7CCD0DCA23D09020B316826C364066AC8F6C52A72",
+      "authenticode_sha256": "970C908018BE499F5A43B5E10E599AF3AE7DC535C21B6F952CC97A0DA85E42F7",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/build-train/tester.33/artifacts/release/extra-bench-release/d3d11bench.exe",
-      "sha256": "F8F88EA68719FF0B66B6E650A1FF240E12BD32D6362F49F8322D14BFDD2C1289",
+      "source": "scratch/t34/release/set/artifacts/release/extra-bench-release/d3d11bench.exe",
+      "sha256": "618EF06E409A5B8C51C536D6129E9AC297480985D460A7890DE5B0A06303BFE9",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/d3d11bench/build.ps1",
         "args": [
           "-Kits",
@@ -2450,25 +2450,25 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release"
         ],
         "output": "d3d11bench.exe"
       },
       "size": 367616,
-      "authenticode_sha256": "143C3A7DBD5B533F23F71B2CE6B465DFDA218CC1502A53611F11933BEEAE8ADD",
+      "authenticode_sha256": "D6301FBF86E4725BE2795828F84BEFC58C818BB98AC4600C93CCC8A5DDD3EBEE",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/d3d11bench.exe",
-      "source": "scratch/build-train/tester.33/artifacts/lab/extra-bench-lab/d3d11bench.exe",
-      "sha256": "812F66AEF3BDD09D9027544AC66D3CF1EEB8DDCCA6D6A33C0F20F1D76498CBFD",
+      "source": "scratch/t34/release/set/artifacts/lab/extra-bench-lab/d3d11bench.exe",
+      "sha256": "29273E04A43597F33C2311796344F58556328AB25962BB5A8C22AA2F28E7F2C1",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/win/d3d11bench/build.ps1",
         "args": [
           "-Kits",
@@ -2478,25 +2478,25 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab"
         ],
         "output": "d3d11bench.exe"
       },
       "size": 367616,
-      "authenticode_sha256": "0E5AA9941DE3ABE156E679121C177F68445B6C0F3C9D7DB3C73B1CDC38442335",
+      "authenticode_sha256": "347D49027633BF7278F0149F980D95E58F332DCDED03B8EDDB48B41F38BBA639",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/extra-hip-release/amdhip64.dll",
-      "sha256": "7EFC770C3A9AA6F3E3BCD322863C30DACFE269373ADAFCB764F5DB62D33FE051",
+      "source": "scratch/t34/release/set/artifacts/release/extra-hip-release/amdhip64.dll",
+      "sha256": "2C1A351EA358494F4C4AB2549C48C1C745EBC902A164C9A61E5DCAFCAB149F6A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2506,7 +2506,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release",
           "-Root",
@@ -2525,18 +2525,18 @@
         "output": "amdhip64.dll"
       },
       "size": 300544,
-      "authenticode_sha256": "AEC6A9E033E32319ECA0AE998CA5C8E54BECCA6D4BC55B85E65F93E3409EB0E6",
+      "authenticode_sha256": "4268FAF1A1E46DAA733A09C610D7F01B843193EFB17F28259B4D00AF375FDAFD",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/amdhip64.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/extra-hip-lab/amdhip64.dll",
-      "sha256": "12F84D4A4F08026B9FD3A4CAAA209E49E19D471DF103FDE6D3DDDBD6CFBFDBFD",
+      "source": "scratch/t34/release/set/artifacts/lab/extra-hip-lab/amdhip64.dll",
+      "sha256": "765BF53E2E97667550B88A5F24424684278B54E6A937CEC5D03C4AB436F09FC6",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2546,7 +2546,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab",
           "-Root",
@@ -2565,18 +2565,18 @@
         "output": "amdhip64.dll"
       },
       "size": 316416,
-      "authenticode_sha256": "43C6DF7187CAF3905BE99B0E1D21700F18079BC9C26EFBC88B00BC1E3C2D4D16",
+      "authenticode_sha256": "26B00BC82316789366388EEFAF2A4389DCAC6009594DD5D13C17C4EA069F1093",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/build-train/tester.33/artifacts/release/extra-hip-release/vadd.exe",
-      "sha256": "F946FADD08AAE82E33DE9E707A1C4F053946A9815FC968E56A8BA95FA3E89260",
+      "source": "scratch/t34/release/set/artifacts/release/extra-hip-release/vadd.exe",
+      "sha256": "73C4E73D7BB2761A4460C2F1148F03CCF7106703FA18B2A12922B5036E754FB1",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2586,7 +2586,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release",
           "-Root",
@@ -2605,18 +2605,18 @@
         "output": "controls/vadd.exe"
       },
       "size": 162304,
-      "authenticode_sha256": "F815092AD36775D47E513F7F1CFA9E88C35EEA89F96041B812B00A9106D53C19",
+      "authenticode_sha256": "0EC94A7D95D1C6678B7504626DEED6F648DBAB1F9E5122F5645D318C76DAD98A",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/vadd.exe",
-      "source": "scratch/build-train/tester.33/artifacts/lab/extra-hip-lab/vadd.exe",
-      "sha256": "8616906155C614862054EFFFA9383FD549BBA75426A3D1022437D9093689E364",
+      "source": "scratch/t34/release/set/artifacts/lab/extra-hip-lab/vadd.exe",
+      "sha256": "9D1D45A37F8F8A89F7D1932F273B797B11AB7361828C5F64E780183F3B107E63",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2626,7 +2626,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab",
           "-Root",
@@ -2645,18 +2645,18 @@
         "output": "controls/vadd.exe"
       },
       "size": 166400,
-      "authenticode_sha256": "228BE15601706B2DEFBE304888CC81590FE2DEB39CB6079FEA811BA7999469B3",
+      "authenticode_sha256": "939A85D3F49F3181E7A2765BB5CB46FA78DB225575DA5D0D629B4D6565A26D24",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/extra-hip-release/bc250hipblas.dll",
-      "sha256": "EAE944F65A1C05FB7616A9A65D8DB4573875A71DE96457CDD2C4D9EC57AFF417",
+      "source": "scratch/t34/release/set/artifacts/release/extra-hip-release/bc250hipblas.dll",
+      "sha256": "F71EE351068BC88648791C5DB2A44D223B199EE5496EA5B42BC9C97E8F4400F9",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2666,7 +2666,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release",
           "-Root",
@@ -2685,18 +2685,18 @@
         "output": "controls/hipblas/bc250hipblas.dll"
       },
       "size": 157696,
-      "authenticode_sha256": "4164C3E3B26FABC5F9A559881B01A7F1A992776F60ABA11FEA2EF85DBD810A94",
+      "authenticode_sha256": "C6F3EDF93AF55D2E79223636E7F0ABC28E04B86642BF6EB7C1B2BCCC3A4FE2FA",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/hip/bc250hipblas.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
-      "sha256": "6DA1038B401E8C35DF11DE3191196B52D5B7A1FDD4A64FEE418E3196B59B6CAD",
+      "source": "scratch/t34/release/set/artifacts/lab/extra-hip-lab/bc250hipblas.dll",
+      "sha256": "48D1FECADD6F6FD36823D3B8C56E9327F47D7B558D1976ED6935A2171BCA6055",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "21983d3210b0c955f2e2a9896341c075bffb17cd",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "compute/hip/build-runtime.ps1",
         "args": [
           "-Kits",
@@ -2706,7 +2706,7 @@
           "-Compiler",
           "clang-cl",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab",
           "-Root",
@@ -2725,19 +2725,19 @@
         "output": "controls/hipblas/bc250hipblas.dll"
       },
       "size": 157696,
-      "authenticode_sha256": "68B0101C3DCC517ADB3EABFE61F68EB46E810F471A70E9B6210C4FCEE5E074E7",
+      "authenticode_sha256": "4ED7C514D90E697E4C20B93ED8FCE81A7F4F8AC20FA1D59ADE019D82CC5BBD41",
       "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
       "flavour": "lab"
     },
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
-      "sha256": "9E28B640EB433CDF8483F746F9A1C2DD1E8AFFF039C31E70A82833E313C54523",
+      "source": "scratch/t34/release/set/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
+      "sha256": "EF5BD5EDF4D31AD70684EC14211DC0B13D6EFD810665F0E2A9DB32E4AAB45B60",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "e0d424ff909c3e11bae0297d655f9b2383de4a1b",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "1226ec984d45b17f6730de84b2b7e98073b679cd",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -2761,24 +2761,24 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/gallium/targets/wgl/amdgpu_wddm_gl.dll"
       },
-      "size": 18359296,
-      "role": "OpenGL ICD for 64-bit applications (BD-076): the OpenGL line 71b34d2c of tester.32 with upstream Mesa a0ef4c88 merged (2985c09a) and the clang-cl interlocked forms (e0d424ff). x64 only, as in tester.32: opengl_icd.architectures registers x64 alone.",
+      "size": 18923008,
+      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd). x64 only: opengl_icd.architectures registers x64 alone.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
-      "sha256": "F806F649524F7DE39949ADBC7C04AEB9FCF04B76D6BFC0430347BD453B45FC8B",
+      "source": "scratch/t34/release/set/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
+      "sha256": "F221AF2410BB968E42C181D6F09F46C036631CEAB04B42CB6BCC4420AFDB2A31",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "e0d424ff909c3e11bae0297d655f9b2383de4a1b",
-        "recipe_commit": "78cda693d0a0432322cdffac3a4aa70657766c10",
+        "commit": "1226ec984d45b17f6730de84b2b7e98073b679cd",
+        "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
           "-Config",
@@ -2803,12 +2803,12 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "src/gallium/targets/wgl/amdgpu_wddm_gl.dll"
       },
-      "size": 18366976,
-      "role": "OpenGL ICD for 64-bit applications (BD-076): the OpenGL line 71b34d2c of tester.32 with upstream Mesa a0ef4c88 merged (2985c09a) and the clang-cl interlocked forms (e0d424ff). x64 only, as in tester.32: opengl_icd.architectures registers x64 alone.",
+      "size": 18931200,
+      "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd). x64 only: opengl_icd.architectures registers x64 alone.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -2844,11 +2844,11 @@
     {
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
-      "source": "scratch/build-train/tester.33/artifacts/release/kmd-rel/amdgpu-state.bin",
-      "sha256": "2F3A6AA64A17A025ECDC42A518A2D01F682499DE7DDF55B9DB2C21EFB568FFEC",
+      "source": "scratch/t34/release/set/artifacts/release/kmd-rel/amdgpu-state.bin",
+      "sha256": "548A5DEC8E04CAD23608CA9D01C341759E94386267C68F7C3DA188C881A37D03",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -2860,21 +2860,21 @@
           "-Flavour",
           "release",
           "-PackageVersion",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "package/amdgpu-state.bin"
       },
-      "size": 2312,
+      "size": 2384,
       "flavour": "shared"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/build-train/tester.33/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
-      "sha256": "EAE7744D8A3B6B5769CA5CA61D4210011F91D6E285D3993EE6F93529FDAF4A16",
+      "source": "scratch/t34/release/set/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
+      "sha256": "5BA7D5BFE6AC29EFE0336F5ED911372003B860085AB6FE9B3BBBA599490133EC",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
           "-Compiler",
@@ -2885,24 +2885,24 @@
           "{root}/toolchain/nuget",
           "-Test",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "release"
         ],
         "output": "amdgpu-state-installer.exe"
       },
-      "size": 239616,
-      "authenticode_sha256": "7C81C154618255CCCB40E14C974FEC8E4528DD5609E219876F9E6D07546561F2",
+      "size": 240640,
+      "authenticode_sha256": "92FFF53355549201EED15047254A8EA71828A1B0809D89A4E00DA369E9264FD8",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
-      "source": "scratch/build-train/tester.33/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
-      "sha256": "D15297C2EE811BAA6F11EA18A74742D68A014BC6AA6AF2DA1946D6FA1F6874A7",
+      "source": "scratch/t34/release/set/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
+      "sha256": "410188060B5D9E371B454F7E6B9875890B3D63178E9FB55D72CEC27CAB1C135F",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "b689e250812a338b396333e57b7f8e551514a4e2",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
           "-Compiler",
@@ -2913,24 +2913,24 @@
           "{root}/toolchain/nuget",
           "-Test",
           "-Version",
-          "0.7.216.105-tester.33",
+          "0.7.216.106-tester.34",
           "-Flavour",
           "lab"
         ],
         "output": "amdgpu-state-installer.exe"
       },
-      "size": 239616,
-      "authenticode_sha256": "DAAC341C6060B4381E919C64CFFE20C393150BB79E83903E077D3D8842C9538A",
+      "size": 240640,
+      "authenticode_sha256": "E75C70C82D91380453FF1B03E5B3B2AEAC9951F8F60DD5BC0AE87E79056215FC",
       "flavour": "lab"
     },
     {
       "component": "adl",
       "path": "payload/adl/atiadlxx.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/adl-x64-release/atiadlxx.dll",
-      "sha256": "32845DAEC801A7EAF56E3ABB9EF9DBD6DFBA6C70FBD6D9252D2968287ADD3B22",
+      "source": "scratch/t34/release/set/artifacts/release/adl-x64-release/atiadlxx.dll",
+      "sha256": "9BBCCF742454C0BD97DADBB2CE8AC84A97BC7B87FB9A18FC17CF17561F2D8E34",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-adl.ps1",
         "args": [
           "-OutputDir",
@@ -2942,23 +2942,23 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "atiadlxx.dll"
       },
       "size": 133632,
-      "authenticode_sha256": "033AA536ED03809CE376C622E3D42196C681D6BB81E6CA95D1E17DC5EB6D4717",
+      "authenticode_sha256": "F53B71DC2B6BC0388AB443E53210BABDD9AC0FD5C2110D5C2C5FA877281A3245",
       "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
       "flavour": "release"
     },
     {
       "component": "adl",
       "path": "payload/wow64/adl/atiadlxy.dll",
-      "source": "scratch/build-train/tester.33/artifacts/release/adl-x86-release/atiadlxy.dll",
-      "sha256": "69747DD69865E7B8A64C70F4EBE1BE59B0168E6FF9D0C266DF5CAA771735E5DE",
+      "source": "scratch/t34/release/set/artifacts/release/adl-x86-release/atiadlxy.dll",
+      "sha256": "CB0042CDE0847C3DDD5FB58FD503F77501A8FDD44B6D46E7B3372BF3FD01B9C8",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-adl.ps1",
         "args": [
           "-OutputDir",
@@ -2970,23 +2970,23 @@
           "-Flavour",
           "release",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "atiadlxy.dll"
       },
       "size": 108032,
-      "authenticode_sha256": "114CD1B0474A7838CC7F0E8B4E7DB3028CB11786C06B4FFF956EFB6AB1E83B99",
+      "authenticode_sha256": "794DE6811D6E9911F44146A2D7F8208AFE2C8CEF9673B1F7E9C596354E2D6BF8",
       "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
       "flavour": "release"
     },
     {
       "component": "adl",
       "path": "payload/adl/atiadlxx.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/adl-x64-lab/atiadlxx.dll",
-      "sha256": "047AB5F7FA523A61A080BF432F7218FF3238B102512B321A020DB1F12C02CA27",
+      "source": "scratch/t34/release/set/artifacts/lab/adl-x64-lab/atiadlxx.dll",
+      "sha256": "F78CC382F7BE0E75243B7AF70F78F15661665F261F702D6C2E1EB7A32D8CDCC2",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-adl.ps1",
         "args": [
           "-OutputDir",
@@ -2998,23 +2998,23 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "atiadlxx.dll"
       },
       "size": 133632,
-      "authenticode_sha256": "90CFAFFAA26F878CE64CBBAD2C7AED315C0A5D3957B3F55A7B78784B080F8869",
+      "authenticode_sha256": "3CA1AA9207FD8B2113F42C49286AF9BF8B504AC68A1277CFA0ED257AB4D8EFE4",
       "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
       "flavour": "lab"
     },
     {
       "component": "adl",
       "path": "payload/wow64/adl/atiadlxy.dll",
-      "source": "scratch/build-train/tester.33/artifacts/lab/adl-x86-lab/atiadlxy.dll",
-      "sha256": "5B10268F0826B21DDF42FD0B0D0D8CF59314B9DAC9D9F5983621AF1EBF5A295B",
+      "source": "scratch/t34/release/set/artifacts/lab/adl-x86-lab/atiadlxy.dll",
+      "sha256": "8739722DD107A5EEF4F7EA21CFB899ADDB6E0D789E2DBEE3F56133787B09247B",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "375188253d576c9495079e66118ae2aa4227907f",
+        "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
         "recipe": "tools/build/build-umd-adl.ps1",
         "args": [
           "-OutputDir",
@@ -3026,12 +3026,12 @@
           "-Flavour",
           "lab",
           "-Version",
-          "0.7.216.105-tester.33"
+          "0.7.216.106-tester.34"
         ],
         "output": "atiadlxy.dll"
       },
       "size": 108032,
-      "authenticode_sha256": "D61D266FAA0B58586D446789352D6319CD2497B3889CB9956F6FF1D96E73A707",
+      "authenticode_sha256": "32653CFBF1A123443679AD28FDB735E57947A21D2EC7F1522B4C44DA437DB8F9",
       "unverified": "The stamped ADL outputs have passed their ABI gates; byte-identical rebuilds across different output directories are not claimed by this registration.",
       "flavour": "lab"
     }
