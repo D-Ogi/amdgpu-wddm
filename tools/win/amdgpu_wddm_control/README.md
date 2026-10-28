@@ -76,7 +76,13 @@ value removes the game's key), `--gfx <settings>` for its graphics settings, or 
 ## Graphics settings for games
 
 The registry contract of 2026-10-08 (`src/GraphicsSettings.cs`). The driver's readers own the meaning. This app writes
-only these names, only under these keys, and only values inside the contract:
+only these names, only under these keys, and only values inside the contract.
+
+`FrameRateLimit`, `VSync`, `Anisotropy` and `MaxFrameLatency` have three readers: the D3D11 shell, the D3D12 shell,
+and, from tester.34, the system Vulkan ICD (64-bit and 32-bit, `radv_wddm2_app_settings.h` in the Mesa fork). The
+OpenGL ICD presents through the 64-bit system Vulkan ICD, so 64-bit OpenGL games get them too. On the 32-bit ICD,
+which presents through GDI only, `VSync` 0 removes the wait for the next composition, and `MaxFrameLatency` needs no
+wait because each present copies a finished frame. The help text of each of the four settings names these APIs.
 
 | Key (below `HKLM\SOFTWARE\amdgpu-wddm`) | Value | Type | Values | In the window |
 |---|---|---|---|---|

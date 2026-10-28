@@ -650,11 +650,11 @@ help.setting.repair|rev|7bd6d691|Instaluje ponownie to samo wydanie z kopii na t
 help.setting.report|rev|77f4acdf|Tworzy plik zip z informacjami dla twórców. Ty decydujesz, czy go wysłać.
 help.setting.restart|rev|f4c0e8b6|Uruchamia ponownie system Windows. Ponowne uruchomienie samego sterownika grafiki nie jest dostępne.
 help.setting.guides|rev|e75ebef4|Pomoc krok po kroku w typowych problemach.
-help.setting.vsync|rev|321b1cca|Sprawia, że gra czeka na monitor, zanim pokaże nową klatkę. Usuwa to rozrywanie obrazu, ale może dodać małe opóźnienie. „Decyduje aplikacja” zostawia to ustawieniu samej gry.
-help.setting.fps|rev|9453113b|Ogranicza liczbę klatek rysowanych przez grę w każdej sekundzie. Limit sprawia, że układ graficzny jest chłodniejszy i cichszy. „Bez limitu” dla jednej gry znosi limit ustawiony dla wszystkich gier.
+help.setting.vsync|mt|0cddf4ee|Sprawia, że gra czeka na monitor, zanim pokaże nową klatkę. Usuwa to rozrywanie obrazu, ale może dodać małe opóźnienie. „Decyduje aplikacja” zostawia to ustawieniu samej gry. Działa w grach DirectX 11, DirectX 12, Vulkan oraz w 64-bitowych grach OpenGL.
+help.setting.fps|mt|01cbd5d3|Ogranicza liczbę klatek rysowanych przez grę w każdej sekundzie. Limit sprawia, że układ graficzny jest chłodniejszy i cichszy. „Bez limitu” dla jednej gry znosi limit ustawiony dla wszystkich gier. Działa w grach DirectX 11, DirectX 12, Vulkan oraz w 64-bitowych grach OpenGL.
 help.setting.sharpen|rev|f351a4a8|Sprawia, że obraz wygląda ostrzej. Wkrótce.
 help.setting.aa|rev|2f6e7807|Wygładza poszarpane krawędzie. Wkrótce.
-help.setting.af|rev|4c6456a0|Sprawia, że tekstury widziane pod kątem wyglądają ostrzej. Wyższe wartości nieco spowalniają grę.
+help.setting.af|mt|16b4ebae|Sprawia, że tekstury widziane pod kątem wyglądają ostrzej. Wyższe wartości nieco spowalniają grę. Działa w grach DirectX 11, DirectX 12, Vulkan oraz w 64-bitowych grach OpenGL.
 help.setting.scaling|rev|9b2c7d59|Jak obraz o niższej rozdzielczości niż monitor wypełnia ekran: rozciągnięty na cały ekran, powiększony z zachowaniem proporcji albo wyśrodkowany bez skalowania. Zmiana zostaje tylko wtedy, gdy ją zachowasz w ciągu 15 sekund.
 help.setting.hdr|rev|af54494e|Wysoki zakres dynamiki: jaśniejsze rozbłyski i więcej kolorów. Wkrótce.
 help.setting.vrr|rev|4662d04f|Monitor dostosowuje się do liczby klatek gry, dzięki czemu ruch jest płynniejszy. Wkrótce.
@@ -935,7 +935,7 @@ search.games.sm.terms|rev|ab586346|model shaderów|shader model|SM 6.8|SM 6.7|SM
 search.games.cpu-render|rev|bf157885|Uruchamiaj DirectX 11 na procesorze
 search.games.cpu-render.terms|rev|927301e2|renderowanie na CPU|renderowanie programowe|WARP|procesor|DirectX 11|ostateczność
 search.display.scaling|rev|22b1cb79|Skalowanie GPU
-help.setting.latency|rev|a684f1ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11 i DirectX 12. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
+help.setting.latency|mt|4d3900ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11, DirectX 12, Vulkan oraz w 64-bitowych grach OpenGL. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|rev|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
 help.setting.vk-present|mt|31f80141|Sposób, w jaki gry Vulkan wyświetlają klatki, dla wszystkich gier naraz. Domyślny jest tryb Szybki (flip): karta graficzna kopiuje każdą klatkę, a gra na pełnym ekranie trafia prosto na ekran. Tryb Zgodny kopiuje każdą klatkę przez procesor. Jest wolniejszy, ale działa tam, gdzie Szybki (flip) nie działa. Jeśli gra Vulkan pokazuje czarny lub zamrożony obraz, wybierz Zgodny.
 help.setting.vk-memory|mt|50303e03|Co dostaje gra DirectX 11 lub DirectX 12, gdy pamięć wideo jest pełna, dla jednej gry lub dla wszystkich gier. Nie dotyczy gier Vulkan. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
