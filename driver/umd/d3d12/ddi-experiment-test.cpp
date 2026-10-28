@@ -78,6 +78,44 @@ int main() {
     assert(!detail::application_profile_key(L"C:\\Games\\witcher3.exe", key, 40));
 
     native12::DdiExperimentValue v{};
+    // The two registry sources together: the profile's list, then the machine-wide list.
+    v = detail::combine_experiment(1, "present-cached", 1, "deferred-replay-off");
+    assert(v.source == DdiExperimentSource::ProfileAndMachine && !std::strcmp(v.text, "present-cached,deferred-replay-off"));
+    v = detail::combine_experiment(0, "", 1, "deferred-replay-off");
+    assert(v.source == DdiExperimentSource::Machine && !std::strcmp(v.text, "deferred-replay-off"));
+    v = detail::combine_experiment(1, "present-cached", 0, "");
+    assert(v.source == DdiExperimentSource::Profile && !std::strcmp(v.text, "present-cached"));
+    v = detail::combine_experiment(0, "", 0, "");
+    assert(v.source == DdiExperimentSource::None && !v.text[0]);
+    // A profile of exactly "none" turns the machine-wide switches off for that game too.
+    v = detail::combine_experiment(1, "none", 1, "deferred-replay-off");
+    assert(v.source == DdiExperimentSource::Profile && !v.text[0]);
+    // A machine-wide "none" or empty value adds nothing.
+    v = detail::combine_experiment(1, "present-cached", 1, "none");
+    assert(v.source == DdiExperimentSource::ProfileAndMachine && !std::strcmp(v.text, "present-cached"));
+    v = detail::combine_experiment(1, "present-cached", 1, "");
+    assert(!std::strcmp(v.text, "present-cached"));
+    v = detail::combine_experiment(0, "", 1, "none");
+    assert(v.source == DdiExperimentSource::Machine && !v.text[0]);
+    // An invalid value of either source gives no switch at all.
+    v = detail::combine_experiment(-1, "", 1, "deferred-replay-off");
+    assert(v.source == DdiExperimentSource::Invalid && !v.text[0]);
+    v = detail::combine_experiment(1, "present-cached", -1, "");
+    assert(v.source == DdiExperimentSource::Invalid && !v.text[0]);
+    v = detail::combine_experiment(1, "Present-Cached", 1, "deferred-replay-off");
+    assert(v.source == DdiExperimentSource::Invalid && !v.text[0]);
+    // The longest single value fits; a joined list too long for the buffer is refused, never cut.
+    const std::string full(255, 'a');
+    v = detail::combine_experiment(1, full.c_str(), 0, "");
+    assert(v.source == DdiExperimentSource::Profile && std::strlen(v.text) == 255);
+    v = detail::combine_experiment(1, std::string(200, 'a').c_str(), 1, std::string(54, 'b').c_str());
+    assert(v.source == DdiExperimentSource::ProfileAndMachine && std::strlen(v.text) == 255);
+    v = detail::combine_experiment(1, std::string(200, 'a').c_str(), 1, std::string(55, 'b').c_str());
+    assert(v.source == DdiExperimentSource::Invalid && !v.text[0]);
+    // A switch of the machine-wide list is found in the joined list.
+    v = detail::combine_experiment(1, "present-cached", 1, "scanout-flip-off");
+    assert(native12::ddi_experiment_listed(v.text, "scanout-flip-off") && native12::ddi_experiment_listed(v.text, "present-cached"));
+
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     // Lab build: the variable wins whenever it is present.
     v = with_variable("raytracing-tier,present-cached");
@@ -138,11 +176,11 @@ int main() {
     assert(detail::machine_experiment(text, sizeof(text)) == 0 && !text[0]);
 
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
-    std::puts("PASS ddi experiment sources (lab build): syntax, matching, profile key, machine-wide value, variable "
-              "precedence, none, refusals, the -off form of every default");
+    std::puts("PASS ddi experiment sources (lab build): syntax, matching, profile key, machine-wide value, profile and "
+              "machine-wide lists joined, variable precedence, none, refusals, the -off form of every default");
 #else
-    std::puts("PASS ddi experiment sources (release build): syntax, matching, profile key, machine-wide value, no "
-              "variable source, the -off form of every default");
+    std::puts("PASS ddi experiment sources (release build): syntax, matching, profile key, machine-wide value, profile "
+              "and machine-wide lists joined, no variable source, the -off form of every default");
 #endif
     return 0;
 }

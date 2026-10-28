@@ -164,11 +164,27 @@ namespace AmdgpuWddmControl
         public static bool IsValidMode(uint mode) { return mode == 0 || mode == 1; }
 
         // What the KMD will use for a stored value: absent = default, out of range = fixed clock (INVALID_SETTING).
+        // An absent value is the code default (DpmMode 0, the default ceiling): the case of a driver key without the
+        // installation defaults (DefaultsV2) and of an older snapshot.
         public static string Describe(uint? mode, uint? maxMHz)
         {
             string m = mode == null ? "Fixed (default)" : mode == 1 ? "Automatic" : mode == 0 ? "Fixed" : "Invalid (" + mode + ")";
             string c = maxMHz == null ? DefaultMaxMHz + " MHz (default)" : maxMHz + " MHz";
             return m + ", ceiling " + c;
+        }
+
+        // The same for the common service state (schema 2), where mode and maxMHz are the effective values: a user
+        // override, else the installation default (DefaultsV2: DpmMode 1 since schema 2), else the code default. A value
+        // without a user override in overrides is the default the driver will use, so it gets "(default)" whatever it is.
+        // overrides null: the raw values could not be read, and no value is called a default.
+        public static string Describe(uint? mode, uint? maxMHz, IDictionary<string, long> overrides)
+        {
+            if (overrides == null) return Describe(mode, maxMHz);
+            bool modeDefault = mode == null || !overrides.ContainsKey("DpmMode");
+            bool maxDefault = maxMHz == null || !overrides.ContainsKey("DpmMaxMHz");
+            string m = mode == null ? "Fixed" : mode == 1 ? "Automatic" : mode == 0 ? "Fixed" : "Invalid (" + mode + ")";
+            string c = (maxMHz ?? DefaultMaxMHz) + " MHz";
+            return m + (modeDefault ? " (default)" : "") + ", ceiling " + c + (maxDefault ? " (default)" : "");
         }
 
         // The writes of the Performance page under the settings rule: DpmMode 1 only while "automatic" is checked

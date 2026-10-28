@@ -517,7 +517,8 @@ inline HRESULT recordbench_run(Session& s){
     sh.cycles_per_us=calibrate(sh.qpf);
     // What the shell reads once per process (resolve_experiment, driver/umd/d3d12/ddi-trace.h): a lab shell takes
     // AMDGPU_WDDM_D3D12_EXPERIMENT when the process has it; either flavour then takes the application profile of this
-    // image, then the machine-wide value of HKLM\SOFTWARE\amdgpu-wddm\D3D12. Each source is reported as absent, empty,
+    // image followed by the machine-wide value of HKLM\SOFTWARE\amdgpu-wddm\D3D12 (both lists, combine_experiment).
+    // The first word names the profile when there is one; the machine-wide value is in the label too. Each source is reported as absent, empty,
     // invalid (read as none: not lower-case letters, digits, hyphens and commas, or too long) or its text. The first
     // word names the arm a release shell runs, and a lab shell too while the variable is absent, as in the A/B. The
     // text is cut at 127 characters: both labels below must fit the 512-byte trace line of Session::event.

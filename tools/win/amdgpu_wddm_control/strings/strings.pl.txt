@@ -189,6 +189,10 @@ cache.d3d12.present|rev|15118fb9|Zajęte: {0}, liczba programów: {1}. Dzięki t
 cache.d3d12.empty|rev|2bed9aa6|Pusta. Gry wypełniają ją przy pierwszym uruchomieniu.
 cache.unknown|rev|b7cdc0cc|Nie można jeszcze sprawdzić.
 cache.d3d11|rev|4738ed96|Pamięć podręczna shaderów DirectX 11
+cache.d3d11.present|mt|15118fb9|Zajęte: {0}, liczba programów: {1}. Dzięki temu kolejne uruchomienia gier są szybsze.
+cache.d3d11.empty|mt|2bed9aa6|Pusta. Gry wypełniają ją przy pierwszym uruchomieniu.
+cache.vulkan.present|mt|3ea51817|Zajęte: {0}. Gry Vulkan, OpenGL i DirectX przechowują tu przygotowane programy graficzne. Dzięki temu kolejne uruchomienia gier są szybsze.
+cache.vulkan.empty|mt|2bed9aa6|Pusta. Gry wypełniają ją przy pierwszym uruchomieniu.
 cache.vulkan|rev|eac8dfa1|Pamięć podręczna shaderów Vulkan
 cache.windows|rev|f621abf7|Pamięć podręczna shaderów DirectX systemu Windows
 cache.windows.text|rev|4525456f|Zarządza nią Windows. Możesz ją wyczyścić narzędziem Oczyszczanie dysku systemu Windows.

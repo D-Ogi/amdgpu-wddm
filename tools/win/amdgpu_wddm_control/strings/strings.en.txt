@@ -189,6 +189,10 @@ cache.d3d12.present|src|-|In use: {0} for {1} programs. It makes later starts of
 cache.d3d12.empty|src|-|Empty. Games fill it the first time they run.
 cache.unknown|src|-|Cannot be checked yet.
 cache.d3d11|src|-|DirectX 11 shader cache
+cache.d3d11.present|src|-|In use: {0} for {1} programs. It makes later starts of games faster.
+cache.d3d11.empty|src|-|Empty. Games fill it the first time they run.
+cache.vulkan.present|src|-|In use: {0}. Vulkan, OpenGL and DirectX games keep prepared graphics programs here. It makes later starts of games faster.
+cache.vulkan.empty|src|-|Empty. Games fill it the first time they run.
 cache.vulkan|src|-|Vulkan shader cache
 cache.windows|src|-|Windows DirectX shader cache
 cache.windows.text|src|-|Managed by Windows. You can clear it with Windows Disk Cleanup.
