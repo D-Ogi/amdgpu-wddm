@@ -1171,7 +1171,8 @@ namespace AmdgpuWddmControl
             // after the fallback, the live reason and DpmLastReason only say "fixed clock requested" (BD-069).
             uint closedReason = s.P("DpmClosedReason") ?? 0;
             uint fallReason = closedReason != 0 ? closedReason : runReason;
-            string stored = "Setting for the next start: " + DpmSettings.Describe(mode, max) + ".";
+            string stored = "Setting for the next start: " + (s.StateSchema == 2 ? DpmSettings.Describe(mode, max, s.ParameterOverrides)
+                : DpmSettings.Describe(mode, max)) + ".";
             bool fellBack = mode != 1 && (closedReason != 0 || runReason == 3 || runReason == 4 || runReason == 8);
             if (fellBack)
                 add("Clock control", "The driver went back to the fixed clock: " + KmdReply.ReasonText(fallReason) + ". " + stored, "warn", "enable-dpm", "Re-enable automatic clocks");

@@ -519,7 +519,7 @@ static partial class UnitTests
             "F7: Start brings the buttons of the card into reach, not the card alone");
     }
 
-    // F-CACHE: the D3D12 engine cache counted from a directory; the other caches honestly unknown.
+    // F-CACHE: the D3D12 and D3D11 engine caches and the Mesa cache counted from their directories.
     static void Caches()
     {
         var dir = Path.Combine(Path.GetTempPath(), "amdgpu-wddm-cache-test-" + Guid.NewGuid().ToString("N"));
@@ -537,9 +537,34 @@ static partial class UnitTests
             Equal(2, rows[0].Programs, "cache: one program per .cache file");
             Check(rows[0].Text.Contains("2"), "cache: the text names the program count");
             Equal(CacheState.Empty, CacheInventory.Read(Path.Combine(dir, "missing"))[0].State, "cache: a missing directory is empty");
-            Check(rows.Any(r => r.Id == "d3d11" && r.State == CacheState.Unknown) && rows.Any(r => r.Id == "vulkan" && r.State == CacheState.Unknown), "cache: DXVK and Mesa caches are unknown, not empty");
             Check(rows.Any(r => r.Id == "windows" && r.State == CacheState.Windows), "cache: the Windows cache is a pointer");
             Equal("1.5 GB", CacheInventory.Size(3L << 29), "cache size text");
+
+            // The D3D11 engine (DXVK) and Mesa caches, each from its own directory.
+            var d = new CacheDirectories { D3D12 = Path.Combine(dir, "vkd3d"), D3D11 = Path.Combine(dir, "dxvk"), Mesa = Path.Combine(dir, "mesa") };
+            rows = CacheInventory.Read(d);
+            Check(rows.Where(r => r.Id != "windows").All(r => r.State == CacheState.Empty), "cache: missing directories are empty, not unknown");
+            Directory.CreateDirectory(d.D3D11);
+            string a = new string('a', 16), b = new string('b', 16), one = new string('1', 16), two = new string('2', 16);
+            File.WriteAllBytes(Path.Combine(d.D3D11, a + "-" + one + ".dxvk.lut"), new byte[100]);
+            File.WriteAllBytes(Path.Combine(d.D3D11, a + "-" + one + ".dxvk.bin"), new byte[900]);
+            File.WriteAllBytes(Path.Combine(d.D3D11, a + "-" + two + ".dxvk.bin"), new byte[500]);
+            File.WriteAllBytes(Path.Combine(d.D3D11, b + "-" + one + ".dxvk.bin"), new byte[500]);
+            File.WriteAllBytes(Path.Combine(d.D3D11, "notes.txt"), new byte[10]);
+            Directory.CreateDirectory(Path.Combine(d.Mesa, "ab"));
+            File.WriteAllBytes(Path.Combine(d.Mesa, "index"), new byte[1024]);
+            File.WriteAllBytes(Path.Combine(d.Mesa, "ab", "cdef"), new byte[4096]);
+            rows = CacheInventory.Read(d);
+            var d3d11 = rows.Single(r => r.Id == "d3d11");
+            Equal(CacheState.Present, d3d11.State, "cache: the D3D11 engine cache is present");
+            Equal(2010L, d3d11.Bytes, "cache: D3D11 bytes of every file in the directory");
+            Equal(2, d3d11.Programs, "cache: one D3D11 program per distinct first 16 digits, other builds and names not counted");
+            var mesa = rows.Single(r => r.Id == "vulkan");
+            Equal(CacheState.Present, mesa.State, "cache: the Mesa cache is present");
+            Equal(5120L, mesa.Bytes, "cache: Mesa bytes include the subdirectories");
+            Check(CacheInventory.IsD3D11CacheFile(a + "-" + one + ".dxvk.lut") && !CacheInventory.IsD3D11CacheFile("A" + a.Substring(1) + "-" + one + ".dxvk.lut")
+                && !CacheInventory.IsD3D11CacheFile(a + "-" + one + ".dxvk.tmp"), "cache: D3D11 cache name pattern");
+            Equal(CacheState.Unknown, CacheInventory.Read(new CacheDirectories())[1].State, "cache: no LocalAppData folder is unknown");
         }
         finally { Directory.Delete(dir, true); }
     }

@@ -187,6 +187,10 @@ cache.d3d12.present|mt|15118fb9|사용 중: 프로그램 {1}개에 {0}. 다음�
 cache.d3d12.empty|mt|2bed9aa6|비어 있습니다. 게임을 처음 실행할 때 채워집니다.
 cache.unknown|mt|b7cdc0cc|아직 확인할 수 없습니다.
 cache.d3d11|mt-safe|4738ed96|DirectX 11 셰이더 캐시
+cache.d3d11.present|mt|15118fb9|사용 중: 프로그램 {1}개에 {0}. 다음부터 게임을 더 빠르게 시작할 수 있습니다.
+cache.d3d11.empty|mt|2bed9aa6|비어 있습니다. 게임을 처음 실행할 때 채워집니다.
+cache.vulkan.present|mt|3ea51817|사용 중: {0}. Vulkan, OpenGL 및 DirectX 게임이 준비된 그래픽 프로그램을 여기에 보관합니다. 다음부터 게임을 더 빠르게 시작할 수 있습니다.
+cache.vulkan.empty|mt|2bed9aa6|비어 있습니다. 게임을 처음 실행할 때 채워집니다.
 cache.vulkan|mt-safe|eac8dfa1|Vulkan 셰이더 캐시
 cache.windows|mt-safe|f621abf7|Windows DirectX 셰이더 캐시
 cache.windows.text|mt|4525456f|Windows가 관리합니다. Windows 디스크 정리로 지울 수 있습니다.

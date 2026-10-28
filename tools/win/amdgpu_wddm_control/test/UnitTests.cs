@@ -304,6 +304,13 @@ static partial class UnitTests
         Check(DpmSettings.IsValidMode(0) && DpmSettings.IsValidMode(1) && !DpmSettings.IsValidMode(2), "modes");
         Equal("Fixed (default), ceiling 2000 MHz (default)", DpmSettings.Describe(null, null), "describe defaults");
         Equal("Automatic, ceiling 2000 MHz", DpmSettings.Describe(1, 2000), "describe dpm 2000");
+        // Schema 2: the effective values; no user override means the installation default.
+        var noOverride = new Dictionary<string, long>();
+        Equal("Automatic (default), ceiling 2000 MHz (default)", DpmSettings.Describe(1, 2000, noOverride), "describe installation default");
+        var fixedByUser = new Dictionary<string, long> { { "DpmMode", 0 }, { "DpmMaxMHz", 1500 } };
+        Equal("Fixed, ceiling 1500 MHz", DpmSettings.Describe(0, 1500, fixedByUser), "describe user overrides");
+        Equal("Fixed (default), ceiling 2000 MHz (default)", DpmSettings.Describe(null, null, noOverride), "describe absent effective values");
+        Equal("Automatic, ceiling 2000 MHz", DpmSettings.Describe(1, 2000, null), "describe without readable overrides");
         var languageBefore = Strings.Language;
         try
         {

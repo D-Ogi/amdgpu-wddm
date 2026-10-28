@@ -187,6 +187,10 @@ cache.d3d12.present|mt|15118fb9|使用中：{1} 個のプログラムで {0}。2
 cache.d3d12.empty|mt|2bed9aa6|空です。ゲームを初めて実行したときに作成されます。
 cache.unknown|mt|b7cdc0cc|まだ確認できません。
 cache.d3d11|mt-safe|4738ed96|DirectX 11 シェーダー キャッシュ
+cache.d3d11.present|mt|15118fb9|使用中：{1} 個のプログラムで {0}。2 回目以降のゲームの起動が速くなります。
+cache.d3d11.empty|mt|2bed9aa6|空です。ゲームを初めて実行したときに作成されます。
+cache.vulkan.present|mt|3ea51817|使用中：{0}。Vulkan、OpenGL、DirectX のゲームが準備済みのグラフィックス プログラムをここに保存します。2 回目以降のゲームの起動が速くなります。
+cache.vulkan.empty|mt|2bed9aa6|空です。ゲームを初めて実行したときに作成されます。
 cache.vulkan|mt-safe|eac8dfa1|Vulkan シェーダー キャッシュ
 cache.windows|mt-safe|f621abf7|Windows DirectX シェーダー キャッシュ
 cache.windows.text|mt|4525456f|Windows によって管理されます。Windows のディスク クリーンアップで消去できます。
