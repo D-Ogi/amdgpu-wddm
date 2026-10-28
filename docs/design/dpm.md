@@ -69,13 +69,15 @@ The three overclock points of the V/F table:
 
 | MHz | 2100 | 2200 | 2300 |
 |---|---|---|---|
-| mV | 1025 | 1050 | 1075 |
-| VID | 84 | 80 | 76 |
+| mV | 1050 | 1050 | 1075 |
+| VID | 80 | 80 | 76 |
 
 The points come from community reports and are not measured on our unit (third-party: the governor table of
 `katzzero/bc250-unofficial-community-guide` `06-gpu-governor.md` gives 2100/1025, 2200/1030-1050 and 2300/1075. The
-default configuration of `bc250-collective/cyan-skillfish-governor` gives 2200/1050). 1075 mV stays 54 mV under the overdrive maximum of 1129 mV (`CYAN_SKILLFISH_VDDC_MAX`). A lab
-measurement can change a point before the tier ships.
+default configuration of `bc250-collective/cyan-skillfish-governor` gives 2200/1050). The project gives 2100 MHz the
+voltage of 2200 MHz, 1050 mV, for a margin over the lowest reported value. 1075 mV stays 54 mV under the overdrive
+maximum of 1129 mV (`CYAN_SKILLFISH_VDDC_MAX`). If the lab shows that 2300 MHz is not stable at 1075 mV, the point can
+get more voltage, never more than 1100 mV. A lab measurement can change a point before the tier ships.
 
 The rules:
 
@@ -96,6 +98,23 @@ The rules:
   BC-250, or that has no board identity, gets the tier none (reason UNSUPPORTED). `bc250_oc_decide()` holds these
   rules and `driver/shim/test/oc_test.c` tests them.
 - The board provider unbind sets the tier to none, so a board that is not bound never runs an overclock envelope.
+- A start that finds `DpmSession` knows that the last start stopped above the floor without a clean stop.
+  `OcTierStart()` reads it before `DpmStart` consumes it, and deletes a stored tier before the board checks (reason
+  UNCLEAN_STOP). The over-current lock of [M790](../facts/hardware.md#m790) looks exactly like such a stop. A start
+  with nothing stored does not write `OcTierLastReason`, so the record stays at UNCLEAN_STOP until the person chooses
+  a tier again, and the control app shows a plain notice for that time.
+- When the SMU refuses an overclock point, `bc250_dpm_oc_refused()` removes that point and every point above it for
+  the rest of the start, and a thermal cap above the new ceiling comes down to it. `DpmApplyEx()` then applies the
+  next lower level and logs `dpm: overclock point ... refused` once for that point. The refusal does not count
+  toward `BC250_DPM_ERROR_LIMIT`: this is the rule of the sub-floor points, and one refused point never costs the
+  whole DPM start.
+- When the person chooses a lower tier or the standard limits, the control app also lowers the stored values above
+  the new limits to those limits (`DpmMaxMHz`, `CpuMaxMHz`, `CpuUvSteps`) in the same plan, and the dialog says so.
+  The driver refuses the whole stored processor set at its next start when one value is above the tier of that
+  start, so a value left above the limits would silently give the firmware's own processor values.
+- `bc250kmd_cli oc` prints the tier of this start, its reason, the stored tier, the board fingerprint, the stored
+  `OcTier`, `OcTierBoard` and `OcTierLastReason`, whether the stored board is this board, the three envelopes and
+  the three points. It is read only.
 - The thermal rules do not change: the 87 C warm zone and thermal cap, the 90 C thermal floor, the fan guard and
   the CPU gates apply at every tier. The PSU limit of 300 W does not change.
 - The board capability query (ABI 2) reports the tier of this start, the stored tier, the reason, the board
@@ -875,7 +894,7 @@ keeps its busy gate for the same message.
 | `DpmMaxMHz` | ceiling in dpm, 1000-2300, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, since 2026-10-10). The tier's ceiling bounds it: 2000 MHz without a tier, 2200 MHz (air), 2300 MHz (liquid). A value above the tier's ceiling runs at that ceiling |
 | `OcTier` | the overclock tier ("Overclock tiers"): absent or 0 none, 1 air, 2 liquid. Any other value is refused by the state catalog and runs the tier none. Read at device start |
 | `OcTierBoard` | the fingerprint of the board that `OcTier` belongs to. Written by the control app from the board capability query. A mismatch deletes both values |
-| `OcTierLastReason` | written by the driver: the reason of the last start's tier choice (1 OK, 2 INVALID, 3 UNSUPPORTED, 4 UNBOUND, 5 BOARD_CHANGED) |
+| `OcTierLastReason` | written by the driver: the reason of the last start's tier choice (1 OK, 2 INVALID, 3 UNSUPPORTED, 4 UNBOUND, 5 BOARD_CHANGED, 6 UNCLEAN_STOP) |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |

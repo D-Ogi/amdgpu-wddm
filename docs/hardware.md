@@ -56,13 +56,15 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   | air | 2200 MHz | 1050 mV | 3900 MHz |
   | liquid (AIO) | 2300 MHz | 1075 mV | 4100 MHz |
 
-  The GPU points above 2000 MHz are 2100/1025, 2200/1050 and 2300/1075 (MHz/mV), from community reports and not
+  The GPU points above 2000 MHz are 2100/1050, 2200/1050 and 2300/1075 (MHz/mV), from community reports and not
   measured on our unit. 1075 mV stays under the overdrive maximum of 1129 mV. Every tier lies inside the reported
   lock band of [M790](facts/hardware.md#m790), so the lock is the expected failure, not a hang or a TDR. The
   control app tells the person, in plain words, that a lock cuts the picture, that the buttons do nothing, and
   that only pulling the power cable recovers the board. The thermal rules, the 87 C and 90 C limits, the fan
   guard and the 300 W PSU limit are the same at every tier. A tier belongs to one board: a start on another board
-  deletes it. Every other device gets "not supported" and no tier.
+  deletes it. A start after a stop above the floor without a clean stop also deletes it, because the lock looks
+  exactly like that stop. A point that the SMU refuses goes for the rest of that start and does not count as an SMU
+  error. Every other device gets "not supported" and no tier.
 - SMU messages: the native KMD sends only `GetSmuVersion` (parameter 0),
   `GetGfxFrequency` (0), `GetGfxVid` (0), `RequestGfxclk` and `ForceGfxVid` through
   its serialized owner, with the argument ranges Linux uses. The setters follow the
