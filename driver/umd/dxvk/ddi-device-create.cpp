@@ -5,6 +5,8 @@
 #include "ddi-dxgi-table.h"
 #include "ddi-wddm2.h"
 #include "ddi-wddm22.h"
+#include "ddi-experiment.h"
+#include "ddi-lifecycle.h"
 namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     PFN_vkGetInstanceProcAddr get,const BC250_DXVK_ENGINE_FUNCS &funcs,D3D_FEATURE_LEVEL level,
@@ -33,6 +35,9 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;
     if (!owner) return E_OUTOFMEMORY;
     if (scanout) owner->set_scanout(*scanout);
+    // BD-253: the hosted ICD's identity of this device is the owner's own address (RuntimeDevice::host_identity);
+    // the switch "host-identity-off" gives the runtime's handle as before, for a lab comparison.
+    owner->runtime().legacy_host_identity=d3d11_experiment_off("host-identity");
     HRESULT hr=E_FAIL,cleanup=S_OK;
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);
@@ -60,7 +65,17 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         }
     }
     if (FAILED(hr)) {
-        if (FAILED(cleanup) || owner->has_live_objects()) failedCleanup.owner=owner;
+        // BD-253: one line for each failed creation, in both flavours: an ordinary error report. It names the step,
+        // whether the runtime gave this device the handle of a device that the process keeps (a failed cleanup),
+        // and how many devices the process keeps.
+        const bool kept=FAILED(cleanup) || owner->has_live_objects();
+        auto &runtime=owner->runtime();
+        static std::atomic_uint notes{16};
+        device_life_note(notes,"BC250 BD-253: CreateDevice failed: step=%s hr=%08X cleanup=%08X kept=%u runtime=%p "
+            "identity=%p handle-of-kept-device=%u kept-devices=%u\n",owner->step(),unsigned(hr),unsigned(cleanup),
+            unsigned(kept),runtime.hDevice,runtime.host_identity(),unsigned(retained_runtime_handle(runtime.hDevice)),
+            retained_device_count());
+        if (kept) { note_retained_runtime_handle(runtime.hDevice); failedCleanup.owner=owner; }
         else delete owner;
         // HRESULT return is the CreateDevice error channel, not SetErrorCb.
         return ddi_device_status(hr);
@@ -83,6 +98,16 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         *args.p11_1DeviceFuncs=make_render_device_table();
     }
     storage->owner=owner;
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    {
+        // BD-253, lab flavour (BD-167): one line for each new device, bounded, with the same fields as the failure.
+        auto &runtime=owner->runtime();
+        static std::atomic_uint notes{16};
+        device_life_note(notes,"BC250 BD-253: CreateDevice runtime=%p identity=%p handle-of-kept-device=%u "
+            "kept-devices=%u\n",runtime.hDevice,runtime.host_identity(),
+            unsigned(retained_runtime_handle(runtime.hDevice)),retained_device_count());
+    }
+#endif
     return S_OK;
 }
 }

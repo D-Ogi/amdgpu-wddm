@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "device-owner.h"
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 using namespace bc250::umd;
 namespace {
@@ -44,9 +45,12 @@ int main() {
     fail_create=true;
     check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_OUTOFMEMORY);
     check(creates==1 && destroys==0 && !owner.runtime().present_context);
+    // BD-253: the step that failed, for the CreateDevice line, survives the rollback.
+    check(!std::strcmp(owner.step(),"present-context"));
     fail_create=false;
     check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_INVALIDARG);
     check(creates==2 && destroys==1 && !owner.runtime().present_context);
+    check(!std::strcmp(owner.step(),"modules"));
     fail_destroy=true;
     check(FAILED(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)));
     check(creates==3 && destroys==2 && owner.runtime().present_context==&context && owner.has_live_objects());
@@ -61,7 +65,10 @@ int main() {
     check(owner.initialize(args,1,nullptr,funcs,D3D_FEATURE_LEVEL_11_0,services)==E_UNEXPECTED);
     owner.runtime().present_context=&context; fail_destroy=true;
     check(owner.close()==E_FAIL && owner.retained_module_count()==3);
+    // BD-253: the step that kept the device, for the DestroyDevice line.
+    check(!std::strcmp(owner.step(),"close-present-context"));
     fail_destroy=false;
     check(owner.close()==S_OK && owner.retained_module_count()==0 && !owner.has_live_objects());
+    check(!std::strcmp(owner.step(),"none"));
     std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry\n";
 }

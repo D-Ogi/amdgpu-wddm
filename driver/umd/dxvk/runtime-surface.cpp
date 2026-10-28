@@ -58,7 +58,7 @@ HRESULT finish_runtime_surface(VkDevice device,const RuntimeImageDispatch &vk,
     surface.phase=SurfacePhase::failed;
     if (FAILED(hr)) return hr;
     bc250_host_import imported{};
-    imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=surface.owner->hDevice;
+    imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=surface.owner->host_identity();
     imported.allocation=surface.allocation.allocation; imported.va=surface.mapping.address;
     imported.size=surface.bytes;
     hr=create_runtime_texture(*surface.owner,device,vk,engine,properties,surface.desc,

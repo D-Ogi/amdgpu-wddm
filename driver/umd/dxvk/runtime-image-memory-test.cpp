@@ -7,6 +7,8 @@
 using namespace bc250::umd;
 namespace {
 int identity; unsigned allocations,bindings,frees;
+// BD-253: the identity the hosted ICD knows the device by, RuntimeDevice::host_identity, not the runtime handle.
+void *hostIdentity=nullptr;
 VkDeviceMemory memory=(VkDeviceMemory)(uintptr_t(7));
 VkResult allocationResult=VK_SUCCESS,bindResult=VK_SUCCESS;
 void check(bool b) { if (!b) std::abort(); }
@@ -15,7 +17,7 @@ VkResult VKAPI_CALL allocate(VkDevice,const VkMemoryAllocateInfo *a,const VkAllo
     ++allocations;
     auto *i=static_cast<const bc250_host_import *>(a->pNext);
     auto *d=static_cast<const VkMemoryDedicatedAllocateInfo *>(i->pNext);
-    check(i->identity==&identity && i->allocation==31 && i->va==65536 && i->size==8192 && d->image);
+    check(i->identity==hostIdentity && i->allocation==31 && i->va==65536 && i->size==8192 && d->image);
     check(d->sType==VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO && a->allocationSize==4096 && a->memoryTypeIndex==1);
     if (allocationResult==VK_SUCCESS) *m=memory; return allocationResult;
 }
@@ -130,10 +132,14 @@ struct ImportEngine final : IBc250DxvkDevice2 {
 }
 int main() {
     RuntimeDevice runtime; runtime.hDevice=&identity;
+    // BD-253: the owner's own address is the identity, and the switch gives the runtime handle as before.
+    hostIdentity=runtime.host_identity();
+    check(hostIdentity==&runtime && hostIdentity!=static_cast<void *>(&identity));
+    runtime.legacy_host_identity=true; check(runtime.host_identity()==&identity); runtime.legacy_host_identity=false;
     VkDevice device=reinterpret_cast<VkDevice>(uintptr_t(1)); VkImage image=(VkImage)(uintptr_t(2));
     ImageMemoryDispatch dispatch{requirements,allocate,bind,release};
     VkPhysicalDeviceMemoryProperties properties{}; properties.memoryTypeCount=2; properties.memoryTypes[1].propertyFlags=VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    bc250_host_import imported{}; imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=&identity;
+    bc250_host_import imported{}; imported.sType=BC250_HOST_IMPORT_STYPE; imported.identity=hostIdentity;
     imported.allocation=31; imported.va=65536; imported.size=8192;
     VkDeviceMemory out=VK_NULL_HANDLE;
     auto run=[&]() { return import_runtime_image_memory(runtime,device,image,dispatch,properties,imported,out); };
@@ -141,7 +147,9 @@ int main() {
     RuntimeDomain::Scope scope(runtime.domain);
     imported.size=100; check(run()==E_INVALIDARG && !allocations); imported.size=8192;
     ++imported.va; check(run()==E_INVALIDARG && !allocations); --imported.va;
-    imported.identity=nullptr; check(run()==E_INVALIDARG && !allocations); imported.identity=&identity;
+    imported.identity=nullptr; check(run()==E_INVALIDARG && !allocations);
+    // The runtime handle is not this device's identity any more: an import that names it is refused.
+    imported.identity=&identity; check(run()==E_INVALIDARG && !allocations); imported.identity=hostIdentity;
     allocationResult=VK_ERROR_OUT_OF_DEVICE_MEMORY; check(run()==E_OUTOFMEMORY && !out && !bindings && !frees);
     allocationResult=VK_SUCCESS; bindResult=VK_ERROR_DEVICE_LOST;
     check(run()==D3DDDIERR_DEVICEREMOVED && !out && frees==1);

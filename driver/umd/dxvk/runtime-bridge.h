@@ -18,6 +18,17 @@ struct RuntimeDevice {
     const DXGI_DDI_BASE_CALLBACKS *DXGICallbacks = nullptr;
     D3DDDI_DEVICECALLBACKS KTCallbacks = {};
     D3D10DDI_CORELAYER_DEVICECALLBACKS UMCallbacks = {};
+    // BD-253: the identity the hosted ICD knows this device by (bc250_host.identity, bc250_host_import.identity).
+    // The ICD keeps one winsys for each identity in the process and gives it again to a new instance with the same
+    // identity (radv_wddm2_winsys_create). The runtime's hDevice cannot be that identity: the runtime can give
+    // the same handle to a new device after it destroys the old one, while the old device's instance and winsys
+    // stay alive because its cleanup failed (retire_device_handle keeps such an owner). The new device then gets
+    // the old winsys, with the old device's paging queue and host callbacks. The address of this object does not
+    // have that problem: the owner that holds it is not freed while an instance of it is alive.
+    // legacy_host_identity (the experiment switch "host-identity-off") gives hDevice as before, for a lab
+    // comparison.
+    bool legacy_host_identity = false;
+    void *host_identity() { return legacy_host_identity ? hDevice : static_cast<void *>(this); }
 };
 // Zero initialize; lifetime and cleanup belong to the UMD device. Context tokens
 // are bridge-local, not kernel handles. No DXVK worker may enter a runtime scope.
@@ -66,7 +77,7 @@ inline bc250_host host_descriptor(HostBridge &bridge, uint64_t adapter_luid) {
     host.version = BC250_HOST_VERSION;
     host.size = sizeof(host);
     host.adapter_luid = adapter_luid;
-    host.identity = bridge.device->hDevice;
+    host.identity = bridge.device->host_identity();
     host.userdata = &bridge;
     host.dispatch = host_dispatch;
     return host;
