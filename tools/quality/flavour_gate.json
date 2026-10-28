@@ -1552,6 +1552,19 @@
    }
   },
   {
+   "name": "AMDGPU_WDDM_PROFILE_DIR",
+   "where": "mesa-wddm src/util/u_driconf_file.c (RADV ICDs); dxvk src/util/config/config_profile.cpp; vkd3d-proton libs/vkd3d/profile_file.c",
+   "does": "reads the game profile files (drirc.d, dxvk.conf, vkd3d-proton.conf) from that directory in place of the machine profile directory, which only administrators can change (docs/design/app-profiles.md)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_dxvk.dll",
+     "amdgpu_wddm_radv.dll",
+     "amdgpu_wddm_vkd3d.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
    "name": "DXVK_LOG_LEVEL",
    "where": "dxvk src/util/log/log.cpp (Logger::getMinLogLevel)",
    "does": "the level of the engine log (lead decision 4)",

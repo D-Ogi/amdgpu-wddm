@@ -193,6 +193,7 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  Check 'driver-state-installer' { & pwsh -NoProfile -File "$repo\driver\state\installer-build.ps1" -Kits "$Kits" -Out "$Out\driver-state-installer" -Test }
  Check 'driver-state-lifecycle' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-state-lifecycle.ps1" }
  Check 'driver-state-rollback' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-legacy-rollback.ps1" }
+ Check 'app-profiles-installer' { & powershell -NoProfile -NonInteractive -File "$repo\tools\release\test-app-profiles.ps1" }
  Check 'driver-state-consumer-syntax' { & powershell -NoProfile -NonInteractive -File "$repo\tools\state\test-consumer-syntax.ps1" }
  # Native consumers link the same state ABI. These gates never open a device or a window.
  Check 'driver-state-cli-x64' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x64" -Arch x64 }
