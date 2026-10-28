@@ -418,7 +418,7 @@ void test_allocation_failure() {
 
 void test_off_clear_in_flight() {
     const std::wstring exe=L"C:\\Games\\inflight.exe",old=L"C:\\Games\\old.exe";
-    struct Ctx {std::wstring store;bool off;std::thread app;std::atomic<bool> cleared{false};bool clear_ok{};};
+    struct Ctx {std::wstring store;bool off;std::thread app;std::atomic<bool> cleared{false},switched{false};bool clear_ok{};};
     // a) The writer saw "on", then the user turned the list off and cleared it before the writer took the lock.
     {
         Ctx c{fresh(L"inflight-a"),true};delete_switch();
@@ -436,8 +436,14 @@ void test_off_clear_in_flight() {
         rl::Inputs in=inputs(c.store,exe,63);in.hook_context=&c;
         in.inside_lock=[](void* p){
             auto* c=static_cast<Ctx*>(p);
-            c->app=std::thread([c]{c->clear_ok=clear(c->store,true);c->cleared=true;});
-            Sleep(30); // the app thread has written the switch and waits for the lock
+            // Clear in two steps, as clear(store,true) does them: the switch first, then the list under the lock.
+            c->app=std::thread([c]{set_switch(0);c->switched=true;c->clear_ok=clear(c->store,false);c->cleared=true;});
+            // The writer rechecks the switch only after the app thread has written it. A fixed sleep here was not
+            // enough on a loaded machine: the thread wrote the switch after the recheck, and the writer recorded
+            // the launch, which the protocol allows (Clear then removes it).
+            const auto t0=std::chrono::steady_clock::now();
+            while(!c->switched && ms_since(t0)<10000)Sleep(1);
+            Sleep(30); // the app thread now waits for the lock
         };
         CHECK(rl::commit(in,rl::ApiD3D12)==rl::Outcome::SwitchOff);
         c.app.join();
