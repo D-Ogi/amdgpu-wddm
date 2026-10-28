@@ -611,7 +611,31 @@ def build_records_ok(records_dir, sources, errors):
                           f"clean checkout")
         if pinned and commit not in pinned:
             errors.append(f"{where}: its source commit {commit[:8]} is pinned by no row of this release")
+        if record.get("recipe") == "vkd3d":
+            vkd3d_build_id_ok(where, record, commit, errors)
     return len(records)
+
+
+VKD3D_FALLBACK_BUILD_ID = "12345678"
+
+
+def vkd3d_build_id_ok(where, record, commit, errors):
+    """A vkd3d-proton engine carries the build id of its source commit (tools/build/vkd3d_build_id.py).
+
+    The disk shader cache of the engine refuses a blob of another build only by this id. A build whose git
+    describe failed has the fallback id, and so has every other such build: the cache then hands it the SPIR-V
+    of an older converter. A record from before the gate has no build_id section and is refused too: rebuild it.
+    """
+    bid = record.get("build_id")
+    if not isinstance(bid, dict) or not isinstance(bid.get("built"), str):
+        errors.append(f"{where}: no build_id.built: the record is from a build without the vkd3d build id gate "
+                      f"(tools/build/build-vkd3d.ps1); rebuild the row")
+        return
+    built = bid["built"].lower()
+    if built == str(bid.get("fallback") or VKD3D_FALLBACK_BUILD_ID).lower() or built == VKD3D_FALLBACK_BUILD_ID:
+        errors.append(f"{where}: the engine has the vcs_tag fallback build id 0x{built}")
+    elif bid.get("dirty") or not commit.startswith(built):
+        errors.append(f"{where}: build id 0x{built} is not the id of the clean source commit {commit[:12]}")
 
 
 def pairs_ok(sources, recipe_repo, repos, errors):

@@ -49,6 +49,15 @@ DLL (msvcp*, vcruntime*, concrt*, ucrtbase, api-ms-win-crt-*) stops the script, 
 The source tree must be a vkd3d-proton checkout with its submodules initialized (git submodule update --init
 --recursive); this script patches nothing and fetches nothing.
 
+The build id (vkd3d_build.h) comes from the source commit, and the build stops when it does not. vkd3d-proton's
+meson.build writes it with vcs_tag from git describe, and writes the fallback 0x12345678 without a word when git
+fails there (a submodule .git file that names a missing gitdir is enough). The disk shader cache refuses a blob of
+another build only by this id, so a fallback id lets an engine take the SPIR-V of an older converter. Before
+configure, vkd3d_build_id.py runs the same git command in the source tree and stops on a failure or on a dirty tree
+(-AllowDirtySource admits a dirty tree with the dirty mark). After the build it reads vkd3d_build.h and stops on the
+fallback or on any other id than the expected one, and with -Arch x64 also when no target DLL holds the 64-bit id.
+recipe.json records the result as build_id, and the script prints it.
+
 .EXAMPLE
 pwsh tools\build\build-vkd3d.ps1 -Config ddi-engine -Compiler msvc -Source P:\BC-250\scratch\m15\vkd3d -Build P:\BC-250\scratch\m15\vkd3d-ddi-engine -Widl P:\BC-250\toolchain\mingw-w64-tools-14.0.0.r532\ucrt64\bin\widl.exe
 
@@ -95,7 +104,11 @@ param(
     [Parameter(Mandatory)][ValidateSet('msvc', 'clang-cl')][string]$Compiler,
     # -Compiler clang-cl: the LLVM Windows toolchain whose bin\ holds clang-cl.exe, lld-link.exe and llvm-lib.exe
     # (default <BC250_ROOT>\toolchain\llvm-23.1.4-win64).
-    [string]$ClangToolchain
+    [string]$ClangToolchain,
+    # A source tree with changes against its commit stops the build: every such tree of one commit gets the same
+    # vkd3d_build id, and the disk shader cache keys its blobs by that id. A dev build may pass this switch; its id
+    # then carries the dirty mark of vkd3d-proton's meson.build, and recipe.json says build_id.dirty = true.
+    [switch]$AllowDirtySource
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -296,6 +309,20 @@ try {
     $ninjaExe = Resolve-Tool '' 'ninja'
     if (-not $ninjaExe) { throw 'ninja not found: put it on PATH or pass -Ninja' }
 
+    # The build id that vcs_tag must write: the same git command in the same tree, with the git that meson finds on
+    # this PATH. A failure here is the failure that would give the fallback id.
+    $buildIdTool = Join-Path $PSScriptRoot 'vkd3d_build_id.py'
+    $buildIdExpect = Join-Path $Build 'vkd3d-build-id.json'
+    $gitExe = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $gitExe) { throw 'git.exe is not on PATH: vkd3d-proton takes its build id from git describe' }
+    $idArgs = @($buildIdTool, 'expect', '--source', $Source, '--git', $gitExe.Source)
+    if ($AllowDirtySource) { $idArgs += '--allow-dirty' }
+    $r = Invoke-Capture $pythonExe $idArgs
+    if ($r.Code -ne 0) { throw "$($r.Err.Trim())" }
+    Set-Content -LiteralPath $buildIdExpect -Encoding utf8 -Value $r.Out.Trim()
+    $buildIdExpected = $r.Out | ConvertFrom-Json
+    Write-Host "build id: expected 0x$($buildIdExpected.build_id) from $($buildIdExpected.commit)$(if ($buildIdExpected.dirty) { ' (dirty tree, -AllowDirtySource)' })"
+
     $mesonArgs = @('-m', 'mesonbuild.mesonmain', 'setup')
     if ($configured) { $mesonArgs += '--reconfigure' }
     $mesonArgs += @($Build, $Source) + $options + @("--native-file=$nativeFile")
@@ -312,6 +339,10 @@ try {
         bc250_root      = $root
         source          = Get-SourceIdentity $Source
         submodules      = Get-SubmoduleStatus $Source
+        build_id        = [ordered]@{
+            expected = $buildIdExpected.build_id; commit = $buildIdExpected.commit; dirty = $buildIdExpected.dirty
+            fallback = $buildIdExpected.fallback; git = $gitExe.Source; built = $null; dlls = $null
+        }
         build_dir       = $Build
         meson_options   = $options
         compiler        = $Compiler
@@ -424,6 +455,27 @@ try {
             throw "$t imports a C or C++ runtime DLL although -Config $Config links the static C runtime: $($crt -join ', ')"
         }
     }
+
+    # The build id gate, before anything is stamped: the id that vcs_tag wrote is the expected one, and the DLLs carry
+    # it. An x64 DLL holds the id as a 64-bit constant; an x86 one may build it from two 32-bit halves, so there the
+    # count is recorded and not required.
+    $header = Join-Path $Build 'vkd3d_build.h'
+    $dllCounts = [ordered]@{}
+    foreach ($t in @($targets | Where-Object { $_ -like '*.dll' })) {
+        $r = Invoke-Capture $pythonExe @($buildIdTool, 'check', '--header', $header, '--expect', $buildIdExpect,
+            '--dll', (Join-Path $Build ($t -replace '/', '\')))
+        if ($r.Code -ne 0) { $recipe.status = 'build-id-gate-failed'; Write-Recipe $recipePath $recipe; throw "$($r.Err.Trim())" }
+        $checked = $r.Out | ConvertFrom-Json
+        $dllCounts[$t] = $checked.dll_occurrences
+        $recipe.build_id.built = $checked.build_id
+    }
+    $recipe.build_id.dlls = $dllCounts
+    if ($Arch -eq 'x64' -and -not @($dllCounts.Values | Where-Object { $_ -gt 0 }).Count) {
+        $recipe.status = 'build-id-gate-failed'; Write-Recipe $recipePath $recipe
+        throw "no target DLL of $Build holds the 64-bit build id 0x$($recipe.build_id.built): $(($dllCounts.Keys | ForEach-Object { "$_ $($dllCounts[$_])" }) -join ', ')"
+    }
+    Write-Recipe $recipePath $recipe
+    Write-Host "build id gate: vkd3d_build 0x$($recipe.build_id.built) = commit $($recipe.build_id.commit)$(if ($recipe.build_id.dirty) { ' + dirty mark' }), in $(($dllCounts.Keys | ForEach-Object { "$_ x$($dllCounts[$_])" }) -join ', ')"
 
     # BD-166: every artifact a release ships carries its version resource from this build, its last step before the
     # receipt; the release copies the file and rewrites none of it (tools\release\build-release.ps1). The option set
