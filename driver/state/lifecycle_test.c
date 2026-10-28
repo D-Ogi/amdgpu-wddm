@@ -673,15 +673,19 @@ int main(void)
     // generation under its own catalog. The retained generation may belong to an earlier catalog of the same
     // schema (a release that added settings); without a handoff such a generation is refused. The last scenario
     // is the update from the catalog of tester.32 (0.7.216.104): the settings that catalog does not have are absent
-    // from its generation, so the new generation reads them at their installation default, never at 0.
-    for(i=0;i<6;i++) {
+    // from its generation, so the new generation reads them at their installation default, never at 0. The update
+    // from the catalog of tester.33 (0.7.216.105) gives AdapterRecoveryMode its code default and writes no overclock
+    // tier.
+    for(i=0;i<7;i++) {
         static const WCHAR same[]=L"02000000000000000000000000000000";
         static const WCHAR fake[]=L"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         static const WCHAR tester32[]=L"49c220dc550899786b5fe743513dafe78b5acb5f24be5a848f66777744a3bb73";
+        static const WCHAR tester33[]=L"55ac2dcef76b92b5c52faf145d4a38e3fd31a77ed43b366bab38e33f3d6d1bf9";
         static const char *const names[]={"update in place with the same catalog","update in place across a catalog change",
             "a generation of another catalog without a handoff is refused","a malformed catalog identity is never a source",
-            "a receipt of another catalog than the generation is refused","update in place from the tester.32 catalog"};
-        const WCHAR *earlier=i==5?tester32:fake;unsigned k=i==5?1:i;
+            "a receipt of another catalog than the generation is refused","update in place from the tester.32 catalog",
+            "update in place from the tester.33 catalog"};
+        const WCHAR *earlier=i==5?tester32:i==6?tester33:fake;unsigned k=i>=5?1:i;
         AMDGPU_TRANSFER_HEADER old;WCHAR wide[65];unsigned j,gen2,data2,meta2;
         Reset(names[i]);
         root=Key(L"S\\StateV2",TRUE);SetString(root,L"Active",same);
@@ -715,6 +719,11 @@ int main(void)
         CHECK(!ready_writes && !active_writes);
         CHECK(DriverStateActivate(good)==0);Accepted();CheckNumber(L"CuMode",40);CheckNumber(L"DpmMode",0);
         if(i==5){CheckNumber(L"EnableComputeQueue",1);CheckNumber(L"EnableGdiHwAccel",1);}
+        if(i==6){
+            unsigned data=Key(DataPath,FALSE);
+            CheckNumber(L"EnableComputeQueue",1);CheckNumber(L"EnableGdiHwAccel",1);CheckNumber(L"AdapterRecoveryMode",2);
+            CHECK(data && !Value(data,L"OcTier",FALSE) && !Value(data,L"OcTierBoard",FALSE));
+        }
         gen=Key(GenerationPath,FALSE);stored=Value(gen,L"CatalogId",FALSE);
         CHECK(stored && !wcscmp((WCHAR*)values[stored].data,wide));
         stored=Value(gen2,L"CatalogId",FALSE);CHECK(stored && !wcscmp((WCHAR*)values[stored].data,k?earlier:wide));
