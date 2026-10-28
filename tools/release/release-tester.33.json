@@ -163,7 +163,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "b6a3ab0887275706b5604a919acd1d8d90e63b2c",
+      "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -222,7 +222,7 @@
           "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell b6a3ab08: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of 661d8d67 (BD-248 fix). Final installed-package acceptance pending."
+      "note": "D3D12 shell c8ae2a66: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of d0f1fab2 (BD-248 and BD-250 fixes). Final installed-package acceptance pending."
     },
     {
       "id": "d3d12-x86-rel",
@@ -230,7 +230,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "b6a3ab0887275706b5604a919acd1d8d90e63b2c",
+      "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -289,7 +289,7 @@
           "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell b6a3ab08: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of 661d8d67 (BD-248 fix). Final installed-package acceptance pending."
+      "note": "D3D12 shell c8ae2a66: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of d0f1fab2 (BD-248 and BD-250 fixes). Final installed-package acceptance pending."
     },
     {
       "id": "d3d12-x64-lab",
@@ -297,7 +297,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "b6a3ab0887275706b5604a919acd1d8d90e63b2c",
+      "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -356,7 +356,7 @@
           "path": "payload/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell b6a3ab08: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of 661d8d67 (BD-248 fix). Final installed-package acceptance pending."
+      "note": "D3D12 shell c8ae2a66: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of d0f1fab2 (BD-248 and BD-250 fixes). Final installed-package acceptance pending."
     },
     {
       "id": "d3d12-x86-lab",
@@ -364,7 +364,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "b6a3ab0887275706b5604a919acd1d8d90e63b2c",
+      "commit": "c8ae2a66fd4afed0629e51eb0ddb78a277bcf038",
       "tree": "shared",
       "recipe": "tools/build/build-umd-d3d12.ps1",
       "args": [
@@ -423,7 +423,7 @@
           "path": "payload/wow64/d3d12/amdgpu_wddm_d3d12.dll"
         }
       ],
-      "note": "D3D12 shell b6a3ab08: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of 661d8d67 (BD-248 fix). Final installed-package acceptance pending."
+      "note": "D3D12 shell c8ae2a66: partial graphics programs with stream output admission, engine ABI 1.10 pinned to the canonical engine12 builds of d0f1fab2 (BD-248 and BD-250 fixes). Final installed-package acceptance pending."
     },
     {
       "id": "dxvk-x64-rel",
