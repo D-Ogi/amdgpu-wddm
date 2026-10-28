@@ -80,6 +80,10 @@ Controlled Vulkan and engine callbacks validate requirements propagation, queue 
 & .\\bc250-win\\tools\\build\\test-umd-hosted-instance.ps1 -DxvkSource .\\scratch\\m14\\dxvk
 ```
 
+The script builds with clang-cl 23.1.4 by default. `-Compiler msvc -MsvcReason <reason>` builds with cl.exe. The script prints the compiler version and writes it into `compiler.json` in the output directory.
+
+The test checks the application info: engine "DXVK" 3.1.1, the executable file name and version 0. DXVK's own instance gives the same values, so the RADV driconf sections for DXVK and for applications apply.
+
 Controlled ICD callbacks verify the v5 chain, non-first physical-device match, invalid LUID, absent match, duplicate match, bounded enumeration retry, create failure and exact cleanup. This tests bootstrap mechanics; a real hosted ICD and the engine DLL still need integration through the DDI CreateDevice entry. A malformed ICD lacking vkDestroyInstance leaves the handle visible for owner retention rather than silently dropping it.
 
 ## DDI device owner

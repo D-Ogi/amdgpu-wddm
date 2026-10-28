@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
+#include <string>
 #include "runtime-domain.h"
 #include "host-bootstrap.h"
 #include "ddi/bc250_dxvk_engine.h"
@@ -23,5 +24,6 @@ private:
     bc250_host_policy policy_{};
     BC250_DXVK_VULKAN_INSTANCE info_{};
     PFN_vkDestroyInstance destroy_=nullptr;
+    std::string app_name_; // VkApplicationInfo::pApplicationName: the executable's file name
 };
 }

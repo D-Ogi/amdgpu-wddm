@@ -7,6 +7,7 @@ using namespace bc250::umd;
 namespace {
 void check(bool ok) { if (!ok) std::abort(); }
 int identity, mode; unsigned destroyed, enumerations; uint32_t expected_policy;
+char expected_app[MAX_PATH];
 constexpr uint64_t luid=0x123456789abcdef0;
 int32_t dispatch(void *,uint32_t,void *) { return 0; }
 VkResult VKAPI_PTR create(const VkInstanceCreateInfo *c,const VkAllocationCallbacks *,VkInstance *out) {
@@ -16,6 +17,11 @@ VkResult VKAPI_PTR create(const VkInstanceCreateInfo *c,const VkAllocationCallba
     check(policy && policy->sType==BC250_HOST_POLICY_STYPE && policy->version==BC250_HOST_POLICY_VERSION &&
           policy->size==sizeof(*policy) && policy->flags==expected_policy && !policy->reserved && !policy->pNext);
     check(c->pApplicationInfo->apiVersion==VK_API_VERSION_1_3);
+    // The application info of DXVK's own instance: the ICD selects its driconf sections by these names.
+    const VkApplicationInfo *app=c->pApplicationInfo;
+    check(app->sType==VK_STRUCTURE_TYPE_APPLICATION_INFO && app->pEngineName && !std::strcmp(app->pEngineName,"DXVK"));
+    check(app->engineVersion==VK_MAKE_API_VERSION(0,3,1,1) && app->applicationVersion==0);
+    check(app->pApplicationName && !std::strcmp(app->pApplicationName,expected_app));
     if (mode==5) return VK_ERROR_OUT_OF_HOST_MEMORY;
     *out=reinterpret_cast<VkInstance>(1); return VK_SUCCESS;
 }
@@ -47,6 +53,9 @@ PFN_vkVoidFunction VKAPI_PTR get(VkInstance,const char *name) {
 }
 }
 int main() {
+    char path[MAX_PATH]; const DWORD n=GetModuleFileNameA(nullptr,path,MAX_PATH); check(n && n<MAX_PATH);
+    const char *slash=std::strrchr(path,'\\'); const char *base=slash ? slash+1 : path; std::memcpy(expected_app,base,std::strlen(base)+1);
+    check(!std::strcmp(expected_app,"hosted-instance-test.exe"));
     bc250_host host{}; host.sType=BC250_HOST_STYPE; host.version=BC250_HOST_VERSION;
     host.size=sizeof(host); host.identity=&identity; host.adapter_luid=luid; host.dispatch=dispatch;
     for (mode=0;mode<8;++mode) {
@@ -69,5 +78,5 @@ int main() {
         const auto count=destroyed;
         check(instance.close()==S_OK && destroyed==count);
     }
-    std::cout << "PASS hosted instance: v5 chain with instance policy, exact LUID, invalid/ambiguous identity, enumeration retry and cleanup\n";
+    std::cout << "PASS hosted instance: v5 chain with instance policy, DXVK engine and executable names, exact LUID, invalid/ambiguous identity, enumeration retry and cleanup\n";
 }
