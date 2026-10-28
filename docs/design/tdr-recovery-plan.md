@@ -332,6 +332,8 @@ the plan uses `dxcap -forcetdr` instead.
 
 ### 5.4 Stages for tester.34
 
+S0 and S1 are implemented in [tdr-recovery-s1.md](tdr-recovery-s1.md). They are not measured on the lab yet.
+
 S0 and S1 can join tester.34. S0 adds tools and log lines only. S1 changes the failure policy for the
 idle case only, and a failed witness keeps the old behaviour. S2 and S3 need the Linux rows and new
 lab selectors first, so they come later.
