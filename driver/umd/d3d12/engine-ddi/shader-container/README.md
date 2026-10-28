@@ -24,8 +24,8 @@ vkd3d-proton compiles DXBC and DXIL alike through dxil-spirv (`libs/vkd3d-shader
 
 `BuildContainer` validates the program and its entries, then writes `ISG1`, `OSG1`, `PSG1` (hull, domain and mesh)
 and the program part (`SHEX`/`SHDR`, or `DXIL`) copied unchanged, with the checksum computed as fxc computes it (dxc's
-signed digest is the same function: the test recomputes both). Names are a pure function of the entry, so a vertex
-output, the pixel input it feeds and an input layout agree without seeing each other:
+signed digest is the same function: the test recomputes both). DXBC names are a pure function of the entry, so a
+vertex output, the pixel input it feeds and an input layout agree without seeing each other (DXIL: see below):
 
 | Entry | Name, index |
 |---|---|
@@ -42,7 +42,15 @@ starts again at register 0, while the pixel input signature is one flat space or
 parameter declarations, so two different outputs would get one name. For both mesh slots, and for the pixel program
 of a mesh pipeline (`BuildMeshLinkContainer`), every entry therefore takes the name and index of the program's own
 `dx.entryPoints` metadata, matched to the entry by register row, first component and stream. An entry with no
-element in the metadata keeps its synthetic name. The vertex path is untouched.
+element in the metadata keeps its synthetic name.
+
+A DXIL program on `Slot::Standard` is named from its metadata in the same way. Only the inputs of a vertex program
+keep the synthetic names, because `InputLayoutSemantic` gives those names to the input layout. Stream output needs
+the metadata names. dxil-spirv reports each output to the stream-output remapper by its metadata name, and the
+engine's canonical capture declaration and rasterized-stream mapping take their names from `OSG1` and `ISG1`
+(`libs/vkd3d/state.c`, `d3d12_partial_so_capture_desc` and `d3d12_partial_so_map_raster_inputs`). With synthetic
+names, a generic output did not match its capture entry, and an output on geometry stream 1 to 3 (`BC250_S<n>R`)
+did not match the pixel input that it feeds (`BC250_R`). The pipeline then failed with `E_INVALIDARG`.
 
 `InputLayoutSemantic` and `StreamOutputSemantic` turn the DDI's input elements and stream-output entries back into
 semantics. For a DXIL program `StreamOutputSemantic` returns the program's own names, read from the `dx.entryPoints`
@@ -69,7 +77,7 @@ Citations are vkd3d-proton fork 7bfcd7f0 and its dxil-spirv c5e5522a, unless mar
 
 Vertex input locations and varyings come from the metadata start rows (`libs/vkd3d-shader/dxil.c:401-407` at
 c5d9d85f; dxil-spirv `emit_stage_output_variables`), which equal the `ISG1`/`OSG1` registers dxc writes, so the
-synthetic names link as they do for DXBC.
+synthetic vertex input names link as they do for DXBC.
 
 ## Reuse and deviations
 

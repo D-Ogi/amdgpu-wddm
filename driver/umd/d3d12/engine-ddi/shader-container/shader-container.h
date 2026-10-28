@@ -19,16 +19,16 @@
 // Output: a container with ISG1, OSG1, PSG1 (hull and domain programs only) and the program part (SHEX/SHDR or
 // DXIL), in that order, the program copied unchanged, and the container checksum computed as fxc computes it.
 //
-// Names are a pure function of the entry, so a vertex output, the pixel input it feeds and an input layout agree
-// without seeing each other:
+// DXBC names are a pure function of the entry, so a vertex output, the pixel input it feeds and an input layout
+// agree without seeing each other:
 //   - system values get their SV_ name and index (tessellation factors: the edge or inside index);
 //   - pixel outputs without a system value are SV_Target<register>;
 //   - every other element is BC250_R with semantic index register * 4 + first component; on gs_5 output streams
 //     1 to 3 the name is BC250_S<stream>R, because vkd3d-proton 7bfcd7f0 matches stream-output entries by name
 //     alone.
-// A stream-output declaration of a DXBC program uses these names too. For a DXIL program it uses the semantic
-// names of the program's own metadata (dx.entryPoints), because the engine's DXIL front end matches the
-// declaration against those (dxil-metadata.h).
+// A stream-output declaration of a DXBC program uses these names too. A DXIL program, and a stream-output
+// declaration of it, use the semantic names of the program's own metadata (dx.entryPoints) instead, see Slot
+// below; only the inputs of a DXIL vertex program keep the synthetic names, for the input layout.
 //
 // Provenance: ported from our own D3D11 engine code, DXVK fork branch amdgpu-wddm/ddi-engine,
 // src/ddi/ddi_shader.cpp at bc0d4697b9b6d27eb659aa617ac30e166be7d546 (MIT); the signature chunk layout, the
@@ -86,16 +86,19 @@ constexpr uint32_t kDxilProgramKindMesh = 13;
 constexpr uint32_t kDxilProgramKindAmplification = 14;
 
 // Which create-shader slot the program came from. Mesh and amplification programs are DXIL program kinds 13 and
-// 14, which no other slot admits. The slot is also the one place that decides where the container's signature
-// names come from, so no second field can disagree with it:
-//   - Standard names them synthetically, by the scheme of the table in README.md, a pure function of the entry.
-//   - Mesh and Amplification name them from the program's own metadata: the semantic name and index of its
-//     dx.entryPoints element on that register and component, which is what dxc wrote into the original container.
-//     A mesh pipeline needs those names, because the engine checks its stage linkage by semantic name and index
-//     alone (vkd3d-proton state.c, vkd3d_validate_mesh_shader_io_signatures) and a mesh shader's primitive
-//     outputs have a register space of their own, which no synthetic name over registers can keep apart from the
-//     vertex outputs. Metadata naming is DXIL only, and BuildMeshLinkContainer below applies it to a program of
-//     any slot, for the other stages of a mesh pipeline.
+// 14, which no other slot admits. The slot and the program format decide where the container's signature names
+// come from:
+//   - A DXBC program on Standard is named synthetically, by the scheme of the table in README.md, a pure function
+//     of the entry.
+//   - A DXIL program is named from its own metadata: the semantic name and index of its dx.entryPoints element on
+//     that register and component, which is what dxc wrote into the original container. Only the inputs of a
+//     vertex program on Standard keep the synthetic names, which InputLayoutSemantic gives the input layout.
+//     The engine needs those names wherever it pairs a container entry with what dxil-spirv reports, which is
+//     always the metadata name: stream output (libs/vkd3d-shader/dxil.c, dxil_output_remap; the canonical capture
+//     and the rasterized-stream mapping of libs/vkd3d/state.c, d3d12_partial_so_*), and the stage linkage of a
+//     mesh pipeline (vkd3d_validate_mesh_shader_io_signatures), whose primitive outputs have a register space of
+//     their own, which no synthetic name over registers can keep apart from the vertex outputs.
+//     BuildMeshLinkContainer below applies it to a program of any slot, for the other stages of a mesh pipeline.
 enum class Slot : uint32_t
 {
     Standard = 0,       // vertex, pixel, geometry, compute, hull, domain
