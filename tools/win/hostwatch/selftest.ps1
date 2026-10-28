@@ -89,12 +89,14 @@ try {
 }
 
 # A process name no installer can produce, so the kill list is always empty even without -DryRun.
+# The limit is far below zero: a limit of the baseline minus 1 MB did not fire for 30 s while the nonpaged pool
+# shrank under the load of the other quick gates.
 $victim = 'bc250-hostwatch-selftest-absent'
 $log = Join-Path $Out 'killswitch.log'
 $stop = Join-Path $Out 'killswitch.stop'
 New-Item -ItemType File -Path $stop -Force | Out-Null   # stale: the run must clear it and keep watching
 $argv = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'killswitch.ps1'),
-          '-GrowthLimitMB', '-1', '-ProcessName', $victim, '-Log', $log, '-StopFile', $stop, '-DryRun')
+          '-GrowthLimitMB', '-1000000', '-ProcessName', $victim, '-Log', $log, '-StopFile', $stop, '-DryRun')
 $proc = Start-Process -FilePath $ps51 -ArgumentList $argv -WindowStyle Hidden -PassThru
 try {
     # The first Win32_PerfFormattedData_PerfOS_Memory query of a session can take several seconds, so wait for the
