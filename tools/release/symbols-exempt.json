@@ -10,18 +10,6 @@
       "reason": "The registered state-installer build emits no CodeView debug information, so there is no matching PDB for these bytes. Adding debug information to driver/state/installer-build.ps1 remains an open diagnostics task."
     },
     {
-      "path": "payload/tools/hip/amdhip64.dll",
-      "reason": "The tester.33 HIP build was rebuilt with Clang but still emits no CodeView debug information. No matching PDB exists for these bytes. Adding debug information to the HIP build remains an open diagnostics task; this exception does not establish symbol coverage for HIP."
-    },
-    {
-      "path": "payload/tools/hip/bc250hipblas.dll",
-      "reason": "The tester.33 HIP build was rebuilt with Clang but still emits no CodeView debug information. No matching PDB exists for these bytes. Adding debug information to the HIP build remains an open diagnostics task; this exception does not establish symbol coverage for HIP."
-    },
-    {
-      "path": "payload/tools/hip/vadd.exe",
-      "reason": "The tester.33 HIP build was rebuilt with Clang but still emits no CodeView debug information. No matching PDB exists for these bytes. Adding debug information to the HIP build remains an open diagnostics task; this exception does not establish symbol coverage for HIP."
-    },
-    {
       "path": "payload/tools/vulkaninfo.exe",
       "reason": "the Vulkan SDK's own tool, carried unchanged from the SDK package, which ships no PDB for it."
     }
