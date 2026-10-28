@@ -52,13 +52,16 @@ try {
  Check 'kmd-pe-tests' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_kmd_pe.py' }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
- # Its deadline is 900 s in gate-inputs.json, not the 180 s of the manifest: 57 host tests of Python that build and
+ # Its deadline is 1200 s in gate-inputs.json, not the 180 s of the manifest: 57 host tests of Python that build and
  # scan synthetic PE sets and packages. Measured on 2026-10-28: 146 s and 189 s run alone in one lane, 180.9 s and a FAIL at the
  # old deadline in a KMD row of a package build, and 251.2 s, 252.2 s alone and 222.8 s under an added CPU and disk
  # load on the development PC, which other lanes also used. At 180 s the load of the machine decided the result. A
- # gate with no room over its own cost is a flaky gate. 900 s is 3.6x the worst recorded run, the rule of the
- # register-generators and release-provenance gates.
+ # gate with no room over its own cost is a flaky gate. It first got 900 s; then two KMD package rows of the same
+ # evening ran it in 348.7 s and 362.8 s, so it holds 1200 s, 3.3x the worst recorded run, as the ledger and
+ # release-provenance gates do.
  Check 'flavour-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\flavour-controls").FullName; & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_flavour_gate.py' }
+ # Its deadline is 600 s in gate-inputs.json: 7 s to 37 s in the package rows of 2026-10-28, and 154.3 s in one
+ # quick suite of that evening under the load of other lanes, 86 per cent of the old 180 s. 600 s is 3.9x that run.
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
  # counts next to it, and a rate normalised to another clock must say which numbers the model made.
@@ -127,6 +130,8 @@ try {
  # below and compiled nothing, so a C error in driver\kmd or driver\shim passed this whole list and was found only
  # when somebody built a package by hand. -CompileOnly writes the same file and then runs the three cl.exe calls,
  # the link and the stack budget, with no quality gates of its own (this is the list it would call).
+# Its deadline is 900 s in gate-inputs.json: 63 s to 91 s with a quiet machine, 135.6 s to 174.3 s in the KMD package
+# rows of 2026-10-28 that shared the machine with other lanes, 97 per cent of the old 180 s. 900 s is 5.2x the worst.
  Check 'kmd-compile' { & pwsh -NoProfile -File "$repo\driver\kmd\build.ps1" -Kits "$Kits" -Out "$Out\kmd" -CompileOnly }
  # BD-166: the kernel-mode driver carries a compiled version resource, so a game that asks Windows which AMD driver
 # it runs on does not read 0.0.0.0 (Counter-Strike 2 did). The numbers come from version-stamp.h, which the KMD
@@ -370,6 +375,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'display-modes' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_display_modes.ps1" -Root $Workspace -Out "$Out\display-modes" -Kits "$Kits" }
  Check 'vidpn-flip' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip" }
  # BD-170 r6: each rule of wddm.c's flip state machine broken in a copy of the extracted source; every one must fail.
+ # Its deadline is 900 s in gate-inputs.json: 57 s to 168.4 s over the passing runs of 2026-10-28, and three FAILs at
+ # the old 180 s in KMD package rows under load. 900 s is 5.3x the worst passing run.
  Check 'vidpn-flip-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-controls" -Mutation all }
  # The lab flavour's witnesses (BD-167 switch): read after the shipping decision, never change it; each control must fail.
  Check 'vidpn-flip-lab' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab" -Lab }
@@ -433,6 +440,9 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  # The open ADL subset (docs/design/adl-subset.md) for both architectures: the export, dependency and calling-
  # convention gates, the unit test, and the real AGS 6.3 library over the shipped, the injected and the two
  # negative-control builds. AGS is not in the repository (THIRD-PARTY.md); the dx12 case needs a D3D12 adapter.
+# Its deadline is 900 s in gate-inputs.json: two builds and their tests, 85 s to 178.2 s over the passing runs of
+# 2026-10-28 (146 s alone in one lane), and five FAILs at the old 180 s in KMD package rows under load. 900 s is 5x
+# the worst passing run.
  CheckIf 'umd-adl' "$Workspace\ref\AGS_SDK-v6.3.0\amd_ags.h" {
      $env:BC250_ROOT=$Workspace
      foreach($arch in @('x64','x86')){
@@ -546,6 +556,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='dcn-flip-retire-frame';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireOneFrame');Fails=$true}
   @{n='dcn-flip-bridge-adopt';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeAdoptIgnored');Fails=$true}
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}

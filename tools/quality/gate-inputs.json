@@ -236,7 +236,7 @@
         "host"
       ]
     },
-    "flavour-controls": { "inputs": ["host"], "timeout": 900 },
+    "flavour-controls": { "inputs": ["host"], "timeout": 1200 },
     "connector-replug": { "inputs": ["host"] },
     "lab-gate": { "inputs": ["host"] },
     "dcn-flip-retire-stall": { "inputs": ["host"] },
@@ -286,7 +286,8 @@
       ],
       "artifacts": [
         "kmd/compile_commands.json"
-      ]
+      ],
+      "timeout": 900
     },
     "kmd-version-rc": {
       "inputs": [
@@ -1521,6 +1522,18 @@
     },
     "quality-controls": {
       "timeout": 900
+    },
+    "vidpn-flip-controls": {
+      "timeout": 900
+    },
+    "umd-adl": {
+      "timeout": 900
+    },
+    "facts": {
+      "timeout": 600
+    },
+    "flip-state-controls": {
+      "timeout": 600
     },
     "kmd-deploy": {
       "timeout": 600
