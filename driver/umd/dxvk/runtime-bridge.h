@@ -49,6 +49,21 @@ struct HostBridge {
 // Latch a loss whose status the caller already carries: the entry that got it reports it through its
 // own error class, so the bridge must not report it a second time.
 inline void latch_device_lost(HostBridge &bridge) { bridge.device_lost=true; bridge.lost_reported=true; }
+// BD-253: TRUE when the kernel has put this device in its error state: a monitored fence of the bridge (the present
+// fence or a progress fence of the hosted ICD) reads the lost-device value, which only the kernel writes, and only
+// when it ends the device's work. A latched loss alone is not this proof: a refused submission or a wait that
+// timed out also latches one while earlier work can still run.
+inline bool kernel_ended_device_work(const HostBridge &bridge) {
+   if (bridge.present_cpu && *(const volatile UINT64 *)bridge.present_cpu==UINT64_MAX) return true;
+   for (const auto &p:bridge.progress)
+      if (p.cpu_address && *(const volatile UINT64 *)p.cpu_address==UINT64_MAX) return true;
+   return false;
+}
+// The statuses that report a lost device.
+inline bool device_lost_status(HRESULT hr) {
+   return hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET ||
+          hr==DXGI_ERROR_DEVICE_HUNG || hr==DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+}
 using FlushEngine = HRESULT (*)(void *);
 // The per-application VSync setting (docs/design/per-app-graphics-settings.md): when valid, the Present callback
 // carries interval as DXGIDDICB_PRESENT.SyncIntervalOverride in place of the application's sync interval.

@@ -213,6 +213,27 @@ int main() {
     describedFormat=VK_FORMAT_A8_UNORM_KHR; textureDesc.Format=DXGI_FORMAT_A8_UNORM;
     check(create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,atlas)==S_OK && atlas.texture);
     check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,atlas)==S_OK && !atlas.image.image && releases==3);
+    // BD-253: a wait that reports a lost device closes the texture only when the kernel has ended the device's work
+    // (a fence of the bridge reads the lost value). A latched loss alone, or another failure, keeps it.
+    describedFormat=VK_FORMAT_R8G8B8A8_UNORM; textureDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    RuntimeTexture lost{};
+    check(create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,lost)==S_OK);
+    textureWait=DXGI_ERROR_DEVICE_RESET; bridge.device_lost=true;
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,lost)==DXGI_ERROR_DEVICE_RESET &&
+          lost.texture && releases==3);
+    UINT64 fenceValue=7; bridge.progress[2].cpu_address=&fenceValue;
+    check(!kernel_ended_device_work(bridge) &&
+          close_runtime_texture(bridge,device,imageDispatch,textureDispatch,lost)==DXGI_ERROR_DEVICE_RESET && lost.texture);
+    fenceValue=UINT64_MAX; textureWait=E_FAIL;
+    check(kernel_ended_device_work(bridge) &&
+          close_runtime_texture(bridge,device,imageDispatch,textureDispatch,lost)==E_FAIL && lost.texture);
+    textureWait=DXGI_ERROR_DEVICE_REMOVED;
+    check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,lost)==S_OK && !lost.texture &&
+          !lost.image.image && releases==4);
+    UINT64 presentValue=UINT64_MAX; bridge.progress[2]={}; bridge.present_cpu=&presentValue;
+    check(kernel_ended_device_work(bridge));
+    bridge.present_cpu=nullptr; bridge.device_lost=false; textureWait=S_OK;
+    check(!kernel_ended_device_work(bridge));
     textureDesc.Format=DXGI_FORMAT_R16_FLOAT; const unsigned createsBeforeUnknown=imageCreates;
     check(create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,atlas)==E_NOTIMPL);
     check(!atlas.texture && !atlas.image.image && imageCreates==createsBeforeUnknown);

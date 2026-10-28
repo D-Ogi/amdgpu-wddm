@@ -217,11 +217,46 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
 // for a cached CPU mapping (CPU_READ), and refusing those would close the desktop route. Which access
 // bits are coherent at all is still the kernel driver's parser's answer, inside the decode.
 static_assert(BC250_SHARED_LAYOUT_UNDEFINED==D3D11_TEXTURE_LAYOUT_UNDEFINED);
+// BD-253: a shared surface with no resource record. Its creator gave no E26R blob to the runtime, so the only
+// description is the LB7A blob that the kernel driver keeps for the allocation: a standard GDI surface that the
+// kernel driver described (GetStandardAllocationDriverData, 48 bytes: LB7A and the GDI1 trailer), or the
+// compositor's hosted driver's own surface (32 bytes, LB7A only; driver/umd/router/front-resource.h says the
+// desktop's live surfaces are such blobs). Qt's backing store opens one right after it makes its swap chain, and
+// a refusal of that open removed every device of Galaxy and of its Notifications Renderer. The description
+// that follows from the blob: the storage format of the LB7A format's COMPOSED row, one mip, one array slice,
+// no multisampling, DEFAULT usage, shader resource and render target binding, no misc flags. Only a GDI texture
+// (D3DKMDT_GDISURFACE_TEXTURE, 1) is a GPU texture; the staging and lookup-table types are refused. The
+// geometry rule is the one of every other opened surface (Bc250SharedSurfaceGeometry).
+static HRESULT decode_bare_allocation(const D3DDDI_OPENALLOCATIONINFO2 &a,BC250_WDDM_ALLOCATION_PRIVATE &metadata,
+    D3D11_TEXTURE2D_DESC1 &desc) {
+    constexpr unsigned long gdi_texture=1; // D3DKMDT_GDISURFACE_TEXTURE (d3dkmdt.h)
+    BC250_GDI_PRIVATE blob{};
+    if (!a.pPrivateDriverData) return E_INVALIDARG;
+    if (a.PrivateDriverDataSize==sizeof(BC250_GDI_PRIVATE)) {
+        std::memcpy(&blob,a.pPrivateDriverData,sizeof(blob));
+        if (blob.Magic!=BC250_GDI_PRIVATE_MAGIC || blob.Type!=gdi_texture || blob.Flags || blob.Reserved)
+            return E_INVALIDARG;
+    } else if (a.PrivateDriverDataSize==sizeof(BC250_WDDM_ALLOCATION_PRIVATE)) {
+        std::memcpy(&blob.Surface,a.pPrivateDriverData,sizeof(blob.Surface));
+    } else return E_INVALIDARG;
+    const auto &s=blob.Surface;
+    if (s.Magic!=BC250_WDDM_ALLOCATION_PRIVATE_MAGIC || s.Version!=1) return E_INVALIDARG;
+    const auto *row=amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_d3dddi(unsigned(s.Format)),
+        AMDGPU_WDDM_SURFACE_COMPOSED);
+    if (!row || !row->dxgi) return E_NOTIMPL;
+    if (!s.Width || !s.Height || s.Width>BC250_SHARED_MAX_EDGE || s.Height>BC250_SHARED_MAX_EDGE ||
+        !Bc250SharedSurfaceGeometry(&s,row->bytes_per_pixel)) return E_INVALIDARG;
+    metadata=s;
+    desc=D3D11_TEXTURE2D_DESC1{UINT(s.Width),UINT(s.Height),1,1,DXGI_FORMAT(row->dxgi),{1,0},D3D11_USAGE_DEFAULT,
+        D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET,0,0,D3D11_TEXTURE_LAYOUT_UNDEFINED};
+    return S_OK;
+}
 HRESULT decode_open_resource(const D3D10DDIARG_OPENRESOURCE &input,BC250_WDDM_ALLOCATION_PRIVATE &metadata,
     D3D11_TEXTURE2D_DESC1 &desc) {
     if (input.NumAllocations!=1 || !input.pOpenAllocationInfo2) return E_NOTIMPL;
     const auto &a=input.pOpenAllocationInfo2[0];
     if (!a.hAllocation) return E_INVALIDARG;
+    if (!input.PrivateDriverDataSize) return decode_bare_allocation(a,metadata,desc);
     BC250_SHARED_SURFACE_ADMIT admit{};
     admit.RequireShared=0;
     admit.AccessMask=BC250_SURFACE_RESOURCE_ACCESS_MASK;
@@ -244,6 +279,14 @@ namespace {
 // one call and its caller can choose another format, while device removal ends every device of the
 // process. The Ascent's RGB10A2 primary (339-342) is the measured example, and BD-071 is the same
 // mistake made with E_NOTIMPL, a status this page does not allow at all.
+// OpenResource may report only E_OUTOFMEMORY or D3DDDIERR_DEVICEREMOVED; the runtime takes every other status as
+// critical (d3d10umddi.md, PFND3D10DDI_OPENRESOURCE remarks). A surface that this driver cannot describe or adopt is
+// therefore E_OUTOFMEMORY: the runtime fails that one OpenSharedResource and keeps the device. Before BD-253 such a
+// refusal reported E_INVALIDARG, which the error class made device removal, and the opener lost its device. Only a
+// status that reports a lost device stays device removal.
+HRESULT unopenable_resource(HRESULT hr) {
+    return ddi_device_status(hr)==D3DDDIERR_DEVICEREMOVED ? D3DDDIERR_DEVICEREMOVED : E_OUTOFMEMORY;
+}
 HRESULT unsupported_request(HRESULT hr) {
     const HRESULT status=ddi_device_status(hr);
     return (status==E_OUTOFMEMORY || status==D3DDDIERR_DEVICEREMOVED) ? status : DXGI_DDI_ERR_UNSUPPORTED;
@@ -346,17 +389,24 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
         // BD-253, lab flavour: each OpenResource of this device, at most 32 lines per process: the step it reached,
         // its status, and what the opener asked for (Qt opens Chromium's shared texture here).
+        // The allocation blob is named by its size and its first two words (the LB7A magic and version), and by
+        // the GDI1 type when it has the trailer.
         auto opened=[&](const char *step,HRESULT status) {
             static std::atomic_uint notes{32};
+            const auto &info=args->pOpenAllocationInfo2 ? args->pOpenAllocationInfo2[0] : D3DDDI_OPENALLOCATIONINFO2{};
+            unsigned long words[12]{};
+            if (info.pPrivateDriverData)
+                std::memcpy(words,info.pPrivateDriverData,std::min<size_t>(info.PrivateDriverDataSize,sizeof(words)));
             device_life_note(notes,"BC250 BD-253: OpenResource %s hr=%08X runtime=%p allocations=%u private=%u "
-                "km-resource=%u format=%u %ux%u bind=%08X misc=%08X thread=%lu\n",step,unsigned(status),
-                owner.runtime().hDevice,args->NumAllocations,args->PrivateDriverDataSize,
+                "allocation-private=%u %08lX/%lu d3dddi=%lu gdi=%08lX/%lu km-resource=%u format=%u %ux%u bind=%08X "
+                "misc=%08X thread=%lu\n",step,unsigned(status),owner.runtime().hDevice,args->NumAllocations,
+                args->PrivateDriverDataSize,info.PrivateDriverDataSize,words[0],words[1],words[5],words[8],words[9],
                 unsigned(args->hKMResource.handle),unsigned(desc.Format),desc.Width,desc.Height,desc.BindFlags,
                 desc.MiscFlags,(unsigned long)GetCurrentThreadId());
         };
         if (FAILED(hr)) opened("decode",hr);
 #endif
-        if (FAILED(hr)) { report_ddi_error(owner,hr,DdiErrorClass::out_of_memory); return; }
+        if (FAILED(hr)) { report_ddi_error(owner,unopenable_resource(hr),DdiErrorClass::out_of_memory); return; }
         RuntimeSurfaceAllocation allocation{reinterpret_cast<HANDLE>(runtimeHandle.handle),args->pOpenAllocationInfo2[0].hAllocation,args->hKMResource.handle};
         RuntimeSurface *surface=nullptr;
         hr=owner.adopt_surface(allocation,metadata,desc,surface);
@@ -371,7 +421,7 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         }
         if (hr!=S_OK) {
             if (surface) owner.release_surface_handle(*surface);
-            report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return;
+            report_ddi_error(owner,FAILED(hr) ? unopenable_resource(hr) : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::out_of_memory); return;
         }
         s->runtime_surface=surface; s->object=surface->texture.texture;
         s->dimension=D3D10DDIRESOURCE_TEXTURE2D; s->present_allocation=surface->allocation.allocation;
