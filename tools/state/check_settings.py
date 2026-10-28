@@ -9,7 +9,12 @@ classified, and a call whose first argument is not a wide string literal, or who
 failure, never a silent skip. The default accepts decimal, hex and octal literals with integer suffixes, redundant
 parentheses, TRUE/FALSE and a macro defined with such a literal anywhere under driver/; the name may be a macro
 defined as a wide literal. A computed default is
-reported in the count and left to the catalog. Exit 1 on any failure.
+reported in the count and left to the catalog.
+
+The "source" references of the catalog are checked too: each one is a file of this repository, without a line
+number, that names the value as a quoted string. A line number goes stale at the next edit of the file, and the
+catalog identity (AMDGPU_STATE_CATALOG_ID) hashes this field, so a correction of a stale number alone changes the
+state generation. Exit 1 on any failure.
 """
 import argparse
 import json
@@ -176,16 +181,40 @@ def sweep(root):
     return checked, computed, failures
 
 
+def check_sources(root):
+    """Every catalog "source" reference: a repository file without a line number that names the value."""
+    catalog = json.loads((root / 'driver/state/catalog.json').read_text(encoding='utf-8'))
+    texts, failures, checked = {}, [], 0
+    for s in catalog['values']:
+        where = (s['path'] + '\\' if s['path'] else '') + s['name']
+        for ref in s.get('source') or []:
+            checked += 1
+            if re.search(r':\d+$', ref):
+                failures.append(f'catalog {where}: source {ref} has a line number; name the file only')
+                continue
+            path = root / ref
+            if ref not in texts:
+                texts[ref] = path.read_text(encoding='utf-8', errors='replace') if path.is_file() else None
+            if texts[ref] is None:
+                failures.append(f'catalog {where}: source {ref} is not a file of the repository')
+            elif not re.search(r'''(?<![A-Za-z0-9_])L?(["']){}\1'''.format(re.escape(s['name'])), texts[ref]):
+                failures.append(f'catalog {where}: source {ref} does not name the value')
+    return checked, failures
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--root', default=str(ROOT), help='repository root (default: this checkout)')
     args = parser.parse_args()
-    checked, computed, failures = sweep(Path(args.root).resolve())
-    for line in failures:
+    root = Path(args.root).resolve()
+    checked, computed, failures = sweep(root)
+    refs, source_failures = check_sources(root)
+    for line in failures + source_failures:
         print('FAIL ' + line)
     print(f'driver-state-settings: {checked} reads match the catalog ({computed} with a computed default), '
           f'{len(failures)} failures')
-    sys.exit(1 if failures else 0)
+    print(f'driver-state-settings: {refs} catalog source references, {len(source_failures)} failures')
+    sys.exit(1 if failures or source_failures else 0)
 
 
 if __name__ == '__main__':
