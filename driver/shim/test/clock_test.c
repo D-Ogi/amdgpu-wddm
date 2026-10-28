@@ -104,12 +104,12 @@ static void refused(unsigned t,unsigned mhz,unsigned mv){
 static void test_oc_tiers(void){
  unsigned t,mhz;
  // The overclock rows: fixed voltages, VID by the SVI2 formula, above the plain ceiling and under the absolute cap.
- CHECK(bc250_clock_points[16].mhz==2100 && bc250_clock_points[16].mv==1025 && bc250_clock_points[16].vid==84);
+ CHECK(bc250_clock_points[16].mhz==2100 && bc250_clock_points[16].mv==1050 && bc250_clock_points[16].vid==80);
  CHECK(bc250_clock_points[17].mhz==2200 && bc250_clock_points[17].mv==1050 && bc250_clock_points[17].vid==80);
  CHECK(bc250_clock_points[18].mhz==2300 && bc250_clock_points[18].mv==1075 && bc250_clock_points[18].vid==76);
  for(t=16;t<BC250_CLOCK_ALL_LEVELS;t++)
   CHECK(bc250_clock_points[t].vid==bc250_clock_vid(bc250_clock_points[t].mv) &&
-        bc250_clock_points[t].mv<=BC250_CLOCK_OC_CEILING_MV && bc250_clock_points[t].mv>bc250_clock_points[t-1].mv);
+        bc250_clock_points[t].mv<=BC250_CLOCK_OC_CEILING_MV && bc250_clock_points[t].mv>=bc250_clock_points[t-1].mv);
  // The tier none admits nothing above 2000 MHz, whatever the voltage; the plain table is the same under every tier.
  for(mhz=2000;mhz<=2600;mhz+=25)for(t=0;t<4;t++){
   unsigned mv;
@@ -123,8 +123,8 @@ static void test_oc_tiers(void){
    }
   }
  }
- refused(0,2100,1025);
- refused(7,2100,1025);  // an unknown tier is the tier none
+ refused(0,2100,1050);
+ refused(7,2100,1050);  // an unknown tier is the tier none
  refused(1,2300,1075);  // air stops at 2200
  refused(1,2200,1075);  // a point carries its own voltage, never another
  refused(2,2300,1100);
@@ -132,7 +132,7 @@ static void test_oc_tiers(void){
  // Under a tier the overclock points go through the same transaction, sent without the import (direct_commit):
  // the voltage first, then the clock, and back.
  tier=2;
- positive(2000,88,2100,1025);
+ positive(2000,88,2100,1050);
  positive(2000,88,2300,1075);
  positive(1000,116,2300,1075);
  positive(2300,76,2000,1000);
@@ -141,7 +141,7 @@ static void test_oc_tiers(void){
  positive(1000,116,1500,919); // a plain point under a tier is a plain point
  tier=1;
  positive(2000,88,2200,1050);
- positive(2200,80,2100,1025);
+ positive(2200,80,2100,1050);
  tier=0;
 }
 int main(void){

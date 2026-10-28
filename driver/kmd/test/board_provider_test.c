@@ -60,7 +60,7 @@ int main(int argc,char** argv)
           caps.OcTiers[1].CpuUvMaxSteps==40);
     CHECK(caps.OcTiers[2].GpuMaxMHz==2300 && caps.OcTiers[2].GpuMaxMv==1075 && caps.OcTiers[2].CpuMaxMHz==4100 &&
           caps.OcTiers[2].CpuUvMaxSteps==40);
-    CHECK(caps.OcPoints[0].MHz==2100 && caps.OcPoints[0].Mv==1025 && caps.OcPoints[0].Vid==84);
+    CHECK(caps.OcPoints[0].MHz==2100 && caps.OcPoints[0].Mv==1050 && caps.OcPoints[0].Vid==80);
     CHECK(caps.OcPoints[1].MHz==2200 && caps.OcPoints[1].Mv==1050 && caps.OcPoints[1].Vid==80);
     CHECK(caps.OcPoints[2].MHz==2300 && caps.OcPoints[2].Mv==1075 && caps.OcPoints[2].Vid==76);
     CHECK(caps.OcCpuMinUvSteps[0]==8 && caps.OcCpuMinUvSteps[1]==16 && caps.OcCpuMinUvSteps[4]==36 &&
