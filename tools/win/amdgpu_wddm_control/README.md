@@ -89,8 +89,10 @@ only these names, only under these keys, and only values inside the contract:
 | `Vulkan` | `WsiRoute` | REG_SZ | `dxgi` (default, BD-197), `gdi` | Vulkan presentation for all games: Fast (flip) or Compatible. The ICD reads no `WsiRoute` of `Vulkan\Applications\<exe>`, so the Games page has no such row |
 | `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full (DirectX 11 and 12 games only): use system memory, or report out of memory (not shown now, see below) |
 
-The system Vulkan ICD (64-bit, and 32-bit from tester.31) reads `WsiRoute` for all games only. When the value is
-absent, it presents through DXGI (`dxgi`, "Fast (flip)"). That is the design decision, and it is
+The 64-bit system Vulkan ICD reads `WsiRoute` for all games only. The 32-bit system ICD has only the GDI route
+(the DXGI route is not ported to it): it reads `WsiRoute` too, from tester.34, but only to write in its log what
+was asked (`reason=x86-gdi-only`), and a 32-bit game presents through GDI with either value. When the value is
+absent, the 64-bit ICD presents through DXGI (`dxgi`, "Fast (flip)"). That is the design decision, and it is
 the default again since BD-197, after the route presented on the lab (Quake II RTX and vkcube). `gdi`
 ("Compatible") is the rollback that a person stores, and a stored `gdi` stays `gdi`. A DXGI swapchain that fails,
 or that does not present its first frame in time, goes to GDI by itself, for that swapchain only

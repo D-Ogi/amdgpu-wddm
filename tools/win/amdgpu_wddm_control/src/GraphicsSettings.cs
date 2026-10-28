@@ -14,7 +14,8 @@
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\<image>      REG_SZ values for one game (MemoryOverflow only)
 //     WsiRoute            for all games only: the system Vulkan ICD reads no WsiRoute of a game's key
 //                         (radv_wddm2_wsi.c). dxgi (the default, BD-197) or gdi, the rollback; the reader also
-//                         takes dxgi-composition, which this app does not offer, and takes any other value as gdi
+//                         takes dxgi-composition, which this app does not offer, and takes any other value as gdi.
+//                         The 32-bit system ICD presents through GDI with any value; it only logs the value.
 //                         (radv_wddm2_wsi_route.h)
 //     MemoryOverflow      allow (the default) or strict; any other value selects allow (radv_wddm2_mem_overflow.h)
 //     Case does not matter and an empty string counts as absent.
