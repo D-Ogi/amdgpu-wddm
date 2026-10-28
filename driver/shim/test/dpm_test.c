@@ -119,11 +119,17 @@ static void test_table(void)
 	CHECK(bc250_clock_vid(918u) == 101u && bc250_clock_vid_uv(101u) == 918750u);
 	for (mhz = 0; mhz <= 2600u; mhz += 25u) {
 		int on = mhz >= BC250_CLOCK_MIN_MHZ && mhz <= 2000u && mhz % 100u == 0;
+		/* The overclock points (include/bc250_oc.h) are levels too, but no plain point admits them. */
+		int oc = mhz > 2000u && mhz <= BC250_CLOCK_OC_CEILING_MHZ && mhz % 100u == 0;
 		CHECK((bc250_clock_min_mv(mhz) != 0) == on);
-		CHECK((bc250_dpm_level_of(mhz) >= 0) == on);
+		CHECK((bc250_dpm_level_of(mhz) >= 0) == (on || oc));
 		if (!on) CHECK(!bc250_clock_point_allowed(mhz, 950u));
+		if (oc) CHECK(!bc250_clock_point_allowed(mhz, bc250_dpm_level_mv((unsigned int)bc250_dpm_level_of(mhz))));
 	}
 	CHECK(bc250_dpm_level_mhz(BC250_DPM_TOP_LEVEL) == 2000u && bc250_dpm_level_mhz(99u) == 2000u);
+	CHECK(bc250_dpm_level_mhz(BC250_DPM_OC_TOP_LEVEL) == 2300u && bc250_dpm_level_mv(BC250_DPM_OC_TOP_LEVEL) == 1075u);
+	CHECK(bc250_dpm_level_mhz(BC250_DPM_TOP_LEVEL + 1u) == 2100u && bc250_dpm_level_mv(BC250_DPM_TOP_LEVEL + 1u) == 1025u);
+	CHECK(bc250_dpm_level_mv(99u) == 1000u);
 }
 
 static void test_allowlist(void)
@@ -223,12 +229,51 @@ static void test_decide(void)
 	r.max_mhz = 999;
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_INVALID_SETTING && !d.force_fixed && !d.mark_pending);
+	/* Inside the overclock range, with no tier: DPM stays on at the plain ceiling, the stored value is kept. 2001
+	 * is rounded to the grid first, so it is not a clamp. */
 	r.max_mhz = 2001;
 	bc250_dpm_decide(&r, &d);
-	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_INVALID_SETTING);
-	r.max_mhz = 2300;   /* the community's patched-kernel range: not ours */
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.max_level == L(10) && !d.clamped);
+	CHECK(d.encoded == bc250_dpm_encode(2000u));
+	r.max_mhz = 2300;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.clamped);
+	r.max_mhz = 2000;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && !d.clamped);
+	/* Above it: the community's patched-kernel range up to 2500 MHz is not ours under any tier. */
+	r.max_mhz = 2301;
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_INVALID_SETTING);
+	r.tier = BC250_OC_TIER_AIO;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_INVALID_SETTING);
+	r.max_mhz = 2500;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_FIXED && d.reason == BC250_DPM_REASON_INVALID_SETTING);
+	/* Each tier: its own ceiling, clamped from above, never raised from below. */
+	r.max_mhz = 2300; r.tier = BC250_OC_TIER_AIO;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2300u && d.max_level == BC250_DPM_OC_TOP_LEVEL && !d.clamped);
+	CHECK(d.encoded == bc250_dpm_encode(2300u) && d.mark_pending);
+	r.tier = BC250_OC_TIER_AIR;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2200u && d.max_level == BC250_DPM_TOP_LEVEL + 2u && d.clamped);
+	r.max_mhz = 2150;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2100u && !d.clamped);
+	r.max_mhz = 1800; r.tier = BC250_OC_TIER_AIO;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 1800u && !d.clamped);
+	/* The default ceiling does not move with a tier: an absent DpmMaxMHz is 2000 under every tier. */
+	r.max_present = 0;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && !d.clamped);
+	/* An unknown tier is the tier none. */
+	r.max_present = 1; r.max_mhz = 2300; r.tier = 7;
+	bc250_dpm_decide(&r, &d);
+	CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == 2000u && d.clamped);
+	r.tier = BC250_OC_TIER_NONE; r.max_mhz = 1500; r.max_present = 1;
 
 	/* An unknown mode is kept as written and runs fixed. */
 	r = req(); r.mode_present = 1; r.mode = 2; r.pending_present = 1;
@@ -303,7 +348,7 @@ static void test_decide_closed_record(void)
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.reason == BC250_DPM_REASON_INVALID_SETTING && d.clear_closed && d.closed_reason == 0u);
 	/* So is a DPM request with a ceiling out of range. */
-	r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 2300;
+	r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 2400;
 	r.closed_present = 1; r.closed = BC250_DPM_REASON_UNCLEAN;
 	bc250_dpm_decide(&r, &d);
 	CHECK(d.reason == BC250_DPM_REASON_INVALID_SETTING && d.clear_closed && d.closed_reason == 0u);
@@ -367,6 +412,42 @@ static unsigned int run_mc(struct bc250_dpm_governor *g, unsigned int busy, int 
 static unsigned int run(struct bc250_dpm_governor *g, unsigned int busy, int temp_c, unsigned int dt)
 {
 	return run_mc(g, busy, temp_c * 1000, dt);
+}
+
+/* The overclock tiers (include/bc250_oc.h): the governor reaches the tier's ceiling and no level above it, and a
+ * start with the tier none behaves as before. */
+static void test_oc_tiers(void)
+{
+	struct bc250_dpm_governor g;
+	struct bc250_dpm_request r;
+	struct bc250_dpm_decision d;
+	unsigned int i, level = 0, tier, top;
+	static const unsigned int want[3] = { 2000u, 2200u, 2300u };
+
+	for (tier = 0; tier < 3u; tier++) {
+		r = req(); r.mode_present = 1; r.mode = 1; r.max_present = 1; r.max_mhz = 2300; r.tier = tier;
+		bc250_dpm_decide(&r, &d);
+		CHECK(d.mode == BC250_DPM_MODE_DPM && d.max_mhz == want[tier]);
+		bc250_dpm_init(&g, d.max_level);
+		CHECK(g.level == L(0) && g.max_level == d.max_level);
+		top = 0;
+		for (i = 0; i < 40; i++) {
+			level = run(&g, 1000, 60, 25);
+			if (level > top) top = level;
+		}
+		CHECK(bc250_dpm_level_mhz(top) == want[tier] && level == d.max_level);
+		/* Idle all the way down to the floor, one step at a time. */
+		for (i = 0; i < 2000 && level > L(0); i++) level = run(&g, 0, 60, 25);
+		CHECK(level == L(0));
+		/* Hot: the thermal cap pulls an overclock level down like any other. */
+		for (i = 0; i < 40; i++) level = run(&g, 1000, 60, 25);
+		CHECK(level == d.max_level);
+		for (i = 0; i < 400; i++) level = run(&g, 1000, 92, 25);
+		CHECK(level < d.max_level && bc250_dpm_level_mhz(level) <= 2000u);
+	}
+	/* A ceiling above the plain top that no decision made is still clamped to the overclock top. */
+	bc250_dpm_init(&g, 99u);
+	CHECK(g.max_level == BC250_DPM_OC_TOP_LEVEL);
 }
 
 static void test_load_steps(void)
@@ -891,7 +972,10 @@ static void test_tune_check(void)
 	t = tune(900, 800, 650, 200, L(10)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_OK);
 	CHECK(bc250_dpm_tune_check(&t, L(9)) == BC250_DPM_TUNE_FLOOR);
 	CHECK(bc250_dpm_tune_check(&t, L(0)) == BC250_DPM_TUNE_FLOOR);
-	t = tune(900, 800, 650, 200, L(11)); CHECK(bc250_dpm_tune_check(&t, L(99)) == BC250_DPM_TUNE_FLOOR);
+	t = tune(900, 800, 650, 200, L(11)); CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_FLOOR);
+	/* Under an overclock tier the floor may sit up to the tier's ceiling, never above the overclock top. */
+	CHECK(bc250_dpm_tune_check(&t, L(12)) == BC250_DPM_TUNE_OK);
+	t = tune(900, 800, 650, 200, L(14)); CHECK(bc250_dpm_tune_check(&t, L(99)) == BC250_DPM_TUNE_FLOOR);
 	t = tune(900, 800, 650, 200, L(6)); CHECK(bc250_dpm_tune_check(&t, L(6)) == BC250_DPM_TUNE_OK);
 	/* The thermal timing (0.7.197): each field at both edges and one past each, the soft delta's 0 (off) admitted. */
 	t = d; t.hot_step_ms = 249; CHECK(bc250_dpm_tune_check(&t, L(10)) == BC250_DPM_TUNE_THERMAL);
@@ -3735,6 +3819,7 @@ int main(void)
 	test_table();
 	test_allowlist();
 	test_decide();
+	test_oc_tiers();
 	test_load_steps();
 	test_no_oscillation();
 	test_thermal();

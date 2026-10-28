@@ -123,7 +123,9 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 	case BC250_CPU_MSG_SET_CAP_C:
 		return parameter >= BC250_CPU_TEMP_MIN_C && parameter <= BC250_CPU_TEMP_MAX_C;
 	case BC250_CPU_MSG_SET_MAX_MHZ:
-		return parameter >= BC250_CPU_MIN_MHZ && parameter <= BC250_CPU_MAX_MHZ_LAB;
+		/* The widest bound any start can admit: the lab's own, or the highest overclock tier's. Which of
+		 * them this start admits is bc250_cpu_settings_check_tier's decision, made before a plan exists. */
+		return parameter >= BC250_CPU_MIN_MHZ && parameter <= BC250_CPU_OC_MAX_MHZ;
 	case BC250_CPU_MSG_SET_CURVE_SCALE: {
 		unsigned int steps;
 		if (parameter > 0xFFFFu) return 0;
@@ -132,7 +134,7 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 		 * count. A positive scale would raise the voltage and is refused here, not in the firmware. */
 		if (parameter < 0x8000u) return 0;
 		steps = (0x10000u - parameter) & 0xFFFFu;
-		return steps <= BC250_CPU_UV_MAX_STEPS;
+		return steps <= BC250_CPU_OC_UV_MAX_STEPS;
 	}
 	default:
 		return 0;
@@ -143,15 +145,30 @@ int bc250_cpu_argument_allowed(unsigned int queue, unsigned int message, unsigne
 
 enum bc250_cpu_error bc250_cpu_settings_check(const struct bc250_cpu_settings *s, int lab)
 {
+	return bc250_cpu_settings_check_tier(s, lab, BC250_OC_TIER_NONE);
+}
+
+enum bc250_cpu_error bc250_cpu_settings_check_tier(const struct bc250_cpu_settings *s, int lab, unsigned int tier)
+{
+	struct bc250_oc_envelope oc;
+	int tiered = bc250_oc_envelope_of(tier, &oc) && tier != BC250_OC_TIER_NONE;
 	unsigned int ceiling = lab ? BC250_CPU_MAX_MHZ_LAB : BC250_CPU_MAX_MHZ;
-	if (s->uv_given && s->uv_steps > BC250_CPU_UV_MAX_STEPS) return BC250_CPU_ERROR_UV;
+	if (tiered && oc.cpu_max_mhz > ceiling) ceiling = oc.cpu_max_mhz;
+	if (s->uv_given && s->uv_steps > (tiered ? oc.cpu_uv_max_steps : BC250_CPU_UV_MAX_STEPS))
+		return BC250_CPU_ERROR_UV;
 	if (s->max_given) {
 		if (s->max_mhz < BC250_CPU_MIN_MHZ || s->max_mhz > ceiling) return BC250_CPU_ERROR_CLOCK;
-		/* A clock above the release bound is a lab experiment, and it never runs without a real undervolt
-		 * in the same request: that is the one rule between us and the reported bricking path. One step is
-		 * about 5 mV at 3500 MHz, which is not an undervolt, so the bar is BC250_CPU_LAB_MIN_UV_STEPS. */
-		if (s->max_mhz > BC250_CPU_MAX_MHZ &&
-		    !(s->uv_given && s->uv_steps >= BC250_CPU_LAB_MIN_UV_STEPS)) return BC250_CPU_ERROR_CLOCK;
+		/* A clock above the release bound never runs without a real undervolt in the same request: that is
+		 * the one rule between us and the reported bricking path. Under an overclock tier the undervolt a
+		 * clock needs grows with the clock (bc250_oc_cpu_min_uv_steps), so the voltage stays near the stock
+		 * 3500 MHz voltage. Without a tier the clock is a lab experiment, and one step is about 5 mV at
+		 * 3500 MHz, which is not an undervolt, so the bar is BC250_CPU_LAB_MIN_UV_STEPS. */
+		if (s->max_mhz > BC250_CPU_MAX_MHZ) {
+			unsigned int need = (tiered && s->max_mhz <= oc.cpu_max_mhz) ?
+				bc250_oc_cpu_min_uv_steps(tier, s->max_mhz) : BC250_CPU_LAB_MIN_UV_STEPS;
+			if (!(tiered && s->max_mhz <= oc.cpu_max_mhz) && !lab) return BC250_CPU_ERROR_CLOCK;
+			if (!(s->uv_given && s->uv_steps >= need)) return BC250_CPU_ERROR_CLOCK;
+		}
 	}
 	if (s->temp_given && (s->temp_c < BC250_CPU_TEMP_MIN_C || s->temp_c > BC250_CPU_TEMP_MAX_C))
 		return BC250_CPU_ERROR_TEMP;
@@ -185,6 +202,12 @@ static void add_clock(struct bc250_cpu_plan *p, unsigned int mhz, unsigned int c
 enum bc250_cpu_error bc250_cpu_plan(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *to,
 				    int lab, struct bc250_cpu_plan *plan)
 {
+	return bc250_cpu_plan_tier(from, to, lab, BC250_OC_TIER_NONE, plan);
+}
+
+enum bc250_cpu_error bc250_cpu_plan_tier(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *to,
+					 int lab, unsigned int tier, struct bc250_cpu_plan *plan)
+{
 	struct bc250_cpu_settings want;
 	enum bc250_cpu_error error;
 	int uvChange, clockChange, tempChange, deeper, lower;
@@ -195,7 +218,7 @@ enum bc250_cpu_error bc250_cpu_plan(const struct bc250_cpu_settings *from, const
 	if (!want.max_given) { want.max_given = from->max_given; want.max_mhz = from->max_mhz; }
 	if (!want.uv_given) { want.uv_given = from->uv_given; want.uv_steps = from->uv_steps; }
 	if (!want.temp_given) { want.temp_given = from->temp_given; want.temp_c = from->temp_c; }
-	error = bc250_cpu_settings_check(&want, lab);
+	error = bc250_cpu_settings_check_tier(&want, lab, tier);
 	if (error != BC250_CPU_OK) return error;
 
 	uvChange = want.uv_given && (!from->uv_given || from->uv_steps != want.uv_steps);

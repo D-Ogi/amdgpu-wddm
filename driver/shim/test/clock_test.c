@@ -54,10 +54,12 @@ static struct backend setup(unsigned old_mhz,unsigned old_vid,unsigned mhz,unsig
  struct backend b;memset(&b,0,sizeof(b));
  b.temp=67000;b.mhz=old_mhz;b.vid=old_vid;b.initial_vid=old_vid;b.target_mhz=mhz;b.target_vid=(1550-mv)*160/1000;return b;
 }
+static unsigned tier; // the overclock tier positive() runs its transaction under (include/bc250_oc.h)
 static void positive(unsigned old_mhz,unsigned old_vid,unsigned mhz,unsigned mv){
  struct backend b=setup(old_mhz,old_vid,mhz,mv);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
  unsigned staged=old_vid>b.target_vid,at=staged?4:2;
- CHECK(bc250_clock_prepare(&c,mhz,mv,&r)==0);CHECK(r.ready==1 && !r.status);
+ CHECK((tier?bc250_clock_prepare_tier(&c,tier,mhz,mv,&r):bc250_clock_prepare(&c,mhz,mv,&r))==0);
+ CHECK(r.ready==1 && !r.status);
  CHECK(b.begin_count==1 && b.end_count==1 && !b.held && b.temp_count==1);
  CHECK(r.initial_mhz==old_mhz && r.initial_vid==old_vid && r.voltage_staged==staged);
  CHECK(r.messages_attempted==at+4 && r.messages_completed==at+4);
@@ -93,12 +95,62 @@ static void ramp(unsigned old_mhz,unsigned old_vid,unsigned mhz,unsigned mv,unsi
  else if(old_mhz<mhz)CHECK(r.observed_mhz>=old_mhz && r.observed_mhz<mhz);
  else CHECK(r.observed_mhz<=old_mhz && r.observed_mhz>mhz);
 }
+// A point the tier does not admit: refused before the first message, the lock never taken.
+static void refused(unsigned t,unsigned mhz,unsigned mv){
+ struct backend b=setup(2000,88,mhz,mv);struct bc250_clock_report r;struct bc250_clock_io c=io(&b);
+ CHECK(bc250_clock_prepare_tier(&c,t,mhz,mv,&r)==BC250_CLOCK_INVALID);
+ CHECK(!r.ready && !b.count && !b.begin_count && b.mhz==2000 && b.vid==88);
+}
+static void test_oc_tiers(void){
+ unsigned t,mhz;
+ // The overclock rows: fixed voltages, VID by the SVI2 formula, above the plain ceiling and under the absolute cap.
+ CHECK(bc250_clock_points[16].mhz==2100 && bc250_clock_points[16].mv==1025 && bc250_clock_points[16].vid==84);
+ CHECK(bc250_clock_points[17].mhz==2200 && bc250_clock_points[17].mv==1050 && bc250_clock_points[17].vid==80);
+ CHECK(bc250_clock_points[18].mhz==2300 && bc250_clock_points[18].mv==1075 && bc250_clock_points[18].vid==76);
+ for(t=16;t<BC250_CLOCK_ALL_LEVELS;t++)
+  CHECK(bc250_clock_points[t].vid==bc250_clock_vid(bc250_clock_points[t].mv) &&
+        bc250_clock_points[t].mv<=BC250_CLOCK_OC_CEILING_MV && bc250_clock_points[t].mv>bc250_clock_points[t-1].mv);
+ // The tier none admits nothing above 2000 MHz, whatever the voltage; the plain table is the same under every tier.
+ for(mhz=2000;mhz<=2600;mhz+=25)for(t=0;t<4;t++){
+  unsigned mv;
+  for(mv=900;mv<=1129;mv++){
+   int plain=bc250_clock_point_allowed(mhz,mv),ok=bc250_clock_point_allowed_tier(t,mhz,mv);
+   if(mhz<=2000)CHECK(ok==plain);
+   else {
+    unsigned top=t==1?2200u:t==2?2300u:2000u;
+    int want=mhz<=top && mhz%100==0 && mv==bc250_clock_points[(mhz-500)/100].mv;
+    CHECK(ok==want);
+   }
+  }
+ }
+ refused(0,2100,1025);
+ refused(7,2100,1025);  // an unknown tier is the tier none
+ refused(1,2300,1075);  // air stops at 2200
+ refused(1,2200,1075);  // a point carries its own voltage, never another
+ refused(2,2300,1100);
+ refused(2,2400,1100);
+ // Under a tier the overclock points go through the same transaction, sent without the import (direct_commit):
+ // the voltage first, then the clock, and back.
+ tier=2;
+ positive(2000,88,2100,1025);
+ positive(2000,88,2300,1075);
+ positive(1000,116,2300,1075);
+ positive(2300,76,2000,1000);
+ positive(2300,76,1000,820);
+ positive(2300,76,800,820);   // the thermal cap from the top to the bottom
+ positive(1000,116,1500,919); // a plain point under a tier is a plain point
+ tier=1;
+ positive(2000,88,2200,1050);
+ positive(2200,80,2100,1025);
+ tier=0;
+}
 int main(void){
  unsigned path,step;
+ test_oc_tiers();
  positive(1000,116,1500,919); // voltage up, then clock up
  // The points under the lab floor (900 and 800 MHz for the thermal cap, 0.7.205; 500 MHz for the idle
  // state, 0.7.207): the same voltage
- // as the floor, so no staging, and the same two messages, sent without the import (subfloor_commit).
+ // as the floor, so no staging, and the same two messages, sent without the import (direct_commit).
  positive(1000,116,900,820);   // the lab floor down to 900 MHz
  positive(1000,116,800,820);   // and to 800 MHz
  positive(800,116,1000,820);   // back to the lab floor

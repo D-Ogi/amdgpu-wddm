@@ -42,15 +42,18 @@
  * levels between it and the thermal floor (700 and 600 MHz) exist to keep the 100 MHz grid whole and no rule
  * selects them. The KMD may withdraw the point for a start: bc250_dpm_idle_refused(). */
 
+/* A level of the whole table, the overclock rows included (a governor reaches them only when its start's tier and
+ * ceiling admit them, bc250_dpm_decide). A level past the whole table reads as the qualified table's top. */
 static __inline unsigned int bc250_dpm_level_mhz(unsigned int level)
 {
-	return bc250_clock_points[level < BC250_CLOCK_LEVELS ? level : BC250_DPM_TOP_LEVEL].mhz;
+	return bc250_clock_points[level < BC250_CLOCK_ALL_LEVELS ? level : BC250_DPM_TOP_LEVEL].mhz;
 }
 static __inline unsigned int bc250_dpm_level_mv(unsigned int level)
 {
-	return bc250_clock_points[level < BC250_CLOCK_LEVELS ? level : BC250_DPM_TOP_LEVEL].mv;
+	return bc250_clock_points[level < BC250_CLOCK_ALL_LEVELS ? level : BC250_DPM_TOP_LEVEL].mv;
 }
-/* The level of an exact grid clock, or -1 (a clock somebody else set, a failed readback). */
+/* The level of an exact grid clock up to BC250_CLOCK_OC_CEILING_MHZ, or -1 (a clock somebody else set, a failed
+ * readback). */
 int bc250_dpm_level_of(unsigned int mhz);
 
 /* ---- the settings and the boot guard -------------------------------------------------------- */
@@ -90,6 +93,10 @@ struct bc250_dpm_request {
 	unsigned int	session;
 	int		closed_present;		/* DpmClosedReason: the driver itself wrote the fixed mode (0.7.208) */
 	unsigned int	closed;
+	/* The overclock tier this start runs (include/bc250_oc.h, already decided). It moves the highest ceiling
+	 * DpmMaxMHz may name and nothing else: the default ceiling stays BC250_DPM_DEFAULT_MAX_MHZ. 0 is the tier none,
+	 * so a request that never set it is today's request. */
+	unsigned int	tier;
 };
 
 struct bc250_dpm_decision {
@@ -112,6 +119,10 @@ struct bc250_dpm_decision {
 						 * DpmClosedReason (driver/kmd/dpm.c PersistFallback), every other
 						 * start reports here what the key keeps. 0 for no record */
 	int		clear_closed;		/* delete DpmClosedReason: DpmMode is not the fixed mode any more */
+	/* DpmMaxMHz is above what this start's tier admits but inside the overclock range: the start runs at the
+	 * tier's own ceiling instead (a tier that was turned off or reset keeps DPM, at a lower clock). The stored
+	 * value is kept, so the same ceiling comes back with the tier. */
+	int		clamped;
 };
 
 void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decision *d);

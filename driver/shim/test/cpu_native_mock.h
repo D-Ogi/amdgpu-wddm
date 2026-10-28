@@ -463,6 +463,7 @@ typedef struct _BC250_DEVICE {
     BC250_DPM_OWNER_NATIVE Dpm;
     BC250_CPU_STATE Cpu;
     BOOLEAN FullWddm;
+    ULONG OcTier;
 } BC250_DEVICE;
 
 /* The mailbox owner, as cpu.c sees it. The sequence flag is the real one's contract: SmuCpuBegin takes it or
