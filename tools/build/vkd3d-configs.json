@@ -32,7 +32,8 @@
       ],
       "targets": [
         "libs/ddi/amdgpu_wddm_vkd3d.dll",
-        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"
+        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe",
+        "libs/ddi/amdgpu_wddm_vkd3d_cache_policy_test.exe"
       ],
       "ships": {"libs/ddi/amdgpu_wddm_vkd3d.dll": ["amdgpu_wddm_vkd3d.dll"]}
     },
@@ -64,7 +65,8 @@
       },
       "targets": [
         "libs/ddi/amdgpu_wddm_vkd3d.dll",
-        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe"
+        "libs/ddi/amdgpu_wddm_vkd3d_engine_test.exe",
+        "libs/ddi/amdgpu_wddm_vkd3d_cache_policy_test.exe"
       ],
       "ships": {"libs/ddi/amdgpu_wddm_vkd3d.dll": ["amdgpu_wddm_vkd3d.dll"]}
     }
