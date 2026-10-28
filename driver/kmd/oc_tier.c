@@ -8,15 +8,18 @@
 //   OcTierBoard       the board the tier was chosen on: bc250_oc_board_fingerprint, as the board capability query
 //                     reports it to the application
 //   OcTierLastReason  what this start did with them (enum bc250_oc_reason)
+// It also reads DpmSession (dpm.c), before DpmStart consumes it: a start that finds it knows that the last one went
+// down above the floor without a clean stop, and a stored tier goes (BC250_OC_REASON_UNCLEAN_STOP).
 #include "bc250kmd.h"
 #include "bc250_oc.h"
 
 #define OC_SETTING_TIER L"OcTier"
 #define OC_SETTING_BOARD L"OcTierBoard"
 #define OC_SETTING_REASON L"OcTierLastReason"
+#define OC_SETTING_DPM_SESSION L"DpmSession"
 
 C_ASSERT(BC250_OC_TIER_COUNT == 3);
-C_ASSERT(BC250_OC_REASON_COUNT == 6);
+C_ASSERT(BC250_OC_REASON_COUNT == 7);
 
 static BOOLEAN OcQueryPresent(PCWSTR Name, unsigned int* Value)
 {
@@ -45,12 +48,14 @@ void OcTierStart(BC250_DEVICE* Device)
 {
     struct bc250_oc_request r;
     struct bc250_oc_decision d;
+    unsigned int session = 0;
     RtlZeroMemory(&r, sizeof(r));
     Device->OcBoard = OcTierCurrentBoard(Device);
     r.current_board = Device->OcBoard;
     r.supported = r.current_board != 0;
     r.tier_present = OcQueryPresent(OC_SETTING_TIER, &r.tier) ? 1 : 0;
     r.board_present = OcQueryPresent(OC_SETTING_BOARD, &r.board) ? 1 : 0;
+    r.unclean_stop = OcQueryPresent(OC_SETTING_DPM_SESSION, &session) ? 1 : 0;
     bc250_oc_decide(&r, &d);
     if (d.clear) {
         // The tier first: a crash between the two deletes leaves a binding without a tier, which the next start
@@ -67,6 +72,7 @@ void OcTierStart(BC250_DEVICE* Device)
         NTSTATUS status = GuardStoreSetting(OC_SETTING_REASON, d.reason);
         if (!NT_SUCCESS(status)) GuardLog("oc: writing OcTierLastReason failed 0x%08X", status);
     }
-    GuardLog("oc: stored tier %lu present %u, board %08X present %u, this board %08X -> tier %lu reason %lu deleted %u",
-             r.tier, r.tier_present, r.board, r.board_present, r.current_board, d.tier, d.reason, d.clear);
+    GuardLog("oc: stored tier %lu/%u board %08X/%u, this %08X, unclean %u -> tier %lu reason %lu deleted %u",
+             r.tier, r.tier_present, r.board, r.board_present, r.current_board, r.unclean_stop, d.tier, d.reason,
+             d.clear);
 }

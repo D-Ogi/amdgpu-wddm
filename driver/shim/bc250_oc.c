@@ -22,6 +22,15 @@ void bc250_oc_decide(const struct bc250_oc_request *r, struct bc250_oc_decision 
 		d->reason = BC250_OC_REASON_INVALID;
 		return;
 	}
+	if (r->unclean_stop) {
+		/* The last start went down above the floor without a clean stop. The over-current lock of facts M790 looks
+		 * exactly like that from here, so the higher limits go until the person turns them on again. This comes
+		 * before the board checks: DpmStart consumes the record on this start, so a start without a positive
+		 * identification that kept the tier would let the next start run it again with nothing to show for it. */
+		d->reason = BC250_OC_REASON_UNCLEAN_STOP;
+		d->clear = 1;
+		return;
+	}
 	if (!r->supported || r->current_board == 0u) {
 		/* No positive identification on this start. That can be a foreign device or a failed firmware table
 		 * read, and neither is evidence that the board changed, so the choice stays stored and does not run. */

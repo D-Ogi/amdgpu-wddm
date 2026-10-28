@@ -85,7 +85,18 @@ static void test_decide(void)
 		CHECK(d.tier == BC250_OC_TIER_NONE && d.reason == BC250_OC_REASON_UNSUPPORTED && !d.clear);
 		r = request(1, t, 1, 0x5EEDu); r.current_board = 0; bc250_oc_decide(&r, &d);
 		CHECK(d.tier == BC250_OC_TIER_NONE && d.reason == BC250_OC_REASON_UNSUPPORTED && !d.clear);
+		/* The last start went down above the floor: the tier goes, on a match and without identification alike. */
+		r = request(1, t, 1, 0x5EEDu); r.unclean_stop = 1; bc250_oc_decide(&r, &d);
+		CHECK(d.tier == BC250_OC_TIER_NONE && d.reason == BC250_OC_REASON_UNCLEAN_STOP && d.clear);
+		r.supported = 0; bc250_oc_decide(&r, &d);
+		CHECK(d.tier == BC250_OC_TIER_NONE && d.reason == BC250_OC_REASON_UNCLEAN_STOP && d.clear);
 	}
+	/* An unclean stop with no tier stored changes nothing here (DpmStart has its own fallback). */
+	r = request(0, 0, 0, 0); r.unclean_stop = 1; bc250_oc_decide(&r, &d);
+	CHECK(d.tier == BC250_OC_TIER_NONE && d.reason == BC250_OC_REASON_NONE && !d.clear);
+	/* A value that is not a tier stays for the person to read, also after an unclean stop. */
+	r = request(1, 7u, 1, 0x5EEDu); r.unclean_stop = 1; bc250_oc_decide(&r, &d);
+	CHECK(d.reason == BC250_OC_REASON_INVALID && !d.clear);
 	/* Not a tier: kept for the person to read, never run, whatever the binding. */
 	for (t = BC250_OC_TIER_COUNT; t < 40u; t++) {
 		r = request(1, t, 1, 0x5EEDu); bc250_oc_decide(&r, &d);
@@ -95,15 +106,15 @@ static void test_decide(void)
 	CHECK(d.tier == BC250_OC_TIER_NONE && d.reason == BC250_OC_REASON_INVALID && !d.clear);
 	/* Exhaustive over the small inputs: a tier other than none runs only with reason OK, and OK only on a match. */
 	{
-		int tp, bp, sup;
+		int tp, bp, sup, uc;
 		unsigned int b;
-		for (tp = 0; tp < 2; tp++) for (bp = 0; bp < 2; bp++) for (sup = 0; sup < 2; sup++)
+		for (tp = 0; tp < 2; tp++) for (bp = 0; bp < 2; bp++) for (sup = 0; sup < 2; sup++) for (uc = 0; uc < 2; uc++)
 			for (t = 0; t < 5u; t++) for (b = 0; b < 3u; b++) {
-				r = request(tp, t, bp, b ? 0x5EECu + b : 0u); r.supported = sup;
+				r = request(tp, t, bp, b ? 0x5EECu + b : 0u); r.supported = sup; r.unclean_stop = uc;
 				bc250_oc_decide(&r, &d);
 				CHECK((d.tier != BC250_OC_TIER_NONE) == (d.reason == BC250_OC_REASON_OK));
 				if (d.reason == BC250_OC_REASON_OK)
-					CHECK(tp && sup && bp && r.board == r.current_board && t > 0u && t < BC250_OC_TIER_COUNT);
+					CHECK(tp && sup && bp && !uc && r.board == r.current_board && t > 0u && t < BC250_OC_TIER_COUNT);
 				CHECK(d.tier < BC250_OC_TIER_COUNT && d.reason < BC250_OC_REASON_COUNT);
 				/* A delete never removes a tier this start runs. */
 				if (d.clear) CHECK(d.tier == BC250_OC_TIER_NONE);

@@ -80,6 +80,7 @@ enum bc250_oc_reason {
 	BC250_OC_REASON_UNSUPPORTED = 3,	/* this device is not a positively identified BC-250 */
 	BC250_OC_REASON_UNBOUND = 4,		/* a tier without the board it was chosen on: deleted */
 	BC250_OC_REASON_BOARD_CHANGED = 5,	/* the tier was chosen on another board: deleted */
+	BC250_OC_REASON_UNCLEAN_STOP = 6,	/* the last start under the tier stopped above the floor without a clean stop: deleted */
 	BC250_OC_REASON_COUNT
 };
 
@@ -90,6 +91,7 @@ struct bc250_oc_request {
 	unsigned int	tier;
 	int		board_present;		/* OcTierBoard: the fingerprint the application wrote with the tier */
 	unsigned int	board;
+	int		unclean_stop;		/* DpmSession is present: the last start went down above the floor */
 };
 
 struct bc250_oc_decision {
