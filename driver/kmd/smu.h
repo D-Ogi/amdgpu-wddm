@@ -27,6 +27,10 @@ typedef struct _BC250_SMU_OWNER {
     struct bc250_smu CpuTransport;      // the firmware's queue 3; the registers are in include/bc250_cpu.h
     // Set by the DPM governor while it runs (dpm.c): the administrator's SET escape is refused then.
     volatile LONG GovernorActive;
+    // The overclock tier of this start (oc_tier.c, include/bc250_oc.h): every clock transaction of this owner is
+    // judged against its envelope (bc250_clock_prepare_tier). Latched before the governor starts and cleared by
+    // BoardProviderUnbind, so a start that never decided a tier runs the tier none.
+    volatile LONG OcTier;
     // The page the firmware was told to write the metrics table into (0.7.215, SmuReadMetrics), or 0 while this
     // owner start has told it nothing. Under the owner lock; SmuOwnerStart clears it, so the address goes out
     // again after every power transition.

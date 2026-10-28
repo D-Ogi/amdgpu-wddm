@@ -467,7 +467,7 @@ static partial class UnitTests
         Check(v.StepChoices.All(CpuTuning.ValidSteps) && v.StepChoices.Length == CpuTuning.MaxSteps + 1, "cpu: every undervolt choice is one the driver takes");
         Check(v.TempChoices.All(CpuTuning.ValidTemp) && v.TempChoices.Length == CpuTuning.MaxTempC - CpuTuning.MinTempC + 1, "cpu: every temperature choice is one the driver takes");
         Check(v.ClockChoices.Contains(v.Clock) && v.StepChoices.Contains(v.Steps) && v.TempChoices.Contains(v.Temp), "cpu: the pickers start inside their lists");
-        Equal(CpuTuning.MaxMHz, v.Clock, "cpu: no limit in force starts the clock picker at the highest allowed limit");
+        Equal(OcUnlock.CpuMaxMHz(OcUnlock.None), v.Clock, "cpu: no limit in force starts the clock picker at the standard limit");
     }
 
     static void CpuTrials()

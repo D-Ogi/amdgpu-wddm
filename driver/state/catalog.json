@@ -255,7 +255,7 @@
       "kind": "setting",
       "type": "dword",
       "min": 2800,
-      "max": 4000,
+      "max": 4100,
       "allowed": [],
       "max_bytes": 4,
       "factory": null,
@@ -377,7 +377,7 @@
       "kind": "setting",
       "type": "dword",
       "min": 0,
-      "max": 16,
+      "max": 40,
       "allowed": [],
       "max_bytes": 4,
       "factory": null,
@@ -1229,7 +1229,7 @@
       "kind": "setting",
       "type": "dword",
       "min": 1000,
-      "max": 2000,
+      "max": 2300,
       "allowed": [],
       "max_bytes": 4,
       "factory": 2000,
@@ -3055,6 +3055,75 @@
       "migration": "raw-once",
       "source": [
         "driver/kmd/wddm.c:3150"
+      ]
+    },
+    {
+      "path": "",
+      "name": "OcTier",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/oc_tier.c:52",
+        "driver/kmd/oc_tier.c:58"
+      ]
+    },
+    {
+      "path": "",
+      "name": "OcTierBoard",
+      "kind": "setting",
+      "type": "dword",
+      "min": 1,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/oc_tier.c:53",
+        "driver/kmd/oc_tier.c:58"
+      ]
+    },
+    {
+      "path": "",
+      "name": "OcTierLastReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/oc_tier.c:67"
       ]
     },
     {

@@ -2,11 +2,13 @@
  * Shim deviations: per-call/per-device settings instead of Linux's global;
  * owner callbacks instead of smu_cmn, the operating-point table of bc250_clock.h
  * (800-2000 MHz, 820-1000 mV, docs/design/dpm.md; the two points under 1000 MHz are thermal-only and
- * bypass the import's own 1000 MHz bound, see subfloor_commit), a temperature gate on raises,
- * explicit MHz/VID readback (re-read while a raise ramps) and voltage-up staging before AMD commit. */
+ * bypass the import's own 1000 MHz bound, see direct_commit), a temperature gate on raises,
+ * explicit MHz/VID readback (re-read while a raise ramps) and voltage-up staging before AMD commit.
+ * The overclock points above 2000 MHz (include/bc250_oc.h) bypass the import's 2000 MHz bound the same way. */
 #include <stddef.h>
 #include <string.h>
 #include "bc250_clock.h"
+#include "bc250_oc.h"
 #include "smu_v11_8_ppsmc.h"
 
 typedef unsigned int uint32_t;
@@ -74,6 +76,19 @@ int bc250_clock_point_allowed(unsigned int mhz,unsigned int mv)
     unsigned int least=bc250_clock_floor_mv(mhz);
     return least && mv>=least && mv<=BC250_CLOCK_CEILING_MV;
 }
+int bc250_clock_point_allowed_tier(unsigned int tier,unsigned int mhz,unsigned int mv)
+{
+    struct bc250_oc_envelope e;
+    unsigned int level;
+    if(mhz<=BC250_CLOCK_CEILING_MHZ)return bc250_clock_point_allowed(mhz,mv);
+    (void)bc250_oc_envelope_of(tier,&e);
+    if(mhz>e.gpu_max_mhz || mhz>BC250_CLOCK_OC_CEILING_MHZ || (mhz-BC250_CLOCK_MIN_MHZ)%BC250_CLOCK_STEP_MHZ)return 0;
+    level=(mhz-BC250_CLOCK_MIN_MHZ)/BC250_CLOCK_STEP_MHZ;
+    // The overclock rows carry one voltage each and no band: no curve reaches them, so a request at another
+    // voltage is not a point anybody chose.
+    return level<BC250_CLOCK_ALL_LEVELS && mv==bc250_clock_points[level].mv && mv<=e.gpu_max_mv &&
+           mv<=BC250_CLOCK_OC_CEILING_MV;
+}
 
 // ---- the operator's V/F curve (0.7.210, docs/design/tuner.md, ADR 0020) --------------------------------------
 // The clock grid is fixed, so a curve carries the voltage column alone and only from the lab floor up. The rules
@@ -88,8 +103,8 @@ void bc250_clock_curve_default(struct bc250_clock_curve *curve)
 
 unsigned int bc250_clock_curve_mv(const struct bc250_clock_curve *curve,unsigned int level)
 {
-    if(level>=BC250_CLOCK_LEVELS)level=BC250_CLOCK_LEVELS-1u;
-    if(level<BC250_CURVE_FIRST_LEVEL)return bc250_clock_points[level].mv;
+    if(level>=BC250_CLOCK_ALL_LEVELS)level=BC250_CLOCK_LEVELS-1u;
+    if(level<BC250_CURVE_FIRST_LEVEL || level>=BC250_CLOCK_LEVELS)return bc250_clock_points[level].mv;
     return curve->mv[level-BC250_CURVE_FIRST_LEVEL];
 }
 
@@ -158,8 +173,11 @@ int bc250_clock_message_allowed(unsigned int message)
 // 900 MHz at VID 116, facts M785). The points under the lab floor (900 and 800 MHz for the thermal cap,
 // 0.7.205; 500 MHz for the idle state, 0.7.207) therefore go out from here, as the two messages the imported
 // PP_OD_COMMIT_DPM_TABLE sends for a forced voltage, in its order and with its VID encoding, and nothing
-// else. The import stays as extracted; this is the one deviation, and it covers only mhz < SCLK_MIN.
-static int subfloor_commit(struct smu_context *smu,unsigned int mhz,unsigned int mv)
+// else. The import stays as extracted; this is the one deviation, and it covers only mhz < SCLK_MIN and the
+// overclock points above CYAN_SKILLFISH_SCLK_MAX (2000 MHz, include/bc250_oc.h), which the import refuses for the
+// same reason: its bounds are amdgpu's overdrive range, not the firmware's. Community kernels that admit clocks up
+// to 2230 and 2500 MHz change only that bound and send these same two messages (third-party, not measured here).
+static int direct_commit(struct smu_context *smu,unsigned int mhz,unsigned int mv)
 {
     int status=smu_cmn_send_smc_msg_with_param(smu,PPSMC_MSG_RequestGfxclk,mhz,NULL);
     if(status)return status;
@@ -175,24 +193,31 @@ static int on_the_way(unsigned int observed,unsigned int from,unsigned int to)
 int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
                         unsigned int mv,struct bc250_clock_report *report)
 {
-    struct smu_context smu={0};long input[3];int status;int subfloor;
+    return bc250_clock_prepare_tier(io,BC250_OC_TIER_NONE,mhz,mv,report);
+}
+
+int bc250_clock_prepare_tier(const struct bc250_clock_io *io,unsigned int tier,unsigned int mhz,
+                             unsigned int mv,struct bc250_clock_report *report)
+{
+    struct smu_context smu={0};long input[3];int status;int direct;
     if(!report)return BC250_CLOCK_INVALID;
     memset(report,0,sizeof(*report));report->status=BC250_CLOCK_INVALID;
     report->requested_mhz=mhz;report->requested_mv=mv;
-    // The table is narrower than AMD's range (700-1129 mV, 2000 MHz), never wider; its points below the
-    // lab floor are the one place where it goes under AMD's 1000 MHz (subfloor_commit above).
+    // The table is narrower than AMD's voltage range (700-1129 mV), never wider. Its points below the lab floor
+    // and the overclock points above 2000 MHz are the two places where it leaves AMD's clock range (direct_commit
+    // above), and the second only under a tier that admits the point.
     if(!io || !io->begin || !io->end || !io->temperature || !io->message ||
-       mhz<BC250_CLOCK_MIN_MHZ || mhz>CYAN_SKILLFISH_SCLK_MAX ||
+       mhz<BC250_CLOCK_MIN_MHZ || mhz>BC250_CLOCK_OC_CEILING_MHZ ||
        mv<CYAN_SKILLFISH_VDDC_MIN || mv>CYAN_SKILLFISH_VDDC_MAX ||
-       !bc250_clock_point_allowed(mhz,mv))return report->status;
-    subfloor=mhz<CYAN_SKILLFISH_SCLK_MIN;
+       !bc250_clock_point_allowed_tier(tier,mhz,mv))return report->status;
+    direct=mhz<CYAN_SKILLFISH_SCLK_MIN || mhz>CYAN_SKILLFISH_SCLK_MAX;
     report->expected_vid=bc250_clock_vid(mv); // same encoded readback as AMD commit
     status=io->begin(io->context);
     if(status){report->status=status;return status;}
     smu.io=io;smu.report=report;
     status=io->temperature(io->context,&report->temperature_mc);
     if(status)goto done;
-    if(!subfloor) {
+    if(!direct) {
         input[0]=0;input[1]=(long)mhz;input[2]=(long)mv;
         status=cyan_skillfish_od_edit_dpm_table(&smu,PP_OD_EDIT_VDDC_CURVE,input,3);
         if(status)goto done;
@@ -230,7 +255,7 @@ int bc250_clock_prepare(const struct bc250_clock_io *io,unsigned int mhz,
         if(report->staged_vid!=report->expected_vid) {status=BC250_CLOCK_MISMATCH;goto done;}
         report->voltage_staged=1;
     }
-    status=subfloor?subfloor_commit(&smu,mhz,mv)
+    status=direct?direct_commit(&smu,mhz,mv)
                    :cyan_skillfish_od_edit_dpm_table(&smu,PP_OD_COMMIT_DPM_TABLE,NULL,0);
     if(status)goto done;
     status=smu_cmn_send_smc_msg(&smu,PPSMC_MSG_GetGfxFrequency,&report->observed_mhz);

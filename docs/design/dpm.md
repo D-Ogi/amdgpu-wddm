@@ -46,9 +46,91 @@ table started at 1000 MHz up to 0.7.204 and at 800 MHz in 0.7.205.
   with AC removal as the only exit ([M790](../facts/hardware.md#m790), third-party, no log). Our hard ceiling lies
   inside that band. The release upper limit is 2000 MHz since 2026-10-10. The report still supports
   having the smart plug ready for runs near that band. It does not qualify any point above the hard ceiling.
+- 2100, 2200 and 2300 MHz are the overclock points (levels 16 to 18). Only an overclock tier admits them. See
+  "Overclock tiers" below.
 - `bc250_clock_prepare` accepts only table points: a clock on the 100 MHz grid with a voltage between the table's
   value and 1000 mV. The escape SET and the governor go through the same gate, so the administrator's `clock set` can
   also ask for a point from 500 to 900 MHz while the governor is not running.
+
+## Overclock tiers
+
+The overclock tiers are a project decision. They give a positively identified BC-250 two higher envelopes, one for
+air cooling and one for liquid (AIO) cooling. The release defaults do not change: the DPM upper limit stays
+2000 MHz (`BC250_DPM_DEFAULT_MAX_MHZ`) and the CPU limit stays 3500 MHz (`BC250_CPU_MAX_MHZ`). A tier only raises
+the highest value that the two settings can take.
+
+| Tier | `OcTier` | GPU ceiling | GPU voltage cap | CPU limit | CPU undervolt range |
+|---|---|---|---|---|---|
+| none | absent or 0 | 2000 MHz | 1000 mV | 3500 MHz | 16 steps |
+| air | 1 | 2200 MHz | 1050 mV | 3900 MHz | 40 steps |
+| liquid (AIO) | 2 | 2300 MHz | 1075 mV | 4100 MHz | 40 steps |
+
+The three overclock points of the V/F table:
+
+| MHz | 2100 | 2200 | 2300 |
+|---|---|---|---|
+| mV | 1050 | 1050 | 1075 |
+| VID | 80 | 80 | 76 |
+
+The points come from community reports and are not measured on our unit (third-party: the governor table of
+`katzzero/bc250-unofficial-community-guide` `06-gpu-governor.md` gives 2100/1025, 2200/1030-1050 and 2300/1075. The
+default configuration of `bc250-collective/cyan-skillfish-governor` gives 2200/1050). The project gives 2100 MHz the
+voltage of 2200 MHz, 1050 mV, for a margin over the lowest reported value. 1075 mV stays 54 mV under the overdrive
+maximum of 1129 mV (`CYAN_SKILLFISH_VDDC_MAX`). If the lab shows that 2300 MHz is not stable at 1075 mV, the point can
+get more voltage, never more than 1100 mV. A lab measurement can change a point before the tier ships.
+
+The rules:
+
+- The KMD takes every number from compiled constants: `driver/shim/include/bc250_board_envelope.h` holds the
+  envelopes and `driver/shim/bc250_board_gpu_points.inc` the points. `bc250_oc_envelope_of()` returns them for a tier.
+  An unknown tier gets the envelope of the tier none. The registry holds a tier number, never a clock or a voltage.
+- `bc250_clock_point_allowed_tier()` admits a point above 2000 MHz only when the tier's ceiling includes it and its
+  voltage is the table's value and not above the tier's voltage cap. The operator's curve does not cover the
+  overclock points: they run at the table's voltage, with no undervolt band.
+- The governor clamps a `DpmMaxMHz` above the tier's ceiling to that ceiling and logs
+  `dpm: DpmMaxMHz ... is above the ceiling of overclock tier ...`.
+  A value above 2300 MHz is refused as before (reason INVALID_SETTING).
+- The tier belongs to one board. `OcTierBoard` holds a fingerprint of the board identity that the driver reads at
+  start (FNV-1a over the 16 bytes of the SMBIOS UUID and the 4 bytes of the BIOS identity). `OcTierStart()`
+  (`driver/kmd/oc_tier.c`) runs after the board provider bind and before `DpmStart`. When the stored fingerprint is
+  not that of this board, the driver deletes `OcTier` and `OcTierBoard` and runs the tier none (reason
+  BOARD_CHANGED). A tier without a fingerprint runs the tier none (reason UNBOUND). A board that is not a supported
+  BC-250, or that has no board identity, gets the tier none (reason UNSUPPORTED). `bc250_oc_decide()` holds these
+  rules and `driver/shim/test/oc_test.c` tests them.
+- The board provider unbind sets the tier to none, so a board that is not bound never runs an overclock envelope.
+- A start that finds `DpmSession` knows that the last start stopped above the floor without a clean stop.
+  `OcTierStart()` reads it before `DpmStart` consumes it, and deletes a stored tier before the board checks (reason
+  UNCLEAN_STOP). The over-current lock of [M790](../facts/hardware.md#m790) looks exactly like such a stop. A start
+  with nothing stored does not write `OcTierLastReason`, so the record stays at UNCLEAN_STOP until the person chooses
+  a tier again, and the control app shows a plain notice for that time.
+- When the SMU refuses an overclock point, `bc250_dpm_oc_refused()` removes that point and every point above it for
+  the rest of the start, and a thermal cap above the new ceiling comes down to it. `DpmApplyEx()` then applies the
+  next lower level and logs `dpm: overclock point ... refused` once for that point. The refusal does not count
+  toward `BC250_DPM_ERROR_LIMIT`: this is the rule of the sub-floor points, and one refused point never costs the
+  whole DPM start.
+- When the person chooses a lower tier or the standard limits, the control app also lowers the stored values above
+  the new limits to those limits (`DpmMaxMHz`, `CpuMaxMHz`, `CpuUvSteps`) in the same plan, and the dialog says so.
+  The driver refuses the whole stored processor set at its next start when one value is above the tier of that
+  start, so a value left above the limits would silently give the firmware's own processor values.
+- `bc250kmd_cli oc` prints the tier of this start, its reason, the stored tier, the board fingerprint, the stored
+  `OcTier`, `OcTierBoard` and `OcTierLastReason`, whether the stored board is this board, the three envelopes and
+  the three points. It is read only.
+- The thermal rules do not change: the 87 C warm zone and thermal cap, the 90 C thermal floor, the fan guard and
+  the CPU gates apply at every tier. The PSU limit of 300 W does not change.
+- The board capability query (ABI 2) reports the tier of this start, the stored tier, the reason, the board
+  fingerprint, the three envelopes, the three points and the CPU undervolt table. A reader that asks for ABI 1 gets
+  the ABI 1 reply, with the overclock words at zero.
+- The control app asks for the cooling type and then shows three warnings. Each warning needs an explicit "I
+  understand". A "Stop" at any step writes nothing. The app then writes `OcTier` and `OcTierBoard` through the
+  ordinary plan and confirmation. The reset to defaults deletes both values.
+
+The over-current lock is the main risk above 2000 MHz. The community reports that 40-CU boards lock between about
+1850 and 2200 MHz, and that every tested board locks at 2400 MHz ([M790](../facts/hardware.md#m790), third-party).
+The lock cuts the picture, and the reset and power buttons do nothing. Only AC removal recovers the board. A
+combined CPU and GPU load finds the lock first, and a higher CPU clock moves it to a lower GPU clock. The first
+warning of the app names the limits, the second explains the lock in plain words, and the third says that the
+person takes the risk. After a lock, the next start finds `DpmSession` and runs fixed-lab (reason UNCLEAN), as
+after every unclean stop above the floor.
 
 ## SMU allowlist
 
@@ -221,7 +303,8 @@ towards the SMU give-up limit (`BC250_DPM_ERROR_LIMIT`). From then on, for the r
 lowest level is the lab floor again, so the governor does not ask for an impossible point once a tick. The imported
 AMD commit refuses a clock below `CYAN_SKILLFISH_SCLK_MIN` (1000 MHz) itself, so the two thermal-only points send the
 two messages of its COMMIT branch (RequestGfxclk, then ForceGfxVid with the same VID encoding) from `bc250_clock.c`
-(`subfloor_commit`) instead of going through the import, which stays exactly as extracted.
+(`direct_commit`) instead of going through the import, which stays exactly as extracted. The overclock points above
+2000 MHz use the same function, because the import also refuses a clock above `CYAN_SKILLFISH_SCLK_MAX` (2000 MHz).
 
 `test_subfloor` in `dpm_test.c` covers a sustained 88 C stepping 1000 -> 900 -> 800 MHz and staying there, 90 C
 going to 800 MHz at once, the release back up through 900 and 1000 MHz, the load never asking below 1000 MHz at any
@@ -808,7 +891,10 @@ keeps its busy gate for the same message.
 | Value | Meaning |
 |---|---|
 | `DpmMode` | 0 fixed-lab (1000 MHz / 820 mV, the default until lab acceptance), 1 dpm. Anything else: fixed, reason INVALID_SETTING |
-| `DpmMaxMHz` | ceiling in dpm, 1000-2000, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, since 2026-10-10); 2000 is the hard ceiling |
+| `DpmMaxMHz` | ceiling in dpm, 1000-2300, rounded down to the 100 MHz grid; absent = 2000 (`BC250_DPM_DEFAULT_MAX_MHZ`, since 2026-10-10). The tier's ceiling bounds it: 2000 MHz without a tier, 2200 MHz (air), 2300 MHz (liquid). A value above the tier's ceiling runs at that ceiling |
+| `OcTier` | the overclock tier ("Overclock tiers"): absent or 0 none, 1 air, 2 liquid. Any other value is refused by the state catalog and runs the tier none. Read at device start |
+| `OcTierBoard` | the fingerprint of the board that `OcTier` belongs to. Written by the control app from the board capability query. A mismatch deletes both values |
+| `OcTierLastReason` | written by the driver: the reason of the last start's tier choice (1 OK, 2 INVALID, 3 UNSUPPORTED, 4 UNBOUND, 5 BOARD_CHANGED, 6 UNCLEAN_STOP) |
 | `DpmIdleMHz` | the idle point (0.7.207): a table clock from 500 to 900 MHz, or 0 for no idle state. Absent = 500 (`BC250_DPM_IDLE_MHZ`). Only a start that governs the clock reads it (`DpmMode` 1, past the guard, with an SMU owner). The thermal cap still bounds a point above the thermal floor |
 | `DpmIdleHoldMs` | how long the GPU must have no work before the idle point; absent = 3000, range 250 to 60000 |
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |

@@ -37,7 +37,7 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 
 ## Limits for our experiments
 
-- GPU clock and voltage: only the points of the DPM table in `docs/design/dpm.md` (500 MHz / 820 mV, the idle point, to 2000 MHz / 1000 mV), which is the written reason for going above 1500 MHz / 900 mV (decision of 2026-09-30). The base and start clock stays at 1000 MHz. The automatic clock range is 500-2000 MHz, with a default upper limit of 2000 MHz (decision of 2026-10-10). `DpmMaxMHz` can select a lower ceiling. Nothing above 1000 mV. Thermal: from 70 C the DPM governor raises one level at most, 1 s to 4 s after the last raise (thermal ramp, KMD 0.7.203, after session 367). At 87 C or more the DPM governor does not raise the clock or the voltage (warm zone, KMD 0.7.204, decision of 2026-10-04; at 85 C in KMD 0.7.200-0.7.203, after session 344). At 87 C the thermal cap steps down and the clock gate refuses a raise (decision of 2026-10-01, was 85 C). At 90 C the clock goes to the thermal floor, 800 MHz (`BC250_DPM_THERMAL_FLOOR_LEVEL`). That is the lowest point the thermal cap uses, and not the lowest point of the table. Only the thermal cap and the idle state may go below 1000 MHz, all at 820 mV. The cap goes to 900 and 800 MHz and never lower (KMD 0.7.205, decision of 2026-10-05). The clock the part ran at when it went hot does not change that bottom. The idle state goes to 500 MHz while the GPU has no work (KMD 0.7.207, decision of 2026-10-05). It leaves that point at the first tick with work. `DpmIdleMHz` 0 turns the idle state off. The load never asks below 1000 MHz. The firmware accepts the two sub-floor points. Session 402 held 800 MHz at VID 116 in 49 readbacks and 900 MHz at VID 116 in 4, with no refusal ([M785](facts/hardware.md#m785)). 1000 MHz is only the lowest `sclk` level the tables publish ([M47](facts/hardware.md#m47)) and the bound of the imported Linux path. It is not a measured hardware floor. The KMD still withdraws a sub-floor point or the idle point for the rest of a start if the SMU refuses it.
+- GPU clock and voltage: only the points of the DPM table in `docs/design/dpm.md` (500 MHz / 820 mV, the idle point, to 2000 MHz / 1000 mV), which is the written reason for going above 1500 MHz / 900 mV (decision of 2026-09-30). The base and start clock stays at 1000 MHz. The automatic clock range is 500-2000 MHz, with a default upper limit of 2000 MHz (decision of 2026-10-10). `DpmMaxMHz` can select a lower ceiling. Nothing above 1000 mV without an overclock tier (see "Overclock tiers" below). Thermal: from 70 C the DPM governor raises one level at most, 1 s to 4 s after the last raise (thermal ramp, KMD 0.7.203, after session 367). At 87 C or more the DPM governor does not raise the clock or the voltage (warm zone, KMD 0.7.204, decision of 2026-10-04; at 85 C in KMD 0.7.200-0.7.203, after session 344). At 87 C the thermal cap steps down and the clock gate refuses a raise (decision of 2026-10-01, was 85 C). At 90 C the clock goes to the thermal floor, 800 MHz (`BC250_DPM_THERMAL_FLOOR_LEVEL`). That is the lowest point the thermal cap uses, and not the lowest point of the table. Only the thermal cap and the idle state may go below 1000 MHz, all at 820 mV. The cap goes to 900 and 800 MHz and never lower (KMD 0.7.205, decision of 2026-10-05). The clock the part ran at when it went hot does not change that bottom. The idle state goes to 500 MHz while the GPU has no work (KMD 0.7.207, decision of 2026-10-05). It leaves that point at the first tick with work. `DpmIdleMHz` 0 turns the idle state off. The load never asks below 1000 MHz. The firmware accepts the two sub-floor points. Session 402 held 800 MHz at VID 116 in 49 readbacks and 900 MHz at VID 116 in 4, with no refusal ([M785](facts/hardware.md#m785)). 1000 MHz is only the lowest `sclk` level the tables publish ([M47](facts/hardware.md#m47)) and the bound of the imported Linux path. It is not a measured hardware floor. The KMD still withdraws a sub-floor point or the idle point for the rest of a start if the SMU refuses it.
 - GPU voltage band (KMD 0.7.213.1, the operator's V/F curve, decision of 2026-10-06): the voltage at a clock may
   go down to the table's line less 25 mV (`BC250_CURVE_UNDERVOLT_MV`), and never under 820 mV, which is the
   voltage the lab point has run at for weeks. `bc250_clock_floor_mv(MHz)` is that bound and every gate uses it.
@@ -45,7 +45,26 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   stays the absolute ceiling. The curve cannot raise a voltage above the table's line at that clock.
   25 mV is about two VID steps of 6.25 mV. A deeper undervolt needs a measured lab result first: an unstable
   voltage shows as a hang or a TDR under load, not as a refusal, which is why the trial window reverts by itself.
-- Over-current protection: the community reports a board-level lock band on 40-CU boards. It starts between about 1850 and 2200 MHz and catches every tested board at 2400 MHz. AC removal is the only exit ([M790](facts/hardware.md#m790), third-party, no log). Our hard ceiling of 2000 MHz lies inside that band. The release DPM upper limit is 2000 MHz since 2026-10-10. Keep the smart plug ready for runs near the reported lock band. Nothing above the 2000 MHz hard ceiling is admitted.
+- Over-current protection: the community reports a board-level lock band on 40-CU boards. It starts between about 1850 and 2200 MHz and catches every tested board at 2400 MHz. AC removal is the only exit ([M790](facts/hardware.md#m790), third-party, no log). Our hard ceiling of 2000 MHz lies inside that band. The release DPM upper limit is 2000 MHz since 2026-10-10. Keep the smart plug ready for runs near the reported lock band. Without an overclock tier, nothing above the 2000 MHz hard ceiling is admitted.
+- Overclock tiers (a project decision, `docs/design/dpm.md` "Overclock tiers"). A positively identified BC-250 can
+  run one of two higher envelopes when its owner chooses one in the control app. The app asks for the cooling type
+  and shows three warnings first. The defaults do not change: 2000 MHz for the GPU and 3500 MHz for the CPU.
+
+  | Tier | GPU ceiling | GPU voltage cap | CPU limit |
+  |---|---|---|---|
+  | none (the default) | 2000 MHz | 1000 mV | 3500 MHz |
+  | air | 2200 MHz | 1050 mV | 3900 MHz |
+  | liquid (AIO) | 2300 MHz | 1075 mV | 4100 MHz |
+
+  The GPU points above 2000 MHz are 2100/1050, 2200/1050 and 2300/1075 (MHz/mV), from community reports and not
+  measured on our unit. 1075 mV stays under the overdrive maximum of 1129 mV. Every tier lies inside the reported
+  lock band of [M790](facts/hardware.md#m790), so the lock is the expected failure, not a hang or a TDR. The
+  control app tells the person, in plain words, that a lock cuts the picture, that the buttons do nothing, and
+  that only pulling the power cable recovers the board. The thermal rules, the 87 C and 90 C limits, the fan
+  guard and the 300 W PSU limit are the same at every tier. A tier belongs to one board: a start on another board
+  deletes it. A start after a stop above the floor without a clean stop also deletes it, because the lock looks
+  exactly like that stop. A point that the SMU refuses goes for the rest of that start and does not count as an SMU
+  error. Every other device gets "not supported" and no tier.
 - SMU messages: the native KMD sends only `GetSmuVersion` (parameter 0),
   `GetGfxFrequency` (0), `GetGfxVid` (0), `RequestGfxclk` and `ForceGfxVid` through
   its serialized owner, with the argument ranges Linux uses. The setters follow the
@@ -99,8 +118,8 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
 
   | Message | Queue | Direction | Admitted argument |
   |---|---|---|---|
-  | `0x8F` SetMaxBoostMHz | 3 | write | 2800 to 4000 MHz (`BC250_CPU_MIN_MHZ`, `_MAX_MHZ_LAB`; the release build stops at 3500, `_MAX_MHZ`) |
-  | `0x50` SetCurveScale | 3 | write | 0, or a negative 16-bit value of at most 16 steps (`BC250_CPU_UV_MAX_STEPS`). A positive scale raises the voltage and is refused here, not in the firmware |
+  | `0x8F` SetMaxBoostMHz | 3 | write | 2800 to 4100 MHz (`BC250_CPU_MIN_MHZ`, `BC250_CPU_OC_MAX_MHZ`). The settings gate stops at 3500 MHz (`_MAX_MHZ`), at 4000 MHz in the lab build (`_MAX_MHZ_LAB`), and at the CPU limit of an overclock tier |
+  | `0x50` SetCurveScale | 3 | write | 0, or a negative 16-bit value of at most 40 steps (`BC250_CPU_OC_UV_MAX_STEPS`). The settings gate stops at 16 steps (`BC250_CPU_UV_MAX_STEPS`) without an overclock tier. A positive scale raises the voltage and is refused here, not in the firmware |
   | `0x8B` SetTemperatureCapC | 3 | write | 85 to 100 C (`BC250_CPU_TEMP_MIN_C`, `_MAX_C`; 100 is the firmware default) |
   | `0x36` `0x37` `0x3B` `0x40` `0x42` `0x43` | 3 | read | the voltages, a P-state clock (0 to 7), the cap in force, a SoC DPM clock (0 to 19) and a core clock (0 to 7) |
   | `0x2C` SetCoreEnableMask | 0 | write | `0x77` (stock, 6 cores) or `0xFF` (8 cores) and nothing else: another pattern suggests a real harvest of defective cores |
@@ -114,6 +133,19 @@ Things marked TBD are filled in from the first diagnostic run (E01). Community k
   The driver lowers before it raises, reads `0x36` back after every change, and undoes the change at once above
   1300 mV. A readback outside 700 to 1600 mV is not a voltage we understand, and the driver treats it as a failed
   read and not as a safe value. There is no absolute CPU VID write on the allowlist and there will not be one.
+- CPU clock above 3500 MHz (an overclock tier, or the lab build up to 4000 MHz). A higher limit lets the firmware
+  pick a higher voltage, and the community reports a board that stopped working after 4000 MHz at about 1275 mV.
+  The settings gate (`bc250_cpu_settings_check_tier`) therefore takes a limit above 3500 MHz only together with an
+  undervolt of at least this depth:
+
+  | CPU limit | 3600 | 3700 | 3800 | 3900 | 4000 | 4100 |
+  |---|---|---|---|---|---|---|
+  | least undervolt (steps) | 8 | 16 | 20 | 24 | 36 | 40 |
+
+  The table is a proposal from community presets (third-party, not measured here). The 1300 mV refusal line and
+  the readback after every change stay in force: the undervolt makes a refusal less probable, it does not replace
+  it. The firmware's answer to 4100 MHz is not measured on our unit. A lab build without a tier keeps the old
+  rule (4 steps or more above 3500 MHz).
 - CPU gates: no CPU setter while the GPU is 50 % busy or more (`BC250_CPU_GPU_BUSY_PERMILLE`), no setter at 87 C or
   more (the GPU rule, read before **every** message and not once per sequence), one setter per 100 ms
   (`BC250_CPU_MESSAGE_GAP_MS`) with the owner lock released between them, and one CPU sequence at a time. A getter

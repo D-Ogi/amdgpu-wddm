@@ -45,6 +45,7 @@ namespace AmdgpuWddmControl
                 // The waiting time for the graphics (TdrSetting.cs): the helper plans again from its own reading, so
                 // the chosen number has to reach its command line, or it refuses the action as a usage error.
                 if (more.Tdr != null) { verb.Add("--tdr"); verb.Add(more.Tdr.Value.ToString(CultureInfo.InvariantCulture)); }
+                if (more.OcTier != null) { verb.Add("--oc-tier"); verb.Add(more.OcTier.Value.ToString(CultureInfo.InvariantCulture)); }
                 // How long to record the game logs (GameLog.cs), for the same reason.
                 if (more.Minutes != null) { verb.Add("--minutes"); verb.Add(more.Minutes.Value.ToString(CultureInfo.InvariantCulture)); }
                 verb.AddRange(TunerPlan.Arguments(more));

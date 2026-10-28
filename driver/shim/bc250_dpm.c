@@ -24,10 +24,11 @@
  */
 #include <string.h>
 #include "bc250_dpm.h"
+#include "bc250_oc.h"
 
 int bc250_dpm_level_of(unsigned int mhz)
 {
-	if (mhz < BC250_CLOCK_MIN_MHZ || mhz > BC250_CLOCK_CEILING_MHZ ||
+	if (mhz < BC250_CLOCK_MIN_MHZ || mhz > BC250_CLOCK_OC_CEILING_MHZ ||
 	    (mhz - BC250_CLOCK_MIN_MHZ) % BC250_CLOCK_STEP_MHZ)
 		return -1;
 	return (int)((mhz - BC250_CLOCK_MIN_MHZ) / BC250_CLOCK_STEP_MHZ);
@@ -39,13 +40,22 @@ static unsigned int add_ms(unsigned int a, unsigned int b)
 	return a > BC250_DPM_CAP_MS_MAX - b ? BC250_DPM_CAP_MS_MAX : a + b;
 }
 
-/* The lowest level at or above a clock, over the whole table (the points under the lab floor included). */
-static unsigned int ceil_level(unsigned int mhz)
+/* The highest level the load's arithmetic may name for a start whose ceiling is max_level: the qualified table's top,
+ * or the ceiling itself when an overclock tier put it above that. With no tier this is BC250_DPM_TOP_LEVEL for every
+ * start, which is the arithmetic of every release before the tiers; the ceiling then clamps it as it always did. */
+static unsigned int load_top(unsigned int max_level)
+{
+	if (max_level <= BC250_DPM_TOP_LEVEL) return BC250_DPM_TOP_LEVEL;
+	return max_level > BC250_DPM_OC_TOP_LEVEL ? BC250_DPM_OC_TOP_LEVEL : max_level;
+}
+
+/* The lowest level at or above a clock, over the table up to top (the points under the lab floor included). */
+static unsigned int ceil_level(unsigned int mhz, unsigned int top)
 {
 	unsigned int level;
 	if (mhz <= BC250_CLOCK_MIN_MHZ) return BC250_DPM_IDLE_LEVEL;
 	level = (mhz - BC250_CLOCK_MIN_MHZ + BC250_CLOCK_STEP_MHZ - 1u) / BC250_CLOCK_STEP_MHZ;
-	return level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : level;
+	return level > top ? top : level;
 }
 
 /* The lowest level the thermal cap may use now: the thermal floor, or the lab floor once a sub-floor
@@ -57,11 +67,11 @@ static unsigned int thermal_floor(const struct bc250_dpm_governor *g)
 
 /* Where a raise from cur goes: the lowest level at which the tick's work (busy x clock) would fill target
  * permille, at least one level up, and never below the lab floor (the load's own lowest level).
- * bc250_dpm_step and invariant 2 of bc250_dpm_tune_check share it. */
-static unsigned int raise_level(unsigned int cur, unsigned int busy, unsigned int target_permille)
+ * bc250_dpm_step and invariant 2 of bc250_dpm_tune_check share it. top is load_top() of the start's ceiling. */
+static unsigned int raise_level(unsigned int cur, unsigned int busy, unsigned int target_permille, unsigned int top)
 {
-	unsigned int want = ceil_level(bc250_dpm_level_mhz(cur) * busy / target_permille);
-	if (want <= cur && cur < BC250_DPM_TOP_LEVEL) want = cur + 1u;
+	unsigned int want = ceil_level(bc250_dpm_level_mhz(cur) * busy / target_permille, top);
+	if (want <= cur && cur < top) want = cur + 1u;
 	return want < BC250_DPM_FLOOR_LEVEL ? BC250_DPM_FLOOR_LEVEL : want;
 }
 
@@ -87,6 +97,7 @@ unsigned int bc250_dpm_busy_permille(unsigned int samples, unsigned int active, 
 
 void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decision *d)
 {
+	struct bc250_oc_envelope oc;
 	unsigned int max;
 
 	memset(d, 0, sizeof(*d));
@@ -120,11 +131,19 @@ void bc250_dpm_decide(const struct bc250_dpm_request *r, struct bc250_dpm_decisi
 		return;
 	}
 	max = r->max_present ? r->max_mhz : BC250_DPM_DEFAULT_MAX_MHZ;
-	if (max < BC250_CLOCK_FLOOR_MHZ || max > BC250_CLOCK_CEILING_MHZ) {
+	if (max < BC250_CLOCK_FLOOR_MHZ || max > BC250_CLOCK_OC_CEILING_MHZ) {
 		d->reason = BC250_DPM_REASON_INVALID_SETTING;
 		return;
 	}
 	max -= (max - BC250_CLOCK_FLOOR_MHZ) % BC250_CLOCK_STEP_MHZ;
+	/* The overclock tier (include/bc250_oc.h) sets the highest ceiling. A stored ceiling above it, inside the
+	 * overclock range, is a choice made under a tier that this start does not run: DPM stays on at the tier's own
+	 * ceiling, and the stored value is not touched. Above the overclock range it stays INVALID_SETTING, as above. */
+	(void)bc250_oc_envelope_of(r->tier, &oc);
+	if (max > oc.gpu_max_mhz) {
+		max = oc.gpu_max_mhz;
+		d->clamped = 1;
+	}
 	d->encoded = bc250_dpm_encode(max);
 	if (r->pending_present) {
 		/* Whatever happened to the start that set it, DPM is not tried twice unasked. */
@@ -191,7 +210,7 @@ int bc250_dpm_warm_mc(const struct bc250_dpm_tune *t)
 
 enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, unsigned int max_level)
 {
-	unsigned int level;
+	unsigned int level, top = load_top(max_level);
 
 	if (t->up_permille < BC250_DPM_TUNE_MIN_PERMILLE || t->up_permille > BC250_DPM_TUNE_MAX_PERMILLE ||
 	    t->target_permille < BC250_DPM_TUNE_MIN_PERMILLE || t->target_permille > BC250_DPM_TUNE_MAX_PERMILLE ||
@@ -201,15 +220,15 @@ enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, u
 		return BC250_DPM_TUNE_ORDER;
 	/* Invariant 1, every adjacent pair of the load's levels (the lab floor up; the two thermal-only points
 	 * below it are never a load decision), not only the bottom one: the inequality is the contract, the
-	 * table's shape (where the ratio peaks) is not. */
-	for (level = BC250_DPM_FLOOR_LEVEL + 1u; level < BC250_CLOCK_LEVELS; level++)
+	 * table's shape (where the ratio peaks) is not. Under an overclock tier the pairs go up to its ceiling. */
+	for (level = BC250_DPM_FLOOR_LEVEL + 1u; level <= top; level++)
 		if ((t->down_permille + 1u) * bc250_dpm_level_mhz(level) > t->up_permille * bc250_dpm_level_mhz(level - 1u))
 			return BC250_DPM_TUNE_LOWERING;
-	/* Invariant 2, with bc250_dpm_step's own arithmetic. At most 10 x 901 cases; run only when a tune changes. */
-	for (level = BC250_DPM_FLOOR_LEVEL; level < BC250_DPM_TOP_LEVEL; level++) {
+	/* Invariant 2, with bc250_dpm_step's own arithmetic. At most 13 x 901 cases; run only when a tune changes. */
+	for (level = BC250_DPM_FLOOR_LEVEL; level < top; level++) {
 		unsigned int busy, mhz = bc250_dpm_level_mhz(level);
 		for (busy = t->up_permille; busy <= 1000u; busy++) {
-			unsigned int next = raise_level(level, busy, t->target_permille);
+			unsigned int next = raise_level(level, busy, t->target_permille, top);
 			if (t->down_permille * bc250_dpm_level_mhz(next) > busy * mhz) return BC250_DPM_TUNE_RAISE;
 		}
 	}
@@ -218,7 +237,7 @@ enum bc250_dpm_tune_error bc250_dpm_tune_check(const struct bc250_dpm_tune *t, u
 	/* The runtime floor stays between the lab floor and the start's ceiling: the thermal-only points below
 	 * BC250_DPM_FLOOR_LEVEL are the cap's, and the load never lands there (0.7.205). */
 	if (t->floor_level < BC250_DPM_FLOOR_LEVEL || t->floor_level > max_level ||
-	    t->floor_level > BC250_DPM_TOP_LEVEL)
+	    t->floor_level > top)
 		return BC250_DPM_TUNE_FLOOR;
 	if (t->hot_step_ms < BC250_DPM_TUNE_MIN_HOT_STEP_MS || t->hot_step_ms > BC250_DPM_TUNE_MAX_HOT_STEP_MS ||
 	    (t->soft_delta_mc != 0u &&
@@ -284,7 +303,7 @@ int bc250_dpm_compute_on(const struct bc250_dpm_governor *g)
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 {
 	memset(g, 0, sizeof(*g));
-	g->max_level = max_level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : max_level;
+	g->max_level = max_level > BC250_DPM_OC_TOP_LEVEL ? BC250_DPM_OC_TOP_LEVEL : max_level;
 	g->thermal_cap = g->max_level;
 	g->level = BC250_DPM_FLOOR_LEVEL;
 	g->cap_ms = BC250_DPM_CAP_MS_MAX;	/* no change yet: the first hot tick steps at once */
@@ -497,6 +516,18 @@ unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g)
 	/* The thermal sub-floor and the idle state stand or fall together below the lab floor: a point the
 	 * firmware refused for one of them is refused for the other (bc250_dpm_subfloor_refused). */
 	return g->idle_on && g->subfloor_ok ? bc250_dpm_level_mhz(g->idle_level) : 0u;
+}
+
+unsigned int bc250_dpm_oc_refused(struct bc250_dpm_governor *g, unsigned int level)
+{
+	if (level <= BC250_DPM_TOP_LEVEL || level > BC250_DPM_OC_TOP_LEVEL) return g->max_level;
+	g->oc_refusals++;
+	if (g->max_level >= level) g->max_level = level - 1u;
+	if (g->thermal_cap > g->max_level) {
+		g->thermal_cap = g->max_level;
+		g->cap_ms = 0;
+	}
+	return g->max_level;
 }
 
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g)
@@ -743,7 +774,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 {
 	unsigned int dt = in->dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : in->dt_ms;
 	unsigned int busy = in->busy_permille > 1000u ? 1000u : in->busy_permille;
-	unsigned int cur = g->level > BC250_DPM_TOP_LEVEL ? BC250_DPM_TOP_LEVEL : g->level;
+	unsigned int cur = g->level > BC250_DPM_OC_TOP_LEVEL ? BC250_DPM_OC_TOP_LEVEL : g->level;
 	unsigned int want = cur, limit, target;
 	unsigned int thermal = BC250_DPM_THROTTLE_NONE;
 	int left = 0, idle_exit = 0;	/* the idle state ended in this tick / this tick returns from under the floor */
@@ -984,7 +1015,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 
 	/* The load. */
 	if (busy >= t->up_permille) {
-		want = raise_level(cur, busy, t->target_permille);
+		want = raise_level(cur, busy, t->target_permille, load_top(g->max_level));
 		g->down_ms = 0;
 	} else if (g->avg_permille < t->down_permille) {
 		g->down_ms += dt;
@@ -1114,7 +1145,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 
 void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level)
 {
-	if (level > BC250_DPM_TOP_LEVEL) level = BC250_DPM_TOP_LEVEL;
+	if (level > BC250_DPM_OC_TOP_LEVEL) level = BC250_DPM_OC_TOP_LEVEL;
 	if (level > g->level) g->raises++;
 	else if (level < g->level) g->lowers++;
 	g->level = level;
@@ -1122,7 +1153,7 @@ void bc250_dpm_commit(struct bc250_dpm_governor *g, unsigned int level)
 
 void bc250_dpm_recall_confirm(struct bc250_dpm_governor *g, unsigned int level, unsigned int serial)
 {
-	if (level > BC250_DPM_TOP_LEVEL) level = BC250_DPM_TOP_LEVEL;
+	if (level > BC250_DPM_OC_TOP_LEVEL) level = BC250_DPM_OC_TOP_LEVEL;
 	/* A lower level under the same curve keeps the higher one and its age: that is the drop a return goes back from. */
 	if (g->recall_valid && serial == g->recall_serial && level < g->recall_level) return;
 	g->recall_valid = 1;

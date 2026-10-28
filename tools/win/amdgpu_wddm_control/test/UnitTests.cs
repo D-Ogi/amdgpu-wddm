@@ -1348,6 +1348,7 @@ static partial class UnitTests
         WallpaperTests(args[0]);
         GraphicsSettingsTests();
         TdrTests(args[0]);
+        OcUnlockTests();
         DriverFeatureTests(args[0]);
         GameLogTests(args[0]);
         HangRecordTests(args[0]);

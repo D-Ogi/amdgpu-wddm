@@ -9,6 +9,8 @@ bc250kmd_cli info [hardware-id]   the escape, to the adapter with that PnP hardw
                                   (default PCI\VEN_1002&DEV_13FE)
 bc250kmd_cli list                 every graphics adapter, with hardware id, interface path, handle and LUID
 bc250kmd_cli board-caps           board capabilities and limits from the driver, without hardware access
+bc250kmd_cli oc                   the overclock tier of this start, its reason, the stored tier and board, and
+                                  whether the stored board is this board
 bc250kmd_cli stages               LastStage / StageHistory / UnconfirmedStarts, with names
 bc250kmd_cli confirm              explicit human confirmation, checked durable zero (elevated)
 bc250kmd_cli health read          cached device-start identity and completed-presentation witness

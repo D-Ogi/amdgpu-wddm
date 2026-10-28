@@ -1321,3 +1321,47 @@ search.graphics.gdi|src|-|Hardware acceleration of classic drawing
 search.graphics.gdi.terms|src|-|gdi|hardware acceleration|acceleration|2d|classic|drawing|text|windows
 help.setting.compute|src|-|Lets Vulkan games and apps do calculations on a second hardware queue of the graphics chip while they draw, which can make them faster. It is on from the start. Switch it off if a Vulkan game stops responding or shows wrong pictures; a new setting works after you restart Windows.
 help.setting.gdi|src|-|Lets the graphics chip do the classic Windows drawing of many programs: their windows, text and pictures. The processor then has less work. It is on from the start. Switch it off if the windows or text of a program look wrong; a new setting works after you restart Windows.
+
+# ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
+oc.title|src|-|Higher clocks for your cooler
+oc.now|src|-|Now
+oc.next|src|-|After the restart
+oc.intro|src|-|Standard limits: {0} MHz for the graphics and {1} MHz for the processor. With a good air cooler or an all-in-one liquid cooler you can allow higher limits. The app first asks which cooler you have, then shows three warnings.
+oc.lock.short|src|-|Some boards switch off their power under heavy load at high clocks. Such a board starts again only after you pull out the power cable for a short time.
+oc.unlock|src|-|Allow higher clocks...
+oc.off|src|-|Standard limits
+oc.not-installed|src|-|Install the driver to use this.
+oc.stopped|src|-|Nothing was changed.
+oc.tier.none|src|-|Standard limits
+oc.tier.air|src|-|Air cooler
+oc.tier.liquid|src|-|All-in-one liquid cooler
+oc.state.runs|src|-|{0}: up to {1} MHz for the graphics and {2} MHz for the processor.
+oc.state.pending|src|-|A new choice applies after the next restart of Windows.
+oc.state.board-changed|src|-|The higher limits were turned off because the driver found a different board or new board firmware. Answer the questions again to turn them on.
+oc.state.unbound|src|-|The stored choice did not belong to this board, so the driver turned it off. Answer the questions again to turn it on.
+oc.state.invalid|src|-|The stored choice is not valid, so the standard limits apply. Choose again or select Standard limits.
+oc.q.title|src|-|Higher clocks: your cooler
+oc.q.cooling|src|-|Which cooler is on your board? The higher limits depend on it.
+oc.q.air.text|src|-|Air cooler: a heatsink with one or more fans that blow through it. Up to {0} MHz for the graphics and {1} MHz for the processor.
+oc.q.liquid.text|src|-|All-in-one liquid cooler: a pump block on the chip and a radiator with fans. Up to {0} MHz for the graphics and {1} MHz for the processor.
+oc.q.stock.text|src|-|The board's own heatsink with no fan on it, or you are not sure: keep the standard limits.
+oc.q.stock|src|-|Not sure, keep standard
+oc.q.air|src|-|Air cooler
+oc.q.liquid|src|-|Liquid cooler
+oc.warn.title|src|-|Warning {0} of {1}
+oc.warn.stop|src|-|Stop
+oc.warn.accept|src|-|I understand
+oc.warn.1|src|-|Higher clocks make more heat and use more power. Up to {0} MHz for the graphics and {1} MHz for the processor is what other owners report with this cooler. It is not a promise for your board: every chip is different. A board can become unstable, and in the worst case it can be damaged. You use the higher limits at your own risk.
+oc.warn.2|src|-|Some boards, mostly boards with all 40 graphics cores turned on, switch off their power completely under heavy load at about 1850 to 2200 MHz. The fan stops and the screen goes dark. The power button and the reset button then do nothing: the board starts again only after you pull out the power cable for a short time, or switch the power off at the wall, and then connect it again. A heavy game that loads the processor and the graphics together finds this first, and a higher processor clock makes it happen sooner. If it happens, choose a lower clock or fewer graphics cores.
+oc.warn.3|src|-|The safety rules stay the same: the driver still lowers the clocks when the chip reaches 87 °C, and the fan control does not change. Use a good power supply with enough power for the board: a weak one can switch off or fail at these clocks. Change one thing at a time and test it with the games you play. If Windows does not end cleanly, the driver starts with the safe fixed clock the next time. You can go back to the standard limits here at any time.
+oc.note.limits|src|-|After the restart, choose the higher clocks yourself under the clock ceiling and the processor limit. The standard values do not change by themselves.
+plan.title.oc-tier|src|-|Higher clocks for your cooler
+plan.line.oc-off|src|-|The higher clock limits are turned off; the standard limits apply.
+plan.line.oc-air|src|-|Higher clock limits for an air cooler are allowed.
+plan.line.oc-liquid|src|-|Higher clock limits for an all-in-one liquid cooler are allowed.
+plan.line.oc-board|src|-|The choice belongs to this board. On another board it turns itself off.
+tuner.refuse.cpu-needs-uv|src|-|A processor limit of {0} MHz needs at least {1} voltage steps.
+oc.state.unclean|src|-|The higher limits were turned off after an unexpected stop of the computer. The board can switch itself off like this at high clocks. You can turn them on again with the questions.
+oc.note.lowered|src|-|Some of your saved values are above the new limits. The app lowers them to the new limits, as the list above shows.
+plan.line.cpu-clock|src|-|Highest processor speed: {0} MHz.
+plan.line.cpu-uv|src|-|Processor voltage: {0} steps lower.

@@ -69,6 +69,8 @@ namespace AmdgpuWddmControl
             toggle.Enabled = !(open && must);
             head.Add(Ui.WrapRow(head.Inner, toggle, Explain("tuning", Strings.T("graphics.tuning.title"))));
             page.Controls.Add(head);
+            // The overclock unlock is not a trial: it stays in sight whether the cards below are open or not.
+            page.Controls.Add(BuildOcCard(width, installed));
             if (open)
             {
                 page.Controls.Add(BuildCurveCard(width, installed));

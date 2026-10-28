@@ -219,6 +219,13 @@ namespace AmdgpuWddmControl
                     if (more.CpuUv != null && !CpuTuning.ValidSteps(more.CpuUv.Value))
                         return No(p, "The undervolt must be " + CpuTuning.MaxSteps + " steps or fewer.",
                             "tuner.refuse.cpu-bad-uv", CpuTuning.MaxSteps);
+                    // Above the standard limit the driver takes a clock only with its least undervolt in the same
+                    // request (bc250_cpu_settings_check_tier): the window says so before it asks.
+                    if (more.CpuClock != null && OcUnlock.Effective != OcUnlock.None && more.CpuClock.Value > OcUnlock.CpuMaxMHz(OcUnlock.None) &&
+                        (more.CpuUv ?? u.AppliedUvSteps) < OcUnlock.CpuMinUvSteps(more.CpuClock.Value))
+                        return No(p, "A processor clock of " + more.CpuClock.Value + " MHz needs an undervolt of at least "
+                            + OcUnlock.CpuMinUvSteps(more.CpuClock.Value) + " steps.", "tuner.refuse.cpu-needs-uv",
+                            more.CpuClock.Value, OcUnlock.CpuMinUvSteps(more.CpuClock.Value));
                     if (more.CpuTemp != null && !CpuTuning.ValidTemp(more.CpuTemp.Value))
                         return No(p, "The processor temperature cap must be " + CpuTuning.MinTempC + " to "
                             + CpuTuning.MaxTempC + " C.", "tuner.refuse.cpu-bad-temp", CpuTuning.MinTempC, CpuTuning.MaxTempC);

@@ -479,6 +479,7 @@ static BOOLEAN GfxStartupResources(BC250_DEVICE* d, BOOLEAN live) { (void)d; (vo
 static void HangDetectorStart(BC250_DEVICE* d) { (void)d; }
 static void FanStart(BC250_DEVICE* d) { (void)d; }
 static void SmuMetricsStart(BC250_DEVICE* d) { (void)d; }
+static void OcTierStart(BC250_DEVICE* d) { (void)d; }
 static void DpmStart(BC250_DEVICE* d) { (void)d; }
 static void CpuStart(BC250_DEVICE* d) { (void)d; }
 static void InterlockedExchange(LONG* t, LONG v) { *t = v; }

@@ -422,7 +422,8 @@ namespace AmdgpuWddmControl
         // its access is "driver", the state client refuses a delete from user mode, and the driver deletes it by
         // itself at the next start that reads a DpmMode other than 0 (driver/kmd/dpm.c, clear_closed). The catalog
         // test (ClosureTests) holds this list to the catalog's access rules.
-        public static readonly string[] ParameterNames = new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost", BootLogoSetting.ValueName }
+        public static readonly string[] ParameterNames = new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost", BootLogoSetting.ValueName,
+            OcUnlock.TierName, OcUnlock.BoardName, OcUnlock.CpuMaxName, OcUnlock.CpuUvName }
             .Concat(DriverFeatures.ValueNames).ToArray();
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
@@ -458,6 +459,8 @@ namespace AmdgpuWddmControl
             "graphics-defaults",
             // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079).
             "tdr-delay",
+            // The overclock unlock by cooling type (OcUnlock.cs): the tier and the board it belongs to.
+            OcUnlock.Action,
             // "Record game logs" (GameLog.cs): the timed diagnostic switch of the Help page.
             "game-log-on", "game-log-off",
             // The driver's own switches of the Graphics page (DriverFeatures.cs): the second queue for calculations
@@ -1471,6 +1474,9 @@ namespace AmdgpuWddmControl
                     // the processor surface, is in manifest.json (1 from 0.7.216): the steps put it back to that
                     // number, not off, and a number other than 0 or 1 refuses the action, as the other
                     // defaults out of range do. A release that names none keeps the old step, which removes it.
+                    // The cooling type of the overclock unlock is a choice of a person, never a release default: the
+                    // reset takes it away with its board binding (OcUnlock.cs).
+                    p.Writes.AddRange(OcUnlock.PlanWrites(s.P(OcUnlock.TierName), s.P(OcUnlock.BoardName), null, OcUnlock.None, 0));
                     long cpuTuneDefault;
                     bool cpuTuneNamed = s.DefaultParameters.TryGetValue("CpuTune", out cpuTuneDefault);
                     if (cpuTuneNamed && cpuTuneDefault != 0 && cpuTuneDefault != 1)
@@ -1671,6 +1677,38 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case OcUnlock.Action:
+                {
+                    // The overclock unlock (OcUnlock.cs). The window asked for the cooler and three warnings before it
+                    // planned this; the plan writes the tier and this board's fingerprint as the driver reports it now,
+                    // never a number the window chose. The driver reads both at its next start.
+                    p.Title = "Higher clocks for the cooling";
+                    p.Effect = "at the next restart of Windows";
+                    p.Undoable = true;
+                    if (more.OcTier == null || !OcUnlock.IsTier(more.OcTier.Value)) return Refuse(p, "No cooling type given.");
+                    if (!OcUnlock.Available) return Refuse(p, "This board does not take a cooling type: the driver does not identify it as a BC-250.");
+                    uint tier = more.OcTier.Value;
+                    p.Writes.AddRange(OcUnlock.PlanWrites(s.P(OcUnlock.TierName), s.P(OcUnlock.BoardName), s.P("DpmMaxMHz"), tier, OcUnlock.Board,
+                        s.P(OcUnlock.CpuMaxName), s.P(OcUnlock.CpuUvName)));
+                    if (p.Writes.Count == 0) return Refuse(p, "This cooling type is stored already.");
+                    if (p.Writes.Any(OcUnlock.Lowers))
+                    {
+                        p.Notes.Add("Stored values above the limits of the new choice are lowered to those limits: " +
+                            string.Join(", ", p.Writes.Where(OcUnlock.Lowers).Select(w => w.Name + " = " + w.Number)) + ".");
+                        p.PlainNotes.Add(Strings.T("oc.note.lowered"));
+                    }
+                    p.Change = tier == OcUnlock.None ? "Removes the cooling type: the standard limits of " + OcUnlock.GpuMaxMHz(0) + " MHz (graphics) and "
+                        + OcUnlock.CpuMaxMHz(0) + " MHz (processor) apply." : "Cooling type " + tier + " (OcTier) on board " + OcUnlock.Board.ToString("X8") + ": up to "
+                        + OcUnlock.GpuMaxMHz(tier) + " MHz graphics at " + OcUnlock.GpuMaxMv(tier) + " mV and " + OcUnlock.CpuMaxMHz(tier) + " MHz processor.";
+                    if (tier != OcUnlock.None)
+                    {
+                        p.Notes.Add("The higher limits are a choice, not a default: the clock ceiling and the processor limit stay where they are until they are raised.");
+                        p.PlainNotes.Add(Strings.T("oc.note.limits"));
+                    }
+                    p.OfferRestart = true;
+                    break;
+                }
+
                 case "tdr-delay":
                 {
                     // How long Windows waits for the graphics before it resets them (TdrSetting.cs, BD-079). Windows
@@ -1824,6 +1862,8 @@ namespace AmdgpuWddmControl
             public uint? Window, CpuClock, CpuUv, CpuTemp, Cores;
             // tdr-delay: the waiting time in seconds that the person chose (TdrSetting.Choices).
             public uint? Tdr;
+            // oc-tier: the cooling type the person chose (OcUnlock.None, Air, Liquid).
+            public uint? OcTier;
             // game-log-on: how many minutes of game logs to record (GameLog.Choices).
             public uint? Minutes;
             // The fan card: the choice (standard, quiet, performance, custom) and a custom curve as "40:50,60:70,...".

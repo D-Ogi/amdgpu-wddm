@@ -704,15 +704,26 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware);
 static NTSTATUS TelemetryAdapter(const WCHAR *wantedId, LUID *luid, ULONGLONG *dedicated);
 static NTSTATUS TelemetryStatistics(D3DKMT_QUERYSTATISTICS *query);
 
+// enum bc250_oc_reason (driver/shim/include/bc250_oc.h), in its order: the escape and the record OcTierLastReason
+// carry these numbers.
+static const char *const g_OcReasonNames[] = { "none", "ok", "invalid", "unsupported", "unbound", "board-changed",
+                                               "unclean-stop" };
+static const char *const g_OcTierNames[] = { "none", "air", "liquid" };
+
 // Query-only provider envelope. No old-driver fallback and no hardware escape.
 static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
 {
     ULONG i, j;
     const ULONG *words = (const ULONG *)c;
     if (c->Magic != BC250_ESCAPE_MAGIC || c->Command != BC250_ESCAPE_RUN_BOARD_CAPS ||
-        c->Status != BC250_ESCAPE_STATUS_DONE || c->NtStatus || c->AbiVersion != BC250_BOARD_CAPS_ABI ||
+        c->Status != BC250_ESCAPE_STATUS_DONE || c->NtStatus ||
+        (c->AbiVersion != BC250_BOARD_CAPS_ABI && c->AbiVersion != BC250_BOARD_CAPS_ABI_V1) ||
         (c->Flags & ~31u) || c->Reason > BC250_BOARD_CAPS_REASON_INACTIVE) return 0;
     for (i = 0; i < ARRAYSIZE(c->Reserved); ++i) if (c->Reserved[i]) return 0;
+    // An ABI 1 reply (a driver older than the overclock tiers) has no overclock words at all.
+    if (c->AbiVersion == BC250_BOARD_CAPS_ABI_V1)
+        for (i = FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTier) / sizeof(ULONG); i < sizeof(*c) / sizeof(ULONG); ++i)
+            if (words[i]) return 0;
     if (!c->ProviderId) {
         if (c->Flags || c->Reason != BC250_BOARD_CAPS_REASON_BOARD) return 0;
         for (i = 8; i < sizeof(*c) / sizeof(ULONG); ++i) if (words[i]) return 0;
@@ -744,6 +755,30 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
             p->Mv < c->GpuMinMv || p->Mv > c->GpuMaxMv || p->Vid != (1550u - p->Mv) * 160u / 1000u || (i && p->Mv < c->GpuPoints[i-1].Mv)) return 0;
     }
     if (c->GpuPoints[c->GpuPointCount-1].MHz != c->GpuMaxMHz) return 0;
+    if (c->AbiVersion == BC250_BOARD_CAPS_ABI) {
+        // The overclock envelopes: tier 0 is the plain envelope above, each tier admits at least what the one
+        // before it admits, and every tier ceiling is a published point.
+        if (c->OcTierCount != ARRAYSIZE(c->OcTiers) || c->OcTier >= c->OcTierCount || c->OcStoredTier > MAXLONG ||
+            c->OcReason >= ARRAYSIZE(g_OcReasonNames) || (c->OcTier && !c->OcBoard)) return 0;
+        if (c->OcTiers[0].GpuMaxMHz != c->GpuMaxMHz || c->OcTiers[0].GpuMaxMv != c->GpuMaxMv ||
+            c->OcTiers[0].CpuMaxMHz != c->CpuMaxMHz || c->OcTiers[0].CpuUvMaxSteps != c->CpuUvMaxSteps) return 0;
+        for (i = 0; i < ARRAYSIZE(c->OcPoints); ++i) {
+            const BC250_BOARD_GPU_POINT *p = &c->OcPoints[i];
+            const ULONG before = i ? c->OcPoints[i-1].Mv : c->GpuPoints[c->GpuPointCount-1].Mv;
+            if (p->MHz != (ULONGLONG)c->GpuMaxMHz + (ULONGLONG)(i + 1) * c->GpuStepMHz || p->Mv < before ||
+                p->Mv > 1550 || p->Vid != (1550u - p->Mv) * 160u / 1000u) return 0;
+        }
+        for (i = 1; i < ARRAYSIZE(c->OcTiers); ++i) {
+            const BC250_BOARD_OC_TIER *t = &c->OcTiers[i], *b = &c->OcTiers[i-1];
+            if (t->GpuMaxMHz < b->GpuMaxMHz || t->GpuMaxMv < b->GpuMaxMv || t->CpuMaxMHz < b->CpuMaxMHz ||
+                t->CpuUvMaxSteps < b->CpuUvMaxSteps || t->GpuMaxMHz > c->OcPoints[ARRAYSIZE(c->OcPoints)-1].MHz ||
+                (t->GpuMaxMHz - c->GpuMaxMHz) % c->GpuStepMHz) return 0;
+            if (t->GpuMaxMHz > c->GpuMaxMHz &&
+                c->OcPoints[(t->GpuMaxMHz - c->GpuMaxMHz) / c->GpuStepMHz - 1].Mv > t->GpuMaxMv) return 0;
+        }
+        for (i = 1; i < ARRAYSIZE(c->OcCpuMinUvSteps); ++i)
+            if (c->OcCpuMinUvSteps[i] < c->OcCpuMinUvSteps[i-1]) return 0;
+    }
     for (i = 0; i < 3; ++i) {
         if (c->FanPresetCounts[i] < c->FanPointMin || c->FanPresetCounts[i] > c->FanPointMax) return 0;
         for (j = 0; j < 8; ++j) {
@@ -769,6 +804,16 @@ BC250_CONTROL_API LONG WINAPI Bc250BoardCapabilities(BC250_ESCAPE_BOARD_CAPS *da
     status = TelemetryEscape(data, sizeof(*data));
     if (!NT_SUCCESS(status)) return status;
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status == BC250_ESCAPE_STATUS_REFUSED) {
+        // A driver older than the overclock tiers refuses ABI 2: ask it again for the ABI 1 reply.
+        memset(data, 0, sizeof(*data));
+        data->Magic = BC250_ESCAPE_MAGIC;
+        data->Command = BC250_ESCAPE_RUN_BOARD_CAPS;
+        data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+        data->AbiVersion = BC250_BOARD_CAPS_ABI_V1;
+        status = TelemetryEscape(data, sizeof(*data));
+        if (!NT_SUCCESS(status)) return status;
+    }
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
         return (LONG)data->NtStatus < 0 ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     return BoardCapabilitiesValid(data) ? 0 : (LONG)0xC000000D;
@@ -4367,6 +4412,53 @@ static int BoardCapsCommand(void)
     return 0;
 }
 
+// The overclock tier (docs/design/dpm.md "Overclock tiers") in one place: what this start runs and why, from the board
+// capability query, and the three values the control application and the driver keep for it, from the shared
+// service state. "board-match" compares the stored OcTierBoard with the fingerprint of this board. Read only.
+static int OcCommand(void)
+{
+    BC250_ESCAPE_BOARD_CAPS c;
+    AMDGPU_WINDOWS_STATE *state = NULL;
+    DWORD tier = 0, board = 0, last = 0, error;
+    int hasTier = 0, hasBoard = 0, hasLast = 0;
+    NTSTATUS status = Bc250BoardCapabilities(&c, sizeof(c));
+    if (!NT_SUCCESS(status)) { PrintStatus("board capabilities", status); return 1; }
+    if (!(c.Flags & BC250_BOARD_CAPS_SUPPORTED)) {
+        printf("oc: not supported on this device (board-caps reason %lu)\n", c.Reason);
+        return 0;
+    }
+    if (c.AbiVersion != BC250_BOARD_CAPS_ABI) {
+        printf("oc: this driver reports no overclock tiers (board capabilities ABI %lu)\n", c.AbiVersion);
+        return 0;
+    }
+    StageReadError = 0;
+    error = AmdgpuClientOpen(&state, 0);
+    if (error) {
+        fprintf(stderr, "cannot open bc250kmd state, error %lu\n", error);
+        return 1;
+    }
+    hasTier = ReadStateDword(state, "", "OcTier", &tier);
+    hasBoard = ReadStateDword(state, "", "OcTierBoard", &board);
+    hasLast = ReadStateDword(state, "", "OcTierLastReason", &last);
+    AmdgpuClientClose(state);
+    if (StageReadError) return 1;
+    printf("oc tier=%lu (%s) reason=%lu (%s) board=%08lX stored-tier=%lu\n", c.OcTier, g_OcTierNames[c.OcTier],
+           c.OcReason, g_OcReasonNames[c.OcReason], c.OcBoard, c.OcStoredTier);
+    printf("oc-state OcTier=");
+    if (hasTier) printf("%lu", tier); else printf("-");
+    printf(" OcTierBoard=");
+    if (hasBoard) printf("%08lX", board); else printf("-");
+    printf(" board-match=%s OcTierLastReason=", !hasBoard ? "-" : board == c.OcBoard ? "yes" : "no");
+    if (hasLast) printf("%lu (%s)\n", last, last < ARRAYSIZE(g_OcReasonNames) ? g_OcReasonNames[last] : "?");
+    else printf("-\n");
+    for (ULONG i = 0; i < c.OcTierCount; ++i)
+        printf("oc-tier %s gpu_max_mhz=%lu gpu_max_mv=%lu cpu_max_mhz=%lu cpu_uv_max_steps=%lu\n", g_OcTierNames[i],
+               c.OcTiers[i].GpuMaxMHz, c.OcTiers[i].GpuMaxMv, c.OcTiers[i].CpuMaxMHz, c.OcTiers[i].CpuUvMaxSteps);
+    for (ULONG i = 0; i < ARRAYSIZE(c.OcPoints); ++i)
+        printf("oc-point mhz=%lu mv=%lu vid=%lu\n", c.OcPoints[i].MHz, c.OcPoints[i].Mv, c.OcPoints[i].Vid);
+    return 0;
+}
+
 static int Bc250BoardMemoryProbeCommand(void)
 {
     static const unsigned int rtc[] = {0, 2, 4, 13};
@@ -4463,6 +4555,7 @@ int wmain(int argc, wchar_t **argv)
     if (!_wcsicmp(argv[1], L"waves")) return WavesCommand(argc,argv);
     if (!_wcsicmp(argv[1], L"bc250-board-memory-probe") && argc == 2) return Bc250BoardMemoryProbeCommand();
     if (!_wcsicmp(argv[1], L"board-caps") && argc == 2) return BoardCapsCommand();
+    if (!_wcsicmp(argv[1], L"oc") && argc == 2) return OcCommand();
     if (!_wcsicmp(argv[1], L"health")) return StartHealth(argc,argv);
     if (!_wcsicmp(argv[1], L"connector") && argc == 3 && !_wcsicmp(argv[2], L"replug")) return ConnectorReplug();
     if (!_wcsicmp(argv[1], L"clock")) return Clock(argc,argv);

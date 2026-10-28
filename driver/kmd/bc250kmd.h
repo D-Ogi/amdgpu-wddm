@@ -390,6 +390,14 @@ typedef struct _BC250_DEVICE {
     volatile LONG64 UmaActiveBytes; // atomic software view; zero outside a successful VRAM start
     UCHAR BoardMemoryMachineId[16];
     ULONG BoardMemoryBiosId;
+    // The overclock tier of this start (oc_tier.c). OcTier is the effective tier (BC250_OC_TIER_*), OcStoredTier the
+    // tier the settings still hold after the start (0 when it deleted them), OcReason an enum bc250_oc_reason, OcBoard
+    // this board's fingerprint (0 when the board is not a positively identified BC-250). Written once by OcTierStart
+    // before the governor starts, reset by BoardProviderUnbind; the board capability query reports them.
+    ULONG OcTier;
+    ULONG OcStoredTier;
+    ULONG OcReason;
+    ULONG OcBoard;
     ULONG BoardMemoryMapping;
     BOOLEAN BoardMemoryStarted;
     KSPIN_LOCK BoardMemorySnapshotLock;
@@ -1458,4 +1466,7 @@ NTSTATUS GfxPagingBuildVirtualPtes(BC250_DEVICE* Device, ULONGLONG Source,
 
 void BoardProviderBind(BC250_DEVICE* Device);
 void BoardProviderUnbind(BC250_DEVICE* Device);
+// oc_tier.c: the overclock tier of this start, after BoardProviderBind and before DpmStart. Never fails the start.
+void OcTierStart(BC250_DEVICE* Device);
+ULONG OcTierCurrentBoard(BC250_DEVICE* Device);
 void BoardProviderCaps(BC250_DEVICE* Device, BC250_ESCAPE_BOARD_CAPS* Data, ULONG Flags);

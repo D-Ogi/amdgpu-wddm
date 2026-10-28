@@ -141,6 +141,10 @@ static void test_allowlist(void)
 	}
 }
 
+/* The widest clock the mailbox admits is the highest tier's, and it covers the lab bound. */
+typedef char oc_max_check[(BC250_CPU_OC_MAX_MHZ >= BC250_CPU_MAX_MHZ_LAB &&
+			    BC250_CPU_OC_MAX_MHZ == BC250_OC_AIO_CPU_MAX_MHZ) ? 1 : -1];
+
 static void test_arguments(void)
 {
 	unsigned int p;
@@ -171,12 +175,14 @@ static void test_arguments(void)
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, BC250_CPU_TEMP_MIN_C));
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, BC250_CPU_TEMP_MAX_C));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CAP_C, BC250_CPU_TEMP_MAX_C + 1u));
-	/* The clock limit: the lab bound is the widest the argument check admits, and bc250_cpu_settings_check is
-	 * what refuses the band between the release bound and it without an undervolt. */
+	/* The clock limit: the highest overclock tier's bound is the widest the argument check admits, and
+	 * bc250_cpu_settings_check_tier is what refuses the band above the release bound without an undervolt and
+	 * without a tier or the lab bound. */
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_MIN_MHZ - 1u));
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_MIN_MHZ));
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_MAX_MHZ_LAB));
-	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_MAX_MHZ_LAB + 1u));
+	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_OC_MAX_MHZ));
+	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, BC250_CPU_OC_MAX_MHZ + 1u));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_MAX_MHZ, 5000u));
 	/* The core mask: two values and no others. */
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_GFX, BC250_CPU_MSG_SET_CORE_ENABLE_MASK, BC250_CPU_MASK_STOCK));
@@ -186,11 +192,11 @@ static void test_arguments(void)
 	/* The curve scale, the one argument whose form is the safety rule: 0 or a negative 16-bit value whose
 	 * magnitude is an admitted step count. Every positive scale is refused here, before the mailbox. */
 	CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CURVE_SCALE, 0u));
-	for (p = 1; p <= BC250_CPU_UV_MAX_STEPS; p++)
+	for (p = 1; p <= BC250_CPU_OC_UV_MAX_STEPS; p++)
 		CHECK(bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CURVE_SCALE,
 						bc250_cpu_scale_argument(p)));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CURVE_SCALE,
-					  bc250_cpu_scale_argument(BC250_CPU_UV_MAX_STEPS + 1u)));
+					  bc250_cpu_scale_argument(BC250_CPU_OC_UV_MAX_STEPS + 1u)));
 	for (p = 1; p < 0x8000u; p += 97u)
 		CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CURVE_SCALE, p));
 	CHECK(!bc250_cpu_argument_allowed(BC250_CPU_QUEUE_CPU, BC250_CPU_MSG_SET_CURVE_SCALE, 0x10000u));
@@ -260,6 +266,67 @@ static void test_settings(void)
 	CHECK(bc250_cpu_settings_check(&s, 0) == BC250_CPU_ERROR_TEMP);
 	s = set(0, 0, BC250_CPU_TEMP_MAX_C + 1u);
 	CHECK(bc250_cpu_settings_check(&s, 0) == BC250_CPU_ERROR_TEMP);
+}
+
+/* ---- the overclock tiers (include/bc250_oc.h) ----------------------------------------------------- */
+
+static void test_settings_tier(void)
+{
+	struct bc250_cpu_settings s;
+	struct bc250_cpu_plan plan;
+	struct bc250_cpu_settings from;
+	unsigned int mhz, uv, tier, lab;
+	/* The tier none is the plain check exactly, in both flavours, for every clock and undervolt. */
+	for (lab = 0; lab < 2u; lab++)
+		for (mhz = BC250_CPU_MIN_MHZ - 100u; mhz <= 4300u; mhz += 50u)
+			for (uv = 0; uv <= 45u; uv++) {
+				s = set(mhz, uv, 0);
+				CHECK(bc250_cpu_settings_check_tier(&s, (int)lab, BC250_OC_TIER_NONE) ==
+				      bc250_cpu_settings_check(&s, (int)lab));
+				/* An unknown tier is the tier none. */
+				CHECK(bc250_cpu_settings_check_tier(&s, (int)lab, 7u) == bc250_cpu_settings_check(&s, (int)lab));
+			}
+	/* Air: up to 3900 MHz, each clock above 3500 with its own least undervolt. */
+	s = set(3900, 24, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_OK);
+	s = set(3900, 23, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_CLOCK);
+	s = set(3900, 0, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_CLOCK);
+	s = set(4000, 40, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_CLOCK);
+	s = set(3600, 8, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_OK);
+	s = set(3600, 7, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_CLOCK);
+	s = set(3700, 16, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_OK);
+	s = set(3500, 0, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_OK);
+	/* The deeper undervolt range of a tier: 40 steps, never more. */
+	s = set(0, 40, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_OK);
+	s = set(0, 41, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_UV);
+	s = set(0, 17, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_NONE) == BC250_CPU_ERROR_UV);
+	/* Liquid: up to 4100 MHz. */
+	s = set(4100, 40, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIO) == BC250_CPU_OK);
+	s = set(4100, 39, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIO) == BC250_CPU_ERROR_CLOCK);
+	s = set(4000, 36, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIO) == BC250_CPU_OK);
+	s = set(4000, 35, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIO) == BC250_CPU_ERROR_CLOCK);
+	s = set(4101, 40, 0); CHECK(bc250_cpu_settings_check_tier(&s, 0, BC250_OC_TIER_AIO) == BC250_CPU_ERROR_CLOCK);
+	s = set(4200, 40, 0); CHECK(bc250_cpu_settings_check_tier(&s, 1, BC250_OC_TIER_AIO) == BC250_CPU_ERROR_CLOCK);
+	/* The lab flavour under a tier: the tier's rule inside the tier, the lab rule above it, up to the lab bound. */
+	s = set(4000, 4, 0); CHECK(bc250_cpu_settings_check_tier(&s, 1, BC250_OC_TIER_AIR) == BC250_CPU_OK);
+	s = set(3900, 4, 0); CHECK(bc250_cpu_settings_check_tier(&s, 1, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_CLOCK);
+	s = set(4100, 40, 0); CHECK(bc250_cpu_settings_check_tier(&s, 1, BC250_OC_TIER_AIR) == BC250_CPU_ERROR_CLOCK);
+	/* The least undervolt grows with the clock and never exceeds the tier's bound. */
+	for (tier = BC250_OC_TIER_AIR; tier <= BC250_OC_TIER_AIO; tier++)
+		for (mhz = 3500u; mhz <= 4100u; mhz += 100u) {
+			CHECK(bc250_oc_cpu_min_uv_steps(tier, mhz) <= BC250_CPU_OC_UV_MAX_STEPS);
+			CHECK(bc250_oc_cpu_min_uv_steps(tier, mhz) >= bc250_oc_cpu_min_uv_steps(tier, mhz - 100u));
+		}
+	CHECK(bc250_oc_cpu_min_uv_steps(BC250_OC_TIER_AIR, 3500u) == 0u);
+	/* The plan follows the same judge: the undervolt goes out before the raise of the clock. */
+	from = set(BC250_CPU_MAX_MHZ, 0, 0);	/* the firmware's own ceiling, as the baseline gives it */
+	s = set(4100, 40, 0);
+	CHECK(bc250_cpu_plan(&from, &s, 0, &plan) != BC250_CPU_OK);
+	CHECK(bc250_cpu_plan_tier(&from, &s, 0, BC250_OC_TIER_AIO, &plan) == BC250_CPU_OK);
+	CHECK(plan.count == 2u && plan.step[0].kind == BC250_CPU_STEP_UV && plan.step[1].kind == BC250_CPU_STEP_CLOCK);
+	CHECK(plan.step[1].parameter == 4100u && plan.step[0].parameter == bc250_cpu_scale_argument(40u));
+	CHECK(bc250_cpu_argument_allowed(plan.step[0].queue, plan.step[0].message, plan.step[0].parameter) &&
+	      bc250_cpu_argument_allowed(plan.step[1].queue, plan.step[1].message, plan.step[1].parameter));
+	CHECK(bc250_cpu_plan_tier(&from, &s, 0, BC250_OC_TIER_AIR, &plan) == BC250_CPU_ERROR_CLOCK);
 }
 
 /* ---- the order a change is sent in --------------------------------------------------------------- */
@@ -876,6 +943,7 @@ int main(void)
 	test_allowlist();
 	test_arguments();
 	test_settings();
+	test_settings_tier();
 	test_plan();
 	test_restore();
 	test_baseline();

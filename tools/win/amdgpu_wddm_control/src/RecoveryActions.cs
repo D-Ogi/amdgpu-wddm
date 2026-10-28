@@ -788,6 +788,7 @@ namespace AmdgpuWddmControl
                 else if (a == "--fan-curve") o.More.FanCurve = args[++i];
                 else if (a == "--fan-test-pct" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.FanTestPct = n; i++; }
                 else if (a == "--tdr" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Tdr = n; i++; }
+                else if (a == "--oc-tier" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n) && OcUnlock.IsTier(n)) { o.More.OcTier = n; i++; }
                 else if (a == "--minutes" && uint.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out n)) { o.More.Minutes = n; i++; }
                 else return null;
             }
@@ -815,6 +816,8 @@ namespace AmdgpuWddmControl
             if ((o.More.FanTestPct != null) != (o.Action == "fan-test")) return null;
             // The waiting time for the graphics belongs to its own action only.
             if ((o.More.Tdr != null) != (o.Action == "tdr-delay")) return null;
+            // The cooling type belongs to the overclock unlock only.
+            if ((o.More.OcTier != null) != (o.Action == OcUnlock.Action)) return null;
             // The recording time belongs to game-log-on only; game-log-off takes none.
             if ((o.More.Minutes != null) != (o.Action == "game-log-on")) return null;
             if (o.SnapshotFile != null && !o.DryRun) return null;     // a recorded snapshot never drives real writes
@@ -989,7 +992,7 @@ namespace AmdgpuWddmControl
                 (o.More.Curve != null ? " curve " + o.More.Curve : "") + (o.More.Window != null ? " window " + o.More.Window : "") +
                 (o.More.CpuClock != null ? " cpu-clock " + o.More.CpuClock : "") + (o.More.CpuUv != null ? " cpu-uv " + o.More.CpuUv : "") +
                 (o.More.CpuTemp != null ? " cpu-temp " + o.More.CpuTemp : "") + (o.More.Cores != null ? " cores " + o.More.Cores : "") +
-                (o.More.Tdr != null ? " tdr " + o.More.Tdr : "") + (o.More.Minutes != null ? " minutes " + o.More.Minutes : "") +
+                (o.More.Tdr != null ? " tdr " + o.More.Tdr : "") + (o.More.OcTier != null ? " oc-tier " + o.More.OcTier : "") + (o.More.Minutes != null ? " minutes " + o.More.Minutes : "") +
                 ", " + Program.ProductName + " " + Program.VersionText);
             try
             {

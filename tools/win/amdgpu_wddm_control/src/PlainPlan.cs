@@ -50,6 +50,13 @@ namespace AmdgpuWddmControl
                 // "Record game logs" (GameLog.cs). The value is an instant, not a length, so the sentence names no
                 // number: the card above it says how long the recording runs.
                 case GameLog.ValueName: return w.Delete ? "plan.line.gamelog-off" : "plan.line.gamelog-on";
+                // The overclock unlock (OcUnlock.cs): the tier and its board binding share one sentence when removed.
+                case OcUnlock.TierName:
+                case OcUnlock.BoardName: return OcUnlock.LineId(w);
+                // The processor limit and undervolt: the app writes them only to lower them to a lower tier's limits
+                // (OcUnlock.PlanWrites); the tuning page stores them through the driver.
+                case OcUnlock.CpuMaxName: return w.Delete ? null : "plan.line.cpu-clock";
+                case OcUnlock.CpuUvName: return w.Delete ? null : "plan.line.cpu-uv";
                 default: return null;
             }
         }
@@ -60,7 +67,8 @@ namespace AmdgpuWddmControl
             var id = LineId(w);
             if (id == null) return Strings.T("plan.line.other");
             if (id == "plan.line.ceiling-default") return Strings.T(id, DpmSettings.DefaultMaxMHz.ToString(CultureInfo.InvariantCulture));
-            return id == "plan.line.ceiling" || id == "plan.line.tdr" ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
+            return id == "plan.line.ceiling" || id == "plan.line.tdr" || id == "plan.line.cpu-clock" || id == "plan.line.cpu-uv"
+                ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
         }
 
         public static string GroupList(string value)
@@ -132,7 +140,7 @@ namespace AmdgpuWddmControl
             new Regex(@"\b(KMD|UMD|ICD|DWM|DDI|WDDM|SMU|DPM|IOCTL|HKLM|HKCU|HKEY_\w+)\b"),
             new Regex(@"(?i)\b(fence|escapes?|exit code|error code|dxgkrnl|registry)\b"),
             new Regex(@"0x[0-9A-Fa-f]+"),
-            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd|ComputeQueue|GdiHwAccel)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*)\b"),
+            new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd|ComputeQueue|GdiHwAccel)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*|OcTier\w*)\b"),
             new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };

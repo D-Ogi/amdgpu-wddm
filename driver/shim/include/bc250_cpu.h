@@ -33,6 +33,7 @@
 #define BC250_CPU_H
 
 #include "bc250_clock.h"
+#include "bc250_oc.h"
 
 /* ---- the two queues ---------------------------------------------------------------------------- */
 
@@ -145,6 +146,11 @@ enum bc250_cpu_error {
 /* Ranges alone, against the release bound or the lab bound (lab=1 admits up to BC250_CPU_MAX_MHZ_LAB and needs
  * an undervolt: uv_steps must then be at least 1). */
 enum bc250_cpu_error bc250_cpu_settings_check(const struct bc250_cpu_settings *s, int lab);
+/* The same under an overclock tier (include/bc250_oc.h). The tier raises the ceiling to its own CPU clock and the
+ * undervolt bound to BC250_CPU_OC_UV_MAX_STEPS, and a clock above BC250_CPU_MAX_MHZ that the tier admits needs at
+ * least bc250_oc_cpu_min_uv_steps steps. A clock the tier does not admit falls back to the rule above. The tier
+ * none is bc250_cpu_settings_check exactly. */
+enum bc250_cpu_error bc250_cpu_settings_check_tier(const struct bc250_cpu_settings *s, int lab, unsigned int tier);
 
 /* ---- the order a change is sent in ------------------------------------------------------------- */
 
@@ -172,6 +178,9 @@ struct bc250_cpu_plan { struct bc250_cpu_step step[BC250_CPU_PLAN_MAX]; unsigned
  * *from has. Returns BC250_CPU_ERROR_NOTHING when nothing would change. */
 enum bc250_cpu_error bc250_cpu_plan(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *to,
 				    int lab, struct bc250_cpu_plan *plan);
+/* The same, judged by bc250_cpu_settings_check_tier. */
+enum bc250_cpu_error bc250_cpu_plan_tier(const struct bc250_cpu_settings *from, const struct bc250_cpu_settings *to,
+					 int lab, unsigned int tier, struct bc250_cpu_plan *plan);
 /* The signed curve scale as the mailbox argument: a step count of n is sent as -n, packed into the low 16 bits. */
 unsigned int bc250_cpu_scale_argument(unsigned int uv_steps);
 

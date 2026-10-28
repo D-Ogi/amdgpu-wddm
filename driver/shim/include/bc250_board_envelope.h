@@ -60,6 +60,29 @@ static inline int bc250_board_supported(unsigned int provider_id)
 #define BC250_DPM_MODE_DPM	1u
 #define BC250_DPM_DEFAULT_MODE	BC250_DPM_MODE_FIXED
 #define BC250_DPM_TOP_LEVEL	(BC250_CLOCK_LEVELS - 1u)
+/* The opt-in overclock tiers by cooling type (docs/design/dpm.md, "Overclock tiers"; include/bc250_oc.h). A project
+ * decision on third-party numbers: nobody has measured them on unit A. Each value is the highest the tier admits.
+ * The defaults (BC250_DPM_DEFAULT_MAX_MHZ, the CPU restore baseline) do not change with the tier, and the thermal
+ * rules above do not change either. */
+#define BC250_OC_TIER_NONE		0u	/* the qualified table and the release CPU bound: the default */
+#define BC250_OC_TIER_AIR		1u
+#define BC250_OC_TIER_AIO		2u	/* an all-in-one liquid cooler */
+#define BC250_OC_TIER_COUNT		3u
+#define BC250_OC_AIR_GPU_MAX_MHZ	2200u
+#define BC250_OC_AIR_GPU_MAX_MV		1050u
+#define BC250_OC_AIR_CPU_MAX_MHZ	3900u
+#define BC250_OC_AIO_GPU_MAX_MHZ	2300u
+#define BC250_OC_AIO_GPU_MAX_MV		1075u
+#define BC250_OC_AIO_CPU_MAX_MHZ	4100u
+/* Three operating points above the qualified table, in the same array (bc250_board_gpu_points.inc). Only a tier
+ * that admits a point makes it reachable; BC250_CLOCK_LEVELS stays the qualified table of 16 points. */
+#define BC250_CLOCK_OC_LEVELS		3u
+#define BC250_CLOCK_ALL_LEVELS		(BC250_CLOCK_LEVELS + BC250_CLOCK_OC_LEVELS)
+#define BC250_CLOCK_OC_CEILING_MHZ	2300u
+#define BC250_CLOCK_OC_CEILING_MV	1075u	/* 54 mV under amdgpu's overdrive maximum of 1129 mV */
+#define BC250_DPM_OC_TOP_LEVEL		(BC250_CLOCK_ALL_LEVELS - 1u)
+#define BC250_CPU_OC_MAX_MHZ		4100u	/* the mailbox bound of SetMaxBoostMHz with a tier */
+#define BC250_CPU_OC_UV_MAX_STEPS	40u	/* the reference tool's own stop; a tier clock needs the depth */
 #define BC250_DPM_ENCODED_TAG	0xD0000000u
 #define BC250_DPM_UP_PERMILLE		900u	/* at or above: raise now */
 #define BC250_DPM_TARGET_PERMILLE	800u	/* a raise aims at this share at the new clock */

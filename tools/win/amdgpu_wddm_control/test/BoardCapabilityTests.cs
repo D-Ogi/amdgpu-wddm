@@ -8,7 +8,8 @@ partial class UnitTests
     {
         int size;
         string flatHeader = header.Replace("BC250_BOARD_GPU_POINT GpuPoints[16]", "unsigned long GpuPoints[48]")
-            .Replace("BC250_BOARD_FAN_POINT FanPresets[3][8]", "unsigned long FanPresets[48]");
+            .Replace("BC250_BOARD_FAN_POINT FanPresets[3][8]", "unsigned long FanPresets[48]")
+            .Replace("BC250_BOARD_OC_TIER OcTiers[3]", "unsigned long OcTiers[12]").Replace("BC250_BOARD_GPU_POINT OcPoints[3]", "unsigned long OcPoints[9]");
         var layout = Layout(flatHeader, "BC250_ESCAPE_BOARD_CAPS", out size);
         Equal(BoardCapabilities.Bytes, size, "board capability ABI size");
         string[] fields = ("Magic Command Status NtStatus AbiVersion ProviderId Flags Reason " +
@@ -21,7 +22,11 @@ partial class UnitTests
         Equal(356, layout["FanPresets"], "capability preset vector offset");
         Equal(548, layout["GpuDefaultMaxMHz"], "capability default ceiling offset");
         Equal(552, layout["CpuStockCoreCount"], "capability stock count offset");
-        Equal(556, layout["Reserved"], "capability reserved offset");
+        Equal(556, layout["OcTier"], "capability overclock tier offset");
+        Equal(576, layout["OcTiers"], "capability overclock envelope offset");
+        Equal(624, layout["OcPoints"], "capability overclock point offset");
+        Equal(660, layout["OcCpuMinUvSteps"], "capability overclock undervolt offset");
+        Equal(684, layout["Reserved"], "capability reserved offset");
         var raw = File.ReadAllBytes(Environment.GetEnvironmentVariable("AMDGPU_WDDM_BOARD_FIXTURE"));
         var valid = BoardCapabilities.Parse(raw);
         BoardCapabilities.Replace(null);
@@ -37,7 +42,8 @@ partial class UnitTests
         Check(Tuner.Check(new uint[0], null, out rejectedPoint) != CurveError.Ok, "unknown empty curve refused");
         Check(FanCurves.Check(new uint[0], new uint[0], out rejectedPoint) != FanCurveError.Ok, "unknown empty fan refused");
         for (int i = 0; i < 192; i++) {
-            if (i < 139 && i != 4 && i != 5 && i != 6 && i != 12 && i != 86) continue;
+            // Word 142 is the board fingerprint: any value is a valid one.
+            if (i < 139 && i != 4 && i != 5 && i != 6 && i != 12 && i != 86 || i == 142) continue;
             byte[] bad = (byte[])raw.Clone();
             Array.Copy(BitConverter.GetBytes(uint.MaxValue), 0, bad, i*4, 4);
             bool refused = false;

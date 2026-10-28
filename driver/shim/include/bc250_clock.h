@@ -67,7 +67,9 @@ struct bc250_clock_report {
 #define BC250_CURVE_FIRST_LEVEL 5u      /* 1000 MHz: the lowest level a curve may change (== BC250_DPM_FLOOR_LEVEL) */
 #define BC250_CURVE_POINTS 11u          /* levels 5..15, 1000..2000 MHz */
 struct bc250_clock_point { unsigned int mhz, mv, vid; };
-extern const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_LEVELS];
+/* The qualified table is the first BC250_CLOCK_LEVELS rows. The BC250_CLOCK_OC_LEVELS rows after them are the
+ * overclock points, which only bc250_clock_point_allowed_tier() admits (include/bc250_oc.h). */
+extern const struct bc250_clock_point bc250_clock_points[BC250_CLOCK_ALL_LEVELS];
 struct bc250_clock_curve { unsigned int mv[BC250_CURVE_POINTS]; };
 /* Why a candidate curve was refused; the escape, the CLI and the GUI share it, and the reply names the level. */
 enum bc250_clock_curve_error {
@@ -95,10 +97,16 @@ unsigned int bc250_clock_min_mv(unsigned int mhz);
 unsigned int bc250_clock_floor_mv(unsigned int mhz);
 /* Clock on the grid within the table, voltage between bc250_clock_floor_mv() and the ceiling. */
 int bc250_clock_point_allowed(unsigned int mhz, unsigned int mv);
+/* The same rule under an overclock tier (include/bc250_oc.h). Up to BC250_CLOCK_CEILING_MHZ it is
+ * bc250_clock_point_allowed(). Above it, a point of the overclock rows at or under the tier's clock and voltage, at
+ * exactly the table's voltage: no curve reaches those rows, so there is no band under them. The tier none admits
+ * none of them, and an unknown tier is the tier none. */
+int bc250_clock_point_allowed_tier(unsigned int tier, unsigned int mhz, unsigned int mv);
 /* The table's own line as a curve: the default of every start, and what RESET puts back. */
 void bc250_clock_curve_default(struct bc250_clock_curve *curve);
 /* The voltage a curve asks for at a level of the whole table: the curve from BC250_CURVE_FIRST_LEVEL up, the
- * table's own value below it (where no curve may act). A level past the table reads as the top one. */
+ * table's own value below it (where no curve may act) and on the overclock rows above it (where no curve reaches).
+ * A level past the overclock rows reads as the curve's top one. */
 unsigned int bc250_clock_curve_mv(const struct bc250_clock_curve *curve, unsigned int level);
 /* Every rule a candidate must keep (docs/design/tuner.md): each value whole and inside the hard bounds, none
  * more than BC250_CURVE_UNDERVOLT_MV under the table's line, the voltage never falling as the clock rises,
@@ -128,4 +136,9 @@ int bc250_clock_message_allowed(unsigned int message);
  * Caller must prohibit GPU startup unless report.ready and status zero. */
 int bc250_clock_prepare(const struct bc250_clock_io *io, unsigned int mhz,
                         unsigned int mv, struct bc250_clock_report *report);
+/* The same transaction under an overclock tier: the point must pass bc250_clock_point_allowed_tier(). The imported
+ * commit refuses a clock above CYAN_SKILLFISH_SCLK_MAX as well, so such a clock goes out as the same two messages
+ * as a point under the lab floor, in the same order. bc250_clock_prepare() is this with the tier none. */
+int bc250_clock_prepare_tier(const struct bc250_clock_io *io, unsigned int tier, unsigned int mhz,
+                             unsigned int mv, struct bc250_clock_report *report);
 #endif

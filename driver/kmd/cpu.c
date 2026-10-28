@@ -26,7 +26,9 @@
 // Settings, all REG_DWORD under Services\bc250kmd\Parameters:
 //   CpuTune           1 (written by the INF from 0.7.216) opens the surface; absent or 0, read-only
 //   CpuLab            1 admits BC250_CPU_MAX_MHZ_LAB with an undervolt in force (the lab's own bound)
-//   CpuMaxMHz         the stored clock limit, absent for none
+//   CpuMaxMHz         the stored clock limit, absent for none. The overclock tier of this start (oc_tier.c)
+//                     admits up to 3900 MHz (air) or 4100 MHz (liquid), with the undervolt
+//                     bc250_oc_cpu_min_uv_steps asks for (bc250_cpu_settings_check_tier)
 //   CpuUvSteps        the stored undervolt, in curve-scale steps
 //   CpuTempC          the stored temperature cap
 //   CpuTrialMs        the default trial window of a SET
@@ -473,7 +475,7 @@ static NTSTATUS CpuApplyEx(BC250_DEVICE* Device, const struct bc250_cpu_settings
 
     RtlZeroMemory(&plan, sizeof(plan));
     applied = s->Applied;
-    error = bc250_cpu_plan(&applied, To, s->Lab ? 1 : 0, &plan);
+    error = bc250_cpu_plan_tier(&applied, To, s->Lab ? 1 : 0, s->OcTier, &plan);
     if (Error != NULL) *Error = error;
     if (error == BC250_CPU_ERROR_NOTHING) {
         // Nothing to send is not a failure, and it is never silent: a revert whose target is already in force
@@ -939,6 +941,7 @@ void CpuStart(BC250_DEVICE* Device)
     (void)CpuQueryPresent(CPU_SETTING_LAB, &lab);
     s->Enabled = (tune == 1) && Device->FullWddm && Device->Smu.Online && Device->Smu.CpuOnline;
     s->Lab = lab == 1;
+    s->OcTier = Device->OcTier;     // OcTierStart ran before this start of the CPU surface
     if (CpuQueryPresent(CPU_SETTING_TRIAL, &value) && value) {
         if (value < BC250_CPU_TRIAL_MIN_MS) value = BC250_CPU_TRIAL_MIN_MS;
         if (value > BC250_CPU_TRIAL_MAX_MS) value = BC250_CPU_TRIAL_MAX_MS;
@@ -976,7 +979,7 @@ void CpuStart(BC250_DEVICE* Device)
         return;
     }
     if (s->Stored.max_given || s->Stored.uv_given || s->Stored.temp_given) {
-        enum bc250_cpu_error error = bc250_cpu_settings_check(&s->Stored, s->Lab ? 1 : 0);
+        enum bc250_cpu_error error = bc250_cpu_settings_check_tier(&s->Stored, s->Lab ? 1 : 0, s->OcTier);
         if (pendingPresent) {
             GuardLog("cpu: the stored settings (mark 0x%08X) ran a start that never became healthy: they are "
                      "deleted and the firmware's own values stand", pending);
@@ -1304,7 +1307,7 @@ void CpuRequest(BC250_DEVICE* Device, BC250_ESCAPE_CPU* Data, ULONG Size, BOOLEA
             ULONG window = Data->TrialMs ? Data->TrialMs : s->TrialMs;
             if (window < BC250_CPU_TRIAL_MIN_MS) window = BC250_CPU_TRIAL_MIN_MS;
             if (window > BC250_CPU_TRIAL_MAX_MS) window = BC250_CPU_TRIAL_MAX_MS;
-            error = bc250_cpu_settings_check(&request, s->Lab ? 1 : 0);
+            error = bc250_cpu_settings_check_tier(&request, s->Lab ? 1 : 0, s->OcTier);
             if (error != BC250_CPU_OK) status = STATUS_INVALID_PARAMETER;
             else {
                 // A second SET inside a window keeps the first window's revert target: a chain of trials never

@@ -21,8 +21,10 @@
 //
 // Settings, all REG_DWORD under Services\bc250kmd\Parameters:
 //   DpmMode         0 fixed-lab (today's 1000/820, set once at start), 1 DPM. Absent = BC250_DPM_DEFAULT_MODE.
-//   DpmMaxMHz       optional ceiling with DPM, 1000..2000, rounded down to the 100 MHz grid. Absent =
-//                   BC250_DPM_DEFAULT_MAX_MHZ (2000); 2000 is the hard ceiling.
+//   DpmMaxMHz       optional ceiling with DPM, 1000..2300, rounded down to the 100 MHz grid. Absent =
+//                   BC250_DPM_DEFAULT_MAX_MHZ (2000). The overclock tier of this start (oc_tier.c) sets the hard
+//                   ceiling: 2000 with no tier, 2200 for air cooling, 2300 for liquid cooling. A value above the
+//                   tier's ceiling runs at that ceiling and is kept as written.
 //   DpmPending      the encoded DPM request of a start nobody confirmed yet
 //   DpmConfirmed    the encoded DPM request a healthy start confirmed
 //   DpmSession      written when the governor first leaves the floor, deleted after 10 s at the floor or
@@ -786,6 +788,20 @@ static BOOLEAN DpmApplyEx(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T,
         (void)DpmApplyEx(Device, S, T, BC250_DPM_FLOOR_LEVEL, "sub-floor refused", FALSE, 0);
         return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
     }
+    if (Level > BC250_DPM_TOP_LEVEL) {
+        // An overclock point (levels above 2000 MHz, admitted only by an overclock tier) is outside what AMD
+        // qualified for this part, so a refusal is the same kind of answer as a refused sub-floor point: the
+        // governor loses that point and every point above it for the rest of the start, the next lower level goes
+        // in, and the SMU give-up counter is untouched. Each point is refused at most once per start, so this
+        // line comes at most once per point.
+        ULONG top = bc250_dpm_oc_refused(&S->Gov, Level);
+        GuardLog("dpm: overclock point %lu MHz refused 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), top %lu MHz",
+                 bc250_dpm_level_mhz(Level), status, report.status, report.messages_completed,
+                 report.messages_attempted, report.observed_mhz, report.observed_vid, bc250_dpm_level_mhz(top));
+        InterlockedExchange(&S->Resync, 1);
+        (void)DpmApplyEx(Device, S, T, top, "overclock point refused", FALSE, 0);
+        return FALSE;       // the hardware is not at Level; the apply above reported its own result
+    }
     T->Errors++;
     S->ErrorsInRow++;
     InterlockedExchange(&S->Resync, 1);
@@ -861,7 +877,7 @@ static void DpmResyncLevel(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T
         }
     }
     GuardLog("dpm: resync read 0x%08X %lu MHz VID %lu: not a table point, back to the floor", status, mhz, vid);
-    S->Gov.level = BC250_DPM_TOP_LEVEL;     // unknown: any floor request is a lowering
+    S->Gov.level = BC250_DPM_OC_TOP_LEVEL;  // unknown: any floor request is a lowering
     if (!DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "resync") && S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
         DpmGiveUp(Device, S, T);
 }
@@ -1466,6 +1482,7 @@ void DpmStart(BC250_DEVICE* Device)
         return;
     }
     r.smu_online = Device->Smu.Online ? 1 : 0;
+    r.tier = Device->OcTier;            // OcTierStart ran before this start of the governor
     r.mode_present = QueryPresent(DPM_SETTING_MODE, &r.mode);
     r.max_present = QueryPresent(DPM_SETTING_MAX, &r.max_mhz);
     r.pending_present = QueryPresent(DPM_SETTING_PENDING, &r.pending);
@@ -1519,6 +1536,9 @@ void DpmStart(BC250_DEVICE* Device)
              r.mode_present ? "" : " (absent)", r.max_mhz, r.max_present ? "" : " (absent)",
              d->mode == BC250_DPM_MODE_DPM ? "DPM" : "fixed-lab", d->max_mhz, d->reason,
              s->Pending ? ", pending" : "", s->Confirmed ? ", confirmed earlier" : "");
+    if (d->clamped)
+        GuardLog("dpm: DpmMaxMHz %lu is above the ceiling of overclock tier %lu: %lu MHz runs", r.max_mhz, r.tier,
+                 d->max_mhz);
     if (!r.smu_online) {
         DpmPublish(Device, s, NULL, FALSE);
         DpmUnlock(s);
