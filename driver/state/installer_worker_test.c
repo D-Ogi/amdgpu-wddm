@@ -67,13 +67,34 @@ UINT AmdgpuWindowsStateFreeze(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DWORD *e
 {(void)s;(void)tx;freeze++;*error=failure==3?ERROR_WRITE_FAULT:0;return *error?AMDGPU_STATE_IO:0;}
 UINT AmdgpuWindowsStateRetire(AMDGPU_WINDOWS_STATE *s,const BYTE tx[16],DWORD *error)
 {(void)s;(void)tx;CHECK(restores && !enabled);*error=retire_error;if(*error)return AMDGPU_STATE_IO;retired++;origin=AMDGPU_TRANSFER_LEGACY;return 0;}
+// The installed generation holds the hang recovery record of an earlier 0x116 (docs/design/hang-recovery.md):
+// LastVerdict 2 and a pre-kill wave snapshot. Every transfer of an installed generation carries it.
+static void HangWaves(BYTE out[64]){UINT i;for(i=0;i<64;i++)out[i]=(BYTE)(i*7+3);}
 static UINT Fetch(void *context,UINT source,const AMDGPU_STATE_SPEC *spec,AMDGPU_STATE_VALUE *v,void *data,UINT capacity)
 {
-    DWORD one=1;(void)context;(void)source;(void)capacity;
+    DWORD one=1,verdict=2;(void)context;(void)source;
     if(origin!=AMDGPU_TRANSFER_FRESH && !strcmp(spec->name,"CpuTune") && !spec->path[0]) {
         memcpy(data,&one,4);v->type=4;v->bytes=4;return 0;
     }
+    if(origin==AMDGPU_TRANSFER_CURRENT && !strcmp(spec->path,"HangRecovery") && !strcmp(spec->name,"LastVerdict")) {
+        memcpy(data,&verdict,4);v->type=4;v->bytes=4;return 0;
+    }
+    if(origin==AMDGPU_TRANSFER_CURRENT && !strcmp(spec->path,"HangRecovery\\Waves") && !strcmp(spec->name,"Snapshot")) {
+        if(capacity<64)return AMDGPU_STATE_BUFFER;HangWaves(data);v->type=3;v->bytes=64;return 0;
+    }
     return AMDGPU_STATE_ABSENT;
+}
+static void HangRecordIn(const BYTE *buffer,UINT bytes)
+{
+    const AMDGPU_STATE_SPEC *want[2];AMDGPU_STATE_VALUE v;const void *data;BYTE waves[64];UINT i,k;
+    want[0]=AmdgpuStateFind("HangRecovery","LastVerdict");want[1]=AmdgpuStateFind("HangRecovery\\Waves","Snapshot");
+    CHECK(want[0] && want[1]);HangWaves(waves);
+    for(k=0;k<2;k++) {
+        for(i=0;i<AmdgpuStateCount();i++)if(AmdgpuStateAt(i)==want[k])break;
+        CHECK(AmdgpuTransferFind(buffer,bytes,i,&v,&data)==AMDGPU_STATE_OK);
+        if(k==0)CHECK(v.type==4 && v.bytes==4 && data && *(const DWORD*)data==2);
+        else CHECK(v.type==3 && v.bytes==64 && data && !memcmp(data,waves,64));
+    }
 }
 UINT AmdgpuWindowsLegacyComparisonValue(const AMDGPU_STATE_SPEC *spec,AMDGPU_STATE_VALUE *v,DWORD *data)
 {
@@ -171,6 +192,7 @@ int main(void)
     for(i=AMDGPU_TRANSFER_FRESH;i<=AMDGPU_TRANSFER_CURRENT;i++) {
         Reset(i);CHECK(!Run(L"prepare",tx));CHECK(publish==1);CHECK(captured==1);
         CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==i);
+        if(i==AMDGPU_TRANSFER_CURRENT)HangRecordIn(saved,saved_bytes);
         CHECK(freeze==(UINT)(i==AMDGPU_TRANSFER_CURRENT));CHECK(stop==0);
         CHECK(source_opens==(UINT)(i==AMDGPU_TRANSFER_CURRENT) && !strict_opens);
         CHECK(!Run(L"prepare",tx));CHECK(publish==1);CHECK(captured==1);
@@ -192,7 +214,7 @@ int main(void)
     Reset(AMDGPU_TRANSFER_LEGACY);current_package=TRUE;
     CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(publish==0 && captured==0);
     Reset(AMDGPU_TRANSFER_CURRENT);CHECK(!Run(L"archive",tx));CHECK(archives==1 && stop==1 && freeze==1);
-    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_CURRENT);
+    CHECK(!AmdgpuTransferCheck(removed,removed_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_CURRENT);HangRecordIn(removed,removed_bytes);
     // SCM and S are gone. The old final archive supplies settings to a new
     // transaction, and never supplies fresh-board authorization.
     origin=AMDGPU_TRANSFER_FRESH;
@@ -200,6 +222,8 @@ int main(void)
     CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_ARCHIVE);
     CHECK(h.board_kind==AMDGPU_BOARD_UNPROVEN);CHECK(h.source_generation[0]==2);
     CHECK(h.transaction[0]==2);CHECK(h.source_version[0]!=0);
+    // The reinstall after the uninstall hands the archived hang recovery record to the new package.
+    HangRecordIn(saved,saved_bytes);
     Reset(AMDGPU_TRANSFER_CURRENT);failure=6;
     CHECK(Run(L"archive",tx)==ERROR_WRITE_FAULT);CHECK(!removed_bytes && freeze==1);
     Reset(AMDGPU_TRANSFER_CURRENT);device_error=ERROR_BUSY;

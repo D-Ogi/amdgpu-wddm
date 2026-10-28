@@ -64,7 +64,7 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 }
 
 /* The verdict of one ResetEngine call that reached stage 1 (the record, docs/design/hang-recovery.md). guard.c
- * GuardRecordHangRecovery writes it, flushed, to the non-volatile subkey Parameters\HangRecovery, because the
+ * GuardRecordHangRecovery writes it, flushed, to the non-volatile HangRecovery state records, because the
  * KMD log ring (about 1024 lines, in memory) does not outlive the 0x116 and the reboot that follow a refusal. */
 #define BC250_HANG_VERDICT_PENDING          0u  /* on disk before the first kill; still 0 after a reboot = the
                                                    machine went down between the kill and the verdict */
@@ -80,7 +80,7 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
 #define BC250_HANG_VERDICT_ADMISSION_GUARD  8u  /* no reset transaction began; LastSeq is the reason mask below,
                                                    not a hardware sequence. LastFence/Kills/Micros are zero */
 
-/* Stable on-disk bit assignments for verdict 8 (Parameters\HangRecovery\LastSeq).
+/* Stable on-disk bit assignments for verdict 8 (HangRecovery\LastSeq of the state store).
  * Multiple bits preserve every failed condition from the same locked observation. */
 #define BC250_HANG_ADMISSION_STOPPING           0x01u
 #define BC250_HANG_ADMISSION_COMPLETION_PENDING 0x02u

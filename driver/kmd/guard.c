@@ -1029,7 +1029,7 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 
 // ---- the M15.12 hang-recovery record (docs/design/hang-recovery.md) -----------------------------------------------
 //
-//   <service key>\Parameters\HangRecovery   non-volatile, written and flushed by DxgkDdiResetEngine (wddm.c)
+//   HangRecovery records of the state store   non-volatile, written and flushed by DxgkDdiResetEngine (wddm.c)
 //     Attempts, Recovered, NotDrained, Refused  REG_DWORD  counters (Bc250HangVerdictCounts), never reset here
 //     LastVerdict                               REG_DWORD  BC250_HANG_VERDICT_*; 0 = a kill was under way
 //     LastSeq, LastFence                        REG_DWORD  the newest ring sequence, the OS fence it would abort

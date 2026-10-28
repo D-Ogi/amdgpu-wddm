@@ -700,7 +700,7 @@ void GuardRecordStartFailed(NTSTATUS Status);
 void GuardRecordStartStarted(void);
 void GuardRecordStopBegin(BC250_DEVICE* Device);
 void GuardRecordStopDone(void);
-// M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
+// M15.12: one ResetEngine verdict (hang_recovery.h) into the HangRecovery state records, counters and Last*, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
 void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
 struct BC250_WAVE_HEADER;
