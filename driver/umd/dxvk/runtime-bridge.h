@@ -42,9 +42,13 @@ using FlushEngine = HRESULT (*)(void *);
 // The per-application VSync setting (docs/design/per-app-graphics-settings.md): when valid, the Present callback
 // carries interval as DXGIDDICB_PRESENT.SyncIntervalOverride in place of the application's sync interval.
 struct PresentSyncOverride { bool valid=false; DXGI_DDI_FLIP_INTERVAL_TYPE interval=DXGI_DDI_FLIP_INTERVAL_IMMEDIATE; };
+// callback, when given, receives the status of pfnPresentCbDXGI, or S_OK when the present did not reach it: the runtime
+// keeps the kernel status of that callback for itself, so the DDI entry must know which step failed (present-contract.h).
+// step, when given, receives the step that ended the present: 'H' a lost host or a failed submission before the first
+// step, 'F' the flush, 'W' the GPU wait, 'P' the callback, 'S' the fence signal, or 0 when each step succeeded.
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
     D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
-    PresentSyncOverride sync=PresentSyncOverride{});
+    PresentSyncOverride sync=PresentSyncOverride{}, HRESULT *callback=nullptr, char *step=nullptr);
 HRESULT queue_present_wait(HostBridge &bridge);
 HRESULT signal_present(HostBridge &bridge);
 // Destruction/readback only. Steady-state Present uses GPU waits above.

@@ -261,10 +261,12 @@ static_assert(offsetof(DXGI1_4_DDI_BASE_FUNCTIONS,pfnReclaimResources)==offsetof
 static_assert(offsetof(DXGI1_4_DDI_BASE_FUNCTIONS,pfnGetMultiplaneOverlayCaps)==offsetof(DXGI1_2_DDI_BASE_FUNCTIONS,pfnGetMultiplaneOverlayCaps));
 const DXGI1_2_DDI_BASE_FUNCTIONS &dxgi_base() { static const auto table=make_dxgi_device_table(); return table; }
 HRESULT APIENTRY present1(DXGI_DDI_ARG_PRESENT1 *a) {
-    if (!a || !a->hDevice) return E_INVALIDARG;
+    // BD-170: a Present may fail only with device removal (present-contract.h); any other status removes the
+    // device too, as a driver error.
+    if (!a || !a->hDevice) return D3DDDIERR_DEVICEREMOVED;
     // One surface is the Present of DXGI 1.2 (dirty rectangles are hints). Several surfaces per Present
     // belong to stereo and multi-plane swap chains, which this driver does not create.
-    if (a->SurfacesToPresent!=1 || !a->phSurfacesToPresent) return DXGI_ERROR_UNSUPPORTED;
+    if (a->SurfacesToPresent!=1 || !a->phSurfacesToPresent) return D3DDDIERR_DEVICEREMOVED;
     DXGI_DDI_ARG_PRESENT p{};
     p.hDevice=a->hDevice; p.hSurfaceToPresent=a->phSurfacesToPresent[0].hSurface;
     p.SrcSubResourceIndex=a->phSurfacesToPresent[0].SubResourceIndex;

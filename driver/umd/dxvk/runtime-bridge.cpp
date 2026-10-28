@@ -385,20 +385,27 @@ HRESULT wait_present_value(HostBridge &bridge, UINT64 value)
 
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
     D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
-    PresentSyncOverride sync)
+    PresentSyncOverride sync, HRESULT *callback, char *step)
 {
+   if (callback) *callback=S_OK;
+   char ignored=0; char &at=step ? *step : ignored;
+   at=0;
    auto *device=bridge.device;
    if (!device || !device->domain.entered() || !device->present_context || !source || !flush)
       return E_INVALIDARG;
    if (!device->DXGICallbacks || !device->DXGICallbacks->pfnPresentCb) return E_NOTIMPL;
+   at='H';
    if (FAILED(Bc250HostStatus(&bridge)) || bridge.submission_failed)
       return DXGI_ERROR_DEVICE_REMOVED;
+   at='F';
    HRESULT hr=flush(engine);
    if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
    if (FAILED(hr)) return hr;
+   at='W';
    hr=queue_present_wait(bridge);
    if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
    if (FAILED(hr)) return hr;
+   at='P';
    DXGIDDICB_PRESENT present={};
    present.hSrcAllocation=source;
    present.hDstAllocation=destination;
@@ -409,11 +416,15 @@ HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
       present.SyncIntervalOverride=sync.interval;
    }
    const HRESULT result=device->DXGICallbacks->pfnPresentCb(device->hDevice,&present);
+   if (callback) *callback=result;
    if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge);
    if (FAILED(result)) return result;
+   at='S';
    hr=signal_present(bridge);
    if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
-   return FAILED(hr) ? hr : result;
+   if (FAILED(hr)) return hr;
+   at=0;
+   return result;
 }
 
 }

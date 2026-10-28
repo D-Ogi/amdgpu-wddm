@@ -220,7 +220,7 @@ void dxgi_table() {
     DXGI1_6_1_DDI_ARG_PRESENT present{}; present.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&device);
     present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=2;
     present.RotationHint=DXGI_DDI_MODE_ROTATION_ROTATE90;
-    CHECK(t.pfnPresent1(nullptr)==E_INVALIDARG && t.pfnPresent1(&present)==DXGI_ERROR_UNSUPPORTED);
+    CHECK(t.pfnPresent1(nullptr)==D3DDDIERR_DEVICEREMOVED && t.pfnPresent1(&present)==D3DDDIERR_DEVICEREMOVED);
     CHECK(t.pfnPresentMultiplaneOverlay1(nullptr)==DXGI_ERROR_UNSUPPORTED);
     // The one-surface conversion, field by field: every argument the DXGI 1.2 Present reads is the one the
     // runtime gave, and the rotation hint is not one of them. Two surfaces and a missing array carry nothing.

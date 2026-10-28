@@ -905,9 +905,11 @@ int main() {
     if (errors!=beforeClear+1 || owner.runtime().domain.entered()) fail(__LINE__);
     DXGI1_2_DDI_BASE_FUNCTIONS dxgiPresentTable{}; install_present_ddi(dxgiPresentTable);
     DXGI_DDI_ARG_PRESENT presentArgs{};
-    if (dxgiPresentTable.pfnPresent(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnPresent(&presentArgs)!=E_INVALIDARG) fail(__LINE__);
+    // BD-170: PresentDXGI fails only with device removal (present-contract.h).
+    if (dxgiPresentTable.pfnPresent(nullptr)!=D3DDDIERR_DEVICEREMOVED ||
+        dxgiPresentTable.pfnPresent(&presentArgs)!=D3DDDIERR_DEVICEREMOVED) fail(__LINE__);
     presentArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
-    if (dxgiPresentTable.pfnPresent(&presentArgs)!=E_FAIL || owner.runtime().domain.entered()) fail(__LINE__);
+    if (dxgiPresentTable.pfnPresent(&presentArgs)!=D3DDDIERR_DEVICEREMOVED || owner.runtime().domain.entered()) fail(__LINE__);
     int rotateIdentity[3]{};
     DdiResource rotating[3]{}; DXGI_DDI_HRESOURCE rotatingHandles[3]{};
     for (UINT i=0;i<3;++i) {
