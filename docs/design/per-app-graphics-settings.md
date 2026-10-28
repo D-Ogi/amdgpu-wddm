@@ -80,14 +80,14 @@ DXVK's DXGI serves both.
 
 ## The settings
 
-| Value | Environment variable | Accepted | D3D11 | D3D12 |
-|---|---|---|---|---|
-| `FrameRateLimit` | `AMDGPU_WDDM_FRAME_RATE_LIMIT` | 0, 20-300 | works | works |
-| `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | works | works |
-| `Anisotropy` | `AMDGPU_WDDM_ANISOTROPY` | 1, 2, 4, 8, 16 | works | works |
-| `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | works |
-| `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied |
-| `RenderOnCpu` | `AMDGPU_WDDM_RENDER_ON_CPU` | 0, 1 | works, also for D3D10 | no CPU route |
+| Value | Environment variable | Accepted | D3D11 | D3D12 | Vulkan, OpenGL |
+|---|---|---|---|---|---|
+| `FrameRateLimit` | `AMDGPU_WDDM_FRAME_RATE_LIMIT` | 0, 20-300 | works | works | works |
+| `VSync` | `AMDGPU_WDDM_VSYNC` | 0, 1 | works | works | works |
+| `Anisotropy` | `AMDGPU_WDDM_ANISOTROPY` | 1, 2, 4, 8, 16 | works | works | works |
+| `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | works | works |
+| `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied | not read |
+| `RenderOnCpu` | `AMDGPU_WDDM_RENDER_ON_CPU` | 0, 1 | works, also for D3D10 | no CPU route | not read |
 
 "Works" in this table means that the host gates pass. The lab script `settings-lab.ps1` of the work directory
 checks each row on unit A.
@@ -248,6 +248,25 @@ keep their own reasons. The list moves the route only: every window of the image
 the CPU route gets FL 10_0 (BD-088).
 
 D3D12 has no CPU route. No CPU route through lavapipe exists in any repository of this project.
+
+### The system Vulkan ICD
+
+From tester.34 the system Vulkan ICD reads `FrameRateLimit`, `VSync`, `Anisotropy` and `MaxFrameLatency` by the
+same contract (`src/amd/vulkan/winsys/wddm2/radv_wddm2_app_settings.h` in the Mesa fork, one reader in the 64-bit
+and in the 32-bit ICD). It reads them once per process. It does not read them in `dwm.exe`, and a device of the ICD
+that a D3D shell hosts does not apply them, because the shell applies them. The OpenGL ICD presents through the
+64-bit system Vulkan ICD in the same process, so a 64-bit OpenGL game gets them too. The present rules are in
+`src/vulkan/wsi/wsi_win32_present_policy.h`. The host test is `radv_wddm2_app_settings_test.c`.
+
+| Value | 64-bit ICD, DXGI route | 64-bit ICD, GDI route | 32-bit ICD (GDI only) |
+|---|---|---|---|
+| `FrameRateLimit` | a paced wait before each present | the same | the same |
+| `VSync` | 1 is FIFO, 0 is IMMEDIATE (tearing where the chain may tear) | 1 is FIFO, 0 is IMMEDIATE (no wait for the composition) | 1 is as without the value, 0 removes the wait for the composition |
+| `MaxFrameLatency` | after a present, a wait of at most 1 s for the copy of the present that many presents back | no wait: each present copies a finished frame | no wait, as on the GDI route |
+| `Anisotropy` | the anisotropy of each sampler with a linear minification filter and normalized coordinates | the same | the same |
+
+The `VSync` value also replaces a present mode that the application changes per present. The effective line of the
+log is `amdgpu-wddm settings: api=vulkan app=<image> ...`.
 
 ### Installed driver version
 
