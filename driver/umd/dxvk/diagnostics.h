@@ -2,6 +2,7 @@
 #pragma once
 #include <windows.h>
 #include <atomic>
+#include <cstdarg>
 #include <cstdio>
 #include "../d3d12/stdio-log.h"
 namespace bc250::umd {
@@ -28,6 +29,21 @@ inline void surface_diagnostic(const char *stage,HRESULT status,unsigned format,
     std::snprintf(text,sizeof(text),"M14 surface %s failed HRESULT=%08X format=%u %ux%u values=%llu/%llu/%llu\n",
         stage,static_cast<unsigned>(status),format,width,height,a,b,c);
     OutputDebugStringA(text);
+}
+// BD-253: one line about the life of a device (a failed CreateDevice, a device that DestroyDevice could not clean
+// up, a new device in the lab flavour), on the debugger channel and the AMDGPU_WDDM_LOG sink. Each caller passes its
+// own budget, so that a process that repeats the failure cannot flood either channel.
+inline void device_life_note(std::atomic_uint &budget,const char *format,...) noexcept {
+    unsigned count=budget.load(std::memory_order_relaxed);
+    while(count && !budget.compare_exchange_weak(count,count-1,std::memory_order_relaxed)){}
+    if(!count)return;
+    char text[320];
+    va_list args;
+    va_start(args,format);
+    std::vsnprintf(text,sizeof(text),format,args);
+    va_end(args);
+    OutputDebugStringA(text);
+    amdgpu_wddm_log::print("%s",text);
 }
 inline void APIENTRY engine_diagnostic(void *,UINT32 level,const char *message) noexcept {
     if(!message || level<1 || level>3)return;

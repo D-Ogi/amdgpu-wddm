@@ -905,9 +905,11 @@ int main() {
     if (errors!=beforeClear+1 || owner.runtime().domain.entered()) fail(__LINE__);
     DXGI1_2_DDI_BASE_FUNCTIONS dxgiPresentTable{}; install_present_ddi(dxgiPresentTable);
     DXGI_DDI_ARG_PRESENT presentArgs{};
-    if (dxgiPresentTable.pfnPresent(nullptr)!=E_INVALIDARG || dxgiPresentTable.pfnPresent(&presentArgs)!=E_INVALIDARG) fail(__LINE__);
+    // BD-170: PresentDXGI fails only with device removal (present-contract.h).
+    if (dxgiPresentTable.pfnPresent(nullptr)!=D3DDDIERR_DEVICEREMOVED ||
+        dxgiPresentTable.pfnPresent(&presentArgs)!=D3DDDIERR_DEVICEREMOVED) fail(__LINE__);
     presentArgs.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&storage);
-    if (dxgiPresentTable.pfnPresent(&presentArgs)!=E_FAIL || owner.runtime().domain.entered()) fail(__LINE__);
+    if (dxgiPresentTable.pfnPresent(&presentArgs)!=D3DDDIERR_DEVICEREMOVED || owner.runtime().domain.entered()) fail(__LINE__);
     int rotateIdentity[3]{};
     DdiResource rotating[3]{}; DXGI_DDI_HRESOURCE rotatingHandles[3]{};
     for (UINT i=0;i<3;++i) {
@@ -1108,12 +1110,51 @@ int main() {
     request.texture.Width=65; request.texture.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
     if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) fail(__LINE__);
     request.texture.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
-    for (UINT length=0;length<sizeof(request.texture);++length) {
+    // A short record is refused at every length; no record at all is the BD-253 case below.
+    for (UINT length=1;length<sizeof(request.texture);++length) {
         openArgs.PrivateDriverDataSize=length;
         if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) fail(__LINE__);
     }
     openArgs.PrivateDriverDataSize=sizeof(request.texture); request.texture.BindFlags=UINT32_MAX;
     if (decode_open_resource(openArgs,decodedSurface,decodedDesc)!=E_INVALIDARG) fail(__LINE__);
+    // BD-253: an open with no resource record takes its description from the LB7A blob alone: 32 bytes (the
+    // compositor's hosted surfaces) or 48 with the GDI1 trailer of a GDI texture. The other GDI types, a GDI1 blob
+    // with flags, a foreign blob, a format with no composed row and a pitch below the row are refused.
+    openArgs.PrivateDriverDataSize=0;
+    const auto bare=[&](HRESULT want) {
+        decodedDesc={};
+        const HRESULT hr=decode_open_resource(openArgs,decodedSurface,decodedDesc);
+        if (hr!=want) return false;
+        if (hr!=S_OK) return true;
+        return decodedDesc.Format==DXGI_FORMAT_B8G8R8A8_UNORM && decodedDesc.Width==65 && decodedDesc.Height==17 &&
+            decodedDesc.MipLevels==1 && decodedDesc.ArraySize==1 && decodedDesc.SampleDesc.Count==1 &&
+            decodedDesc.Usage==D3D11_USAGE_DEFAULT && !decodedDesc.CPUAccessFlags && !decodedDesc.MiscFlags &&
+            decodedDesc.BindFlags==(D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET) &&
+            !std::memcmp(&decodedSurface,&request.surface,sizeof(decodedSurface));
+    };
+    if (request.surface.Format!=D3DDDIFMT_A8R8G8B8 || !bare(S_OK)) fail(__LINE__);
+    BC250_GDI_PRIVATE gdi{}; gdi.Surface=request.surface; gdi.Magic=BC250_GDI_PRIVATE_MAGIC; gdi.Type=1;
+    openAllocation.pPrivateDriverData=&gdi; openAllocation.PrivateDriverDataSize=sizeof(gdi);
+    if (!bare(S_OK)) fail(__LINE__);
+    for (unsigned long type:{0ul,2ul,3ul,4ul,5ul}) { gdi.Type=type; if (!bare(E_INVALIDARG)) fail(__LINE__); }
+    gdi.Type=1; gdi.Flags=1;
+    if (!bare(E_INVALIDARG)) fail(__LINE__);
+    gdi.Flags=0; gdi.Magic=0;
+    if (!bare(E_INVALIDARG)) fail(__LINE__);
+    gdi.Magic=BC250_GDI_PRIVATE_MAGIC; gdi.Surface.Magic=0;
+    if (!bare(E_INVALIDARG)) fail(__LINE__);
+    gdi.Surface=request.surface; gdi.Surface.Format=D3DDDIFMT_X8R8G8B8;
+    if (!bare(E_NOTIMPL)) fail(__LINE__);
+    gdi.Surface=request.surface; gdi.Surface.Pitch=256;
+    if (!bare(E_INVALIDARG)) fail(__LINE__);
+    gdi.Surface=request.surface; gdi.Surface.Size=gdi.Surface.Pitch*16;
+    if (!bare(E_INVALIDARG)) fail(__LINE__);
+    gdi.Surface=request.surface; openAllocation.PrivateDriverDataSize=40;
+    if (!bare(E_INVALIDARG)) fail(__LINE__);
+    openAllocation.PrivateDriverDataSize=sizeof(gdi);
+    if (!bare(S_OK)) fail(__LINE__);
+    openAllocation.pPrivateDriverData=&request.surface; openAllocation.PrivateDriverDataSize=sizeof(request.surface);
+    openArgs.PrivateDriverDataSize=sizeof(request.texture);
     // M14.1: the atlases DirectComposition shares (Task Manager: A8_UNORM 32x32, SRV|RT|PRESENT,
     // SHARED) and the other composed rows, at the row's pixel size: pitch = width * bytes rounded
     // up to 256, rows rounded up to 4, size rounded up to a page. A primary stays 8-bit.

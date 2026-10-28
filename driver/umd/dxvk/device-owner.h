@@ -31,6 +31,9 @@ public:
         PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
         D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services, UINT32 policy_flags=0);
     HRESULT close();
+    // BD-253: the step of initialize or close that ran last; after a failure, the step that failed. A fixed name,
+    // for the error lines of CreateDevice and DestroyDevice (ddi-device-create.cpp, ddi-lifecycle.cpp).
+    const char *step() const { return step_; }
     HRESULT take_deferred_error(EngineErrorPolicy policy=EngineErrorPolicy::device_removed_only);
     // On any result, a non-null out belongs to this owner and needs close_surface.
     // S_FALSE means paging/import are pending; only finish_surface S_OK is publishable.
@@ -88,6 +91,7 @@ private:
     ID3D11DeviceContext4 *context_=nullptr;
     HMODULE modules_[3]{};
     EngineErrorState errors_;
+    const char *step_="none";
     bool initialized_=false,closing_=false,full_present_callback_=false;
 };
 }

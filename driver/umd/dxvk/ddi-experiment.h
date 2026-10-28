@@ -15,6 +15,11 @@
 //   wddm22-ddi-off  the shell offers the WDDM 2.0 interface as its newest one and does not offer WDDM 2.2
 //                   (BD-099). Then the runtime gives the short Present callback again, and VSync 1 is paced
 //                   by vertical-blank waits (vblank-pacer.h).
+//   present-status-off  PresentDXGI returns its own result again, a refused present callback included, in place
+//                   of S_OK or device removal (present-contract.h). The runtime then removes the device for any
+//                   status but S_OK and device removal (BD-170, BD-253). For a lab comparison only.
+//   host-identity-off   the hosted ICD knows a device by the runtime's device handle again, in place of the
+//                   owner's own address (RuntimeDevice::host_identity, BD-253). For a lab comparison only.
 #pragma once
 #include "../d3d12/ddi-trace.h"
 namespace bc250::umd {

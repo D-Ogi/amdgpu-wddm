@@ -19,6 +19,7 @@ HRESULT DeviceOwner::retain_code_modules(const void *engineEntry,const void *icd
 HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 luid,
     PFN_vkGetInstanceProcAddr get, const BC250_DXVK_ENGINE_FUNCS &funcs,
     D3D_FEATURE_LEVEL level, const BC250_DXVK_SHELL_SERVICES &services, UINT32 policy_flags) {
+    step_="arguments";
     if (!runtime_.domain.entered() || initialized_ || closing_ || has_live_objects())
         return E_UNEXPECTED;
     if (!args.pKTCallbacks || !args.pUMCallbacks || !args.DXGIBaseDDI.pDXGIBaseCallbacks || !args.hRTDevice.handle)
@@ -35,6 +36,7 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     // on the interface and version this device negotiated. It decides where the per-application VSync acts:
     // in the runtime, through the override field, or in this shell, through vertical-blank waits.
     full_present_callback_=IS_DXGI1_6_1_BASE_FUNCTIONS(args.Interface,args.Version);
+    step_="present-context";
     D3DDDICB_CREATECONTEXTVIRTUAL create{}; create.EngineAffinity=1;
     HRESULT hr=runtime_.KTCallbacks.pfnCreateContextVirtualCb(runtime_.hDevice,&create);
     if (FAILED(hr)) return hr;
@@ -42,10 +44,12 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
     if (!runtime_.present_context) return E_FAIL;
     vblank_pacer_.set_luid(luid);
     auto host=host_descriptor(bridge_,luid);
+    step_="modules";
     hr=retain_code_modules(reinterpret_cast<const void *>(funcs.CreateDevice),reinterpret_cast<const void *>(get));
-    if (SUCCEEDED(hr)) hr=instance_.open(get,host,policy_flags);
-    if (SUCCEEDED(hr)) hr=session_.open(funcs,instance_.info(),level,services);
+    if (SUCCEEDED(hr)) { step_="instance"; hr=instance_.open(get,host,policy_flags); }
+    if (SUCCEEDED(hr)) { step_="session"; hr=session_.open(funcs,instance_.info(),level,services); }
     if (SUCCEEDED(hr)) {
+        step_="engine";
         hr=session_.engine()->QueryInterface(__uuidof(IBc250DxvkDevice4),reinterpret_cast<void **>(&engine4_));
         if (SUCCEEDED(hr) && !engine4_) hr=E_NOINTERFACE;
     }
@@ -57,7 +61,12 @@ HRESULT DeviceOwner::initialize(const D3D10DDIARG_CREATEDEVICE &args, UINT64 lui
         hr=session_.engine()->GetImmediateContext(__uuidof(ID3D11DeviceContext4),reinterpret_cast<void **>(&context_));
         if (SUCCEEDED(hr) && !context_) hr=E_FAIL;
     }
-    if (FAILED(hr)) { close(); return hr; }
+    if (FAILED(hr)) {
+        // close() names its own steps; the failed step of initialize is the one to report.
+        const char *failed=step_;
+        close(); step_=failed; return hr;
+    }
+    step_="none";
     initialized_=true;
     return S_OK;
 }
@@ -149,8 +158,10 @@ HRESULT DeviceOwner::release_surface_handle(RuntimeSurface &surface) {
 HRESULT DeviceOwner::close() {
     if (!runtime_.domain.entered()) return E_UNEXPECTED;
     closing_=true;
+    step_="close-engine";
     if (session_.must_retain_owner()) return E_UNEXPECTED;
     HRESULT hr=S_OK;
+    step_="close-present-idle";
     if (session_.device()) {
         hr=wait_present_idle(bridge_);
         if (FAILED(hr) && hr!=D3DDDIERR_DEVICEREMOVED) return hr;
@@ -158,28 +169,34 @@ HRESULT DeviceOwner::close() {
     // Drop bound views before releasing imported textures, while the engine and
     // hosted Vulkan device still exist. A pending/failed close retains everything.
     if (!surfaces_.empty() && context_) context_->ClearState();
+    step_="close-surface";
     while (!surfaces_.empty()) {
         hr=close_surface(*surfaces_.back());
         if (hr!=S_OK) return hr;
     }
     present_shadows_={};
+    step_="close-paging-queue";
     hr=destroy_surface_paging_queue(runtime_,surface_queue_);
     if (hr!=S_OK) return hr;
     surface_vk_={}; surface_memory_={};
     if (context_) { context_->Release(); context_=nullptr; }
     if (device_) { device_->Release(); device_=nullptr; }
     if (engine4_) { engine4_->Release(); engine4_=nullptr; }
+    step_="close-session";
     hr=session_.close();
     if (FAILED(hr)) return hr;
     for (auto &progress:bridge_.progress) progress={};
+    step_="close-instance";
     hr=instance_.close();
     if (FAILED(hr)) return hr;
+    step_="close-present-sync";
     if (bridge_.present_sync) {
         D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT destroy{}; destroy.hSyncObject=bridge_.present_sync;
         hr=runtime_.KTCallbacks.pfnDestroySynchronizationObjectCb(runtime_.hDevice,&destroy);
         if (FAILED(hr)) return hr;
         bridge_.present_sync=0; bridge_.present_cpu=nullptr; bridge_.present_value=0;
     }
+    step_="close-present-context";
     if (runtime_.present_context) {
         D3DDDICB_DESTROYCONTEXT destroy{}; destroy.hContext=runtime_.present_context;
         hr=runtime_.KTCallbacks.pfnDestroyContextCb(runtime_.hDevice,&destroy);
@@ -189,6 +206,7 @@ HRESULT DeviceOwner::close() {
     // Both Vulkan and all runtime handles are gone. Release engine and ICD
     // first, our extra UMD reference last. The caller owns its normal loader
     // reference while executing this API. Failed close never reaches this.
+    step_="close-modules";
     for (int i=2;i>=0;--i) {
         if (modules_[i]) {
             if (!FreeLibrary(modules_[i])) return HRESULT_FROM_WIN32(GetLastError());
@@ -196,7 +214,7 @@ HRESULT DeviceOwner::close() {
         }
     }
     runtime_.DXGICallbacks=nullptr;
-    bridge_={}; bridge_.device=&runtime_; errors_={}; initialized_=false; closing_=false;
+    bridge_={}; bridge_.device=&runtime_; errors_={}; initialized_=false; closing_=false; step_="none";
     return S_OK;
 }
 }

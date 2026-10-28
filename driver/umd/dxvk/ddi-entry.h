@@ -32,6 +32,8 @@ inline void report_ddi_error(DeviceOwner &owner,HRESULT status,
             static_cast<unsigned>(status),static_cast<unsigned>(policy),
             static_cast<unsigned>(reported),where.line(),where.function_name());
         OutputDebugStringA(message);
+        // BD-253: also on the AMDGPU_WDDM_LOG sink. A device that an entry removed had no line in the game log.
+        amdgpu_wddm_log::print("%s",message);
     }
     if (reported==S_OK) return; // This entry may report no status at all.
     auto &r=owner.runtime();

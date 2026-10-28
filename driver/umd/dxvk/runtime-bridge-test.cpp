@@ -91,7 +91,20 @@ int main() {
     HostBridge bridge{}; bridge.device=&device;
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)<0);
     const auto host=host_descriptor(bridge, 123);
-    require(host.version==5 && host.size==sizeof(bc250_host) && host.identity==&identity && host.adapter_luid==123);
+    // BD-253: the ICD knows the device by the address of its RuntimeDevice, never by the runtime handle, which the
+    // runtime can give to a new device while the old one's winsys is still alive. The switch gives the handle again.
+    require(host.version==5 && host.size==sizeof(bc250_host) && host.identity==&device && host.identity!=&identity &&
+        host.adapter_luid==123);
+    device.legacy_host_identity=true;
+    require(host_descriptor(bridge, 123).identity==&identity);
+    device.legacy_host_identity=false;
+    {
+        // Two devices that the runtime gives the same handle (the second after the first one's destruction) have
+        // two identities as long as both owners live.
+        RuntimeDevice second; second.hDevice=&identity;
+        HostBridge secondBridge{}; secondBridge.device=&second;
+        require(host_descriptor(secondBridge, 123).identity!=host.identity);
+    }
     RuntimeDomain::Scope scope(device.domain);
     require(host.dispatch(host.userdata, BC250_HOST_CHECK_STATUS, nullptr)==0);
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)==0);

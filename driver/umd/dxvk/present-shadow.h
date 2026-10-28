@@ -10,18 +10,28 @@ namespace bc250::umd {
 // Unity 2017 game). The shell therefore converts such a buffer on the GPU into a B8G8R8A8 shadow it owns, and
 // presents the shadow. Flip-model buffers reach the compositor without a kernel copy and are left alone.
 
+// BD-253: DXGI can also name the destination: the window's redirection surface, which the runtime opened as a GDI
+// texture without a resource record (GOG Galaxy, Qt 6). The kernel driver compares the D3DDDI formats of the two
+// allocations and refuses a difference in the same way, so such a present goes through the shadow when the shadow
+// has the destination's D3DDDI format.
+
 // The format a windowed Blt present of a buffer in this format is converted to, or DXGI_FORMAT_UNKNOWN when the
-// buffer is presented as it is: a flip, a present to a named destination, a flip-model buffer (shared, primary or
-// displayable: bltModelBuffer false), or a buffer already in B8G8R8A8. Only the 8-bit red-first rows are converted,
-// each to the B8G8R8A8 row of the same encoding.
-inline DXGI_FORMAT present_shadow_format(DXGI_DDI_PRESENT_FLAGS flags,bool destination,bool bltModelBuffer,
-    DXGI_FORMAT buffer) {
-    if (!flags.Blt || flags.Flip || destination || !bltModelBuffer) return DXGI_FORMAT_UNKNOWN;
+// buffer is presented as it is: a flip, a flip-model buffer (shared, primary or displayable: bltModelBuffer false),
+// a buffer already in B8G8R8A8, or a named destination of another D3DDDI format than the shadow (destination is the
+// DXGI format of the named destination, DXGI_FORMAT_UNKNOWN when there is none or its format is not known). Only
+// the 8-bit red-first rows are converted, each to the B8G8R8A8 row of the same encoding.
+inline DXGI_FORMAT present_shadow_format(DXGI_DDI_PRESENT_FLAGS flags,bool named,DXGI_FORMAT destination,
+    bool bltModelBuffer,DXGI_FORMAT buffer) {
+    if (!flags.Blt || flags.Flip || !bltModelBuffer) return DXGI_FORMAT_UNKNOWN;
+    DXGI_FORMAT shadow=DXGI_FORMAT_UNKNOWN;
     switch (buffer) {
-    case DXGI_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM;
-    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+    case DXGI_FORMAT_R8G8B8A8_UNORM: shadow=DXGI_FORMAT_B8G8R8A8_UNORM; break;
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: shadow=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB; break;
     default: return DXGI_FORMAT_UNKNOWN;
     }
+    if (!named) return shadow;
+    const auto *target=runtime_surface_format(destination),*row=runtime_surface_format(shadow);
+    return target && row && target->d3dddi==row->d3dddi ? shadow : DXGI_FORMAT_UNKNOWN;
 }
 
 struct PresentShadowSlot {

@@ -120,9 +120,10 @@ const DXGI1_4_DDI_BASE_FUNCTIONS &dxgi1_4_base() { static const auto table=make_
 // One surface is the Present of DXGI 1.2. present_arguments_1_6_1 (ddi-wddm22.h) carries the arguments over and
 // the host test reads every field it carries.
 HRESULT APIENTRY present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENT *a) {
-    if (!a || !a->hDevice) return E_INVALIDARG;
+    // BD-170: a Present may fail only with device removal (present-contract.h).
+    if (!a || !a->hDevice) return D3DDDIERR_DEVICEREMOVED;
     DXGI_DDI_ARG_PRESENT p{};
-    if (!present_arguments_1_6_1(*a,p)) return DXGI_ERROR_UNSUPPORTED;
+    if (!present_arguments_1_6_1(*a,p)) return D3DDDIERR_DEVICEREMOVED;
     return dxgi1_4_base().pfnPresent(&p);
 }
 HRESULT APIENTRY overlay_present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENTMULTIPLANEOVERLAY *) { return DXGI_ERROR_UNSUPPORTED; }

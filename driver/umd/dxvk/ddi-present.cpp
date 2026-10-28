@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-present.h"
+#include "present-contract.h"
+#include "ddi-experiment.h"
+#include "present-probe.h"
 #include <atomic>
 #include <cstdio>
 namespace bc250::umd {
@@ -15,7 +18,18 @@ HRESULT submit(void *data) {
     const HRESULT deferred=s.owner->take_deferred_error(EngineErrorPolicy::allow_out_of_memory);
     return FAILED(hr) ? hr : deferred;
 }
-HRESULT APIENTRY rotate(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
+// The BD-170 lines: bounded, on the debugger channel and the AMDGPU_WDDM_LOG sink. A failed Present and a failed
+// rotation were silent before; the runtime then removed the device without a record.
+void present_note(const char *text) {
+    OutputDebugStringA(text);
+    amdgpu_wddm_log::print("%s",text);
+}
+bool present_note_budget(std::atomic_uint &left) {
+    unsigned count=left.load(std::memory_order_relaxed);
+    while (count && !left.compare_exchange_weak(count,count-1,std::memory_order_relaxed)) {}
+    return count!=0;
+}
+HRESULT rotate_work(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
     if (!args) return E_INVALIDARG;
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
     if (!storage || !storage->owner) return E_INVALIDARG;
@@ -28,6 +42,17 @@ HRESULT APIENTRY rotate(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
         },&owner.runtime()));
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
+}
+HRESULT APIENTRY rotate(DXGI_DDI_ARG_ROTATE_RESOURCE_IDENTITIES *args) {
+    const HRESULT result=rotate_work(args);
+    static std::atomic_uint notes{8};
+    if (FAILED(result) && present_note_budget(notes)) {
+        char text[128];
+        std::snprintf(text,sizeof(text),"BC250 BD-170: RotateResourceIdentities of %u resources returned %08X\n",
+            args ? unsigned(args->Resources) : 0u,unsigned(result));
+        present_note(text);
+    }
+    return result;
 }
 // BD-065: the shadow for this present, written by the engine from the buffer. A slot is written again only
 // after the Present that read it has retired; a slot of another size or format is replaced.
@@ -62,7 +87,7 @@ HRESULT write_present_shadow(DeviceOwner &owner,const DdiResource &source,UINT s
             char text[160];
             std::snprintf(text,sizeof(text),"BC250 BD-065: Present shadow %ux%u format %u for buffer format %u\n",
                 desc.Width,desc.Height,unsigned(format),unsigned(desc.Format));
-            OutputDebugStringA(text);
+            present_note(text);
         }
     } else {
         hr=wait_present_value(owner.bridge(),slot.retire);
@@ -77,7 +102,9 @@ HRESULT write_present_shadow(DeviceOwner &owner,const DdiResource &source,UINT s
     if (FAILED(hr)) return hr;
     out=&slot; return S_OK;
 }
-HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
+// What one Present did, for present_ddi_status and the BD-170 lines.
+struct PresentOutcome { HRESULT callback=S_OK; PresentSyncOverride sync{}; char step=0; };
+HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
     if (!args) return E_INVALIDARG;
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
     if (!storage || !storage->owner) return E_INVALIDARG;
@@ -96,8 +123,10 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
         Submission submission{&owner,source->object,args->SrcSubResourceIndex};
         D3DKMT_HANDLE presented=source->present_allocation;
         PresentShadowSlot *shadow=nullptr;
+        const DXGI_FORMAT destinationFormat=destination && destination->runtime_surface ?
+            destination->runtime_surface->desc.Format : DXGI_FORMAT_UNKNOWN;
         const DXGI_FORMAT shadowFormat=source->runtime_surface ?
-            present_shadow_format(args->Flags,destination!=nullptr,source->blt_model_buffer,
+            present_shadow_format(args->Flags,destination!=nullptr,destinationFormat,source->blt_model_buffer,
                 source->runtime_surface->desc.Format) : DXGI_FORMAT_UNKNOWN;
         if (shadowFormat!=DXGI_FORMAT_UNKNOWN) {
             HRESULT hr=write_present_shadow(owner,*source,args->SrcSubResourceIndex,shadowFormat,shadow);
@@ -112,7 +141,7 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
                     char text[160];
                     std::snprintf(text,sizeof(text),"BC250 BD-065: Present shadow failed hr=%08X format=%u width=%u height=%u\n",
                         unsigned(hr),unsigned(shadowFormat),source->runtime_surface->desc.Width,source->runtime_surface->desc.Height);
-                    OutputDebugStringA(text);
+                    present_note(text);
                 }
                 shadow=nullptr;
             }
@@ -128,13 +157,40 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
         PresentSyncOverride sync{};
         sync.valid=passed.valid;
         sync.interval=passed.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
+        outcome.sync=sync;
         const HRESULT hr=present_runtime(owner.bridge(),presented,
-            destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission,sync);
+            destination ? destination->present_allocation : 0,args->pDXGIContext,submit,&submission,sync,
+            &outcome.callback,&outcome.step);
         if (shadow && SUCCEEDED(hr)) {
             // This Present reads the slot; the next write of it waits for this value.
             shadow->retire=owner.bridge().present_value;
             owner.present_shadows().next^=1u;
         }
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+        // BD-253, lab flavour: a few Presents of the process with what each one read and wrote. After the Present
+        // fence the kernel driver's copy is done, so the destination texels are what the copy wrote.
+        static std::atomic_uint presents{0};
+        unsigned index=0;
+        if (probe_due(presents,index)) {
+            char buffer[64]="-",shown[64]="-",target[64]="-";
+            if (SUCCEEDED(hr) && SUCCEEDED(wait_present_value(owner.bridge(),owner.bridge().present_value))) {
+                probe_texels(owner,source->object,args->SrcSubResourceIndex,buffer,sizeof(buffer));
+                if (shadow) probe_texels(owner,submission.resource,0,shown,sizeof(shown));
+                if (destination) probe_texels(owner,destination->object,args->DstSubResourceIndex,target,sizeof(target));
+            }
+            unsigned sf,sw,sh,df,dw,dh;
+            probe_shape(source,sf,sw,sh); probe_shape(destination,df,dw,dh);
+            char text[640];
+            std::snprintf(text,sizeof(text),"BC250 BD-253: Present #%u flags=%08X interval=%u src=%u fmt=%u %ux%u "
+                "blt-model=%u dst=%u fmt=%u %ux%u shadow=%u presented=%u step=%c callback=%08X hr=%08X texels: buffer %s "
+                "shadow %s destination %s thread=%lu\n",index,unsigned(args->Flags.Value),unsigned(args->FlipInterval),
+                unsigned(source->present_allocation),sf,sw,sh,unsigned(source->blt_model_buffer),
+                destination ? unsigned(destination->present_allocation) : 0u,df,dw,dh,unsigned(shadowFormat),
+                unsigned(presented),outcome.step ? outcome.step : '-',unsigned(outcome.callback),unsigned(hr),
+                buffer,shown,target,(unsigned long)GetCurrentThreadId());
+            present_note(text);
+        }
+#endif
         if (SUCCEEDED(hr)) {
             // At most N Presents queued ahead of the GPU: wait for the one N back to retire, as DXVK's own
             // swap chain does for its frame latency. Only a lost device makes this Present fail.
@@ -153,6 +209,37 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
         return ddi_device_status(hr);
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
+}
+HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
+    PresentOutcome outcome;
+    const HRESULT result=present_work(args,outcome);
+    // BD-253: the switch "present-status-off" returns the entry's own result as before, for a lab comparison.
+    static const bool legacy=d3d11_experiment_off("present-status");
+    const HRESULT status=legacy ? result : present_ddi_status(result,outcome.callback);
+    // One line for each Present that removes the device, in both flavours: an ordinary error report. The lab flavour
+    // (BD-167) also writes one for each other failed Present (a refused callback, which the runtime maps) and for the
+    // first flips of the process. The line: what the runtime asked for (flags, interval, a destination), what the
+    // shell passed on (override), the step that ended the present, the callback's status, the entry's own result and
+    // what it returns.
+    static std::atomic_uint losses{16};
+    const bool lost=status==D3DDDIERR_DEVICEREMOVED;
+    bool note=lost && present_note_budget(losses);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    static std::atomic_uint failures{16},flips{6};
+    const bool failed=!lost && (FAILED(result) || FAILED(outcome.callback) || status!=result);
+    if (!note) note=(failed && present_note_budget(failures)) || (args && args->Flags.Flip && present_note_budget(flips));
+#endif
+    if (note) {
+        char text[256];
+        std::snprintf(text,sizeof(text),"BC250 BD-170: Present flags=%08X interval=%u dst=%u override=%u/%u step=%c "
+            "callback=%08X result=%08X returns %08X%s\n",args ? unsigned(args->Flags.Value) : 0u,
+            args ? unsigned(args->FlipInterval) : 0u,unsigned(args && args->hDstResource),
+            unsigned(outcome.sync.valid),unsigned(outcome.sync.interval),outcome.step ? outcome.step : '-',
+            unsigned(outcome.callback),unsigned(result),unsigned(status),
+            present_callback_refused(result,outcome.callback) ? " (callback refused: the runtime maps the status)" : "");
+        present_note(text);
+    }
+    return status;
 }
 }
 void install_present_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &t) { t.pfnPresent=present; t.pfnRotateResourceIdentities=rotate; }

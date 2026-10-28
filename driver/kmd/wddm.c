@@ -721,6 +721,10 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GpuPresentSubmits, GpuPresentSubmitRejected, GpuPresentSubmitFailed;
     volatile LONG64 GpuPresentStatuses[4]; // invalid parameter/handle/color/other failures
     volatile LONG64 GpuPresentSnapshotRefusals[Bc250SnapshotRefusalCount]; // BD-065, by first failing check
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    volatile LONG64 GpuPresentParameterRefusals[Bc250GpuPresentStepCount]; // by the check of WddmBuildGpuPresent that returned
+#endif
+    volatile LONG64 GpuPresentScaled, GpuPresentClipped; // built Presents whose DstRect differs from SrcRect in size or leaves the surface
     volatile LONG64 PresentObservationCalls;
     BC250_PRESENT_OBSERVATION PresentObservations[BC250_PRESENT_OBSERVATIONS];
     volatile LONG64 DriverCapsInteropReturned[2]; // successful replies, not registry state
@@ -3582,6 +3586,29 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
         InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotDescriptor],0,0),
         InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotSameBacking],0,0),
         InterlockedCompareExchange64(&Wddm->GpuPresentSnapshotRefusals[Bc250SnapshotFormat],0,0));
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    // Lab flavour: the "parameter" errors above, split by the check of WddmBuildGpuPresent that returned.
+    GuardLog("wddm: GPU Present parameter umd%lld flags%lld node%lld list%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentUmdContext],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentFlags],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentNode],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentAllocationList],0,0));
+    GuardLog("wddm: GPU Present parameter subarray%lld dma%lld align%lld record%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentSubRectArray],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentDmaBuffer],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentDmaAlignment],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentRecord],0,0));
+    GuardLog("wddm: GPU Present parameter adapter%lld va%lld ib%lld subcount%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentPhysicalAdapter],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentVirtualAddress],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentIbOverlap],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentSubRectCount],0,0));
+    GuardLog("wddm: GPU Present parameter emitter%lld written%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentEmitter],0,0),
+        InterlockedCompareExchange64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentWritten],0,0));
+#endif
+    GuardLog("wddm: GPU Present geometry scaled%lld clipped%lld",
+        InterlockedCompareExchange64(&Wddm->GpuPresentScaled,0,0),InterlockedCompareExchange64(&Wddm->GpuPresentClipped,0,0));
     GuardLog("wddm summary: blit gate %s, %ld blits, %ld skips, %ld sources translated contiguous", Wddm->BlitGate ? "open" : "closed",
              Wddm->Blits, Wddm->BlitSkips, Wddm->BlitTranslations);
     // 2026-09-22 (ADR 0011 consequences, facts M100): where the copy actually landed. BlitsToFlip should be
@@ -8717,6 +8744,73 @@ static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_
     if (owned) ConnectorOperationRelease(Context->Device);
 }
 
+// One STATUS_INVALID_PARAMETER of WddmBuildGpuPresent. The lab flavour counts it by the check that returned it; the first
+// refusals of a start also write what the Present carried: the flags and the context, the DMA buffer, the
+// rectangles, the first sub-rectangle, the two GPU virtual addresses (Va, when they were read) and the two
+// allocations (Allocations, when the snapshot has run). Detail names the check more closely: for the emitter, its
+// result times 100 plus WddmGpuPresentEmitterRule; for a virtual address, the side plus 1.
+static NTSTATUS WddmGpuPresentRefuse(BC250_WDDM* Wddm, const BC250_WDDM_OBJECT* Context,
+    const DXGKARG_PRESENT* Present, BC250_GPU_PRESENT_STEP Step, UINT Detail,
+    const ULONGLONG* Va, const BC250_WDDM_ALLOCATION_PRIVATE* Allocations)
+{
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    LONG64 refusal;
+    UINT i;
+    InterlockedIncrement64(&Wddm->GpuPresentParameterRefusals[Step]);
+    // Slot 0 is never a step: it counts all refusals and bounds the log.
+    refusal=InterlockedIncrement64(&Wddm->GpuPresentParameterRefusals[Bc250GpuPresentRefusals]);
+    if (refusal>BC250_GPU_PRESENT_REFUSAL_LOGS) return STATUS_INVALID_PARAMETER;
+    GuardLog("wddm: GPU Present param%lld step%u detail%u flags%x node%u umd%u list%u",
+        refusal,(UINT)Step,Detail,Present->Flags.Value,Context->NodeOrdinal,(UINT)Context->UmdContext,
+        Context->AllocationListSize);
+    GuardLog("wddm: GPU Present param%lld dma%u priv%u off%u rects%u ib%llX",
+        refusal,Present->DmaSize,Present->DmaBufferPrivateDataSize,Present->MultipassOffset,Present->SubRectCnt,
+        (ULONGLONG)Present->DmaBufferGpuVirtualAddress);
+    GuardLog("wddm: GPU Present param%lld src %ld,%ld,%ld,%ld dst %ld,%ld,%ld,%ld",
+        refusal,Present->SrcRect.left,Present->SrcRect.top,Present->SrcRect.right,Present->SrcRect.bottom,
+        Present->DstRect.left,Present->DstRect.top,Present->DstRect.right,Present->DstRect.bottom);
+    if (Present->SubRectCnt && Present->pDstSubRects)
+        GuardLog("wddm: GPU Present param%lld sub0 %ld,%ld,%ld,%ld",refusal,
+            Present->pDstSubRects[0].left,Present->pDstSubRects[0].top,
+            Present->pDstSubRects[0].right,Present->pDstSubRects[0].bottom);
+    if (Va) GuardLog("wddm: GPU Present param%lld va%llX/%llX",refusal,Va[0],Va[1]);
+    if (Allocations)
+        for (i=0;i<2;i++)
+            GuardLog("wddm: GPU Present param%lld side%u %ux%u pitch%u fmt%u bytes%llu",refusal,i,
+                Allocations[i].Width,Allocations[i].Height,Allocations[i].Pitch,Allocations[i].Format,
+                Allocations[i].Size);
+#else
+    // The release flavour keeps the status and drops the counters and the lines.
+    UNREFERENCED_PARAMETER(Wddm); UNREFERENCED_PARAMETER(Context); UNREFERENCED_PARAMETER(Present);
+    UNREFERENCED_PARAMETER(Step); UNREFERENCED_PARAMETER(Detail); UNREFERENCED_PARAMETER(Va);
+    UNREFERENCED_PARAMETER(Allocations);
+#endif
+    return STATUS_INVALID_PARAMETER;
+}
+
+// For the refusal line only: the first rule of the Present geometry (blit_plan.c Bc250PlanPresentRun, gfx_blt.c)
+// that the Present breaks. 1 the source rectangle is not inside the source, 2 the destination rectangle is
+// inverted, 4 a sub-rectangle is not inside the destination, 5 the two allocations overlap, 6 the two formats
+// differ, 0 none of these (a surface rule or a span rule). Rule 3 (a size difference) is not a refusal any more:
+// DstRect and SrcRect give the stretch factor, and DstRect may leave the destination surface.
+static int WddmGpuPresentRectInside(const BC250_BLIT_RECT* Rect, const BC250_BLIT_SURFACE* Surface)
+{
+    return Rect->Left>=0 && Rect->Top>=0 && Rect->Right>=Rect->Left && Rect->Bottom>=Rect->Top &&
+        (UINT)Rect->Right<=Surface->Width && (UINT)Rect->Bottom<=Surface->Height;
+}
+static UINT WddmGpuPresentEmitterRule(const BC250_BLIT_SURFACE* Surface, const BC250_BLIT_RECT* Src,
+    const BC250_BLIT_RECT* Dst, const BC250_BLIT_RECT* Dirty, UINT Count, const ULONGLONG* Va)
+{
+    UINT i;
+    if (!WddmGpuPresentRectInside(Src,Surface)) return 1;
+    if (Dst->Right<Dst->Left || Dst->Bottom<Dst->Top) return 2;
+    for (i=0;Dirty && i<Count;i++)
+        if (!WddmGpuPresentRectInside(Dirty+i,Surface+1)) return 4;
+    if (Va[0]<=Va[1] ? Va[1]-Va[0]<Surface[0].Bytes : Va[0]-Va[1]<Surface[1].Bytes) return 5;
+    if (Surface[0].Format!=Surface[1].Format) return 6;
+    return 0;
+}
+
 // Build a complete OS-owned IB. The gate remains diagnostic until CDD/UMD
 // admission, cache ordering and lifecycle have been verified on the exact build.
 static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT* Present)
@@ -8726,23 +8820,27 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     BC250_WDDM_ALLOCATION_PRIVATE allocations[2];
     BC250_BLIT_SURFACE surface[2];
     BC250_BLIT_RECT src, dst, *dirty=NULL;
-    ULONGLONG va[2], ib=Present->DmaBufferGpuVirtualAddress;
+    ULONGLONG va[2]={0,0}, ib=Present->DmaBufferGpuVirtualAddress;
     ULONG record[BC250_GFX_PRESENT_RECORD_BYTES/sizeof(ULONG)];
-    UINT i,next=Present->MultipassOffset,written=0;
+    UINT i,rule,next=Present->MultipassOffset,written=0;
     BC250_GFX_BLIT_RESULT result;
-    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    // Every STATUS_INVALID_PARAMETER below goes through WddmGpuPresentRefuse with the check that failed.
+#define BC250_REFUSE(step,detail,vas,allocs) return WddmGpuPresentRefuse(wddm,Context,Present,(step),(detail),(vas),(allocs))
     // BC2C UMD admission is withheld until source AND destination residency on
     // that exact submitting device is established. ACQUIRE_MEM is not a wait
     // for another queue, and an allocation-list entry does not confer residency.
-    if (Context->UmdContext || Present->Flags.Value!=1 || Context->NodeOrdinal!=BC250_WDDM_NODE_3D ||
-        !Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX ||
-        (Present->SubRectCnt && !Present->pDstSubRects)) return status;
+    if (Context->UmdContext) BC250_REFUSE(Bc250GpuPresentUmdContext,0,NULL,NULL);
+    if (Present->Flags.Value!=1) BC250_REFUSE(Bc250GpuPresentFlags,0,NULL,NULL);
+    if (Context->NodeOrdinal!=BC250_WDDM_NODE_3D) BC250_REFUSE(Bc250GpuPresentNode,0,NULL,NULL);
+    if (!Present->pAllocationInfo || Context->AllocationListSize<=DXGK_PRESENT_MAX_INDEX)
+        BC250_REFUSE(Bc250GpuPresentAllocationList,0,NULL,NULL);
+    if (Present->SubRectCnt && !Present->pDstSubRects) BC250_REFUSE(Bc250GpuPresentSubRectArray,0,NULL,NULL);
     // A malformed available buffer is not exhaustion: retrying an equally
     // sized buffer cannot repair its alignment or an absent backing pointer.
     if ((Present->DmaSize && !Present->pDmaBuffer) ||
         ((ULONG_PTR)Present->pDmaBuffer&3u) ||
         (Present->DmaBufferPrivateDataSize && !Present->pDmaBufferPrivateData))
-        return status;
+        BC250_REFUSE(Bc250GpuPresentDmaBuffer,0,NULL,NULL);
     // DXGKARG_PRESENT reports remaining private bytes, not the context's
     // original capacity. Exhaustion can legitimately require buffer rotation.
     // Fresh non-UMD contexts have enough room for both our IB and its record.
@@ -8750,12 +8848,13 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     C_ASSERT(sizeof(BC250_PRESENT_PACKET)>=BC250_GFX_PRESENT_RECORD_BYTES);
     if (Present->DmaSize<64 || Present->DmaBufferPrivateDataSize<sizeof(record))
         return STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER;
-    if (Present->DmaSize&31u) return status;
-    if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize)) return status;
+    if (Present->DmaSize&31u) BC250_REFUSE(Bc250GpuPresentDmaAlignment,0,NULL,NULL);
+    if (!Bc250GfxPresentRecord(record,sizeof(record),ib,Present->DmaSize))
+        BC250_REFUSE(Bc250GpuPresentRecord,0,NULL,NULL);
     for (i=0;i<2;i++) {
         const DXGK_PRESENTALLOCATIONINFO* info=Present->pAllocationInfo+
             (i ? DXGK_PRESENT_DESTINATION_INDEX : DXGK_PRESENT_SOURCE_INDEX);
-        if (info->PhysicalAdapterIndex) return status;
+        if (info->PhysicalAdapterIndex) BC250_REFUSE(Bc250GpuPresentPhysicalAdapter,i+1,NULL,NULL);
         handles[i]=info->hDeviceSpecificAllocation;
     }
     {
@@ -8787,16 +8886,18 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
         surface[i].Width=a->Width;surface[i].Height=a->Height;surface[i].Pitch=a->Pitch;
         surface[i].Bytes=a->Size;surface[i].Format=WddmRedFirst(a->Format)?Bc250BltRgba8:Bc250BltBgra8;
         va[i]=info->AllocationVirtualAddress;
-        if (!va[i] || (va[i]&(PAGE_SIZE-1)) || !a->Size || va[i]>MAXULONGLONG-(a->Size-1)) return status;
+        if (!va[i] || (va[i]&(PAGE_SIZE-1)) || !a->Size || va[i]>MAXULONGLONG-(a->Size-1))
+            BC250_REFUSE(Bc250GpuPresentVirtualAddress,i+1,va,allocations);
         // The active command allocation must never be a copy source or target.
-        if (ib<=va[i] ? va[i]-ib<Present->DmaSize : ib-va[i]<a->Size) return status;
+        if (ib<=va[i] ? va[i]-ib<Present->DmaSize : ib-va[i]<a->Size)
+            BC250_REFUSE(Bc250GpuPresentIbOverlap,i+1,va,allocations);
     }
     src.Left=Present->SrcRect.left;src.Top=Present->SrcRect.top;
     src.Right=Present->SrcRect.right;src.Bottom=Present->SrcRect.bottom;
     dst.Left=Present->DstRect.left;dst.Top=Present->DstRect.top;
     dst.Right=Present->DstRect.right;dst.Bottom=Present->DstRect.bottom;
     if (Present->SubRectCnt) {
-        if (Present->SubRectCnt>MAXULONG/sizeof(*dirty)) return status;
+        if (Present->SubRectCnt>MAXULONG/sizeof(*dirty)) BC250_REFUSE(Bc250GpuPresentSubRectCount,0,va,allocations);
         dirty=ExAllocatePool2(POOL_FLAG_NON_PAGED,(SIZE_T)Present->SubRectCnt*sizeof(*dirty),BC250_WDDM_TAG);
         if (!dirty) return STATUS_INSUFFICIENT_RESOURCES;
         for(i=0;i<Present->SubRectCnt;i++) {
@@ -8806,11 +8907,21 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
     }
     result=Bc250EmitGfxPresentBltList(surface,surface+1,&src,&dst,dirty,Present->SubRectCnt,
         va[0],va[1],Present->MultipassOffset,&next,Present->pDmaBuffer,Present->DmaSize/4u,&written);
+    rule=result!=Bc250GfxBltDone && result!=Bc250GfxBltMore ?
+        WddmGpuPresentEmitterRule(surface,&src,&dst,dirty,Present->SubRectCnt,va) : 0;
     if (dirty) ExFreePoolWithTag(dirty,BC250_WDDM_TAG);
-    if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return status;
+    if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore)
+        BC250_REFUSE(Bc250GpuPresentEmitter,(UINT)result*100u+rule,va,allocations);
     // Consume the entire aligned DMA buffer, one record/IB. This prevents two
     // Present records being appended while the consumer expects one exact span.
-    if (written!=Present->DmaSize/4u) return status;
+    if (written!=Present->DmaSize/4u) BC250_REFUSE(Bc250GpuPresentWritten,written,va,allocations);
+    // Once per Present, on its first pass: a stretch (point sampled) and a DstRect past the destination surface.
+    if (!Present->MultipassOffset) {
+        if ((LONGLONG)src.Right-src.Left!=(LONGLONG)dst.Right-dst.Left ||
+            (LONGLONG)src.Bottom-src.Top!=(LONGLONG)dst.Bottom-dst.Top)
+            InterlockedIncrement64(&wddm->GpuPresentScaled);
+        if (!WddmGpuPresentRectInside(&dst,surface+1)) InterlockedIncrement64(&wddm->GpuPresentClipped);
+    }
     KeMemoryBarrier();
     RtlCopyMemory(Present->pDmaBufferPrivateData,record,sizeof(record));
     Present->pDmaBuffer=(UCHAR*)Present->pDmaBuffer+Present->DmaSize;
@@ -8827,6 +8938,7 @@ static NTSTATUS WddmBuildGpuPresent(BC250_WDDM_OBJECT* Context, DXGKARG_PRESENT*
                 allocations[i].Pitch,allocations[i].Format,allocations[i].Size);
     }
     return result==Bc250GfxBltMore ? STATUS_GRAPHICS_INSUFFICIENT_DMA_BUFFER : STATUS_SUCCESS;
+#undef BC250_REFUSE
 }
 
 // Diagnostic only: no mapping, pixel access or GPU work. Uses the producer's

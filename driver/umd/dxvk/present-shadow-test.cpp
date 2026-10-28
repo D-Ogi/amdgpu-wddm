@@ -30,16 +30,30 @@ DXGI_DDI_PRESENT_FLAGS flags(UINT value) { DXGI_DDI_PRESENT_FLAGS f{}; f.Value=v
 }
 int main() {
     const auto blt=flags(1),flip=flags(2),both=flags(3),none=flags(0);
+    constexpr DXGI_FORMAT unnamed=DXGI_FORMAT_UNKNOWN;
     // Session 353 (Stygian, Unity 2017): a windowed blt-model RGBA buffer, no destination.
-    check(present_shadow_format(blt,false,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_B8G8R8A8_UNORM);
-    check(present_shadow_format(blt,false,true,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
-    // Left alone: a buffer the kernel driver copies as it is, a flip, a named destination, a flip-model buffer.
+    check(present_shadow_format(blt,false,unnamed,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_B8G8R8A8_UNORM);
+    check(present_shadow_format(blt,false,unnamed,true,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+    // Left alone: a buffer the kernel driver copies as it is, a flip, a flip-model buffer.
     for (DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,DXGI_FORMAT_R10G10B10A2_UNORM,
                         DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_A8_UNORM,DXGI_FORMAT_UNKNOWN})
-        check(present_shadow_format(blt,false,true,f)==DXGI_FORMAT_UNKNOWN);
-    for (auto f:{flip,both,none}) check(present_shadow_format(f,false,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
-    check(present_shadow_format(blt,true,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
-    check(present_shadow_format(blt,false,false,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+        check(present_shadow_format(blt,false,unnamed,true,f)==DXGI_FORMAT_UNKNOWN);
+    for (auto f:{flip,both,none})
+        check(present_shadow_format(f,false,unnamed,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+    check(present_shadow_format(blt,false,unnamed,false,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+    // BD-253 (GOG Galaxy, Qt 6): a named destination, the window's redirection surface opened as a GDI texture in
+    // A8R8G8B8. The shadow has its D3DDDI format, as an sRGB view of the same storage does.
+    for (DXGI_FORMAT d:{DXGI_FORMAT_B8G8R8A8_UNORM,DXGI_FORMAT_B8G8R8A8_UNORM_SRGB}) {
+        check(present_shadow_format(blt,true,d,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_B8G8R8A8_UNORM);
+        check(present_shadow_format(blt,true,d,true,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB)==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB);
+        check(present_shadow_format(blt,true,d,true,DXGI_FORMAT_B8G8R8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+        check(present_shadow_format(blt,true,d,false,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+        check(present_shadow_format(flip,true,d,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
+    }
+    // A named destination of another format, or of a format the shell does not know, is presented as it is.
+    for (DXGI_FORMAT d:{DXGI_FORMAT_R8G8B8A8_UNORM,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R10G10B10A2_UNORM,
+                        DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_UNKNOWN})
+        check(present_shadow_format(blt,true,d,true,DXGI_FORMAT_R8G8B8A8_UNORM)==DXGI_FORMAT_UNKNOWN);
 
     // The request: the B8G8R8A8 LB7A row (A8R8G8B8), the engine's 256-byte pitch, whole pages, no runtime resource.
     RuntimeSurfaceRequest request{}; D3D11_TEXTURE2D_DESC1 desc{};
@@ -84,6 +98,7 @@ int main() {
         bad=request;bad.texture.CpuAccessFlags=D3D11_CPU_ACCESS_READ;
         check(allocate_runtime_surface(device,bad,allocation)==E_INVALIDARG && allocates==1);
     }
-    std::cout << "PASS present shadow: blt-model RGBA buffers only, BGRA LB7A request admitted\n";
+    std::cout << "PASS present shadow: blt-model RGBA buffers only, a named destination of the shadow's format, "
+        "BGRA LB7A request admitted\n";
     return 0;
 }

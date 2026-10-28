@@ -6,6 +6,56 @@
 #include "../gfx_copy.h"
 #include "../gfx_copy_fields.h"
 #define CHECK(c) do {if(!(c)){fprintf(stderr,"FAIL line%d: %s\n",__LINE__,#c);exit(1);}}while(0)
+
+/* One Present of the DXGKARG_PRESENT geometry through the production wrapper at
+ * several capacities, against a pixel oracle that samples the source at the
+ * destination pixel centre in floating point. Dirty NULL is the whole destination. */
+static void PresentCase(const BC250_BLIT_SURFACE* s, const BC250_BLIT_SURFACE* d,
+    const BC250_BLIT_RECT* sr, const BC250_BLIT_RECT* dr, const BC250_BLIT_RECT* dirty, unsigned int count)
+{
+    static unsigned char source[4096], actual[4096], expected[4096];
+    unsigned int buffer[64], capacity, offset, written, j, k, attempts, x, y;
+    unsigned long long sourceBase=0x100000000ull, destinationBase=0x200000000ull;
+    BC250_GFX_BLIT_RESULT result;
+    CHECK(s->Bytes<=sizeof(source) && d->Bytes<=sizeof(actual));
+    for(j=0;j<sizeof(source);j++)source[j]=(unsigned char)(29u*j+7u);
+    memset(expected,0xcc,sizeof(expected));
+    for(y=0;y<d->Height;y++)for(x=0;x<d->Width;x++) {
+        int hit=!count;
+        for(k=0;k<count;k++)if((int)x>=dirty[k].Left && (int)x<dirty[k].Right &&
+            (int)y>=dirty[k].Top && (int)y<dirty[k].Bottom)hit=1;
+        if(!hit || (int)x<dr->Left || (int)x>=dr->Right || (int)y<dr->Top || (int)y>=dr->Bottom)continue;
+        {
+            double fx=((double)x-dr->Left+0.5)*(sr->Right-sr->Left)/(double)(dr->Right-dr->Left);
+            double fy=((double)y-dr->Top+0.5)*(sr->Bottom-sr->Top)/(double)(dr->Bottom-dr->Top);
+            unsigned int sx=(unsigned int)(sr->Left+(int)fx),sy=(unsigned int)(sr->Top+(int)fy);
+            CHECK(sx<s->Width && sy<s->Height);
+            memcpy(expected+y*d->Pitch+x*4u,source+sy*s->Pitch+sx*4u,4);
+        }
+    }
+    for(capacity=16;capacity<=64;capacity+=8) {
+        offset=attempts=0;memset(actual,0xcc,sizeof(actual));
+        do {
+            unsigned int prior=offset,packets;
+            result=Bc250EmitGfxPresentBltList(s,d,sr,dr,dirty,count,sourceBase,destinationBase,
+                offset,&offset,buffer,capacity,&written);
+            CHECK(result==Bc250GfxBltDone || result==Bc250GfxBltMore);
+            CHECK(written==capacity);
+            packets=offset-prior;
+            CHECK(8+7*packets<=written);
+            for(j=8;j<8+7*packets;j+=7) {
+                unsigned long long from=(((unsigned long long)buffer[j+3]<<32)|buffer[j+2])-sourceBase;
+                unsigned long long to=(((unsigned long long)buffer[j+5]<<32)|buffer[j+4])-destinationBase;
+                unsigned int bytes=buffer[j+6]&S_506_BYTE_COUNT(~0u);
+                CHECK(from+bytes<=s->Bytes && to+bytes<=d->Bytes);
+                memcpy(actual+to,source+from,bytes);
+            }
+            CHECK(++attempts<=256);
+        } while(result==Bc250GfxBltMore);
+        CHECK(!memcmp(actual,expected,(size_t)d->Bytes));
+    }
+}
+
 int main(void)
 {
     BC250_BLIT_SURFACE s={8,7,40,280,Bc250BltBgra8},d={11,9,48,432,Bc250BltBgra8};
@@ -243,6 +293,43 @@ int main(void)
             record[i]^=1;
         }
     }
+    {
+        /* Present geometry: DestinationRect past the surface and of another size. */
+        BC250_BLIT_SURFACE ps={6,5,24,120,Bc250BltBgra8},pd={6,5,28,140,Bc250BltBgra8},
+            big={13,9,56,504,Bc250BltBgra8};
+        BC250_BLIT_RECT psr={0,0,6,5},gog={0,-1,6,5},corner={-1,-1,6,5},sub={0,0,6,5},
+            part[2]={{0,0,3,2},{2,3,6,5}},small={1,1,4,3},twice={0,0,6,4},shrink={1,0,4,9},
+            same={0,0,6,5},inverted={0,5,6,4},outside={0,0,7,5};
+        BC250_BLIT_PLAN p;
+        BC250_PRESENT_RUN run;
+        unsigned int offset=0,runs;
+        /* The redirected-window case of GOG Galaxy: top -1, one row higher than the source. */
+        PresentCase(&ps,&pd,&psr,&gog,&sub,1);
+        PresentCase(&ps,&pd,&psr,&gog,0,0);
+        PresentCase(&ps,&pd,&psr,&corner,part,2);
+        PresentCase(&ps,&pd,&small,&twice,0,0);      /* 2x up in both axes */
+        PresentCase(&ps,&big,&psr,&shrink,0,0);      /* down in x, up in y */
+        PresentCase(&ps,&pd,&psr,&same,part,2);      /* equal sizes: one run per sub-rectangle */
+        memset(&run,0,sizeof(run));runs=0;
+        while(Bc250PlanPresentRun(&ps,&pd,&psr,&gog,&sub,&run,&p)==Bc250BltCopy)runs++;
+        CHECK(runs==2);                              /* 6 rows from 5: one row repeats */
+        memset(&run,0,sizeof(run));runs=0;
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&psr,&same,&sub,&run,&p)==Bc250BltCopy && p.Rows==5 && p.RowBytes==24);
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&psr,&same,&sub,&run,&p)==Bc250BltEmpty && !p.Rows);
+        memset(&run,0,sizeof(run));
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&psr,&inverted,&sub,&run,&p)==Bc250BltInvalid);
+        memset(&run,0,sizeof(run));
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&outside,&gog,&sub,&run,&p)==Bc250BltInvalid);
+        memset(&run,0,sizeof(run));
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&psr,&gog,&outside,&run,&p)==Bc250BltInvalid);
+        memset(&run,0,sizeof(run));run.Started=1;run.X=0;run.Y=2;run.YEnd=9;
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&psr,&gog,&sub,&run,&p)==Bc250BltInvalid);
+        memset(&run,0,sizeof(run));
+        CHECK(Bc250PlanPresentRun(&ps,&pd,&psr,&psr,0,0,&p)==Bc250BltInvalid);
+        CHECK(Bc250EmitGfxPresentBltList(&ps,&pd,&psr,&inverted,&sub,1,sourceBase,destinationBase,
+            0,&offset,buffer,64,&written)==Bc250GfxBltInvalid && !written && !offset);
+    }
+    puts("PASS Present geometry: destination rectangle past the surface, point-sampled sizes, run cursor");
     puts("PASS Present consumed-private-span replay and negative boundaries");
     puts("PASS acquired and padded Present IBs, resumed copies, rejection and independent pixels");
     puts("PASS Present private-record binding, truncation, mutation and range checks");

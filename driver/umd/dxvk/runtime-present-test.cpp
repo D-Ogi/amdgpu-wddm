@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "runtime-bridge.h"
+#include "present-contract.h"
 #include <cstdlib>
 #include <string>
 using namespace bc250::umd;
@@ -38,17 +39,37 @@ HRESULT APIENTRY signal(HANDLE h, const D3DDDICB_SIGNALSYNCHRONIZATIONOBJECTFROM
     check(h==&identity && p->ObjectCount==1 && *p->ObjectHandleArray==62);
     check(*p->MonitoredFenceValueArray==1); trace+='S'; return signal_result;
 }
+// BD-170: what the Present entry returns. S_OK or device removal only: a refused callback is S_OK (the runtime
+// maps the kernel status), a success code is S_OK, and a failure of the shell's own steps is device removal.
+void test_present_ddi_status() {
+    check(present_ddi_status(S_OK,S_OK)==S_OK);
+    check(present_ddi_status(S_FALSE,S_FALSE)==S_OK);
+    check(present_ddi_status(DXGI_STATUS_OCCLUDED,DXGI_STATUS_OCCLUDED)==S_OK);
+    check(present_ddi_status(E_INVALIDARG,E_INVALIDARG)==S_OK && present_callback_refused(E_INVALIDARG,E_INVALIDARG));
+    check(present_ddi_status(E_FAIL,E_FAIL)==S_OK);
+    check(present_ddi_status(E_FAIL,S_OK)==D3DDDIERR_DEVICEREMOVED && !present_callback_refused(E_FAIL,S_OK));
+    check(present_ddi_status(E_INVALIDARG,S_OK)==D3DDDIERR_DEVICEREMOVED);
+    check(present_ddi_status(E_OUTOFMEMORY,S_OK)==D3DDDIERR_DEVICEREMOVED);
+    check(present_ddi_status(E_FAIL,E_INVALIDARG)==D3DDDIERR_DEVICEREMOVED);
+    check(present_ddi_status(D3DDDIERR_DEVICEREMOVED,DXGI_ERROR_DEVICE_REMOVED)==D3DDDIERR_DEVICEREMOVED);
+    check(present_ddi_status(DXGI_ERROR_DEVICE_HUNG,S_OK)==D3DDDIERR_DEVICEREMOVED);
+    check(!present_callback_refused(D3DDDIERR_DEVICEREMOVED,DXGI_ERROR_DEVICE_REMOVED));
+    check(!present_callback_refused(S_FALSE,S_FALSE));
+}
 }
 void test_runtime_present() {
-    struct Case { HRESULT f,w,p,s,result; const char *order; bool lost; };
+    test_present_ddi_status();
+    // entry: what the Present entry returns for the case (present_ddi_status of the result and the callback status).
+    struct Case { HRESULT f,w,p,s,result; const char *order; bool lost; HRESULT entry; };
     const Case cases[] = {
-        {S_OK,S_OK,S_OK,S_OK,S_OK,"FCWPS",false},
-        {S_OK,S_OK,S_FALSE,S_OK,S_FALSE,"FCWPS",false},
-        {E_FAIL,S_OK,S_OK,S_OK,E_FAIL,"F",false},
-        {S_OK,E_FAIL,S_OK,S_OK,E_FAIL,"FCW",false},
-        {S_OK,S_OK,E_FAIL,S_OK,E_FAIL,"FCWP",false},
-        {S_OK,S_OK,S_OK,E_FAIL,E_FAIL,"FCWPS",false},
-        {S_OK,S_OK,DXGI_ERROR_DEVICE_REMOVED,S_OK,D3DDDIERR_DEVICEREMOVED,"FCWP",true},
+        {S_OK,S_OK,S_OK,S_OK,S_OK,"FCWPS",false,S_OK},
+        {S_OK,S_OK,S_FALSE,S_OK,S_FALSE,"FCWPS",false,S_OK},
+        {E_FAIL,S_OK,S_OK,S_OK,E_FAIL,"F",false,D3DDDIERR_DEVICEREMOVED},
+        {S_OK,E_FAIL,S_OK,S_OK,E_FAIL,"FCW",false,D3DDDIERR_DEVICEREMOVED},
+        {S_OK,S_OK,E_FAIL,S_OK,E_FAIL,"FCWP",false,S_OK},
+        {S_OK,S_OK,E_INVALIDARG,S_OK,E_INVALIDARG,"FCWP",false,S_OK},
+        {S_OK,S_OK,S_OK,E_FAIL,E_FAIL,"FCWPS",false,D3DDDIERR_DEVICEREMOVED},
+        {S_OK,S_OK,DXGI_ERROR_DEVICE_REMOVED,S_OK,D3DDDIERR_DEVICEREMOVED,"FCWP",true,D3DDDIERR_DEVICEREMOVED},
     };
     for (const auto &c:cases) {
         RuntimeDevice d; d.hDevice=&identity; d.present_context=&context;
@@ -60,7 +81,15 @@ void test_runtime_present() {
         trace.clear(); flush_result=c.f; wait_result=c.w; present_result=c.p; signal_result=c.s;
         check(present_runtime(b,71,72,&dxgi,flush,&b)==E_INVALIDARG && trace.empty());
         RuntimeDomain::Scope scope(d.domain);
-        check(present_runtime(b,71,72,&dxgi,flush,&b)==c.result && trace==c.order);
+        HRESULT callback=E_PENDING; char step='?';
+        const HRESULT result=present_runtime(b,71,72,&dxgi,flush,&b,PresentSyncOverride{},&callback,&step);
+        check(result==c.result && trace==c.order);
+        // The step that ended the present: the last letter of the trace where a step failed, none where all passed.
+        const char last=c.order[std::string(c.order).size()-1];
+        check(step==(FAILED(c.result) ? (last=='C' ? 'W' : last) : 0));
+        // The callback status: the callback's own where the present reached it, S_OK where it did not.
+        check(callback==(std::string(c.order).find('P')!=std::string::npos ? c.p : S_OK));
+        check(present_ddi_status(result,callback)==c.entry);
         check(b.device_lost==c.lost);
         check(b.present_value==((SUCCEEDED(c.f)&&SUCCEEDED(c.w)&&SUCCEEDED(c.p)&&SUCCEEDED(c.s)) ? 1u : 0u));
         trace.clear();

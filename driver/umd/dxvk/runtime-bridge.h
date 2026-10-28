@@ -18,6 +18,17 @@ struct RuntimeDevice {
     const DXGI_DDI_BASE_CALLBACKS *DXGICallbacks = nullptr;
     D3DDDI_DEVICECALLBACKS KTCallbacks = {};
     D3D10DDI_CORELAYER_DEVICECALLBACKS UMCallbacks = {};
+    // BD-253: the identity the hosted ICD knows this device by (bc250_host.identity, bc250_host_import.identity).
+    // The ICD keeps one winsys for each identity in the process and gives it again to a new instance with the same
+    // identity (radv_wddm2_winsys_create). The runtime's hDevice cannot be that identity: the runtime can give
+    // the same handle to a new device after it destroys the old one, while the old device's instance and winsys
+    // stay alive because its cleanup failed (retire_device_handle keeps such an owner). The new device then gets
+    // the old winsys, with the old device's paging queue and host callbacks. The address of this object does not
+    // have that problem: the owner that holds it is not freed while an instance of it is alive.
+    // legacy_host_identity (the experiment switch "host-identity-off") gives hDevice as before, for a lab
+    // comparison.
+    bool legacy_host_identity = false;
+    void *host_identity() { return legacy_host_identity ? hDevice : static_cast<void *>(this); }
 };
 // Zero initialize; lifetime and cleanup belong to the UMD device. Context tokens
 // are bridge-local, not kernel handles. No DXVK worker may enter a runtime scope.
@@ -38,13 +49,32 @@ struct HostBridge {
 // Latch a loss whose status the caller already carries: the entry that got it reports it through its
 // own error class, so the bridge must not report it a second time.
 inline void latch_device_lost(HostBridge &bridge) { bridge.device_lost=true; bridge.lost_reported=true; }
+// BD-253: TRUE when the kernel has put this device in its error state: a monitored fence of the bridge (the present
+// fence or a progress fence of the hosted ICD) reads the lost-device value, which only the kernel writes, and only
+// when it ends the device's work. A latched loss alone is not this proof: a refused submission or a wait that
+// timed out also latches one while earlier work can still run.
+inline bool kernel_ended_device_work(const HostBridge &bridge) {
+   if (bridge.present_cpu && *(const volatile UINT64 *)bridge.present_cpu==UINT64_MAX) return true;
+   for (const auto &p:bridge.progress)
+      if (p.cpu_address && *(const volatile UINT64 *)p.cpu_address==UINT64_MAX) return true;
+   return false;
+}
+// The statuses that report a lost device.
+inline bool device_lost_status(HRESULT hr) {
+   return hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET ||
+          hr==DXGI_ERROR_DEVICE_HUNG || hr==DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+}
 using FlushEngine = HRESULT (*)(void *);
 // The per-application VSync setting (docs/design/per-app-graphics-settings.md): when valid, the Present callback
 // carries interval as DXGIDDICB_PRESENT.SyncIntervalOverride in place of the application's sync interval.
 struct PresentSyncOverride { bool valid=false; DXGI_DDI_FLIP_INTERVAL_TYPE interval=DXGI_DDI_FLIP_INTERVAL_IMMEDIATE; };
+// callback, when given, receives the status of pfnPresentCbDXGI, or S_OK when the present did not reach it: the runtime
+// keeps the kernel status of that callback for itself, so the DDI entry must know which step failed (present-contract.h).
+// step, when given, receives the step that ended the present: 'H' a lost host or a failed submission before the first
+// step, 'F' the flush, 'W' the GPU wait, 'P' the callback, 'S' the fence signal, or 0 when each step succeeded.
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
     D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
-    PresentSyncOverride sync=PresentSyncOverride{});
+    PresentSyncOverride sync=PresentSyncOverride{}, HRESULT *callback=nullptr, char *step=nullptr);
 HRESULT queue_present_wait(HostBridge &bridge);
 HRESULT signal_present(HostBridge &bridge);
 // Destruction/readback only. Steady-state Present uses GPU waits above.
@@ -62,7 +92,7 @@ inline bc250_host host_descriptor(HostBridge &bridge, uint64_t adapter_luid) {
     host.version = BC250_HOST_VERSION;
     host.size = sizeof(host);
     host.adapter_luid = adapter_luid;
-    host.identity = bridge.device->hDevice;
+    host.identity = bridge.device->host_identity();
     host.userdata = &bridge;
     host.dispatch = host_dispatch;
     return host;

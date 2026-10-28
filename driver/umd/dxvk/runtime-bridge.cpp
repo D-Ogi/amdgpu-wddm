@@ -29,14 +29,26 @@
 // Gallium Device replaced with runtime-only state; entry uses RuntimeDomain.
 #include "runtime-bridge.h"
 #include "ddi-error-policy.h"
+#include "diagnostics.h"
 namespace bc250::umd {
+// BD-253: one line when a bridge first latches a loss, in both flavours (an ordinary error report, at most 16
+// lines per process): the reason, the host operation and its status where one caused it, the device and the
+// thread. The engine's own line ("Command submission failed: VK_ERROR_DEVICE_LOST") does not name the cause.
+static void Bc250HostLossNote(HostBridge *s, const char *reason, unsigned op, HRESULT hr)
+{
+   static std::atomic_uint notes{16};
+   device_life_note(notes,"BC250 BD-253: host loss latched: reason=%s op=%u hr=%08X runtime=%p identity=%p "
+      "thread=%lu\n",reason,op,unsigned(hr),s->device ? s->device->hDevice : nullptr,
+      s->device ? s->device->host_identity() : nullptr,(unsigned long)GetCurrentThreadId());
+}
 // The device is gone. This is the one report that happens outside a DDI entry's own code: the loss is
 // detected inside the engine's submission path, under whichever entry is running. That entry's page
 // decides whether the runtime accepts device removal here, so the status passes through the entry
 // class that enter_context put on this thread. A capability-check entry accepts no status at all, and
 // then the report waits for the next entry whose page allows it (BD-071 review).
-static HRESULT Bc250HostLost(HostBridge *s)
+static HRESULT Bc250HostLost(HostBridge *s, const char *reason="unnamed", unsigned op=~0u, HRESULT hr=S_OK)
 {
+   if (!s->device_lost) Bc250HostLossNote(s,reason,op,hr);
    s->device_lost=true;
    s->submission_failed=true;
    if (!s->lost_reported) {
@@ -51,24 +63,23 @@ static HRESULT Bc250HostLost(HostBridge *s)
 
 static bool Bc250DeviceLostResult(HRESULT hr)
 {
-   return hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED ||
-          hr==DXGI_ERROR_DEVICE_RESET || hr==DXGI_ERROR_DEVICE_HUNG ||
-          hr==DXGI_ERROR_DRIVER_INTERNAL_ERROR;
+   return device_lost_status(hr);
 }
 
 static HRESULT Bc250HostStatus(HostBridge *s)
 {
    // A loss already latched still needs its report when a check-type entry swallowed the first one.
-   if (s->device_lost) return s->lost_reported ? D3DDDIERR_DEVICEREMOVED : Bc250HostLost(s);
+   if (s->device_lost) return s->lost_reported ? D3DDDIERR_DEVICEREMOVED : Bc250HostLost(s,"an earlier loss of this device");
    for (const auto &p:s->progress) {
       if (!p.cpu_address) continue;
       UINT64 observed=*(const volatile UINT64 *)p.cpu_address;
 
-      if (observed==UINT64_MAX) return Bc250HostLost(s);
+      if (observed==UINT64_MAX) return Bc250HostLost(s,"progress fence reads the lost-device value");
    }
-   if ((s->present_cpu && *(const volatile UINT64 *)s->present_cpu==UINT64_MAX) ||
-       (s->device->pagingFence && *s->device->pagingFence==UINT64_MAX))
-      return Bc250HostLost(s);
+   if (s->present_cpu && *(const volatile UINT64 *)s->present_cpu==UINT64_MAX)
+      return Bc250HostLost(s,"present fence reads the lost-device value");
+   if (s->device->pagingFence && *s->device->pagingFence==UINT64_MAX)
+      return Bc250HostLost(s,"paging fence reads the lost-device value");
    return S_OK;
 }
 
@@ -82,7 +93,7 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
    auto &cb = s->device->KTCallbacks;
    HANDLE rt = s->device->hDevice;
    if (op==BC250_HOST_CHECK_STATUS) return Bc250HostStatus(s);
-   if (op==BC250_HOST_REPORT_LOST) return Bc250HostLost(s);
+   if (op==BC250_HOST_REPORT_LOST) return Bc250HostLost(s,"the ICD reports a loss",op);
    if (!argument) return E_INVALIDARG;
 #define HOST_CALL(name, arg) (cb.pfn##name##Cb ? cb.pfn##name##Cb(rt, arg) : E_NOTIMPL)
    switch (op) {
@@ -283,15 +294,41 @@ int32_t host_dispatch(void *userdata, uint32_t operation, void *argument)
 {
    auto *s=(HostBridge *)userdata;
    if (!s || !s->device || !s->device->domain.entered()) {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+      // BD-253, lab flavour (BD-167): a call that reached a device whose runtime scope this thread has not
+      // entered, for example a winsys that the hosted ICD kept for another device with the same identity.
+      static std::atomic_uint wrong{16};
+      device_life_note(wrong,"BC250 BD-253: host op %u refused: not in this device's runtime scope: runtime=%p "
+         "identity=%p thread=%lu\n",operation,s && s->device ? s->device->hDevice : nullptr,
+         s && s->device ? s->device->host_identity() : nullptr,(unsigned long)GetCurrentThreadId());
+#endif
       return (int32_t)0xc000000d;
    }
    HRESULT hr=Bc250HostOperation(s,operation,argument);
    if (Bc250DeviceLostResult(hr)) {
-      Bc250HostLost(s);
+      Bc250HostLost(s,"a host operation returned a lost-device status",operation,hr);
       return (int32_t)0xc00002b6;
    }
-   if (FAILED(hr) && (operation==BC250_HOST_SubmitCommand || operation==BC250_HOST_SignalSynchronizationObjectFromGpu2 || operation==BC250_HOST_UpdateGpuVirtualAddress || operation==BC250_HOST_PUBLISH_PROGRESS))
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+   // BD-253, lab flavour: each other failed operation, at most 32 lines per process. E_PENDING of a mapping or a
+   // residency request is the normal paging answer, not a failure.
+   if (FAILED(hr) && hr!=E_NOTIMPL && !(hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress ||
+       operation==BC250_HOST_MakeResident))) {
+      static std::atomic_uint failed{32};
+      device_life_note(failed,"BC250 BD-253: host op %u failed hr=%08X runtime=%p identity=%p thread=%lu\n",
+         operation,unsigned(hr),s->device->hDevice,s->device->host_identity(),(unsigned long)GetCurrentThreadId());
+   }
+#endif
+   if (FAILED(hr) && (operation==BC250_HOST_SubmitCommand || operation==BC250_HOST_SignalSynchronizationObjectFromGpu2 || operation==BC250_HOST_UpdateGpuVirtualAddress || operation==BC250_HOST_PUBLISH_PROGRESS)) {
+      // BD-253: in both flavours, one line when a submission-path failure first stops this device's Present.
+      if (!s->submission_failed) {
+         static std::atomic_uint stops{16};
+         device_life_note(stops,"BC250 BD-253: submission stopped: host op %u failed hr=%08X runtime=%p identity=%p "
+            "thread=%lu\n",operation,unsigned(hr),s->device->hDevice,s->device->host_identity(),
+            (unsigned long)GetCurrentThreadId());
+      }
       s->submission_failed=true;
+   }
    if (operation<64) ++s->calls[operation];
    if (hr==E_PENDING && (operation==BC250_HOST_MapGpuVirtualAddress || operation==BC250_HOST_MakeResident)) return 0x103;
    return SUCCEEDED(hr) ? 0 : hr==E_NOTIMPL ? (int32_t)0xc00000bb :
@@ -379,26 +416,33 @@ HRESULT wait_present_value(HostBridge &bridge, UINT64 value)
    HRESULT hr=device->KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device->hDevice,&wait);
    if (SUCCEEDED(hr) && WaitForSingleObject(event,10000)!=WAIT_OBJECT_0) hr=DXGI_ERROR_DEVICE_HUNG;
    CloseHandle(event);
-   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(s);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(s,"present fence wait",~0u,hr);
    return SUCCEEDED(hr) ? Bc250HostStatus(s) : hr;
 }
 
 HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
     D3DKMT_HANDLE destination, void *dxgi_context, FlushEngine flush, void *engine,
-    PresentSyncOverride sync)
+    PresentSyncOverride sync, HRESULT *callback, char *step)
 {
+   if (callback) *callback=S_OK;
+   char ignored=0; char &at=step ? *step : ignored;
+   at=0;
    auto *device=bridge.device;
    if (!device || !device->domain.entered() || !device->present_context || !source || !flush)
       return E_INVALIDARG;
    if (!device->DXGICallbacks || !device->DXGICallbacks->pfnPresentCb) return E_NOTIMPL;
+   at='H';
    if (FAILED(Bc250HostStatus(&bridge)) || bridge.submission_failed)
       return DXGI_ERROR_DEVICE_REMOVED;
+   at='F';
    HRESULT hr=flush(engine);
-   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge,"Present: engine flush",~0u,hr);
    if (FAILED(hr)) return hr;
+   at='W';
    hr=queue_present_wait(bridge);
-   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge,"Present: queue wait",~0u,hr);
    if (FAILED(hr)) return hr;
+   at='P';
    DXGIDDICB_PRESENT present={};
    present.hSrcAllocation=source;
    present.hDstAllocation=destination;
@@ -409,11 +453,15 @@ HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
       present.SyncIntervalOverride=sync.interval;
    }
    const HRESULT result=device->DXGICallbacks->pfnPresentCb(device->hDevice,&present);
-   if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge);
+   if (callback) *callback=result;
+   if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge,"Present: present callback",~0u,result);
    if (FAILED(result)) return result;
+   at='S';
    hr=signal_present(bridge);
-   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge);
-   return FAILED(hr) ? hr : result;
+   if (Bc250DeviceLostResult(hr)) return Bc250HostLost(&bridge,"Present: present fence signal",~0u,hr);
+   if (FAILED(hr)) return hr;
+   at=0;
+   return result;
 }
 
 }

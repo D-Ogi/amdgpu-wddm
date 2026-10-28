@@ -148,6 +148,75 @@ int Bc250GfxPresentSubmitMatches(const void* record, unsigned int capacity,
         Bc250GfxPresentMatches(record, capacity, address, bytes);
 }
 
+/* Bc250EmitGfxBltList for the Present geometry of Bc250PlanPresentRun: the same
+ * whole-list preflight, packet ordinals and pass rules, over the runs of each
+ * sub-rectangle in place of one plan per sub-rectangle. Equal rectangle sizes give
+ * one run per sub-rectangle, so the packets are those of Bc250EmitGfxBltList. */
+static BC250_GFX_BLIT_RESULT EmitPresentRuns(
+    const BC250_BLIT_SURFACE* source, const BC250_BLIT_SURFACE* destination,
+    const BC250_BLIT_RECT* sourceRect, const BC250_BLIT_RECT* destinationRect,
+    const BC250_BLIT_RECT* dirty, unsigned int count,
+    unsigned long long sourceBase, unsigned long long destinationBase,
+    unsigned int offset, unsigned int* next, unsigned int* buffer,
+    unsigned int capacity, unsigned int* written)
+{
+    BC250_BLIT_PLAN plan;
+    BC250_BLIT_CURSOR cursor, end;
+    BC250_PRESENT_RUN run;
+    BC250_BLIT_RESULT planned;
+    unsigned int i, n = count ? count : 1u, ignored, maximum = Bc250GfxCopyMaxBytes();
+    unsigned int perRow, packets, skip = offset, used = 0;
+    unsigned long long total = 0;
+    BC250_GFX_BLIT_RESULT result;
+    if (!next || !written) return Bc250GfxBltInvalid;
+    *next = offset; *written = 0;
+    if (!source || !destination || !sourceRect || !destinationRect ||
+        (count && !dirty) || !source->Bytes || !destination->Bytes ||
+        (sourceBase & 3u) || (destinationBase & 3u) ||
+        sourceBase > ~0ull - (source->Bytes - 1u) ||
+        destinationBase > ~0ull - (destination->Bytes - 1u)) return Bc250GfxBltInvalid;
+    if (sourceBase <= destinationBase ? destinationBase - sourceBase < source->Bytes :
+        sourceBase - destinationBase < destination->Bytes) return Bc250GfxBltInvalid;
+    /* Full-list preflight must finish before even the first output word. */
+    for (i = 0; i < n; i++) {
+        run.Started = run.X = run.Y = run.YEnd = 0;
+        while ((planned = Bc250PlanPresentRun(source, destination, sourceRect, destinationRect,
+            count ? dirty + i : 0, &run, &plan)) == Bc250BltCopy) {
+            cursor.Row = cursor.ByteInRow = 0;
+            result = Bc250EmitGfxBlt(&plan, sourceBase, destinationBase, &cursor, &end, 0, 0, &ignored);
+            if (result != Bc250GfxBltNoSpace && result != Bc250GfxBltDone) return Bc250GfxBltInvalid;
+            perRow = plan.RowBytes / maximum + (plan.RowBytes % maximum != 0);
+            total += (unsigned long long)perRow * plan.Rows;
+            if (total > ~0u) return Bc250GfxBltInvalid;
+        }
+        if (planned != Bc250BltEmpty) return Bc250GfxBltInvalid;
+    }
+    if (offset > total) return Bc250GfxBltInvalid;
+    if (offset == total) return Bc250GfxBltDone;
+    if (capacity < 7u) return Bc250GfxBltNoSpace;
+    if (!buffer) return Bc250GfxBltInvalid;
+    for (i = 0; i < n; i++) {
+        run.Started = run.X = run.Y = run.YEnd = 0;
+        /* Immutable input and the preflight above prove every run and its packet count. */
+        while (Bc250PlanPresentRun(source, destination, sourceRect, destinationRect,
+            count ? dirty + i : 0, &run, &plan) == Bc250BltCopy) {
+            perRow = plan.RowBytes / maximum + (plan.RowBytes % maximum != 0);
+            packets = perRow * plan.Rows;
+            if (skip >= packets) { skip -= packets; continue; }
+            cursor.Row = skip / perRow;
+            cursor.ByteInRow = (skip % perRow) * maximum;
+            result = Bc250EmitGfxBlt(&plan, sourceBase, destinationBase, &cursor, &end,
+                buffer + used, capacity - used, &ignored);
+            used += ignored;
+            skip = 0;
+            if (result == Bc250GfxBltMore || capacity - used < 7u) goto full;
+        }
+    }
+full:
+    *written = used; *next = offset + used / 7u;
+    return *next == (unsigned int)total ? Bc250GfxBltDone : Bc250GfxBltMore;
+}
+
 BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
     const BC250_BLIT_SURFACE* source, const BC250_BLIT_SURFACE* destination,
     const BC250_BLIT_RECT* sourceRect, const BC250_BLIT_RECT* destinationRect,
@@ -162,7 +231,7 @@ BC250_GFX_BLIT_RESULT Bc250EmitGfxPresentBltList(
     *next=offset;*written=0;
     if (capacity<16u || (capacity&7u)) return Bc250GfxBltNoSpace;
     if (!buffer) return Bc250GfxBltInvalid;
-    result=Bc250EmitGfxBltList(source,destination,sourceRect,destinationRect,
+    result=EmitPresentRuns(source,destination,sourceRect,destinationRect,
         dirty,count,sourceBase,destinationBase,offset,next,
         buffer+BC250_GFX_ACQUIRE_DWORDS,capacity-BC250_GFX_ACQUIRE_DWORDS,&copied);
     if (result!=Bc250GfxBltDone && result!=Bc250GfxBltMore) return result;

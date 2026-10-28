@@ -26,7 +26,7 @@ HRESULT import_runtime_image_memory(RuntimeDevice &runtime,VkDevice device,VkIma
     const bc250_host_import &source,VkDeviceMemory &out) {
     if (out) return E_UNEXPECTED;
     if (!runtime.domain.entered() || !device || !image || !vk.requirements || !vk.allocate || !vk.bind || !vk.free ||
-        source.sType!=BC250_HOST_IMPORT_STYPE || source.identity!=runtime.hDevice || !source.identity ||
+        source.sType!=BC250_HOST_IMPORT_STYPE || source.identity!=runtime.host_identity() || !source.identity ||
         !source.allocation || !source.va || !source.size || source.va>UINT64_MAX-source.size ||
         properties.memoryTypeCount>VK_MAX_MEMORY_TYPES) return E_INVALIDARG;
     VkMemoryRequirements requirements{}; vk.requirements(device,image,&requirements);
