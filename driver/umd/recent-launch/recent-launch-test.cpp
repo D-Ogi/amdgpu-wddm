@@ -546,8 +546,10 @@ int run_child(const wchar_t* cmdline,DWORD flags,STARTUPINFOEXW* si,PROCESS_INFO
 // The children queue on one lock and hold it a few milliseconds each. On a loaded host, 24 process starts and
 // commits take longer than the driver's 1000 ms wait, and the late children dropped their notes as Busy (21-22 of 24
 // at 70-90 % CPU, 2026-10-08). This test checks that simultaneous commits serialize and lose nothing, so its children
-// wait 10 s. test_lock_bound checks the driver's bound.
-constexpr DWORD kProcessesLockWaitMs=10000;
+// wait 60 s. 10 s was not enough on 2026-10-28: with other builds on the host one commit took up to 1.5 s (the
+// first open of the list after a write), and 15 of 24 children dropped their notes as Busy. test_lock_bound checks
+// the driver's bound.
+constexpr DWORD kProcessesLockWaitMs=60000;
 void test_processes() {
     const std::wstring store=fresh(L"processes"),same=L"C:\\Games\\same.exe";
     delete_switch();
@@ -564,7 +566,7 @@ void test_processes() {
     int recorded_same=0,busy=0,bad=0;
     std::vector<rl::Outcome> outcomes(N);
     for(int i=0;i<N;++i){
-        WaitForSingleObject(pis[i].hProcess,30000);
+        WaitForSingleObject(pis[i].hProcess,kProcessesLockWaitMs+30000); // a child's lock wait and its own work
         DWORD code=DWORD(-1);GetExitCodeProcess(pis[i].hProcess,&code);
         CloseHandle(pis[i].hThread);CloseHandle(pis[i].hProcess);
         const auto o=outcomes[i]=rl::Outcome(code);
@@ -685,7 +687,7 @@ void test_note_and_timing() {
         for(uint32_t i=0;i<rl::kMaxEntries;++i)
             rl::commit(inputs(tstore,L"C:\\Program Files (x86)\\Steam\\steamapps\\common\\"+std::wstring(60,L'g')+
                 std::to_wstring(i)+L"\\bin\\x64\\game.exe",9000+base+i),rl::ApiD3D12);
-        std::vector<double> whole,gathers,writes;
+        std::vector<double> whole,gathers,writes,files;
         for(uint32_t i=0;i<300;++i){
             t0=std::chrono::steady_clock::now();
             rl::Inputs in;rl::Outcome skip{};
@@ -694,19 +696,38 @@ void test_note_and_timing() {
             in.store_dir=tstore;in.switch_key=g_switch_key.c_str();in.pid=20000+base+i; // a new launch each time
             CHECK(rl::commit(in,rl::ApiD3D12)==rl::Outcome::Recorded);
             whole.push_back(ms_since(t0));
-            // The file part alone: write and rename a list of the same size.
-            std::string text;bool none=false;rl::read_store(tstore,text,none);
+            // The file part alone, on the same disk and in the same second: open and read the list that the commit
+            // has just written, then write and rename a list of the same size. These are the file operations of a
+            // commit without its own work.
             const auto t1=std::chrono::steady_clock::now();
+            std::string text;bool none=false;
+            CHECK(rl::read_store(tstore,text,none) && !none);
+            const auto t2=std::chrono::steady_clock::now();
             CHECK(rl::write_store(tstore,text));
-            writes.push_back(ms_since(t1));
+            writes.push_back(ms_since(t2));
+            files.push_back(ms_since(t1));
         }
+        // The whole helper's budget: 25 ms, plus kFileFactor times what the file operations of this attempt take
+        // above their p95 on an idle host (kIdleFilesP95). Most of the helper's time is the first open of a list
+        // after a write (a real-time scan of the modified file), so a busy disk or a busy scanner slows the
+        // reference and the helper together. On 2026-10-28 three to five parallel builds gave whole-helper p95
+        // values of 205-783 ms in two release-set rows, with an unchanged helper. Measured on the development PC
+        // the same day: idle, file operations p95 11.7-16.4 ms and whole helper p95 13.8-17.0 ms; under CPU and
+        // disk load, file operations p95 25-359 ms and whole helper p95 at most 1.9 times that. An idle host still
+        // holds the helper to 25 ms, so a helper that does more than its file operations fails there. The
+        // call-site budget stays absolute: it held under the same load (p99 0.08-0.47 ms).
+        constexpr double kFileFactor=3.0,kIdleFilesP95=15.0;
+        const double whole_p95=pct(whole,0.95),files_p95=pct(files,0.95);
+        const double whole_budget=25.0+kFileFactor*std::max(0.0,files_p95-kIdleFilesP95);
         std::printf("timing (attempt %d of %d): call site p50 %.3f p99 %.3f max %.3f ms; whole helper p50 %.3f p95 %.3f "
-            "p99 %.3f max %.3f ms (gather p50 %.3f ms, write+rename p50 %.3f ms)\n",attempt,kTimingAttempts,
-            pct(calls,0.5),pct(calls,0.99),pct(calls,1.0),pct(whole,0.5),pct(whole,0.95),pct(whole,0.99),pct(whole,1.0),
-            pct(gathers,0.5),pct(writes,0.5));
-        budgets_met=pct(calls,0.99)<2.0 && pct(whole,0.95)<25.0;
+            "p99 %.3f max %.3f ms (gather p50 %.3f ms, write+rename p50 %.3f ms, file operations p50 %.3f p95 %.3f "
+            "ms, whole-helper budget %.1f ms)\n",attempt,kTimingAttempts,
+            pct(calls,0.5),pct(calls,0.99),pct(calls,1.0),pct(whole,0.5),whole_p95,pct(whole,0.99),pct(whole,1.0),
+            pct(gathers,0.5),pct(writes,0.5),pct(files,0.5),files_p95,whole_budget);
+        budgets_met=pct(calls,0.99)<2.0 && whole_p95<whole_budget;
     }
-    CHECK(budgets_met); // call site p99 < 2 ms and whole helper p95 < 25 ms in one attempt
+    // call site p99 < 2 ms, and whole helper p95 < 25 ms + 3 x (file operations p95 - 15 ms, if positive), in one attempt
+    CHECK(budgets_met);
 }
 
 uint64_t process_start() {

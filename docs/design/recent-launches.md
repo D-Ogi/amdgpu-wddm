@@ -245,10 +245,17 @@ case creates the AppContainer profile `amdgpu-wddm.recent-launch-test` and delet
 | an AppContainer child records nothing | `test_app_container` |
 | `note_outer_device` end to end and the timing above | `test_note_and_timing` |
 
-The gate must give the same result on a loaded host. The 24 processes therefore wait 10 s for the lock, and not
-the 1000 ms of the driver, because this test checks that no note is lost. The timing budgets (creating thread
-99th percentile under 2 ms, whole helper 95th percentile under 25 ms) must hold in one of three measurements,
-because other builds on the same host make a measurement slower although the code did not change.
+The gate must give the same result on a loaded host. The 24 processes therefore wait 60 s for the lock, and not
+the 1000 ms of the driver, because this test checks that no note is lost. The timing budgets must hold in one of
+three measurements, because other builds on the same host make a measurement slower although the code did not
+change:
+
+- Creating thread: 99th percentile under 2 ms.
+- Whole helper: 95th percentile under 25 ms, plus three times the time by which the 95th percentile of the same
+  file operations is above 15 ms. The file operations are: open and read the list that the commit wrote, then
+  write and rename a list of the same size. The test measures them in the same loop, so a busy disk or a busy
+  real-time scanner slows them together with the helper. 15 ms is their 95th percentile on the idle development
+  PC, so an idle host keeps the 25 ms budget.
 
 Failed outer creation: `driver/umd/dxvk/ddi-draw-test.cpp` checks that a `CreateDevice` without its engine modules
 takes no note; `driver/umd/d3d12/adapter-test.cpp` points `LOCALAPPDATA` at its build directory and checks that its
