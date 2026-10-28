@@ -1012,6 +1012,22 @@
    }
   },
   {
+   "name": "BC250_PREAMBLE_IDLE_WAIT",
+   "where": "mesa-wddm src/amd/vulkan/radv_queue.c (radv_preamble_idle_wait, under AMDGPU_WDDM_LAB_FLAVOUR; BD-254)",
+   "does": "negative control of the BD-254 stall: radv_update_preambles waits for the queue to go idle before it destroys the replaced preamble objects on every winsys, as before the BD-254 fix",
+   "lab": {
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "desktop/amdgpu_wddm_radv.dll",
+     "wow64/vulkan/vulkan_radeon.dll"
+    ],
+    "note": "vulkan/vulkan_radeon.dll (system line) does not hold BC250_PREAMBLE_IDLE_WAIT in either flavour: its build line has no lookup of it. That is by build line, not by flavour"
+   }
+  },
+  {
    "name": "BC250_PREAMBLE_NO_IDLE_WAIT",
    "where": "mesa-wddm src/amd/vulkan/radv_queue.c (radv_preamble_no_idle_wait, under AMDGPU_WDDM_LAB_FLAVOUR; BD-201 lab arm)",
    "does": "lab arm: radv_update_preambles skips its idle wait, so the replaced scratch, rings and descriptors are destroyed while the submissions that use them still run",
@@ -4116,6 +4132,16 @@
    "name": "BC250_PREPARE_DEVICE",
    "where": "vkd3d-proton libs/ddi/ddi_engine.c",
    "reason": "the name of the bc250_prepare_device() function of the engine's DDI entry layer, as a C string: the vkd3d debug macros take __FUNCTION__, and since BD-180 the lab engine recipe drops -DVKD3D_NO_DEBUG_MESSAGES, so those messages (and their function names) are compiled into the lab flavour. Not a lookup: no environment variable or registry value of this name is read. The release engine keeps the token and holds none of these strings, which is why only the lab engines carry them. A newly traced bc250_* function of this layer adds a name here"
+  },
+  {
+   "name": "BC250_PREPARE_CACHE_DIRECTORY",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_prepare_cache_directory() function of the engine's DDI entry layer, as a C string: its INFO message (the disk cache path and mode) takes __FUNCTION__, and VKD3D_NO_DEBUG_MESSAGES compiles out only WARN and FIXME, so both flavours carry it. Not a lookup: no environment variable or registry value of this name is read"
+  },
+  {
+   "name": "BC250_TRIM_CACHE_DIRECTORY",
+   "where": "vkd3d-proton libs/ddi/ddi_engine.c",
+   "reason": "the name of the bc250_trim_cache_directory() function of the engine's DDI entry layer, as a C string: its INFO message (a program group dropped over the disk cache budget) takes __FUNCTION__, and VKD3D_NO_DEBUG_MESSAGES compiles out only WARN and FIXME, so both flavours carry it. Not a lookup: no environment variable or registry value of this name is read"
   },
   {
    "name": "BC250_QUERY_ADAPTER_CAPS",
