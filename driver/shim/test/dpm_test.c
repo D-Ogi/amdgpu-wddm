@@ -128,7 +128,7 @@ static void test_table(void)
 	}
 	CHECK(bc250_dpm_level_mhz(BC250_DPM_TOP_LEVEL) == 2000u && bc250_dpm_level_mhz(99u) == 2000u);
 	CHECK(bc250_dpm_level_mhz(BC250_DPM_OC_TOP_LEVEL) == 2300u && bc250_dpm_level_mv(BC250_DPM_OC_TOP_LEVEL) == 1075u);
-	CHECK(bc250_dpm_level_mhz(BC250_DPM_TOP_LEVEL + 1u) == 2100u && bc250_dpm_level_mv(BC250_DPM_TOP_LEVEL + 1u) == 1025u);
+	CHECK(bc250_dpm_level_mhz(BC250_DPM_TOP_LEVEL + 1u) == 2100u && bc250_dpm_level_mv(BC250_DPM_TOP_LEVEL + 1u) == 1050u);
 	CHECK(bc250_dpm_level_mv(99u) == 1000u);
 }
 
@@ -448,6 +448,36 @@ static void test_oc_tiers(void)
 	/* A ceiling above the plain top that no decision made is still clamped to the overclock top. */
 	bc250_dpm_init(&g, 99u);
 	CHECK(g.max_level == BC250_DPM_OC_TOP_LEVEL);
+
+	/* A refused overclock point: that point and the points above it go for the rest of the start, the next lower
+	 * one stays, and the governor never asks for the refused point again. */
+	bc250_dpm_init(&g, BC250_DPM_OC_TOP_LEVEL);
+	CHECK(bc250_dpm_oc_refused(&g, BC250_DPM_OC_TOP_LEVEL) == BC250_DPM_OC_TOP_LEVEL - 1u);
+	CHECK(g.max_level == BC250_DPM_OC_TOP_LEVEL - 1u && g.oc_refusals == 1u);
+	top = 0;
+	for (i = 0; i < 400; i++) {
+		level = run(&g, 1000, 60, 25);
+		if (level > top) top = level;
+	}
+	CHECK(top == BC250_DPM_OC_TOP_LEVEL - 1u && bc250_dpm_level_mhz(top) == 2200u);
+	/* The next refusal takes the next point; a refusal of a point above the ceiling changes nothing. */
+	CHECK(bc250_dpm_oc_refused(&g, BC250_DPM_TOP_LEVEL + 2u) == BC250_DPM_TOP_LEVEL + 1u);
+	CHECK(bc250_dpm_oc_refused(&g, BC250_DPM_OC_TOP_LEVEL) == BC250_DPM_TOP_LEVEL + 1u);
+	CHECK(bc250_dpm_oc_refused(&g, BC250_DPM_TOP_LEVEL + 1u) == BC250_DPM_TOP_LEVEL);
+	CHECK(g.oc_refusals == 4u && g.max_level == BC250_DPM_TOP_LEVEL);
+	/* A plain level is not an overclock point: the SMU give-up path owns its refusal. */
+	CHECK(bc250_dpm_oc_refused(&g, BC250_DPM_TOP_LEVEL) == BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_oc_refused(&g, 3u) == BC250_DPM_TOP_LEVEL && g.oc_refusals == 4u);
+	for (i = 0; i < 400; i++) level = run(&g, 1000, 60, 25);
+	CHECK(level == BC250_DPM_TOP_LEVEL);
+	/* A thermal cap above the new ceiling comes down to it. */
+	bc250_dpm_init(&g, BC250_DPM_OC_TOP_LEVEL);
+	CHECK(g.thermal_cap == BC250_DPM_OC_TOP_LEVEL);
+	(void)bc250_dpm_oc_refused(&g, BC250_DPM_TOP_LEVEL + 1u);
+	CHECK(g.thermal_cap == BC250_DPM_TOP_LEVEL && g.max_level == BC250_DPM_TOP_LEVEL);
+	/* Without a tier the ceiling is the plain top already: a refusal report changes nothing. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(bc250_dpm_oc_refused(&g, BC250_DPM_OC_TOP_LEVEL) == BC250_DPM_TOP_LEVEL && g.thermal_cap == BC250_DPM_TOP_LEVEL);
 }
 
 static void test_load_steps(void)

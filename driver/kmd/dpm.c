@@ -788,6 +788,20 @@ static BOOLEAN DpmApplyEx(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T,
         (void)DpmApplyEx(Device, S, T, BC250_DPM_FLOOR_LEVEL, "sub-floor refused", FALSE, 0);
         return FALSE;       // the hardware is not at Level; the floor apply above reported its own result
     }
+    if (Level > BC250_DPM_TOP_LEVEL) {
+        // An overclock point (levels above 2000 MHz, admitted only by an overclock tier) is outside what AMD
+        // qualified for this part, so a refusal is the same kind of answer as a refused sub-floor point: the
+        // governor loses that point and every point above it for the rest of the start, the next lower level goes
+        // in, and the SMU give-up counter is untouched. Each point is refused at most once per start, so this
+        // line comes at most once per point.
+        ULONG top = bc250_dpm_oc_refused(&S->Gov, Level);
+        GuardLog("dpm: overclock point %lu MHz refused 0x%08X (clock %d, %u/%u msgs, read %u MHz VID %u), top %lu MHz",
+                 bc250_dpm_level_mhz(Level), status, report.status, report.messages_completed,
+                 report.messages_attempted, report.observed_mhz, report.observed_vid, bc250_dpm_level_mhz(top));
+        InterlockedExchange(&S->Resync, 1);
+        (void)DpmApplyEx(Device, S, T, top, "overclock point refused", FALSE, 0);
+        return FALSE;       // the hardware is not at Level; the apply above reported its own result
+    }
     T->Errors++;
     S->ErrorsInRow++;
     InterlockedExchange(&S->Resync, 1);

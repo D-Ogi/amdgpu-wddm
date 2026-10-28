@@ -491,6 +491,7 @@ struct bc250_dpm_governor {
 	unsigned int	recall_revokes;		/* recalled raises taken back before the transaction */
 	int		subfloor_ok;		/* the thermal cap may use the points under the lab floor (0.7.205) */
 	unsigned int	subfloor_refusals;	/* bc250_dpm_subfloor_refused() calls of this start */
+	unsigned int	oc_refusals;		/* bc250_dpm_oc_refused() calls of this start */
 	/* The idle state (0.7.207). idle_on is the setting of this start, idle the state now. */
 	int		idle_on, idle;
 	unsigned int	idle_level;		/* the point idle holds; raised to the thermal floor after a refusal */
@@ -566,6 +567,12 @@ unsigned int bc250_dpm_recall_revoke(struct bc250_dpm_governor *g, unsigned int 
  * published tables (facts M47), so one refusal is enough: the governor does not try the same point again and
  * again. Unit A's own firmware accepts them (facts M785). */
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g);
+/* The caller could not put the hardware at an overclock point (a level above BC250_DPM_TOP_LEVEL, admitted only by
+ * an overclock tier). The same rule as the sub-floor: for the rest of this start the ceiling stops one level under
+ * the refused point, and a thermal cap above it comes down to it. The governor never asks for the refused point
+ * again, and the refusal does not count toward the SMU give-up limit. Returns the new ceiling level. A level at or
+ * under BC250_DPM_TOP_LEVEL changes nothing. */
+unsigned int bc250_dpm_oc_refused(struct bc250_dpm_governor *g, unsigned int level);
 
 /* ---- the idle state (0.7.207) ----------------------------------------------------------------- */
 

@@ -518,6 +518,18 @@ unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g)
 	return g->idle_on && g->subfloor_ok ? bc250_dpm_level_mhz(g->idle_level) : 0u;
 }
 
+unsigned int bc250_dpm_oc_refused(struct bc250_dpm_governor *g, unsigned int level)
+{
+	if (level <= BC250_DPM_TOP_LEVEL || level > BC250_DPM_OC_TOP_LEVEL) return g->max_level;
+	g->oc_refusals++;
+	if (g->max_level >= level) g->max_level = level - 1u;
+	if (g->thermal_cap > g->max_level) {
+		g->thermal_cap = g->max_level;
+		g->cap_ms = 0;
+	}
+	return g->max_level;
+}
+
 void bc250_dpm_subfloor_refused(struct bc250_dpm_governor *g)
 {
 	g->subfloor_refusals++;
