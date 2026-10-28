@@ -67,7 +67,7 @@ namespace AmdgpuWddmControl
                 return card;
             }
             uint? stored = _snap != null ? _snap.P(OcUnlock.TierName) : null;
-            card.Pair(Strings.T("oc.now"), OcUnlock.StateText());
+            card.Pair(Strings.T("oc.now"), OcUnlock.StateText(_snap != null ? _snap.P(OcUnlock.LastReasonName) : null));
             if ((stored ?? OcUnlock.None) != OcUnlock.Effective)
                 card.Pair(Strings.T("oc.next"), OcUnlock.TierText(stored ?? OcUnlock.None));
             card.Add(Ui.Dim(Strings.T("oc.intro", OcUnlock.GpuMaxMHz(OcUnlock.None), OcUnlock.CpuMaxMHz(OcUnlock.None)), card.Inner));

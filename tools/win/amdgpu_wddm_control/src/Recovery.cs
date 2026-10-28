@@ -423,7 +423,7 @@ namespace AmdgpuWddmControl
         // itself at the next start that reads a DpmMode other than 0 (driver/kmd/dpm.c, clear_closed). The catalog
         // test (ClosureTests) holds this list to the catalog's access rules.
         public static readonly string[] ParameterNames = new[] { "EnableGpuPresentBlit", "EnableCddDwmInterop", "InteropClosedReason", "DpmMode", "DpmMaxMHz", "CpuTune", "FanLoadBoost", BootLogoSetting.ValueName,
-            OcUnlock.TierName, OcUnlock.BoardName }
+            OcUnlock.TierName, OcUnlock.BoardName, OcUnlock.CpuMaxName, OcUnlock.CpuUvName }
             .Concat(DriverFeatures.ValueNames).ToArray();
         public static readonly string[] RouterNames = { "DwmForceCpu" };
         // Defaults the reset takes from manifest.json (the rest of the release's table is not the app's to touch).
@@ -1688,8 +1688,15 @@ namespace AmdgpuWddmControl
                     if (more.OcTier == null || !OcUnlock.IsTier(more.OcTier.Value)) return Refuse(p, "No cooling type given.");
                     if (!OcUnlock.Available) return Refuse(p, "This board does not take a cooling type: the driver does not identify it as a BC-250.");
                     uint tier = more.OcTier.Value;
-                    p.Writes.AddRange(OcUnlock.PlanWrites(s.P(OcUnlock.TierName), s.P(OcUnlock.BoardName), s.P("DpmMaxMHz"), tier, OcUnlock.Board));
+                    p.Writes.AddRange(OcUnlock.PlanWrites(s.P(OcUnlock.TierName), s.P(OcUnlock.BoardName), s.P("DpmMaxMHz"), tier, OcUnlock.Board,
+                        s.P(OcUnlock.CpuMaxName), s.P(OcUnlock.CpuUvName)));
                     if (p.Writes.Count == 0) return Refuse(p, "This cooling type is stored already.");
+                    if (p.Writes.Any(OcUnlock.Lowers))
+                    {
+                        p.Notes.Add("Stored values above the limits of the new choice are lowered to those limits: " +
+                            string.Join(", ", p.Writes.Where(OcUnlock.Lowers).Select(w => w.Name + " = " + w.Number)) + ".");
+                        p.PlainNotes.Add(Strings.T("oc.note.lowered"));
+                    }
                     p.Change = tier == OcUnlock.None ? "Removes the cooling type: the standard limits of " + OcUnlock.GpuMaxMHz(0) + " MHz (graphics) and "
                         + OcUnlock.CpuMaxMHz(0) + " MHz (processor) apply." : "Cooling type " + tier + " (OcTier) on board " + OcUnlock.Board.ToString("X8") + ": up to "
                         + OcUnlock.GpuMaxMHz(tier) + " MHz graphics at " + OcUnlock.GpuMaxMv(tier) + " mV and " + OcUnlock.CpuMaxMHz(tier) + " MHz processor.";

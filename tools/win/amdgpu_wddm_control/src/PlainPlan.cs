@@ -53,6 +53,10 @@ namespace AmdgpuWddmControl
                 // The overclock unlock (OcUnlock.cs): the tier and its board binding share one sentence when removed.
                 case OcUnlock.TierName:
                 case OcUnlock.BoardName: return OcUnlock.LineId(w);
+                // The processor limit and undervolt: the app writes them only to lower them to a lower tier's limits
+                // (OcUnlock.PlanWrites); the tuning page stores them through the driver.
+                case OcUnlock.CpuMaxName: return w.Delete ? null : "plan.line.cpu-clock";
+                case OcUnlock.CpuUvName: return w.Delete ? null : "plan.line.cpu-uv";
                 default: return null;
             }
         }
@@ -63,7 +67,8 @@ namespace AmdgpuWddmControl
             var id = LineId(w);
             if (id == null) return Strings.T("plan.line.other");
             if (id == "plan.line.ceiling-default") return Strings.T(id, DpmSettings.DefaultMaxMHz.ToString(CultureInfo.InvariantCulture));
-            return id == "plan.line.ceiling" || id == "plan.line.tdr" ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
+            return id == "plan.line.ceiling" || id == "plan.line.tdr" || id == "plan.line.cpu-clock" || id == "plan.line.cpu-uv"
+                ? Strings.T(id, w.Number.ToString(CultureInfo.InvariantCulture)) : Strings.T(id);
         }
 
         public static string GroupList(string value)

@@ -1361,3 +1361,7 @@ plan.line.oc-air|src|-|Higher clock limits for an air cooler are allowed.
 plan.line.oc-liquid|src|-|Higher clock limits for an all-in-one liquid cooler are allowed.
 plan.line.oc-board|src|-|The choice belongs to this board. On another board it turns itself off.
 tuner.refuse.cpu-needs-uv|src|-|A processor limit of {0} MHz needs at least {1} voltage steps.
+oc.state.unclean|src|-|The higher limits were turned off after an unexpected stop of the computer. The board can switch itself off like this at high clocks. You can turn them on again with the questions.
+oc.note.lowered|src|-|Some of your saved values are above the new limits. The app lowers them to the new limits, as the list above shows.
+plan.line.cpu-clock|src|-|Highest processor speed: {0} MHz.
+plan.line.cpu-uv|src|-|Processor voltage: {0} steps lower.

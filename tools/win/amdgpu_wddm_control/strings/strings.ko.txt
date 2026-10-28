@@ -1342,3 +1342,7 @@ plan.line.oc-air|mt|813adea6|공랭 쿨러용 더 높은 클럭 한도를 허용
 plan.line.oc-liquid|mt|2ea2c664|일체형 수랭 쿨러용 더 높은 클럭 한도를 허용합니다.
 plan.line.oc-board|mt|c39d0346|이 선택은 이 보드에만 적용됩니다. 다른 보드에서는 저절로 꺼집니다.
 tuner.refuse.cpu-needs-uv|mt|18966afc|프로세서 한도 {0} MHz에는 최소 {1}단계의 전압 스텝이 필요합니다.
+oc.state.unclean|mt|bf3d28b8|컴퓨터가 예기치 않게 멈춰서 더 높은 한도가 꺼졌습니다. 높은 클럭에서는 보드가 이렇게 스스로 꺼질 수 있습니다. 질문에 답하면 다시 켤 수 있습니다.
+oc.note.lowered|mt|9f9534fd|저장된 값 중 일부가 새 한도보다 높습니다. 위 목록처럼 앱이 새 한도로 낮춥니다.
+plan.line.cpu-clock|mt|56bf9d8a|프로세서 최고 속도: {0} MHz.
+plan.line.cpu-uv|mt|0babddfe|프로세서 전압: {0}단계 낮게.

@@ -12,7 +12,10 @@ namespace AmdgpuWddmControl
 {
     public static class OcUnlock
     {
-        public const string TierName = "OcTier", BoardName = "OcTierBoard";
+        public const string TierName = "OcTier", BoardName = "OcTierBoard", LastReasonName = "OcTierLastReason";
+        public const string CpuMaxName = "CpuMaxMHz", CpuUvName = "CpuUvSteps";
+        // enum bc250_oc_reason (driver/shim/include/bc250_oc.h)
+        public const uint ReasonInvalid = 2, ReasonUnbound = 4, ReasonBoardChanged = 5, ReasonUncleanStop = 6, ReasonCount = 7;
         public const uint None = 0, Air = 1, Liquid = 2;
         public const string Action = "oc-tier";
 
@@ -83,9 +86,12 @@ namespace AmdgpuWddmControl
 
         // ---- the writes ---------------------------------------------------------------------------------------
 
-        // A tier and the board it belongs to, both or neither. A lower tier also brings a stored GPU ceiling above
-        // its own down to its ceiling, so the automatic clocks stay on with a value the driver takes as written.
-        public static List<RegWrite> PlanWrites(uint? storedTier, uint? storedBoard, uint? storedCeiling, uint tier, uint board)
+        // A tier and the board it belongs to, both or neither. A lower tier also brings the stored values above its
+        // own limits down to them: the GPU ceiling, so the automatic clocks stay on with a value the driver takes as
+        // written, and the processor limit and undervolt, which the driver refuses as a whole set at its next start
+        // when one of them is above the tier of that start.
+        public static List<RegWrite> PlanWrites(uint? storedTier, uint? storedBoard, uint? storedCeiling, uint tier, uint board,
+            uint? storedCpuMHz = null, uint? storedCpuUv = null)
         {
             var writes = new List<RegWrite>();
             if (tier == None)
@@ -100,7 +106,16 @@ namespace AmdgpuWddmControl
             }
             uint top = GpuMaxMHz(tier);
             if (storedCeiling != null && storedCeiling.Value > top) writes.Add(RegWrite.Dword(DpmSettings.RegistryPath, "DpmMaxMHz", top));
+            uint cpu = CpuMaxMHz(tier), uv = CpuUvMaxSteps(tier);
+            if (storedCpuMHz != null && storedCpuMHz.Value > cpu) writes.Add(RegWrite.Dword(DpmSettings.RegistryPath, CpuMaxName, cpu));
+            if (storedCpuUv != null && storedCpuUv.Value > uv) writes.Add(RegWrite.Dword(DpmSettings.RegistryPath, CpuUvName, uv));
             return writes;
+        }
+
+        // The writes of PlanWrites that lower a stored value to the new limits, for the note that says so.
+        public static bool Lowers(RegWrite w)
+        {
+            return !w.Delete && (w.Name == "DpmMaxMHz" || w.Name == CpuMaxName || w.Name == CpuUvName);
         }
 
         // ---- the texts ----------------------------------------------------------------------------------------
@@ -110,14 +125,17 @@ namespace AmdgpuWddmControl
             return Strings.T(tier == Air ? "oc.tier.air" : tier == Liquid ? "oc.tier.liquid" : "oc.tier.none");
         }
 
-        // What this start runs, and why when that is not what was chosen.
-        public static string StateText()
+        // What this start runs, and why when that is not what was chosen. lastReason is the driver's record
+        // OcTierLastReason: the start that deletes a tier after an unexpected stop writes it, and a later start with
+        // nothing stored leaves it as it is, so the notice stays until the person chooses again.
+        public static string StateText(uint? lastReason = null)
         {
             if (!Available) return Strings.T("board.unsupported");
             uint e = Effective, s = Stored, r = Reason;
-            if (r == 5) return Strings.T("oc.state.board-changed");
-            if (r == 4) return Strings.T("oc.state.unbound");
-            if (r == 2) return Strings.T("oc.state.invalid");
+            if (r == ReasonUncleanStop || (r == 0 && s == None && lastReason == ReasonUncleanStop)) return Strings.T("oc.state.unclean");
+            if (r == ReasonBoardChanged) return Strings.T("oc.state.board-changed");
+            if (r == ReasonUnbound) return Strings.T("oc.state.unbound");
+            if (r == ReasonInvalid) return Strings.T("oc.state.invalid");
             return Strings.T("oc.state.runs", TierText(e), GpuMaxMHz(e), CpuMaxMHz(e)) + (s != e ? " " + Strings.T("oc.state.pending") : "");
         }
 

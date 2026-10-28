@@ -1342,3 +1342,7 @@ plan.line.oc-air|mt|813adea6|空冷クーラー向けの高いクロック上限
 plan.line.oc-liquid|mt|2ea2c664|オールインワン水冷クーラー向けの高いクロック上限を許可します。
 plan.line.oc-board|mt|c39d0346|この選択はこのボード専用です。別のボードでは自動的にオフになります。
 tuner.refuse.cpu-needs-uv|mt|18966afc|プロセッサーの上限 {0} MHz には、少なくとも {1} 段階の電圧ステップが必要です。
+oc.state.unclean|mt|bf3d28b8|コンピューターが予期せず停止したため、高い上限はオフになりました。高いクロックでは、ボードがこのように自分で電源を切ることがあります。質問に答えると、もう一度オンにできます。
+oc.note.lowered|mt|9f9534fd|保存されている値の一部が新しい上限を超えています。上の一覧のとおり、アプリはそれらを新しい上限まで下げます。
+plan.line.cpu-clock|mt|56bf9d8a|プロセッサーの最高速度: {0} MHz。
+plan.line.cpu-uv|mt|0babddfe|プロセッサーの電圧: {0} 段階低く。

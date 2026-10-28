@@ -67,6 +67,17 @@ static partial class UnitTests
         Check(cv.ClockChoices[0] == 4100u, "liquid: the processor picker offers 4100 MHz");
         Equal(3500u, cv.Clock, "liquid: with nothing in force the processor picker starts at the standard 3500 MHz");
         Check(OcUnlock.StateText().Contains("2300") && OcUnlock.StateText().Contains("4100"), "the card names the limits: " + OcUnlock.StateText());
+        Check(OcUnlock.StateText(OcUnlock.ReasonUncleanStop).Contains("4100"), "a tier in force hides an old record of an unexpected stop");
+        // The start after an unexpected stop: the driver deleted the tier, and the card says why in plain words.
+        BoardCapabilities.Replace(BoardCapabilities.Parse(OcCaps(raw, 0, 0, OcUnlock.ReasonUncleanStop, 0x1234)));
+        Equal(Strings.T("oc.state.unclean"), OcUnlock.StateText(), "unexpected stop: the card says the limits were turned off");
+        // A later start with nothing stored (reason none) keeps the notice from the driver's record.
+        BoardCapabilities.Replace(BoardCapabilities.Parse(OcCaps(raw, 0, 0, 0, 0x1234)));
+        Equal(Strings.T("oc.state.unclean"), OcUnlock.StateText(OcUnlock.ReasonUncleanStop), "a later start: the notice stays from the record");
+        Check(OcUnlock.StateText(null).Contains("2000"), "no record: the standard limits");
+        BoardCapabilities.Replace(BoardCapabilities.Parse(OcCaps(raw, 0, 1, 0, 0x1234)));
+        Check(OcUnlock.StateText(OcUnlock.ReasonUncleanStop) != Strings.T("oc.state.unclean"), "a new choice waits for the restart: no old notice");
+        BoardCapabilities.Replace(BoardCapabilities.Parse(OcCaps(raw, 2, 2, 1, 0x1234)));
 
         // A driver older than the tiers (ABI 1): no unlock, the plain ranges.
         var abi1 = (byte[])raw.Clone();
@@ -78,7 +89,8 @@ static partial class UnitTests
         // Malformed overclock words.
         Check(ParseRefuses(OcCaps(raw, 3, 0, 0, 0x1234)), "tier 3 is refused");
         Check(ParseRefuses(OcCaps(raw, 2, 2, 1, 0)), "a tier without a board is refused");
-        Check(ParseRefuses(OcCaps(raw, 0, 0, 6, 0x1234)), "reason 6 is refused");
+        Check(ParseRefuses(OcCaps(raw, 0, 0, 7, 0x1234)), "reason 7 is refused");
+        Check(!ParseRefuses(OcCaps(raw, 0, 0, 6, 0x1234)), "reason 6 (an unexpected stop) is reported");
         Check(!ParseRefuses(OcCaps(raw, 0, 7, 2, 0x1234)), "a hand-written stored tier is reported as it is");
         foreach (int word in new[] { 143, 144, 148, 152, 156, 157, 158, 170, 171, 191 })
         {
@@ -124,6 +136,26 @@ static partial class UnitTests
         Check(!off.Refused && Writes(off, "OcTier-", "OcTierBoard-", "DpmMaxMHz=2000"), "standard limits: the tier and the binding go, the ceiling comes to 2000 MHz");
         s.Parameters["DpmMaxMHz"] = 2300;
         Check(Writes(Recovery.Plan(OcUnlock.Action, s, more: new Recovery.PlanArgs { OcTier = OcUnlock.Air }), "OcTier=1", "OcTierBoard=4660", "DpmMaxMHz=2200"), "air under a 2300 ceiling: 2200 MHz");
+        Check(Recovery.Plan(OcUnlock.Action, s, more: new Recovery.PlanArgs { OcTier = OcUnlock.Air }).PlainNotes.Contains(Strings.T("oc.note.lowered")),
+            "a lowered ceiling: the dialog says so");
+        // The processor limit and undervolt above the new tier come down to its limits too, and the dialog says so.
+        s.Parameters["OcTier"] = 2; s.Parameters["OcTierBoard"] = 0x1234; s.Parameters["DpmMaxMHz"] = 2300;
+        s.Parameters["CpuMaxMHz"] = 4100; s.Parameters["CpuUvSteps"] = 40;
+        uint airUv = OcUnlock.CpuUvMaxSteps(OcUnlock.Air), noneUv = OcUnlock.CpuUvMaxSteps(OcUnlock.None);
+        var down = Recovery.Plan(OcUnlock.Action, s, more: new Recovery.PlanArgs { OcTier = OcUnlock.Air });
+        Check(!down.Refused && Writes(down, new[] { "OcTier=1", "DpmMaxMHz=2200", "CpuMaxMHz=3900" }.Concat(40 > airUv ? new[] { "CpuUvSteps=" + airUv } : new string[0]).ToArray()),
+            "liquid to air: the ceiling and the processor limit come down: " + down.Refusal);
+        var dd = PlainPlan.Describe(down);
+        Check(dd.Changes.Contains(Strings.T("plan.line.cpu-clock", "3900")) && dd.Notes.Contains(Strings.T("oc.note.lowered")), "the dialog names the new processor limit");
+        foreach (var w in down.Writes) Check(PlainPlan.LineId(w) != null && Recovery.Allowed(w.Path, w.Name), "G-PLAN: " + w.Name + " has a plain sentence and is allowed");
+        var none = Recovery.Plan(OcUnlock.Action, s, more: new Recovery.PlanArgs { OcTier = OcUnlock.None });
+        Check(!none.Refused && Writes(none, new[] { "OcTier-", "OcTierBoard-", "DpmMaxMHz=2000", "CpuMaxMHz=3500" }.Concat(40 > noneUv ? new[] { "CpuUvSteps=" + noneUv } : new string[0]).ToArray()),
+            "liquid to standard: everything comes to the standard limits");
+        // Values inside the new limits stay as they are.
+        s.Parameters["CpuMaxMHz"] = 3400; s.Parameters["CpuUvSteps"] = 0; s.Parameters["DpmMaxMHz"] = 1800;
+        var keep = Recovery.Plan(OcUnlock.Action, s, more: new Recovery.PlanArgs { OcTier = OcUnlock.Air });
+        Check(Writes(keep, "OcTier=1") && !keep.PlainNotes.Contains(Strings.T("oc.note.lowered")), "values inside the limits: only the tier");
+        s.Parameters.Remove("CpuMaxMHz"); s.Parameters.Remove("CpuUvSteps");
         s.Parameters.Remove("OcTier"); s.Parameters.Remove("OcTierBoard"); s.Parameters.Remove("DpmMaxMHz");
         Check(Recovery.Plan(OcUnlock.Action, s, more: new Recovery.PlanArgs { OcTier = OcUnlock.None }).Refusal.Contains("already"), "nothing stored: the standard limits are in force already");
         Check(Recovery.Plan(OcUnlock.Action, s).Refusal.Contains("No cooling type"), "no cooling type given");
@@ -144,7 +176,8 @@ static partial class UnitTests
         foreach (var lang in Strings.Languages)
         {
             Strings.Language = lang;
-            foreach (var id in Strings.Tables["en"].Entries.Keys.Where(k => k.StartsWith("oc.", StringComparison.Ordinal) || k.StartsWith("plan.line.oc-", StringComparison.Ordinal)))
+            foreach (var id in Strings.Tables["en"].Entries.Keys.Where(k => k.StartsWith("oc.", StringComparison.Ordinal) || k.StartsWith("plan.line.oc-", StringComparison.Ordinal) ||
+                k == "plan.line.cpu-clock" || k == "plan.line.cpu-uv"))
             {
                 Check(Strings.Tables[lang].Entries.ContainsKey(id), lang + " has " + id);
                 foreach (var x in PlainWords.Findings(new[] { Strings.T(id, 1, 2, 3) })) Check(false, "G-NOINT: " + lang + " " + id + ": " + x);

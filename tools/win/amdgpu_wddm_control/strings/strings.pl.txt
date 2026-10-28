@@ -1344,3 +1344,7 @@ plan.line.oc-air|mt|813adea6|Zostają dopuszczone wyższe limity taktowania dla 
 plan.line.oc-liquid|mt|2ea2c664|Zostają dopuszczone wyższe limity taktowania dla chłodzenia cieczą all-in-one.
 plan.line.oc-board|mt|c39d0346|Wybór należy do tej płyty. Na innej płycie sam się wyłączy.
 tuner.refuse.cpu-needs-uv|mt|18966afc|Limit procesora {0} MHz wymaga co najmniej {1} stopni napięcia.
+oc.state.unclean|mt|bf3d28b8|Wyższe limity zostały wyłączone po nieoczekiwanym zatrzymaniu komputera. Przy wysokich taktowaniach płyta może się w ten sposób sama wyłączyć. Możesz je ponownie włączyć, odpowiadając na pytania.
+oc.note.lowered|mt|9f9534fd|Niektóre zapisane wartości są wyższe niż nowe limity. Aplikacja obniża je do nowych limitów, jak pokazuje lista powyżej.
+plan.line.cpu-clock|mt|56bf9d8a|Maksymalne taktowanie procesora: {0} MHz.
+plan.line.cpu-uv|mt|0babddfe|Napięcie procesora: o {0} stopni niżej.

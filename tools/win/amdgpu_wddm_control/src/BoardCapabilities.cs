@@ -81,7 +81,7 @@ namespace AmdgpuWddmControl
         // plain envelope above), the clock points above the plain ceiling and the least CPU undervolt per clock.
         static void ParseOverclock(uint[] w)
         {
-            Require(w[143] == 3 && w[139] < 3 && w[140] <= int.MaxValue && w[141] <= 5 && (w[139] == 0 || w[142] != 0));
+            Require(w[143] == 3 && w[139] < 3 && w[140] <= int.MaxValue && w[141] < OcUnlock.ReasonCount && (w[139] == 0 || w[142] != 0));
             Require(w[144] == w[10] && w[145] == w[14] && w[146] == w[18] && w[147] == w[21]);
             for (int i = 0; i < 3; i++) {
                 int o = 156 + i * 3;
