@@ -86,19 +86,21 @@ python -m unittest discover -s tools/regcalc
 
 ## In numbers
 
-Lines of our own source on 2026-10-28 (main 27b4c04b and the fork branches of tester.33), with comments and blank
-lines. Imported code (amdgpu, DML, `third_party/`), generated tables and `evidence/` are not in the count.
+Lines of our own source on 2026-10-28 (main 1ac39efe and the fork branches of tester.33), counted as cloc and
+tokei count them: code lines exclude blank lines and comment lines, and comments have their own column. Imported code
+(amdgpu, DML, `third_party/`), generated tables and `evidence/` are not in the count. A fork counts the lines that its
+branch adds to the upstream code it is based on.
 
-| Part | Code | Tests |
-|---|---|---|
-| Driver: kernel mode, user-mode shells, shim, contract | 147,000 | 132,000 |
-| Tools: installer, control app, release and quality gates, lab tools | 206,000 | 38,000 |
-| Compute (HIP runtime) | 21,000 | 15,000 |
-| Experiments and lab procedures | 67,000 | 3,000 |
-| Our changes in the forks: vkd3d-proton, Mesa, DXVK, dxil-spirv | 81,000 | 34,000 |
-| **Total** | **522,000** | **222,000** |
+| Part | Code | Tests | Comments |
+|---|---|---|---|
+| Driver: kernel mode, user-mode shells, shim, contract | 110,000 | 112,000 | 44,000 |
+| Tools: installer, control app, release and quality gates, lab tools | 185,000 | 30,000 | 28,000 |
+| Compute (HIP runtime) | 15,000 | 12,000 | 6,000 |
+| Experiments and lab procedures | 62,000 | 3,000 | 3,000 |
+| Our changes in the forks: vkd3d-proton, Mesa, DXVK, dxil-spirv | 48,000 | 43,000 | 11,000 |
+| **Total** | **420,000** | **200,000** | **92,000** |
 
-The documentation adds about 140,000 lines. <sub>Kropla drąży skałę: dripping water hollows out the stone.</sub>
+Blank lines add about 49,000 more, and the documentation about 140,000. <sub>Kropla drąży skałę: dripping water hollows out the stone.</sub>
 
 ## Repositories
 
