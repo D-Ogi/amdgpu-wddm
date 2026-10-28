@@ -350,6 +350,19 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     }
     if ($missing.Count) { Stop-Package ("rows not registered in tools\release\release-sources.json (run the set with -Register, commit, push): " + ($missing -join ', ')) }
     "$(Get-Utc) package: $($rowsDoc.files.Count) rows registered at $($head.Substring(0, 8)), version $version"
+    # The work ledger gate of build-release.ps1, run here first with the same arguments: it refuses in seconds,
+    # before the setup window and the package steps of each flavour spend about 10 minutes.
+    $ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
+    if (Test-Path -LiteralPath $ledgerTool) {
+        $ledgerOut = & $python $ledgerTool --root $Root check --release $version --release-sources (Join-Path $PSScriptRoot 'release-sources.json') 2>&1
+        $ledgerExit = $LASTEXITCODE
+        if ($ledgerExit -gt 1) { Stop-Package "the work ledger checker failed with exit $ledgerExit (a malformed or missing LEDGER.json)" }
+        if ($ledgerExit -ne 0 -and -not $LedgerDebtReason) {
+            @($ledgerOut | Where-Object { "$_" -match '^\s*ERROR|error\(s\)' }) | ForEach-Object { "    $_" }
+            Stop-Package 'the work ledger refuses this release (the lines above); land the work, or package with -LedgerDebtReason'
+        }
+        "$(Get-Utc) work ledger: exit $ledgerExit$(if ($ledgerExit) { ', debt reason given' })"
+    }
     # Check every registered first-party PE, including rows carried from older
     # sets, before paying for setup, signing and catalog generation.
     foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
