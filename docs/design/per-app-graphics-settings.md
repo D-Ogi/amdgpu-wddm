@@ -28,6 +28,7 @@ The driver takes each setting from the first source that holds a valid value:
 1. The environment variable `AMDGPU_WDDM_<NAME>` of the process, where `<NAME>` is the value name in upper snake case.
 2. The application key.
 3. The global key.
+4. The DXVK profile (the D3D11 and D3D12 shells only, not the router). See "The DXVK profile source".
 
 When no source holds a valid value, the driver leaves the setting to the application. An environment value must be
 a decimal number of 1 to 10 digits, with no sign, no space and no `0x`. The driver ignores a value outside its
@@ -37,6 +38,45 @@ writes one log line and then reads the next source.
 The two shells read the settings once per process, at the first device creation. A change takes effect at the next
 start of the application. The router reads `RenderOnCpu` at each `OpenAdapter` call, as it reads its `AppRouter`
 key. The installed INF owns the Windows driver version.
+
+## The DXVK profile source
+
+DXVK keeps per-game `dxgi.*` options in its own configuration: the app profiles in its source
+(`src/util/config/config.cpp`), `dxvk.conf` and `DXVK_CONFIG`. DXVK applies them in its DXGI front and its swap
+chain. On our route the system DXGI owns the swap chain and the adapter identity, so DXVK's DXGI code does not run
+and the options apply nowhere. The DXVK engine reads them with DXVK's own configuration code and returns them
+(`Bc250DxvkEngineGetAppOptions`, engine ABI 1.5, `src/ddi/bc250_dxvk_engine.h` of the DXVK fork). A newer DXVK with
+new or changed profiles therefore needs no change in the shells. The user's `dxvk.conf` and `DXVK_CONFIG` win over
+the app profile, as in DXVK.
+
+Both shells load the engine from the `d3d11` directory of the package (the D3D12 shell for this one query). They use
+the options that they have a mechanism for as the lowest source (`driver/umd/app-settings/dxvk-profile.h`):
+
+| DXVK option | Setting | Rule |
+|---|---|---|
+| `dxvk.maxFrameRate`, else `dxgi.maxFrameRate` | `FrameRateLimit` | n above 0: a cap of n. -1 (no limiter in DXVK): 0. -n: a cap of n. 0: no value |
+| `dxgi.syncInterval` | `VSync` | 0 or 1. A negative value: no value. 2 and more: ignored with a log line |
+| `dxgi.maxFrameLatency` | `MaxFrameLatency` | 1-3. 0: no value. 4 and more: ignored with a log line |
+
+For -n, DXVK engages its limiter only when the game runs much faster than n. The shells give it as a cap of n, which
+is the same limit for the games that DXVK sets it for (games whose speed depends on the frame rate above 60).
+The effective-settings line marks such a value `/dxvk-profile`.
+
+The other `dxgi.*` options do not apply on this route. The lab flavour writes one log line for each option of the
+process with the reason, after the effective-settings line:
+
+| DXVK options | Reason |
+|---|---|
+| `customVendorId`, `customDeviceId`, `customDeviceDesc`, `hideNvidiaGpu`, `hideNvkGpu`, `hideAmdGpu`, `hideIntelGpu` | The system DXGI reports the adapter identity from the kernel-mode driver, the same for every process |
+| `maxDeviceMemory`, `maxSharedMemory` | The system DXGI reports the memory sizes from the kernel-mode driver, the same for every process |
+| `enableDummyCompositionSwapchain` | Composition swap chains are the system DXGI's |
+| `deferSurfaceCreation`, `tearFree`, `forceRefreshRate`, `enableHDR`, `enableUe4Workarounds` | Options of DXVK's DXGI and swap chain, which the system DXGI replaces on this route |
+| any other | No mechanism on this route |
+
+The profiles of DXVK acb78320 that set an option with a mechanism: `dxgi.maxFrameRate = -60` (six games, one with
+-120, one with -1), `dxgi.syncInterval = 1` (five games, for example Persona 3 Reload, `P3R.exe`, a D3D12 game) and
+`dxgi.maxFrameLatency = 1` (three games). D3D12 games get the same options as D3D11 games, as under Proton, where
+DXVK's DXGI serves both.
 
 ## The settings
 
@@ -353,7 +393,8 @@ A future entry that matches all versions from a value upward, with `>=`, would a
 |---|---|
 | `driver/umd/app-settings/app-settings-core.h` | names, ranges, precedence, registry and environment reads |
 | `driver/umd/app-settings/app-settings.h` | log lines, sync override, frame limiter, engine options |
-| `driver/umd/app-settings/app-settings-test.cpp` | host test, run by `tools/build/test-umd-app-settings.ps1` |
+| `driver/umd/app-settings/app-settings-test.cpp` | host test, run by `tools/build/test-umd-app-settings.ps1` in the release and the lab flavour |
+| `driver/umd/app-settings/flavour-strings-check.cpp` | compile check: the release object of `log_once` holds no lab line of `dxvk-profile.h`, the lab object holds them |
 | `driver/umd/dxvk/ddi-adapter.cpp`, `ddi-present.cpp` | the D3D11 shell |
 | `driver/umd/d3d12/adapter.cpp`, `native-tables.cpp` | the D3D12 shell |
 | `driver/umd/router/router-policy.h`, `router.cpp` | `RenderOnCpu` |

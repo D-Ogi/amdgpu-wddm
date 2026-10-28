@@ -9,7 +9,9 @@
 //                                                               not case-sensitive
 //
 // Precedence, highest first: the environment variable AMDGPU_WDDM_<NAME> (descriptor()), the application key, the
-// global key. No value from any source = the application decides. Every value is a REG_DWORD. A value out of its
+// global key, the DXVK profile (the dxgi.* options of DXVK's own configuration for the process, which the shells
+// read from the DXVK engine: dxvk-profile.h; the router has no such source). No value from any source = the
+// application decides. Every value is a REG_DWORD. A value out of its
 // range, a value of another type, or an environment string that is not a decimal number is ignored with one log
 // line, and the next source is read. A 32-bit process reads the 64-bit registry view, as the router does (BD-064).
 //
@@ -31,8 +33,9 @@ enum class Setting : unsigned {FrameRateLimit,VSync,Anisotropy,MaxFrameLatency,P
 enum : unsigned {kCount=static_cast<unsigned>(Setting::Count),kAll=(1u<<kCount)-1u};
 inline constexpr unsigned bit(Setting s) noexcept {return 1u<<static_cast<unsigned>(s);}
 
-// Where a value came from. None: no source has a valid value, the application decides.
-enum class Source : unsigned {None,Global,Application,Environment};
+// Where a value came from. None: no source has a valid value, the application decides. Profile, the lowest source,
+// is last so that the numbers of the others stay as they were.
+enum class Source : unsigned {None,Global,Application,Environment,Profile};
 
 struct Descriptor {
     const wchar_t* value;   // REG_DWORD value name in both keys
@@ -70,6 +73,7 @@ inline const char* source_name(Source s) noexcept {
     case Source::Global:return "global";
     case Source::Application:return "application";
     case Source::Environment:return "environment";
+    case Source::Profile:return "dxvk-profile";
     default:return "unset";
     }
 }
@@ -83,6 +87,9 @@ struct Sources {
     Read (*registry)(void* context,const wchar_t* application,const wchar_t* value,uint32_t* out);
     // false: the variable is not set. text gets at most size-1 characters and a terminating zero.
     bool (*environment)(void* context,const char* name,char* text,size_t size);
+    // The lowest source, in the scale of the setting (dxvk-profile.h maps the DXVK options), or null for none.
+    // Absent or a value; never WrongType.
+    Read (*profile)(void* context,Setting setting,uint32_t* out);
 };
 
 struct Value {
@@ -100,7 +107,7 @@ struct Rejection {
 };
 struct Settings {
     Value values[kCount];
-    Rejection rejections[kCount*3];
+    Rejection rejections[kCount*4];
     unsigned rejection_count=0;
     wchar_t application[MAX_PATH]={};   // the image file name the application key was read for ("" = none)
     const Value& operator[](Setting s) const noexcept {return values[static_cast<unsigned>(s)];}
@@ -133,6 +140,13 @@ inline bool take_registry(Settings& s,Setting setting,Source source,const Source
     default:return false;
     }
 }
+inline void take_profile(Settings& s,Setting setting,const Sources& from) noexcept {
+    uint32_t v=0;
+    if(!from.profile || from.profile(from.context,setting,&v)!=Read::Value)return;
+    if(valid(setting,v)){s.values[static_cast<unsigned>(setting)].value=v;
+        s.values[static_cast<unsigned>(setting)].source=Source::Profile;return;}
+    reject(s,setting,Source::Profile,Problem::OutOfRange,v,nullptr);
+}
 } // namespace detail
 
 // A decimal number of 1 to 10 digits that fits 32 bits, nothing else (no sign, no space, no "0x").
@@ -162,7 +176,8 @@ inline void resolve(const wchar_t* application,const Sources& from,Settings& s) 
             else {s.values[i].value=v;s.values[i].source=Source::Environment;continue;}
         }
         if(s.application[0] && detail::take_registry(s,setting,Source::Application,from,s.application))continue;
-        detail::take_registry(s,setting,Source::Global,from,nullptr);
+        if(detail::take_registry(s,setting,Source::Global,from,nullptr))continue;
+        detail::take_profile(s,setting,from);
     }
 }
 
@@ -192,7 +207,7 @@ inline bool system_environment(void*,const char* name,char* text,size_t size) no
     if(n>=size)detail::copy(text,size,"(too long)");
     return true;
 }
-inline Sources system_sources() noexcept {Sources s={nullptr,system_registry,system_environment};return s;}
+inline Sources system_sources() noexcept {Sources s={nullptr,system_registry,system_environment,nullptr};return s;}
 
 // The file name of the process image (game.exe), or "" when it cannot be read.
 inline void image_name(wchar_t* out,size_t size) noexcept {
