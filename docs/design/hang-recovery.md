@@ -153,6 +153,12 @@ that key finds nothing, and that does not prove that the record is gone. Read th
 the installation (`Read-DriverStateValues -Path HangRecovery`, `tools/release/installer/state-reader.ps1`), and the
 wave snapshot with `bc250kmd_cli waves saved`.
 
+The reader finds `bc250kmd_cli.exe` in this order: the `-Cli` argument, then `$script:DriverStateCli`, then
+`tools\bc250kmd_cli.exe` below `$InstallRoot`, then the directory of the reader. In an installation the reader is in
+`installer\` and the CLI is in `tools\`. Thus a script that dot-sources only the reader fails with "shared state could
+not be read". Set `$script:DriverStateCli` to the installed `tools\bc250kmd_cli.exe`, or set `$InstallRoot` to the
+installation directory, after the dot-source and before the first read.
+
 The record survives the installer:
 
 - An update in place: the first start of the new package reads the records from the stopped old generation. Thus
