@@ -7,6 +7,7 @@
 #include "ddi-wddm22.h"
 #include "ddi-experiment.h"
 #include "ddi-lifecycle.h"
+#include <cstring>
 namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     PFN_vkGetInstanceProcAddr get,const BC250_DXVK_ENGINE_FUNCS &funcs,D3D_FEATURE_LEVEL level,
@@ -39,17 +40,22 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     // the switch "host-identity-off" gives the runtime's handle as before, for a lab comparison.
     owner->runtime().legacy_host_identity=d3d11_experiment_off("host-identity");
     HRESULT hr=E_FAIL,cleanup=S_OK;
+    // The step that failed. close() sets the owner's own step back to "none", so it is kept here.
+    const char *failedStep="none";
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);
         try {
             hr=owner->initialize(args,luid,get,funcs,level,services,policy_flags);
+            failedStep=owner->step();
             if (SUCCEEDED(hr)) {
+                failedStep="caps-interface";
                 IBc250DxvkDevice3 *capsEngine=nullptr;
                 hr=owner->engine()->QueryInterface(__uuidof(IBc250DxvkDevice3),reinterpret_cast<void **>(&capsEngine));
                 if (SUCCEEDED(hr)) {
                     if (!capsEngine) hr=E_NOINTERFACE;
                     else {
                         struct ReleaseCaps { IBc250DxvkDevice3 *p; ~ReleaseCaps(){p->Release();} } release{capsEngine};
+                        failedStep="caps-verify";
                         hr=verify_adapter_caps(advertised,[&](D3D_FEATURE_LEVEL maximum,D3D11_FEATURE feature,void *data,UINT size) {
                             return capsEngine->CheckFeatureSupportAtLevel(maximum,feature,data,size);
                         });
@@ -60,6 +66,7 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         catch (const std::bad_alloc &) { hr=E_OUTOFMEMORY; }
         catch (...) { hr=E_FAIL; }
         if (FAILED(hr)) {
+            if (!std::strcmp(failedStep,"none")) failedStep=owner->step();
             try { cleanup=owner->close(); }
             catch (...) { cleanup=E_FAIL; }
         }
@@ -72,7 +79,7 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         auto &runtime=owner->runtime();
         static std::atomic_uint notes{16};
         device_life_note(notes,"BC250 BD-253: CreateDevice failed: step=%s hr=%08X cleanup=%08X kept=%u runtime=%p "
-            "identity=%p handle-of-kept-device=%u kept-devices=%u\n",owner->step(),unsigned(hr),unsigned(cleanup),
+            "identity=%p handle-of-kept-device=%u kept-devices=%u\n",failedStep,unsigned(hr),unsigned(cleanup),
             unsigned(kept),runtime.hDevice,runtime.host_identity(),unsigned(retained_runtime_handle(runtime.hDevice)),
             retained_device_count());
         if (kept) { note_retained_runtime_handle(runtime.hDevice); failedCleanup.owner=owner; }
