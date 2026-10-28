@@ -7,6 +7,7 @@
 // creation. A change takes effect at the next start of the application.
 #pragma once
 #include "app-settings-core.h"
+#include "dxvk-profile.h"
 #include <atomic>
 #include <cstring>
 #include <mutex>
@@ -14,12 +15,16 @@
 
 namespace amdgpu_wddm::app_settings {
 
-// This module's reading of the settings: once per process, at the first call.
+// This module's reading of the settings: once per process, at the first call. The first call loads the DXVK engine
+// for its profile options (dxvk-profile.h), so it must not run under the loader lock.
 inline const Settings& process_settings() noexcept {
     static const Settings settings=[]() noexcept {
         Settings s;
         wchar_t name[MAX_PATH];image_name(name,MAX_PATH);
-        resolve(name,system_sources(),s);
+        Sources from=system_sources();
+        from.context=const_cast<dxvk_profile::Profile*>(&dxvk_profile::process_profile());
+        from.profile=dxvk_profile::source;
+        resolve(name,from,s);
         return s;
     }();
     return settings;
@@ -31,7 +36,8 @@ inline const Settings& process_settings() noexcept {
 inline int format_rejection(const Rejection& r,char* out,size_t size) noexcept {
     const Descriptor& d=descriptor(r.setting);
     const char* where=r.source==Source::Environment ? "the environment" :
-        r.source==Source::Application ? "the application key" : "the global key";
+        r.source==Source::Application ? "the application key" :
+        r.source==Source::Profile ? "the DXVK profile" : "the global key";
     switch(r.problem){
     case Problem::OutOfRange:
         return std::snprintf(out,size,"amdgpu-wddm settings: ignored %s=%u from %s (accepted: %s)",
@@ -62,13 +68,28 @@ inline int format_effective(const Settings& s,const char* api,unsigned applied,c
     return n;
 }
 inline std::atomic<bool>& logged() noexcept {static std::atomic<bool> done{false};return done;}
-// The rejection lines and the effective line, each through emit (one line, no newline), once per module.
-template<class Emit> void log_once(const Settings& s,const char* api,unsigned applied,Emit&& emit) noexcept {
+// The profile whose options log_once lists as not applied: this process's in the lab flavour, none in the release
+// flavour, which has no such lines.
+inline const dxvk_profile::Profile* lab_log_profile() noexcept {
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return &dxvk_profile::process_profile();
+#else
+    return nullptr;
+#endif
+}
+// The rejection lines and the effective line, each through emit (one line, no newline), once per module; then, for a
+// profile, its options that do not apply here (dxvk-profile.h).
+template<class Emit> void log_once(const Settings& s,const char* api,unsigned applied,Emit&& emit,
+    const dxvk_profile::Profile* profile=lab_log_profile()) noexcept {
     if(logged().exchange(true))return;
     char line[1024];
     for(unsigned i=0;i<s.rejection_count;++i)
         if(format_rejection(s.rejections[i],line,sizeof(line))>0)emit(line);
     if(format_effective(s,api,applied,line,sizeof(line))>0)emit(line);
+    if(profile){
+        try {dxvk_profile::log_not_applied(*profile,emit);}
+        catch(...) {}
+    }
 }
 
 // ---- what the shells do with the values ----------------------------------------------------------------------

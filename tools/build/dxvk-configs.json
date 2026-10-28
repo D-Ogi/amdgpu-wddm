@@ -36,7 +36,8 @@
       "release_options": ["-Db_ndebug=true"],
       "targets": [
         "src/ddi/amdgpu_wddm_dxvk.dll",
-        "src/ddi/amdgpu_wddm_dxvk_engine_test.exe"
+        "src/ddi/amdgpu_wddm_dxvk_engine_test.exe",
+        "src/ddi/amdgpu_wddm_dxvk_app_options_test.exe"
       ],
       "ships": {"src/ddi/amdgpu_wddm_dxvk.dll": ["amdgpu_wddm_dxvk.dll"]}
     }

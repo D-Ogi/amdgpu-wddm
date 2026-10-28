@@ -9,9 +9,20 @@
 #include "../recent-launch/recent-launch.h"
 #include "../app-settings/app-settings.h"
 #include "../d3d12/stdio-log.h"
+#include "engine-abi.h"
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <memory>
+#include <type_traits>
+// The DXVK profile reader (app-settings/dxvk-profile.h) declares the engine's second export itself, because the
+// D3D12 shell builds without the DXVK headers. This shell has them and checks that both declarations agree.
+static_assert(std::is_same_v<amdgpu_wddm::app_settings::dxvk_profile::GetAppOptions,
+    PFN_BC250_DXVK_ENGINE_GET_APP_OPTIONS>);
+static_assert(std::string_view(amdgpu_wddm::app_settings::dxvk_profile::kGetAppOptionsName)==
+    BC250_DXVK_ENGINE_GET_APP_OPTIONS_NAME);
+static_assert((amdgpu_wddm::app_settings::dxvk_profile::kEngineAbi>>16)==BC250_DXVK_ENGINE_ABI_MAJOR &&
+    amdgpu_wddm::app_settings::dxvk_profile::kEngineAbi<=BC250_DXVK_ENGINE_ABI_VERSION);
 namespace bc250::umd {
 namespace {
 struct Adapter {

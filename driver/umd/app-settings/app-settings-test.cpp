@@ -384,6 +384,136 @@ void image_name_test() {
     wchar_t tiny[4];as::image_name(tiny,4);
     CHECK(std::wcslen(tiny)==3);
 }
+// A stand-in for the engine's Bc250DxvkEngineGetAppOptions: the lines of g_engine_text, with the engine's buffer
+// rules (bc250_dxvk_engine.h r10).
+std::string g_engine_text;
+HRESULT APIENTRY fake_get_app_options(UINT32 abi,char* text,UINT32 size,UINT32* length) {
+    if(!length || (!text && size))return E_INVALIDARG;
+    if((abi>>16)!=1)return E_NOINTERFACE;
+    *length=static_cast<UINT32>(g_engine_text.size());
+    if(g_engine_text.size()>=size){
+        if(size)text[0]=0;   // whole lines only; the reader asks again with the length
+        return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    }
+    std::memcpy(text,g_engine_text.c_str(),g_engine_text.size()+1);
+    return S_OK;
+}
+namespace dp=as::dxvk_profile;
+as::Settings run_profile(Fake& f,const dp::Profile& p,const wchar_t* app=L"Game.EXE") {
+    as::Settings s;
+    as::Sources from{&f,fake_registry,fake_environment,nullptr};
+    // The registry double and the profile share one context in resolve: wrap both.
+    struct Both {Fake* fake;const dp::Profile* profile;};
+    static Both both;both={&f,&p};
+    from.context=&both;
+    from.registry=[](void* c,const wchar_t* a,const wchar_t* v,uint32_t* o) noexcept {
+        return fake_registry(static_cast<Both*>(c)->fake,a,v,o);};
+    from.environment=[](void* c,const char* n,char* t,size_t z) noexcept {
+        return fake_environment(static_cast<Both*>(c)->fake,n,t,z);};
+    from.profile=[](void* c,Setting s,uint32_t* o) noexcept {
+        return dp::source(const_cast<dp::Profile*>(static_cast<Both*>(c)->profile),s,o);};
+    as::resolve(app,from,s);
+    return s;
+}
+dp::Profile profile_of(const char* text) {g_engine_text=text;return dp::from_engine(fake_get_app_options);}
+
+void profile_tests() {
+    {   // The lines of the engine, in its order; a line without a name is skipped.
+        const auto o=dp::parse("dxgi.a=1\n=x\ndxgi.b=two words\nno-equals\ndxgi.c=");
+        CHECK(o.size()==3 && o[0].name=="dxgi.a" && o[0].value=="1" && o[1].value=="two words" && o[2].value.empty());
+        CHECK(dp::parse("").empty() && dp::parse(nullptr).empty());
+    }
+    {   // DXVK's int32 rule.
+        int64_t v=0;
+        CHECK(dp::parse_int("-60",&v) && v==-60);
+        CHECK(dp::parse_int("1",&v) && v==1);
+        CHECK(!dp::parse_int("",&v) && !dp::parse_int("-",&v) && !dp::parse_int("1.5",&v) && !dp::parse_int("0x10",&v));
+        CHECK(!dp::parse_int("99999999999",&v));
+    }
+    {   // The DXVK profiles of tester.33's DXVK: P3R (syncInterval 1), ShantaeCurse (maxFrameRate -60), A Way Out
+        // (maxFrameLatency 1). A soft limit -n is a cap of n, -1 is no limiter.
+        auto p=profile_of("dxgi.syncInterval=1\n");
+        CHECK(p.read && p.has[unsigned(Setting::VSync)] && p.value[unsigned(Setting::VSync)]==1);
+        p=profile_of("dxgi.maxFrameRate=-60\n");
+        CHECK(p.has[unsigned(Setting::FrameRateLimit)] && p.value[unsigned(Setting::FrameRateLimit)]==60);
+        p=profile_of("dxgi.maxFrameRate=-1\n");
+        CHECK(p.has[unsigned(Setting::FrameRateLimit)] && p.value[unsigned(Setting::FrameRateLimit)]==0);
+        p=profile_of("dxgi.maxFrameRate=0\ndxgi.maxFrameLatency=0\ndxgi.syncInterval=-1\n");
+        for(unsigned i=0;i<as::kCount;++i)CHECK(!p.has[i]);
+        p=profile_of("dxgi.maxFrameLatency=1\n");
+        CHECK(p.has[unsigned(Setting::MaxFrameLatency)] && p.value[unsigned(Setting::MaxFrameLatency)]==1);
+        // dxvk.maxFrameRate wins over dxgi.maxFrameRate, as in DxgiOptions.
+        p=profile_of("dxgi.maxFrameRate=30\ndxvk.maxFrameRate=90\n");
+        CHECK(p.value[unsigned(Setting::FrameRateLimit)]==90 && !std::strcmp(p.option[unsigned(Setting::FrameRateLimit)],"dxvk.maxFrameRate"));
+        CHECK(dp::not_applied_reason(p,"dxgi.maxFrameRate")!=nullptr && !dp::not_applied_reason(p,"dxvk.maxFrameRate"));
+        // A long answer: the reader asks again with the length the engine gives.
+        std::string many;
+        for(int i=0;i<400;++i)many+="dxgi.unknownOption"+std::to_string(i)+"=1\n";
+        many+="dxgi.syncInterval=0\n";
+        p=profile_of(many.c_str());
+        CHECK(p.read && p.options.size()==401 && p.has[unsigned(Setting::VSync)] && p.value[unsigned(Setting::VSync)]==0);
+        // No export (an engine before ABI 1.5): no profile.
+        p=dp::from_engine(nullptr);
+        CHECK(!p.read && p.result==E_NOINTERFACE);
+    }
+    {   // The profile is the lowest source: the global key and the application key win over it.
+        Fake f;
+        const auto p=profile_of("dxgi.syncInterval=1\ndxgi.maxFrameRate=-60\ndxgi.maxFrameLatency=1\n");
+        auto s=run_profile(f,p);
+        CHECK(s[Setting::VSync].value==1 && s[Setting::VSync].source==Source::Profile);
+        CHECK(s[Setting::FrameRateLimit].value==60 && s[Setting::FrameRateLimit].source==Source::Profile);
+        CHECK(s[Setting::MaxFrameLatency].value==1 && s[Setting::MaxFrameLatency].source==Source::Profile);
+        CHECK(!s[Setting::Anisotropy].set());
+        CHECK(has(effective(s),"VSync=1/dxvk-profile") && has(effective(s),"FrameRateLimit=60/dxvk-profile"));
+        f.dword(L"",L"VSync",0);f.dword(L"game.exe",L"FrameRateLimit",144);
+        s=run_profile(f,p);
+        CHECK(s[Setting::VSync].value==0 && s[Setting::VSync].source==Source::Global);
+        CHECK(s[Setting::FrameRateLimit].value==144 && s[Setting::FrameRateLimit].source==Source::Application);
+        CHECK(s[Setting::MaxFrameLatency].source==Source::Profile);
+    }
+    {   // A value out of the setting's range is ignored with a log line that names the DXVK profile.
+        Fake f;
+        const auto p=profile_of("dxgi.syncInterval=2\ndxgi.maxFrameRate=-500\ndxgi.maxFrameLatency=8\n");
+        const auto s=run_profile(f,p);
+        CHECK(!s[Setting::VSync].set() && !s[Setting::FrameRateLimit].set() && !s[Setting::MaxFrameLatency].set());
+        CHECK(s.rejection_count==3);
+        CHECK(has(rejection(s,0),"ignored FrameRateLimit=500 from the DXVK profile (accepted: 0, 20-300)"));
+        CHECK(has(rejection(s,1),"ignored VSync=2 from the DXVK profile"));
+        CHECK(has(rejection(s,2),"ignored MaxFrameLatency=8 from the DXVK profile"));
+    }
+    {   // The options that do not apply on this route, each with its reason, in the lab log.
+        const auto p=profile_of("dxgi.customVendorId=10de\ndxgi.enableDummyCompositionSwapchain=True\n"
+            "dxgi.maxDeviceMemory=4095\ndxgi.someFutureOption=1\ndxgi.syncInterval=1\n");
+        std::vector<std::string> lines;
+        dp::log_not_applied(p,[&](const char* l){lines.emplace_back(l);});
+        CHECK(lines.size()==4);
+        CHECK(lines.size()==4 && has(lines[0],"dxgi.customVendorId=10de not applied: the system DXGI reports the adapter identity"));
+        CHECK(lines.size()==4 && has(lines[1],"dxgi.enableDummyCompositionSwapchain=True not applied: composition swap chains"));
+        CHECK(lines.size()==4 && has(lines[2],"dxgi.maxDeviceMemory=4095 not applied: the system DXGI reports the memory sizes"));
+        CHECK(lines.size()==4 && has(lines[3],"dxgi.someFutureOption=1 not applied: no mechanism on this route"));
+        lines.clear();
+        dp::log_not_applied(dp::from_engine(nullptr),[&](const char* l){lines.emplace_back(l);});
+        CHECK(lines.size()==1 && has(lines[0],"no DXVK profile options"));
+    }
+    {   // log_once adds the not-applied lines after the effective line, for the profile it is given.
+        as::logged().store(false);
+        Fake f;const auto p=profile_of("dxgi.hideNvidiaGpu=False\n");
+        const auto s=run_profile(f,p);
+        std::vector<std::string> lines;
+        as::log_once(s,"d3d12",as::kAll,[&](const char* l){lines.emplace_back(l);},&p);
+        CHECK(lines.size()==2 && has(lines[0],"api=d3d12") && has(lines[1],"dxgi.hideNvidiaGpu=False not applied"));
+        as::logged().store(false);
+    }
+    {   // The engine path: the D3D11 directory next to this module's directory.
+        const std::wstring path=dp::engine_path();
+        CHECK(path.size()>std::wcslen(AMDGPU_DXVK_FILE) && path.find(L"\\d3d11\\")!=std::wstring::npos &&
+              path.find(L"..")==std::wstring::npos && path.compare(path.size()-std::wcslen(AMDGPU_DXVK_FILE),
+              std::wstring::npos,AMDGPU_DXVK_FILE)==0);
+        // No engine at that path: no profile, and the reason is the load error.
+        const auto p=dp::from_path(L"P:\\no-such-directory-for-the-dxvk-profile-test\\amdgpu_wddm_dxvk.dll");
+        CHECK(!p.read && FAILED(p.result));
+    }
+}
 } // namespace
 
 int main() {
@@ -397,6 +527,7 @@ int main() {
     env_tests();
     registry_tests();
     image_name_test();
+    profile_tests();
     std::printf("app-settings-test: %d checks, %d failures\n",checks,failures);
     return failures ? 1 : 0;
 }
