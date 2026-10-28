@@ -136,6 +136,67 @@ class TreemapTests(unittest.TestCase):
         self.assertEqual(sm.counts(metric), (2, 3, 0))
         self.assertEqual(sm.counts(metric, every=True), (2, 6, 0))
 
+    def test_not_applicable_and_optional_cells_are_marked(self):
+        def slot(name, done, cls):
+            return {"name": name, "done": done, "reason": "r", "applicability": {"class": cls, "reason": "why",
+                                                                                 "source": "doc"}}
+        metric = {"title": "T", "subtitle": "S", "groups": [
+            {"name": "A", "slots": [slot("a", True, "applicable"), slot("b", False, "applicable"),
+                                    slot("c", False, "optional"), slot("d", False, "not-applicable"),
+                                    slot("e", True, "optional")]}]}
+        svg = sm.treemap_svg(metric)
+        self.assertIn("2 of 5 slots done (40.00%), applicable 1 of 2 (50.00%)", svg)
+        self.assertEqual(svg.count('fill="url(#na)"'), 1 + 1)        # one cell and the legend key
+        self.assertEqual(svg.count('fill="url(#optional)"'), 1 + 1)  # the optional slot that is not done
+        self.assertIn(">not applicable</text>", svg)
+        self.assertEqual(sm.counts(metric, applicable=True), (1, 2, 0))
+        self.assertEqual(sm.class_counts(metric), {"applicable": 2, "optional": 2, "not-applicable": 1})
+
+
+class ApplicabilityTests(unittest.TestCase):
+    @staticmethod
+    def metric():
+        return {"id": "d3d12-ddi", "groups": [{"name": "G", "slots": [{"name": "pfnA"}, {"name": "pfnB"}]}]}
+
+    @staticmethod
+    def entry(cls="applicable"):
+        return {"class": cls, "reason": "why", "source": "doc"}
+
+    def test_every_slot_gets_its_class(self):
+        m = self.metric()
+        sm.classify(m, {"d3d12-ddi": {"G/pfnA": self.entry(), "G/pfnB": self.entry("optional")}})
+        self.assertEqual([s["applicability"]["class"] for s in m["groups"][0]["slots"]], ["applicable", "optional"])
+
+    def test_slot_without_a_class_stops_the_script(self):
+        with self.assertRaises(SystemExit) as e:
+            sm.classify(self.metric(), {"d3d12-ddi": {"G/pfnA": self.entry()}})
+        self.assertIn("G/pfnB", str(e.exception))
+
+    def test_class_of_an_unknown_slot_stops_the_script(self):
+        with self.assertRaises(SystemExit) as e:
+            sm.classify(self.metric(), {"d3d12-ddi": {"G/pfnA": self.entry(), "G/pfnB": self.entry(),
+                                                      "G/pfnGone": self.entry()}})
+        self.assertIn("G/pfnGone", str(e.exception))
+
+    def test_unknown_class_or_missing_reason_stops_the_script(self):
+        for bad in (self.entry("maybe"), {"class": "optional", "reason": "", "source": "doc"}):
+            with self.assertRaises(SystemExit):
+                sm.classify(self.metric(), {"d3d12-ddi": {"G/pfnA": self.entry(), "G/pfnB": bad}})
+
+    def test_kernel_mode_keys_are_member_names(self):
+        m = {"id": "kmd-ddi", "groups": [{"name": "Family", "slots": [{"name": "DxgkDdiX"}]}]}
+        sm.classify(m, {"kmd-ddi": {"DxgkDdiX": self.entry("not-applicable")}})
+        self.assertEqual(sm.slot_class(m["groups"][0]["slots"][0]), "not-applicable")
+
+    def test_committed_file_classifies_every_committed_slot(self):
+        import json
+        table = json.loads(sm.APPLICABILITY.read_text(encoding="utf-8"))
+        doc = json.loads(sm.JSON_PATH.read_text(encoding="utf-8"))
+        for metric in doc["metrics"]:
+            sm.classify(metric, table)
+
+
+class LabelTests(unittest.TestCase):
     def test_version_label(self):
         self.assertEqual(sm.version_label("WDDM2_9"), "WDDM 2.9")
         self.assertEqual(sm.version_label("WDDM2_1_5"), "WDDM 2.1.5")
