@@ -247,12 +247,13 @@ void output_tests() {
         const char* utf8=reinterpret_cast<const char*>(bytes);
         CHECK(has(effective(u),utf8));
     }
-    {   // log_once: the rejections first, then the effective line, and only on the first call.
+    {   // log_once: the rejections first, then the effective line, and only on the first call. No profile: the lab
+        // flavour's default, this process's profile, adds the line of the engine that is not there.
         Fake g;g.dword(L"",L"VSync",7);
         const auto t=run(g);
         std::vector<std::string> lines;
-        as::log_once(t,"d3d12",as::kAll,[&](const char* l){lines.emplace_back(l);});
-        as::log_once(t,"d3d12",as::kAll,[&](const char* l){lines.emplace_back(l);});
+        as::log_once(t,"d3d12",as::kAll,[&](const char* l){lines.emplace_back(l);},nullptr);
+        as::log_once(t,"d3d12",as::kAll,[&](const char* l){lines.emplace_back(l);},nullptr);
         CHECK(lines.size()==2);
         if(lines.size()==2)CHECK(has(lines[0],"ignored VSync=7 from the global key") && has(lines[1],"api=d3d12"));
     }
@@ -495,13 +496,20 @@ void profile_tests() {
         dp::log_not_applied(dp::from_engine(nullptr),[&](const char* l){lines.emplace_back(l);});
         CHECK(lines.size()==1 && has(lines[0],"no DXVK profile options"));
     }
-    {   // log_once adds the not-applied lines after the effective line, for the profile it is given.
+    {   // log_once adds the not-applied lines after the effective line, for the profile it is given, in the lab
+        // flavour only. test-umd-app-settings.ps1 builds and runs this test in both flavours.
         as::logged().store(false);
         Fake f;const auto p=profile_of("dxgi.hideNvidiaGpu=False\n");
         const auto s=run_profile(f,p);
         std::vector<std::string> lines;
         as::log_once(s,"d3d12",as::kAll,[&](const char* l){lines.emplace_back(l);},&p);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
         CHECK(lines.size()==2 && has(lines[0],"api=d3d12") && has(lines[1],"dxgi.hideNvidiaGpu=False not applied"));
+        CHECK(as::lab_log_profile()!=nullptr);
+#else
+        CHECK(lines.size()==1 && has(lines[0],"api=d3d12"));
+        CHECK(as::lab_log_profile()==nullptr);
+#endif
         as::logged().store(false);
     }
     {   // The engine path: the D3D11 directory next to this module's directory.

@@ -19,9 +19,29 @@ try {
         # The router's half with the router DLL's flags: C++14 (the compiler default), no /EHsc.
         & cl.exe /nologo /c /O2 /W4 /WX "/Fo:core-c++14-check.obj" "$repo\driver\umd\app-settings\core-c++14-check.cpp"
         if ($LASTEXITCODE -ne 0) { throw 'app-settings-core.h does not build with the router flags' }
-        & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /O2 /MT /DNOMINMAX /DWIN32_LEAN_AND_MEAN /Fe:app-settings-test.exe "$repo\driver\umd\app-settings\app-settings-test.cpp"
-        if ($LASTEXITCODE -ne 0) { throw 'App settings test build failed' }
-        & .\app-settings-test.exe
-        if ($LASTEXITCODE -ne 0) { throw 'App settings tests failed' }
+        # BD-167: the release flavour of log_once holds no lab line of dxvk-profile.h; the lab flavour holds them.
+        $labLines=@('DXVK profile option %s=%s not applied: %s', 'no DXVK profile options (engine result %08lx)')
+        foreach ($flavour in 'release', 'lab') {
+            # An array even with one item: PowerShell unrolls a one-item array that an if statement returns.
+            $define=@()
+            if ($flavour -eq 'lab') { $define=@('/DAMDGPU_WDDM_LAB_FLAVOUR') }
+            $obj="flavour-strings-$flavour.obj"
+            & cl.exe /nologo /c /std:c++20 /EHsc /W4 /WX /Od /MT /DNOMINMAX /DWIN32_LEAN_AND_MEAN @define "/Fo:$obj" "$repo\driver\umd\app-settings\flavour-strings-check.cpp"
+            if ($LASTEXITCODE -ne 0) { throw "The $flavour flavour string check does not build" }
+            $bytes=[Text.Encoding]::GetEncoding(28591).GetString([IO.File]::ReadAllBytes((Join-Path $OutputDir $obj)))
+            foreach ($line in $labLines) {
+                $has=$bytes.Contains($line)
+                if ($flavour -eq 'release' -and $has) { throw "The release flavour of log_once holds the lab line '$line'" }
+                if ($flavour -eq 'lab' -and -not $has) { throw "The lab flavour of log_once lacks the lab line '$line'" }
+            }
+            "flavour strings: $flavour ok"
+            # The test checks its own image name, so each flavour gets a directory of its own.
+            New-Item -ItemType Directory -Force (Join-Path $OutputDir $flavour) | Out-Null
+            $exe="$flavour\app-settings-test.exe"
+            & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /O2 /MT /DNOMINMAX /DWIN32_LEAN_AND_MEAN @define "/Fe:$exe" "$repo\driver\umd\app-settings\app-settings-test.cpp"
+            if ($LASTEXITCODE -ne 0) { throw "App settings test build failed ($flavour flavour)" }
+            & ".\$exe"
+            if ($LASTEXITCODE -ne 0) { throw "App settings tests failed ($flavour flavour)" }
+        }
     } finally { Pop-Location }
 } finally { Restore-ProcessEnvironment $saved }

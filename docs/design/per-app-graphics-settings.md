@@ -393,7 +393,8 @@ A future entry that matches all versions from a value upward, with `>=`, would a
 |---|---|
 | `driver/umd/app-settings/app-settings-core.h` | names, ranges, precedence, registry and environment reads |
 | `driver/umd/app-settings/app-settings.h` | log lines, sync override, frame limiter, engine options |
-| `driver/umd/app-settings/app-settings-test.cpp` | host test, run by `tools/build/test-umd-app-settings.ps1` |
+| `driver/umd/app-settings/app-settings-test.cpp` | host test, run by `tools/build/test-umd-app-settings.ps1` in the release and the lab flavour |
+| `driver/umd/app-settings/flavour-strings-check.cpp` | compile check: the release object of `log_once` holds no lab line of `dxvk-profile.h`, the lab object holds them |
 | `driver/umd/dxvk/ddi-adapter.cpp`, `ddi-present.cpp` | the D3D11 shell |
 | `driver/umd/d3d12/adapter.cpp`, `native-tables.cpp` | the D3D12 shell |
 | `driver/umd/router/router-policy.h`, `router.cpp` | `RenderOnCpu` |

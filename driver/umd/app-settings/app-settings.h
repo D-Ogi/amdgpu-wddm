@@ -78,7 +78,8 @@ inline const dxvk_profile::Profile* lab_log_profile() noexcept {
 #endif
 }
 // The rejection lines and the effective line, each through emit (one line, no newline), once per module; then, for a
-// profile, its options that do not apply here (dxvk-profile.h).
+// profile, its options that do not apply here (dxvk-profile.h). The release flavour compiles that part out, so that
+// its DLLs do not hold the lab lines (BD-167; tools/release/flavour_bytes.py checks the built shells).
 template<class Emit> void log_once(const Settings& s,const char* api,unsigned applied,Emit&& emit,
     const dxvk_profile::Profile* profile=lab_log_profile()) noexcept {
     if(logged().exchange(true))return;
@@ -86,10 +87,14 @@ template<class Emit> void log_once(const Settings& s,const char* api,unsigned ap
     for(unsigned i=0;i<s.rejection_count;++i)
         if(format_rejection(s.rejections[i],line,sizeof(line))>0)emit(line);
     if(format_effective(s,api,applied,line,sizeof(line))>0)emit(line);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     if(profile){
         try {dxvk_profile::log_not_applied(*profile,emit);}
         catch(...) {}
     }
+#else
+    (void)profile;
+#endif
 }
 
 // ---- what the shells do with the values ----------------------------------------------------------------------
