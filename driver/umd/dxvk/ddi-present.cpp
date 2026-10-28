@@ -86,7 +86,7 @@ HRESULT write_present_shadow(DeviceOwner &owner,const DdiResource &source,UINT s
             char text[160];
             std::snprintf(text,sizeof(text),"BC250 BD-065: Present shadow %ux%u format %u for buffer format %u\n",
                 desc.Width,desc.Height,unsigned(format),unsigned(desc.Format));
-            OutputDebugStringA(text);
+            present_note(text);
         }
     } else {
         hr=wait_present_value(owner.bridge(),slot.retire);
@@ -138,7 +138,7 @@ HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
                     char text[160];
                     std::snprintf(text,sizeof(text),"BC250 BD-065: Present shadow failed hr=%08X format=%u width=%u height=%u\n",
                         unsigned(hr),unsigned(shadowFormat),source->runtime_surface->desc.Width,source->runtime_surface->desc.Height);
-                    OutputDebugStringA(text);
+                    present_note(text);
                 }
                 shadow=nullptr;
             }

@@ -275,6 +275,7 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                         unsigned(desc->Usage),desc->MapFlags,desc->MipLevels,desc->ArraySize,
                         desc->SampleDesc.Count,desc->SampleDesc.Quality,m ? m->TexelWidth : 0u,m ? m->TexelHeight : 0u);
                     OutputDebugStringA(text);
+                    amdgpu_wddm_log::print("%s",text);   // BD-253: also in the game log
                 }
                 report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported); return;
             }
