@@ -46,12 +46,17 @@
 #    <Out>\register-receipt.json). The capability words of a record are not measured again. Commit and push the file.
 # 5. Packages, a second run on the registered set:
 #      pwsh -File tools\release\build-release-set.ps1 -Package -From <Out> -UmdSource <dir> -UmdBuild <dir>
-#           [-Flavours release,lab] [-LedgerDebtReason <text>]
+#           [-Flavours release,lab] [-LedgerDebtReason <text>] [-Parallel]
 #    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
 #    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
 #    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
 #    each package and its zip, and <Out>\package-report.json their SHA-256. Then the host dry run of the installer
 #    (test-dryrun.ps1) on each package and the BD-167 byte check of the Mesa DLLs of both (flavour_bytes.py).
+#    -Parallel builds the flavours at the same time. Each flavour runs in its own process (the package steps set
+#    process-wide variables such as TEMP) and in its own detached worktree of the same commit, <Out>\package-wt-<flavour>
+#    (the setup window build writes intermediate files into the tree). Each process writes
+#    <Out>\package-report-<flavour>.json and <Out>\logs\package-<flavour>.out; this process merges the reports, runs
+#    the byte check and removes the worktrees.
 #
 # -Plan prints the gates, the builds with their expanded command lines, outputs, tests and disk budget, and builds
 # nothing. -Only rebuilds the rows it names (ids or wildcards); a row it does not name keeps the artifact of the last
@@ -98,7 +103,11 @@ param(
     # Unlanded ledger work this release carries on purpose (build-release.ps1 -AllowLedgerDebt).
     [Parameter(ParameterSetName = 'Package')][string]$LedgerDebtReason = '',
     [Parameter(ParameterSetName = 'Package')][string]$PackageRoot = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }),
-    [Parameter(ParameterSetName = 'Package')][string]$PackageGuard
+    [Parameter(ParameterSetName = 'Package')][string]$PackageGuard,
+    # Build the flavours at the same time, each in its own process and worktree (see "5. Packages" above).
+    [Parameter(ParameterSetName = 'Package')][switch]$Parallel,
+    # The package report; <From>\package-report.json by default. A -Parallel run gives each flavour its own.
+    [Parameter(ParameterSetName = 'Package')][string]$Report
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
@@ -316,7 +325,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     $env:PYTHONDONTWRITEBYTECODE = '1'
     if (-not $PackageGuard) { $PackageGuard = Join-Path $Root 'scratch\cleanup-250\size-guard.py' }
     $python = (Get-Command python -CommandType Application | Select-Object -First 1).Source
-    $packageReport = Join-Path $From 'package-report.json'
+    $packageReport = if ($Report) { [IO.Path]::GetFullPath($Report) } else { Join-Path $From 'package-report.json' }
     $pr = [ordered]@{ tool = 'build-release-set'; step = 'package'; started_utc = Get-Utc; from = $From; flavours = @() }
     function Stop-Package([string]$Why) {
         $pr.status = 'failed'; $pr.error = $Why; $pr.finished_utc = Get-Utc
@@ -364,7 +373,52 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         "$(Get-Utc) $guard"
         if ($LASTEXITCODE -ne 0 -or $guard -notmatch 'size ok') { Stop-Package "the size guard refuses ${What}: $guard" }
     }
-    foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+    $serial = @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
+    if ($Parallel -and $serial.Count -gt 1) {
+        # One process and one detached worktree of $head per flavour. Each child runs the serial path below for its
+        # flavour and writes its own report; the byte check of both runs here after every child ends.
+        function Format-Arg([string]$A) { '"' + ($A -replace '"', '\"') + '"' }
+        $children = @()
+        try {
+            foreach ($flavour in $serial) {
+                $wt = Join-Path $From "package-wt-$flavour"
+                if (Test-Path -LiteralPath $wt) { Stop-Package "worktree exists: $wt (remove it with git worktree remove)" }
+                & git -C $repo worktree add --detach $wt $head 2>&1 | Out-Null
+                if ($LASTEXITCODE) { Stop-Package "git worktree add $wt failed" }
+                $childReport = Join-Path $From "package-report-$flavour.json"
+                Remove-Item -LiteralPath $childReport -ErrorAction SilentlyContinue
+                $logs = Join-Path $From 'logs'
+                New-Item -ItemType Directory -Force $logs | Out-Null
+                $childArgs = @('-NoProfile', '-File', (Join-Path $wt 'tools\release\build-release-set.ps1'), '-Package',
+                               '-From', $From, '-Flavours', $flavour, '-UmdSource', $env:BC250_UMD_SOURCE, '-UmdBuild', $env:BC250_UMD_BUILD,
+                               '-PackageRoot', $Root, '-PackageGuard', $PackageGuard, '-Report', $childReport)
+                if ($LedgerDebtReason) { $childArgs += @('-LedgerDebtReason', $LedgerDebtReason) }
+                $out = Join-Path $logs "package-$flavour.out"
+                $p = Start-Process -FilePath $shell -ArgumentList (@($childArgs | ForEach-Object { Format-Arg $_ }) -join ' ') `
+                    -WorkingDirectory $wt -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError "$out.err"
+                "$(Get-Utc) package $flavour started in process $($p.Id) (worktree $wt, log $out)"
+                $children += [pscustomobject]@{ flavour = $flavour; process = $p; report = $childReport; out = $out; wt = $wt }
+            }
+            foreach ($c in $children) {
+                $c.process.WaitForExit()
+                $cr = if (Test-Path -LiteralPath $c.report) { Read-Json $c.report } else { $null }
+                if (-not $cr -or $cr.status -ne 'ok') {
+                    @(Get-Content -LiteralPath $c.out -Tail 15 -ErrorAction SilentlyContinue) | ForEach-Object { "    $_" }
+                    $why = if ($cr) { $cr.error } else { "no report $($c.report)" }
+                    foreach ($o in $children) { if (-not $o.process.HasExited) { $o.process.WaitForExit() } }
+                    Stop-Package "the $($c.flavour) package process failed: $why (log $($c.out))"
+                }
+                foreach ($cf in $cr.flavours) { $pr.flavours += $cf }
+                "$(Get-Utc) package $($c.flavour) ended: $(@($cr.flavours | ForEach-Object { $_.zip.sha256 }) -join ', ')"
+            }
+        } finally {
+            foreach ($c in $children) {
+                if ($c.process.HasExited) { & git -C $repo worktree remove --force $c.wt 2>&1 | Out-Null }
+            }
+        }
+        $serial = @()
+    }
+    foreach ($flavour in $serial) {
         $f = [ordered]@{ flavour = $flavour }
         $tmp = Join-Path $From "tmp-package-$flavour"
         New-Item -ItemType Directory -Force $tmp | Out-Null
