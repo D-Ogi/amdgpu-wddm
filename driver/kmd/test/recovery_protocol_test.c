@@ -279,6 +279,19 @@ static void witness_ownership(void)
     StartHealthFaultPendingReset(&d);
     CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
     CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0);
+    /* TDR recovery S1: with AdapterRecoveryMode on, a node-0 refusal keeps the mark, so that the adapter reset
+     * that follows can reopen the witness when it proves the engines idle. With the mode off it clears it. */
+    admission_setup(&d, &w, &g);
+    MockTailWddm = &w;
+    w.AdapterRecovery = 2;
+    StartHealthFaultPendingReset(&d);
+    CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
+    CHECK(d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 1);
+    w.AdapterRecovery = BC250_ADAPTER_RECOVERY_OFF;
+    StartHealthFaultPendingReset(&d);
+    CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
+    CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0);
+    MockTailWddm = NULL;
     admission_setup(&d, &w, &g);
     CHECK(TestResetAdmit(&d, &w, 0) == 0);
     CHECK(w.WatchdogFaulted[0] && g.SubmitFailed && !d.HealthFault && !d.HealthPendingReset);

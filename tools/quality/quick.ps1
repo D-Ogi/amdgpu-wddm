@@ -643,6 +643,13 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='hang-recovery-gart-backend';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-GartBackend');Fails=$true}
   @{n='hang-recovery-count-refused';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-CountRefusedKills');Fails=$true}
   @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true}
+  @{n='adapter-reset';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace)}
+  @{n='adapter-reset-last-sample-only';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-LastSampleOnly');Fails=$true}
+  @{n='adapter-reset-no-sdma-idle';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-IgnoreSdmaIdle');Fails=$true}
+  @{n='adapter-reset-partial-begin';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-PartialBegin');Fails=$true}
+  @{n='adapter-reset-complete-window';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CompleteNonEmptyWindow');Fails=$true}
+  @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true}
+  @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true}
   @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
   @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
   @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
@@ -668,6 +675,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='recovery-protocol-DropWitnessReopen';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-DropWitnessReopen');Fails=$true}
   @{n='recovery-protocol-ReopenWitnessOnRefusal';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-ReopenWitnessOnRefusal');Fails=$true}
   @{n='recovery-protocol-RefusalClosesEveryNode';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-RefusalClosesEveryNode');Fails=$true}
+  @{n='recovery-protocol-RefusalIgnoresAdapterRecovery';s='driver\kmd\test\run_recovery_protocol.ps1';a=@('-Root',$Workspace,'-RefusalIgnoresAdapterRecovery');Fails=$true}
   @{n='submit-watchdog-flat-500';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-FlatFiveHundred');Fails=$true}
   @{n='submit-watchdog-short-diagnostic';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AllowTooShortDiagnostic');Fails=$true}
   @{n='submit-watchdog-long-diagnostic';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-AllowTooLongDiagnostic');Fails=$true}

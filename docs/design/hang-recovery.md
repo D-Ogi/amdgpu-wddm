@@ -16,6 +16,8 @@ change (see "Lab trial D1 of 0.7.216.17" below). With that change (zink b25) the
 stayed, but DWM still lost its device and made a new one. The cause is a 10 s CPU wait in the hosted ICD, not the
 KMD (see "Lab trial D1 of 0.7.216.17 with zink b25" below). From 0.7.216.18 stage 1 is on by default.
 
+The adapter-wide path, `DxgkDdiResetFromTimeout`, is stage S1 of the TDR recovery plan: [tdr-recovery-s1.md](tdr-recovery-s1.md).
+
 BD-114 of 2026-10-10 found a second way into the same bugcheck, and this time the driver's own watchdog started
 it. 0.7.216.27 addresses it in two places: the watchdog itself ("The private submit watchdog" below) and a verdict
 that can report a reset only after completion/publication guards pass (verdict 7 below). The hang class above is unchanged.

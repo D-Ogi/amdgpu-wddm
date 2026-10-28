@@ -42,6 +42,7 @@ def main():
         assert sample.index("GfxWaveSampleBegin(") < sample.index("MmioRead(") < sample.index("GfxWaveSampleEnd(")
         assert sample.count("GfxWaveSampleEnd(") == 1
     functions = [function(guard, "static NTSTATUS WriteDword("),
+                 function(guard, "void GuardRecordHangRecoveryPath("),
                  function(guard, "void GuardRecordHangRecovery("),
                  function(guard, "NTSTATUS GuardRecordWaveSnapshot("),
                  function(gfx, "void GfxRecordWavesBeforeKill(")]

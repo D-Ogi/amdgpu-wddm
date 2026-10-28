@@ -703,6 +703,11 @@ void GuardRecordStopDone(void);
 // M15.12: one ResetEngine verdict (hang_recovery.h) into Parameters\HangRecovery, counters and Last* values, flushed
 // so it outlives a 0x116 and the reboot. PASSIVE_LEVEL; failures are logged, never returned.
 void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending);
+// TDR recovery S1: the same record with LastPath (BC250_HANG_PATH_*; GuardRecordHangRecovery writes the engine path),
+// and AdapterRestarts plus one. PASSIVE_LEVEL, flushed, failures logged.
+void GuardRecordHangRecoveryPath(ULONG Path, ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros,
+                                 BOOLEAN WavesPending);
+void GuardRecordAdapterRestart(void);
 struct BC250_WAVE_HEADER;
 struct BC250_WAVE_SNAPSHOT;
 NTSTATUS GuardRecordWaveSnapshot(const struct BC250_WAVE_HEADER* Header);
@@ -1124,6 +1129,15 @@ BOOLEAN GfxComputeFenceObserved(_Inout_ BC250_DEVICE* Device, _Out_ ULONG* Value
 BOOLEAN GfxComputeReopenAfterAbort(_Inout_ BC250_DEVICE* Device);
 BOOLEAN GfxComputeNodeGate(_In_ const BC250_DEVICE* Device);
 BOOLEAN GfxComputeNodeOffBySetting(_In_ const BC250_DEVICE* Device);
+// TDR recovery S1 (docs/design/tdr-recovery-s1.md), for DxgkDdiResetFromTimeout and DxgkDdiRestartFromTimeout:
+//   GfxRingsRetired            the software witnesses (adapter_reset.h): the newest sequence of each ring retired.
+//                              Fence memory reads only.
+//   GfxPagingSubmitClose       GfxPagingSubmitFail without a StartHealth fault: the temporary close of the reset.
+//   GfxPagingReopenAfterReset  GfxReopenAfterAbort for node 1. Writes no register. FALSE: work is still in flight.
+struct bc250_adapter_rings;
+void GfxRingsRetired(_Inout_ BC250_DEVICE* Device, _Out_ struct bc250_adapter_rings* Rings, _Out_ BOOLEAN* SdmaRingInUse);
+void GfxPagingSubmitClose(_Inout_ BC250_DEVICE* Device);
+BOOLEAN GfxPagingReopenAfterReset(_Inout_ BC250_DEVICE* Device);
 // D5: how many per-submit guard-log lines HotSubmitLog left out, so that the wddm summary can say it and a quiet
 // log is never read as a quiet ring. 0 with the gate open, and 0 before anything submitted.
 ULONG GfxHotSubmitLinesSkipped(_In_ const BC250_DEVICE* Device);

@@ -1029,7 +1029,9 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 
 // ---- the M15.12 hang-recovery record (docs/design/hang-recovery.md) -----------------------------------------------
 //
-//   <service key>\Parameters\HangRecovery   non-volatile, written and flushed by DxgkDdiResetEngine (wddm.c)
+//   HangRecovery records of the state store   non-volatile, written and flushed by DxgkDdiResetEngine (wddm.c) and,
+//                                             since TDR recovery S1, by DxgkDdiResetFromTimeout and
+//                                             DxgkDdiRestartFromTimeout
 //     Attempts, Recovered, NotDrained, Refused  REG_DWORD  counters (Bc250HangVerdictCounts), never reset here
 //     LastVerdict                               REG_DWORD  BC250_HANG_VERDICT_*; 0 = a kill was under way
 //     LastSeq, LastFence                        REG_DWORD  the newest ring sequence, the OS fence it would abort
@@ -1038,6 +1040,10 @@ NTSTATUS GuardVolatileStore(_In_z_ PCWSTR Subkey, _In_z_ PCWSTR Name, ULONG Valu
 //     LastTime                                  REG_QWORD  KeQuerySystemTime of this write (UTC FILETIME)
 //     LastVersion                               REG_DWORD  BC250_KMD_VERSION of the writer
 //     WavesPending                              REG_DWORD  capture admitted, no snapshot persisted yet
+//     LastPath                                  REG_DWORD  BC250_HANG_PATH_*: 1 ResetEngine, 2 ResetFromTimeout
+//     AdapterRestarts                           REG_DWORD  RestartFromTimeout calls after a successful adapter reset
+//                                                          (GuardRecordAdapterRestart); lower than the verdict 9
+//                                                          count when dxgkrnl did not restart after a reset
 //
 // The log ring tells the same story in prose, but it is about 1024 lines in memory and does not outlive the 0x116
 // that a refusal leads to; this does, because every write is flushed before the caller goes on (the pending one
@@ -1054,7 +1060,8 @@ static NTSTATUS AddOne(HANDLE Key, PCWSTR Name)
     return WriteDword(Key, Name, value + 1);
 }
 
-void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending)
+void GuardRecordHangRecoveryPath(ULONG Path, ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros,
+                                 BOOLEAN WavesPending)
 {
     HANDLE parameters, key;
     UNICODE_STRING name;
@@ -1087,6 +1094,7 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastKills", Kills);
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastMicros", Micros);
     if (NT_SUCCESS(status)) status = WriteDword(key, L"LastVersion", BC250_KMD_VERSION);
+    if (NT_SUCCESS(status)) status = WriteDword(key, L"LastPath", Path);
     // A new attempt replaces the marker, including when capture is disabled.
     // Final verdicts do not hide a failed or interrupted snapshot write.
     if (NT_SUCCESS(status) && Verdict == BC250_HANG_VERDICT_PENDING)
@@ -1098,8 +1106,42 @@ void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills,
     }
     if (NT_SUCCESS(status)) status = ZwFlushKey(key);   // on the disk before the caller kills, or refuses into 0x116
     ZwClose(key);
-    GuardLog("hang record: verdict %lu seq %lu fence %lu kills %lu %lu us, persisted 0x%08X", Verdict, Seq, Fence,
-             Kills, Micros, status);
+    GuardLog("hang record: path %lu verdict %lu seq %lu fence %lu kills %lu %lu us, persisted 0x%08X", Path, Verdict,
+             Seq, Fence, Kills, Micros, status);
+}
+
+void GuardRecordHangRecovery(ULONG Verdict, ULONG Seq, ULONG Fence, ULONG Kills, ULONG Micros, BOOLEAN WavesPending)
+{
+    GuardRecordHangRecoveryPath(BC250_HANG_PATH_ENGINE, Verdict, Seq, Fence, Kills, Micros, WavesPending);
+}
+
+// TDR recovery S1: AdapterRestarts plus one, flushed, when DxgkDdiRestartFromTimeout ends a successful adapter
+// reset. Same rules as above: PASSIVE_LEVEL, a failure is logged and otherwise ignored.
+void GuardRecordAdapterRestart(void)
+{
+    HANDLE parameters, key;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    NTSTATUS status;
+
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL || !DriverStateReady()) return;
+    status = OpenParameters(&parameters);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("hang record: adapter restart NOT persisted, Parameters open 0x%08X", status);
+        return;
+    }
+    RtlInitUnicodeString(&name, L"HangRecovery");
+    InitializeObjectAttributes(&attributes, &name, OBJ_KERNEL_HANDLE | OBJ_CASE_INSENSITIVE, parameters, NULL);
+    status = ZwCreateKey(&key, KEY_READ | KEY_WRITE, &attributes, 0, NULL, REG_OPTION_NON_VOLATILE, NULL);
+    ZwClose(parameters);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("hang record: adapter restart NOT persisted, subkey create 0x%08X", status);
+        return;
+    }
+    status = AddOne(key, L"AdapterRestarts");
+    if (NT_SUCCESS(status)) status = ZwFlushKey(key);
+    ZwClose(key);
+    GuardLog("hang record: AdapterRestarts + 1, persisted 0x%08X", status);
 }
 // The buffer is driver-owned and initialized, never an escape pointer. Keep the
 // failure header too: an empty partial read must not leave an old success visible.

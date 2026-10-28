@@ -20,6 +20,7 @@
 #include "gfx_completion_queue.h"
 #include "gfx_blt.h"
 #include "hang_recovery.h"
+#include "adapter_reset.h"        // TDR recovery S1: DxgkDdiResetFromTimeout
 #include "submit_watchdog.h"     // BD-114: the private submit watchdog's budget, its progress window and its stamps
 #include "gfx_copy.h"
 #include "paging_private.h"
@@ -503,6 +504,22 @@ typedef struct _BC250_WDDM {
     BOOLEAN HangRecoveryMode;
     BOOLEAN HangRecoveryWaves;          // independent start-latched diagnostic capture; absent = on
     volatile LONG SoftRecoveries;       // ResetEngine soft recoveries that drained the ring (reported as aborted)
+    // TDR recovery S1 (docs/design/tdr-recovery-s1.md, adapter_reset.h). AdapterRecovery is BC250_ADAPTER_RECOVERY_*,
+    // start-latched from AdapterRecoveryMode. AdapterResetWindow is 1 from a successful DxgkDdiResetFromTimeout to
+    // its DxgkDdiRestartFromTimeout; written under Lock, read without it by the window diagnostics. What dxgkrnl
+    // does in that window is not measured on this part, so it is counted: DDI calls (WindowDdiCalls) and, per
+    // render node, the submissions that the closed node held back (WindowSubmits, WindowNonEmpty, WindowFence:
+    // the newest of them). Under Lock, except the interlocked counters.
+    ULONG AdapterRecovery;
+    volatile LONG AdapterResetWindow;
+    volatile LONG AdapterResets;        // ResetFromTimeout calls that returned success
+    volatile LONG AdapterRefusals;      // ResetFromTimeout calls that S1 refused (the 0x116 path)
+    volatile LONG AdapterRestarts;      // RestartFromTimeout calls that reopened the render nodes after a success
+    volatile LONG WindowDdiCalls;
+    volatile LONG PagingEvictionNotices; // BuildPagingBuffer TRANSFER of size 0 (eviction after a reset)
+    ULONG WindowSubmits[BC250_WDDM_NODE_COUNT_MAX];
+    ULONG WindowNonEmpty[BC250_WDDM_NODE_COUNT_MAX];
+    ULONG WindowFence[BC250_WDDM_NODE_COUNT_MAX];
 
     // Preemption goes through the same DPC, and after the completion, so that the fence it reports as last
     // completed is the one the completion just published rather than the one before it. Per node, same reason
@@ -1020,6 +1037,8 @@ BOOLEAN WddmFullTableSelected(void)
 // interlocked and is taken at any IRQL; only the permission to log is withheld above DISPATCH_LEVEL, because the
 // ring behind GuardLog needs a spin lock. One DDI in this table is annotated for that height
 // (DxgkDdiSetVidPnSourceAddress, _IRQL_requires_max_(PROFILE_LEVEL - 1)), and it is counted there like any other.
+#define BC250_WDDM_WINDOW_LOG_CALLS 64
+
 static BOOLEAN WddmFirstCalls(_In_opt_ BC250_WDDM* Wddm, BC250_WDDM_DDI Ddi)
 {
     LONG calls;
@@ -1028,6 +1047,12 @@ static BOOLEAN WddmFirstCalls(_In_opt_ BC250_WDDM* Wddm, BC250_WDDM_DDI Ddi)
     calls = InterlockedIncrement(&Wddm->Calls[Ddi]);
     if (calls == 1) InterlockedExchange(&Wddm->FirstSequence[Ddi], (LONG)GuardLogSequence());
     if (KeGetCurrentIrql() > DISPATCH_LEVEL) return FALSE;
+    // TDR recovery S1: every DDI between a successful ResetFromTimeout and its RestartFromTimeout, by name, for the
+    // first BC250_WDDM_WINDOW_LOG_CALLS of them. BuildPagingBuffer logs its own line with the operation.
+    if (Wddm->AdapterResetWindow && Ddi != WddmDdiRestartFromTimeout && Ddi != WddmDdiBuildPagingBuffer) {
+        LONG n = InterlockedIncrement(&Wddm->WindowDdiCalls);
+        if (n <= BC250_WDDM_WINDOW_LOG_CALLS) GuardLog("wddm: tdr window: DDI %s (window call %ld)", g_DdiNames[Ddi], n);
+    }
     return calls <= BC250_WDDM_LOG_CALLS;
 }
 
@@ -3859,6 +3884,9 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
                  Wddm->Calls[WddmDdiResetFromTimeout], Wddm->Calls[WddmDdiRestartFromTimeout]);
     else
         GuardLog("wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)");
+    GuardLog("wddm summary: adapter recovery mode %lu: %ld reset(s), %ld refused, %ld restart(s), %ld eviction(s)",
+             Wddm->AdapterRecovery, Wddm->AdapterResets, Wddm->AdapterRefusals, Wddm->AdapterRestarts,
+             Wddm->PagingEvictionNotices);
     // Counted since the driver image was loaded, not since this start: the counter cannot live in the block.
     GuardLog("wddm summary: CollectDbgInfo called %ld time(s) since the driver was loaded", g_CollectDbgInfoCalls);
 }
@@ -4178,6 +4206,14 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                  "Parameters\\HangRecovery");
     else
         GuardLog("wddm: HangRecoveryMode 0: ResetEngine refuses every engine reset, as before 0.7.216.13");
+    // TDR recovery S1 (docs/design/tdr-recovery-s1.md): ResetFromTimeout may return success when every engine is
+    // proven idle. Start-latched. 0, or HangRecoveryMode 0, keeps the failure of every earlier version (0x116).
+    wddm->AdapterRecovery = Bc250AdapterRecoveryMode(wddm->HangRecoveryMode,
+                                                     GuardReadSetting(L"AdapterRecoveryMode", BC250_ADAPTER_RECOVERY_KILL));
+    GuardLog("wddm: AdapterRecoveryMode %lu: ResetFromTimeout %s", wddm->AdapterRecovery,
+             wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF ? "fails every time, as before" :
+             wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_IDLE ? "succeeds only on idle engines" :
+             "kills hung waves, then succeeds only on idle engines");
     KeInitializeDpc(&wddm->PagingSubmitDpc, WddmPagingSubmitDpcRoutine, Device);
     KeInitializeTimer(&wddm->PagingSubmitTimer);
     KeInitializeDpc(&wddm->PagingDrainDpc, WddmPagingDrainDpcRoutine, Device);
@@ -7033,6 +7069,25 @@ static NTSTATUS WddmBuildPagingBufferImpl(_In_ const HANDLE hAdapter, _In_ DXGKA
             KeGetCurrentIrql() <= DISPATCH_LEVEL)
             GuardLog("wddm: BuildPagingBuffer operation %u segment %u, %u bytes free, pass offset %u", operation, segment,
                      pBuildPagingBuffer->DmaSize, pBuildPagingBuffer->MultipassOffset);
+        // TDR recovery S1: what VidMm asks for between a successful ResetFromTimeout and its RestartFromTimeout.
+        if (wddm != NULL && wddm->AdapterResetWindow && KeGetCurrentIrql() <= DISPATCH_LEVEL) {
+            LONG n = InterlockedIncrement(&wddm->WindowDdiCalls);
+            if (n <= BC250_WDDM_WINDOW_LOG_CALLS)
+                GuardLog("wddm: tdr window: BuildPagingBuffer operation %u segment %u size %llu (window call %ld)",
+                         operation, segment,
+                         operation == DXGK_OPERATION_TRANSFER ? (ULONGLONG)pBuildPagingBuffer->Transfer.TransferSize : 0ull,
+                         n);
+        }
+    }
+    // TDR recovery S1. After a successful DxgkDdiResetFromTimeout, VidMm reports each eviction as a TRANSFER of
+    // size 0: "No content transfer is involved because the content was lost during the reset"
+    // (thread-synchronization-and-tdr.md). There is nothing to build, so the buffer stays as it is. Before S1 no
+    // reset succeeded and this call never came; WddmPreparePhysicalTransfer refuses a size of 0, and that refusal
+    // would go to the OS as bug check 0x10E (paging_ddi_status.h).
+    if (wddm != NULL && pBuildPagingBuffer->Operation == DXGK_OPERATION_TRANSFER &&
+        pBuildPagingBuffer->Transfer.TransferSize == 0) {
+        InterlockedIncrement(&wddm->PagingEvictionNotices);
+        return STATUS_SUCCESS;
     }
     if (wddm != NULL && (pBuildPagingBuffer->Operation==DXGK_OPERATION_MAP_APERTURE_SEGMENT ||
                          pBuildPagingBuffer->Operation==DXGK_OPERATION_UNMAP_APERTURE_SEGMENT)) {
@@ -7304,12 +7359,26 @@ static void WddmNoteSubmittedLocked(_Inout_ BC250_WDDM* Wddm, UINT Node, UINT Fe
 // an entry that Impl later rejects. It is an upper bound, not proof of execution.
 // A reset freezes both hardware submissions and CPU/software completion paths.
 // Keep any new packet outstanding for reset/replay; never invent a completion.
+// TDR recovery S1: a packet held back between a successful ResetFromTimeout and its RestartFromTimeout is
+// counted, with Empty (no command bytes), so that the restart can decide what to do with it
+// (Bc250AdapterWindowOutcome).
 static BOOLEAN WddmBeginSubmissionLocked(BC250_WDDM* Wddm, UINT Node, UINT Fence)
 {
     WddmNoteSubmittedLocked(Wddm, Node, Fence);
     if (Wddm->Recovery[Node].ResetActive) return FALSE;
     Wddm->ActiveSubmissions[Node]++;
     return TRUE;
+}
+
+// TDR recovery S1: a submission that WddmBeginSubmissionLocked held back between a successful ResetFromTimeout and
+// RestartFromTimeout. It is counted, with its fence, and never sent. The restart decides from the counts whether
+// the node opens (Bc250AdapterWindowOutcome). Outside that window this does nothing.
+static void WddmNoteWindowSubmissionLocked(BC250_WDDM* Wddm, UINT Node, UINT Fence, BOOLEAN Empty)
+{
+    if (!Wddm->AdapterResetWindow || !Wddm->Recovery[Node].ResetActive) return;
+    if (Wddm->WindowSubmits[Node] == 0 || (LONG)(Fence - Wddm->WindowFence[Node]) > 0) Wddm->WindowFence[Node] = Fence;
+    Wddm->WindowSubmits[Node]++;
+    if (!Empty) Wddm->WindowNonEmpty[Node]++;
 }
 
 static NTSTATUS Bc250WddmSubmitCommandImpl(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SUBMITCOMMAND* pSubmitCommand)
@@ -7364,6 +7433,10 @@ static NTSTATUS Bc250WddmSubmitCommand(_In_ const HANDLE hAdapter, _In_ const DX
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
         admitted = WddmBeginSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId);
+        if (!admitted)
+            WddmNoteWindowSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId,
+                                           pSubmitCommand->DmaBufferSubmissionStartOffset ==
+                                               pSubmitCommand->DmaBufferSubmissionEndOffset);
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
     if (!admitted) {
@@ -7882,6 +7955,12 @@ static NTSTATUS Bc250WddmSubmitCommandVirtual(_In_ const HANDLE hAdapter, _In_ c
     {
         KeAcquireSpinLock(&wddm->Lock, &irql);
         admitted = WddmBeginSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId);
+        // Empty as the Impl sees it: no DMA bytes, no UMD record, no present (each of those is work).
+        if (!admitted)
+            WddmNoteWindowSubmissionLocked(wddm, node, pSubmitCommand->SubmissionFenceId,
+                                           pSubmitCommand->DmaBufferSize == 0 &&
+                                               pSubmitCommand->DmaBufferUmdPrivateDataSize == 0 &&
+                                               !pSubmitCommand->Flags.Present);
         KeReleaseSpinLock(&wddm->Lock, irql);
     }
     if (!admitted) {
@@ -7921,27 +8000,334 @@ static NTSTATUS Bc250WddmPreemptCommand(_In_ const HANDLE hAdapter, _In_ const D
     return STATUS_SUCCESS;
 }
 
+// ---- TDR recovery S1: the adapter-wide pair (docs/design/tdr-recovery-s1.md, adapter_reset.h) ----------------------
+//
+// The contract (windows-driver-docs 110f60ea, windows-driver-docs-ddi 7515063):
+//   - DxgkDdiResetFromTimeout must leave the GPU reading and writing no memory when it returns success. A failure
+//     return is a bug check: 0x116, with the status in parameter 3 (nc-d3dkmddi-dxgkddi_resetfromtimeout.md,
+//     bug-check-0x116---video-tdr-failure.md). No other driver thread runs during the call; DPCs and ISRs do
+//     (thread-synchronization-and-tdr.md).
+//   - After a success, VidMm cleans up (eviction notices: TRANSFER of size 0 and UNMAP_APERTURE_SEGMENT), and then
+//     DxgkDdiRestartFromTimeout says the OS will render on the adapter again.
+//   - For an adapter-wide reset, the last completed fence of every node advances to the last submitted fence
+//     (tdr-changes-in-windows-8.md).
+//
+// This part has no adapter reset that is measured to work (facts M53, M351), so S1 resets no hardware. It returns
+// success only when it proves that no engine of this driver has work: every ring's newest sequence retired, and
+// three register samples about 1 ms apart with GRBM, CP, CPC and SDMA0 idle (adapter_reset.h). Mode 2 first runs
+// the bounded wave kill of hang-recovery.md stage 1 on the IB nodes. When the proof fails, the call returns the old
+// failure, so a hang never ends worse than before S1.
+//
+// The render nodes (0 and 2) stay closed from the success to RestartFromTimeout, so that no render work reaches
+// the hardware in the cleanup. The paging node (1) opens again at the end of the success, because the cleanup is
+// VidMm's paging work: an unmap that this driver held back would leave the GART and VidMm's view apart.
+
+// The witness registers in the order of the BC250_ADAPTER_REG_* indexes. All on the READ_REG list
+// (regs.generated.h, gen_regs.py). Reads only.
+static const ULONG g_AdapterWitnessRegisters[BC250_ADAPTER_SAMPLE_REGISTERS] = {
+    BC250_REG_GC_GRBM_STATUS, BC250_REG_GC_CP_STAT, BC250_REG_GC_CP_CPC_STATUS, BC250_REG_GC_SDMA0_STATUS_REG,
+    BC250_REG_GC_SDMA0_GFX_RB_RPTR, BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI, BC250_REG_GC_SDMA0_GFX_RB_WPTR,
+    BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI,
+};
+C_ASSERT(RTL_NUMBER_OF(g_AdapterWitnessRegisters) == BC250_ADAPTER_SAMPLE_REGISTERS);
+
+static void WddmAdapterSample(_In_ const BC250_DEVICE* Device, _Out_ BC250_ADAPTER_SAMPLE* Sample)
+{
+    unsigned i;
+    ULONG value;
+
+    RtlZeroMemory(Sample, sizeof(*Sample));
+    for (i = 0; i < BC250_ADAPTER_SAMPLE_REGISTERS; i++) {
+        if (!NT_SUCCESS(MmioRead(Device, g_AdapterWitnessRegisters[i], &value))) continue;
+        Sample->Value[i] = (unsigned)value;
+        Sample->Read |= 1u << i;
+    }
+}
+
+// Mode 2: the stage-1 wave kill on one IB node, when the head of its queue is a job that a kill may name. Lock not
+// held, PASSIVE_LEVEL. The gates of the node are already closed (WddmAdapterReset). Returns the SQ_CMD writes.
+static ULONG WddmAdapterKill(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm, UINT Node, _Inout_ ULONG* Micros)
+{
+    const BC250_GFX_COMPLETION* head;
+    ULONG vmid = 0, seq = 0, kills = 0, micros = 0, verdict;
+    BOOLEAN wanted;
+    KIRQL irql;
+
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    head = Bc250GfxQueueHead(WddmRingQueue(Wddm, Node));
+    wanted = head != NULL && head->Node == Node && Bc250KillVmidValid(head->Vmid);
+    if (wanted) vmid = head->Vmid;
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    if (!wanted) return 0;
+    verdict = Node == BC250_WDDM_NODE_COMPUTE ? GfxComputeSoftRecover(Device, vmid, &seq, &kills, &micros) :
+              GfxSoftRecover(Device, vmid, &seq, &kills, &micros);
+    GuardLog("wddm: adapter reset: node %u kill on vmid %lu: verdict %lu seq %lu, %lu kill(s) in %lu us", Node, vmid,
+             verdict, seq, kills, micros);
+    *Micros += micros;
+    return kills;
+}
+
+// The S1 attempt. TRUE: every node is committed and ResetFromTimeout returns success. FALSE: nothing advanced; the
+// caller takes the old failure path. PASSIVE_LEVEL (the DDI's level).
+static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm)
+{
+    ULONGLONG start = KeQueryInterruptTime();
+    ULONGLONG deadline = start + 10000ull * BC250_HANG_ADMISSION_WAIT_MS;
+    BC250_ADAPTER_SAMPLE samples[BC250_ADAPTER_SAMPLES];
+    BC250_ADAPTER_RINGS rings;
+    BOOLEAN sdmaRingInUse = FALSE, signalled = FALSE, begun = FALSE, pagingOpen;
+    UINT nodeCount = Wddm->NodeCount < BC250_WDDM_NODE_COUNT_MAX ? Wddm->NodeCount : BC250_WDDM_NODE_COUNT_MAX;
+    BOOLEAN computeNode = nodeCount > BC250_WDDM_NODE_COMPUTE;
+    UINT n, fence[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
+    int known[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
+    ULONG busy = 0, kills = 0, killMicros = 0, micros, seq = 0;
+    const BC250_GFX_COMPLETION* job;
+    LARGE_INTEGER delay;
+    KIRQL irql;
+    unsigned i;
+
+    // The attempt is on the disk before anything else, LastPath 2, so a machine that does not survive the call
+    // still says that this path ran (LastVerdict 0, Attempts one ahead).
+    GuardRecordHangRecoveryPath(BC250_HANG_PATH_ADAPTER, BC250_HANG_VERDICT_PENDING, 0, 0, 0, 0, FALSE);
+
+    // 1. Close every node for the duration, without a health fault of its own. The watchdogs are stopped, so no
+    //    private timeout fires while the reset decides. The start witness gets the mark that a recovered reset may
+    //    undo (BD-120); a fault that closed it first has cleared that mark and keeps it closed.
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    for (n = 0; n < nodeCount; n++) Wddm->WatchdogFaulted[n] = TRUE;
+    KeCancelTimer(&Wddm->SubmitTimer);
+    KeCancelTimer(&Wddm->ComputeTimer);
+    KeCancelTimer(&Wddm->PagingSubmitTimer);
+    StartHealthFaultPendingReset(Device);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+    GfxSubmitClose(Device);
+    if (computeNode) GfxComputeClose(Device);
+    GfxPagingSubmitClose(Device);
+
+    // 2. Retire what arrived late, as ResetEngine does. A ring closed in step 1 dispatches no queued job.
+    WddmRingFence(Device, BC250_WDDM_NODE_3D);
+    if (computeNode) WddmRingFence(Device, BC250_WDDM_NODE_COMPUTE);
+    WddmGpuFencePaging(Device);
+
+    // 3. Begin the reset on every node at once. A report in flight or a submission inside the driver gets the
+    //    budget WddmResetAdmit gives it (500 ms, 1 ms steps, no lock across the sleep).
+    for (;;) {
+        KeAcquireSpinLock(&Wddm->Lock, &irql);
+        busy = Wddm->Stopping ? BC250_ADAPTER_BUSY_STOPPING : 0u;
+        if (Wddm->AdapterResetWindow) busy |= BC250_ADAPTER_BUSY_WINDOW;
+        if (busy == 0) busy = Bc250AdapterResetBeginAll(Wddm->Recovery, Wddm->ActiveSubmissions, nodeCount);
+        if (busy == 0) {
+            job = Bc250GfxQueueTail(&Wddm->GfxPending);
+            seq = job != NULL ? job->Seq : 0;
+            KeReleaseSpinLock(&Wddm->Lock, irql);
+            begun = TRUE;
+            break;
+        }
+        KeReleaseSpinLock(&Wddm->Lock, irql);
+        if ((busy & ~(BC250_ADAPTER_BUSY_PUBLICATION | BC250_ADAPTER_BUSY_SUBMISSIONS)) != 0 ||
+            KeQueryInterruptTime() >= deadline) goto refuse;
+        if (!signalled) { GfxRetireSignal(Device); signalled = TRUE; }
+        delay.QuadPart = -10000;    // one millisecond, outside Lock
+        (void)KeDelayExecutionThread(KernelMode, FALSE, &delay);
+    }
+
+    // 4. Mode 2: the bounded wave kill of hang-recovery.md stage 1, on each IB node that still has a job.
+    if (Wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_KILL) {
+        kills += WddmAdapterKill(Device, Wddm, BC250_WDDM_NODE_3D, &killMicros);
+        if (computeNode) kills += WddmAdapterKill(Device, Wddm, BC250_WDDM_NODE_COMPUTE, &killMicros);
+    }
+
+    // 5. The witnesses: the rings from their fence memory, then three register samples about 1 ms apart.
+    GfxRingsRetired(Device, &rings, &sdmaRingInUse);
+    for (i = 0; i < BC250_ADAPTER_SAMPLES; i++) {
+        if (i != 0) {
+            delay.QuadPart = -10000;
+            (void)KeDelayExecutionThread(KernelMode, FALSE, &delay);
+        }
+        WddmAdapterSample(Device, &samples[i]);
+    }
+    busy = Bc250AdapterBusyReasons(&rings, samples, BC250_ADAPTER_SAMPLES, sdmaRingInUse);
+    GuardLog("wddm: adapter reset witnesses: busy 0x%04lX, GRBM 0x%08X CP 0x%08X CPC 0x%08X SDMA0 0x%08X", busy,
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_GRBM_STATUS],
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_CP_STAT],
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_CP_CPC_STATUS],
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_SDMA0_STATUS]);
+    GuardLog("wddm: adapter reset witnesses: SDMA0 rptr 0x%08X:%08X wptr 0x%08X:%08X (in use %u), rings %d%d%d",
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_SDMA0_RPTR_HI],
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_SDMA0_RPTR],
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_SDMA0_WPTR_HI],
+             samples[BC250_ADAPTER_SAMPLES - 1].Value[BC250_ADAPTER_REG_SDMA0_WPTR], (ULONG)sdmaRingInUse,
+             rings.GfxRetired, rings.ComputeRetired, rings.PagingRetired);
+
+    // 6. The commit, in one critical section. Nothing that ran is lost: the rings retired, so every job on the
+    //    queues ran, and its completion is covered by the fence advance. A paging job still queued did not run;
+    //    the commit cannot know what VidMm expects of it, so it refuses.
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    if (busy == 0 && Wddm->Stopping) busy |= BC250_ADAPTER_BUSY_STOPPING;
+    if (busy == 0 && (Wddm->PagingHead != NULL || Wddm->PagingHwPending)) busy |= BC250_ADAPTER_BUSY_PAGING_QUEUED;
+    if (busy != 0) {
+        Bc250AdapterResetAbortAll(Wddm->Recovery, nodeCount);
+        KeReleaseSpinLock(&Wddm->Lock, irql);
+        begun = FALSE;
+        goto refuse;
+    }
+    while ((job = Bc250GfxQueueHead(&Wddm->GfxPending)) != NULL) {
+        HipJournalReset(job->HipJournalId, FALSE);  // an adapter reset replays nothing
+        Bc250GfxQueuePop(&Wddm->GfxPending);
+    }
+    while ((job = Bc250GfxQueueHead(&Wddm->ComputePending)) != NULL) {
+        HipJournalReset(job->HipJournalId, FALSE);
+        Bc250GfxQueuePop(&Wddm->ComputePending);
+    }
+    for (n = 0; n < nodeCount; n++) {
+        known[n] = Bc250AdapterResetFence(Wddm->LastSubmittedValid[n] != 0, (unsigned)Wddm->LastSubmittedFence[n],
+                                          Wddm->LastReportedValid[n] != 0, (unsigned)Wddm->LastReportedFence[n],
+                                          &fence[n]);
+        if (known[n]) {
+            // "Advanced to the last submitted fence ID at the time of the reset". A report of a lower fence that is
+            // still waiting is covered by this one, so it is dropped with the rest of the pending state below.
+            Wddm->LastReportedFence[n] = (LONG)fence[n];
+            Wddm->LastReportedValid[n] = TRUE;
+            Wddm->SubmittedFence[n] = (LONG)fence[n];
+        }
+        Wddm->RefusalPending[n] = FALSE;
+        Wddm->RejectedPending[n] = FALSE;
+        Wddm->CompletionPending[n] = 0;
+        Wddm->CompletionRetries[n] = 0;
+        Wddm->PreemptionPending[n] = 0;
+        Wddm->WindowSubmits[n] = 0;
+        Wddm->WindowNonEmpty[n] = 0;
+        Wddm->WindowFence[n] = 0;
+        Bc250AdapterResetCommitNode(&Wddm->Recovery[n], known[n], fence[n]);
+    }
+    Wddm->DeferredValid = FALSE;
+    Wddm->ComputeDeferredValid = FALSE;
+    Wddm->PagingDeferredValid = FALSE;
+    // The paging node opens again now, for VidMm's cleanup (see the head of this section). Its ring is idle by the
+    // witnesses, so GfxPagingReopenAfterReset only clears the flags of the close in step 1.
+    pagingOpen = GfxPagingReopenAfterReset(Device);
+    if (nodeCount > BC250_WDDM_NODE_COPY) {
+        Bc250AdapterRestartNode(&Wddm->Recovery[BC250_WDDM_NODE_COPY]);
+        if (pagingOpen) Wddm->WatchdogFaulted[BC250_WDDM_NODE_COPY] = FALSE;
+    }
+    InterlockedExchange(&Wddm->AdapterResetWindow, 1);
+    InterlockedExchange(&Wddm->WindowDdiCalls, 0);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+
+    micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
+    InterlockedIncrement(&Wddm->AdapterResets);
+    GuardRecordHangRecoveryPath(BC250_HANG_PATH_ADAPTER, BC250_HANG_VERDICT_ADAPTER_RESET, seq, fence[0], kills, micros,
+                                FALSE);
+    GuardLog("wddm: *** ResetFromTimeout: every engine proven idle, success after %lu us (%lu kill(s)) ***", micros,
+             kills);
+    for (n = 0; n < nodeCount; n++)
+        GuardLog("wddm: adapter reset: node %u last completed fence advanced to %u (known %d)", n, fence[n], known[n]);
+    GuardLog("wddm: adapter reset: paging node %s for the cleanup, render nodes closed until RestartFromTimeout",
+             pagingOpen ? "open" : "NOT reopened");
+    return TRUE;
+
+refuse:
+    if (begun) {
+        KeAcquireSpinLock(&Wddm->Lock, &irql);
+        Bc250AdapterResetAbortAll(Wddm->Recovery, nodeCount);
+        KeReleaseSpinLock(&Wddm->Lock, irql);
+    }
+    micros = (ULONG)((KeQueryInterruptTime() - start) / 10ull);
+    InterlockedIncrement(&Wddm->AdapterRefusals);
+    GuardRecordHangRecoveryPath(BC250_HANG_PATH_ADAPTER, BC250_HANG_VERDICT_ADAPTER_BUSY, busy, 0, kills, micros, FALSE);
+    GuardLog("wddm: ResetFromTimeout: S1 refused, busy 0x%04lX after %lu us (%lu kill(s)); the old failure follows",
+             busy, micros, kills);
+    return FALSE;
+}
+
 static DXGKDDI_RESETFROMTIMEOUT Bc250WddmResetFromTimeout;
 static NTSTATUS Bc250WddmResetFromTimeout(_In_ const HANDLE hAdapter)
 {
     BC250_DEVICE* device=(BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm=WddmOf(hAdapter);
     (void)WddmFirstCalls(wddm,WddmDdiResetFromTimeout);
+    if (device != NULL && wddm != NULL && wddm->AdapterRecovery != BC250_ADAPTER_RECOVERY_OFF &&
+        WddmAdapterReset(device, wddm)) return STATUS_SUCCESS;
     if (device!=NULL) { StartHealthClose(device); GfxSubmitFail(device); GfxPagingSubmitFail(device); GfxComputeClose(device); }
     // Microsoft requires all GPU memory access stopped before a successful return.
     // Closing software gates does not prove that. Preserve outstanding fences and
     // return failure so Windows follows its failed-TDR path instead of freeing
-    // memory under an engine this driver has not actually stopped. Recovery that
-    // can return success still needs a verified hardware halt/reset implementation.
+    // memory under an engine this driver has not actually stopped. S1 above returns
+    // success only when its witnesses prove every engine idle; every other case is this one.
     GuardLog("wddm: ResetFromTimeout failed: GPU memory access not proven stopped");
     return STATUS_UNSUCCESSFUL;
+}
+
+// The end of a successful S1 reset. The render nodes reopen unless a packet with commands arrived in the window
+// (Bc250AdapterWindowOutcome); an empty one is completed in software after the reopen. The start witness reopens
+// with node 0. DPM and the fan run on their own timers, and the reset never stopped them: the summary lines say
+// where they stand. PASSIVE_LEVEL.
+static void WddmAdapterRestart(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM* Wddm)
+{
+    UINT nodeCount = Wddm->NodeCount < BC250_WDDM_NODE_COUNT_MAX ? Wddm->NodeCount : BC250_WDDM_NODE_COUNT_MAX;
+    BOOLEAN computeNode = nodeCount > BC250_WDDM_NODE_COMPUTE;
+    BOOLEAN open[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
+    unsigned outcome[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
+    UINT windowFence[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
+    ULONG submits[BC250_WDDM_NODE_COUNT_MAX] = { 0 }, nonEmpty[BC250_WDDM_NODE_COUNT_MAX] = { 0 };
+    BC250_START_HEALTH_RECOVERY witness = BC250_START_HEALTH_RECOVERY_STICKY;
+    ULONGLONG witnessEpoch = 0;
+    UINT n;
+    KIRQL irql;
+
+    KeAcquireSpinLock(&Wddm->Lock, &irql);
+    InterlockedExchange(&Wddm->AdapterResetWindow, 0);
+    for (n = 0; n < nodeCount; n++) {
+        if (n == BC250_WDDM_NODE_COPY) continue;     // reopened at the end of ResetFromTimeout
+        submits[n] = Wddm->WindowSubmits[n];
+        nonEmpty[n] = Wddm->WindowNonEmpty[n];
+        windowFence[n] = Wddm->WindowFence[n];
+        outcome[n] = Bc250AdapterWindowOutcome(submits[n], nonEmpty[n]);
+        Bc250AdapterRestartNode(&Wddm->Recovery[n]);
+        open[n] = outcome[n] != BC250_ADAPTER_WINDOW_CLOSE &&
+                  (n == BC250_WDDM_NODE_COMPUTE ? GfxComputeReopenAfterAbort(Device) : GfxReopenAfterAbort(Device));
+        if (open[n]) Wddm->WatchdogFaulted[n] = FALSE;
+        WddmRingHeadLocked(Wddm, n);
+    }
+    if (open[BC250_WDDM_NODE_3D]) witness = StartHealthRecovered(Device, &witnessEpoch);
+    KeReleaseSpinLock(&Wddm->Lock, irql);
+
+    GfxRetireSignal(Device);
+    WddmGpuFencePaging(Device);
+    for (n = 0; n < nodeCount; n++)
+        if (open[n] && outcome[n] == BC250_ADAPTER_WINDOW_COMPLETE)
+            WddmCompleteSoftware(Device, windowFence[n], n);
+    WddmQueueReport(Wddm);
+    InterlockedIncrement(&Wddm->AdapterRestarts);
+    GuardRecordAdapterRestart();
+
+    GuardLog("wddm: *** RestartFromTimeout after an S1 reset: %ld window call(s) ***", Wddm->WindowDdiCalls);
+    for (n = 0; n < nodeCount; n++) {
+        if (n == BC250_WDDM_NODE_COPY) continue;
+        if (!computeNode && n == BC250_WDDM_NODE_COMPUTE) continue;
+        GuardLog("wddm: adapter restart: node %u %s, window %lu submit(s), %lu with commands, newest fence %u", n,
+                 open[n] ? "reopened" : "STAYS CLOSED", submits[n], nonEmpty[n], windowFence[n]);
+    }
+    if (witness == BC250_START_HEALTH_RECOVERY_REOPENED)
+        GuardLog("wddm: start witness reopened after the adapter reset: epoch %llu", witnessEpoch);
+    else if (witness == BC250_START_HEALTH_RECOVERY_REARMED)
+        GuardLog("wddm: start witness was still open at the adapter reset: epoch %llu", witnessEpoch);
+    else
+        GuardLog("wddm: start witness stays closed after the adapter reset (epoch %llu)", witnessEpoch);
+    DpmLogSummary(Device);
 }
 
 static DXGKDDI_RESTARTFROMTIMEOUT Bc250WddmRestartFromTimeout;
 static NTSTATUS Bc250WddmRestartFromTimeout(_In_ const HANDLE hAdapter)
 {
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+
+    (void)WddmFirstCalls(wddm, WddmDdiRestartFromTimeout);
+    if (hAdapter != NULL && wddm != NULL && wddm->AdapterResetWindow) {
+        WddmAdapterRestart((BC250_DEVICE*)hAdapter, wddm);
+        return STATUS_SUCCESS;
+    }
     StartHealthClose((BC250_DEVICE*)hAdapter);
-    (void)WddmFirstCalls(WddmOf(hAdapter), WddmDdiRestartFromTimeout);
     GuardLog("wddm: *** RestartFromTimeout: the adapter is being restarted after a timeout ***");
     return STATUS_SUCCESS;       // "can simply return STATUS_SUCCESS immediately"
 }
@@ -8248,7 +8634,11 @@ refuseReset:
     // takes the pending-reset mark with it, so no later reset reopens the witness. A refusal on node 1 says
     // nothing about node 0: node 1 is never soft-recovered by policy, and clearing node 0's mark here would
     // leave the node-0 reset that follows with nothing to reopen.
-    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);
+    // TDR recovery S1: with AdapterRecoveryMode on, node 0's refusal keeps the mark too. The scheduler answers the
+    // refusal with ResetFromTimeout, which reopens the witness only when it proves every engine idle; when it
+    // cannot, it closes the witness for good, as this line did before S1.
+    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D &&
+        (wddm == NULL || wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF)) StartHealthClose(device);
     else StartHealthCloseKeepPendingReset(device);
     // A refusal before recovery admission may leave a held submission waiting
     // while the scheduler moves on to ResetFromTimeout (which closes the path). Wake

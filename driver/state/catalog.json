@@ -5,6 +5,31 @@
   "values": [
     {
       "path": "",
+      "name": "AdapterRecoveryMode",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 2,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:4185"
+      ]
+    },
+    {
+      "path": "",
       "name": "ApertureSegmentMegabytes",
       "kind": "setting",
       "type": "dword",
@@ -3422,6 +3447,27 @@
     },
     {
       "path": "HangRecovery",
+      "name": "AdapterRestarts",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
       "name": "Attempts",
       "kind": "record",
       "type": "dword",
@@ -3486,6 +3532,27 @@
     {
       "path": "HangRecovery",
       "name": "LastMicros",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastPath",
       "kind": "record",
       "type": "dword",
       "min": 0,

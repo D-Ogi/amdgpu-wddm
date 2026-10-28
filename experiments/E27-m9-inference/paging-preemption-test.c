@@ -66,7 +66,9 @@ typedef void* HANDLE;
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000DL)
 #define BC250_WDDM_MAGIC_CONTEXT 0x4d37437au
 typedef struct { ULONG Magic; UINT NodeOrdinal; } BC250_WDDM_OBJECT;
-typedef struct { UINT SubmissionFenceId; HANDLE hContext; UINT NodeOrdinal; } DXGKARG_SUBMITCOMMANDVIRTUAL;
+typedef struct { UINT Present; } BC250_SUBMIT_FLAGS_STUB;
+typedef struct { UINT SubmissionFenceId; HANDLE hContext; UINT NodeOrdinal; UINT DmaBufferSize;
+                 UINT DmaBufferUmdPrivateDataSize; BC250_SUBMIT_FLAGS_STUB Flags; } DXGKARG_SUBMITCOMMANDVIRTUAL;
 static BC250_WDDM_OBJECT gfxContext={BC250_WDDM_MAGIC_CONTEXT,0};
 static UINT ringFences[8];
 static unsigned ringCount;
