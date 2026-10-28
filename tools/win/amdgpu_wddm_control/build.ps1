@@ -91,7 +91,7 @@ $refs = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Drawing.dll', '
     ForEach-Object { "/reference:$fx\$_" }
 $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recovery.cs', 'Strings.cs', 'CuMode.cs', 'DriverCard.cs', 'UpdateCheck.cs',
     'AppSettings.cs', 'Guide.cs', 'RecentLaunches.cs', 'Sensors.cs', 'CacheInventory.cs', 'DisplayInfo.cs', 'Hints.cs', 'GameGroups.cs',
-    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs',
+    'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs', 'OcUnlock.cs',
     'GameLog.cs', 'HangRecord.cs',
     'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs', 'DriverState.cs',
     'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs', 'ClosureNotice.cs', 'DriverFeatures.cs' |
@@ -108,6 +108,15 @@ $unknownBoard = New-Object byte[] 768
 [Array]::Copy([IO.File]::ReadAllBytes($env:AMDGPU_WDDM_BOARD_FIXTURE), $unknownBoard, 20)
 [Array]::Copy([BitConverter]::GetBytes([uint32]1), 0, $unknownBoard, 28, 4)
 [IO.File]::WriteAllBytes($unknownBoardFixture, $unknownBoard)
+# The same board with the liquid-cooling tier in force (src/OcUnlock.cs): words 139 to 142 of ABI 2 are the tier of
+# this start, the stored tier, the reason (1, OK) and a board fingerprint. The render runs draw the overclock card
+# with its buttons from it; the provider fixture has no fingerprint, so its runs draw the card without them.
+$ocBoardFixture = Join-Path $providerOut 'board-oc-liquid.bin'
+$ocBoard = [IO.File]::ReadAllBytes($env:AMDGPU_WDDM_BOARD_FIXTURE)
+foreach ($w in @(@(139, 2), @(140, 2), @(141, 1), @(142, 0x1234))) {
+    [Array]::Copy([BitConverter]::GetBytes([uint32]$w[1]), 0, $ocBoard, $w[0] * 4, 4)
+}
+[IO.File]::WriteAllBytes($ocBoardFixture, $ocBoard)
 
 # 1. Unit tests of the pure parts. Their temporary files go below the output directory, never to the system drive's
 # temp folder. With -Oracle the review oracles (oracle-cu.json, oracle-ver.json, oracle-art.json) in that directory are
@@ -783,6 +792,11 @@ if (-not $NoSmoke) {
     $runs += , @('ko-2-tuner', '2', '--lang', 'ko', '--fixture', "`"$tuner`"")
     $runs += , @('en-1-tuner-off', '1', '--fixture', "`"$tunerOff`"")
     $runs += , @('pl-1-tuner-off', '1', '--lang', 'pl', '--fixture', "`"$tunerOff`"")
+    # The overclock card with the liquid-cooling tier in force and nothing stored, in the four languages.
+    $runs += , @('en-1-tuner-oc', '1', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
+    $runs += , @('pl-1.25-tuner-oc', '1.25', '--lang', 'pl', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
+    $runs += , @('ja-1.5-tuner-oc', '1.5', '--lang', 'ja', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
+    $runs += , @('ko-2-tuner-oc', '2', '--lang', 'ko', '--fixture', "`"$tuner`"", '--board-fixture', "`"$ocBoardFixture`"")
     # BD-181: the notice card of Home, in the four languages. This fixture is the state unit A was left in after the
     # 0x116 of 2026-10-15 01:05Z: the driver closed the GPU desktop path and the automatic clock at the 01:12:22Z
     # start and left the durable record of each (InteropClosedReason 4, DpmClosedReason 4), so later starts read the

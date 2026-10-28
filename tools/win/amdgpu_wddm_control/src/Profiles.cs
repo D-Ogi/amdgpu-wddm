@@ -154,9 +154,11 @@ namespace AmdgpuWddmControl
     {
         public const string RegistryPath = @"SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters";
         public static uint DefaultMaxMHz { get { return BoardCapabilities.Current[137]; } }
-        public static uint HardMaxMHz { get { return BoardCapabilities.Current[10]; } }
+        // The overclock tier of this start (OcUnlock.cs) raises the hard ceiling and adds its clock points; the
+        // default ceiling does not move.
+        public static uint HardMaxMHz { get { return OcUnlock.GpuMaxMHz(OcUnlock.Effective); } }
         public static uint MinMHz { get { return BoardCapabilities.Current[9]; } }
-        public static uint[] CeilingChoices { get { return BoardCapabilities.Current.GpuClocks; } }
+        public static uint[] CeilingChoices { get { return BoardCapabilities.Current.GpuClocks.Concat(OcUnlock.GpuClocks(OcUnlock.Effective)).ToArray(); } }
 
         public static bool IsValidCeiling(uint mhz) { return Array.IndexOf(CeilingChoices, mhz) >= 0; }
         public static bool IsValidMode(uint mode) { return mode == 0 || mode == 1; }

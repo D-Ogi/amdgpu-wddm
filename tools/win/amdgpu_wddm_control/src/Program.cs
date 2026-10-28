@@ -196,7 +196,7 @@ namespace AmdgpuWddmControl
                         if (slow) f.SaySlow();
                         LabelLayout.Check(f, "loading window" + (slow ? ", slow" : ""), t);
                     }
-                foreach (var f in new[] { ThreeWayDialog.Sample(), ConfirmDialog.Sample(), RestartDialog.Sample(),
+                foreach (var f in new[] { ThreeWayDialog.Sample(), ConfirmDialog.Sample(), RestartDialog.Sample(), OcCoolingDialog.Sample(), OcWarningDialog.Sample(),
                     new IdentifyForm(new System.Drawing.Rectangle(0, 0, 1920, 1080), "1"), new ReportPreview(new BugReport(Redactor.ForThisPc()), "report.zip") })
                     using (f) LabelLayout.Check(f, f.GetType().Name, t);
                 int beforeKeep = t.Live;

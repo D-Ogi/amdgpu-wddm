@@ -304,8 +304,10 @@ namespace AmdgpuWddmControl
                 : Strings.T("tuner.cpu.settings", Own(u.BaselineMaxMHz, " MHz"), CpuTuning.StepsText(u.BaselineUvSteps), Own(u.BaselineTempC, " °C"))));
 
             // The pickers start at what is in force; a value outside the driver's list (a baseline above the
-            // release's highest limit) is never shown as a choice, the picker shows the nearest allowed one.
-            v.Clock = clockEdit ?? Nearest(v.ClockChoices, u.AppliedMaxMHz != 0 ? u.AppliedMaxMHz : CpuTuning.MaxMHz);
+            // release's highest limit) is never shown as a choice, the picker shows the nearest allowed one. With
+            // nothing in force it starts at the standard limit, also under an overclock tier (OcUnlock.cs): the
+            // tier widens the list, it does not move the default.
+            v.Clock = clockEdit ?? Nearest(v.ClockChoices, u.AppliedMaxMHz != 0 ? u.AppliedMaxMHz : OcUnlock.CpuMaxMHz(OcUnlock.None));
             v.Steps = uvEdit ?? Nearest(v.StepChoices, u.AppliedUvSteps);
             v.Temp = tempEdit ?? Nearest(v.TempChoices, u.AppliedTempC != 0 ? u.AppliedTempC : u.CapC != 0 ? u.CapC : CpuTuning.MaxTempC);
             v.Edited = clockEdit != null || uvEdit != null || tempEdit != null;

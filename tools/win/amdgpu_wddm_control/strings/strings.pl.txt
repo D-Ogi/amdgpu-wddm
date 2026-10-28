@@ -1304,3 +1304,43 @@ search.graphics.gdi|mt-safe|1cea1d53|Sprzętowa akceleracja klasycznego rysowani
 search.graphics.gdi.terms|mt-safe|e9dfeb26|gdi|akceleracja|przyspieszenie sprzętowe|rysowanie|tekst|okna|2d
 help.setting.compute|mt|9c34d158|Pozwala grom i aplikacjom Vulkan wykonywać obliczenia w drugiej sprzętowej kolejce układu graficznego, gdy rysują, co może je przyspieszyć. Jest włączona od początku. Wyłącz ją, jeśli gra Vulkan przestaje odpowiadać albo pokazuje błędny obraz; nowe ustawienie działa po ponownym uruchomieniu Windows.
 help.setting.gdi|mt|57b5fd27|Pozwala układowi graficznemu wykonywać klasyczne rysowanie Windows w wielu programach: ich okna, tekst i obrazy. Procesor ma wtedy mniej pracy. Jest włączone od początku. Wyłącz to, jeśli okna lub tekst jakiegoś programu wyglądają źle; nowe ustawienie działa po ponownym uruchomieniu Windows.
+
+# ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
+oc.title|mt|681c1eb4|Wyższe taktowania dla Twojego chłodzenia
+oc.now|mt|fe18013d|Teraz
+oc.next|mt|57faee03|Po ponownym uruchomieniu
+oc.intro|mt|da4766d4|Standardowe limity: {0} MHz dla grafiki i {1} MHz dla procesora. Z dobrym chłodzeniem powietrzem lub chłodzeniem cieczą typu all-in-one możesz zezwolić na wyższe limity. Aplikacja najpierw pyta, jakie masz chłodzenie, a potem pokazuje trzy ostrzeżenia.
+oc.lock.short|mt|df47f387|Niektóre płyty przy wysokich taktowaniach i dużym obciążeniu same wyłączają zasilanie. Taka płyta uruchamia się ponownie dopiero po krótkim wyjęciu kabla zasilającego.
+oc.unlock|mt|ddc6743b|Zezwól na wyższe taktowania...
+oc.off|mt|13536552|Standardowe limity
+oc.not-installed|mt|8612d5cb|Zainstaluj sterownik, aby z tego skorzystać.
+oc.stopped|mt|54ca5460|Nic nie zostało zmienione.
+oc.tier.none|mt|13536552|Standardowe limity
+oc.tier.air|mt|59843b77|Chłodzenie powietrzem
+oc.tier.liquid|mt|bd4d3df2|Chłodzenie cieczą all-in-one
+oc.state.runs|mt|9ca6fe57|{0}: do {1} MHz dla grafiki i {2} MHz dla procesora.
+oc.state.pending|mt|11e74224|Nowy wybór zacznie działać po następnym ponownym uruchomieniu Windows.
+oc.state.board-changed|mt|2b7734f3|Wyższe limity zostały wyłączone, ponieważ sterownik wykrył inną płytę albo nowe oprogramowanie płyty. Odpowiedz ponownie na pytania, aby je włączyć.
+oc.state.unbound|mt|eb2a6439|Zapisany wybór nie należał do tej płyty, więc sterownik go wyłączył. Odpowiedz ponownie na pytania, aby go włączyć.
+oc.state.invalid|mt|ad8e394b|Zapisany wybór jest nieprawidłowy, więc obowiązują standardowe limity. Wybierz ponownie albo wybierz Standardowe limity.
+oc.q.title|mt|763f00b7|Wyższe taktowania: Twoje chłodzenie
+oc.q.cooling|mt|e91ef188|Jakie chłodzenie jest na Twojej płycie? Od tego zależą wyższe limity.
+oc.q.air.text|mt|8906447d|Chłodzenie powietrzem: radiator z jednym lub kilkoma wentylatorami, które przez niego dmuchają. Do {0} MHz dla grafiki i {1} MHz dla procesora.
+oc.q.liquid.text|mt|773b1c27|Chłodzenie cieczą all-in-one: blok z pompą na układzie i chłodnica z wentylatorami. Do {0} MHz dla grafiki i {1} MHz dla procesora.
+oc.q.stock.text|mt|58d81d5c|Własny radiator płyty bez wentylatora albo nie masz pewności: zostaw standardowe limity.
+oc.q.stock|mt|857b227d|Nie wiem, zostaw standard
+oc.q.air|mt|59843b77|Chłodzenie powietrzem
+oc.q.liquid|mt|48de08ce|Chłodzenie cieczą
+oc.warn.title|mt|be0ce762|Ostrzeżenie {0} z {1}
+oc.warn.stop|mt|cae7d57b|Przerwij
+oc.warn.accept|mt|86029644|Rozumiem
+oc.warn.1|mt|9897a53c|Wyższe taktowania wytwarzają więcej ciepła i pobierają więcej prądu. Do {0} MHz dla grafiki i {1} MHz dla procesora to wartości, które podają inni właściciele z takim chłodzeniem. To nie jest obietnica dla Twojej płyty: każdy układ jest inny. Płyta może działać niestabilnie, a w najgorszym razie może ulec uszkodzeniu. Korzystasz z wyższych limitów na własne ryzyko.
+oc.warn.2|mt|44925bc7|Niektóre płyty, głównie te z włączonymi wszystkimi 40 rdzeniami graficznymi, przy dużym obciążeniu i około 1850 do 2200 MHz całkowicie wyłączają zasilanie. Wentylator staje, a ekran gaśnie. Przycisk zasilania i przycisk reset nic wtedy nie robią: płyta uruchomi się ponownie dopiero, gdy na chwilę wyjmiesz kabel zasilający albo wyłączysz zasilanie w gniazdku, a potem znów je podłączysz. Najszybciej trafia na to ciężka gra, która obciąża jednocześnie procesor i grafikę, a wyższe taktowanie procesora sprawia, że dzieje się to wcześniej. Jeśli tak się stanie, wybierz niższe taktowanie albo mniej rdzeni graficznych.
+oc.warn.3|mt|f1d20762|Zasady bezpieczeństwa pozostają takie same: sterownik nadal obniża taktowania, gdy układ osiągnie 87 °C, a sterowanie wentylatorem się nie zmienia. Używaj dobrego zasilacza o mocy wystarczającej dla płyty: słaby zasilacz może się wyłączyć albo uszkodzić przy takich taktowaniach. Zmieniaj jedną rzecz naraz i sprawdzaj ją w grach, w które grasz. Jeśli Windows nie zakończy pracy prawidłowo, sterownik przy następnym starcie uruchomi się z bezpiecznym stałym taktowaniem. W każdej chwili możesz tu wrócić do standardowych limitów.
+oc.note.limits|mt|0abc2857|Po ponownym uruchomieniu sam wybierz wyższe taktowania w ustawieniu maksymalnego taktowania i limitu procesora. Standardowe wartości nie zmieniają się same.
+plan.title.oc-tier|mt|681c1eb4|Wyższe taktowania dla Twojego chłodzenia
+plan.line.oc-off|mt|db80c552|Wyższe limity taktowania zostają wyłączone; obowiązują standardowe limity.
+plan.line.oc-air|mt|813adea6|Zostają dopuszczone wyższe limity taktowania dla chłodzenia powietrzem.
+plan.line.oc-liquid|mt|2ea2c664|Zostają dopuszczone wyższe limity taktowania dla chłodzenia cieczą all-in-one.
+plan.line.oc-board|mt|c39d0346|Wybór należy do tej płyty. Na innej płycie sam się wyłączy.
+tuner.refuse.cpu-needs-uv|mt|18966afc|Limit procesora {0} MHz wymaga co najmniej {1} stopni napięcia.

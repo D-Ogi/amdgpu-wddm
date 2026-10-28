@@ -197,8 +197,9 @@ namespace AmdgpuWddmControl
         // BC250_CPU_TEMP_MAX_C of driver/shim/include/bc250_cpu.h. MaxMHz is the highest limit the release build
         // of the driver takes, not a stock clock: nobody has measured this part's own boost ceiling.
         public static uint MinMHz { get { return BoardCapabilities.Current[17]; } }
-        public static uint MaxMHz { get { return BoardCapabilities.Current[18]; } }
-        public static uint MaxSteps { get { return BoardCapabilities.Current[21]; } }
+        // The overclock tier of this start (OcUnlock.cs) sets both: the release bound and 16 steps without one.
+        public static uint MaxMHz { get { return OcUnlock.CpuMaxMHz(OcUnlock.Effective); } }
+        public static uint MaxSteps { get { return OcUnlock.CpuUvMaxSteps(OcUnlock.Effective); } }
         public static uint MinTempC { get { return BoardCapabilities.Current[22]; } }
         public static uint MaxTempC { get { return BoardCapabilities.Current[23]; } }
         public static uint MaskStock { get { return BoardCapabilities.Current[25]; } }
