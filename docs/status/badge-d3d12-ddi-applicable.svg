@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="193" height="20" role="img" aria-label="D3D12 DDI, applicable: 93.00%">
+<title>D3D12 DDI, applicable: 93.00%</title>
+<linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+<clipPath id="r"><rect width="193" height="20" rx="3" fill="#fff"/></clipPath>
+<g clip-path="url(#r)"><rect width="138" height="20" fill="#555"/><rect x="138" width="55" height="20" fill="#4c1"/><rect width="193" height="20" fill="url(#s)"/></g>
+<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11"><text x="69.0" y="15" fill="#010101" fill-opacity=".3">D3D12 DDI, applicable</text><text x="69.0" y="14">D3D12 DDI, applicable</text><text x="165.5" y="15" fill="#010101" fill-opacity=".3">93.00%</text><text x="165.5" y="14">93.00%</text></g>
+</svg>

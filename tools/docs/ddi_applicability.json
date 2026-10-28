@@ -1,0 +1,2000 @@
+{
+ "about": "Applicability class of every slot of the two status-map metrics, read by tools/docs/status_map.py. A reviewed decision per slot, made from the WDK header and the Microsoft documents named below. The script refuses to run when a slot has no class or a key names no slot.",
+ "classes": {
+  "applicable": "The driver must implement the slot for its declared feature set on the BC-250 and later AMD GPUs. Counted in the applicable figure.",
+  "optional": "A real feature that the driver may implement later. Not counted in the applicable figure.",
+  "not-applicable": "Not relevant to a WDDM 2.x GPU-VA driver for this class of hardware. Not counted in the applicable figure."
+ },
+ "rule_when_unsure": "applicable",
+ "sources": {
+  "windows-driver-docs": "github.com/MicrosoftDocs/windows-driver-docs, windows-driver-docs-pr/, staging @ 110f60ea",
+  "windows-driver-docs-ddi": "github.com/MicrosoftDocs/windows-driver-docs-ddi @ 7515063c (learn.microsoft.com /windows-hardware/drivers/ddi/<topic>)",
+  "DirectX-Specs": "github.com/microsoft/DirectX-Specs @ f2917db8",
+  "WDK 10.0.26100": "the kernel-mode headers that the kmd-ddi metric reads",
+  "WDK 10.0.28000": "um/d3d12umddi.h, the header that the d3d12-ddi metric reads"
+ },
+ "kmd-ddi": {
+  "DxgkDdiAddDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiStartDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiStopDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiRemoveDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDispatchIoRequest": {
+   "class": "optional",
+   "reason": "Private IOCTL support. The docs make it optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetPowerState": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiNotifyAcpiEvent": {
+   "class": "optional",
+   "reason": "The DDI reference calls it an optional display miniport driver function.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_notify_acpi_event"
+  },
+  "DxgkDdiResetDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiUnload": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiQueryInterface": {
+   "class": "optional",
+   "reason": "Interface support (for example OPM). The docs make it optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiControlEtwLogging": {
+   "class": "optional",
+   "reason": "ETW support. The docs make it optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiQueryAdapterInfo": {
+   "class": "applicable",
+   "reason": "Every driver of WDDM 2.6 and later must implement it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_queryadapterinfo"
+  },
+  "DxgkDdiEscape": {
+   "class": "applicable",
+   "reason": "The UMD and the control app talk to the KMD through it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_escape"
+  },
+  "DxgkDdiSetPowerComponentFState": {
+   "class": "optional",
+   "reason": "Runtime power management (F-states): optional; called only with SupportRuntimePowerManagement set.",
+   "source": "windows-driver-docs: display/gpu-power-management-of-idle-and-active-power.md"
+  },
+  "DxgkDdiStopDeviceAndReleasePostDisplayOwnership": {
+   "class": "applicable",
+   "reason": "PnP start and stop: mandatory for a full graphics driver from WDDM 1.2.",
+   "source": "windows-driver-docs: display/plug-and-play--pnp--start-and-stop-cases.md"
+  },
+  "DxgkDdiPowerRuntimeControlRequest": {
+   "class": "optional",
+   "reason": "Runtime power management: optional; called only with SupportRuntimePowerManagement set.",
+   "source": "windows-driver-docs: display/gpu-power-management-of-idle-and-active-power.md"
+  },
+  "DxgkDdiSetPowerPState": {
+   "class": "not-applicable",
+   "reason": "Reserved for system use. The DDI reference says not to use it in a driver.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddisetpowerpstate"
+  },
+  "DxgkDdiPowerRuntimeSetDeviceHandle": {
+   "class": "optional",
+   "reason": "Runtime power management: optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetStablePowerState": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiInterruptRoutine": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDpcRoutine": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiControlInterrupt": {
+   "class": "applicable",
+   "reason": "VSync interrupt control for flips: FlipOnVSyncMmIo is mandatory from WDDM 1.2.",
+   "source": "windows-driver-docs: display/wddm-driver-and-feature-caps.md"
+  },
+  "DxgkDdiControlInterrupt2": {
+   "class": "applicable",
+   "reason": "VSync control of WDDM 1.3 and later. The OS uses it when the driver does not implement ControlInterrupt3.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_controlinterrupt2"
+  },
+  "DxgkDdiControlInterrupt3": {
+   "class": "optional",
+   "reason": "Independent VidPn VSync: optional. A WDDM 2.7 driver without it opts out.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_controlinterrupt3"
+  },
+  "DxgkDdiSetInterruptTargetPresentId": {
+   "class": "optional",
+   "reason": "Hardware flip queue: an optional display feature, used only when the driver opts in.",
+   "source": "windows-driver-docs: display/hardware-flip-queue.md"
+  },
+  "DxgkDdiQueryChildRelations": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiQueryChildStatus": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiQueryDeviceDescriptor": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetPalette": {
+   "class": "not-applicable",
+   "reason": "Programs the color registers of 8 bpp palettized modes. A WDDM 2.x driver of this hardware offers no such mode.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_setpalette"
+  },
+  "DxgkDdiSetPointerPosition": {
+   "class": "applicable",
+   "reason": "Hardware mouse pointer of the display engine; dxgkrnl calls it apart from all other DDIs.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_setpointerposition"
+  },
+  "DxgkDdiSetPointerShape": {
+   "class": "applicable",
+   "reason": "Hardware mouse pointer of the display engine.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_setpointershape"
+  },
+  "DxgkDdiIsSupportedVidPn": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_issupportedvidpn"
+  },
+  "DxgkDdiRecommendFunctionalVidPn": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_recommendfunctionalvidpn"
+  },
+  "DxgkDdiEnumVidPnCofuncModality": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_enumvidpncofuncmodality"
+  },
+  "DxgkDdiSetVidPnSourceVisibility": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_setvidpnsourcevisibility"
+  },
+  "DxgkDdiCommitVidPn": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_commitvidpn"
+  },
+  "DxgkDdiRecommendMonitorModes": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_recommendmonitormodes"
+  },
+  "DxgkDdiRecommendVidPnTopology": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_recommendvidpntopology"
+  },
+  "DxgkDdiGetScanLine": {
+   "class": "applicable",
+   "reason": "Scan-line query of the flip path (FlipOnVSyncMmIo, mandatory from WDDM 1.2).",
+   "source": "windows-driver-docs: display/wddm-driver-and-feature-caps.md"
+  },
+  "DxgkDdiStopCapture": {
+   "class": "not-applicable",
+   "reason": "Video capture child devices. This class of hardware has no capture unit.",
+   "source": "windows-driver-docs: display/supporting-video-capture-and-other-child-devices.md"
+  },
+  "DxgkDdiQueryVidPnHWCapability": {
+   "class": "applicable",
+   "reason": "The docs say that drivers should support it.",
+   "source": "windows-driver-docs: display/querying-vidpnhardware-capabilities.md"
+  },
+  "DxgkDdiSystemDisplayEnable": {
+   "class": "applicable",
+   "reason": "WDDM 1.2 and later drivers must implement it (bug check display).",
+   "source": "windows-driver-docs: display/seamless-state-transitions-in-wddm-1-2-and-later.md"
+  },
+  "DxgkDdiSystemDisplayWrite": {
+   "class": "applicable",
+   "reason": "WDDM 1.2 and later drivers must implement it (bug check display).",
+   "source": "windows-driver-docs: display/seamless-state-transitions-in-wddm-1-2-and-later.md"
+  },
+  "DxgkDdiGetChildContainerId": {
+   "class": "applicable",
+   "reason": "Container ID support: mandatory for a full graphics driver from WDDM 1.2.",
+   "source": "windows-driver-docs: display/container-id-support-for-displays-.md"
+  },
+  "DxgkDdiControlModeBehavior": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays. WDDM 2.1 mode enumeration behaviour.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_controlmodebehavior"
+  },
+  "DxgkDdiUpdateMonitorLinkInfo": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays. WDDM 2.1 link capabilities of the monitor.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_updatemonitorlinkinfo"
+  },
+  "DxgkDdiSetTimingsFromVidPn": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays. The WDDM 2.2 replacement of CommitVidPn.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_settimingsfromvidpn"
+  },
+  "DxgkDdiSetTargetGamma": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays. The WDDM 2.2 per-target gamma LUT.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_settargetgamma"
+  },
+  "DxgkDdiSetTargetContentType": {
+   "class": "optional",
+   "reason": "The DDI reference calls it an optional DDI.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_settargetcontenttype"
+  },
+  "DxgkDdiSetTargetAdjustedColorimetry": {
+   "class": "optional",
+   "reason": "Advanced color (HDR, wide color gamut): an optional feature.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_settargetadjustedcolorimetry"
+  },
+  "DxgkDdiDisplayDetectControl": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays. WDDM 2.2 hot plug detection control.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_displaydetectcontrol"
+  },
+  "DxgkDdiQueryConnectionChange": {
+   "class": "applicable",
+   "reason": "Display DDI of a full graphics driver that drives displays. WDDM 2.2 connector status changes.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_queryconnectionchange"
+  },
+  "DxgkDdiExchangePreStartInfo": {
+   "class": "applicable",
+   "reason": "WDDM 2.2 data exchange before StartDevice.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_exchangeprestartinfo"
+  },
+  "DxgkDdiSetTargetAdjustedColorimetry2": {
+   "class": "optional",
+   "reason": "Advanced color (HDR, wide color gamut): an optional feature.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_settargetadjustedcolorimetry2"
+  },
+  "DxgkDdiCreateDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSubmitCommand": {
+   "class": "applicable",
+   "reason": "Paging buffers arrive on it with no context, also on a GpuMmu driver.",
+   "source": "windows-driver-docs: display/submitting-a-command-buffer.md"
+  },
+  "DxgkDdiPreemptCommand": {
+   "class": "applicable",
+   "reason": "GPU preemption: mandatory from WDDM 1.2.",
+   "source": "windows-driver-docs: display/wddm-driver-and-feature-caps.md"
+  },
+  "DxgkDdiQueryCurrentFence": {
+   "class": "applicable",
+   "reason": "Query of the last completed submission fence.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_querycurrentfence"
+  },
+  "DxgkDdiDestroyDevice": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiRender": {
+   "class": "not-applicable",
+   "reason": "Physical addressing only. A GpuMmu driver submits through SubmitCommandVirtual.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCreateContext": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDestroyContext": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiLinkDevice": {
+   "class": "optional",
+   "reason": "Linked display adapters: optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiRenderKm": {
+   "class": "applicable",
+   "reason": "GDI hardware acceleration is mandatory for a full graphics driver, and a driver that supports it must implement RenderKm (SupportKernelModeCommandBuffer).",
+   "source": "windows-driver-docs: display/gdi-hardware-acceleration.md"
+  },
+  "DxgkDdiGetNodeMetadata": {
+   "class": "applicable",
+   "reason": "WDDM 1.3 and later drivers must implement it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_getnodemetadata"
+  },
+  "DxgkDdiCalibrateGpuClock": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiFormatHistoryBuffer": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiRenderGdi": {
+   "class": "applicable",
+   "reason": "GDI hardware acceleration for contexts with virtual addressing (mandatory feature).",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_rendergdi"
+  },
+  "DxgkDdiSubmitCommandVirtual": {
+   "class": "applicable",
+   "reason": "GPU virtual addressing: required when the driver reports GpuMmu, which this driver does.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCreateProcess": {
+   "class": "applicable",
+   "reason": "GPU virtual addressing: required when the driver reports GpuMmu, which this driver does.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDestroyProcess": {
+   "class": "applicable",
+   "reason": "GPU virtual addressing: required when the driver reports GpuMmu, which this driver does.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCreateHwContext": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDestroyHwContext": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCreateHwQueue": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDestroyHwQueue": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSubmitCommandToHwQueue": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSwitchToHwContextList": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiUpdateHwContextState": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetSchedulingLogBuffer": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetupPriorityBands": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetContextSchedulingProperties": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSuspendContext": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiResumeContext": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSignalMonitoredFence": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiValidateSubmitCommand": {
+   "class": "optional",
+   "reason": "Command submission validation: optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetTrackedWorkloadPowerLevel": {
+   "class": "optional",
+   "reason": "Power consumption reporting: optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCreateCpuEvent": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_createcpuevent"
+  },
+  "DxgkDdiDestroyCpuEvent": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_destroycpuevent"
+  },
+  "DxgkDdiCreateNativeFence": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiDestroyNativeFence": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiUpdateMonitoredValues": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiUpdateCurrentValuesFromCpu": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiCreateDoorbell": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/user-mode-work-submission.md"
+  },
+  "DxgkDdiConnectDoorbell": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/user-mode-work-submission.md"
+  },
+  "DxgkDdiDisconnectDoorbell": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/user-mode-work-submission.md"
+  },
+  "DxgkDdiDestroyDoorbell": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/user-mode-work-submission.md"
+  },
+  "DxgkDdiNotifyWorkSubmission": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/user-mode-work-submission.md"
+  },
+  "DxgkDdiOpenNativeFence": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiCloseNativeFence": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiSetNativeFenceLogBuffer": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiUpdateNativeFenceLogs": {
+   "class": "optional",
+   "reason": "Native GPU fences and user-mode submission (WDDM 3.1 and later): an optional feature for hardware that has it.",
+   "source": "windows-driver-docs: display/native-gpu-fence-objects.md"
+  },
+  "DxgkDdiNotifyContextPriorityChange": {
+   "class": "optional",
+   "reason": "WDDM 3.2 priority notice of the hardware scheduler: optional.",
+   "source": "WDK 10.0.26100: km/d3dkmddi.h PDXGKDDI_NOTIFYCONTEXTPRIORITYCHANGE"
+  },
+  "DxgkDdiCreateAllocation": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDestroyAllocation": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiDescribeAllocation": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiGetStandardAllocationDriverData": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiAcquireSwizzlingRange": {
+   "class": "not-applicable",
+   "reason": "CPU aperture swizzling ranges. The driver reports NumberOfSwizzlingRanges 0, and an MCDM driver must not provide it.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiReleaseSwizzlingRange": {
+   "class": "not-applicable",
+   "reason": "CPU aperture swizzling ranges. The driver reports NumberOfSwizzlingRanges 0.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_releaseswizzlingrange"
+  },
+  "DxgkDdiPatch": {
+   "class": "not-applicable",
+   "reason": "Physical addressing only. A GpuMmu driver gets GPU virtual addresses, not patch lists.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiBuildPagingBuffer": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiOpenAllocation": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCloseAllocation": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetRootPageTable": {
+   "class": "applicable",
+   "reason": "GPU virtual addressing: required when the driver reports GpuMmu, which this driver does.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiGetRootPageTableSize": {
+   "class": "applicable",
+   "reason": "GPU virtual addressing: required when the driver reports GpuMmu, which this driver does.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiMapCpuHostAperture": {
+   "class": "optional",
+   "reason": "CPU host aperture: required only when the driver supports one.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiUnmapCpuHostAperture": {
+   "class": "optional",
+   "reason": "CPU host aperture: required only when the driver supports one.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiValidateUpdateAllocationProperty": {
+   "class": "optional",
+   "reason": "UpdateAllocationProperty support: optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetAllocationBackingStore": {
+   "class": "optional",
+   "reason": "Sharing of the backing store with the KMD (WDDM 3.0): optional.",
+   "source": "windows-driver-docs: display/sharing-backing-store-with-kmd.md"
+  },
+  "DxgkDdiCreateMemoryBasis": {
+   "class": "not-applicable",
+   "reason": "Dirty bit tracking for the live migration of GPU-P virtual functions. GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiDestroyMemoryBasis": {
+   "class": "not-applicable",
+   "reason": "Dirty bit tracking for the live migration of GPU-P virtual functions. GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiResetFromTimeout": {
+   "class": "applicable",
+   "reason": "TDR: the driver must still implement it.",
+   "source": "windows-driver-docs: display/tdr-changes-in-windows-8.md"
+  },
+  "DxgkDdiRestartFromTimeout": {
+   "class": "applicable",
+   "reason": "TDR: the driver must still implement it.",
+   "source": "windows-driver-docs: display/tdr-changes-in-windows-8.md"
+  },
+  "DxgkDdiCollectDbgInfo": {
+   "class": "applicable",
+   "reason": "In the minimum DDI set that the docs require even of a compute-only (MCDM) driver. A full graphics driver needs it too.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiQueryDependentEngineGroup": {
+   "class": "applicable",
+   "reason": "Per-engine TDR: mandatory for a full graphics driver from WDDM 1.2.",
+   "source": "windows-driver-docs: display/tdr-changes-in-windows-8.md"
+  },
+  "DxgkDdiQueryEngineStatus": {
+   "class": "applicable",
+   "reason": "Per-engine TDR: mandatory for a full graphics driver from WDDM 1.2.",
+   "source": "windows-driver-docs: display/tdr-changes-in-windows-8.md"
+  },
+  "DxgkDdiResetEngine": {
+   "class": "applicable",
+   "reason": "Per-engine TDR: mandatory for a full graphics driver from WDDM 1.2.",
+   "source": "windows-driver-docs: display/tdr-changes-in-windows-8.md"
+  },
+  "DxgkDdiCancelCommand": {
+   "class": "optional",
+   "reason": "Cancel support: optional; called only with CancelCommandAware set.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiNotifySurpriseRemoval": {
+   "class": "optional",
+   "reason": "Surprise removal support: optional.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiResetHwEngine": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiQueryDiagnosticTypesSupport": {
+   "class": "applicable",
+   "reason": "WDDM 2.4 display diagnostics; dxgkrnl asks for it together with ControlDiagnosticReporting.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_querydiagnostictypessupport"
+  },
+  "DxgkDdiControlDiagnosticReporting": {
+   "class": "applicable",
+   "reason": "WDDM 2.4 display diagnostics; dxgkrnl asks for it together with QueryDiagnosticTypesSupport.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_controldiagnosticreporting"
+  },
+  "DxgkDdiResumeHwEngine": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiCollectDiagnosticInfo": {
+   "class": "applicable",
+   "reason": "WDDM 2.7 and later drivers must support the black screen diagnostic through it.",
+   "source": "windows-driver-docs-ddi: dispmprt/nc-dispmprt-dxgkddi_collectdiagnosticinfo"
+  },
+  "DxgkDdiCollectDbgInfo2": {
+   "class": "optional",
+   "reason": "A WDDM 3.2 driver is not required to implement it; the OS then calls CollectDbgInfo.",
+   "source": "windows-driver-docs: display/tdr-debuggability-improvements.md"
+  },
+  "DxgkDdiResetDisplayEngine": {
+   "class": "optional",
+   "reason": "WDDM 3.2 reset of the display engine alone: optional.",
+   "source": "WDK 10.0.26100: km/d3dkmddi.h PDXGKDDI_RESETDISPLAYENGINE"
+  },
+  "DxgkDdiSetVidPnSourceAddress": {
+   "class": "applicable",
+   "reason": "Flip of the primary: direct flip and FlipOnVSyncMmIo are mandatory.",
+   "source": "windows-driver-docs: display/direct-flip-of-video-memory.md"
+  },
+  "DxgkDdiUpdateActiveVidPnPresentPath": {
+   "class": "applicable",
+   "reason": "Smooth rotation support: mandatory for a full graphics driver.",
+   "source": "windows-driver-docs: display/optimized-screen-rotation-support.md"
+  },
+  "DxgkDdiCreateOverlay": {
+   "class": "not-applicable",
+   "reason": "Legacy kernel-mode video overlay (MaxOverlays). Multiplane overlays replace it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_createoverlay"
+  },
+  "DxgkDdiPresent": {
+   "class": "applicable",
+   "reason": "Present blits of the desktop compositor and GDI.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_present"
+  },
+  "DxgkDdiUpdateOverlay": {
+   "class": "not-applicable",
+   "reason": "Legacy kernel-mode video overlay (MaxOverlays). Multiplane overlays replace it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_updateoverlay"
+  },
+  "DxgkDdiFlipOverlay": {
+   "class": "not-applicable",
+   "reason": "Legacy kernel-mode video overlay (MaxOverlays). Multiplane overlays replace it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_flipoverlay"
+  },
+  "DxgkDdiDestroyOverlay": {
+   "class": "not-applicable",
+   "reason": "Legacy kernel-mode video overlay (MaxOverlays). Multiplane overlays replace it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_destroyoverlay"
+  },
+  "DxgkDdiSetDisplayPrivateDriverFormat": {
+   "class": "optional",
+   "reason": "Scan-out of a primary in a private (for example compressed) format without translation: an optimization.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_setdisplayprivatedriverformat"
+  },
+  "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay": {
+   "class": "not-applicable",
+   "reason": "The WDDM 1.3 MPO entry. A WDDM 2.x driver uses the later versions.",
+   "source": "windows-driver-docs: display/multiplane-overlay-support.md"
+  },
+  "DxgkDdiCheckMultiPlaneOverlaySupport": {
+   "class": "not-applicable",
+   "reason": "The WDDM 1.3 MPO check. CheckMultiPlaneOverlaySupport3 replaces it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_checkmultiplaneoverlaysupport"
+  },
+  "DxgkDdiCheckMultiPlaneOverlaySupport2": {
+   "class": "optional",
+   "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
+   "source": "windows-driver-docs: display/multiplane-overlay-support.md"
+  },
+  "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2": {
+   "class": "optional",
+   "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
+   "source": "windows-driver-docs: display/multiplane-overlay-support.md"
+  },
+  "DxgkDdiCheckMultiPlaneOverlaySupport3": {
+   "class": "optional",
+   "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
+   "source": "windows-driver-docs: display/multiplane-overlay-support.md"
+  },
+  "DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3": {
+   "class": "optional",
+   "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
+   "source": "windows-driver-docs: display/multiplane-overlay-support.md"
+  },
+  "DxgkDdiPostMultiPlaneOverlayPresent": {
+   "class": "optional",
+   "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
+   "source": "windows-driver-docs: display/multiplane-overlay-support.md"
+  },
+  "DxgkDdiCreatePeriodicFrameNotification": {
+   "class": "applicable",
+   "reason": "WDDM 2.2 periodic frame notification of a display source.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_createperiodicframenotification"
+  },
+  "DxgkDdiDestroyPeriodicFrameNotification": {
+   "class": "applicable",
+   "reason": "WDDM 2.2 periodic frame notification of a display source.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_destroyperiodicframenotification"
+  },
+  "DxgkDdiGetMultiPlaneOverlayCaps": {
+   "class": "optional",
+   "reason": "Multiplane overlay (MPO): optional, required only of a driver that reports overlay planes.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_getmultiplaneoverlaycaps"
+  },
+  "DxgkDdiGetPostCompositionCaps": {
+   "class": "optional",
+   "reason": "Post-composition scaling: required only of a driver that supports it.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_getpostcompositioncaps"
+  },
+  "DxgkDdiNotifyFocusPresent": {
+   "class": "optional",
+   "reason": "Yield check of the GPU scheduler for a focus present (hardware scheduling): optional.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_notifyfocuspresent"
+  },
+  "DxgkDdiPresentToHwQueue": {
+   "class": "optional",
+   "reason": "Hardware scheduling (HAGS): an optional feature that the driver must report before dxgkrnl calls these DDIs.",
+   "source": "windows-driver-docs: display/mcdm-implementation-guidelines.md"
+  },
+  "DxgkDdiSetFlipQueueLogBuffer": {
+   "class": "optional",
+   "reason": "Hardware flip queue: an optional display feature, used only when the driver opts in.",
+   "source": "windows-driver-docs: display/hardware-flip-queue.md"
+  },
+  "DxgkDdiUpdateFlipQueueLog": {
+   "class": "optional",
+   "reason": "Hardware flip queue: an optional display feature, used only when the driver opts in.",
+   "source": "windows-driver-docs: display/hardware-flip-queue.md"
+  },
+  "DxgkDdiCancelQueuedFlips": {
+   "class": "optional",
+   "reason": "Hardware flip queue: an optional display feature, used only when the driver opts in.",
+   "source": "windows-driver-docs: display/hardware-flip-queue.md"
+  },
+  "DxgkDdiCancelFlips": {
+   "class": "optional",
+   "reason": "Hardware flip queue: an optional display feature, used only when the driver opts in.",
+   "source": "windows-driver-docs: display/hardware-flip-queue.md"
+  },
+  "DxgkDdiSetVideoProtectedRegion": {
+   "class": "optional",
+   "reason": "Content protection: an optional feature.",
+   "source": "WDK 10.0.26100: km/d3dkmddi.h PDXGKDDI_SETVIDEOPROTECTEDREGION"
+  },
+  "DxgkDdiSetTargetAnalogCopyProtection": {
+   "class": "not-applicable",
+   "reason": "Analog copy protection works only on analog targets. The BC-250 and current AMD boards have no analog output.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_settargetanalogcopyprotection"
+  },
+  "DxgkDdiCreateProtectedSession": {
+   "class": "optional",
+   "reason": "Content protection: an optional feature.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_createprotectedsession"
+  },
+  "DxgkDdiDestroyProtectedSession": {
+   "class": "optional",
+   "reason": "Content protection: an optional feature.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_destroyprotectedsession"
+  },
+  "DxgkDdiSetVirtualMachineData": {
+   "class": "optional",
+   "reason": "GPU paravirtualization (GPU-PV, for WSL and Windows Sandbox): optional; the driver opts in with ParavirtualizationSupported.",
+   "source": "windows-driver-docs: display/gpu-paravirtualization.md"
+  },
+  "DxgkDdiBeginExclusiveAccess": {
+   "class": "optional",
+   "reason": "IOMMU-based GPU isolation: optional; it needs a platform IOMMU.",
+   "source": "windows-driver-docs: display/iommu-based-gpu-isolation.md"
+  },
+  "DxgkDdiEndExclusiveAccess": {
+   "class": "optional",
+   "reason": "IOMMU-based GPU isolation: optional; it needs a platform IOMMU.",
+   "source": "windows-driver-docs: display/iommu-based-gpu-isolation.md"
+  },
+  "DxgkDdiSaveMemoryForHotUpdate": {
+   "class": "not-applicable",
+   "reason": "Hot update of a driver that runs virtual GPUs (virtual functions). GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_savememoryforhotupdate"
+  },
+  "DxgkDdiRestoreMemoryForHotUpdate": {
+   "class": "not-applicable",
+   "reason": "Hot update of a driver that runs virtual GPUs (virtual functions). GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_restorememoryforhotupdate"
+  },
+  "DxgkDdiStartDirtyTracking": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiStopDirtyTracking": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiQueryDirtyBitData": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiPrepareLiveMigration": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiSaveImmutableMigrationData": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiSaveMutableMigrationData": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiEndLiveMigration": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiRestoreImmutableMigrationData": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiRestoreMutableMigrationData": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs: display/live-migration-on-gpup-devices.md"
+  },
+  "DxgkDdiWriteVirtualizedInterrupt": {
+   "class": "not-applicable",
+   "reason": "MSI-X table writes of a virtualized GPU during live migration. GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "windows-driver-docs-ddi: d3dkmddi/nc-d3dkmddi-dxgkddi_writevirtualizedinterrupt"
+  },
+  "DxgkDdiSetVirtualGpuResources2": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "WDK 10.0.26100: km/d3dkmddi.h PDXGKDDI_SETVIRTUALGPURESOURCES2"
+  },
+  "DxgkDdiSetVirtualFunctionPauseState": {
+   "class": "not-applicable",
+   "reason": "GPU partitioning (GPU-P, SR-IOV) and live migration of virtual functions: not used by a host driver of this class.",
+   "source": "WDK 10.0.26100: km/d3dkmddi.h PDXGKDDI_SETVIRTUALFUNCTIONPAUSESTATE"
+  }
+ },
+ "d3d12-ddi": {
+  "Adapter/pfnCalcPrivateDeviceSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Adapter/pfnCreateDevice": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Adapter/pfnCloseAdapter": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Adapter/pfnGetSupportedVersions": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Adapter/pfnGetCaps": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Adapter/pfnGetOptionalDDITables": {
+   "class": "applicable",
+   "reason": "The adapter tells the runtime which optional DDI tables it fills.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_GETOPTIONALDDITTABLES"
+  },
+  "Adapter/pfnFillDDITable": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Adapter/pfnDestroyDevice": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_ADAPTERFUNCS"
+  },
+  "Device core/pfnCheckFormatSupport": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckMultisampleQualityLevels": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetMipPacking": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateElementLayoutSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateElementLayout": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyElementLayout": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateBlendStateSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateBlendState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyBlendState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateDepthStencilStateSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateDepthStencilState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyDepthStencilState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateRasterizerStateSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateRasterizerState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyRasterizerState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateShaderSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateVertexShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreatePixelShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateGeometryShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateComputeShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateGeometryShaderWithStreamOutput": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateGeometryShaderWithStreamOutput": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateTessellationShaderSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateHullShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateDomainShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateCommandQueueSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateCommandQueue": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyCommandQueue": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateCommandPoolSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateCommandPool": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyCommandPool": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnResetCommandPool": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivatePipelineStateSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreatePipelineState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyPipelineState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateCommandListSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateCommandList": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyCommandList": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateFenceSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateFence": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyFence": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateDescriptorHeapSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateDescriptorHeap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyDescriptorHeap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetDescriptorSizeInBytes": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetCPUDescriptorHandleForHeapStart": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetGPUDescriptorHandleForHeapStart": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateShaderResourceView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateConstantBufferView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateSampler": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateUnorderedAccessView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateRenderTargetView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateDepthStencilView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateRootSignatureSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateRootSignature": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyRootSignature": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnMapHeap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnUnmapHeap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateHeapAndResourceSizes": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateHeapAndResource": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyHeapAndResource": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnMakeResident": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnEvict": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateOpenedHeapAndResourceSizes": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnOpenHeapAndResource": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCopyDescriptors": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCopyDescriptorsSimple": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateQueryHeapSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateQueryHeap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyQueryHeap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateCommandSignatureSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateCommandSignature": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyCommandSignature": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckResourceVirtualAddress": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckResourceAllocationInfo": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckSubresourceInfo": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckExistingResourceAllocationInfo": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnOfferResources": {
+   "class": "applicable",
+   "reason": "Offer and reclaim were ported to the D3D12 DDI (ID3D12Device::OfferResources).",
+   "source": "DirectX-Specs: d3d/ResourceHeaps.md"
+  },
+  "Device core/pfnReclaimResources": {
+   "class": "applicable",
+   "reason": "Offer and reclaim were ported to the D3D12 DDI (ID3D12Device::ReclaimResources).",
+   "source": "DirectX-Specs: d3d/ResourceHeaps.md"
+  },
+  "Device core/pfnGetImplicitPhysicalAdapterMask": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetPresentPrivateDriverDataSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnQueryNodeMap": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnRetrieveShaderComment": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckResourceAllocationHandle": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivatePipelineLibrarySize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreatePipelineLibrary": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyPipelineLibrary": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnAddPipelineStateToLibrary": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcSerializedLibrarySize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnSerializeLibrary": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetDebugAllocationInfo": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateCommandRecorderSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateCommandRecorder": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyCommandRecorder": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCommandRecorderSetCommandPoolAsTarget": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateSchedulingGroupSize": {
+   "class": "optional",
+   "reason": "Hardware scheduling groups: optional, tied to hardware scheduling.",
+   "source": "windows-driver-docs-ddi: d3d12umddi/nc-d3d12umddi-pfnd3d12ddi_calcprivateschedulinggroupsize_0050"
+  },
+  "Device core/pfnCreateSchedulingGroup": {
+   "class": "optional",
+   "reason": "Hardware scheduling groups: optional, tied to hardware scheduling.",
+   "source": "windows-driver-docs-ddi: d3d12umddi/nc-d3d12umddi-pfnd3d12ddi_createschedulinggroup_0050"
+  },
+  "Device core/pfnDestroySchedulingGroup": {
+   "class": "optional",
+   "reason": "Hardware scheduling groups: optional, tied to hardware scheduling.",
+   "source": "windows-driver-docs-ddi: d3d12umddi/nc-d3d12umddi-pfnd3d12ddi_destroyschedulinggroup_0050"
+  },
+  "Device core/pfnEnumerateMetaCommands": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_ENUMERATE_META_COMMANDS_0052"
+  },
+  "Device core/pfnEnumerateMetaCommandParameters": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_ENUMERATE_META_COMMAND_PARAMETERS_0052"
+  },
+  "Device core/pfnCalcPrivateMetaCommandSize": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_CALC_PRIVATE_META_COMMAND_SIZE_0052"
+  },
+  "Device core/pfnCreateMetaCommand": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_CREATE_META_COMMAND_0052"
+  },
+  "Device core/pfnDestroyMetaCommand": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_DESTROY_META_COMMAND_0052"
+  },
+  "Device core/pfnGetMetaCommandRequiredParameterInfo": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_GET_META_COMMAND_REQUIRED_PARAMETER_INFO_0052"
+  },
+  "Device core/pfnCalcPrivateStateObjectSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateStateObject": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnDestroyStateObject": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetRaytracingAccelerationStructurePrebuildInfo": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCheckDriverMatchingIdentifier": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetShaderIdentifier": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetShaderStackSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnGetPipelineStackSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnSetPipelineStackSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnSetBackgroundProcessingMode": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateAddToStateObjectSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnAddToStateObject": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateSamplerFeedbackUnorderedAccessView": {
+   "class": "optional",
+   "reason": "Sampler feedback: an optional tier. The BC-250 (gfx1013) reports none.",
+   "source": "DirectX-Specs: d3d/SamplerFeedback.md"
+  },
+  "Device core/pfnCreateAmplificationShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCreateMeshShader": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnCalcPrivateMeshShaderSize": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_DEVICE_FUNCS_CORE_0088"
+  },
+  "Device core/pfnImplicitShaderCacheControl": {
+   "class": "optional",
+   "reason": "Needed only when the driver reports a driver-managed shader cache; developer mode only.",
+   "source": "DirectX-Specs: d3d/ShaderCache.md"
+  },
+  "Command list/pfnCloseCommandList": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnResetCommandList": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnDrawInstanced": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnDrawIndexedInstanced": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnDispatch": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnClearUnorderedAccessViewUint": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnClearUnorderedAccessViewFloat": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnClearRenderTargetView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnClearDepthStencilView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnDiscardResource": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnCopyTextureRegion": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnResourceCopy": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnCopyTiles": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnCopyBufferRegion": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnResourceResolveSubresource": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnExecuteBundle": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnExecuteIndirect": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnResourceBarrier": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnBlt": {
+   "class": "applicable",
+   "reason": "The DXGI Blt was ported to D3D12 command lists.",
+   "source": "DirectX-Specs: d3d/ResourceHeaps.md"
+  },
+  "Command list/pfnPresent": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnBeginQuery": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnEndQuery": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnResolveQueryData": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetPredication": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnIaSetTopology": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnRsSetViewports": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnRsSetScissorRects": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnOmSetBlendFactor": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnOmSetStencilRef": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetPipelineState": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetDescriptorHeaps": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRootSignature": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRootSignature": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRootDescriptorTable": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRootDescriptorTable": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRoot32BitConstant": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRoot32BitConstant": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRoot32BitConstants": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRoot32BitConstants": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRootConstantBufferView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRootConstantBufferView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRootShaderResourceView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRootShaderResourceView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetComputeRootUnorderedAccessView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetGraphicsRootUnorderedAccessView": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnIASetIndexBuffer": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnIASetVertexBuffers": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSOSetTargets": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnOMSetRenderTargets": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetMarker": {
+   "class": "applicable",
+   "reason": "Marker of the D3D12 command list.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_SET_MARKER"
+  },
+  "Command list/pfnClearRootArguments": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnAtomicCopyBufferRegion": {
+   "class": "applicable",
+   "reason": "AtomicCopyBufferUINT and AtomicCopyBufferUINT64 of the command list.",
+   "source": "DirectX-Specs: d3d/RenderPasses.md"
+  },
+  "Command list/pfnOMSetDepthBounds": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetSamplePositions": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnResourceResolveSubresourceRegion": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetProtectedResourceSession": {
+   "class": "optional",
+   "reason": "Protected resources (content protection): optional.",
+   "source": "DirectX-Specs: d3d/ProtectedResources.md"
+  },
+  "Command list/pfnWriteBufferImmediate": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetViewInstanceMask": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnInitializeMetaCommand": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_INITIALIZE_META_COMMAND_0052"
+  },
+  "Command list/pfnExecuteMetaCommand": {
+   "class": "optional",
+   "reason": "Meta commands: optional. A driver may enumerate no meta command.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h PFND3D12DDI_EXECUTE_META_COMMAND_0052"
+  },
+  "Command list/pfnBuildRaytracingAccelerationStructure": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnEmitRaytracingAccelerationStructurePostbuildInfo": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnCopyRaytracingAccelerationStructure": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnSetPipelineState1": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnDispatchRays": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnRSSetShadingRate": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnRSSetShadingRateImage": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnDispatchMesh": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnBarrier": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_LIST_FUNCS_3D_0092"
+  },
+  "Command list/pfnOmSetAlphaBlendFactor": {
+   "class": "not-applicable",
+   "reason": "No longer valid: the entry stays in the table but D3D marks it unused.",
+   "source": "DirectX-Specs: d3d/VulkanOn12.md"
+  },
+  "Command queue/pfnExecuteCommandLists": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001"
+  },
+  "Command queue/pfnUpdateTileMappings": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001"
+  },
+  "Command queue/pfnCopyTileMappings": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001"
+  },
+  "Command queue/pfnSignalFence": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001"
+  },
+  "Command queue/pfnWaitForFence": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_COMMAND_QUEUE_FUNCS_CORE_0001"
+  },
+  "Render pass/pfnBeginRenderPass": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_RENDER_PASS_FUNCS_0053"
+  },
+  "Render pass/pfnEndRenderPass": {
+   "class": "applicable",
+   "reason": "Part of the D3D12 API that every D3D12 device exposes at the feature level and DDI build the driver reports.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_RENDER_PASS_FUNCS_0053"
+  },
+  "Extended features/pfnGetSupportedExtendedFeatures": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features/pfnGetSupportedExtendedFeatureVersions": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features/pfnEnableExtendedFeature": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features/pfnSetExtendedFeatureCallbacks": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features 0096/pfnGetSupportedExtendedFeatures": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features 0096/pfnGetSupportedExtendedFeatureVersions": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features 0096/pfnEnableExtendedFeature": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  },
+  "Extended features 0096/pfnSetExtendedFeatureCallbacks": {
+   "class": "applicable",
+   "reason": "The runtime finds and enables the extended features of D3D12DDI_FEATURE_0020 (render passes, shader caching, video, protected resources) through this table, and the driver publishes the render pass table.",
+   "source": "WDK 10.0.28000: um/d3d12umddi.h D3D12DDI_FEATURE_0020"
+  }
+ }
+}
