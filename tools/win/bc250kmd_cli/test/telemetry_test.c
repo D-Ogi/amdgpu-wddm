@@ -164,6 +164,15 @@ static NTSTATUS TelemetryEscapeFlags(void *data, unsigned size, int hardware)
         boardCalls++;
         if (size != sizeof(*c) || hardware) return (NTSTATUS)0xC000000D;
         if (boardMode == 1) return 0; /* old driver: unchanged UNKNOWN */
+        if (boardMode == 7) { /* a driver older than ABI 2: refuses it, answers ABI 1 without the overclock words */
+            unsigned i; ULONG *w = (ULONG *)c;
+            if (c->AbiVersion != 1) { c->Status = BC250_ESCAPE_STATUS_REFUSED; c->NtStatus = (ULONG)0xC000000D; return 0; }
+            *c = boardFixture; c->AbiVersion = 1;
+            for (i = 139; i < sizeof(*c) / sizeof(ULONG); ++i) w[i] = 0;
+            return 0;
+        }
+        if (boardMode == 8) { *c = boardFixture; c->OcPoints[1].Mv = 1000; return 0; } /* a falling overclock point */
+        if (boardMode == 9) { *c = boardFixture; c->AbiVersion = 1; return 0; }        /* ABI 1 with overclock words */
         *c = boardFixture;
         if (boardMode == 2) { memset(c, 0, sizeof(*c)); c->Magic=BC250_ESCAPE_MAGIC; c->Command=33; c->AbiVersion=1; c->Reason=1; }
         if (boardMode == 3) c->GpuPointCount = 17;
@@ -252,6 +261,12 @@ int main(int argc, char **argv)
         }
 
     }
+    boardMode = 7; boardCalls = 0;
+    CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 1 && caps.Flags == 31 &&
+          boardCalls == 2 && !caps.OcTierCount);
+    boardMode = 8; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
+    boardMode = 9; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) < 0);
+    boardMode = 0; CHECK(Bc250BoardCapabilities(&caps, sizeof(caps)) == 0 && caps.AbiVersion == 2 && caps.OcTierCount == 3);
     boardMode = 0; escapeCalls = 0;
 
 

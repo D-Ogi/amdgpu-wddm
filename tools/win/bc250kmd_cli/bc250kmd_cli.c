@@ -710,9 +710,14 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
     ULONG i, j;
     const ULONG *words = (const ULONG *)c;
     if (c->Magic != BC250_ESCAPE_MAGIC || c->Command != BC250_ESCAPE_RUN_BOARD_CAPS ||
-        c->Status != BC250_ESCAPE_STATUS_DONE || c->NtStatus || c->AbiVersion != BC250_BOARD_CAPS_ABI ||
+        c->Status != BC250_ESCAPE_STATUS_DONE || c->NtStatus ||
+        (c->AbiVersion != BC250_BOARD_CAPS_ABI && c->AbiVersion != BC250_BOARD_CAPS_ABI_V1) ||
         (c->Flags & ~31u) || c->Reason > BC250_BOARD_CAPS_REASON_INACTIVE) return 0;
     for (i = 0; i < ARRAYSIZE(c->Reserved); ++i) if (c->Reserved[i]) return 0;
+    // An ABI 1 reply (a driver older than the overclock tiers) has no overclock words at all.
+    if (c->AbiVersion == BC250_BOARD_CAPS_ABI_V1)
+        for (i = FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTier) / sizeof(ULONG); i < sizeof(*c) / sizeof(ULONG); ++i)
+            if (words[i]) return 0;
     if (!c->ProviderId) {
         if (c->Flags || c->Reason != BC250_BOARD_CAPS_REASON_BOARD) return 0;
         for (i = 8; i < sizeof(*c) / sizeof(ULONG); ++i) if (words[i]) return 0;
@@ -744,6 +749,30 @@ static int BoardCapabilitiesValid(const BC250_ESCAPE_BOARD_CAPS *c)
             p->Mv < c->GpuMinMv || p->Mv > c->GpuMaxMv || p->Vid != (1550u - p->Mv) * 160u / 1000u || (i && p->Mv < c->GpuPoints[i-1].Mv)) return 0;
     }
     if (c->GpuPoints[c->GpuPointCount-1].MHz != c->GpuMaxMHz) return 0;
+    if (c->AbiVersion == BC250_BOARD_CAPS_ABI) {
+        // The overclock envelopes: tier 0 is the plain envelope above, each tier admits at least what the one
+        // before it admits, and every tier ceiling is a published point.
+        if (c->OcTierCount != ARRAYSIZE(c->OcTiers) || c->OcTier >= c->OcTierCount || c->OcStoredTier > MAXLONG ||
+            c->OcReason > 5 || (c->OcTier && !c->OcBoard)) return 0;
+        if (c->OcTiers[0].GpuMaxMHz != c->GpuMaxMHz || c->OcTiers[0].GpuMaxMv != c->GpuMaxMv ||
+            c->OcTiers[0].CpuMaxMHz != c->CpuMaxMHz || c->OcTiers[0].CpuUvMaxSteps != c->CpuUvMaxSteps) return 0;
+        for (i = 0; i < ARRAYSIZE(c->OcPoints); ++i) {
+            const BC250_BOARD_GPU_POINT *p = &c->OcPoints[i];
+            const ULONG before = i ? c->OcPoints[i-1].Mv : c->GpuPoints[c->GpuPointCount-1].Mv;
+            if (p->MHz != (ULONGLONG)c->GpuMaxMHz + (ULONGLONG)(i + 1) * c->GpuStepMHz || p->Mv < before ||
+                p->Mv > 1550 || p->Vid != (1550u - p->Mv) * 160u / 1000u) return 0;
+        }
+        for (i = 1; i < ARRAYSIZE(c->OcTiers); ++i) {
+            const BC250_BOARD_OC_TIER *t = &c->OcTiers[i], *b = &c->OcTiers[i-1];
+            if (t->GpuMaxMHz < b->GpuMaxMHz || t->GpuMaxMv < b->GpuMaxMv || t->CpuMaxMHz < b->CpuMaxMHz ||
+                t->CpuUvMaxSteps < b->CpuUvMaxSteps || t->GpuMaxMHz > c->OcPoints[ARRAYSIZE(c->OcPoints)-1].MHz ||
+                (t->GpuMaxMHz - c->GpuMaxMHz) % c->GpuStepMHz) return 0;
+            if (t->GpuMaxMHz > c->GpuMaxMHz &&
+                c->OcPoints[(t->GpuMaxMHz - c->GpuMaxMHz) / c->GpuStepMHz - 1].Mv > t->GpuMaxMv) return 0;
+        }
+        for (i = 1; i < ARRAYSIZE(c->OcCpuMinUvSteps); ++i)
+            if (c->OcCpuMinUvSteps[i] < c->OcCpuMinUvSteps[i-1]) return 0;
+    }
     for (i = 0; i < 3; ++i) {
         if (c->FanPresetCounts[i] < c->FanPointMin || c->FanPresetCounts[i] > c->FanPointMax) return 0;
         for (j = 0; j < 8; ++j) {
@@ -769,6 +798,16 @@ BC250_CONTROL_API LONG WINAPI Bc250BoardCapabilities(BC250_ESCAPE_BOARD_CAPS *da
     status = TelemetryEscape(data, sizeof(*data));
     if (!NT_SUCCESS(status)) return status;
     if (data->Status == BC250_ESCAPE_STATUS_UNKNOWN_COMMAND) return (LONG)0xC00000BB;
+    if (data->Status == BC250_ESCAPE_STATUS_REFUSED) {
+        // A driver older than the overclock tiers refuses ABI 2: ask it again for the ABI 1 reply.
+        memset(data, 0, sizeof(*data));
+        data->Magic = BC250_ESCAPE_MAGIC;
+        data->Command = BC250_ESCAPE_RUN_BOARD_CAPS;
+        data->Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
+        data->AbiVersion = BC250_BOARD_CAPS_ABI_V1;
+        status = TelemetryEscape(data, sizeof(*data));
+        if (!NT_SUCCESS(status)) return status;
+    }
     if (data->Status != BC250_ESCAPE_STATUS_DONE || data->NtStatus)
         return (LONG)data->NtStatus < 0 ? (LONG)data->NtStatus : (LONG)0xC00000A3;
     return BoardCapabilitiesValid(data) ? 0 : (LONG)0xC000000D;
