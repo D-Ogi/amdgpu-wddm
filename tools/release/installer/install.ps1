@@ -95,6 +95,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'state-lifecycle.ps1')
 . (Join-Path $here 'state-reader.ps1')
 . (Join-Path $here 'legacy-rollback.ps1')
+. (Join-Path $here 'app-profiles.ps1')
 $enginePackage=$package
 $engineHere=$here
 $legacyRollback=[bool]$RollbackPackage
@@ -2168,6 +2169,12 @@ if ($controlExe -and $dirs -contains 'control') {
     # The Nagi wallpaper: the choice and its stamp for the application, which sets the picture (common.ps1).
     Set-WallpaperRecord -Selected (-not [bool]$NoWallpaper) -Version ([string]$script:Manifest.version)
 } else { Write-Info 'control application: not in this package (or -NoControlApp); skipped' }
+
+# The machine profile directory that the Mesa drivers, DXVK and vkd3d-proton read (app-profiles.ps1). A failure is a
+# warning: the drivers work without it, with their built-in profiles.
+try {
+    Invoke-Change 'make the game profile directory: administrators edit, users read' { Initialize-AppProfileDirectory } | Out-Null
+} catch { Write-Warn2 "game profile directory not made: $($_.Exception.Message)" }
 
 # ---- the extras ------------------------------------------------------------------------------------------------
 # After the driver, and last of all the changes of phase 2: an extra is optional, its download is large, and nothing

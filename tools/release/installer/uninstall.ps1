@@ -409,6 +409,9 @@ Invoke-Change "remove the installer state $($script:StateDir) (with the kept rep
     Remove-Item -LiteralPath (Join-Path $dataRoot 'dwm-baseline.json') -Force -ErrorAction SilentlyContinue
     if ((Test-Path -LiteralPath $dataRoot) -and -not @(Get-ChildItem -LiteralPath $dataRoot -Force).Count) { Remove-Item -LiteralPath $dataRoot -Force }
 } | Out-Null
+# The game profiles (%ProgramData%\amdgpu-wddm\profiles, app-profiles.ps1) are the administrator's files: kept, and
+# the next install reads them again.
+if (Test-Path -LiteralPath (Join-Path $dataRoot 'profiles')) { Write-Info "$dataRoot\profiles (game profiles of the administrator): kept" }
 Write-Step 'Per-user data'
 $userData = @(Get-OurUserDataDirs)
 if ($userData.Count) {
