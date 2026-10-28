@@ -106,8 +106,9 @@ param(
     [Parameter(ParameterSetName = 'Package')][string]$PackageGuard,
     # Build the flavours at the same time, each in its own process and worktree (see "5. Packages" above).
     [Parameter(ParameterSetName = 'Package')][switch]$Parallel,
-    # The package report; <From>\package-report.json by default. A -Parallel run gives each flavour its own.
-    [Parameter(ParameterSetName = 'Package')][string]$Report
+    # The package report; <From>\package-report.json by default. A -Parallel run gives each flavour its own. Not named
+    # -Report: PowerShell variable names ignore case, and the release set path uses a $report table.
+    [Parameter(ParameterSetName = 'Package')][string]$FlavourReport
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path (Split-Path $PSScriptRoot)
@@ -325,7 +326,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     $env:PYTHONDONTWRITEBYTECODE = '1'
     if (-not $PackageGuard) { $PackageGuard = Join-Path $Root 'scratch\cleanup-250\size-guard.py' }
     $python = (Get-Command python -CommandType Application | Select-Object -First 1).Source
-    $packageReport = if ($Report) { [IO.Path]::GetFullPath($Report) } else { Join-Path $From 'package-report.json' }
+    $packageReport = if ($FlavourReport) { [IO.Path]::GetFullPath($FlavourReport) } else { Join-Path $From 'package-report.json' }
     $pr = [ordered]@{ tool = 'build-release-set'; step = 'package'; started_utc = Get-Utc; from = $From; flavours = @() }
     function Stop-Package([string]$Why) {
         $pr.status = 'failed'; $pr.error = $Why; $pr.finished_utc = Get-Utc
@@ -404,7 +405,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
                 New-Item -ItemType Directory -Force $logs | Out-Null
                 $childArgs = @('-NoProfile', '-File', (Join-Path $wt 'tools\release\build-release-set.ps1'), '-Package',
                                '-From', $From, '-Flavours', $flavour, '-UmdSource', $env:BC250_UMD_SOURCE, '-UmdBuild', $env:BC250_UMD_BUILD,
-                               '-PackageRoot', $Root, '-PackageGuard', $PackageGuard, '-Report', $childReport)
+                               '-PackageRoot', $Root, '-PackageGuard', $PackageGuard, '-FlavourReport', $childReport)
                 if ($LedgerDebtReason) { $childArgs += @('-LedgerDebtReason', $LedgerDebtReason) }
                 $out = Join-Path $logs "package-$flavour.out"
                 $p = Start-Process -FilePath $shell -ArgumentList (@($childArgs | ForEach-Object { Format-Arg $_ }) -join ' ') `
