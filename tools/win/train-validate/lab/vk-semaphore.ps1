@@ -23,9 +23,9 @@ $ErrorActionPreference = 'Continue'
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
 function Sha8($p) { if (Test-Path -LiteralPath $p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.Substring(0, 8) } else { 'ABSENT' } }
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
-$out = Join-Path $Out $stamp
-New-Item -ItemType Directory -Force $out | Out-Null
-"vk-semaphore start $([DateTime]::UtcNow.ToString('o')) out $out"
+$Out = Join-Path $Out $stamp
+New-Item -ItemType Directory -Force $Out | Out-Null
+"vk-semaphore start $([DateTime]::UtcNow.ToString('o')) out $Out"
 $x64 = Join-Path $Dir 'vksemcheck-x64.exe'
 $x86 = Join-Path $Dir 'vksemcheck-x86.exe'
 foreach ($p in $x64, $x86) {
@@ -40,11 +40,11 @@ Remove-Item Env:\VK_ICD_FILENAMES -ErrorAction SilentlyContinue
 
 # One run of the client in this session, with a kill bound. Returns the exit code and the number of FAIL lines.
 function Run-Here([string]$Exe, [string]$Name, [string[]]$Extra, [int]$BoundS) {
-    $stdout = Join-Path $out "$Name.txt"
-    $childLog = Join-Path $out "$Name-child.log"
+    $stdout = Join-Path $Out "$Name.txt"
+    $childLog = Join-Path $Out "$Name-child.log"
     $argList = @('--wait-ms', $WaitMs, '--child-log', ('"' + $childLog + '"')) + $Extra
     $p = Start-Process -FilePath $Exe -ArgumentList $argList -PassThru -NoNewWindow `
-        -RedirectStandardOutput $stdout -RedirectStandardError (Join-Path $out "$Name.err")
+        -RedirectStandardOutput $stdout -RedirectStandardError (Join-Path $Out "$Name.err")
     $null = $p.Handle  # without the handle taken now, PowerShell 5.1 reports no exit code
     $code = 'killed'
     if ($p.WaitForExit($BoundS * 1000)) { $code = $p.ExitCode } else {
@@ -66,11 +66,11 @@ function Show($r) {
 function Run-Interactive([string]$Exe, [string]$Name, [int]$BoundS) {
     $user = (Get-CimInstance Win32_ComputerSystem).UserName
     if (-not $user) { return [pscustomobject]@{ Name = $Name; Exit = 'no interactive user'; Fails = 0; Lines = @() } }
-    & icacls.exe $out /grant ("${user}:(OI)(CI)M") | Out-Null
-    $stdout = Join-Path $out "$Name.txt"
-    $childLog = Join-Path $out "$Name-child.log"
-    $done = Join-Path $out "$Name.exit"
-    $script = Join-Path $out "$Name.ps1"
+    & icacls.exe $Out /grant ("${user}:(OI)(CI)M") | Out-Null
+    $stdout = Join-Path $Out "$Name.txt"
+    $childLog = Join-Path $Out "$Name-child.log"
+    $done = Join-Path $Out "$Name.exit"
+    $script = Join-Path $Out "$Name.ps1"
     @(
         '$ErrorActionPreference = ''Continue'''
         "`$p = Start-Process -FilePath '$Exe' -ArgumentList @('--wait-ms', '$WaitMs', '--child-log', '`"$childLog`"') -PassThru -WindowStyle Hidden -RedirectStandardOutput '$stdout' -RedirectStandardError '$stdout.err'; `$null = `$p.Handle"

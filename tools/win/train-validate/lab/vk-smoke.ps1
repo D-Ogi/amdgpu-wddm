@@ -9,8 +9,7 @@ param([ValidateSet('vulkaninfo', 'vkfill-x64', 'vkfill-x86', 'all')][string]$Ste
       [string]$Out = 'C:\BC250\tmp\train-vk')
 $ErrorActionPreference = 'Continue'
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
-$out = $Out
-New-Item -ItemType Directory -Force $out | Out-Null
+New-Item -ItemType Directory -Force $Out | Out-Null
 $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
 function Faults { $l = & $cli log 2>&1; '{0} faults, {1} timeouts' -f ($l | Select-String 'GPU FAULT').Count, ($l | Select-String 'HARDWARE FENCE TIMEOUT|ResetEngine node').Count }
 function Sha8($p) { if (Test-Path -LiteralPath $p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.Substring(0, 8) } else { 'ABSENT' } }
@@ -23,7 +22,7 @@ if ($Step -in 'vulkaninfo', 'all') {
     $vi = Join-Path $inst 'tools\vulkaninfo.exe'
     foreach ($mode in 'registered', 'driver-files') {
         '--- vulkaninfo --summary ({0})' -f $mode
-        $o = "$out\vulkaninfo-$mode.txt"; $e = "$out\vulkaninfo-$mode.err"
+        $o = "$Out\vulkaninfo-$mode.txt"; $e = "$Out\vulkaninfo-$mode.err"
         if ($mode -eq 'driver-files') {
             $env:VK_DRIVER_FILES = Join-Path $inst 'vulkan\radeon_icd.json'
             $env:VK_ICD_FILENAMES = $env:VK_DRIVER_FILES
@@ -49,7 +48,7 @@ if ($Step -in 'vkfill-x64', 'all') {
     $s = Get-Date
     $o = & $exe --icd $icd --deadline 40 2>&1
     $code = $LASTEXITCODE
-    $o | Out-File -Encoding utf8 "$out\vkfill-system-x64.txt"
+    $o | Out-File -Encoding utf8 "$Out\vkfill-system-x64.txt"
     $o | Select-String -Pattern '^icd module|^device|^cases|^result|FAIL |error|deadline' | Select-Object -Last 8 | ForEach-Object { $_.Line.Substring(0, [Math]::Min(200, $_.Line.Length)) }
     'exit {0} after {1:N1} s' -f $code, ((Get-Date) - $s).TotalSeconds
 }
@@ -61,7 +60,7 @@ if ($Step -in 'vkfill-x86', 'all') {
     $s = Get-Date
     $o = & $exe --icd $icd --deadline 40 2>&1
     $code = $LASTEXITCODE
-    $o | Out-File -Encoding utf8 "$out\vkfill-wow64-x86.txt"
+    $o | Out-File -Encoding utf8 "$Out\vkfill-wow64-x86.txt"
     $o | Select-String -Pattern '^icd module|^device|^cases|^result|FAIL |error|deadline' | Select-Object -Last 8 | ForEach-Object { $_.Line.Substring(0, [Math]::Min(200, $_.Line.Length)) }
     'exit {0} after {1:N1} s' -f $code, ((Get-Date) - $s).TotalSeconds
 }

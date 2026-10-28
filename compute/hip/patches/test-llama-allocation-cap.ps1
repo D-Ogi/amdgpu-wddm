@@ -6,8 +6,8 @@ New-Item -ItemType Directory -Force (Join-Path $Out 'tmp') | Out-Null
 $vs=& "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -property installationPath
 $vc=Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat'
 & cmd /c "`"$vc`" >nul 2>&1 && set" | ForEach-Object {if($_ -match '^([^=]+)=(.*)$'){Set-Item "env:$($Matches[1])" $Matches[2]}}
-$env:TEMP="$out/tmp";$env:TMP=$env:TEMP
-Push-Location $out
+$env:TEMP="$Out/tmp";$env:TMP=$env:TEMP
+Push-Location $Out
 try {
  foreach($name in @('limited','ordinary','mutant')) {
   $src=if($name -eq 'mutant'){'planner-mutant.cpp'}else{'planner-test.cpp'}

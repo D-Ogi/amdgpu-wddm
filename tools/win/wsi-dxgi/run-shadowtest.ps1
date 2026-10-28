@@ -18,7 +18,7 @@ param(
 # The run creates two application directories under -Out: one without and one with the application-local
 # dxgi.dll. The control mode uses the first, every other mode the second.
 $ErrorActionPreference = 'Stop'
-$exe = (Resolve-Path -LiteralPath $Exe).Path
+$Exe = (Resolve-Path -LiteralPath $Exe).Path
 $logs = (New-Item -ItemType Directory -Force $Out).FullName
 $run = (New-Item -ItemType Directory -Force (Join-Path $logs 'appdirs')).FullName
 
@@ -29,14 +29,14 @@ if ($ExpectAppLocalSha256 -and $appLocalHash -ne $ExpectAppLocalSha256) {
 
 $plain = Join-Path $run 'plain'; $app = Join-Path $run 'appdir'
 New-Item -ItemType Directory -Force $plain, $app | Out-Null
-Copy-Item -LiteralPath $exe -Destination $plain -Force
-Copy-Item -LiteralPath $exe -Destination $app -Force
+Copy-Item -LiteralPath $Exe -Destination $plain -Force
+Copy-Item -LiteralPath $Exe -Destination $app -Force
 Copy-Item -LiteralPath $AppLocalDxgi -Destination (Join-Path $app 'dxgi.dll') -Force
 
 $manifest = [ordered]@{
     utc = (Get-Date).ToUniversalTime().ToString('o')
     host = 'development PC, headless console process'
-    shadowtest_sha256 = (Get-FileHash -LiteralPath $exe).Hash
+    shadowtest_sha256 = (Get-FileHash -LiteralPath $Exe).Hash
     app_local_dxgi = [ordered]@{ sha256 = $appLocalHash }
     system_modules = [ordered]@{}
     runs = [ordered]@{}
@@ -66,8 +66,8 @@ foreach ($mode in $Modes) {
     $finished = $p.WaitForExit($TimeoutSeconds * 1000)
     if (-not $finished) { $p.Kill($true); $p.WaitForExit() }
     $watch.Stop()
-    $out = $outTask.Result; $err = $errTask.Result
-    [IO.File]::WriteAllText((Join-Path $logs "$mode.txt"), $out + $(if ($err) { "`n--- stderr`n$err" } else { '' }))
+    $stdout = $outTask.Result; $err = $errTask.Result
+    [IO.File]::WriteAllText((Join-Path $logs "$mode.txt"), $stdout + $(if ($err) { "`n--- stderr`n$err" } else { '' }))
     $manifest.runs[$mode] = [ordered]@{
         exit = $(if ($finished) { $p.ExitCode } else { 'timeout-killed' })
         seconds = [Math]::Round($watch.Elapsed.TotalSeconds, 3)

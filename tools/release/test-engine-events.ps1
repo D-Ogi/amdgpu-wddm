@@ -23,6 +23,19 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# New-Item -ItemType HardLink reads [ ] in -Target as a wildcard, so a package path with brackets is not found.
+# CreateHardLinkW takes the path as it is.
+function New-HardLink([string]$Path, [string]$Existing) {
+    if (-not ('Bc250Test.HardLink' -as [type])) {
+        Add-Type -Namespace Bc250Test -Name HardLink -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+'@
+    }
+    if (-not [Bc250Test.HardLink]::CreateHardLinkW($Path, $Existing, [IntPtr]::Zero)) {
+        throw [ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error(), "no hard link $Path to $Existing")
+    }
+}
 # BD-163: the folder a single-file setup unpacks itself into is read by name, not by a count. A count over the whole
 # of %ProgramData%\amdgpu-wddm moves with every file a run writes there, and once such a folder stays behind it reads
 # the same before and after, so the count went blind to the very thing it was meant to catch.
@@ -255,10 +268,10 @@ $broken = Join-Path $brokenTop 'files'
 foreach ($f in @($m.files)) {
     $dst = Join-Path $broken ($f.path -replace '/', '\')
     [void][IO.Directory]::CreateDirectory((Split-Path $dst))
-    [void](New-Item -ItemType HardLink -Path $dst -Target (Join-Path $Package ($f.path -replace '/', '\')))
+    New-HardLink $dst (Join-Path $Package ($f.path -replace '/', '\'))
 }
 $setupSrc = @((Join-Path $Package 'setup.exe'), (Join-Path $Package '..\setup.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { [IO.Path]::GetFullPath($_) })[0]
-if ($setupSrc) { [void](New-Item -ItemType HardLink -Path (Join-Path $brokenTop 'setup.exe') -Target $setupSrc) }
+if ($setupSrc) { New-HardLink (Join-Path $brokenTop 'setup.exe') $setupSrc }
 $tbl = Join-Path $broken 'installer\registry-defaults.json'
 Remove-Item -LiteralPath $tbl
 [IO.File]::WriteAllText($tbl, '{ "schema": 1, "defaults": ')
@@ -312,15 +325,15 @@ if ($null -ne $bootId) {
     # An installed release B (another version and ABI) under a test install root; package A (this package) runs Verify.
     $instB = Join-Path $work 'installed-b'
     [void][IO.Directory]::CreateDirectory($instB)
-    $mB = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
-    $mB.version = '0.0.1.100-other.1'; $mB.name = 'amdgpu-wddm-tester-0.0.1.100-other.1'; $mB.kmd_abi = '0x000700AA'
-    [IO.File]::WriteAllText((Join-Path $instB 'manifest.json'), ($mB | ConvertTo-Json -Depth 8))
+    $manifestB = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json
+    $manifestB.version = '0.0.1.100-other.1'; $manifestB.name = 'amdgpu-wddm-tester-0.0.1.100-other.1'; $manifestB.kmd_abi = '0x000700AA'
+    [IO.File]::WriteAllText((Join-Path $instB 'manifest.json'), ($manifestB | ConvertTo-Json -Depth 8))
     $shaB = (Get-FileHash -LiteralPath (Join-Path $instB 'manifest.json') -Algorithm SHA256).Hash
-    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $mB.version; install_root = $instB; updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
+    $st = [ordered]@{ schema = 1; phase = 'installed'; package_version = $manifestB.version; install_root = $instB; updated_utc = '2000-01-01T00:00:00.0000000Z'; restart_boot_id = $bootId + 1 }
     $r = Invoke-Engine 'verify of another installed release' @('-DryRun', '-Verify') -State $st
     $rep = @(Get-ChildItem -LiteralPath (Join-Path $r.state_dir 'verify') -Filter 'verify-*.json' -ErrorAction SilentlyContinue)
     $vr = $(if ($rep.Count -eq 1) { Get-Content -LiteralPath $rep[0].FullName -Raw | ConvertFrom-Json })
-    Check (($r.code -eq 3) -and $vr -and ($vr.package_version -eq $mB.version) -and ($vr.release -eq $mB.name) -and ($vr.manifest_sha256 -eq $shaB) -and ($vr.manifest_source -eq 'install-root') -and ($vr.kmd_abi -eq '0x000700AA') -and ($r.text -match [regex]::Escape("verifies against $instB\manifest.json (install-root): $($mB.version)"))) "package $pkgVersion verifies installed $($mB.version): checks and report both name the installed manifest ($(if ($vr) { "$($vr.package_version), $($vr.manifest_source)" } else { 'no report' }))"
+    Check (($r.code -eq 3) -and $vr -and ($vr.package_version -eq $manifestB.version) -and ($vr.release -eq $manifestB.name) -and ($vr.manifest_sha256 -eq $shaB) -and ($vr.manifest_source -eq 'install-root') -and ($vr.kmd_abi -eq '0x000700AA') -and ($r.text -match [regex]::Escape("verifies against $instB\manifest.json (install-root): $($manifestB.version)"))) "package $pkgVersion verifies installed $($manifestB.version): checks and report both name the installed manifest ($(if ($vr) { "$($vr.package_version), $($vr.manifest_source)" } else { 'no report' }))"
 } else { '  (skipped: BootId not readable on this PC)' }
 
 '[G-STAGE] deadline: the run stops at the first stop point after -DeadlineUtc (interfaces-setup.md section 10)'

@@ -1549,6 +1549,9 @@
         "host"
       ]
     },
+    "variable-case": {
+      "timeout": 300
+    },
     "flavour-sources": {
       "inputs": [
         "host"

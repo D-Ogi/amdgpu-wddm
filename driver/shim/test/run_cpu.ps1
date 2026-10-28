@@ -76,10 +76,10 @@ Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/c', '/kernel', '/GS-', '/W
 # The shipping binding, with its one miniport include swapped for the mock. Nothing else in the file is touched,
 # and the generated copy is read back into the compiler, so a diff of it is the whole difference under test.
 Write-Host 'generate (the binding, with the kernel primitives and the mailbox owner mocked)'
-$source = Get-Content -LiteralPath $Source -Raw
+$cpuSource = Get-Content -LiteralPath $Source -Raw
 $needle = '#include "bc250kmd.h"'
-if (-not $source.Contains($needle)) { throw "$Source no longer includes the miniport header: the mock cannot replace it" }
-[IO.File]::WriteAllText((Join-Path $Out 'cpu-native.inc'), $source.Replace($needle, '#include "cpu_native_mock.h"').Replace('#include "state_kernel.h"',''),
+if (-not $cpuSource.Contains($needle)) { throw "$Source no longer includes the miniport header: the mock cannot replace it" }
+[IO.File]::WriteAllText((Join-Path $Out 'cpu-native.inc'), $cpuSource.Replace($needle, '#include "cpu_native_mock.h"').Replace('#include "state_kernel.h"',''),
     [Text.UTF8Encoding]::new($false))
 
 Write-Host 'compile (binding, user mode)'

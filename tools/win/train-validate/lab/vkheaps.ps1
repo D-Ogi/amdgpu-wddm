@@ -14,8 +14,7 @@
 param([string]$Out = 'C:\BC250\tmp\train-vkheaps')
 $ErrorActionPreference = 'Continue'
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
-$out = $Out
-New-Item -ItemType Directory -Force $out | Out-Null
+New-Item -ItemType Directory -Force $Out | Out-Null
 $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
 function Sha8($p) { if (Test-Path -LiteralPath $p) { (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.Substring(0, 8) } else { 'ABSENT' } }
 "vkheaps start $([DateTime]::UtcNow.ToString('o'))"
@@ -23,8 +22,8 @@ function Sha8($p) { if (Test-Path -LiteralPath $p) { (Get-FileHash -LiteralPath 
 "vulkaninfo   $(Sha8 (Join-Path $inst 'tools\vulkaninfo.exe'))"
 
 $vi = Join-Path $inst 'tools\vulkaninfo.exe'
-$o = "$out\vulkaninfo-full.txt"
-$e = "$out\vulkaninfo-full.err"
+$o = "$Out\vulkaninfo-full.txt"
+$e = "$Out\vulkaninfo-full.err"
 Remove-Item Env:\VK_DRIVER_FILES -ErrorAction SilentlyContinue
 Remove-Item Env:\VK_ICD_FILENAMES -ErrorAction SilentlyContinue
 $s = Get-Date
@@ -60,6 +59,6 @@ foreach ($h in $heaps) { '  {0,8} MiB  device_local={1}' -f [int]([Math]::Round(
 
 '--- bc250kmd_cli vram'
 $vram = & $cli vram 2>&1
-$vram | Out-File -Encoding utf8 "$out\vram.txt"
+$vram | Out-File -Encoding utf8 "$Out\vram.txt"
 $vram | Select-Object -First 12 | ForEach-Object { '  ' + "$_" }
 'vkheaps done'

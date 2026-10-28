@@ -260,6 +260,14 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # Every variable a build recipe reads is written somewhere in that recipe (tools\quality\check-unassigned.ps1,
  # PowerShell's own parser). This is the rule the lost assignment broke, and it reads all 105 recipes in 3 s.
  Check 'script-variables' { & pwsh -NoProfile -File "$repo\tools\quality\check-unassigned.ps1" -Recipes -Repo $repo }
+ # One variable has one spelling in each scope that writes it (tools\quality\check-variable-case.ps1, PowerShell's own
+ # parser). PowerShell variable names ignore case, so $report = @{...} wrote a table into the [string]$Report
+ # parameter of build-release-set.ps1 and 4 of its 32 tests failed while a package was cut. It reads every tracked
+ # .ps1 and .psm1 of the repository except the records, about 580 files in 12 s on the idle development PC and 42 s
+ # under load. Its deadline is its own 300 s in gate-inputs.json, outside quality-controls, which runs only its
+ # planted controls. It declares no inputs: it reads the file list of git and scripts in every directory, which no
+ # input group covers, so it runs in every suite.
+ Check 'variable-case' { & pwsh -NoProfile -File "$repo\tools\quality\check-variable-case.ps1" -Repo $repo }
  # Every read of one of the four lab-only settings in the control application's sources is inside its flavour
  # guard (tools\quality\flavour_sources.py). The build proves the same thing on the built image; this names the
  # file and the line without a compiler. Both gates' planted controls run in quality-controls.
@@ -662,28 +670,28 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='gfx-pipeline-no-boundary-pad';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutBoundaryPad')}
   @{n='gfx-pipeline-no-pad-capacity';s='driver\kmd\test\run_gfx_pipeline.ps1';a=@('-Root',$Workspace,'-KmdOnly','-WithoutPadCapacity')}
   # -Root as well: this runner puts the compiler's TEMP under it, and a worktree's parent has no scratch\tmp.
-  @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
-  @{n='firmware-io';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits)}
-  @{n='firmware-io-short-read';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$kits,'-AcceptShort');Fails=$true}
-  @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$kits)}
-  @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits)}
-  @{n='paging-private-slot-reuse';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$kits,'-ReuseFirstQueueSlot');Fails=$true}
-  @{n='paging-pt-shadow';s='driver\kmd\test\run_paging_pt_shadow.ps1';a=@('-Kits',$kits)}
-  @{n='paging-stream';s='driver\kmd\test\run_paging_stream.ps1';a=@('-Kits',$kits)}
-  @{n='paging-window';s='driver\kmd\test\run_paging_window.ps1';a=@('-Kits',$kits)}
-  @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$kits)}
-  @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$kits)}
+  @{n='firmware-metadata-no-runtime';s='driver\kmd\test\run_firmware_metadata.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Firmware',$firmware,'-OmitRuntimeFirmware');Fails=$true}
+  @{n='firmware-io';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$Kits)}
+  @{n='firmware-io-short-read';s='driver\kmd\test\run_firmware_io.ps1';a=@('-Kits',$Kits,'-AcceptShort');Fails=$true}
+  @{n='paging-mc';s='driver\kmd\test\run_paging_mc.ps1';a=@('-Kits',$Kits)}
+  @{n='paging-private';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$Kits)}
+  @{n='paging-private-slot-reuse';s='driver\kmd\test\run_paging_private.ps1';a=@('-Kits',$Kits,'-ReuseFirstQueueSlot');Fails=$true}
+  @{n='paging-pt-shadow';s='driver\kmd\test\run_paging_pt_shadow.ps1';a=@('-Kits',$Kits)}
+  @{n='paging-stream';s='driver\kmd\test\run_paging_stream.ps1';a=@('-Kits',$Kits)}
+  @{n='paging-window';s='driver\kmd\test\run_paging_window.ps1';a=@('-Kits',$Kits)}
+  @{n='shim-replay';s='driver\shim\test\run.ps1';a=@('-Kits',$Kits)}
+  @{n='shim-gfx';s='driver\shim\test\run_gfx.ps1';a=@('-Kits',$Kits)}
   # The frozen gfx job frame and the VM flush on the ring (docs/design/gfx-submit-root-serialization.md).
-  @{n='gfx-vm-flush';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$kits)}
-  @{n='gfx-vm-flush-wrong-ack';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$kits,'-WrongAckMask');Fails=$true}
-  @{n='shim-ih';s='driver\shim\test\run_ih.ps1';a=@('-Kits',$kits)}
-  @{n='shim-psp';s='driver\shim\test\run_psp.ps1';a=@('-Kits',$kits,'-Firmware',$firmware)}
-  @{n='shim-pte';s='driver\shim\test\run_pte.ps1';a=@('-Kits',$kits)}
-  @{n='shim-paging';s='driver\shim\test\run_paging.ps1';a=@('-Kits',$kits)}
-  @{n='sdma-copy';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits)}
-  @{n='sdma-copy-vmid-zero';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits,'-ForceIbVmidZero');Fails=$true}
-  @{n='sdma-copy-no-vm-flush';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$kits,'-OmitVmFlush');Fails=$true}
-  @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$kits)}
+  @{n='gfx-vm-flush';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='gfx-vm-flush-wrong-ack';s='driver\shim\test\run_gfx_vm_flush.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-WrongAckMask');Fails=$true}
+  @{n='shim-ih';s='driver\shim\test\run_ih.ps1';a=@('-Kits',$Kits)}
+  @{n='shim-psp';s='driver\shim\test\run_psp.ps1';a=@('-Kits',$Kits,'-Firmware',$firmware)}
+  @{n='shim-pte';s='driver\shim\test\run_pte.ps1';a=@('-Kits',$Kits)}
+  @{n='shim-paging';s='driver\shim\test\run_paging.ps1';a=@('-Kits',$Kits)}
+  @{n='sdma-copy';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$Kits)}
+  @{n='sdma-copy-vmid-zero';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$Kits,'-ForceIbVmidZero');Fails=$true}
+  @{n='sdma-copy-no-vm-flush';s='driver\shim\test\run_sdma_copy.ps1';a=@('-Kits',$Kits,'-OmitVmFlush');Fails=$true}
+  @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits)}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
@@ -693,19 +701,19 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   # runs is not a control, so both are listed here and not only in the runner.
   @{n='smu-native-clock-write-privilege';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','clock-write-privilege');Fails=$true}
   @{n='smu-native-clock-read-snapshot';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','clock-read-snapshot');Fails=$true}
-  @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits)}
-  @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','board-port');Fails=$true}
+  @{n='hwmon';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits)}
+  @{n='hwmon-board-port';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','board-port');Fails=$true}
   # The case fan's load feed-forward (rule 10 of driver\shim\include\bc250_fan.h): the first negative controls of
   # the fan suite, because this is the rule that writes 255 to the chip by itself. Each -Mutation changes one line
   # of a copy of the file under test and the suite must then fail by a check.
-  @{n='hwmon-no-boost-raise';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','no-boost-raise');Fails=$true}
-  @{n='hwmon-boost-held-back';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','boost-held-back');Fails=$true}
-  @{n='hwmon-step-pays-all';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','step-pays-all');Fails=$true}
-  @{n='hwmon-telemetry-always';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','telemetry-always');Fails=$true}
-  @{n='hwmon-boost-claims-fixed';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','boost-claims-fixed');Fails=$true}
-  @{n='hwmon-rise-outlives-doubt';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$kits,'-Mutation','rise-outlives-doubt');Fails=$true}
-  @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$kits)}
-  @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$kits,'-Mesa',"$Workspace\ref\mesa")}
+  @{n='hwmon-no-boost-raise';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','no-boost-raise');Fails=$true}
+  @{n='hwmon-boost-held-back';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','boost-held-back');Fails=$true}
+  @{n='hwmon-step-pays-all';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','step-pays-all');Fails=$true}
+  @{n='hwmon-telemetry-always';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','telemetry-always');Fails=$true}
+  @{n='hwmon-boost-claims-fixed';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','boost-claims-fixed');Fails=$true}
+  @{n='hwmon-rise-outlives-doubt';s='driver\shim\test\run_hwmon.ps1';a=@('-Kits',$Kits,'-Mutation','rise-outlives-doubt');Fails=$true}
+  @{n='smu-metrics';s='driver\shim\test\run_smu_metrics.ps1';a=@('-Kits',$Kits)}
+  @{n='contract-caps';s='driver\contract\test\run.ps1';a=@('-Kits',$Kits,'-Mesa',"$Workspace\ref\mesa")}
  )
  # Every runner is in this file, and every runner tests the tree it lives in: one that took its sources from
  # -Root\bc250-win tested the main checkout from any worktree, which is how three suites rotted unseen (BD-053).

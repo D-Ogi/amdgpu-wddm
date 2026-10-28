@@ -14,6 +14,12 @@ $recordRoot=Join-Path $testRoot 'amdgpu-wddm\system-tuning'
 & $module {param($Root)$script:Root=$Root} $recordRoot
 $checks=0
 function Check([bool]$Value,[string]$Message){$script:checks++;if(-not $Value){throw ('Journal test failed: '+$Message)}}
+# New-Item -ItemType Junction reads [ ] in -Target as a wildcard, so a work path with brackets is not found. mklink
+# takes the path as it is.
+function New-Junction([string]$Path,[string]$Target){
+    $text=& cmd.exe /d /c "mklink /J `"$Path`" `"$Target`""
+    if($LASTEXITCODE -ne 0){throw "mklink /J could not link $Path to $Target (exit $LASTEXITCODE): $text"}
+}
 $previousTemp=$env:TEMP;$previousTmp=$env:TMP
 try{
     $env:TEMP=$testRoot;$env:TMP=$testRoot
@@ -69,7 +75,7 @@ Check $refused 'weak existing directory refused'
 $junction=Join-Path $testRoot 'junction'
 $junctionTest='passed'
 try{
-    $null=New-Item -ItemType Junction -Path $junction -Target $recordRoot
+    New-Junction $junction $recordRoot
     $refused=$false
     try{& $module {param($Path)Assert-ProtectedPath $Path} $junction}catch{$refused=$true}
     Check $refused 'reparse point refused'
@@ -99,7 +105,7 @@ Check $refused 'the strict rule itself still refuses that parent shape'
 if($junctionTest -eq 'passed'){
     $reparseRoot=Join-Path $testRoot 'reparse'
     [void][IO.Directory]::CreateDirectory((Join-Path $reparseRoot 'real'))
-    $null=New-Item -ItemType Junction -Path (Join-Path $reparseRoot 'amdgpu-wddm') -Target (Join-Path $reparseRoot 'real')
+    New-Junction (Join-Path $reparseRoot 'amdgpu-wddm') (Join-Path $reparseRoot 'real')
     & $module {param($Root)$script:Root=$Root} (Join-Path $reparseRoot 'amdgpu-wddm\system-tuning')
     $refused=$false
     try{& $module {Assert-StateChain $true}}catch{$refused=$true}

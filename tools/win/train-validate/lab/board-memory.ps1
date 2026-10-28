@@ -19,8 +19,7 @@ param([ValidateSet('probe', 'vram', 'ram', 'all')][string]$Step = 'all',
       [string]$Out = 'C:\BC250\tmp\train-board-memory')
 $ErrorActionPreference = 'Continue'
 $inst = [string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot).InstallRoot
-$out = $Out
-New-Item -ItemType Directory -Force $out | Out-Null
+New-Item -ItemType Directory -Force $Out | Out-Null
 $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
 "board memory read, step $Step, start $([DateTime]::UtcNow.ToString('o'))"
 "cli   $(if (Test-Path -LiteralPath $cli) { (Get-FileHash -LiteralPath $cli -Algorithm SHA256).Hash.Substring(0,8) } else { 'ABSENT' })"
@@ -28,7 +27,7 @@ $cli = Join-Path $inst 'tools\bc250kmd_cli.exe'
 if ($Step -in 'probe', 'all') {
     '--- bc250kmd_cli bc250-board-memory-probe'
     $probe = & $cli bc250-board-memory-probe 2>&1
-    $probe | Out-File -Encoding utf8 "$out\probe.json"
+    $probe | Out-File -Encoding utf8 "$Out\probe.json"
     # One JSON line. The block bytes stay in the file; the line below is what the run reads.
     $text = ($probe | Out-String)
     if ($text -match '"status"\s*:\s*(\d+)') { 'probe status {0}' -f $Matches[1] } else { 'probe status unread' }
@@ -38,7 +37,7 @@ if ($Step -in 'probe', 'all') {
 if ($Step -in 'vram', 'all') {
     '--- bc250kmd_cli vram'
     $vram = & $cli vram 2>&1
-    $vram | Out-File -Encoding utf8 "$out\vram.txt"
+    $vram | Out-File -Encoding utf8 "$Out\vram.txt"
     $vram | Select-Object -First 12 | ForEach-Object { '  ' + "$_" }
 }
 

@@ -19,8 +19,7 @@ param([Parameter(Mandatory = $true)][ValidateSet('uninstall', 'inventory', 'inst
       [switch]$Repair)
 $ErrorActionPreference = 'Continue'
 if ($Step -eq 'install' -and -not $Name) { 'clean-slate: -Name is needed for the install step'; exit 2 }
-$root = $Root
-$pkg = "$root\$Name"
+$pkg = "$Root\$Name"
 # The zip unpacks to <pkg>\setup.exe and <pkg>\files\ (2026-10-11): the installer scripts live under files\.
 # A package built before that layout has them in <pkg> itself. Asked after the expansion, never before.
 function Get-PackageFilesDir { if (Test-Path -LiteralPath "$pkg\files\manifest.json") { return "$pkg\files" } return $pkg }
@@ -101,7 +100,7 @@ function Inventory {
     'display class keys naming our UMD: {0}' -f @($cls).Count
     'harness C:\BC250 present: {0}' -f (Test-Path 'C:\BC250\tools')
 }
-New-Item -ItemType Directory -Force $root | Out-Null
+New-Item -ItemType Directory -Force $Root | Out-Null
 switch ($Step) {
     'inventory' { Inventory }
     'uninstall' {
@@ -111,7 +110,7 @@ switch ($Step) {
         '--- before'
         Inventory
         '--- uninstall'
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$inst\installer\uninstall.ps1" -Yes -KeepTestSigning -NoReboot -Force *>&1 | Tee-Object "$root\uninstall-console.txt" | Select-Object -Last 40
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$inst\installer\uninstall.ps1" -Yes -KeepTestSigning -NoReboot -Force *>&1 | Tee-Object "$Root\uninstall-console.txt" | Select-Object -Last 40
         "uninstall exit $LASTEXITCODE"
         '--- after'
         Inventory
@@ -119,11 +118,11 @@ switch ($Step) {
     'install' {
         if ($Sha) { $h = (Get-FileHash "$pkg.zip" -Algorithm SHA256).Hash; if ($h -ne $Sha) { "zip hash $h, expected $Sha"; exit 2 }; "zip ok $($h.Substring(0, 8))" }
         if (Test-Path $pkg) { Remove-Item $pkg -Recurse -Force }
-        Expand-Archive "$pkg.zip" -DestinationPath $root -Force
+        Expand-Archive "$pkg.zip" -DestinationPath $Root -Force
         $pkgFiles = Get-PackageFilesDir
         "package files: $pkgFiles"
         $extra = @(); if ($Repair) { $extra += '-Repair' }
-        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkgFiles\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -NoComponents -NoModels -CuMode $CuMode @extra *>&1 | Tee-Object "$root\install-console.txt" | Select-Object -Last 30
+        & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$pkgFiles\installer\install.ps1" -Force -AcceptTestSigning -NoReboot -NoComponents -NoModels -CuMode $CuMode @extra *>&1 | Tee-Object "$Root\install-console.txt" | Select-Object -Last 30
         "install exit $LASTEXITCODE"
         '--- after install'
         Inventory

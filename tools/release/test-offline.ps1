@@ -23,6 +23,19 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# New-Item -ItemType HardLink reads [ ] in -Target as a wildcard, so a package path with brackets is not found.
+# CreateHardLinkW takes the path as it is.
+function New-HardLink([string]$Path, [string]$Existing) {
+    if (-not ('Bc250Test.HardLink' -as [type])) {
+        Add-Type -Namespace Bc250Test -Name HardLink -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+'@
+    }
+    if (-not [Bc250Test.HardLink]::CreateHardLinkW($Path, $Existing, [IntPtr]::Zero)) {
+        throw [ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error(), "no hard link $Path to $Existing")
+    }
+}
 # BD-163: the folder a single-file setup unpacks itself into is read by name, not by a count. A count over the whole
 # of %ProgramData%\amdgpu-wddm moves with every file a run writes there, and once such a folder stays behind it reads
 # the same before and after, so the count went blind to the very thing it was meant to catch.
@@ -57,12 +70,12 @@ function Copy-Linked([string]$From, [string]$To, [string[]]$RealCopy = @()) {
         $dst = Join-Path $To $rel
         [void][IO.Directory]::CreateDirectory((Split-Path $dst))
         if (@($RealCopy | Where-Object { $rel -like "$_\*" }).Count) { Copy-Item -LiteralPath $f.FullName -Destination $dst }
-        else { [void](New-Item -ItemType HardLink -Path $dst -Target $f.FullName) }
+        else { New-HardLink $dst $f.FullName }
     }
     $own = Join-Path $To 'setup.exe'
     $src = Join-Path $From '..\setup.exe'
     if (-not (Test-Path -LiteralPath $own -PathType Leaf) -and (Test-Path -LiteralPath $src -PathType Leaf)) {
-        [void](New-Item -ItemType HardLink -Path $own -Target ([IO.Path]::GetFullPath($src)))
+        New-HardLink $own ([IO.Path]::GetFullPath($src))
     }
 }
 $m = Get-Content -LiteralPath (Join-Path $Package 'manifest.json') -Raw | ConvertFrom-Json

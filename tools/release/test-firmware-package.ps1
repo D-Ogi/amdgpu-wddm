@@ -14,6 +14,12 @@ function Refuses([scriptblock]$Body, [string]$Why) {
     Check $refused $Why
 }
 function Clone($Object) { return ($Object | ConvertTo-Json -Depth 16 | ConvertFrom-Json) }
+# New-Item -ItemType Junction reads [ ] in -Target as a wildcard, so a work path with brackets is not found. mklink
+# takes the path as it is.
+function New-Junction([string]$Path, [string]$Target) {
+    $text = & cmd.exe /d /c "mklink /J `"$Path`" `"$Target`""
+    if ($LASTEXITCODE -ne 0) { throw "mklink /J could not link $Path to $Target (exit $LASTEXITCODE): $text" }
+}
 [void][IO.Directory]::CreateDirectory($WorkRoot)
 $case = Join-Path $WorkRoot ('firmware-' + [guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($case)
@@ -113,7 +119,7 @@ Check (@(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) 'failed hydrati
 $bad = Clone $manifest; $bad.files += [pscustomobject]@{ path = 'payload/kmd/other.inf'; size = 1; sha256 = '0' * 64 }
 Refuses { New-HydratedDriverPackage $bad $package $source $parent } 'second INF refuses before staging'
 $junction = Join-Path $case 'junction'
-[void](New-Item -ItemType Junction -Path $junction -Target $parent)
+New-Junction $junction $parent
 try {
     Refuses { New-HydratedDriverPackage $manifest $package $source $junction } 'reparse parent refused'
 } finally { [IO.Directory]::Delete($junction) }

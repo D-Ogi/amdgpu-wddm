@@ -340,8 +340,8 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     $pr.recipe_commit = $head
     $setReport = Read-Json (Join-Path $From 'release-report.json')
     if ($setReport.status -ne 'ok') { Stop-Package "the release set in $From did not end well (status $($setReport.status))" }
-    $version = $setReport.version
-    $pr.version = $version
+    $setVersion = $setReport.version
+    $pr.version = $setVersion
     $rowsDoc = Read-Json (Join-Path $From 'release-sources.rows.json')
     $registered = Read-Json (Join-Path $PSScriptRoot 'release-sources.json')
     $missing = @()
@@ -350,12 +350,12 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         if ($hit.Count -ne 1 -or $hit[0].sha256 -ne $row.sha256 -or $hit[0].source -ne $row.source) { $missing += "$($row.path) ($($row.flavour))" }
     }
     if ($missing.Count) { Stop-Package ("rows not registered in tools\release\release-sources.json (run the set with -Register, commit, push): " + ($missing -join ', ')) }
-    "$(Get-Utc) package: $($rowsDoc.files.Count) rows registered at $($head.Substring(0, 8)), version $version"
+    "$(Get-Utc) package: $($rowsDoc.files.Count) rows registered at $($head.Substring(0, 8)), version $setVersion"
     # The work ledger gate of build-release.ps1, run here first with the same arguments: it refuses in seconds,
     # before the setup window and the package steps of each flavour spend about 10 minutes.
     $ledgerTool = Join-Path $Root 'scratch\ledger\ledger.py'
     if (Test-Path -LiteralPath $ledgerTool) {
-        $ledgerOut = & $python $ledgerTool --root $Root check --release $version --release-sources (Join-Path $PSScriptRoot 'release-sources.json') 2>&1
+        $ledgerOut = & $python $ledgerTool --root $Root check --release $setVersion --release-sources (Join-Path $PSScriptRoot 'release-sources.json') 2>&1
         $ledgerExit = $LASTEXITCODE
         if ($ledgerExit -gt 1) { Stop-Package "the work ledger checker failed with exit $ledgerExit (a malformed or missing LEDGER.json)" }
         if ($ledgerExit -ne 0 -and -not $LedgerDebtReason) {
@@ -369,7 +369,7 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
         & $python -I (Join-Path $PSScriptRoot 'check_source_versions.py') `
             --sources (Join-Path $PSScriptRoot 'release-sources.json') --root $Root --repo $repo `
-            --version $version --flavour $flavour
+            --version $setVersion --flavour $flavour
         if ($LASTEXITCODE) { Stop-Package "source version resources failed ($flavour)" }
     }
     foreach ($p in $UmdSource, $UmdBuild) { if (-not (Test-Path -LiteralPath $p)) { Stop-Package "user-mode driver tree missing: $p" } }
@@ -407,11 +407,11 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
                                '-From', $From, '-Flavours', $flavour, '-UmdSource', $env:BC250_UMD_SOURCE, '-UmdBuild', $env:BC250_UMD_BUILD,
                                '-PackageRoot', $Root, '-PackageGuard', $PackageGuard, '-FlavourReport', $childReport)
                 if ($LedgerDebtReason) { $childArgs += @('-LedgerDebtReason', $LedgerDebtReason) }
-                $out = Join-Path $logs "package-$flavour.out"
+                $packageLog = Join-Path $logs "package-$flavour.out"
                 $p = Start-Process -FilePath $shell -ArgumentList (@($childArgs | ForEach-Object { Format-Arg $_ }) -join ' ') `
-                    -WorkingDirectory $wt -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError "$out.err"
-                "$(Get-Utc) package $flavour started in process $($p.Id) (worktree $wt, log $out)"
-                $children += [pscustomobject]@{ flavour = $flavour; process = $p; report = $childReport; out = $out; wt = $wt }
+                    -WorkingDirectory $wt -NoNewWindow -PassThru -RedirectStandardOutput $packageLog -RedirectStandardError "$packageLog.err"
+                "$(Get-Utc) package $flavour started in process $($p.Id) (worktree $wt, log $packageLog)"
+                $children += [pscustomobject]@{ flavour = $flavour; process = $p; report = $childReport; out = $packageLog; wt = $wt }
             }
             foreach ($c in $children) {
                 $c.process.WaitForExit()
@@ -444,11 +444,11 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         if (Test-Path -LiteralPath $setup) { Stop-Package "setup output exists: $setup (remove it for a new package)" }
         Test-Guard "the setup window ($flavour)"
         "$(Get-Utc) setup window $flavour"
-        & $shell -NoProfile -File (Join-Path $repo 'tools\win\amdgpu_wddm_setup\build.ps1') -Out $setup -Version $version -Flavour $flavour *> (Join-Path $logs 'setup.log')
+        & $shell -NoProfile -File (Join-Path $repo 'tools\win\amdgpu_wddm_setup\build.ps1') -Out $setup -Version $setVersion -Flavour $flavour *> (Join-Path $logs 'setup.log')
         if ($LASTEXITCODE -ne 0) { Stop-Package "setup window $flavour exit $LASTEXITCODE (log $logs\setup.log)" }
         $setupExe = Join-Path $setup 'amdgpu_wddm_setup.exe'
         $stamp = (& $python -I (Join-Path $repo 'tools\build\versionstamp.py') show $setupExe 2>&1) -join "`n"
-        if (-not $stamp.Contains("'ProductVersion': '$version'")) { Stop-Package "the setup window $setupExe does not carry $version" }
+        if (-not $stamp.Contains("'ProductVersion': '$setVersion'")) { Stop-Package "the setup window $setupExe does not carry $setVersion" }
         $f.setup = [ordered]@{ file = $setupExe; sha256 = (Get-FileHash -LiteralPath $setupExe).Hash }
         # The router gate of the quality suite reads the hosted and CPU UMDs and the D3D11 app package of the flavour.
         $env:BC250_ROUTER_HOSTED_UMD = Get-Registered 'payload/desktop/bc250d3d_zink.dll' $flavour
@@ -463,10 +463,10 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         $pkgOut = Join-Path $From "package\$flavour"
         if (Test-Path -LiteralPath $pkgOut) { Stop-Package "package output exists: $pkgOut (remove it for a new package)" }
         Test-Guard "the $flavour package"
-        $packageArgs = @('-Root', $Root, '-Out', $pkgOut, '-Version', $version, '-Flavour', $flavour, '-SetupApp', $setup,
+        $packageArgs = @('-Root', $Root, '-Out', $pkgOut, '-Version', $setVersion, '-Flavour', $flavour, '-SetupApp', $setup,
                          '-BuildRecords', (Join-Path $From 'artifacts'))
         if ($flavour -eq 'release') {
-            $cab = Join-Path $From "submission\amdgpu-wddm-$version.cab"
+            $cab = Join-Path $From "submission\amdgpu-wddm-$setVersion.cab"
             New-Item -ItemType Directory -Force (Split-Path $cab) | Out-Null
             $packageArgs += @('-SubmissionCab', $cab)
         }

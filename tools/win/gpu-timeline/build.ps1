@@ -21,8 +21,7 @@ if (-not $Kits) { $Kits = Join-Path $Root 'toolchain\nuget' }
 if (-not $Out) { $Out = Join-Path $Root 'scratch\build\gpu-timeline' }
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
 $sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
-$out = $Out
-New-Item -ItemType Directory -Force $out | Out-Null
+New-Item -ItemType Directory -Force $Out | Out-Null
 
 & python (Join-Path $here 'gen_regs.py') --repo $repo --out (Join-Path $here 'gtl_regs.h')
 if ($LASTEXITCODE -ne 0) { throw 'gen_regs.py failed' }
@@ -36,7 +35,7 @@ $env:INCLUDE = ''; $env:LIB = ''
     "/I$(Join-Path $msvc.FullName 'include')" "/I$sdk\Include\$KitVersion\ucrt" "/I$sdk\Include\$KitVersion\um" `
     "/I$sdk\Include\$KitVersion\shared" "/I$(Join-Path $repo 'tools\win\bc250rd')" `
     "/I$(Join-Path $repo 'third_party\linux-amdgpu')" "/I$here" `
-    "/Fo$out\gpu-timeline.obj" "/Fe$out\gpu-timeline.exe" (Join-Path $here 'gpu-timeline.c') `
+    "/Fo$Out\gpu-timeline.obj" "/Fe$Out\gpu-timeline.exe" (Join-Path $here 'gpu-timeline.c') `
     /link /Brepro "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')" "/LIBPATH:$sdkLib\ucrt\x64" "/LIBPATH:$sdkLib\um\x64"
 if ($LASTEXITCODE -ne 0) { throw "cl failed ($LASTEXITCODE)" }
 
@@ -47,17 +46,17 @@ $inputs = @(
     (Join-Path $here 'lab\gtl-run.ps1'), (Join-Path $here 'lab\test-invoke-gtl.ps1'),
     (Join-Path $repo 'tools\win\bc250rd\bc250rd_ioctl.h'), (Join-Path $repo 'tools\win\bc250rd\driver\allowlist.h'),
     (Join-Path $repo 'third_party\linux-amdgpu\gc_10_1_0_sh_mask.h'), (Join-Path $repo 'tools\regcalc\regcalc.py'),
-    (Join-Path $out 'gpu-timeline.exe'))
+    (Join-Path $Out 'gpu-timeline.exe'))
 $head = (& git -C $repo rev-parse HEAD).Trim()
 $lines = @("bc250-win HEAD $head", "msvc $($msvc.Name)", "sdk $KitVersion")
 foreach ($f in $inputs) { $lines += '{0}  {1}' -f (Get-FileHash -LiteralPath $f -Algorithm SHA256).Hash, $f }
-$lines | Set-Content -LiteralPath (Join-Path $out 'build-info.txt') -Encoding ascii
+$lines | Set-Content -LiteralPath (Join-Path $Out 'build-info.txt') -Encoding ascii
 $lines | ForEach-Object { Write-Host $_ }
 
 # Self-checks on this PC: no device is opened by either.
-& (Join-Path $out 'gpu-timeline.exe') selftest --out (Join-Path $out 'selftest.gtl')
+& (Join-Path $Out 'gpu-timeline.exe') selftest --out (Join-Path $Out 'selftest.gtl')
 if ($LASTEXITCODE -ne 0) { throw 'selftest failed' }
-$env:BC250_GTL_BUILD = $out   # so that the analyzer's selftest case finds the exe outside the repository
+$env:BC250_GTL_BUILD = $Out   # so that the analyzer's selftest case finds the exe outside the repository
 & python -m unittest discover -s $here -p 'test_*.py' -v
 if ($LASTEXITCODE -ne 0) { throw 'analyzer tests failed' }
 # The lab wrapper's process handling under Windows PowerShell 5.1, the lab's shell.
