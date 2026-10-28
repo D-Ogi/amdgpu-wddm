@@ -1,0 +1,22 @@
+control 7DB25E9732652FC0E0D91A157E5CE41C1AD8388FE4AAC2D15989554B0F3E53F2
+gdi-switch on at 2026-10-26T05:56:58.1019857Z
+state override EnableGdiHwAccel: {"abi":1,"command":"get","path":"","name":"EnableGdiHwAccel","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":0},"error":0}
+stored EnableGdiHwAccel 0
+factory EnableGdiHwAccel 1
+factory CatalogId 55ac2dcef76b92b5c52faf145d4a38e3fd31a77ed43b366bab38e33f3d6d1bf9
+state Features\GdiHwAccel: {"abi":1,"command":"get","path":"Features","name":"GdiHwAccel","kind":"volatile","type":4,"max_bytes":4,"access":1,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":2},"error":0}
+feature GdiHwAccel 2
+--- control --action gdi-accel-on
+2026-10-26T05:56:58.391Z 2b6bb71f7022 start gdi-accel-on, Nagi Control App 0.7.0.0
+2026-10-26T05:56:59.720Z 2b6bb71f7022 backup backup-20261026T055659717Z.json
+2026-10-26T05:56:59.726Z 2b6bb71f7022 wrote: delete HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters EnableGdiHwAccel
+2026-10-26T05:56:59.728Z 2b6bb71f7022 read back OK: delete HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters EnableGdiHwAccel
+2026-10-26T05:56:59.734Z 2b6bb71f7022 result: written, pending until the next restart of Windows: the graphics chip does the classic Windows drawing (GDI), from the driver's next start
+exit 0
+control exit 0
+state override EnableGdiHwAccel: {"abi":1,"command":"get","path":"","name":"EnableGdiHwAccel","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"absent","os_error":2,"error":2,"source":"none","type":0,"bytes":0,"value":null},"error":2}
+stored EnableGdiHwAccel absent
+factory EnableGdiHwAccel 1
+factory CatalogId 55ac2dcef76b92b5c52faf145d4a38e3fd31a77ed43b366bab38e33f3d6d1bf9
+state Features\GdiHwAccel: {"abi":1,"command":"get","path":"Features","name":"GdiHwAccel","kind":"volatile","type":4,"max_bytes":4,"access":1,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":2},"error":0}
+feature GdiHwAccel 2

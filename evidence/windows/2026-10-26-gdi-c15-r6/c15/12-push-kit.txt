@@ -1,0 +1,5 @@
+C:\BC250\tmp\gdi-c15-c15-t33-r6\gdi-desktop-work.ps1
+C:\BC250\tmp\gdi-c15-c15-t33-r6\gdi-load.ps1
+C:\BC250\tmp\gdi-c15-c15-t33-r6\c15-guard.ps1
+C:\BC250\tmp\gdi-c15-c15-t33-r6\vkace.exe
+C:\BC250\tmp\gdi-c15-c15-t33-r6\gdi-cpuwrite.exe

@@ -1,0 +1,8 @@
+utc 2026-10-26T05:53:14.6958463Z
+2026-10-26T05:53:14.895Z efc30050a7c6 start confirm-start, Nagi Control App 0.7.0.0
+2026-10-26T05:53:15.563Z efc30050a7c6 backup backup-20261026T055315559Z.json
+2026-10-26T05:53:15.568Z efc30050a7c6 eligible: flags 23 completed 117 age_ms 501 ready_ms 63593
+2026-10-26T05:53:15.577Z efc30050a7c6 read back: flags 31 (confirmed), UnconfirmedStarts 0, DpmPending absent
+2026-10-26T05:53:15.590Z efc30050a7c6 result: done: Tells the driver that this start is healthy. The driver resets its unconfirmed-start counter and keeps automatic clocks if they are on trial. Takes effect at once.
+exit 0
+action exit 0

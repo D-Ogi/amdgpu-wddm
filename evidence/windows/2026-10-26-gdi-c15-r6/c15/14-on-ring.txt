@@ -1,0 +1,1075 @@
+--- the whole KMD ring at 2026-10-26T05:51:45.0278151Z
+log          3505 lines since this driver load, 2481 lost to the wrap, 0 dropped above DISPATCH_LEVEL; ring 1024 lines of which the first 256 are kept; table FULL WDDM (the gate was open at DriverEntry)
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     1      0.000 kmd: BD-167 flavour lab (raw diagnostic escapes, test signing + LabDiagnostics)
+     2      0.000 lab: paging boundary mode 1: PagingBoundaryMode absent, the default (pad)
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+     4      0.000 gate: EnableFullWddm 2
+     5      1.142 stage 30
+     6      1.142 start record attempt - - 0x00000000, 0 lines, write 0x00000000
+     7      1.142 guard: count 0 -> 1 flushed, durable required 1
+     8      1.142 stage 31
+     9      1.158 stage 32
+    10      1.158 post display acquired 1920x1200 pitch 7680 format 22 address C0000000 target 4294967295
+    11      1.158 post display 1920x1200 pitch 7680 format 22 target 4294967295
+    12      1.158 stage 33
+    13      1.158 stage 34
+    14      1.158 interrupt resource 1: message, vector 0x51, flags 0x3
+    15      1.158 mmio: BAR5 at 0xFE800000 mapped, writes off, dcn writes allowed, vidpn flip allowed
+    16      1.174 hwmon: base 0x0A20 ec 1.0 build 07/28/21 customer 0x162B -> ok
+    17      1.174 hwmon: base 0x0A20 cfg 0x80 fans 0x1F duties 0x1F temps 3 volts 6 mode 0xE0 eng 0x60
+    18      1.174 hwmon: customer ID 0x162B is not pinned (HwmonExpectId absent): pin it after this trial
+    19      1.174 smu: native owner start status 0x00000000
+    20      1.174 vram: 0x270000000 + 0x200000000, MC 0xF400000000, BAR0 0xC0000000 + 0x10000000, writes allowed
+    21      1.348 connector: reserved linear handoff 35389440 bytes before the application segment
+    22      1.348 connector: handoff reservation status 00000000
+    23      1.348 fb sample mapped: phys 0xC0000000 first 0x00000000 mid 0x00000000
+    24      1.348 fb sample physical: 0x270000000 first 0x00000000 mid 0x00000000
+    25      1.364 boot logo: drawn on 1920x1200 anchor 350, 52532 pixels, 210128 bytes, 18087 us
+    26      1.364 boot logo: scanout 0x270000000 inherited 0xC0000000 otg master 1 blank 1 control 0x00000101
+    27      1.364 gart: ready, dummy page at 0x1196FD000
+    28      1.364 psp: ready
+    29      1.364 gpumem: ready, doorbells at 0xD0000000
+    30      1.364 gfx: ready, GPU submission allowed, paging node allowed, hot submit log off
+    31      1.364 gfx: VMID pool on (EnableVmidPool)
+    32      1.364 gfx: VM flush on the ring (EnableRingVmFlush), engine 1
+    33      1.364 gfx: compute node open: node 2 on compute ring 1, fence slot 11, engine 4
+    34      1.364 ih: ready
+    35      1.364 wddm: composed source modes offered
+    36      1.364 wddm: LargePages 0: off
+    37      1.364 wddm: OS build 22631, CDD shadow backing local memory
+    38      1.364 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 2
+    39      1.364 wddm: scan-out admission on
+    40      1.364 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    41      1.364 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+    42      1.364 wddm: DirectFlip handshake on
+    43      1.364 wddm: DirectFlip handshake inputs: asked 1 gate 1 flip 1 vram 1 mmio 1 aligned 1 post 1
+    44      1.364 dcnflip: plane format: firmware argb8888 config 0x00000008 crossbar 0x00E40000 cnvc 0x00000008
+    45      1.364 dcnflip: plane format: cnvc control 0x00000000 alpha lut 0xFFAA5500 mpcc control 0xFFFF0461 (blend mode 2)
+    46      1.364 wddm: plane formats on
+    47      1.364 wddm: shared residency on (UMD VRAM allocations may be demoted to the aperture)
+    48      1.364 wddm: completion report pairs its own notify dpc: yes
+    49      1.364 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    50      1.364 wddm: 3 nodes: 3D, paging, compute (MEC ring 1)
+    51      1.364 wddm: pre-kill wave capture on
+    52      1.364 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+    53      1.364 wddm: POST display target 4294967295 is not ours, vsync reports name child 0x250001
+    54      1.364 wddm: OS aperture asked 384 MiB, using 384 MiB (only MAP_APERTURE_SEGMENT uses it)
+    55      1.364 wddm: OS aperture 384 MiB at gpu 0x4002000, PTE slice 0xF5FFE20010
+    56      1.379 vidmm: logical paging state 515 tables, 1031 slots, 4767344 bytes reserved
+    57      1.379 vidmm: table segment 3 at physical 0x45E260000 + 0xFDA0000, host memory below 0x270000000, updates are WRITTEN
+    58      1.379 vidmm: VRAM segment 1 at physical 0x272A90000 + 0x1EB7D0000, large pages off
+    59      1.379 startup: entering interrupt connection
+    60      1.379 startup: entering firmware preparation
+    61      1.379 startup: entering native clock preparation
+    62      1.379 startup: clock status 0x00000000 ready 1 request 1000MHz/820mV initial 1500MHz/VID101 observed 1000MHz/VID116 temp 59875mc staged 0
+    63      1.379 gfx: CP_ME_CNTL 0x15000000, CP_MEC_CNTL 0x50000000, SDMA0/1_F32_CNTL 0x1 0x1
+    64      1.379 gfx: unpublished translation bootstrap entered with engines halted
+    65      1.379 gfx: RLC before-gart-initialization CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    66      1.379 gfx: GRBM before-gart-initialization STATUS 0x00003028 read 0x00000000
+    67      1.379 startup: entering GART initialization
+    68      1.395 gart: startup startup-after-gfxhub-enable sample 0x00000000 fault 0x00000000
+    69      1.395 gfx: RLC startup-after-gfxhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    70      1.395 gfx: GRBM startup-after-gfxhub-enable STATUS 0x00003028 read 0x00000000
+    71      1.395 gart: startup startup-after-mmhub-enable sample 0x00000000 fault 0x00000000
+    72      1.395 gfx: RLC startup-after-mmhub-enable CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    73      1.395 gfx: GRBM startup-after-mmhub-enable STATUS 0x00003028 read 0x00000000
+    74      1.395 gart: startup startup-after-fault-defaults sample 0x00000000 fault 0x00000000
+    75      1.395 gfx: RLC startup-after-fault-defaults CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    76      1.395 gfx: GRBM startup-after-fault-defaults STATUS 0x00003028 read 0x00000000
+    77      1.395 gart: startup bootstrap-after-mmhub-flush sample 0x00000000 fault 0x00000000
+    78      1.395 gfx: RLC bootstrap-after-mmhub-flush CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    79      1.395 gfx: GRBM bootstrap-after-mmhub-flush STATUS 0x00003028 read 0x00000000
+    80      1.395 gart: op 1 -> 0x00000000 (-), result 0, 284 writes, fault offset 0x00000
+    81      1.395 gfx: RLC before-psp CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    82      1.395 gfx: GRBM before-psp STATUS 0x00003028 read 0x00000000
+    83      1.395 startup: entering PSP initialization
+    84      1.442 gfx: RLC before-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    85      1.442 gfx: GRBM before-psp-ring-create STATUS 0x00003028 read 0x00000000
+    86      1.473 gfx: RLC after-psp-ring-create CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    87      1.473 gfx: GRBM after-psp-ring-create STATUS 0x00003028 read 0x00000000
+    88      1.473 amdgpu[0]: reserve 0x400000 from 0xf5ff800000 for PSP TMR
+
+    89      1.473 psp: command 1 (id 5, type 0, 4194304 bytes): rc 0, status 0x0, 238 us, in TMR at 0x0
+    90      1.473 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    91      1.473 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    92      1.473 psp: command 2 (id 6, type 9, 33536 bytes): rc 0, status 0x0, 1890 us, in TMR at 0x0
+    93      1.473 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    94      1.473 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    95      1.473 psp: command 3 (id 6, type 10, 33536 bytes): rc 0, status 0x0, 1887 us, in TMR at 0x0
+    96      1.473 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+    97      1.473 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+    98      1.473 psp: command 4 (id 6, type 3, 263040 bytes): rc 0, status 0x0, 5854 us, in TMR at 0xF5FF842000
+    99      1.473 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   100      1.473 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   101      1.489 psp: command 5 (id 6, type 2, 263168 bytes): rc 0, status 0x0, 5917 us, in TMR at 0xF5FF883000
+   102      1.489 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   103      1.489 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   104      1.489 psp: command 6 (id 6, type 1, 263168 bytes): rc 0, status 0x0, 5903 us, in TMR at 0xF5FF8C4000
+   105      1.489 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   106      1.489 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   107      1.489 psp: command 7 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 5954 us, in TMR at 0xF5FF800000
+   108      1.489 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   109      1.489 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   110      1.489 psp: command 8 (id 6, type 5, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   111      1.489 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   112      1.489 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   113      1.505 psp: command 9 (id 6, type 4, 267440 bytes): rc 0, status 0x0, 6004 us, in TMR at 0xF5FF800000
+   114      1.505 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   115      1.505 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   116      1.505 psp: command 10 (id 6, type 6, 896 bytes): rc 0, status 0x0, 130 us, in TMR at 0x0
+   117      1.505 gfx: RLC after-psp-command CNTL 0x00000000 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   118      1.505 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   119      1.505 psp: command 11 (id 6, type 8, 25088 bytes): rc 0, status 0x0, 1736 us, in TMR at 0x0
+   120      1.505 gfx: RLC after-psp-command CNTL 0x00000001 read 0x00000000 STATUS2 0x01004008 read 0x00000000
+   121      1.505 gfx: GRBM after-psp-command STATUS 0x00003028 read 0x00000000
+   122      1.505 psp: op 1 -> 0x00000000, result 0, 15 writes, 11 of 11 commands
+   123      1.505 gfx: RLC after-psp CNTL 0x00000001 read 0x00000000 STATUS2 0x01004008 read 0x00000000
+   124      1.505 gfx: GRBM after-psp STATUS 0x00003028 read 0x00000000
+   125      1.505 startup: entering IH initialization
+   126      1.505 ih: init: rc 0, 18 writes
+   127      1.505 ih: op 1 -> 0x00000000, result 0, 19 writes; 0 interrupt routine calls, 0 ours, 0 DPCs, 0 vectors; status idle 1 input_idle 1 bif_interrupt_line 0
+   128      1.505 startup: entering GFX initialization
+   129      1.505 cumode: CuMode 24 disable 0x00000 -> mode 24 reason 0
+   130      1.505 gfx: RLC startup policy pp_gfxoff 0
+   131      1.505 gfx: stage 1 (doorbell aperture): rc 0, 49 writes so far, 1 us
+   132      1.505 gfx: stage 2 (golden registers): rc 0, 83 writes so far, 24 us
+   133      1.505 gfx: stage 3 (GRBM CAM probe): rc 0, 86 writes so far, 2 us
+   134      1.505 gfx: stage 4 (constants): rc 0, 252 writes so far, 72 us
+   135      1.505 gpumem: GFXHUB after-invalidate-request sample 0x00F80001 fault 0x00000000
+   136      1.505 gpumem: GFXHUB after-invalidate-request-read sample 0x00F80001 fault 0x00000000
+   137      1.505 gpumem: GFXHUB after-invalidate-ack sample 0x00000001 fault 0x00000000
+   138      1.505 gpumem: startup GFX translations committed after RLC, before CP
+   139      1.505 gfx: RLC after-bootstrap-translation-commit CNTL 0x00000001 read 0x00000000 STATUS2 0x00000008 read 0x00000000
+   140      1.505 gfx: GRBM after-bootstrap-translation-commit STATUS 0x00003028 read 0x00000000
+   141      1.505 gfx: stage 5 (RLC): rc 0, 264 writes so far, 149 us
+   142      1.505 amdgpu[0]: CP resume kiq-init begin
+
+   143      1.505 amdgpu[0]: CP resume kiq-init end result=0
+
+   144      1.505 amdgpu[0]: CP resume compute-unhalt begin
+
+   145      1.505 amdgpu[0]: CP resume compute-unhalt end
+
+   146      1.505 amdgpu[0]: CP resume kcq-init ring=0 begin
+
+   147      1.505 amdgpu[0]: CP resume kcq-init ring=0 end result=0
+
+   148      1.505 amdgpu[0]: CP resume kcq-init ring=1 begin
+
+   149      1.505 amdgpu[0]: CP resume kcq-init ring=1 end result=0
+
+   150      1.505 amdgpu[0]: CP resume kcq-init ring=2 begin
+
+   151      1.505 amdgpu[0]: CP resume kcq-init ring=2 end result=0
+
+   152      1.505 amdgpu[0]: CP resume kcq-init ring=3 begin
+
+   153      1.505 amdgpu[0]: CP resume kcq-init ring=3 end result=0
+
+   154      1.505 amdgpu[0]: CP resume kcq-init ring=4 begin
+
+   155      1.505 amdgpu[0]: CP resume kcq-init ring=4 end result=0
+
+   156      1.505 amdgpu[0]: CP resume kcq-init ring=5 begin
+
+   157      1.505 amdgpu[0]: CP resume kcq-init ring=5 end result=0
+
+   158      1.505 amdgpu[0]: CP resume kcq-init ring=6 begin
+
+   159      1.505 amdgpu[0]: CP resume kcq-init ring=6 end result=0
+
+   160      1.505 amdgpu[0]: CP resume kcq-init ring=7 begin
+
+   161      1.505 amdgpu[0]: CP resume kcq-init ring=7 end result=0
+
+   162      1.505 amdgpu[0]: CP resume kcq-enable begin
+
+   163      1.505 amdgpu[0]: CP resume kcq-enable end result=0
+
+   164      1.505 amdgpu[0]: CP resume kgq-init ring=0 begin
+
+   165      1.505 amdgpu[0]: CP resume kgq-init ring=0 end result=0
+
+   166      1.505 amdgpu[0]: CP resume kgq-enable begin
+
+   167      1.505 amdgpu[0]: CP resume kgq-enable end result=0
+
+   168      1.505 amdgpu[0]: CP resume gfx-start begin
+
+   169      1.505 amdgpu[0]: CP resume gfx-start end result=0
+
+   170      1.505 amdgpu[0]: CP resume gfx-test ring=0 begin
+
+   171      1.505 amdgpu[0]: CP resume gfx-test ring=0 end result=0
+
+   172      1.505 amdgpu[0]: CP resume compute-test ring=0 begin
+
+   173      1.505 amdgpu[0]: CP resume compute-test ring=0 end result=0
+
+   174      1.505 amdgpu[0]: CP resume compute-test ring=1 begin
+
+   175      1.505 amdgpu[0]: CP resume compute-test ring=1 end result=0
+
+   176      1.505 amdgpu[0]: CP resume compute-test ring=2 begin
+
+   177      1.505 amdgpu[0]: CP resume compute-test ring=2 end result=0
+
+   178      1.505 amdgpu[0]: CP resume compute-test ring=3 begin
+
+   179      1.505 amdgpu[0]: CP resume compute-test ring=3 end result=0
+
+   180      1.505 amdgpu[0]: CP resume compute-test ring=4 begin
+
+   181      1.505 amdgpu[0]: CP resume compute-test ring=4 end result=0
+
+   182      1.505 amdgpu[0]: CP resume compute-test ring=5 begin
+
+   183      1.505 amdgpu[0]: CP resume compute-test ring=5 end result=0
+
+   184      1.505 amdgpu[0]: CP resume compute-test ring=6 begin
+
+   185      1.505 amdgpu[0]: CP resume compute-test ring=6 end result=0
+
+   186      1.505 amdgpu[0]: CP resume compute-test ring=7 begin
+
+   187      1.505 amdgpu[0]: CP resume compute-test ring=7 end result=0
+
+   188      1.505 gfx: stage 6 (CP): rc 0, 326 writes so far, 401 us
+   189      1.505 lab: sdma0 receipt bring-up: requested 0x0 applied 0x0 refused 0 adopted 0, bring-ups 1
+   190      1.505 lab: sdma0 receipt bring-up: RPTR 0x00000000_00000000 WPTR 0x00000000_00000000 (read back after the writes)
+   191      1.505 lab: sdma0 receipt bring-up: poll 0x0 rptr_wb 0x0 sw wptr 0x0 dw (sequential reads)
+   192      1.505 lab: sdma0 receipt ring test: result 0
+   193      1.505 lab: sdma0 receipt ring test: RPTR 0x00000000_00000040 WPTR 0x00000000_00000040 valid 0xF (sequential reads)
+   194      1.505 lab: sdma0 receipt ring test: poll 0x40 rptr_wb 0x40 sw wptr 0x10 dw
+   195      1.505 lab: sdma0 receipt ring test: retired 0 pending 0
+   196      1.505 gfx: stage 7 (SDMA): rc 0, 419 writes so far, 84 us
+   197      1.505 gfx: stage 8 (interrupt sources): rc 0, 454 writes so far, 21 us
+   198      1.505 gfx: paging node ready, SDMA0 doorbell 0x200, per-buffer private commands
+   199      1.505 gfx: op 1 to stage 8 -> 0x00000000, result 0, 454 writes, 16 doorbells
+   200      1.505 cumode: applied 24 CUs (24 counted), reason 0, consistent 1, wrote 0, RLC_PG_CNTL 0x00000008 (PG enables 0x8), after the RLC stage 0x00800000 (PG enables 0x0)
+   201      1.505 cumode: SA0-3 CC 0xFFF80000 0xFFF80000 0xFFF80000 0xFFF80000 SPI 0x7 0x7 0x7 0x7
+   202      1.505 startup: both engines ready
+   203      1.505 startup: attempted 0x1F completed 0x1F status 0x00000000 ready 1 unwind 0 quarantine 0
+   204      1.505 wddm: GPU initialized before adapter admission
+   205      1.505 wddm: callbacks sync 1 notify 1 queuedpc 1 notifydpc 1, interface 576 of 568 bytes
+   206      1.505 wddm: handle callbacks size 576 get@104=FFFFF8079249E910 acquire@288=FFFFF80792384100 release@296=FFFFF80792384760
+   207      1.505 inherited: source 1920x1200 pitch 7680 target 1920x1200 fixed 0 support F status 00000000 valid 7FFFFF
+   208      1.505 inherited gate: 0 none word 00000000
+   209      1.505 display inherited: viewport 00000000/04B00780 recout 00000000/04B00780 mpc 04B00780 scl 00000001 ratio 01000000/01000000
+   210      1.505 display inherited: top 00000000 odm 00000000 hubp 000F1002 mem 00000000 taps 00000000 format 00000008 tiling 00000080 pitch 0000077F otg1 80000310
+   211      1.505 display inherited: surface 00000000 bottom 00000000 mpcc FFFF0461 out 01440000
+   212      1.505 display inherited: autocal 00000100 dscl control 00000000
+   213      1.520 display modes: AUX 25 transactions 25 attempts, 0 defers 0 timeouts 0 invalid 0 nacks 0 busy
+   214      1.520 display modes: AUX 20450 us stalled, EDID 256 bytes, status 0x00000000 close 0x00000000
+   215      1.520 display modes: DPCD rev 0x11 max link rate 0x0A max lanes 4 (0x84) downspread 0x01
+   216      1.520 display modes: EDID ok, 256 bytes, 2 blocks, version 1.4
+   217      1.520 display modes: monitor LEN product 0x1144 name 'LEN LT2452pwC'
+   218      1.520 display modes: preferred 1920x1200 59.950 Hz, pixel clock 154000 kHz; native (firmware) 1920x1200
+   219      1.520 display modes: pipe 0 ok (0x00000000): viewport 0x00000000/0x04B00780 recout 0x00000000/0x04B00780 mpc 0x04B00780
+   220      1.520 display modes: pipe 0 scl 0x00000001 mem 0x00000000 top 0 odm 0 hubp 0x000F1002
+   221      1.520 display modes: requested 2 level 2, 16 source modes, descriptor served
+   222      1.520 display modes: list 0..5: 1920x1200/0x03 1920x1080/0x36 1680x1050/0x24 1600x1200/0x04 1600x900/0x20 1440x900/0x24
+   223      1.520 display modes: list 6..11: 1400x1050/0x20 1280x1024/0x2C 1280x960/0x20 1280x800/0x20 1280x720/0x32 1152x864/0x20
+   224      1.520 display modes: list 12..15: 1024x768/0x28 800x600/0x28 720x480/0x02 640x480/0x3C
+   225      1.520 dpaudio: codec 0x1002AA01 rev 0x00100700 straps 0x00008000 vid 0x00010201/0x00100200 be 0x00000100/0x00010000 hpd 0x12/0x0
+   226      1.520 dpaudio: ep0 cfg 0x185600F0 hpc 0x00000000 unsol 0x80 sense 0x7FFFFFFF; ep1 cfg 0x185600F0 hpc 0x00000000; first fail 0x00000000
+   227      1.520 dpaudio: sec 0x00000000/0x00000000 dto src 0x00000030 dto1 0/1 afmt 0x00000100/0x00000000 pkt 0x04000800/0x04000800
+   228      1.520 dpaudio: DP reference clock count 6000 (100 kHz units): DTO1 module 6000000, phase 240000, for a 24 MHz wall clock
+   229      1.520 dpaudio: preconditions hold: stream DP0, endpoint 0, notes 0x8
+   230      1.520 dpaudio: hw_init done on endpoint 0: rates 0x00020070 power 0xC0000009 hpc 0x00000000, 4 writes
+   231      1.520 dpaudio: configure done on endpoint 0 (EDID), 27 writes, speakers 0x01
+   232      1.520 dpaudio: LPCM 2 ch rates 0x7F sizes 0x7, sink 0xAE30/0x1144 'LEN LT2452pwC'
+   233      1.520 dpaudio: ELD port id 0x0D9894495558859E (Linux's constant: no container ID yet)
+   234      1.520 dpaudio: stream on DP0: DTO_SOURCE 0x00100010 DTO1 240000/6000000, AUD_N 0x00008000 timestamp 0x1, 18 writes
+   235      1.520 dpaudio: stream on DP0: AFMT_CNTL 0x00000101 SRC 0x0 PACKET 0x04000801 PACKET2 0x00000300 SEC_CNTL 0x00001111
+   236      1.520 dpaudio: AUDIO_ENABLED set on endpoint 0: hpc 0x00000000 -> 0x80000000
+   237      1.520 stage 35
+   238      1.520 connector-link: sink generation 1 kind 1 adapter 0 max 0 kHz limit 300000 kHz
+   239      1.536 link: open result gen 1 step 0 ready status 00000000 atom 0 ready 7
+   240      1.536 connector-link: open pipe support F status 00000000 valid 7FFFFF bottom 00000000 control FFFF0461
+   241      1.536 connector-link: prepare generation 1 targets 7 status 00000000
+   242      1.536 connector: start generation 1 status 00000000 inherited stream preserved 0
+   243      1.552 fan: control on: mode curve profile standard
+   244      1.552 fan: load boost on (FanLoadBoost)
+   245      1.552 fan: restore record taken at the first change, bugcheck callback on
+   246      1.552 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   247      1.552 smu metrics: table page MC 0xF5FFFEC000, physical 0x46FFEC000, one read every 1000 ms
+   248      1.552 dpm: thermal zone DpmThermalZone 1 -> on, error 0
+   249      1.552 dpm: thermal zone: steps from 86000 mC, no raise from 83000 mC
+   250      1.552 dpm: compute set DpmComputeProfile 1 -> on, error 0
+   251      1.552 dpm: compute set up 400 target 300 down 200 permille
+   252      1.552 dpm: compute set: in force while a compute context is open
+   253      1.552 dpm: idle DpmIdleMHz 500 hold 3000 ms under 2 permille -> on (error 0)
+   254      1.552 dpm: idle DpmIdleLeavePermille 150: leaves at 150 permille over the window, or 500 in one tick
+   255      1.552 dpm: joint power arm DpmJointGovernor 0 -> off
+  2737    171.769 wddm: preemption report fence 206 node 2 last completed 445 at DMA boundary
+  2738    171.793 wddm: preemption queued fence 446 node 0 hardware pending 1 active submits 0
+  2739    171.816 wddm: preemption queued fence 207 node 2 hardware pending 1 active submits 0
+  2740    171.872 wddm: preemption report fence 446 node 0 last completed 2516 at DMA boundary
+  2741    171.901 wddm: preemption queued fence 447 node 0 hardware pending 1 active submits 0
+  2742    172.018 wddm: preemption report fence 447 node 0 last completed 2518 at DMA boundary
+  2743    172.023 wddm: preemption report fence 207 node 2 last completed 446 at DMA boundary
+  2744    172.040 dpm: telemetry dpm 2000 MHz/1000 mV (SMU 2000 MHz VID 88) 73.3 C busy 100.0% avg 99.9% want 2000 cap 2000 max 2000 throttle none, raises 5 lowers 2 thermal 0 w
+  2745    172.040 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  2746    172.040 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  2747    172.040 hwmon: telemetry fan2 1659 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  2748    172.040 hwmon: telemetry apu 73.0 C, duty read-back unproven
+  2749    172.040 hwmon: telemetry 168 samples 0 errors 0 retries 0 refusals
+  2750    172.040 smu metrics: telemetry mW p99361 a102651 g71900 s1422 reject 1 why 4 sp00000000 m67 0
+  2751    172.040 smu metrics: telemetry gfx 981 mV 2000 MHz 73.7 C soc 806 mV 67.5 C thr 0
+  2752    172.040 fan: telemetry curve curve/standard
+  2753    172.040 fan: telemetry target 100% applied 100% raw 255 rb 255, 1659 rpm
+  2754    172.040 wddm: preemption queued fence 448 node 0 hardware pending 1 active submits 0
+  2755    172.040 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  2756    172.040 fan: telemetry 0 failures 0 emergencies 0 doubts
+  2757    172.040 fan: telemetry boost on (busy+power)
+  2758    172.040 fan: telemetry boost 2 times, 67039 ms
+  2759    172.040 wddm: preemption queued fence 208 node 2 hardware pending 1 active submits 0
+  2760    172.100 wddm: preemption report fence 448 node 0 last completed 2521 at DMA boundary
+  2761    172.131 wddm: preemption queued fence 449 node 0 hardware pending 1 active submits 0
+  2762    172.145 wddm: preemption report fence 208 node 2 last completed 448 at DMA boundary
+  2763    172.162 wddm: preemption queued fence 209 node 2 hardware pending 1 active submits 0
+  2764    172.187 wddm: preemption report fence 449 node 0 last completed 2523 at DMA boundary
+  2765    172.205 wddm: preemption queued fence 450 node 0 hardware pending 1 active submits 0
+  2766    172.271 wddm: preemption report fence 450 node 0 last completed 2528 at DMA boundary
+  2767    172.300 wddm: preemption queued fence 451 node 0 hardware pending 1 active submits 0
+  2768    172.329 wddm: preemption report fence 451 node 0 last completed 2532 at DMA boundary
+  2769    172.329 wddm: preemption report fence 209 node 2 last completed 450 at DMA boundary
+  2770    172.331 wddm: preemption queued fence 452 node 0 hardware pending 1 active submits 0
+  2771    172.346 wddm: preemption queued fence 210 node 2 hardware pending 1 active submits 0
+  2772    172.358 wddm: preemption report fence 452 node 0 last completed 2533 at DMA boundary
+  2773    172.392 wddm: preemption queued fence 453 node 0 hardware pending 1 active submits 0
+  2774    172.429 wddm: preemption report fence 453 node 0 last completed 2535 at DMA boundary
+  2775    172.430 wddm: preemption report fence 210 node 2 last completed 452 at DMA boundary
+  2776    172.447 wddm: preemption queued fence 211 node 2 hardware pending 1 active submits 0
+  2777    172.454 wddm: preemption queued fence 454 node 0 hardware pending 1 active submits 0
+  2778    172.475 wddm: preemption report fence 454 node 0 last completed 2540 at DMA boundary
+  2779    172.491 wddm: preemption queued fence 455 node 0 hardware pending 1 active submits 0
+  2780    172.521 wddm: preemption report fence 211 node 2 last completed 454 at DMA boundary
+  2781    172.522 wddm: preemption report fence 455 node 0 last completed 2543 at DMA boundary
+  2782    172.557 wddm: preemption queued fence 456 node 0 hardware pending 1 active submits 0
+  2783    172.632 wddm: preemption queued fence 212 node 2 hardware pending 1 active submits 0
+  2784    172.654 wddm: preemption report fence 456 node 0 last completed 2549 at DMA boundary
+  2785    172.673 wddm: preemption report fence 212 node 2 last completed 456 at DMA boundary
+  2786    172.683 wddm: preemption queued fence 457 node 0 hardware pending 1 active submits 0
+  2787    172.702 wddm: preemption report fence 457 node 0 last completed 2552 at DMA boundary
+  2788    172.708 wddm: preemption queued fence 458 node 0 hardware pending 1 active submits 0
+  2789    172.754 wddm: preemption report fence 458 node 0 last completed 2554 at DMA boundary
+  2790    172.771 wddm: preemption queued fence 213 node 2 hardware pending 1 active submits 0
+  2791    172.771 wddm: preemption queued fence 459 node 0 hardware pending 1 active submits 0
+  2792    172.875 wddm: preemption report fence 459 node 0 last completed 2558 at DMA boundary
+  2793    172.886 wddm: preemption queued fence 460 node 0 hardware pending 1 active submits 0
+  2794    172.929 wddm: preemption report fence 460 node 0 last completed 2561 at DMA boundary
+  2795    172.938 wddm: preemption queued fence 461 node 0 hardware pending 1 active submits 0
+  2796    173.000 wddm: preemption report fence 461 node 0 last completed 2565 at DMA boundary
+  2797    173.000 wddm: preemption report fence 213 node 2 last completed 459 at DMA boundary
+  2798    173.023 wddm: preemption queued fence 214 node 2 hardware pending 1 active submits 0
+  2799    173.042 wddm: preemption queued fence 462 node 0 hardware pending 1 active submits 0
+  2800    173.043 wddm: preemption report fence 462 node 0 last completed 2569 at DMA boundary
+  2801    173.106 wddm: preemption queued fence 463 node 0 hardware pending 1 active submits 0
+  2802    173.162 wddm: preemption report fence 214 node 2 last completed 462 at DMA boundary
+  2803    173.163 wddm: preemption report fence 463 node 0 last completed 2574 at DMA boundary
+  2804    173.189 wddm: preemption queued fence 215 node 2 hardware pending 1 active submits 0
+  2805    173.189 wddm: preemption queued fence 464 node 0 hardware pending 1 active submits 0
+  2806    173.203 wddm: preemption report fence 464 node 0 last completed 2577 at DMA boundary
+  2807    173.255 wddm: preemption report fence 215 node 2 last completed 466 at DMA boundary
+  2808    173.274 wddm: preemption queued fence 465 node 0 hardware pending 1 active submits 0
+  2809    173.437 wddm: preemption report fence 465 node 0 last completed 2585 at DMA boundary
+  2810    173.440 wddm: preemption queued fence 216 node 2 hardware pending 1 active submits 0
+  2811    173.471 wddm: preemption queued fence 466 node 0 hardware pending 1 active submits 0
+  2812    173.510 wddm: preemption report fence 216 node 2 last completed 467 at DMA boundary
+  2813    173.527 wddm: preemption queued fence 217 node 2 hardware pending 1 active submits 0
+  2814    173.588 wddm: preemption report fence 466 node 0 last completed 2587 at DMA boundary
+  2815    173.610 wddm: preemption queued fence 467 node 0 hardware pending 1 active submits 0
+  2816    173.700 wddm: preemption report fence 467 node 0 last completed 2590 at DMA boundary
+  2817    173.718 wddm: preemption queued fence 468 node 0 hardware pending 1 active submits 0
+  2818    173.831 wddm: preemption report fence 468 node 0 last completed 2592 at DMA boundary
+  2819    173.832 wddm: preemption report fence 217 node 2 last completed 469 at DMA boundary
+  2820    173.855 wddm: preemption queued fence 218 node 2 hardware pending 1 active submits 0
+  2821    173.856 wddm: preemption queued fence 469 node 0 hardware pending 1 active submits 0
+  2822    173.869 wddm: preemption report fence 469 node 0 last completed 2595 at DMA boundary
+  2823    173.933 wddm: preemption report fence 218 node 2 last completed 470 at DMA boundary
+  2824    173.943 wddm: preemption queued fence 219 node 2 hardware pending 1 active submits 0
+  2825    173.956 wddm: preemption queued fence 470 node 0 hardware pending 1 active submits 0
+  2826    174.021 wddm: preemption report fence 470 node 0 last completed 2604 at DMA boundary
+  2827    174.022 wddm: preemption report fence 219 node 2 last completed 472 at DMA boundary
+  2828    174.040 wddm: preemption queued fence 220 node 2 hardware pending 1 active submits 0
+  2829    174.110 wddm: preemption queued fence 471 node 0 hardware pending 1 active submits 0
+  2830    174.161 wddm: preemption report fence 220 node 2 last completed 474 at DMA boundary
+  2831    174.173 wddm: preemption report fence 471 node 0 last completed 2613 at DMA boundary
+  2832    174.189 wddm: preemption queued fence 221 node 2 hardware pending 1 active submits 0
+  2833    174.189 wddm: preemption queued fence 472 node 0 hardware pending 1 active submits 0
+  2834    174.201 wddm: preemption report fence 472 node 0 last completed 2618 at DMA boundary
+  2835    174.250 wddm: preemption report fence 221 node 2 last completed 478 at DMA boundary
+  2836    174.285 wddm: preemption queued fence 473 node 0 hardware pending 1 active submits 0
+  2837    174.357 wddm: preemption report fence 473 node 0 last completed 2625 at DMA boundary
+  2838    174.394 wddm: preemption queued fence 474 node 0 hardware pending 1 active submits 0
+  2839    174.521 wddm: preemption report fence 474 node 0 last completed 2630 at DMA boundary
+  2840    174.525 wddm: preemption queued fence 222 node 2 hardware pending 1 active submits 0
+  2841    174.538 wddm: preemption queued fence 475 node 0 hardware pending 1 active submits 0
+  2842    174.600 wddm: preemption report fence 222 node 2 last completed 480 at DMA boundary
+  2843    174.607 wddm: preemption report fence 475 node 0 last completed 2634 at DMA boundary
+  2844    174.624 wddm: preemption queued fence 476 node 0 hardware pending 1 active submits 0
+  2845    174.714 wddm: preemption report fence 476 node 0 last completed 2636 at DMA boundary
+  2846    174.747 wddm: preemption queued fence 477 node 0 hardware pending 1 active submits 0
+  2847    174.762 wddm: preemption report fence 477 node 0 last completed 2638 at DMA boundary
+  2848    174.772 wddm: preemption queued fence 478 node 0 hardware pending 1 active submits 0
+  2849    174.781 wddm: preemption queued fence 223 node 2 hardware pending 1 active submits 0
+  2850    174.799 wddm: preemption report fence 478 node 0 last completed 2641 at DMA boundary
+  2851    174.804 wddm: preemption queued fence 479 node 0 hardware pending 1 active submits 0
+  2852    174.892 wddm: preemption report fence 479 node 0 last completed 2644 at DMA boundary
+  2853    174.931 wddm: preemption queued fence 480 node 0 hardware pending 1 active submits 0
+  2854    174.942 wddm: preemption report fence 480 node 0 last completed 2646 at DMA boundary
+  2855    174.942 wddm: preemption report fence 223 node 2 last completed 482 at DMA boundary
+  2856    174.955 wddm: preemption queued fence 481 node 0 hardware pending 1 active submits 0
+  2857    174.974 wddm: preemption report fence 481 node 0 last completed 2649 at DMA boundary
+  2858    174.974 wddm: preemption queued fence 224 node 2 hardware pending 1 active submits 0
+  2859    174.977 wddm: preemption queued fence 482 node 0 hardware pending 1 active submits 0
+  2860    174.996 wddm: preemption report fence 482 node 0 last completed 2652 at DMA boundary
+  2861    175.000 wddm: preemption report fence 224 node 2 last completed 486 at DMA boundary
+  2862    175.009 wddm: preemption queued fence 483 node 0 hardware pending 1 active submits 0
+  2863    175.053 wddm: preemption report fence 483 node 0 last completed 2655 at DMA boundary
+  2864    175.101 wddm: preemption queued fence 484 node 0 hardware pending 1 active submits 0
+  2865    175.105 wddm: preemption report fence 484 node 0 last completed 2659 at DMA boundary
+  2866    175.106 wddm: preemption queued fence 485 node 0 hardware pending 1 active submits 0
+  2867    175.109 wddm: preemption queued fence 225 node 2 hardware pending 1 active submits 0
+  2868    175.117 wddm: preemption report fence 485 node 0 last completed 2660 at DMA boundary
+  2869    175.122 wddm: preemption queued fence 486 node 0 hardware pending 1 active submits 0
+  2870    175.122 wddm: preemption report fence 225 node 2 last completed 487 at DMA boundary
+  2871    175.122 wddm: preemption report fence 486 node 0 last completed 2662 at DMA boundary
+  2872    175.139 wddm: preemption queued fence 487 node 0 hardware pending 1 active submits 0
+  2873    175.146 wddm: preemption queued fence 226 node 2 hardware pending 1 active submits 0
+  2874    175.163 wddm: preemption report fence 487 node 0 last completed 2665 at DMA boundary
+  2875    175.189 wddm: preemption queued fence 488 node 0 hardware pending 1 active submits 0
+  2876    175.197 wddm: preemption report fence 488 node 0 last completed 2668 at DMA boundary
+  2877    175.209 wddm: preemption queued fence 489 node 0 hardware pending 1 active submits 0
+  2878    175.262 wddm: preemption report fence 489 node 0 last completed 2670 at DMA boundary
+  2879    175.267 wddm: preemption report fence 226 node 2 last completed 490 at DMA boundary
+  2880    175.267 wddm: preemption queued fence 490 node 0 hardware pending 1 active submits 0
+  2881    175.276 wddm: preemption report fence 490 node 0 last completed 2672 at DMA boundary
+  2882    175.280 wddm: preemption queued fence 227 node 2 hardware pending 1 active submits 0
+  2883    175.285 wddm: preemption report fence 227 node 2 last completed 491 at DMA boundary
+  2884    175.285 wddm: preemption queued fence 491 node 0 hardware pending 1 active submits 0
+  2885    175.286 wddm: preemption report fence 491 node 0 last completed 2674 at DMA boundary
+  2886    175.319 wddm: preemption queued fence 492 node 0 hardware pending 1 active submits 0
+  2887    175.331 wddm: preemption report fence 492 node 0 last completed 2678 at DMA boundary
+  2888    175.394 wddm: preemption queued fence 493 node 0 hardware pending 1 active submits 0
+  2889    175.554 wddm: preemption report fence 493 node 0 last completed 2685 at DMA boundary
+  2890    175.559 wddm: preemption queued fence 228 node 2 hardware pending 1 active submits 0
+  2891    175.623 wddm: preemption report fence 228 node 2 last completed 495 at DMA boundary
+  2892    175.639 wddm: preemption queued fence 494 node 0 hardware pending 1 active submits 0
+  2893    175.639 wddm: preemption queued fence 229 node 2 hardware pending 1 active submits 0
+  2894    175.703 wddm: preemption report fence 494 node 0 last completed 2689 at DMA boundary
+  2895    175.718 wddm: preemption queued fence 495 node 0 hardware pending 1 active submits 0
+  2896    175.748 wddm: preemption report fence 495 node 0 last completed 2691 at DMA boundary
+  2897    175.763 wddm: preemption queued fence 496 node 0 hardware pending 1 active submits 0
+  2898    175.923 wddm: preemption report fence 496 node 0 last completed 2693 at DMA boundary
+  2899    175.947 wddm: preemption queued fence 497 node 0 hardware pending 1 active submits 0
+  2900    175.968 wddm: preemption report fence 497 node 0 last completed 2695 at DMA boundary
+  2901    175.970 wddm: preemption report fence 229 node 2 last completed 497 at DMA boundary
+  2902    175.974 wddm: preemption queued fence 498 node 0 hardware pending 1 active submits 0
+  2903    175.976 wddm: preemption report fence 498 node 0 last completed 2697 at DMA boundary
+  2904    175.984 wddm: preemption queued fence 230 node 2 hardware pending 1 active submits 0
+  2905    176.011 wddm: preemption queued fence 499 node 0 hardware pending 1 active submits 0
+  2906    176.041 wddm: preemption report fence 499 node 0 last completed 2701 at DMA boundary
+  2907    176.106 wddm: preemption report fence 230 node 2 last completed 499 at DMA boundary
+  2908    176.117 wddm: preemption queued fence 231 node 2 hardware pending 1 active submits 0
+  2909    176.125 wddm: preemption queued fence 500 node 0 hardware pending 1 active submits 0
+  2910    176.168 wddm: preemption report fence 500 node 0 last completed 2704 at DMA boundary
+  2911    176.171 wddm: preemption queued fence 501 node 0 hardware pending 1 active submits 0
+  2912    176.172 wddm: preemption report fence 501 node 0 last completed 2706 at DMA boundary
+  2913    176.196 wddm: preemption report fence 231 node 2 last completed 501 at DMA boundary
+  2914    176.202 wddm: preemption queued fence 502 node 0 hardware pending 1 active submits 0
+  2915    176.207 wddm: preemption queued fence 232 node 2 hardware pending 1 active submits 0
+  2916    176.254 wddm: preemption report fence 502 node 0 last completed 2711 at DMA boundary
+  2917    176.257 wddm: preemption queued fence 503 node 0 hardware pending 1 active submits 0
+  2918    176.263 wddm: preemption report fence 503 node 0 last completed 2714 at DMA boundary
+  2919    176.277 wddm: preemption queued fence 504 node 0 hardware pending 1 active submits 0
+  2920    176.384 wddm: preemption report fence 504 node 0 last completed 2717 at DMA boundary
+  2921    176.384 wddm: preemption report fence 232 node 2 last completed 503 at DMA boundary
+  2922    176.408 wddm: preemption queued fence 233 node 2 hardware pending 1 active submits 0
+  2923    176.423 wddm: preemption queued fence 505 node 0 hardware pending 1 active submits 0
+  2924    176.451 wddm: preemption report fence 505 node 0 last completed 2719 at DMA boundary
+  2925    176.462 wddm: preemption queued fence 506 node 0 hardware pending 1 active submits 0
+  2926    176.502 wddm: preemption report fence 233 node 2 last completed 505 at DMA boundary
+  2927    176.502 wddm: preemption report fence 506 node 0 last completed 2721 at DMA boundary
+  2928    176.509 wddm: preemption queued fence 507 node 0 hardware pending 1 active submits 0
+  2929    176.513 wddm: preemption report fence 507 node 0 last completed 2724 at DMA boundary
+  2930    176.531 wddm: preemption queued fence 234 node 2 hardware pending 1 active submits 0
+  2931    176.545 wddm: preemption queued fence 508 node 0 hardware pending 1 active submits 0
+  2932    176.649 wddm: preemption report fence 508 node 0 last completed 2726 at DMA boundary
+  2933    176.665 wddm: preemption queued fence 509 node 0 hardware pending 1 active submits 0
+  2934    176.709 wddm: preemption report fence 509 node 0 last completed 2728 at DMA boundary
+  2935    176.715 wddm: preemption report fence 234 node 2 last completed 507 at DMA boundary
+  2936    176.728 wddm: preemption queued fence 510 node 0 hardware pending 1 active submits 0
+  2937    176.728 wddm: preemption queued fence 235 node 2 hardware pending 1 active submits 0
+  2938    176.783 wddm: preemption report fence 510 node 0 last completed 2732 at DMA boundary
+  2939    176.819 wddm: preemption queued fence 511 node 0 hardware pending 1 active submits 0
+  2940    176.847 wddm: preemption report fence 511 node 0 last completed 2734 at DMA boundary
+  2941    176.859 wddm: preemption queued fence 512 node 0 hardware pending 1 active submits 0
+  2942    176.967 wddm: preemption report fence 512 node 0 last completed 2737 at DMA boundary
+  2943    176.970 wddm: preemption report fence 235 node 2 last completed 509 at DMA boundary
+  2944    176.980 wddm: preemption queued fence 236 node 2 hardware pending 1 active submits 0
+  2945    177.050 wddm: preemption report fence 236 node 2 last completed 511 at DMA boundary
+  2946    177.053 dpm: telemetry dpm 2000 MHz/1000 mV (SMU 2000 MHz VID 88) 74.2 C busy 100.0% avg 99.9% want 2000 cap 2000 max 2000 throttle none, raises 5 lowers 2 thermal 0 w
+  2947    177.053 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  2948    177.053 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  2949    177.053 hwmon: telemetry fan2 1659 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  2950    177.053 hwmon: telemetry apu 74.0 C, duty read-back unproven
+  2951    177.053 hwmon: telemetry 173 samples 0 errors 0 retries 0 refusals
+  2952    177.053 smu metrics: telemetry mW p98623 a105304 g71900 s711 reject 1 why 4 sp00000000 m67 0
+  2953    177.053 smu metrics: telemetry gfx 981 mV 2000 MHz 74.5 C soc 806 mV 68.7 C thr 0
+  2954    177.053 fan: telemetry curve curve/standard
+  2955    177.053 fan: telemetry target 100% applied 100% raw 255 rb 255, 1659 rpm
+  2956    177.053 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  2957    177.053 fan: telemetry 0 failures 0 emergencies 0 doubts
+  2958    177.053 fan: telemetry boost on (busy+power)
+  2959    177.053 fan: telemetry boost 2 times, 72112 ms
+  2960    177.057 wddm: preemption queued fence 513 node 0 hardware pending 1 active submits 0
+  2961    177.069 wddm: preemption queued fence 237 node 2 hardware pending 1 active submits 0
+  2962    177.179 wddm: preemption report fence 513 node 0 last completed 2746 at DMA boundary
+  2963    177.189 wddm: preemption queued fence 514 node 0 hardware pending 1 active submits 0
+  2964    177.221 wddm: preemption report fence 514 node 0 last completed 2749 at DMA boundary
+  2965    177.260 wddm: preemption report fence 237 node 2 last completed 513 at DMA boundary
+  2966    177.271 wddm: preemption queued fence 515 node 0 hardware pending 1 active submits 0
+  2967    177.271 wddm: preemption report fence 515 node 0 last completed 2752 at DMA boundary
+  2968    177.281 wddm: preemption queued fence 516 node 0 hardware pending 1 active submits 0
+  2969    177.290 wddm: preemption queued fence 238 node 2 hardware pending 1 active submits 0
+  2970    177.300 wddm: preemption report fence 516 node 0 last completed 2754 at DMA boundary
+  2971    177.301 wddm: preemption report fence 238 node 2 last completed 514 at DMA boundary
+  2972    177.309 wddm: preemption queued fence 517 node 0 hardware pending 1 active submits 0
+  2973    177.314 wddm: preemption report fence 517 node 0 last completed 2758 at DMA boundary
+  2974    177.326 wddm: preemption queued fence 518 node 0 hardware pending 1 active submits 0
+  2975    177.364 wddm: preemption queued fence 239 node 2 hardware pending 1 active submits 0
+  2976    177.373 wddm: preemption report fence 518 node 0 last completed 2761 at DMA boundary
+  2977    177.383 wddm: preemption report fence 239 node 2 last completed 516 at DMA boundary
+  2978    177.392 wddm: preemption queued fence 519 node 0 hardware pending 1 active submits 0
+  2979    177.395 wddm: preemption report fence 519 node 0 last completed 2764 at DMA boundary
+  2980    177.422 wddm: preemption queued fence 520 node 0 hardware pending 1 active submits 0
+  2981    177.432 wddm: preemption report fence 520 node 0 last completed 2766 at DMA boundary
+  2982    177.441 wddm: preemption queued fence 521 node 0 hardware pending 1 active submits 0
+  2983    177.447 wddm: preemption queued fence 240 node 2 hardware pending 1 active submits 0
+  2984    177.519 wddm: preemption report fence 521 node 0 last completed 2768 at DMA boundary
+  2985    177.546 wddm: preemption queued fence 522 node 0 hardware pending 1 active submits 0
+  2986    177.559 wddm: preemption report fence 522 node 0 last completed 2770 at DMA boundary
+  2987    177.559 wddm: preemption report fence 240 node 2 last completed 518 at DMA boundary
+  2988    177.571 wddm: preemption queued fence 523 node 0 hardware pending 1 active submits 0
+  2989    177.592 wddm: preemption queued fence 241 node 2 hardware pending 1 active submits 0
+  2990    177.656 wddm: preemption report fence 523 node 0 last completed 2773 at DMA boundary
+  2991    177.668 wddm: preemption queued fence 524 node 0 hardware pending 1 active submits 0
+  2992    177.690 wddm: preemption report fence 524 node 0 last completed 2775 at DMA boundary
+  2993    177.700 wddm: preemption queued fence 525 node 0 hardware pending 1 active submits 0
+  2994    177.710 wddm: preemption report fence 525 node 0 last completed 2778 at DMA boundary
+  2995    177.730 wddm: preemption queued fence 526 node 0 hardware pending 1 active submits 0
+  2996    177.782 wddm: preemption report fence 526 node 0 last completed 2780 at DMA boundary
+  2997    177.791 wddm: preemption report fence 241 node 2 last completed 521 at DMA boundary
+  2998    177.807 wddm: preemption queued fence 527 node 0 hardware pending 1 active submits 0
+  2999    177.807 wddm: preemption queued fence 242 node 2 hardware pending 1 active submits 0
+  3000    177.827 wddm: preemption report fence 527 node 0 last completed 2785 at DMA boundary
+  3001    177.860 wddm: preemption queued fence 528 node 0 hardware pending 1 active submits 0
+  3002    177.869 wddm: preemption report fence 528 node 0 last completed 2788 at DMA boundary
+  3003    177.912 wddm: preemption report fence 242 node 2 last completed 523 at DMA boundary
+  3004    177.926 wddm: preemption queued fence 243 node 2 hardware pending 1 active submits 0
+  3005    177.944 wddm: preemption queued fence 529 node 0 hardware pending 1 active submits 0
+  3006    177.950 wddm: preemption report fence 529 node 0 last completed 2791 at DMA boundary
+  3007    177.983 wddm: preemption queued fence 530 node 0 hardware pending 1 active submits 0
+  3008    178.018 wddm: preemption report fence 530 node 0 last completed 2797 at DMA boundary
+  3009    178.019 wddm: preemption report fence 243 node 2 last completed 525 at DMA boundary
+  3010    178.020 wddm: preemption queued fence 531 node 0 hardware pending 1 active submits 0
+  3011    178.033 wddm: preemption queued fence 244 node 2 hardware pending 1 active submits 0
+  3012    178.048 wddm: preemption report fence 531 node 0 last completed 2800 at DMA boundary
+  3013    178.058 wddm: preemption queued fence 532 node 0 hardware pending 1 active submits 0
+  3014    178.114 wddm: preemption report fence 532 node 0 last completed 2804 at DMA boundary
+  3015    178.137 wddm: preemption report fence 244 node 2 last completed 527 at DMA boundary
+  3016    178.147 wddm: preemption queued fence 533 node 0 hardware pending 1 active submits 0
+  3017    178.149 wddm: preemption queued fence 245 node 2 hardware pending 1 active submits 0
+  3018    178.184 wddm: preemption report fence 533 node 0 last completed 2807 at DMA boundary
+  3019    178.199 wddm: preemption queued fence 534 node 0 hardware pending 1 active submits 0
+  3020    178.208 wddm: preemption report fence 534 node 0 last completed 2809 at DMA boundary
+  3021    178.229 wddm: preemption report fence 245 node 2 last completed 529 at DMA boundary
+  3022    178.233 wddm: preemption queued fence 535 node 0 hardware pending 1 active submits 0
+  3023    178.244 wddm: preemption queued fence 246 node 2 hardware pending 1 active submits 0
+  3024    178.254 wddm: preemption report fence 535 node 0 last completed 2812 at DMA boundary
+  3025    178.282 wddm: preemption queued fence 536 node 0 hardware pending 1 active submits 0
+  3026    178.291 wddm: preemption report fence 536 node 0 last completed 2814 at DMA boundary
+  3027    178.302 wddm: preemption queued fence 537 node 0 hardware pending 1 active submits 0
+  3028    178.315 wddm: preemption report fence 246 node 2 last completed 531 at DMA boundary
+  3029    178.335 wddm: preemption report fence 537 node 0 last completed 2818 at DMA boundary
+  3030    178.356 wddm: preemption queued fence 538 node 0 hardware pending 1 active submits 0
+  3031    178.425 wddm: preemption report fence 538 node 0 last completed 2821 at DMA boundary
+  3032    178.450 wddm: preemption queued fence 539 node 0 hardware pending 1 active submits 0
+  3033    178.455 wddm: preemption report fence 539 node 0 last completed 2823 at DMA boundary
+  3034    178.476 wddm: preemption queued fence 540 node 0 hardware pending 1 active submits 0
+  3035    178.544 wddm: preemption queued fence 247 node 2 hardware pending 1 active submits 0
+  3036    178.623 wddm: preemption report fence 540 node 0 last completed 2830 at DMA boundary
+  3037    178.649 wddm: preemption report fence 247 node 2 last completed 534 at DMA boundary
+  3038    178.649 wddm: preemption report fence 541 node 0 last completed 2832 at DMA boundary
+  3039    178.649 wddm: preemption queued fence 541 node 0 hardware pending 1 active submits 0
+  3040    178.667 wddm: preemption queued fence 248 node 2 hardware pending 1 active submits 0
+  3041    178.681 wddm: preemption queued fence 542 node 0 hardware pending 1 active submits 0
+  3042    178.729 wddm: preemption report fence 542 node 0 last completed 2834 at DMA boundary
+  3043    178.744 wddm: preemption queued fence 543 node 0 hardware pending 1 active submits 0
+  3044    178.793 wddm: preemption report fence 543 node 0 last completed 2838 at DMA boundary
+  3045    178.797 wddm: preemption queued fence 544 node 0 hardware pending 1 active submits 0
+  3046    178.842 wddm: preemption report fence 248 node 2 last completed 536 at DMA boundary
+  3047    178.862 wddm: preemption queued fence 249 node 2 hardware pending 1 active submits 0
+  3048    178.922 wddm: preemption report fence 544 node 0 last completed 2841 at DMA boundary
+  3049    178.927 wddm: preemption queued fence 545 node 0 hardware pending 1 active submits 0
+  3050    179.032 wddm: preemption report fence 545 node 0 last completed 2844 at DMA boundary
+  3051    179.068 wddm: preemption queued fence 546 node 0 hardware pending 1 active submits 0
+  3052    179.093 wddm: preemption report fence 546 node 0 last completed 2846 at DMA boundary
+  3053    179.167 wddm: preemption queued fence 547 node 0 hardware pending 1 active submits 0
+  3054    179.169 wddm: preemption report fence 249 node 2 last completed 538 at DMA boundary
+  3055    179.169 wddm: preemption report fence 547 node 0 last completed 2848 at DMA boundary
+  3056    179.192 wddm: preemption queued fence 250 node 2 hardware pending 1 active submits 0
+  3057    179.193 wddm: preemption report fence 250 node 2 last completed 539 at DMA boundary
+  3058    179.198 wddm: preemption queued fence 548 node 0 hardware pending 1 active submits 0
+  3059    179.199 wddm: preemption report fence 548 node 0 last completed 2853 at DMA boundary
+  3060    179.204 wddm: preemption queued fence 251 node 2 hardware pending 1 active submits 0
+  3061    179.230 wddm: preemption queued fence 549 node 0 hardware pending 1 active submits 0
+  3062    179.298 wddm: preemption report fence 549 node 0 last completed 2859 at DMA boundary
+  3063    179.300 wddm: preemption report fence 251 node 2 last completed 541 at DMA boundary
+  3064    179.310 wddm: preemption queued fence 252 node 2 hardware pending 1 active submits 0
+  3065    179.310 wddm: preemption queued fence 550 node 0 hardware pending 1 active submits 0
+  3066    179.334 wddm: preemption report fence 550 node 0 last completed 2863 at DMA boundary
+  3067    179.363 wddm: preemption queued fence 551 node 0 hardware pending 1 active submits 0
+  3068    179.398 wddm: preemption report fence 551 node 0 last completed 2866 at DMA boundary
+  3069    179.399 wddm: preemption report fence 252 node 2 last completed 543 at DMA boundary
+  3070    179.401 wddm: preemption queued fence 552 node 0 hardware pending 1 active submits 0
+  3071    179.402 wddm: preemption report fence 552 node 0 last completed 2869 at DMA boundary
+  3072    179.413 wddm: preemption queued fence 253 node 2 hardware pending 1 active submits 0
+  3073    179.427 wddm: preemption queued fence 553 node 0 hardware pending 1 active submits 0
+  3074    179.526 wddm: preemption report fence 553 node 0 last completed 2873 at DMA boundary
+  3075    179.562 wddm: preemption queued fence 554 node 0 hardware pending 1 active submits 0
+  3076    179.572 wddm: preemption report fence 554 node 0 last completed 2876 at DMA boundary
+  3077    179.574 wddm: preemption report fence 253 node 2 last completed 545 at DMA boundary
+  3078    179.583 wddm: preemption queued fence 555 node 0 hardware pending 1 active submits 0
+  3079    179.586 wddm: preemption queued fence 254 node 2 hardware pending 1 active submits 0
+  3080    179.607 wddm: preemption report fence 555 node 0 last completed 2878 at DMA boundary
+  3081    179.636 wddm: preemption queued fence 556 node 0 hardware pending 1 active submits 0
+  3082    179.645 wddm: preemption report fence 556 node 0 last completed 2880 at DMA boundary
+  3083    179.661 wddm: preemption queued fence 557 node 0 hardware pending 1 active submits 0
+  3084    179.703 wddm: preemption report fence 557 node 0 last completed 2882 at DMA boundary
+  3085    179.714 wddm: preemption report fence 254 node 2 last completed 547 at DMA boundary
+  3086    179.726 wddm: preemption queued fence 255 node 2 hardware pending 1 active submits 0
+  3087    179.731 wddm: preemption queued fence 558 node 0 hardware pending 1 active submits 0
+  3088    179.756 wddm: preemption report fence 558 node 0 last completed 2888 at DMA boundary
+  3089    179.789 wddm: preemption queued fence 559 node 0 hardware pending 1 active submits 0
+  3090    179.796 wddm: preemption report fence 255 node 2 last completed 549 at DMA boundary
+  3091    179.806 wddm: preemption queued fence 256 node 2 hardware pending 1 active submits 0
+  3092    179.810 wddm: preemption report fence 559 node 0 last completed 2891 at DMA boundary
+  3093    179.815 wddm: preemption queued fence 560 node 0 hardware pending 1 active submits 0
+  3094    179.820 wddm: preemption report fence 560 node 0 last completed 2894 at DMA boundary
+  3095    179.845 wddm: preemption queued fence 561 node 0 hardware pending 1 active submits 0
+  3096    179.872 wddm: preemption report fence 256 node 2 last completed 551 at DMA boundary
+  3097    179.872 wddm: preemption report fence 561 node 0 last completed 2898 at DMA boundary
+  3098    179.894 wddm: preemption queued fence 562 node 0 hardware pending 1 active submits 0
+  3099    179.894 wddm: preemption queued fence 257 node 2 hardware pending 1 active submits 0
+  3100    179.920 wddm: preemption report fence 562 node 0 last completed 2901 at DMA boundary
+  3101    179.943 wddm: preemption queued fence 563 node 0 hardware pending 1 active submits 0
+  3102    179.949 wddm: preemption report fence 257 node 2 last completed 553 at DMA boundary
+  3103    179.970 wddm: preemption report fence 563 node 0 last completed 2904 at DMA boundary
+  3104    179.979 wddm: preemption queued fence 564 node 0 hardware pending 1 active submits 0
+  3105    180.005 wddm: preemption queued fence 258 node 2 hardware pending 1 active submits 0
+  3106    180.007 wddm: preemption report fence 564 node 0 last completed 2907 at DMA boundary
+  3107    180.010 wddm: preemption report fence 258 node 2 last completed 554 at DMA boundary
+  3108    180.021 wddm: preemption queued fence 565 node 0 hardware pending 1 active submits 0
+  3109    180.049 wddm: preemption report fence 565 node 0 last completed 2910 at DMA boundary
+  3110    180.053 wddm: preemption queued fence 259 node 2 hardware pending 1 active submits 0
+  3111    180.058 wddm: preemption report fence 259 node 2 last completed 555 at DMA boundary
+  3112    180.066 wddm: preemption queued fence 566 node 0 hardware pending 1 active submits 0
+  3113    180.081 wddm: preemption queued fence 260 node 2 hardware pending 1 active submits 0
+  3114    180.086 wddm: preemption report fence 566 node 0 last completed 2915 at DMA boundary
+  3115    180.114 wddm: preemption queued fence 567 node 0 hardware pending 1 active submits 0
+  3116    180.139 wddm: preemption report fence 567 node 0 last completed 2919 at DMA boundary
+  3117    180.149 wddm: preemption report fence 260 node 2 last completed 557 at DMA boundary
+  3118    180.159 wddm: preemption queued fence 568 node 0 hardware pending 1 active submits 0
+  3119    180.159 wddm: preemption queued fence 261 node 2 hardware pending 1 active submits 0
+  3120    180.200 wddm: preemption report fence 568 node 0 last completed 2922 at DMA boundary
+  3121    180.230 wddm: preemption queued fence 569 node 0 hardware pending 1 active submits 0
+  3122    180.269 wddm: preemption report fence 261 node 2 last completed 559 at DMA boundary
+  3123    180.281 wddm: preemption queued fence 262 node 2 hardware pending 1 active submits 0
+  3124    180.291 wddm: preemption report fence 569 node 0 last completed 2927 at DMA boundary
+  3125    180.298 wddm: preemption queued fence 570 node 0 hardware pending 1 active submits 0
+  3126    180.317 wddm: preemption report fence 262 node 2 last completed 561 at DMA boundary
+  3127    180.345 wddm: preemption report fence 570 node 0 last completed 2931 at DMA boundary
+  3128    180.348 wddm: preemption queued fence 263 node 2 hardware pending 1 active submits 0
+  3129    180.367 wddm: preemption report fence 263 node 2 last completed 562 at DMA boundary
+  3130    180.383 wddm: preemption queued fence 571 node 0 hardware pending 1 active submits 0
+  3131    180.390 wddm: preemption report fence 571 node 0 last completed 2934 at DMA boundary
+  3132    180.400 wddm: preemption queued fence 572 node 0 hardware pending 1 active submits 0
+  3133    180.419 wddm: preemption report fence 572 node 0 last completed 2937 at DMA boundary
+  3134    180.426 wddm: preemption queued fence 573 node 0 hardware pending 1 active submits 0
+  3135    180.507 wddm: preemption queued fence 264 node 2 hardware pending 1 active submits 0
+  3136    180.586 wddm: preemption report fence 573 node 0 last completed 2941 at DMA boundary
+  3137    180.610 wddm: preemption report fence 264 node 2 last completed 564 at DMA boundary
+  3138    180.627 wddm: preemption queued fence 574 node 0 hardware pending 1 active submits 0
+  3139    180.627 wddm: preemption queued fence 265 node 2 hardware pending 1 active submits 0
+  3140    180.716 wddm: preemption report fence 574 node 0 last completed 2944 at DMA boundary
+  3141    180.731 wddm: preemption queued fence 575 node 0 hardware pending 1 active submits 0
+  3142    180.878 wddm: preemption report fence 575 node 0 last completed 2950 at DMA boundary
+  3143    180.879 wddm: preemption report fence 265 node 2 last completed 566 at DMA boundary
+  3144    180.889 wddm: preemption queued fence 576 node 0 hardware pending 1 active submits 0
+  3145    180.891 wddm: preemption queued fence 266 node 2 hardware pending 1 active submits 0
+  3146    180.915 wddm: preemption report fence 576 node 0 last completed 2953 at DMA boundary
+  3147    180.941 wddm: preemption queued fence 577 node 0 hardware pending 1 active submits 0
+  3148    181.056 wddm: preemption report fence 577 node 0 last completed 2955 at DMA boundary
+  3149    181.056 wddm: preemption report fence 266 node 2 last completed 567 at DMA boundary
+  3150    181.066 wddm: preemption queued fence 267 node 2 hardware pending 1 active submits 0
+  3151    181.158 wddm: preemption report fence 267 node 2 last completed 569 at DMA boundary
+  3152    181.175 wddm: preemption queued fence 268 node 2 hardware pending 1 active submits 0
+  3153    181.178 wddm: preemption queued fence 578 node 0 hardware pending 1 active submits 0
+  3154    181.195 wddm: preemption report fence 578 node 0 last completed 2965 at DMA boundary
+  3155    181.257 wddm: preemption report fence 268 node 2 last completed 572 at DMA boundary
+  3156    181.281 wddm: preemption queued fence 579 node 0 hardware pending 1 active submits 0
+  3157    181.321 wddm: preemption report fence 579 node 0 last completed 2970 at DMA boundary
+  3158    181.324 wddm: preemption queued fence 269 node 2 hardware pending 1 active submits 0
+  3159    181.356 wddm: preemption queued fence 580 node 0 hardware pending 1 active submits 0
+  3160    181.358 wddm: preemption report fence 269 node 2 last completed 573 at DMA boundary
+  3161    181.358 wddm: preemption report fence 580 node 0 last completed 2973 at DMA boundary
+  3162    181.360 wddm: preemption queued fence 581 node 0 hardware pending 1 active submits 0
+  3163    181.372 wddm: preemption queued fence 270 node 2 hardware pending 1 active submits 0
+  3164    181.387 wddm: preemption report fence 581 node 0 last completed 2975 at DMA boundary
+  3165    181.414 wddm: preemption queued fence 582 node 0 hardware pending 1 active submits 0
+  3166    181.418 wddm: preemption report fence 582 node 0 last completed 2977 at DMA boundary
+  3167    181.429 wddm: preemption queued fence 583 node 0 hardware pending 1 active submits 0
+  3168    181.482 wddm: preemption report fence 583 node 0 last completed 2979 at DMA boundary
+  3169    181.514 wddm: preemption report fence 270 node 2 last completed 575 at DMA boundary
+  3170    181.524 wddm: preemption queued fence 271 node 2 hardware pending 1 active submits 0
+  3171    181.529 wddm: preemption queued fence 584 node 0 hardware pending 1 active submits 0
+  3172    181.581 wddm: preemption report fence 584 node 0 last completed 2983 at DMA boundary
+  3173    181.596 wddm: preemption queued fence 585 node 0 hardware pending 1 active submits 0
+  3174    181.644 wddm: preemption report fence 585 node 0 last completed 2985 at DMA boundary
+  3175    181.645 wddm: preemption report fence 271 node 2 last completed 577 at DMA boundary
+  3176    181.656 wddm: preemption queued fence 272 node 2 hardware pending 1 active submits 0
+  3177    181.660 wddm: preemption queued fence 586 node 0 hardware pending 1 active submits 0
+  3178    181.707 wddm: preemption report fence 586 node 0 last completed 2991 at DMA boundary
+  3179    181.727 wddm: preemption report fence 272 node 2 last completed 579 at DMA boundary
+  3180    181.741 wddm: preemption queued fence 273 node 2 hardware pending 1 active submits 0
+  3181    181.794 wddm: preemption queued fence 587 node 0 hardware pending 1 active submits 0
+  3182    181.876 wddm: preemption report fence 587 node 0 last completed 3000 at DMA boundary
+  3183    181.880 wddm: preemption report fence 273 node 2 last completed 581 at DMA boundary
+  3184    181.895 wddm: preemption queued fence 588 node 0 hardware pending 1 active submits 0
+  3185    181.895 wddm: preemption queued fence 274 node 2 hardware pending 1 active submits 0
+  3186    181.937 wddm: preemption report fence 588 node 0 last completed 3006 at DMA boundary
+  3187    181.943 wddm: preemption queued fence 589 node 0 hardware pending 1 active submits 0
+  3188    182.016 wddm: preemption report fence 589 node 0 last completed 3009 at DMA boundary
+  3189    182.047 wddm: preemption report fence 274 node 2 last completed 583 at DMA boundary
+  3190    182.064 wddm: preemption queued fence 275 node 2 hardware pending 1 active submits 0
+  3191    182.064 dpm: telemetry dpm 2000 MHz/1000 mV (SMU 2000 MHz VID 88) 75.0 C busy 100.0% avg 99.9% want 2000 cap 2000 max 2000 throttle none, raises 5 lowers 2 thermal 0 w
+  3192    182.064 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  3193    182.064 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  3194    182.064 hwmon: telemetry fan2 1662 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  3195    182.064 hwmon: telemetry apu 75.0 C, duty read-back unproven
+  3196    182.064 hwmon: telemetry 178 samples 0 errors 0 retries 0 refusals
+  3197    182.064 smu metrics: telemetry mW p108431 a104393 g71900 s10217 reject 1 why 4 sp00000000 m67 0
+  3198    182.064 smu metrics: telemetry gfx 981 mV 2000 MHz 75.7 C soc 1206 mV 69.2 C thr 0
+  3199    182.064 fan: telemetry curve curve/standard
+  3200    182.064 fan: telemetry target 100% applied 100% raw 255 rb 255, 1662 rpm
+  3201    182.064 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  3202    182.064 fan: telemetry 0 failures 0 emergencies 0 doubts
+  3203    182.064 fan: telemetry boost on (busy+power)
+  3204    182.064 fan: telemetry boost 2 times, 77183 ms
+  3205    182.066 wddm: preemption queued fence 590 node 0 hardware pending 1 active submits 0
+  3206    182.089 wddm: preemption report fence 590 node 0 last completed 3013 at DMA boundary
+  3207    182.103 wddm: preemption queued fence 591 node 0 hardware pending 1 active submits 0
+  3208    182.113 wddm: preemption report fence 591 node 0 last completed 3015 at DMA boundary
+  3209    182.140 wddm: preemption queued fence 592 node 0 hardware pending 1 active submits 0
+  3210    182.151 wddm: preemption report fence 275 node 2 last completed 585 at DMA boundary
+  3211    182.169 wddm: preemption report fence 592 node 0 last completed 3017 at DMA boundary
+  3212    182.169 wddm: preemption queued fence 276 node 2 hardware pending 1 active submits 0
+  3213    182.201 wddm: preemption queued fence 593 node 0 hardware pending 1 active submits 0
+  3214    182.207 wddm: preemption report fence 593 node 0 last completed 3020 at DMA boundary
+  3215    182.208 wddm: preemption queued fence 594 node 0 hardware pending 1 active submits 0
+  3216    182.225 wddm: preemption report fence 594 node 0 last completed 3021 at DMA boundary
+  3217    182.237 wddm: preemption report fence 276 node 2 last completed 587 at DMA boundary
+  3218    182.240 wddm: preemption queued fence 595 node 0 hardware pending 1 active submits 0
+  3219    182.247 wddm: preemption queued fence 277 node 2 hardware pending 1 active submits 0
+  3220    182.272 wddm: preemption report fence 595 node 0 last completed 3024 at DMA boundary
+  3221    182.299 wddm: preemption queued fence 596 node 0 hardware pending 1 active submits 0
+  3222    182.323 wddm: preemption report fence 596 node 0 last completed 3028 at DMA boundary
+  3223    182.323 wddm: preemption report fence 277 node 2 last completed 589 at DMA boundary
+  3224    182.341 wddm: preemption queued fence 597 node 0 hardware pending 1 active submits 0
+  3225    182.368 wddm: preemption report fence 597 node 0 last completed 3031 at DMA boundary
+  3226    182.373 wddm: preemption queued fence 598 node 0 hardware pending 1 active submits 0
+  3227    182.453 wddm: preemption report fence 598 node 0 last completed 3037 at DMA boundary
+  3228    182.456 wddm: preemption queued fence 278 node 2 hardware pending 1 active submits 0
+  3229    182.466 wddm: preemption report fence 278 node 2 last completed 591 at DMA boundary
+  3230    182.470 wddm: preemption queued fence 599 node 0 hardware pending 1 active submits 0
+  3231    182.478 wddm: preemption queued fence 279 node 2 hardware pending 1 active submits 0
+  3232    182.501 wddm: preemption report fence 599 node 0 last completed 3042 at DMA boundary
+  3233    182.540 wddm: preemption queued fence 600 node 0 hardware pending 1 active submits 0
+  3234    182.550 wddm: preemption report fence 600 node 0 last completed 3044 at DMA boundary
+  3235    182.581 wddm: preemption queued fence 601 node 0 hardware pending 1 active submits 0
+  3236    182.611 wddm: preemption report fence 601 node 0 last completed 3048 at DMA boundary
+  3237    182.621 wddm: preemption queued fence 602 node 0 hardware pending 1 active submits 0
+  3238    182.621 wddm: preemption report fence 279 node 2 last completed 593 at DMA boundary
+  3239    182.629 wddm: preemption report fence 602 node 0 last completed 3050 at DMA boundary
+  3240    182.631 wddm: preemption queued fence 280 node 2 hardware pending 1 active submits 0
+  3241    182.681 wddm: preemption queued fence 603 node 0 hardware pending 1 active submits 0
+  3242    182.750 wddm: preemption report fence 603 node 0 last completed 3053 at DMA boundary
+  3243    182.786 wddm: preemption queued fence 604 node 0 hardware pending 1 active submits 0
+  3244    182.829 wddm: preemption report fence 604 node 0 last completed 3055 at DMA boundary
+  3245    182.829 wddm: preemption report fence 280 node 2 last completed 595 at DMA boundary
+  3246    182.845 wddm: preemption queued fence 605 node 0 hardware pending 1 active submits 0
+  3247    182.845 wddm: preemption queued fence 281 node 2 hardware pending 1 active submits 0
+  3248    182.875 wddm: preemption report fence 605 node 0 last completed 3058 at DMA boundary
+  3249    182.896 wddm: preemption queued fence 606 node 0 hardware pending 1 active submits 0
+  3250    182.948 wddm: preemption report fence 606 node 0 last completed 3062 at DMA boundary
+  3251    182.964 wddm: preemption queued fence 607 node 0 hardware pending 1 active submits 0
+  3252    182.981 wddm: preemption report fence 607 node 0 last completed 3064 at DMA boundary
+  3253    182.981 wddm: preemption report fence 281 node 2 last completed 597 at DMA boundary
+  3254    182.994 wddm: preemption queued fence 282 node 2 hardware pending 1 active submits 0
+  3255    183.001 wddm: preemption queued fence 608 node 0 hardware pending 1 active submits 0
+  3256    183.047 wddm: preemption report fence 608 node 0 last completed 3068 at DMA boundary
+  3257    183.063 wddm: preemption report fence 282 node 2 last completed 599 at DMA boundary
+  3258    183.078 wddm: preemption queued fence 609 node 0 hardware pending 1 active submits 0
+  3259    183.078 wddm: preemption queued fence 283 node 2 hardware pending 1 active submits 0
+  3260    183.132 wddm: preemption report fence 609 node 0 last completed 3074 at DMA boundary
+  3261    183.139 wddm: preemption queued fence 610 node 0 hardware pending 1 active submits 0
+  3262    183.147 wddm: preemption report fence 610 node 0 last completed 3076 at DMA boundary
+  3263    183.192 wddm: preemption report fence 283 node 2 last completed 601 at DMA boundary
+  3264    183.213 wddm: preemption queued fence 611 node 0 hardware pending 1 active submits 0
+  3265    183.215 wddm: preemption queued fence 284 node 2 hardware pending 1 active submits 0
+  3266    183.267 wddm: preemption report fence 611 node 0 last completed 3082 at DMA boundary
+  3267    183.272 wddm: preemption report fence 284 node 2 last completed 602 at DMA boundary
+  3268    183.293 wddm: preemption queued fence 285 node 2 hardware pending 1 active submits 0
+  3269    183.296 wddm: preemption queued fence 612 node 0 hardware pending 1 active submits 0
+  3270    183.304 wddm: preemption report fence 612 node 0 last completed 3085 at DMA boundary
+  3271    183.337 wddm: preemption queued fence 613 node 0 hardware pending 1 active submits 0
+  3272    183.350 wddm: preemption report fence 285 node 2 last completed 605 at DMA boundary
+  3273    183.350 wddm: preemption report fence 613 node 0 last completed 3087 at DMA boundary
+  3274    183.360 wddm: preemption queued fence 614 node 0 hardware pending 1 active submits 0
+  3275    183.421 wddm: preemption report fence 614 node 0 last completed 3089 at DMA boundary
+  3276    183.430 wddm: preemption queued fence 615 node 0 hardware pending 1 active submits 0
+  3277    183.432 wddm: preemption report fence 615 node 0 last completed 3091 at DMA boundary
+  3278    183.468 wddm: preemption queued fence 616 node 0 hardware pending 1 active submits 0
+  3279    183.480 wddm: preemption report fence 616 node 0 last completed 3096 at DMA boundary
+  3280    183.484 wddm: preemption queued fence 286 node 2 hardware pending 1 active submits 0
+  3281    183.489 wddm: preemption report fence 286 node 2 last completed 607 at DMA boundary
+  3282    183.499 wddm: preemption queued fence 287 node 2 hardware pending 1 active submits 0
+  3283    183.499 wddm: preemption queued fence 617 node 0 hardware pending 1 active submits 0
+  3284    183.589 wddm: preemption report fence 617 node 0 last completed 3101 at DMA boundary
+  3285    183.600 wddm: preemption queued fence 618 node 0 hardware pending 1 active submits 0
+  3286    183.609 wddm: preemption report fence 618 node 0 last completed 3104 at DMA boundary
+  3287    183.610 wddm: preemption report fence 287 node 2 last completed 609 at DMA boundary
+  3288    183.629 wddm: preemption queued fence 619 node 0 hardware pending 1 active submits 0
+  3289    183.629 wddm: preemption queued fence 288 node 2 hardware pending 1 active submits 0
+  3290    183.666 wddm: preemption report fence 619 node 0 last completed 3107 at DMA boundary
+  3291    183.692 wddm: preemption queued fence 620 node 0 hardware pending 1 active submits 0
+  3292    183.732 wddm: preemption report fence 620 node 0 last completed 3109 at DMA boundary
+  3293    183.744 wddm: preemption report fence 288 node 2 last completed 611 at DMA boundary
+  3294    183.747 wddm: preemption queued fence 621 node 0 hardware pending 1 active submits 0
+  3295    183.758 wddm: preemption queued fence 289 node 2 hardware pending 1 active submits 0
+  3296    183.879 wddm: preemption report fence 621 node 0 last completed 3113 at DMA boundary
+  3297    183.906 wddm: preemption queued fence 622 node 0 hardware pending 1 active submits 0
+  3298    183.912 wddm: preemption report fence 622 node 0 last completed 3116 at DMA boundary
+  3299    183.918 wddm: preemption queued fence 623 node 0 hardware pending 1 active submits 0
+  3300    183.934 wddm: preemption report fence 623 node 0 last completed 3118 at DMA boundary
+  3301    183.962 wddm: preemption queued fence 624 node 0 hardware pending 1 active submits 0
+  3302    183.992 wddm: preemption report fence 289 node 2 last completed 613 at DMA boundary
+  3303    184.013 wddm: preemption queued fence 290 node 2 hardware pending 1 active submits 0
+  3304    184.034 wddm: preemption report fence 624 node 0 last completed 3120 at DMA boundary
+  3305    184.087 wddm: preemption queued fence 625 node 0 hardware pending 1 active submits 0
+  3306    184.125 wddm: preemption report fence 625 node 0 last completed 3126 at DMA boundary
+  3307    184.126 wddm: preemption report fence 290 node 2 last completed 615 at DMA boundary
+  3308    184.130 wddm: preemption queued fence 626 node 0 hardware pending 1 active submits 0
+  3309    184.137 wddm: preemption queued fence 291 node 2 hardware pending 1 active submits 0
+  3310    184.173 wddm: preemption report fence 626 node 0 last completed 3129 at DMA boundary
+  3311    184.179 wddm: preemption queued fence 627 node 0 hardware pending 1 active submits 0
+  3312    184.282 wddm: preemption report fence 627 node 0 last completed 3133 at DMA boundary
+  3313    184.283 wddm: preemption report fence 291 node 2 last completed 617 at DMA boundary
+  3314    184.295 wddm: preemption queued fence 292 node 2 hardware pending 1 active submits 0
+  3315    184.304 wddm: preemption queued fence 628 node 0 hardware pending 1 active submits 0
+  3316    184.348 wddm: preemption report fence 628 node 0 last completed 3137 at DMA boundary
+  3317    184.354 wddm: preemption queued fence 629 node 0 hardware pending 1 active submits 0
+  3318    184.359 wddm: preemption report fence 629 node 0 last completed 3140 at DMA boundary
+  3319    184.363 wddm: preemption report fence 292 node 2 last completed 619 at DMA boundary
+  3320    184.379 wddm: preemption queued fence 630 node 0 hardware pending 1 active submits 0
+  3321    184.379 wddm: preemption queued fence 293 node 2 hardware pending 1 active submits 0
+  3322    184.425 wddm: preemption report fence 630 node 0 last completed 3143 at DMA boundary
+  3323    184.448 wddm: preemption queued fence 631 node 0 hardware pending 1 active submits 0
+  3324    184.476 wddm: preemption report fence 631 node 0 last completed 3146 at DMA boundary
+  3325    184.502 wddm: preemption report fence 293 node 2 last completed 621 at DMA boundary
+  3326    184.515 wddm: preemption queued fence 632 node 0 hardware pending 1 active submits 0
+  3327    184.516 wddm: preemption queued fence 294 node 2 hardware pending 1 active submits 0
+  3328    184.583 wddm: preemption report fence 632 node 0 last completed 3152 at DMA boundary
+  3329    184.583 wddm: preemption report fence 294 node 2 last completed 622 at DMA boundary
+  3330    184.602 wddm: preemption queued fence 295 node 2 hardware pending 1 active submits 0
+  3331    184.603 wddm: preemption queued fence 633 node 0 hardware pending 1 active submits 0
+  3332    184.663 wddm: preemption report fence 633 node 0 last completed 3155 at DMA boundary
+  3333    184.672 wddm: preemption report fence 295 node 2 last completed 625 at DMA boundary
+  3334    184.691 wddm: preemption queued fence 634 node 0 hardware pending 1 active submits 0
+  3335    184.749 wddm: preemption queued fence 296 node 2 hardware pending 1 active submits 0
+  3336    184.817 wddm: preemption report fence 634 node 0 last completed 3162 at DMA boundary
+  3337    184.843 wddm: preemption queued fence 635 node 0 hardware pending 1 active submits 0
+  3338    184.856 wddm: preemption report fence 296 node 2 last completed 626 at DMA boundary
+  3339    184.860 wddm: preemption report fence 635 node 0 last completed 3164 at DMA boundary
+  3340    184.886 wddm: preemption queued fence 636 node 0 hardware pending 1 active submits 0
+  3341    184.905 wddm: preemption queued fence 297 node 2 hardware pending 1 active submits 0
+  3342    184.920 wddm: preemption report fence 636 node 0 last completed 3170 at DMA boundary
+  3343    184.950 wddm: preemption report fence 297 node 2 last completed 627 at DMA boundary
+  3344    184.966 wddm: preemption queued fence 637 node 0 hardware pending 1 active submits 0
+  3345    184.966 wddm: preemption queued fence 298 node 2 hardware pending 1 active submits 0
+  3346    184.972 wddm: preemption report fence 637 node 0 last completed 3173 at DMA boundary
+  3347    184.981 wddm: preemption queued fence 638 node 0 hardware pending 1 active submits 0
+  3348    185.040 wddm: preemption report fence 298 node 2 last completed 629 at DMA boundary
+  3349    185.040 wddm: preemption report fence 638 node 0 last completed 3175 at DMA boundary
+  3350    185.050 wddm: preemption queued fence 639 node 0 hardware pending 1 active submits 0
+  3351    185.058 wddm: preemption queued fence 299 node 2 hardware pending 1 active submits 0
+  3352    185.086 wddm: preemption report fence 639 node 0 last completed 3178 at DMA boundary
+  3353    185.150 wddm: preemption queued fence 640 node 0 hardware pending 1 active submits 0
+  3354    185.156 wddm: preemption report fence 640 node 0 last completed 3182 at DMA boundary
+  3355    185.156 wddm: preemption report fence 299 node 2 last completed 631 at DMA boundary
+  3356    185.165 wddm: preemption queued fence 641 node 0 hardware pending 1 active submits 0
+  3357    185.168 wddm: preemption queued fence 300 node 2 hardware pending 1 active submits 0
+  3358    185.177 wddm: preemption report fence 641 node 0 last completed 3184 at DMA boundary
+  3359    185.177 wddm: preemption report fence 300 node 2 last completed 632 at DMA boundary
+  3360    185.330 wddm: preemption queued fence 642 node 0 hardware pending 1 active submits 0
+  3361    185.333 wddm: preemption report fence 642 node 0 last completed 3190 at DMA boundary
+  3362    185.450 dpm: 2000 -> 1900 MHz/984 mV VID 90, 0 settle reads (load, busy 0 permille, 75.6 C, throttle none)
+  3363    185.666 dpm: 1900 -> 1800 MHz/968 mV VID 93, 0 settle reads (load, busy 67 permille, 75.5 C, throttle none)
+  3364    185.881 dpm: 1800 -> 1700 MHz/952 mV VID 95, 0 settle reads (load, busy 0 permille, 75.5 C, throttle none)
+  3365    185.978 wddm: preemption queued fence 643 node 0 hardware pending 1 active submits 0
+  3366    185.980 wddm: preemption report fence 643 node 0 last completed 3225 at DMA boundary
+  3367    186.096 dpm: 1700 -> 1600 MHz/935 mV VID 98, 0 settle reads (load, busy 0 permille, 75.3 C, throttle none)
+  3368    186.285 wddm: preemption queued fence 644 node 0 hardware pending 1 active submits 0
+  3369    186.285 wddm: preemption report fence 644 node 0 last completed 3237 at DMA boundary
+  3370    186.312 dpm: 1600 -> 1500 MHz/919 mV VID 100, 0 settle reads (load, busy 100 permille, 75.3 C, throttle none)
+  3371    186.529 dpm: 1500 -> 1400 MHz/899 mV VID 104, 0 settle reads (load, busy 0 permille, 75.2 C, throttle none)
+  3372    186.747 dpm: 1400 -> 1300 MHz/880 mV VID 107, 0 settle reads (load, busy 33 permille, 75.2 C, throttle none)
+  3373    186.964 dpm: 1300 -> 1200 MHz/860 mV VID 110, 0 settle reads (load, busy 0 permille, 75.1 C, throttle none)
+  3374    187.088 dpm: telemetry dpm 1200 MHz/860 mV (SMU 1200 MHz VID 110) 75.1 C busy 3.3% avg 3.1% want 1200 cap 2000 max 2000 throttle none, raises 5 lowers 10 thermal 0 war
+  3375    187.088 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  3376    187.088 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  3377    187.088 hwmon: telemetry fan2 1664 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  3378    187.088 hwmon: telemetry apu 75.0 C, duty read-back unproven
+  3379    187.088 hwmon: telemetry 183 samples 0 errors 0 retries 0 refusals
+  3380    187.088 smu metrics: telemetry mW p48491 a60281 g21742 s995 reject 1 why 4 sp00000000 m67 0
+  3381    187.088 smu metrics: telemetry gfx 856 mV 1200 MHz 63.0 C soc 806 mV 63.2 C thr 0
+  3382    187.088 fan: telemetry curve curve/standard
+  3383    187.088 fan: telemetry target 100% applied 100% raw 255 rb 255, 1664 rpm
+  3384    187.088 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  3385    187.088 fan: telemetry 0 failures 0 emergencies 0 doubts
+  3386    187.088 fan: telemetry boost on (busy+power)
+  3387    187.088 fan: telemetry boost 2 times, 82266 ms
+  3388    187.180 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 75.1 C, throttle none)
+  3389    187.247 wddm: preemption queued fence 645 node 0 hardware pending 1 active submits 0
+  3390    187.248 wddm: preemption report fence 645 node 0 last completed 3291 at DMA boundary
+  3391    187.397 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 67 permille, 75.0 C, throttle none)
+  3392    187.894 wddm: preemption queued fence 646 node 0 hardware pending 1 active submits 0
+  3393    187.895 wddm: preemption report fence 646 node 0 last completed 3328 at DMA boundary
+  3394    188.065 wddm: preemption queued fence 647 node 0 hardware pending 1 active submits 0
+  3395    188.065 wddm: preemption report fence 647 node 0 last completed 3337 at DMA boundary
+  3396    188.891 wddm: preemption queued fence 648 node 0 hardware pending 1 active submits 0
+  3397    188.892 wddm: preemption report fence 648 node 0 last completed 3379 at DMA boundary
+  3398    189.409 wddm: preemption queued fence 649 node 0 hardware pending 1 active submits 0
+  3399    189.409 wddm: preemption report fence 649 node 0 last completed 3413 at DMA boundary
+  3400    189.910 wddm: preemption queued fence 650 node 0 hardware pending 1 active submits 0
+  3401    189.911 wddm: preemption report fence 650 node 0 last completed 3443 at DMA boundary
+  3402    190.072 wddm: preemption queued fence 651 node 0 hardware pending 1 active submits 0
+  3403    190.072 wddm: preemption report fence 651 node 0 last completed 3452 at DMA boundary
+  3404    190.224 wddm: preemption queued fence 652 node 0 hardware pending 1 active submits 0
+  3405    190.224 wddm: preemption report fence 652 node 0 last completed 3458 at DMA boundary
+  3406    190.854 wddm: preemption queued fence 653 node 0 hardware pending 1 active submits 0
+  3407    190.855 wddm: preemption report fence 653 node 0 last completed 3493 at DMA boundary
+  3408    191.171 wddm: preemption queued fence 654 node 0 hardware pending 1 active submits 0
+  3409    191.172 wddm: preemption report fence 654 node 0 last completed 3512 at DMA boundary
+  3410    191.841 wddm: preemption queued fence 655 node 0 hardware pending 1 active submits 0
+  3411    191.844 wddm: preemption report fence 655 node 0 last completed 3552 at DMA boundary
+  3412    192.091 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 73.2 C busy 0.0% avg 1.7% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 war
+  3413    192.091 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  3414    192.091 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  3415    192.091 hwmon: telemetry fan2 1664 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  3416    192.091 hwmon: telemetry apu 73.0 C, duty read-back unproven
+  3417    192.091 hwmon: telemetry 187 samples 0 errors 0 retries 0 refusals
+  3418    192.091 smu metrics: telemetry mW p43175 a50197 g16631 s853 reject 1 why 4 sp00000000 m67 0
+  3419    192.091 smu metrics: telemetry gfx 818 mV 1000 MHz 59.5 C soc 806 mV 61.2 C thr 0
+  3420    192.091 fan: telemetry curve curve/standard
+  3421    192.091 fan: telemetry target 100% applied 100% raw 255 rb 255, 1664 rpm
+  3422    192.091 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  3423    192.091 fan: telemetry 0 failures 0 emergencies 0 doubts
+  3424    192.091 fan: telemetry boost on (busy+power)
+  3425    192.091 fan: telemetry boost 2 times, 86345 ms
+  3426    193.105 wddm: preemption queued fence 656 node 0 hardware pending 1 active submits 0
+  3427    193.107 wddm: preemption report fence 656 node 0 last completed 3617 at DMA boundary
+  3428    193.240 wddm: preemption queued fence 657 node 0 hardware pending 1 active submits 0
+  3429    193.240 wddm: preemption report fence 657 node 0 last completed 3623 at DMA boundary
+  3430    193.417 wddm: preemption queued fence 658 node 0 hardware pending 1 active submits 0
+  3431    193.417 wddm: preemption report fence 658 node 0 last completed 3636 at DMA boundary
+  3432    194.079 wddm: preemption queued fence 659 node 0 hardware pending 1 active submits 0
+  3433    194.080 wddm: preemption report fence 659 node 0 last completed 3673 at DMA boundary
+  3434    195.072 wddm: preemption queued fence 660 node 0 hardware pending 1 active submits 0
+  3435    195.073 wddm: preemption report fence 660 node 0 last completed 3723 at DMA boundary
+  3436    195.408 wddm: preemption queued fence 661 node 0 hardware pending 1 active submits 0
+  3437    195.411 wddm: preemption report fence 661 node 0 last completed 3744 at DMA boundary
+  3438    195.732 wddm: preemption queued fence 662 node 0 hardware pending 1 active submits 0
+  3439    195.733 wddm: preemption report fence 662 node 0 last completed 3759 at DMA boundary
+  3440    195.846 wddm: preemption queued fence 663 node 0 hardware pending 1 active submits 0
+  3441    195.846 wddm: preemption report fence 663 node 0 last completed 3766 at DMA boundary
+  3442    196.181 wddm: preemption queued fence 664 node 0 hardware pending 1 active submits 0
+  3443    196.181 wddm: preemption report fence 664 node 0 last completed 3783 at DMA boundary
+  3444    196.297 gfx: paging submit, seq 80129 at 0x410860: 60157 submits in 60019 ms, 75697 of 75709 with no line
+  3445    196.995 wddm: preemption queued fence 665 node 0 hardware pending 1 active submits 0
+  3446    196.997 wddm: preemption report fence 665 node 0 last completed 3823 at DMA boundary
+  3447    197.102 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 71.6 C busy 0.0% avg 3.7% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 war
+  3448    197.102 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  3449    197.102 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  3450    197.102 hwmon: telemetry fan2 1666 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  3451    197.102 hwmon: telemetry apu 72.0 C, duty read-back unproven
+  3452    197.102 hwmon: telemetry 192 samples 0 errors 0 retries 0 refusals
+  3453    197.102 smu metrics: telemetry mW p48277 a48348 g17225 s5266 reject 1 why 4 sp00000000 m67 0
+  3454    197.102 smu metrics: telemetry gfx 818 mV 1000 MHz 58.5 C soc 1193 mV 60.5 C thr 0
+  3455    197.102 fan: telemetry curve curve/standard
+  3456    197.102 fan: telemetry target 100% applied 100% raw 255 rb 255, 1666 rpm
+  3457    197.102 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  3458    197.102 fan: telemetry 0 failures 0 emergencies 0 doubts
+  3459    197.102 fan: telemetry boost on (busy+power)
+  3460    197.102 fan: telemetry boost 2 times, 91434 ms
+  3461    197.293 wddm: preemption queued fence 666 node 0 hardware pending 1 active submits 0
+  3462    197.296 wddm: preemption report fence 666 node 0 last completed 3838 at DMA boundary
+  3463    199.605 wddm: preemption queued fence 667 node 0 hardware pending 1 active submits 0
+  3464    199.607 wddm: preemption report fence 667 node 0 last completed 3971 at DMA boundary
+  3465    199.922 wddm: preemption queued fence 668 node 0 hardware pending 1 active submits 0
+  3466    199.922 wddm: preemption report fence 668 node 0 last completed 3987 at DMA boundary
+  3467    200.867 wddm: preemption queued fence 669 node 0 hardware pending 1 active submits 0
+  3468    200.869 wddm: preemption report fence 669 node 0 last completed 4035 at DMA boundary
+  3469    201.490 wddm: preemption queued fence 670 node 0 hardware pending 1 active submits 0
+  3470    201.493 wddm: preemption report fence 670 node 0 last completed 4069 at DMA boundary
+  3471    202.104 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 70.1 C busy 0.0% avg 1.9% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 war
+  3472    202.104 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  3473    202.104 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  3474    202.104 hwmon: telemetry fan2 1666 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  3475    202.104 hwmon: telemetry apu 70.0 C, duty read-back unproven
+  3476    202.104 hwmon: telemetry 197 samples 0 errors 0 retries 0 refusals
+  3477    202.104 smu metrics: telemetry mW p48051 a48201 g17225 s5211 reject 1 why 4 sp00000000 m67 0
+  3478    202.104 smu metrics: telemetry gfx 818 mV 1000 MHz 58.0 C soc 1181 mV 60.0 C thr 0
+  3479    202.104 fan: telemetry curve curve/standard
+  3480    202.104 fan: telemetry target 100% applied 100% raw 255 rb 255, 1666 rpm
+  3481    202.104 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  3482    202.104 fan: telemetry 0 failures 0 emergencies 0 doubts
+  3483    202.104 fan: telemetry boost on (busy+power)
+  3484    202.104 fan: telemetry boost 2 times, 96561 ms
+  3485    202.963 wddm: preemption queued fence 671 node 0 hardware pending 1 active submits 0
+  3486    202.963 wddm: preemption report fence 671 node 0 last completed 4147 at DMA boundary
+  3487    203.590 wddm: preemption queued fence 672 node 0 hardware pending 1 active submits 0
+  3488    203.590 wddm: preemption report fence 672 node 0 last completed 4178 at DMA boundary
+  3489    207.124 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 68.7 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 war
+  3490    207.124 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 2 exits 2 refusals 0, 95068 ms at the point
+  3491    207.124 dpm: telemetry idle leave at 150 permille, exits 2 by a busy tick, 0 by the window
+  3492    207.124 hwmon: telemetry fan2 1662 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  3493    207.124 hwmon: telemetry apu 69.0 C, duty read-back unproven
+  3494    207.124 hwmon: telemetry 202 samples 0 errors 0 retries 0 refusals
+  3495    207.124 smu metrics: telemetry mW p48282 a44093 g16758 s5929 reject 1 why 4 sp00000000 m67 0
+  3496    207.124 smu metrics: telemetry gfx 824 mV 1000 MHz 57.0 C soc 1199 mV 59.7 C thr 0
+  3497    207.124 fan: telemetry curve curve/standard
+  3498    207.124 fan: telemetry target 100% applied 100% raw 255 rb 255, 1662 rpm
+  3499    207.124 fan: telemetry 1 takeovers 0 handbacks 15 writes
+  3500    207.124 fan: telemetry 0 failures 0 emergencies 0 doubts
+  3501    207.124 fan: telemetry boost on (busy+power)
+  3502    207.124 fan: telemetry boost 2 times, 101633 ms
+  3503    208.940 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 68.3 C, throttle idle)
+  3504    210.738 gfx: paging submit, seq 82759 at 0x4006D8: 2164 submits in 14441 ms, 77860 of 77873 with no line
+             1024 lines printed
+             escapes: 17 without adapter synchronization, 0 with HardwareAccess

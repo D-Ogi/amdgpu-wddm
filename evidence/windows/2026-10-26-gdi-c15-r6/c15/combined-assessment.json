@@ -1,0 +1,24 @@
+{
+  "result": "PASS",
+  "checks": {
+    "TRIAL 3 GDI ON BUSY": true,
+    "SWITCH OFF": true,
+    "TRIAL 3 GDI OFF BUSY": true,
+    "SWITCH ON": true,
+    "TRIAL 5 CPU WRITE": true,
+    "WHOLE PASS": true,
+    "same_binary": true,
+    "controlled_wait_path": true,
+    "default_restored": true,
+    "witness_evidence_unchanged": true,
+    "default_raw_failure_retained": true
+  },
+  "scope": "Default-pool desktop, counters, GDI off/on and CPU-write plus separate same-binary pool0 kernel-wait coverage. Default-pool positive waits were NOT observed; its raw BUSY RING failure is retained. This assessment does not assert default-pool wait coverage or performance gain.",
+  "kernel_holds_controlled": 154,
+  "max_controlled_hold_us": 40494,
+  "inputs": {
+    "lab\\c15-t33-r6-20261026T054942Z\\summary.json": "f6c614977ffe4894894ff89ccb681e453c8f9aed923a5f40907a5381a848acc2",
+    "lab\\c15-t33-r6-20261026T054942Z\\c15.log": "7b198001f4246f0374b14855191c94386b50aa46393be8e3093e2a5fabc4cde0",
+    "lab\\pool-hold-20261026T054039Z\\independent-verdict.json": "203119313ba731e231dba2c89bfa1884bb56bbc15264bff7b8551ad2d23a3acc"
+  }
+}

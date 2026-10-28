@@ -1,0 +1,6 @@
+utc 2026-10-26T05:47:13.5921589Z
+2026-10-26T05:47:13.888Z 70fe1fc40a68 start confirm-start, Nagi Control App 0.7.0.0
+2026-10-26T05:47:14.527Z 70fe1fc40a68 result: refused: This start is confirmed already.
+exit 3
+action exit 3
+Confirmation is already complete; caller must independently verify start health.

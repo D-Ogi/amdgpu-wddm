@@ -1,0 +1,272 @@
+--- the GDI lines of the log ring
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    38      1.364 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 2
+    40      1.364 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    41      1.364 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+   551      2.824 wddm: gdi diag submit7 fence 7 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   569      2.872 wddm: gdi diag submit8 fence 8 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   581      2.919 wddm: gdi diag submit9 fence 9 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   590      2.966 wddm: gdi diag submit10 fence 10 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   599      3.012 wddm: gdi diag submit11 fence 11 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   608      3.059 wddm: gdi diag submit12 fence 12 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   617      3.107 wddm: gdi diag submit13 fence 13 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   627      3.330 wddm: gdi diag submit14 fence 14 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   636      3.362 wddm: gdi diag submit15 fence 15 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   645      3.444 wddm: gdi diag submit16 fence 16 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   883     15.549 wddm: GDI request type 3 flags 0x00000000 phase size 1920x64 format 21
+   885     15.549 wddm: GDI request type 3 flags 0x00000000 phase fill 1920x64 format 21
+   888     15.549 wddm: GDI request type 2 flags 0x00000000 phase size 1920x1200 format 21
+   890     15.549 wddm: GDI request type 2 flags 0x00000000 phase fill 1920x1200 format 21
+   894     15.550 wddm: GDI request type 4 flags 0x00000000 phase size 512x16 format 28
+   895     15.550 wddm: GDI request type 4 flags 0x00000000 phase fill 512x16 format 28
+   897     15.550 wddm: gdi diag c1 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   898     15.550 wddm: gdi diag c1 cap 997376 len 96 subs 1 list 2
+   899     15.550 wddm: gdi diag c1 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   900     15.550 wddm: gdi diag c1 k0 D 0 0 512 13 S 0 0 512 13
+   901     15.550 wddm: gdi diag c1 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   902     15.550 wddm: gdi diag c1 k0 mode 0 mx 0 my 0 sp 512 dp 0 ap 0 n 1
+   903     15.550 wddm: gdi diag c1 k0 s0 ix 1 seg 0 wr 1 type 4 512x16 pitch 512
+   904     15.550 wddm: gdi diag c1 k0 s0 bpp 1 rf 0 bytes 8192 va 0x19B8000
+   905     15.550 wddm: gdi diag c1 k0 s1 ix 0 seg 0 wr 0 type 2 512x16 pitch 512
+   906     15.550 wddm: gdi diag c1 k0 s1 bpp 1 rf 0 bytes 8192 va 0x19BA000
+   907     15.550 wddm: gdi diag c1 k0 r0 1 0 0 512 13 0 0 0 0
+   908     15.550 wddm: gdi diag c1 end used 104 committed 104 code 0x0 disp 0 rows 1 fall 0
+   909     15.550 wddm: gdi diag c1 hash 0xE42A7F930AF58FD5 lab-skipped 0 lab-dropped 0
+   910     15.550 wddm: RenderGdi1 ctxFFFF848B6B8CAD30 commands1 bytes96 dwords104 rects1 fall0 over0
+   911     15.550 wddm: GDI request type 1 flags 0x00000000 phase size 1920x48 format 21
+   912     15.550 wddm: GDI request type 1 flags 0x00000000 phase fill 1920x48 format 21
+   913     15.556 wddm: gdi diag c2 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   914     15.556 wddm: gdi diag c2 cap 997376 len 80 subs 2 list 1
+   915     15.556 wddm: gdi diag c2 k0 op 2 ix 0 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   916     15.556 wddm: gdi diag c2 k0 D 0 0 1920 48 S 0 0 0 0
+   917     15.556 wddm: gdi diag c2 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   918     15.556 wddm: gdi diag c2 k0 mode 0 mx 0 my 0 sp 0 dp 0 ap 0 n 2
+   919     15.556 wddm: gdi diag c2 k0 s0 ix 0 seg 0 wr 1 type 1 1920x48 pitch 7680
+   920     15.556 wddm: gdi diag c2 k0 s0 bpp 4 rf 0 bytes 368640 va 0x19BA000
+   921     15.556 wddm: gdi diag c2 k0 r0 2 0 0 1920 48 0 0 1920 48
+   922     15.556 wddm: gdi diag c2 end used 680 committed 680 code 0x0 disp 0 rows 2 fall 0
+   923     15.556 wddm: gdi diag c2 hash 0xB1E86FA443817258 lab-skipped 0 lab-dropped 0
+   924     15.556 wddm: RenderGdi2 ctxFFFF848B6B8CAD30 commands1 bytes80 dwords680 rects2 fall0 over0
+   925     15.563 wddm: gdi diag c3 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   926     15.563 wddm: gdi diag c3 cap 997376 len 64 subs 1 list 1
+   927     15.563 wddm: gdi diag c3 k0 op 2 ix 0 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   928     15.563 wddm: gdi diag c3 k0 D 0 0 1920 48 S 0 0 0 0
+   929     15.563 wddm: gdi diag c3 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   930     15.563 wddm: gdi diag c3 k0 mode 0 mx 0 my 0 sp 0 dp 0 ap 0 n 1
+   931     15.563 wddm: gdi diag c3 k0 s0 ix 0 seg 0 wr 1 type 1 1920x48 pitch 7680
+   932     15.563 wddm: gdi diag c3 k0 s0 bpp 4 rf 0 bytes 368640 va 0x19BA000
+   933     15.563 wddm: gdi diag c3 k0 r0 1 0 0 1920 48 0 0 0 0
+   934     15.563 wddm: gdi diag c3 end used 344 committed 344 code 0x0 disp 0 rows 1 fall 0
+   935     15.563 wddm: gdi diag c3 hash 0xB3DDCC2C7ABC37C6 lab-skipped 0 lab-dropped 0
+   936     15.563 wddm: RenderGdi3 ctxFFFF848B6B8CAD30 commands1 bytes64 dwords344 rects1 fall0 over0
+   956     15.889 wddm: gdi diag c4 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   957     15.889 wddm: gdi diag c4 cap 997376 len 64 subs 1 list 1
+   958     15.889 wddm: gdi diag c4 k0 op 2 ix 0 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   959     15.889 wddm: gdi diag c4 k0 D 0 0 1920 48 S 0 0 0 0
+   960     15.889 wddm: gdi diag c4 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   961     15.889 wddm: gdi diag c4 k0 mode 0 mx 0 my 0 sp 0 dp 0 ap 0 n 1
+   962     15.889 wddm: gdi diag c4 k0 s0 ix 0 seg 0 wr 1 type 1 1920x48 pitch 7680
+   963     15.889 wddm: gdi diag c4 k0 s0 bpp 4 rf 0 bytes 368640 va 0x19BA000
+   964     15.889 wddm: gdi diag c4 k0 r0 1 0 0 1920 48 0 0 0 0
+   965     15.889 wddm: gdi diag c4 end used 344 committed 344 code 0x0 disp 0 rows 1 fall 0
+   966     15.889 wddm: gdi diag c4 hash 0xB3DDCC2C7ABC37C6 lab-skipped 0 lab-dropped 0
+   967     15.889 wddm: RenderGdi4 ctxFFFF848B6B8CAD30 commands1 bytes64 dwords344 rects1 fall0 over0
+   969     15.905 wddm: gdi diag c5 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   970     15.905 wddm: gdi diag c5 cap 997376 len 128 subs 5 list 1
+   971     15.905 wddm: gdi diag c5 k0 op 2 ix 0 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   972     15.905 wddm: gdi diag c5 k0 D 0 0 1920 48 S 0 0 0 0
+   973     15.905 wddm: gdi diag c5 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   974     15.905 wddm: gdi diag c5 k0 mode 0 mx 0 my 0 sp 0 dp 0 ap 0 n 5
+   975     15.905 wddm: gdi diag c5 k0 s0 ix 0 seg 0 wr 1 type 1 1920x48 pitch 7680
+   976     15.905 wddm: gdi diag c5 k0 s0 bpp 4 rf 0 bytes 368640 va 0x19BA000
+   977     15.905 wddm: gdi diag c5 k0 r0 2 0 0 1920 48 0 0 1920 48
+   978     15.905 wddm: gdi diag c5 k0 r2 2 0 0 1920 48 0 0 1920 48
+   979     15.905 wddm: gdi diag c5 k0 r4 1 0 0 1920 48 0 0 0 0
+   980     15.905 wddm: gdi diag c5 end used 1688 committed 1688 code 0x0 disp 0 rows 5 fall 0
+   981     15.905 wddm: gdi diag c5 hash 0xEF6DA90FD3280136 lab-skipped 0 lab-dropped 0
+   982     15.905 wddm: RenderGdi5 ctxFFFF848B6B8CAD30 commands1 bytes128 dwords1688 rects5 fall0 over0
+  1002     16.174 wddm: gdi diag c6 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1003     16.174 wddm: gdi diag c6 cap 997376 len 192 subs 2 list 2
+  1004     16.174 wddm: gdi diag c6 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1005     16.174 wddm: gdi diag c6 k0 D 0 0 1920 1152 S 0 0 1920 1152
+  1006     16.174 wddm: gdi diag c6 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1007     16.174 wddm: gdi diag c6 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1008     16.174 wddm: gdi diag c6 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1009     16.174 wddm: gdi diag c6 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1010     16.174 wddm: gdi diag c6 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1011     16.174 wddm: gdi diag c6 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1012     16.174 wddm: gdi diag c6 k0 r0 1 0 0 1920 1152 0 0 0 0
+  1013     16.174 wddm: gdi diag c6 k1 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1014     16.174 wddm: gdi diag c6 k1 D 0 1152 1920 1200 S 0 1152 1920 1200
+  1015     16.174 wddm: gdi diag c6 k1 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1016     16.174 wddm: gdi diag c6 k1 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1017     16.174 wddm: gdi diag c6 k1 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1018     16.174 wddm: gdi diag c6 k1 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1019     16.174 wddm: gdi diag c6 k1 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1020     16.174 wddm: gdi diag c6 k1 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1021     16.174 wddm: gdi diag c6 k1 r0 1 0 1152 1920 1200 0 0 0 0
+  1022     16.175 wddm: gdi diag c6 end used 8408 committed 8408 code 0x0 disp 0 rows 2 fall 0
+  1023     16.175 wddm: gdi diag c6 hash 0xDBB6C55BE2A93AA1 lab-skipped 0 lab-dropped 0
+  1024     16.175 wddm: RenderGdi6 ctxFFFF848B6B8CAD30 commands2 bytes192 dwords8408 rects2 fall0 over0
+  1029     16.206 wddm: gdi diag c7 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1030     16.206 wddm: gdi diag c7 cap 997376 len 352 subs 17 list 2
+  1031     16.206 wddm: gdi diag c7 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1032     16.206 wddm: gdi diag c7 k0 D 0 0 1834 1120 S 0 0 1834 1120
+  1033     16.206 wddm: gdi diag c7 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1034     16.206 wddm: gdi diag c7 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 17
+  1035     16.206 wddm: gdi diag c7 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1036     16.206 wddm: gdi diag c7 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1037     16.206 wddm: gdi diag c7 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1038     16.206 wddm: gdi diag c7 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x10EE000
+  1039     16.206 wddm: gdi diag c7 k0 r0 2 0 0 238 85 0 97 162 289
+  1040     16.206 wddm: gdi diag c7 k0 r2 2 66 289 162 301 0 301 162 391
+  1041     16.206 wddm: gdi diag c7 k0 r4 2 0 391 86 403 0 403 162 493
+  1042     16.206 wddm: gdi diag c7 k0 r6 2 66 493 162 505 0 505 162 607
+  1043     16.206 wddm: gdi diag c7 k0 r8 2 0 607 162 712 826 607 922 712
+  1044     16.206 wddm: gdi diag c7 k0 r10 2 0 712 86 913 0 913 86 1015
+  1045     16.206 wddm: gdi diag c7 k0 r12 2 1738 913 1834 1015 0 1015 162 1018
+  1046     16.206 wddm: gdi diag c7 k0 r14 2 1738 1015 1834 1018 0 1018 162 1105
+  1047     16.206 wddm: gdi diag c7 k0 r16 1 66 1105 162 1120 0 0 0 0
+  1049     16.208 wddm: gdi diag c7 end used 9240 committed 9240 code 0x0 disp 0 rows 17 fall 0
+  1050     16.208 wddm: gdi diag c7 hash 0xA4E62CC1CBF44143 lab-skipped 0 lab-dropped 0
+  1051     16.208 wddm: RenderGdi7 ctxFFFF848B6B8CAD30 commands1 bytes352 dwords9240 rects17 fall0 over0
+  1052     16.222 wddm: gdi diag c8 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1053     16.222 wddm: gdi diag c8 cap 997376 len 352 subs 17 list 2
+  1054     16.222 wddm: gdi diag c8 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1055     16.222 wddm: gdi diag c8 k0 D 0 0 1834 1120 S 0 0 1834 1120
+  1056     16.222 wddm: gdi diag c8 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1057     16.222 wddm: gdi diag c8 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 17
+  1058     16.222 wddm: gdi diag c8 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1059     16.222 wddm: gdi diag c8 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1060     16.222 wddm: gdi diag c8 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1061     16.222 wddm: gdi diag c8 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1062     16.222 wddm: gdi diag c8 k0 r0 2 0 0 238 85 0 97 162 289
+  1063     16.222 wddm: gdi diag c8 k0 r2 2 66 289 162 301 0 301 162 391
+  1064     16.222 wddm: gdi diag c8 k0 r4 2 0 391 86 403 0 403 162 493
+  1065     16.222 wddm: gdi diag c8 k0 r6 2 66 493 162 505 0 505 162 607
+  1066     16.222 wddm: gdi diag c8 k0 r8 2 0 607 162 712 826 607 922 712
+  1067     16.222 wddm: gdi diag c8 k0 r10 2 0 712 86 913 0 913 86 1015
+  1068     16.222 wddm: gdi diag c8 k0 r12 2 1738 913 1834 1015 0 1015 162 1018
+  1069     16.222 wddm: gdi diag c8 k0 r14 2 1738 1015 1834 1018 0 1018 162 1105
+  1070     16.222 wddm: gdi diag c8 k0 r16 1 66 1105 162 1120 0 0 0 0
+  1071     16.223 wddm: gdi diag c8 end used 9240 committed 9240 code 0x0 disp 0 rows 17 fall 0
+  1072     16.223 wddm: gdi diag c8 hash 0xBCBF1D3F17A9723D lab-skipped 0 lab-dropped 0
+  1073     16.223 wddm: RenderGdi8 ctxFFFF848B6B8CAD30 commands1 bytes352 dwords9240 rects17 fall0 over0
+  1084     16.239 wddm: gdi diag c9 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1085     16.239 wddm: gdi diag c9 cap 997376 len 128 subs 3 list 2
+  1086     16.239 wddm: gdi diag c9 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1087     16.239 wddm: gdi diag c9 k0 D 0 0 238 1120 S 0 0 238 1120
+  1088     16.239 wddm: gdi diag c9 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1089     16.239 wddm: gdi diag c9 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 3
+  1090     16.239 wddm: gdi diag c9 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1091     16.239 wddm: gdi diag c9 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1092     16.239 wddm: gdi diag c9 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1093     16.239 wddm: gdi diag c9 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x10EE000
+  1094     16.239 wddm: gdi diag c9 k0 r0 2 142 0 238 85 0 97 86 202
+  1095     16.239 wddm: gdi diag c9 k0 r2 1 66 1015 162 1120 0 0 0 0
+  1096     16.239 wddm: gdi diag c9 end used 2080 committed 2080 code 0x0 disp 0 rows 3 fall 0
+  1097     16.239 wddm: gdi diag c9 hash 0xE904AE162B01C543 lab-skipped 0 lab-dropped 0
+  1099     16.255 wddm: gdi diag c10 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1100     16.255 wddm: gdi diag c10 cap 997376 len 208 subs 3 list 2
+  1101     16.255 wddm: gdi diag c10 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1102     16.255 wddm: gdi diag c10 k0 D 0 199 922 712 S 0 0 922 513
+  1103     16.255 wddm: gdi diag c10 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1104     16.255 wddm: gdi diag c10 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 2
+  1105     16.255 wddm: gdi diag c10 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1106     16.255 wddm: gdi diag c10 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1107     16.255 wddm: gdi diag c10 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1108     16.255 wddm: gdi diag c10 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1109     16.255 wddm: gdi diag c10 k0 r0 2 826 607 922 712 0 199 86 289
+  1110     16.255 wddm: gdi diag c10 k1 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1111     16.255 wddm: gdi diag c10 k1 D 0 301 86 406 S 922 0 1008 105
+  1112     16.255 wddm: gdi diag c10 k1 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1113     16.255 wddm: gdi diag c10 k1 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1114     16.255 wddm: gdi diag c10 k1 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1115     16.255 wddm: gdi diag c10 k1 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1116     16.255 wddm: gdi diag c10 k1 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1117     16.255 wddm: gdi diag c10 k1 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1118     16.255 wddm: gdi diag c10 k1 r0 1 0 301 86 406 0 0 0 0
+  1119     16.256 wddm: gdi diag c10 end used 2112 committed 2112 code 0x0 disp 0 rows 3 fall 0
+  1120     16.256 wddm: gdi diag c10 hash 0xC84549EE7FFADE14 lab-skipped 0 lab-dropped 0
+  1123     16.273 wddm: gdi diag c11 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1124     16.273 wddm: gdi diag c11 cap 997376 len 288 subs 3 list 2
+  1125     16.273 wddm: gdi diag c11 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1126     16.273 wddm: gdi diag c11 k0 D 0 913 86 1018 S 1008 0 1094 105
+  1127     16.273 wddm: gdi diag c11 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1128     16.273 wddm: gdi diag c11 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1129     16.273 wddm: gdi diag c11 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1130     16.273 wddm: gdi diag c11 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1131     16.273 wddm: gdi diag c11 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1132     16.273 wddm: gdi diag c11 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1133     16.273 wddm: gdi diag c11 k0 r0 1 0 913 86 1018 0 0 0 0
+  1134     16.273 wddm: gdi diag c11 k1 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1135     16.273 wddm: gdi diag c11 k1 D 66 607 162 712 S 1094 0 1190 105
+  1136     16.273 wddm: gdi diag c11 k1 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1137     16.273 wddm: gdi diag c11 k1 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1138     16.273 wddm: gdi diag c11 k1 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1139     16.273 wddm: gdi diag c11 k1 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1140     16.273 wddm: gdi diag c11 k1 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1141     16.273 wddm: gdi diag c11 k1 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1142     16.273 wddm: gdi diag c11 k1 r0 1 66 607 162 712 0 0 0 0
+  1143     16.273 wddm: gdi diag c11 k2 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1144     16.273 wddm: gdi diag c11 k2 D 66 403 162 508 S 1190 0 1286 105
+  1145     16.273 wddm: gdi diag c11 k2 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1146     16.273 wddm: gdi diag c11 k2 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1147     16.273 wddm: gdi diag c11 k2 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1148     16.273 wddm: gdi diag c11 k2 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1149     16.273 wddm: gdi diag c11 k2 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1150     16.273 wddm: gdi diag c11 k2 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1151     16.273 wddm: gdi diag c11 k2 r0 1 66 403 162 508 0 0 0 0
+  1152     16.273 wddm: gdi diag c11 end used 2216 committed 2216 code 0x0 disp 0 rows 3 fall 0
+  1153     16.273 wddm: gdi diag c11 hash 0xDBF45D20132DEA2B lab-skipped 0 lab-dropped 0
+  1155     16.289 wddm: gdi diag c12 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1156     16.289 wddm: gdi diag c12 cap 997376 len 384 subs 4 list 2
+  1157     16.289 wddm: gdi diag c12 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1158     16.289 wddm: gdi diag c12 k0 D 66 505 162 610 S 1286 0 1382 105
+  1159     16.289 wddm: gdi diag c12 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1160     16.289 wddm: gdi diag c12 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1161     16.289 wddm: gdi diag c12 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1162     16.289 wddm: gdi diag c12 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1163     16.289 wddm: gdi diag c12 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1164     16.289 wddm: gdi diag c12 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1165     16.289 wddm: gdi diag c12 k0 r0 1 66 505 162 610 0 0 0 0
+  1166     16.289 wddm: gdi diag c12 k1 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1167     16.289 wddm: gdi diag c12 k1 D 0 403 86 493 S 1382 0 1468 90
+  1168     16.289 wddm: gdi diag c12 k1 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1169     16.289 wddm: gdi diag c12 k1 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1170     16.289 wddm: gdi diag c12 k1 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1171     16.289 wddm: gdi diag c12 k1 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1172     16.289 wddm: gdi diag c12 k1 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1173     16.289 wddm: gdi diag c12 k1 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1174     16.289 wddm: gdi diag c12 k1 r0 1 0 403 86 493 0 0 0 0
+  1175     16.289 wddm: gdi diag c12 k2 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1176     16.289 wddm: gdi diag c12 k2 D 0 1015 86 1105 S 1468 0 1554 90
+  1177     16.289 wddm: gdi diag c12 k2 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1178     16.289 wddm: gdi diag c12 k2 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1179     16.289 wddm: gdi diag c12 k2 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1180     16.289 wddm: gdi diag c12 k2 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1181     16.289 wddm: gdi diag c12 k2 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1182     16.289 wddm: gdi diag c12 k2 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1183     16.289 wddm: gdi diag c12 k2 r0 1 0 1015 86 1105 0 0 0 0
+  1184     16.289 wddm: gdi diag c12 k3 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1185     16.289 wddm: gdi diag c12 k3 D 0 607 86 712 S 1554 0 1640 105
+  1186     16.289 wddm: gdi diag c12 k3 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1187     16.289 wddm: gdi diag c12 k3 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 1
+  1188     16.289 wddm: gdi diag c12 k3 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1189     16.289 wddm: gdi diag c12 k3 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1190     16.289 wddm: gdi diag c12 k3 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1191     16.289 wddm: gdi diag c12 k3 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1192     16.289 wddm: gdi diag c12 k3 r0 1 0 607 86 712 0 0 0 0
+  1193     16.289 wddm: gdi diag c12 end used 2744 committed 2744 code 0x0 disp 0 rows 4 fall 0
+  1194     16.289 wddm: gdi diag c12 hash 0x5E9ADA42F1976664 lab-skipped 0 lab-dropped 0
+gdi code hash ok
+--- interop (bc250kmd_cli interop)
+driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 50631089
+settings EnableGpuPresentBlit=1 EnableCddDwmInterop=1
+power callback registered
+session marked, users 1, marks 1, unmarks 0, mark failures 0, last end none, previous end last-user-gone, boot 869, marker found 0
+--- the selector
+Parameters\LabGdiHwAccel: absent
+--- device
+status OK problem CM_PROB_NONE

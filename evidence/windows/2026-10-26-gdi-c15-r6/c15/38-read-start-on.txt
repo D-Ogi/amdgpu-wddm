@@ -1,0 +1,81 @@
+--- boot (UTC): 2026-10-26 05:58:57Z
+--- device: OK problem CM_PROB_NONE
+--- records from StateV2 generation ddcb7c9cad4545f8ac5761636cf86efa
+--- UnconfirmedStarts 0, LastStage 50
+--- CuMode 24, CuModeClosedReason 
+--- StartRecord
+    Result = started
+    Step = -
+    SubStep = -
+    Status = 0
+    Stage = 39
+    Version = 458968
+    TimeUtc = 2026-10-26T05:59:02.912Z
+--- on-disk image of the running service (not a memory hash)
+DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\bc250kmd.sys
+--- health
+--- KMD log lines
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    38      1.379 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 2
+    40      1.379 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    41      1.379 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+   591      2.163 wddm: gdi diag submit5 fence 5 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   609      2.211 wddm: gdi diag submit6 fence 6 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   627      2.258 wddm: gdi diag submit7 fence 7 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   645      2.305 wddm: gdi diag submit8 fence 8 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   657      2.352 wddm: gdi diag submit9 fence 9 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   666      2.399 wddm: gdi diag submit10 fence 10 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   675      2.446 wddm: gdi diag submit11 fence 11 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   684      2.493 wddm: gdi diag submit12 fence 12 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   693      2.540 wddm: gdi diag submit13 fence 13 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   703      2.748 wddm: gdi diag submit14 fence 14 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   712      2.779 wddm: gdi diag submit15 fence 15 node 0 flags 0x00000002 va 0x3DE000 size 3989504 freed 0 raced 0
+   721      2.866 wddm: gdi diag submit16 fence 16 node 0 flags 0x00000002 va 0x10000 size 3989504 freed 0 raced 0
+   962     14.982 wddm: GDI request type 3 flags 0x00000000 phase size 1920x64 format 21
+   964     14.982 wddm: GDI request type 3 flags 0x00000000 phase fill 1920x64 format 21
+   967     14.983 wddm: GDI request type 2 flags 0x00000000 phase size 1920x1200 format 21
+   969     14.983 wddm: GDI request type 2 flags 0x00000000 phase fill 1920x1200 format 21
+   973     14.983 wddm: GDI request type 4 flags 0x00000000 phase size 512x16 format 28
+   974     14.983 wddm: GDI request type 4 flags 0x00000000 phase fill 512x16 format 28
+   977     14.984 wddm: gdi diag c1 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   978     14.984 wddm: gdi diag c1 cap 997376 len 96 subs 1 list 2
+   979     14.984 wddm: gdi diag c1 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   980     14.984 wddm: gdi diag c1 k0 D 0 0 512 13 S 0 0 512 13
+   981     14.984 wddm: gdi diag c1 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   982     14.984 wddm: gdi diag c1 k0 mode 0 mx 0 my 0 sp 512 dp 0 ap 0 n 1
+   983     14.984 wddm: gdi diag c1 k0 s0 ix 1 seg 0 wr 1 type 4 512x16 pitch 512
+   984     14.984 wddm: gdi diag c1 k0 s0 bpp 1 rf 0 bytes 8192 va 0x19B8000
+   985     14.984 wddm: gdi diag c1 k0 s1 ix 0 seg 0 wr 0 type 2 512x16 pitch 512
+   986     14.984 wddm: gdi diag c1 k0 s1 bpp 1 rf 0 bytes 8192 va 0x19BA000
+   987     14.984 wddm: gdi diag c1 k0 r0 1 0 0 512 13 0 0 0 0
+   988     14.984 wddm: gdi diag c1 end used 104 committed 104 code 0x0 disp 0 rows 1 fall 0
+   989     14.984 wddm: gdi diag c1 hash 0xE42A7F930AF58FD5 lab-skipped 0 lab-dropped 0
+   990     14.984 wddm: RenderGdi1 ctxFFFFCA8C35442DB0 commands1 bytes96 dwords104 rects1 fall0 over0
+   991     14.984 wddm: GDI request type 1 flags 0x00000000 phase size 1920x48 format 21
+   992     14.984 wddm: GDI request type 1 flags 0x00000000 phase fill 1920x48 format 21
+   993     14.999 wddm: gdi diag c2 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+   994     14.999 wddm: gdi diag c2 cap 997376 len 96 subs 3 list 1
+   995     14.999 wddm: gdi diag c2 k0 op 2 ix 0 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+   996     14.999 wddm: gdi diag c2 k0 D 0 0 1920 48 S 0 0 0 0
+   997     14.999 wddm: gdi diag c2 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+   998     14.999 wddm: gdi diag c2 k0 mode 0 mx 0 my 0 sp 0 dp 0 ap 0 n 3
+   999     14.999 wddm: gdi diag c2 k0 s0 ix 0 seg 0 wr 1 type 1 1920x48 pitch 7680
+  1000     14.999 wddm: gdi diag c2 k0 s0 bpp 4 rf 0 bytes 368640 va 0x19BA000
+  1001     14.999 wddm: gdi diag c2 k0 r0 2 0 0 1920 48 0 0 1920 48
+  1002     14.999 wddm: gdi diag c2 k0 r2 1 0 0 1920 48 0 0 0 0
+  1003     14.999 wddm: gdi diag c2 end used 1016 committed 1016 code 0x0 disp 0 rows 3 fall 0
+  1004     14.999 wddm: gdi diag c2 hash 0x39E8D6D975E7AF1E lab-skipped 0 lab-dropped 0
+  1005     14.999 wddm: RenderGdi2 ctxFFFFCA8C35442DB0 commands1 bytes96 dwords1016 rects3 fall0 over0
+  1026     15.332 wddm: gdi diag c3 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1027     15.332 wddm: gdi diag c3 cap 997376 len 144 subs 6 list 1
+  1028     15.332 wddm: gdi diag c3 k0 op 2 ix 0 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1029     15.332 wddm: gdi diag c3 k0 D 0 0 1920 48 S 0 0 0 0
+  1030     15.332 wddm: gdi diag c3 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1031     15.332 wddm: gdi diag c3 k0 mode 0 mx 0 my 0 sp 0 dp 0 ap 0 n 6
+  1032     15.332 wddm: gdi diag c3 k0 s0 ix 0 seg 0 wr 1 type 1 1920x48 pitch 7680
+  1033     15.332 wddm: gdi diag c3 k0 s0 bpp 4 rf 0 bytes 368640 va 0x19BA000
+--- DxgKrnl admin events since boot
+--- sessions
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+ bc250                 console             1  Active      none   10/26/2026 6:59 AM

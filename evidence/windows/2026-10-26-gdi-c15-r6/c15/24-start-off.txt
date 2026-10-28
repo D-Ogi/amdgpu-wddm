@@ -1,0 +1,33 @@
+--- the GDI lines of the log ring
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    38      1.410 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 2
+    40      1.410 wddm: GDI hardware acceleration gate 0, kernels 1, capability 0
+   341      1.997 wddm: DRIVERCAPS reply started1 interop1 extent-shifts2/2
+   485      2.085 interop: session marked (first interop present of a device) for boot 870 (users 1), status 0x00000000
+   500      2.086 wddm: gdi diag submit1 fence 1 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   528      2.130 wddm: gdi diag submit2 fence 2 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   550      2.177 wddm: gdi diag submit3 fence 3 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   568      2.224 wddm: gdi diag submit4 fence 4 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   586      2.271 wddm: gdi diag submit5 fence 5 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   604      2.318 wddm: gdi diag submit6 fence 6 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   622      2.365 wddm: gdi diag submit7 fence 7 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   640      2.412 wddm: gdi diag submit8 fence 8 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   652      2.459 wddm: gdi diag submit9 fence 9 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   661      2.506 wddm: gdi diag submit10 fence 10 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   670      2.553 wddm: gdi diag submit11 fence 11 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   679      2.600 wddm: gdi diag submit12 fence 12 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   694      2.838 wddm: gdi diag submit13 fence 13 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+   698      2.838 wddm: gdi diag submit14 fence 14 node 0 flags 0x00000002 va 0x10000 size 4096 freed 0 raced 0
+   708      2.838 wddm: gdi diag submit15 fence 15 node 0 flags 0x00000002 va 0x11A6000 size 4096 freed 0 raced 0
+   716      2.838 wddm: gdi diag submit16 fence 16 node 0 flags 0x00000002 va 0x11000 size 4096 freed 0 raced 0
+gdi code hash WRONG: no gdi code line
+--- interop (bc250kmd_cli interop)
+driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 50473367
+settings EnableGpuPresentBlit=1 EnableCddDwmInterop=1
+power callback registered
+session marked, users 1, marks 1, unmarks 0, mark failures 0, last end none, previous end last-user-gone, boot 870, marker found 0
+--- the selector
+Parameters\LabGdiHwAccel: absent
+--- device
+status OK problem CM_PROB_NONE

@@ -1,0 +1,110 @@
+--- gdi-hang-records 2026-10-26T06:00:37.3230460Z, interval 2026-10-26T05:49:42.1515752Z .. 2026-10-26T06:00:37.3230460Z, boot 2026-10-26T05:58:57.5000000Z
+loaded image DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 state Running
+cli C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe
+--- hang-recovery record (driver state path HangRecovery)
+  record paths: , CuModeBoot, Features, GuardBoot, HangRecovery, HangRecovery\Waves, InteropBoot, StartRecord, StopRecord
+  Attempts = 58
+  LastFence = 890
+  LastKills = 0
+  LastMicros = 0
+  LastSeq = 0
+  LastTime = 134374665941237197 (2026-10-26T05:36:34.1237197Z)
+  LastVerdict = 7
+  LastVersion = 458968
+  NotDrained = 3
+  Recovered = 55
+  WavesPending = 0
+--- bc250kmd_cli waves saved
+WARNING: historical snapshot; not verified against latest recovery record.
+wave snapshot abi=1 bytes=128 driver=0x000700D8 kind=pre-kill result=0xC000009C flags=0x4
+waves=0 slots_visited=1600 wgp_visited=20 invalid_reads=0 start_100ns=3569401596 end_100ns=3569436839
+topology se=2 sh_per_se=2 wgp_per_sh=5 simd_per_wgp=4 slots_per_simd=20
+wgp_masks=0000001F,0000001F;0000001F,0000001F recovery_seq=56454 fence=27238 vmid=15 fault_offset=0x30800
+WARNING: sequential live reads, not an atomic context image. Equal rechecks do not prove atomicity.
+exit 1
+--- System events in the interval: Display, DxgKrnl, bc250kmd, WHEA, Kernel-Power, BugCheck
+2026-10-26T05:53:38.2276544Z Microsoft-Windows-Kernel-Power 109 The kernel power manager has initiated a shutdown transition. Action: Power Action Reboot Event Code: 0x0 Reason: Kernel API
+2026-10-26T05:53:38.8627345Z Microsoft-Windows-Kernel-Power 577 The system has prepared for a system initiated reboot from Active.
+2026-10-26T05:53:53.8571014Z Microsoft-Windows-Kernel-Power 172 Connectivity state in standby: Disconnected, Reason: NIC compliance
+2026-10-26T05:58:42.9872853Z Microsoft-Windows-Kernel-Power 109 The kernel power manager has initiated a shutdown transition. Action: Power Action Reboot Event Code: 0x0 Reason: Kernel API
+2026-10-26T05:58:43.5680554Z Microsoft-Windows-Kernel-Power 577 The system has prepared for a system initiated reboot from Active.
+2026-10-26T05:58:58.8471934Z Microsoft-Windows-Kernel-Power 172 Connectivity state in standby: Disconnected, Reason: NIC compliance
+--- Application events in the interval: Windows Error Reporting (LiveKernelEvent) and DWM
+--- C:\Windows\LiveKernelReports and the crash dumps, written in the interval
+--- kept driver logs written in the interval
+== 2026-10-26T05:51:58.3519542Z 92868 bytes ring-20261026-055158-341-stop.log
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    40      1.364 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    41      1.364 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+    49      1.364 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    52      1.364 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+   246      1.552 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+  3590    225.547 wddm summary: stdalloc gdi size/fill 477/477 ok 954 refused 0/0/0/0/0
+  3592    225.547 wddm summary: gdi type 1 size/fill 472/472 ok 944 refused 0/0/0/0/0
+  3594    225.547 wddm summary: gdi type 2 size/fill 3/3 ok 6 refused 0/0/0/0/0
+  3596    225.547 wddm summary: gdi type 3 size/fill 1/1 ok 2 refused 0/0/0/0/0
+  3598    225.547 wddm summary: gdi type 4 size/fill 1/1 ok 2 refused 0/0/0/0/0
+  3601    225.547 wddm summary: gdi type masks requested 0x01E refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+  3604    225.547 wddm summary: submit diagnostic v2 12000 ms (OS TdrDelay unavailable), 0 checks, 0 re-armed
+  3605    225.547 wddm summary: submit watchdog observations: activity 0, primes 0, gap resets 0
+  3861    225.548 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  3864    225.548 wddm: gdi totals calls1584 commands35470 items52432 dwords43724290
+  3865    225.548 wddm: gdi committed dwords43742800
+  3866    225.548 wddm: gdi drops call0 malformed0 outside0 empty0
+  3867    225.548 wddm: gdi overflow0 item-refused0 red-first0
+  3868    225.548 wddm: gdi batch-refused0 fallback0 peak rects240 dwords150672
+  3869    225.548 wddm: gdi capacity-short0 peak cmdlen16808 want0 omitted subrects0
+  3870    225.548 wddm: gdi ib-full0 ib-over0 dma-short0
+  3871    225.548 wddm: gdi above-producer0 scope-refused0
+  3872    225.548 wddm: gdi dma append0 submitted1584 raced0
+  3873    225.548 wddm: gdi dma unknown0 full0 small0 lost0
+== 2026-10-26T05:52:10.6349067Z 47629 bytes ring-20261026-055209-837-start.log
+     3      0.003 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    39      0.373 wddm: GDI hardware acceleration gate 0, kernels 1, capability 0
+    47      0.373 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    50      0.373 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+   318      0.687 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   340      1.091 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x1A slots 0 tdr 1 dflip 1 rot 1
+== 2026-10-26T05:53:58.1376190Z 47820 bytes ring-20261026-055357-468-start.log
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    40      1.410 wddm: GDI hardware acceleration gate 0, kernels 1, capability 0
+    48      1.410 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    51      1.410 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+   320      1.724 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   342      1.997 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x1A slots 0 tdr 1 dflip 1 rot 1
+== 2026-10-26T05:57:02.9400892Z 90581 bytes ring-20261026-055702-930-stop.log
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    40      1.410 wddm: GDI hardware acceleration gate 0, kernels 1, capability 0
+    48      1.410 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    51      1.410 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+  3081    186.164 wddm summary: gdi type masks requested 0x000 refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+  3084    186.164 wddm summary: submit diagnostic v2 12000 ms (OS TdrDelay unavailable), 0 checks, 0 re-armed
+  3085    186.164 wddm summary: submit watchdog observations: activity 0, primes 0, gap resets 0
+  3341    186.165 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+== 2026-10-26T05:57:15.1198774Z 47859 bytes ring-20261026-055714-304-start.log
+     3      0.003 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    39      0.389 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    40      0.389 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+    48      0.389 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    51      0.390 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+   319      0.704 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   341      1.117 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x1A slots 0 tdr 1 dflip 1 rot 1
+   412      1.185 wddm: CreateContext: GDI dma 3989504 bytes for cmdbuf 196608 of aperture 384 MiB
+== 2026-10-26T05:59:02.9982683Z 48050 bytes ring-20261026-055902-407-start.log
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    40      1.379 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    41      1.379 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+    49      1.379 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    52      1.379 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+   321      1.615 fan: the watchdog's handback runs in a work item at PASSIVE_LEVEL
+   343      1.886 wddm: DRIVERCAPS into 592 bytes: wddm 8192 sched 0x45 mm 0x60 flip 0x1A slots 0 tdr 1 dflip 1 rot 1
+   414      1.961 wddm: CreateContext: GDI dma 3989504 bytes for cmdbuf 196608 of aperture 384 MiB
+--- done
+bc250kmd_cli.exe : waves: incomplete/failed capture or expectation did not match
+At C:\BC250\tmp\gdi-hang-records.ps1:73 char:13
++ if ($cli) { & $cli waves saved 2>&1 | Select-Object -First 400; "exit ...
++             ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (waves: incomple...n did not match:String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 

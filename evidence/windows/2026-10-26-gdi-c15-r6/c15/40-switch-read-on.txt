@@ -1,0 +1,9 @@
+control 7DB25E9732652FC0E0D91A157E5CE41C1AD8388FE4AAC2D15989554B0F3E53F2
+gdi-switch read at 2026-10-26T06:00:27.3802828Z
+state override EnableGdiHwAccel: {"abi":1,"command":"get","path":"","name":"EnableGdiHwAccel","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"absent","os_error":2,"error":2,"source":"none","type":0,"bytes":0,"value":null},"error":2}
+stored EnableGdiHwAccel absent
+factory EnableGdiHwAccel 1
+factory CatalogId 55ac2dcef76b92b5c52faf145d4a38e3fd31a77ed43b366bab38e33f3d6d1bf9
+state Features\GdiHwAccel: {"abi":1,"command":"get","path":"Features","name":"GdiHwAccel","kind":"volatile","type":4,"max_bytes":4,"access":1,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":1},"error":0}
+feature GdiHwAccel 1
+read only: stored value, factory catalog and running feature recorded

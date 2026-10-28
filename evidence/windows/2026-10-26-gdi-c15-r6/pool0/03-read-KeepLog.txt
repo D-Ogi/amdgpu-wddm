@@ -1,0 +1,1 @@
+{"utc":"2026-10-26T05:41:01.3593492Z","name":"KeepLog","effective":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":0},"stored":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":0},"device":"OK"}

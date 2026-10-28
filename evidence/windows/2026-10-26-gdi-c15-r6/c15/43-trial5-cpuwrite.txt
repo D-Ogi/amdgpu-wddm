@@ -1,0 +1,74 @@
+C15 GUARD 2026-10-26T06:00:34.6361814Z Tctl=58.875 STOP=false
+--- gdi-cpuwrite F73A80689D11504BE967B83D79F2AE0ED02DC4D653E3E8ECDDD965AFEFEF5C18
+GDI-CPUWRITE 16 MiB, 3 pass(es), budget 120000 ms
+POLICY class=sysmem expect cpu_visible=1 aperture=0 cached=1 physical=0 (committed pages, not a driver allocation)
+POLICY class=type0 expect cpu_visible=1 aperture=0 cached=0 physical=1
+POLICY class=type2 expect cpu_visible=1 aperture=1 cached=1 physical=0
+CPUWRITE class=sysmem kind=store64 pass=1 bytes=16777216 ms=1.14 mbs=14046.2 sum=0x0000000000000000 witness=0x2334455667788000
+CPUWRITE class=sysmem kind=store64 pass=2 bytes=16777216 ms=1.14 mbs=14014.2 sum=0x0000000000000000 witness=0x2334455667789000
+CPUWRITE class=sysmem kind=store64 pass=3 bytes=16777216 ms=1.14 mbs=14067.2 sum=0x0000000000000000 witness=0x233445566778A000
+CPUWRITE class=sysmem kind=store64 median_mbs=14046.2 passes=3
+CPUWRITE class=sysmem kind=memcpy pass=1 bytes=16777216 ms=1.20 mbs=13289.0 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=sysmem kind=memcpy pass=2 bytes=16777216 ms=1.16 mbs=13756.3 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=sysmem kind=memcpy pass=3 bytes=16777216 ms=1.17 mbs=13710.4 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=sysmem kind=memcpy median_mbs=13710.4 passes=3
+CPUWRITE class=sysmem kind=read64 pass=1 bytes=16777216 ms=1.07 mbs=14914.2 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=sysmem kind=read64 pass=2 bytes=16777216 ms=1.09 mbs=14704.5 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=sysmem kind=read64 pass=3 bytes=16777216 ms=1.07 mbs=14889.3 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=sysmem kind=read64 median_mbs=14889.3 passes=3
+CPUWRITE class=sysmem checksum=0xA5A5A5A5A5A5A000
+  D3DKMTEnumAdapters2 (count)                  STATUS_SUCCESS
+  D3DKMTEnumAdapters2                          STATUS_SUCCESS
+  adapter 0: "Microsoft Basic Display Adapter" chip "" umd "C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\desktop\bc250d3d_router.dll"
+    ^ selected
+  adapter 1: "" chip "" umd "d3d10warp.dll"
+  D3DKMTOpenAdapterFromLuid                    STATUS_SUCCESS
+  D3DKMTCreateDevice                           STATUS_SUCCESS
+  D3DKMTCreatePagingQueue                      STATUS_SUCCESS
+  type0: 1024x4096 pitch 4096 format A8R8G8B8 size 16777216, private 32 bytes
+  D3DKMTCreateAllocation2                      STATUS_SUCCESS
+  D3DKMTMapGpuVirtualAddress                   STATUS_PENDING
+  D3DKMTMakeResident                           STATUS_PENDING
+  D3DKMTLock2                                  STATUS_SUCCESS
+  type0: locked, page aligned yes
+CPUWRITE class=type0 kind=store64 pass=1 bytes=16777216 ms=0.56 mbs=28464.7 sum=0x0000000000000000 witness=0x2334455667788000
+CPUWRITE class=type0 kind=store64 pass=2 bytes=16777216 ms=0.44 mbs=36513.0 sum=0x0000000000000000 witness=0x2334455667789000
+CPUWRITE class=type0 kind=store64 pass=3 bytes=16777216 ms=0.44 mbs=36504.7 sum=0x0000000000000000 witness=0x233445566778A000
+CPUWRITE class=type0 kind=store64 median_mbs=36504.7 passes=3
+CPUWRITE class=type0 kind=memcpy pass=1 bytes=16777216 ms=1.07 mbs=14981.3 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type0 kind=memcpy pass=2 bytes=16777216 ms=1.07 mbs=14910.1 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type0 kind=memcpy pass=3 bytes=16777216 ms=1.08 mbs=14856.1 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type0 kind=memcpy median_mbs=14910.1 passes=3
+CPUWRITE class=type0 kind=read64 pass=1 bytes=16777216 ms=156.32 mbs=102.4 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type0 kind=read64 pass=2 bytes=16777216 ms=156.40 mbs=102.3 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type0 kind=read64 pass=3 bytes=16777216 ms=157.90 mbs=101.3 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type0 kind=read64 median_mbs=102.3 passes=3
+CPUWRITE class=type0 checksum=0xA5A5A5A5A5A5A000
+  D3DKMTUnlock2                                STATUS_SUCCESS
+  D3DKMTDestroyAllocation2                     STATUS_SUCCESS
+  type2: 1024x4096 pitch 4096 format A8R8G8B8 size 16777216, private 48 bytes
+  D3DKMTCreateAllocation2                      STATUS_SUCCESS
+  D3DKMTMapGpuVirtualAddress                   STATUS_PENDING
+  D3DKMTMakeResident                           STATUS_PENDING
+  D3DKMTLock2                                  STATUS_SUCCESS
+  type2: locked, page aligned yes
+CPUWRITE class=type2 kind=store64 pass=1 bytes=16777216 ms=1.29 mbs=12400.2 sum=0x0000000000000000 witness=0x2334455667788000
+CPUWRITE class=type2 kind=store64 pass=2 bytes=16777216 ms=1.16 mbs=13822.9 sum=0x0000000000000000 witness=0x2334455667789000
+CPUWRITE class=type2 kind=store64 pass=3 bytes=16777216 ms=1.15 mbs=13909.4 sum=0x0000000000000000 witness=0x233445566778A000
+CPUWRITE class=type2 kind=store64 median_mbs=13822.9 passes=3
+CPUWRITE class=type2 kind=memcpy pass=1 bytes=16777216 ms=1.16 mbs=13845.6 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type2 kind=memcpy pass=2 bytes=16777216 ms=1.16 mbs=13814.5 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type2 kind=memcpy pass=3 bytes=16777216 ms=1.16 mbs=13827.7 sum=0x0000000000000000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type2 kind=memcpy median_mbs=13827.7 passes=3
+CPUWRITE class=type2 kind=read64 pass=1 bytes=16777216 ms=1.08 mbs=14788.8 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type2 kind=read64 pass=2 bytes=16777216 ms=1.07 mbs=14894.8 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type2 kind=read64 pass=3 bytes=16777216 ms=1.07 mbs=14933.7 sum=0x4B4B4B4B4B400000 witness=0xA5A5A5A5A5A5A000
+CPUWRITE class=type2 kind=read64 median_mbs=14894.8 passes=3
+CPUWRITE class=type2 checksum=0xA5A5A5A5A5A5A000
+  D3DKMTUnlock2                                STATUS_SUCCESS
+  D3DKMTDestroyAllocation2                     STATUS_SUCCESS
+  D3DKMTDestroyDevice                          STATUS_SUCCESS
+PENALTY class=type0 store64=2.599x memcpy=1.088x read64=0.007x
+PENALTY class=type2 store64=0.984x memcpy=1.009x read64=1.000x
+DONE
+gdi-cpuwrite exit 0

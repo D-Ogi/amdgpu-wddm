@@ -1,0 +1,1 @@
+{"utc":"2026-10-26T05:40:58.9273803Z","name":"EnableVmidPool","effective":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":1},"stored":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":1},"device":"OK"}

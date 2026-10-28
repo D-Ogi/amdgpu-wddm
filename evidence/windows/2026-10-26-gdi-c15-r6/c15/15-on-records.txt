@@ -1,0 +1,38 @@
+--- gdi-hang-records 2026-10-26T05:51:47.0800703Z, interval 2026-10-26T05:50:09.6813037Z .. 2026-10-26T05:51:47.0800703Z, boot 2026-10-26T05:48:08.5000000Z
+loaded image DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 state Running
+cli C:\Program Files\amdgpu-wddm\tools\bc250kmd_cli.exe
+--- hang-recovery record (driver state path HangRecovery)
+  record paths: , CuModeBoot, Features, GuardBoot, HangRecovery, HangRecovery\Waves, InteropBoot, StartRecord, StopRecord
+  Attempts = 58
+  LastFence = 890
+  LastKills = 0
+  LastMicros = 0
+  LastSeq = 0
+  LastTime = 134374665941237197 (2026-10-26T05:36:34.1237197Z)
+  LastVerdict = 7
+  LastVersion = 458968
+  NotDrained = 3
+  Recovered = 55
+  WavesPending = 0
+--- bc250kmd_cli waves saved
+WARNING: historical snapshot; not verified against latest recovery record.
+wave snapshot abi=1 bytes=128 driver=0x000700D8 kind=pre-kill result=0xC000009C flags=0x4
+waves=0 slots_visited=1600 wgp_visited=20 invalid_reads=0 start_100ns=3569401596 end_100ns=3569436839
+topology se=2 sh_per_se=2 wgp_per_sh=5 simd_per_wgp=4 slots_per_simd=20
+wgp_masks=0000001F,0000001F;0000001F,0000001F recovery_seq=56454 fence=27238 vmid=15 fault_offset=0x30800
+WARNING: sequential live reads, not an atomic context image. Equal rechecks do not prove atomicity.
+exit 1
+--- System events in the interval: Display, DxgKrnl, bc250kmd, WHEA, Kernel-Power, BugCheck
+--- Application events in the interval: Windows Error Reporting (LiveKernelEvent) and DWM
+--- C:\Windows\LiveKernelReports and the crash dumps, written in the interval
+--- kept driver logs written in the interval
+no kept log in C:\Windows\ServiceState\bc250kmd\SharedData\Logs was written in the interval
+--- done
+bc250kmd_cli.exe : waves: incomplete/failed capture or expectation did not match
+At C:\BC250\tmp\gdi-hang-records.ps1:73 char:13
++ if ($cli) { & $cli waves saved 2>&1 | Select-Object -First 400; "exit ...
++             ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (waves: incomple...n did not match:String) [], Remote 
+   Exception
+    + FullyQualifiedErrorId : NativeCommandError
+ 

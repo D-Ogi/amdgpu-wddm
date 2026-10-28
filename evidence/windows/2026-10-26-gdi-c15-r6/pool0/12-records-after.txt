@@ -1,0 +1,271 @@
+--- hang reading at 2026-10-26T05:44:27.6917662Z
+--- progress: 1427 lines, the last 25
+2026-10-26T05:44:17.7698861Z step 174 devmgmt resize
+2026-10-26T05:44:17.7882888Z step 174 devmgmt scroll
+2026-10-26T05:44:17.7882888Z step 174 devmgmt redraw
+2026-10-26T05:44:17.9325620Z step 175 regedit move
+2026-10-26T05:44:17.9386876Z step 175 regedit resize
+2026-10-26T05:44:17.9589350Z step 175 regedit scroll
+2026-10-26T05:44:17.9589350Z step 175 regedit redraw
+2026-10-26T05:44:18.0864138Z step 175 devmgmt move
+2026-10-26T05:44:18.0955928Z step 175 devmgmt resize
+2026-10-26T05:44:18.1047584Z step 175 devmgmt scroll
+2026-10-26T05:44:18.1057784Z step 175 devmgmt redraw
+2026-10-26T05:44:18.2577013Z step 176 regedit move
+2026-10-26T05:44:18.2701591Z step 176 regedit resize
+2026-10-26T05:44:18.2883846Z step 176 regedit scroll
+2026-10-26T05:44:18.2894047Z step 176 regedit redraw
+2026-10-26T05:44:18.4279680Z step 176 devmgmt move
+2026-10-26T05:44:18.4414937Z step 176 devmgmt resize
+2026-10-26T05:44:18.4506834Z step 176 devmgmt scroll
+2026-10-26T05:44:18.4506834Z step 176 devmgmt redraw
+2026-10-26T05:44:18.5987187Z step 177 regedit move
+2026-10-26T05:44:18.6101896Z step 177 regedit resize
+2026-10-26T05:44:18.6112030Z step 177 regedit scroll
+2026-10-26T05:44:18.6122153Z step 177 regedit redraw
+2026-10-26T05:44:18.7546689Z loop end at step 178
+2026-10-26T05:44:20.8090361Z done 62.1 s
+--- the workload processes (regedit, mmc) and the task
+task: gone (the workload step removed it)
+--- device
+status OK problem CM_PROB_NONE
+--- KMD ring, the last 150 lines
+  2780    144.025 dpm: 1200 -> 1100 MHz/840 mV VID 113, 0 settle reads (load, busy 0 permille, 70.7 C, throttle none)
+  2781    144.239 dpm: 1100 -> 1000 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 70.7 C, throttle none)
+  2782    144.499 wddm: preemption queued fence 465 node 0 hardware pending 1 active submits 0
+  2783    144.502 wddm: preemption report fence 465 node 0 last completed 3850 at DMA boundary
+  2784    144.768 wddm: preemption queued fence 466 node 0 hardware pending 1 active submits 0
+  2785    144.771 wddm: preemption report fence 466 node 0 last completed 3860 at DMA boundary
+  2786    144.771 wddm: kernel submit fence 3862 held 458 us (21 spins, 0 event, 0 timeout)
+  2787    144.799 wddm: preemption queued fence 467 node 0 hardware pending 1 active submits 0
+  2788    144.799 wddm: preemption report fence 467 node 0 last completed 3864 at DMA boundary
+  2789    146.076 wddm: preemption queued fence 468 node 0 hardware pending 1 active submits 0
+  2790    146.077 wddm: preemption report fence 468 node 0 last completed 3928 at DMA boundary
+  2791    146.762 wddm: preemption queued fence 469 node 0 hardware pending 1 active submits 0
+  2792    146.764 wddm: preemption report fence 469 node 0 last completed 3969 at DMA boundary
+  2793    146.903 wddm: kernel submit fence 3975 held 420 us (18 spins, 0 event, 0 timeout)
+  2794    147.173 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 69.8 C busy 0.0% avg 3.3% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 war
+  2795    147.173 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 1 exits 1 refusals 0, 64347 ms at the point
+  2796    147.173 dpm: telemetry idle leave at 150 permille, exits 1 by a busy tick, 0 by the window
+  2797    147.173 hwmon: telemetry fan2 1664 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  2798    147.173 hwmon: telemetry apu 70.0 C, duty read-back unproven
+  2799    147.173 hwmon: telemetry 143 samples 0 errors 0 retries 0 refusals
+  2800    147.173 smu metrics: telemetry mW p52148 a46039 g17225 s9105 reject 1 why 4 sp00000000 m67 0
+  2801    147.173 smu metrics: telemetry gfx 818 mV 1000 MHz 58.5 C soc 1199 mV 60.5 C thr 0
+  2802    147.173 fan: telemetry curve curve/standard
+  2803    147.173 fan: telemetry target 100% applied 100% raw 255 rb 255, 1664 rpm
+  2804    147.173 fan: telemetry 1 takeovers 0 handbacks 12 writes
+  2805    147.173 fan: telemetry 0 failures 0 emergencies 0 doubts
+  2806    147.173 fan: telemetry boost on (power)
+  2807    147.173 fan: telemetry boost 2 times, 84250 ms
+  2808    147.683 wddm: preemption queued fence 470 node 0 hardware pending 1 active submits 0
+  2809    147.684 wddm: preemption report fence 470 node 0 last completed 4017 at DMA boundary
+  2810    147.987 wddm: preemption queued fence 471 node 0 hardware pending 1 active submits 0
+  2811    147.988 wddm: preemption report fence 471 node 0 last completed 4032 at DMA boundary
+  2812    148.105 wddm: preemption queued fence 472 node 0 hardware pending 1 active submits 0
+  2813    148.106 wddm: preemption report fence 472 node 0 last completed 4035 at DMA boundary
+  2814    148.106 wddm: kernel submit fence 4037 held 266 us (12 spins, 0 event, 0 timeout)
+  2815    149.230 wddm: preemption queued fence 473 node 0 hardware pending 1 active submits 0
+  2816    149.230 wddm: preemption report fence 473 node 0 last completed 4101 at DMA boundary
+  2817    149.562 wddm: preemption queued fence 474 node 0 hardware pending 1 active submits 0
+  2818    149.562 wddm: preemption report fence 474 node 0 last completed 4123 at DMA boundary
+  2819    149.732 wddm: preemption queued fence 475 node 0 hardware pending 1 active submits 0
+  2820    149.732 wddm: preemption report fence 475 node 0 last completed 4129 at DMA boundary
+  2821    150.435 wddm: kernel submit fence 4174 held 156 us (7 spins, 0 event, 0 timeout)
+  2822    150.590 wddm: preemption queued fence 476 node 0 hardware pending 1 active submits 0
+  2823    150.591 wddm: preemption report fence 476 node 0 last completed 4180 at DMA boundary
+  2824    151.046 wddm: kernel submit fence 4204 held 128 us (5 spins, 0 event, 0 timeout)
+  2825    151.208 wddm: preemption queued fence 477 node 0 hardware pending 1 active submits 0
+  2826    151.210 wddm: preemption report fence 477 node 0 last completed 4214 at DMA boundary
+  2827    151.539 wddm: preemption queued fence 478 node 0 hardware pending 1 active submits 0
+  2828    151.540 wddm: preemption report fence 478 node 0 last completed 4233 at DMA boundary
+  2829    151.701 wddm: preemption queued fence 479 node 0 hardware pending 1 active submits 0
+  2830    151.701 wddm: preemption report fence 479 node 0 last completed 4241 at DMA boundary
+  2831    151.854 wddm: preemption queued fence 480 node 0 hardware pending 1 active submits 0
+  2832    151.857 wddm: preemption report fence 480 node 0 last completed 4247 at DMA boundary
+  2833    151.866 wddm: preemption queued fence 481 node 0 hardware pending 1 active submits 0
+  2834    151.866 wddm: preemption report fence 481 node 0 last completed 4249 at DMA boundary
+  2835    152.188 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 68.6 C busy 23.3% avg 7.3% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 wa
+  2836    152.188 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 1 exits 1 refusals 0, 64347 ms at the point
+  2837    152.188 dpm: telemetry idle leave at 150 permille, exits 1 by a busy tick, 0 by the window
+  2838    152.188 hwmon: telemetry fan2 1664 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  2839    152.188 hwmon: telemetry apu 68.0 C, duty read-back unproven
+  2840    152.188 hwmon: telemetry 148 samples 0 errors 0 retries 0 refusals
+  2841    152.188 smu metrics: telemetry mW p43889 a47351 g17225 s995 reject 1 why 4 sp00000000 m67 0
+  2842    152.188 smu metrics: telemetry gfx 818 mV 1000 MHz 57.2 C soc 806 mV 59.5 C thr 0
+  2843    152.188 fan: telemetry curve curve/standard
+  2844    152.188 fan: telemetry target 100% applied 100% raw 255 rb 255, 1664 rpm
+  2845    152.188 fan: telemetry 1 takeovers 0 handbacks 12 writes
+  2846    152.188 fan: telemetry 0 failures 0 emergencies 0 doubts
+  2847    152.188 fan: telemetry boost on (power)
+  2848    152.188 fan: telemetry boost 2 times, 89352 ms
+  2849    152.489 wddm: preemption queued fence 482 node 0 hardware pending 1 active submits 0
+  2850    152.490 wddm: preemption report fence 482 node 0 last completed 4285 at DMA boundary
+  2851    152.525 wddm: preemption queued fence 483 node 0 hardware pending 1 active submits 0
+  2852    152.528 wddm: preemption report fence 483 node 0 last completed 4288 at DMA boundary
+  2853    153.494 wddm: preemption queued fence 484 node 0 hardware pending 1 active submits 0
+  2854    153.495 wddm: preemption report fence 484 node 0 last completed 4338 at DMA boundary
+  2855    153.797 wddm: preemption queued fence 485 node 0 hardware pending 1 active submits 0
+  2856    153.798 wddm: preemption report fence 485 node 0 last completed 4354 at DMA boundary
+  2857    153.925 wddm: kernel submit fence 4361 held 121 us (4 spins, 0 event, 0 timeout)
+  2858    154.112 wddm: preemption queued fence 486 node 0 hardware pending 1 active submits 0
+  2859    154.113 wddm: preemption report fence 486 node 0 last completed 4371 at DMA boundary
+  2860    154.261 wddm: preemption queued fence 487 node 0 hardware pending 1 active submits 0
+  2861    154.261 wddm: preemption report fence 487 node 0 last completed 4377 at DMA boundary
+  2862    154.462 wddm: preemption queued fence 488 node 0 hardware pending 1 active submits 0
+  2863    154.464 wddm: preemption report fence 488 node 0 last completed 4390 at DMA boundary
+  2864    154.791 wddm: preemption queued fence 489 node 0 hardware pending 1 active submits 0
+  2865    154.792 wddm: preemption report fence 489 node 0 last completed 4406 at DMA boundary
+  2866    154.929 wddm: kernel submit fence 4412 held 238 us (10 spins, 0 event, 0 timeout)
+  2867    155.420 wddm: preemption queued fence 490 node 0 hardware pending 1 active submits 0
+  2868    155.420 wddm: preemption report fence 490 node 0 last completed 4438 at DMA boundary
+  2869    155.566 wddm: kernel submit fence 4450 held 384 us (17 spins, 0 event, 0 timeout)
+  2870    155.720 wddm: kernel submit fence 4457 held 420 us (19 spins, 0 event, 0 timeout)
+  2871    155.745 wddm: preemption queued fence 491 node 0 hardware pending 1 active submits 0
+  2872    155.747 wddm: preemption report fence 491 node 0 last completed 4459 at DMA boundary
+  2873    156.389 wddm: preemption queued fence 492 node 0 hardware pending 1 active submits 0
+  2874    156.389 wddm: preemption report fence 492 node 0 last completed 4491 at DMA boundary
+  2875    157.191 wddm: kernel submit fence 4538 held 270 us (11 spins, 0 event, 0 timeout)
+  2876    157.200 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 67.3 C busy 10.0% avg 4.7% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 wa
+  2877    157.200 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 1 exits 1 refusals 0, 64347 ms at the point
+  2878    157.200 dpm: telemetry idle leave at 150 permille, exits 1 by a busy tick, 0 by the window
+  2879    157.200 hwmon: telemetry fan2 1664 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  2880    157.200 hwmon: telemetry apu 67.0 C, duty read-back unproven
+  2881    157.200 hwmon: telemetry 153 samples 0 errors 0 retries 0 refusals
+  2882    157.200 smu metrics: telemetry mW p50882 a50795 g16631 s8382 reject 1 why 4 sp00000000 m67 0
+  2883    157.200 smu metrics: telemetry gfx 818 mV 1000 MHz 56.7 C soc 1187 mV 58.7 C thr 0
+  2884    157.200 fan: telemetry curve curve/standard
+  2885    157.200 fan: telemetry target 100% applied 100% raw 255 rb 255, 1664 rpm
+  2886    157.200 fan: telemetry 1 takeovers 0 handbacks 12 writes
+  2887    157.200 fan: telemetry 0 failures 0 emergencies 0 doubts
+  2888    157.200 fan: telemetry boost on (power)
+  2889    157.200 fan: telemetry boost 2 times, 94447 ms
+  2890    157.696 wddm: preemption queued fence 493 node 0 hardware pending 1 active submits 0
+  2891    157.698 wddm: preemption report fence 493 node 0 last completed 4563 at DMA boundary
+  2892    157.992 wddm: preemption queued fence 494 node 0 hardware pending 1 active submits 0
+  2893    157.994 wddm: preemption report fence 494 node 0 last completed 4583 at DMA boundary
+  2894    158.025 wddm: preemption queued fence 495 node 0 hardware pending 1 active submits 0
+  2895    158.028 wddm: preemption report fence 495 node 0 last completed 4587 at DMA boundary
+  2896    158.467 wddm: preemption queued fence 496 node 0 hardware pending 1 active submits 0
+  2897    158.467 wddm: preemption report fence 496 node 0 last completed 4609 at DMA boundary
+  2898    159.287 wddm: preemption queued fence 497 node 0 hardware pending 1 active submits 0
+  2899    159.288 wddm: preemption report fence 497 node 0 last completed 4654 at DMA boundary
+  2900    159.433 wddm: kernel submit fence 4663 held 438 us (19 spins, 0 event, 0 timeout)
+  2901    159.597 wddm: preemption queued fence 498 node 0 hardware pending 1 active submits 0
+  2902    159.599 wddm: preemption report fence 498 node 0 last completed 4669 at DMA boundary
+  2903    159.879 wddm: preemption queued fence 499 node 0 hardware pending 1 active submits 0
+  2904    159.881 wddm: preemption report fence 499 node 0 last completed 4683 at DMA boundary
+  2905    159.882 wddm: kernel submit fence 4685 held 439 us (20 spins, 0 event, 0 timeout)
+  2906    160.245 wddm: preemption queued fence 500 node 0 hardware pending 1 active submits 0
+  2907    160.248 wddm: preemption report fence 500 node 0 last completed 4707 at DMA boundary
+  2908    160.410 wddm: preemption queued fence 501 node 0 hardware pending 1 active submits 0
+  2909    160.410 wddm: preemption report fence 501 node 0 last completed 4720 at DMA boundary
+  2910    160.427 wddm: preemption queued fence 502 node 0 hardware pending 1 active submits 0
+  2911    160.427 wddm: preemption report fence 502 node 0 last completed 4722 at DMA boundary
+  2912    162.214 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 66.1 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 5 lowers 12 thermal 0 war
+  2913    162.214 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 1 exits 1 refusals 0, 64347 ms at the point
+  2914    162.214 dpm: telemetry idle leave at 150 permille, exits 1 by a busy tick, 0 by the window
+  2915    162.214 hwmon: telemetry fan2 1666 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  2916    162.214 hwmon: telemetry apu 66.0 C, duty read-back unproven
+  2917    162.214 hwmon: telemetry 158 samples 0 errors 0 retries 0 refusals
+  2918    162.214 smu metrics: telemetry mW p48061 a46137 g16631 s5867 reject 1 why 4 sp00000000 m67 0
+  2919    162.214 smu metrics: telemetry gfx 818 mV 1000 MHz 56.2 C soc 1187 mV 58.5 C thr 0
+  2920    162.214 fan: telemetry curve curve/standard
+  2921    162.214 fan: telemetry target 100% applied 100% raw 255 rb 255, 1666 rpm
+  2922    162.214 fan: telemetry 1 takeovers 0 handbacks 12 writes
+  2923    162.214 fan: telemetry 0 failures 0 emergencies 0 doubts
+  2924    162.214 fan: telemetry boost on (power)
+  2925    162.214 fan: telemetry boost 2 times, 99558 ms
+  2926    162.757 gfx: paging submit, seq 74962 at 0x410E6C: 9273 submits in 24390 ms, 70171 of 70183 with no line
+  2927    165.397 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 65.5 C, throttle idle)
+             1024 lines printed
+             escapes: 17 without adapter synchronization, 0 with HardwareAccess
+--- health
+--- interop
+driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 50611089
+settings EnableGpuPresentBlit=1 EnableCddDwmInterop=1
+power callback registered
+session marked, users 1, marks 1, unmarks 0, mark failures 0, last end none, previous end system-power, boot 868, marker found 0
+--- System events since boot: bc250, Display, DxgKrnl, WHEA
+--- WER LiveKernelEvent since boot
+--- wddm summary (bc250kmd_cli log summary only), read last because it waits for the adapter
+4026532636    171.435 wddm summary: widest blit 0 rows
+4026532637    171.435 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+4026532638    171.435 wddm summary: vsync enabled, 0 ticks, 9554 reported to dxgkrnl
+4026532639    171.435 wddm summary: visibility calls 8 source 0x00000000 requested 1 status 0x00000000 current 1
+4026532640    171.435 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+4026532641    171.435 wddm summary: display commit power-only 0 visible-link-off 0
+4026532642    171.435 wddm visibility: true 6 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+4026532643    171.435 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 66344167..66344210
+4026532644    171.435 wddm visibility event: 2 src 0 req 1 status 00000000 visible 1 blank 0 qpc 67000557..67000636
+4026532645    171.435 wddm visibility event: 3 src 0 req 1 status 00000000 visible 1 blank 0 qpc 67556478..67556593
+4026532646    171.435 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 159545005..159545111
+4026532647    171.435 wddm visibility event: 5 src 0 req 0 status 00000000 visible 0 blank 1 qpc 173322042..173605782
+4026532648    171.435 wddm visibility event: 6 src 0 req 0 status 00000000 visible 0 blank 1 qpc 173607811..173938653
+4026532649    171.435 wddm visibility event: 7 src 0 req 1 status 00000000 visible 1 blank 0 qpc 174026310..174026366
+4026532650    171.435 wddm visibility event: 8 src 0 req 1 status 00000000 visible 1 blank 0 qpc 174233872..174234022
+4026532651    171.435 wddm summary: dcn lock acknowledgement timeouts 0
+4026532652    171.435 wddm summary: vidpn flip open: 2009 hardware flips, 0 refused
+4026532653    171.435 wddm summary: vidpn flip vsyncs 1 armed, 10114 acked, 0 refused, 0 completion-deferred, 0 old-buffer-reports
+4026532654    171.435 wddm summary: immediate 0 programmed, 0 same-frame, 0 promoted; Present DMA flips refused 0
+4026532655    171.435 wddm summary: immediate outcome done 0 late 0 pending 0 primary-other 0 read-failed 0 superseded 0
+4026532656    171.435 wddm summary: immediate done max 0 us sum 0 us, observe max 0 us overruns 0, flip in L max 15 us
+4026532657    171.435 wddm summary: flip edges f0 0 f1 0 a 0 wv 0 wi 0 wu 0 e 2014
+4026532658    171.435 wddm summary: flip results of e refused 0 ok 2009 fault 0 u 0
+4026532659    171.435 wddm summary: flip writers faulting 0 high 0 sync-failed 0 low-sync-failed 0 resumed 0
+4026532660    171.435 wddm summary: flip end-programs 0 owed-invalidated 0 owed-reported 2013 flushes 0 destroy-unsync 0
+4026532661    171.435 wddm summary: flip writer-busy 0 recovery-pending 0
+4026532662    171.435 wddm summary: flip writer kind 0 busy 0 refused 0
+4026532663    171.435 wddm summary: flip writer kind 1 busy 0 refused 0
+4026532664    171.435 wddm summary: flip writer kind 2 busy 0 refused 0
+4026532665    171.435 wddm summary: flip writer kind 3 busy 0 refused 0
+4026532666    171.435 wddm summary: flip writer kind 4 busy 0 refused 0
+4026532667    171.435 wddm summary: flip writer kind 5 busy 0 refused 0
+4026532668    171.435 wddm summary: flip writer kind 6 busy 0 refused 0
+4026532669    171.435 wddm summary: flip writer kind 7 busy 0 refused 0
+4026532670    171.435 wddm summary: flip writer kind 8 busy 0 refused 0
+4026532671    171.435 wddm summary: flip writer kind 9 busy 0 refused 0
+4026532672    171.435 wddm summary: flip writer kind 10 busy 0 refused 0
+4026532673    171.435 wddm summary: flip writer refused 0 last kind 0 at irql answer 0 status 00000000
+4026532674    171.435 wddm summary: bridge programmed 0 retired 0 failed 0
+4026532675    171.435 wddm summary: flip e5 0 faulting 0 code 0x000000 node 0 blank 00000000
+4026532676    171.435 wddm summary: flip e5 notified 0 failed 0 drain 0/0; exclusive refused 0 failed 0
+4026532677    171.435 wddm summary: flip wu 0, records 0, to-end max 0 us
+4026532678    171.435 wddm summary: flip witness (lab) requests 0 read-failed 0 stale 0 order 0
+4026532679    171.435 wddm summary: flip witness (lab) qe 0 qr 0 er 0 kept 0 lost 0
+4026532680    171.435 wddm summary: vsync control 3 calls, on 2 off 1, last 3, QPC now 1753263882 at 10000000/s
+4026532681    171.435 wddm vsync control 1: on qpc 66377073 owed 0xF402A90000
+4026532682    171.435 wddm vsync control 2: off qpc 74200446 owed 0x0
+4026532683    171.435 wddm vsync control 3: on qpc 167480156 owed 0xF402A90000
+4026532684    171.435 vsync skip: odd 0 read 0 same 0 changed 0
+4026532685    171.435 vsync skip100ns: odd 0 read 0 same 0 changed 0
+4026532686    171.435 vsync vector: DPC polls 10114 ACKs 10 sync-failures 0
+4026532687    171.435 vsync diagnostic: irq 84775 no-mmio 0 flip-off 0 unarmed 54
+4026532688    171.435 vsync diagnostic: no-event 84721 read-fail 0 ack-fail 0
+4026532689    171.435 vsync diagnostic: 100ns irq 1751757000 entry 1751757000 ack 1751757000 notify 1751757000 status 00101104
+4026532690    171.435 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+4026532691    171.435 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+4026532692    171.435 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+4026532693    171.435 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+4026532694    171.435 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+4026532695    171.435 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+4026532696    171.435 vidmm summary: segment 0 named by 2615986 valid entries, 0 refused
+4026532697    171.435 vidmm summary: segment 1 named by 5055364 valid entries, 0 refused
+4026532698    171.435 vidmm summary: segment 3 named by 21137 valid entries, 0 refused
+4026532699    171.436 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+4026532700    171.436 vidmm summary: PTE encoding level 0 segment 0 coherent 67744 noncoherent 2548242
+4026532701    171.436 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+4026532702    171.436 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 5055364
+4026532703    171.436 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+4026532704    171.436 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+4026532705    171.436 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+4026532706    171.436 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 14848
+4026532707    171.436 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+4026532708    171.436 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 4328
+4026532709    171.436 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+4026532710    171.436 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 1449
+4026532711    171.436 vidmm summary: large pages not reported
+4026532712    171.436 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+4026532713    171.436 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 725 roots
+             362 lines printed
+             escapes: 6 without adapter synchronization, 1 with HardwareAccess

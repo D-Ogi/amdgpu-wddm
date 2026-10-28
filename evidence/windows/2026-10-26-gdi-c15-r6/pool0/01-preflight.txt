@@ -1,0 +1,29 @@
+--- boot (UTC): 2026-10-26 05:37:38Z
+--- device: OK problem CM_PROB_NONE
+--- records from StateV2 generation ddcb7c9cad4545f8ac5761636cf86efa
+--- UnconfirmedStarts 0, LastStage 50
+--- CuMode 24, CuModeClosedReason 
+--- StartRecord
+    Result = started
+    Step = -
+    SubStep = -
+    Status = 0
+    Stage = 39
+    Version = 458968
+    TimeUtc = 2026-10-26T05:37:44.257Z
+--- on-disk image of the running service (not a memory hash)
+DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\bc250kmd.sys
+--- health
+--- KMD log lines
+    31      1.395 gfx: VMID pool on (EnableVmidPool)
+    33      1.395 gfx: compute node open: node 2 on compute ring 1, fence slot 11, engine 4
+   618      2.900 gfx: pipeline queued seq67 prior66 observed_after_doorbell66 overlap0 vmid1
+   628      3.121 gfx: pipeline queued seq68 prior67 observed_after_doorbell67 overlap0 vmid1
+   637      3.153 gfx: pipeline queued seq69 prior68 observed_after_doorbell68 overlap0 vmid1
+   646      3.234 gfx: pipeline queued seq70 prior69 observed_after_doorbell69 overlap0 vmid1
+   737     12.904 vidmm: root page table 3:0xFD8F000 = physical 0x46DFEF000, 512 entries (the VMID is pointed at it by the first packet)
+  1207     16.273 vidmm: root page table 3:0xFD3E000 = physical 0x46DF9E000, 512 entries (the VMID is pointed at it by the first packet)
+--- DxgKrnl admin events since boot
+--- sessions
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+ bc250                 console             1  Active      none   10/26/2026 6:37 AM

@@ -1,0 +1,246 @@
+--- hang reading at 2026-10-26T05:43:07.0366242Z
+--- progress: no file C:\BC250\tmp\gdi\work.progress
+--- the workload processes (regedit, mmc) and the task
+task: gone (the workload step removed it)
+--- device
+status OK problem CM_PROB_NONE
+--- KMD ring, the last 150 lines
+  1164     16.556 wddm: gdi diag c9 k0 D 0 199 1834 1018 S 0 0 1834 819
+  1165     16.556 wddm: gdi diag c9 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1166     16.556 wddm: gdi diag c9 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 4
+  1167     16.556 wddm: gdi diag c9 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1168     16.556 wddm: gdi diag c9 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1169     16.556 wddm: gdi diag c9 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1170     16.556 wddm: gdi diag c9 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1171     16.556 wddm: gdi diag c9 k0 r0 2 1738 913 1834 1018 826 607 922 712
+  1172     16.556 wddm: gdi diag c9 k0 r2 2 0 301 86 406 0 199 86 289
+  1173     16.556 wddm: gdi diag c9 end used 2848 committed 2848 code 0x0 disp 0 rows 4 fall 0
+  1174     16.556 wddm: gdi diag c9 hash 0x2436DA25C30C6453 lab-skipped 0 lab-dropped 0
+  1175     16.573 wddm: gdi diag c10 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1176     16.573 wddm: gdi diag c10 cap 997376 len 128 subs 3 list 2
+  1177     16.573 wddm: gdi diag c10 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1178     16.573 wddm: gdi diag c10 k0 D 0 0 238 1120 S 0 0 238 1120
+  1179     16.573 wddm: gdi diag c10 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1180     16.573 wddm: gdi diag c10 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 3
+  1181     16.573 wddm: gdi diag c10 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1182     16.573 wddm: gdi diag c10 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1183     16.573 wddm: gdi diag c10 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1184     16.573 wddm: gdi diag c10 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x10EE000
+  1185     16.573 wddm: gdi diag c10 k0 r0 2 142 0 238 85 0 97 86 202
+  1186     16.573 wddm: gdi diag c10 k0 r2 1 66 1015 162 1120 0 0 0 0
+  1187     16.574 wddm: gdi diag c10 end used 2080 committed 2080 code 0x0 disp 0 rows 3 fall 0
+  1188     16.574 wddm: gdi diag c10 hash 0xE904AE162B01C543 lab-skipped 0 lab-dropped 0
+  1189     16.583 wddm: CreateProcess flags 0x00000000 pasids 1
+  1190     16.586 wddm: gdi diag c11 ib 0x10000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1191     16.586 wddm: gdi diag c11 cap 997376 len 112 subs 2 list 2
+  1192     16.586 wddm: gdi diag c11 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1193     16.586 wddm: gdi diag c11 k0 D 0 199 922 712 S 0 0 922 513
+  1194     16.586 wddm: gdi diag c11 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1195     16.586 wddm: gdi diag c11 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 2
+  1196     16.586 wddm: gdi diag c11 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1197     16.586 wddm: gdi diag c11 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1198     16.586 wddm: gdi diag c11 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1199     16.586 wddm: gdi diag c11 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x824000
+  1200     16.586 wddm: gdi diag c11 k0 r0 2 826 607 922 712 0 199 86 289
+  1201     16.587 wddm: gdi diag c11 end used 1376 committed 1376 code 0x0 disp 0 rows 2 fall 0
+  1202     16.587 wddm: gdi diag c11 hash 0x2795BA3DE4D8BF19 lab-skipped 0 lab-dropped 0
+  1203     16.589 wddm: gdi diag c12 ib 0x3DE000 lo 0x0 dma 3989504 place 0 ahead 0 room 997376
+  1204     16.589 wddm: gdi diag c12 cap 997376 len 112 subs 2 list 2
+  1205     16.589 wddm: gdi diag c12 k0 op 1 ix 1 0 0 0 rop 0x1 r3 0x0 col 0x0 0x0
+  1206     16.589 wddm: gdi diag c12 k0 D 0 301 86 1018 S 0 0 86 717
+  1207     16.589 wddm: gdi diag c12 k0 gam 0 ao 0 0 sca 0 sha 0 ha 0
+  1208     16.589 wddm: gdi diag c12 k0 mode 0 mx 0 my 0 sp 7680 dp 0 ap 0 n 2
+  1209     16.589 wddm: gdi diag c12 k0 s0 ix 1 seg 0 wr 1 type 1 1920x1200 pitch 7680
+  1210     16.589 wddm: gdi diag c12 k0 s0 bpp 4 rf 0 bytes 9216000 va 0x1A14000
+  1211     16.589 wddm: gdi diag c12 k0 s1 ix 0 seg 0 wr 0 type 2 1920x1200 pitch 7680
+  1212     16.589 wddm: gdi diag c12 k0 s1 bpp 4 rf 0 bytes 9216000 va 0x10EE000
+  1213     16.589 wddm: gdi diag c12 k0 r0 2 0 913 86 1018 0 301 86 406
+  1214     16.590 wddm: gdi diag c12 end used 1480 committed 1480 code 0x0 disp 0 rows 2 fall 0
+  1215     16.590 wddm: gdi diag c12 hash 0xF47287D121AA2A84 lab-skipped 0 lab-dropped 0
+  1216     16.647 wddm: SetRootPageTable segment 3 offset 0xFD40000, 512 entries
+  1217     16.647 vidmm: root page table 3:0xFD40000 = physical 0x46DFA0000, 512 entries (the VMID is pointed at it by the first packet)
+  1218     16.647 wddm: root binding handleFFFFBC04597BFDB0 ctxFFFFBC04597BFDB0 ownerFFFFBC04591F0290 resolved1 physical46DFA0000 irql0
+  1219     16.701 wddm: umd context node 0 ip 0 graphics, private slot 576
+  1220     16.725 wddm: umd context node 0 ip 0 graphics, private slot 576
+  1221     16.780 wddm: DestroyContext
+  1222     16.780 wddm: DestroyContext
+  1223     16.783 wddm: DestroyDevice
+  1224     16.795 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 62.3 C busy 3.4% avg 3.6% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 warm
+  1225     16.795 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 0 exits 0 refusals 0, 0 ms at the point
+  1226     16.795 dpm: telemetry idle leave at 150 permille, exits 0 by a busy tick, 0 by the window
+  1227     16.795 hwmon: telemetry fan2 1318 rpm (1/5 turn) duty 710 permille, mode 0xE0 eng 0x60
+  1228     16.795 hwmon: telemetry apu 60.0 C, duty read-back unproven
+  1229     16.795 hwmon: telemetry 15 samples 0 errors 0 retries 0 refusals
+  1230     16.795 smu metrics: telemetry mW p53473 a54296 g16160 s11223 reject 1 why 4 sp00000000 m67 0
+  1231     16.795 smu metrics: telemetry gfx 824 mV 1000 MHz 52.5 C soc 1199 mV 55.0 C thr 0
+  1232     16.795 fan: telemetry curve curve/standard
+  1233     16.795 fan: telemetry target 73% applied 73% raw 186 rb 181, 1318 rpm
+  1234     16.795 fan: telemetry 1 takeovers 0 handbacks 3 writes
+  1235     16.795 fan: telemetry 0 failures 0 emergencies 0 doubts
+  1236     16.921 wddm: SetRootPageTable segment 3 offset 0xFD40000, 512 entries
+  1237     16.921 wddm: root binding handleFFFFBC0459AE9DB0 ctxFFFFBC0459AE9DB0 ownerFFFFBC0456D71DA0 resolved1 physical46DFA0000 irql0
+  1238     16.963 wddm: umd context node 0 ip 0 graphics, private slot 576
+  1239     17.027 wddm: DestroyContext
+  1240     17.027 wddm: DestroyContext
+  1241     17.031 wddm: DestroyDevice
+  1242     17.158 wddm: SetRootPageTable segment 3 offset 0xFD5B000, 512 entries
+  1243     17.158 wddm: root binding handleFFFFBC0456DBEDD0 ctxFFFFBC0456DBEDD0 ownerFFFFBC0459860DA0 resolved1 physical46DFBB000 irql0
+  1244     17.170 wddm: SetRootPageTable segment 3 offset 0xFD40000, 512 entries
+  1245     17.170 wddm: root binding handleFFFFBC0459576DA0 ctxFFFFBC0459576DA0 ownerFFFFBC04568D85E0 resolved1 physical46DFA0000 irql0
+  1246     17.190 wddm: DestroyContext
+  1247     17.191 wddm: DestroyContext
+  1248     17.195 wddm: DestroyDevice
+  1249     17.211 wddm: umd context node 0 ip 0 graphics, private slot 576
+  1250     17.262 wddm: DestroyContext
+  1251     17.263 wddm: DestroyContext
+  1252     17.264 wddm: umd context node 0 ip 0 graphics, private slot 576
+  1253     17.266 wddm: DestroyDevice
+  1254     17.424 wddm: SetRootPageTable segment 3 offset 0xFD40000, 512 entries
+  1255     17.424 wddm: root binding handleFFFFBC04591B1B20 ctxFFFFBC04591B1B20 ownerFFFFBC0459003010 resolved1 physical46DFA0000 irql0
+  1256     17.471 wddm: umd context node 0 ip 0 graphics, private slot 576
+  1257     17.578 wddm: umd submit fence 249 held 115 us (4 spins, 0 event, 0 timeout)
+  1258     17.594 wddm: DestroyDevice
+  1259     17.633 wddm: DestroyDevice
+  1260     17.673 wddm: DestroyDevice
+  1261     17.858 wddm: DestroyDevice
+  1262     17.931 wddm: DestroyProcess
+  1263     21.010 fan: load boost on (rise): full speed at guard 65.7 C, duty was 100%
+  1264     21.225 wddm: CreateProcess flags 0x00000000 pasids 1
+  1265     21.802 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 65.6 C busy 0.0% avg 0.4% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 warm
+  1266     21.802 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 0 exits 0 refusals 0, 0 ms at the point
+  1267     21.802 dpm: telemetry idle leave at 150 permille, exits 0 by a busy tick, 0 by the window
+  1268     21.802 hwmon: telemetry fan2 1426 rpm (1/5 turn) duty 800 permille, mode 0xE0 eng 0x60
+  1269     21.802 hwmon: telemetry apu 65.0 C, duty read-back unproven
+  1270     21.802 hwmon: telemetry 20 samples 0 errors 0 retries 0 refusals
+  1271     21.802 smu metrics: telemetry mW p53119 a52413 g16631 s10743 reject 1 why 4 sp00000000 m67 0
+  1272     21.802 smu metrics: telemetry gfx 818 mV 1000 MHz 52.7 C soc 1193 mV 54.5 C thr 0
+  1273     21.802 fan: telemetry curve curve/standard
+  1274     21.802 fan: telemetry target 100% applied 100% raw 255 rb 204, 1426 rpm
+  1275     21.802 fan: telemetry 1 takeovers 0 handbacks 7 writes
+  1276     21.802 fan: telemetry 0 failures 0 emergencies 0 doubts
+  1277     21.802 fan: telemetry boost on (rise)
+  1278     21.802 fan: telemetry boost 1 times, 0 ms
+  1279     26.825 dpm: telemetry dpm 1000 MHz/820 mV (SMU 1000 MHz VID 116) 64.1 C busy 0.0% avg 0.2% want 1000 cap 2000 max 2000 throttle none, raises 0 lowers 0 thermal 0 warm
+  1280     26.825 dpm: telemetry idle 500 MHz, hold 3000 ms under 2 permille, entries 0 exits 0 refusals 0, 0 ms at the point
+  1281     26.825 dpm: telemetry idle leave at 150 permille, exits 0 by a busy tick, 0 by the window
+  1282     26.825 hwmon: telemetry fan2 1673 rpm (1/5 turn) duty 1000 permille, mode 0xE0 eng 0x60
+  1283     26.825 hwmon: telemetry apu 64.0 C, duty read-back unproven
+  1284     26.825 hwmon: telemetry 25 samples 0 errors 0 retries 0 refusals
+  1285     26.825 smu metrics: telemetry mW p57167 a46447 g16631 s14535 reject 1 why 4 sp00000000 m67 0
+  1286     26.825 smu metrics: telemetry gfx 818 mV 1000 MHz 52.2 C soc 1193 mV 54.7 C thr 0
+  1287     26.825 fan: telemetry curve curve/standard
+  1288     26.825 fan: telemetry target 100% applied 100% raw 255 rb 255, 1673 rpm
+  1289     26.825 fan: telemetry 1 takeovers 0 handbacks 7 writes
+  1290     26.825 fan: telemetry 0 failures 0 emergencies 0 doubts
+  1291     26.825 fan: telemetry boost on (rise)
+  1292     26.825 fan: telemetry boost 1 times, 5077 ms
+  1293     27.803 dpm: 1000 -> 500 MHz/820 mV VID 116, 0 settle reads (load, busy 0 permille, 64.0 C, throttle idle)
+  1294     28.965 wddm: DestroyProcess
+  1295     31.201 wddm: DestroyProcess
+  1296     31.990 wddm: DestroyProcess
+  1297     34.840 wddm: umd submit fence 454 held 628 us (23 spins, 1 event, 0 timeout)
+  1298     35.538 wddm: DestroyProcess
+  1299     36.282 wddm: DestroyProcess
+  1300     36.317 wddm: DestroyProcess
+  1301     38.494 wddm: DestroyProcess
+  1302     45.899 wddm: PreemptCommand fence 3 node 0
+  1303     45.899 wddm: preemption queued fence 3 node 0 hardware pending 1 active submits 0
+  1304     45.899 wddm: preemption report fence 3 node 0 last completed 556 at DMA boundary
+  1305     47.383 wddm: kernel submit fence 622 held 48 us (1 spins, 0 event, 0 timeout)
+  1306     53.512 fan: load boost off after 32488 ms, duty 100%, guard 65.5 C
+  1307     75.106 guard: healthy start confirmation persistence 0x00000000
+  1308     75.106 guard: boot marked confirmed 0x00000000
+  1309     78.367 gfx: paging submit, seq 13519 at 0x4007A4: 12733 submits in 75632 ms, 12732 of 12741 with no line
+  1310     79.938 wddm: kernel submit fence 788 held 397 us (18 spins, 0 event, 0 timeout)
+  1311     82.808 gfx: paging submit, seq 14022 at 0x400100: 484 submits in 4441 ms, 13215 of 13225 with no line
+             1024 lines printed
+             escapes: 17 without adapter synchronization, 0 with HardwareAccess
+--- health
+--- interop
+driver 0x000700D8, requested blit+cdd, effective blit+cdd, reason none, generation 50611089
+settings EnableGpuPresentBlit=1 EnableCddDwmInterop=1
+power callback registered
+session marked, users 1, marks 1, unmarks 0, mark failures 0, last end none, previous end system-power, boot 868, marker found 0
+--- System events since boot: bc250, Display, DxgKrnl, WHEA
+--- WER LiveKernelEvent since boot
+--- wddm summary (bc250kmd_cli log summary only), read last because it waits for the adapter
+4026532124     90.816 wddm summary: widest blit 0 rows
+4026532125     90.816 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+4026532126     90.816 wddm summary: vsync enabled, 0 ticks, 4720 reported to dxgkrnl
+4026532127     90.816 wddm summary: visibility calls 8 source 0x00000000 requested 1 status 0x00000000 current 1
+4026532128     90.816 wddm summary: display mode 1 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+4026532129     90.816 wddm summary: display commit power-only 0 visible-link-off 0
+4026532130     90.816 wddm visibility: true 6 false 2 failures 0 first-true 0x00000000 last-true 0x00000000 QPC 10000000
+4026532131     90.816 wddm visibility event: 1 src 0 req 1 status 00000000 visible 1 blank 0 qpc 66344167..66344210
+4026532132     90.816 wddm visibility event: 2 src 0 req 1 status 00000000 visible 1 blank 0 qpc 67000557..67000636
+4026532133     90.816 wddm visibility event: 3 src 0 req 1 status 00000000 visible 1 blank 0 qpc 67556478..67556593
+4026532134     90.816 wddm visibility event: 4 src 0 req 1 status 00000000 visible 1 blank 0 qpc 159545005..159545111
+4026532135     90.816 wddm visibility event: 5 src 0 req 0 status 00000000 visible 0 blank 1 qpc 173322042..173605782
+4026532136     90.816 wddm visibility event: 6 src 0 req 0 status 00000000 visible 0 blank 1 qpc 173607811..173938653
+4026532137     90.816 wddm visibility event: 7 src 0 req 1 status 00000000 visible 1 blank 0 qpc 174026310..174026366
+4026532138     90.816 wddm visibility event: 8 src 0 req 1 status 00000000 visible 1 blank 0 qpc 174233872..174234022
+4026532139     90.816 wddm summary: dcn lock acknowledgement timeouts 0
+4026532140     90.816 wddm summary: vidpn flip open: 579 hardware flips, 0 refused
+4026532141     90.816 wddm summary: vidpn flip vsyncs 1 armed, 5280 acked, 0 refused, 0 completion-deferred, 0 old-buffer-reports
+4026532142     90.816 wddm summary: immediate 0 programmed, 0 same-frame, 0 promoted; Present DMA flips refused 0
+4026532143     90.816 wddm summary: immediate outcome done 0 late 0 pending 0 primary-other 0 read-failed 0 superseded 0
+4026532144     90.816 wddm summary: immediate done max 0 us sum 0 us, observe max 0 us overruns 0, flip in L max 14 us
+4026532145     90.816 wddm summary: flip edges f0 0 f1 0 a 0 wv 0 wi 0 wu 0 e 584
+4026532146     90.816 wddm summary: flip results of e refused 0 ok 579 fault 0 u 0
+4026532147     90.816 wddm summary: flip writers faulting 0 high 0 sync-failed 0 low-sync-failed 0 resumed 0
+4026532148     90.816 wddm summary: flip end-programs 0 owed-invalidated 0 owed-reported 583 flushes 0 destroy-unsync 0
+4026532149     90.816 wddm summary: flip writer-busy 0 recovery-pending 0
+4026532150     90.816 wddm summary: flip writer kind 0 busy 0 refused 0
+4026532151     90.816 wddm summary: flip writer kind 1 busy 0 refused 0
+4026532152     90.816 wddm summary: flip writer kind 2 busy 0 refused 0
+4026532153     90.816 wddm summary: flip writer kind 3 busy 0 refused 0
+4026532154     90.816 wddm summary: flip writer kind 4 busy 0 refused 0
+4026532155     90.816 wddm summary: flip writer kind 5 busy 0 refused 0
+4026532156     90.816 wddm summary: flip writer kind 6 busy 0 refused 0
+4026532157     90.816 wddm summary: flip writer kind 7 busy 0 refused 0
+4026532158     90.816 wddm summary: flip writer kind 8 busy 0 refused 0
+4026532159     90.816 wddm summary: flip writer kind 9 busy 0 refused 0
+4026532160     90.816 wddm summary: flip writer kind 10 busy 0 refused 0
+4026532161     90.816 wddm summary: flip writer refused 0 last kind 0 at irql answer 0 status 00000000
+4026532162     90.816 wddm summary: bridge programmed 0 retired 0 failed 0
+4026532163     90.816 wddm summary: flip e5 0 faulting 0 code 0x000000 node 0 blank 00000000
+4026532164     90.816 wddm summary: flip e5 notified 0 failed 0 drain 0/0; exclusive refused 0 failed 0
+4026532165     90.816 wddm summary: flip wu 0, records 0, to-end max 0 us
+4026532166     90.816 wddm summary: flip witness (lab) requests 0 read-failed 0 stale 0 order 0
+4026532167     90.816 wddm summary: flip witness (lab) qe 0 qr 0 er 0 kept 0 lost 0
+4026532168     90.816 wddm summary: vsync control 3 calls, on 2 off 1, last 3, QPC now 947071096 at 10000000/s
+4026532169     90.816 wddm vsync control 1: on qpc 66377073 owed 0xF402A90000
+4026532170     90.816 wddm vsync control 2: off qpc 74200446 owed 0x0
+4026532171     90.816 wddm vsync control 3: on qpc 167480156 owed 0xF402A90000
+4026532172     90.816 vsync skip: odd 0 read 0 same 0 changed 0
+4026532173     90.816 vsync skip100ns: odd 0 read 0 same 0 changed 0
+4026532174     90.816 vsync vector: DPC polls 5280 ACKs 3 sync-failures 0
+4026532175     90.816 vsync diagnostic: irq 19281 no-mmio 0 flip-off 0 unarmed 54
+4026532176     90.816 vsync diagnostic: no-event 19227 read-fail 0 ack-fail 0
+4026532177     90.816 vsync diagnostic: 100ns irq 945422446 entry 945422446 ack 945422446 notify 945422446 status 00101104
+4026532178     90.816 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+4026532179     90.816 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+4026532180     90.816 vidmm summary: level 0: 1026 calls, 262688 entries, 544 valid
+4026532181     90.816 vidmm summary: level 1: 2 calls, 1024 entries, 512 valid
+4026532182     90.816 vidmm summary: level 2: 1 calls, 512 entries, 2 valid
+4026532183     90.816 vidmm summary: level 3: 1 calls, 512 entries, 1 valid
+4026532184     90.816 vidmm summary: segment 0 named by 1038058 valid entries, 0 refused
+4026532185     90.816 vidmm summary: segment 1 named by 1707966 valid entries, 0 refused
+4026532186     90.816 vidmm summary: segment 3 named by 4963 valid entries, 0 refused
+4026532187     90.816 vidmm summary: PTE encoding level 0 segment 0 snoop mismatches 0
+4026532188     90.816 vidmm summary: PTE encoding level 0 segment 0 coherent 44304 noncoherent 993754
+4026532189     90.816 vidmm summary: PTE encoding level 0 segment 1 snoop mismatches 0
+4026532190     90.816 vidmm summary: PTE encoding level 0 segment 1 coherent 0 noncoherent 1707966
+4026532191     90.816 vidmm summary: PTE encoding level 0 segment 3 snoop mismatches 0
+4026532192     90.816 vidmm summary: PTE encoding level 0 segment 3 coherent 0 noncoherent 512
+4026532193     90.816 vidmm summary: PTE encoding level 1 segment 3 snoop mismatches 0
+4026532194     90.816 vidmm summary: PTE encoding level 1 segment 3 coherent 0 noncoherent 4242
+4026532195     90.816 vidmm summary: PTE encoding level 2 segment 3 snoop mismatches 0
+4026532196     90.816 vidmm summary: PTE encoding level 2 segment 3 coherent 0 noncoherent 152
+4026532197     90.816 vidmm summary: PTE encoding level 3 segment 3 snoop mismatches 0
+4026532198     90.816 vidmm summary: PTE encoding level 3 segment 3 coherent 0 noncoherent 57
+4026532199     90.816 vidmm summary: large pages not reported
+4026532200     90.816 vidmm summary: 1030 cpu-virtual calls, 0 gpu-physical calls, 0 gpu-physical refusals
+4026532201     90.816 vidmm summary: 264736 entries written (EnableGpuVa open), 0 refused, 0 bad calls, 31 roots
+             362 lines printed
+             escapes: 6 without adapter synchronization, 1 with HardwareAccess

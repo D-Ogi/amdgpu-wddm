@@ -1,0 +1,49 @@
+--- boot (UTC): 2026-10-26 05:53:52Z
+--- device: OK problem CM_PROB_NONE
+--- records from StateV2 generation ddcb7c9cad4545f8ac5761636cf86efa
+--- UnconfirmedStarts 0, LastStage 50
+--- CuMode 24, CuModeClosedReason 
+--- StartRecord
+    Result = started
+    Step = -
+    SubStep = -
+    Status = 0
+    Stage = 39
+    Version = 458968
+    TimeUtc = 2026-10-26T05:57:15.025Z
+--- on-disk image of the running service (not a memory hash)
+DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\bc250kmd.sys
+--- health
+--- KMD log lines
+    21      0.388 connector: reserved linear handoff 35389440 bytes before the application segment
+    22      0.388 connector: handoff reservation status 00000000
+   127      0.552 cumode: CuMode 24 disable 0x00000 -> mode 24 reason 0, stock from this boot's record
+   147      0.577 startup: RLC boundary before-gfx-visibility
+   149      0.580 startup: visibility observer returned after-invalidate-request
+   151      0.584 startup: visibility observer returned after-invalidate-request-read
+   153      0.587 startup: visibility observer returned after-invalidate-ack
+   154      0.588 startup: visibility GFX returned 0, entering MMHUB
+   155      0.589 startup: visibility MMHUB returned 0
+   159      0.593 startup: visibility publication observer returned
+   160      0.594 startup: RLC boundary after-gfx-visibility
+   475      1.209 connector-link: commit generation 1 attempts 1 completed 1 refused 0 active 1 status 00000000
+   480      1.210 display visibility: call 1 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   481      1.210 display visibility: call 1 status 0x00000000 current 1 blanked 0
+   482      1.210 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   925      2.695 display visibility: call 2 source 0x00000000 visible 0 previous 1 hardware 1 blanked 0
+   926      2.722 display visibility: call 2 status 0x00000000 current 0 blanked 1
+   927      2.722 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   928      2.723 display visibility: call 3 source 0x00000000 visible 0 previous 0 hardware 1 blanked 1
+   929      2.756 display visibility: call 3 status 0x00000000 current 0 blanked 1
+   930      2.756 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   941      2.783 display visibility: call 4 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   942      2.784 display visibility: call 4 status 0x00000000 current 1 blanked 0
+   943      2.784 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   959      2.821 display visibility: call 5 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+   960      2.821 display visibility: call 5 status 0x00000000 current 1 blanked 0
+   961      2.821 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+  1175     66.111 guard: healthy start confirmation persistence 0x00000000
+--- DxgKrnl admin events since boot
+--- sessions
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+ bc250                 console             1  Active      none   10/26/2026 6:54 AM

@@ -1,0 +1,13 @@
+store C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784
+kmd DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 Running
+file 3F3D41AA d3d12\amdgpu_wddm_d3d12.dll
+file FC754D71 d3d12\amdgpu_wddm_vkd3d.dll
+file 792B8CF6 d3d12\amdgpu_wddm_radv_d3d12.dll
+file 42EEC191 wow64\d3d12\amdgpu_wddm_d3d1232.dll
+file 07708471 wow64\d3d12\amdgpu_wddm_vkd3d32.dll
+file 2634CD1A wow64\d3d12\amdgpu_wddm_radv_d3d1232.dll
+file 36DA764A vulkan\vulkan_radeon.dll
+file 5099E73E wow64\vulkan\vulkan_radeon32.dll
+file 16FB66AA d3d11\amdgpu_wddm_d3d11.dll
+file F6EA7886 desktop\amdgpu_wddm_radv.dll
+file 4AE32EF2 desktop\bc250d3d.dll

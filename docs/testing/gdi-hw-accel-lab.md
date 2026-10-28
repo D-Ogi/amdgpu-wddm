@@ -2,7 +2,12 @@
 
 This page is the lab plan for the GDI acceleration of [docs/design/gdi-hw-accel.md](../design/gdi-hw-accel.md).
 Both increments are in the driver, the kernels are in the image, and the driver reports the
-capability, so this plan applies to every build that carries this series. Nothing of it has run yet.
+capability, so this plan applies to every build that carries this series.
+
+Status, 2026-10-28. Trials 3, 4 and 5 ran on the 0.7.216.105-tester.33 lab package on 2026-10-26, and they
+passed (facts M926 and M927, [evidence](../../evidence/windows/2026-10-26-gdi-c15-r6/RESULT.md)). That run did
+not reach the held submission path of a busy ring. A second run with `EnableVmidPool` 0 reached it, with no
+TDR. Trials 1 and 2, the HLK jobs, have not run.
 
 Run it only on a build whose start log says `kernels 1`. On an image without the kernels
 `Bc250GdiKernelsPresent` returns 0, the driver reports the caps of the previous release, and nothing

@@ -1,0 +1,57 @@
+--- boot (UTC): 2026-10-26 05:48:08Z
+--- device: OK problem CM_PROB_NONE
+--- records from StateV2 generation ddcb7c9cad4545f8ac5761636cf86efa
+--- UnconfirmedStarts 0, LastStage 50
+--- CuMode 24, CuModeClosedReason 
+--- StartRecord
+    Result = started
+    Step = -
+    SubStep = -
+    Status = 0
+    Stage = 39
+    Version = 458968
+    TimeUtc = 2026-10-26T05:48:14.542Z
+--- on-disk image of the running service (not a memory hash)
+DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\bc250kmd.sys
+--- health
+--- KMD log lines
+    21      1.348 connector: reserved linear handoff 35389440 bytes before the application segment
+    22      1.348 connector: handoff reservation status 00000000
+    26      1.364 boot logo: scanout 0x270000000 inherited 0xC0000000 otg master 1 blank 1 control 0x00000101
+   129      1.505 cumode: CuMode 24 disable 0x00000 -> mode 24 reason 0
+   200      1.505 cumode: applied 24 CUs (24 counted), reason 0, consistent 1, wrote 0, RLC_PG_CNTL 0x00000008 (PG enables 0x8), after the RLC stage 0x00800000 (PG enables 0x0)
+   201      1.505 cumode: SA0-3 CC 0xFFF80000 0xFFF80000 0xFFF80000 0xFFF80000 SPI 0x7 0x7 0x7 0x7
+   207      1.505 inherited: source 1920x1200 pitch 7680 target 1920x1200 fixed 0 support F status 00000000 valid 7FFFFF
+   208      1.505 inherited gate: 0 none word 00000000
+   209      1.505 display inherited: viewport 00000000/04B00780 recout 00000000/04B00780 mpc 04B00780 scl 00000001 ratio 01000000/01000000
+   210      1.505 display inherited: top 00000000 odm 00000000 hubp 000F1002 mem 00000000 taps 00000000 format 00000008 tiling 00000080 pitch 0000077F otg1 80000310
+   211      1.505 display inherited: surface 00000000 bottom 00000000 mpcc FFFF0461 out 01440000
+   212      1.505 display inherited: autocal 00000100 dscl control 00000000
+   218      1.520 display modes: preferred 1920x1200 59.950 Hz, pixel clock 154000 kHz; native (firmware) 1920x1200
+   221      1.520 display modes: requested 2 level 2, 16 source modes, descriptor served
+   222      1.520 display modes: list 0..5: 1920x1200/0x03 1920x1080/0x36 1680x1050/0x24 1600x1200/0x04 1600x900/0x20 1440x900/0x24
+   223      1.520 display modes: list 6..11: 1400x1050/0x20 1280x1024/0x2C 1280x960/0x20 1280x800/0x20 1280x720/0x32 1152x864/0x20
+   224      1.520 display modes: list 12..15: 1024x768/0x28 800x600/0x28 720x480/0x02 640x480/0x3C
+   237      1.520 stage 35
+   238      1.520 connector-link: sink generation 1 kind 1 adapter 0 max 0 kHz limit 300000 kHz
+   240      1.536 connector-link: open pipe support F status 00000000 valid 7FFFFF bottom 00000000 control FFFF0461
+   241      1.536 connector-link: prepare generation 1 targets 7 status 00000000
+   242      1.536 connector: start generation 1 status 00000000 inherited stream preserved 0
+   678     11.861 display visibility: call 4 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+   679     11.861 display visibility: call 4 status 0x00000000 current 1 blanked 0
+   680     11.861 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   748     13.269 display visibility: call 5 source 0x00000000 visible 0 previous 1 hardware 1 blanked 0
+   749     13.286 display visibility: call 5 status 0x00000000 current 0 blanked 1
+   750     13.286 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   751     13.286 display visibility: call 6 source 0x00000000 visible 0 previous 0 hardware 1 blanked 1
+   752     13.320 display visibility: call 6 status 0x00000000 current 0 blanked 1
+   753     13.320 wddm: display SetVidPnSourceVisibility call 6 detail 0x0 -> 0x00000000
+   763     13.329 display visibility: call 7 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   764     13.329 display visibility: call 7 status 0x00000000 current 1 blanked 0
+   781     13.360 display visibility: call 8 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+   782     13.360 display visibility: call 8 status 0x00000000 current 1 blanked 0
+  1310     74.057 guard: healthy start confirmation persistence 0x00000000
+--- DxgKrnl admin events since boot
+--- sessions
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+ bc250                 console             1  Active      none   10/26/2026 6:48 AM

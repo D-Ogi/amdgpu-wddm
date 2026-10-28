@@ -1,0 +1,8 @@
+The variable cannot be validated because the value confirm-start is not a valid value for the 
+Action variable.
+At C:\BC250\tmp\c15-recover-action.ps1:16 char:3
++   $Action='confirm-start'
++   ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : MetadataError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : ValidateSetFailure
+ 

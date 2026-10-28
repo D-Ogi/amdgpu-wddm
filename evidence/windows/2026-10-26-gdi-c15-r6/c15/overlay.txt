@@ -1,0 +1,8 @@
+off-12s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 59.8 permille, mean luminance 52
+off-33s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 59.9 permille, mean luminance 48
+off-55s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 61.0 permille, mean luminance 49
+off.png: crop (480, 0, 960, 500) (fixed rectangle), ink 62.2 permille, mean luminance 38
+on-12s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 59.4 permille, mean luminance 51
+on-33s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 61.0 permille, mean luminance 50
+on-55s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 62.0 permille, mean luminance 51
+on.png: crop (480, 0, 960, 500) (fixed rectangle), ink 61.8 permille, mean luminance 38

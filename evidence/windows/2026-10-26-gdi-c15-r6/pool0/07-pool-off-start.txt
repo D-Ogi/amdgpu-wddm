@@ -1,0 +1,45 @@
+--- boot (UTC): 2026-10-26 05:41:34Z
+--- device: OK problem CM_PROB_NONE
+--- records from StateV2 generation ddcb7c9cad4545f8ac5761636cf86efa
+--- UnconfirmedStarts 0, LastStage 50
+--- CuMode 24, CuModeClosedReason 
+--- StartRecord
+    Result = started
+    Step = -
+    SubStep = -
+    Status = 0
+    Stage = 39
+    Version = 458968
+    TimeUtc = 2026-10-26T05:41:40.731Z
+--- on-disk image of the running service (not a memory hash)
+DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\bc250kmd.sys
+--- health
+--- KMD log lines
+    31      1.379 gfx: VMID pool off (EnableVmidPool 0): every job at VMID 1
+    33      1.379 gfx: compute node closed (a gate it rests on is closed)
+   545      2.840 gfx: pipeline queued seq57 prior56 observed_after_doorbell56 overlap0 vmid1
+   546      2.840 wddm: fence 3 on the gfx ring: sequence 57, vmid 1, root 0x46DFFF000, va 0x3DE000, 3989504 bytes
+   567      2.888 gfx: pipeline queued seq58 prior57 observed_after_doorbell57 overlap0 vmid1
+   568      2.888 wddm: fence 4 on the gfx ring: sequence 58, vmid 1, root 0x46DFFF000, va 0x10000, 3989504 bytes
+   585      2.935 gfx: pipeline queued seq59 prior58 observed_after_doorbell58 overlap0 vmid1
+   586      2.935 wddm: fence 5 on the gfx ring: sequence 59, vmid 1, root 0x46DFFF000, va 0x3DE000, 3989504 bytes
+   603      2.982 gfx: pipeline queued seq60 prior59 observed_after_doorbell59 overlap0 vmid1
+   604      2.982 wddm: fence 6 on the gfx ring: sequence 60, vmid 1, root 0x46DFFF000, va 0x10000, 3989504 bytes
+   621      3.029 gfx: pipeline queued seq61 prior60 observed_after_doorbell60 overlap0 vmid1
+   622      3.029 wddm: fence 7 on the gfx ring: sequence 61, vmid 1, root 0x46DFFF000, va 0x3DE000, 3989504 bytes
+   639      3.076 gfx: pipeline queued seq62 prior61 observed_after_doorbell61 overlap0 vmid1
+   640      3.076 wddm: fence 8 on the gfx ring: sequence 62, vmid 1, root 0x46DFFF000, va 0x10000, 3989504 bytes
+   650      3.123 gfx: pipeline queued seq63 prior62 observed_after_doorbell62 overlap0 vmid1
+   659      3.169 gfx: pipeline queued seq64 prior63 observed_after_doorbell63 overlap0 vmid1
+   668      3.216 gfx: pipeline queued seq65 prior64 observed_after_doorbell64 overlap0 vmid1
+   677      3.264 gfx: pipeline queued seq66 prior65 observed_after_doorbell65 overlap0 vmid1
+   686      3.311 gfx: pipeline queued seq67 prior66 observed_after_doorbell66 overlap0 vmid1
+   696      3.535 gfx: pipeline queued seq68 prior67 observed_after_doorbell67 overlap0 vmid1
+   705      3.566 gfx: pipeline queued seq69 prior68 observed_after_doorbell68 overlap0 vmid1
+   714      3.650 gfx: pipeline queued seq70 prior69 observed_after_doorbell69 overlap0 vmid1
+   805     13.300 vidmm: root page table 3:0xFD8F000 = physical 0x46DFEF000, 512 entries (the VMID is pointed at it by the first packet)
+  1217     16.647 vidmm: root page table 3:0xFD40000 = physical 0x46DFA0000, 512 entries (the VMID is pointed at it by the first packet)
+--- DxgKrnl admin events since boot
+--- sessions
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+ bc250                 console             1  Active      none   10/26/2026 6:41 AM

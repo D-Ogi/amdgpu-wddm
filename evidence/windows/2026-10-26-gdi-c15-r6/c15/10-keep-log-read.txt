@@ -1,0 +1,2 @@
+state get KeepLog: {"abi":1,"command":"get","path":"","name":"KeepLog","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":0},"error":0}
+state override KeepLog: {"abi":1,"command":"get","path":"","name":"KeepLog","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":0,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":0},"error":0}

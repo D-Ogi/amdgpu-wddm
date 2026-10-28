@@ -1,0 +1,2 @@
+0x000803ce  steamwebhelper       160x28+-32000+-32000 Steam  (minimized)
+0x00010114  explorer             1920x1200+0+0        Program Manager

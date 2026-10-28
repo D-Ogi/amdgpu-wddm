@@ -2158,3 +2158,17 @@ facts:
     status_text: "MEASURED (unit A, five runs)"
     detail: "From the kernel driver summary lines `VMID pool FLUSH_TLB` and `node 0 hardware`, read before and after each run. The two reads enclose the game from its start to its exit. The rate on file before this, about 12 a second (47863 in 3909 s, `evidence/linux/2026-09-24-E29-sdma-reset/windows-before.log`), is a desktop rate"
     evidence: "[VM flush skip arm](../evidence/windows/2026-10-22-vm-flush-skip-arm/README.md)"
+  - id: M926
+    status: MEASURED
+    date: "2026-10-26"
+    claim: "Kernel GDI hardware acceleration runs on the desktop of unit A with the tester.33 lab kernel driver DAD8D7A4 (22631, 24 CU, `EnableGdiHwAccel` at its installation default 1): the start reports gate 1, kernels 1, capability 1 and the GDI code hash ca4950d6, a 60 s desktop workload beside four Vulkan loops on nodes 0 and 2 gave 1584 RenderGdi calls with 0 drops in every class, 0 Display 4101 and 0 ResetEngine, and the off switch of the control app gives gate 0, capability 0 and Features GdiHwAccel 2 after a restart, then capability 1 again after the on action"
+    status_text: "MEASURED (unit A, one run, plus one run with EnableVmidPool 0)"
+    detail: "Trials 3 and 4 of docs/testing/gdi-hw-accel-lab.md. In the default run no GDI buffer came while the ring was busy, so the held submission path of a driver-built DMA buffer (BD-246) did not run there. A second run with EnableVmidPool 0 gave 154 unique held submissions, the longest 40494 us, with no TDR and no GDI loss. The HLK GDIHW jobs (trials 1 and 2) and the release flavour kernel driver were not part of these runs"
+    evidence: "[GDI trials 3, 4 and 5](../evidence/windows/2026-10-26-gdi-c15-r6/RESULT.md)"
+  - id: M927
+    status: MEASURED
+    date: "2026-10-26"
+    claim: "On unit A the processor writes, copies and reads a type 2 GDI staging allocation (CPU-visible, aperture, cached) of 16 MiB at 0.984x, 1.009x and 1.000x the rate of ordinary committed pages (median of 3 passes, 13822.9, 13827.7 and 14894.8 MB/s against 14046.2, 13710.4 and 14889.3 MB/s), so the CPU access condition of the GDI acceleration capability holds for the placement the driver gives a GDI staging surface. An uncached type 0 allocation reads at 102.3 MB/s, 0.007x"
+    status_text: "MEASURED (unit A, one run, tester.33 lab kernel driver DAD8D7A4)"
+    detail: "Trial 5 of docs/testing/gdi-hw-accel-lab.md with tools/win/gdi-cpuwrite. The allocations are asked for through the private data of our driver, because no user-mode process can create a standard GDI staging surface. The baseline is partly in the processor cache, which is the comparison a small GDI rectangle needs"
+    evidence: "[GDI trials 3, 4 and 5](../evidence/windows/2026-10-26-gdi-c15-r6/RESULT.md)"

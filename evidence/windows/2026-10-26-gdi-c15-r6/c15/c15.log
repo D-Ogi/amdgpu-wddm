@@ -1,0 +1,238 @@
+2026-10-26T05:49:42.1536867Z C15 kernel GDI acceleration, label c15-t33-r6, KMD DAD8D7A45B65D3C0, ICD 36DA764AF38AB2F5, control 7DB25E9732652FC0, trial 60 s, busy 50 s x 4 (vkace step 4), out P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z
+2026-10-26T05:49:42.1638416Z step 1 target-info (bound 90 s) -> 01-target-info.txt
+2026-10-26T05:49:43.1190839Z   exit 0
+2026-10-26T05:49:43.1246264Z step 2 owner-stop (bound 15 s) -> 02-owner-stop.txt
+2026-10-26T05:49:45.2833210Z   exit 0
+2026-10-26T05:49:45.2912022Z step 3 read-start (bound 180 s) -> 03-read-start.txt
+2026-10-26T05:49:47.9557933Z   exit 0
+2026-10-26T05:49:47.9616745Z   read-start: loaded KMD DAD8D7A45B65D3C0, wanted DAD8D7A45B65D3C0, device OK CM_PROB_NONE: ok
+2026-10-26T05:49:47.9646137Z step 4 temp (bound 60 s) -> 04-temp.txt
+2026-10-26T05:49:48.5642392Z   exit 0
+2026-10-26T05:49:48.5677586Z   Tctl at preflight: 58,2 C
+2026-10-26T05:49:48.5709599Z step 5 owner-stop (bound 15 s) -> 05-owner-stop.txt
+2026-10-26T05:49:51.7565215Z   exit 0
+2026-10-26T05:49:51.7588511Z step 6 store (bound 180 s) -> 06-store.txt
+2026-10-26T05:49:55.1690291Z   exit 0
+2026-10-26T05:49:55.1891042Z   store C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784; file 36DA764A vulkan\vulkan_radeon.dll
+2026-10-26T05:49:55.1924455Z step 7 switch-read (bound 180 s) -> 07-switch-read.txt
+2026-10-26T05:49:57.7748093Z   exit 0
+2026-10-26T05:49:57.7958810Z   EnableGdiHwAccel stored value: absent
+2026-10-26T05:49:57.7986479Z   Features\GdiHwAccel of this start: 1
+2026-10-26T05:49:57.8020447Z step 8 start-preflight (bound 180 s) -> 08-start-preflight.txt
+2026-10-26T05:50:00.2066691Z   exit 0
+2026-10-26T05:50:00.2191217Z   start-preflight: gate 1, kernels 1, capability 1, code hash ok, DRIVERCAPS interop-1
+2026-10-26T05:50:00.2219528Z step 9 records-preflight (bound 180 s) -> 09-records-preflight.txt
+2026-10-26T05:50:03.2504345Z   exit 0
+2026-10-26T05:50:03.2535740Z   records-preflight: Attempts = 58
+2026-10-26T05:50:03.2544889Z   records-preflight: LastVerdict = 7
+2026-10-26T05:50:03.2553678Z   records-preflight: NotDrained = 3
+2026-10-26T05:50:03.2562060Z   records-preflight: Recovered = 55
+2026-10-26T05:50:03.2587062Z step 10 keep-log-read (bound 180 s) -> 10-keep-log-read.txt
+2026-10-26T05:50:05.3353252Z   exit 0
+2026-10-26T05:50:05.3373906Z   KeepLog stored value was 0
+2026-10-26T05:50:05.3385772Z step 11 keep-log-on (bound 180 s) -> 11-keep-log-on.txt
+2026-10-26T05:50:07.4421106Z   exit 0
+2026-10-26T05:50:07.4446940Z step 12 push-kit (bound 180 s) -> 12-push-kit.txt
+2026-10-26T05:50:08.7426929Z   exit 0
+2026-10-26T05:50:09.6950055Z step 13 on-trial3-busy (bound 180 s) -> 13-on-trial3-busy.txt
+2026-10-26T05:51:26.0344774Z   exit 0
+2026-10-26T05:51:26.0421136Z   on shots: 2026-10-26T05:50:27Z screenshot exit 0 at 17.7 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on-12s.png   960x600 px   408923 bytes
+2026-10-26T05:51:26.0430993Z   on shots: 2026-10-26T05:50:44Z screenshot exit 0 at 34.6 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on-33s.png   960x600 px   578238 bytes
+2026-10-26T05:51:26.0439283Z   on shots: 2026-10-26T05:51:08Z screenshot exit 0 at 58.6 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on-55s.png   960x600 px   543721 bytes
+2026-10-26T05:51:26.0459341Z   on: busy start 2026-10-26T05:50:27.0127082Z: 4 loop(s) of vkace --step 4 for 50 s, icd C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\vulkan\vulkan_radeon.dll
+2026-10-26T05:51:26.0474786Z   on: busy loop 1: 79 runs, 79 pass, 0 fail, graphics 4041.7 ms
+2026-10-26T05:51:26.0482834Z   on: busy loop 2: 78 runs, 78 pass, 0 fail, graphics 3783.2 ms
+2026-10-26T05:51:26.0490749Z   on: busy loop 3: 80 runs, 80 pass, 0 fail, graphics 3594 ms
+2026-10-26T05:51:26.0498791Z   on: busy loop 4: 80 runs, 80 pass, 0 fail, graphics 3457.3 ms
+2026-10-26T05:51:26.0506877Z   on: busy load: 317 runs, 317 pass, 0 fail, graphics queue GPU time 14876 ms in 50 s (29.8 % of node 0)
+2026-10-26T05:51:26.0514668Z   on: busy end 2026-10-26T05:51:41.0546439Z elapsed 74 s, workload exit 0
+2026-10-26T05:51:26.0574574Z   on: task result 0, last run 2026-10-26 05:50:50Z
+2026-10-26T05:51:27.9566678Z   screenshot: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on.png   960x600 px   779827 bytes
+2026-10-26T05:51:27.9833431Z   camera: no frame (      0 [main] bash (55584) C:\Program Files\Git\bin\..\usr\bin\bash.exe: *** fatal error - CreateFileMapping S-1-5-21-793577254-3189489660-548702539-1003.1, Win32 error 5.  Terminating.)
+2026-10-26T05:51:27.9855885Z step 14 on-ring (bound 180 s) -> 14-on-ring.txt
+2026-10-26T05:51:30.1068242Z   exit 0
+2026-10-26T05:51:30.1314897Z   on-ring: 1075 ring lines, ResetEngine 0, NOT dispatched 0, kernel holds 0, present holds 0, timeout/fault 0
+2026-10-26T05:51:30.1454002Z step 15 on-records (bound 180 s) -> 15-on-records.txt
+2026-10-26T05:51:33.0971190Z   exit 0
+2026-10-26T05:51:33.0986163Z   on-records: Attempts = 58
+2026-10-26T05:51:33.0995326Z   on-records: LastVerdict = 7
+2026-10-26T05:51:33.1004314Z   on-records: NotDrained = 3
+2026-10-26T05:51:33.1012559Z   on-records: Recovered = 55
+2026-10-26T05:51:33.1049278Z step 16 temp (bound 60 s) -> 16-temp.txt
+2026-10-26T05:51:33.6772030Z   exit 0
+2026-10-26T05:51:33.6786083Z   Tctl at after trial 3 on: 66,4 C
+2026-10-26T05:51:33.6795779Z step 17 owner-stop (bound 15 s) -> 17-owner-stop.txt
+2026-10-26T05:51:35.0794432Z   exit 0
+2026-10-26T05:51:36.4188367Z step 18 switch-off (bound 180 s) -> 18-switch-off.txt
+2026-10-26T05:51:40.1450872Z   exit 0
+2026-10-26T05:51:40.1472899Z   switch-off: control 7DB25E9732652FC0E0D91A157E5CE41C1AD8388FE4AAC2D15989554B0F3E53F2
+2026-10-26T05:51:40.1481137Z   switch-off: stored EnableGdiHwAccel absent
+2026-10-26T05:51:40.1488961Z   switch-off: feature GdiHwAccel 1
+2026-10-26T05:51:40.1496409Z   switch-off: exit 0
+2026-10-26T05:51:40.1503226Z   switch-off: control exit 0
+2026-10-26T05:51:40.1510409Z   switch-off: stored EnableGdiHwAccel 0
+2026-10-26T05:51:40.1518365Z   switch-off: feature GdiHwAccel 1
+2026-10-26T05:51:40.1546771Z step 19 stop-on (bound 180 s) -> 19-stop-on.txt
+2026-10-26T05:51:49.3462006Z   exit 0
+2026-10-26T05:51:49.3562675Z step 20 stop-on-enable-confirm (bound 180 s) -> 20-stop-on-enable-confirm.txt
+2026-10-26T05:53:00.6253897Z   exit 0
+2026-10-26T05:53:00.6271230Z step 21 stop-on-healthy (bound 180 s) -> 21-stop-on-healthy.txt
+2026-10-26T05:53:06.2126422Z   exit 0
+2026-10-26T05:53:06.2152753Z step 22 boot-after-stop-on (bound 660 s) -> 22-boot-after-stop-on.txt
+2026-10-26T05:54:59.6421966Z   exit 0
+2026-10-26T05:54:59.6494300Z   stop-on: device now CM_PROB_DISABLED, service Stopped
+2026-10-26T05:54:59.6505212Z   stop-on: --- kept log ring-20261026-055158-341-stop.log, written 2026-10-26 05:51:58Z
+2026-10-26T05:54:59.6513757Z   stop-on: 40      1.364 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+2026-10-26T05:54:59.6522731Z   stop-on: 41      1.364 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+2026-10-26T05:54:59.6530335Z   stop-on: 52      1.364 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+2026-10-26T05:54:59.6538892Z   stop-on: 3613    225.547 wddm profile: holds 0 (spin-only 0), held 0 us worst 0, 0 spins
+2026-10-26T05:54:59.6546836Z   stop-on: 3614    225.547 wddm profile: hold wakes 0 event, 0 timeout
+2026-10-26T05:54:59.6555699Z   stop-on: 3666    225.547 wddm: DRIVERCAPS returned interop0 1 interop1 0
+2026-10-26T05:54:59.6563239Z   stop-on: 3861    225.548 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+2026-10-26T05:54:59.6571121Z   stop-on: 3864    225.548 wddm: gdi totals calls1584 commands35470 items52432 dwords43724290
+2026-10-26T05:54:59.6578063Z   stop-on: 3865    225.548 wddm: gdi committed dwords43742800
+2026-10-26T05:54:59.6585223Z   stop-on: 3866    225.548 wddm: gdi drops call0 malformed0 outside0 empty0
+2026-10-26T05:54:59.6592416Z   stop-on: 3867    225.548 wddm: gdi overflow0 item-refused0 red-first0
+2026-10-26T05:54:59.6600394Z   stop-on: 3868    225.548 wddm: gdi batch-refused0 fallback0 peak rects240 dwords150672
+2026-10-26T05:54:59.6607858Z   stop-on: 3869    225.548 wddm: gdi capacity-short0 peak cmdlen16808 want0 omitted subrects0
+2026-10-26T05:54:59.6614917Z   stop-on: 3870    225.548 wddm: gdi ib-full0 ib-over0 dma-short0
+2026-10-26T05:54:59.6622302Z   stop-on: 3871    225.548 wddm: gdi above-producer0 scope-refused0
+2026-10-26T05:54:59.6629745Z   stop-on: 3872    225.548 wddm: gdi dma append0 submitted1584 raced0
+2026-10-26T05:54:59.6637478Z   stop-on: 3873    225.548 wddm: gdi dma unknown0 full0 small0 lost0
+2026-10-26T05:54:59.6750003Z C15 TRIAL 3 GDI ON BUSY: PASS (kernel submit held lines: ring 0, kept stop log 0; present held lines: ring 0, kept stop log 0; wddm profile: holds 0; busy 317 runs; 4101 0; ResetEngine 0; gdi calls 1584)
+2026-10-26T05:54:59.6768452Z C15 BUSY RING: FAIL (kernel submit held lines: ring 0, kept stop log 0; present held lines: ring 0, kept stop log 0; wddm profile: holds 0; busy 317 runs; 4101 0; ResetEngine 0; gdi calls 1584) -- BD-246 kernel hold path not observed
+2026-10-26T05:54:59.6777354Z C15 BUSY RING: stage C kernel holds 0 (ring 0, kept stop log 0), wddm profile: holds 0: FAIL: the busy-ring branch of stage C did not run
+2026-10-26T05:54:59.6787437Z step 23 read-start-off (bound 180 s) -> 23-read-start-off.txt
+2026-10-26T05:55:03.0650012Z   exit 0
+2026-10-26T05:55:03.0666576Z   read-start-off: loaded KMD DAD8D7A45B65D3C0, wanted DAD8D7A45B65D3C0, device OK CM_PROB_NONE: ok
+2026-10-26T05:55:03.0678345Z step 24 start-off (bound 180 s) -> 24-start-off.txt
+2026-10-26T05:55:05.4056126Z   exit 0
+2026-10-26T05:55:05.4081203Z   start-off: gate 0, kernels 1, capability 0, code hash WRONG, DRIVERCAPS interop1
+2026-10-26T05:55:05.4091807Z step 25 switch-read-off (bound 180 s) -> 25-switch-read-off.txt
+2026-10-26T05:55:07.9693974Z   exit 0
+2026-10-26T05:55:07.9717892Z   switch-read-off: stored EnableGdiHwAccel 0
+2026-10-26T05:55:07.9728460Z   switch-read-off: feature GdiHwAccel 2
+2026-10-26T05:55:07.9757240Z C15 SWITCH OFF: PASS (gate 0, kernels 1, capability 0 (no SupportKernelModeCommandBuffer), code hash WRONG, DRIVERCAPS interop1, stored 0, Features\GdiHwAccel 2)
+2026-10-26T05:55:07.9766240Z step 26 temp (bound 60 s) -> 26-temp.txt
+2026-10-26T05:55:08.6050286Z   exit 0
+2026-10-26T05:55:08.6087715Z   Tctl at before trial 3 off: 59,5 C
+2026-10-26T05:55:08.6096805Z step 27 owner-stop (bound 15 s) -> 27-owner-stop.txt
+2026-10-26T05:55:11.5200849Z   exit 0
+2026-10-26T05:55:15.0997031Z step 28 off-trial3-busy (bound 180 s) -> 28-off-trial3-busy.txt
+2026-10-26T05:56:31.8887929Z   exit 0
+2026-10-26T05:56:31.8905954Z   off shots: 2026-10-26T05:55:29Z screenshot exit 0 at 14.1 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\off-12s.png   960x600 px   558662 bytes
+2026-10-26T05:56:31.8915043Z   off shots: 2026-10-26T05:55:49Z screenshot exit 0 at 34.6 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\off-33s.png   960x600 px   562117 bytes
+2026-10-26T05:56:31.8922889Z   off shots: 2026-10-26T05:56:13Z screenshot exit 0 at 58.4 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\off-55s.png   960x600 px   531313 bytes
+2026-10-26T05:56:31.8934338Z   off: busy start 2026-10-26T05:55:31.9932594Z: 4 loop(s) of vkace --step 4 for 50 s, icd C:\Windows\system32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\vulkan\vulkan_radeon.dll
+2026-10-26T05:56:31.8941810Z   off: busy loop 1: 84 runs, 84 pass, 0 fail, graphics 3816.7 ms
+2026-10-26T05:56:31.8950377Z   off: busy loop 2: 82 runs, 82 pass, 0 fail, graphics 3667.4 ms
+2026-10-26T05:56:31.8958765Z   off: busy loop 3: 84 runs, 84 pass, 0 fail, graphics 3752.4 ms
+2026-10-26T05:56:31.8967981Z   off: busy loop 4: 82 runs, 82 pass, 0 fail, graphics 3381.7 ms
+2026-10-26T05:56:31.8976173Z   off: busy load: 332 runs, 332 pass, 0 fail, graphics queue GPU time 14618 ms in 50 s (29.2 % of node 0)
+2026-10-26T05:56:31.8985648Z   off: busy end 2026-10-26T05:56:46.4747732Z elapsed 74 s, workload exit 0
+2026-10-26T05:56:31.8999511Z   off: task result 0, last run 2026-10-26 05:55:55Z
+2026-10-26T05:56:33.4525464Z   screenshot: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\off.png   960x600 px   780127 bytes
+2026-10-26T05:56:33.4772151Z   camera: no frame (      0 [main] bash (34176) C:\Program Files\Git\bin\..\usr\bin\bash.exe: *** fatal error - CreateFileMapping S-1-5-21-793577254-3189489660-548702539-1003.1, Win32 error 5.  Terminating.)
+2026-10-26T05:56:33.4784384Z step 29 off-ring (bound 180 s) -> 29-off-ring.txt
+2026-10-26T05:56:35.5069475Z   exit 0
+2026-10-26T05:56:35.5266732Z   off-ring: 1075 ring lines, ResetEngine 0, NOT dispatched 0, kernel holds 0, present holds 0, timeout/fault 0
+2026-10-26T05:56:35.5334819Z step 30 off-records (bound 180 s) -> 30-off-records.txt
+2026-10-26T05:56:38.6276151Z   exit 0
+2026-10-26T05:56:38.6289691Z   off-records: Attempts = 58
+2026-10-26T05:56:38.6297294Z   off-records: LastVerdict = 7
+2026-10-26T05:56:38.6305492Z   off-records: NotDrained = 3
+2026-10-26T05:56:38.6313198Z   off-records: Recovered = 55
+2026-10-26T05:56:38.6327267Z step 31 temp (bound 60 s) -> 31-temp.txt
+2026-10-26T05:56:39.1757407Z   exit 0
+2026-10-26T05:56:39.1771766Z   Tctl at after trial 3 off: 66,6 C
+2026-10-26T05:56:39.1781550Z step 32 owner-stop (bound 15 s) -> 32-owner-stop.txt
+2026-10-26T05:56:40.6163223Z   exit 0
+2026-10-26T05:56:41.4969033Z step 33 switch-on (bound 180 s) -> 33-switch-on.txt
+2026-10-26T05:56:45.2197002Z   exit 0
+2026-10-26T05:56:45.2224795Z   switch-on: control 7DB25E9732652FC0E0D91A157E5CE41C1AD8388FE4AAC2D15989554B0F3E53F2
+2026-10-26T05:56:45.2233449Z   switch-on: stored EnableGdiHwAccel 0
+2026-10-26T05:56:45.2240724Z   switch-on: feature GdiHwAccel 2
+2026-10-26T05:56:45.2248143Z   switch-on: exit 0
+2026-10-26T05:56:45.2255557Z   switch-on: control exit 0
+2026-10-26T05:56:45.2263157Z   switch-on: stored EnableGdiHwAccel absent
+2026-10-26T05:56:45.2271210Z   switch-on: feature GdiHwAccel 2
+2026-10-26T05:56:45.2281813Z step 34 stop-off (bound 180 s) -> 34-stop-off.txt
+2026-10-26T05:56:54.3785176Z   exit 0
+2026-10-26T05:56:54.3804093Z step 35 stop-off-enable-confirm (bound 180 s) -> 35-stop-off-enable-confirm.txt
+2026-10-26T05:58:05.5031566Z   exit 0
+2026-10-26T05:58:05.5047460Z step 36 stop-off-healthy (bound 180 s) -> 36-stop-off-healthy.txt
+2026-10-26T05:58:11.1890747Z   exit 0
+2026-10-26T05:58:11.1906023Z step 37 boot-after-stop-off (bound 660 s) -> 37-boot-after-stop-off.txt
+2026-10-26T06:00:04.7045929Z   exit 0
+2026-10-26T06:00:04.7084560Z   stop-off: device now CM_PROB_DISABLED, service Stopped
+2026-10-26T06:00:04.7094475Z   stop-off: --- kept log ring-20261026-055702-930-stop.log, written 2026-10-26 05:57:02Z
+2026-10-26T06:00:04.7102236Z   stop-off: 40      1.410 wddm: GDI hardware acceleration gate 0, kernels 1, capability 0
+2026-10-26T06:00:04.7110207Z   stop-off: 51      1.410 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+2026-10-26T06:00:04.7118395Z   stop-off: 3093    186.164 wddm profile: holds 0 (spin-only 0), held 0 us worst 0, 0 spins
+2026-10-26T06:00:04.7126229Z   stop-off: 3094    186.164 wddm profile: hold wakes 0 event, 0 timeout
+2026-10-26T06:00:04.7133652Z   stop-off: 3146    186.164 wddm: DRIVERCAPS returned interop0 0 interop1 1
+2026-10-26T06:00:04.7140905Z   stop-off: 3341    186.165 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+2026-10-26T06:00:04.7149491Z C15 TRIAL 3 GDI OFF BUSY: PASS (kernel submit held lines: ring 0, kept stop log 0; present held lines: ring 0, kept stop log 0; wddm profile: holds 0; busy 332 runs; 4101 0; ResetEngine 0; gdi calls -1)
+2026-10-26T06:00:04.7158747Z step 38 read-start-on (bound 180 s) -> 38-read-start-on.txt
+2026-10-26T06:00:08.1416738Z   exit 0
+2026-10-26T06:00:08.1434431Z   read-start-on: loaded KMD DAD8D7A45B65D3C0, wanted DAD8D7A45B65D3C0, device OK CM_PROB_NONE: ok
+2026-10-26T06:00:08.1445879Z step 39 start-on (bound 180 s) -> 39-start-on.txt
+2026-10-26T06:00:10.5732086Z   exit 0
+2026-10-26T06:00:10.5761062Z   start-on: gate 1, kernels 1, capability 1, code hash ok, DRIVERCAPS interop-1
+2026-10-26T06:00:10.5772635Z step 40 switch-read-on (bound 180 s) -> 40-switch-read-on.txt
+2026-10-26T06:00:13.0109600Z   exit 0
+2026-10-26T06:00:13.0130667Z   switch-read-on: stored EnableGdiHwAccel absent
+2026-10-26T06:00:13.0139012Z   switch-read-on: feature GdiHwAccel 1
+2026-10-26T06:00:13.0158572Z C15 SWITCH ON: PASS (gate 1, kernels 1, capability 1, code hash ok, DRIVERCAPS interop-1, stored absent, Features\GdiHwAccel 1)
+2026-10-26T06:00:13.0168273Z step 41 temp (bound 60 s) -> 41-temp.txt
+2026-10-26T06:00:13.7220304Z   exit 0
+2026-10-26T06:00:13.7234280Z   Tctl at before trial 5: 59,9 C
+2026-10-26T06:00:13.7242531Z step 42 owner-stop (bound 15 s) -> 42-owner-stop.txt
+2026-10-26T06:00:16.9534642Z   exit 0
+2026-10-26T06:00:17.8825354Z step 43 trial5-cpuwrite (bound 180 s) -> 43-trial5-cpuwrite.txt
+2026-10-26T06:00:20.8618604Z   exit 0
+2026-10-26T06:00:20.8652673Z   trial 5: POLICY class=sysmem expect cpu_visible=1 aperture=0 cached=1 physical=0 (committed pages, not a driver allocation)
+2026-10-26T06:00:20.8663194Z   trial 5: POLICY class=type0 expect cpu_visible=1 aperture=0 cached=0 physical=1
+2026-10-26T06:00:20.8673480Z   trial 5: POLICY class=type2 expect cpu_visible=1 aperture=1 cached=1 physical=0
+2026-10-26T06:00:20.8681395Z   trial 5: CPUWRITE class=sysmem kind=store64 median_mbs=14046.2 passes=3
+2026-10-26T06:00:20.8688672Z   trial 5: CPUWRITE class=sysmem kind=memcpy median_mbs=13710.4 passes=3
+2026-10-26T06:00:20.8696211Z   trial 5: CPUWRITE class=sysmem kind=read64 median_mbs=14889.3 passes=3
+2026-10-26T06:00:20.8704976Z   trial 5: CPUWRITE class=type0 kind=store64 median_mbs=36504.7 passes=3
+2026-10-26T06:00:20.8713617Z   trial 5: CPUWRITE class=type0 kind=memcpy median_mbs=14910.1 passes=3
+2026-10-26T06:00:20.8722278Z   trial 5: CPUWRITE class=type0 kind=read64 median_mbs=102.3 passes=3
+2026-10-26T06:00:20.8730838Z   trial 5: CPUWRITE class=type2 kind=store64 median_mbs=13822.9 passes=3
+2026-10-26T06:00:20.8739999Z   trial 5: CPUWRITE class=type2 kind=memcpy median_mbs=13827.7 passes=3
+2026-10-26T06:00:20.8749133Z   trial 5: CPUWRITE class=type2 kind=read64 median_mbs=14894.8 passes=3
+2026-10-26T06:00:20.8757077Z   trial 5: PENALTY class=type0 store64=2.599x memcpy=1.088x read64=0.007x
+2026-10-26T06:00:20.8765868Z   trial 5: PENALTY class=type2 store64=0.984x memcpy=1.009x read64=1.000x
+2026-10-26T06:00:20.8773424Z   trial 5: DONE
+2026-10-26T06:00:20.8781315Z   trial 5: gdi-cpuwrite exit 0
+2026-10-26T06:00:20.8799942Z C15 TRIAL 5 CPU WRITE: PASS (CPUWRITE class=sysmem kind=store64 median_mbs=14046.2 passes=3 | CPUWRITE class=sysmem kind=memcpy median_mbs=13710.4 passes=3 | CPUWRITE class=sysmem kind=read64 median_mbs=14889.3 passes=3)
+2026-10-26T06:00:20.8814229Z step 44 records-pass (bound 180 s) -> 44-records-pass.txt
+2026-10-26T06:00:24.4128603Z   exit 0
+2026-10-26T06:00:24.4145140Z   records-pass: Attempts = 58
+2026-10-26T06:00:24.4152644Z   records-pass: LastVerdict = 7
+2026-10-26T06:00:24.4162807Z   records-pass: NotDrained = 3
+2026-10-26T06:00:24.4170538Z   records-pass: Recovered = 55
+2026-10-26T06:00:24.4186815Z C15 WHOLE PASS: PASS (Display 4101 events 0, hang-recovery attempts 58 -> 58)
+2026-10-26T06:00:24.4210915Z step 45 restore-keep-log (bound 180 s) -> 45-restore-keep-log.txt
+2026-10-26T06:00:26.7211823Z   exit 0
+2026-10-26T06:00:26.7226616Z KeepLog back to 0: exit 0
+2026-10-26T06:00:26.7240468Z step 46 verify-keep-log (bound 180 s) -> 46-verify-keep-log.txt
+2026-10-26T06:00:28.8795094Z   exit 0
+2026-10-26T06:00:28.8810658Z step 47 verify-final-switch (bound 180 s) -> 47-verify-final-switch.txt
+2026-10-26T06:00:30.9987205Z   exit 0
+2026-10-26T06:00:31.0004688Z step 48 verify-final-driver (bound 180 s) -> 48-verify-final-driver.txt
+2026-10-26T06:00:33.6435499Z   exit 0
+2026-10-26T06:00:33.6451620Z   verify-final-driver: loaded KMD DAD8D7A45B65D3C0, wanted DAD8D7A45B65D3C0, device OK CM_PROB_NONE: ok
+2026-10-26T06:00:33.6461631Z C15 RESTORE VERIFIED: GDI default on, device OK, running service path hash, KeepLog restored
+2026-10-26T06:00:34.2516628Z   overlay: off-12s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 59.8 permille, mean luminance 52
+2026-10-26T06:00:34.2526656Z   overlay: off-33s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 59.9 permille, mean luminance 48
+2026-10-26T06:00:34.2536123Z   overlay: off-55s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 61.0 permille, mean luminance 49
+2026-10-26T06:00:34.2544438Z   overlay: off.png: crop (480, 0, 960, 500) (fixed rectangle), ink 62.2 permille, mean luminance 38
+2026-10-26T06:00:34.2551447Z   overlay: on-12s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 59.4 permille, mean luminance 51
+2026-10-26T06:00:34.2558827Z   overlay: on-33s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 61.0 permille, mean luminance 50
+2026-10-26T06:00:34.2566255Z   overlay: on-55s.png: crop (480, 0, 960, 500) (fixed rectangle), ink 62.0 permille, mean luminance 51
+2026-10-26T06:00:34.2574333Z   overlay: on.png: crop (480, 0, 960, 500) (fixed rectangle), ink 61.8 permille, mean luminance 38
+2026-10-26T06:00:36.5788283Z RESULT C15: FAIL (failed: BUSY RING)
+2026-10-26T06:00:36.5861625Z summary -> P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\summary.json

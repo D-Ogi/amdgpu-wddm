@@ -1,0 +1,229 @@
+stop utc 2026-10-26T05:44:31.4481330Z
+pnputil disable exit 0 :: 
+device now CM_PROB_DISABLED, service Stopped
+the device stays disabled until restart.ps1 enables it before its restart
+--- kept log ring-20261026-054432-668-stop.log, written 2026-10-26 05:44:32Z
+     0      0.000 interop: \Callback\PowerState registration 0x00000000
+     3      0.000 lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)
+    38      1.410 interop: requested 0x3 effective 0x3 reason 0 (none) closed-reason 0 flags 0x801 blit 1 cdd 1 previous-end 3
+    40      1.410 wddm: GDI hardware acceleration gate 1, kernels 1, capability 1
+    41      1.410 wddm: gdi code 6 kernels, 5120 bytes, sha256 ca4950d6ae5664dfea3e5d59b450c819327a89a03afb1fbf6411d1566dc1718b
+    49      1.410 wddm: submit diagnostic v2 12000 ms (setting 0, default), sample every 250 ms; OS TdrDelay unavailable
+    52      1.410 wddm: HangRecoveryMode 1: a node-0 ResetEngine tries stage-1 soft recovery, verdicts in Parameters\HangRecovery
+  2572    136.394 wddm: kernel submit fence 3349 held 33778 us (23 spins, 1 event, 2 timeout)
+  2575    136.443 wddm: kernel submit fence 3352 held 34457 us (23 spins, 1 event, 2 timeout)
+  2576    136.664 wddm: kernel submit fence 3365 held 38194 us (22 spins, 1 event, 3 timeout)
+  2583    136.799 wddm: kernel submit fence 3376 held 222 us (9 spins, 0 event, 0 timeout)
+  2586    136.847 wddm: kernel submit fence 3381 held 216 us (9 spins, 0 event, 0 timeout)
+  2589    136.933 wddm: umd submit fence 3386 held 180 us (8 spins, 0 event, 0 timeout)
+  2592    136.973 wddm: kernel submit fence 3388 held 163 us (7 spins, 0 event, 0 timeout)
+  2615    137.436 wddm: umd submit fence 3422 held 551 us (23 spins, 1 event, 0 timeout)
+  2618    137.477 wddm: umd submit fence 3424 held 287 us (11 spins, 0 event, 0 timeout)
+  2619    137.610 wddm: kernel submit fence 3428 held 38615 us (23 spins, 1 event, 2 timeout)
+  2622    137.611 wddm: kernel submit fence 3430 held 314 us (14 spins, 0 event, 0 timeout)
+  2627    137.739 wddm: kernel submit fence 3435 held 278 us (12 spins, 0 event, 0 timeout)
+  2630    137.786 wddm: kernel submit fence 3439 held 317 us (12 spins, 0 event, 0 timeout)
+  2633    137.911 wddm: kernel submit fence 3445 held 148 us (6 spins, 0 event, 0 timeout)
+  2638    138.091 wddm: umd submit fence 3460 held 307 us (13 spins, 0 event, 0 timeout)
+  2643    138.265 wddm: kernel submit fence 3469 held 39115 us (23 spins, 1 event, 3 timeout)
+  2651    138.400 wddm: kernel submit fence 3478 held 208 us (9 spins, 0 event, 0 timeout)
+  2652    138.449 wddm: kernel submit fence 3482 held 37787 us (23 spins, 1 event, 2 timeout)
+  2657    138.805 wddm: kernel submit fence 3504 held 177 us (8 spins, 0 event, 0 timeout)
+  2658    138.809 wddm: umd submit fence 3508 held 1064 us (23 spins, 1 event, 0 timeout)
+  2659    138.850 wddm: kernel submit fence 3509 held 39461 us (22 spins, 1 event, 2 timeout)
+  2662    138.851 wddm: kernel submit fence 3511 held 211 us (9 spins, 0 event, 0 timeout)
+  2663    138.991 wddm: kernel submit fence 3515 held 39883 us (23 spins, 1 event, 2 timeout)
+  2666    138.992 wddm: kernel submit fence 3517 held 29 us (1 spins, 0 event, 0 timeout)
+  2669    139.137 wddm: umd submit fence 3524 held 208 us (8 spins, 0 event, 0 timeout)
+  2672    139.177 wddm: kernel submit fence 3526 held 192 us (8 spins, 0 event, 0 timeout)
+  2675    139.179 wddm: kernel submit fence 3528 held 234 us (9 spins, 0 event, 0 timeout)
+  2678    139.306 wddm: kernel submit fence 3533 held 138 us (6 spins, 0 event, 0 timeout)
+  2681    139.448 wddm: kernel submit fence 3542 held 296 us (13 spins, 0 event, 0 timeout)
+  2682    139.464 wddm: kernel submit fence 3546 held 218 us (8 spins, 0 event, 0 timeout)
+  2687    139.788 wddm: kernel submit fence 3561 held 199 us (9 spins, 0 event, 0 timeout)
+  2690    139.790 wddm: kernel submit fence 3563 held 290 us (13 spins, 0 event, 0 timeout)
+  2691    139.793 wddm: umd submit fence 3566 held 945 us (23 spins, 1 event, 0 timeout)
+  2694    139.959 wddm: kernel submit fence 3573 held 36132 us (23 spins, 1 event, 2 timeout)
+  2697    139.960 wddm: kernel submit fence 3575 held 109 us (4 spins, 0 event, 0 timeout)
+  2698    140.098 wddm: umd submit fence 3585 held 32505 us (23 spins, 1 event, 2 timeout)
+  2707    140.380 wddm: umd submit fence 3606 held 36 us (1 spins, 0 event, 0 timeout)
+  2708    140.521 wddm: kernel submit fence 3614 held 38062 us (23 spins, 1 event, 3 timeout)
+  2711    140.522 wddm: kernel submit fence 3616 held 280 us (11 spins, 0 event, 0 timeout)
+  2716    140.656 wddm: kernel submit fence 3622 held 156 us (7 spins, 0 event, 0 timeout)
+  2719    140.790 wddm: kernel submit fence 3631 held 199 us (8 spins, 0 event, 0 timeout)
+  2720    140.839 wddm: kernel submit fence 3636 held 30535 us (23 spins, 1 event, 2 timeout)
+  2723    140.968 wddm: kernel submit fence 3643 held 40453 us (23 spins, 1 event, 3 timeout)
+  2724    141.115 wddm: umd submit fence 3657 held 32478 us (23 spins, 1 event, 2 timeout)
+  2733    141.384 wddm: umd submit fence 3675 held 183 us (6 spins, 0 event, 0 timeout)
+  2734    141.474 wddm: umd submit fence 3681 held 117 us (5 spins, 0 event, 0 timeout)
+  2737    141.514 wddm: kernel submit fence 3683 held 304 us (12 spins, 0 event, 0 timeout)
+  2738    141.515 wddm: umd submit fence 3684 held 826 us (23 spins, 1 event, 0 timeout)
+  2743    141.644 wddm: kernel submit fence 3688 held 325 us (12 spins, 0 event, 0 timeout)
+  2746    141.645 wddm: kernel submit fence 3690 held 328 us (15 spins, 0 event, 0 timeout)
+  2751    141.773 wddm: kernel submit fence 3696 held 245 us (11 spins, 0 event, 0 timeout)
+  2786    144.771 wddm: kernel submit fence 3862 held 458 us (21 spins, 0 event, 0 timeout)
+  2793    146.903 wddm: kernel submit fence 3975 held 420 us (18 spins, 0 event, 0 timeout)
+  2814    148.106 wddm: kernel submit fence 4037 held 266 us (12 spins, 0 event, 0 timeout)
+  2821    150.435 wddm: kernel submit fence 4174 held 156 us (7 spins, 0 event, 0 timeout)
+  2824    151.046 wddm: kernel submit fence 4204 held 128 us (5 spins, 0 event, 0 timeout)
+  2857    153.925 wddm: kernel submit fence 4361 held 121 us (4 spins, 0 event, 0 timeout)
+  2866    154.929 wddm: kernel submit fence 4412 held 238 us (10 spins, 0 event, 0 timeout)
+  2869    155.566 wddm: kernel submit fence 4450 held 384 us (17 spins, 0 event, 0 timeout)
+  2870    155.720 wddm: kernel submit fence 4457 held 420 us (19 spins, 0 event, 0 timeout)
+  2875    157.191 wddm: kernel submit fence 4538 held 270 us (11 spins, 0 event, 0 timeout)
+  2900    159.433 wddm: kernel submit fence 4663 held 438 us (19 spins, 0 event, 0 timeout)
+  2905    159.882 wddm: kernel submit fence 4685 held 439 us (20 spins, 0 event, 0 timeout)
+  2931    173.791 interop: session unmarked (last user gone), status 0x00000000
+  2965    173.887 wddm summary: ---- DDI calls: name, count, first log line ----
+  2966    173.887 wddm summary: QueryAdapterInfo                  872  first at 344
+  2967    173.887 wddm summary: GetNodeMetadata                     2  first at 352
+  2968    173.887 wddm summary: CreateDevice                      764  first at 359
+  2969    173.887 wddm summary: DestroyDevice                     764  first at 1223
+  2970    173.887 wddm summary: CreateContext                     798  first at 363
+  2971    173.887 wddm summary: DestroyContext                    798  first at 1221
+  2972    173.887 wddm summary: CreateProcess                     723  first at 358
+  2973    173.887 wddm summary: DestroyProcess                    723  first at 1262
+  2974    173.887 wddm summary: SetRootPageTable                  725  first at 386
+  2975    173.887 wddm summary: CreateAllocation                10021  first at 451
+  2976    173.887 wddm summary: DestroyAllocation               16970  first at 824
+  2977    173.887 wddm summary: DescribeAllocation               2017  first at 458
+  2978    173.887 wddm summary: GetStandardAllocationDriverData   1240  first at 448
+  2979    173.887 wddm summary: OpenAllocation                  10683  first at 454
+  2980    173.887 wddm summary: CloseAllocation                 10683  first at 823
+  2981    173.887 wddm summary: BuildPagingBuffer              135069  first at 365
+  2982    173.887 wddm summary: SubmitCommandVirtual            75121  first at 419
+  2983    173.887 wddm summary: PreemptCommand                    502  first at 503
+  2984    173.887 wddm summary: Present                          2043  first at 483
+  2985    173.887 wddm summary: SetVidPnSourceAddress            2018  first at 475
+  2986    173.887 wddm summary: ControlInterrupt                    4  first at 481
+  2987    173.887 wddm summary: ---- QueryAdapterInfo types: type, count, first log line ----
+  2988    173.887 wddm summary: adapter info type   1       1  first at 344
+  2989    173.887 wddm summary: adapter info type  15       1  first at 345
+  2990    173.887 wddm summary: adapter info type  47       1  first at 346
+  2991    173.887 wddm summary: adapter info type  13       1  first at 347
+  2992    173.887 wddm summary: adapter info type  14       4  first at 348
+  2993    173.887 wddm summary: adapter info type  11       2  first at 355
+  2994    173.887 wddm summary: adapter info type  10       1  first at 357
+  2995    173.887 wddm summary: adapter info type  16       1  first at 357
+  2996    173.887 wddm summary: adapter info type  20       1  first at 394
+  2997    173.887 wddm summary: adapter info type   0     859  first at 749
+  2998    173.887 wddm summary: capture plans reserved 0 heap 0
+  2999    173.887 wddm summary: capture context peaks plans 0 reserved-bytes 0
+  3000    173.887 wddm summary: ---- BuildPagingBuffer operations: operation, count, first log line ----
+  3001    173.887 wddm summary: paging operation  11   84632  first at 365
+  3002    173.887 wddm summary: paging operation  12   42798  first at 441
+  3003    173.887 wddm summary: paging operation   9    6126  first at 456
+  3004    173.887 wddm summary: paging operation   2    1511  first at 822
+  3005    173.887 wddm summary: paging operation   8       2  first at 827
+  3006    173.887 wddm summary: objects created/destroyed: alloc 10021/16970
+  3007    173.887 wddm summary: objects created/destroyed: dev 764/764 ctx 798/798 proc 723/723, 0 alive
+  3008    173.887 wddm summary: allocations opened/closed: 10683/10683 calls
+  3009    173.887 wddm summary: ---- standard allocations; refused flags/type/geom/buf/input ----
+  3010    173.887 wddm summary: stdalloc primary size/fill 1/1 ok 2 refused 0/0/0/0/0
+  3011    173.887 wddm summary: stdalloc shadow size/fill 1/1 ok 2 refused 0/0/0/0/0
+  3012    173.887 wddm summary: stdalloc gdi size/fill 618/618 ok 1236 refused 0/0/0/0/0
+  3013    173.887 wddm summary: lb7a type 0 create ok/refused/rolled-back 112/0/0 open ok/refused 162/0
+  3014    173.887 wddm summary: gdi type 1 size/fill 612/612 ok 1224 refused 0/0/0/0/0
+  3015    173.887 wddm summary: lb7a type 1 create ok/refused/rolled-back 612/0/0 open ok/refused 1224/0
+  3016    173.887 wddm summary: gdi type 2 size/fill 3/3 ok 6 refused 0/0/0/0/0
+  3017    173.887 wddm summary: lb7a type 2 create ok/refused/rolled-back 3/0/0 open ok/refused 3/0
+  3018    173.887 wddm summary: gdi type 3 size/fill 2/2 ok 4 refused 0/0/0/0/0
+  3019    173.887 wddm summary: lb7a type 3 create ok/refused/rolled-back 2/0/0 open ok/refused 2/0
+  3020    173.887 wddm summary: gdi type 4 size/fill 1/1 ok 2 refused 0/0/0/0/0
+  3021    173.887 wddm summary: lb7a type 4 create ok/refused/rolled-back 1/0/0 open ok/refused 1/0
+  3022    173.887 wddm summary: CreateAllocation calls ok 10021 resource-data 0 invalid 0 no-memory 0
+  3023    173.887 wddm summary: gdi type masks requested 0x01E refused 0x000 create-refused 0x000 rolled-back 0x000 open-refused 0x000
+  3024    173.887 wddm summary: submissions 0 physical + 75121 virtual, 502 preemptions, last completed fence 70292
+  3025    173.887 wddm summary: node 0 hardware: 4829 submitted, 4799 completed, 0 timeouts, 0 refused, 0 soft-recovered
+  3026    173.887 wddm summary: submit diagnostic v2 12000 ms (OS TdrDelay unavailable), 0 checks, 0 re-armed
+  3027    173.887 wddm summary: submit watchdog observations: activity 0, primes 0, gap resets 0
+  3028    173.887 wddm summary: sampled software-head high water 0 ms, queue wait 5 ms
+  3029    173.887 wddm summary: umd: 9291 allocs (0 refused), 752 contexts, 2919 submits on the ring, 0 not run
+  3030    173.887 wddm summary: umd placement (shared residency on): local 0, local+aperture 3411, aperture 5880
+  3031    173.887 wddm summary: umd cpu view: gpu-only 888 (1181 MiB), cpu-visible 8403 (5398 MiB)
+  3032    173.887 wddm summary: lb7a cpu view: gpu-only 0 (0 MiB), cpu-visible 112 (352 MiB), private 0
+  3035    173.887 wddm profile: holds 400 (spin-only 222), held 5814212 us worst 89350, 6056 spins
+  3036    173.887 wddm profile: hold wakes 175 event, 365 timeout
+  3054    173.887 wddm summary: VMID pool off, members 0x0002, excluded 0x0000
+  3055    173.888 wddm summary: VMID pool: 0 claims, 0 reuses, 0 busy, 0 rule refusals
+  3056    173.888 wddm summary: VMID pool FLUSH_TLB: 0 built, 0 VMID invalidations
+  3057    173.888 wddm summary: ring VM flush on: 4829 frames, 1718 of them on a root the VMID held
+  3058    173.888 wddm summary: node 1 (paging, open): 70292 hardware submitted, 70292 completed, 0 timeouts, 0 refused
+  3059    173.888 wddm summary: node 2 (compute, closed): 0 hardware submitted, 0 completed, 0 refused, 0 polls
+  3061    173.888 wddm summary: SubmitCommandVirtual by node: 0: 4829, 1: 70292, 0 private-buffer refusals
+  3062    173.888 wddm summary: paging DMA VA nonzero 134040 zero 1029, mapping observations 8
+  3063    173.888 wddm summary: native DMA transfers 2 fills 3520 bytes 2570997760
+  3065    173.888 wddm summary: native DMA exact disjoint checks 0
+  3066    173.888 wddm summary: DMA mapping matches 8/8 last VA0x400000 root0x45E260000 PA0x11301E000 CPU_PA0x11301E000
+  3067    173.888 wddm summary: BuildPagingBuffer: 2 transfers, 5947 fills, 4170280960 bytes, 23309 insufficient-buffer
+  3068    173.888 wddm summary: BuildPagingBuffer: 0 statuses outside the DDI (last op0 0x00000000), 0 inner failures
+  3069    173.888 wddm summary: virtual transfers (count/bytes) to system 1/9216000, from system 1/9216000, other 0/0
+  3070    173.888 wddm summary: physical transfers (count/bytes) to system 0/0, from system 0/0, other 0/0
+  3071    173.888 wddm summary: aperture map batches 0, unmap batches 0
+  3072    173.888 wddm summary: paging fills 5947/4151848960 bytes, aperture pages mapped 0 unmapped 0
+  3073    173.888 wddm summary: paging TLB invalidations 42366, PTE update batches 81883
+  3074    173.888 wddm summary: paging unsupported (not ready/no root/no translation/system memory/not contiguous) 0/0/0/0/0
+  3075    173.888 wddm summary: presents 2043, flips 2013 of 2018 address calls (2012 arrived above DISPATCH_LEVEL)
+  3076    173.888 wddm summary: scan-out flips 0 of 0 requested candidates; admission ok/no-alloc/not-requested 2018/0/0
+  3077    173.888 wddm summary: scan-out refusals format/geom/pitch/size/segment/align/gated 0/0/0/0/0/0/0
+  3078    173.888 wddm summary: type0 creates asked/not by record none 0/2 v1 0/36 v2 0/10 v3 0/64
+  3079    173.888 wddm summary: type0 creates other 0/0, PRIMARY records 3, in a resource group 112
+  3080    173.888 wddm summary: flip flags mode/immediate/shared-transition/independent 6/0/0/0, redirected presents 0
+  3081    173.888 wddm summary: plane formats 1, flips argb8888/abgr8888/abgr2101010 2013/0/0, changes 0 refused 0
+  3082    173.888 wddm summary: DirectFlip handshake on
+  3083    173.888 wddm: CDD interop1 GPU Present gate1 identity probe1
+  3084    173.888 wddm: DRIVERCAPS returned interop0 1 interop1 0
+  3085    173.888 wddm: DRIVERCAPS interop0 first100ns64003628 last100ns64003628
+  3086    173.888 wddm: DRIVERCAPS interop1 first100ns0 last100ns0
+  3220    173.888 wddm summary: blit gate open, 0 blits, 0 skips, 0 sources translated contiguous
+  3221    173.888 wddm summary: blit destination: 0 to the flipped surface, 0 to the POST framebuffer (0 a failed-mapping fallback)
+  3222    173.888 wddm summary: blit destination: 0 scanout remaps (0 failed), last blit 0 rows, 0 seeds
+  3223    173.888 wddm summary: widest blit 0 rows
+  3224    173.888 wddm summary: last blit reading 0, 0x0 pitch 0, 0 rectangles, source physical 0x0
+  3225    173.888 wddm summary: vsync not enabled by ControlInterrupt, 0 ticks, 9697 reported to dxgkrnl
+  3226    173.888 wddm summary: visibility calls 9 source 0x00000000 requested 0 status 0x00000000 current 0
+  3227    173.888 wddm summary: display mode 0 blanked 0 write 1 commit calls 1 power-transition 0 powered-off 0
+  3228    173.888 wddm summary: display commit power-only 0 visible-link-off 0
+  3239    173.888 wddm summary: dcn lock acknowledgement timeouts 0
+  3240    173.888 wddm summary: vidpn flip open: 2013 hardware flips, 0 refused
+  3241    173.888 wddm summary: vidpn flip vsyncs 0 armed, 10260 acked, 0 refused, 0 completion-deferred, 0 old-buffer-reports
+  3242    173.888 wddm summary: immediate 0 programmed, 0 same-frame, 0 promoted; Present DMA flips refused 0
+  3243    173.888 wddm summary: immediate outcome done 0 late 0 pending 0 primary-other 0 read-failed 0 superseded 0
+  3244    173.888 wddm summary: immediate done max 0 us sum 0 us, observe max 0 us overruns 0, flip in L max 15 us
+  3245    173.888 wddm summary: flip edges f0 0 f1 0 a 0 wv 0 wi 0 wu 0 e 2018
+  3246    173.888 wddm summary: flip results of e refused 0 ok 2013 fault 0 u 0
+  3247    173.888 wddm summary: flip writers faulting 0 high 0 sync-failed 0 low-sync-failed 0 resumed 0
+  3248    173.888 wddm summary: flip end-programs 0 owed-invalidated 0 owed-reported 2017 flushes 0 destroy-unsync 0
+  3249    173.888 wddm summary: flip writer-busy 0 recovery-pending 0
+  3250    173.888 wddm summary: flip writer kind 0 busy 0 refused 0
+  3251    173.888 wddm summary: flip writer kind 1 busy 0 refused 0
+  3252    173.888 wddm summary: flip writer kind 2 busy 0 refused 0
+  3253    173.888 wddm summary: flip writer kind 3 busy 0 refused 0
+  3254    173.888 wddm summary: flip writer kind 4 busy 0 refused 0
+  3255    173.888 wddm summary: flip writer kind 5 busy 0 refused 0
+  3256    173.888 wddm summary: flip writer kind 6 busy 0 refused 0
+  3257    173.888 wddm summary: flip writer kind 7 busy 0 refused 0
+  3258    173.888 wddm summary: flip writer kind 8 busy 0 refused 0
+  3259    173.888 wddm summary: flip writer kind 9 busy 0 refused 0
+  3260    173.888 wddm summary: flip writer kind 10 busy 0 refused 0
+  3261    173.888 wddm summary: flip writer refused 0 last kind 0 at irql answer 0 status 00000000
+  3262    173.888 wddm summary: bridge programmed 0 retired 0 failed 0
+  3263    173.888 wddm summary: flip e5 0 faulting 0 code 0x000000 node 0 blank 00000000
+  3264    173.888 wddm summary: flip e5 notified 0 failed 0 drain 0/0; exclusive refused 0 failed 0
+  3265    173.888 wddm summary: flip wu 0, records 0, to-end max 0 us
+  3266    173.888 wddm summary: flip witness (lab) requests 0 read-failed 0 stale 0 order 0
+  3267    173.888 wddm summary: flip witness (lab) qe 0 qr 0 er 0 kept 0 lost 0
+  3268    173.888 wddm summary: vsync control 4 calls, on 2 off 2, last 4, QPC now 1777785916 at 10000000/s
+  3279    173.888 wddm summary: no TDR (ResetEngine, ResetFromTimeout and RestartFromTimeout were never called)
+  3280    173.888 wddm summary: CollectDbgInfo called 0 time(s) since the driver was loaded
+  3281    173.888 wddm: stop, last completed fence 70292, 0 vsync ticks, 0 objects freed at the stop
+  3282    173.888 wddm: gdi totals calls1879 commands47016 items69452 dwords56501288
+  3283    173.888 wddm: gdi committed dwords56523368
+  3284    173.888 wddm: gdi drops call0 malformed0 outside0 empty0
+  3285    173.888 wddm: gdi overflow0 item-refused0 red-first0
+  3286    173.888 wddm: gdi batch-refused0 fallback0 peak rects246 dwords149608
+  3287    173.888 wddm: gdi capacity-short0 peak cmdlen16936 want0 omitted subrects0
+  3288    173.888 wddm: gdi ib-full0 ib-over0 dma-short0
+  3289    173.888 wddm: gdi above-producer0 scope-refused0
+  3290    173.888 wddm: gdi dma append0 submitted1879 raced0
+  3291    173.888 wddm: gdi dma unknown0 full0 small0 lost0

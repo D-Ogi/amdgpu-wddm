@@ -1,0 +1,1 @@
+Exact setting overrides restored; normal boot; exact candidate; UnconfirmedStarts0.

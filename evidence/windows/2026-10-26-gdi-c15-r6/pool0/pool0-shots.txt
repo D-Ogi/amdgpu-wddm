@@ -1,0 +1,3 @@
+2026-10-26T05:43:08Z screenshot exit 0 at 13.9 s: P:\BC-250\scratch\gdi-hw\lab\pool-hold-20261026T054039Z\pool0-12s.png   960x600 px   415721 bytes
+2026-10-26T05:43:29Z screenshot exit 0 at 34.7 s: P:\BC-250\scratch\gdi-hw\lab\pool-hold-20261026T054039Z\pool0-33s.png   960x600 px   446867 bytes
+2026-10-26T05:43:51Z screenshot exit 0 at 56.6 s: P:\BC-250\scratch\gdi-hw\lab\pool-hold-20261026T054039Z\pool0-55s.png   960x600 px   571945 bytes

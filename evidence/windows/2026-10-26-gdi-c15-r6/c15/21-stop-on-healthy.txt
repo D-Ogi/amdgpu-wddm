@@ -1,0 +1,68 @@
+--- boot (UTC): 2026-10-26 05:48:08Z
+--- device: OK problem CM_PROB_NONE
+--- records from StateV2 generation ddcb7c9cad4545f8ac5761636cf86efa
+--- UnconfirmedStarts 0, LastStage 50
+--- CuMode 24, CuModeClosedReason 
+--- StartRecord
+    Result = started
+    Step = -
+    SubStep = -
+    Status = 0
+    Stage = 39
+    Version = 458968
+    TimeUtc = 2026-10-26T05:52:10.548Z
+--- on-disk image of the running service (not a memory hash)
+DAD8D7A45B65D3C069CBE10FEBA32667503AF9855FEE3A7CBC99AB7D6F619FA9 C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_b232ecc34f3d8784\bc250kmd.sys
+--- health
+--- KMD log lines
+    21      0.372 connector: reserved linear handoff 35389440 bytes before the application segment
+    22      0.372 connector: handoff reservation status 00000000
+   126      0.523 cumode: CuMode 24 disable 0x00000 -> mode 24 reason 0, stock from this boot's record
+   146      0.549 startup: RLC boundary before-gfx-visibility
+   148      0.553 startup: visibility observer returned after-invalidate-request
+   150      0.556 startup: visibility observer returned after-invalidate-request-read
+   152      0.559 startup: visibility observer returned after-invalidate-ack
+   153      0.560 startup: visibility GFX returned 0, entering MMHUB
+   154      0.563 startup: visibility MMHUB returned 0
+   158      0.566 startup: visibility publication observer returned
+   159      0.567 startup: RLC boundary after-gfx-visibility
+   271      0.633 cumode: applied 24 CUs (24 counted), reason 0, consistent 1, wrote 0, RLC_PG_CNTL 0x00800000 (PG enables 0x0), after the RLC stage 0x00800000 (PG enables 0x0)
+   272      0.633 cumode: SA0-3 CC 0xFFF80000 0xFFF80000 0xFFF80000 0xFFF80000 SPI 0x7 0x7 0x7 0x7
+   278      0.635 inherited: source 1920x1200 pitch 7680 target 1920x1200 fixed 0 support F status 00000000 valid 7FFFFF
+   279      0.635 inherited gate: 0 none word 00000000
+   280      0.635 display inherited: viewport 00000000/04B00780 recout 00000000/04B00780 mpc 04B00780 scl 00000001 ratio 01000000/01000000
+   281      0.635 display inherited: top 00000000 odm 00000000 hubp 000F1002 mem 00000000 taps 00000000 format 00000008 tiling 00000080 pitch 0000077F otg1 80000310
+   282      0.635 display inherited: surface 00000000 bottom 00000000 mpcc FFFF0461 out 01440000
+   283      0.635 display inherited: autocal 00000100 dscl control 00000000
+   289      0.657 display modes: preferred 1920x1200 59.950 Hz, pixel clock 154000 kHz; native (firmware) 1920x1200
+   292      0.657 display modes: requested 2 level 2, 16 source modes, descriptor served
+   293      0.657 display modes: list 0..5: 1920x1200/0x03 1920x1080/0x36 1680x1050/0x24 1600x1200/0x04 1600x900/0x20 1440x900/0x24
+   294      0.657 display modes: list 6..11: 1400x1050/0x20 1280x1024/0x2C 1280x960/0x20 1280x800/0x20 1280x720/0x32 1152x864/0x20
+   295      0.657 display modes: list 12..15: 1024x768/0x28 800x600/0x28 720x480/0x02 640x480/0x3C
+   308      0.659 stage 35
+   309      0.659 connector-link: sink generation 1 kind 1 adapter 0 max 0 kHz limit 300000 kHz
+   311      0.661 connector-link: open pipe support F status 00000000 valid 7FFFFF bottom 00000000 control FFFF0461
+   313      0.668 connector-link: prepare generation 1 targets 7 status 00000000
+   314      0.668 connector: start generation 1 status 00000000 inherited stream preserved 0
+   336      1.089 stage 39
+   473      1.177 connector-link: commit generation 1 attempts 1 completed 1 refused 0 active 1 status 00000000
+   478      1.177 display visibility: call 1 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   479      1.177 display visibility: call 1 status 0x00000000 current 1 blanked 0
+   480      1.177 wddm: display SetVidPnSourceVisibility call 1 detail 0x0 -> 0x00000000
+   562      2.436 display visibility: call 2 source 0x00000000 visible 0 previous 1 hardware 1 blanked 0
+   563      2.455 display visibility: call 2 status 0x00000000 current 0 blanked 1
+   564      2.455 wddm: display SetVidPnSourceVisibility call 2 detail 0x0 -> 0x00000000
+   565      2.455 display visibility: call 3 source 0x00000000 visible 0 previous 0 hardware 1 blanked 1
+   566      2.488 display visibility: call 3 status 0x00000000 current 0 blanked 1
+   567      2.488 wddm: display SetVidPnSourceVisibility call 3 detail 0x0 -> 0x00000000
+   578      2.516 display visibility: call 4 source 0x00000000 visible 1 previous 0 hardware 1 blanked 1
+   579      2.516 display visibility: call 4 status 0x00000000 current 1 blanked 0
+   580      2.516 wddm: display SetVidPnSourceVisibility call 4 detail 0x0 -> 0x00000000
+   619      2.545 display visibility: call 5 source 0x00000000 visible 1 previous 1 hardware 1 blanked 0
+   620      2.545 display visibility: call 5 status 0x00000000 current 1 blanked 0
+   621      2.545 wddm: display SetVidPnSourceVisibility call 5 detail 0x0 -> 0x00000000
+   871     66.114 guard: healthy start confirmation persistence 0x00000000
+--- DxgKrnl admin events since boot
+--- sessions
+ USERNAME              SESSIONNAME        ID  STATE   IDLE TIME  LOGON TIME
+ bc250                 console             1  Active      none   10/26/2026 6:48 AM

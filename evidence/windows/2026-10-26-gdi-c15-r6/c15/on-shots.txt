@@ -1,0 +1,3 @@
+2026-10-26T05:50:27Z screenshot exit 0 at 17.7 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on-12s.png   960x600 px   408923 bytes
+2026-10-26T05:50:44Z screenshot exit 0 at 34.6 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on-33s.png   960x600 px   578238 bytes
+2026-10-26T05:51:08Z screenshot exit 0 at 58.6 s: P:\BC-250\scratch\gdi-hw\lab\c15-t33-r6-20261026T054942Z\on-55s.png   960x600 px   543721 bytes
