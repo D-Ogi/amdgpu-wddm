@@ -101,6 +101,7 @@ public:
 #endif
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;   // 1091
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
+    D3D12_FEATURE_DATA_SHADER_CACHE shader_cache;   // AUTOMATIC_DISK_CACHE: DriverManagedShaderCachePresent
     MemoryArchitecturePolicy memory_policy;     // all Default until set_memory_architecture_policy
     bool partial_graphics_programs{};
     bool report_raytracing_tier{true};          // the driver's default; set_raytracing_tier_reporting takes it back
@@ -274,6 +275,7 @@ const char* feature_name(D3D12_FEATURE f) noexcept {
     case D3D12_FEATURE_D3D12_OPTIONS14: return "D3D12_OPTIONS14";
     case D3D12_FEATURE_D3D12_OPTIONS21: return "D3D12_OPTIONS21";
     case D3D12_FEATURE_SERIALIZATION: return "SERIALIZATION";
+    case D3D12_FEATURE_SHADER_CACHE: return "SHADER_CACHE";
     default: return "?";
     }
 }
@@ -342,11 +344,15 @@ void fill_options(const AdapterCaps& c, uint32_t ddi_version, D3D12DDI_D3D12_OPT
     //   stub that returns E_NOTIMPL (vkd3d-proton device.c, d3d12_device_SetBackgroundProcessingMode and
     //   d3d12_device_caps_init_feature_options6), so there is no mode to apply; D114 is the shell's slot and
     //   accepts the call without applying one.
-    //   DriverManagedShaderCachePresent: engine-ddi keeps no driver-managed shader cache. The pipeline libraries
-    //   of D85-D90 are not one: a library is the application's cache, which the application creates and
-    //   serializes itself, while this field says that the driver has a cache of its own which D121
-    //   pfnImplicitShaderCacheControl can disable, enable and clear (context.cpp, no_implicit_shader_cache).
     //   Deterministic64KBUndefinedSwizzle: no engine answer exists; not claimed.
+    // DriverManagedShaderCachePresent: the engine's per-user disk cache (%LOCALAPPDATA%\amdgpu-wddm\vkd3d, with the
+    // binaries in hosted RADV's %LOCALAPPDATA%\mesa_shader_cache) is a cache of the driver's own, which D121
+    // pfnImplicitShaderCacheControl disables, enables and clears (context.cpp, implicit_shader_cache_control). The
+    // engine says whether this process has it: AUTOMATIC_DISK_CACHE in its D3D12_FEATURE_SHADER_CACHE answer, which it
+    // gives only when the cache is configured (vkd3d-proton device.c). An engine without that answer reports no such
+    // cache. The pipeline libraries of D85-D90 are not this cache: a library is the application's own.
+    o.DriverManagedShaderCachePresent =
+        (c.shader_cache.SupportFlags & D3D12_SHADER_CACHE_SUPPORT_AUTOMATIC_DISK_CACHE) ? TRUE : FALSE;
     o.RenderPassTier = render_pass_tier(c);
     // The engine's 1_1 or higher as 1_1, never more than the engine says, and NOT_SUPPORTED below that
     // (tier 1_0 demands acceleration structure copy modes the engine drops). set_raytracing_tier_reporting
@@ -544,6 +550,7 @@ HRESULT query_adapter_caps(const BC250_VKD3D_ENGINE_FUNCS* funcs, const BC250_VK
 #endif
         {D3D12_FEATURE_D3D12_OPTIONS21, &c->options21, sizeof(c->options21), false},
         {D3D12_FEATURE_SERIALIZATION, &c->serialization, sizeof(c->serialization), false},
+        {D3D12_FEATURE_SHADER_CACHE, &c->shader_cache, sizeof(c->shader_cache), false},
     };
     constexpr size_t kCount = std::size(entries);
     BC250_VKD3D_FEATURE_QUERY queries[kCount]{};

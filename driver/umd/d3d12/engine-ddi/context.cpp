@@ -721,15 +721,33 @@ HRESULT APIENTRY enumerate_no_meta_commands(D3D12DDI_HDEVICE, UINT* count, D3D12
     return S_OK;
 }
 
-// engine-ddi reports no driver-managed shader cache (1006 D3D12_OPTIONS DriverManagedShaderCachePresent FALSE,
-// d3d12umddi.h D3D12DDI_D3D12_OPTIONS_DATA_0089; INTEGRATION.md), so
-// there is no cache of engine-ddi's to disable, enable or clear: the control is accepted as a no-op, never an error.
-// The pipeline libraries of D85-D90 do not change that. A pipeline library is the application's own cache: the
-// application creates it, decides what goes into it and serializes it, and this control may not touch it. A
-// driver-managed cache would be one of ours that the runtime can disable and clear through this very slot, and
-// there is none: the engine's disk cache is not ours to switch and no engine entry reaches it (pipelines.cpp,
-// "Pipeline libraries"; caps.cpp, fill_options).
-void APIENTRY no_implicit_shader_cache(D3D12DDI_HDEVICE, D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAGS_0080) {}
+// The driver-managed shader cache is the engine's per-user disk cache (1006 D3D12_OPTIONS
+// DriverManagedShaderCachePresent, caps.cpp; INTEGRATION.md). The runtime calls this slot in developer mode only, and
+// its flags are hints (d3d12umddi.h PFND3D12DDI_IMPLICITSHADERCACHECONTROL_0080): the engine takes them through
+// ID3D12Device9::ShaderCacheControl with the kind IMPLICIT_DRIVER_MANAGED, which the DDI flags match bit for bit
+// (DISABLE 1, ENABLE 2, CLEAR 4). DISABLE stops lookups and stores until ENABLE; CLEAR deletes the archive files of
+// the program and stops both for the rest of the process. Hosted RADV's own cache of binaries is shared by all
+// processes and is not cleared: a pipeline is translated again and may still find its binary there. The slot returns
+// nothing, so a refusal is logged once. The pipeline libraries of D85-D90 are the application's own caches; this
+// control never touches them (pipelines.cpp, "Pipeline libraries").
+static_assert(static_cast<int>(D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_DISABLE) ==
+                      static_cast<int>(D3D12_SHADER_CACHE_CONTROL_FLAG_DISABLE) &&
+                  static_cast<int>(D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_ENABLE) ==
+                      static_cast<int>(D3D12_SHADER_CACHE_CONTROL_FLAG_ENABLE) &&
+                  static_cast<int>(D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_CLEAR) ==
+                      static_cast<int>(D3D12_SHADER_CACHE_CONTROL_FLAG_CLEAR),
+              "shader cache control flags");
+void APIENTRY implicit_shader_cache_control(D3D12DDI_HDEVICE device,
+                                            D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAGS_0080 flags) {
+    DeviceContext* c = resolve(device);
+    if (!c || !c->device10) return;
+    const HRESULT hr = c->device10->ShaderCacheControl(D3D12_SHADER_CACHE_KIND_FLAG_IMPLICIT_DRIVER_MANAGED,
+                                                       static_cast<D3D12_SHADER_CACHE_CONTROL_FLAGS>(flags));
+    static std::atomic<bool> once{false};
+    if (FAILED(hr) && !once.exchange(true))
+        log_line("ImplicitShaderCacheControl %#x: the engine answered %08lx", static_cast<unsigned>(flags),
+                 static_cast<unsigned long>(hr));
+}
 } // namespace
 
 #define ENGINE_DDI_FS(t, T, m) (t)->m = FailSafe<decltype((t)->m), 'D', offsetof(T, m)>::slot
@@ -789,7 +807,7 @@ void fill_core_failsafe(D3D12DDI_DEVICE_FUNCS_CORE_0088* t) noexcept {
     CREATE(pfnCreateSamplerFeedbackUnorderedAccessView);   // D117, a view create: void, so it reports the code
     FS(pfnCreateAmplificationShader); FS(pfnCreateMeshShader);
     CALC(pfnCalcPrivateMeshShaderSize);
-    t->pfnImplicitShaderCacheControl = no_implicit_shader_cache;
+    t->pfnImplicitShaderCacheControl = implicit_shader_cache_control;
 #undef FS
 #undef CALC
 #undef ZERO

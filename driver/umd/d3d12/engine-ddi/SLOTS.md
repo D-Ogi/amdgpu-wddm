@@ -70,8 +70,8 @@ per thread and not per library because `ID3D12PipelineLibrary` is free-threaded:
 one thread's serialize be handed a size another thread's query had made larger. A `LibraryReference` in a create payload turns
 `pfnCreatePipelineState` into a load out of that library under the index's name, which is where a library saves an
 application its compile. None of this is a reported capability: the 0092 capability structures carry no pipeline
-library field, and `DriverManagedShaderCachePresent` stays FALSE, because an application's library is the
-application's cache and not a cache of this driver's that D121 could clear.
+library field, and `DriverManagedShaderCachePresent` does not count them: it reports the engine's per-user disk cache,
+which D121 controls, while an application's library is the application's cache, which D121 never touches.
 
 The render pass table (`D3D12DDI_TABLE_TYPE_0043_RENDER_PASS`, 20) is not in the slot tables below: it is a table
 of its own with two slots at 0053, `pfnBeginRenderPass` and `pfnEndRenderPass`. Both are filled, onto the engine's

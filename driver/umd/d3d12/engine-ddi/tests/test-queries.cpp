@@ -619,7 +619,8 @@ void test_device_queries(Env& env, Device& device) {
         checkf(false, "CheckExistingResourceAllocationInfo: DEFAULT buffer (hr %08lx)", static_cast<unsigned long>(hr));
     }
 
-    // ImplicitShaderCacheControl: no driver-managed cache is reported, so every control is a no-op.
+    // ImplicitShaderCacheControl: the engine takes the flags as hints (CLEAR deletes this program's archive files),
+    // and the slot reports no device error whatever the engine answers.
     env.core.pfnImplicitShaderCacheControl(device.h(), D3D12DDI_IMPLICIT_SHADER_CACHE_CONTROL_FLAG_0080_CLEAR);
     checkf(device.shell.device_errors == errors_before, "device queries: no device error reported (%u new)",
            device.shell.device_errors - errors_before);
