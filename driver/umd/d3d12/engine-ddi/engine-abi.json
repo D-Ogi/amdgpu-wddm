@@ -5,7 +5,7 @@
   "header_revision": "Stream output for partial graphics programs, ABI 1.10",
   "repository": "vkd3d-proton fork of this project",
   "branch": "",
-  "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+  "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
   "source_checkout": "scratch/forksync/vkd3d-proton",
   "header_path": "libs/ddi/bc250_vkd3d_engine.h",
   "header_sha256": "ff73803fe25cca6959732a32ead124f5440aaeafcf37d52f24d712b8852049d6",
@@ -15,13 +15,13 @@
   "flavours": {
     "release": {
       "engine_dll_dir": "scratch/build-train/tester.33/artifacts/release/engine12-x64-rel",
-      "engine_dll_sha256": "bac75232e167c4ef307708edb213b7ee27e97dbe041a7cfab026ec04c96220e4",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 c1ff01249961c2a8ba63d7653ef71db849cd89ac"
+      "engine_dll_sha256": "bb1e4d97c5f13f567622262922850fb9dfc25d0f8f3fe4a80f2a0fb0a077661c",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 661d8d677def7bd4916a510fe6a1f9c9e42c7d98"
     },
     "lab": {
       "engine_dll_dir": "scratch/build-train/tester.33/artifacts/lab/engine12-x64-lab",
-      "engine_dll_sha256": "e171ffe8c9af99059ada2ca0a467b4f3b8f938d746b506ecfcec82c9ebd59d41",
-      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 c1ff01249961c2a8ba63d7653ef71db849cd89ac"
+      "engine_dll_sha256": "d08290d18c66119b0055410c1196b93db469333efe1738b048a6265b2699e079",
+      "engine_dll_recipe": "tools/build/build-vkd3d.ps1; canonical engine12 661d8d677def7bd4916a510fe6a1f9c9e42c7d98"
     }
   }
 }
