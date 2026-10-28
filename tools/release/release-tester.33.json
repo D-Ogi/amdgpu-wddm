@@ -205,7 +205,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+          "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
           "paths": [
             "libs/ddi"
           ]
@@ -272,7 +272,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+          "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
           "paths": [
             "libs/ddi"
           ]
@@ -339,7 +339,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+          "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
           "paths": [
             "libs/ddi"
           ]
@@ -406,7 +406,7 @@
         },
         "engine": {
           "repo": "vkd3d-proton",
-          "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+          "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
           "paths": [
             "libs/ddi"
           ]
@@ -2284,7 +2284,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+      "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2330,7 +2330,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
+      "note": "vkd3d-proton 661d8d67 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10, and a buffer device address for narrow root structured buffers on the heap path (BD-248); dxil-spirv a332af23 (per-stream GS clip/cull, vector index of physical structured accesses). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2339,7 +2339,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+      "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2385,7 +2385,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
+      "note": "vkd3d-proton 661d8d67 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10, and a buffer device address for narrow root structured buffers on the heap path (BD-248); dxil-spirv a332af23 (per-stream GS clip/cull, vector index of physical structured accesses). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2394,7 +2394,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+      "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2440,7 +2440,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
+      "note": "vkd3d-proton 661d8d67 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10, and a buffer device address for narrow root structured buffers on the heap path (BD-248); dxil-spirv a332af23 (per-stream GS clip/cull, vector index of physical structured accesses). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
@@ -2449,7 +2449,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "c1ff01249961c2a8ba63d7653ef71db849cd89ac",
+      "commit": "661d8d677def7bd4916a510fe6a1f9c9e42c7d98",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2495,7 +2495,7 @@
           "pass": "^PASSED"
         }
       ],
-      "note": "vkd3d-proton c1ff0124 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10; dxil-spirv 7a2312e4 (per-stream GS clip/cull). Final installed-package acceptance pending.",
+      "note": "vkd3d-proton 661d8d67 (feat/pgp-so-t33): reusable graphics state and stream output for partial graphics programs through the private hosted RADV contract revision 4, engine ABI 1.10, and a buffer device address for narrow root structured buffers on the heap path (BD-248); dxil-spirv a332af23 (per-stream GS clip/cull, vector index of physical structured accesses). Final installed-package acceptance pending.",
       "base": "f5fda15126faa9cbb8392035b965d4b7d968ae45"
     },
     {
