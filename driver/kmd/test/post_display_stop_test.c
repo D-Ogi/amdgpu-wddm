@@ -19,7 +19,7 @@ typedef struct {unsigned Width,Height,Pitch,ColorFormat,TargetId;LARGE_INTEGER P
 typedef struct LIST_ENTRY {struct LIST_ENTRY *Flink,*Blink;} LIST_ENTRY;
 typedef struct BC250_PAGING_JOB {struct BC250_PAGING_JOB*Next;} BC250_PAGING_JOB;
 typedef struct {LIST_ENTRY Link;} BC250_WDDM_OBJECT;
-typedef struct {BOOLEAN BoardAllowed;} BOARD_BLOCK;
+typedef struct {BOOLEAN BoardAllowed; volatile long OcTier;} BOARD_BLOCK;   /* OcTier: the board unbind resets it */
 typedef struct {
     int HwPending,PagingHwPending,Lock,Stopping,VSyncArmed,VSyncTimer,SubmitTimer,PagingSubmitTimer,PagingDrainTimer;
     int SubmitDpc,PagingSubmitDpc,PagingDrainDpc,VSyncDpc,ReportDpc;
@@ -48,6 +48,7 @@ typedef struct _BC250_DEVICE {
     BC250_WDDM *Wddm;
     void* PhysicalDeviceObject;
     BOARD_BLOCK Smu,Hwmon;
+    unsigned long OcTier;
     int Started,ModeActive,SourceVisible,CommitSeen,PresentSeen,FullWddm,SystemDisplayReady;
     volatile long DcnVsyncArmed;
     volatile long StartVisibilityPending;

@@ -1988,7 +1988,8 @@ typedef struct _BC250_ESCAPE_DPAUDIO {
 typedef char BC250_ESCAPE_DPAUDIO_SIZE_CHECK[(sizeof(BC250_ESCAPE_DPAUDIO) == 536) ? 1 : -1];
 typedef char BC250_DPAUDIO_OBS_FIT_CHECK[(BC250_DPAUDIO_OBS_COUNT <= BC250_DPAUDIO_OBS_SLOTS) ? 1 : -1];
 
-// Board provider ABI 1. Query only; all reserved input and output words are zero.
+// Board provider ABI 2 (ABI 1 is the same reply without the overclock words, which stay zero). Query only; all
+// reserved input and output words are zero. The request names the ABI it reads: 1 or 2.
 #define BC250_ESCAPE_RUN_BOARD_CAPS 33u
 #define BC250_ESCAPE_CONNECTOR_REPLUG 36u // lab only; 34 is GET_WAVES, 35 is the HIP journal upload
 #define BC250_CONNECTOR_REPLUG_ABI 1u
@@ -1998,7 +1999,8 @@ typedef struct _BC250_ESCAPE_CONNECTOR_REPLUG_DATA {
     unsigned long Reserved[8];
 } BC250_ESCAPE_CONNECTOR_REPLUG_DATA; // 64 bytes; only AbiVersion is input beyond Magic/Command
 typedef char BC250_CONNECTOR_REPLUG_SIZE_CHECK[(sizeof(BC250_ESCAPE_CONNECTOR_REPLUG_DATA) == 64) ? 1 : -1];
-#define BC250_BOARD_CAPS_ABI 1u
+#define BC250_BOARD_CAPS_ABI 2u
+#define BC250_BOARD_CAPS_ABI_V1 1u
 #define BC250_BOARD_CAPS_SUPPORTED 1u
 #define BC250_BOARD_CAPS_FAN 2u
 #define BC250_BOARD_CAPS_GPU 4u
@@ -2009,6 +2011,8 @@ typedef char BC250_CONNECTOR_REPLUG_SIZE_CHECK[(sizeof(BC250_ESCAPE_CONNECTOR_RE
 #define BC250_BOARD_CAPS_REASON_INACTIVE 2u
 typedef struct _BC250_BOARD_GPU_POINT { unsigned long MHz, Mv, Vid; } BC250_BOARD_GPU_POINT;
 typedef struct _BC250_BOARD_FAN_POINT { unsigned long TempC, DutyPct; } BC250_BOARD_FAN_POINT;
+// One overclock tier's envelope (include/bc250_oc.h), indexed by the tier: 0 none, 1 air, 2 liquid.
+typedef struct _BC250_BOARD_OC_TIER { unsigned long GpuMaxMHz, GpuMaxMv, CpuMaxMHz, CpuUvMaxSteps; } BC250_BOARD_OC_TIER;
 typedef struct _BC250_ESCAPE_BOARD_CAPS {
     unsigned long Magic, Command, Status, NtStatus, AbiVersion, ProviderId, Flags, Reason;
     unsigned long GpuMinMHz, GpuFloorMHz, GpuMaxMHz, GpuStepMHz, GpuPointCount;
@@ -2021,5 +2025,13 @@ typedef struct _BC250_ESCAPE_BOARD_CAPS {
     unsigned long FanPresetCounts[3]; // Standard, Quiet, Performance.
     BC250_BOARD_FAN_POINT FanPresets[3][8];
     unsigned long GpuDefaultMaxMHz, CpuStockCoreCount;
-    unsigned long Reserved[53];
+    // ABI 2: the overclock tier of this start (driver/kmd/oc_tier.c). OcTier is the effective tier, OcStoredTier
+    // the stored one, OcReason an enum bc250_oc_reason, OcBoard the fingerprint the control application writes
+    // to OcTierBoard (0: this board cannot take a tier). OcPoints are the clock points above GpuMaxMHz, in order;
+    // OcCpuMinUvSteps[i] is the undervolt a tier needs for a CPU clock limit of 3600 + 100 * i MHz.
+    unsigned long OcTier, OcStoredTier, OcReason, OcBoard, OcTierCount;
+    BC250_BOARD_OC_TIER OcTiers[3];
+    BC250_BOARD_GPU_POINT OcPoints[3];
+    unsigned long OcCpuMinUvSteps[6];
+    unsigned long Reserved[21];
 } BC250_ESCAPE_BOARD_CAPS;

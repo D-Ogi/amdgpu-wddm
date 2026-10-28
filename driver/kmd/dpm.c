@@ -21,8 +21,10 @@
 //
 // Settings, all REG_DWORD under Services\bc250kmd\Parameters:
 //   DpmMode         0 fixed-lab (today's 1000/820, set once at start), 1 DPM. Absent = BC250_DPM_DEFAULT_MODE.
-//   DpmMaxMHz       optional ceiling with DPM, 1000..2000, rounded down to the 100 MHz grid. Absent =
-//                   BC250_DPM_DEFAULT_MAX_MHZ (2000); 2000 is the hard ceiling.
+//   DpmMaxMHz       optional ceiling with DPM, 1000..2300, rounded down to the 100 MHz grid. Absent =
+//                   BC250_DPM_DEFAULT_MAX_MHZ (2000). The overclock tier of this start (oc_tier.c) sets the hard
+//                   ceiling: 2000 with no tier, 2200 for air cooling, 2300 for liquid cooling. A value above the
+//                   tier's ceiling runs at that ceiling and is kept as written.
 //   DpmPending      the encoded DPM request of a start nobody confirmed yet
 //   DpmConfirmed    the encoded DPM request a healthy start confirmed
 //   DpmSession      written when the governor first leaves the floor, deleted after 10 s at the floor or
@@ -861,7 +863,7 @@ static void DpmResyncLevel(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T
         }
     }
     GuardLog("dpm: resync read 0x%08X %lu MHz VID %lu: not a table point, back to the floor", status, mhz, vid);
-    S->Gov.level = BC250_DPM_TOP_LEVEL;     // unknown: any floor request is a lowering
+    S->Gov.level = BC250_DPM_OC_TOP_LEVEL;  // unknown: any floor request is a lowering
     if (!DpmApply(Device, S, T, BC250_DPM_FLOOR_LEVEL, "resync") && S->ErrorsInRow >= BC250_DPM_ERROR_LIMIT)
         DpmGiveUp(Device, S, T);
 }
@@ -1466,6 +1468,7 @@ void DpmStart(BC250_DEVICE* Device)
         return;
     }
     r.smu_online = Device->Smu.Online ? 1 : 0;
+    r.tier = Device->OcTier;            // OcTierStart ran before this start of the governor
     r.mode_present = QueryPresent(DPM_SETTING_MODE, &r.mode);
     r.max_present = QueryPresent(DPM_SETTING_MAX, &r.max_mhz);
     r.pending_present = QueryPresent(DPM_SETTING_PENDING, &r.pending);
@@ -1519,6 +1522,9 @@ void DpmStart(BC250_DEVICE* Device)
              r.mode_present ? "" : " (absent)", r.max_mhz, r.max_present ? "" : " (absent)",
              d->mode == BC250_DPM_MODE_DPM ? "DPM" : "fixed-lab", d->max_mhz, d->reason,
              s->Pending ? ", pending" : "", s->Confirmed ? ", confirmed earlier" : "");
+    if (d->clamped)
+        GuardLog("dpm: DpmMaxMHz %lu is above the ceiling of overclock tier %lu: %lu MHz runs", r.max_mhz, r.tier,
+                 d->max_mhz);
     if (!r.smu_online) {
         DpmPublish(Device, s, NULL, FALSE);
         DpmUnlock(s);

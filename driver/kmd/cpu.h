@@ -40,6 +40,7 @@ typedef struct _BC250_CPU_STATE {
     BOOLEAN Created;
     BOOLEAN Enabled;                        // CpuTune 1: without it every write is refused
     BOOLEAN Lab;                            // CpuLab 1: the lab's own bound (BC250_CPU_MAX_MHZ_LAB)
+    ULONG OcTier;                           // the overclock tier of this start (oc_tier.c), read at CpuStart
     BOOLEAN Proven;                         // queue 3 answered a getter in this start: setters are admitted
     BOOLEAN Pending, Confirmed;             // the stored settings' two marks
     BOOLEAN CorePending, CoreConfirmed;     // the core mask's two marks

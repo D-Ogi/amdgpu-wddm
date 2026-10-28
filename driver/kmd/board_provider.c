@@ -1,12 +1,18 @@
 // Board identity gates platform accesses; chip discovery remains independent.
 #include "bc250kmd.h"
 #include "bc250_board_envelope.h"
+#include "bc250_oc.h"
 
 C_ASSERT(sizeof(BC250_ESCAPE_BOARD_CAPS) == 768);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, GpuPoints) == 152);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, FanPresetCounts) == 344);
 C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, FanPresets) == 356);
-C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, Reserved) == 556);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTier) == 556);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcTiers) == 576);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcPoints) == 624);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, OcCpuMinUvSteps) == 660);
+C_ASSERT(FIELD_OFFSET(BC250_ESCAPE_BOARD_CAPS, Reserved) == 684);
+C_ASSERT(BC250_OC_TIER_COUNT == 3 && BC250_CLOCK_OC_LEVELS == 3);
 
 void BoardProviderBind(BC250_DEVICE* device)
 {
@@ -20,6 +26,9 @@ void BoardProviderUnbind(BC250_DEVICE* device)
     // Only after every fan hand-back and mailbox teardown has completed.
     device->Hwmon.BoardAllowed = FALSE;
     device->Smu.BoardAllowed = FALSE;
+    // A stopped device runs no overclock tier; the next start decides it again (oc_tier.c).
+    InterlockedExchange(&device->Smu.OcTier, 0);
+    device->OcTier = 0;
 }
 void BoardProviderCaps(BC250_DEVICE* device, BC250_ESCAPE_BOARD_CAPS* data, ULONG flags)
 {
@@ -29,7 +38,9 @@ void BoardProviderCaps(BC250_DEVICE* device, BC250_ESCAPE_BOARD_CAPS* data, ULON
     canonical.Magic = BC250_ESCAPE_MAGIC;
     canonical.Command = BC250_ESCAPE_RUN_BOARD_CAPS;
     canonical.Status = BC250_ESCAPE_STATUS_UNKNOWN_COMMAND;
-    canonical.AbiVersion = BC250_BOARD_CAPS_ABI;
+    // ABI 1 readers (an older control application) get the ABI 1 reply: the overclock words stay zero.
+    canonical.AbiVersion = request.AbiVersion == BC250_BOARD_CAPS_ABI_V1 ? BC250_BOARD_CAPS_ABI_V1 :
+                                                                          BC250_BOARD_CAPS_ABI;
     *data = canonical;
     data->Status = BC250_ESCAPE_STATUS_REFUSED;
     data->NtStatus = (ULONG)STATUS_INVALID_PARAMETER;
@@ -70,6 +81,24 @@ void BoardProviderCaps(BC250_DEVICE* device, BC250_ESCAPE_BOARD_CAPS* data, ULON
         data->GpuPoints[i].MHz=bc250_clock_points[i].mhz;
         data->GpuPoints[i].Mv=bc250_clock_points[i].mv;
         data->GpuPoints[i].Vid=bc250_clock_points[i].vid;
+    }
+    if (canonical.AbiVersion == BC250_BOARD_CAPS_ABI) {
+        data->OcTier=device->OcTier; data->OcStoredTier=device->OcStoredTier;
+        data->OcReason=device->OcReason; data->OcBoard=device->OcBoard;
+        data->OcTierCount=BC250_OC_TIER_COUNT;
+        for(i=0;i<BC250_OC_TIER_COUNT;++i) {
+            struct bc250_oc_envelope e;
+            (void)bc250_oc_envelope_of(i,&e);
+            data->OcTiers[i].GpuMaxMHz=e.gpu_max_mhz; data->OcTiers[i].GpuMaxMv=e.gpu_max_mv;
+            data->OcTiers[i].CpuMaxMHz=e.cpu_max_mhz; data->OcTiers[i].CpuUvMaxSteps=e.cpu_uv_max_steps;
+        }
+        for(i=0;i<BC250_CLOCK_OC_LEVELS;++i) {
+            data->OcPoints[i].MHz=bc250_clock_points[BC250_CLOCK_LEVELS+i].mhz;
+            data->OcPoints[i].Mv=bc250_clock_points[BC250_CLOCK_LEVELS+i].mv;
+            data->OcPoints[i].Vid=bc250_clock_points[BC250_CLOCK_LEVELS+i].vid;
+        }
+        for(i=0;i<ARRAYSIZE(data->OcCpuMinUvSteps);++i)
+            data->OcCpuMinUvSteps[i]=bc250_oc_cpu_min_uv_steps(BC250_OC_TIER_AIO,3600u+100u*i);
     }
     for(i=0;i<3;++i) {
         struct bc250_fan_curve curve;

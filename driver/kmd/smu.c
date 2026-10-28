@@ -342,7 +342,8 @@ NTSTATUS SmuPrepareClock(BC250_SMU_OWNER* owner,struct bc250_clock_report* repor
 NTSTATUS SmuSetPoint(BC250_SMU_OWNER* owner,ULONG mhz,ULONG mv,struct bc250_clock_report* report)
 {
     struct bc250_clock_io io={owner,OwnerBegin,OwnerEnd,Temperature,Message,ClockDelay};
-    return ResultStatus(bc250_clock_prepare(&io,mhz,mv,report));
+    return ResultStatus(bc250_clock_prepare_tier(&io,(unsigned)InterlockedCompareExchange(&owner->OcTier,0,0),
+                                                 mhz,mv,report));
 }
 NTSTATUS SmuReadTemperature(BC250_SMU_OWNER* owner,LONG* temperature)
 {
@@ -453,7 +454,9 @@ void SmuClockRequest(BC250_SMU_OWNER* owner, BC250_ESCAPE_CLOCK* data,
     } else if(op==BC250_CLOCK_OP_SET) {
         // The DPM governor owns the operating point while it runs (dpm.c); two writers would fight.
         if(InterlockedCompareExchange(&owner->GovernorActive,0,0)) { status=STATUS_DEVICE_BUSY;goto Done; }
-        status=ResultStatus(bc250_clock_prepare(&io,data->RequestedMHz,data->RequestedMv,&report));
+        // The administrator's point is judged against the same tier as the governor's (oc_tier.c).
+        status=ResultStatus(bc250_clock_prepare_tier(&io,(unsigned)InterlockedCompareExchange(&owner->OcTier,0,0),
+                                                     data->RequestedMHz,data->RequestedMv,&report));
         data->ObservedMHz=report.observed_mhz;data->ObservedVid=report.observed_vid;
         data->TemperatureMc=report.temperature_mc;
         data->InitialMHz=report.initial_mhz;data->InitialVid=report.initial_vid;

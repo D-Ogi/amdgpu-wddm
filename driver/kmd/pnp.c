@@ -277,6 +277,8 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     FanStart(device);
     // Before the governor, whose thread reads the table: the page and the gate (smu_metrics.c). Sends nothing.
     SmuMetricsStart(device);
+    // Before the governor and the CPU surface, which take their envelope from it; never fails the start (oc_tier.c).
+    OcTierStart(device);
     // After it: the governor starts from the floor the start set, and never fails the start (dpm.c).
     DpmStart(device);
     // After the governor: the CPU surface reads its settings and, if CpuTune is 1, starts its worker (cpu.c).
