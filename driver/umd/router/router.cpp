@@ -8,10 +8,11 @@
 // route is decided at every OpenAdapter10/OpenAdapter10_2 call from:
 //
 //   HKLM\SOFTWARE\amdgpu-wddm\DesktopRouter   (the GPU DWM kit's fixed interface; read for every process)
-//     CpuUmdPath          REG_SZ     lab override; absent: the CPU UMD beside this router
+//     CpuUmdPath          REG_SZ     test loader only (BC250_ROUTER_TEST_LOADER_OVERRIDES); the shipped router
+//                                    reads no UMD path and loads the CPU UMD beside this router
 //                                    (32-bit router: CpuUmdPathWow, default bc250d3d.dll next to this DLL)
-//     HostedUmdPath       REG_SZ     hosted UMD, absolute path (default: bc250d3d_zink.dll next to this DLL)
-//                                    (32-bit router: HostedUmdPathWow, same default)
+//     HostedUmdPath       REG_SZ     test loader only, as CpuUmdPath; the shipped router loads the hosted UMD
+//                                    bc250d3d_zink.dll next to this DLL (32-bit router: HostedUmdPathWow)
 //     DwmForceCpu         REG_DWORD  kill switch: any value other than 0 (or any other type) sends every hosted
 //                                    client to the CPU UMD; absent = 0
 //     RequireKmdSwitches  REG_DWORD  0 = ignore the KMD desktop switches; absent, 1 or any other value = require
@@ -27,7 +28,8 @@
 //   HKLM\SOFTWARE\amdgpu-wddm\AppRouter       (applications only; never read for dwm.exe or a HostedClients entry)
 //     Mode                REG_SZ     cpu | allowlist | gpu-default. Absent = cpu (the application kill switch); any
 //                                    other string or value kind = invalid, which routes like cpu
-//     GpuUmdPath          REG_SZ     lab override; absent: ../d3d11/<shell> beside this package's desktop folder.
+//     GpuUmdPath          REG_SZ     test loader only, as CpuUmdPath; the shipped router loads
+//                                    ../d3d11/<shell> beside this package's desktop folder.
 //                                    Invalid explicit overrides refuse the GPU route (app-gpu-umd-unset).
 //                                    (32-bit router: GpuUmdPathWow)
 //     Allow               REG_MULTI_SZ  image base names routed to the GPU UMD in allowlist mode

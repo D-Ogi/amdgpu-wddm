@@ -62,7 +62,7 @@
       "options": [
         "-Dbuildtype=debugoptimized",
         "-Db_ndebug=true",
-        "-Dforce_fallback_for=zlib",
+        "-Dforce_fallback_for=zlib,libzstd",
         "-Dllvm=disabled",
         "-Damd-use-llvm=false",
         "-Dvulkan-drivers=amd",
@@ -73,7 +73,7 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=enabled"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["amdgpu_wddm_radv.dll", "vulkan_radeon.dll"]},
@@ -86,7 +86,7 @@
       "options": [
         "-Dbuildtype=debugoptimized",
         "-Db_ndebug=true",
-        "-Dforce_fallback_for=zlib",
+        "-Dforce_fallback_for=zlib,libzstd",
         "-Dllvm=disabled",
         "-Damd-use-llvm=false",
         "-Dvulkan-drivers=amd",
@@ -97,7 +97,7 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled"
+        "-Dzstd=enabled"
       ],
       "targets": ["src/amd/vulkan/vulkan_radeon.dll"],
       "ships": {"src/amd/vulkan/vulkan_radeon.dll": ["vulkan_radeon.dll"]},
@@ -191,7 +191,7 @@
       "options": [
         "-Dbuildtype=debugoptimized",
         "-Db_ndebug=true",
-        "-Dforce_fallback_for=zlib",
+        "-Dforce_fallback_for=zlib,libzstd",
         "-Dllvm=disabled",
         "-Damd-use-llvm=false",
         "-Dvulkan-drivers=[]",
@@ -202,7 +202,7 @@
         "-Dvideo-codecs=[]",
         "-Degl=disabled",
         "-Dglx=disabled",
-        "-Dzstd=disabled",
+        "-Dzstd=enabled",
         "-Dgallium-wgl-dll-name=amdgpu_wddm_gl"
       ],
       "targets": [

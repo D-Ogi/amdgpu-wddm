@@ -1938,8 +1938,13 @@ static void Child(const std::string &s)
         // Release: the LUID variable is not read, so a fallback without the trailer fails as umd-no-trailer does,
         // and a mismatched or invalid value no longer refuses the adapter's own identity.
         const bool envRejects = s == "umd-env-luid-mismatch" || s == "umd-env-luid-invalid";
+        // BD-256: only a lab-flavour hosted UMD reads the registry values IcdPath, Diagnostics and
+        // DiagnosticsDirectory too. A release one loads the ICD next to the DLL and has no diagnostics log, so a
+        // missing IcdPath target does not refuse the adapter there.
+        const bool registryRead = envRead;
+        const bool icdMissing = s == "umd-no-icd" || (s == "umd-registry-icd-missing" && registryRead);
         const bool expectOk = s == "umd-identity" || (s == "umd-env-luid-fallback" && envRead) || s == "umd-env-luid-match" ||
-                              (envRejects && !envRead) ||
+                              (envRejects && !envRead) || (s == "umd-registry-icd-missing" && !registryRead) ||
                               s == "umd-registry-icd" || s == "umd-diag-registry" || s == "umd-diag-env" ||
                               s == "umd-diag-default-dir" || s == "umd-openadapter10";
         if (expectOk) {
@@ -1953,22 +1958,26 @@ static void Child(const std::string &s)
         }
         if (s == "umd-no-trailer" || (s == "umd-env-luid-fallback" && !envRead)) CHECK(o.hr == E_NOINTERFACE, "hr=%08lx", o.hr);
         if (envRejects && envRead) CHECK(o.hr == E_INVALIDARG, "hr=%08lx", o.hr);
-        if (s == "umd-no-icd" || s == "umd-registry-icd-missing") CHECK(o.hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), "hr=%08lx", o.hr);
+        if (icdMissing) CHECK(o.hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND), "hr=%08lx", o.hr);
         if (s == "umd-callback-fails") CHECK(o.hr == E_FAIL, "hr=%08lx", o.hr);
         if (s == "umd-zero-luid") CHECK(o.hr == E_UNEXPECTED, "hr=%08lx", o.hr);
-        if (s != "umd-no-icd" && s != "umd-registry-icd-missing") {
+        if (!icdMissing) {
             CHECK(QueryCalls == 1 && CapsQuerySize(QuerySize) && QueryHandle == (HANDLE)(UINT_PTR)0x5A5A,
                   "adapter query calls=%u size=%u handle=%p", QueryCalls, QuerySize, QueryHandle);
         } else {
             CHECK(QueryCalls == 0, "an unusable ICD must refuse the adapter before querying it");
         }
-        // Diagnostics off (every scenario but the diag ones, and umd-diag-env on a release UMD, which reads neither
-        // variable): no log directory or file may appear.
-        const bool diag = s.rfind("umd-diag-", 0) == 0 && (s != "umd-diag-env" || envRead);
+        // Diagnostics off (every scenario but the diag ones, and every diag one on a release UMD, which reads
+        // neither the variables nor the registry values): no log directory or file may appear.
+        const bool diag = s.rfind("umd-diag-", 0) == 0 && envRead;
         if (!diag) CHECK(!Exists(Layout + L"\\umd\\logs"), "diagnostics off created umd\\logs");
         std::wstring logName = L"\\bc250d3d_zink-" + ExeBase() + L"-" + std::to_wstring(GetCurrentProcessId()) + L".log";
         if (s == "umd-diag-env" && !envRead)
             CHECK(!Exists(Layout + L"\\diaglogs-env" + logName), "a release UMD followed BC250_UMD_DIAG_DIR");
+        if (s == "umd-diag-registry" && !registryRead)
+            CHECK(!Exists(Layout + L"\\diaglogs" + logName), "a release UMD followed DiagnosticsDirectory");
+        if (s == "umd-diag-default-dir" && !registryRead)
+            CHECK(!Exists(Layout + L"\\umd-diag\\logs" + logName), "a release UMD followed Diagnostics");
         std::wstring logDir = s == "umd-diag-registry" ? Layout + L"\\diaglogs" : s == "umd-diag-env" ? Layout + L"\\diaglogs-env" :
                               Layout + L"\\umd-diag\\logs";
         if (diag) {

@@ -294,7 +294,11 @@ DLL C runtime (`MSVCP140.dll`, `VCRUNTIME140.dll`, `VCRUNTIME140_1.dll`). Candid
 are listed in the [E33 README](../experiments/E33-m12-applications/README.md).
 
 `-Config radv-mt` is the same set with `-Db_vscrt=mt` before `-Ddefault_library=static`: the static C runtime,
-no `MSVCP140.dll` import. The ICD is loaded into every game process, and a game that ships an older
+no `MSVCP140.dll` import. It also takes `-Dforce_fallback_for=zlib,libzstd` and `-Dzstd=enabled`: the ICDs of
+game processes have the shader disk cache, which compresses its entries with zstd at level 3 when zstd is
+there and with zlib at its highest level when it is not (`src/util/compress.c`, BD-256). The Mesa line must
+carry `subprojects/zstd.wrap` (zstd 1.5.7, meson WrapDB). The desktop, Zink UMD and llvmpipe configs keep
+`-Dzstd=disabled`: those lines have no disk cache. The ICD is loaded into every game process, and a game that ships an older
 `msvcp140.dll` beside its exe hands that copy to every DLL importing `MSVCP140.dll` by name; a `std::mutex`
 built by newer STL headers then faults in the old `_Mtx_lock` (Rise of the Tomb Raider, 2026-10-01). ICDs
 for game processes use it. The Mesa tree needs the fork's RADV link fix (D-Ogi/mesa-amdgpu-wddm
@@ -370,10 +374,12 @@ files in `experiments/E33-m12-applications/`.
 ### System OpenGL ICD on Zink (`-Config zink-gl-icd`)
 
 ```
--Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib -Dllvm=disabled -Damd-use-llvm=false
+-Dbuildtype=debugoptimized -Db_ndebug=true -Dforce_fallback_for=zlib,libzstd -Dllvm=disabled -Damd-use-llvm=false
 -Dvulkan-drivers=[] -Dgallium-drivers=zink -Db_vscrt=mt -Ddefault_library=static -Dplatforms=windows
--Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=disabled -Dgallium-wgl-dll-name=amdgpu_wddm_gl
+-Dvideo-codecs=[] -Degl=disabled -Dglx=disabled -Dzstd=enabled -Dgallium-wgl-dll-name=amdgpu_wddm_gl
 ```
+
+zstd as for `radv-mt`: the OpenGL ICD has the shader disk cache.
 
 Targets `src/gallium/targets/wgl/amdgpu_wddm_gl.dll` and `src/gallium/targets/libgl-gdi/opengl32.dll`.
 The first file is the OpenGL installable client driver: the graphics adapter's driver key names it in

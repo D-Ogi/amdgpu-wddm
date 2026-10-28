@@ -381,6 +381,39 @@
    }
   },
   {
+   "name": "RADV_TRAP_HANDLER",
+   "where": "mesa-wddm src/amd/vulkan/radv_device.c (RADV ICDs)",
+   "does": "enables the shader trap handler, which upstream calls experimental and only for debugging (BD-256)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_DXGI_3D_NODE",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c (RADV ICDs)",
+   "does": "moves the graphics queue to another engine node; the release flavour takes node 0, the value of an unset variable (BD-256)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
+   "name": "RADV_DXGI_COMPUTE_NODE",
+   "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_cs.c (RADV ICDs)",
+   "does": "moves the compute queue to another engine node; the release flavour takes node 2, the value of an unset variable (BD-256)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ]
+   }
+  },
+  {
    "name": "RADV_TRAP_HANDLER_EXCP",
    "where": "mesa-wddm src/amd/vulkan/radv_instance.c (RADV ICDs)",
    "does": "selects the exceptions that the shader trap handler reports (memory violations, float division by zero, overflow, underflow)",
@@ -664,7 +697,7 @@
   {
    "name": "AMDGPU_WDDM_D3D11_SCANOUT",
    "where": "bc250-win driver/umd/dxvk/scanout-primary.h (read_scanout_source)",
-   "does": "asks for the D3D11 scan-out of the primary per process (M15.14 operator switch); the release flavour takes the HKLM machine value ScanoutPrimary, as with the variable unset",
+   "does": "sets the D3D11 scan-out of the primary per process (M15.14 operator switch, on by default from tester.34); the release flavour takes the HKLM machine value ScanoutPrimary, as with the variable unset",
    "lab": {
     "every": [
      "amdgpu_wddm_d3d11.dll"
@@ -1152,7 +1185,7 @@
   {
    "name": "BC250_HOSTED_ICD",
    "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp, Device.cpp, targets/d3d10umd/d3d10_gdi.c (zink UMD)",
-   "does": "loads the Vulkan ICD of the hosted UMD from that path in place of the HKLM IcdPath or the ICD next to the DLL",
+   "does": "loads the Vulkan ICD of the hosted UMD from that path in place of the ICD next to the DLL (a lab build also reads the HKLM IcdPath)",
    "lab": {
     "every": [
      "bc250d3d_zink.dll"
@@ -1290,9 +1323,39 @@
    }
   },
   {
+   "name": "ICDPATH",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD), the HKLM value of this name in any case under SOFTWARE\\amdgpu-wddm\\HostedUmd",
+   "does": "loads the Vulkan ICD of the hosted UMD from that path; the release flavour loads the ICD next to the DLL (BD-256)",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "DIAGNOSTICSDIRECTORY",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD), the HKLM value of this name in any case under SOFTWARE\\amdgpu-wddm\\HostedUmd",
+   "does": "writes the hosted UMD diagnostics (stderr, dwm.exe included) to that directory; the release flavour has no diagnostics log (BD-256)",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
+   "name": "DIAGNOSTICS",
+   "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD), the HKLM value of this name in any case under SOFTWARE\\amdgpu-wddm\\HostedUmd",
+   "does": "turns the hosted UMD diagnostics log on; the release flavour has no diagnostics log (BD-256)",
+   "lab": {
+    "every": [
+     "bc250d3d_zink.dll"
+    ]
+   }
+  },
+  {
    "name": "BC250_UMD_DIAG_DIR",
    "where": "mesa-wddm src/gallium/frontends/d3d10umd/Bc250Config.cpp (zink UMD)",
-   "does": "writes the hosted UMD diagnostics (stderr) to that directory; the release flavour takes the HKLM value DiagnosticsDirectory, else <DLL directory>\\logs",
+   "does": "writes the hosted UMD diagnostics (stderr) to that directory; a lab build without it takes the HKLM value DiagnosticsDirectory, else <DLL directory>\\logs, and the release flavour has no diagnostics log",
    "lab": {
     "every": [
      "bc250d3d_zink.dll"

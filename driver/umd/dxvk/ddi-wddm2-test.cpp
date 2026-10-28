@@ -495,7 +495,10 @@ void scanout_primary() {
     CHECK(scanout_primary_machine_setting(ERROR_MORE_DATA,REG_QWORD,8,1)==S::Off);
     CHECK(scanout_primary_machine_setting(ERROR_ACCESS_DENIED,0,0,0)==S::Off);
     CHECK(scanout_primary_switch(S::Absent,S::Absent)==W::Default);
-    CHECK(scanout_primary_requested(W::Default)==kScanoutPrimaryDefaultOn && !kScanoutPrimaryDefaultOn);
+    // BD-256: on by default, as the D3D12 shell; ScanoutPrimary=0 (or the lab variable "0") is the rollback.
+    CHECK(scanout_primary_requested(W::Default)==kScanoutPrimaryDefaultOn && kScanoutPrimaryDefaultOn);
+    CHECK(ScanoutSource{}.switch_state==W::Default);
+    CHECK(scanout_primary_switch(S::Absent,S::Off)==W::Off && !scanout_primary_requested(W::Off));
     CHECK(scanout_primary_switch(S::Absent,S::On)==W::On && scanout_primary_requested(W::On));
     CHECK(scanout_primary_switch(S::Off,S::On)==W::Off && !scanout_primary_requested(W::Off));
     CHECK(scanout_primary_switch(S::On,S::Off)==W::On);
@@ -544,11 +547,14 @@ void scanout_primary() {
     CHECK(decode_open_resource(openArgs,decodedSurface,decodedDesc)==S_OK && decodedDesc.Width==1920 &&
           decodedSurface.Pitch==7680);
     CHECK(composed(nullptr) && !WddmGdiRecordScannable(&request.texture,sizeof(request.texture)));
-    // No source, the off switch and the default make no query at all.
+    // No source and the off switch make no query at all. The default asks, as an explicit on.
     queries=adapterQueries;
     ScanoutSource off=on; off.switch_state=W::Off;
     ScanoutSource byDefault=on; byDefault.switch_state=W::Default;
-    CHECK(composed(nullptr) && composed(&off) && composed(&byDefault) && adapterQueries==queries);
+    CHECK(composed(nullptr) && composed(&off) && adapterQueries==queries);
+    CHECK(convert(&byDefault)==S_OK && request.scanout && adapterQueries==queries+1);
+    CHECK(scanout_primary_decide(&byDefault,true,0,87,1920,1200,7680).admitted);
+    queries=adapterQueries;
     CHECK(scanout_primary_decide(&off,true,0,87,1920,1200,7680).reason==R::Off);
     // A buffer without a primary descriptor (a windowed flip-model chain, M746) and a foreign video present
     // source stand down before the query too.
