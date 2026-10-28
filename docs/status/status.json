@@ -4761,7 +4761,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:758",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4773,7 +4773,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:758",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4785,7 +4785,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:758",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4797,7 +4797,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:758",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4809,7 +4809,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:758",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -4965,7 +4965,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:758",
        "applicability": {
         "class": "optional",
         "reason": "Sampler feedback: an optional tier. The BC-250 (gfx1013) reports none.",
@@ -5010,10 +5010,10 @@
       },
       {
        "name": "pfnImplicitShaderCacheControl",
-       "function": "no_implicit_shader_cache",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:732",
-       "done": false,
-       "reason": "only logs, counts, reads or writes zeros",
+       "function": "implicit_shader_cache_control",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:740",
+       "done": true,
+       "reason": "does work",
        "applicability": {
         "class": "optional",
         "reason": "Needed only when the driver reports a driver-managed shader cache; developer mode only.",
@@ -5599,7 +5599,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:799",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:817",
        "applicability": {
         "class": "applicable",
         "reason": "The DXGI Blt was ported to D3D12 command lists.",
@@ -5995,7 +5995,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:799",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:817",
        "applicability": {
         "class": "applicable",
         "reason": "AtomicCopyBufferUINT and AtomicCopyBufferUINT64 of the command list.",
@@ -6080,7 +6080,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:799",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:817",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -6092,7 +6092,7 @@
        "function": "FailSafe",
        "done": false,
        "reason": "fail-safe entry of engine-ddi",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:799",
+       "source": "driver/umd/d3d12/engine-ddi/context.cpp:817",
        "applicability": {
         "class": "optional",
         "reason": "Meta commands: optional. A driver may enumerate no meta command.",
@@ -6521,10 +6521,10 @@
     }
    ],
    "summary": {
-    "done": 187,
+    "done": 188,
     "total": 215,
     "partial": 8,
-    "percent": 86.98,
+    "percent": 87.44,
     "applicable": {
      "done": 186,
      "total": 200,

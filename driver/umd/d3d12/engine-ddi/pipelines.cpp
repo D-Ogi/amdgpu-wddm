@@ -737,9 +737,9 @@ void APIENTRY destroy_pipeline(D3D12DDI_HDEVICE device, D3D12DDI_HPIPELINESTATE 
 // nothing here.
 //
 // No capability gates these six slots: the 0092 capability types carry no pipeline library field at all
-// (H:11078-11112). DriverManagedShaderCachePresent is a different thing and stays FALSE, because an application
-// pipeline library is the application's cache, not a cache of this driver's that D121
-// pfnImplicitShaderCacheControl could disable or clear (caps.cpp, context.cpp).
+// (H:11078-11112). DriverManagedShaderCachePresent is a different thing: it reports the engine's per-user disk
+// cache, which D121 pfnImplicitShaderCacheControl controls, while an application pipeline library is the
+// application's cache, which that slot never touches (caps.cpp, context.cpp).
 SIZE_T APIENTRY calc_pipeline_library(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_PIPELINE_LIBRARY_0010*) {
     return sizeof(PipelineLibraryRecord);
 }

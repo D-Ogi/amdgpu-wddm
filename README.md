@@ -37,7 +37,7 @@ and attach the support file that the installer or the control app makes.
 
 <a href="docs/status/README.md"><img src="docs/status/badge-kmd-ddi.svg" alt="kernel-mode DDI: 35.37%">
 <img src="docs/status/badge-kmd-ddi-applicable.svg" alt="kernel-mode DDI, applicable to this driver: 67.53%">
-<img src="docs/status/badge-d3d12-ddi.svg" alt="D3D12 DDI: 86.98%">
+<img src="docs/status/badge-d3d12-ddi.svg" alt="D3D12 DDI: 87.44%">
 <img src="docs/status/badge-d3d12-ddi-applicable.svg" alt="D3D12 DDI, applicable to this driver: 93.00%"></a>
 
 <!-- /status-map -->

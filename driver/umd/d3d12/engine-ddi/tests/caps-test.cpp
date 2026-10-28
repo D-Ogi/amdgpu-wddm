@@ -84,7 +84,8 @@ struct Answers {
 #endif
     D3D12_FEATURE_DATA_D3D12_OPTIONS21 options21;
     D3D12_FEATURE_DATA_SERIALIZATION serialization;
-    UINT raw_model;                             // non-zero: SHADER_MODEL answers this whatever was asked
+    D3D12_FEATURE_DATA_SHADER_CACHE shader_cache;   // zero: an engine whose process has no disk cache
+    UINT raw_model;                            // non-zero: SHADER_MODEL answers this whatever was asked
     int unsupported;                            // a D3D12_FEATURE answered DXGI_ERROR_UNSUPPORTED; -1 for none
 };
 
@@ -213,6 +214,7 @@ HRESULT APIENTRY stub_query(const BC250_VKD3D_DEVICE_CREATE_INFO* info, UINT32 c
 #endif
         case D3D12_FEATURE_D3D12_OPTIONS21: answer(q, a.options21); break;
         case D3D12_FEATURE_SERIALIZATION: answer(q, a.serialization); break;
+        case D3D12_FEATURE_SHADER_CACHE: answer(q, a.shader_cache); break;
         default: break;
         }
     }
@@ -325,9 +327,9 @@ void test_stub(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
     engine_ddi::AdapterCaps* caps = query_stub(a12_0, info, "FL12_0 engine");
     if (!caps) return;
 #if defined(D3D12DDI_BUILD_VERSION_0119)
-    check(g_queries == 21, "one batch of 21 features including tight alignment and OPTIONS19 (%u)", g_queries);
+    check(g_queries == 22, "one batch of 22 features including tight alignment and OPTIONS19 (%u)", g_queries);
 #else
-    check(g_queries == 19, "one batch of 19 features including the optional view contract (%u)", g_queries);
+    check(g_queries == 20, "one batch of 20 features including the optional view contract (%u)", g_queries);
 #endif
     check(g_model_asked == D3D_SHADER_MODEL_6_9, "SHADER_MODEL is asked with 6_9 as the highest model (%x)",
           static_cast<unsigned>(g_model_asked));
@@ -792,6 +794,40 @@ void test_depth_bounds(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               "depth bounds, engine without an OPTIONS2 answer: the zeroed structure is FALSE");
         engine_ddi::free_adapter_caps(caps);
     }
+}
+
+// 1006 DriverManagedShaderCachePresent is TRUE only when the engine's D3D12_FEATURE_SHADER_CACHE answer has
+// AUTOMATIC_DISK_CACHE (the process has the engine's disk cache), FALSE without it or without an answer, and in no
+// case does it move the rest of 1006.
+void test_driver_managed_shader_cache(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
+    auto answer_of = [&](const Answers& a, const char* what) {
+        PipelineCapAnswer p{};
+        p.hr = E_FAIL;
+        if (engine_ddi::AdapterCaps* caps = query_stub(a, info, what)) {
+            p = pipeline_cap_answer(caps);
+            engine_ddi::free_adapter_caps(caps);
+        }
+        return p;
+    };
+    auto rest_same = [](PipelineCapAnswer p, const PipelineCapAnswer& floor) {
+        p.options.DriverManagedShaderCachePresent = FALSE;
+        return !std::memcmp(&p.options, &floor.options, sizeof(p.options));
+    };
+    Answers a = fl12_0();
+    a.shader_cache.SupportFlags = D3D12_SHADER_CACHE_SUPPORT_SINGLE_PSO | D3D12_SHADER_CACHE_SUPPORT_LIBRARY |
+                                  D3D12_SHADER_CACHE_SUPPORT_AUTOMATIC_INPROC_CACHE;
+    const PipelineCapAnswer floor = answer_of(a, "engine without a disk cache");
+    check(floor.hr == S_OK && !floor.options.DriverManagedShaderCachePresent,
+          "driver-managed cache, engine without AUTOMATIC_DISK_CACHE: 1006 reports FALSE (hr %08lx)",
+          static_cast<unsigned long>(floor.hr));
+    a.shader_cache.SupportFlags |= D3D12_SHADER_CACHE_SUPPORT_AUTOMATIC_DISK_CACHE;
+    const PipelineCapAnswer on = answer_of(a, "engine with a disk cache");
+    check(on.hr == S_OK && on.options.DriverManagedShaderCachePresent && rest_same(on, floor),
+          "driver-managed cache, engine with AUTOMATIC_DISK_CACHE: 1006 reports TRUE and nothing else of 1006 moved");
+    a.unsupported = D3D12_FEATURE_SHADER_CACHE;
+    const PipelineCapAnswer none = answer_of(a, "engine without a SHADER_CACHE answer");
+    check(none.hr == S_OK && !none.options.DriverManagedShaderCachePresent && rest_same(none, floor),
+          "driver-managed cache, engine without a SHADER_CACHE answer: the zeroed structure is FALSE");
 }
 
 // Legacy partial multiview is never enough. The full-domain contract enables only Tier 2.
@@ -1867,6 +1903,7 @@ int wmain(int argc, wchar_t** argv) {
         test_raytracing_tier_reporting(info);
         test_mesh_shader_tier(info);
         test_depth_bounds(info);
+        test_driver_managed_shader_cache(info);
         test_view_instancing(info);
         test_render_pass(info);
         test_write_buffer_immediate(info);

@@ -208,7 +208,7 @@ Nothing waits on the CPU: both phases read the queues' state words and fences at
   the last size query answered to each calling thread and refuses a serialize that has none of its own behind it.
   Every refusal of these creation slots is clamped to a code the runtime admits, the two codes of a stale blob
   included. No capability reports any of this,
-  and `DriverManagedShaderCachePresent` stays FALSE: an application's library is the application's cache
+  and `DriverManagedShaderCachePresent` does not count them: an application's library is the application's cache
   (INTEGRATION.md, SLOTS.md).
 - The harness creates a DXIL compute program (dxc) and a DXBC vertex and pixel program (fxc) through these slots,
   from containers reduced to the DDI form, and checks the dispatch and the draw word for word. The reduction is

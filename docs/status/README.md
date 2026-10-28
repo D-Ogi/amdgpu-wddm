@@ -10,7 +10,7 @@ Each map has two figures. The raw figure counts every slot of the tables, so tha
 
 Slots of `DRIVER_INITIALIZATION_DATA` (`km/dispmprt.h`, WDK 10.0.26100) up to WDDM 2.9, the version that `WddmBuildTable` declares. The 34 slots of WDDM 3.0 and later are not counted: hatched cells, or cross-hatched cells when not applicable. All versions: 52 of 181 (28.73%), applicable 52 of 77 (67.53%). Classes of the 147 counted slots: 77 applicable, 54 optional and 16 not applicable.
 
-## D3D12 user-mode DDI: 187 of 215 slots (86.98%), applicable 186 of 200 (93.00%)
+## D3D12 user-mode DDI: 188 of 215 slots (87.44%), applicable 186 of 200 (93.00%)
 
 <img src="d3d12-ddi.svg" width="860" alt="Treemap of the D3D12 user-mode DDI slots">
 
