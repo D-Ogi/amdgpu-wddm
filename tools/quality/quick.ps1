@@ -89,6 +89,9 @@ try {
  Check 'present-mode' { & python "$repo\tools\win\etw\etw-present-mode-test.py" }
  Check 'frameloop-host' { & pwsh -NoProfile -File "$repo\tools\win\frameloop\lab\host-checks.ps1" }
  Check 'register-generators' { & python -m unittest discover -s "$repo\tools\regcalc"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\diagusb" }; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\win\bc250rd" } }
+ # Its deadline is 900 s in gate-inputs.json. It had 300 s. The tester.33 release suites ran it in 196 s to 248 s one
+ # flavour at a time, so 300 s left 20 % of margin. build-release-set.ps1 -Parallel runs the release and the lab
+ # suites at the same time, and then all four runs of this gate stopped at 300 s. 900 s is 3.6x the worst serial run.
  Check 'quality-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\quality-controls").FullName; & python -m unittest discover -s "$repo\tools\quality" }
  Check 'gate-cache-controls' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_gate_cache.py' }
  Check 'wininstall-locale' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\wininstall\test-locale.ps1" -Out "$Out\wininstall-locale" }

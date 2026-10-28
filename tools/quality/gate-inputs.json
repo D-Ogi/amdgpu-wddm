@@ -1520,7 +1520,7 @@
       ]
     },
     "quality-controls": {
-      "timeout": 300
+      "timeout": 900
     },
     "kmd-deploy": {
       "timeout": 600
