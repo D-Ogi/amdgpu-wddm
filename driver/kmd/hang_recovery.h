@@ -79,6 +79,17 @@ static __inline int Bc250KillVmidValid(unsigned vmid)
                                                    between the watchdog and the TDR, and the ring is already idle */
 #define BC250_HANG_VERDICT_ADMISSION_GUARD  8u  /* no reset transaction began; LastSeq is the reason mask below,
                                                    not a hardware sequence. LastFence/Kills/Micros are zero */
+/* TDR recovery S1 (adapter_reset.h, docs/design/tdr-recovery-s1.md): the adapter path, DxgkDdiResetFromTimeout.
+ * Its call writes PENDING first (with LastPath 2), before any wave kill, and then one of these two. LastFence is
+ * node 0's advanced fence, LastKills the wave kills of the call, LastMicros the time of the whole call. */
+#define BC250_HANG_VERDICT_ADAPTER_RESET    9u  /* every witness idle: success returned, render nodes closed until
+                                                   RestartFromTimeout */
+#define BC250_HANG_VERDICT_ADAPTER_BUSY    10u  /* a witness busy: failure returned (0x116), LastSeq is the
+                                                   BC250_ADAPTER_BUSY_* mask, not a hardware sequence */
+
+/* Which DDI wrote the record: Parameters\HangRecovery LastPath. */
+#define BC250_HANG_PATH_ENGINE   1u     /* DxgkDdiResetEngine, stage 1 of hang-recovery.md */
+#define BC250_HANG_PATH_ADAPTER  2u     /* DxgkDdiResetFromTimeout, TDR recovery S1 */
 
 /* Stable on-disk bit assignments for verdict 8 (Parameters\HangRecovery\LastSeq).
  * Multiple bits preserve every failed condition from the same locked observation. */
@@ -276,6 +287,9 @@ static __inline unsigned Bc250HangVerdictCounts(unsigned verdict)
      * write ahead of it to have counted one. Without this the record's invariant would break the other way. */
     case BC250_HANG_VERDICT_ABORT_REPORTED:   return BC250_HANG_COUNT_ATTEMPT | BC250_HANG_COUNT_RECOVERED;
     case BC250_HANG_VERDICT_NOT_DRAINED:      return BC250_HANG_COUNT_NOT_DRAINED;
+    /* The adapter path always writes PENDING first, which counted its attempt: the outcome counts only itself. */
+    case BC250_HANG_VERDICT_ADAPTER_RESET:    return BC250_HANG_COUNT_RECOVERED;
+    case BC250_HANG_VERDICT_ADAPTER_BUSY:     return BC250_HANG_COUNT_REFUSED;
     default:                                  return BC250_HANG_COUNT_ATTEMPT | BC250_HANG_COUNT_REFUSED;
     }
 }

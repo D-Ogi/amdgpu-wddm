@@ -36,6 +36,7 @@
 #include "lab_gate.h"          // BD-167: GfxEscape/GfxFenceEscape are the lab-only user GFX/FENCE submit entries
 #include "bc250_fence_order.h"
 #include "hang_recovery.h"
+#include "adapter_reset.h"   // TDR recovery S1: the ring witnesses of DxgkDdiResetFromTimeout
 #include "vmid_pool.h"
 #include "bc250_sdma_virtual_ptes.h"
 #include "paging_intervals.h"
@@ -3096,23 +3097,95 @@ static void GfxPagingSubmitFailAccess(_Inout_ BC250_DEVICE* Device)
     BC250_GFX* gfx = (BC250_GFX*)Device->Gfx;
 
     if (gfx == NULL) return;
-    // Sticky, once, independent of node 0's own SubmitFailed (GfxSubmitFail): the two nodes fail on their own
-    // hardware (design note section 5). The write pointer is left where it stands, for the same reason
-    // GfxSubmitFail leaves node 0's: M59/M60 say a hardware pointer only counts up.
+    // Once, independent of node 0's own SubmitFailed (GfxSubmitFail): the two nodes fail on their own hardware
+    // (design note section 5). The write pointer is left where it stands, for the same reason GfxSubmitFail leaves
+    // node 0's: M59/M60 say a hardware pointer only counts up. Only an adapter reset that proved the engines idle
+    // opens the path again in this device start (GfxPagingReopenAfterReset, TDR recovery S1).
     if (InterlockedExchange(&gfx->PagingSubmitFailed, 1) == 0)
-        GuardLog("gfx: paging submission path failed, no further ring writes this device start (seq %lu in flight, slot 0x%X)",
+        GuardLog("gfx: paging submission path failed, ring closed until an adapter recovery (seq %lu in flight, slot 0x%X)",
                  gfx->PagingSubmitSeq,
                  gfx->PagingDevicePtr != NULL ? (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) : 0);
 }
 
-void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
+// The temporary close of DxgkDdiResetFromTimeout (TDR recovery S1): GfxPagingSubmitFail without StartHealthFault.
+// An adapter reset that succeeds must not make a health fault only because it closed the path for its duration. A
+// real fault that came first keeps its own StartHealthFault.
+void GfxPagingSubmitClose(_Inout_ BC250_DEVICE* Device)
 {
-    StartHealthFault(Device);
     if (GfxAccessAcquire(Device) == NULL)
     {
         return;
     }
     GfxPagingSubmitFailAccess(Device);
+    GfxAccessRelease(Device);
+}
+
+void GfxPagingSubmitFail(_Inout_ BC250_DEVICE* Device)
+{
+    StartHealthFault(Device);
+    GfxPagingSubmitClose(Device);
+}
+
+// GfxReopenAfterAbort for node 1, at the end of a DxgkDdiResetFromTimeout that proved every engine idle (TDR
+// recovery S1), at DISPATCH_LEVEL under the WDDM lock. The same refusal: a ring that still holds work is never reopened. One packet at a time is
+// in flight on this ring (GfxSubmitPaging), so the witness is the fence slot against PagingSubmitSeq. No register
+// is written. TRUE: the path is open again.
+BOOLEAN GfxPagingReopenAfterReset(_Inout_ BC250_DEVICE* Device)
+{
+    BC250_GFX* gfx;
+    BOOLEAN idle;
+    LONG pending;
+    ULONG observed;
+
+    if (GfxAccessAcquire(Device) == NULL) return FALSE;
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx == NULL) { GfxAccessRelease(Device); return FALSE; }
+    pending = InterlockedCompareExchange(&gfx->PagingSubmitInFlight, 0, 0);
+    observed = gfx->PagingDevicePtr != NULL ? (ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT) : 0;
+    idle = pending == 0 || (gfx->PagingDevicePtr != NULL && bc250_fence_reached(observed, gfx->PagingSubmitSeq));
+    if (idle && pending != 0) InterlockedCompareExchange(&gfx->PagingSubmitInFlight, 0, pending);
+    if (idle)
+    {
+        InterlockedExchange(&gfx->PagingSubmitFailed, 0);
+        GuardLog("gfx: paging ring reopened after an adapter reset (seq %lu, slot 0x%X)", gfx->PagingSubmitSeq, observed);
+    }
+    else
+        GuardLog("gfx: paging ring NOT reopened: seq %lu is still in flight (slot 0x%X)", gfx->PagingSubmitSeq, observed);
+    GfxAccessRelease(Device);
+    return idle;
+}
+
+// The software witnesses of DxgkDdiResetFromTimeout (TDR recovery S1, adapter_reset.h): for each ring, has the fence
+// slot reached the newest sequence this driver wrote to it? A ring that never ran (sequence 0, or no device of its
+// own yet) has nothing outstanding. Reads of fence memory only. SdmaRingInUse: node 1 has its SDMA0 ring, so the
+// SDMA0 ring pointers are a witness too.
+void GfxRingsRetired(_Inout_ BC250_DEVICE* Device, _Out_ BC250_ADAPTER_RINGS* Rings, _Out_ BOOLEAN* SdmaRingInUse)
+{
+    BC250_GFX* gfx;
+
+    Rings->GfxRetired = Rings->ComputeRetired = Rings->PagingRetired = 1;
+    *SdmaRingInUse = FALSE;
+    if (GfxAccessAcquire(Device) == NULL) return;
+    gfx = (BC250_GFX*)Device->Gfx;
+    if (gfx != NULL)
+    {
+        LONG gfxPending = InterlockedCompareExchange(&gfx->SubmitInFlight, 0, 0);
+        LONG computePending = InterlockedCompareExchange(&gfx->ComputeInFlight, 0, 0);
+
+        if (gfx->SubmitAdev != NULL && gfx->SubmitSeq != 0)
+            Rings->GfxRetired = bc250_fence_reached((ULONG)bc250_gfx_fence_read(gfx->SubmitAdev, BC250_SUBMIT_FENCE_SLOT),
+                                                    gfx->SubmitSeq);
+        else if (gfxPending != 0) Rings->GfxRetired = 0;
+        if (gfx->ComputeAdev != NULL && gfx->ComputeSeq != 0)
+            Rings->ComputeRetired = bc250_fence_reached(
+                (ULONG)bc250_gfx_fence_read(gfx->ComputeAdev, BC250_COMPUTE_FENCE_SLOT), gfx->ComputeSeq);
+        else if (computePending != 0) Rings->ComputeRetired = 0;
+        if (InterlockedCompareExchange(&gfx->PagingSubmitInFlight, 0, 0) != 0)
+            Rings->PagingRetired = gfx->PagingDevicePtr != NULL &&
+                bc250_fence_reached((ULONG)bc250_sdma_fence_read(gfx->PagingDevicePtr, BC250_PAGING_FENCE_SLOT),
+                                    gfx->PagingSubmitSeq);
+        *SdmaRingInUse = gfx->PagingDevicePtr != NULL;
+    }
     GfxAccessRelease(Device);
 }
 

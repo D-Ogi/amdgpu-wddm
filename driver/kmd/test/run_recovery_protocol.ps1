@@ -5,7 +5,8 @@ param(
     [switch]$UseNotifiedAsCompleted, [switch]$ShareNodeWatermark,
     [switch]$ResetWritesCompleted, [switch]$IgnoreEpoch, [switch]$TimeoutAfterUnlock,
     [switch]$ReadAfterRelease, [switch]$KeepCoveredBoundary, [switch]$DropAdmissionReason, [switch]$RejectActiveImmediately, [switch]$IgnoreDrainDeadline, [switch]$FaultHealthOnAdmission, [switch]$AdmitDuringReset,
-    [switch]$LatchFaultsStickily, [switch]$ReopenWitnessOnRefusal, [switch]$DropWitnessReopen, [switch]$RefusalClosesEveryNode
+    [switch]$LatchFaultsStickily, [switch]$ReopenWitnessOnRefusal, [switch]$DropWitnessReopen, [switch]$RefusalClosesEveryNode,
+    [switch]$RefusalIgnoresAdapterRecovery
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
@@ -66,7 +67,10 @@ if ($DropAdmissionReason) {
 [IO.File]::WriteAllText((Join-Path $Out 'hang_recovery.h'), $header)
 # BD-120 negative controls over the witness wiring. The first one is the code before the fix.
 $reopenLive = '            if (node == BC250_WDDM_NODE_3D) witness = StartHealthRecovered(device, &witnessEpoch);'
-$tailLive = '    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);'
+# Written with explicit newlines: the sources are stored with LF and this script with CRLF.
+$tailLive = "    if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D &&`n" +
+            '        (wddm == NULL || wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF)) StartHealthClose(device);'
+$tailAdapterLive = 'wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF)) StartHealthClose(device);'
 if ($DropWitnessReopen) {
     if (!$source.Contains($reopenLive)) { throw 'witness reopen anchor changed' }
     $source = $source.Replace($reopenLive, '            if (node == BC250_WDDM_NODE_3D) witness = BC250_START_HEALTH_RECOVERY_STICKY;')
@@ -83,6 +87,12 @@ if ($ReopenWitnessOnRefusal) {
 if ($RefusalClosesEveryNode) {
     if (!$source.Contains($tailLive)) { throw 'refusal node anchor changed' }
     $source = $source.Replace($tailLive, '    if (1) StartHealthClose(device);')
+}
+# TDR recovery S1: a node-0 refusal with AdapterRecoveryMode on clearing the mark, so that the adapter reset that
+# follows has nothing to reopen.
+if ($RefusalIgnoresAdapterRecovery) {
+    if (!$source.Contains($tailAdapterLive)) { throw 'refusal adapter recovery anchor changed' }
+    $source = $source.Replace($tailAdapterLive, '1)) StartHealthClose(device);')
 }
 $latch = 'static BOOLEAN ' + (Function-Body $source 'WddmLatchSubmitDiagnosticLocked').Text
 if ($LatchFaultsStickily) {
@@ -106,6 +116,7 @@ typedef struct { long long QuadPart; } LARGE_INTEGER;
 #define BC250_WDDM_NODE_COMPUTE 2u
 #define BC250_SUBMIT_FENCE_SLOT 0
 #define BC250_COMPUTE_FENCE_SLOT 11
+#define BC250_ADAPTER_RECOVERY_OFF 0u
 typedef struct { void *SubmitAdev; LONG SubmitFailed; ULONG SubmitSeq;
                  void *ComputeAdev; LONG ComputeFailed; ULONG ComputeSeq; } BC250_GFX;
 /* BD-120: HealthPendingReset says whether the witness close is the one a recovered ResetEngine owns, and
@@ -118,8 +129,11 @@ typedef struct {
     struct { int SnapshotTaken; } SubmitWatchdog;
     int WatchdogFaulted[3], DeferredValid, CompletionPending[3], ActiveSubmissions[3];
     unsigned NoteCalls, NotedFence[2];
+    ULONG AdapterRecovery;
 } BC250_WDDM;
 static BC250_WDDM *MockWddm;
+/* The adapter state that the refusal tail reads. NULL: the tail of a ResetEngine without adapter state. */
+static BC250_WDDM *MockTailWddm;
 static BC250_DEVICE *MockDevice;
 static ULONGLONG MockNow, MockStart;
 static unsigned MockDrainMs, MockSecondaryMs, MockFaultMs, MockWaits, MockLockDepth, MockSafetyTrips, MockPoisonRelease;
@@ -314,7 +328,7 @@ if (!$tail.Contains('StartHealthClose(device);') -or $tail.Contains('GfxSubmitCl
 #    other node, whose refusal says nothing about node 0.
 $witnessOk = $true
 if ($latch.Contains('StartHealthFault') -or $latch.Contains('GfxSubmit') -or $latch.Contains('WatchdogFaulted[0] = TRUE')) { $witnessOk = $false }
-if (!$tail.Contains('if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D) StartHealthClose(device);') -or
+if (!$tail.Contains($tailLive.TrimStart()) -or
     !$tail.Contains('else StartHealthCloseKeepPendingReset(device);')) { $witnessOk = $false }
 $reopenCall = $reset.IndexOf('StartHealthRecovered(device')
 $innerRefusal = if ($reopen -ge 0) { $reset.IndexOf('goto refuseReset;', $reopen) } else { -1 }
@@ -331,7 +345,9 @@ $mock += @'
 static int run_refusal_tail_node(BC250_DEVICE *device, UINT node)
 {
     BC250_DEVICE *hAdapter = device;
+    BC250_WDDM *wddm = MockTailWddm;
     struct { UINT NodeOrdinal, EngineOrdinal; } args, *pResetEngine = &args;
+    (void)wddm;     /* a control that drops the mode test leaves it unread */
     args.NodeOrdinal = node;
     args.EngineOrdinal = 0;
 '@

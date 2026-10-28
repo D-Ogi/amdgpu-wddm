@@ -36,6 +36,7 @@ code=sub(code,' LONG PagingQueueBorrowed,', ''' LONG SubmittedNode[2],Preemption
  UINT RejectedFence[2]; KDPC* ReportDpc;
  BOOLEAN NotifyDpcInReport;
  LONG CompletionRetries[2],CompletionsDropped[2],PreemptionReportsLost;
+ LONG AdapterResetWindow; ULONG WindowSubmits[2],WindowNonEmpty[2],WindowFence[2];
  LONG PagingQueueBorrowed,''')
 code=sub(code,' struct {BOOLEAN ResetActive;} Recovery[2];',
          ' BC250_HANG_NODE_STATE Recovery[BC250_WDDM_NODE_COUNT_MAX];')
@@ -79,7 +80,10 @@ prefix,suffix=extra.split('/* ACTUAL_FUNCTIONS */')
 # tools/quality/quick.ps1.
 # F-q44-mem-4: the submit DDI's wrapper too, where a STATUS_INVALID_PARAMETER of its body is recorded as the rejected
 # fence that the report pass then completes. The body itself is the harness's stand-in.
+# The wrapper counts a held-back submission of the TDR recovery window (docs/design/tdr-recovery-s1.md), so that
+# helper is extracted too. The harness never opens the window, so the helper returns at once here.
 submit=(extract('static void WddmNoteSubmittedLocked(')+'\n'+extract('static BOOLEAN WddmBeginSubmissionLocked(')+'\n'+
+        extract('static void WddmNoteWindowSubmissionLocked(')+'\n'+
         extract('static NTSTATUS Bc250WddmSubmitCommandVirtual(')+'\n')
 # The compute node (docs/design/compute-node.md) gave nodes 0 and 2 one ring-pending answer, WddmRingPendingLocked,
 # which the preemption and the report pass read for every node except node 1. The harness has two nodes, so node 2

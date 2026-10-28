@@ -53,7 +53,7 @@ typedef struct {
     struct { ULONGLONG DestinationVirtualAddress, FillSizeInBytes; HANDLE hAllocation; } FillVirtual;
     struct { DXGK_MEMORY_TRANSFER_DIRECTION TransferDirection; ULONGLONG SourceVirtualAddress; HANDLE hAllocation; }
         TransferVirtual;
-    struct { HANDLE hAllocation; struct { UINT SegmentId; } Source, Destination; } Transfer;
+    struct { HANDLE hAllocation; ULONGLONG TransferSize; struct { UINT SegmentId; } Source, Destination; } Transfer;
     DXGK_BUILDPAGINGBUFFER_UPDATEPAGETABLE UpdatePageTable;
     struct { ULONGLONG RootPageTableAddress; } FlushTlb;
 } DXGKARG_BUILDPAGINGBUFFER;
@@ -74,7 +74,9 @@ typedef struct {
     volatile LONG64 PagingDmaVaBuilds, PagingDmaZeroVaBuilds;
     volatile LONG PagingDmaVaObserved, PagingDmaVaMatched;
     ULONGLONG PagingDmaLastVa, PagingDmaLastRoot, PagingDmaLastPa, PagingDmaLastCpu;
+    volatile LONG AdapterResetWindow, WindowDdiCalls, PagingEvictionNotices;   /* TDR recovery S1 */
 } BC250_WDDM;
+#define BC250_WDDM_WINDOW_LOG_CALLS 64
 typedef struct { int Unused; } BC250_DEVICE;
 typedef struct { ULONGLONG RootPhysical; int Captures; } BC250_WDDM_OBJECT;
 #define BC250_WDDM_MAGIC_CONTEXT 0x43545854u
@@ -214,6 +216,7 @@ static void Fresh(DXGK_BUILDPAGINGBUFFER_OPERATION Operation, DXGK_PAGETABLEUPDA
     build.hSystemContext = (HANDLE)&context_state;
     build.FlushTlb.RootPageTableAddress = 0x40000;
     build.FillVirtual.FillSizeInBytes = 64ull << 20;
+    build.Transfer.TransferSize = 64ull << 20;  /* a TRANSFER of size 0 is the eviction notice after a TDR */
 }
 static NTSTATUS Ddi(void) { return Bc250WddmBuildPagingBuffer(ADAPTER, &build); }
 
@@ -364,6 +367,25 @@ int main(void)
             CHECK(journal_notes == 1 && journal_failure == 0);
         }
     }
+    /* TDR recovery S1: after a successful ResetFromTimeout VidMm reports each eviction as a TRANSFER of size 0
+     * (thread-synchronization-and-tdr.md). Nothing is built, journalled or published, and the OS gets SUCCESS, in
+     * the window between the two timeout DDIs and outside it. In the window the call is counted. */
+    Fresh(DXGK_OPERATION_TRANSFER, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
+    build.Transfer.TransferSize = 0;
+    mock.status = STATUS_INVALID_PARAMETER;     /* a builder call would fail the DDI */
+    CHECK(Ddi() == STATUS_SUCCESS && builder_calls == 0 && publishes == 0 && journal_notes == 0);
+    CHECK(build.MultipassOffset == 0 && wddm_state.PagingContractRefusals == 0 && wddm_state.PagingEvictionNotices == 1);
+    CHECK(wddm_state.WindowDdiCalls == 0 && wddm_state.PagingBuildLock == 0);
+    Fresh(DXGK_OPERATION_TRANSFER, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
+    build.Transfer.TransferSize = 0;
+    wddm_state.AdapterResetWindow = 1;
+    CHECK(Ddi() == STATUS_SUCCESS && builder_calls == 0 && wddm_state.PagingEvictionNotices == 1);
+    CHECK(wddm_state.WindowDdiCalls == 1 && strstr(last_log, "tdr window: BuildPagingBuffer") != NULL);
+    /* A TRANSFER with a size is built as before, in the window too. */
+    Fresh(DXGK_OPERATION_TRANSFER, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
+    wddm_state.AdapterResetWindow = 1;
+    mock.moved = page; mock.progress = 1;
+    CHECK(Ddi() == STATUS_SUCCESS && builder_calls == 1 && wddm_state.PagingEvictionNotices == 0);
     /* COPY_PAGE_TABLE_ENTRIES: the builder's status, as it is. */
     Fresh(DXGK_OPERATION_COPY_PAGE_TABLE_ENTRIES, DXGK_PAGETABLEUPDATE_GPU_PHYSICAL, 0);
     mock.status = STATUS_DEVICE_NOT_READY;
