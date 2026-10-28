@@ -37,12 +37,14 @@ flowchart LR
   M807["M807"]
   M812["M812"]
   M813["M813"]
+  M815["M815"]
   M870["M870<br/>kmd"]
   M880["M880<br/>kmd"]
   M896["M896"]
   M907["M907"]
   M910["M910"]
   M922["M922"]
+  M924["M924"]
   S1["S1"]
   S2["S2"]
   S3["S3"]
@@ -67,6 +69,8 @@ flowchart LR
   M896 ==>|supports| M880
   M910 ==>|supports| M907
   M922 ==>|supports| M564
+  M924 ==>|supports| M14
+  M924 ==>|supports| M815
   M870 ==>|supports| M13
   M870 ==>|supports| M14
   M5 -.->|refutes| S3
@@ -133,14 +137,14 @@ flowchart LR
   M871["M871<br/>games"]
   M872["M872"]
   M884["M884"]
-  M887["M887<br/>kmd"]
-  M894["M894<br/>kmd"]
-  M896["M896"]
   M906["M906"]
   M907["M907"]
   M908["M908"]
   M910["M910"]
   M914["M914<br/>kmd"]
+  M923["M923"]
+  M924["M924"]
+  M925["M925"]
   M3 --> M4
   M18 --> M4
   M18 --> M5
@@ -178,17 +182,18 @@ flowchart LR
   M872 --> M806
   M872 --> M871
   M884 --> M812
-  M896 --> M887
   M907 --> M906
   M907 --> M910
   M908 --> M906
   M910 --> M906
+  M923 --> M924
+  M924 --> M47
+  M925 --> M924
   M37 --> M33
   M37 --> M39
   M81 --> M30
   M81 --> M57
   M81 --> M60
-  M894 --> M896
   M914 --> M31
   M85 --> M31
   M118 --> M31
@@ -198,7 +203,7 @@ flowchart LR
   M55 --> M44
   M805 --> M47
   classDef other stroke-dasharray:4 3
-  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M118,M776,M801,M805,M847,M867,M871,M887,M894,M914 other
+  class M5,M24,M37,M41,M46,M48,M54,M55,M81,M85,M118,M776,M801,M805,M847,M867,M871,M914 other
 ```
 
 ### Part 2
@@ -233,6 +238,9 @@ flowchart LR
   M822["M822<br/>linux"]
   M823["M823"]
   M833["M833<br/>kmd"]
+  M887["M887<br/>kmd"]
+  M894["M894<br/>kmd"]
+  M896["M896"]
   M2 --> M1
   M35 --> M333
   M43 --> M40
@@ -243,11 +251,13 @@ flowchart LR
   M796 --> M11
   M815 --> M21
   M823 --> M822
+  M896 --> M887
   M833 --> M817
+  M894 --> M896
   M106 --> M79
   M117 --> M20
   M816 --> M52
   classDef other stroke-dasharray:4 3
-  class M40,M53,M106,M117,M333,M348,M816,M822,M833 other
+  class M40,M53,M106,M117,M333,M348,M816,M822,M833,M887,M894 other
 ```
 

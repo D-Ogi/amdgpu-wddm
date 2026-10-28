@@ -1,0 +1,32 @@
+# Collected 2026-10-28T05:05:23Z on unit A over SSH (read only): pcie-link-props.ps1
+BIOS American Megatrends Inc. P3.00 2021-12-09
+OS build 10.0.22631.0
+VEN_1022&DEV_13F6      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 6
+VEN_1022&DEV_13E0      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 0, function 0
+VEN_1022&DEV_13E2      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 1, function 0
+VEN_1022&DEV_13E2      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 8, function 0
+VEN_15B7&DEV_5025      Standard NVM Express Controller        cur=2/x2 max=3/x4 PCI bus 3, device 0, function 0
+VEN_1022&DEV_13F3      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 3
+VEN_1022&DEV_43A0      PCI Express Root Port                  cur=/x max=/x PCI bus 0, device 21, function 0
+VEN_1022&DEV_7807      Standard OpenHCD USB Host Controller   cur=/x max=/x PCI bus 0, device 18, function 0
+VEN_1022&DEV_7807      Standard OpenHCD USB Host Controller   cur=/x max=/x PCI bus 0, device 19, function 0
+VEN_1022&DEV_13F0      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 0
+VEN_10EC&DEV_8168      Realtek PCIe GbE Family Controller     cur=1/x1 max=1/x1 PCI bus 4, device 0, function 0
+VEN_1002&DEV_13FF      High Definition Audio Controller       cur=4/x16 max=4/x16 PCI bus 1, device 0, function 1
+VEN_1022&DEV_780E      PCI standard ISA bridge                cur=/x max=/x PCI bus 0, device 20, function 3
+VEN_1022&DEV_780B      SM Bus Controller                      cur=/x max=/x PCI bus 0, device 20, function 0
+VEN_1022&DEV_13E5      PCI Express Root Port                  cur=/x max=/x PCI bus 0, device 8, function 1
+VEN_1022&DEV_13F5      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 5
+VEN_1022&DEV_143E      PCI Encryption/Decryption Controller   cur=4/x16 max=4/x16 PCI bus 1, device 0, function 2
+VEN_1022&DEV_7809      Standard OpenHCD USB Host Controller   cur=/x max=/x PCI bus 0, device 20, function 5
+VEN_1022&DEV_13F2      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 2
+VEN_1022&DEV_13F7      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 7
+VEN_1022&DEV_7808      Standard Enhanced PCI to USB Host Controller cur=/x max=/x PCI bus 0, device 18, function 2
+VEN_1022&DEV_7808      Standard Enhanced PCI to USB Host Controller cur=/x max=/x PCI bus 0, device 19, function 2
+VEN_1022&DEV_780F      PCI-to-PCI Bridge                      cur=/x max=/x PCI bus 0, device 20, function 4
+VEN_1022&DEV_13F4      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 4
+VEN_1022&DEV_43A1      PCI Express Root Port                  cur=/x max=/x PCI bus 0, device 21, function 1
+VEN_1022&DEV_7801      Standard SATA AHCI Controller          cur=/x max=/x PCI bus 0, device 17, function 0
+VEN_1022&DEV_13F1      PCI standard host CPU bridge           cur=/x max=/x PCI bus 0, device 24, function 1
+VEN_1022&DEV_7814      AMD USB 3.0 eXtensible Host Controller - 1.0 (Microsoft) cur=/x max=/x PCI bus 0, device 16, function 0
+VEN_1002&DEV_13FE      BC-250 GPU (amdgpu-wddm)               cur=4/x16 max=4/x16 PCI bus 1, device 0, function 0
