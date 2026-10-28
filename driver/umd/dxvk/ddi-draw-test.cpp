@@ -574,7 +574,7 @@ int main() {
     rv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE3D; rv.Tex3D={2,3,4};
     if (convert_rtv(rv,1,1,0,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE3D ||
         rvout.Texture3D.FirstWSlice!=3 || rvout.Texture3D.WSize!=4) fail(__LINE__);
-    rv.ResourceDimension=D3D10DDIRESOURCE_BUFFER; rv.Buffer={7,11};
+    rv.ResourceDimension=D3D10DDIRESOURCE_BUFFER; rv.Buffer.FirstElement=7; rv.Buffer.NumElements=11;
     if (convert_rtv(rv,1,1,0,rvout)!=S_OK || rvout.Buffer.FirstElement!=7 || rvout.Buffer.NumElements!=11) fail(__LINE__);
     rv.ResourceDimension=D3D10DDIRESOURCE_TEXTURE1D; rv.Tex1D={3,0,1};
     if (convert_rtv(rv,1,1,0,rvout)!=S_OK || rvout.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE1D || rvout.Texture1D.MipSlice!=3) fail(__LINE__);
@@ -683,7 +683,7 @@ int main() {
     sv.Tex2D={2,1,4,3};
     if (convert_srv(sv,8,1,0,svout)!=S_OK || svout.Texture2DArray.MostDetailedMip!=2 || svout.Texture2DArray.MipLevels!=4) fail(__LINE__);
     if (convert_srv(sv,8,4,0,svout)!=E_INVALIDARG) fail(__LINE__);
-    sv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; sv.BufferEx={7,19,D3D11_DDI_BUFFEREX_SRV_FLAG_RAW};
+    sv.ResourceDimension=D3D11DDIRESOURCE_BUFFEREX; sv.BufferEx.FirstElement=7; sv.BufferEx.NumElements=19; sv.BufferEx.Flags=D3D11_DDI_BUFFEREX_SRV_FLAG_RAW;
     if (convert_srv(sv,1,1,0,svout)!=S_OK || svout.BufferEx.FirstElement!=7 || svout.BufferEx.NumElements!=19 || svout.BufferEx.Flags!=D3D11_BUFFEREX_SRV_FLAG_RAW) fail(__LINE__);
     sv.BufferEx.Flags=0x80000000;
     if (convert_srv(sv,1,1,0,svout)!=E_INVALIDARG) fail(__LINE__);
@@ -1272,7 +1272,7 @@ int main() {
         residencyMode=mode;
         for (auto &value:statuses) value=static_cast<DXGI_DDI_RESIDENCY>(99);
         if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_FAIL) fail(__LINE__);
-        for (auto value:statuses) if (value!=99) fail(__LINE__);
+        for (auto value:statuses) if (static_cast<int>(value)!=99) fail(__LINE__);
     }
     residencyMode=3;
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK) fail(__LINE__);

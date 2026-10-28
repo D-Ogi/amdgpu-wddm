@@ -16,8 +16,8 @@
 # ConvertTo-Bc250ClangFlags (x86-64-v3, tuned for Zen 2, SDK and WDK headers as system headers, the path prefix map
 # in place of /FC and /d1trimfile, no /GL and /LTCG), plus -Werror=cast-calling-convention: the router is loaded into
 # DWM and every D3D process, and its x86 entry points are __stdcall. -Compiler msvc builds with cl.exe and needs a
-# concrete -MsvcReason (compiler policy). The app-settings host test (test-umd-app-settings.ps1) stays on cl, as it
-# does for the shells.
+# concrete -MsvcReason (compiler policy). The app-settings host test (test-umd-app-settings.ps1) builds with
+# clang-cl by default, as it does for the shells.
 #
 # -Arch x86 builds the 32-bit router for UserModeDriverNameWow (BD-064). It links /MT, not /MD, so the 32-bit UMD
 # set needs no x86 Visual C++ redistributable; the shells, engines, ICD and CPU UMD are /MT already. The recipe
