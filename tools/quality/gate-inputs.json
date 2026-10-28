@@ -236,7 +236,7 @@
         "host"
       ]
     },
-    "flavour-controls": { "inputs": ["host"] },
+    "flavour-controls": { "inputs": ["host"], "timeout": 900 },
     "connector-replug": { "inputs": ["host"] },
     "lab-gate": { "inputs": ["host"] },
     "dcn-flip-retire-stall": { "inputs": ["host"] },

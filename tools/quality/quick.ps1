@@ -52,6 +52,12 @@ try {
  Check 'kmd-pe-tests' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_kmd_pe.py' }
  # One namespace spans all KMD headers, including optional diagnostic commands.
  Check 'escape-commands' { & python "$repo\tools\quality\escape_commands.py" --root $repo --out "$Out\escape-commands"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\quality" -p 'test_escape_commands.py' } }
+ # Its deadline is 900 s in gate-inputs.json, not the 180 s of the manifest: 57 host tests of Python that build and
+ # scan synthetic PE sets and packages. Measured on 2026-10-28: 146 s and 189 s run alone in one lane, 180.9 s and a FAIL at the
+ # old deadline in a KMD row of a package build, and 251.2 s, 252.2 s alone and 222.8 s under an added CPU and disk
+ # load on the development PC, which other lanes also used. At 180 s the load of the machine decided the result. A
+ # gate with no room over its own cost is a flaky gate. 900 s is 3.6x the worst recorded run, the rule of the
+ # register-generators and release-provenance gates.
  Check 'flavour-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\flavour-controls").FullName; & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_flavour_gate.py' }
  Check 'facts' { & python "$repo\tools\facts\gen_facts.py" --root $repo --check; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\facts" } }
  # Shares, denominators and modelled labels in the facts rows: a percentage must be the share of the
