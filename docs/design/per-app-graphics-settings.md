@@ -225,8 +225,11 @@ own defaults is taken back, for a comparison or for one program that a default h
 | `HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image>` | `Experiment`, `REG_SZ`, a comma-separated list of tokens |
 | `HKLM\SOFTWARE\amdgpu-wddm\D3D12` | the same value for every program |
 
-The environment variable `AMDGPU_WDDM_D3D12_EXPERIMENT` of the process comes before both. Each default has one
-token, `<name>-off`. A token the driver does not know is ignored.
+The program gets the profile's list and the machine-wide list together: a profile adds to the machine-wide
+switches and does not replace them. A profile of exactly `none` gives that program no switch, the machine-wide
+ones included. A value outside the syntax in either key gives no switch at all. In a lab build, the environment
+variable `AMDGPU_WDDM_D3D12_EXPERIMENT` of the process replaces both keys. Each default has one token,
+`<name>-off`. A token the driver does not know is ignored.
 `driver/umd/d3d12/ddi-trace.h` lists every default and its token, and the D3D12 shell's README says what each one
 does. Two of them a tester may need:
 

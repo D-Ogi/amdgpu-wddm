@@ -119,20 +119,26 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 // The positive names of the defaults (raytracing-tier, recording-bind, retire-handoff, deferred-replay) are
 // still accepted and do nothing, so that an older trial string or profile naming them still resolves.
 //
-// Where the list comes from, first source that exists wins:
-//   1. AMDGPU_WDDM_D3D12_EXPERIMENT in the process environment, "none" and empty included. A trial sets it
-//      so that it never inherits a profile. Lab builds only (BD-167): a release shell skips this source.
+// Where the list comes from:
+//   1. AMDGPU_WDDM_D3D12_EXPERIMENT in the process environment, "none" and empty included. When it exists, it is
+//      the whole list: a trial sets it so that it never inherits a profile or the machine-wide value. Lab builds
+//      only (BD-167): a release shell skips this source.
 //   2. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12\Applications\<image file name>, the
 //      application profile (M15.7), for an application-specific workaround shipped by the package.
 //   3. the REG_SZ value "Experiment" of HKLM\SOFTWARE\amdgpu-wddm\D3D12, which turns a default off for the
 //      whole machine without replacing the binary.
-// Registry key names compare without case; both values take the same syntax.
+// Without the variable, the list is the profile's list followed by the machine-wide list (combine_experiment), so a
+// profile adds to the machine-wide switches and does not replace them. A profile of exactly "none" is the one
+// exception: that game runs with no switch, the machine-wide ones included. A value of either source that is
+// outside the syntax or too long gives no switch at all, as before. Registry key names compare without case; both
+// values take the same syntax.
 enum class DdiExperimentSource : unsigned {
-    None,         // no variable, no profile for this image and no machine-wide value
-    Environment,  // AMDGPU_WDDM_D3D12_EXPERIMENT, "none" and empty included (lab builds only)
-    Profile,      // the image's application profile
-    Machine,      // the machine-wide value under HKLM\SOFTWARE\amdgpu-wddm\D3D12
-    Invalid,      // a value outside the syntax or too long: no switch
+    None,               // no variable, no profile for this image and no machine-wide value
+    Environment,        // AMDGPU_WDDM_D3D12_EXPERIMENT, "none" and empty included (lab builds only)
+    Profile,            // the image's application profile alone
+    Machine,            // the machine-wide value under HKLM\SOFTWARE\amdgpu-wddm\D3D12 alone
+    Invalid,            // a value outside the syntax or too long: no switch
+    ProfileAndMachine,  // the profile's list followed by the machine-wide list
 };
 struct DdiExperimentValue {
     char text[256]{};
@@ -186,6 +192,29 @@ inline int application_profile(char* text,size_t capacity) noexcept {
 inline int machine_experiment(char* text,size_t capacity) noexcept {
     return registry_experiment(L"SOFTWARE\\amdgpu-wddm\\D3D12",text,capacity);
 }
+// The list of the two registry sources. found is 1 (text holds the value), 0 (no value) or -1 (not a string of the
+// syntax that fits). A found value outside the syntax counts as -1. "none" of the machine-wide value adds nothing;
+// "none" of the profile ends the list empty. Each value is at most 255 characters; a joined list longer than the
+// buffer gives Invalid, never a cut list.
+inline DdiExperimentValue combine_experiment(int profile_found,const char* profile,int machine_found,const char* machine) noexcept {
+    DdiExperimentValue v{};
+    if(profile_found>0 && !experiment_syntax(profile))profile_found=-1;
+    if(machine_found>0 && !experiment_syntax(machine))machine_found=-1;
+    if(profile_found<0 || machine_found<0){v.source=DdiExperimentSource::Invalid;return v;}
+    if(profile_found>0 && !std::strcmp(profile,"none")){v.source=DdiExperimentSource::Profile;return v;}
+    const bool machine_adds=machine_found>0 && machine[0] && std::strcmp(machine,"none");
+    const size_t pl=profile_found>0?std::strlen(profile):0,ml=machine_adds?std::strlen(machine):0;
+    if(pl+ml+(pl && ml?1:0)+1>sizeof(v.text)){v.source=DdiExperimentSource::Invalid;return v;}
+    if(pl)std::memcpy(v.text,profile,pl);
+    if(pl && ml)v.text[pl]=',';
+    if(ml)std::memcpy(v.text+pl+(pl?1:0),machine,ml);
+    v.text[pl+ml+(pl && ml?1:0)]=0;
+    v.source=profile_found>0 && machine_found>0?DdiExperimentSource::ProfileAndMachine
+            :profile_found>0?DdiExperimentSource::Profile
+            :machine_found>0?DdiExperimentSource::Machine:DdiExperimentSource::None;
+    if(!std::strcmp(v.text,"none"))v.text[0]=0;
+    return v;
+}
 // BD-167: the environment variable is a source in a lab build only (AMDGPU_WDDM_LAB_FLAVOUR, build-umd-d3d12.ps1 -Lab). A
 // release shell has no lookup of it, so the name is not in the DLL, and the profile and the machine-wide value,
 // which only an administrator writes, are its sources.
@@ -199,10 +228,10 @@ inline DdiExperimentValue resolve_experiment() noexcept {
     } else
 #endif
     {
-        int found=application_profile(v.text,sizeof(v.text));
-        DdiExperimentSource source=DdiExperimentSource::Profile;
-        if(found==0){found=machine_experiment(v.text,sizeof(v.text));source=DdiExperimentSource::Machine;}
-        v.source=found>0?source:found<0?DdiExperimentSource::Invalid:DdiExperimentSource::None;
+        char profile[sizeof(v.text)]{},machine[sizeof(v.text)]{};
+        const int profile_found=application_profile(profile,sizeof(profile));
+        const int machine_found=machine_experiment(machine,sizeof(machine));
+        v=combine_experiment(profile_found,profile,machine_found,machine);
     }
     if(v.source==DdiExperimentSource::Invalid || !experiment_syntax(v.text)){
         v.text[0]=0;v.source=DdiExperimentSource::Invalid;
