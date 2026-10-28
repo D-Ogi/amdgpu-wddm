@@ -23,6 +23,19 @@ $ErrorActionPreference = 'Stop'
 $ps51 = Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
+# New-Item -ItemType HardLink reads [ ] in -Target as a wildcard, so a package path with brackets is not found.
+# CreateHardLinkW takes the path as it is.
+function New-HardLink([string]$Path, [string]$Existing) {
+    if (-not ('Bc250Test.HardLink' -as [type])) {
+        Add-Type -Namespace Bc250Test -Name HardLink -MemberDefinition @'
+[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern bool CreateHardLinkW(string lpFileName, string lpExistingFileName, IntPtr lpSecurityAttributes);
+'@
+    }
+    if (-not [Bc250Test.HardLink]::CreateHardLinkW($Path, $Existing, [IntPtr]::Zero)) {
+        throw [ComponentModel.Win32Exception]::new([Runtime.InteropServices.Marshal]::GetLastWin32Error(), "no hard link $Path to $Existing")
+    }
+}
 # BD-163: the folder a single-file setup unpacks itself into is read by name, not by a count. A count over the whole
 # of %ProgramData%\amdgpu-wddm moves with every file a run writes there, and once such a folder stays behind it reads
 # the same before and after, so the count went blind to the very thing it was meant to catch.
@@ -255,10 +268,10 @@ $broken = Join-Path $brokenTop 'files'
 foreach ($f in @($m.files)) {
     $dst = Join-Path $broken ($f.path -replace '/', '\')
     [void][IO.Directory]::CreateDirectory((Split-Path $dst))
-    [void](New-Item -ItemType HardLink -Path $dst -Target (Join-Path $Package ($f.path -replace '/', '\')))
+    New-HardLink $dst (Join-Path $Package ($f.path -replace '/', '\'))
 }
 $setupSrc = @((Join-Path $Package 'setup.exe'), (Join-Path $Package '..\setup.exe') | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | ForEach-Object { [IO.Path]::GetFullPath($_) })[0]
-if ($setupSrc) { [void](New-Item -ItemType HardLink -Path (Join-Path $brokenTop 'setup.exe') -Target $setupSrc) }
+if ($setupSrc) { New-HardLink (Join-Path $brokenTop 'setup.exe') $setupSrc }
 $tbl = Join-Path $broken 'installer\registry-defaults.json'
 Remove-Item -LiteralPath $tbl
 [IO.File]::WriteAllText($tbl, '{ "schema": 1, "defaults": ')
