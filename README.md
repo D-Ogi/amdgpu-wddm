@@ -81,6 +81,22 @@ python tools/regcalc/regcalc.py reverse 0x5C3C
 python -m unittest discover -s tools/regcalc
 ```
 
+## In numbers
+
+Lines of our own source on 2026-10-28 (main 27b4c04b and the fork branches of tester.33), with comments and blank
+lines. Imported code (amdgpu, DML, `third_party/`), generated tables and `evidence/` are not in the count.
+
+| Part | Code | Tests |
+|---|---|---|
+| Driver: kernel mode, user-mode shells, shim, contract | 147,000 | 132,000 |
+| Tools: installer, control app, release and quality gates, lab tools | 206,000 | 38,000 |
+| Compute (HIP runtime) | 21,000 | 15,000 |
+| Experiments and lab procedures | 67,000 | 3,000 |
+| Our changes in the forks: vkd3d-proton, Mesa, DXVK, dxil-spirv | 81,000 | 34,000 |
+| **Total** | **522,000** | **222,000** |
+
+The documentation adds about 140,000 lines. <sub>Kropla drąży skałę: dripping water hollows out the stone.</sub>
+
 ## Repositories
 
 | Repository | What it holds |
