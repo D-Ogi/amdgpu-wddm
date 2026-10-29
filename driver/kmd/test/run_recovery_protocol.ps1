@@ -121,8 +121,8 @@ typedef struct { void *SubmitAdev; LONG SubmitFailed; ULONG SubmitSeq;
                  void *ComputeAdev; LONG ComputeFailed; ULONG ComputeSeq; } BC250_GFX;
 /* BD-120: HealthPendingReset says whether the witness close is the one a recovered ResetEngine owns, and
  * HealthReopens counts the reopen attempts, so the refusal tail can be checked for making none. */
-typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault, HealthPendingReset; unsigned HealthReopens;
-                 unsigned Wakes, DrainWakes; } BC250_DEVICE;
+typedef struct { int GfxClosed; int Calls; void *Gfx; int HealthFault, HealthPendingReset, HealthRefused;
+                 unsigned HealthReopens; unsigned Wakes, DrainWakes; } BC250_DEVICE;
 typedef struct {
     int Stopping, Lock, SubmitTimer, ComputeTimer;
     BC250_HANG_NODE_STATE Recovery[3];
@@ -144,23 +144,30 @@ static void GfxAccessRelease(BC250_DEVICE *d) {
 static ULONG bc250_gfx_fence_read(void *adev, int slot) { (void)adev; (void)slot; return 123; }
 static LONG InterlockedExchange(LONG *p, LONG value) { LONG old = *p; *p = value; return old; }
 static void GuardLog(const char *format, ...) { (void)format; }
-static void StartHealthFault(BC250_DEVICE *d) { d->HealthFault = 1; d->HealthPendingReset = 0; d->Calls++; }
+static void StartHealthFault(BC250_DEVICE *d) {
+    d->HealthFault = 1; d->HealthPendingReset = 0; d->HealthRefused = 0; d->Calls++;
+}
 static void StartHealthClose(BC250_DEVICE *d) { StartHealthFault(d); }
-/* BD-120, start_health.c: the timeout latch's close carries the mark, and only a marked close is reopened.
+/* BD-120, start_health.c: the adapter reset's close carries the mark, and only a marked close is reopened.
+ * TDR recovery S1: it also adopts the close of a ResetEngine refusal before it (HealthRefused).
  * The policy itself is checked over the production source in driver/kmd/test/start_health_test.c. */
 static void StartHealthFaultPendingReset(BC250_DEVICE *d) {
-    if (!d->HealthFault) d->HealthPendingReset = 1;
-    d->HealthFault = 1; d->Calls++;
+    if (!d->HealthFault || d->HealthRefused) d->HealthPendingReset = 1;
+    d->HealthFault = 1; d->HealthRefused = 0; d->Calls++;
 }
 /* The three answers of start_health.c: STICKY 0, REOPENED 1, REARMED 2 (never closed). */
 static int StartHealthRecovered(BC250_DEVICE *d, ULONGLONG *epoch) {
     *epoch = 0; d->HealthReopens++;
     if (!d->HealthFault) return 2;
     if (!d->HealthPendingReset) return 0;
-    d->HealthFault = 0; d->HealthPendingReset = 0; return 1;
+    d->HealthFault = 0; d->HealthPendingReset = 0; d->HealthRefused = 0; return 1;
 }
-/* The refusal close of a node that is not node 0: it closes and leaves the mark where it is. */
-static void StartHealthCloseKeepPendingReset(BC250_DEVICE *d) { d->HealthFault = 1; d->Calls++; }
+/* The keep-mark refusal close: it closes and leaves the mark where it is. Over an open witness it records the
+ * refusal, for the adapter reset that follows. */
+static void StartHealthCloseKeepPendingReset(BC250_DEVICE *d) {
+    if (!d->HealthFault) d->HealthRefused = 1;
+    d->HealthFault = 1; d->Calls++;
+}
 static void GfxRetireSignal(BC250_DEVICE *d) {
     d->Wakes++;
     d->GfxClosed = d->Gfx && ((BC250_GFX *)d->Gfx)->SubmitFailed;

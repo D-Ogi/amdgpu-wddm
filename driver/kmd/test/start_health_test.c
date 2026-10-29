@@ -264,6 +264,71 @@ int main(void)
     healthy(&d);StartHealthCloseKeepPendingReset(&d);
     CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
     r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    // TDR recovery S1, the tester.34 lab sequence S1-C, in the order wddm.c makes the calls: the OS TDR finds
+    // the witness open (BD-152), ResetEngine refuses node 1 twice (the keep-mark close), ResetFromTimeout
+    // closes for its duration (WddmAdapterReset step 1) and proves every engine idle, and RestartFromTimeout
+    // reopens node 0 (WddmAdapterRestart). The lab saw "stays closed after the adapter reset (epoch 14)".
+    healthy(&d);epoch=d.StartHealth.Epoch;
+    StartHealthCloseKeepPendingReset(&d);StartHealthCloseKeepPendingReset(&d);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL && r.Epoch>epoch);
+    StartHealthFaultPendingReset(&d);CHECK(d.StartHealth.PendingReset);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED && witness>epoch);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_REQUIRED && r.Epoch==witness && !r.Completed);
+    // The S1-E sequence after it: an idle node-0 engine reset that recovers (verdict 7) finds the witness open,
+    // so only the interval ends. On the lab it found the S1-C close still standing and said STICKY.
+    epoch=d.StartHealth.Epoch;
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REARMED && witness>epoch);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_REQUIRED);
+    // The same with a node-0 refusal (AdapterRecoveryMode on), which takes the same keep-mark close.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
+    // A node-0 engine reset that recovers between the node-1 refusal and the adapter reset reopens nothing: the
+    // node-1 refusal is no evidence about node 0. The adapter reset that follows can still adopt the close.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_REOPENED);
+    // Negative control: the adapter reset is refused (busy). ResetFromTimeout fails with the sticky close, and so
+    // does RestartFromTimeout outside a window. Any later reset finds the witness sticky.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    StartHealthClose(&d);StartHealthClose(&d);
+    CHECK(!d.StartHealth.PendingReset && !d.StartHealth.RefusedReset);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    // Negative control: a real fault between the refusal and the adapter reset, and one between the adapter
+    // reset's close and the restart. Both stay sticky.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);StartHealthFault(&d);StartHealthFaultPendingReset(&d);
+    CHECK(!d.StartHealth.PendingReset && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);StartHealthFault(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    // Negative control: a real fault before the refusal. The refusal records nothing over a closed witness.
+    healthy(&d);StartHealthFault(&d);StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(!d.StartHealth.RefusedReset && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    // Negative control: a startup engine failure stays sticky through a refusal and an adapter reset.
+    StartHealthBegin(&d,TRUE);StartHealthReady(&d,FALSE);
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    // A stop after the refusal takes the record away, like the mark.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);StartHealthStop(&d,&r);StartHealthFaultPendingReset(&d);
+    CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    // A new start and a resume take away a refusal record of the interval before them. The start below has an
+    // engine failure, so its own refusal records nothing; only a record left over from before the start could
+    // make the S1 close take a mark, and RestartFromTimeout would then reopen a failed start.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);CHECK(d.StartHealth.RefusedReset);
+    StartHealthBegin(&d,TRUE);StartHealthReady(&d,FALSE);
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(!d.StartHealth.PendingReset && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);CHECK(d.StartHealth.RefusedReset);
+    StartHealthResumeReady(&d,TRUE);StartHealthReady(&d,FALSE);
+    StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(!d.StartHealth.PendingReset && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
     // The other ordering of the hang itself: the OS TDR reaches ResetEngine before our fence timeout latches
     // (Bc250SubmitBudgetMs is never shorter than TdrDelay), so nothing closed the witness. There is no close to
     // undo, but the interval it reports contained a GPU hang, so that interval ends too: a new epoch, no

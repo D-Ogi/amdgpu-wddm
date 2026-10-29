@@ -627,6 +627,13 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='start-health-refusal-drops-other-node-mark';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RefusalDropsOtherNodeMark');Fails=$true}
   @{n='start-health-rearm-skips-open-witness';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RearmSkipsOpenWitness');Fails=$true}
   @{n='start-health-confirm-hung-request';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ConfirmHungRequest');Fails=$true}
+  # TDR recovery S1: the adapter reset adopts the close of a ResetEngine refusal before it, and no fault.
+  @{n='start-health-adapter-reset-ignores-refusal';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-AdapterResetIgnoresRefusal');Fails=$true}
+  @{n='start-health-fault-keeps-refusal';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-FaultKeepsRefusal');Fails=$true}
+  @{n='start-health-begin-keeps-refusal';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-BeginKeepsRefusal');Fails=$true}
+  @{n='start-health-resume-keeps-refusal';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-ResumeKeepsRefusal');Fails=$true}
+  @{n='start-health-refusal-over-failed-engines';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RefusalOverFailedEngines');Fails=$true}
+  @{n='start-health-refusal-over-closed-witness';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-RefusalOverClosedWitness');Fails=$true}
   # QUIET (0.7.216.104): an idle GPU desktop confirms with nothing owed, and a flip still owed never confirms.
   @{n='start-health-quiet-ignores-owed-flip';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-QuietIgnoresOwedFlip');Fails=$true}
   @{n='start-health-no-quiet';s='driver\kmd\test\run_start_health.ps1';a=@('-Root',$Workspace,'-NoQuiet');Fails=$true}
