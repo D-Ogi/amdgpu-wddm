@@ -44,7 +44,8 @@ enum link_plan_check {
     LINK_PLAN_OPTC,             // the OPTC admission gate (bc250_optc.h names the term)
     LINK_PLAN_SCALER,           // the identity transform was refused
     LINK_PLAN_LINK_RATE,        // BD-139: no DP rate under this sink's ceiling carries it (a faster training failed)
-    LINK_PLAN_DTO               // BD-139: above the DP DTO reference, after a measured refresh there disagreed
+    LINK_PLAN_DTO,              // BD-139: above the DP DTO reference, after a measured refresh there disagreed
+    LINK_PLAN_DTO_WINDOW        // GitHub #45 review: above the DP DTO reference at a refresh no measurement checks
 };
 // Which call of the plan refused. The log line spells it out, so the three sites are told apart in the ring.
 #define LINK_SITE_TARGET    0u      // a target of the monitor's own list
@@ -425,6 +426,14 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
     }
     status=Bc250Dcn201ReadClocks(&c->Io,c->CrystalKhz,&m->Clocks);
     if(!NT_SUCCESS(status)) {Refusal->Check=LINK_PLAN_CLOCKS;return status;}
+    // GitHub #45 review: above DPREFCLK the commit measures the refresh (MeasureDto), and that measurement checks
+    // no refresh above BC250_REFRESH_MEASURE_MAX_HZ. Such a mode is refused here, before any hardware step, so a
+    // measurement that cannot pass never sets the dto-ref ceiling for the other modes of this sink.
+    if(protocol==BC250_LINK_DP && t->PixelClockKhz>m->Clocks.DpRefClockKhz &&
+       (ULONGLONG)t->PixelClockKhz*1000u>(ULONGLONG)(t->HActive+t->HBlank)*(t->VActive+t->VBlank)*
+       BC250_REFRESH_MEASURE_MAX_HZ) {
+        Refusal->Check=LINK_PLAN_DTO_WINDOW;return STATUS_NOT_SUPPORTED;
+    }
     input.HActive=t->HActive;input.HTotal=t->HActive+t->HBlank;
     input.HFrontPorch=t->HSyncOffset;input.HSyncWidth=t->HSyncWidth;
     input.VActive=t->VActive;input.VTotal=t->VActive+t->VBlank;
@@ -459,7 +468,7 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
 static void LogPlanRefusal(ULONG Site,const BC250_TARGET_TIMING* t,NTSTATUS Status,const LINK_PLAN_REFUSAL* r)
 {
     static const char* const planChecks[]={"none","timing","clock-floor","clock-sink","clock-ceiling","extent",
-        "pitch","clocks","xstate","dml-call","dml-invalid","optc","scaler","link-rate","dto-ref"};
+        "pitch","clocks","xstate","dml-call","dml-invalid","optc","scaler","link-rate","dto-ref","dto-window"};
     const char* check=r->Check==LINK_PLAN_OPTC?Bc250OptcReasonName((int)r->Optc):
         (r->Check<RTL_NUMBER_OF(planChecks)?planChecks[r->Check]:"invalid");
     switch(Site) {
@@ -887,7 +896,7 @@ static NTSTATUS MeasureDto(CONNECTOR_LINK* c,const LINK_MODE* m)
     // generation), that try still counts: a new discovery clears the ceiling, and a pipe that showed no frame
     // must not be retried on every commit.
     while(tries<3u && !NT_SUCCESS(status) && LinkOwned(c)) {
-        ++tries;status=DisplayMeasureRefresh(c->Device,ht,vt,&hz,&milli);
+        ++tries;status=DisplayMeasureRefresh(c->Device,ht,vt,t->PixelClockKhz,&hz,&milli);
     }
     if(!tries)return STATUS_RETRY;
     if(NT_SUCCESS(status)) {

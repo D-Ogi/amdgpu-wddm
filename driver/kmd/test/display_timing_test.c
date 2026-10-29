@@ -136,6 +136,7 @@ static unsigned checks,failures,reads,tear,readFailure;static ULONG otg1Value;
 static ULONG routes[TmdsRouteCount],frameBase;
 static ULONGLONG qpc,period=200000;
 static int stopped,unstable,routeTear,modeTear,skipEdge,frozenQpc;
+static ULONGLONG stallExtra;   /* QPC ticks a poll takes beyond its 10 us stall */
 static unsigned polls;
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static NTSTATUS ReadValue(ULONG offset,ULONG* value)
@@ -178,12 +179,12 @@ static NTSTATUS MmioRead(const BC250_DEVICE* d,ULONG offset,ULONG* value)
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER* frequency)
 {LARGE_INTEGER result;if(frequency)frequency->QuadPart=12000000;result.QuadPart=(long long)qpc;return result;}
 static void KeStallExecutionProcessor(ULONG us)
-{polls++;if(!frozenQpc)qpc+=(ULONGLONG)us*12;}
+{polls++;if(!frozenQpc)qpc+=(ULONGLONG)us*12+stallExtra;}
 static void Mode(BC250_DEVICE* d,ULONG w,ULONG h,ULONG ht,ULONG vt,ULONG pixel)
 {
     memset(values,0,sizeof(values));reads=tear=readFailure=0;
     qpc=0;polls=0;period=200000;frameBase=0;
-    stopped=unstable=routeTear=modeTear=skipEdge=frozenQpc=0;
+    stopped=unstable=routeTear=modeTear=skipEdge=frozenQpc=0;stallExtra=0;
     memset(routes,0,sizeof(routes));d->InheritedTmds=FALSE;
     d->Mmio=d;d->FullWddm=1;d->Post.Width=w;d->Post.Height=h;
     d->Post.Pitch=w*4;PipeFixture(w,h,w,h);
@@ -437,6 +438,47 @@ int main(int argc,char** argv)
         power.Flags.PathPowerTransition=1;power.Flags.PathPoweredOff=1;d.CommitPowerOnly=16;before=guardLines;
         CHECK(CommitVidPnCore(&d,&power)==STATUS_SUCCESS && d.CommitPowerOnly==17 && guardLines==before);
         testConnectorEnabled=FALSE;testSinkConnected=FALSE;testConnectorCommitStatus=STATUS_SUCCESS;
+    }
+    {
+        /* GitHub #45 review: the measurement of a DP mode above DPREFCLK has its own window, 23 to 500 Hz, and
+         * halves of the expected refresh over 60 Hz frames (at least 4). The fake QPC runs at 12 MHz; period is in
+         * its ticks. */
+        ULONG pixel,milli;ULONGLONG want,diff;
+        static const struct {ULONG w,h,ht,vt,khz;ULONGLONG period;} fast[3]={
+            {1920,1080,2000,1111,799920,33333},     /* 1080p360 */
+            {2560,1440,2640,1525,966240,50000},     /* 1440p240 */
+            {2560,1440,2640,1481,645100,72727}};    /* 1440p165 */
+        unsigned i;
+        for(i=0;i<3;++i) {
+            Mode(&d,fast[i].w,fast[i].h,fast[i].ht,fast[i].vt,0);period=fast[i].period;
+            CHECK(DisplayMeasureFast(&d,fast[i].ht,fast[i].vt,fast[i].khz,&pixel,&milli)==STATUS_SUCCESS);
+            want=(ULONGLONG)fast[i].khz*1000u;diff=pixel>want?pixel-want:want-pixel;
+            CHECK(diff*1000u<=want);    /* within 0.1%: each edge is known to one poll */
+            want=12000000000ull/fast[i].period;diff=milli>want?milli-want:want-milli;CHECK(diff*1000u<=want);
+        }
+        /* The TMDS start keeps its 240 Hz: 1080p360 is outside its window. */
+        Mode(&d,1920,1080,2000,1111,0);period=33333;
+        CHECK(DisplayMeasureTmds(&d,2000,1111,&pixel,&milli)==STATUS_NOT_SUPPORTED);
+        /* 500 Hz with a 13 us poll: nine frames per half meet the 0.25% bound, the four of the TMDS start do not. */
+        Mode(&d,1280,720,1360,750,0);period=24000;stallExtra=36;
+        CHECK(DisplayMeasureFast(&d,1360,750,510000,&pixel,&milli)==STATUS_SUCCESS);
+        CHECK(pixel>=509490000 && pixel<=510510000 && milli>=499500 && milli<=500500);
+        Mode(&d,1280,720,1360,750,0);period=24000;stallExtra=36;
+        CHECK(DisplayMeasureFrames(&d,1360,750,4,23,500,&pixel,&milli)==STATUS_DEVICE_DATA_ERROR);
+        /* Above 500 Hz: an asked clock is refused without a poll, a measured refresh fails the window. */
+        Mode(&d,1280,720,1360,750,0);period=20000;
+        CHECK(DisplayMeasureFast(&d,1360,750,612000,&pixel,&milli)==STATUS_NOT_SUPPORTED && !polls && !pixel);
+        Mode(&d,1920,1080,2000,1111,0);period=20000;
+        CHECK(DisplayMeasureFast(&d,2000,1111,799920,&pixel,&milli)==STATUS_NOT_SUPPORTED && !pixel);
+        /* The checks of the TMDS start stay: a skipped edge and a stopped counter fail closed. */
+        Mode(&d,1920,1080,2000,1111,0);period=33333;skipEdge=1;
+        CHECK(DisplayMeasureFast(&d,2000,1111,799920,&pixel,&milli)==STATUS_DEVICE_DATA_ERROR);
+        Mode(&d,1920,1080,2000,1111,0);stopped=1;
+        CHECK(DisplayMeasureFast(&d,2000,1111,799920,&pixel,&milli)==STATUS_DEVICE_DATA_ERROR && polls==50000);
+        Mode(&d,1920,1080,2000,1111,0);
+        CHECK(DisplayMeasureFast(&d,0,1111,799920,&pixel,&milli)==STATUS_INVALID_PARAMETER && !polls);
+        CHECK(DisplayMeasureFrames(&d,2000,1111,BC250_REFRESH_MEASURE_MAX_HALF+1,23,500,&pixel,&milli)==
+            STATUS_INVALID_PARAMETER && !polls);
     }
     printf("inherited timing: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

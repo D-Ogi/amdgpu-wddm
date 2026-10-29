@@ -142,6 +142,23 @@ int main(void)
         r=admit(&philips[0],hbr2,0);CHECK(admitted(&r));
         r=admit(&philips[1],hbr2,0);CHECK(admitted(&r));
     }
+    // GitHub #45 review: the high-refresh timings of the DTO measurement window (connector_link_test.c dto_window)
+    // through the real plan on HBR3 x4 caps: 1080p360 (total 2000x1111) and 1440p240 (2640x1525) at HBR3, 1440p165
+    // at HBR2. DISPCLK stays under the 1.2 GHz of dcn201_resource.c.
+    {
+        static const BC250_TARGET_TIMING fast[3]={
+            {799920,1920,80,8,32,1080,31,3,8,0x1a},{966240,2560,80,8,32,1440,85,3,8,0x1a},
+            {645100,2560,80,8,32,1440,41,3,8,0x1a}};
+        static const unsigned rate[3]={DP_LINK_BW_8_1,DP_LINK_BW_8_1,DP_LINK_BW_5_4};
+        unsigned char hbr3[16];
+        memcpy(hbr3,hbr2,sizeof(hbr3));hbr3[DP_MAX_LINK_RATE]=DP_LINK_BW_8_1;hbr3[DP_DPCD_REV]=0x14;
+        printf("High refresh above DPREFCLK (model HBR3 x4 caps)\n");
+        for(i=0;i<3;++i) {
+            r=admit(&fast[i],hbr3,1);
+            CHECK(r.Rate==rate[i] && admitted(&r));
+            CHECK(r.Plan.DispClockKhz>=fast[i].PixelClockKhz && r.Plan.DispClockKhz<=1200000);
+        }
+    }
     free(workspace);
     printf("mode_admit_test: %u checks, %u failures\n",checks,failures);
     return failures?1:0;

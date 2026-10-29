@@ -340,11 +340,12 @@ int Bc250LinkAtomDpSymbolClock(unsigned khz) { return khz==162000 || khz==270000
 /* BD-139: the eight-frame OTG measurement (display_tmds.h, display_timing_test.c runs the real one). The fixture
  * answers measure_hz, or fails measure_fail times first. */
 static unsigned measure_calls,measure_fail,measure_expire;
-static ULONG measure_hz;
-static NTSTATUS DisplayMeasureRefresh(const BC250_DEVICE* d,ULONG ht,ULONG vt,ULONG* hz,ULONG* milli)
+static ULONG measure_hz,measure_pixel_khz;
+static NTSTATUS DisplayMeasureRefresh(const BC250_DEVICE* d,ULONG ht,ULONG vt,ULONG pixel_khz,ULONG* hz,ULONG* milli)
 {
     /* Before the mode is visible: the OTG runs and the plane is still blank. */
-    CHECK(d==&device && crtc_enabled && plane_blank && ht && vt && primary_locks && !spin_locks);++measure_calls;
+    CHECK(d==&device && crtc_enabled && plane_blank && ht && vt && pixel_khz && primary_locks && !spin_locks);
+    ++measure_calls;measure_pixel_khz=pixel_khz;
     *hz=*milli=0;
     /* A try that used the rest of the transaction's deadline without seeing a frame. */
     if(measure_expire) {measure_expire=0;clock_us=link.Deadline+1;return STATUS_DEVICE_DATA_ERROR;}
@@ -1531,6 +1532,40 @@ static void dto_check(void)
     CHECK(link.Active && Bc250TargetTimingEqual(&link.Current.Timing,&previous));
     CHECK(logged("measured 0 Hz 0 mHz tries 1 status C000009C"));balanced();
 }
+/* GitHub #45 review: high refresh above the DTO reference on an HBR3 x4 sink. 1080p360, 1440p240 and 1440p165 are
+ * measured, each with the clock it asked for (display_timing_test.c runs the real measurement at these rates).
+ * 720p600 is above what the measurement checks: the plan refuses it before any hardware step, it is not measured,
+ * and it sets no dto-ref ceiling, so the other modes above the reference still set. */
+static const BC250_TARGET_TIMING high_refresh[4]={
+    {799920,1920,80,8,32,1080,31,3,8,0x1a},     /* 1080p360, total 2000x1111 */
+    {966240,2560,80,8,32,1440,85,3,8,0x1a},     /* 1440p240, total 2640x1525 */
+    {645100,2560,80,8,32,1440,41,3,8,0x1a},     /* 1440p165, total 2640x1481 (hpx32[3]) */
+    {612000,1280,80,48,32,720,30,3,5,0x1a}};    /* 720p600, total 1360x750 */
+static void dto_window(void)
+{
+    BC250_TARGET_TIMING previous;LINK_MODE mode;LINK_PLAN_REFUSAL refusal;unsigned i;
+    static const ULONG hz[3]={799920000,966240000,645100000};
+    for(i=0;i<3;++i) {
+        hbr2_sink(BC250_SINK_DP);snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=0x1e;snapshot.Sink.MaxPixelClockKhz=1080000;
+        CHECK(commit()==STATUS_SUCCESS);measure_hz=hz[i];measure_pixel_khz=0;
+        CHECK(commit_timing(&high_refresh[i])==STATUS_SUCCESS && measure_calls==1);
+        CHECK(measure_pixel_khz==high_refresh[i].PixelClockKhz && !link.PixelLimitKhz);
+        CHECK(link.Current.Rate==(i==2?20u:30u));balanced();
+    }
+    hbr2_sink(BC250_SINK_DP);snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=0x1e;snapshot.Sink.MaxPixelClockKhz=1080000;
+    device.RuntimeFramebufferLength=10240ull*1440u;
+    Begin(&link,snapshot.Generation,FALSE);
+    CHECK(Plan(&link,&snapshot.Sink,&high_refresh[3],&mode,&refusal)==STATUS_NOT_SUPPORTED);
+    CHECK(refusal.Check==LINK_PLAN_DTO_WINDOW);
+    End(&link);balanced();
+    CHECK(commit()==STATUS_SUCCESS);previous=link.Current.Timing;
+    memset(log_ring,0,sizeof(log_ring));
+    CHECK(commit_timing(&high_refresh[3])==STATUS_NOT_SUPPORTED && !measure_calls && !link.PixelLimitKhz);
+    CHECK(link.Active && Bc250TargetTimingEqual(&link.Current.Timing,&previous));
+    CHECK(logged("connector-link: commit 1280x720 612000 kHz refused C00000BB check dto-window"));balanced();
+    measure_hz=966240000;
+    CHECK(commit_timing(&high_refresh[1])==STATUS_SUCCESS && measure_calls==1 && link.Current.Rate==30);balanced();
+}
 static void inherited_cold(unsigned kind,unsigned rate,const BC250_TARGET_TIMING* listed)
 {
     hbr2_sink(kind);device.ConnectorLink=NULL;inherited_rate=rate;inherited_timing=hpx32[0];
@@ -1735,7 +1770,7 @@ int main(void)
     detach_before_apply();
     keep_breadcrumbs();
     release_handoff();
-    hbr2_admission();hbr2_commit();hbr2_training_fallback();dto_check();inherited_hbr2();
+    hbr2_admission();hbr2_commit();hbr2_training_fallback();dto_check();dto_window();inherited_hbr2();
     philips_hbr2();
     printf("connector transaction: %u checks, %u failures (software boundary model)\n",checks,failures);
     return failures?1:0;

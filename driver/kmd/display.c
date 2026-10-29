@@ -972,11 +972,12 @@ static BOOLEAN ScalingPinned(D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling)
     return Scaling != D3DKMDT_VPPS_UNPINNED && Scaling != D3DKMDT_VPPS_UNINITIALIZED && Scaling != D3DKMDT_VPPS_NOTSPECIFIED;
 }
 
-// BD-139: the same eight-frame OTG0 measurement as the inherited TMDS start, for a pipe the connector just enabled.
-NTSTATUS DisplayMeasureRefresh(_In_ const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal,
+// BD-139: the OTG0 measurement of the inherited TMDS start, for a pipe the connector just enabled. GitHub #45 review:
+// with its own window up to BC250_REFRESH_MEASURE_MAX_HZ, not the 240 Hz of the TMDS start.
+NTSTATUS DisplayMeasureRefresh(_In_ const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal, ULONG PixelKhz,
                                _Out_ ULONG* PixelHz, _Out_ ULONG* RefreshMilliHz)
 {
-    return DisplayMeasureTmds(Device, HTotal, VTotal, PixelHz, RefreshMilliHz);
+    return DisplayMeasureFast(Device, HTotal, VTotal, PixelKhz, PixelHz, RefreshMilliHz);
 }
 
 NTSTATUS DisplayPrepareInheritedTiming(_Inout_ BC250_DEVICE* Device)
