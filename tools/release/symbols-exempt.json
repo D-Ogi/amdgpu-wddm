@@ -6,6 +6,10 @@
       "reason": "Microsoft's Visual C++ redistributable, downloaded and carried unchanged. Its own debug directory names burn.pdb, which Microsoft does not publish with the installer."
     },
     {
+      "path": "payload/redist/VulkanRT-X64-1.4.363.0-Installer.exe",
+      "reason": "LunarG's Vulkan Runtime installer, downloaded and carried unchanged. It has no debug directory, and LunarG publishes no symbol file for it."
+    },
+    {
       "path": "payload/tools/amdgpu-state-installer.exe",
       "reason": "The registered state-installer build emits no CodeView debug information, so there is no matching PDB for these bytes. Adding debug information to driver/state/installer-build.ps1 remains an open diagnostics task."
     },

@@ -4261,6 +4261,7 @@
    "mft/amdgpu_wddm_mft_h264.dll",
    "opengl/amdgpu_wddm_gl.dll",
    "redist/vc_redist.x64.exe",
+   "redist/vulkanrt-x64-1.4.363.0-installer.exe",
    "setup.exe",
    "tools/amdgpu-state-installer.exe",
    "tools/amdgpu_wddm_d3d12caps.exe",
