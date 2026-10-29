@@ -54,6 +54,8 @@ static long operation(BC250_DISP_IO* io,unsigned op)
     case 2:return Bc250DpPhyPattern(io,2,1);
     case 3:return Bc250DpPhyPattern(io,0,1);
     case 4:return Bc250DpPhyPattern(io,0,0);
+    case 5:return Bc250DpPhyPattern(io,3,1);
+    case 6:return Bc250DpPhyPattern(io,4,1);
     default:return Bc250DpPhyDisableTraining(io);
     }
 }
@@ -67,7 +69,7 @@ int main(void)
         CHECK(field(&m,REG(DP_CONFIG),MASK(DP_CONFIG,DP_UDI_LANES))==lanes-1);
         CHECK(field(&m,REG(DP_DPHY_SCRAM_CNTL),MASK(DP_DPHY_SCRAM_CNTL,DPHY_SCRAMBLER_ADVANCE))==1);
         CHECK(field(&m,REG(DP_LINK_FRAMING_CNTL),MASK(DP_LINK_FRAMING_CNTL,DP_VID_ENHANCED_FRAME_MODE))==enhanced);
-        for(pattern=1;pattern<=2;++pattern) {
+        for(pattern=1;pattern<=4;++pattern) {
             CHECK(Bc250DpPhyPattern(&io,pattern,(int)enhanced)==0);
             CHECK(field(&m,REG(DP_DPHY_TRAINING_PATTERN_SEL),MASK(DP_DPHY_TRAINING_PATTERN_SEL,DPHY_TRAINING_PATTERN_SEL))==pattern-1);
             CHECK(field(&m,REG(DP_LINK_CNTL),MASK(DP_LINK_CNTL,DP_LINK_TRAINING_COMPLETE))==0);
@@ -84,7 +86,7 @@ int main(void)
         CHECK(field(&m,REG(DP_LINK_CNTL),MASK(DP_LINK_CNTL,DP_LINK_TRAINING_COMPLETE))==0);
     }
     // Every access failure aborts all later writes: never advertise trained after a failed control access.
-    for(op=0;op<6;++op) {
+    for(op=0;op<8;++op) {
         reset(&m);CHECK(operation(&io,op)==0);accesses=m.accesses;
         for(fail=1;fail<=accesses;++fail) {
             reset(&m);m.failAt=fail;
@@ -94,7 +96,7 @@ int main(void)
     }
     reset(&m);
     CHECK(Bc250DpPhyConfigure(&io,3,1)==BC250_DISP_STATUS_INVALID);
-    CHECK(Bc250DpPhyPattern(&io,3,1)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250DpPhyPattern(&io,5,1)==BC250_DISP_STATUS_INVALID);
     CHECK(Bc250DpPhyConfigure(&io,4,2)==BC250_DISP_STATUS_INVALID);
     CHECK(m.accesses==0 && io.Refusals==0);
     io.Write=NULL;

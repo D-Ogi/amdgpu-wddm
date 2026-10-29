@@ -306,6 +306,12 @@ static void TestTargetTimings(void)
     CHECK(!Bc250TargetTimingValid(&malformed));
     malformed=info.Targets[0];malformed.Flags|=0x80;
     CHECK(!Bc250TargetTimingValid(&malformed));
+    // BD-139: a target may be as fast as HBR3 x4 carries at RGB8, so 2560x1440 at 144 and 165 Hz is a valid timing;
+    // the link and the display plan decide whether a sink gets it.
+    malformed=info.Targets[0];malformed.PixelClockKhz=645100;
+    CHECK(Bc250TargetTimingValid(&malformed));
+    malformed.PixelClockKhz=BC250_TARGET_MAX_PIXEL_KHZ;CHECK(Bc250TargetTimingValid(&malformed));
+    malformed.PixelClockKhz=BC250_TARGET_MAX_PIXEL_KHZ+1;CHECK(!Bc250TargetTimingValid(&malformed));
     info.Reason=BC250_EDID_CHECKSUM;
     CHECK(Bc250EdidTargetList(&info,300000,1920,1200,targets,48)==0);
 }

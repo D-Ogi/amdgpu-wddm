@@ -19,14 +19,18 @@ def main():
     p.add_argument("--wrong-recovery-target", action="store_true")
     p.add_argument("--omit-surface-adopt", action="store_true")
     p.add_argument("--omit-detached-mode", action="store_true")
+    p.add_argument("--drop-optc-term", action="store_true")
+    p.add_argument("--omit-rate-limit", action="store_true")
+    p.add_argument("--omit-dto-check", action="store_true")
+    p.add_argument("--omit-inherited-target", action="store_true")
     args = p.parse_args()
     source = Path(__file__).resolve().parents[1] / "connector_link.c"
     data = source.read_text(encoding="utf-8")
     types = data[data.index("#define LINK_TAG"):data.index("static ULONGLONG LinkNow")]
     names = (
-        "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor Plan CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext ConnectorLinkPrepare "
+        "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor LinkCaps LowerRate LinkSettingsValid Plan LogPlanRefusal CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext InheritedTarget ConnectorLinkPrepare "
         "TrainRead TrainWrite TrainEnable TrainPattern TrainDrive TrainDisable "
-        "DisableOwned ConnectorLinkDisable Apply ConnectorLinkCommit "
+        "DisableOwned ConnectorLinkDisable TrainingResult MeasureDto Apply ConnectorLinkCommit "
         "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume "
         "HandoffTarget ConnectorLinkHandoff ConnectorLinkRelease"
     ).split()
@@ -60,6 +64,31 @@ def main():
             needle = "if(c->Previous.Valid) {c->Detached=c->Previous;c->DetachedGeneration=Snapshot->Generation;}"
             if body.count(needle) != 1:
                 raise SystemExit("Detached mode mutation anchor changed")
+            body = body.replace(needle, "(void)0;")
+        # BD-177: a refusal line that keeps the check but loses the term of the OPTC gate is the mutant that
+        # proves the term is read from the gate and not invented by the log.
+        if args.drop_optc_term and name == "Plan":
+            needle = "Refusal->Check=LINK_PLAN_OPTC;Refusal->Optc=(ULONG)result;"
+            if body.count(needle) != 1:
+                raise SystemExit("OPTC term mutation anchor changed")
+            body = body.replace(needle, "Refusal->Check=LINK_PLAN_OPTC;")
+        # BD-139: the three guards of the faster links. Without the ceiling a failed HBR2 training is retried on
+        # every commit, without the measurement a DTO above its modulo goes unseen, and without the inherited target
+        # the firmware timing of BD-122 leaves the mode list.
+        if args.omit_rate_limit and name == "TrainingResult":
+            needle = "c->RateLimit=lower;"
+            if body.count(needle) != 1:
+                raise SystemExit("Rate limit mutation anchor changed")
+            body = body.replace(needle, "(void)lower;")
+        if args.omit_dto_check and name == "Apply":
+            needle = "LINK_CALL(c,BC250_LINK_OTG_ENABLE,MeasureDto(c,m));"
+            if body.count(needle) != 1:
+                raise SystemExit("DTO check mutation anchor changed")
+            body = body.replace(needle, "(void)0;")
+        if args.omit_inherited_target and name == "ConnectorLinkPrepare":
+            needle = "InheritedTarget(Sink,&inherited);"
+            if body.count(needle) != 1:
+                raise SystemExit("Inherited target mutation anchor changed")
             body = body.replace(needle, "(void)0;")
         if args.write_requested_value and name == "AtomWrite":
             needle = "WRITE_REGISTER_ULONG(c->Device->Mmio+Dword,effective)"

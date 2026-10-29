@@ -12,6 +12,12 @@ typedef struct BC250_SINK {
     long Status, CleanupStatus, AuxStatus, DdcStatus;
     unsigned long EdidLength, MaxPixelClockKhz, TargetCount;
     unsigned char Dpcd[16], Edid[BC250_EDID_MAX_BYTES];
+    // GitHub #45 review: DPCD 0x080-0x08F, read for a branch device on DPCD 1.1 and later (DownstreamRead), its
+    // first port's enum BC250_DP_DOWNSTREAM and that converter's pixel-clock limit (0 for none). MaxPixelClockKhz
+    // is under that limit.
+    unsigned char DownstreamPort[16];
+    unsigned DownstreamRead, DownstreamType;
+    unsigned long DownstreamKhz;
     BC250_DUAL_MODE_ADAPTER Adapter;
     BC250_EDID_INFO Info;
     BC250_TARGET_TIMING Targets[BC250_EDID_MAX_MODES];
@@ -27,5 +33,7 @@ typedef struct BC250_SINK_GUARD {
 // Io is already owned by the passive operation. Restore uses that same physical
 // owner even if Current becomes false. A failed cleanup prevents a second protocol.
 // Result is caller-allocated nonpaged workspace, not a kernel stack local.
-long Bc250SinkDiscover(BC250_DISP_IO* Io,const BC250_SINK_GUARD* Guard,
-    unsigned long MaxPixelClockKhz,unsigned long MaxWidth,unsigned long MaxHeight,BC250_SINK* Result);
+// MaxDpKhz bounds a DP sink, MaxTmdsKhz an HDMI or DVI sink (behind a dual-mode adapter): each is the ceiling of
+// that protocol's route, under the sink's own limit.
+long Bc250SinkDiscover(BC250_DISP_IO* Io,const BC250_SINK_GUARD* Guard,unsigned long MaxDpKhz,
+    unsigned long MaxTmdsKhz,unsigned long MaxWidth,unsigned long MaxHeight,BC250_SINK* Result);

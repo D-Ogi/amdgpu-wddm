@@ -51,14 +51,15 @@ static ULONG DisplayTmdsPixel(ULONG Measured, ULONG Width, ULONG Height, ULONG H
     return pixel && pixel<D3DKMDT_FREQUENCY_NOTSPECIFIED ? (ULONG)pixel : 0;
 }
 
-// Nine observed edges delimit eight whole frames, in two equal halves. Edge
+// 2 x Half + 1 observed edges delimit two equal halves of Half whole frames each. Edge
 // timestamps are bracketed by QPC reads, so a scheduler interruption cannot
 // silently become a precise-looking refresh estimate. Frame counter wrap is
 // 24-bit (dcn_2_0_1_sh_mask.h). A skipped edge or stalled clock fails closed.
 // PASSIVE_LEVEL, no locks. Ten-us stalls only during this one bounded startup
 // measurement; the QPC deadline and an independent poll cap both stop it.
-static NTSTATUS DisplayMeasureTmds(const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal,
-                                  ULONG* Pixel, ULONG* RefreshMilliHz)
+// A refresh outside MinHz..MaxHz is STATUS_NOT_SUPPORTED.
+static NTSTATUS DisplayMeasureFrames(const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal, ULONG Half,
+                                    ULONG MinHz, ULONG MaxHz, ULONG* Pixel, ULONG* RefreshMilliHz)
 {
     LARGE_INTEGER frequency, stamp;
     ULONGLONG start, before, after, previousBefore, edge[3]={0}, uncertainty[3]={0};
@@ -66,6 +67,7 @@ static NTSTATUS DisplayMeasureTmds(const BC250_DEVICE* Device, ULONG HTotal, ULO
     ULONG previous, current, edges=0, poll;
     NTSTATUS status;
     *Pixel=*RefreshMilliHz=0;
+    if(Half<4u || Half>BC250_REFRESH_MEASURE_MAX_HALF)return STATUS_INVALID_PARAMETER;
     stamp=KeQueryPerformanceCounter(&frequency);
     if(frequency.QuadPart<=0 || frequency.QuadPart>10000000000ll || stamp.QuadPart<0)
         return STATUS_DEVICE_DATA_ERROR;
@@ -85,17 +87,17 @@ static NTSTATUS DisplayMeasureTmds(const BC250_DEVICE* Device, ULONG HTotal, ULO
         if(current!=previous) {
             ULONG delta=(current-previous)&OTG0_OTG_STATUS_FRAME_COUNT__OTG_FRAME_COUNT_MASK;
             if(delta!=1)return STATUS_DEVICE_DATA_ERROR;
-            if(edges==0 || edges==4 || edges==8) {
-                ULONG slot=edges/4;
+            if(edges==0 || edges==Half || edges==2u*Half) {
+                ULONG slot=edges/Half;
                 uncertainty[slot]=after-previousBefore;
                 edge[slot]=previousBefore+uncertainty[slot]/2;
             }
             edges++;
-            if(edges==9)break;
+            if(edges==2u*Half+1u)break;
         }
         previous=current;previousBefore=before;
     }
-    if(edges!=9 || edge[1]<=edge[0] || edge[2]<=edge[1])return STATUS_DEVICE_DATA_ERROR;
+    if(edges!=2u*Half+1u || edge[1]<=edge[0] || edge[2]<=edge[1])return STATUS_DEVICE_DATA_ERROR;
     half0=edge[1]-edge[0];half1=edge[2]-edge[1];span=edge[2]-edge[0];
     difference=half0>half1 ? half0-half1 : half1-half0;
     // Less than 0.5% disagreement between halves; uncertainty below 0.25%
@@ -103,8 +105,8 @@ static NTSTATUS DisplayMeasureTmds(const BC250_DEVICE* Device, ULONG HTotal, ULO
     if(difference>(half0<half1 ? half0 : half1)/200u ||
        uncertainty[0]+uncertainty[1]>half0/400u || uncertainty[1]+uncertainty[2]>half1/400u)
         return STATUS_DEVICE_DATA_ERROR;
-    rate=(ULONGLONG)frequency.QuadPart*8u;
-    if(rate<span*23u || rate>span*240u)return STATUS_NOT_SUPPORTED;
+    rate=(ULONGLONG)frequency.QuadPart*2u*Half;
+    if(rate<span*MinHz || rate>span*MaxHz)return STATUS_NOT_SUPPORTED;
     framePixels=(ULONGLONG)HTotal*VTotal;
     if(!framePixels || framePixels>(~(ULONGLONG)0-span/2)/rate)return STATUS_DEVICE_DATA_ERROR;
     product=framePixels*rate;
@@ -113,4 +115,28 @@ static NTSTATUS DisplayMeasureTmds(const BC250_DEVICE* Device, ULONG HTotal, ULO
     *Pixel=(ULONG)measured;
     *RefreshMilliHz=(ULONG)((rate*1000u+span/2)/span);
     return STATUS_SUCCESS;
+}
+
+// The inherited TMDS start: four frames per half, 23 to 240 Hz.
+static NTSTATUS DisplayMeasureTmds(const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal,
+                                  ULONG* Pixel, ULONG* RefreshMilliHz)
+{
+    return DisplayMeasureFrames(Device, HTotal, VTotal, 4u, 23u, 240u, Pixel, RefreshMilliHz);
+}
+
+// GitHub #45 review: a DP pipe the connector enabled above DPREFCLK, 23 to BC250_REFRESH_MEASURE_MAX_HZ. Each half
+// lasts at least as long as the four frames of a 240 Hz half, so the 0.25% uncertainty bound per half stays one that
+// a 10 us poll meets: Half is the expected refresh over 60 Hz, rounded up, at least 4 (9 at 500 Hz, 18 frames).
+// PixelKhz is the clock the mode asked for; it chooses Half only, the result is what the OTG did.
+static NTSTATUS DisplayMeasureFast(const BC250_DEVICE* Device, ULONG HTotal, ULONG VTotal, ULONG PixelKhz,
+                                  ULONG* Pixel, ULONG* RefreshMilliHz)
+{
+    ULONGLONG framePixels=(ULONGLONG)HTotal*VTotal, half;
+    *Pixel=*RefreshMilliHz=0;
+    if(!framePixels || !PixelKhz)return STATUS_INVALID_PARAMETER;
+    if((ULONGLONG)PixelKhz*1000u>framePixels*BC250_REFRESH_MEASURE_MAX_HZ)return STATUS_NOT_SUPPORTED;
+    half=((ULONGLONG)PixelKhz*1000u+framePixels*60u-1u)/(framePixels*60u);
+    if(half<4u)half=4u;
+    return DisplayMeasureFrames(Device, HTotal, VTotal, (ULONG)half, 23u, BC250_REFRESH_MEASURE_MAX_HZ,
+        Pixel, RefreshMilliHz);
 }

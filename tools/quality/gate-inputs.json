@@ -812,6 +812,26 @@
         "host"
       ]
     },
+    "connector-link-optc-term": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-rate-limit": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-dto-check": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-link-inherited-target": {
+      "inputs": [
+        "host"
+      ]
+    },
     "dml201": {
       "inputs": [
         "host"

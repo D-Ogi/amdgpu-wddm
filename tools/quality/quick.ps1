@@ -552,6 +552,10 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='connector-link-recovery-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WrongRecoveryTarget','-ExpectFailure')}
   @{n='connector-link-surface-adopt';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitSurfaceAdopt','-ExpectFailure')}
   @{n='connector-link-detached-mode';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDetachedMode','-ExpectFailure')}
+  @{n='connector-link-optc-term';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-DropOptcTerm','-ExpectFailure')}
+  @{n='connector-link-rate-limit';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitRateLimit','-ExpectFailure')}
+  @{n='connector-link-dto-check';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDtoCheck','-ExpectFailure')}
+  @{n='connector-link-inherited-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitInheritedTarget','-ExpectFailure')}
   @{n='dml201';s='driver\shim\test\run_dml201.ps1';a=@('-Kits',$Kits)}
   @{n='dcn201-pipe';s='driver\shim\test\run_dcn201_pipe.ps1';a=@('-Kits',$Kits)}
   @{n='dpaudio-start-debt';s='driver\kmd\test\run_dpaudio_debt.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}

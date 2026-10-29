@@ -67,6 +67,10 @@ int main(void)
     CHECK(Bc250DpStreamProgram(&io,&svga)==0);
     CHECK(F(DP_MSA_TIMING_PARAM1,DP_MSA_HTOTAL)==1056 && F(DP_MSA_TIMING_PARAM1,DP_MSA_VTOTAL)==628);
     CHECK(Bc250DpStreamUnblank(&io,40000,6)==0 && F(DP_VID_M,DP_VID_M)==8090);
+    // BD-139: HBR2 and HBR3. VID_M is 0x8000 x pixel / (rate x 27 MHz), rounded down (enc1_stream_encoder_dp_unblank).
+    CHECK(Bc250DpStreamUnblank(&io,645100,20)==0 && F(DP_VID_M,DP_VID_M)==39145 && F(DP_VID_N,DP_VID_N)==32768);
+    CHECK(Bc250DpStreamUnblank(&io,497750,20)==0 && F(DP_VID_M,DP_VID_M)==30204);
+    CHECK(Bc250DpStreamUnblank(&io,1080000,30)==0 && F(DP_VID_M,DP_VID_M)==43690);
     for(n=0;n<3;++n) {
         setup(n);io.StalledUs=0;CHECK(op(&io,n)==0);total=model.access;
         for(i=1;i<=total;++i) {
@@ -82,7 +86,9 @@ int main(void)
     CHECK(Bc250DpStreamUnblank(&io,148500,10)==BC250_DISP_STATUS_BUDGET);
     CHECK(!F(DP_VID_STREAM_CNTL,DP_VID_STREAM_ENABLE));
     setup(0);bad=hd;bad.Flags|=0x80;CHECK(Bc250DpStreamProgram(&io,&bad)==BC250_DISP_STATUS_INVALID && !model.access);
-    CHECK(Bc250DpStreamUnblank(&io,148500,20)==BC250_DISP_STATUS_INVALID && !model.access);
+    CHECK(Bc250DpStreamUnblank(&io,148500,21)==BC250_DISP_STATUS_INVALID && !model.access);
+    CHECK(Bc250DpStreamUnblank(&io,1080001,30)==BC250_DISP_STATUS_INVALID && !model.access);
+    CHECK(Bc250DpStreamUnblank(&io,24999,6)==BC250_DISP_STATUS_INVALID && !model.access);
     printf("dp_stream_test: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
 }

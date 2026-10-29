@@ -35,6 +35,8 @@ typedef struct _BC250_MODESET {
     BC250_DUAL_MODE_ADAPTER Adapter;
     UCHAR Edid[BC250_EDID_MAX_BYTES];
     UCHAR Dpcd[BC250_MODESET_DPCD_BYTES];
+    UCHAR DownstreamPort[16];               // GitHub #45 review: DPCD 0x080-0x08F of a branch device (DownstreamRead)
+    BOOLEAN DownstreamRead;
     BC250_EDID_INFO Info;
     BC250_MODE_LIST Modes;
     // The committed source size. Post's until a commit changes it. Written only while wddm.c's primary transaction

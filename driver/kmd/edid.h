@@ -56,6 +56,15 @@ typedef struct _BC250_TARGET_TIMING {
     unsigned long Flags;
 } BC250_TARGET_TIMING;
 
+// The fastest target timing the parser keeps: what an HBR3 x4 DisplayPort link carries at RGB8 (BD-139). The link,
+// the protocol and the sink set the real limit for each target (connector_link.c Plan); connector_link.c asserts that
+// this value equals BC250_DP_MAX_PIXEL_KHZ.
+#define BC250_TARGET_MAX_PIXEL_KHZ 1080000ul
+// GitHub #45 review: the highest refresh that the OTG measurement of a DP mode above DPREFCLK checks (display_tmds.h
+// DisplayMeasureFast), and the most frames per half it takes for that refresh (500 Hz over 60 Hz, rounded up).
+#define BC250_REFRESH_MEASURE_MAX_HZ 500u
+#define BC250_REFRESH_MEASURE_MAX_HALF 9u
+
 int Bc250TargetTimingValid(const BC250_TARGET_TIMING* Timing);
 int Bc250TargetTimingEqual(const BC250_TARGET_TIMING* A, const BC250_TARGET_TIMING* B);
 unsigned long Bc250TargetRefreshMilliHz(const BC250_TARGET_TIMING* Timing);

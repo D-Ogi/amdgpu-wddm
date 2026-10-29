@@ -43,10 +43,17 @@ try {
         & $cl @actual
         if($LASTEXITCODE){throw 'Clock replay build failed'}
         # Both callers of the PHY power-up table: HDMI SetPixelClock over four mode
-        # changes, and DP transmitter enable after a re-plug (BD-195).
-        $replays=@(@{Name='clock';Args=@($Rom,'3','0','112','148500')},
-            @{Name='dp-tx-enable';Args=@($Rom,'0','0','76','270000')})
+        # changes, and DP transmitter enable after a re-plug (BD-195), at HBR, HBR2 and HBR3 (GitHub #45).
+        # DP transmitter disable of the firmware's link (GitHub #45) does not use the power-up table, so the old
+        # scoped policy has nothing to refuse there and the negative control skips it (Scoped false).
+        $replays=@(@{Name='clock';Scoped=$true;Args=@($Rom,'3','0','112','148500')},
+            @{Name='dp-tx-enable';Scoped=$true;Args=@($Rom,'0','0','76','270000')},
+            @{Name='dp-tx-enable-hbr2';Scoped=$true;Args=@($Rom,'0','0','76','540000')},
+            @{Name='dp-tx-enable-hbr3';Scoped=$true;Args=@($Rom,'0','0','76','810000')},
+            @{Name='dp-tx-disable-hbr2';Scoped=$false;Args=@($Rom,'0','0','0','540000')},
+            @{Name='dp-tx-disable-hbr3';Scoped=$false;Args=@($Rom,'0','0','0','810000')})
         foreach($replay in $replays) {
+            if($OldScope -and !$replay.Scoped){continue}
             $replayArgs=$replay.Args
             if($OldScope){$replayArgs+='old-scope'}
             $result=& "$Out/link_clock_reinit_test.exe" @replayArgs

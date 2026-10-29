@@ -174,14 +174,21 @@ static void failures_test(void)
     unsigned before;ready();before=runs;
     CHECK(Bc250LinkAtomClock(&link,1,148500)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomClock(&link,0,24999)==BC250_ATOM_ARGUMENT);
-    CHECK(Bc250LinkAtomClock(&link,0,300001)==BC250_ATOM_ARGUMENT);
+    // BD-139: DP takes what HBR3 x4 carries, TMDS keeps its 300 MHz.
+    CHECK(Bc250LinkAtomClock(&link,0,1080001)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomClock(&link,BC250_LINK_HDMI,300001)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomClock(&link,BC250_LINK_DVI,645100)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_DRIVE,3,148500,4,0,0)==BC250_ATOM_ARGUMENT);
-    CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,0,540000,4,0,0)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,0,594000,4,0,0)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,BC250_LINK_HDMI,540000,4,0,0)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,0,270000,3,0,0)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_DRIVE,0,270000,4,3,1)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomTransmitter(&link,(enum bc250_link_tx_action)99,0,270000,4,0,0)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomStream(&link,3,148500,2,0)==BC250_ATOM_ARGUMENT);
-    CHECK(Bc250LinkAtomStream(&link,0,148500,4,20)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomStream(&link,0,148500,4,21)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomStream(&link,0,148500,4,536870918u)==BC250_ATOM_ARGUMENT); // wraps to 162000 kHz
+    CHECK(Bc250LinkAtomStream(&link,0,1080001,4,30)==BC250_ATOM_ARGUMENT);
+    CHECK(Bc250LinkAtomStream(&link,BC250_LINK_HDMI,300001,4,0)==BC250_ATOM_ARGUMENT);
     CHECK(Bc250LinkAtomStream(&link,3,148500,4,6)==BC250_ATOM_ARGUMENT);CHECK(runs==before);
     badroot=12;pre_status=BC250_ATOM_OPCODE;
     CHECK(Bc250LinkAtomClock(&link,0,148500)==BC250_ATOM_OPCODE);
@@ -219,13 +226,24 @@ static void boundaries(void)
     unsigned lane,rate;ready();
     CHECK(Bc250LinkAtomClock(&link,BC250_LINK_HDMI,25000)==BC250_ATOM_OK);
     CHECK(Bc250LinkAtomClock(&link,BC250_LINK_DVI,300000)==BC250_ATOM_OK);
-    for(lane=1;lane<=4;lane*=2)for(rate=6;rate<=10;rate+=4) {
+    // BD-139: the four 8b/10b rates, each with every lane count, at the floor and at the HBR3 x4 ceiling.
+    for(lane=1;lane<=4;lane*=2)for(rate=6;rate<=30;rate=rate==6?10:rate==10?20:rate==20?30:31) {
         struct dig_encoder_stream_setup_parameters_v1_5 e={0};
+        struct dig_transmitter_control_ps_allocation_v1_6 t={0};
         e.action=ATOM_ENCODER_CMD_STREAM_SETUP;e.lanenum=(uint8_t)lane;e.pclk_10khz=2500;
         e.bitpercolor=2;e.dplinkrate_270mhz=(uint8_t)rate;
         CHECK(Bc250LinkAtomStream(&link,BC250_LINK_DP,25000,lane,rate)==BC250_ATOM_OK);
         CHECK(captured_size==sizeof(e) && !memcmp(captured,&e,sizeof(e)));
+        e.pclk_10khz=108000;
+        CHECK(Bc250LinkAtomStream(&link,BC250_LINK_DP,1080000,lane,rate)==BC250_ATOM_OK);
+        CHECK(captured_size==sizeof(e) && !memcmp(captured,&e,sizeof(e)));
+        t.param.action=ATOM_TRANSMITTER_ACTION_SETUP_VSEMPH;t.param.mode_laneset.dplaneset=1;
+        t.param.lanenum=(uint8_t)lane;t.param.symclk_10khz=rate*2700u;t.param.hpdsel=1;t.param.connobj_id=19;
+        CHECK(Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_DRIVE,BC250_LINK_DP,rate*27000u,lane,1,0)==BC250_ATOM_OK);
+        CHECK(captured_size==sizeof(t) && !memcmp(captured,&t,sizeof(t)));
     }
+    CHECK(Bc250LinkAtomClock(&link,BC250_LINK_DP,645100)==BC250_ATOM_OK);
+    CHECK(Bc250LinkAtomClock(&link,BC250_LINK_DP,1080000)==BC250_ATOM_OK);
     reset();link.Image=NULL;CHECK(Bc250LinkAtomValidate(&link)==BC250_ATOM_ARGUMENT);
     reset();link.Plan=NULL;CHECK(Bc250LinkAtomValidate(&link)==BC250_ATOM_ARGUMENT);
     reset();link.Workspace=NULL;CHECK(Bc250LinkAtomValidate(&link)==BC250_ATOM_ARGUMENT);

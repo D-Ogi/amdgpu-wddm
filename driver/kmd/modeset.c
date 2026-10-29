@@ -10,6 +10,7 @@
 // centered). A value above 2 counts as 0.
 #include "bc250kmd.h"
 #include "dpaux.h"
+#include "../shim/bc250_dp_train.h"
 #include "dcn_2_0_1_sh_mask.h"
 #include <ntstrsafe.h>
 
@@ -224,6 +225,11 @@ static void ReadMonitor(_Inout_ BC250_DEVICE* Device)
     }
     // The DPCD first: a sink that answers it is a DP sink, and its link fields are stage B's starting point.
     m->DpcdValid = Bc250AuxDpcdRead(&aux, 0, m->Dpcd, BC250_MODESET_DPCD_BYTES) >= 0;
+    // GitHub #45 review: the downstream port of a branch device (an active converter limits the pixel clock,
+    // connector.c). A failed read leaves the class that DPCD 0x005 gives, as in sink discovery.
+    m->DownstreamRead = m->DpcdValid && Bc250DpDownstreamPortReadable(m->Dpcd) &&
+        Bc250AuxDpcdRead(&aux, BC250_DP_DOWNSTREAM_PORT_DPCD, m->DownstreamPort, sizeof(m->DownstreamPort)) >= 0;
+    if (!m->DownstreamRead) RtlZeroMemory(m->DownstreamPort, sizeof(m->DownstreamPort));
     status = Bc250AuxReadEdid(&aux, m->Edid, sizeof(m->Edid), &length);
     close = Bc250AuxClose(&aux);
     m->AuxStatus = status < 0 ? status : close;
@@ -299,11 +305,12 @@ void ModesetStart(_Inout_ BC250_DEVICE* Device)
     m->PipeVerdict = BC250_PIPE_VERDICT_COUNT;
     m->AuxStatus = STATUS_NOT_SUPPORTED;
     m->EdidReason = BC250_EDID_SHORT;
-    m->EdidValid = m->DescriptorServed = m->DpcdValid = FALSE;
+    m->EdidValid = m->DescriptorServed = m->DpcdValid = m->DownstreamRead = FALSE;
     m->PipeChanged = m->Suspended = FALSE;
     m->EdidLength = 0;
     RtlZeroMemory(m->Edid, sizeof(m->Edid));
     RtlZeroMemory(m->Dpcd, sizeof(m->Dpcd));
+    RtlZeroMemory(m->DownstreamPort, sizeof(m->DownstreamPort));
     RtlZeroMemory(&m->Info, sizeof(m->Info));
     RtlZeroMemory(&m->Adapter, sizeof(m->Adapter));
     m->Adapter.status = STATUS_NOT_SUPPORTED;
