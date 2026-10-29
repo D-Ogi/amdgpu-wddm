@@ -81,6 +81,18 @@ int Bc250AmdIdentityDecide(int has_process, unsigned int name_flags, unsigned in
     return on;
 }
 
+int Bc250AmdIdentityShellWord(unsigned int fsr_identity, unsigned int image_flags, unsigned int* word)
+{
+    unsigned int shell;
+    if (!word) return 0;
+    if (fsr_identity == BC250_AMD_IDENTITY_FSR_OFF) shell = BC250_AMD_IDENTITY_SHELL_OFF;
+    else if (fsr_identity == BC250_AMD_IDENTITY_FSR_ON) shell = BC250_AMD_IDENTITY_SHELL_ON;
+    else if (fsr_identity == BC250_AMD_IDENTITY_FSR_UNSET) shell = BC250_AMD_IDENTITY_SHELL_NONE;
+    else return 0;
+    *word = shell | ((image_flags & 0xFFu) << 8);
+    return 1;
+}
+
 static void Put32(unsigned char* p, unsigned int v)
 {
     p[0] = (unsigned char)v; p[1] = (unsigned char)(v >> 8); p[2] = (unsigned char)(v >> 16); p[3] = (unsigned char)(v >> 24);

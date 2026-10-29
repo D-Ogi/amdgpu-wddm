@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
-// Host test of the FSR 4 identity policy (amd_identity_policy.c): the anti-cheat list match, the precedence and the
-// 608-byte reply. run_amd_identity.ps1 builds it with the policy source and runs it.
+// Host test of the FSR 4 identity policy (amd_identity_policy.c): the anti-cheat list match, the precedence, the
+// shell word of the escape (with the unset value) and the 608-byte reply. run_amd_identity.ps1 builds it with the policy source and runs it.
 #include <stdio.h>
 #include <string.h>
 #include "amd_identity_policy.h"
@@ -111,6 +111,67 @@ static void TestPrecedence(void)
     CHECK(strcmp(Bc250AmdIdentitySourceName(BC250_AMD_IDENTITY_SOURCE_COUNT), "?") == 0, "past the sources is '?'");
 }
 
+// The shell word of an escape (Bc250AmdIdentityShellWord), and the decision on the record it gives, as
+// amd_identity.c does it: dxgkrnl's name flags OR the shell name's flags, and the shell value.
+static int Record(const char* dxgkrnl, unsigned int fsr, const char* shellImage, unsigned int want_source)
+{
+    unsigned int word = 0xDEADu, names;
+    CHECK(Bc250AmdIdentityShellWord(fsr, Flags(shellImage), &word) == 1, "a valid escape value gives a word");
+    names = Flags(dxgkrnl) | ((word >> 8) & 0xFFu);
+    return Decide(1, names, word & 0xFFu, want_source);
+}
+
+static void TestShellWord(void)
+{
+    const unsigned int listed = BC250_AMD_IDENTITY_NAME_KNOWN | BC250_AMD_IDENTITY_NAME_LISTED;
+    unsigned int word = 0xDEADu, v;
+
+    CHECK(Bc250AmdIdentityShellWord(BC250_AMD_IDENTITY_FSR_OFF, 0, &word) == 1 && word == BC250_AMD_IDENTITY_SHELL_OFF,
+        "FsrUpgrade 0 is SHELL_OFF");
+    CHECK(Bc250AmdIdentityShellWord(BC250_AMD_IDENTITY_FSR_ON, 0, &word) == 1 && word == BC250_AMD_IDENTITY_SHELL_ON,
+        "FsrUpgrade 1 is SHELL_ON");
+    CHECK(Bc250AmdIdentityShellWord(BC250_AMD_IDENTITY_FSR_UNSET, listed, &word) == 1 &&
+        word == (BC250_AMD_IDENTITY_SHELL_NONE | (listed << 8)), "unset is SHELL_NONE with the name's flags");
+    for (v = BC250_AMD_IDENTITY_FSR_UNSET + 1; v < 8; v++) {
+        word = 0xDEADu;
+        CHECK(Bc250AmdIdentityShellWord(v, listed, &word) == 0 && word == 0xDEADu, "a value above unset is refused");
+    }
+    CHECK(Bc250AmdIdentityShellWord(0xFFFFFFFFu, 0, &word) == 0, "all ones is refused");
+    CHECK(Bc250AmdIdentityShellWord(BC250_AMD_IDENTITY_FSR_ON, 0, NULL) == 0, "a NULL word is refused");
+
+    // No setting: the shell's name alone puts a listed game OFF when dxgkrnl's name is shortened (15 characters, as
+    // the EPROCESS ImageFileName is), is missing, or is a full path that does not reach the file name.
+    CHECK(Record("EscapeFromTarko", BC250_AMD_IDENTITY_FSR_UNSET, "EscapeFromTarkov.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "a shortened name with the shell's full name is listed");
+    CHECK(Record("FortniteClient-", BC250_AMD_IDENTITY_FSR_UNSET, "FortniteClient-Win64-Shipping.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "Fortnite with a shortened name is listed");
+    CHECK(Record("RainbowSix_BE.e", BC250_AMD_IDENTITY_FSR_UNSET, "RainbowSix_BE.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "RainbowSix_BE with a shortened name is listed");
+    CHECK(Record("VALORANT-Win64-", BC250_AMD_IDENTITY_FSR_UNSET, "VALORANT-Win64-Shipping.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "VALORANT with a shortened name is listed");
+    CHECK(Record("EscapeFromTarko", BC250_AMD_IDENTITY_FSR_UNSET, "EscapeFromTarkov_BE.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "EscapeFromTarkov_BE with a shortened name is listed");
+    CHECK(Record("", BC250_AMD_IDENTITY_FSR_UNSET, "TslGame.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "no dxgkrnl name, a listed shell name is OFF");
+    CHECK(Record("EscapeFromTarko", BC250_AMD_IDENTITY_FSR_ON, "EscapeFromTarkov.exe", BC250_AMD_IDENTITY_SOURCE_LIST) == 0,
+        "FsrUpgrade 1 cannot turn a listed shell name ON");
+    // Without the shell's name (the old behaviour, nothing sent) the shortened name is not listed: the default is ON.
+    CHECK(Decide(1, Flags("EscapeFromTarko"), BC250_AMD_IDENTITY_SHELL_NONE, BC250_AMD_IDENTITY_SOURCE_DEFAULT) == 1,
+        "a shortened name alone misses the list (the reason the shell always sends its name)");
+    // Unset keeps the default for a game that is not listed, with or without dxgkrnl's name.
+    CHECK(Record("witcher3.exe", BC250_AMD_IDENTITY_FSR_UNSET, "witcher3.exe", BC250_AMD_IDENTITY_SOURCE_DEFAULT) == 1,
+        "unset, not listed: default ON");
+    CHECK(Record("", BC250_AMD_IDENTITY_FSR_UNSET, "witcher3.exe", BC250_AMD_IDENTITY_SOURCE_DEFAULT) == 1,
+        "unset, no dxgkrnl name, the shell's name is known: default ON");
+    CHECK(Record("", BC250_AMD_IDENTITY_FSR_UNSET, "", BC250_AMD_IDENTITY_SOURCE_NO_NAME) == 0,
+        "unset, no name at all: OFF");
+    // A value still decides for a game that is not listed.
+    CHECK(Record("witcher3.exe", BC250_AMD_IDENTITY_FSR_OFF, "witcher3.exe", BC250_AMD_IDENTITY_SOURCE_SHELL) == 0,
+        "FsrUpgrade 0 is OFF");
+    CHECK(Record("witcher3.exe", BC250_AMD_IDENTITY_FSR_ON, "witcher3.exe", BC250_AMD_IDENTITY_SOURCE_SHELL) == 1,
+        "FsrUpgrade 1 is ON");
+}
+
 static void TestFill(void)
 {
     static const unsigned int sizes[] = {0, 4, 64, 600, 607, 609, 1024, 1471, 1472, 1520, 17248};
@@ -147,6 +208,7 @@ int main(void)
 {
     TestNames();
     TestPrecedence();
+    TestShellWord();
     TestFill();
     printf("amd_identity: %s (%d failure%s)\n", g_failures ? "FAIL" : "PASS", g_failures, g_failures == 1 ? "" : "s");
     return g_failures ? 1 : 0;

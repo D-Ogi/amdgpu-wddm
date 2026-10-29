@@ -13,7 +13,10 @@ typedef struct _BC250_AMD_IDENTITY_PROCESS {
     volatile LONG Shell;        // the shell's value (BC250_AMD_IDENTITY_SHELL_*) | the NAME_* bits of its name << 8;
                                 // written by the escape, read by the query, one interlocked word
     volatile LONG Logged;       // lab flavour: 1 once this process's first answer is in the log
-    char Image[32];             // dxgkrnl's file name in ASCII, for the log; written with NameFlags
+    ULONG NameChars;            // DXGKARG_CREATEPROCESS.ProcessNameLength as dxgkrnl gave it, for the log
+    ULONG NameFileAt;           // the index of the file name part in that name (0: no '\' or '/'), for the log
+    char Image[48];             // dxgkrnl's file name in ASCII, for the log (at most 47 characters, so that a log
+                                // line fits BC250_LOG_TEXT); written with NameFlags
 } BC250_AMD_IDENTITY_PROCESS;
 
 // CreateProcess: the record from dxgkrnl's process name (DXGKARG_CREATEPROCESS.pProcessName, ProcessNameLength

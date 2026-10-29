@@ -34,9 +34,20 @@ enum bc250_amd_identity_source {
 #define BC250_AMD_IDENTITY_NAME_LISTED 2u       // its file name is in the anti-cheat list
 
 // The shell's value as the process object keeps it.
-#define BC250_AMD_IDENTITY_SHELL_NONE 0u        // nothing was sent
+#define BC250_AMD_IDENTITY_SHELL_NONE 0u        // nothing was sent, or FsrUpgrade has no value
 #define BC250_AMD_IDENTITY_SHELL_OFF 1u         // FsrUpgrade 0
 #define BC250_AMD_IDENTITY_SHELL_ON 2u          // FsrUpgrade 1
+
+// The FsrIdentity word of the shell's escape (BC250_ESCAPE_PROCESS_POLICY, the same values as
+// BC250_PROCESS_POLICY_FSR_*).
+#define BC250_AMD_IDENTITY_FSR_OFF 0u           // FsrUpgrade 0
+#define BC250_AMD_IDENTITY_FSR_ON 1u            // FsrUpgrade 1
+#define BC250_AMD_IDENTITY_FSR_UNSET 2u         // FsrUpgrade has no value: only the image name counts
+
+// The process record's shell word for one escape: the shell's value in bits 0-7 and the NAME_* bits of the shell's
+// image name in bits 8-15. fsr_identity FSR_UNSET gives SHELL_NONE, so the name facts are kept and the default
+// applies. Returns 0 and writes nothing for a value above FSR_UNSET.
+int Bc250AmdIdentityShellWord(unsigned int fsr_identity, unsigned int image_flags, unsigned int* word);
 
 // The facts of an image name. name: a file name or a full path, chars characters long without a terminating zero
 // (the name may have none; a zero inside ends it). Only the part after the last '\' or '/' is compared with the
