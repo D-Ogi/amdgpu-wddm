@@ -211,7 +211,7 @@ void DcnLinkSurfaceAdopt(BC250_DEVICE* d)
 void DcnPipeConnectorPlan(BC250_DEVICE* d,ULONG det);   /* BD-197, defined after the pipe step's stub */
 /* BD-223: the mode shape replaces the shape of a plane, before the scaler step and with the pipe stopped. */
 static unsigned plane_shape_forgets;
-static void DcnPlaneShapeModeset(BC250_DEVICE* d) { CHECK(d==&device);++plane_shape_forgets; }
+static void DcnPlaneShapeModeset(BC250_DEVICE* d,BOOLEAN programmed) { CHECK(d==&device);CHECK(programmed);++plane_shape_forgets; }
 static BOOLEAN ConnectorIsConnected(BC250_DEVICE* d) { CHECK(d==&device && !operation_locks);return sink_connected; }
 static NTSTATUS DcnSetVisibility(BC250_DEVICE*,BOOLEAN);
 static NTSTATUS DcnRuntimeSurface(BC250_DEVICE*,BOOLEAN);

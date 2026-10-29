@@ -22,7 +22,7 @@ typedef struct _BC250_PLANE_REQUEST {
     int Enabled;
     unsigned long SurfaceWidth, SurfaceHeight;  // the allocation's own description
     unsigned long SurfacePitch;                 // its pitch in bytes
-    unsigned long RequiredPitch;                // the pitch the committed pipe was planned for, 0 for none
+    unsigned long RequiredPitch;                // the committed pipe's pitch: only a plane at it is the identity plane
     unsigned long PlaneFormat;                  // plane_format.h BC250_PLANE_FORMAT_*, NONE for any other format
     int TenBitSource;                           // the committed source mode is 10-bit (scan-out caps flag)
     unsigned long SourceModeWidth, SourceModeHeight;    // the committed VidPN source mode
@@ -63,8 +63,10 @@ enum bc250_plane_verdict {
     BC250_PLANE_DML = 20,               // DML refused the scaled pipe, or could not run
     BC250_PLANE_CLOCKS = 21,            // DML needs a DISPCLK or DPPCLK above the programmed one
     BC250_PLANE_STRETCH_QUALITY = 22,   // StretchQuality is neither BILINEAR nor HIGH
-    BC250_PLANE_PITCH = 23,             // not the committed pipe's pitch: its request and delivery registers stay
+    BC250_PLANE_PITCH = 23,             // stage S1 only: not the committed pipe's pitch. Since S2 the flip programs
+                                        // the request and delivery registers of the plane's own pitch
     BC250_PLANE_SCANOUT = 24,           // the allocation fails the scan-out rule (scanout_admit.h); wddm.c decides it
+    BC250_PLANE_GLOBAL_SYNC = 25,       // the plane's display plan needs another VSTARTUP or VUPDATE offset than OTG0
     BC250_PLANE_VERDICTS
 };
 const char* Bc250PlaneVerdictText(unsigned long Verdict);
@@ -74,8 +76,9 @@ const char* Bc250PlaneVerdictText(unsigned long Verdict);
 #define BC250_PLANE_MIN_DIMENSION 64ul
 #define BC250_PLANE_MAX_UPSCALE_MILLI 16000ul
 
-// What the scan-out of an admitted plane needs. Identity is a plane of the source mode's own size at its origin:
-// the native 1:1 shape of dcn_scale.c (Bc250ScalerRestoreNative), which DirectFlip programs today.
+// What the scan-out of an admitted plane needs. Identity is a plane of the source mode's own size at its origin and
+// at the committed pipe's pitch: the native 1:1 shape of dcn_scale.c (Bc250ScalerRestoreNative), which DirectFlip
+// programs today. The same geometry at another pitch is a plane with a 1:1 scaler and its own requestor.
 typedef struct _BC250_PLANE_PLAN {
     BC250_SCALER_PLAN Scaler;
     int Identity;
@@ -93,6 +96,12 @@ unsigned long Bc250PlanePrepare(const BC250_PLANE_REQUEST* Request, BC250_PLANE_
 unsigned long Bc250PlaneDmlVerdict(const BC250_PLANE_PLAN* Plan, int DmlStatus, unsigned long DmlValid,
                                    unsigned long DispClockKhz, unsigned long DppClockKhz,
                                    unsigned long BudgetDispClockKhz, unsigned long BudgetDppClockKhz);
+
+// The global sync step (stage S2): the plane's display plan against OTG0's registers. The flip may move VREADY and
+// the VUPDATE width (bc250_optc.h Bc250OptcGlobalSyncLocked), not VSTARTUP and not the VUPDATE offset.
+unsigned long Bc250PlaneSyncVerdict(const BC250_PLANE_PLAN* Plan, unsigned long PlanVStartup,
+                                    unsigned long PlanVUpdateOffset, unsigned long OtgVStartup,
+                                    unsigned long OtgVUpdateOffset);
 
 // Two plans that program the same pipe shape (the address aside): a flip between them writes no scaler register.
 int Bc250PlaneSameShape(const BC250_PLANE_PLAN* A, const BC250_PLANE_PLAN* B);

@@ -247,8 +247,8 @@ static NTSTATUS WddmWriterResume(BC250_DEVICE*d)
 }
 /* BD-223: no write sequence of these paths carries a plane shape, and their pipe is never scaled for a plane, so
  * the shape step writes nothing (dcn.c DcnPlaneShapeLocked with NULL and DcnPlaneScaled FALSE). */
-static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d,const BC250_SCALER_PLAN *shape)
-{(void)d;return shape?STATUS_INVALID_PARAMETER:STATUS_SUCCESS;}
+static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d,const BC250_SCALER_PLAN *shape,ULONG pitch)
+{(void)d;(void)pitch;return shape?STATUS_INVALID_PARAMETER:STATUS_SUCCESS;}
 /* ACTUAL_SOURCE */
 static void init(BC250_DEVICE*d,ULONG*fb)
 {

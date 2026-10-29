@@ -74,24 +74,56 @@ DDI's plane into `BC250_PLANE_REQUEST`. Each refusal has a verdict number, which
 | ARGB8888, ABGR8888 when the plane formats are open, no 10-bit | `format` | The rows of the scan-out rule (`bc250_scanout_caps.h`). DCN 2.0.1 cannot scale FP16 |
 | The allocation passes the scan-out rule at its own size | `scanout` | `Bc250ScanoutAdmit`. The flip checks residency and the address again |
 | 64x64 to 16383x16383 | `surface` | The plane caps of Linux `dcn201_resource.c`, and the 14-bit viewport fields |
-| The pitch of the committed pipe | `pitch` | See below |
+| Any pitch (stage S2) | - | The flip programs the plane's own display plan. See below. `pitch` is the verdict of stage S1 and is not given now |
 | `SrcRect` is the whole allocation | `src-crop` | A crop needs the viewport start and the init phases of a clipped source |
 | `DstRect` inside the source mode, `ClipRect` contains `DstRect` | `dst-bounds`, `clip` | The `ClipRect` text says "relative to the DstRect". A clip that cuts the plane is refused, so both readings give the same answer |
 | 1:1 or up, at most 16 times | `downscale`, `upscale` | `max_upscale_factor` 16000. Downscale needs DPP clock and DCHUB changes |
 | The scaler plan | `scaler` | `Bc250ScalerPlanRecout` (`dcn_scale.c`) |
 | DML fits the scaled pipe into the clocks that run | `dml`, `clocks` | The flip changes no clock. The DENTIST belongs to the commit |
+| The plan's VSTARTUP and VUPDATE offset are the ones of OTG0 | `global-sync` | See below |
+| The plan passes the range checks of the requestor writes | `dml` | `Bc250Dcn201RequestorValidate`: a plan that Check approves is one the flip can write |
 
-A plane of the source mode's size at the origin is the identity plane. It is the full-size flip of today and needs
-no DML.
+A plane of the source mode's size at the origin, at the committed pipe's pitch, is the identity plane. It is the
+full-size flip of today and needs no DML. The same geometry at another pitch is a plane: a 1:1 scaler and its own
+display plan.
 
-### The pitch rule
+### The display plan of a plane (stage S2)
 
-The flip writes the viewport, the scaler and the MPCC, not the request (RQ) and delivery (DLG, TTU) registers. The
-commit programmed those for the pipe's pitch (`connector_link.c`). So a plane must have that pitch. In practice the
-plane then has the source mode's width, and the scaling is vertical. The lab case passes: 1920x1080 at pitch 7680
-on the 1920x1200 timing is a vertical ratio of 1080:1200. A narrower chain, for example 1280x720 on 1920x1080, is
-refused with `pitch` and DWM composes it as before. To remove this limit, the flip must program RQ, DLG and TTU
-from the plane's DML plan inside the same lock. That is a later step.
+Stage S1 kept the request (RQ) and delivery (DLG, TTU) registers of the commit, so a plane needed the pitch of the
+committed pipe. The S2 probe on the lab timing found that this was not safe even at that pitch: DML gives another
+VREADY and VUPDATE width for every scaled plane (369 and 275 for 1280x720 against 340 and 255 for the mode). So from
+stage S2 the flip programs the whole display plan of the plane, at the plane's own pitch.
+
+Inside the acknowledged OTG0 lock the order is the order of Linux dcn20 (`dcn20_prepare_bandwidth`,
+`dcn20_program_tg`, then `dcn20_update_dchubp_dpp`). AMD `hubp201_setup` says that OTG is locked when it is called
+and that its registers are double-buffered. The steps are:
+
+1. The watermarks, raised only (`hubbub201_program_watermarks` with `safe_to_lower` false).
+2. The global sync (`optc1_program_global_sync`): VREADY and the VUPDATE width of the plan.
+3. The requestor (`hubp201_setup`): the RQ, DLG and TTU registers of the plan.
+4. The scaler, as in stage S1.
+5. The format, the pitch and the address, as before.
+
+The first plane flip saves the mode's global sync (`Bc250OptcReadGlobalSync`) and the fields that the requestor
+setters write (`BC250_DCN201_REQUESTOR_SAVE`: the AMD setters run once in capture mode, which reads and records and
+writes nothing). A flip from one plane to another keeps that save. The next full-size flip writes the saved global
+sync, then the saved requestor fields, then the 1:1 shape, in its own lock. `DcnPlaneShapeModeset` does the same in
+its own lock for a mode program of `modeset.c`, which writes only the scaler. A commit of `connector_link.c` writes
+the whole pipe, so there the save is old and is dropped.
+
+These are the deviations from Linux:
+
+| Linux | This driver | Why |
+| --- | --- | --- |
+| `dcn20_optimize_bandwidth` lowers the watermarks after the frame | The watermarks stay raised until the next commit | A flip cannot wait for that frame. A raised watermark is safe for the requestor on the pipe now |
+| The watermark cache of `hubbub` | The cache is what the registers hold now (`floor(register * 1000 / MHz)`) | No cache lives across the owners of the pipe (the firmware, a commit, a plane). `convert_and_clamp` truncates, so AMD writes exactly the watermarks that are not lower |
+| `dcn20_program_tg` can write a new VSTARTUP, then waits for VACTIVE and calls `set_vtg_params` | VSTARTUP and the VUPDATE offset must equal OTG0's (verdict `global-sync`) | The flip runs up to DIRQL and cannot wait. DCN 2.0.1 plans VSTARTUP at its maximum for the timing (`use_maximum_vstartup`), so a plane on the committed timing has the committed VSTARTUP. The VUPDATE offset is where the flip latches |
+| The pipe's state is the new context | The way back is the saved register fields | No second context exists in the flip |
+| `DET_BUF_PLANE1_BASE_ADDRESS` of the plan | The format registers keep the commit's value (`DcnPlaneFormatRegisters`) | Plane 1 holds chroma only. For an RGB plane the field has no effect. The YUV step (S4) must write the plan's value |
+
+On the lab timing (1920x1200, HTotal 2080, VTotal 1235, 154000 kHz, DP x4, DCHUB reference 50000 kHz) every plane of
+this stage gives VSTARTUP 22 and VUPDATE offset 520, the values of the mode. The DPP clock is 154462 kHz for 1:1 and
+up. A 4 times downscale needs 617848 kHz, more than the budget, so it is refused with `clocks`.
 
 ### DML
 
@@ -101,12 +133,14 @@ viewport, recout and taps. The budget is the clocks that run: the firmware's clo
 commit's DML clocks for an applied one. For the lab case the host test gives DISPCLK 156007 kHz and DPPCLK
 154462 kHz, the same as the full-size pipe.
 
-DML cannot run in the flip DDI, which can be at DIRQL. Check therefore keeps the last four approved shapes in a
-table (`WddmPlaneApprove`), each with the mode stamp that was current before DML ran. The flip DDI plans the
-plane again (integer only), and programs it only when the table has the same shape under the same stamp
-(`WddmPlaneApproved`, a sequence count for each entry, no lock). Every program of the pipe by a mode increments
-the stamp (`DcnPlaneShapeModeset`), so an approval does not survive a mode change. A plane that is not in the
-table is refused with `STATUS_INVALID_PARAMETER` and counted as `unapproved`.
+DML cannot run in the flip DDI, which can be at DIRQL. Check (`DcnPlaneCheck`, `dcn.c`) therefore keeps the last four
+approved planes in a table, each with its shape, its pitch, its whole DML plan and the mode stamp that was current
+before DML ran. The flip DDI plans the plane again (integer only) and asks `DcnPlaneApproved`. In the transaction,
+before any write, `DcnPlaneShapeAdmit` copies the plan of the same shape and pitch under the same stamp, because
+Check can replace the entry before the locked step runs. Each entry has a sequence count, odd while Check writes it,
+so a reader takes no lock. A plane that is on the pipe now stays admitted after its entry is replaced. Every program
+of the pipe by a mode increments the stamp (`DcnPlaneShapeModeset`), so an approval does not survive a mode change.
+A plane that is not in the table is refused with `STATUS_INVALID_PARAMETER` and counted as `unapproved`.
 
 ## The flip
 
@@ -121,12 +155,14 @@ points:
 3. A different shape is a change, also at the same address. A full-size flip after a scaled one is a change.
 4. A flip with no allocation keeps the current shape (`DcnPlaneShapeCurrent`), because its surface is the same.
 
-`DcnFlipSourceAddressShaped` checks the shape against the source mode (`DcnPlaneShapeAdmit`) before any write.
-In the acknowledged lock it writes the shape before the address (`DcnPlaneShapeLocked`, which calls
-`Bc250ScalerProgramLocked`). A shape that equals the one on the pipe is not written again, so a run of game frames
-writes the scaler once. Every write sequence without a shape puts the 1:1 shape back first, so the next desktop
-flip, a restore or a writer always ends a scaled shape in its own update. A failed shape write counts the pipe as
-scaled with no known shape, so the next flip writes its shape again.
+`DcnFlipSourceAddressShaped` checks the shape against the source mode (`DcnPlaneShapeAdmit`) before any write. A
+plane takes any pitch. A full-size flip keeps the pitch rule of the pipe. In the acknowledged lock it writes the
+plane's display plan and shape before the address (`DcnPlaneShapeLocked`, in the order of the section above). A plane
+that is on the pipe at the same pitch is not written again, so a run of game frames writes the plan once. The same
+shape at another pitch writes the global sync and the requestor, not the scaler. Every write sequence without a shape
+puts the mode's registers back first, so the next desktop flip, a restore or a writer always ends a plane in its own
+update. A failed write counts the pipe as neither the plane's nor the mode's, so the next flip writes again: a plane
+writes its plan, and a full-size flip writes the saved fields that are still on record.
 
 A shape change at the same address is retired by the pending bit of that address, which the hardware clears at
 the VUPDATE that also takes the shape, because both are in one lock. The BD-223 transaction audit of 2026-10-22
@@ -142,10 +178,11 @@ The HLK MPO tests are not expected to pass at this stage. These are the known ga
 
 | Requirement | This stage |
 | --- | --- |
-| At least one plane can shrink and stretch | Stretch only. Shrink needs DPP clock and DCHUB work |
+| At least one plane can shrink and stretch | Stretch only. Shrink comes with the 4-tap downscale filters and the DPP clock budget |
 | More than one plane | Plane 0 only (`MaxOverlayPlanes` 1) |
 | Any `SrcRect` | The whole allocation only |
-| Any pitch of the plane | The pitch of the committed pipe only |
+| Any pitch of the plane | Any pitch from stage S2 |
+| A plane at any VSTARTUP | The committed VSTARTUP and VUPDATE offset only (`global-sync`). DML gives them for every plane of this stage on the lab timing |
 | MPO immediate flip | Not in WDDM 2.0. `FlipImmediate` follows the M15.14 rules of plane 0 |
 | `ClipRect` that cuts `DstRect` | Refused (`clip`) |
 
@@ -173,13 +210,16 @@ absence of a regression. It cannot measure the Cyberpunk case.
 | Test | What it proves |
 | --- | --- |
 | `dcn_scale_test.c` (run_modeset.ps1) | `Bc250ScalerPlanRecout` and `Bc250ScalerProgramLocked`: the register file equals the one of `Bc250ScalerProgram` for the same plan, and nothing is written outside a held lock |
-| `dcn_plane_test.c` (run_modeset.ps1) | Every verdict, the lab case, and the DML verdict against the budget, with DML201 itself |
+| `dcn_plane_test.c` (run_modeset.ps1) | Every verdict, the lab case, the DML verdict against the budget, and the global sync verdict, with DML201 itself |
+| `dcn201_pipe_test.c` (run_dcn201_pipe.ps1) | `Bc250Dcn201RequestorLocked` over a running mode: the capture, the watermarks raised only and the checks before any MMIO. After every MMIO failure, the restore gives the register file of the mode back |
+| `optc_test.c` (run_modeset.ps1) | `Bc250OptcReadGlobalSync` and `Bc250OptcGlobalSyncLocked`: VREADY and the VUPDATE width move, the rest refused before any write, every access failure |
+| `dcn_plane_state_test.c` (run_dcn_plane_state.ps1) | The plane state of `dcn.c`: the approvals, the stamp and the order of the locked steps. Also the save at the first plane flip, the way back, the failures and the mode programs. Six negative controls |
 | `dcn_flip_test.c` (run_dcn_flip.ps1) | `DcnFlipSourceAddressShaped`: the plane's size, the admission before any write, the shape inside the lock before the address, and the refusals |
 | `vidpn_flip_test.c` (run_vidpn_flip.ps1) | `PlaneShapeFlips` at both levels: the shape as a change, the kept shape of a NULL allocation, the end of a shape, and the refusals. Three negative controls: `shape-not-a-change`, `null-drops-shape`, `shape-without-allocation` |
 | `connector_link_test.c` | The commit forgets the plane's shape before its scaler step |
 
-The lab-flavour code of `wddm.c` (the DDI translation, the approval table and the MPO VSync report) compiles in
-both flavours and has no host test yet.
+The lab-flavour code of `wddm.c` (the DDI translation and the MPO VSync report) compiles in both flavours and has no
+host test yet.
 
 ## The lab plan
 

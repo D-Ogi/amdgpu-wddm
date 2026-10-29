@@ -105,6 +105,7 @@ NTSTATUS MmioStart(_Inout_ BC250_DEVICE* Device)
     Device->DcnFormatChanges = Device->DcnFormatRefused = 0;
     Device->DcnPipeConnector = FALSE;
     Device->DcnPipeDetPlane1 = 0;
+    DcnPlaneStateReset(Device);     // BD-223: no approved plane and no plane requestor, same reset rule
     // 0.7.24 (ADR 0011 point 3 step 3): the hardware vsync's own state, same reset rule.
     Device->InterruptLastTime = Device->DcnVsyncEntryTime = 0;
     Device->DcnVsyncAckTime = Device->DcnVsyncNotifyTime = 0;

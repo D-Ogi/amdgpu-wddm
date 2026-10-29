@@ -18,6 +18,8 @@
 #include "plane_format.h"            // M15.14: the plane's pixel format per flip
 #include "flip_state.h"              // BD-170 r6: the DRAINED fact (Bc250FlipDrained)
 #include "../shim/bc250_dcn201_pipe.h"
+#include "../shim/bc250_optc.h"      // BD-223 stage S2: the global sync of a plane
+#include "dcn_plane.h"               // BD-223 stage S2: the verdicts of DcnPlaneCheck
 #include <ntstrsafe.h>
 
 void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN_OBSERVE* Data,
@@ -416,9 +418,10 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
 #endif /* AMDGPU_WDDM_LAB_FLAVOUR (DcnFlip FillSurface) */
 
 // BD-223: the pipe's shape for a multiplane-overlay plane 0 (DcnPlaneShapeLocked and DcnPlaneShapeAdmit, defined with
-// the pipe's own accessors below). The flip sequence and the source-address admission call them.
-static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape);
-static BOOLEAN DcnPlaneShapeAdmit(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape);
+// the pipe's own accessors below). The flip sequence and the source-address admission call them. Pitch is the plane's
+// pitch in bytes: since stage S2 a plane's display plan, and so its requestor, is for its own pitch.
+static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape, ULONG Pitch);
+static BOOLEAN DcnPlaneShapeAdmit(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch);
 
 // M15.14 (0.7.216.20): the three register values of PlaneFormat (plane_format.h), composed from the firmware's own
 // values with only the format fields replaced: SURFACE_PIXEL_FORMAT, CROSSBAR_SRC_CB_B, CROSSBAR_SRC_CR_R and
@@ -533,7 +536,8 @@ void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device)
 // hubp1 clears for a mono plane stay as the firmware left them, as since M87, so a vsync flip is unchanged.
 // Shape (BD-223) is the scaler plan of a multiplane-overlay plane 0 that is not the source mode's size, written inside
 // the same acknowledged lock, before the address, as dcn20_program_pipe calls dpp_setup before update_plane_addr.
-// NULL is the source mode's own 1:1 shape: nothing is written for it unless a scaled plane is on the pipe now
+// Since stage S2 the plane's global sync and requestor go first, in the same lock (DcnPlaneShapeLocked).
+// NULL is the source mode's own 1:1 shape: nothing is written for it unless a plane is on the pipe now
 // (DcnPlaneShapeLocked), so every caller that passes NULL writes exactly the register set it wrote before BD-223.
 static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch,
     ULONG BytesPerPixel, _In_opt_ const BC250_PLANE_REGISTERS* Format, _In_opt_ const BC250_SCALER_PLAN* Shape,
@@ -562,7 +566,7 @@ static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Tar
             waited++;
         }
     }
-    if (NT_SUCCESS(status)) status = DcnPlaneShapeLocked(Device, Shape);
+    if (NT_SUCCESS(status)) status = DcnPlaneShapeLocked(Device, Shape, Pitch);
     if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value);
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,
         (value & ~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK) |
@@ -1291,70 +1295,352 @@ static void RuntimeStall(void* Context, unsigned long Microseconds)
     KeStallExecutionProcessor(Microseconds);
 }
 
-// BD-223: a plane 0 shape is for the source mode on the screen now: its target is that mode, which is also the
-// timing's active area (dcn_plane.c refuses a source mode that stage A scales). The 1:1 shape of that mode is kept
-// next to it, so that the next full-size flip, a restore or a writer can put it back in its own update.
-static BOOLEAN DcnPlaneShapeAdmit(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape)
+// ---- BD-223 stage S2: the display plan of a plane ------------------------------------------------------------------
+//
+// Check (PASSIVE_LEVEL) runs DML for the plane and keeps the whole plan in a small table, under the mode stamp it read
+// first. The flip transaction (inside L, up to DIRQL) copies an approved plan into Staged before any write
+// (DcnPlaneShapeAdmit) and programs it inside the acknowledged OTG0 lock (DcnPlaneShapeLocked): first the plane's
+// global sync, then its requestor (RQ, DLG, TTU, with the watermarks raised only), then the scaler, as Linux dcn20 does
+// (prepare_bandwidth, program_tg, update_dchubp_dpp). The registers of the mode that the plane replaced are saved at
+// the first plane flip (Sync, Save) and written back by the next full-size flip, or by a mode program.
+#define DCN_PLANE_APPROVALS 4u
+#define DCN_PLANE_TAG 'PdAB'
+typedef struct _DCN_PLANE_APPROVAL {
+    volatile LONG Sequence;         // 0 empty; odd while Check writes the entry
+    LONG ModeStamp;
+    BC250_SCALER_PLAN Shape;
+    ULONG Pitch;                    // bytes
+    ULONG DchubRefClockKhz;
+    BC250_DML201_PLAN Plan;
+} DCN_PLANE_APPROVAL;
+
+typedef struct _DCN_PLANE_STATE {
+    KSPIN_LOCK Lock;                // orders the writers of Approved (Check); the readers take no lock
+    ULONG Next;
+    DCN_PLANE_APPROVAL Approved[DCN_PLANE_APPROVALS];
+    // Inside L, or with the pipe owned by a writer:
+    BOOLEAN StagedValid;            // DcnPlaneShapeAdmit copied the plan of StagedShape at StagedPitch
+    BC250_SCALER_PLAN StagedShape;
+    ULONG StagedPitch, StagedRefKhz;
+    BC250_DML201_PLAN Staged;
+    BOOLEAN Requestor;              // a plane's requestor is on the pipe (or a write of one failed): Save holds the mode's
+    ULONG Pitch;                    // the pitch of that requestor; 0 unknown
+    BC250_DCN201_REQUESTOR_SAVE Save;
+    BOOLEAN SyncSaved;              // Sync is the mode's global sync, and a plane's may be on the pipe
+    BC250_OPTC_SYNC Sync;
+} DCN_PLANE_STATE;
+C_ASSERT(sizeof(DCN_PLANE_STATE) <= BC250_DCN_PLANE_STATE_BYTES);
+C_ASSERT(__alignof(DCN_PLANE_STATE) <= __alignof(ULONGLONG));
+
+static DCN_PLANE_STATE* DcnPlaneStateOf(_In_ const BC250_DEVICE* Device)
 {
-    const ULONG width = DisplaySourceWidth(Device), height = DisplaySourceHeight(Device);
-    BC250_SCALER_PLAN native;
-    if (Shape->Scaling != BC250_SCALING_PLANE || Shape->TargetWidth != width || Shape->TargetHeight != height)
-        return FALSE;
-    return Bc250ScalerPlan(width, height, width, height, BC250_SCALING_IDENTITY, &native) >= 0;
+    return (DCN_PLANE_STATE*)(ULONG_PTR)Device->DcnPlaneState;
 }
 
-// Inside DcnFlipWriteSequence's acknowledged lock, before the address. Shape NULL: the source mode's 1:1 shape,
-// written only when a scaled one is on the pipe. A shape equal to the one on the pipe is not written again, so a run
-// of game frames writes the scaler once. No log, no wait, no floating point: this runs at DIRQL in the transaction.
-static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape)
+static void DcnPlaneIo(_In_ BC250_DEVICE* Device, _Out_ BC250_DISP_IO* Io)
 {
-    BC250_DISP_IO io;
-    BC250_SCALER_RESULT result;
-    const BC250_SCALER_PLAN* write;
-    long status;
+    RtlZeroMemory(Io, sizeof(*Io));
+    Io->Context = Device; Io->Read = RuntimeRead; Io->Write = RuntimeWrite; Io->Stall = RuntimeStall;
+}
 
-    if (Shape == NULL) {
-        if (!Device->DcnPlaneScaled) return STATUS_SUCCESS;
+void DcnPlaneStateReset(_Inout_ BC250_DEVICE* Device)
+{
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    RtlZeroMemory(s, sizeof(*s));
+    KeInitializeSpinLock(&s->Lock);
+    Device->DcnPlaneScaled = FALSE;
+    RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
+    Device->DcnPlaneRequestorWrites = Device->DcnPlaneRequestorRestores = Device->DcnPlaneRequestorDropped = 0;
+}
+
+// A copy of an entry that Check did not change while it was read. Any level, no lock.
+static BOOLEAN DcnPlaneApprovalCopy(_In_ DCN_PLANE_APPROVAL* Entry, _Out_ DCN_PLANE_APPROVAL* Copy)
+{
+    const LONG before = InterlockedCompareExchange(&Entry->Sequence, 0, 0);
+    if (before == 0 || (before & 1)) return FALSE;
+    RtlCopyMemory(Copy, (const void*)Entry, sizeof(*Copy));
+    KeMemoryBarrier();
+    return InterlockedCompareExchange(&Entry->Sequence, 0, 0) == before;
+}
+
+// The approved entry of Shape at Pitch under the mode on the screen now, copied to *Copy. Any level, no lock.
+static BOOLEAN DcnPlaneApprovalFind(_In_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch,
+                                    _Out_ DCN_PLANE_APPROVAL* Copy)
+{
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    const LONG stamp = InterlockedCompareExchange(&Device->DcnPlaneModeStamp, 0, 0);
+    ULONG i;
+    for (i = 0; i < DCN_PLANE_APPROVALS; i++) {
+        if (!DcnPlaneApprovalCopy(&s->Approved[i], Copy)) continue;
+        if (Copy->ModeStamp == stamp && Copy->Pitch == Pitch && RtlEqualMemory(&Copy->Shape, Shape, sizeof(*Shape)))
+            return TRUE;
+    }
+    return FALSE;
+}
+
+// The pipe shows the plane of Shape at Pitch now: its scaler and its requestor. Inside L for an exact answer.
+static BOOLEAN DcnPlaneOnPipe(_In_ const BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch)
+{
+    const DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    return Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape)) && s->Requestor &&
+           s->Pitch == Pitch;
+}
+
+ULONG DcnPlaneCheck(_Inout_ BC250_DEVICE* Device, _In_ const BC250_PLANE_PLAN* Plan, ULONG Pitch, ULONG BytesPerPixel,
+                    _Out_ BC250_DCN_PLANE_CHECK* Out)
+{
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    const LONG stamp = InterlockedCompareExchange(&Device->DcnPlaneModeStamp, 0, 0);
+    BC250_DML201_PLAN* dml;
+    BC250_LINK_PLANE link;
+    BC250_LINK_PLANE_DML answer;
+    BC250_OPTC_SYNC otg;
+    BC250_DISP_IO io;
+    ULONG verdict, i;
+    KIRQL irql;
+
+    RtlZeroMemory(Out, sizeof(*Out));
+    Out->Status = STATUS_DEVICE_NOT_READY;
+    if (Plan->Identity) return BC250_PLANE_OK;
+    if (!BytesPerPixel || !Pitch || (Pitch % BytesPerPixel)) return BC250_PLANE_ARGS;
+    // 664 bytes: not on the stack of a DDI.
+    dml = (BC250_DML201_PLAN*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*dml), DCN_PLANE_TAG);
+    if (dml == NULL) { Out->Status = STATUS_INSUFFICIENT_RESOURCES; return BC250_PLANE_DML; }
+    RtlZeroMemory(&link, sizeof(link));
+    link.PitchPixels = Pitch / BytesPerPixel;
+    link.ViewportWidth = Plan->DmlViewportWidth; link.ViewportHeight = Plan->DmlViewportHeight;
+    link.RecoutWidth = Plan->DmlRecoutWidth; link.RecoutHeight = Plan->DmlRecoutHeight;
+    link.HTaps = Plan->DmlHTaps; link.VTaps = Plan->DmlVTaps;
+    Out->Status = ConnectorLinkPlaneDml(Device, &link, &answer, dml);
+    if (!NT_SUCCESS(Out->Status)) { verdict = BC250_PLANE_DML; goto done; }
+    Out->Result = answer.Result; Out->Valid = answer.Valid;
+    Out->DispClockKhz = answer.DispClockKhz; Out->DppClockKhz = answer.DppClockKhz;
+    Out->BudgetDispKhz = answer.BudgetDispKhz; Out->BudgetDppKhz = answer.BudgetDppKhz;
+    Out->VStartup = dml->VStartup; Out->VReady = dml->VReady;
+    Out->VUpdateOffset = dml->VUpdateOffset; Out->VUpdateWidth = dml->VUpdateWidth;
+    verdict = Bc250PlaneDmlVerdict(Plan, answer.Result, answer.Valid, answer.DispClockKhz, answer.DppClockKhz,
+                                   answer.BudgetDispKhz, answer.BudgetDppKhz);
+    if (verdict != BC250_PLANE_OK) goto done;
+    if (Device->Mmio == NULL) { verdict = BC250_PLANE_GLOBAL_SYNC; goto done; }
+    DcnPlaneIo(Device, &io);
+    if (Bc250OptcReadGlobalSync(&io, &otg) < 0) { verdict = BC250_PLANE_GLOBAL_SYNC; goto done; }
+    Out->OtgVStartup = otg.VStartup; Out->OtgVUpdateOffset = otg.VUpdateOffset;
+    verdict = Bc250PlaneSyncVerdict(Plan, dml->VStartup, dml->VUpdateOffset, otg.VStartup, otg.VUpdateOffset);
+    if (verdict != BC250_PLANE_OK) goto done;
+    // The range checks of the live requestor write, so that an approved plan is one the flip can write.
+    if (Bc250Dcn201RequestorValidate(dml, answer.DchubRefClockKhz) < 0) { verdict = BC250_PLANE_DML; goto done; }
+    KeAcquireSpinLock(&s->Lock, &irql);
+    for (i = 0; i < DCN_PLANE_APPROVALS; i++) {
+        DCN_PLANE_APPROVAL* entry = &s->Approved[i];
+        if (entry->Sequence != 0 && entry->ModeStamp == stamp && entry->Pitch == Pitch &&
+            RtlEqualMemory(&entry->Shape, &Plan->Scaler, sizeof(Plan->Scaler)))
+            break;
+    }
+    {
+        DCN_PLANE_APPROVAL* entry = i < DCN_PLANE_APPROVALS ? &s->Approved[i] :
+                                    &s->Approved[s->Next++ % DCN_PLANE_APPROVALS];
+        InterlockedIncrement(&entry->Sequence);     // odd: a reader that sees this ignores the entry
+        entry->ModeStamp = stamp;
+        entry->Shape = Plan->Scaler;
+        entry->Pitch = Pitch;
+        entry->DchubRefClockKhz = answer.DchubRefClockKhz;
+        entry->Plan = *dml;
+        InterlockedIncrement(&entry->Sequence);     // even again, after the writes (a full barrier)
+    }
+    KeReleaseSpinLock(&s->Lock, irql);
+done:
+    ExFreePoolWithTag(dml, DCN_PLANE_TAG);
+    return verdict;
+}
+
+BOOLEAN DcnPlaneApproved(_In_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch)
+{
+    DCN_PLANE_APPROVAL copy;
+    // Outside L the pipe's view is a hint only: DcnPlaneShapeAdmit asks again inside L.
+    if (DcnPlaneOnPipe(Device, Shape, Pitch)) return TRUE;
+    return DcnPlaneApprovalFind(Device, Shape, Pitch, &copy);
+}
+
+// BD-223: a plane 0 shape is for the source mode on the screen now: its target is that mode, which is also the
+// timing's active area (dcn_plane.c refuses a source mode that stage A scales). The 1:1 shape of that mode is kept
+// next to it, so that the next full-size flip, a restore or a writer can put it back in its own update. Inside L,
+// before any write: a plane that is not on the pipe needs an approval of this mode, and its plan is copied to Staged,
+// because Check may replace the entry before DcnPlaneShapeLocked runs.
+static BOOLEAN DcnPlaneShapeAdmit(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch)
+{
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    const ULONG width = DisplaySourceWidth(Device), height = DisplaySourceHeight(Device);
+    BC250_SCALER_PLAN native;
+    DCN_PLANE_APPROVAL copy;
+    s->StagedValid = FALSE;
+    if (Shape->Scaling != BC250_SCALING_PLANE || Shape->TargetWidth != width || Shape->TargetHeight != height)
+        return FALSE;
+    if (Bc250ScalerPlan(width, height, width, height, BC250_SCALING_IDENTITY, &native) < 0) return FALSE;
+    if (DcnPlaneOnPipe(Device, Shape, Pitch)) return TRUE;
+    if (!DcnPlaneApprovalFind(Device, Shape, Pitch, &copy)) return FALSE;
+    s->StagedShape = copy.Shape;
+    s->StagedPitch = copy.Pitch;
+    s->StagedRefKhz = copy.DchubRefClockKhz;
+    s->Staged = copy.Plan;
+    s->StagedValid = TRUE;
+    return TRUE;
+}
+
+// The mode's global sync and requestor back, in that order (the reverse of a plane flip), and then, when Scaler is
+// TRUE and a scaled shape is on the pipe, the 1:1 shape of the source mode. Inside the acknowledged OTG0 lock. A field
+// that is written back is forgotten; after a failure the rest stays for the next try. The watermarks stay raised
+// until the next commit programs them (Linux lowers them in dcn20_optimize_bandwidth, after the frame; a flip cannot
+// wait for that frame).
+static NTSTATUS DcnPlaneRestoreLocked(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_DISP_IO* Io, BOOLEAN Scaler)
+{
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    BC250_SCALER_RESULT result;
+    long status = STATUS_SUCCESS;
+
+    if (s->SyncSaved) {
+        status = Bc250OptcGlobalSyncLocked(Io, &s->Sync);
+        if (status >= 0) s->SyncSaved = FALSE;
+    }
+    if (status >= 0 && s->Requestor) {
+        status = Bc250Dcn201RequestorRestoreLocked(Io, &s->Save);
+        if (status >= 0) {
+            s->Requestor = FALSE;
+            s->Pitch = 0;
+            s->Save.Count = 0;
+            InterlockedIncrement(&Device->DcnPlaneRequestorRestores);
+        }
+    }
+    if (status >= 0 && Scaler && Device->DcnPlaneScaled) {
         // The 1:1 shape of the source mode on the screen now, planned again here: DcnPlaneShapeModeset clears the
         // scaled state at every mode program, so this is the mode the scaled shape was admitted for.
         if (Bc250ScalerPlan(DisplaySourceWidth(Device), DisplaySourceHeight(Device), DisplaySourceWidth(Device),
-                            DisplaySourceHeight(Device), BC250_SCALING_IDENTITY, &Device->DcnPlaneNative) < 0) {
-            InterlockedIncrement(&Device->DcnPlaneShapeFailures);
-            return STATUS_INVALID_DEVICE_STATE;
+                            DisplaySourceHeight(Device), BC250_SCALING_IDENTITY, &Device->DcnPlaneNative) < 0)
+            status = STATUS_INVALID_DEVICE_STATE;
+        if (status >= 0) status = Bc250ScalerProgramLocked(Io, &Device->DcnPlaneNative, &result);
+        if (status >= 0) {
+            Device->DcnPlaneScaled = FALSE;
+            InterlockedIncrement(&Device->DcnPlaneShapeRestores);
+        } else {
+            // Unknown after a failed write: the pipe counts as scaled with no known shape.
+            RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
         }
-        write = &Device->DcnPlaneNative;
-    } else {
-        if (Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape)))
-            return STATUS_SUCCESS;
-        write = Shape;
     }
-    RtlZeroMemory(&io, sizeof(io));
-    io.Context = Device; io.Read = RuntimeRead; io.Write = RuntimeWrite; io.Stall = RuntimeStall;
-    status = Bc250ScalerProgramLocked(&io, write, &result);
-    if (status < 0) {
-        // Unknown after a failed write: the pipe counts as scaled with no known shape, so the next flip writes its
-        // own shape again, and a full-size one writes the 1:1 shape.
-        InterlockedIncrement(&Device->DcnPlaneShapeFailures);
-        Device->DcnPlaneScaled = TRUE;
-        RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
-        return (NTSTATUS)status;
-    }
+    if (status < 0) InterlockedIncrement(&Device->DcnPlaneShapeFailures);
+    return (NTSTATUS)status;
+}
+
+// Inside DcnFlipWriteSequence's acknowledged lock, before the address. Shape NULL: the mode's own pipe, written only
+// when a plane is on the pipe (DcnPlaneRestoreLocked). A plane that is on the pipe at Pitch is not written again, so a
+// run of game frames writes the plan once. No log, no wait, no floating point: this runs at DIRQL in the transaction.
+static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape, ULONG Pitch)
+{
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    BC250_DISP_IO io;
+    BC250_SCALER_RESULT result;
+    BC250_OPTC_SYNC sync;
+    BOOLEAN shapeOn;
+    // The copy is for this transaction only: whatever this call does, the next one needs its own admission.
+    const BOOLEAN staged = s->StagedValid;
+    long status;
+
+    s->StagedValid = FALSE;
+    DcnPlaneIo(Device, &io);
     if (Shape == NULL) {
-        Device->DcnPlaneScaled = FALSE;
-        InterlockedIncrement(&Device->DcnPlaneShapeRestores);
-    } else {
-        Device->DcnPlaneShape = *Shape;
-        Device->DcnPlaneScaled = TRUE;
-        InterlockedIncrement(&Device->DcnPlaneShapeWrites);
+        if (!Device->DcnPlaneScaled && !s->Requestor && !s->SyncSaved) return STATUS_SUCCESS;
+        return DcnPlaneRestoreLocked(Device, &io, TRUE);
     }
-    return STATUS_SUCCESS;
+    if (DcnPlaneOnPipe(Device, Shape, Pitch)) return STATUS_SUCCESS;
+    // DcnPlaneShapeAdmit staged this plane in the same transaction.
+    if (!staged || s->StagedPitch != Pitch || !RtlEqualMemory(&s->StagedShape, Shape, sizeof(*Shape))) {
+        InterlockedIncrement(&Device->DcnPlaneShapeFailures);
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+    shapeOn = Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape));
+    // 1. The global sync (dcn20_program_tg): VREADY and the VUPDATE width of the plan. The mode's values are saved once,
+    // before the first plane write. Bc250OptcGlobalSyncLocked refuses another VSTARTUP or VUPDATE offset before any write.
+    status = STATUS_SUCCESS;
+    if (!s->SyncSaved) {
+        status = Bc250OptcReadGlobalSync(&io, &s->Sync);
+        if (status >= 0) s->SyncSaved = TRUE;
+    }
+    if (status >= 0) {
+        sync.VReady = s->Staged.VReady; sync.VStartup = s->Staged.VStartup;
+        sync.VUpdateOffset = s->Staged.VUpdateOffset; sync.VUpdateWidth = s->Staged.VUpdateWidth;
+        status = Bc250OptcGlobalSyncLocked(&io, &sync);
+    }
+    // 2. The requestor (dcn20_update_dchubp_dpp hubp_setup), with the watermarks raised first. Save captures the mode's
+    // fields at the first plane write only, so a flip from one plane to another keeps the mode's values.
+    if (status >= 0) {
+        s->Pitch = 0;
+        status = Bc250Dcn201RequestorLocked(&io, &s->Staged, s->StagedRefKhz, &s->Save);
+        if (s->Save.Count != 0) s->Requestor = TRUE;
+        if (status >= 0) {
+            s->Pitch = Pitch;
+            InterlockedIncrement(&Device->DcnPlaneRequestorWrites);
+        }
+    }
+    // 3. The scaler (dpp_setup), unless the pipe has this shape already (the same plane at another pitch).
+    if (status >= 0 && !shapeOn) {
+        status = Bc250ScalerProgramLocked(&io, Shape, &result);
+        if (status >= 0) {
+            Device->DcnPlaneShape = *Shape;
+            Device->DcnPlaneScaled = TRUE;
+            InterlockedIncrement(&Device->DcnPlaneShapeWrites);
+        } else {
+            // Unknown after a failed write: the pipe counts as scaled with no known shape, so the next flip writes its
+            // own shape again, and a full-size one writes the 1:1 shape.
+            Device->DcnPlaneScaled = TRUE;
+            RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
+        }
+    }
+    if (status < 0) InterlockedIncrement(&Device->DcnPlaneShapeFailures);
+    return (NTSTATUS)status;
+}
+
+// OTG0's master update lock for a writer's restore, acknowledged as in DcnFlipWriteSequence.
+static NTSTATUS DcnPlaneOtgLock(_Inout_ BC250_DEVICE* Device)
+{
+    ULONG value = 0, waited = 0;
+    NTSTATUS status = MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 1, TRUE);
+    while (NT_SUCCESS(status)) {
+        status = MmioDcnRead(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &value);
+        if (!NT_SUCCESS(status) || (value & OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK) != 0) break;
+        if (waited == 10) {
+            InterlockedIncrement(&Device->DcnLockTimeouts);
+            status = STATUS_IO_TIMEOUT;
+            break;
+        }
+        KeStallExecutionProcessor(1);
+        waited++;
+    }
+    return status;
 }
 
 // Every program of the pipe shape by a mode (modeset.c, connector_link.c) replaces the shape of a plane, so the pipe
 // is no longer scaled for a plane. The callers hold the primary as a writer or own a stopped pipe: no flip transaction
-// reads these fields meanwhile.
-void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device)
+// reads these fields meanwhile. PipeProgrammed: the caller writes the mode's own requestor and global sync as well
+// (connector_link.c Apply), so the saved ones are old. Otherwise (modeset.c, which writes only the scaler) the saved
+// requestor and global sync go back here, in their own acknowledged lock.
+void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device, BOOLEAN PipeProgrammed)
 {
+    DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    BC250_DISP_IO io;
+    NTSTATUS status = STATUS_SUCCESS;
+
+    if (!PipeProgrammed && (s->Requestor || s->SyncSaved)) {
+        status = Device->Mmio != NULL ? DcnPlaneOtgLock(Device) : STATUS_DEVICE_NOT_READY;
+        if (NT_SUCCESS(status)) {
+            DcnPlaneIo(Device, &io);
+            status = DcnPlaneRestoreLocked(Device, &io, FALSE);
+        }
+        if (Device->Mmio != NULL) (void)MmioDcnWriteEx(Device, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, 0, TRUE);
+    }
+    if (s->Requestor || s->SyncSaved || !NT_SUCCESS(status)) InterlockedIncrement(&Device->DcnPlaneRequestorDropped);
+    s->StagedValid = FALSE;
+    s->Requestor = FALSE;
+    s->Pitch = 0;
+    s->Save.Count = 0;
+    s->SyncSaved = FALSE;
     Device->DcnPlaneScaled = FALSE;
     RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
     InterlockedIncrement(&Device->DcnPlaneModeStamp);
@@ -1362,10 +1648,14 @@ void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device)
 
 // The view of the pipe for the flip transaction: TRUE when it shows Shape (NULL: the 1:1 shape of the source mode).
 // Inside L.
+// Since stage S2 the plane's requestor and global sync count too: a pipe left with a plane's requestor, or with one
+// whose write failed (Pitch 0), is not the mode's pipe and not the plane's either. The caller compares the pitch.
 BOOLEAN DcnPlaneShapeIs(_In_ const BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape)
 {
-    if (Shape == NULL) return !Device->DcnPlaneScaled;
-    return Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape));
+    const DCN_PLANE_STATE* s = DcnPlaneStateOf(Device);
+    if (Shape == NULL) return !Device->DcnPlaneScaled && !s->Requestor && !s->SyncSaved;
+    return Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape)) && s->Requestor &&
+           s->Pitch != 0;
 }
 
 // A copy of the scaled shape on the pipe, for a vsync report. FALSE when the pipe has the 1:1 shape. Inside L.
@@ -1738,16 +2028,19 @@ NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG Card
     // RuntimePost.Pitch (connector_link.c Plan), the source format of every plane encoding (plane_format.h, the
     // same-size rule), and the format registers keep its DET base (DcnPlaneFormatRegisters). So it takes every
     // format at that pitch, where 0.7.216.62 to 0.7.216.103 took ARGB8888 only.
+    // BD-223 stage S2: a plane (Shape) takes any pitch, because its flip programs the requestor of its own display plan
+    // at that pitch (DcnPlaneShapeLocked). The pipe's other rules stay.
     if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) {
         if (!InterlockedCompareExchange(&Device->RuntimePostValid,0,0) ||
-            Pitch!=Device->RuntimePost.Pitch ||
+            (Shape==NULL && Pitch!=Device->RuntimePost.Pitch) ||
             DisplaySourceWidth(Device)!=Device->RuntimePost.Width ||
             DisplaySourceHeight(Device)!=Device->RuntimePost.Height) return STATUS_NOT_SUPPORTED;
     } else if (Device->Modeset.InheritedFixed && (!Device->Modeset.InheritedSupport ||
-        Pitch != Device->Post.Pitch || PlaneFormat != BC250_PLANE_FORMAT_ARGB8888)) return STATUS_NOT_SUPPORTED;
+        (Shape==NULL && Pitch != Device->Post.Pitch) || PlaneFormat != BC250_PLANE_FORMAT_ARGB8888))
+        return STATUS_NOT_SUPPORTED;
     if (plane==NULL || !DcnLinearSurfaceBytes(width,height,Pitch,plane->BytesPerPixel,&bytes) ||
         bytes>AllocationBytes) return STATUS_INVALID_PARAMETER;
-    if (Shape && !DcnPlaneShapeAdmit(Device,Shape)) return STATUS_NOT_SUPPORTED;
+    if (Shape && !DcnPlaneShapeAdmit(Device,Shape,Pitch)) return STATUS_NOT_SUPPORTED;
     // A format other than the firmware's needs the firmware's format captured at start: restore writes it back.
     // Refused before any register is touched, so the plane keeps its frame. wddm.c does not offer the flip to the
     // compositor's driver in that case (BC250_SCANOUT_CAPS_PLANE_FORMATS), so this is a guard, not a path.

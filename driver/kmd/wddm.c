@@ -435,12 +435,6 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 #define BC250_WDDM_SCALED_PLANE_MPO_VSYNC 0x2ul
 #define BC250_WDDM_SCALED_PLANE_TWO_PLANES 0x4ul
 #define BC250_WDDM_SCALED_PLANE_MASK 0x7ul
-#define BC250_WDDM_PLANE_APPROVALS 4u
-typedef struct _BC250_WDDM_PLANE_APPROVAL {
-    volatile LONG Sequence;             // odd while Check writes the entry; 0 for an entry never written
-    LONG ModeStamp;                     // BC250_DEVICE::DcnPlaneModeStamp before DML ran
-    BC250_SCALER_PLAN Shape;
-} BC250_WDDM_PLANE_APPROVAL;
 #endif
 
 typedef struct _BC250_WDDM {
@@ -1016,10 +1010,7 @@ typedef struct _BC250_WDDM {
     volatile LONG PlaneChecksOff;                       // Check calls with bit 0 off: answered "not supported"
     volatile LONG PlaneSets, PlaneSetsScaled, PlaneSetsRefused, PlaneSetsUnapproved;
     volatile LONG PlaneNotes;                           // the log budget of both DDIs
-    // The shapes that DML approved, written by Check at PASSIVE_LEVEL under Lock and read by the flip DDI at any
-    // level without a lock (WddmPlaneApproved): a sequence count per entry, odd while it is written.
-    BC250_WDDM_PLANE_APPROVAL PlaneApproved[BC250_WDDM_PLANE_APPROVALS];
-    ULONG PlaneApprovedNext;
+    // The planes that DML approved, with their display plans, are dcn.c's (DcnPlaneCheck, DcnPlaneApproved).
 #endif
 } BC250_WDDM;
 
@@ -3640,6 +3631,10 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
             GuardLog("wddm summary: plane shape writes %ld restores %ld failures %ld mode stamp %ld",
                      device->DcnPlaneShapeWrites, device->DcnPlaneShapeRestores, device->DcnPlaneShapeFailures,
                      device->DcnPlaneModeStamp);
+        if (device != NULL)
+            GuardLog("wddm summary: plane requestor writes %ld restores %ld dropped %ld",
+                     device->DcnPlaneRequestorWrites, device->DcnPlaneRequestorRestores,
+                     device->DcnPlaneRequestorDropped);
         for (v = 0; v < BC250_PLANE_VERDICTS; v++)
             if (Wddm->PlaneChecks[v])
                 GuardLog("wddm summary: plane check %s %ld", Bc250PlaneVerdictText(v), Wddm->PlaneChecks[v]);
@@ -11439,8 +11434,9 @@ Report:
 // ---- BD-223 (lab flavour): plane 0 of the multiplane-overlay DDIs ---------------------------------------------------
 //
 // docs/design/scaled-flip.md. One plane, layer 0, the whole allocation scaled 1:1 or up into its DstRect by DSCL0, at
-// the pitch of the committed pipe. Check answers yes only for that and only when DML fits the scaled pipe into the
-// clocks that run; everything else is composed by DWM as before. The flip DDI programs a plane that Check approved,
+// any pitch (stage S2: the flip programs the plane's own display plan). Check answers yes only for that and only when
+// DML fits the scaled pipe into the clocks that run and the global sync of OTG0; everything else is composed by DWM
+// as before. The flip DDI programs a plane that Check approved,
 // through the same transaction as SetVidPnSourceAddress (WddmFlipEntry), with the shape inside the same OTG lock as
 // the address (dcn.c DcnFlipWriteSequence).
 
@@ -11518,51 +11514,6 @@ static void WddmPlaneRequestOf(_In_ BC250_DEVICE* Device, _In_ const BC250_WDDM*
                               A->StretchQuality == DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_HIGH) ? 1 : 0;
 }
 
-// Check records a shape that DML approved under the mode of Stamp. PASSIVE_LEVEL; Lock orders the writers.
-static void WddmPlaneApprove(_Inout_ BC250_WDDM* Wddm, LONG Stamp, _In_ const BC250_SCALER_PLAN* Shape)
-{
-    BC250_WDDM_PLANE_APPROVAL* entry;
-    KIRQL irql;
-    ULONG i;
-
-    KeAcquireSpinLock(&Wddm->Lock, &irql);
-    for (i = 0; i < BC250_WDDM_PLANE_APPROVALS; i++) {
-        entry = &Wddm->PlaneApproved[i];
-        if (entry->Sequence != 0 && entry->ModeStamp == Stamp && RtlEqualMemory(&entry->Shape, Shape, sizeof(*Shape))) {
-            KeReleaseSpinLock(&Wddm->Lock, irql);
-            return;
-        }
-    }
-    entry = &Wddm->PlaneApproved[Wddm->PlaneApprovedNext++ % BC250_WDDM_PLANE_APPROVALS];
-    InterlockedIncrement(&entry->Sequence);     // odd: a reader that sees this ignores the entry
-    entry->ModeStamp = Stamp;
-    entry->Shape = *Shape;
-    InterlockedIncrement(&entry->Sequence);     // even again, after the writes (a full barrier)
-    KeReleaseSpinLock(&Wddm->Lock, irql);
-}
-
-// TRUE when Check approved Shape under the mode on the screen now. Any level, no lock: an entry that changes while it
-// is read has another sequence count after the copy and does not count.
-static BOOLEAN WddmPlaneApproved(_In_ BC250_DEVICE* Device, _In_ BC250_WDDM* Wddm, _In_ const BC250_SCALER_PLAN* Shape)
-{
-    const LONG stamp = InterlockedCompareExchange(&Device->DcnPlaneModeStamp, 0, 0);
-    ULONG i;
-
-    for (i = 0; i < BC250_WDDM_PLANE_APPROVALS; i++) {
-        BC250_WDDM_PLANE_APPROVAL* entry = &Wddm->PlaneApproved[i];
-        const LONG before = InterlockedCompareExchange(&entry->Sequence, 0, 0);
-        LONG modeStamp;
-        BC250_SCALER_PLAN copy;
-        if (before == 0 || (before & 1)) continue;
-        modeStamp = entry->ModeStamp;
-        copy = entry->Shape;
-        KeMemoryBarrier();
-        if (InterlockedCompareExchange(&entry->Sequence, 0, 0) != before) continue;
-        if (modeStamp == stamp && RtlEqualMemory(&copy, Shape, sizeof(copy))) return TRUE;
-    }
-    return FALSE;
-}
-
 static DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT2 Bc250WddmCheckMultiPlaneOverlaySupport2;
 static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport2(_In_ const HANDLE hAdapter,
                                                         _Inout_ DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT2* pCheck)
@@ -11593,27 +11544,21 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport2(_In_ const HANDLE hAdapt
         if (verdict == BC250_PLANE_OK && scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_PLANE_SCANOUT;
     }
     if (verdict == BC250_PLANE_OK && !plan.Identity) {
-        // DML at PASSIVE_LEVEL with the floating-point state saved (connector_link.c ConnectorLinkPlaneDml), under the
-        // mode stamp read first: a mode program during the plan makes the approval stale, and the flip refuses it.
-        const LONG stamp = InterlockedCompareExchange(&device->DcnPlaneModeStamp, 0, 0);
+        // DML at PASSIVE_LEVEL with the floating-point state saved, the clock budget, the global sync against OTG0 and
+        // the requestor's range checks (dcn.c DcnPlaneCheck). The approval keeps the plane's whole display plan under
+        // the mode stamp read first: a mode program during the plan makes it stale, and the flip refuses it.
         const BC250_PLANE_ENCODING* encoding = Bc250PlaneEncoding(r.PlaneFormat);
-        BC250_LINK_PLANE link;
-        BC250_LINK_PLANE_DML dml;
-        NTSTATUS status;
-        RtlZeroMemory(&link, sizeof(link));
-        link.PitchPixels = encoding ? r.SurfacePitch / encoding->BytesPerPixel : 0;
-        link.ViewportWidth = plan.DmlViewportWidth; link.ViewportHeight = plan.DmlViewportHeight;
-        link.RecoutWidth = plan.DmlRecoutWidth; link.RecoutHeight = plan.DmlRecoutHeight;
-        link.HTaps = plan.DmlHTaps; link.VTaps = plan.DmlVTaps;
-        status = ConnectorLinkPlaneDml(device, &link, &dml);
-        verdict = NT_SUCCESS(status) ? Bc250PlaneDmlVerdict(&plan, dml.Result, dml.Valid, dml.DispClockKhz,
-                                                            dml.DppClockKhz, dml.BudgetDispKhz, dml.BudgetDppKhz)
-                                     : BC250_PLANE_DML;
-        if (verdict == BC250_PLANE_OK) WddmPlaneApprove(wddm, stamp, &plan.Scaler);
-        if (InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS)
+        BC250_DCN_PLANE_CHECK dml;
+        verdict = encoding ? DcnPlaneCheck(device, &plan, r.SurfacePitch, encoding->BytesPerPixel, &dml)
+                           : BC250_PLANE_FORMAT;
+        if (encoding == NULL) RtlZeroMemory(&dml, sizeof(dml));
+        if (InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS) {
             GuardLog("wddm: MPO check DML 0x%08X result %d valid %lu disp %lu/%lu dpp %lu/%lu kHz -> %s",
-                     (ULONG)status, dml.Result, dml.Valid, dml.DispClockKhz, dml.BudgetDispKhz, dml.DppClockKhz,
+                     (ULONG)dml.Status, dml.Result, dml.Valid, dml.DispClockKhz, dml.BudgetDispKhz, dml.DppClockKhz,
                      dml.BudgetDppKhz, Bc250PlaneVerdictText(verdict));
+            GuardLog("wddm: MPO check sync vstartup %lu/%lu vupdate %lu/%lu vready %lu width %lu", dml.VStartup,
+                     dml.OtgVStartup, dml.VUpdateOffset, dml.OtgVUpdateOffset, dml.VReady, dml.VUpdateWidth);
+        }
     }
     if (verdict < BC250_PLANE_VERDICTS) InterlockedIncrement(&wddm->PlaneChecks[verdict]);
     pCheck->Supported = verdict == BC250_PLANE_OK ? TRUE : FALSE;
@@ -11671,7 +11616,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2(_In_ const 
     if (verdict != BC250_PLANE_OK) goto refused;
     // A plane of the source mode's own size at its origin is the full-size flip of today.
     if (plan.Identity) return WddmFlipEntry(hAdapter, &flip, NULL);
-    if (!WddmPlaneApproved(device, wddm, &plan.Scaler)) {
+    if (!DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch)) {
         InterlockedIncrement(&wddm->PlaneSetsUnapproved);
         verdict = BC250_PLANE_DML;
         goto refused;

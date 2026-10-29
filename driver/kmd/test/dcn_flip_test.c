@@ -343,23 +343,27 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE *d, ULONG reg, ULONG value, BO
     return STATUS_SUCCESS;
 }
 /* BD-223: the pipe's shape. DcnPlaneShapeLocked runs inside the acknowledged lock, before either address half,
-   and once per write sequence; DcnPlaneShapeAdmit answers as shape_model.admit says. dcn_scale_test.c tests the
-   register writes of the shape itself (Bc250ScalerProgramLocked). */
-static struct { unsigned calls, shaped, admits; int admit; NTSTATUS status; const BC250_SCALER_PLAN *last; } shape_model;
-static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape)
+   and once per write sequence, with the flip's pitch; DcnPlaneShapeAdmit answers as shape_model.admit says.
+   dcn_scale_test.c tests the register writes of the shape itself (Bc250ScalerProgramLocked), dcn201_pipe_test.c
+   and optc_test.c those of the plane's requestor and global sync. */
+static struct { unsigned calls, shaped, admits; int admit; NTSTATUS status; const BC250_SCALER_PLAN *last;
+                ULONG pitch, admit_pitch; } shape_model;
+static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape, ULONG pitch)
 {
     (void)d;
     CHECK(model.locked && model.acknowledged && model.address_writes == 0);
     shape_model.calls++;
     shape_model.last = shape;
+    shape_model.pitch = pitch;
     if (shape) shape_model.shaped++;
     return shape_model.status;
 }
-static BOOLEAN DcnPlaneShapeAdmit(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape)
+static BOOLEAN DcnPlaneShapeAdmit(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape, ULONG pitch)
 {
     (void)d; (void)shape;
     CHECK(!model.locked && model.writes == 0);
     shape_model.admits++;
+    shape_model.admit_pitch = pitch;
     return shape_model.admit;
 }
 /* ACTUAL_SOURCE */
@@ -1030,6 +1034,7 @@ static void ShapedSourceAddress(void)
                                      &physical, &wrote) == STATUS_SUCCESS);
     CHECK(wrote && physical == 0x201000 && model.latched == physical && !model.locked);
     CHECK(shape_model.admits == 1 && shape_model.calls == 1 && shape_model.shaped == 1 && shape_model.last == &shape);
+    CHECK(shape_model.admit_pitch == 256 && shape_model.pitch == 256);
     SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
     CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE,
                                &physical, &wrote) == STATUS_INVALID_PARAMETER);
@@ -1043,12 +1048,30 @@ static void ShapedSourceAddress(void)
     CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,
                                      &physical, &wrote) == STATUS_NOT_SUPPORTED);
     CHECK(!wrote && model.writes == 0 && shape_model.calls == 0);
-    /* The pipe's pitch rule stays: a runtime mode at another pitch refuses the plane before the admission. */
+    /* Stage S2: a plane takes another pitch than the runtime mode's, because its flip programs the requestor of its
+       own plan at that pitch. The admission and the locked step get the plane's pitch. */
     SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
     d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1;
     CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 512, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE, &shape,
-                                     &physical, &wrote) == STATUS_NOT_SUPPORTED);
+                                     &physical, &wrote) == STATUS_SUCCESS);
+    CHECK(wrote && shape_model.admits == 1 && shape_model.admit_pitch == 512 && shape_model.pitch == 512);
+    /* The full-size flip keeps the pipe's pitch rule: no shape, no requestor of its own. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 512, BC250_PLANE_FORMAT_ARGB8888, 8192, FALSE,
+                               &physical, &wrote) == STATUS_NOT_SUPPORTED);
     CHECK(!wrote && model.writes == 0 && shape_model.admits == 0);
+    /* The same for the inherited fixed pipe: a plane at another pitch is admitted, a full-size flip is not. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = TRUE;
+    CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 512, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE, &shape,
+                                     &physical, &wrote) == STATUS_SUCCESS);
+    CHECK(wrote && shape_model.admit_pitch == 512 && shape_model.pitch == 512);
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    d.Modeset.InheritedFixed = TRUE; d.Modeset.InheritedSupport = TRUE;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 512, BC250_PLANE_FORMAT_ARGB8888, 8192, FALSE,
+                               &physical, &wrote) == STATUS_NOT_SUPPORTED);
+    CHECK(!wrote && model.writes == 0);
     /* The address of a plane must fit the carve-out for the plane's own size. */
     SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
     CHECK(DcnFlipSourceAddressShaped(&d, 0x0, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,

@@ -95,9 +95,11 @@ the rule also admits a chain that is not a mode when `bc250_scanout_mpo_geometry
 in each direction. `SetVidPnSourceAddress` still refuses such a primary (`BC250_SCANOUT_GEOMETRY`). It reaches the
 plane only through the MPO flip, after the KMD check approved its shape.
 
-The present KMD stage also needs the plane's pitch to be the committed pipe's pitch, because the flip does not
-program the RQ, DLG and TTU registers again. 1920x1080 on the 1920x1200 mode flips. 1280x720 is refused at the
-check (verdict `pitch`) and composed. The shells do not copy this rule: it goes away with step S2.
+From step S2 the KMD takes a plane at any pitch: the flip programs the plane's own RQ, DLG and TTU registers and its
+global sync from the DML plan that Check kept ([scaled-flip.md](scaled-flip.md), "The display plan of a plane").
+Stage S1 refused 1280x720 on the 1920x1200 mode with verdict `pitch`. Step S2 admits it when DML fits it into the
+clocks that run and its VSTARTUP and VUPDATE offset are the ones of OTG0 (verdict `global-sync` otherwise). The
+shells have no pitch rule of their own.
 
 Open: a D3D11 borderless or windowed flip-model chain is a `DISPLAYABLE_SURFACE` without `pPrimaryDesc`, and the
 surface record refuses `SCANOUT` without `PRIMARY` (`surface_resource_private.h`). Such a chain cannot reach a
@@ -126,7 +128,7 @@ own. The steps change what the KMD check admits and the constants of the header.
 | `StereoFormat`, `StereoFlipMode`, the stereo frame fields | `Stereo` | Mono only |
 | `ColorSpaceType` | `NotSrgb` | `RGB_FULL_G22_NONE_P709` only |
 | `StretchQuality` | `StretchQualityKnown` | Bilinear or high: the polyphase filter meets both |
-| The allocation's description | `SurfaceWidth`, `SurfaceHeight`, `SurfacePitch`, `PlaneFormat` | A scan-out allocation (`scanout`), the committed pitch (`pitch`) |
+| The allocation's description | `SurfaceWidth`, `SurfaceHeight`, `SurfacePitch`, `PlaneFormat` | A scan-out allocation (`scanout`), any pitch from step S2 (stage S1: the committed pitch, `pitch`) |
 
 Every refusal has a numbered verdict in `dcn_plane.h` (`BC250_PLANE_*`), and `dcn_plane_test.c` drives each one. The
 DML step (`ConnectorLinkPlaneDml`) refuses a pipe that needs more DISPCLK or DPPCLK than the mode programmed.

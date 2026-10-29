@@ -311,8 +311,17 @@ typedef struct _BC250_DEVICE {
     volatile LONG DcnPlaneShapeRestores;    // writes of the native shape after a scaled one
     volatile LONG DcnPlaneShapeFailures;    // shape writes refused or failed (the lock not held, an MMIO failure)
     // Incremented by DcnPlaneShapeModeset at every program of the pipe by a mode: a plane that DML approved for one
-    // mode is not flipped under the next one (wddm.c WddmPlaneApproved).
+    // mode is not flipped under the next one (dcn.c DcnPlaneApproved).
     volatile LONG DcnPlaneModeStamp;
+    // BD-223 stage S2 (dcn.c DCN_PLANE_STATE): Check's approvals with their DML plans, the flip's copy of one, and the
+    // requestor and global sync of the mode while a plane's own are on the pipe. Opaque here, because the DML types
+    // do not compile with every unit that includes this header (their bool is not the one of amdgpu.h). dcn.c has a
+    // C_ASSERT that the state fits.
+#define BC250_DCN_PLANE_STATE_BYTES 6144u
+    ULONGLONG DcnPlaneState[BC250_DCN_PLANE_STATE_BYTES / sizeof(ULONGLONG)];   // 8-byte aligned, as the state needs
+    volatile LONG DcnPlaneRequestorWrites;  // flips that wrote a plane's requestor
+    volatile LONG DcnPlaneRequestorRestores; // writes of the mode's requestor after a plane's
+    volatile LONG DcnPlaneRequestorDropped;  // mode programs that found a plane's requestor on the pipe
     // M15.14 plane format (0.7.216.20, plane_format.h). The firmware's three format registers, read once per start
     // by DcnCaptureFirmwareFormat (WddmStart). DcnPlaneFormats is TRUE only when they decode to ARGB8888, and
     // only then may a flip program another format or restore check one. DcnPlaneFormat is the plane format the
@@ -884,9 +893,31 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
 NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch,
     ULONG PlaneFormat, ULONGLONG AllocationBytes, BOOLEAN Immediate, _In_opt_ const BC250_SCALER_PLAN* Shape,
     _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote);
-// BD-223: the pitch a plane 0 must have on the pipe as it is committed (DcnFlipSourceAddress's own rule).
+// BD-223: the pitch a full-size flip must have on the pipe as it is committed (DcnFlipSourceAddress's own rule).
 ULONG DcnPlanePitch(_In_ BC250_DEVICE* Device);
-void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device);
+// BD-223 stage S2: what Check's DML step answered, for its log line. Status is ConnectorLinkPlaneDml's; the rest is
+// that call's summary (connector.h) and the global sync of the plan and of OTG0.
+typedef struct _BC250_DCN_PLANE_CHECK {
+    NTSTATUS Status;
+    int Result;
+    ULONG Valid, DispClockKhz, DppClockKhz, BudgetDispKhz, BudgetDppKhz;
+    ULONG VStartup, VReady, VUpdateOffset, VUpdateWidth;
+    ULONG OtgVStartup, OtgVUpdateOffset;
+} BC250_DCN_PLANE_CHECK;
+struct _BC250_PLANE_PLAN;
+// PASSIVE_LEVEL (CheckMultiPlaneOverlaySupport2). DML for the plane at Pitch (bytes, BytesPerPixel its unit), the
+// clock budget, the global sync against OTG0 and the requestor's own range checks. An approved plane is kept with
+// its whole plan under the mode stamp read before DML ran, so that a flip can program the plan (DcnPlaneShapeLocked)
+// without DML. Returns the verdict (dcn_plane.h enum bc250_plane_verdict).
+ULONG DcnPlaneCheck(_Inout_ BC250_DEVICE* Device, _In_ const struct _BC250_PLANE_PLAN* Plan, ULONG Pitch,
+    ULONG BytesPerPixel, _Out_ BC250_DCN_PLANE_CHECK* Out);
+// Any level, no lock: TRUE when Check approved Shape at Pitch under the mode on the screen now, or when the pipe
+// shows that plane already.
+BOOLEAN DcnPlaneApproved(_In_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch);
+// MmioStart: an empty approval table and no plane requestor on the pipe.
+void DcnPlaneStateReset(_Inout_ BC250_DEVICE* Device);
+// Every mode program of the pipe. PipeProgrammed: the caller writes the mode's requestor and global sync too.
+void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device, BOOLEAN PipeProgrammed);
 BOOLEAN DcnPlaneShapeIs(_In_ const BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape);
 BOOLEAN DcnPlaneShapeCurrent(_In_ const BC250_DEVICE* Device, _Out_ BC250_SCALER_PLAN* Shape);
 // BD-170: after an immediate flip, sample P' (SURFACE_FLIP_PENDING clear and PRIMARY_SURFACE_ADDRESS read back as

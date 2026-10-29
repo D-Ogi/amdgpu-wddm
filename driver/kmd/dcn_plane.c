@@ -7,7 +7,7 @@ const char* Bc250PlaneVerdictText(unsigned long Verdict)
     static const char* const text[BC250_PLANE_VERDICTS] = {
         "ok", "args", "count", "layer", "disabled", "source-mode", "format", "surface", "src-crop", "dst-bounds",
         "clip", "mirror", "rotation", "blend", "interlaced", "stereo", "color-space", "downscale", "upscale",
-        "scaler", "dml", "clocks", "stretch-quality", "pitch", "scanout",
+        "scaler", "dml", "clocks", "stretch-quality", "pitch", "scanout", "global-sync",
     };
     return Verdict < BC250_PLANE_VERDICTS ? text[Verdict] : "?";
 }
@@ -68,9 +68,8 @@ unsigned long Bc250PlanePrepare(const BC250_PLANE_REQUEST* R, BC250_PLANE_PLAN* 
     if (R->SurfaceWidth < BC250_PLANE_MIN_DIMENSION || R->SurfaceHeight < BC250_PLANE_MIN_DIMENSION ||
         R->SurfaceWidth > BC250_SCALE_MAX_DIMENSION || R->SurfaceHeight > BC250_SCALE_MAX_DIMENSION)
         return BC250_PLANE_SURFACE;
-    // The flip writes the viewport and the scaler, not the request (RQ) and delivery (DLG/TTU) registers that the
-    // commit programmed for its pitch (connector_link.c Plan, dcn.c DcnFlipSourceAddress), so the pitch stays.
-    if (R->RequiredPitch && R->SurfacePitch != R->RequiredPitch) return BC250_PLANE_PITCH;
+    // Any pitch (stage S2): the flip of a plane programs the request (RQ) and delivery (DLG, TTU) registers of the
+    // plane's DML plan, which has the plane's pitch (dcn.c DcnPlaneShapeLocked). BC250_PLANE_PITCH is not answered.
     // The viewport is the whole allocation: dcn_scale.c reads the source from its origin, and a crop needs the
     // viewport start and the init phases of a clipped source (calculate_init_and_vp with an offset), not here.
     if (R->Src.Left != 0 || R->Src.Top != 0 || Width(&R->Src) != R->SurfaceWidth || Height(&R->Src) != R->SurfaceHeight)
@@ -89,8 +88,10 @@ unsigned long Bc250PlanePrepare(const BC250_PLANE_REQUEST* R, BC250_PLANE_PLAN* 
     recout.Height = dh;
     s = Bc250ScalerPlanRecout(sw, sh, R->TargetWidth, R->TargetHeight, &recout, &Plan->Scaler);
     if (s < 0) return Refuse(Plan, BC250_PLANE_SCALER);
+    // The full-size flip keeps the committed requestor, so it takes the committed pitch only.
     Plan->Identity = sw == R->TargetWidth && sh == R->TargetHeight && recout.X == 0 && recout.Y == 0 &&
-                     dw == R->TargetWidth && dh == R->TargetHeight;
+                     dw == R->TargetWidth && dh == R->TargetHeight &&
+                     (R->RequiredPitch == 0 || R->SurfacePitch == R->RequiredPitch);
     Plan->DmlViewportWidth = sw;
     Plan->DmlViewportHeight = sh;
     Plan->DmlRecoutWidth = dw;
@@ -110,6 +111,20 @@ unsigned long Bc250PlaneDmlVerdict(const BC250_PLANE_PLAN* Plan, int DmlStatus, 
     // The flip changes no clock (the DENTIST is the modeset's), so the scaled pipe must fit in the clocks that run.
     if (!BudgetDispClockKhz || !BudgetDppClockKhz || DispClockKhz > BudgetDispClockKhz || DppClockKhz > BudgetDppClockKhz)
         return BC250_PLANE_CLOCKS;
+    return BC250_PLANE_OK;
+}
+
+unsigned long Bc250PlaneSyncVerdict(const BC250_PLANE_PLAN* Plan, unsigned long PlanVStartup,
+                                    unsigned long PlanVUpdateOffset, unsigned long OtgVStartup,
+                                    unsigned long OtgVUpdateOffset)
+{
+    if (!Plan) return BC250_PLANE_ARGS;
+    if (Plan->Identity) return BC250_PLANE_OK;
+    // dcn20_program_tg follows a new VSTARTUP with a wait for VACTIVE and set_vtg_params; the flip runs up to DIRQL
+    // and cannot wait. DCN 2.0.1 plans VSTARTUP at its maximum for the timing (use_maximum_vstartup), so a plane on
+    // the committed timing gets the committed VSTARTUP. The VUPDATE offset is the flip's latch point.
+    if (!PlanVStartup || PlanVStartup != OtgVStartup || PlanVUpdateOffset != OtgVUpdateOffset)
+        return BC250_PLANE_GLOBAL_SYNC;
     return BC250_PLANE_OK;
 }
 

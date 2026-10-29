@@ -89,9 +89,10 @@ NTSTATUS ConnectorLinkCommit(struct _BC250_DEVICE* Device, const BC250_CONNECTOR
 NTSTATUS ConnectorLinkCurrentSignal(struct _BC250_DEVICE* Device, D3DKMDT_VIDEO_SIGNAL_INFO* Signal);
 // BD-223: the scaled plane 0 of a multiplane-overlay check, in the units of BC250_DML201_INPUT (dcn_plane.h
 // gives the values). PASSIVE, Connector.Operation not held. STATUS_DEVICE_NOT_READY with no active link of the
-// current sink, STATUS_INSUFFICIENT_RESOURCES with no memory for the plan; otherwise SUCCESS, with Out->Result the
-// return of Bc250Dml201Plan, the plan's clocks and the budget the clocks that run. The plan itself stays inside
-// connector_link.c, so that a caller does not include the DML headers: their bool is not the one of amdgpu.h.
+// current sink; otherwise SUCCESS, with Out->Result the return of Bc250Dml201Plan, the plan's clocks, the budget
+// the clocks that run and the DCHUB reference clock, and *Plan the whole plan (dcn.c DcnPlaneCheck keeps it for
+// the flip). Plan is incomplete here, so that a caller such as wddm.c does not include the DML headers: their bool
+// is not the one of amdgpu.h.
 typedef struct _BC250_LINK_PLANE {
     ULONG PitchPixels, ViewportWidth, ViewportHeight, RecoutWidth, RecoutHeight, HTaps, VTaps;
 } BC250_LINK_PLANE;
@@ -99,9 +100,11 @@ typedef struct _BC250_LINK_PLANE_DML {
     int Result;
     ULONG Valid, DispClockKhz, DppClockKhz;
     ULONG BudgetDispKhz, BudgetDppKhz;
+    ULONG DchubRefClockKhz;
 } BC250_LINK_PLANE_DML;
+struct BC250_DML201_PLAN;
 NTSTATUS ConnectorLinkPlaneDml(struct _BC250_DEVICE* Device, const BC250_LINK_PLANE* Plane,
-    BC250_LINK_PLANE_DML* Out);
+    BC250_LINK_PLANE_DML* Out, struct BC250_DML201_PLAN* Plan);
 // PASSIVE, Connector.Operation not held. TRUE when a connected sink is published
 // and its link is off and not suspended: a power-on CommitVidPn must program it
 // (BD-195). *Active and *Connected are for the caller's log.

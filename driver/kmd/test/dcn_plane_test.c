@@ -86,8 +86,9 @@ static void TestVerdicts(void)
     r = LabRequest(); r.SurfaceWidth = 63; Rect(&r.Src, 0, 0, 63, 1080); CHECK(Verdict(&r) == BC250_PLANE_SURFACE);
     r = LabRequest(); r.SurfaceHeight = 0x4000; Rect(&r.Src, 0, 0, 1920, 0x4000); CHECK(Verdict(&r) == BC250_PLANE_SURFACE);
     r = LabRequest(); Rect(&r.Src, 0, 0, 1280, 720); CHECK(Verdict(&r) == BC250_PLANE_SRC_CROP);
-    // The committed pipe's pitch: a wider row is refused, and 0 means no rule.
-    r = LabRequest(); r.SurfacePitch = 8192; CHECK(Verdict(&r) == BC250_PLANE_PITCH);
+    // Stage S2: any pitch, because the flip programs the plane's own requestor. The committed pipe's pitch decides
+    // only whether a full-size plane is the identity plane (TestPlans).
+    r = LabRequest(); r.SurfacePitch = 8192; CHECK(Verdict(&r) == BC250_PLANE_OK);
     r.RequiredPitch = 0; CHECK(Verdict(&r) == BC250_PLANE_OK);
     r = LabRequest(); Rect(&r.Src, 1, 0, 1921, 1080); CHECK(Verdict(&r) == BC250_PLANE_SRC_CROP);
     r = LabRequest(); Rect(&r.Dst, 0, 0, 1920, 1201); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DST_BOUNDS);
@@ -109,6 +110,7 @@ static void TestVerdicts(void)
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_OK), "ok") == 0);
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_STRETCH_QUALITY), "stretch-quality") == 0);
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_PITCH), "pitch") == 0);
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_GLOBAL_SYNC), "global-sync") == 0);
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_VERDICTS), "?") == 0);
 }
 
@@ -133,6 +135,13 @@ static void TestPlans(void)
     CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK);
     CHECK(q.Identity && q.DmlHTaps == 1 && q.DmlVTaps == 1);
     CHECK(!Bc250PlaneSameShape(&p, &q));
+    // The same geometry at another pitch is a plane with a 1:1 scaler and its own requestor, not the identity plane;
+    // with no pitch rule (0) it is the identity plane again.
+    r.SurfacePitch = 8192;
+    CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK);
+    CHECK(!q.Identity && q.DmlHTaps == 1 && q.DmlVTaps == 1 && q.Scaler.Scaling == BC250_SCALING_PLANE);
+    r.RequiredPitch = 0;
+    CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK && q.Identity);
     // A full-size plane away from the origin is not the identity: it has the position of a recout.
     r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
     Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
@@ -227,11 +236,59 @@ static void TestDml(void)
     free(w);
 }
 
+// Stage S2: the plane's global sync against OTG0. DCN 2.0.1 plans VSTARTUP at its maximum for the timing, so a plane on
+// the committed timing has the committed VSTARTUP and VUPDATE offset, and only VREADY and the VUPDATE width move.
+static void TestSync(void)
+{
+    size_t bytes = Bc250Dml201WorkspaceSize();
+    void* w = malloc(bytes);
+    BC250_DML201_INPUT lab = LabTiming();
+    BC250_DML201_PLAN native, scaled;
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN p;
+    int s;
+
+    CHECK(w != NULL);
+    if (!w) return;
+    CHECK(Bc250Dml201Plan(&lab, w, bytes, &native) == 0 && native.Valid == 1 && native.VStartup != 0);
+    // The letterboxed 720p plane at its own pitch.
+    r = LabRequest(); r.SurfaceWidth = 1280; r.SurfaceHeight = 720; r.SurfacePitch = 1280 * 4;
+    Rect(&r.Src, 0, 0, 1280, 720); Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && !p.Identity);
+    s = Dml(&p, 1280, w, bytes, &scaled);
+    printf("plane 1280x720 at pitch 1280: vstartup %u/%u vupdate offset %u/%u width %u/%u vready %u/%u\n",
+           scaled.VStartup, native.VStartup, scaled.VUpdateOffset, native.VUpdateOffset, scaled.VUpdateWidth,
+           native.VUpdateWidth, scaled.VReady, native.VReady);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset, native.VStartup, native.VUpdateOffset) ==
+          BC250_PLANE_OK);
+    // Another VSTARTUP or VUPDATE offset than OTG0's, or no VSTARTUP, is refused.
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup + 1, scaled.VUpdateOffset, scaled.VStartup,
+                                scaled.VUpdateOffset) == BC250_PLANE_GLOBAL_SYNC);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset + 1, scaled.VStartup,
+                                scaled.VUpdateOffset) == BC250_PLANE_GLOBAL_SYNC);
+    CHECK(Bc250PlaneSyncVerdict(&p, 0, scaled.VUpdateOffset, 0, scaled.VUpdateOffset) == BC250_PLANE_GLOBAL_SYNC);
+    // The full-size plane at another pitch: the committed sync again, with its own requestor.
+    r = LabRequest(); r.SurfaceHeight = 1200; r.SurfacePitch = 2048 * 4; Rect(&r.Src, 0, 0, 1920, 1200);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && !p.Identity);
+    s = Dml(&p, 2048, w, bytes, &scaled);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset, native.VStartup, native.VUpdateOffset) ==
+          BC250_PLANE_OK);
+    // The identity plane is the committed pipe: no sync step.
+    r = LabRequest(); r.SurfaceHeight = 1200; Rect(&r.Src, 0, 0, 1920, 1200);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && p.Identity);
+    CHECK(Bc250PlaneSyncVerdict(&p, 0, 0, 1, 1) == BC250_PLANE_OK);
+    CHECK(Bc250PlaneSyncVerdict(NULL, 1, 1, 1, 1) == BC250_PLANE_ARGS);
+    free(w);
+}
+
 int main(void)
 {
     TestVerdicts();
     TestPlans();
     TestDml();
+    TestSync();
     printf("dcn_plane: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }
