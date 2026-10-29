@@ -20,21 +20,36 @@ and has no MPO DDI. The lab results of 2026-10-29 on unit A, with the lab KMD of
 | Selector 0 | Installed tester.34 | Scans out (1498 of 1556 flips) | Composed. No MPO caps, as expected |
 | Selector 1 or 3 | Installed tester.34 | Composed. DWM restarts its composition about every 0.4 s | Composed |
 | Selector 0, 1 or 3 | Router 9fd42f83 and zink 088a1588 | Scans out (1499 of 1557, 1500 of 1546) | Composed. No `CheckMultiPlaneOverlaySupport2` call |
+| Selector 5 or 7 (`MaxOverlayPlanes` 2) | Router 9fd42f83 and zink 088a1588 | Scans out (1497 of 1551, 1499 of 1574) | Composed. No `CheckMultiPlaneOverlaySupport2` call |
 
 - The tester.34 router front refuses every DXGI overlay entry. With the MPO caps of the KMD, that refusal makes DWM
   start its composition again and again: every flip is a mode-change flip, and `SetVisibility` comes 1297 times in
   222 s. Thus the KMD caps must not go out without the user-mode half of [The KMD/UMD contract](#the-kmdumd-contract).
 - With the user-mode half, the caps are harmless: one DWM per start, VSync flips, no DWM event, no underflow. The
   front publishes WDDM 1.3 (`level=wddm1_3 hosted_mpo=1`), and it refuses no entry.
-- dxgkrnl does not call `DxgkDdiCheckMultiPlaneOverlaySupport2` with `MaxOverlayPlanes` 1. The probable cause: `MaxOverlayPlanes` counts
-  the primary surface, so 1 gives DWM no overlay plane, and DWM does not make an overlay candidate. The plan of
-  plane 0 alone (step S1 in [Steps](#steps)) therefore does not reach the KMD.
+- dxgkrnl does not call `DxgkDdiCheckMultiPlaneOverlaySupport2` in any arm. The first-call log of the Check is
+  empty, and the check and set counters stay 0. `MaxOverlayPlanes` counts the primary surface, so 1 gives DWM no
+  overlay plane. But `MaxOverlayPlanes` 2 also gives no Check call, so the KMD plane count alone is not the gate.
+  The plan of plane 0 alone (step S1 in [Steps](#steps)) does not reach the KMD.
+- The BD-258 device churn (9 to 14 `CreateDevice` calls a second) was present in every arm, the control arms
+  included. The native scan-out passed with it, so it does not explain the missing Check.
 
-The next lab question is `MaxOverlayPlanes` 2 (`LabScaledPlane` bit 2, values 5 and 7): which plane sets DWM sends
-to the Check. The KMD log keeps the first Check calls (`wddm: MPO check n <planes> surf <size> ... dst ...`). If
-DWM sends the game chain over the desktop plane, plane 0 can take a set in which an opaque top plane covers the
-whole output and the plane below it is not visible. That is a change of the Check and of the flip, after
-tester.34.
+The gates that can stop DWM before the Check, in the order of the next lab work (after tester.34):
+
+1. The caps answer of the front. In arms 5 and 7 the caps trailer was `0x0000000b`, without
+   `BC250_SCANOUT_CAPS_MPO_PLANE1`. Thus `pfnGetMultiplaneOverlayCaps` and `pfnGetMultiplaneOverlayGroupCaps` said
+   1 plane while the KMD said `MaxOverlayPlanes` 2. The front logs a refusal but not an answer, so the log does not
+   tell if DWM asked these entries. The next arm makes the two counts agree and logs each caps answer once.
+2. The format support of the chain. The D3D12 engine never reports `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY`
+   (`format-list.py` excludes it with `DISPLAY`). The hosted D3D11 UMD of DWM must report it for the formats of
+   plane 0 as well. That is not checked yet.
+3. YUV in the group caps. The Microsoft minimum asks for one plane with YUV formats and both BT.601 and BT.709
+   ([multiplane-overlay-hardware-requirements.md](https://learn.microsoft.com/windows-hardware/drivers/display/multiplane-overlay-hardware-requirements)).
+   The group caps report RGB only. That is step S4.
+
+When DWM makes the Check, the KMD log keeps its first calls (`wddm: MPO check n <planes> surf <size> ... dst ...`).
+If DWM sends the game chain over the desktop plane, plane 0 can take a set in which an opaque top plane covers the
+whole output and the plane below it is not visible. That is a change of the Check and of the flip.
 
 ## The route
 
