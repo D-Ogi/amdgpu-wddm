@@ -87,24 +87,51 @@ shapes there). `Bc250Dcn201PipeApply` writes the cursor TTU of the plan with the
 inherited timing (the firmware's pipe), the connector does not program the requestor, so `DcnCursorPipeReady`
 writes the two cursor TTU registers from the plan, while the cursor is off.
 
+Why this write on the inherited pipe is safe, and why it stays:
+
+- What the firmware leaves there is not known. No dump on this disk has the two registers. Without the write, the cursor would fetch with a deadline that nobody planned. Linux programs these
+  registers on every pipe it sets up (`hubp2_program_deadline`, from `hubp2_setup`), also when it keeps the
+  firmware's timing. Kit 2 reads both registers at setting 0, where the driver does not write them, so the lab
+  records the firmware's values.
+- The values come from the DML plan of the inherited timing with the 256 cursor. That is the same plan, and the same
+  fields, that `Bc250Dcn201PipeApply` writes on every mode set of the connector route. A value that does not fit its
+  field is refused: the pipe is then not ready, nothing is written, and dxgkrnl draws the pointer (host test
+  `dcn-cursor-life`, control `ttu-unchecked`).
+- The two registers control only the requests of the cursor (`DCN_CUR0`): the delivery deadline, the fixed QoS level
+  and the QoS ramp. The plane requests have their own TTU registers (`DCN_SURF0_TTU_CNTL0` and `_CNTL1`), which this
+  write does not touch. A wrong value can make the cursor fetch late (a damaged cursor line) or make its requests
+  urgent too early (more memory priority for at most 1 KiB of cursor data per line). It does not change the plane fetch.
+- The write happens with the cursor off, so no cursor fetch runs while the value changes.
+
 ## Life cycle
 
 | Event | What the cursor does |
 | --- | --- |
-| Start | `DcnCursorPrepare` allocates. The caps report a pointer only on the full WDDM table with DCN writes and VidPN flips. A pipe with a cursor in its plan must also have become ready (`EverReady`). |
+| Start | `DcnCursorPrepare` allocates. The caps report a pointer only on the full WDDM table with DCN writes and VidPN flips. Three more conditions apply. A pipe with a cursor in its plan became ready (`EverReady`), the connector is enabled, and no stop ran. dxgkrnl reads the caps once, after `StartDevice`. A start whose first pipe has no cursor in its plan keeps the software pointer until the next start. |
+| Start refused after the inherited pipe was adopted | `ConnectorLinkRelease` calls `DcnCursorPipeGone` first. The connector is then not enabled, so the caps report no pointer, and nothing programs the firmware's pipe. |
 | Mode set (connector) | `Apply` calls `DcnCursorPipeGone` before the OTG goes off and `DcnCursorPipeReady` at the end. The stored shape is drawn again for the new pipe, at the last position. |
 | Mode set (legacy route), rotation | `ModesetCommit` and `DisplayRecordRotation` call `DcnCursorRefresh`: a new angle draws the image again, else the cursor is placed again. |
-| D3 and the return to D0 | `ConnectorLinkSuspend` calls `DcnCursorPipeGone`. The resume applies the mode (connector route) or calls `DcnCursorPipeReady` on the inherited pipe. |
-| Detach | `DisableOwned` calls `DcnCursorPipeGone`. |
+| D3 and the return to D0 | `PowerAdapterDown` calls `DcnCursorPipeGone` before anything else. The static inherited path has no connector suspend. The connector suspend can stop early (`STATUS_DEVICE_NOT_READY` while DP audio is not quiet). `ConnectorLinkSuspend` also calls it first. The resume applies the mode (connector route) or calls `DcnCursorPipeReady` on the inherited pipe. |
+| Detach | `ConnectorLinkDisable` calls `DcnCursorPipeGone` before its early returns, and `DisableOwned` calls it again. |
 | Bugcheck screen | `Bc250SystemDisplayEnable` calls `DcnCursorOffQuiet` (any IRQL, no lock, no log) before it restores the firmware surface. |
 | TDR, reset | `Bc250ResetDevice` calls `DcnCursorOffQuiet`. |
 | Handoff of the firmware surface, stop | `Bc250StopDeviceAndReleasePostDisplayOwnership`, `Bc250StopDevice` and `DcnStop` call `DcnCursorStop`: the cursor goes off, and nothing programs it again until the next start. One summary line goes to the guard log. |
 | Unload | `ConnectorBufferRelease` calls `DcnCursorRelease`: stop, unmap, free. |
 
-`DcnCursorSetShape` refuses a shape when no pipe is ready (`STATUS_DEVICE_NOT_READY`) or when the shape is out of
-range (`STATUS_NOT_SUPPORTED`): more than 256 pixels, a pitch that does not hold one row, a reserved or second
-format flag, or more than 256 KiB of input. A refusal is logged (the first 32 lines). The intent is that dxgkrnl
-then draws the pointer itself.
+`DcnCursorSetShape` refuses a shape that is out of range (`STATUS_NOT_SUPPORTED`): more than 256 pixels, a pitch
+that does not hold one row, a reserved or second format flag, more than 256 KiB of input, or a hot spot outside the
+image (`XHot` not less than the width, or `YHot` not less than the height). The hot spot registers are 8 bits.
+
+A valid shape that arrives while no pipe is ready, but a pipe is expected (a pipe of this start had the cursor, the
+connector is enabled, and no stop ran), is stored and answered with `STATUS_SUCCESS`. This is a mode change, a power
+transition or a detach. Nothing is drawn or written then, and `DcnCursorPipeReady` draws the stored shape for the
+new pipe. A shape that came just before the change has the same result, so the order of the two does not matter.
+The decision is made under `ShapeLock`, which `DcnCursorPipeReady` holds for its whole run, so no shape is stored
+after that run without being shown. A refusal there would keep the software pointer until the next shape change.
+
+A shape when no pipe is expected (no cursor pipe in this start, a released link, after the stop) is refused with
+`STATUS_DEVICE_NOT_READY`. A refusal is logged (the first 32 lines). The intent is that dxgkrnl then draws the
+pointer itself.
 
 ## Locks and IRQL
 
@@ -136,7 +163,10 @@ component that pins the catalog must be built again. A later catalog entry can r
 | Gate | What it checks |
 | --- | --- |
 | `dcn-cursor` | `dcn_cursor_test.c` on the production header. It checks the verdicts and the three formats (monochrome with an odd width and a padded pitch, with an inverting pixel). It checks the hot spot rule and the placement: negative clamp, edges, the 8-bit hot spot and the destination offset. It checks a scaled plane with a viewport origin, and the rotated image against `Bc250RotationMapPixel`. |
-| `dcn-cursor-controls` | 11 mutations of the header. Each one must fail the test. |
+| `dcn-cursor-controls` | 12 mutations of the header. Each one must fail the test. |
+| `dcn-cursor-life` | `dcn_cursor_life_test.c` on the production `dcn_cursor.c`, with a model of the registers, the locks and the clock. It checks the prepare and the caps. It checks a shape before any pipe, on a ready pipe and in the gap of a mode change. It checks the two surfaces and the latch wait, and the cursor TTU with its range checks. After a failed register write, the update lock is released and the next batch writes the enable again. It also checks the stop, the quiet off and the release. The model checks the lock order, the IRQL, and that every cursor register write is under `Lock` and inside the update lock. |
+| `dcn-cursor-life-controls` | 10 mutations of `dcn_cursor.c`. Each one must fail the test. |
+| `connector-link`, `power-coordinator` | The cursor goes off on a refused suspend, a refused disable, the release, and first in `PowerAdapterDown`. |
 | `dcn-write-sites` | Each cursor write names a register on the write list. |
 
 ## Open points
