@@ -935,6 +935,255 @@ static void FrontTableTests()
     CHECK(keptNulls == 0, "%u DXGI entries are null when slot 7 came from the hosted driver", keptNulls);
 }
 
+// ---------------------------------------------------------------- the WDDM 1.3 front (pure, BD-223)
+
+static_assert(sizeof(D3DWDDM1_3DDI_DEVICEFUNCS) == 164 * sizeof(void *), "D3DWDDM1_3DDI_DEVICEFUNCS is not 164 entries");
+static_assert(sizeof(DXGI1_3_DDI_BASE_FUNCTIONS) == 18 * sizeof(void *), "DXGI1_3_DDI_BASE_FUNCTIONS is not 18 entries");
+
+// The hosted pfnPresent that the WDDM 1.3 pfnPresent1 must reach. A real function, so that the translated
+// argument is read back field by field. It answers a success code that is not S_OK, so a front that flattens
+// the hosted result shows.
+static DXGI_DDI_ARG_PRESENT LastPresent;
+static unsigned PresentCalls;
+static HRESULT APIENTRY RecordPresent(DXGI_DDI_ARG_PRESENT *args)
+{
+    ++PresentCalls;
+    if (args) LastPresent = *args;
+    return DXGI_STATUS_OCCLUDED;
+}
+
+static void FrontTableTests13()
+{
+    using namespace bc250front;
+    D3D10DDI_DEVICEFUNCS hosted;
+    void **hostedSlots = (void **)&hosted;
+    const unsigned hostedCount = (unsigned)(sizeof(hosted) / sizeof(void *));
+    for (unsigned i = 0; i < hostedCount; ++i) hostedSlots[i] = (void *)(HostedDeviceSlotBase + i);
+    auto isCopy = [&](const void *p) {
+        const UINT_PTR v = (UINT_PTR)p;
+        return v >= HostedDeviceSlotBase && v < HostedDeviceSlotBase + hostedCount;
+    };
+    void *const guard = (void *)(UINT_PTR)0x6C6C6C6C;
+
+    // The device table, filled into a buffer with a guard behind it: 164 entries are written and not one more.
+    std::vector<void *> table(kDeviceEntries13 + 16, guard);
+    for (unsigned i = 0; i < kDeviceEntries13; ++i) table[i] = nullptr;
+    D3DWDDM1_3DDI_DEVICEFUNCS *front13 = (D3DWDDM1_3DDI_DEVICEFUNCS *)table.data();
+    FillDeviceFuncs13(front13, hosted);
+    unsigned past = 0;
+    for (size_t i = kDeviceEntries13; i < table.size(); ++i) if (table[i] != guard) ++past;
+    CHECK(past == 0, "%u slots past D3DWDDM1_3DDI_DEVICEFUNCS were written", past);
+    // The head is the D3D11_1 fill, entry for entry, except the two members whose signature changed at WDDM 1.3.
+    // So the review of the D3D11_1 table (FrontTableTests) carries over, and only the difference is checked here.
+    D3D11_1DDI_DEVICEFUNCS front11;
+    memset(&front11, 0, sizeof(front11));
+    FillDeviceFuncs(&front11, hosted);
+    void **slots11 = (void **)&front11;
+    const size_t relocateAt = offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnRelocateDeviceFuncs) / sizeof(void *);
+    const size_t msaaAt = offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnCheckMultisampleQualityLevels) / sizeof(void *);
+    unsigned nulls = 0, copies = 0, own = 0, differ = 0;
+    for (unsigned i = 0; i < kDeviceEntries13; ++i) {
+        const void *v = table[i];
+        if (!v) { ++nulls; printf("  WDDM 1.3 device entry %u is null\n", i); }
+        else if (isCopy(v)) ++copies;
+        else ++own;
+        if (i < kDeviceEntries && i != relocateAt && i != msaaAt && v != slots11[i]) {
+            ++differ;
+            printf("  WDDM 1.3 device entry %u is not the D3D11_1 fill's entry\n", i);
+        }
+    }
+    CHECK(nulls == 0, "%u of the %u WDDM 1.3 device entries are null", nulls, (unsigned)kDeviceEntries13);
+    CHECK(differ == 0, "%u head entries of the WDDM 1.3 table differ from the D3D11_1 fill", differ);
+    // 74 field copies: the 75 of D3D11_1 less pfnCheckMultisampleQualityLevels, whose Flags argument needs a
+    // body. 90 own bodies: the 80 of D3D11_1, that one, and the nine appended entries.
+    printf("  front WDDM 1.3 device table: %u entries, %u field copies, %u own bodies\n",
+           (unsigned)kDeviceEntries13, copies, own);
+    CHECK(copies == 74 && own == 90, "the WDDM 1.3 table splits %u field copies and %u own bodies, expected 74 and 90",
+          copies, own);
+    CHECK(front13->pfnCheckMultisampleQualityLevels && !isCopy((void *)front13->pfnCheckMultisampleQualityLevels),
+          "pfnCheckMultisampleQualityLevels at WDDM 1.3 is the hosted entry, which takes no Flags argument");
+    CHECK((void *)front13->pfnRelocateDeviceFuncs != (void *)front11.pfnRelocateDeviceFuncs,
+          "pfnRelocateDeviceFuncs at WDDM 1.3 is the D3D11_1 body, which fills only the shorter table");
+    struct Named { const void *p; const char *name; };
+    const Named appended[] = {
+        {(void *)front13->pfnUpdateTileMappings, "pfnUpdateTileMappings"},
+        {(void *)front13->pfnCopyTileMappings, "pfnCopyTileMappings"},
+        {(void *)front13->pfnCopyTiles, "pfnCopyTiles"},
+        {(void *)front13->pfnUpdateTiles, "pfnUpdateTiles"},
+        {(void *)front13->pfnTiledResourceBarrier, "pfnTiledResourceBarrier"},
+        {(void *)front13->pfnGetMipPacking, "pfnGetMipPacking"},
+        {(void *)front13->pfnResizeTilePool, "pfnResizeTilePool"},
+        {(void *)front13->pfnSetMarker, "pfnSetMarker"},
+        {(void *)front13->pfnSetMarkerMode, "pfnSetMarkerMode"},
+    };
+    static_assert(ARRAYSIZE(appended) == kDeviceEntries13 - kDeviceEntries, "the nine WDDM 1.3 entries by name");
+    for (const Named &a : appended) CHECK(a.p && !isCopy(a.p), "%s is null or a field copy", a.name);
+
+    // The DXGI table: 18 entries, the hosted driver's 7 and 11 of the front's own, in a guarded buffer.
+    DXGI_DDI_BASE_FUNCTIONS hostedDxgi;
+    void **hostedDxgiSlots = (void **)&hostedDxgi;
+    const unsigned hostedDxgiCount = (unsigned)(sizeof(hostedDxgi) / sizeof(void *));
+    for (unsigned i = 0; i < hostedDxgiCount; ++i) hostedDxgiSlots[i] = (void *)(HostedDxgiSlotBase + i);
+    std::vector<void *> dxgiTable(kDxgiEntries13 + 8, guard);
+    for (unsigned i = 0; i < kDxgiEntries13; ++i) dxgiTable[i] = nullptr;
+    FillDxgiFuncs13((DXGI1_3_DDI_BASE_FUNCTIONS *)dxgiTable.data(), hostedDxgi);
+    unsigned pastDxgi = 0;
+    for (size_t i = kDxgiEntries13; i < dxgiTable.size(); ++i) if (dxgiTable[i] != guard) ++pastDxgi;
+    CHECK(pastDxgi == 0, "%u slots past DXGI1_3_DDI_BASE_FUNCTIONS were written", pastDxgi);
+    unsigned dxgiNulls = 0, dxgiCopies = 0, dxgiOwn = 0;
+    for (unsigned i = 0; i < kDxgiEntries13; ++i) {
+        const UINT_PTR v = (UINT_PTR)dxgiTable[i];
+        if (!v) { ++dxgiNulls; printf("  WDDM 1.3 DXGI entry %u is null\n", i); }
+        else if (v >= HostedDxgiSlotBase && v < HostedDxgiSlotBase + hostedDxgiCount) {
+            ++dxgiCopies;
+            CHECK(i < hostedDxgiCount && v == HostedDxgiSlotBase + i, "WDDM 1.3 DXGI entry %u copies the wrong slot", i);
+        } else {
+            ++dxgiOwn;
+            CHECK(i >= hostedDxgiCount, "WDDM 1.3 DXGI entry %u should be the hosted entry itself", i);
+        }
+    }
+    CHECK(dxgiNulls == 0, "%u of the %u WDDM 1.3 DXGI entries are null", dxgiNulls, (unsigned)kDxgiEntries13);
+    CHECK(dxgiCopies == 7 && dxgiOwn == 11, "WDDM 1.3 DXGI: %u field copies and %u own bodies, expected 7 and 11",
+          dxgiCopies, dxgiOwn);
+    printf("  front WDDM 1.3 DXGI table: %u entries, %u field copies, %u own bodies\n", (unsigned)kDxgiEntries13,
+           dxgiCopies, dxgiOwn);
+    // The slots both interfaces share hold the same body. The two that changed meaning do not: slot 12 is the
+    // group caps where DXGI1_2 had the filter range, and slot 13 is reserved where DXGI1_2 had the plane check.
+    DXGI1_2_DDI_BASE_FUNCTIONS dxgi12;
+    memset(&dxgi12, 0, sizeof(dxgi12));
+    FillDxgiFuncs(&dxgi12, hostedDxgi);
+    const DXGI1_3_DDI_BASE_FUNCTIONS &d13 = *(const DXGI1_3_DDI_BASE_FUNCTIONS *)dxgiTable.data();
+    void **slots12 = (void **)&dxgi12;
+    for (unsigned i : {7u, 8u, 9u, 10u, 11u, 14u})
+        CHECK(dxgiTable[i] == slots12[i], "WDDM 1.3 DXGI entry %u is not the DXGI1_2 body of the same slot", i);
+    CHECK((void *)d13.pfnGetMultiplaneOverlayGroupCaps != (void *)dxgi12.pfnGetMultiplaneOverlayFilterRange,
+          "slot 12 at WDDM 1.3 is the DXGI1_2 filter-range body");
+    CHECK((void *)d13.pfnReserved1 != (void *)dxgi12.pfnCheckMultiplaneOverlaySupport,
+          "slot 13 at WDDM 1.3 is the DXGI1_2 plane-check body");
+    // Slot 7 keeps a hosted pfnResolveSharedResource here as well.
+    std::vector<void *> keptDxgi(kDxgiEntries13, nullptr);
+    void *const hostedResolve = (void *)(UINT_PTR)0x00D2BEEF;
+    keptDxgi[7] = hostedResolve;
+    FillDxgiFuncs13((DXGI1_3_DDI_BASE_FUNCTIONS *)keptDxgi.data(), hostedDxgi);
+    CHECK(keptDxgi[7] == hostedResolve, "the WDDM 1.3 fill overwrote the hosted driver's own pfnResolveSharedResource");
+    unsigned keptNulls = 0;
+    for (void *v : keptDxgi) if (!v) ++keptNulls;
+    CHECK(keptNulls == 0, "%u WDDM 1.3 DXGI entries are null when slot 7 came from the hosted driver", keptNulls);
+
+    // pfnPresent1 over a hosted pfnPresent that records.
+    DXGI_DDI_BASE_FUNCTIONS liveHosted = hostedDxgi;
+    liveHosted.pfnPresent = RecordPresent;
+    DXGI1_3_DDI_BASE_FUNCTIONS live;
+    memset(&live, 0, sizeof(live));
+    FillDxgiFuncs13(&live, liveHosted);
+    PresentCalls = 0;
+    CHECK(live.pfnPresent1(nullptr) == E_INVALIDARG, "a null pfnPresent1 argument was not refused");
+    DXGI_DDI_ARG_PRESENTSURFACE surfaces[3] = {{0x5101, 0}, {0x5102, 1}, {0x5103, 4}};
+    const RECT dirty[2] = {{0, 0, 16, 16}, {32, 32, 64, 48}};
+    DXGI_DDI_ARG_PRESENT1 p1;
+    memset(&p1, 0, sizeof(p1));
+    p1.hDevice = 0x7A10;
+    p1.phSurfacesToPresent = surfaces;
+    p1.SurfacesToPresent = 0;
+    CHECK(live.pfnPresent1(&p1) == E_INVALIDARG, "a present of no surface was not refused");
+    p1.SurfacesToPresent = 1;
+    p1.phSurfacesToPresent = nullptr;
+    CHECK(live.pfnPresent1(&p1) == E_INVALIDARG, "a present with no surface list was not refused");
+    CHECK(PresentCalls == 0, "a refused pfnPresent1 reached the hosted pfnPresent %u times", PresentCalls);
+    // One surface: every field the D3D10.0 present has is carried, and the dirty rectangles are not a reason
+    // to fail.
+    p1.phSurfacesToPresent = &surfaces[1];
+    p1.hDstResource = 0x5200;
+    p1.DstSubResourceIndex = 3;
+    p1.pDXGIContext = (void *)(UINT_PTR)0x5300;
+    p1.Flags.Flip = 1;
+    p1.FlipInterval = DXGI_DDI_FLIP_INTERVAL_ONE;
+    p1.pDirtyRects = dirty;
+    p1.DirtyRects = 2;
+    memset(&LastPresent, 0, sizeof(LastPresent));
+    CHECK(live.pfnPresent1(&p1) == DXGI_STATUS_OCCLUDED, "pfnPresent1 did not return the hosted result");
+    CHECK(PresentCalls == 1, "pfnPresent1 called the hosted pfnPresent %u times", PresentCalls);
+    CHECK(LastPresent.hDevice == 0x7A10 && LastPresent.hSurfaceToPresent == 0x5102 &&
+              LastPresent.SrcSubResourceIndex == 1 && LastPresent.hDstResource == 0x5200 &&
+              LastPresent.DstSubResourceIndex == 3 && LastPresent.pDXGIContext == (void *)(UINT_PTR)0x5300 &&
+              LastPresent.Flags.Value == p1.Flags.Value && LastPresent.FlipInterval == DXGI_DDI_FLIP_INTERVAL_ONE,
+          "pfnPresent1 did not carry its fields: device %Ix surface %Ix sub %u dst %Ix dst_sub %u flags %08x",
+          (UINT_PTR)LastPresent.hDevice, (UINT_PTR)LastPresent.hSurfaceToPresent, LastPresent.SrcSubResourceIndex,
+          (UINT_PTR)LastPresent.hDstResource, LastPresent.DstSubResourceIndex, LastPresent.Flags.Value);
+    // Three surfaces: the last one is the one presented (dxgiddi.h, DXGI_DDI_ARG_PRESENT1).
+    p1.phSurfacesToPresent = surfaces;
+    p1.SurfacesToPresent = 3;
+    p1.hDstResource = 0;
+    CHECK(live.pfnPresent1(&p1) == DXGI_STATUS_OCCLUDED, "a three-surface pfnPresent1 failed");
+    CHECK(PresentCalls == 2 && LastPresent.hSurfaceToPresent == 0x5103 && LastPresent.SrcSubResourceIndex == 4 &&
+              LastPresent.hDstResource == 0,
+          "a three-surface pfnPresent1 presented surface %Ix sub %u, expected the last one",
+          (UINT_PTR)LastPresent.hSurfaceToPresent, LastPresent.SrcSubResourceIndex);
+    // The present-duration question: both outputs zero, which means no seamless refresh-rate change.
+    CHECK(live.pfnCheckPresentDurationSupport(nullptr) == E_INVALIDARG, "a null duration argument was not refused");
+    DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT duration;
+    memset(&duration, 0, sizeof(duration));
+    duration.DesiredPresentDuration = 166666;
+    duration.ClosestSmallerDuration = 0xFFFF;
+    duration.ClosestLargerDuration = 0xFFFF;
+    CHECK(live.pfnCheckPresentDurationSupport(&duration) == S_OK && !duration.ClosestSmallerDuration &&
+              !duration.ClosestLargerDuration,
+          "pfnCheckPresentDurationSupport answered %u and %u, expected 0 and 0", duration.ClosestSmallerDuration,
+          duration.ClosestLargerDuration);
+    // The overlay block over a handle the front never published: no device, so no trailer that admits a plane.
+    // The caps answer DXGI_ERROR_UNSUPPORTED, the present refuses the handle, and a null argument is refused.
+    CHECK(live.pfnGetMultiplaneOverlayCaps(nullptr) == E_INVALIDARG, "a null pfnGetMultiplaneOverlayCaps argument");
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS mpoCaps;
+    memset(&mpoCaps, 0, sizeof(mpoCaps));
+    mpoCaps.hDevice = 0x7A10;
+    CHECK(live.pfnGetMultiplaneOverlayCaps(&mpoCaps) == DXGI_ERROR_UNSUPPORTED && !mpoCaps.MultiplaneOverlayCaps.MaxPlanes,
+          "pfnGetMultiplaneOverlayCaps over an unknown device");
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS groupCaps;
+    memset(&groupCaps, 0, sizeof(groupCaps));
+    groupCaps.hDevice = 0x7A10;
+    CHECK(live.pfnGetMultiplaneOverlayGroupCaps(nullptr) == E_INVALIDARG &&
+              live.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == DXGI_ERROR_UNSUPPORTED,
+          "pfnGetMultiplaneOverlayGroupCaps over an unknown device");
+    CHECK(live.pfnReserved1(nullptr) == DXGI_ERROR_UNSUPPORTED, "pfnReserved1");
+    DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY mpoPresent;
+    memset(&mpoPresent, 0, sizeof(mpoPresent));
+    mpoPresent.hDevice = 0x7A10;
+    CHECK(live.pfnPresentMultiplaneOverlay(nullptr) == E_INVALIDARG &&
+              live.pfnPresentMultiplaneOverlay(&mpoPresent) == E_INVALIDARG,
+          "pfnPresentMultiplaneOverlay over an unknown device was not refused");
+    CHECK(live.pfnReserved2(nullptr) == DXGI_ERROR_UNSUPPORTED, "pfnReserved2");
+    CHECK(PresentCalls == 2, "an overlay entry reached the hosted pfnPresent");
+
+    // The interface level of an adapter. On and Off are the registry's word. Follow takes WDDM 1.3 only when
+    // the kernel driver admits an overlay plane: BC250_SCANOUT_CAPS_MPO, which comes with DIRECT_FLIP. MPO
+    // without DIRECT_FLIP is a trailer no kernel driver writes, and it admits nothing.
+    bc250_scanout_caps none;
+    memset(&none, 0, sizeof(none));
+    bc250_scanout_caps all = none;
+    all.magic = BC250_SCANOUT_CAPS_MAGIC;
+    all.version = BC250_SCANOUT_CAPS_VERSION;
+    all.flags = 0xFFFFFFFFu;
+    CHECK(FrontLevelFor(FrontWddm13::On, none) == FrontLevel::Wddm1_3, "On did not give WDDM 1.3");
+    CHECK(FrontLevelFor(FrontWddm13::Off, all) == FrontLevel::D3D11_1, "Off did not give D3D11_1");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, none) == FrontLevel::D3D11_1,
+          "Follow gave WDDM 1.3 over an empty caps trailer");
+    bc250_scanout_caps flipOnly = all, mpoOnly = all, mpo = all;
+    flipOnly.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
+                     BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
+    mpoOnly.flags = BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_MPO_PLANE1;
+    mpo.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO;
+    CHECK(!FrontOverlayAdmitted(none) && !FrontOverlayAdmitted(flipOnly) && !FrontOverlayAdmitted(mpoOnly) &&
+              FrontOverlayAdmitted(mpo) && FrontOverlayAdmitted(all),
+          "FrontOverlayAdmitted is not MPO together with DIRECT_FLIP");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, flipOnly) == FrontLevel::D3D11_1,
+          "Follow gave WDDM 1.3 to a start without the MPO bit");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, mpoOnly) == FrontLevel::D3D11_1,
+          "Follow gave WDDM 1.3 to an MPO bit without DIRECT_FLIP");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, mpo) == FrontLevel::Wddm1_3,
+          "Follow did not give WDDM 1.3 to a start that admits an overlay plane");
+    CHECK(FrontLevelFor(FrontWddm13::Off, mpo) == FrontLevel::D3D11_1, "Off did not win over the MPO bit");
+}
+
 // ---------------------------------------------------------------- the DirectFlip rule (pure)
 
 // A record the two scannable derivations accept, built the way the contract says each side earns it.
@@ -1700,11 +1949,214 @@ static void FrontLogChecks(const D3D11_1DDI_DEVICEFUNCS &device, D3D10DDI_HDEVIC
     ScanoutTrailer = false;
 }
 
+// BD-223: the WDDM 1.3 device create, through the adapter table the runtime holds. With FrontWddm13 1 the front
+// publishes its 164 device and 18 DXGI entries over the hosted D3D10.0 device. With any other value a WDDM 1.3
+// create is not one of the front's interfaces and goes to the hosted driver untouched; the double refuses every
+// interface but D3D10.0, so a forwarded create is one that the double names.
+static void FrontWddm13Checks(const Opened &o, bool admitted, const char *(*record)(void), void (*recordReset)(void),
+                              SIZE_T (*fakeSize)(void))
+{
+    if (!record || !recordReset || !fakeSize) {
+        CHECK(false, "the double has no record exports");
+        return;
+    }
+    auto frontLog = [] {
+        return ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" + std::to_wstring(GetCurrentProcessId()) +
+                       L".log");
+    };
+    D3D10DDIARG_CALCPRIVATEDEVICESIZE sizeArgs = {};
+    sizeArgs.Interface = D3DWDDM1_3_DDI_INTERFACE_VERSION;
+    sizeArgs.Version = D3DWDDM1_3_DDI_SUPPORTED & 0xFFFFFFFF;
+    recordReset();
+    const SIZE_T size = o.funcs.pfnCalcPrivateDeviceSize(o.adapter, &sizeArgs);
+    if (admitted)
+        CHECK(size > fakeSize() && strstr(record(), "calc-private-device-size") != nullptr,
+              "a WDDM 1.3 private device size is %Iu (hosted %Iu): %s", (size_t)size, (size_t)fakeSize(), record());
+    else
+        CHECK(size == 0 && strstr(record(), "calc-size-wrong-interface") != nullptr,
+              "a WDDM 1.3 size question on a D3D11_1 adapter was not forwarded untouched: %s", record());
+
+    void *const guard = (void *)(UINT_PTR)0x6D6D6D6D;
+    const unsigned deviceSlots = (unsigned)(sizeof(D3DWDDM1_3DDI_DEVICEFUNCS) / sizeof(void *));
+    const unsigned dxgiSlots = (unsigned)(sizeof(DXGI1_3_DDI_BASE_FUNCTIONS) / sizeof(void *));
+    std::vector<void *> table(deviceSlots + 32, guard);
+    std::vector<void *> dxgiTable(dxgiSlots + 16, guard);
+    for (unsigned i = 0; i < deviceSlots; ++i) table[i] = nullptr;
+    for (unsigned i = 0; i < dxgiSlots; ++i) dxgiTable[i] = nullptr;
+    std::vector<BYTE> block((size ? size : fakeSize()) + 256, 0x2F);
+    D3D10DDI_CORELAYER_DEVICECALLBACKS um = {};
+    PFND3D10DDI_RETRIEVESUBOBJECT retrieve = nullptr;
+    D3D10DDIARG_CREATEDEVICE create = {};
+    create.hRTDevice.handle = (HANDLE)(UINT_PTR)0x7A7D;
+    create.Interface = D3DWDDM1_3_DDI_INTERFACE_VERSION;
+    create.Version = D3DWDDM1_3_DDI_SUPPORTED & 0xFFFFFFFF;
+    create.pWDDM1_3DeviceFuncs = (D3DWDDM1_3DDI_DEVICEFUNCS *)table.data();
+    create.hDrvDevice.pDrvPrivate = block.data();
+    create.DXGIBaseDDI.pDXGIDDIBaseFunctions4 = (DXGI1_3_DDI_BASE_FUNCTIONS *)dxgiTable.data();
+    create.pUMCallbacks = &um;
+    create.ppfnRetrieveSubObject = &retrieve;
+    create.Flags = 0;
+    recordReset();
+    const HRESULT hr = o.funcs.pfnCreateDevice(o.adapter, &create);
+    unsigned past = 0, pastDxgi = 0;
+    for (size_t i = deviceSlots; i < table.size(); ++i) if (table[i] != guard) ++past;
+    for (size_t i = dxgiSlots; i < dxgiTable.size(); ++i) if (dxgiTable[i] != guard) ++pastDxgi;
+    CHECK(past == 0 && pastDxgi == 0, "%u device and %u DXGI slots past the WDDM 1.3 tables were written", past,
+          pastDxgi);
+    if (!admitted) {
+        CHECK(hr == E_INVALIDARG && strstr(record(), "create-device-wrong-interface") != nullptr,
+              "a WDDM 1.3 create on a D3D11_1 adapter was not forwarded untouched: hr=%08lx %s", hr, record());
+        unsigned written = 0;
+        for (unsigned i = 0; i < deviceSlots; ++i) if (table[i]) ++written;
+        CHECK(written == 0, "the front filled %u entries of a WDDM 1.3 table it does not publish", written);
+        const std::string log = frontLog();
+        CHECK(Has(log, "create_device forwarded interface="), "the front log does not name the forwarded create: %s",
+              log.c_str());
+        return;
+    }
+    CHECK(hr == DXGI_STATUS_NO_REDIRECTION, "a WDDM 1.3 CreateDevice answered %08lx, expected the hosted %08lx", hr,
+          (unsigned long)DXGI_STATUS_NO_REDIRECTION);
+    CHECK(strstr(record(), "create-device\n") != nullptr, "the hosted CreateDevice was not called: %s", record());
+    if (FAILED(hr)) return;
+    unsigned nulls = 0, dxgiNulls = 0;
+    for (unsigned i = 0; i < deviceSlots; ++i) if (!table[i]) ++nulls;
+    for (unsigned i = 0; i < dxgiSlots; ++i) if (!dxgiTable[i]) ++dxgiNulls;
+    CHECK(nulls == 0 && dxgiNulls == 0, "%u device and %u DXGI entries of the WDDM 1.3 tables are null", nulls,
+          dxgiNulls);
+    D3DWDDM1_3DDI_DEVICEFUNCS &dev = *(D3DWDDM1_3DDI_DEVICEFUNCS *)table.data();
+    DXGI1_3_DDI_BASE_FUNCTIONS &dxgi = *(DXGI1_3_DDI_BASE_FUNCTIONS *)dxgiTable.data();
+    const D3D10DDI_HDEVICE hDevice = create.hDrvDevice;
+
+    // pfnCheckMultisampleQualityLevels with its WDDM 1.3 Flags: a tiled-resource question is answered here
+    // with zero levels; an ordinary one reaches the hosted entry (which answers 7); an undefined bit is named
+    // and dropped, and the question still reaches the hosted entry.
+    UINT levels = 99;
+    recordReset();
+    dev.pfnCheckMultisampleQualityLevels(hDevice, DXGI_FORMAT_R8G8B8A8_UNORM, 4,
+                                         D3DWDDM1_3DDI_CHECK_MULTISAMPLE_QUALITY_LEVELS_TILED_RESOURCE, &levels);
+    CHECK(levels == 0 && !strstr(record(), "check-msaa"),
+          "a tiled-resource quality question answered %u levels or reached the hosted driver: %s", levels, record());
+    levels = 99;
+    dev.pfnCheckMultisampleQualityLevels(hDevice, DXGI_FORMAT_R8G8B8A8_UNORM, 4, 0, &levels);
+    CHECK(levels == 7 && strstr(record(), "check-msaa format=28 samples=4") != nullptr,
+          "an ordinary quality question did not reach the hosted entry (levels %u): %s", levels, record());
+    levels = 99;
+    dev.pfnCheckMultisampleQualityLevels(hDevice, DXGI_FORMAT_R8G8B8A8_UNORM, 2, 0x80, &levels);
+    CHECK(levels == 7, "a quality question with an undefined flag answered %u levels", levels);
+    // The tiled-resource entries refuse; GetMipPacking also writes its two outputs.
+    UINT mips = 9, tiles = 9;
+    D3D10DDI_HRESOURCE noResource;
+    noResource.pDrvPrivate = nullptr;
+    dev.pfnGetMipPacking(hDevice, noResource, &mips, &tiles);
+    CHECK(mips == 0 && tiles == 0, "pfnGetMipPacking left %u packed mips and %u tiles", mips, tiles);
+    dev.pfnResizeTilePool(hDevice, noResource, 65536);
+    dev.pfnTiledResourceBarrier(hDevice, D3D10DDI_HT_RESOURCE, nullptr, D3D10DDI_HT_RESOURCE, nullptr);
+    // Markers: setting the mode to NONE asks for nothing and is not a refusal; a profile mode and a marker are.
+    dev.pfnSetMarkerMode(hDevice, D3DWDDM1_3DDI_MARKER_TYPE_NONE, 0);
+    std::string log = frontLog();
+    CHECK(!Has(log, "refused pfnSetMarkerMode"), "SetMarkerMode NONE was counted as a refusal: %s", log.c_str());
+    dev.pfnSetMarkerMode(hDevice, D3DWDDM1_3DDI_MARKER_TYPE_PROFILE, 0);
+    dev.pfnSetMarker(hDevice);
+    log = frontLog();
+    for (const char *line : {"refused pfnGetMipPacking", "refused pfnResizeTilePool", "refused pfnTiledResourceBarrier",
+                             "refused pfnSetMarkerMode", "refused pfnSetMarker:",
+                             "pfnCheckMultisampleQualityLevels dropped a flag the WDK does not define"})
+        CHECK(Has(log, line), "the front log has no '%s': %s", line, log.c_str());
+
+    // pfnPresent1 through the published table reaches the hosted driver's own pfnPresent.
+    DXGI_DDI_ARG_PRESENTSURFACE surface = {0x5103, 1};
+    DXGI_DDI_ARG_PRESENT1 p1;
+    memset(&p1, 0, sizeof(p1));
+    p1.hDevice = (DXGI_DDI_HDEVICE)hDevice.pDrvPrivate;
+    p1.phSurfacesToPresent = &surface;
+    p1.SurfacesToPresent = 1;
+    p1.Flags.Flip = 1;
+    p1.FlipInterval = DXGI_DDI_FLIP_INTERVAL_ONE;
+    recordReset();
+    CHECK(dxgi.pfnPresent1(&p1) == S_OK, "pfnPresent1 over the hosted pfnPresent failed");
+    CHECK(strstr(record(), "dxgi-present surface=5103 sub=1 dst=0 dst_sub=0") != nullptr,
+          "pfnPresent1 did not reach the hosted pfnPresent: %s", record());
+    DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT duration;
+    memset(&duration, 0, sizeof(duration));
+    duration.ClosestSmallerDuration = duration.ClosestLargerDuration = 1;
+    CHECK(dxgi.pfnCheckPresentDurationSupport(&duration) == S_OK && !duration.ClosestSmallerDuration &&
+              !duration.ClosestLargerDuration,
+          "pfnCheckPresentDurationSupport did not answer zero and zero");
+    // The overlay caps follow the trailer at every question: no MPO bit, then the bit with plane 0 alone, then
+    // with the overlay plane on pipe 1, then the bit without DIRECT_FLIP, which no kernel driver writes.
+    const unsigned savedFlags = ScanoutFlags;
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS overlayCaps;
+    memset(&overlayCaps, 0, sizeof(overlayCaps));
+    overlayCaps.hDevice = (DXGI_DDI_HDEVICE)hDevice.pDrvPrivate;
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS groupCaps;
+    memset(&groupCaps, 0, sizeof(groupCaps));
+    groupCaps.hDevice = overlayCaps.hDevice;
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED &&
+              dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == DXGI_ERROR_UNSUPPORTED,
+          "the overlay caps did not answer DXGI_ERROR_UNSUPPORTED without the MPO bit");
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == S_OK && overlayCaps.MultiplaneOverlayCaps.MaxPlanes == 1 &&
+              overlayCaps.MultiplaneOverlayCaps.NumCapabilityGroups == 1,
+          "plane 0 alone: %u planes in %u groups", overlayCaps.MultiplaneOverlayCaps.MaxPlanes,
+          overlayCaps.MultiplaneOverlayCaps.NumCapabilityGroups);
+    ScanoutFlags |= BC250_SCANOUT_CAPS_MPO_PLANE1;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == S_OK && overlayCaps.MultiplaneOverlayCaps.MaxPlanes == 2,
+          "with the pipe 1 plane: %u planes", overlayCaps.MultiplaneOverlayCaps.MaxPlanes);
+    CHECK(dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == S_OK, "the group caps of group 0 failed");
+    const DXGI_DDI_MULTIPLANE_OVERLAY_GROUP_CAPS &group = groupCaps.MultiplaneOverlayGroupCaps;
+    const UINT wantCaps = DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_RGB |
+                          DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_BILINEAR_FILTER |
+                          DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_HIGH_FILTER;
+    CHECK(group.NumPlanes == 2 && group.MaxStretchFactor == 16.0f && group.MaxShrinkFactor == 1.0f &&
+              group.OverlayCaps == wantCaps && group.StereoCaps == 0,
+          "group 0: %u planes, stretch %.3f, shrink %.3f, caps %08x, stereo %08x", group.NumPlanes,
+          group.MaxStretchFactor, group.MaxShrinkFactor, group.OverlayCaps, group.StereoCaps);
+    groupCaps.GroupIndex = 1;
+    CHECK(dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == E_INVALIDARG, "group 1 of one group was not refused");
+    ScanoutFlags = BC250_SCANOUT_CAPS_MPO;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED,
+          "the MPO bit without DIRECT_FLIP admitted a plane");
+    ScanoutFlags = savedFlags;
+    // The present reaches the hosted driver's own overlay present with the runtime's argument, and only it:
+    // no pfnPresent first, which would be a second present to dxgkrnl.
+    DXGI_DDI_PRESENT_MULTIPLANE_OVERLAY planes[2];
+    memset(planes, 0, sizeof(planes));
+    planes[0].Enabled = TRUE;
+    planes[0].hResource = 0x5103;
+    planes[1].LayerIndex = 1;
+    DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY overlay;
+    memset(&overlay, 0, sizeof(overlay));
+    overlay.hDevice = overlayCaps.hDevice;
+    overlay.pDXGIContext = (void *)(UINT_PTR)0x5300;
+    overlay.PresentPlaneCount = 2;
+    overlay.pPresentPlanes = planes;
+    recordReset();
+    CHECK(dxgi.pfnPresentMultiplaneOverlay(&overlay) == S_OK &&
+              strstr(record(), "mpo-present planes=2 first=5103 context=5300") != nullptr &&
+              !strstr(record(), "dxgi-present"),
+          "the overlay present did not reach the hosted overlay present alone: %s", record());
+
+    // pfnRelocateDeviceFuncs at WDDM 1.3 fills the moved table in its full length, entry for entry the same.
+    std::vector<void *> moved(deviceSlots + 16, guard);
+    for (unsigned i = 0; i < deviceSlots; ++i) moved[i] = nullptr;
+    recordReset();
+    dev.pfnRelocateDeviceFuncs(hDevice, (D3DWDDM1_3DDI_DEVICEFUNCS *)moved.data());
+    unsigned movedWrong = 0, movedPast = 0;
+    for (unsigned i = 0; i < deviceSlots; ++i) if (moved[i] != table[i]) ++movedWrong;
+    for (size_t i = deviceSlots; i < moved.size(); ++i) if (moved[i] != guard) ++movedPast;
+    CHECK(movedWrong == 0 && movedPast == 0,
+          "the relocated WDDM 1.3 table has %u entries that differ and %u slots written past it", movedWrong, movedPast);
+    dev.pfnDestroyDevice(hDevice);
+    CHECK(strstr(record(), "destroy-device") != nullptr, "the hosted DestroyDevice was not called: %s", record());
+}
+
 static void Child(const std::string &s)
 {
     if (s == "policy") { PolicyTests(); return; }
     if (s == "identity") { IdentityTests(); return; }
     if (s == "front-tables") { FrontTableTests(); return; }
+    if (s == "front-tables13") { FrontTableTests13(); return; }
     if (s == "front-rule") { FrontRuleTests(); return; }
     if (s == "front-record") { FrontRecordTests(); return; }
     OpenHive(s);
@@ -2039,6 +2491,18 @@ static void Child(const std::string &s)
         else if (s == "front-zero") SetDw(RouterKey, L"DirectFlipFront", 0);
         else if (s != "front-absent") SetDw(RouterKey, L"DirectFlipFront", 1);
         if (s == "front-cpu-route") SetDw(RouterKey, L"DwmForceCpu", 1);
+        if (s == "front-wddm13") SetDw(RouterKey, L"FrontWddm13", 1);
+        else if (s == "front-wddm13-zero") SetDw(RouterKey, L"FrontWddm13", 0);
+        else if (s == "front-wddm13-wrong-type") SetSz(RouterKey, L"FrontWddm13", L"1");
+        // The WDDM 1.3 scenarios run over a trailer of a start that flips. front-wddm13-follow has no
+        // FrontWddm13 value, and its trailer admits an overlay plane from the adapter open on.
+        if (s.rfind("front-wddm13", 0) == 0) {
+            ScanoutTrailer = true;
+            ScanoutWidth = 1920;
+            ScanoutHeight = 1200;
+            ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+            if (s == "front-wddm13-follow") ScanoutFlags |= BC250_SCANOUT_CAPS_MPO;
+        }
         // front-answer is front-on with the scan-out caps trailer of a start that admits a client flip; the
         // adapter open sees it too, and its install line says so.
         if (s == "front-answer" || s == "front-log") {
@@ -2083,8 +2547,10 @@ static void Child(const std::string &s)
 
         // The adapter table the runtime now holds. With the front off it is the hosted driver's own, so the
         // version count is the hosted driver's; with the front on it is one longer, and the extra entry is
-        // D3D11_1_DDI_SUPPORTED exactly (build version 0).
+        // D3D11_1_DDI_SUPPORTED exactly (build version 0). With FrontWddm13 1 it is two longer, and
+        // D3DWDDM1_3_DDI_SUPPORTED is last (BD-223).
         const bool on = !strcmp(wantColumn, "front=on");
+        const bool wddm13 = s == "front-wddm13" || s == "front-wddm13-follow";
         if (entry10) {
             // The D3D10.0 entry has no GetSupportedVersions and no GetCaps, and the front needs both: the
             // route is unchanged and CalcPrivateDeviceSize is the hosted driver's own, with no front record
@@ -2102,7 +2568,8 @@ static void Child(const std::string &s)
         UINT32 count = 0;
         CHECK(o.funcs.pfnGetSupportedVersions(o.adapter, &count, nullptr) == S_OK, "the count query failed");
         const UINT32 hostedCount = real ? 3 : 2;
-        CHECK(count == hostedCount + (on ? 1u : 0u), "%u versions, expected %u", count, hostedCount + (on ? 1u : 0u));
+        const UINT32 added = on ? (wddm13 ? 2u : 1u) : 0u;
+        CHECK(count == hostedCount + added, "%u versions, expected %u", count, hostedCount + added);
         UINT64 versions[8] = {};
         UINT32 n = 1;
         CHECK(o.funcs.pfnGetSupportedVersions(o.adapter, &n, versions) == E_OUTOFMEMORY,
@@ -2110,11 +2577,34 @@ static void Child(const std::string &s)
         n = ARRAYSIZE(versions);
         CHECK(o.funcs.pfnGetSupportedVersions(o.adapter, &n, versions) == S_OK, "the fill query failed");
         CHECK(n == count, "the fill query wrote %u entries, the count query said %u", n, count);
-        if (on) {
-            CHECK(versions[n - 1] == D3D11_1_DDI_SUPPORTED, "the appended version is %016llx, expected %016llx",
-                  (unsigned long long)versions[n - 1], (unsigned long long)D3D11_1_DDI_SUPPORTED);
-            for (UINT32 i = 0; i + 1 < n; ++i)
+        if (on && n >= added) {
+            const UINT32 at = n - added;
+            CHECK(versions[at] == D3D11_1_DDI_SUPPORTED, "the appended version is %016llx, expected %016llx",
+                  (unsigned long long)versions[at], (unsigned long long)D3D11_1_DDI_SUPPORTED);
+            for (UINT32 i = 0; i < at; ++i)
                 CHECK(versions[i] != D3D11_1_DDI_SUPPORTED, "the hosted list already held D3D11_1");
+            if (wddm13)
+                CHECK(versions[n - 1] == D3DWDDM1_3_DDI_SUPPORTED, "the last version is %016llx, expected %016llx",
+                      (unsigned long long)versions[n - 1], (unsigned long long)D3DWDDM1_3_DDI_SUPPORTED);
+            for (UINT32 i = 0; i < n; ++i)
+                CHECK(wddm13 ? (i == n - 1) == (versions[i] == D3DWDDM1_3_DDI_SUPPORTED)
+                             : versions[i] != D3DWDDM1_3_DDI_SUPPORTED,
+                      "WDDM 1.3 is at entry %u of %u, but FrontWddm13 is %s", i, n, wddm13 ? "1" : "not 1");
+            // The adapter open names the level it decided, once, in the front log.
+            const std::string installLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                                   std::to_wstring(GetCurrentProcessId()) + L".log");
+            const char *wantLevel = s == "front-wddm13" ? "wddm13=on level=wddm1_3"
+                                    : s == "front-wddm13-follow" ? "wddm13=follow level=wddm1_3"
+                                    : s == "front-wddm13-zero" || s == "front-wddm13-wrong-type"
+                                        ? "wddm13=off level=d3d11_1"
+                                        : "wddm13=follow level=d3d11_1";
+            CHECK(Has(installLog, wantLevel), "the install line has no %s: %s", wantLevel, installLog.c_str());
+            // The hosted overlay present was resolved exactly when the hosted module exports it: the double does,
+            // and the real hosted UMD does from the BD-223 Mesa change on.
+            const bool exportsMpo = GetProcAddress(hosted, "Bc250PresentMultiplaneOverlay") != nullptr;
+            const char *wantMpo = exportsMpo ? "hosted_mpo=1" : "hosted_mpo=0";
+            CHECK(Has(installLog, wantMpo) && (real || exportsMpo), "the install line has no %s: %s", wantMpo,
+                  installLog.c_str());
         } else {
             for (UINT32 i = 0; i < n; ++i)
                 CHECK(versions[i] != D3D11_1_DDI_SUPPORTED, "D3D11_1 is offered although the front is off");
@@ -2146,23 +2636,24 @@ static void Child(const std::string &s)
             // half-written.
             caps.DataSize = sizeof(options) + 4;
             CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == E_INVALIDARG, "a caps buffer of the wrong size");
-            // A D3D11-era type the front does not model is answered the way the hosted driver answered every
-            // type before the front existed: zeroed, S_OK. An E_INVALIDARG here is a device create that does
-            // not happen inside dwm.exe, and every one of these structures means "unsupported" when zeroed.
+            // The two WDDM 1.3 types: no tiled resources (D3D11_OPTIONS1) and no markers (MARKER, NONE = 0). The
+            // front answers them by name since BD-223, and the answer is still a zero, so a runtime that asks
+            // them of a D3D11_1 device reads what it read before.
             UINT32 unknown = 0xFFFFFFFF;
             caps.Type = (D3D10_2DDICAPS_TYPE)136; // D3DWDDM1_3DDICAPS_D3D11_OPTIONS1
             caps.pData = &unknown;
             caps.DataSize = sizeof(unknown);
-            CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == S_OK, "an unknown D3D11-era caps type was refused");
-            CHECK(unknown == 0, "an unknown caps type did not zero the buffer");
+            CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == S_OK, "D3D11_OPTIONS1 was refused");
+            CHECK(unknown == 0, "D3D11_OPTIONS1 publishes a tiled-resources tier");
             // And it is answered by the front, not forwarded: the hosted driver's GetCaps sees nothing.
             if (record && recordReset && !real) {
                 recordReset();
                 unknown = 0xFFFFFFFF;
                 caps.Type = (D3D10_2DDICAPS_TYPE)137;
-                CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == S_OK, "a second unknown type was refused");
+                CHECK(o.funcs.pfnGetCaps(o.adapter, &caps) == S_OK && unknown == 0,
+                      "MARKER was refused or is not NONE");
                 CHECK(!strstr(record(), "get-caps type=137"),
-                      "an unknown D3D11-era type reached the hosted driver: %s", record());
+                      "a WDDM 1.3 caps type reached the hosted driver: %s", record());
             }
             // A legacy type still goes to the hosted driver, whose zeroing answer is the right one for it.
             if (record && recordReset && !real) {
@@ -2178,6 +2669,11 @@ static void Child(const std::string &s)
         // runtime's 101-entry table and 7-entry DXGI block instead, it writes 432 and 64 bytes past them and
         // answers S_OK, inside dwm.exe. The two tables here are oversized with a guard pattern, so an overrun
         // is caught by name instead of by a heap crash somewhere else.
+        if (s.rfind("front-wddm13", 0) == 0) {
+            FrontWddm13Checks(o, wddm13, record, recordReset, fakeSize);
+            CHECK(o.funcs.pfnCloseAdapter && o.funcs.pfnCloseAdapter(o.adapter) == S_OK, "CloseAdapter");
+            return;
+        }
         if (s == "front-d3d10-interface") {
             if (!record || !recordReset || !fakeSize || !fakeFuncs) return;
             void *const guard = (void *)(UINT_PTR)0x6A6A6A6A;
@@ -2480,13 +2976,16 @@ static void Child(const std::string &s)
                                            std::to_wstring(GetCurrentProcessId()) + L".log");
         CHECK(Has(bltLog, "pfnBlt1 dropped a source rectangle"),
               "the dropped source rectangle is not in the front log: %s", bltLog.c_str());
-        // The four multiplane-overlay entries answer DXGI_ERROR_UNSUPPORTED, not E_NOTIMPL, and their lines
-        // reach the file through the process-wide log although they have no device record.
-        CHECK(dxgi.pfnPresentMultiplaneOverlay(nullptr) == DXGI_ERROR_UNSUPPORTED,
-              "pfnPresentMultiplaneOverlay did not answer DXGI_ERROR_UNSUPPORTED");
+        // The overlay caps over this device answer DXGI_ERROR_UNSUPPORTED, not E_NOTIMPL: the start has no
+        // MPO bit in its trailer. The line reaches the file through the process-wide log.
+        DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS overlayCaps;
+        memset(&overlayCaps, 0, sizeof(overlayCaps));
+        overlayCaps.hDevice = (DXGI_DDI_HDEVICE)create.hDrvDevice.pDrvPrivate;
+        CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED,
+              "pfnGetMultiplaneOverlayCaps did not answer DXGI_ERROR_UNSUPPORTED without the MPO bit");
         const std::string mpoLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                            std::to_wstring(GetCurrentProcessId()) + L".log");
-        CHECK(Has(mpoLog, "refused dxgi pfnPresentMultiplaneOverlay"),
+        CHECK(Has(mpoLog, "refused dxgi pfnGetMultiplaneOverlayCaps"),
               "a DXGI refusal did not reach the front log: %s", mpoLog.c_str());
 
         // What the front forwards, and what it does not. ClearView with no rectangle list is the whole-view
@@ -2840,6 +3339,10 @@ static int RunAll(const std::wstring &out)
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
         {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}}, {"front-answer", nullptr, {}},
         {"front-log", nullptr, {}},
+        // BD-223: the WDDM 1.3 interface of the front. One pure suite and one scenario per state of FrontWddm13
+        // that changes the interface; Absent is front-on.
+        {"front-tables13", nullptr, {}}, {"front-wddm13", nullptr, {}}, {"front-wddm13-zero", nullptr, {}},
+        {"front-wddm13-wrong-type", nullptr, {}}, {"front-wddm13-follow", nullptr, {}},
         // Application policy (AppRouter).
         {"app-absent-key", nullptr, {}}, {"app-mode-absent", nullptr, {}}, {"app-mode-cpu", nullptr, {}},
         {"app-mode-invalid", nullptr, {}}, {"app-mode-wrong-type", nullptr, {}},

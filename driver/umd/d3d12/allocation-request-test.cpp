@@ -374,6 +374,10 @@ int main() {
             deep=caps_on(1920,1200,BC250_SCANOUT_CAPS_PLANE_FORMATS|BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT),
             deep_only=caps_on(1920,1200,BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT);
         bc250_scanout_caps planes_only=planes;planes_only.flags=BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        // BD-223: the trailer of a kernel driver that answers the multiplane-overlay DDIs, and the MPO flag
+        // alone, which is no trailer.
+        const bc250_scanout_caps mpo=caps_on(1920,1200,BC250_SCANOUT_CAPS_MPO);
+        bc250_scanout_caps mpo_only=mpo;mpo_only.flags=BC250_SCANOUT_CAPS_MPO;
         const unsigned bgra=AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM,pitch=7680;
         const char* none="";
         struct Case { const char* list;bc250_scanout_caps caps;unsigned long force;bool desktop;
@@ -455,6 +459,25 @@ int main() {
             // The flag alone is not DIRECT_FLIP: without it the trailer is closed.
             {none,planes_only,0,true,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,
              ScanoutStandDown::CapsClosed,ScanoutSwitch::Default},
+            // BD-223: with the MPO flag a chain that is not the mode is a scan-out primary for the plane, from
+            // 64 pixels up to the mode and to a stretch of 16 in each direction (bc250_scanout_mpo_geometry).
+            // The 1920x1080 chain on the 1920x1200 mode is the case of the defect. The 1280x720 chain is
+            // admitted here although the kernel driver's present stage refuses its pitch at the plane check:
+            // that refusal composes the frame and goes away with that stage, so the shell does not copy it.
+            {none,mpo,0,true,bgra,1920,1080,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,1280,720,5120,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,120,75,512,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,119,75,512,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,63,1200,256,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,1920,1201,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,1280,720,5376,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
+            {none,mpo,0,true,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1280,720,10240,ScanoutStandDown::Format,
+             ScanoutSwitch::Default},
+            {none,mpo,1,true,bgra,1920,1080,pitch,ScanoutStandDown::ForceCpu,ScanoutSwitch::Default},
+            {none,mpo,0,false,bgra,1920,1080,pitch,ScanoutStandDown::DesktopRoute,ScanoutSwitch::Default},
+            {"scanout-flip-off",mpo,0,true,bgra,1920,1080,pitch,ScanoutStandDown::ModeOff,ScanoutSwitch::Off},
+            {none,mpo_only,0,true,bgra,1920,1080,pitch,ScanoutStandDown::CapsClosed,ScanoutSwitch::Default},
         };
         for(const auto& c:cases) {
             const ScanoutDecision d=scanout_decide(c.list,c.caps,c.force,c.desktop,c.dxgi,c.w,c.h,c.pitch);
@@ -527,7 +550,10 @@ int main() {
         for(const auto& c:cases) {
             if(c.reason!=ScanoutStandDown::Admitted)continue;
             const auto* row=amdgpu_wddm_surface_format_by_dxgi(c.dxgi);
-            CHECK(row && d.prepare_surface(c.w,c.h,c.pitch,D3DDDIFORMAT(row->d3dddi),uint64_t(c.pitch)*c.h,owner,
+            // The backing as engine-ddi sizes it (INTEGRATION.md): the pitch times the height rounded up to 4,
+            // rounded up to 4 KiB. An overlay chain's height need not be a multiple of 4 (BD-223, 120x75).
+            const uint64_t bytes=(uint64_t(c.pitch)*((c.h+3u)&~3u)+4095u)&~uint64_t(4095);
+            CHECK(row && d.prepare_surface(c.w,c.h,c.pitch,D3DDDIFORMAT(row->d3dddi),bytes,owner,
                                            false,true,true)==S_OK);
             check_scanout_record(d,c.w,c.h,c.dxgi);
         }

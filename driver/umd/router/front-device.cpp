@@ -494,6 +494,33 @@ VOID APIENTRY RelocateDeviceFuncs(D3D10DDI_HDEVICE hDevice, D3D11_1DDI_DEVICEFUN
     FillDeviceFuncs(funcs, dev->hosted);
 }
 
+// BD-223: the same entry at the WDDM 1.3 interface, where the runtime's table is the longer one
+// (PFND3DWDDM1_3DDI_RELOCATEDEVICEFUNCS). Filling the D3D11_1 shape into it would leave the nine WDDM 1.3
+// slots of the moved table as the runtime left them.
+VOID APIENTRY RelocateDeviceFuncs13(D3D10DDI_HDEVICE hDevice, D3DWDDM1_3DDI_DEVICEFUNCS *funcs)
+{
+    FRONT_DEVICE(hDevice, )
+    if (!funcs) return;
+    FillDeviceFuncs13(funcs, dev->hosted);
+}
+
+// BD-223: pfnCheckMultisampleQualityLevels grew a Flags argument at WDDM 1.3, whose one bit asks about a tiled
+// resource (D3DWDDM1_3DDI_CHECK_MULTISAMPLE_QUALITY_LEVELS_TILED_RESOURCE). The front publishes no tiled
+// resources (GetCaps, D3D11_OPTIONS1), so that question has the answer of an unsupported combination, zero
+// quality levels, and does not reach the hosted driver. Any other bit is not defined by the WDK; it is named
+// once and dropped, and the question is answered for an ordinary resource.
+VOID APIENTRY CheckMultisampleQualityLevels13(D3D10DDI_HDEVICE hDevice, DXGI_FORMAT format, UINT sampleCount,
+                                              UINT flags, UINT *numQualityLevels)
+{
+    FRONT_DEVICE(hDevice, )
+    if (flags & D3DWDDM1_3DDI_CHECK_MULTISAMPLE_QUALITY_LEVELS_TILED_RESOURCE) {
+        if (numQualityLevels) *numQualityLevels = 0;
+        return;
+    }
+    if (flags) DROPPED_ONCE(dev, "pfnCheckMultisampleQualityLevels", "a flag the WDK does not define");
+    dev->hosted.pfnCheckMultisampleQualityLevels(hDevice, format, sampleCount, numQualityLevels);
+}
+
 SIZE_T APIENTRY CalcPrivateResourceSize(D3D10DDI_HDEVICE hDevice,
                                         CONST D3D11DDIARG_CREATERESOURCE *args)
 {
@@ -1054,6 +1081,53 @@ FRONT_REFUSE_VOID(CopyStructureCount,
                   (D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE a, UINT b,
                    D3D11DDI_HUNORDEREDACCESSVIEW c),
                   (void)a; (void)b; (void)c;)
+// BD-223: the WDDM 1.3 entries. Tiled resources: D3D11_OPTIONS1 publishes no tier, so the runtime creates no
+// tiled resource or tile pool and has no handle to pass to any of these.
+FRONT_REFUSE_VOID(UpdateTileMappings,
+                  (D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE a, UINT b,
+                   CONST D3DWDDM1_3DDI_TILED_RESOURCE_COORDINATE *c, CONST D3DWDDM1_3DDI_TILE_REGION_SIZE *d,
+                   D3D10DDI_HRESOURCE e, UINT f, CONST UINT *g, CONST UINT *h, CONST UINT *i, UINT j),
+                  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; (void)g; (void)h; (void)i; (void)j;)
+FRONT_REFUSE_VOID(CopyTileMappings,
+                  (D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE a,
+                   CONST D3DWDDM1_3DDI_TILED_RESOURCE_COORDINATE *b, D3D10DDI_HRESOURCE c,
+                   CONST D3DWDDM1_3DDI_TILED_RESOURCE_COORDINATE *d, CONST D3DWDDM1_3DDI_TILE_REGION_SIZE *e,
+                   UINT f),
+                  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;)
+FRONT_REFUSE_VOID(CopyTiles,
+                  (D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE a,
+                   CONST D3DWDDM1_3DDI_TILED_RESOURCE_COORDINATE *b, CONST D3DWDDM1_3DDI_TILE_REGION_SIZE *c,
+                   D3D10DDI_HRESOURCE d, UINT64 e, UINT f),
+                  (void)a; (void)b; (void)c; (void)d; (void)e; (void)f;)
+FRONT_REFUSE_VOID(UpdateTiles,
+                  (D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE a,
+                   CONST D3DWDDM1_3DDI_TILED_RESOURCE_COORDINATE *b, CONST D3DWDDM1_3DDI_TILE_REGION_SIZE *c,
+                   CONST VOID *d, UINT e),
+                  (void)a; (void)b; (void)c; (void)d; (void)e;)
+FRONT_REFUSE_VOID(TiledResourceBarrier,
+                  (D3D10DDI_HDEVICE hDevice, D3D11DDI_HANDLETYPE a, VOID *b, D3D11DDI_HANDLETYPE c, VOID *d),
+                  (void)a; (void)b; (void)c; (void)d;)
+FRONT_REFUSE_VOID(ResizeTilePool, (D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE a, UINT64 b), (void)a; (void)b;)
+// The one tiled entry with outputs: they are written as "no packed mips, no tiles", so a caller that reads
+// them after the refusal reads zeros and not its own stack.
+VOID APIENTRY GetMipPacking(D3D10DDI_HDEVICE hDevice, D3D10DDI_HRESOURCE hTiledResource, UINT *numPackedMips,
+                            UINT *numTilesForPackedMips)
+{
+    (void)hTiledResource;
+    if (numPackedMips) *numPackedMips = 0;
+    if (numTilesForPackedMips) *numTilesForPackedMips = 0;
+    FRONT_DEVICE(hDevice, )
+    REFUSE_ONCE(dev, "pfnGetMipPacking");
+}
+// Profile markers: the MARKER caps type answers NONE. Setting the mode to NONE is the one call that asks for
+// nothing, so it is not a refusal and is not counted; any other mode or a marker is.
+VOID APIENTRY SetMarkerMode(D3D10DDI_HDEVICE hDevice, D3DWDDM1_3DDI_MARKER_TYPE type, UINT flags)
+{
+    FRONT_DEVICE(hDevice, )
+    if (type == D3DWDDM1_3DDI_MARKER_TYPE_NONE && !flags) return;
+    REFUSE_ONCE(dev, "pfnSetMarkerMode");
+}
+FRONT_REFUSE_VOID(SetMarker, (D3D10DDI_HDEVICE hDevice), )
 
 #undef FRONT_REFUSE_CREATE
 #undef FRONT_REFUSE_VOID
@@ -1229,6 +1303,31 @@ void FillDeviceFuncs(D3D11_1DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNCS &ho
     out->pfnDynamicConstantBufferMapNoOverwrite = hosted.pfnResourceMap;
     out->pfnCheckDirectFlipSupport = CheckDirectFlipSupport;
     out->pfnClearView = ClearView;
+}
+
+// BD-223: the WDDM 1.3 table. Its head is the D3D11_1 table, member for member (front-adapter.h holds the
+// layout), so the D3D11_1 fill is the head and the review of its 155 entries carries over. Two members of the
+// head changed signature and get their own bodies; the nine appended members are seven tiled-resource
+// refusals, GetMipPacking (a refusal that writes its outputs) and the two marker entries.
+void FillDeviceFuncs13(D3DWDDM1_3DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNCS &hosted)
+{
+    if (!out) return;
+    ZeroMemory(out, sizeof(*out));
+    D3D11_1DDI_DEVICEFUNCS head;
+    FillDeviceFuncs(&head, hosted);
+    memcpy(out, &head, sizeof(head));
+    out->pfnRelocateDeviceFuncs = RelocateDeviceFuncs13;
+    out->pfnCheckMultisampleQualityLevels = CheckMultisampleQualityLevels13;
+    // 155 .. 163  the WDDM 1.3 entries
+    out->pfnUpdateTileMappings = UpdateTileMappings;
+    out->pfnCopyTileMappings = CopyTileMappings;
+    out->pfnCopyTiles = CopyTiles;
+    out->pfnUpdateTiles = UpdateTiles;
+    out->pfnTiledResourceBarrier = TiledResourceBarrier;
+    out->pfnGetMipPacking = GetMipPacking;
+    out->pfnResizeTilePool = ResizeTilePool;
+    out->pfnSetMarker = SetMarker;
+    out->pfnSetMarkerMode = SetMarkerMode;
 }
 
 // ---------------------------------------------------------------- the resource map
