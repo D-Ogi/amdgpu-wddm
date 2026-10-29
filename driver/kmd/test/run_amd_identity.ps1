@@ -1,6 +1,6 @@
 param(
     [string]$Root = $(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),
-    [string]$Out = "$Root\scratch\amd-identity",
+    [string]$Out = "$Root\scratch\build\amd-identity",
     [string]$Kits = "$Root\toolchain\nuget",
     [string]$KitVersion = '10.0.26100.0'
 )

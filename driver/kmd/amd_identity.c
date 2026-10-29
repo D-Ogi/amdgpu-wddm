@@ -32,20 +32,37 @@ static BOOLEAN AmdIdentityLogSlot(void)
 }
 #endif
 
-// The file name part of Name[0..Chars) in ASCII ('?' for any other character), at most Size-1 characters. Returns
-// the index where the file name part starts.
+// The index of the first zero character in Name[0..Chars), or Chars when there is none.
+static UINT AmdIdentityEnd(_In_reads_opt_(Chars) const WCHAR* Name, UINT Chars)
+{
+    UINT end = 0;
+
+    if (Name == NULL) return 0;
+    while (end < Chars && Name[end] != 0) end++;
+    return end;
+}
+
+// Name[From..End) in ASCII ('?' for any other character), at most Size-1 characters.
+static void AmdIdentityAscii(_Out_writes_(Size) char* Out, ULONG Size, _In_reads_opt_(End) const WCHAR* Name, UINT From,
+    UINT End)
+{
+    UINT i;
+    ULONG n = 0;
+
+    if (Name != NULL)
+        for (i = From; i < End && n + 1 < Size; i++) Out[n++] = (Name[i] >= 0x20 && Name[i] < 0x7F) ? (char)Name[i] : '?';
+    Out[n] = 0;
+}
+
+// The file name part of Name[0..Chars) in ASCII, at most Size-1 characters. Returns the index where the file name
+// part starts.
 static UINT AmdIdentityNarrow(_Out_writes_(Size) char* Out, ULONG Size, _In_reads_opt_(Chars) const WCHAR* Name,
     UINT Chars)
 {
-    UINT i, start = 0, end = 0;
-    ULONG n = 0;
+    UINT i, start = 0, end = AmdIdentityEnd(Name, Chars);
 
-    Out[0] = 0;
-    if (Name == NULL) return 0;
-    while (end < Chars && Name[end] != 0) end++;
     for (i = 0; i < end; i++) if (Name[i] == L'\\' || Name[i] == L'/') start = i + 1;
-    for (i = start; i < end && n + 1 < Size; i++) Out[n++] = (Name[i] >= 0x20 && Name[i] < 0x7F) ? (char)Name[i] : '?';
-    Out[n] = 0;
+    AmdIdentityAscii(Out, Size, Name, start, end);
     return start;
 }
 
@@ -62,12 +79,17 @@ void AmdIdentityProcessCreate(_Out_ BC250_AMD_IDENTITY_PROCESS* Process, _In_rea
     UINT Chars)
 {
     RtlZeroMemory(Process, sizeof(*Process));
-    // The raw length is kept for the log before NULL clears it: whether dxgkrnl gives a full path, a file name or a
-    // shortened name is measured on the lab (the kit's long-name arm), not assumed here.
+    // What dxgkrnl gave is kept for the log before NULL clears the length: whether it is a full path, a file name, a
+    // shortened name or nothing is measured on the lab (the kit's long-name arm), not assumed here. Nothing is read
+    // past ProcessNameLength characters.
+    Process->NamePointer = Name != NULL;
     Process->NameChars = Chars;
     if (Name == NULL) Chars = 0;
+    Process->NameEnd = AmdIdentityEnd(Name, Chars);
+    Process->NameFirst = Chars ? Name[0] : 0;
     Process->NameFlags = Bc250AmdIdentityNameFlags((const unsigned short*)Name, Chars);
     Process->NameFileAt = AmdIdentityNarrow(Process->Image, sizeof(Process->Image), Name, Chars);
+    AmdIdentityAscii(Process->Head, sizeof(Process->Head), Name, 0, Process->NameEnd);
 }
 
 NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Out_writes_bytes_(Bytes) void* Out, UINT Bytes)
@@ -80,15 +102,22 @@ NTSTATUS AmdIdentityQuery(_In_opt_ BC250_AMD_IDENTITY_PROCESS* Process, _Out_wri
     if (!Bc250AmdIdentityFill(Out, Bytes, on)) return STATUS_INVALID_PARAMETER;
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     // One line for each process's first answer (every answer without a process), at most AMD_IDENTITY_LOG_LINES.
-    // With a process, a second line: dxgkrnl's name as it came (ProcessNameLength, the index of the file name in it,
-    // and the NAME_* bits of that name alone, without the shell's). It measures the form of dxgkrnl's name.
+    // With a process, two more lines: what DXGKARG_CREATEPROCESS held at CreateProcess (whether pProcessName was set,
+    // ProcessNameLength, the index of the first zero character, the index of the file name, the NAME_* bits of that
+    // name alone, without the shell's; then its first 31 characters and the value of the first one). They measure
+    // the form of dxgkrnl's name. They are written here and not at CreateProcess, so that only processes that ask
+    // for the identity use log lines.
     if ((Process == NULL || InterlockedExchange(&Process->Logged, 1) == 0) && AmdIdentityLogSlot()) {
         GuardLog("fsr4-identity: query image %s source %s revision 0x%02X names 0x%X shell %u",
             (Process != NULL && Process->Image[0]) ? Process->Image : "-", Bc250AmdIdentitySourceName(source),
             on ? BC250_AMD_IDENTITY_EREV_NAVI22 : BC250_AMD_IDENTITY_EREV_OWN, names, shell);
         if (Process != NULL && AmdIdentityLogSlot())
-            GuardLog("fsr4-identity: dxgkrnl name %s chars %lu at %lu names 0x%lX",
-                Process->Image[0] ? Process->Image : "-", Process->NameChars, Process->NameFileAt, Process->NameFlags);
+            GuardLog("fsr4-identity: dxgkrnl name %s ptr %lu chars %lu end %lu at %lu names 0x%lX",
+                Process->Image[0] ? Process->Image : "-", Process->NamePointer, Process->NameChars, Process->NameEnd,
+                Process->NameFileAt, Process->NameFlags);
+        if (Process != NULL && AmdIdentityLogSlot())
+            GuardLog("fsr4-identity: dxgkrnl head %s first 0x%04lX", Process->Head[0] ? Process->Head : "-",
+                Process->NameFirst);
     }
 #endif
     return STATUS_SUCCESS;

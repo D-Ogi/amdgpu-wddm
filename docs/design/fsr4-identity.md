@@ -118,18 +118,29 @@ Call of Duty is not in the list, because no source names its image. For any othe
 
 ## Log lines
 
-The lab flavour of the KMD writes at most 32 lines. It writes two lines for the first answer of each process. It
+The lab flavour of the KMD writes at most 32 lines. It writes three lines for the first answer of each process. It
 writes one line for an escape that changes the record, if the escape has a value, or if only the shell's name is in
 the list. The release flavour writes none.
 
 ```
 fsr4-identity: query image game.exe source default revision 0x32 names 0x1 shell 0
-fsr4-identity: dxgkrnl name game.exe chars 8 at 0 names 0x1
+fsr4-identity: dxgkrnl name game.exe ptr 1 chars 8 end 8 at 0 names 0x1
+fsr4-identity: dxgkrnl head game.exe first 0x0067
 fsr4-identity: shell image game.exe FsrUpgrade 0 source shell revision 0x84 names 0x1
 ```
 
-The `dxgkrnl name` line gives dxgkrnl's name as it came: `chars` is `ProcessNameLength`, `at` is the index of the
-file name in that name (0: no path), and `names` holds the flags of that name alone.
+The two `dxgkrnl` lines give what `DXGKARG_CREATEPROCESS` held at CreateProcess. The KMD keeps these values in the
+process record and writes them at the first answer, so that only processes that ask for the identity use log lines.
+
+- `ptr` is 1 if `pProcessName` was not NULL.
+- `chars` is `ProcessNameLength`.
+- `end` is the index of the first zero character in the first `chars` characters (`chars` if there is none).
+- `at` is the index of the file name in that name (0: no path).
+- `names` holds the flags of that name alone.
+- `head` holds the first 31 characters from index 0, and `first` holds the value of the first character (0: no
+  character).
+
+The KMD reads no character after `chars`.
 
 The D3D12 shell writes one line each time it sends the escape (`FsrUpgrade=unset/unset` when the setting has no
 value):

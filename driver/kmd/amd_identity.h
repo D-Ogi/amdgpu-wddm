@@ -13,10 +13,16 @@ typedef struct _BC250_AMD_IDENTITY_PROCESS {
     volatile LONG Shell;        // the shell's value (BC250_AMD_IDENTITY_SHELL_*) | the NAME_* bits of its name << 8;
                                 // written by the escape, read by the query, one interlocked word
     volatile LONG Logged;       // lab flavour: 1 once this process's first answer is in the log
-    ULONG NameChars;            // DXGKARG_CREATEPROCESS.ProcessNameLength as dxgkrnl gave it, for the log
-    ULONG NameFileAt;           // the index of the file name part in that name (0: no '\' or '/'), for the log
-    char Image[48];             // dxgkrnl's file name in ASCII, for the log (at most 47 characters, so that a log
-                                // line fits BC250_LOG_TEXT); written with NameFlags
+    // What DXGKARG_CREATEPROCESS held, for the lab log (the measurement of the form of dxgkrnl's name); written with
+    // NameFlags and never again.
+    ULONG NamePointer;          // 1: pProcessName was not NULL
+    ULONG NameChars;            // ProcessNameLength as dxgkrnl gave it
+    ULONG NameEnd;              // the index of the first zero character in the first NameChars (NameChars: none)
+    ULONG NameFirst;            // the first character's value (0: no character)
+    ULONG NameFileAt;           // the index of the file name part in that name (0: no '\' or '/')
+    char Image[48];             // dxgkrnl's file name in ASCII (at most 47 characters, so that a log line fits
+                                // BC250_LOG_TEXT)
+    char Head[32];              // the first 31 characters of dxgkrnl's name in ASCII, from index 0
 } BC250_AMD_IDENTITY_PROCESS;
 
 // CreateProcess: the record from dxgkrnl's process name (DXGKARG_CREATEPROCESS.pProcessName, ProcessNameLength
