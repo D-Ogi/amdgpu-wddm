@@ -1556,7 +1556,7 @@ static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const
         return STATUS_INVALID_DEVICE_STATE;
     }
     shapeOn = Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape));
-    // 1. The global sync (dcn20_program_tg): VREADY and the VUPDATE width of the plan. The mode's values are saved once,
+    // 1. The global sync (dcn10_program_pipe, the program_pipe of dcn201_init.c): VREADY and the VUPDATE width of the plan. The mode's values are saved once,
     // before the first plane write. Bc250OptcGlobalSyncLocked refuses another VSTARTUP or VUPDATE offset before any write.
     status = STATUS_SUCCESS;
     if (!s->SyncSaved) {
@@ -1568,7 +1568,7 @@ static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const
         sync.VUpdateOffset = s->Staged.VUpdateOffset; sync.VUpdateWidth = s->Staged.VUpdateWidth;
         status = Bc250OptcGlobalSyncLocked(&io, &sync);
     }
-    // 2. The requestor (dcn20_update_dchubp_dpp hubp_setup), with the watermarks raised first. Save captures the mode's
+    // 2. The requestor (dcn10_update_dchubp_dpp hubp_setup), with the watermarks raised first. Save captures the mode's
     // fields at the first plane write only, so a flip from one plane to another keeps the mode's values.
     if (status >= 0) {
         s->Pitch = 0;

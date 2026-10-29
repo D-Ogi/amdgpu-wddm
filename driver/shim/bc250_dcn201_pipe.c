@@ -396,7 +396,7 @@ long Bc250Dcn201RequestorLocked(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,uns
         a.capture=save;programRequestor(&a,p);a.capture=NULL;
         if(a.status<0) { save->Count=0;return a.status; }
     }
-    // dcn20_prepare_bandwidth raises the watermarks before the pipe update, then dcn20_update_dchubp_dpp programs
+    // dcn20_prepare_bandwidth raises the watermarks before the pipe update, then dcn10_update_dchubp_dpp programs
     // the requestor. A raised watermark is safe for the requestor on the pipe now as well.
     programWatermarks(&a,p,&clocks,1);
     programRequestor(&a,p);

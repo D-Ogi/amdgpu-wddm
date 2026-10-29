@@ -49,7 +49,7 @@ long Bc250Dcn201RequestorValidate(const BC250_DML201_PLAN* Plan, unsigned int Dc
 // BD-223: the live request (RQ), delivery (DLG, TTU) and interdependent registers of HUBP0 for the plan of a
 // multiplane-overlay plane, on a running pipe. The caller holds the acknowledged OTG0 master update lock: AMD
 // hubp201_setup is called "when otg is locked", and the registers are double buffered, so they latch with the
-// surface at the next VUPDATE (dcn20_update_dchubp_dpp, dc/hwss/dcn20/dcn20_hwseq.c). Validates the plan before
+// surface at the next VUPDATE (dcn10_update_dchubp_dpp, dc/hwss/dcn10/dcn10_hwseq.c: dcn201_init.c names dcn10_program_pipe). Validates the plan before
 // any MMIO. When Save->Count is 0, Save first gets the fields that the setters replace, read and not written.
 // The A-D watermarks are only raised: AMD's safe_to_lower=false, with AMD's cache of the programmed watermarks read
 // back from the registers (dcn20_prepare_bandwidth). A lower watermark waits for the next commit, as Linux waits

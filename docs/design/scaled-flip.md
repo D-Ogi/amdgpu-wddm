@@ -94,8 +94,8 @@ committed pipe. The S2 probe on the lab timing found that this was not safe even
 VREADY and VUPDATE width for every scaled plane (369 and 275 for 1280x720 against 340 and 255 for the mode). So from
 stage S2 the flip programs the whole display plan of the plane, at the plane's own pitch.
 
-Inside the acknowledged OTG0 lock the order is the order of Linux dcn20 (`dcn20_prepare_bandwidth`,
-`dcn20_program_tg`, then `dcn20_update_dchubp_dpp`). AMD `hubp201_setup` says that OTG is locked when it is called
+Inside the acknowledged OTG0 lock the order is the order of Linux for DCN 2.0.1 (`dcn20_prepare_bandwidth`, then
+`dcn10_program_pipe` with `dcn10_update_dchubp_dpp`, the `program_pipe` of `dcn201_init.c`). AMD `hubp201_setup` says that OTG is locked when it is called
 and that its registers are double-buffered. The steps are:
 
 1. The watermarks, raised only (`hubbub201_program_watermarks` with `safe_to_lower` false).
@@ -117,7 +117,7 @@ These are the deviations from Linux:
 | --- | --- | --- |
 | `dcn20_optimize_bandwidth` lowers the watermarks after the frame | The watermarks stay raised until the next commit | A flip cannot wait for that frame. A raised watermark is safe for the requestor on the pipe now |
 | The watermark cache of `hubbub` | The cache is what the registers hold now (`floor(register * 1000 / MHz)`) | No cache lives across the owners of the pipe (the firmware, a commit, a plane). `convert_and_clamp` truncates, so AMD writes exactly the watermarks that are not lower |
-| `dcn20_program_tg` can write a new VSTARTUP, then waits for VACTIVE and calls `set_vtg_params` | VSTARTUP and the VUPDATE offset must equal OTG0's (verdict `global-sync`) | The flip runs up to DIRQL and cannot wait. DCN 2.0.1 plans VSTARTUP at its maximum for the timing (`use_maximum_vstartup`), so a plane on the committed timing has the committed VSTARTUP. The VUPDATE offset is where the flip latches |
+| `dcn10_program_pipe` can write a new VSTARTUP, then calls `set_vtg_params`, which moves `VTG0_FP2` with it | VSTARTUP and the VUPDATE offset must equal OTG0's (verdict `global-sync`) | The flip does not program the VTG. DCN 2.0.1 plans VSTARTUP at its maximum for the timing (`use_maximum_vstartup`), so a plane on the committed timing has the committed VSTARTUP. The VUPDATE offset is where the flip latches |
 | The pipe's state is the new context | The way back is the saved register fields | No second context exists in the flip |
 | `DET_BUF_PLANE1_BASE_ADDRESS` of the plan | The format registers keep the commit's value (`DcnPlaneFormatRegisters`) | Plane 1 holds chroma only. For an RGB plane the field has no effect. The YUV step (S4) must write the plan's value |
 

@@ -127,8 +127,8 @@ unsigned long Bc250PlaneSyncVerdict(const BC250_PLANE_PLAN* Plan, unsigned long 
 {
     if (!Plan) return BC250_PLANE_ARGS;
     if (Plan->Identity) return BC250_PLANE_OK;
-    // dcn20_program_tg follows a new VSTARTUP with a wait for VACTIVE and set_vtg_params; the flip runs up to DIRQL
-    // and cannot wait. DCN 2.0.1 plans VSTARTUP at its maximum for the timing (use_maximum_vstartup), so a plane on
+    // dcn10_program_pipe (the program_pipe of dcn201_init.c) follows a new VSTARTUP with set_vtg_params, which moves
+    // VTG0_FP2 with it; the flip does not program the VTG. DCN 2.0.1 plans VSTARTUP at its maximum for the timing (use_maximum_vstartup), so a plane on
     // the committed timing gets the committed VSTARTUP. The VUPDATE offset is the flip's latch point.
     if (!PlanVStartup || PlanVStartup != OtgVStartup || PlanVUpdateOffset != OtgVUpdateOffset)
         return BC250_PLANE_GLOBAL_SYNC;
