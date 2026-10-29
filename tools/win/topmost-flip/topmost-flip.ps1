@@ -205,15 +205,19 @@ function Send-Helper([string]$Word) {
     $n = $script:cmdNumber
     Set-Content -LiteralPath (Join-Path $dir "cmd-$n.txt") -Value $Word -Encoding ascii
     $result = Join-Path $dir "result-$n.json"
-    $until = [DateTime]::UtcNow.AddSeconds(12)
+    # The helper answers in about 10 s at most: two 2 s WM_NULL checks, UI Automation given up after 6 s.
+    $until = [DateTime]::UtcNow.AddSeconds(15)
     while (-not (Test-Path -LiteralPath $result) -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Milliseconds 200 }
-    if (-not (Test-Path -LiteralPath $result)) { $script:bad += "helper: no answer to '$Word' in 12 s"; return $null }
+    if (-not (Test-Path -LiteralPath $result)) { $script:bad += "helper: no answer to '$Word' in 15 s"; return $null }
     return Get-Content -LiteralPath $result -Raw | ConvertFrom-Json
 }
 
 function Step([string]$Name, [string]$From, [string]$To, $Answer) {
     $d = Get-Delta $script:snapshots[$From] $script:snapshots[$To]
-    $how = if ($Answer) { " method=$($Answer.method) option=$($Answer.option) topmost=$($Answer.topmost)" } else { '' }
+    $how = if ($Answer) {
+        " method=$($Answer.method) hung=$($Answer.hung) option=$($Answer.option) setwindowpos=$($Answer.setwindowpos)" +
+        " error=$($Answer.win32_error) topmost=$($Answer.topmost) band=$($Answer.band) ms=$($Answer.ms)"
+    } else { '' }
     $line = '{0,-3} {1,6:N1}s dwm={2}{3} {4}' -f $Name, $script:clock.Elapsed.TotalSeconds, $script:dwmSeen.Count, $how, (Format-Delta $d)
     $line
     $script:steps += [pscustomobject]@{ step = $Name; from = $From; to = $To; utc = [DateTime]::UtcNow.ToString('o'); answer = $Answer; delta = $d }
@@ -256,11 +260,15 @@ try {
         -Principal (New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest) | Out-Null
     Start-ScheduledTask -TaskName $helperTask
     $ready = Join-Path $dir 'ready.json'
-    $until = [DateTime]::UtcNow.AddSeconds(25)
+    # The helper gives the window 20 s to appear and then 10 s to answer WM_NULL.
+    $until = [DateTime]::UtcNow.AddSeconds(35)
     while (-not (Test-Path -LiteralPath $ready) -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Milliseconds 250 }
     $readyValue = if (Test-Path -LiteralPath $ready) { Get-Content -LiteralPath $ready -Raw | ConvertFrom-Json } else { $null }
-    if (-not $readyValue -or -not $readyValue.ok) { throw "helper not ready: $(if ($readyValue) { $readyValue.reason } else { 'no answer in 25 s' })" }
-    "taskmgr pid $($readyValue.pid) window $($readyValue.window) topmost $($readyValue.topmost)"
+    if (-not $readyValue -or -not $readyValue.ok) { throw "helper not ready: $(if ($readyValue) { $readyValue.reason } else { 'no answer in 35 s' })" }
+    "taskmgr pid $($readyValue.pid) window $($readyValue.window) class $($readyValue.class) responsive $($readyValue.responsive) topmost $($readyValue.topmost) band $($readyValue.band) helper-elevated $($readyValue.elevated)"
+    # A window that does not answer WM_NULL cannot be set topmost by anything, so the arms then measure only the
+    # flip client. Said once here, and the run goes on: the counters of arm B are still a result.
+    if (-not $readyValue.responsive) { 'taskmgr ui hung'; $bad += 'taskmgr ui hung: no WM_NULL answer in 10 s after its window appeared' }
     Watch-Dwm 3
     Read-Summary 's1'
     Step 'A1' 's0' 's1' $null
@@ -270,6 +278,13 @@ try {
         $answer = Send-Helper 'off'; Watch-Dwm $OffSeconds; Read-Summary 's3'; Step 'A3' 's2' 's3' $answer
     } else { $snapshots['s3'] = $snapshots['s1'] }
 
+    # Arm B needs its dwell times, two helper answers (15 s each at most), the client's receipt (12 s) and the quit
+    # (about 16 s). When slow helper answers in arm A leave less than that, arm B is skipped, not squeezed.
+    $needB = 8 + $OnSeconds + $OffSeconds + 2 * 15 + 12 + 16
+    if ($armList -contains 'B' -and $clock.Elapsed.TotalSeconds + $needB -gt $BoundSeconds) {
+        $armList = @($armList | Where-Object { $_ -ne 'B' })
+        $bad += "arm B skipped: $([int]$clock.Elapsed.TotalSeconds) s used, it needs $needB s of $BoundSeconds"
+    }
     if ($armList -contains 'B') {
         $clientDir = Join-Path $dir 'client'
         [void][IO.Directory]::CreateDirectory($clientDir)
