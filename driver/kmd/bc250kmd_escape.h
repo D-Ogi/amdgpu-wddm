@@ -2000,6 +2000,27 @@ typedef struct _BC250_ESCAPE_CONNECTOR_REPLUG_DATA {
     unsigned long Reserved[8];
 } BC250_ESCAPE_CONNECTOR_REPLUG_DATA; // 64 bytes; only AbiVersion is input beyond Magic/Command
 typedef char BC250_CONNECTOR_REPLUG_SIZE_CHECK[(sizeof(BC250_ESCAPE_CONNECTOR_REPLUG_DATA) == 64) ? 1 : -1];
+
+// The D3D12 shell's per-process policy (amd_identity.c, docs/design/fsr4-identity.md). Sent once per process at
+// device creation, by any user (no administrator check): it changes only the calling process's own answer to
+// AMD's 608-byte identity query, and it can only take a value of the FsrUpgrade setting, which the user owns.
+// Software state only, so it is answered with any escape flags and in both flavours. The KMD finds the process
+// through DXGKARG_ESCAPE.hKmdProcessHandle; without one, Status is REFUSED and nothing changes.
+#define BC250_ESCAPE_SET_PROCESS_POLICY 38u
+#define BC250_PROCESS_POLICY_ABI 1u
+#define BC250_PROCESS_POLICY_IMAGE_CHARS 64u
+typedef struct _BC250_ESCAPE_PROCESS_POLICY {
+    unsigned long Magic, Command, Status, Version;
+    unsigned long NtStatus, AbiVersion;
+    unsigned long FsrIdentity;              // in: the resolved FsrUpgrade, 0 (off) or 1 (on); any other value is refused
+    unsigned long Reserved0;                // in: 0
+    unsigned long Answer;                   // out: 1 when the process now gets the Navi 2x revision, else 0
+    unsigned long Source;                   // out: enum bc250_amd_identity_source of that answer
+    unsigned long NameFlags;                // out: BC250_AMD_IDENTITY_NAME_* of the names the KMD knows for the process
+    unsigned long Reserved1;                // out: 0
+    unsigned short Image[BC250_PROCESS_POLICY_IMAGE_CHARS]; // in: the process image's file name, zero-terminated
+} BC250_ESCAPE_PROCESS_POLICY; // 176 bytes, ABI 1
+typedef char BC250_PROCESS_POLICY_SIZE_CHECK[(sizeof(BC250_ESCAPE_PROCESS_POLICY) == 176) ? 1 : -1];
 #define BC250_BOARD_CAPS_ABI 2u
 #define BC250_BOARD_CAPS_ABI_V1 1u
 #define BC250_BOARD_CAPS_SUPPORTED 1u
