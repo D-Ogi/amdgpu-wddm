@@ -5338,6 +5338,12 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
             // BD-197: and only while the flip path programs them, which is the rule of DcnPlaneFormatsOpen.
             if (DcnPlaneFormatsOpen(device)) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            // BD-223 (docs/design/mpo.md): the user-mode half of the MPO contract follows DRIVERCAPS
+            // SupportMultiPlaneOverlay (WddmDriverCaps). MPO_PLANE1 stays clear: EnableScaledPlane bit 2 reports
+            // two planes as a lab question, but no second pipe scans out yet.
+            if (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) scanout.flags |= BC250_SCANOUT_CAPS_MPO;
+#endif
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,

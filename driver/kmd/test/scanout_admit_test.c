@@ -13,7 +13,9 @@
 #include <string.h>
 #include "dcn_translate.h"
 #include "scanout_admit.h"
+#include "dcn_plane.h"          /* BD-223: the plane limits that the user-mode MPO caps copy */
 #include "../../contract/bc250_scanout_caps.h"   /* M15.14: the caps flag that publishes the new rows */
+#include "../../contract/bc250_scanout_primary.h"   /* BD-223: the shells' rule for a primary below the mode */
 
 static unsigned checks, failures;
 #define CHECK(x) do { ++checks; if(!(x)){++failures;printf("FAIL line %d: %s\n",__LINE__,#x);} } while(0)
@@ -341,6 +343,66 @@ int main(void)
             c.Address = base + (unsigned long long)align * (i + 1u);
             CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
         }
+    }
+
+    // BD-223, docs/design/mpo.md: the user-mode half of the multiplane-overlay contract. With
+    // BC250_SCANOUT_CAPS_MPO, a primary that plane 0 can scale to the whole mode is admitted for scan-out
+    // although it is not a mode; without the bit, or outside the plane limits, it stays composed. The kernel
+    // driver's own flip rule does not change: SetVidPnSourceAddress still refuses that size.
+    {
+        const unsigned int bgra = AMDGPU_WDDM_DXGI_B8G8R8A8_UNORM;
+        struct bc250_scanout_caps mpo = { BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION,
+                                          BC250_SCANOUT_CAPS_BYTES, BC250_SCANOUT_CAPS_DIRECT_FLIP |
+                                          BC250_SCANOUT_CAPS_MPO, 1920u, 1200u };
+        struct bc250_scanout_caps flip = mpo;
+        struct bc250_scanout_caps lone = mpo;
+        flip.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+        lone.flags = BC250_SCANOUT_CAPS_MPO;
+        // Compile-time: the bits are new, and the limits are the kernel driver's stage limits (dcn_plane.h),
+        // so a change of one without the other fails the build. MAX_SHRINK is 1.0 because
+        // BC250_PLANE_DOWNSCALE refuses every downscale.
+        typedef char mpo_bits[(BC250_SCANOUT_CAPS_MPO == 0x8u && BC250_SCANOUT_CAPS_MPO_PLANE1 == 0x10u &&
+            !(BC250_SCANOUT_CAPS_MPO & (BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
+                                        BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT))) ? 1 : -1];
+        typedef char mpo_limits[(BC250_MPO_MAX_STRETCH_MILLI == BC250_PLANE_MAX_UPSCALE_MILLI &&
+            BC250_MPO_MIN_DIMENSION == BC250_PLANE_MIN_DIMENSION && BC250_MPO_MAX_SHRINK_MILLI == 1000u) ? 1 : -1];
+        (void)sizeof(mpo_bits); (void)sizeof(mpo_limits);
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 1920u, 1080u));
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 1280u, 720u));
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 1920u, 1200u));
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 120u, 75u));        // exactly 16 times in both directions
+        CHECK(!bc250_scanout_mpo_geometry(&mpo, 119u, 75u));       // more than 16 times across
+        CHECK(!bc250_scanout_mpo_geometry(&mpo, 120u, 74u));       // more than 16 times down
+        CHECK(!bc250_scanout_mpo_geometry(&mpo, 63u, 1200u) && !bc250_scanout_mpo_geometry(&mpo, 1920u, 63u));
+        CHECK(!bc250_scanout_mpo_geometry(&mpo, 1921u, 1080u) && !bc250_scanout_mpo_geometry(&mpo, 1920u, 1201u));
+        CHECK(!bc250_scanout_mpo_geometry(&flip, 1920u, 1080u));   // no MPO bit
+        CHECK(!bc250_scanout_mpo_geometry(&lone, 1920u, 1080u));   // MPO without DIRECT_FLIP is no trailer
+        CHECK(!bc250_scanout_mpo_geometry(NULL, 1920u, 1080u));
+        // The shells' rule: the new geometry turns the geometry clause only, and every other clause stays.
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
+              BC250_SCANOUT_PRIMARY_ADMITTED);
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1280u, 720u, 5120u, 0) ==
+              BC250_SCANOUT_PRIMARY_ADMITTED);
+        CHECK(bc250_scanout_primary_rule(&flip, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
+              BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY);
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 119u, 75u, 512u, 0) ==
+              BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY);
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1280u, 720u, 5376u, 0) == BC250_SCANOUT_PRIMARY_PITCH);
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT, 1280u, 720u, 10240u, 0) ==
+              BC250_SCANOUT_PRIMARY_FORMAT);
+        CHECK(bc250_scanout_primary_rule(&mpo, 1, 1, bgra, 1280u, 720u, 5120u, 0) ==
+              BC250_SCANOUT_PRIMARY_FORCE_CPU);
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 0, bgra, 1280u, 720u, 5120u, 0) ==
+              BC250_SCANOUT_PRIMARY_DESKTOP_ROUTE);
+        CHECK(bc250_scanout_primary_rule(&lone, 0, 1, bgra, 1280u, 720u, 5120u, 0) ==
+              BC250_SCANOUT_PRIMARY_CAPS_CLOSED);
+        // The kernel driver's flip rule is unchanged: a requesting 1920x1080 surface on the 1920x1200 mode is
+        // refused by SetVidPnSourceAddress, so the scaled shape reaches the plane only through the MPO flip.
+        Requested(&c);
+        c.Height = 1080ul;
+        c.Size = (unsigned long long)POST_PITCH * 1080ull;
+        CHECK(Admit(&c, &pitch, &bytes) == BC250_SCANOUT_GEOMETRY);
+        CHECK(Bc250ScanoutAdmit(&c, c.Width, c.Height, FLIP_SEGMENT, &pitch, &bytes) == BC250_SCANOUT_ADMIT_OK);
     }
 
     printf("scanout admission: %u checks, %u failures\n", checks, failures);

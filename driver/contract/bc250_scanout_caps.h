@@ -55,6 +55,26 @@
 // not measured. So a 10-bit row is admitted only while the kernel driver says the committed mode has the
 // same depth, and until a driver measures such a flip end to end the row stays a composed primary.
 #define BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT 0x4u
+// BD-223 (docs/design/mpo.md, the user-mode contract): this start reports DXGK_DRIVERCAPS
+// SupportMultiPlaneOverlay and answers DxgkDdiCheckMultiPlaneOverlaySupport2 and
+// DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2. The kernel driver sets it only with DIRECT_FLIP. The
+// compositor's front publishes the WDDM 1.3 interface and the DXGI 1.3 table only while this bit is set, and
+// the application shells admit a scan-out primary smaller than the source mode only while it is set
+// (bc250_scanout_mpo_geometry). The kernel driver's check is the authority for every plane configuration:
+// the user-mode caps below are advisory, and a configuration the kernel driver refuses is composed by DWM.
+#define BC250_SCANOUT_CAPS_MPO 0x8u
+// The kernel driver also scans out an overlay plane on a second pipe (MaxOverlayPlanes 2). No kernel driver
+// sets it yet; until one does, the user-mode MaxPlanes is 1.
+#define BC250_SCANOUT_CAPS_MPO_PLANE1 0x10u
+
+// The plane limits that the user-mode multiplane-overlay caps report and that the shells apply to a scan-out
+// primary smaller than the source mode. They are the kernel driver's stage limits (driver/kmd/dcn_plane.h):
+// the DCN 2.0.1 plane cap of 16 times up (Linux dcn201_resource.c plane_cap max_upscale_factor 16000), no
+// downscale yet (max_downscale_factor 250 needs the DPP clock and DCHUB step), and the 64-pixel minimum of
+// the same plane cap. A kernel driver that lifts a limit changes it here in the same commit.
+#define BC250_MPO_MAX_STRETCH_MILLI 16000u
+#define BC250_MPO_MAX_SHRINK_MILLI 1000u
+#define BC250_MPO_MIN_DIMENSION 64u
 
 struct bc250_scanout_caps {
     unsigned int magic;
@@ -88,4 +108,22 @@ static __inline int bc250_scanout_format_admitted(const AMDGPU_WDDM_SURFACE_FORM
     if (!(flags & BC250_SCANOUT_CAPS_PLANE_FORMATS)) return 0;
     if (bc250_scanout_row_is_10bit(row) && !(flags & BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT)) return 0;
     return 1;
+}
+
+// BD-223: may a scan-out primary of width x height exist although it is not the source mode? Only while the
+// kernel driver answers the multiplane-overlay check (BC250_SCANOUT_CAPS_MPO), and only for a surface that
+// plane 0 can scale to the whole source mode: at least BC250_MPO_MIN_DIMENSION in each direction, not larger
+// than the mode, and at most BC250_MPO_MAX_STRETCH_MILLI / 1000 times up. Such a primary is never flipped by
+// SetVidPnSourceAddress (Bc250ScanoutAdmit refuses a size other than the mode, and the front's
+// CheckDirectFlipSupport answers only for the committed geometry): it reaches the plane only through
+// SetVidPnSourceAddressWithMultiPlaneOverlay2, after the kernel driver's check approved its shape.
+static __inline int bc250_scanout_mpo_geometry(const struct bc250_scanout_caps* caps, unsigned int width,
+    unsigned int height)
+{
+    if (!caps || !(caps->flags & BC250_SCANOUT_CAPS_MPO) || !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP))
+        return 0;
+    if (width < BC250_MPO_MIN_DIMENSION || height < BC250_MPO_MIN_DIMENSION) return 0;
+    if (width > caps->post_width || height > caps->post_height) return 0;
+    return (unsigned long long)caps->post_width * 1000ull <= (unsigned long long)width * BC250_MPO_MAX_STRETCH_MILLI &&
+           (unsigned long long)caps->post_height * 1000ull <= (unsigned long long)height * BC250_MPO_MAX_STRETCH_MILLI;
 }

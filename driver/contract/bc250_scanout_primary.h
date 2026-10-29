@@ -38,7 +38,10 @@
 //                    later by two checks that read the committed mode at that moment, the front's
 //                    CheckDirectFlipSupport answer and Bc250ScanoutAdmit. Until the commit, the compositor
 //                    composes the chain with the GPU, as it composes a scan-out chain under a window. A
-//                    geometry the kernel driver does not offer can never be committed, so it stays here.
+//                    geometry the kernel driver does not offer can never be committed, so it stays here,
+//                    unless the trailer has BC250_SCANOUT_CAPS_MPO and plane 0 can scale the chain to the
+//                    mode (bc250_scanout_mpo_geometry, BD-223): such a chain reaches the plane only through
+//                    the multiplane-overlay flip, after the kernel driver's check approved its shape.
 //   FORMAT           the chain's format is not a SCANOUT_PRIMARY row of the shared table, or is a row with
 //                    no DXGI name (the compositor's opener could not take its record), or is a row other
 //                    than the firmware's own format while the trailer lacks BC250_SCANOUT_CAPS_PLANE_FORMATS
@@ -96,7 +99,8 @@ static __inline unsigned int bc250_scanout_primary_rule(const struct bc250_scano
         !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP))
         return BC250_SCANOUT_PRIMARY_CAPS_CLOSED;
     if (!width || !height ||
-        ((width != caps->post_width || height != caps->post_height) && !offered_mode))
+        ((width != caps->post_width || height != caps->post_height) && !offered_mode &&
+         !bc250_scanout_mpo_geometry(caps, width, height)))
         return BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY;
     row = amdgpu_wddm_surface_format_by_dxgi(dxgi);
     if (!row || !row->dxgi || !bc250_scanout_format_admitted(row, caps->flags))
