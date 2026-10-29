@@ -88,7 +88,10 @@ function Test-Bc250ClangSdk([string]$CompilerExe,[string[]]$Flags,[string]$Out) 
     if($LASTEXITCODE){throw 'Clang SDK probe compile failed'}
     $exe=Join-Path $Out 'clang-sdk-test.exe'
     $includes=@($Flags | Where-Object { $_ -like '/external:I*' -or $_ -cmatch '^/I' })
-    & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /O2 /MT /external:W0 @includes /DBC250_COMPILER_CALLER /DNOMINMAX "/Fe$exe" $probe $obj
+    # The MSVC object goes to $Out too: without /Fo, cl.exe writes it into the current directory, which the parallel
+    # rows of a release set share (BD-266).
+    $callerObj=Join-Path $Out 'umd-compiler-sdk-test.obj'
+    & cl.exe /nologo /std:c++20 /EHsc /W4 /WX /O2 /MT /external:W0 @includes /DBC250_COMPILER_CALLER /DNOMINMAX "/Fo$callerObj" "/Fe$exe" $probe $obj
     if($LASTEXITCODE){throw 'MSVC/Clang SDK boundary control build failed'}
     & $exe
     if($LASTEXITCODE){throw 'MSVC/Clang SDK boundary control failed'}
