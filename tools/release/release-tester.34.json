@@ -2390,6 +2390,14 @@
           "cwd": "{testout}",
           "summary": "^(?:PASSED|FAILED|FAIL )",
           "pass": "^PASSED$"
+        },
+        {
+          "name": "compile-admission",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_compile_admission_test.exe",
+          "args": [],
+          "cwd": "{testout}",
+          "summary": "^(?:PASSED|FAILED|FAIL )",
+          "pass": "^PASSED$"
         }
       ],
       "base": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6"
@@ -2448,6 +2456,14 @@
         {
           "name": "cache-policy",
           "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_cache_policy_test.exe",
+          "args": [],
+          "cwd": "{testout}",
+          "summary": "^(?:PASSED|FAILED|FAIL )",
+          "pass": "^PASSED$"
+        },
+        {
+          "name": "compile-admission",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_compile_admission_test.exe",
           "args": [],
           "cwd": "{testout}",
           "summary": "^(?:PASSED|FAILED|FAIL )",
@@ -2514,6 +2530,14 @@
           "cwd": "{testout}",
           "summary": "^(?:PASSED|FAILED|FAIL )",
           "pass": "^PASSED$"
+        },
+        {
+          "name": "compile-admission",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_compile_admission_test.exe",
+          "args": [],
+          "cwd": "{testout}",
+          "summary": "^(?:PASSED|FAILED|FAIL )",
+          "pass": "^PASSED$"
         }
       ],
       "base": "d0f1fab2d7d2d5827f6b13db1f522e76b2aa80e6"
@@ -2572,6 +2596,14 @@
         {
           "name": "cache-policy",
           "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_cache_policy_test.exe",
+          "args": [],
+          "cwd": "{testout}",
+          "summary": "^(?:PASSED|FAILED|FAIL )",
+          "pass": "^PASSED$"
+        },
+        {
+          "name": "compile-admission",
+          "run": "{out}/libs/ddi/amdgpu_wddm_vkd3d_compile_admission_test.exe",
           "args": [],
           "cwd": "{testout}",
           "summary": "^(?:PASSED|FAILED|FAIL )",
