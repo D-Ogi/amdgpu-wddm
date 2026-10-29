@@ -842,6 +842,7 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;KIRQL irql;
     if(!c)return STATUS_DEVICE_NOT_READY;
+    DcnCursorPipeGone(Device);  // before the early returns: the link is going away, whatever they answer
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
     // .35's journal belongs to the inherited timing only. Discharge it before
@@ -1242,10 +1243,12 @@ BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* Device,BOOLEAN* Active,BOOLEAN* 
 NTSTATUS ConnectorLinkSuspend(BC250_DEVICE* Device)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG generation;NTSTATUS status,finish;
+    // D3, first: the adapter powers down whatever this returns (power.c), and the pointer comes back with the pipe at
+    // the resume. An early return below must not leave the cursor enabled over registers that D0 resets.
+    DcnCursorPipeGone(Device);
     if(!c)return STATUS_SUCCESS;
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
-    DcnCursorPipeGone(Device);  // D3: the pointer comes back with the pipe at the resume
     // A detached link is off and its plane blank: nothing to take or restore (BD-195, I6).
     if(!c->Active) {c->Suspended=TRUE;return STATUS_SUCCESS;}
     if(!WddmPrimaryExclusiveBegin(Device,BC250_WRITER_LINK_SUSPEND,&generation))return STATUS_DEVICE_BUSY;
@@ -1364,6 +1367,9 @@ NTSTATUS ConnectorLinkRelease(BC250_DEVICE* Device)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;
     NTSTATUS status=STATUS_SUCCESS;
+    // A start refused after the inherited pipe was adopted comes here too (connector.c): the cursor that the adoption
+    // made ready goes off, and the caps (DcnCursorCaps, a connector that is not enabled) report no hardware pointer.
+    DcnCursorPipeGone(Device);
     if(!c)return status;
     // PnP has drained operations. DcnStop adopts the reserved current-mode CPU
     // surface before BAR teardown. Do not restore an old stream over that mode.

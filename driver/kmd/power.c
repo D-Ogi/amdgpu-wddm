@@ -150,6 +150,9 @@ Done:
 NTSTATUS PowerAdapterDown(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action)
 {
     NTSTATUS display=STATUS_SUCCESS;
+    // The hardware pointer off before anything else: the static inherited path has no connector suspend, and the
+    // connector's suspend can stop early. A pointer left enabled would be written again over reset registers at D0.
+    DcnCursorPipeGone(Device);
     if (ConnectorIsEnabled(Device)) display=ConnectorSuspend(Device);
     if (!InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) {
         if (!HdmiLinkStop(Device) && NT_SUCCESS(display)) display=STATUS_DEVICE_DATA_ERROR;

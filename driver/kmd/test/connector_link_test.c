@@ -753,15 +753,18 @@ static void hardware_pointer(void)
     /* A timing that has no plan with a cursor: planned again without one, the mode stays, no pointer on it. */
     reset(BC250_SINK_DP);cursor_width=256;plan_fail_cursor=1;CHECK(commit()==0);balanced();
     CHECK(plan_calls==2*base && link.Current.CursorWidth==0 && cursor_ready==1 && cursor_pipe.CursorWidth==0);
-    /* A refused suspend leaves the cursor where it is. */
-    reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && !cursor_gone);
+    /* A refused suspend or disable still takes the cursor off: the adapter powers down or the link goes away all the
+     * same, and a cursor left on would be written again over the registers that D0 resets (review of the pointer). */
+    reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && cursor_gone==1);
+    reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && cursor_gone==1);
     /* The firmware's pipe: the cursor writes the plan's cursor TTU itself, at the start and at each resume. */
     reset(BC250_SINK_HDMI);device.ConnectorLink=NULL;cursor_width=256;
     CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && link.Inherited);
     CHECK(cursor_ready==1 && cursor_ready_ttu==1 && cursor_pipe.CursorWidth==256 && cursor_pipe.Delivery==77);
     CHECK(ConnectorLinkSuspend(&device)==0 && cursor_gone==1);balanced();
     CHECK(ConnectorLinkResume(&device,7)==0 && cursor_ready==2 && cursor_ready_ttu==2);balanced();
-    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);
+    /* The release (also the one of a start refused after this adoption, connector.c) takes the cursor off. */
+    cursor_gone=0;CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS && cursor_gone==1);
 }
 /* BD-188, lab 2026-10-20 (31v3): hibernate with a DP sink on a runtime mode, and the sink compare after D0 differs
  * ("resume discovery generation 15 same 0"). The changed-sink resume replays no timing and writes nothing, but the
