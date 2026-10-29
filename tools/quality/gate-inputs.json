@@ -269,6 +269,11 @@
         "documents"
       ]
     },
+    "third-party-doc": {
+      "inputs": [
+        "documents"
+      ]
+    },
     "opengl-icd": {
       "inputs": [
         "host"

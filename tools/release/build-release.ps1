@@ -139,6 +139,14 @@ $r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'pro
     '--repo', (Split-Path (Split-Path $PSScriptRoot))) -TimeoutSeconds 300
 $r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|\s+note:|commits:)' } | ForEach-Object { "  $($_.Trim())" }
 if ($r.code -ne 0) { throw 'release-sources.json names a commit that is in no checkout of its repository (see above)' }
+# The package carries docs\testing\THIRD-PARTY.md. Its commits are the commits of release-sources.json and of the
+# submodules of those builds (tester.33 shipped it with the commits of tester.32).
+Write-Host 'third-party list'
+$r = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'third_party_doc.py'),
+    '--sources', $manifestPath, '--workspace', $Root,
+    '--repo', (Split-Path (Split-Path $PSScriptRoot))) -TimeoutSeconds 300
+$r.text -split "`r?`n" | Where-Object { $_ -match '^(FAIL|third-party-doc)' } | ForEach-Object { "  $($_.Trim())" }
+if ($r.code -ne 0) { throw 'docs\testing\THIRD-PARTY.md does not name the commits of release-sources.json (see above; tools\release\third_party_doc.py --write)' }
 
 # Work ledger gate: a release must not ship a component whose finished fix is still unlanded,
 # and must not be cut over a ledger that hides new work or claims a landing nobody can verify
