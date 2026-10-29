@@ -391,6 +391,33 @@ HRESULT signal_present(HostBridge &bridge)
    return hr;
 }
 
+bool device_work_drained(const HostBridge &bridge)
+{
+   if (kernel_ended_device_work(bridge)) return true;
+   if (bridge.present_value && (!bridge.present_cpu || *(const volatile UINT64 *)bridge.present_cpu<bridge.present_value))
+      return false;
+   for (const auto &p:bridge.progress)
+      if (p.sync && (!p.cpu_address || *(const volatile UINT64 *)p.cpu_address<p.value)) return false;
+   return true;
+}
+
+bool settle_device_work(HostBridge &bridge, DWORD timeout_ms)
+{
+   if (bridge.work_ended) return true;
+   if (bridge.drain_tried) return false;
+   bridge.drain_tried=true;
+   const ULONGLONG start=GetTickCount64();
+   bool drained=device_work_drained(bridge);
+   while (!drained && GetTickCount64()-start<timeout_ms) { Sleep(1); drained=device_work_drained(bridge); }
+   bridge.work_ended=drained;
+   static std::atomic_uint notes{16};
+   device_life_note(notes,"BC250 BD-253: lost device work %s after %llu ms: kernel-ended=%u runtime=%p identity=%p\n",
+      drained ? "ended" : "did not end",(unsigned long long)(GetTickCount64()-start),
+      unsigned(kernel_ended_device_work(bridge)),bridge.device ? bridge.device->hDevice : nullptr,
+      bridge.device ? bridge.device->host_identity() : nullptr);
+   return drained;
+}
+
 HRESULT wait_present_idle(HostBridge &bridge)
 {
    return wait_present_value(bridge,bridge.present_value);

@@ -166,6 +166,9 @@ HRESULT DeviceOwner::close() {
         hr=wait_present_idle(bridge_);
         if (FAILED(hr) && hr!=D3DDDIERR_DEVICEREMOVED) return hr;
     }
+    // BD-253: for a device that latched a loss, decide once, while the progress fences of the hosted ICD are still
+    // known (close-session forgets them), whether its work ended. The steps below use that answer.
+    if (bridge_.device_lost || bridge_.submission_failed) (void)settle_device_work(bridge_);
     // Drop bound views before releasing imported textures, while the engine and
     // hosted Vulkan device still exist. A pending/failed close retains everything.
     if (!surfaces_.empty() && context_) context_->ClearState();
@@ -175,9 +178,15 @@ HRESULT DeviceOwner::close() {
         if (hr!=S_OK) return hr;
     }
     present_shadows_={};
+    // BD-253: a runtime callback that reports the loss of a device whose work ended is done: the kernel frees the
+    // object together with the device. Then a lost device is freed, not kept for the life of the process.
+    const auto ended=[&](HRESULT status) { return device_lost_status(status) && settle_device_work(bridge_); };
     step_="close-paging-queue";
     hr=destroy_surface_paging_queue(runtime_,surface_queue_);
-    if (hr!=S_OK) return hr;
+    if (hr!=S_OK) {
+        if (!ended(hr)) return hr;
+        surface_queue_={};
+    }
     surface_vk_={}; surface_memory_={};
     if (context_) { context_->Release(); context_=nullptr; }
     if (device_) { device_->Release(); device_=nullptr; }
@@ -193,14 +202,14 @@ HRESULT DeviceOwner::close() {
     if (bridge_.present_sync) {
         D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT destroy{}; destroy.hSyncObject=bridge_.present_sync;
         hr=runtime_.KTCallbacks.pfnDestroySynchronizationObjectCb(runtime_.hDevice,&destroy);
-        if (FAILED(hr)) return hr;
+        if (FAILED(hr) && !ended(hr)) return hr;
         bridge_.present_sync=0; bridge_.present_cpu=nullptr; bridge_.present_value=0;
     }
     step_="close-present-context";
     if (runtime_.present_context) {
         D3DDDICB_DESTROYCONTEXT destroy{}; destroy.hContext=runtime_.present_context;
         hr=runtime_.KTCallbacks.pfnDestroyContextCb(runtime_.hDevice,&destroy);
-        if (FAILED(hr)) return hr;
+        if (FAILED(hr) && !ended(hr)) return hr;
         runtime_.present_context=nullptr;
     }
     // Both Vulkan and all runtime handles are gone. Release engine and ICD

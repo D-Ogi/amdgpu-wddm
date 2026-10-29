@@ -3,10 +3,11 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <thread>
 using namespace bc250::umd;
 namespace {
 void check(bool ok) { if (!ok) std::abort(); }
-int identity, context; unsigned creates, destroys; bool fail_create=false,fail_destroy=false;
+int identity, context; unsigned creates, destroys; bool fail_create=false,fail_destroy=false,lost_destroy=false;
 HRESULT APIENTRY create(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
     check(h==&identity && c->EngineAffinity==1); ++creates;
     if (fail_create) return E_OUTOFMEMORY;
@@ -14,7 +15,7 @@ HRESULT APIENTRY create(HANDLE h,D3DDDICB_CREATECONTEXTVIRTUAL *c) {
 }
 HRESULT APIENTRY destroy(HANDLE h,const D3DDDICB_DESTROYCONTEXT *c) {
     check(h==&identity && c->hContext==&context); ++destroys;
-    return fail_destroy ? E_FAIL : S_OK;
+    return fail_destroy ? E_FAIL : lost_destroy ? D3DDDIERR_DEVICEREMOVED : S_OK;
 }
 HRESULT APIENTRY destroy_sync(HANDLE,const D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT *) { std::abort(); }
 void APIENTRY set_error(D3D10DDI_HRTCORELAYER,HRESULT) { std::abort(); }
@@ -70,5 +71,46 @@ int main() {
     fail_destroy=false;
     check(owner.close()==S_OK && owner.retained_module_count()==0 && !owner.has_live_objects());
     check(!std::strcmp(owner.step(),"none"));
-    std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry\n";
+    // BD-253: the drain proof. Each fence must reach the last value of this device; the lost-device value counts.
+    {
+        HostBridge b{}; b.device=&owner.runtime();
+        UINT64 present=2, progress=4;
+        check(device_work_drained(b));
+        b.present_cpu=&present; b.present_sync=9; b.present_value=3;
+        check(!device_work_drained(b));
+        present=3; check(device_work_drained(b));
+        b.progress[2]={3,7,5,&progress};
+        check(!device_work_drained(b));
+        progress=UINT64_MAX; check(device_work_drained(b) && kernel_ended_device_work(b));
+        progress=5; check(device_work_drained(b));
+        b.progress[2].cpu_address=nullptr; check(!device_work_drained(b));
+    }
+    // BD-253: close on a lost device. While the work of the device has not ended, a lost-device status of a runtime
+    // callback still keeps the device, and the bounded wait is not repeated. When the work ends during the wait,
+    // close completes and the device is freed.
+    {
+        UINT64 fence=4;
+        owner.runtime().present_context=&context; lost_destroy=true;
+        owner.bridge().device_lost=true; owner.bridge().progress[0]={1,7,5,&fence};
+        check(!settle_device_work(owner.bridge(),5) && owner.bridge().drain_tried && !owner.bridge().work_ended);
+        const unsigned before=destroys;
+        check(owner.close()==D3DDDIERR_DEVICEREMOVED && destroys==before+1 && owner.runtime().present_context==&context);
+        check(!std::strcmp(owner.step(),"close-present-context") && owner.has_live_objects());
+        owner.bridge().drain_tried=false; owner.bridge().device_lost=true; owner.bridge().progress[0]={1,7,5,&fence};
+        std::thread gpu([&]() { Sleep(50); *(volatile UINT64 *)&fence=5; });
+        const ULONGLONG start=GetTickCount64();
+        const HRESULT closed=owner.close();
+        const ULONGLONG waited=GetTickCount64()-start;
+        gpu.join();
+        check(closed==S_OK && waited>=30 && waited<2000 && destroys==before+2);
+        check(!owner.runtime().present_context && !owner.has_live_objects() && !std::strcmp(owner.step(),"none"));
+        // A failure that is not a loss still keeps the device, whatever the fences say.
+        owner.runtime().present_context=&context; lost_destroy=false; fail_destroy=true;
+        owner.bridge().device_lost=true;
+        check(owner.close()==E_FAIL && owner.has_live_objects());
+        fail_destroy=false;
+        check(owner.close()==S_OK && !owner.has_live_objects());
+    }
+    std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry, "
+        "close on a lost device\n";
 }

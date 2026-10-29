@@ -48,10 +48,11 @@ HRESULT close_runtime_texture(HostBridge &bridge,VkDevice device,const RuntimeIm
     if (!bridge.device || !bridge.device->domain.entered() || !engine.wait || !engine.release) return E_INVALIDARG;
     if (texture.retained) return E_UNEXPECTED;
     if (texture.texture) {
-        // BD-253: a wait that reports the loss of a device whose work the kernel ended is not a failure of the
-        // close: no work of this device runs on the texture any more. Before, every texture of a lost device
-        // stayed, so DestroyDevice kept the whole device (close-surface, E_UNEXPECTED) for the life of the process.
-        const auto ended=[&](HRESULT status) { return device_lost_status(status) && kernel_ended_device_work(bridge); };
+        // BD-253: a wait that reports the loss of a device whose work ended is not a failure of the close: no work
+        // of this device runs on the texture any more. The kernel ended the work, or each fence of the device
+        // reached its last value (settle_device_work). Before, every texture of a lost device stayed, so
+        // DestroyDevice kept the whole device (close-surface, E_UNEXPECTED) for the life of the process.
+        const auto ended=[&](HRESULT status) { return device_lost_status(status) && settle_device_work(bridge); };
         // Present runs on its own runtime context, outside engine completion.
         HRESULT hr=wait_present_idle(bridge);
         if (FAILED(hr) && !ended(hr)) return hr;

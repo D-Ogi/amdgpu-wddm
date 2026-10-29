@@ -27,6 +27,7 @@ unsigned retained_device_count() noexcept {
     std::lock_guard<std::mutex> lock(r.mutex);
     return r.total;
 }
+bool kept_device_limit_reached() noexcept { return retained_device_count()>=kKeptDeviceLimit; }
 HRESULT retire_device_handle(DdiDeviceHandle &handle) noexcept {
     auto *owner=handle.owner;
     if (!owner) return S_OK;

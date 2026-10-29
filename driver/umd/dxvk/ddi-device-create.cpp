@@ -33,6 +33,14 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     HRESULT negotiated=requested_feature_level(args.Flags,requested,args.Interface);
     if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) ||
         level>advertised.maximum) return E_INVALIDARG;
+    if (kept_device_limit_reached()) {
+        // BD-253: the second bound (ddi-lifecycle.h). One line for each refusal, in both flavours, bounded.
+        static std::atomic_uint notes{16};
+        device_life_note(notes,"BC250 BD-253: CreateDevice refused: kept-devices=%u limit=%u hr=%08X runtime=%p\n",
+            retained_device_count(),kKeptDeviceLimit,unsigned(kKeptDeviceStatus),
+            reinterpret_cast<void *>(args.hRTDevice.handle));
+        return kKeptDeviceStatus;
+    }
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;
     if (!owner) return E_OUTOFMEMORY;
     if (scanout) owner->set_scanout(*scanout);
@@ -105,16 +113,16 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         *args.p11_1DeviceFuncs=make_render_device_table();
     }
     storage->owner=owner;
-#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     {
-        // BD-253, lab flavour (BD-167): one line for each new device, bounded, with the same fields as the failure.
+        // BD-253: one line for each new device, in both flavours (an ordinary error-report line: fixed text and
+        // numbers, no environment variable, at most 16 for each process), with the same fields as the failure.
+        // With the DestroyDevice and loss lines, it gives the rate of a create-lose cycle in a tester's log.
         auto &runtime=owner->runtime();
         static std::atomic_uint notes{16};
         device_life_note(notes,"BC250 BD-253: CreateDevice runtime=%p identity=%p handle-of-kept-device=%u "
             "kept-devices=%u\n",runtime.hDevice,runtime.host_identity(),
             unsigned(retained_runtime_handle(runtime.hDevice)),retained_device_count());
     }
-#endif
     return S_OK;
 }
 }

@@ -14,4 +14,18 @@ void install_lifecycle_ddi(D3D11_1DDI_DEVICEFUNCS &table);
 void note_retained_runtime_handle(HANDLE runtime) noexcept;
 bool retained_runtime_handle(HANDLE runtime) noexcept;
 unsigned retained_device_count() noexcept;
+// BD-253: the second bound of the kept devices. A lost device whose work ended is freed (DeviceOwner::close), so a
+// kept device is one whose cleanup failed for another reason, or whose work did not end in the bounded wait. Each
+// one keeps its hosted instance, its winsys, its kernel objects and the ICD's threads for the life of the process.
+// An application that creates a device again after each loss (the XAML of explorer, BD-253 tester.34) would add one
+// for each loss, without end. When the process has kept this number of devices, CreateDevice fails at once
+// (kKeptDeviceStatus), so the application stops or uses its fallback. The count only goes up: a kept device that a
+// later retire frees still counts. 8 permits a few recoveries from real losses (each one TDR trial gives one loss),
+// and at 8 the process holds at most 8 hosted instances, with up to 4 cache threads in each.
+inline constexpr unsigned kKeptDeviceLimit=8;
+// The status of that refusal. E_FAIL, not DXGI_ERROR_DEVICE_REMOVED: in tester.33, a CreateDevice that failed with
+// E_FAIL (a vkCreateDevice that failed on the winsys of a kept device) stopped the XAML retries of explorer. A device
+// removed status tells the application that a device was lost, and a lost device is what started that loop.
+inline constexpr HRESULT kKeptDeviceStatus=E_FAIL;
+bool kept_device_limit_reached() noexcept;
 }

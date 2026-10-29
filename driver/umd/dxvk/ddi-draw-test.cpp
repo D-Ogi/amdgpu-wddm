@@ -877,6 +877,17 @@ int main() {
     if (retire_device_handle(failedCleanup)!=S_OK || failedCleanup.owner) fail(__LINE__);
     if (std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable))) fail(__LINE__);
     if(std::memcmp(&unchangedDxgi,&originalDxgi,sizeof(unchangedDxgi))) fail(__LINE__);
+    // BD-253: the second bound. When the process keeps kKeptDeviceLimit devices, CreateDevice fails at once with
+    // kKeptDeviceStatus, before it creates anything; an argument error still has its own status.
+    if (retained_device_count()>=kKeptDeviceLimit || kept_device_limit_reached()) fail(__LINE__);
+    while (!kept_device_limit_reached()) note_retained_runtime_handle(nullptr);
+    if (retained_device_count()!=kKeptDeviceLimit) fail(__LINE__);
+    const unsigned createsAtLimit=createCount;
+    if (attemptCreate()!=kKeptDeviceStatus || kKeptDeviceStatus!=E_FAIL || createCount!=createsAtLimit ||
+        newHandle.owner || failedCleanup.owner) fail(__LINE__);
+    createArgs.Flags=0;
+    if (attemptCreate()!=E_INVALIDARG || createCount!=createsAtLimit) fail(__LINE__);
+    createArgs.Flags=negotiatedFlags;
     const auto dxgiTable=make_dxgi_device_table();
     if(!dxgiTable.pfnPresent || !dxgiTable.pfnBlt || !dxgiTable.pfnBlt1 || !dxgiTable.pfnSetDisplayMode ||
        !dxgiTable.pfnSetResourcePriority || !dxgiTable.pfnQueryResourceResidency ||
