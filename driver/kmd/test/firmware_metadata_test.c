@@ -63,7 +63,14 @@ static BOOLEAN DcnPlaneFormatsOpen(BC250_DEVICE* d){planeFormatQuestions++;retur
 /* bc250kmd.h: the committed source size, else the POST size. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE* d){return d->SourceWidth?d->SourceWidth:d->Post.Width;}
 static ULONG DisplaySourceHeight(const BC250_DEVICE* d){return d->SourceHeight?d->SourceHeight:d->Post.Height;}
-typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
+typedef struct {void* pOutputData;ULONG OutputDataSize;void* hKmdProcessHandle;} QUERY;
+// The 608-byte identity block goes to amd_identity.c (its own gate is amd-identity). Here only the route counts:
+// that size reaches the identity answer with the query's process, and no firmware or SMU read runs for it.
+static unsigned identityQueries;
+static void* identityProcess;
+static void* WddmProcessIdentity(void* process){return process;}
+static NTSTATUS AmdIdentityQuery(void* process,void* out,ULONG bytes)
+{identityQueries++;identityProcess=process;CHECK(out!=NULL && bytes==BC250_AMD_IDENTITY_BYTES);return STATUS_SUCCESS;}
 // The adapter's WDDM table, of which the extracted branch reads one start-latched byte: whether this
 // start publishes the DirectFlip handshake. WddmStart computes it from the operator's switch ANDed with
 // every start-latched fact the flip path needs; here it is set directly, which is what lets the test
@@ -139,6 +146,12 @@ int main(int argc,char**argv)
     CompleteLoad(&psp,-1,10,11,fw);
     CHECK(!psp.Loaded && !psp.Firmware.me_version);
     memset(out,0xA5,sizeof(out));memcpy(expected,out,sizeof(out));
+    {
+        // Before the firmware is loaded, as a game can ask: the identity answer does not wait for the PSP.
+        QUERY identity={out,BC250_AMD_IDENTITY_BYTES,(void*)&identity};
+        CHECK(QueryCaps(&d,&identity)==STATUS_SUCCESS && identityQueries==1 && identityProcess==(void*)&identity);
+        CHECK(!smuReads && !memcmp(out,expected,sizeof(out)));
+    }
     CHECK(QueryCaps(&d,&q)==STATUS_DEVICE_NOT_READY && !memcmp(out,expected,sizeof(out)) && !smuReads);
     CompleteLoad(&psp,0,11,11,fw);
     CHECK(psp.Loaded && !memcmp(&psp.Firmware,&fw,sizeof(fw)));
@@ -376,6 +389,7 @@ int main(int argc,char**argv)
             CHECK(smuReads==before && !memcmp(out,expected,sizeof(out)));
         }
     }
+    CHECK(identityQueries==1); // no caps size and no refused size reached the identity answer
     for(i=0;i<BC250_FILE_COUNT;i++)free(files.Data[i]);
     printf("firmware metadata/query: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
