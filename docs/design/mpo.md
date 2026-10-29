@@ -1,109 +1,178 @@
 # Multiplane overlay
 
-This is stage C of [display-modes.md](display-modes.md). It is a design. No code exists.
+This is stage C of [display-modes.md](display-modes.md) and the contract between the KMD and the user-mode drivers
+for BD-223. The target is the Microsoft MPO minimum and the HLK MPO tests. The first part is code in the lab
+flavour: one scaled plane 0 through the WDDM 2.0 MPO DDIs ([scaled-flip.md](scaled-flip.md)). The release flavour
+reports no MPO caps until the full minimum is implemented and its lab gates pass.
 
 With multiplane overlay (MPO), DWM gives the driver more than one plane for a source: the desktop, and on top of it
-a video or a game window. The display hardware blends the planes at scan-out. DWM then does not compose these
-pixels with the 3D engine, and a window can get its own flips. The benefit is less GPU and memory work for each
-frame, and a window that flips at its own rate.
+a video or a game window. The display hardware scales and blends the planes at scan-out. DWM then does not compose
+these pixels with the 3D engine, and a window can get its own flips. A game chain smaller than the mode can also
+flip independently on plane 0, because the plane scales it to the mode.
 
-## The DDIs
+## The route
 
-The KMD is compiled at WDDM 2.9. These are the DDIs of the "3" family that dxgkrnl calls:
+The KMD reports `WDDMVersion` 2.0 (ADR 0019). It therefore uses the WDDM 1.3/2.0 MPO model. dxgkrnl calls the KMD
+DDIs of the "2" family, and the DXGI runtime calls the DXGI 1.3 entries of the compositor's UMD:
 
-| DDI | What the driver does |
+| Part | DDI | What it does here |
+| --- | --- | --- |
+| KMD | `DXGK_DRIVERCAPS.SupportMultiPlaneOverlay`, `MaxOverlayPlanes` | `MaxOverlayPlanes` counts the primary. 1 is plane 0 alone |
+| KMD | `DxgkDdiCheckMultiPlaneOverlaySupport2` | Decides a set of planes at PASSIVE_LEVEL, with no register write. The only authority for a plane configuration |
+| KMD | `DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2` | Programs the planes of the source in one OTG update |
+| KMD | VSync type `DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY` | Reports the address of each plane at the vsync |
+| UMD | `pfnGetMultiplaneOverlayCaps`, `pfnGetMultiplaneOverlayGroupCaps` | Caps for DXGI, from the contract header. Advisory |
+| UMD | `pfnPresentMultiplaneOverlay` | One MPO present for all planes |
+
+At DXGI 1.3 the `pfnCheckMultiplaneOverlaySupport` slot is `pfnReserved1` (`dxgiddi.h`), so the UMD does not check
+a configuration. The runtime asks the KMD. The kernel-only route of the "3" family (`CheckMultiPlaneOverlaySupport3`,
+post-composition caps) needs `WDDMVersion` 2.2 or later and is out of scope.
+
+## The KMD/UMD contract
+
+### The caps trailer
+
+The KMD publishes the MPO state in the scan-out caps trailer (`driver/contract/bc250_scanout_caps.h`). The trailer
+keeps version 1 and 24 bytes. Two flags are new:
+
+| Flag | Value | Meaning |
+| --- | --- | --- |
+| `BC250_SCANOUT_CAPS_MPO` | `0x8` | This start reports `SupportMultiPlaneOverlay` and answers the two MPO DDIs. Set only with `BC250_SCANOUT_CAPS_DIRECT_FLIP` |
+| `BC250_SCANOUT_CAPS_MPO_PLANE1` | `0x10` | The KMD also scans out an overlay plane on pipe 1 (`MaxOverlayPlanes` 2). No KMD sets it yet |
+
+The lab KMD sets `MPO` while `EnableScaledPlane` bit 0 is on (the bits are in [scaled-flip.md](scaled-flip.md)).
+`EnableScaledPlane` bit 2 reports `MaxOverlayPlanes` 2 to dxgkrnl as a lab question, but it does not set
+`MPO_PLANE1`, because no second pipe scans out. The release KMD sets neither flag.
+
+### What the UMD reports
+
+The compositor's front (`driver/umd/router`) publishes the WDDM 1.3 interface (`D3DWDDM1_3_DDI_SUPPORTED`) and a
+DXGI 1.3 table only while the trailer has `MPO`. Without the flag, the front stays the D3D11.1 front with a DXGI 1.2
+table, as before BD-223. The caps come from constants in the same header, not from the trailer:
+
+| Field | Value |
 | --- | --- |
-| `DxgkDdiGetMultiPlaneOverlayCaps` | Returns the plane counts, the overlay caps, and the stretch and shrink factors of a source |
-| `DxgkDdiGetPostCompositionCaps` | Returns the stretch and shrink factors of the post-composition step |
-| `DxgkDdiCheckMultiPlaneOverlaySupport3` | Says if a set of planes and a post-composition step can be scanned out, without a register write |
-| `DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay3` | Programs the planes of a source in one update |
-| `DxgkDdiPostMultiPlaneOverlayPresent` | Optional. Lowers clocks after a configuration that needs less |
+| `DXGI_DDI_MULTIPLANE_OVERLAY_CAPS.MaxPlanes` | 2 with `MPO_PLANE1`, else 1 |
+| `NumCapabilityGroups` | 1 |
+| Group `NumPlanes` | `MaxPlanes` |
+| Group `MaxStretchFactor` | `BC250_MPO_MAX_STRETCH_MILLI` / 1000 (16.0) |
+| Group `MaxShrinkFactor` | `BC250_MPO_MAX_SHRINK_MILLI` / 1000 (1.0: no downscale yet) |
+| Group `OverlayCaps` | `RGB`, `BILINEAR_FILTER` and `HIGH_FILTER`. `YUV` only when a KMD stage admits a YUV plane |
+| Group `StereoCaps` | 0 |
 
-`DXGK_DRIVERCAPS` gets `SupportMultiPlaneOverlay` and `MaxOverlayPlanes`. The vsync report changes from
-`CrtcVsync` to `CrtcVsyncWithMultiPlaneOverlay3`, which carries the present ID of each plane.
+The caps are advisory. The KMD check refuses every configuration outside its stage, and DWM then composes. A KMD
+that changes a limit changes the constant in the same commit. `scanout_admit_test.c` fails the build when the
+constants and `dcn_plane.h` disagree.
+
+### The present
+
+- No MPO DDI carries private driver data. The KMD reads the plane attributes that dxgkrnl gives it
+  (`DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2`). The UMD maps no attribute.
+- `pfnPresentMultiplaneOverlay` makes one `pfnPresentMultiplaneOverlayCb` call for the present.
+  `AllocationInfo[i].hAllocation` is the KMD allocation of plane i's source subresource, and
+  `AllocationInfo[i].PresentIndex` is i.
+- The front does not call the hosted `pfnPresent` before the MPO callback. That is a second present to dxgkrnl. The
+  hosted driver gets an MPO present entry that does the work of its `Present` for every enabled plane: the flush,
+  the order on the present fence, and the allocation on demand (`Bc250EnsureSurface`). Then it makes the one MPO
+  callback.
+
+### The scan-out surface
+
+A plane's allocation is a scan-out allocation as for an independent flip:
+
+- Its creator asked for scan-out: the BC2A `UMD_BLOB_A_SCANOUT` flag with the v3 geometry, or an LB7A surface whose
+  E26R record has `BC250_SURFACE_RESOURCE_SCANOUT`.
+- It is linear, in the local segment, at a 4 KiB aligned address (`Bc250ScanoutAdmit`).
+- Its format is a `SCANOUT_PRIMARY` row of the shared table (`bc250_scanout_format_admitted`).
+- Its pitch is `bc250_scanout_primary_pitch(width, bytes_per_pixel)`: the row rounded up to 256 bytes.
+
+The shells decide a scan-out primary with `bc250_scanout_primary_rule` (`bc250_scanout_primary.h`). With `MPO` set,
+the rule also admits a chain that is not a mode when `bc250_scanout_mpo_geometry` holds: at least
+`BC250_MPO_MIN_DIMENSION` (64) in each direction, not larger than the mode, and the mode at most 16 times the chain
+in each direction. `SetVidPnSourceAddress` still refuses such a primary (`BC250_SCANOUT_GEOMETRY`). It reaches the
+plane only through the MPO flip, after the KMD check approved its shape.
+
+The present KMD stage also needs the plane's pitch to be the committed pipe's pitch, because the flip does not
+program the RQ, DLG and TTU registers again. 1920x1080 on the 1920x1200 mode flips. 1280x720 is refused at the
+check (verdict `pitch`) and composed. The shells do not copy this rule: it goes away with step S2.
+
+### When UNSUPPORTED ends
+
+The UMD answers anything other than "not supported" only while the trailer has `MPO`. It has no step logic of its
+own. The steps change what the KMD check admits and the constants of the header.
+
+## The plane attributes
+
+`WddmPlaneRequestOf` (`driver/kmd/wddm.c`) maps the attributes of a plane to the request that `dcn_plane.c` decides:
+
+| `DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2` | Request | Present stage |
+| --- | --- | --- |
+| `SrcRect` | `Src` | The whole allocation only (`src-crop`) |
+| `DstRect` | `Dst` | Inside the source mode, at least the source size (`dst-bounds`, `downscale`, `upscale`) |
+| `ClipRect` | `Clip` | Must not cut `DstRect` (`clip`) |
+| `Flags.HorizontalFlip`, `Flags.VerticalFlip` | `Mirror` | Refused |
+| `Rotation` | `Rotated` | Identity only |
+| `Blend.AlphaBlend` | `AlphaBlend` | Opaque only |
+| `VideoFrameFormat` | `Interlaced` | Progressive only |
+| `StereoFormat`, `StereoFlipMode`, the stereo frame fields | `Stereo` | Mono only |
+| `ColorSpaceType` | `NotSrgb` | `RGB_FULL_G22_NONE_P709` only |
+| `StretchQuality` | `StretchQualityKnown` | Bilinear or high: the polyphase filter meets both |
+| The allocation's description | `SurfaceWidth`, `SurfaceHeight`, `SurfacePitch`, `PlaneFormat` | A scan-out allocation (`scanout`), the committed pitch (`pitch`) |
+
+Every refusal has a numbered verdict in `dcn_plane.h` (`BC250_PLANE_*`), and `dcn_plane_test.c` drives each one. The
+DML step (`ConnectorLinkPlaneDml`) refuses a pipe that needs more DISPCLK or DPPCLK than the mode programmed.
 
 ## The hardware
 
 DCN 2.0.1 has four pipes (HUBP, DPP), five MPCCs, two OTGs and two OPPs (Linux `dcn201_resource.c`). Unit A uses
-pipe 0 for its one display. Pipes 1 to 3 are free. Linux gives each stream at most one overlay plane
-(`max_slave_planes` 1).
+pipe 0 for its one display. Pipes 1 to 3 are free.
 
-| Plane property | DCN 2.0.1 (Linux caps) | Proposed caps of this driver |
-| --- | --- | --- |
-| Planes for a source | 1 primary and 1 overlay | `MaxPlanes` 2, `MaxRGBPlanes` 2 |
-| YUV planes | `nv12` and `p010` not supported | `MaxYUVPlanes` 0, `StretchYUV` 0 |
-| Formats | ARGB8888 family, FP16 | The scan-out formats of `display_modes.h` |
-| Upscale | 16 times for ARGB8888, none for FP16 | `MaxStretchFactor` 16.0. An FP16 plane must be 1:1 |
-| Downscale | 4 times (`max_downscale_factor` 250) | `MaxShrinkFactor` 1.0 at first, 4.0 after the DCHUB step |
-| Blending | Per-pixel alpha, global alpha | Opaque and alpha blend |
-| Rotation | Only for swizzled surfaces | `Rotation` 0. The surfaces are linear |
-| Mirror | Horizontal mirror in HUBP | `HorizontalFlip` 0 and `VerticalFlip` 0 at first |
-| Filter | Polyphase taps | `BilinearFilter` 1, `HighFilter` 1 |
-| Immediate flip | Flip type in HUBP | `Immediate` 0 until the vsync reports for each plane work |
+| Plane property | DCN 2.0.1 (Linux `plane_cap`) | Microsoft MPO minimum | This driver |
+| --- | --- | --- | --- |
+| Planes for a source | 1 primary and 1 overlay | 2 | 1 now, 2 at step S3 |
+| YUV | `nv12` and `p010` false | NV12 on one plane, BT.601 and BT.709, both ranges | Open: see below |
+| Upscale | 16 times for ARGB8888 | Stretch | 16 times |
+| Downscale | 4 times (`max_downscale_factor` 250) | Shrink | None now, 4 times at step S2 |
+| Blending | Per-pixel alpha, global alpha | Premultiplied alpha | Opaque now, alpha at step S3 |
+| Filter | Polyphase taps | Bilinear or better | The polyphase upscale filter |
+| Clipping | Viewport and recout | Source and destination clipping | Whole surface now, crop and clip at step S3 |
+| Rotation, mirror | Swizzled surfaces only, HUBP mirror | Not required | Refused |
 
-No YUV plane means that MPO does not help video playback on this ASIC. MPO helps a game or a window of RGB pixels
-over the desktop.
+Linux's DCN 2.0.1 resource refuses NV12 and P010, while DCN 2.0 admits them. The reason is not recorded in the Linux
+source. The Microsoft minimum needs a YUV plane. The driver admits YUV only after a lab measurement finds a correct
+NV12 plane on unit A (colour bars in each matrix and range). Until then `OverlayCaps` has no `YUV` bit, and the HLK
+YUV tests are a known failure.
 
-## The mapping
+## The flip
 
-| WDDM | DCN |
-| --- | --- |
-| Plane 0 (the DWM primary) | Pipe 0: HUBP0, DPP0, MPCC0, as today |
-| Overlay plane | Pipe 1: HUBP1, DPP1, MPCC1 |
-| `LayerIndex` | The order of the MPCC tree: a higher layer is nearer the top |
-| `SrcRect` | The HUBP viewport |
-| `DstRect` and `ClipRect` | The DSCL recout and the scaler ratio (the stage A math for each pipe) |
-| Blend: opaque | MPCC blend with the global alpha at full and per-pixel alpha off |
-| Blend: alpha | MPCC per-pixel alpha |
-| Post composition | The source to target scaling of the whole stream. DCN has no scaler after the blend, so the driver adds this step to the scaling of each plane (Linux does the same) |
-| One update for all planes | `OTG_MASTER_UPDATE_LOCK` around the writes of every pipe, then one trigger |
-
-Stage A puts pipe 0 through the scaler. Stage C uses the same plan and register sequence (`dcn_scale.c`) for each
-pipe, with the pipe's register block.
-
-## What DCHUB needs
-
-Stage A writes no DCHUB request register. With two planes that is not safe: each pipe reads its own surface, and
-the urgent and stutter watermarks, the DLG and TTU settings and the DET of each pipe depend on all planes. Linux
-computes them with DML (`dml/dcn20`) and programs them in `hubp2_setup` and `hubbub2_program_watermarks`.
-
-Stage C therefore needs:
-
-1. DML for DCN 2.0.1 imported from Linux (MIT), not typed by hand, with a host test against Linux's numbers for
-   the same configurations.
-2. `CheckMultiPlaneOverlaySupport3` answers from DML: a configuration that DML refuses is not supported.
-3. The DLG, TTU and watermark writes for each pipe, inside the same lock as the planes.
-
-## The interaction with DirectFlip
-
-M15.14 (independent flip) gives a fullscreen swap chain's buffer to `SetVidPnSourceAddress` for plane 0. The
-handshake of that work is in [direct-flip-handshake.md](direct-flip-handshake.md). MPO changes these points:
-
-- The scan-out admission (`Bc250ScanoutAdmit`) and the address checks hold for each plane, not only for plane 0.
+- The scan-out admission and the address checks hold for each plane.
+- One `OTG_MASTER_UPDATE_LOCK` holds the writes of all planes: the scaler, the viewport and the address of each
+  pipe latch at one update.
+- A mode set clears the plane shapes and the check approvals (`DcnPlaneShapeModeset`, the mode stamp).
 - The flip state of each plane is separate: the address, the present ID, the pending flip and the vsync report.
-  The present M15.14 code has one state for plane 0. Stage C makes it an array for each plane, and plane 0 keeps
-  its present behaviour.
-- With MPO, DWM can put a game in a window on an overlay plane and keep the desktop on plane 0. The independent flip
-  of that window then goes through `SetVidPnSourceAddressWithMultiPlaneOverlay3`, not through
-  `SetVidPnSourceAddress`.
-- Stage C starts only after M15.14 is in main, and it does not change the M15.14 files until then.
+  The present code has one state for plane 0. Step S3 makes it an array.
 
 ## Steps
 
 | Step | What | Go when |
 | --- | --- | --- |
-| C0 | Caps only: `GetMultiPlaneOverlayCaps` returns one plane, `CheckMultiPlaneOverlaySupport3` accepts plane 0 alone | The lab desktop and a game run as before, DWM logs no MPO error |
-| C1 | DML import and its host test | The DML numbers equal Linux's numbers for unit A's configurations |
-| C2 | The second plane, opaque, 1:1, RGB, with DML's DCHUB settings | A test client with an overlay swap chain flips on pipe 1, no underflow |
-| C3 | Scaling and alpha on the second plane | The test client at several sizes. DWM uses the plane for a video in a window of RGB pixels |
-| C4 | The vsync report and the flip state for each plane, immediate flips | A game in a window flips independently on the overlay plane |
+| S1 | Plane 0 scaled up, RGB, opaque, whole surface, the committed pitch. Lab flavour, `EnableScaledPlane` | Code in place. Lab: the 3-minute check of [scaled-flip.md](scaled-flip.md), then a game below the mode flips independently |
+| S2 | Plane 0 at any scan-out pitch (RQ, DLG and TTU from DML at the flip) and downscale to 4 times (DPP clock) | 1280x720 and 2560x1440 chains on the 1920x1200 mode flip, no underflow |
+| S3 | Plane 1 on pipe 1: RGB, premultiplied alpha, source crop and clip, the MPCC tree, the flip state per plane, `MPO_PLANE1` | A test client with an overlay chain flips on pipe 1. DWM uses the plane for a window |
+| S4 | NV12 on plane 1, BT.601 and BT.709, both ranges, if the lab measurement admits it | Colour bars correct in each matrix and range. The HLK MPO jobs |
+| S5 | The caps in the release flavour | The lead's lab gates pass on the release bytes |
 
-Each step has its own switch, default off, until its lab trial passes. A trial is at most three minutes, a game
-session at most 20 minutes.
+A trial is at most three minutes, a game session at most 20 minutes.
 
-## Open items
+## Prior work
 
-- The UMD DDIs of WDDM 1.3 (`pfnCheckMultiPlaneOverlaySupport`, `pfnPresentMultiplaneOverlay`) and the KMD DDIs of
-  the "3" family: which ones a WDDM 2.9 driver needs for DWM to use MPO. To check against
-  `multiplane-overlay-vidpn-presentation.md` and the HLK MPO tests before C0.
-- The DPP clock for a downscaled plane. DML gives the value. The clock goes through the DENTIST (stage B, step B2).
+Branch `feat/bd223-scaled-flip` (2026-10-22, base before integrate/tester34) holds host-tested helpers for steps S2
+to S4. None of them is called by a DDI or admits hardware. They are ported onto this line with their author kept:
+
+- Scaler geometry, taps, line-buffer capacity and coefficient banks (`dcn_geometry.c`, `dcn_coeff.c`).
+- Two-plane MPCC blending (`dcn_mpc.c`) and input colour and alpha (`dcn_cnvc_color.c`).
+- The linear and NV12 surface layout and its locked write (`dcn_surface_layout.c`, `dcn_surface_write.c`).
+- DML201 runs for two planes, grouped requestors and mixed NV12 and RGB (`dml201_group_test.c`,
+  `dml201_mpo_test.c`, `dml201_nv12_test.c`).
+- A bounded lab latch probe for the update lock (`dcn_latch_probe.c`) and the requirements matrix
+  (`multiplane-overlay-requirements.md`).
