@@ -143,7 +143,11 @@ Check (-not $d.ok -and $d.id -eq 'unreadable') 'a package INF without a DriverVe
 # The wiring in install.ps1: the preflight runs the check before any change, -Force does not pass it, and the freeze of
 # the state handoff reads it again first.
 $installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
-Check ($installText -match "(?m)^\s+\`$rank = Test-DriverSetRank -InstallState \`$st\r?\n\s+if \(\`$rank\) \{ Add-Check 'driver package rank' \`$\(if \(\`$rank\.ok\) \{ 'ok' \} else \{ 'fail' \}\)") 'the preflight adds the rank check, as fail when it refuses, with no -Force exception'
+$preflightRank = "(?m)^\s+\`$rank = Test-DriverSetRank -InstallState \`$st\r?\n(?:\s+#[^\r\n]*\r?\n)?\s+if \(\`$rank\) \{\r?\n" +
+    "\s+if \(\`$rank\.ok\) \{ Add-Check 'driver package rank' 'ok' \`$rank\.detail 'driver-rank\.ok' \}\r?\n" +
+    "\s+elseif \(\`$rank\.id -eq 'not-above'\) \{ Add-Check 'driver package rank' 'fail' \`$rank\.detail 'driver-rank\.not-above' \}\r?\n" +
+    "\s+else \{ Add-Check 'driver package rank' 'fail' \`$rank\.detail 'driver-rank\.unreadable' \}"
+Check ($installText -match $preflightRank) 'the preflight adds the rank check, as fail when it refuses, with no -Force exception, and one literal id per outcome'
 $freeze = $installText.IndexOf("Invoke-Change 'freeze state writers and publish the protected state handoff before INF staging'")
 $guard = $installText.IndexOf('if ($rank -and -not $rank.ok) { throw "driver package rank: $($rank.detail)" }')
 $compare = $installText.IndexOf('Save-DriverSettingsComparison -State $state')

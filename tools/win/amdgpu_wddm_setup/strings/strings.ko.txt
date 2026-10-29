@@ -108,6 +108,9 @@ check.lab-install.present|mt|c4ebe135|이 PC에는 개발용 드라이버가 설
 check.lab-install.forced|mt|711bb1d9|이 PC에는 개발용 드라이버가 설치되어 있지만, 요청에 따라 계속합니다.
 check.state.ok|mt|52525a38|이전 Nagi 설치를 찾았습니다.
 check.existing.no-state|mt|a46215ab|드라이버가 설치 프로그램의 기록 없이 설치되어 있습니다. 먼저 제거한 다음 설치 프로그램을 다시 시작하세요.
+check.driver-rank.ok|mt|e792821d|Windows가 그래픽 칩을 이 패키지의 드라이버로 바꿀 수 있습니다.
+check.driver-rank.not-above|mt|39cb4710|이 패키지에 더 새로운 버전의 드라이버가 없으므로 Windows는 지금 설치된 드라이버를 그대로 사용합니다. 먼저 드라이버를 제거하고 PC를 다시 시작한 다음 설치 프로그램을 다시 시작하세요.
+check.driver-rank.unreadable|mt|7961fbb0|설치 프로그램이 그래픽 칩이 지금 사용하는 드라이버를 읽지 못했습니다. 먼저 드라이버를 제거하고 PC를 다시 시작한 다음 설치 프로그램을 다시 시작하세요.
 check.prepare.destination-inside|mt|08b96974|폴더가 설치 파일 안에 있습니다. 다른 위치의 폴더를 선택하세요.
 check.prepare.destination-file|mt|3d875a78|이 이름의 파일이 있습니다. 폴더를 선택하세요.
 check.prepare.destination-not-empty|mt|5a6961d7|폴더가 비어 있지 않습니다. 빈 폴더나 이전에 준비한 폴더를 선택하세요.

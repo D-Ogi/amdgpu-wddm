@@ -226,6 +226,7 @@ namespace AmdgpuWddmSetup
         {
             "gpu.missing", "gpu.several", "windows.not-x64", "windows.too-old", "package.damaged", "firmware.no-list",
             "lab-install.present", "secureboot.on", "vcruntime.no-installer",
+            "driver-rank.not-above", "driver-rank.unreadable",
         };
 
         static readonly HashSet<string> Known = new HashSet<string>(StringComparer.Ordinal)

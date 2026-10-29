@@ -108,6 +108,9 @@ check.lab-install.present|mt|c4ebe135|この PC には開発用のドライバ�
 check.lab-install.forced|mt|711bb1d9|この PC には開発用のドライバーがインストールされていますが、指示により続行します。
 check.state.ok|mt|52525a38|以前の Nagi のインストールが見つかりました。
 check.existing.no-state|mt|a46215ab|ドライバーがセットアップの記録なしでインストールされています。先にアンインストールしてから、セットアップをもう一度起動してください。
+check.driver-rank.ok|mt|e792821d|Windows はグラフィックス チップをこのパッケージのドライバーに切り替えることができます。
+check.driver-rank.not-above|mt|39cb4710|このパッケージには新しいバージョンのドライバーがないため、Windows は現在インストールされているドライバーを使い続けます。先にドライバーをアンインストールし、PC を再起動してから、セットアップをもう一度起動してください。
+check.driver-rank.unreadable|mt|7961fbb0|グラフィックス チップが現在使用しているドライバーをセットアップが読み取れませんでした。先にドライバーをアンインストールし、PC を再起動してから、セットアップをもう一度起動してください。
 check.prepare.destination-inside|mt|08b96974|フォルダーがセットアップ ファイルの中にあります。別の場所のフォルダーを選んでください。
 check.prepare.destination-file|mt|3d875a78|この名前のファイルがあります。フォルダーを選んでください。
 check.prepare.destination-not-empty|mt|5a6961d7|フォルダーが空ではありません。空のフォルダーか、以前に準備したフォルダーを選んでください。

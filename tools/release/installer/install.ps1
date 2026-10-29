@@ -307,7 +307,12 @@ function Invoke-Preflight {
     # BD-227: an install that stages a driver set needs Windows to move the GPU to it at the restart. -Force does not
     # pass this check: the state handoff would leave the GPU on a KMD that does not start.
     $rank = Test-DriverSetRank -InstallState $st
-    if ($rank) { Add-Check 'driver package rank' $(if ($rank.ok) { 'ok' } else { 'fail' }) $rank.detail "driver-rank.$($rank.id)" }
+    # One literal id per outcome: the setup window's contract test reads them from this file.
+    if ($rank) {
+        if ($rank.ok) { Add-Check 'driver package rank' 'ok' $rank.detail 'driver-rank.ok' }
+        elseif ($rank.id -eq 'not-above') { Add-Check 'driver package rank' 'fail' $rank.detail 'driver-rank.not-above' }
+        else { Add-Check 'driver package rank' 'fail' $rank.detail 'driver-rank.unreadable' }
+    }
 
     return $checks
 }
