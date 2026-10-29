@@ -88,6 +88,7 @@ DXVK's DXGI serves both.
 | `MaxFrameLatency` | `AMDGPU_WDDM_MAX_FRAME_LATENCY` | 1-3 | works | works | works |
 | `PerformanceOverlay` | `AMDGPU_WDDM_PERFORMANCE_OVERLAY` | 0, 1 | works | not applied | not read |
 | `RenderOnCpu` | `AMDGPU_WDDM_RENDER_ON_CPU` | 0, 1 | works, also for D3D10 | no CPU route | not read |
+| `FsrUpgrade` | `AMDGPU_WDDM_FSR_UPGRADE` | 0, 1 | not applied | works | not read |
 
 "Works" in this table means that the host gates pass. The lab script `settings-lab.ps1` of the work directory
 checks each row on unit A.
@@ -250,6 +251,17 @@ the CPU route gets FL 10_0 (BD-088).
 
 D3D12 has no CPU route. No CPU route through lavapipe exists in any repository of this project.
 
+### FsrUpgrade
+
+The value 0 stops a game that ships AMD's FSR 4 upscaler DLL from selecting its RDNA 2 path on this GPU. The value
+1 or no value lets it select that path. Only a game that ships the 4.x `amd_fidelityfx_upscaler_dx12.dll` gets
+FSR 4. A game with FSR 3.1 or older keeps what it has. The D3D12 shell sends the value to the KMD once per process,
+after the first device of the process exists (`driver/umd/d3d12/fsr-identity.h`). The KMD answers AMD's 608-byte
+identity query with it, and keeps the games of its anti-cheat list off whatever the value. The contract, the list
+and its sources are in [fsr4-identity.md](fsr4-identity.md).
+
+The D3D11 shell and the router read the value and do not apply it: the FSR 4 DLL is a D3D12 DLL.
+
 ### The system Vulkan ICD
 
 From tester.34 the system Vulkan ICD reads `FrameRateLimit`, `VSync`, `Anisotropy` and `MaxFrameLatency` by the
@@ -316,7 +328,7 @@ apply:
 
 ```
 amdgpu-wddm settings: api=d3d12 app=game.exe FrameRateLimit=60/application VSync=unset Anisotropy=16/global
-MaxFrameLatency=2/global PerformanceOverlay=unset RenderOnCpu=unset
+MaxFrameLatency=2/global PerformanceOverlay=unset RenderOnCpu=unset FsrUpgrade=unset
 ```
 
 The line above is one line in the log. An ignored value gives a line before it:
@@ -421,6 +433,7 @@ A future entry that matches all versions from a value upward, with `>=`, would a
 | `driver/umd/dxvk/ddi-adapter.cpp`, `ddi-present.cpp` | the D3D11 shell |
 | `driver/umd/d3d12/adapter.cpp`, `native-tables.cpp` | the D3D12 shell |
 | `driver/umd/router/router-policy.h`, `router.cpp` | `RenderOnCpu` |
+| `driver/umd/d3d12/fsr-identity.h`, `driver/kmd/amd_identity.c` | `FsrUpgrade` (fsr4-identity.md) |
 | `tools/release/installer/version-identity.ps1` | package version identity |
 | `tools/release/test-version-identity.ps1` | version and rollback host tests |
 
