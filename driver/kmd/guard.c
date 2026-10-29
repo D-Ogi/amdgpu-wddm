@@ -120,8 +120,8 @@ static NTSTATUS OpenParameters(_Out_ HANDLE* Key)
 static NTSTATUS ReadDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
 {
     UNICODE_STRING name;
-    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)];
-    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    union { KEY_VALUE_PARTIAL_INFORMATION Info; UCHAR Bytes[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)]; } buffer;
+    PKEY_VALUE_PARTIAL_INFORMATION info = &buffer.Info;     // the union aligns the bytes as the structure
     ULONG length;
     NTSTATUS status;
 
@@ -219,8 +219,8 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
 // STATUS_OBJECT_TYPE_MISMATCH; *Value is 0 then.
 static NTSTATUS ParameterDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
 {
-    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)];
-    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    union { KEY_VALUE_PARTIAL_INFORMATION Info; UCHAR Bytes[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)]; } buffer;
+    PKEY_VALUE_PARTIAL_INFORMATION info = &buffer.Info;     // the union aligns the bytes as the structure
     UNICODE_STRING name;
     ULONG length = 0;
     NTSTATUS status;
@@ -286,8 +286,8 @@ static ULONG g_LabBoundaryMode = BC250_PAGING_BOUNDARY_RELEASE_MODE;
 
 static NTSTATUS LabQueryQword(HANDLE Key, PCWSTR Name, _Out_ ULONGLONG* Value)
 {
-    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONGLONG)];
-    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    union { KEY_VALUE_PARTIAL_INFORMATION Info; UCHAR Bytes[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONGLONG)]; } buffer;
+    PKEY_VALUE_PARTIAL_INFORMATION info = &buffer.Info;     // the union aligns the bytes as the structure
     UNICODE_STRING name;
     ULONG length = 0;
     NTSTATUS status;
