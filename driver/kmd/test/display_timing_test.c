@@ -116,6 +116,9 @@ static void GuardStartDetail(const wchar_t* format,...){va_list a;va_start(a,for
 static unsigned refusedLogs;static NTSTATUS lastRefusal;
 static void DisplayLogRefusedTiming(const BC250_DEVICE* d,NTSTATUS s){(void)d;refusedLogs++;lastRefusal=s;}
 NTSTATUS DisplayValidateInheritedSignal(BC250_DEVICE*);
+/* dcn_cursor.c: a change of rotation places the hardware pointer again (dcn_cursor_test.c tests the turn). */
+static unsigned cursorRefreshes;static ULONG cursorRefreshRotation;
+static void DcnCursorRefresh(BC250_DEVICE* d){cursorRefreshes++;cursorRefreshRotation=d->Rotation;}
 #include "inherited_timing_fixture.h"
 #include "inherited_commit_fixture.h"
 #include "inherited_actual.inc"
@@ -269,6 +272,11 @@ int main(int argc,char** argv)
                 CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS && description.Rotation==stated[i] &&
                       description.Width==1920 && description.Height==1200);
             }
+            d.Rotation=0u;
+            // The hardware pointer turns with a change of rotation, and only with a change.
+            cursorRefreshes=0;DisplayRecordRotation(&d,90u,"test");
+            CHECK(cursorRefreshes==1 && cursorRefreshRotation==BC250_VPPR_ROTATE90);
+            DisplayRecordRotation(&d,90u,"test");CHECK(cursorRefreshes==1);
             d.Rotation=0u;
         }
         values[TimingPhase]++; // subsequent reads must retain the published mode

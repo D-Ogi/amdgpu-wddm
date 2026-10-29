@@ -181,6 +181,11 @@ static void ModesetRestoreQuiet(BC250_DEVICE*d){CHECK(!d->DcnDiverged);++modeset
 static unsigned modeset_stops,scanout_unmaps;
 static void ModesetStop(BC250_DEVICE*d){(void)d;++modeset_stops;}
 static void DcnUnmapScanout(BC250_DEVICE*d){(void)d;++scanout_unmaps;}
+/* dcn_cursor.c (dcn_cursor_test.c tests the cursor itself): the bugcheck screen turns the hardware pointer off before
+ * its restore, and DcnStop stops it before the scan-out mapping goes. */
+static unsigned cursor_offs,cursor_stops,cursor_stop_unmaps;
+static void DcnCursorOffQuiet(BC250_DEVICE*d){(void)d;++cursor_offs;}
+static void DcnCursorStop(BC250_DEVICE*d){(void)d;++cursor_stops;cursor_stop_unmaps=scanout_unmaps;}
 static char guard_lines[8][192];
 static unsigned guard_count;
 static void GuardLog(const char* format,...)
@@ -257,6 +262,7 @@ static void init(BC250_DEVICE*d,ULONG*fb)
     memset(d,0,sizeof(*d));memset(&model,0,sizeof(model));memset(fb,0,96);
     memset(&writer,0,sizeof(writer));plane_is_blank=0;
     model.hubp=FIRMWARE_HUBP;denied_writes=hubp_writes=0;guard_count=0;modeset_stops=scanout_unmaps=0;
+    cursor_offs=cursor_stops=cursor_stop_unmaps=0;
     d->Mmio=&model;d->Framebuffer=fb;d->FramebufferLength=96;
     d->VramEnabled=TRUE;d->VramPhysical.QuadPart=0x400000000ll;d->VramLength=0x100000000ull;
     d->Post.Width=4;d->Post.Height=3;d->Post.Pitch=32;d->Post.ColorFormat=D3DDDIFMT_X8R8G8B8;
@@ -270,6 +276,7 @@ int main(void)
     init(&d,fb);
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
     CHECK(d.SystemDisplayReady && width==4 && height==3 && fmt==D3DDDIFMT_X8R8G8B8);
+    CHECK(cursor_offs==1);
     CHECK(model.scanned==d.DcnFirmwareAddress && model.elapsed==300 && !d.DcnDiverged);
     CHECK(d.DcnCurrentAddress==d.DcnFirmwareAddress && d.DcnCurrentPitch==32);
     CHECK(modeset_restores==1);
@@ -523,6 +530,7 @@ int main(void)
             CHECK(!d.DcnBlanked && !(model.blank&OTG0_OTG_BLANK_CONTROL__OTG_CURRENT_BLANK_STATE_MASK));
             CHECK(model.hubp==FIRMWARE_HUBP && !hubp_writes && !denied_writes);
             CHECK(scanout_unmaps==1 && modeset_stops==1 && writer.resumes==0);
+            CHECK(cursor_stops==1 && !cursor_stop_unmaps);
             CHECK(logged("dcnflip: stop: firmware surface changed 0 valid 0 runtime 0 reserved 490000000"));
             snprintf(line,sizeof(line),
                 "dcnflip: stop: firmware known 1 diverged 1 address 470000000 pitch %u post pitch %u hubp 000F1002",

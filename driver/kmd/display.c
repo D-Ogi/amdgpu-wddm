@@ -241,23 +241,22 @@ NTSTATUS Bc250QueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const DXGKARG_QU
         caps->WDDMVersion = DXGKDDI_WDDMv1_2;
         caps->HighestAcceptableAddress.QuadPart = -1;
         caps->SupportNonVGA = TRUE;
-        // No hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor into the image it presents.
+        // The display-only table has no hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor
+        // into the image it presents. The full table's caps (wddm.c) report the one of dcn_cursor.c.
     }
     return STATUS_SUCCESS;
 }
 
+// Both tables name these two. The display-only start reserves no cursor (DcnCursorPrepare needs FullWddm), so there
+// they answer as before: success for a position, refusal for a shape.
 NTSTATUS Bc250SetPointerPosition(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETPOINTERPOSITION* SetPointerPosition)
 {
-    UNREFERENCED_PARAMETER(hAdapter);
-    UNREFERENCED_PARAMETER(SetPointerPosition);
-    return STATUS_SUCCESS;      // only "hide" can arrive while we report no pointer capability
+    return DcnCursorSetPosition((BC250_DEVICE*)hAdapter, SetPointerPosition);
 }
 
 NTSTATUS Bc250SetPointerShape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_SETPOINTERSHAPE* SetPointerShape)
 {
-    UNREFERENCED_PARAMETER(hAdapter);
-    UNREFERENCED_PARAMETER(SetPointerShape);
-    return STATUS_NOT_SUPPORTED;
+    return DcnCursorSetShape((BC250_DEVICE*)hAdapter, SetPointerShape);
 }
 
 // The escape runs in the caller's context, and these escapes are for administrators. BD-167 (K4): check the
@@ -1264,6 +1263,7 @@ static void DisplayRecordRotation(BC250_DEVICE* Device, ULONG Angle, const char*
     GuardLog("display: rotation %lu -> %lu degrees (%s)",
         (ULONG)Bc250RotationAngle((ULONG)Device->Rotation, TRUE), Angle, Where);
     Device->Rotation = value;
+    DcnCursorRefresh(Device);       // the hardware pointer's image turns with the content (dcn_cursor.c)
 }
 
 // Exact inherited tuple only. The same check serves IsSupportedVidPn and the
@@ -2221,6 +2221,7 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
     // BD-179: the system display is a distinct owner. A bugcheck during StartDevice
     // must be able to show its validated handoff surface without an OS TRUE.
     InterlockedExchange(&device->StartVisibilityPending,0);
+    DcnCursorOffQuiet(device);      // no pointer over the bugcheck screen
     // The serialized restore entry stays as on main: this callback is one of the OS's
     // serialized bugcheck/reset entries and must not take the normal writer protocol.
     status=DcnRestorePostDisplaySerialized(device);

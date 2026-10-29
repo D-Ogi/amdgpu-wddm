@@ -42,6 +42,8 @@ NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* Device)
 
 void ConnectorBufferRelease(BC250_DEVICE* Device)
 {
+    // The hardware pointer's surfaces lie after this buffer in the same reservation (dcn_cursor.c).
+    DcnCursorRelease(Device);
     if (Device->RuntimeFramebuffer) {
         MmUnmapIoSpace(Device->RuntimeFramebuffer,Device->RuntimeFramebufferLength);
         Device->RuntimeFramebuffer=NULL;

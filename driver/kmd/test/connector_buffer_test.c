@@ -40,6 +40,9 @@ static void MmUnmapIoSpace(void*p,SIZE_T n){++unmaps;CHECK(p==&dummy&&n==mappedB
 static void RtlZeroMemory(void*p,SIZE_T n){++zeros;CHECK(p==&dummy&&n==mappedBytes);}
 static void KeMemoryBarrier(void){++barriers;}
 #define GuardLog(...) ((void)0)
+/* dcn_cursor.c: the hardware pointer's surfaces lie after the buffer, so the release frees them first. */
+static unsigned cursorReleases,cursorReleaseUnmaps;
+static void DcnCursorRelease(BC250_DEVICE*d){(void)d;++cursorReleases;cursorReleaseUnmaps=unmaps;}
 #include "connector_buffer_actual.inc"
 static void init(BC250_DEVICE*d)
 {
@@ -62,6 +65,7 @@ int main(void)
     end=d.DisplayReservationEnd;
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_DEVICE_STATE);CHECK(maps==1);
     ConnectorBufferRelease(&d);CHECK(!d.RuntimeFramebuffer&&unmaps==1&&d.DisplayReservationEnd==end);
+    CHECK(cursorReleases==1&&cursorReleaseUnmaps==0);
     ConnectorBufferRelease(&d);CHECK(unmaps==1);
     CHECK(ConnectorBufferPrepare(&d)==STATUS_INVALID_DEVICE_STATE);CHECK(maps==1);
     for(i=0;i<5;++i){

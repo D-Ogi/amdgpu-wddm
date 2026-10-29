@@ -8,18 +8,21 @@ firmware-surface restore of the 31 line then failed, and the PnP stop handed Win
 This reads the call sites in the KMD sources and the two lists in regs.generated.h, resolves each file's own #define
 aliases, and refuses a site whose register is on neither list, or on the lab list outside an
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR) block. It also refuses a site whose register argument it cannot resolve to a
-name, except the escape's pass-through in mmio.c. Before the scan, two fixed snippets are the positive and the
-negative control.
+name, except the escape's pass-through in mmio.c. A read-modify-write wrapper (WRAPPERS) is a write site of the register
+it names, and its own write of its parameter is a pass-through. Before the scan, fixed snippets are the positive and
+the negative controls.
 """
 from pathlib import Path
 import argparse
 import re
 import sys
 
-CALL = re.compile(r'\bMmioDcnWrite(?:Ex)?\s*\(\s*(\w+)\s*,\s*([^,()]+?)\s*,')
+# dcn_cursor.c's CursorUpdate reads a cursor register and writes it back through MmioDcnWriteEx.
+WRAPPERS = ('CursorUpdate',)
+CALL = re.compile(r'\b(?:MmioDcnWrite(?:Ex)?|' + '|'.join(WRAPPERS) + r')\s*\(\s*(\w+)\s*,\s*([^,()]+?)\s*,')
 ALIAS = re.compile(r'^\s*#\s*define\s+(\w+)\s+(BC250_REG_DMU_\w+)\s*$', re.M)
 LAB = 'AMDGPU_WDDM_LAB_FLAVOUR'
-PASS_THROUGH = {('mmio.c', 'Offset')}
+PASS_THROUGH = {('mmio.c', 'Offset'), ('dcn_cursor.c', 'Offset')}
 
 
 def strip_comments(text):
@@ -109,7 +112,9 @@ def controls(names, release, lab):
     allowed = by_offset[min(release)]
     refused = 'BC250_REG_DMU_HUBP0_DCHUBP_CNTL'
     cases = [(f'x = MmioDcnWriteEx(Device, {allowed}, v, TRUE);', 0),
-             (f'x = MmioDcnWriteEx(Device, {refused}, v, TRUE);', 1)]
+             (f'x = MmioDcnWriteEx(Device, {refused}, v, TRUE);', 1),
+             (f'x = CursorUpdate(Device, {allowed}, m, v);', 0),
+             (f'x = CursorUpdate(Device, {refused}, m, v);', 1)]
     if lab:
         lab_name = by_offset[min(lab)]
         cases += [(f'#if defined({LAB})\nx = MmioDcnWriteEx(Device, {lab_name}, v, TRUE);\n#endif\n', 0),

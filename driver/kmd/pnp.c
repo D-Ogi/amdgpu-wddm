@@ -211,6 +211,9 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     VramStart(device);      // same rule
     status=ConnectorBufferPrepare(device);
     GuardLog("connector: handoff reservation status %08lX",(ULONG)status);
+    // The hardware pointer's two surfaces, after the handoff buffer and before WddmStart lays out the segments. Never
+    // fails the start (dcn_cursor.c).
+    if (NT_SUCCESS(status)) (void)DcnCursorPrepare(device);
     DisplayLogFramebufferSample(device);   // after VramStart, so the carve-out view exists when that gate is open
     // The sample keeps what firmware left. The logo keeps its default, but is drawn behind the startup blank;
     // only the later OS visibility request may expose a frame. Never fails the start (display.c).
@@ -329,6 +332,7 @@ NTSTATUS Bc250StopDevice(_In_ const PVOID MiniportDeviceContext)
     }
     // The next display owner needs a visible handoff. This also unwinds a failed start before the first OS TRUE.
     InterlockedExchange(&device->StartVisibilityPending,0);
+    DcnCursorStop(device);  // the hardware pointer off before any owner below changes the pipe (dcn_cursor.c)
     wasStarted=device->Started;
     HangDetectorStop();     // first: a stop may legitimately wait, and the detector must not judge it
     GuardRecordStopBegin(device); // closes health and saves the pre-teardown log without KeepLog
@@ -418,6 +422,8 @@ NTSTATUS Bc250StopDeviceAndReleasePostDisplayOwnership(_In_ PVOID MiniportDevice
              InterlockedCompareExchange(&device->RuntimePostValid,0,0));
     // The next owner needs a visible handoff: the startup hold (BD-179) ends here, before the target below.
     InterlockedExchange(&device->StartVisibilityPending,0);
+    // The next owner gets no hardware pointer of ours, and the link the handoff may enable below does not bring it back.
+    DcnCursorStop(device);
     // dispmprt.md, required steps 2, 5 and 6 (connector_link.c, ConnectorLinkHandoff): a target with no display
     // connected answers STATUS_NOT_SUPPORTED, and a link that an OS or a physical detach turned off gets a target
     // again, black, on the reserved buffer. Before the teardown, which takes the writer and BAR5 away.
@@ -470,6 +476,7 @@ void Bc250ResetDevice(_In_ const PVOID MiniportDeviceContext)
     BC250_DEVICE* device = (BC250_DEVICE*)MiniportDeviceContext;
 
     if (device == NULL || !AdapterOwnerIs(device->PhysicalDeviceObject)) return;
+    DcnCursorOffQuiet(device);      // the hardware pointer is ours too: register writes only (dcn_cursor.c)
     if (device->Modeset.PipeChanged || device->RuntimeDisplayChanged)
     {
         (void)DcnRestorePostDisplaySerialized(device);

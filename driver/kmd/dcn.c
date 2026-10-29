@@ -1940,6 +1940,8 @@ NTSTATUS DcnStop(_Inout_ BC250_DEVICE* Device)
     NTSTATUS status;
     LONG changed=InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0);
     ULONG hubp=0;
+    // The hardware pointer first: the next owner of the firmware surface reads no cursor of ours (dcn_cursor.c).
+    DcnCursorStop(Device);
     DcnUnmapScanout(Device);
     // BD-090: the inputs of the restore below, so that a failed display handoff names its branch and the reason:
     // the runtime branch needs a valid RuntimePost on the reserved buffer, the firmware branch the captured surface.

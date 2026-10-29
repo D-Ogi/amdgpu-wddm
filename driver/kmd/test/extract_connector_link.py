@@ -31,7 +31,7 @@ def main():
     names = (
         "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor LinkCaps LowerRate LinkSettingsValid Plan LogPlanRefusal CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext InheritedTarget ConnectorLinkPrepare "
         "TrainRead TrainWrite TrainEnable TrainPattern TrainDrive TrainDisable "
-        "DisableOwned ConnectorLinkDisable TrainingResult MeasureDto Apply ConnectorLinkCommit "
+        "CursorPipe DisableOwned ConnectorLinkDisable TrainingResult MeasureDto Apply ConnectorLinkCommit "
         "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume ConnectorLinkResumeChanged "
         "HandoffTarget ConnectorLinkHandoff ConnectorLinkRelease"
     ).split()
