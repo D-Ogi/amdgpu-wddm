@@ -16,8 +16,6 @@ $env:TMP = $env:TEMP
 $env:INCLUDE = ''; $env:LIB = ''
 & $cc --version
 if ($LASTEXITCODE) { throw 'Explicit clang-cl unavailable' }
-& "$PSScriptRoot\run_dc_types.ps1" -Root $Root -Out (Join-Path $Out 'dc-types')
-if (-not $?) { throw 'DC type parity controls failed' }
 & python (Join-Path $repo 'tools\import\extract_scaler_geometry.py') --check
 if ($LASTEXITCODE) { throw 'Scaler geometry extraction mismatch' }
 & python (Join-Path $repo 'tools\import\extract_scaler_buffer.py') --check
@@ -159,5 +157,3 @@ try {
     & python "$repo\driver\kmd\test\scaler_geometry_oracle.py" --exe (Join-Path (Get-Location) 'scaler_geometry_test.exe') --chroma
     if ($LASTEXITCODE) { throw 'Chroma geometry rational oracle failed' }
 } finally { Pop-Location }
-& "$PSScriptRoot\run_latch_probe.ps1" -Root $Root -Out (Join-Path $Out 'latch-probe') -Mutations
-if (-not $?) { throw 'Latch probe controls failed' }

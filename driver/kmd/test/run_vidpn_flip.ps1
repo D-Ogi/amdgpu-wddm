@@ -150,7 +150,9 @@ $mutations = [ordered]@{
     'unsafe-immediate-deposit' = @{ find = "if (device->VidPnFlipEnabled) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         with = "if (device->VidPnFlipEnabled && !immediate) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         why = 'an immediate request is accepted without programming its requested surface in the call' }
-    'shape-not-a-change' = @{ find = ' || !DcnPlaneShapeIs(device, shape);'; with = ';'
+    # The call stays and its answer is dropped: without a call the host mock is an unused function, and clang -Werror
+    # refuses the build instead of running the mutant.
+    'shape-not-a-change' = @{ find = ' || !DcnPlaneShapeIs(device, shape);'; with = ' || (DcnPlaneShapeIs(device, shape), FALSE);'
         why = 'a flip to the same address in another pipe shape (BD-223) writes nothing' }
     'null-drops-shape' = @{ find = 'DcnPlaneShapeCurrent(device, &kept)) shape = &kept;'
         with = 'DcnPlaneShapeCurrent(device, &kept)) shape = NULL;'

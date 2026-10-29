@@ -186,7 +186,6 @@ typedef struct _BC250_WDDM_KIND {
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "dcn_plane.h"               // BD-223: the multiplane-overlay plane 0 and its verdicts
 #include "connector.h"               // BD-223: ConnectorLinkPlaneDml
-#include "../shim/bc250_dml201.h"    // BD-223: BC250_DML201_PLAN
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
 #include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
 #include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
@@ -11595,26 +11594,22 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport2(_In_ const HANDLE hAdapt
         const LONG stamp = InterlockedCompareExchange(&device->DcnPlaneModeStamp, 0, 0);
         const BC250_PLANE_ENCODING* encoding = Bc250PlaneEncoding(r.PlaneFormat);
         BC250_LINK_PLANE link;
-        BC250_DML201_PLAN* dml = (BC250_DML201_PLAN*)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(*dml), BC250_WDDM_TAG);
-        ULONG budgetDisp = 0, budgetDpp = 0;
-        int result = 0;
+        BC250_LINK_PLANE_DML dml;
         NTSTATUS status;
         RtlZeroMemory(&link, sizeof(link));
         link.PitchPixels = encoding ? r.SurfacePitch / encoding->BytesPerPixel : 0;
         link.ViewportWidth = plan.DmlViewportWidth; link.ViewportHeight = plan.DmlViewportHeight;
         link.RecoutWidth = plan.DmlRecoutWidth; link.RecoutHeight = plan.DmlRecoutHeight;
         link.HTaps = plan.DmlHTaps; link.VTaps = plan.DmlVTaps;
-        status = dml ? ConnectorLinkPlaneDml(device, &link, dml, &result, &budgetDisp, &budgetDpp)
-                     : STATUS_INSUFFICIENT_RESOURCES;
-        verdict = NT_SUCCESS(status) ? Bc250PlaneDmlVerdict(&plan, result, dml->Valid, dml->DispClockKhz,
-                                                            dml->DppClockKhz, budgetDisp, budgetDpp)
+        status = ConnectorLinkPlaneDml(device, &link, &dml);
+        verdict = NT_SUCCESS(status) ? Bc250PlaneDmlVerdict(&plan, dml.Result, dml.Valid, dml.DispClockKhz,
+                                                            dml.DppClockKhz, dml.BudgetDispKhz, dml.BudgetDppKhz)
                                      : BC250_PLANE_DML;
         if (verdict == BC250_PLANE_OK) WddmPlaneApprove(wddm, stamp, &plan.Scaler);
         if (InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS)
             GuardLog("wddm: MPO check DML 0x%08X result %d valid %lu disp %lu/%lu dpp %lu/%lu kHz -> %s",
-                     (ULONG)status, result, dml ? (ULONG)dml->Valid : 0ul, dml ? (ULONG)dml->DispClockKhz : 0ul,
-                     budgetDisp, dml ? (ULONG)dml->DppClockKhz : 0ul, budgetDpp, Bc250PlaneVerdictText(verdict));
-        if (dml) ExFreePoolWithTag(dml, BC250_WDDM_TAG);
+                     (ULONG)status, dml.Result, dml.Valid, dml.DispClockKhz, dml.BudgetDispKhz, dml.DppClockKhz,
+                     dml.BudgetDppKhz, Bc250PlaneVerdictText(verdict));
     }
     if (verdict < BC250_PLANE_VERDICTS) InterlockedIncrement(&wddm->PlaneChecks[verdict]);
     pCheck->Supported = verdict == BC250_PLANE_OK ? TRUE : FALSE;

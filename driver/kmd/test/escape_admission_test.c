@@ -41,6 +41,10 @@ static int expected(ULONG Command, ULONG Op)
     case BC250_ESCAPE_READ_REG: case BC250_ESCAPE_GET_MEMORY: case BC250_ESCAPE_VRAM_READ: case BC250_ESCAPE_RUN_DCN:
     case BC250_ESCAPE_RUN_FBDUMP:
         return 1;
+    /* BD-223: the latch probe writes display registers only, never a ring, through its own handler, which requires
+     * Level Two and the exclusive owner of the primary (display.c LatchProbeEscape). */
+    case BC250_ESCAPE_LATCH_PROBE_COMMAND:
+        return 1;
     case BC250_ESCAPE_RUN_GFX:
         return Op == BC250_GFX_OP_STATE;
     case BC250_ESCAPE_RUN_IH:

@@ -1167,13 +1167,14 @@ NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE* Device,D3DKMDT_VIDEO_SIGNAL_IN
 // BD-223: Plan's display plan for the timing on the cable with a scaled plane 0 in place of the full-size one. The
 // inputs are Plan's own for this mode, the plane's fields replace the pipe's size, and the budget is what runs: the
 // firmware's clocks on an inherited link, the plan's own on a link this driver applied (Bc250Dcn201PipeApply).
-NTSTATUS ConnectorLinkPlaneDml(BC250_DEVICE* Device,const BC250_LINK_PLANE* Plane,BC250_DML201_PLAN* Out,
-    int* Result,ULONG* BudgetDispKhz,ULONG* BudgetDppKhz)
+NTSTATUS ConnectorLinkPlaneDml(BC250_DEVICE* Device,const BC250_LINK_PLANE* Plane,BC250_LINK_PLANE_DML* Out)
 {
     CONNECTOR_LINK* c;BC250_DML201_INPUT input={0};XSTATE_SAVE state;NTSTATUS status=STATUS_DEVICE_NOT_READY;
-    const BC250_TARGET_TIMING* t;
-    if(!Plane || !Out || !Result || !BudgetDispKhz || !BudgetDppKhz)return STATUS_INVALID_PARAMETER;
-    RtlZeroMemory(Out,sizeof(*Out));*Result=BC250_DML201_INVALID;*BudgetDispKhz=*BudgetDppKhz=0;
+    const BC250_TARGET_TIMING* t;BC250_DML201_PLAN* plan;
+    if(!Plane || !Out)return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Out,sizeof(*Out));Out->Result=BC250_DML201_INVALID;
+    plan=(BC250_DML201_PLAN*)ExAllocatePool2(POOL_FLAG_NON_PAGED,sizeof(*plan),LINK_WORK_TAG);
+    if(!plan)return STATUS_INSUFFICIENT_RESOURCES;
     ConnectorOperationAcquire(Device);c=Device->ConnectorLink;
     if(!c || !c->Active || c->Suspended || !c->Current.Valid || !ConnectorGenerationCurrent(Device,c->Generation) ||
        !c->DmlWorkspace)goto done;
@@ -1189,15 +1190,17 @@ NTSTATUS ConnectorLinkPlaneDml(BC250_DEVICE* Device,const BC250_LINK_PLANE* Plan
     input.ViewportWidth=Plane->ViewportWidth;input.ViewportHeight=Plane->ViewportHeight;
     input.RecoutWidth=Plane->RecoutWidth;input.RecoutHeight=Plane->RecoutHeight;
     input.HTaps=Plane->HTaps;input.VTaps=Plane->VTaps;
-    *BudgetDispKhz=c->Current.Inherited?c->Current.Clocks.DispClockKhz:c->Current.Dml.DispClockKhz;
-    *BudgetDppKhz=c->Current.Inherited?c->Current.Clocks.DppClockKhz:c->Current.Dml.DppClockKhz;
+    Out->BudgetDispKhz=c->Current.Inherited?c->Current.Clocks.DispClockKhz:c->Current.Dml.DispClockKhz;
+    Out->BudgetDppKhz=c->Current.Inherited?c->Current.Clocks.DppClockKhz:c->Current.Dml.DppClockKhz;
     status=KeSaveExtendedProcessorState(XSTATE_MASK_LEGACY,&state);
     if(!NT_SUCCESS(status))goto done;
-    *Result=Bc250Dml201Plan(&input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),Out);
+    RtlZeroMemory(plan,sizeof(*plan));
+    Out->Result=Bc250Dml201Plan(&input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),plan);
     KeRestoreExtendedProcessorState(&state);
+    Out->Valid=plan->Valid?1ul:0ul;Out->DispClockKhz=plan->DispClockKhz;Out->DppClockKhz=plan->DppClockKhz;
     status=STATUS_SUCCESS;
 done:
-    ConnectorOperationRelease(Device);return status;
+    ConnectorOperationRelease(Device);ExFreePoolWithTag(plan,LINK_WORK_TAG);return status;
 }
 
 BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* Device,BOOLEAN* Active,BOOLEAN* Connected)

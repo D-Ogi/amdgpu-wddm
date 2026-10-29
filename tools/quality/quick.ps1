@@ -416,6 +416,11 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
+ # BD-223: the scaler, MPC, surface and colour helpers, the DC types and the latch probe are gates of their own. Inside
+ # modeset they made it run past its 180 s deadline.
+ Check 'scaler-geometry' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scaler_geometry.ps1" -Root $Workspace -Out "$Out\scaler-geometry" }
+ Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
+ Check 'latch-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_latch_probe.ps1" -Root $Workspace -Out "$Out\latch-probe" -Mutations }
  Check 'atom-display' {
   $atomArgs=@('-Root',$Workspace,'-Out',"$Out\atom-display",'-Kits',$Kits)
   if($env:BC250_LINK_TEST_ROM){$atomArgs+=@('-PrivateRom',$env:BC250_LINK_TEST_ROM)}
