@@ -119,11 +119,25 @@ change:
 5. Expected failures: none. A bugcheck 0x113, a TDR or a black screen fails the trial. The last step returns to
    landscape.
 
+Result of rot2 (2026-10-29, lab KMD of this change, 24 CU, held 30 s or more):
+
+| Orientation | Commit | Visibility after the commit | Camera | Trailer |
+| --- | --- | --- | --- | --- |
+| 90 | `display: rotation 0 -> 90 degrees (connector commit)` | FALSE, then TRUE 296 ms after the commit, TRUE to the end of the hold | Desktop turned, panel lit | `direct-flip 0 rotation 90` |
+| 180 | `90 -> 180` | TRUE 260 ms after the commit, FALSE and TRUE again 1 s later, TRUE to the end | Desktop upside down | No new line: the answer stays `direct-flip 0` |
+| 270 | `180 -> 270` | TRUE 258 ms after the commit | Desktop turned the other way | No new line: the answer stays `direct-flip 0` |
+| 0 | `90 -> 0` | TRUE 274 ms after the commit | Landscape | `direct-flip 1 rotation 0` |
+
+The pointer check passed at each angle. No `Present refused a rotated Blt` line, and no bugcheck, TDR or live kernel
+report. The full-screen client step did not run: `scanout-trial.ps1` needs `controller.ps1` next to it on the lab,
+and the kit did not push it. The guard log has no `DescribeAllocation` value of a rotated path, because the driver
+logs only the first calls of that DDI, and those are at the start.
+
 ## Follow-up
 
 - A rotating compute copy for `Flags.Rotate`, if the lab finds that CDD or the shells send it.
-- The DWM user-mode driver (Zink `d3d10umd`) refuses a DXGI `Blt` with a rotation (`E_NOTIMPL`). If DWM asks for
-  such a copy to the rotated primary, the desktop stays black although the KMD admits the path. rot2 tells if this
-  occurs: a rotated desktop with no `visible 1` request after the commit points to it.
+- The DWM user-mode driver (Zink `d3d10umd`) refuses a DXGI `Blt` with a rotation (`E_NOTIMPL`). In rot2 DWM did
+  not need it: the rotated desktop was on the panel. Keep it in mind if another compositor path gives a black screen.
+- The full-screen flip client in portrait (step 3), with `controller.ps1` pushed next to `scanout-trial.ps1`.
 - DirectFlip on a rotated path, for a chain that its application drew already rotated. This needs a way for the
   shells to identify such a chain.
