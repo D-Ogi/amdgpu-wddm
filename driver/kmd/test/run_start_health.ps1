@@ -2,7 +2,8 @@ param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145'
       [switch]$NoWitnessReopen,[switch]$ReopenAnyClose,[switch]$StickyFaultKeepsMark,[switch]$ConfirmCertifiesNewEpoch,
       [switch]$MarkOverFailedEngines,[switch]$RefusalDropsOtherNodeMark,[switch]$RearmSkipsOpenWitness,
       [switch]$ConfirmHungRequest,[switch]$QuietIgnoresOwedFlip,[switch]$NoQuiet,
-      [switch]$AdapterResetIgnoresRefusal,[switch]$FaultKeepsRefusal)
+      [switch]$AdapterResetIgnoresRefusal,[switch]$FaultKeepsRefusal,[switch]$BeginKeepsRefusal,
+      [switch]$ResumeKeepsRefusal,[switch]$RefusalOverFailedEngines,[switch]$RefusalOverClosedWitness)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -31,6 +32,14 @@ if($RefusalDropsOtherNodeMark){$source=Mutate $source 'if (Mark==0) H->PendingRe
 if($AdapterResetIgnoresRefusal){$source=Mutate $source '} else if (Mark>0 && H->RefusedReset) H->PendingReset=TRUE;' '}'}
 # A real fault after a refusal that leaves the refusal record standing, so the adapter reset undoes the fault.
 if($FaultKeepsRefusal){$source=Mutate $source 'if (Mark>=0) H->RefusedReset=FALSE;' 'if (Mark>0) H->RefusedReset=FALSE;'}
+# A new start, or a resume, that keeps the refusal record of the interval before it. Written with explicit
+# newlines: the source is stored with LF and this script with CRLF.
+if($BeginKeepsRefusal){$source=Mutate $source "    h->RefusedReset=FALSE;`n    h->Recovered=FALSE;" '    h->Recovered=FALSE;'}
+if($ResumeKeepsRefusal){$source=Mutate $source "    h->RefusedReset=FALSE;`n    h->Engines=TRUE;`n    h->Visible=FALSE;" "    h->Engines=TRUE;`n    h->Visible=FALSE;"}
+# A refusal that records a close over a witness whose engines did not start, or over a witness that is already
+# closed, so the adapter reset reopens a startup engine failure or a close that a real fault made first.
+if($RefusalOverFailedEngines){$source=Mutate $source 'if (Mark<0 && H->Engines) H->RefusedReset=TRUE;' 'if (Mark<0) H->RefusedReset=TRUE;'}
+if($RefusalOverClosedWitness){$source=Mutate $source '} else if (Mark>0 && H->RefusedReset) H->PendingReset=TRUE;' "} else if (Mark>0 && H->RefusedReset) H->PendingReset=TRUE;`n    else if (Mark<0) H->RefusedReset=TRUE;"}
 # A recovery that leaves an open witness alone, so a measured interval can span the hang.
 if($RearmSkipsOpenWitness){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'}
 # A start that hung node 0 confirming its own clock/voltage and CU request as the next boot's default.

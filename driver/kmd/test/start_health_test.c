@@ -315,6 +315,20 @@ int main(void)
     // A stop after the refusal takes the record away, like the mark.
     healthy(&d);StartHealthCloseKeepPendingReset(&d);StartHealthStop(&d,&r);StartHealthFaultPendingReset(&d);
     CHECK(StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    // A new start and a resume take away a refusal record of the interval before them. The start below has an
+    // engine failure, so its own refusal records nothing; only a record left over from before the start could
+    // make the S1 close take a mark, and RestartFromTimeout would then reopen a failed start.
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);CHECK(d.StartHealth.RefusedReset);
+    StartHealthBegin(&d,TRUE);StartHealthReady(&d,FALSE);
+    StartHealthEnter(&d);StartHealthDisplayLocked(&d,TRUE,TRUE);StartHealthLeave(&d);
+    StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(!d.StartHealth.PendingReset && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
+    healthy(&d);StartHealthCloseKeepPendingReset(&d);CHECK(d.StartHealth.RefusedReset);
+    StartHealthResumeReady(&d,TRUE);StartHealthReady(&d,FALSE);
+    StartHealthCloseKeepPendingReset(&d);StartHealthFaultPendingReset(&d);
+    CHECK(!d.StartHealth.PendingReset && StartHealthRecovered(&d,&witness)==BC250_START_HEALTH_RECOVERY_STICKY);
+    r=query(&d,0);CHECK(r.Flags==BC250_START_HEALTH_FULL);
     // The other ordering of the hang itself: the OS TDR reaches ResetEngine before our fence timeout latches
     // (Bc250SubmitBudgetMs is never shorter than TdrDelay), so nothing closed the witness. There is no close to
     // undo, but the interval it reports contained a GPU hang, so that interval ends too: a new epoch, no

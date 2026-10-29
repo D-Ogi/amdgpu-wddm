@@ -491,7 +491,8 @@ void StartHealthFault(BC250_DEVICE* Device);
 // spin lock, so wddm->Lock may be held over them, as it is for StartHealthFault; never the reverse.
 void StartHealthFaultPendingReset(BC250_DEVICE* Device);
 BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE* Device, _Out_ ULONGLONG* Epoch);
-// BD-120. The close of a ResetEngine refusal on a node that is not node 0: it leaves the answer node 0's own
+// BD-120. The close of a ResetEngine refusal on node 1 or node 2, and on node 0 with AdapterRecoveryMode on
+// (TDR recovery S1): it leaves the answer node 0's own
 // reset is owed. Takes the Lifecycle mutex, like StartHealthClose, so PASSIVE_LEVEL and no wddm->Lock.
 void StartHealthCloseKeepPendingReset(BC250_DEVICE* Device);
 void StartHealthRemove(BC250_DEVICE* Device);

@@ -158,14 +158,17 @@ with `LastVerdict` 0 and `LastPath` 2.
 ## 4. The engine path
 
 With `AdapterRecoveryMode` on, a `DxgkDdiResetEngine` refusal on node 0 keeps the pending-reset mark of
-the start witness (`StartHealthCloseKeepPendingReset`), as a refusal on node 1 always did. The scheduler
+the start witness (`StartHealthCloseKeepPendingReset`), as a refusal on node 1 or node 2 always did. So
+three refusals use this keep-mark close: node 1, node 2 (compute), and node 0 with `AdapterRecoveryMode`
+on. With the mode off, a node-0 refusal closes the witness for good. The scheduler
 follows the refusal with `DxgkDdiResetFromTimeout`. When that call proves the engines idle, the restart
 reopens the witness. When it does not, it closes the witness for good, as the refusal did before S1.
 
 The OS TDR usually finds the witness open, because the private timers do not close it (BD-152). Then the
 refusal has no mark to keep. The refusal close records that it closed an open witness (`RefusedReset` in
 `start_health.h`), and the close of `DxgkDdiResetFromTimeout` takes the mark for that close. A real fault
-after the refusal removes the record, so the witness stays closed. The tester.34 lab gate S1-C (two
+after the refusal removes the record, so the witness stays closed. A refusal over a closed witness, or over
+a witness whose engines did not start, records nothing. A new device start and a resume remove the record. The tester.34 lab gate S1-C (two
 refusals on node 1, then a successful S1 reset) found the witness closed after the restart before this
 change.
 
@@ -205,7 +208,7 @@ Four existing suites cover the parts of S1 that they compile from `wddm.c` and `
 |---|---|
 | `run_paging_build.ps1` | A `TRANSFER` of size 0 returns success with nothing built, journalled or published, in the window and outside it. A `TRANSFER` with a size is built as before |
 | `run_recovery_protocol.ps1` | A node-0 refusal keeps the pending-reset mark when `AdapterRecoveryMode` is on, and clears it when the mode is off. A refusal over an open witness, then the S1 close, reopens the witness at the restart. The control `-RefusalIgnoresAdapterRecovery` fails by a check |
-| `run_start_health.ps1` | The S1-C order over the production `start_health.c`: refusal, S1 close, restart, witness reopened. A busy S1 refusal, a real fault before or after the S1 close, and a startup engine failure stay closed. The controls `-AdapterResetIgnoresRefusal` and `-FaultKeepsRefusal` fail by a check |
+| `run_start_health.ps1` | The S1-C order over the production `start_health.c`: refusal, S1 close, restart, witness reopened. A busy S1 refusal, a real fault before or after the S1 close, and a startup engine failure stay closed. A refusal record of the interval before a new start or a resume has no effect. The controls `-AdapterResetIgnoresRefusal`, `-FaultKeepsRefusal`, `-BeginKeepsRefusal`, `-ResumeKeepsRefusal`, `-RefusalOverFailedEngines` and `-RefusalOverClosedWitness` fail by a check |
 | `run_paging_preemption.ps1` | The submit wrapper with the window helper, outside the window |
 
 ## 8. Open points

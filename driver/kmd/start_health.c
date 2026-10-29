@@ -114,9 +114,9 @@ void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode)
 //             keeps that fault's stickiness and the reset finds nothing of its own to undo.
 //   Mark == 0 every real fault. It takes the mark away as well, whichever of the two ran first, so an engine
 //             reset never reopens a witness that has seen a fault of its own.
-//   Mark < 0  a close that says nothing about node 0: today only a ResetEngine refusal on another node. The
-//             witness closes, as it always did on a refusal, but node 0's own reset keeps the answer it is
-//             owed. Such a close never creates a mark.
+//   Mark < 0  the keep-mark close of a ResetEngine refusal (wddm.c, refuseReset): node 1, node 2, and node 0
+//             with AdapterRecoveryMode on. The witness closes, as it always did on a refusal, but node 0's
+//             own reset keeps the answer it is owed. Such a close never creates a mark.
 //
 // TDR recovery S1. Mark > 0 is today the close of DxgkDdiResetFromTimeout (wddm.c, WddmAdapterReset step 1):
 // the private timers do not close the witness (BD-152), so the OS TDR usually finds it open. A ResetEngine
@@ -223,7 +223,8 @@ void StartHealthClose(BC250_DEVICE* Device)
     StartHealthFault(Device);
     StartHealthLeave(Device);
 }
-// BD-120. The close of a ResetEngine refusal on a node that is not node 0 (wddm.c, refuseReset). It is a close
+// BD-120. The close of a ResetEngine refusal on node 1 or node 2, and on node 0 with AdapterRecoveryMode on
+// (wddm.c, refuseReset). It is a close
 // like any other refusal's, but it leaves node 0's pending-reset mark standing: node 1 is never soft-recovered
 // by policy (Bc250SoftRecoveryWanted), so its refusal is no evidence about node 0, and clearing the mark there
 // would leave the node-0 reset that follows with nothing to reopen - the BD-120 symptom, unfixed.
