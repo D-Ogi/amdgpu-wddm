@@ -61,6 +61,12 @@ namespace AmdgpuWddmControl
             return path != null && (string.Equals(path, DpmSettings.RegistryPath, StringComparison.OrdinalIgnoreCase) ||
                 path.StartsWith(DpmSettings.RegistryPath + "\\", StringComparison.OrdinalIgnoreCase));
         }
+        // A value that goes through the state client: every value of the driver's keys except the one that the app
+        // reads and writes raw because it is not in the catalog (HardwarePointerSetting.cs).
+        public static bool IsStateValue(string path, string name)
+        {
+            return IsPath(path) && !HardwarePointerSetting.Allowed(path, name);
+        }
         public static DriverStateKey OpenPath(string path, bool writable = false, bool effective = true)
         {
             if (!IsPath(path)) throw new ArgumentException("Not a driver state identifier", "path");

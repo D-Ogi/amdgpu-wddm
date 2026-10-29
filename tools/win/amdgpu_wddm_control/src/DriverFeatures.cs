@@ -83,6 +83,7 @@ namespace AmdgpuWddmControl
         // switch, so that no search leads to a page without it. Every other entry stays.
         public static bool Searchable(RecoverySnapshot s, string entryId)
         {
+            if (entryId == "graphics." + HardwarePointerSetting.Id) return HardwarePointerSetting.Shown(s);
             return !All.Any(f => entryId == "graphics." + f.Id && !(s != null && Shown(s, f)));
         }
 

@@ -260,11 +260,11 @@ static partial class UnitTests
             "SettingsStore.ReadDword takes the store for the driver's identifier");
         Check(GuardedBefore(inventory, "public static Dictionary<string, string> ReadAll(string path)", "DriverStateKey.IsPath(path)", "Registry.LocalMachine.OpenSubKey(path)"),
             "SettingsStore.ReadAll takes the store for the driver's identifier");
-        Check(GuardedBefore(actionsSource, "static BackupValue Saved(", "DriverStateKey.IsPath(path)", "SettingsStore.Machine.OpenSubKey(path)"),
+        Check(GuardedBefore(actionsSource, "static BackupValue Saved(", "DriverStateKey.IsStateValue(path, name)", "SettingsStore.Machine.OpenSubKey(path)"),
             "the backup of an action reads the store for the driver's identifier");
-        Check(GuardedBefore(actionsSource, "static void Write(RegWrite w, DriverStateBatch batch)", "DriverStateKey.IsPath(w.Path)", "SettingsStore.Machine.OpenSubKey(w.Path, true)"),
+        Check(GuardedBefore(actionsSource, "static void Write(RegWrite w, DriverStateBatch batch)", "DriverStateKey.IsStateValue(w.Path, w.Name)", "SettingsStore.Machine.OpenSubKey(w.Path, true)"),
             "an action writes the store for the driver's identifier");
-        Check(GuardedBefore(actionsSource, "static bool ReadsBack(RegWrite w, DriverStateBatch batch)", "DriverStateKey.IsPath(w.Path)", "SettingsStore.Machine.OpenSubKey(w.Path)"),
+        Check(GuardedBefore(actionsSource, "static bool ReadsBack(RegWrite w, DriverStateBatch batch)", "DriverStateKey.IsStateValue(w.Path, w.Name)", "SettingsStore.Machine.OpenSubKey(w.Path)"),
             "an action reads back from the store for the driver's identifier");
         Check(Regex.IsMatch(actionsSource, @"public static RecoverySnapshot Read\([^)]*\)\s*\{[\s\S]{0,300}?using \(var k = batch == null \? DriverStateKey\.Open\(\) : batch\.Open\(\)\)"),
             "the snapshot reads the driver's values from the store");

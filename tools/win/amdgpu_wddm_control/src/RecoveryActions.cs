@@ -99,6 +99,7 @@ namespace AmdgpuWddmControl
             try { s.GfxKeys = SettingsStore.ReadGfxKeys(); }
             catch (Exception) { s.GfxKeys = null; }
             ReadTdr(s);
+            ReadHardwarePointer(s);
             ReadGameLog(s);
             using (var k = Registry.LocalMachine.OpenSubKey(Recovery.RouterPath))
             {
@@ -215,6 +216,30 @@ namespace AmdgpuWddmControl
                 }
             }
             catch (Exception e) { s.TdrError = e.Message; }
+        }
+
+        // The hardware mouse pointer switch (HardwarePointerSetting.cs), read raw from the driver's Parameters key: it
+        // is not in the state catalog, so the state client does not list it. Absent is the normal state. A value of
+        // another registry type is named in HardwarePointerError: the driver uses 1 then, and the app does not
+        // overwrite a value it cannot restore.
+        public static void ReadHardwarePointer(RecoverySnapshot s)
+        {
+            try
+            {
+                using (var k = SettingsStore.Machine.OpenSubKey(HardwarePointerSetting.RegistryPath))
+                {
+                    if (k == null) return;
+                    var v = k.GetValue(HardwarePointerSetting.ValueName);
+                    if (v == null) return;
+                    if (k.GetValueKind(HardwarePointerSetting.ValueName) != RegistryValueKind.DWord)
+                    {
+                        s.HardwarePointerError = HardwarePointerSetting.ValueName + " has registry type " + k.GetValueKind(HardwarePointerSetting.ValueName);
+                        return;
+                    }
+                    s.HardwarePointerValue = (uint)(int)v;
+                }
+            }
+            catch (Exception e) { s.HardwarePointerError = e.Message; }
         }
 
         // Where the game logs go: %ProgramData%\amdgpu-wddm\logs\games (GameLog.cs). Every user may read it, so the
@@ -1005,7 +1030,7 @@ namespace AmdgpuWddmControl
                 if (plan.Tune != null) return RunTune(plan);
                 // Begin before the backup. Re-plan while holding the installer
                 // writer lock, then retain the same generation through rollback.
-                using (var batch = plan.Cu != null || plan.Writes.Any(w => DriverStateKey.IsPath(w.Path))
+                using (var batch = plan.Cu != null || plan.Writes.Any(w => DriverStateKey.IsStateValue(w.Path, w.Name))
                     ? DriverStateBatch.Begin() : null)
                 {
                     if (batch != null)
@@ -1139,7 +1164,7 @@ namespace AmdgpuWddmControl
         // One value as found before an action. diagnosis: an unexpected type is recorded, not refused.
         static BackupValue Saved(string path, string name, bool diagnosis, DriverStateBatch batch)
         {
-            if (DriverStateKey.IsPath(path))
+            if (DriverStateKey.IsStateValue(path, name))
                 using (var state = batch == null ? DriverStateKey.OpenPath(path, false, false) : batch.OpenPath(path, false))
                 {
                     var saved = new BackupValue { Path = path, Name = name };
@@ -1530,7 +1555,7 @@ namespace AmdgpuWddmControl
         {
             if (w.DeleteKey) { RemoveEmptyKey(w.Path); return; }
             if (!Recovery.Allowed(w.Path, w.Name)) throw new InvalidOperationException(w.Name + " is not a value this app may write");
-            if (DriverStateKey.IsPath(w.Path))
+            if (DriverStateKey.IsStateValue(w.Path, w.Name))
             {
                 using (var state = batch.OpenPath(w.Path, false))
                 {
@@ -1579,7 +1604,7 @@ namespace AmdgpuWddmControl
 
         static bool ReadsBack(RegWrite w, DriverStateBatch batch)
         {
-            if (DriverStateKey.IsPath(w.Path))
+            if (DriverStateKey.IsStateValue(w.Path, w.Name))
                 using (var state = batch.OpenPath(w.Path, false))
                 {
                     if (state == null) return false;

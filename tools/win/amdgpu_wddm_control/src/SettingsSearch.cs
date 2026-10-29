@@ -34,6 +34,8 @@ namespace AmdgpuWddmControl
             E("graphics.overlay", "graphics"), E("graphics.vk-present", "graphics"),
             // The driver's own switches (DriverFeatures.cs). The card shows them only where the driver can use them.
             E("graphics.compute", "graphics"), E("graphics.gdi", "graphics"),
+            // The hardware mouse pointer (HardwarePointerSetting.cs), in the same card wherever the driver is installed.
+            E("graphics.hw-pointer", "graphics"),
             E("games.rt", "games"), E("games.present", "games"), E("games.cpu", "games"), E("games.sm", "games"), E("games.cpu-render", "games"),
             E("games.undo", "games"), E("games.add", "games"),
             E("display.resolution", "display"), E("display.scaling", "display"), E("display.identify", "display"), E("display.scale", "display"),
