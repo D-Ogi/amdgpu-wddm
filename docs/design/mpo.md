@@ -68,9 +68,12 @@ constants and `dcn_plane.h` disagree.
 
 - No MPO DDI carries private driver data. The KMD reads the plane attributes that dxgkrnl gives it
   (`DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2`). The UMD maps no attribute.
-- `pfnPresentMultiplaneOverlay` makes one `pfnPresentMultiplaneOverlayCb` call for the present.
-  `AllocationInfo[i].hAllocation` is the KMD allocation of plane i's source subresource, and
-  `AllocationInfo[i].PresentIndex` is i.
+- `pfnPresentMultiplaneOverlay` makes one `pfnPresentMultiplaneOverlayCb` call for the present. The entries of
+  `AllocationInfo` (`DXGIDDI_MULTIPLANE_OVERLAY_ALLOCATION_INFO`, dxgiddi.h) are the enabled planes only, in the
+  order of the runtime's plane array: `PresentAllocation` is the KMD allocation of the plane's source resource,
+  and `SubResourceIndex` is the plane's own subresource index. `AllocationInfoCount` is the number of enabled
+  planes ("the number of allocations in the array", dxgiddi.h). A disabled plane names no resource, so it has no
+  entry.
 - The front does not call the hosted `pfnPresent` before the MPO callback. That is a second present to dxgkrnl. The
   hosted driver gets an MPO present entry that does the work of its `Present` for every enabled plane: the flush,
   the order on the present fence, and the allocation on demand (`Bc250EnsureSurface`). Then it makes the one MPO
@@ -95,6 +98,12 @@ plane only through the MPO flip, after the KMD check approved its shape.
 The present KMD stage also needs the plane's pitch to be the committed pipe's pitch, because the flip does not
 program the RQ, DLG and TTU registers again. 1920x1080 on the 1920x1200 mode flips. 1280x720 is refused at the
 check (verdict `pitch`) and composed. The shells do not copy this rule: it goes away with step S2.
+
+Open: a D3D11 borderless or windowed flip-model chain is a `DISPLAYABLE_SURFACE` without `pPrimaryDesc`, and the
+surface record refuses `SCANOUT` without `PRIMARY` (`surface_resource_private.h`). Such a chain cannot reach a
+plane, and DWM composes it. A D3D12 chain always has a `PRIMARY` heap. A record rule for displayable surfaces
+(scan-out with a displayable bit in place of `PRIMARY`, with no video present source) needs a decision of the lead
+before a shell asks for it.
 
 ### When UNSUPPORTED ends
 
