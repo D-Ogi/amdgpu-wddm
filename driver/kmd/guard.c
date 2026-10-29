@@ -340,6 +340,33 @@ void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject)
              g_LabGdiHwAccel ? "gate open" : "not used, the gate is EnableGdiHwAccel");
 }
 
+// BD-223: the scaled plane selector, lab flavour only, not a catalog setting for the reason of LabGdiHwAccel above:
+// a catalog entry changes the CatalogId, and a KMD image of another catalog fails DriverStateInit over the installed
+// package. LabScaledPlane (REG_DWORD, Parameters, read only at DriverEntry) holds the BC250_WDDM_SCALED_PLANE_* bits
+// (wddm.c, docs/design/scaled-flip.md); WddmStart latches it. Absent or not a REG_DWORD is 0.
+static ULONG g_LabScaledPlane = 0;
+
+void GuardLabReadScaledPlane(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (!NT_SUCCESS(status)) {
+        GuardLog("lab: scaled plane selector: Parameters key not opened for reading (0x%08X), 0", status);
+        return;
+    }
+    status = LabQueryDword(key, L"LabScaledPlane", &value);
+    ZwClose(key);
+    if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
+        GuardLog("lab: scaled plane selector absent, 0 (the default)");
+        return;
+    }
+    g_LabScaledPlane = NT_SUCCESS(status) ? value : 0;
+    GuardLog("lab: scaled plane selector read (read only; value 0x%lX, 0x%08X)", value, status);
+}
+
 // StartDevice, after the boot-loop guard passed: the seed for this start's first fresh SDMA0 bring-up, or 0. The
 // nonce is written and flushed first; any failure on the way gives 0. Without a seed, a marker of an earlier seed is
 // deleted, so the internal state holds nothing once the lab script has removed the seed.
@@ -409,6 +436,15 @@ BOOLEAN GuardLabGdiHwAccel(void)
     return g_LabGdiHwAccel;
 #else
     return FALSE;
+#endif
+}
+
+ULONG GuardLabScaledPlane(void)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    return g_LabScaledPlane;
+#else
+    return 0;
 #endif
 }
 

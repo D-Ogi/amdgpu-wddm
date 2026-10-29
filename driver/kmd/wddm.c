@@ -428,7 +428,7 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 }
 
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-// BD-223 (lab flavour): the bits of EnableScaledPlane. CHECK offers the multiplane-overlay caps and answers
+// BD-223 (lab flavour): the bits of LabScaledPlane. CHECK offers the multiplane-overlay caps and answers
 // CheckMultiPlaneOverlaySupport2; MPO_VSYNC reports a VSync as DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY;
 // TWO_PLANES says MaxOverlayPlanes 2 in place of 1 (a lab question: Check still refuses a second plane).
 #define BC250_WDDM_SCALED_PLANE_CHECK 0x1ul
@@ -1009,7 +1009,7 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderDmaRaced, GdiRenderDwordsCommitted;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223 (lab flavour), docs/design/scaled-flip.md: plane 0 of the multiplane-overlay DDIs, with its own size.
-    // ScaledPlane is EnableScaledPlane (read once at WddmStart, absent = 0) while the DirectFlip handshake is on for
+    // ScaledPlane is LabScaledPlane (read at DriverEntry, latched at WddmStart, absent = 0) while the DirectFlip handshake is on for
     // this start, else 0: BC250_WDDM_SCALED_PLANE_* bits.
     ULONG ScaledPlane;
     volatile LONG PlaneChecks[BC250_PLANE_VERDICTS];   // CheckMultiPlaneOverlaySupport2 answers, by verdict
@@ -1272,7 +1272,7 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
 
 // ---- reporting a packet as finished ----------------------------------------------------------------------------
 
-// The call of DxgkCbNotifyInterrupt, inside L at DIRQL. BD-223, lab flavour: with EnableScaledPlane bit 1, a VSync
+// The call of DxgkCbNotifyInterrupt, inside L at DIRQL. BD-223, lab flavour: with LabScaledPlane bit 1, a VSync
 // goes to the OS as DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY, with plane 0 as its one layer and the shape
 // the pipe has (DcnPlaneShapeCurrent) as its rectangles. The caller keeps its own copy of the data, so DesiredOwed
 // is decided on the CRTC_VSYNC address either way.
@@ -4211,12 +4211,12 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
                      formats ? "off (firmware format not decoded)" : "off (EnableScanoutPlaneFormats 0)");
         }
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-        // BD-223: EnableScaledPlane, read once, absent = 0. The plane needs the flip path and the scan-out rule, so it
-        // follows the DirectFlip handshake: a closed handshake closes it too.
+        // BD-223: LabScaledPlane, read once at DriverEntry (guard.c), absent = 0. The plane needs the flip path and the
+        // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too.
         {
-            const ULONG scaled = GuardReadSetting(L"EnableScaledPlane", 0) & BC250_WDDM_SCALED_PLANE_MASK;
+            const ULONG scaled = GuardLabScaledPlane() & BC250_WDDM_SCALED_PLANE_MASK;
             wddm->ScaledPlane = ((scaled & BC250_WDDM_SCALED_PLANE_CHECK) && wddm->DirectFlipHandshake) ? scaled : 0;
-            GuardLog("wddm: scaled plane 0x%lX (EnableScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, scaled,
+            GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, scaled,
                      (ULONG)(wddm->DirectFlipHandshake ? 1 : 0));
         }
 #endif
@@ -4989,7 +4989,7 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->SupportDirectFlip = TRUE;
     caps->SupportSurpriseRemoval = FALSE;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (EnableScaledPlane bit 2 asks 2, a lab
+    // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
     // question; Check still refuses a second plane). WDDM 2.0 has no MPO immediate-flip cap.
     if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         caps->SupportMultiPlaneOverlay = TRUE;
@@ -5146,14 +5146,18 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
     // the 160 bytes of a log line: count before adding a field. Our own sizeof and the paging node are not in
     // it: both are constants of the build (592 = 0x250 at interface 0xE003, which is what the lab's dxgkrnl offers
-    // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0).
-    if (WddmAnswersLogged(Device))
+    // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0). BD-223: the multiplane-overlay caps go on a
+    // line of their own (the line above has no room), the witness of the lab arms of LabScaledPlane.
+    if (WddmAnswersLogged(Device)) {
         GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u "
                  "tdr %u dflip %u rot %u",
              Query->OutputDataSize, (ULONG)caps->WDDMVersion, caps->SchedulingCaps.Value,
              caps->MemoryManagementCaps.Value, caps->FlipCaps.Value,
              caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? 1u : 0u, caps->SupportDirectFlip ? 1u : 0u,
              caps->SupportSmoothRotation ? 1u : 0u);
+        GuardLog("wddm: DRIVERCAPS mpo %u planes %lu", caps->SupportMultiPlaneOverlay ? 1u : 0u,
+                 (ULONG)caps->MaxOverlayPlanes);
+    }
     return STATUS_SUCCESS;
 }
 
@@ -5339,7 +5343,7 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             if (DcnPlaneFormatsOpen(device)) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             // BD-223 (docs/design/mpo.md): the user-mode half of the MPO contract follows DRIVERCAPS
-            // SupportMultiPlaneOverlay (WddmDriverCaps). MPO_PLANE1 stays clear: EnableScaledPlane bit 2 reports
+            // SupportMultiPlaneOverlay (WddmDriverCaps). MPO_PLANE1 stays clear: LabScaledPlane bit 2 reports
             // two planes as a lab question, but no second pipe scans out yet.
             if (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) scanout.flags |= BC250_SCANOUT_CAPS_MPO;
 #endif
@@ -11922,7 +11926,7 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     Data->DxgkDdiGetScanLine = Bc250WddmGetScanLine;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: plane 0 of the multiplane-overlay DDIs, both in the WDDM 2.0 block of the table. dxgkrnl calls them only
-    // for a start whose DRIVERCAPS says SupportMultiPlaneOverlay (EnableScaledPlane bit 0, WddmDriverCaps).
+    // for a start whose DRIVERCAPS says SupportMultiPlaneOverlay (LabScaledPlane bit 0, WddmDriverCaps).
     Data->DxgkDdiCheckMultiPlaneOverlaySupport2 = Bc250WddmCheckMultiPlaneOverlaySupport2;
     Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2 = Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2;
 #endif

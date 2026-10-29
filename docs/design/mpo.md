@@ -40,8 +40,8 @@ keeps version 1 and 24 bytes. Two flags are new:
 | `BC250_SCANOUT_CAPS_MPO` | `0x8` | This start reports `SupportMultiPlaneOverlay` and answers the two MPO DDIs. Set only with `BC250_SCANOUT_CAPS_DIRECT_FLIP` |
 | `BC250_SCANOUT_CAPS_MPO_PLANE1` | `0x10` | The KMD also scans out an overlay plane on pipe 1 (`MaxOverlayPlanes` 2). No KMD sets it yet |
 
-The lab KMD sets `MPO` while `EnableScaledPlane` bit 0 is on (the bits are in [scaled-flip.md](scaled-flip.md)).
-`EnableScaledPlane` bit 2 reports `MaxOverlayPlanes` 2 to dxgkrnl as a lab question, but it does not set
+The lab KMD sets `MPO` while `LabScaledPlane` bit 0 is on (the bits are in [scaled-flip.md](scaled-flip.md)).
+`LabScaledPlane` bit 2 reports `MaxOverlayPlanes` 2 to dxgkrnl as a lab question, but it does not set
 `MPO_PLANE1`, because no second pipe scans out. The release KMD sets neither flag.
 
 ### What the UMD reports
@@ -170,7 +170,7 @@ points. They apply to every step:
 
 | Step | What | Go when |
 | --- | --- | --- |
-| S1 | Plane 0 scaled up, RGB, opaque, whole surface, the committed pitch. Lab flavour, `EnableScaledPlane` | Code in place. Lab: the 3-minute check of [scaled-flip.md](scaled-flip.md), then a game below the mode flips independently |
+| S1 | Plane 0 scaled up, RGB, opaque, whole surface, the committed pitch. Lab flavour, `LabScaledPlane` | Code in place. Lab: the 3-minute check of [scaled-flip.md](scaled-flip.md), then a game below the mode flips independently |
 | S2 | Plane 0 at any scan-out pitch (RQ, DLG and TTU from DML at the flip) and downscale to 4 times (DPP clock) | 1280x720 and 2560x1440 chains on the 1920x1200 mode flip, no underflow |
 | S3 | Plane 1 on pipe 1: RGB, premultiplied alpha, source crop and clip, the MPCC tree, the flip state per plane, `MPO_PLANE1` | A test client with an overlay chain flips on pipe 1. DWM uses the plane for a window |
 | S4 | NV12 on plane 1, BT.601 and BT.709, both ranges, if the lab measurement admits it | Colour bars correct in each matrix and range. The HLK MPO jobs |

@@ -2,7 +2,7 @@
 
 This is BD-223. It is the first part of stage C of [display-modes.md](display-modes.md) and of
 [mpo.md](mpo.md): one plane, plane 0, that is smaller than the source mode and that the display hardware scales.
-The code is in the lab flavour only, behind the switch `EnableScaledPlane` (default 0). The release flavour does
+The code is in the lab flavour only, behind the switch `LabScaledPlane` (default 0). The release flavour does
 not change.
 
 ## The problem
@@ -41,8 +41,14 @@ requirements page.
 
 ## The switch
 
-`EnableScaledPlane` is a REG_DWORD under the driver's Parameters key, read once at `WddmStart`. It is open only
-while the DirectFlip handshake is on for that start, because the plane needs the flip path and the scan-out rule.
+`LabScaledPlane` is a REG_DWORD under the driver's Parameters key. The lab KMD reads it once at `DriverEntry`, and
+`WddmStart` latches it. It is open only while the DirectFlip handshake is on for that start, because the plane
+needs the flip path and the scan-out rule.
+
+The switch is not a setting of the state catalog (`driver/state/catalog.json`), for the same reason as
+`LabGdiHwAccel`. A new catalog entry changes the catalog identity, and `DriverStateInit` refuses a KMD image whose
+catalog is not the catalog of the installed package. A lab arm changes only the KMD image, so the switch must not
+change the catalog. The start log has a line for the read: `lab: scaled plane selector ...`.
 
 | Bit | Meaning |
 | --- | --- |
@@ -50,7 +56,7 @@ while the DirectFlip handshake is on for that start, because the plane needs the
 | 1 | The VSync goes to the OS as the MPO type |
 | 2 | `MaxOverlayPlanes` 2 in place of 1. A lab question only: Check still refuses a second plane |
 
-The start log has `wddm: scaled plane 0x<value> (EnableScaledPlane 0x<value>, handshake <0|1>)`.
+The start log has `wddm: scaled plane 0x<value> (LabScaledPlane 0x<value>, handshake <0|1>)`.
 
 ## What the KMD admits
 

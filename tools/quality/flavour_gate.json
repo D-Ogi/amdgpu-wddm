@@ -3898,6 +3898,16 @@
      "bc250kmd.sys"
     ]
    }
+  },
+  {
+   "name": "LABSCALEDPLANE",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadScaledPlane (lab flavour only), a REG_DWORD value under the driver's Parameters key; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-223 scaled plane arm: bit 0 offers the multiplane-overlay caps and the Check answer for a scaled plane 0, bit 1 reports the VSync as the MPO type, bit 2 says MaxOverlayPlanes 2; the release flavour reports no multiplane overlay",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
   }
  ],
  "allowed": [
