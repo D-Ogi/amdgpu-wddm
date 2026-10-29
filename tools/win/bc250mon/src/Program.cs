@@ -25,6 +25,9 @@ namespace Bc250Mon
                 var state = new State(dataDir);
                 Application.ThreadException += (s, e) => state.Log("ui", Level.Error, e.Exception.ToString());
                 AppDomain.CurrentDomain.UnhandledException += (s, e) => state.Log("fatal", Level.Error, Convert.ToString(e.ExceptionObject));
+                // Before the first P/Invoke: the installed bc250control.dll, else the private copy (ControlDll.cs).
+                ControlDll.Load(AppDomain.CurrentDomain.BaseDirectory);
+                state.Log("control", ControlDll.Level, "bc250control.dll: " + ControlDll.Describe());
 
                 var driver = new Driver();
                 // Nonempty legacy registry overrides fail explicitly. State tests inject a fake client.

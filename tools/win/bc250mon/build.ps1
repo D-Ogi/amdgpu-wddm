@@ -28,6 +28,7 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
 & (Join-Path $here 'test-graphics-api.ps1') -Out (Join-Path $Out 'graphics-api-check')
 & (Join-Path $here 'test-state.ps1') -Out (Join-Path $Out 'state-check')
 & (Join-Path $here 'test-lab-state.ps1') -Out (Join-Path $Out 'lab-state-check')
+& (Join-Path $here 'test-control-load.ps1') -Out (Join-Path $Out 'control-load-check') -ControlDll $ControlDll
 
 $refs = 'System.dll', 'System.Core.dll', 'System.Drawing.dll', 'System.Windows.Forms.dll', 'System.Web.Extensions.dll' |
     ForEach-Object { "/reference:$fx\$_" }
