@@ -18,15 +18,18 @@
 #include <cstring>
 #include "stdio-log.h"
 #include "../recent-launch/recent-launch.h"
+#include "fsr-identity.h"
 namespace {
 using native12::Adapter;
 using native12::Device;
 // The per-application settings this shell applies (docs/design/per-app-graphics-settings.md). PerformanceOverlay
-// is D3D11 only, RenderOnCpu is the router's: a set value of those shows as not applied.
+// is D3D11 only, RenderOnCpu is the router's: a set value of those shows as not applied. FsrUpgrade goes to the KMD
+// (send_fsr_identity_once below).
 constexpr unsigned kAppliedSettings=amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::FrameRateLimit) |
     amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::VSync) |
     amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::Anisotropy) |
-    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::MaxFrameLatency);
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::MaxFrameLatency) |
+    amdgpu_wddm::app_settings::bit(amdgpu_wddm::app_settings::Setting::FsrUpgrade);
 // The DDI builds this shell offers, newest first; the runtime states the one it picked in CreateDevice's Version.
 // Measured on unit A (2026-10-23): the 22631 inbox runtime picks 0092. Agility SDK 1.619.6 picks the newest build
 // offered; with 0093 as the newest it asked caps type 1079 and reported no enhanced barriers, with 0094 it reports
@@ -71,6 +74,34 @@ bool supported(UINT interfaceVersion,UINT runtimeVersion) noexcept {
 void trace(const char* operation,unsigned long long value=0) noexcept {
     amdgpu_wddm_log::print("d3d12-ddi %s %llu\n",operation,value);amdgpu_wddm_log::flush();
 }
+// FsrUpgrade (fsr-identity.h): once per process, after the process's first device exists, so that dxgkrnl has the
+// KMD process object the escape needs. Never an error of CreateDevice.
+void send_fsr_identity_once(const Adapter& adapter,const amdgpu_wddm::app_settings::Settings& settings) noexcept {
+    static std::atomic<bool> sent{false};
+    if(sent.exchange(true))return;
+    namespace as=amdgpu_wddm::app_settings;
+    const as::Value& v=settings[as::Setting::FsrUpgrade];
+    if(!v.set())return;
+    HMODULE gdi=LoadLibraryExW(L"gdi32.dll",nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+    native12::FsrIdentityResult r{};
+    if(!gdi)r.hr=HRESULT_FROM_WIN32(GetLastError());
+    else {
+        const auto entry=[gdi](const char* name) noexcept {return GetProcAddress(gdi,name);};
+        native12::FsrIdentityKmt kmt{};
+        const FARPROC open=entry("D3DKMTOpenAdapterFromLuid"),escape=entry("D3DKMTEscape"),close=entry("D3DKMTCloseAdapter");
+        static_assert(sizeof(kmt.open)==sizeof(open));
+        std::memcpy(&kmt.open,&open,sizeof(open));std::memcpy(&kmt.escape,&escape,sizeof(escape));
+        std::memcpy(&kmt.close,&close,sizeof(close));
+        LUID luid{};std::memcpy(&luid,&adapter.contract.luid,sizeof(luid));
+        r=native12::send_fsr_identity(luid,kmt,true,v.value,settings.application);
+        FreeLibrary(gdi);
+    }
+    amdgpu_wddm_log::print("d3d12-fsr-identity FsrUpgrade=%u/%s result=%08lx status=%lu answer=%lu source=%s names=%lu "
+        "open=%08lx escape=%08lx close=%08lx\n",v.value,as::source_name(v.source),static_cast<unsigned long>(r.hr),
+        r.status,r.answer,native12::fsr_identity_source_name(r.source),r.name_flags,static_cast<unsigned long>(r.open),
+        static_cast<unsigned long>(r.escape),static_cast<unsigned long>(r.close));
+    amdgpu_wddm_log::flush();
+}
 SIZE_T APIENTRY device_size(D3D12DDI_HADAPTER h,const D3D12DDIARG_CALCPRIVATEDEVICESIZE* a) {
     if(!h.pDrvPrivate || !a) return 0;
     trace("CalcPrivateDeviceSize-interface",a->Interface);
@@ -112,6 +143,7 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     }
     if(FAILED(hr)){device->~Device();trace("CreateDevice-engine-failed",static_cast<unsigned>(hr));return hr;}
     ++adapter->devices;
+    send_fsr_identity_once(*adapter,settings);
     // The outer device exists: note the launch once per process, off this thread (recent-launch.h).
     amdgpu_wddm::recent_launch::note_outer_device(amdgpu_wddm::recent_launch::ApiD3D12);
     return S_OK;
