@@ -215,6 +215,7 @@ typedef struct _BC250_DEVICE {
     BC250_MODESET Modeset;             // modeset.c: the EDID, the source modes, pipe 0's scaler and viewport
     BC250_CONNECTOR Connector;         // ISR/DPC/passive owner of the single physical connector
     PVOID ConnectorLink;               // PASSIVE-only clock/PHY/timing transaction, connector_link.c
+    PVOID Cursor;                      // dcn_cursor.c, NULL unless this start reserved the hardware pointer
     // BD-169: the result of a terminal release that connector_link.c performed itself, which nobody else can
     // ask for afterwards: the context is freed and ConnectorLink is NULL, so a second release answers SUCCESS.
     // A caller that has to know whether the hardware is still as the firmware left it reads this as well.
@@ -679,6 +680,10 @@ void GuardReleaseStart(void);       // orderly stop of a started device: give th
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+// EnableHardwarePointer (REG_DWORD under Parameters, read only in DriverEntry, both flavours, absent = 1): the
+// BC250_CURSOR_SETTING_* bits that dcn_cursor.c takes at the start. Not a catalog setting (guard.c says why).
+void GuardReadHardwarePointer(_In_ PDRIVER_OBJECT DriverObject);
+ULONG GuardHardwarePointerSetting(void);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
 // driver's Parameters key) and PagingBoundaryMode (REG_DWORD), read only in DriverEntry (PASSIVE_LEVEL); the seed is
@@ -920,6 +925,22 @@ void DcnPlaneStateReset(_Inout_ BC250_DEVICE* Device);
 void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device, BOOLEAN PipeProgrammed);
 BOOLEAN DcnPlaneShapeIs(_In_ const BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape);
 BOOLEAN DcnPlaneShapeCurrent(_In_ const BC250_DEVICE* Device, _Out_ BC250_SCALER_PLAN* Shape);
+
+// dcn_cursor.c: the hardware pointer of pipe 0 (docs/design/hardware-pointer.md). Lock order: the connector's
+// transaction, then the cursor's shape mutex, then its spin lock.
+// BC250_CURSOR_PIPE, what a pipe gives the cursor, is in the plain header.
+#include "dcn_cursor_shape.h"
+NTSTATUS DcnCursorPrepare(_Inout_ BC250_DEVICE* Device);       // StartDevice, after ConnectorBufferPrepare
+void DcnCursorRelease(_Inout_ BC250_DEVICE* Device);           // StopDevice, with ConnectorBufferRelease
+ULONG DcnCursorPlanWidth(_In_ const BC250_DEVICE* Device);     // the DML CursorWidth: 256, or 0 without the pointer
+BOOLEAN DcnCursorCaps(_In_ BC250_DEVICE* Device);              // DXGK_DRIVERCAPS: report a hardware pointer
+void DcnCursorStop(_Inout_ BC250_DEVICE* Device);              // every exit path: off for the rest of this start
+void DcnCursorOffQuiet(_Inout_ BC250_DEVICE* Device);          // bugcheck and reset: any IRQL, no lock, no log
+void DcnCursorPipeGone(_Inout_ BC250_DEVICE* Device);          // the pipe is about to change: off, spin lock only
+void DcnCursorPipeReady(_Inout_ BC250_DEVICE* Device, _In_ const BC250_CURSOR_PIPE* Pipe);  // PASSIVE
+void DcnCursorRefresh(_Inout_ BC250_DEVICE* Device);           // rotation or source size changed; PASSIVE
+NTSTATUS DcnCursorSetShape(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETPOINTERSHAPE* Arg);
+NTSTATUS DcnCursorSetPosition(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETPOINTERPOSITION* Arg);
 // BD-170: after an immediate flip, sample P' (SURFACE_FLIP_PENDING clear and PRIMARY_SURFACE_ADDRESS read back as
 // Physical) for at most BC250_DCN_IMMEDIATE_OBSERVE_US after the programming and record the result (dcn.c says why).
 // ProgramStartQpc and ProgramEndQpc are KeQueryPerformanceCounter just before DcnFlipSourceAddress and just after it

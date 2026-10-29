@@ -1357,6 +1357,7 @@ static partial class UnitTests
         TdrTests(args[0]);
         OcUnlockTests();
         DriverFeatureTests(args[0]);
+        HardwarePointerTests(args[0]);
         GameLogTests(args[0]);
         HangRecordTests(args[0]);
         UmaTests(args[0]);

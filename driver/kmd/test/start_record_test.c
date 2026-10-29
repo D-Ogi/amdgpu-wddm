@@ -382,6 +382,12 @@ static NTSTATUS ConnectorBufferPrepare(BC250_DEVICE* d) {
        d->RuntimeDisplayChanged || d->RuntimePlaneBlank) connectorDirty++;
     return STATUS_SUCCESS;
 }
+/* dcn_cursor.c: the hardware pointer's surfaces follow the handoff buffer, and the stop turns the pointer off before
+ * anything else of the display goes (dcn_cursor_test.c and connector_link_test.c test the cursor itself). */
+static unsigned cursorPrepares,cursorStops;
+static unsigned cursorBufferSeen;   /* connectorPrepares when the cursor prepared: the buffer came first */
+static NTSTATUS DcnCursorPrepare(BC250_DEVICE* d) { (void)d; cursorBufferSeen = connectorPrepares; cursorPrepares++; return STATUS_SUCCESS; }
+static void DcnCursorStop(BC250_DEVICE* d) { (void)d; cursorStops++; }
 static NTSTATUS ConnectorStart(BC250_DEVICE* d)
 {
     (void)d; connectorStarts++; StartEvent(EVENT_CONNECTOR);
@@ -538,6 +544,7 @@ static void Reset(void)
     startEventCount = blankCalls = logoCalls = gpuCalls = pendingAtStop = blankWithoutHold = 0;
     originalCauseAtStop = 0;
     admissionCalls = mmioStops = 0;
+    cursorPrepares = cursorStops = cursorBufferSeen = 0;
     blankStatus[0] = blankStatus[1] = restoreStatus = STATUS_SUCCESS;
     admissionStatus = STATUS_SUCCESS;
     mmioAvailable = hardwareVisible = restoreAttempt = TRUE;
@@ -615,6 +622,7 @@ int main(void)
             CHECK(EventBefore(EVENT_MMIO, EVENT_BLANK) && EventBefore(EVENT_BLANK, EVENT_LOGO));
             CHECK(EventBefore(EVENT_BLANK, EVENT_GPU) && EventBefore(EVENT_CONNECTOR, EVENT_READY));
             CHECK(logoCalls == 1 && gpuCalls == 1 && readyCalls == 1 && stops == 0);
+            CHECK(cursorPrepares == 1 && cursorBufferSeen && cursorBufferSeen == connectorPrepares);
             CHECK(outputSources == 1 && outputChildren == 1);
         }
     }

@@ -205,6 +205,23 @@ DCN_WRITE_REGISTERS = ["mmHUBPREQ0_DCSURF_SURFACE_PITCH", "mmOTG0_OTG_MASTER_UPD
                        "mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBPRET_CONTROL",
                        "mmCNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT"]
 
+# The hardware pointer of pipe 0 (dcn_cursor.c). AMD DC programs the same registers for a cursor:
+# hubp2_cursor_set_attributes and hubp2_cursor_set_position (HUBP0 cursor block and CURSOR_SETTINGS),
+# dpp2_set_cursor_attributes and dpp1_set_cursor_position (CNVC_CUR0), dpp1_cnv_set_optional_cursor_attributes
+# (the FP scale and bias), mpc1_cursor_lock (CUR_VUPDATE_LOCK_SET of OPP0, which feeds OTG0), and hubp2's
+# program_deadline for the two cursor TTU registers. dcn_cursor.c writes the TTU pair only on a pipe that the
+# connector did not program itself (the inherited timing), from the same DML plan. MEM_PWR_STATUS is read only.
+DCN_CURSOR_WRITE_REGISTERS = ["mmCURSOR0_0_CURSOR_CONTROL", "mmCURSOR0_0_CURSOR_SURFACE_ADDRESS",
+                              "mmCURSOR0_0_CURSOR_SURFACE_ADDRESS_HIGH", "mmCURSOR0_0_CURSOR_SIZE",
+                              "mmCURSOR0_0_CURSOR_POSITION", "mmCURSOR0_0_CURSOR_HOT_SPOT",
+                              "mmCURSOR0_0_CURSOR_DST_OFFSET", "mmHUBPREQ0_CURSOR_SETTINGS",
+                              "mmCNVC_CUR0_CURSOR0_CONTROL", "mmCNVC_CUR0_CURSOR0_COLOR0",
+                              "mmCNVC_CUR0_CURSOR0_COLOR1", "mmCNVC_CUR0_CURSOR0_FP_SCALE_BIAS",
+                              "mmCUR_VUPDATE_LOCK_SET0", "mmHUBPREQ0_DCN_CUR0_TTU_CNTL0",
+                              "mmHUBPREQ0_DCN_CUR0_TTU_CNTL1"]
+DCN_CURSOR_READ_REGISTERS = DCN_CURSOR_WRITE_REGISTERS + ["mmCURSOR0_0_CURSOR_MEM_PWR_STATUS"]
+DCN_WRITE_REGISTERS += DCN_CURSOR_WRITE_REGISTERS
+
 # BD-170 r6, the lab flavour's witnesses (dcn.c's DcnWitnessArm): the clear of the HUBP0 flip event before an immediate
 # flip. A table of its own, emitted only for the lab flavour (AMDGPU_WDDM_LAB_FLAVOUR), so that the release KMD's write
 # allow list does not change.
@@ -253,7 +270,10 @@ DCN_PRIVATE_READ_REGISTERS += ["mmHUBP0_DCSURF_SURFACE_CONFIG", "mmHUBPRET0_HUBP
     "mmCNVC_CFG0_ALPHA_2BIT_LUT"]
 # BD-170 r6, the lab flavour's witnesses: SURFACE_FLIP_INTERRUPT is on DCN_REGISTERS already; named here for a define.
 DCN_PRIVATE_READ_REGISTERS += ["mmHUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT"]
-NAMED += [("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
+# The hardware pointer (dcn_cursor.c): every register it writes is read first, and `bc250kmd_cli read <name>` shows
+# each one on the lab (EXTRA_READS below).
+DCN_PRIVATE_READ_REGISTERS += DCN_CURSOR_READ_REGISTERS
+NAMED +=[("DMU", name) for name in DCN_PRIVATE_READ_REGISTERS + ["mmOTG0_OTG_STATUS_POSITION", "mmOTG0_OTG_GLOBAL_CONTROL0"]]
 NAMED += [("CLK", "mmCLK4_0_CLK4_CLK2_CURRENT_CNT")]
 # BD-122 (GitHub #38): a refused inherited timing logs whether the firmware drove OTG1 instead of OTG0. Read only,
 # and already on the 75-register dump list, so the DCN read allow-list does not change.
@@ -289,6 +309,8 @@ EXTRA_READS += [("DMU", name) for name in DCN_TIMING_READ_REGISTERS + ["mmOTG0_O
 HDMI_POLICY_READS = sorted({"mm" + row["register"] for row in
     json.loads((ROOT / "driver/shim/hdmi_link_policy.json").read_text())})
 EXTRA_READS += [("DMU", name) for name in HDMI_POLICY_READS]
+# The hardware pointer's registers, for the lab kit's readback (scratch\hw-cursor\kit1).
+EXTRA_READS += [("DMU", name) for name in DCN_CURSOR_READ_REGISTERS if ("DMU", name) not in EXTRA_READS]
 
 # ---- DP audio (dpaudio.c): step 0 observation, step 1 endpoint presence, step 2 stream ----------------------------
 # Step 0, read only, and on the READ_REG list as well so that `bc250kmd_cli read <name>` shows each one: the codec's

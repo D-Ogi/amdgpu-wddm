@@ -52,7 +52,7 @@ The driver uses route 3. It does these things:
 | Primary description | `DxgkDdiDescribeAllocation` gives the rotation of the committed path in `Rotation`. The `d3dkmddi.h` comment is "Rotation for display mode". The refresh is that of the committed mode. Before this change the rotation was `D3DDDI_ROTATION_IDENTITY` on every path. In the first lab trial (rot1), dxgkrnl set the source to not visible after each rotated commit. It did not set the source visible again. A primary that does not agree with the mode can cause this (E26/M147 for the refresh) |
 | Hardware caps | `DXGK_VIDPN_HW_CAPABILITY.DriverRotation` is 1 on the full table: the rotation is done by software, not by the scan-out hardware. |
 | Bugcheck screen | `DxgkDdiSystemDisplayEnable` returns the logical size (width and height swap at 90 and 270 degrees). `DxgkDdiSystemDisplayWrite` maps each logical pixel onto the physical frame (`Bc250RotationWriteBlock`). |
-| Cursor | No change. The driver has no hardware cursor (`MaxPointerWidth` 0), so the OS draws the cursor into the rotated desktop. |
+| Cursor | The hardware pointer ([hardware-pointer.md](hardware-pointer.md)) turns its image with the same map and places it in the physical frame. With `EnableHardwarePointer` 0 the driver has no hardware cursor (`MaxPointerWidth` 0), and the OS draws the cursor into the rotated desktop. |
 
 ## What the driver refuses
 

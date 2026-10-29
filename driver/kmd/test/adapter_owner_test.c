@@ -104,6 +104,8 @@ static NTSTATUS ConnectorStop(BC250_DEVICE* device) {
  CHECK(!device->StartVisibilityPending);
  device->ConnectorDrained=1; touch(); return connectorStopResult;
 }
+/* dcn_cursor.c: the hardware pointer goes off at the stop; the call does nothing a second time. */
+#define DcnCursorStop(...) touch()
 static void ConnectorBufferRelease(BC250_DEVICE* device) {
  CHECK(device->ConnectorDrained && !device->ConnectorDestroyed);
  device->ConnectorBufferFreed=1; touch();

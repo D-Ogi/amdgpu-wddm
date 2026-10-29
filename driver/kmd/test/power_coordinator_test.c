@@ -57,6 +57,8 @@ static NTSTATUS ConnectorResumeNotifications(BC250_DEVICE*d)
 static NTSTATUS ConnectorSuspend(BC250_DEVICE*d){CHECK(d->RetainedPowerPhase==0);return note('C');}
 static BOOLEAN HdmiLinkStop(BC250_DEVICE*d){CHECK(d->RetainedPowerPhase==0);return note('L')==0;}
 static void ModesetPowerDown(BC250_DEVICE*d){CHECK(d->RetainedPowerPhase==0);(void)note('M');}
+/* K: the hardware pointer off (dcn_cursor.c), first, on the static path too (no connector suspend there). */
+static void DcnCursorPipeGone(BC250_DEVICE*d){CHECK(d->RetainedPowerPhase==0 && pos==0);(void)note('K');}
 /* ACTUAL_SOURCE */
 static void resetTrace(void){pos=0;trace[0]=0;failAt=0;}
 static void setup(BC250_DEVICE*d){memset(d,0,sizeof(*d));allocFail=0;d->Started=d->FullWddm=d->ModeActive=d->SourceVisible=1;d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;d->Post.PhysicAddress.QuadPart=1234;d->Dxgk.DeviceHandle=d;d->Dxgk.DxgkCbAcquirePostDisplayOwnership=acquire;postMismatch=0;resetTrace();}
@@ -113,18 +115,18 @@ int main(void){BC250_DEVICE d;
  // hibernation restored nothing, so the first paging job went to an SDMA engine without firmware.
  setup(&d);d.Connector.Enabled=1;
  CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==0 && d.RetainedPowerPhase==2 && d.RetainedDownAction==3);
- CHECK(!strcmp(trace,"CLMHSWIGPT"));
+ CHECK(!strcmp(trace,"KCLMHSWIGPT"));
  setup(&d);d.Connector.Enabled=1;failAt='C';
  CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==0 && d.RetainedPowerPhase==2);
- CHECK(!strcmp(trace,"CLMHSWIGPT"));resetTrace();
+ CHECK(!strcmp(trace,"KCLMHSWIGPT"));resetTrace();
  CHECK(GpuSetPowerRetained(&d,PowerDeviceD0,99)==0 && d.RetainedPowerPhase==0);
  CHECK(!strcmp(trace,"scdrvbtpigwhn"));
  // The HDMI link restore of the static path: the same rule, and the modes still take their D3 state.
  setup(&d);failAt='L';
- CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==0 && d.RetainedPowerPhase==2 && !strcmp(trace,"LMHSWIGPT"));
+ CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==0 && d.RetainedPowerPhase==2 && !strcmp(trace,"KLMHSWIGPT"));
  // A runtime mode has no inherited link or native shape to restore.
  setup(&d);d.Connector.Enabled=1;d.RuntimeDisplayChanged=1;
- CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==0 && !strcmp(trace,"CHSWIGPT"));
+ CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==0 && !strcmp(trace,"KCHSWIGPT"));
  // An engine failure on the way down is still the answer of the call, and the D0 after it refuses (phase 4).
  setup(&d);d.Connector.Enabled=1;failAt='G';
  CHECK(PowerAdapterDown(&d,PowerDeviceD3,3)==-9 && d.RetainedPowerPhase==4);resetTrace();

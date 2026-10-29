@@ -151,6 +151,10 @@ static void WddmReleaseCaptures(BC250_WDDM_OBJECT*o){(void)o;CHECK(model.restore
 static void*freedOrder[4];
 static void ExFreePoolWithTag(void*p,int tag){(void)tag;CHECK(model.restores==1 && model.vidmm==1);if(model.objects<4)freedOrder[model.objects]=p;model.objects++;}
 static void HangDetectorStop(void){CHECK(model.smu==0 && model.restores==0);}   /* KMD172: before any teardown */
+/* dcn_cursor.c: the hardware pointer goes off first, before any owner below changes the pipe or unmaps BAR5. The
+   release turns it off before its handoff and the teardown it runs turns it off once more: two calls. */
+static unsigned cursorStops;
+static void DcnCursorStop(BC250_DEVICE*d){(void)d;CHECK(model.smu==0 && model.restores==0 && model.unmaps==0);cursorStops++;}
 static void StartHealthClose(BC250_DEVICE*d){(void)d;}
 static void GuardRecordStopBegin(BC250_DEVICE*d){StartHealthClose(d);CHECK(model.unmaps==0);}
 static void GuardRecordStopDone(void){CHECK(model.unmaps==1);}
@@ -224,7 +228,7 @@ static int postIs(unsigned char v){size_t i;for(i=0;i<sizeof(post);i++)if(post[i
 static void init(BC250_DEVICE*d,BC250_WDDM*w,BC250_WDDM_OBJECT*o)
 {
     memset(d,0,sizeof(*d));memset(w,0,sizeof(*w));memset(o,0,sizeof(*o));memset(&model,0,sizeof(model));retireSignals=0;cpuStopped=0;
-    memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;releases=0;memset(post,0xab,sizeof(post));
+    memset(freedOrder,0,sizeof(freedOrder));w->ObjectIndex.Buckets=buckets;releases=0;cursorStops=0;memset(post,0xab,sizeof(post));
     memset(&handoffModel,0,sizeof(handoffModel));memset(logLines,0,sizeof(logLines));logCount=keptThrough=healthLocks=0;
     d->Wddm=w;d->Framebuffer=post;d->FramebufferLength=sizeof(post);d->FullWddm=1;d->DcnVsyncArmed=1;w->VSyncArmed=1;d->Started=1;
     d->StartVisibilityPending=1;
@@ -240,7 +244,7 @@ int main(void)
     CHECK(Bc250StopDeviceAndReleasePostDisplayOwnership(&d,BC250_CHILD_UID,&info)==STATUS_SUCCESS);
     /* Three pool blocks: the one object, the object index's buckets (KMD 0.7.192) and the adapter state. */
     CHECK(model.smu==1 && model.joined==1 && model.restores==1 && model.objects==3 && model.unmaps==1 && dpmStops==1 && interopStops==1 && cpuStops==1);
-    CHECK(hwmonStops==1 && fanStops==1 && dpaudioStops==1 && metricsStops==1);
+    CHECK(hwmonStops==1 && fanStops==1 && dpaudioStops==1 && metricsStops==1 && cursorStops==2);
     /* The list owns every object, the index only points into it: the objects go first, the index after the last
        of them, the adapter state last of all (WddmStop's drain). */
     CHECK(freedOrder[0]==&o && freedOrder[1]==buckets && freedOrder[2]==&w);
@@ -266,12 +270,12 @@ int main(void)
     {unsigned cpu=cpuStops,dpm=dpmStops,interop=interopStops,fan=fanStops,audio=dpaudioStops;
      CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS);
      CHECK(model.restores==1 && model.unmaps==1 && model.smu==1 && model.vidmm==1 && releases==1);
-     CHECK(cpuStops==cpu && dpmStops==dpm && interopStops==interop && fanStops==fan && dpaudioStops==audio);
+     CHECK(cpuStops==cpu && dpmStops==dpm && interopStops==interop && fanStops==fan && dpaudioStops==audio && cursorStops==2);
      CHECK(d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);}
     // Ordinary stop remains successful even when display restoration failed.
     init(&d,&w,&o);model.result=STATUS_IO_TIMEOUT;
     CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS);CHECK(d.PostDisplayStopStatus==STATUS_IO_TIMEOUT);
-    CHECK(postIs(0xab) && releases==1);  /* the black fill belongs to the release only */
+    CHECK(postIs(0xab) && releases==1 && cursorStops==1);  /* the black fill belongs to the release only */
     /* A start that failed and stops itself (pnp.c's StartDevice error paths) has Started FALSE: it keeps its count. */
     init(&d,&w,&o);d.Started=0;
     CHECK(Bc250StopDevice(&d)==STATUS_SUCCESS && releases==0 && d.StopDone);

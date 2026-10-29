@@ -45,6 +45,7 @@ typedef struct {
     LARGE_INTEGER PhysicAddress;
 } TEST_POST;
 #include "../connector_diag.h"
+#include "../dcn_cursor_shape.h"
 #define RTL_NUMBER_OF(a) (sizeof(a)/sizeof((a)[0]))
 typedef struct _BC250_DEVICE {
     ULONG* Mmio;
@@ -193,6 +194,15 @@ static void KeRestoreExtendedProcessorState(XSTATE_SAVE* saved)
 static void DpAudioStop(BC250_DEVICE* d) { CHECK(d==&device);++audio_stops; }
 static BOOLEAN DpAudioQuiesced(BC250_DEVICE* d) { CHECK(d==&device && audio_stops);return (BOOLEAN)!audio_debt; }
 static void DpAudioStart(BC250_DEVICE* d) { CHECK(d==&device && !link.Owner);++audio_starts; }
+/* dcn_cursor.c's hooks (dcn_cursor_test.c tests the cursor itself). cursor_width is the width the hardware pointer
+ * asks the plan for; plan_fail_cursor refuses only a plan that has a cursor. The pipe goes away before the OTG goes
+ * off, and comes back after the pipe step. */
+static unsigned cursor_width, plan_fail_cursor, cursor_gone, cursor_ready, cursor_ready_ttu, cursor_gone_programs;
+static BC250_CURSOR_PIPE cursor_pipe;
+static ULONG DcnCursorPlanWidth(const BC250_DEVICE* d) { CHECK(d==&device);return cursor_width; }
+static void DcnCursorPipeGone(BC250_DEVICE* d) { CHECK(d==&device);++cursor_gone;cursor_gone_programs=pipe_programs; }
+static void DcnCursorPipeReady(BC250_DEVICE* d,const BC250_CURSOR_PIPE* p)
+{ CHECK(d==&device && p && !test_irql && !spin_locks);++cursor_ready;if(p->WriteTtu)++cursor_ready_ttu;cursor_pipe=*p; }
 BOOLEAN HdmiLinkStop(BC250_DEVICE* d);
 BOOLEAN HdmiLinkStopOwned(BC250_DEVICE* d);
 static ULONG DcnPrimaryPitch(ULONG width) { return (width*4u+255u)&~255u; }
@@ -395,11 +405,12 @@ int Bc250Dml201Plan(const BC250_DML201_INPUT* in,void* w,size_t size,BC250_DML20
     ++plan_calls;CHECK(fp_saved==1 && w==workspace && size==sizeof(workspace));
     CHECK((in->HActive==1920 || in->HActive==2560 || in->HActive==3840) && in->PitchPixels==in->HActive);
     CHECK(in->DchubRefClockKhz==48000 && in->DentistVcoKhz==3000000);
-    CHECK(in->CursorWidth==0 && in->AudioSampleRateKhz==192);
+    CHECK((in->CursorWidth==0 || in->CursorWidth==cursor_width) && in->AudioSampleRateKhz==192);
     CHECK(in->Output==(unsigned)(snapshot.Sink.Kind==BC250_SINK_DP?BC250_DML201_DP:BC250_DML201_HDMI));
-    memset(p,0,sizeof(*p));if(plan_fail)return -1;
+    memset(p,0,sizeof(*p));if(plan_fail || (plan_fail_cursor && in->CursorWidth))return -1;
     if(plan_invalid)return 0;        /* BD-177: a plan that returns without a valid one is its own refusal. */
     p->Valid=1;p->VReady=340;p->VStartup=20;p->VUpdateOffset=550;p->VUpdateWidth=255;
+    if(in->CursorWidth) {p->Ttu.refcyc_per_req_delivery_cur0=77;p->Ttu.refcyc_per_req_delivery_pre_cur0=66;}
     p->Rq.plane1_base_address=0x2A5;   /* BD-197: what the pipe step programs and the surface writes keep */
     return 0;
 }
@@ -599,6 +610,8 @@ static void reset(unsigned kind)
     primary_end_fail=0;
     test_irql=acquire_fail=hdmi_stop_fail=save_fail=plan_fail=bad_clocks=clock_reads=0;
     plan_invalid=optc_reason=0;
+    cursor_width=plan_fail_cursor=cursor_gone=cursor_ready=cursor_ready_ttu=cursor_gone_programs=0;
+    memset(&cursor_pipe,0,sizeof(cursor_pipe));
     apply_count=plane_blank=otg_blank=output_black=aux_open=event_count=fault_triggered=0;
     pipe_programs=pipe_plans=0;
     persistent_aux_fail=firmware_frees=pool_frees=audio_debt=0;
@@ -716,6 +729,42 @@ static void disable_suspend_resume(void)
     CHECK(!NT_SUCCESS(ConnectorLinkResume(&device,7)));balanced();CHECK(link.Active && device.RuntimePostValid); // refused before mutation
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
+}
+/* The hardware pointer (docs/design/hardware-pointer.md): the plan budgets its cursor, a timing that DML refuses with
+ * the cursor is planned again without it, the cursor goes off before the pipe changes and comes back on the new
+ * pipe, and the inherited pipe gets the plan's cursor TTU from the cursor. */
+static void hardware_pointer(void)
+{
+    unsigned base;
+    reset(BC250_SINK_DP);CHECK(commit()==0);balanced();base=plan_calls;
+    CHECK(link.Current.CursorWidth==0 && cursor_ready==1 && cursor_pipe.CursorWidth==0);
+    reset(BC250_SINK_DP);cursor_width=256;CHECK(commit()==0);balanced();
+    CHECK(plan_calls==base && link.Current.CursorWidth==256 && cursor_gone && !cursor_gone_programs);
+    CHECK(cursor_ready==1 && !cursor_ready_ttu && cursor_pipe.CursorWidth==256 && pipe_programs);
+    CHECK(cursor_pipe.RefClockKhz==48000 && cursor_pipe.PixelClockKhz==snapshot.Sink.Targets[0].PixelClockKhz);
+    CHECK(cursor_pipe.Delivery==77 && cursor_pipe.DeliveryPre==66);
+    /* D3 takes the cursor off; the resume applies the mode again and the cursor comes back. */
+    cursor_gone=cursor_ready=0;
+    CHECK(ConnectorLinkSuspend(&device)==0 && cursor_gone==1);balanced();
+    CHECK(ConnectorLinkResume(&device,7)==0 && cursor_ready==1 && cursor_pipe.CursorWidth==256);balanced();
+    /* A detach takes it off. */
+    cursor_gone=0;CHECK(ConnectorLinkCommit(&device,&snapshot,NULL,0,0,D3DKMDT_VPPS_IDENTITY)==0);balanced();
+    CHECK(cursor_gone>=1);
+    /* A timing that has no plan with a cursor: planned again without one, the mode stays, no pointer on it. */
+    reset(BC250_SINK_DP);cursor_width=256;plan_fail_cursor=1;CHECK(commit()==0);balanced();
+    CHECK(plan_calls==2*base && link.Current.CursorWidth==0 && cursor_ready==1 && cursor_pipe.CursorWidth==0);
+    /* A refused suspend or disable still takes the cursor off: the adapter powers down or the link goes away all the
+     * same, and a cursor left on would be written again over the registers that D0 resets (review of the pointer). */
+    reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && cursor_gone==1);
+    reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && cursor_gone==1);
+    /* The firmware's pipe: the cursor writes the plan's cursor TTU itself, at the start and at each resume. */
+    reset(BC250_SINK_HDMI);device.ConnectorLink=NULL;cursor_width=256;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && link.Inherited);
+    CHECK(cursor_ready==1 && cursor_ready_ttu==1 && cursor_pipe.CursorWidth==256 && cursor_pipe.Delivery==77);
+    CHECK(ConnectorLinkSuspend(&device)==0 && cursor_gone==1);balanced();
+    CHECK(ConnectorLinkResume(&device,7)==0 && cursor_ready==2 && cursor_ready_ttu==2);balanced();
+    /* The release (also the one of a start refused after this adoption, connector.c) takes the cursor off. */
+    cursor_gone=0;CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS && cursor_gone==1);
 }
 /* BD-188, lab 2026-10-20 (31v3): hibernate with a DP sink on a runtime mode, and the sink compare after D0 differs
  * ("resume discovery generation 15 same 0"). The changed-sink resume replays no timing and writes nothing, but the
@@ -1861,6 +1910,7 @@ int main(void)
     release_then_fresh_start();
     success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();changed_sink_resume();ownership_and_cleanup();retained_aux_journal();
     detach_before_apply();
+    hardware_pointer();
     keep_breadcrumbs();
     release_handoff();
     hbr2_admission();hbr2_commit();hbr2_training_fallback();dto_check();dto_window();inherited_hbr2();

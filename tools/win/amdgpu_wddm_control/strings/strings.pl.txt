@@ -1312,6 +1312,21 @@ search.graphics.gdi|mt-safe|1cea1d53|Sprzętowa akceleracja klasycznego rysowani
 search.graphics.gdi.terms|mt-safe|e9dfeb26|gdi|akceleracja|przyspieszenie sprzętowe|rysowanie|tekst|okna|2d
 help.setting.compute|mt|9c34d158|Pozwala grom i aplikacjom Vulkan wykonywać obliczenia w drugiej sprzętowej kolejce układu graficznego, gdy rysują, co może je przyspieszyć. Jest włączona od początku. Wyłącz ją, jeśli gra Vulkan przestaje odpowiadać albo pokazuje błędny obraz; nowe ustawienie działa po ponownym uruchomieniu Windows.
 help.setting.gdi|mt|57b5fd27|Pozwala układowi graficznemu wykonywać klasyczne rysowanie Windows w wielu programach: ich okna, tekst i obrazy. Procesor ma wtedy mniej pracy. Jest włączone od początku. Wyłącz to, jeśli okna lub tekst jakiegoś programu wyglądają źle; nowe ustawienie działa po ponownym uruchomieniu Windows.
+# ---- the hardware mouse pointer (HardwarePointerSetting.cs, docs/design/hardware-pointer.md) ----
+graphics.hw-pointer|mt-safe|a49c1648|Sprzętowy wskaźnik myszy
+graphics.hw-pointer.help|mt|d0b780b8|Wskaźnik myszy rysuje silnik wyświetlania, a nie Windows. Jest włączony od początku. Wyłącz go, jeśli wskaźnik migocze albo ma złe kolory. Nowe ustawienie działa po ponownym uruchomieniu Windows.
+graphics.hw-pointer.now.default|mt|7f1b617f|Zapisane ustawienie: włączone (domyślne).
+graphics.hw-pointer.now.on|mt-safe|2933f0fb|Zapisane ustawienie: włączone.
+graphics.hw-pointer.now.off|mt-safe|22c3fa24|Zapisane ustawienie: wyłączone.
+graphics.hw-pointer.unreadable|mt|51a085b4|Nie można odczytać zapisanego ustawienia. Sterownik używa sprzętowego wskaźnika myszy.
+graphics.hw-pointer.refuse.unreadable|mt|d6227d77|Nie można odczytać zapisanego ustawienia, więc nie zostanie zmienione.
+plan.title.hw-pointer-on|mt|f82ef1e7|Włącz sprzętowy wskaźnik myszy
+plan.title.hw-pointer-off|mt|a5dc6483|Wyłącz sprzętowy wskaźnik myszy
+plan.line.hw-pointer-on|mt|4d63c8d1|Silnik wyświetlania rysuje wskaźnik myszy.
+plan.line.hw-pointer-off|mt|dfdaedd0|Windows rysuje wskaźnik myszy w obrazie.
+search.graphics.hw-pointer|mt-safe|a49c1648|Sprzętowy wskaźnik myszy
+search.graphics.hw-pointer.terms|mt-safe|bb0a33b4|mysz|wskaźnik|kursor|kursor sprzętowy|migotanie|strzałka|mouse|cursor
+help.setting.hw-pointer|mt|458914a7|Pozwala silnikowi wyświetlania układu graficznego rysować wskaźnik myszy nad obrazem, więc Windows nie musi rysować go w każdej klatce. Jest włączony od początku. Wyłącz go, jeśli wskaźnik migocze, skacze albo ma złe kolory; nowe ustawienie działa po ponownym uruchomieniu Windows.
 
 # ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
 oc.title|mt|681c1eb4|Wyższe taktowania dla Twojego chłodzenia

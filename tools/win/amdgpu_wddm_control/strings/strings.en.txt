@@ -1329,6 +1329,21 @@ search.graphics.gdi|src|-|Hardware acceleration of classic drawing
 search.graphics.gdi.terms|src|-|gdi|hardware acceleration|acceleration|2d|classic|drawing|text|windows
 help.setting.compute|src|-|Lets Vulkan games and apps do calculations on a second hardware queue of the graphics chip while they draw, which can make them faster. It is on from the start. Switch it off if a Vulkan game stops responding or shows wrong pictures; a new setting works after you restart Windows.
 help.setting.gdi|src|-|Lets the graphics chip do the classic Windows drawing of many programs: their windows, text and pictures. The processor then has less work. It is on from the start. Switch it off if the windows or text of a program look wrong; a new setting works after you restart Windows.
+# ---- the hardware mouse pointer (HardwarePointerSetting.cs, docs/design/hardware-pointer.md) ----
+graphics.hw-pointer|src|-|Hardware mouse pointer
+graphics.hw-pointer.help|src|-|The display engine draws the mouse pointer, not Windows. It is on from the start. Switch it off if the pointer flickers or has wrong colours. A new setting works after you restart Windows.
+graphics.hw-pointer.now.default|src|-|Stored setting: on (the default).
+graphics.hw-pointer.now.on|src|-|Stored setting: on.
+graphics.hw-pointer.now.off|src|-|Stored setting: off.
+graphics.hw-pointer.unreadable|src|-|The stored setting cannot be read. The driver uses the hardware mouse pointer.
+graphics.hw-pointer.refuse.unreadable|src|-|The stored setting cannot be read, so it is not changed.
+plan.title.hw-pointer-on|src|-|Turn the hardware mouse pointer on
+plan.title.hw-pointer-off|src|-|Turn the hardware mouse pointer off
+plan.line.hw-pointer-on|src|-|The display engine draws the mouse pointer.
+plan.line.hw-pointer-off|src|-|Windows draws the mouse pointer into the picture.
+search.graphics.hw-pointer|src|-|Hardware mouse pointer
+search.graphics.hw-pointer.terms|src|-|mouse|pointer|cursor|hardware cursor|flicker|arrow
+help.setting.hw-pointer|src|-|Lets the display engine of the graphics chip draw the mouse pointer on top of the picture, so Windows does not have to draw it into every frame. It is on from the start. Switch it off if the pointer flickers, jumps or has wrong colours; a new setting works after you restart Windows.
 
 # ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
 oc.title|src|-|Higher clocks for your cooler

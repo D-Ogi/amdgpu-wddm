@@ -63,6 +63,7 @@ typedef struct LINK_MODE {
     BC250_SCALER_PLAN Scaler;
     BC250_DCN201_CLOCKS Clocks;
     ULONG Protocol, Pitch, Lanes, Rate;
+    ULONG CursorWidth;          // the cursor the DML plan budgeted (dcn_cursor.c): 256, or 0 for no hardware pointer
     BOOLEAN Valid, Inherited;
 } LINK_MODE;
 
@@ -113,6 +114,7 @@ typedef struct CONNECTOR_LINK {
     if(atomStatus) {SaveFailure(c,STATUS_IO_DEVICE_ERROR);return STATUS_IO_DEVICE_ERROR;} } while(0)
 
 static ULONG Protocol(const BC250_SINK* Sink);
+static void CursorPipe(CONNECTOR_LINK* c,const LINK_MODE* m,BOOLEAN WriteTtu);
 static ULONGLONG LinkNow(void) { return KeQueryInterruptTime()/10ull; }
 static int LinkOwned(void* Context)
 {
@@ -440,13 +442,21 @@ static NTSTATUS Plan(CONNECTOR_LINK* c,const BC250_SINK* Sink,const BC250_TARGET
     input.VFrontPorch=t->VSyncOffset;input.VSyncWidth=t->VSyncWidth;
     input.PixelClockKhz=t->PixelClockKhz;input.PitchPixels=m->Pitch/4u;
     input.Output=m->Protocol==BC250_LINK_DP?BC250_DML201_DP:BC250_DML201_HDMI;
-    input.DpLanes=m->Lanes;input.CursorWidth=0; // WDDM advertises no hardware pointer.
+    // The hardware pointer (dcn_cursor.c): AMD's display manager plans every RGB pipe with a 256-wide 32-bit cursor.
+    // A timing that DML refuses with that cursor is planned again without one: the mode stays offered and has no
+    // hardware pointer (dxgkrnl's pointer then). Without the pointer the width is 0 and the plan is the old one.
+    input.DpLanes=m->Lanes;input.CursorWidth=DcnCursorPlanWidth(c->Device);
     input.AudioSampleRateKhz=192; // maximum admitted endpoint rate, not a guessed active stream.
     input.DchubRefClockKhz=m->Clocks.DchubRefClockKhz;input.DentistVcoKhz=m->Clocks.DentistVcoKhz;
     status=KeSaveExtendedProcessorState(XSTATE_MASK_LEGACY,&state);
     if(!NT_SUCCESS(status)) {Refusal->Check=LINK_PLAN_XSTATE;return status;}
     result=Bc250Dml201Plan(&input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),&m->Dml);
+    if((result || !m->Dml.Valid) && input.CursorWidth) {
+        input.CursorWidth=0;
+        result=Bc250Dml201Plan(&input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),&m->Dml);
+    }
     KeRestoreExtendedProcessorState(&state);
+    m->CursorWidth=input.CursorWidth;
     if(result) {Refusal->Check=LINK_PLAN_DML_CALL;return STATUS_NOT_SUPPORTED;}
     if(!m->Dml.Valid) {Refusal->Check=LINK_PLAN_DML_INVALID;return STATUS_NOT_SUPPORTED;}
     sync.VReady=m->Dml.VReady;sync.VStartup=m->Dml.VStartup;
@@ -711,6 +721,8 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
         }
         c->Current.Rate=c->Rate;c->Current.Lanes=c->Lanes;
         c->Active=TRUE;c->NeedsDisable=TRUE;RtlCopyMemory(c->Caps,Sink->Dpcd,sizeof(c->Caps));
+        // The firmware's pipe, adopted with a complete plan: the hardware pointer gets that plan's cursor TTU.
+        CursorPipe(c,&c->Current,TRUE);
     }
     status=STATUS_SUCCESS;
 done:
@@ -787,10 +799,24 @@ static int TrainDisable(void* Context)
     c->Cleanup=cleanup;if(!result)c->NeedsDisable=FALSE;return result?-1:0;
 }
 
+// The hardware pointer on the pipe of m (dcn_cursor.c). WriteTtu: the pipe's requestor is not the plan's (the
+// inherited timing), so the cursor writes the plan's two cursor TTU words itself.
+static void CursorPipe(CONNECTOR_LINK* c,const LINK_MODE* m,BOOLEAN WriteTtu)
+{
+    BC250_CURSOR_PIPE pipe;
+    RtlZeroMemory(&pipe,sizeof(pipe));
+    pipe.RefClockKhz=m->Clocks.DchubRefClockKhz;pipe.PixelClockKhz=m->Timing.PixelClockKhz;
+    pipe.CursorWidth=m->Valid?m->CursorWidth:0u;pipe.WriteTtu=WriteTtu;
+    pipe.Delivery=m->Dml.Ttu.refcyc_per_req_delivery_cur0;pipe.DeliveryPre=m->Dml.Ttu.refcyc_per_req_delivery_pre_cur0;
+    pipe.QosLevelFixed=m->Dml.Ttu.qos_level_fixed_cur0;pipe.QosRampDisable=m->Dml.Ttu.qos_ramp_disable_cur0;
+    DcnCursorPipeReady(c->Device,&pipe);
+}
+
 static NTSTATUS DisableOwned(CONNECTOR_LINK* c)
 {
     NTSTATUS status;
     c->Phase=1;
+    DcnCursorPipeGone(c->Device);
     // Fail at the first boundary. Recovery gets a separate attempt and cannot
     // replace the failing ATOM result with a later successful TX_OFF.
     if(c->Aux.Open) {LINK_CALL(c,BC250_LINK_AUX_CLOSE,CloseAux(c));}
@@ -816,6 +842,7 @@ NTSTATUS ConnectorLinkDisable(BC250_DEVICE* Device,ULONG Generation)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;KIRQL irql;
     if(!c)return STATUS_DEVICE_NOT_READY;
+    DcnCursorPipeGone(Device);  // before the early returns: the link is going away, whatever they answer
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
     // .35's journal belongs to the inherited timing only. Discharge it before
@@ -921,6 +948,7 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
     BC250_DEVICE* d=c->Device;
     if(c->Aux.Open)return STATUS_INVALID_DEVICE_STATE;
     c->Phase=2;
+    DcnCursorPipeGone(d);       // the pointer comes back at the end, on the new pipe
     LINK_CALL(c,BC250_LINK_OTG_DISABLE,Bc250OptcDisable(&c->Io));
     LINK_CALL(c,BC250_LINK_CLOCK_READ,Bc250Dcn201ReadClocks(&c->Io,c->CrystalKhz,&clocks));
     if(clocks.DchubRefClockKhz!=m->Clocks.DchubRefClockKhz ||
@@ -1005,6 +1033,7 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
     d->SourceVisible=InterlockedCompareExchange(&d->StartVisibilityPending,0,0)?FALSE:
         (Restore?c->RecoveryVisible:TRUE);
     d->ModeActive=Restore?c->RecoveryModeActive:TRUE;
+    CursorPipe(c,m,FALSE);      // Bc250Dcn201PipeApply wrote the plan's cursor TTU with the rest of the requestor
     GuardLog("connector-link: enabled generation %lu protocol %lu %lux%lu pitch %lu pixel %lu kHz lanes %lu rate %lu",
         c->Generation,m->Protocol,m->Timing.HActive,m->Timing.VActive,m->Pitch,m->Timing.PixelClockKhz,
         m->Lanes,m->Rate);
@@ -1184,7 +1213,7 @@ NTSTATUS ConnectorLinkPlaneDml(BC250_DEVICE* Device,const BC250_LINK_PLANE* Plan
     input.VFrontPorch=t->VSyncOffset;input.VSyncWidth=t->VSyncWidth;
     input.PixelClockKhz=t->PixelClockKhz;input.PitchPixels=Plane->PitchPixels;
     input.Output=c->Current.Protocol==BC250_LINK_DP?BC250_DML201_DP:BC250_DML201_HDMI;
-    input.DpLanes=c->Current.Lanes;input.CursorWidth=0;input.AudioSampleRateKhz=192;
+    input.DpLanes=c->Current.Lanes;input.CursorWidth=c->Current.CursorWidth;input.AudioSampleRateKhz=192;
     input.DchubRefClockKhz=c->Current.Clocks.DchubRefClockKhz;input.DentistVcoKhz=c->Current.Clocks.DentistVcoKhz;
     input.ViewportWidth=Plane->ViewportWidth;input.ViewportHeight=Plane->ViewportHeight;
     input.RecoutWidth=Plane->RecoutWidth;input.RecoutHeight=Plane->RecoutHeight;
@@ -1214,6 +1243,9 @@ BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* Device,BOOLEAN* Active,BOOLEAN* 
 NTSTATUS ConnectorLinkSuspend(BC250_DEVICE* Device)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG generation;NTSTATUS status,finish;
+    // D3, first: the adapter powers down whatever this returns (power.c), and the pointer comes back with the pipe at
+    // the resume. An early return below must not leave the cursor enabled over registers that D0 resets.
+    DcnCursorPipeGone(Device);
     if(!c)return STATUS_SUCCESS;
     DpAudioStop(Device);
     if(!DpAudioQuiesced(Device))return STATUS_DEVICE_NOT_READY;
@@ -1232,7 +1264,12 @@ NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;ULONG primary;NTSTATUS status,finish;
     if(!c)return STATUS_DEVICE_NOT_READY;
-    if(c->Inherited) {c->Suspended=FALSE;return STATUS_SUCCESS;}
+    if(c->Inherited) {
+        c->Suspended=FALSE;
+        // The firmware's pipe again: its cursor TTU and the pointer back (D3 may have lost both).
+        if(c->Active && c->Current.Valid)CursorPipe(c,&c->Current,TRUE);
+        return STATUS_SUCCESS;
+    }
     // An inactive link stays off; the next commit, full or power-on, applies a mode (BD-195, I6).
     if(!c->Active) {c->Suspended=FALSE;return STATUS_SUCCESS;}
     if(!c->Current.Valid)return STATUS_DEVICE_NOT_READY;
@@ -1330,6 +1367,9 @@ NTSTATUS ConnectorLinkRelease(BC250_DEVICE* Device)
 {
     CONNECTOR_LINK* c=Device->ConnectorLink;
     NTSTATUS status=STATUS_SUCCESS;
+    // A start refused after the inherited pipe was adopted comes here too (connector.c): the cursor that the adoption
+    // made ready goes off, and the caps (DcnCursorCaps, a connector that is not enabled) report no hardware pointer.
+    DcnCursorPipeGone(Device);
     if(!c)return status;
     // PnP has drained operations. DcnStop adopts the reserved current-mode CPU
     // surface before BAR teardown. Do not restore an old stream over that mode.

@@ -2,17 +2,21 @@
 // running driver says that the switch has an effect. A click runs the planned action at once, as the picture on the
 // start screen does (MainForm.Display.cs). The driver reads the setting when it starts, so each row says that a new
 // choice works after the next restart of Windows, and the action offers that restart.
+//
+// The hardware mouse pointer (HardwarePointerSetting.cs) has a row in the same card, shown wherever the driver is
+// installed. The driver writes no record of what it uses, so the row shows the stored value, read back, under the box.
 using System.Linq;
 
 namespace AmdgpuWddmControl
 {
     public sealed partial class MainForm
     {
-        // Null when the driver can use neither switch on this computer: then the page shows no card at all.
+        // Null when the driver can use none of the switches on this computer: then the page shows no card at all.
         CardPanel BuildDriverFeatures(int width)
         {
             var shown = DriverFeatures.All.Where(f => DriverFeatures.Shown(_snap, f)).ToList();
-            if (shown.Count == 0) return null;
+            bool pointer = HardwarePointerSetting.Shown(_snap);
+            if (shown.Count == 0 && !pointer) return null;
             var card = new CardPanel(Strings.T("graphics.features.title"), width);
             foreach (var f in shown)
             {
@@ -30,7 +34,27 @@ namespace AmdgpuWddmControl
                 card.Add(Ui.Dim(Strings.T("graphics." + f.Id + ".help"), card.Inner));
                 if (DriverFeatures.Pending(_snap, f)) card.Add(Ui.Label(Strings.T("graphics.feature.pending"), null, Theme.Warn, card.Inner));
             }
+            if (pointer) AddHardwarePointer(card);
             return card;
+        }
+
+        void AddHardwarePointer(CardPanel card)
+        {
+            var id = HardwarePointerSetting.Id;
+            bool unreadable = _snap.HardwarePointerError != null;
+            bool on = HardwarePointerSetting.On(_snap.HardwarePointer());
+            var box = Ui.Check(Strings.T("graphics." + id), card.Inner - Theme.S(40));
+            box.Checked = on;
+            box.Enabled = !unreadable;
+            box.CheckedChanged += (s, e) =>
+            {
+                if (box.Checked == on) return;
+                RunAction(box.Checked ? HardwarePointerSetting.ActionOn : HardwarePointerSetting.ActionOff);
+            };
+            Mark("graphics." + id, box);
+            card.Add(Ui.Row(box, Explain(id, box.Text)));
+            card.Add(Ui.Dim(Strings.T("graphics." + id + ".help"), card.Inner));
+            card.Add(Ui.Label(HardwarePointerSetting.StateText(_snap), null, unreadable ? Theme.Warn : (System.Drawing.Color?)null, card.Inner));
         }
     }
 }

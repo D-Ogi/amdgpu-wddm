@@ -192,6 +192,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
 #include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
 #include "gdi_walk.h"                // HLK gap G1: the bounded walk of the OS command buffer
+#include "dcn_cursor_shape.h"        // the hardware pointer's size and kinds in the caps
 
 #define BC250_GDI_BIND_SLOTS 4u                  // the most allocation-list entries one command names
 // One pass must hold the whole command buffer, because the guaranteed contract DMA buffer model
@@ -5125,8 +5126,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->FlipCaps.FlipIndependent = 1;
     caps->MaxQueuedFlipOnVSync = 1;
 
-    // No hardware pointer (MaxPointerWidth/Height stay 0): dxgkrnl draws the cursor into the image it presents,
-    // exactly as in the display-only build.
+    // The hardware pointer (dcn_cursor.c, docs/design/hardware-pointer.md): only when this start reserved the cursor
+    // surfaces and a pipe that this driver programs, with a 256-wide cursor in its plan, is on the screen. Otherwise
+    // MaxPointerWidth/Height stay 0 and dxgkrnl draws the cursor into the image it presents, as in the display-only
+    // build. 256 is the DCN 2.0 cursor's own limit (dcn_cursor_shape.h); all three pointer kinds are converted.
+    if (DcnCursorCaps((BC250_DEVICE*)Device)) {
+        caps->MaxPointerWidth = BC250_CURSOR_MAX_SIZE;
+        caps->MaxPointerHeight = BC250_CURSOR_MAX_SIZE;
+        caps->PointerCaps.Value = BC250_POINTER_CAPS;
+    }
 
     // Successful replies, not merely the gate latched at start. Pre-start
     // replies have no adapter-owned storage and are identified in the log.

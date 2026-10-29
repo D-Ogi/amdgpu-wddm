@@ -64,6 +64,11 @@ namespace AmdgpuWddmControl
         // "nothing stored, read without trouble" and plans the release default, as a fresh machine does.
         public long? TdrDelay { get; set; }
         public string TdrError { get; set; }
+        // The hardware mouse pointer (HardwarePointerSetting.cs): EnableHardwarePointer as stored in the Parameters
+        // key, read raw (it is not a setting of the state catalog); null when nothing is stored. HardwarePointerError
+        // names why it could not be read. An old recorded snapshot has neither member, which reads as "nothing stored".
+        public long? HardwarePointerValue { get; set; }
+        public string HardwarePointerError { get; set; }
 
         // "Record game logs" (GameLog.cs): the stored instant at which recording stops, as a UTC FILETIME, or null
         // when nothing is stored (recording is off). GameLogError names why the value could not be read.
@@ -129,6 +134,13 @@ namespace AmdgpuWddmControl
         public uint? Tdr()
         {
             return TdrDelay != null && TdrDelay.Value >= 0 && TdrDelay.Value <= uint.MaxValue ? (uint?)(uint)TdrDelay.Value : null;
+        }
+
+        // The stored hardware pointer switch as a DWORD, or null when nothing is stored.
+        public uint? HardwarePointer()
+        {
+            return HardwarePointerValue != null && HardwarePointerValue.Value >= 0 && HardwarePointerValue.Value <= uint.MaxValue
+                ? (uint?)(uint)HardwarePointerValue.Value : null;
         }
 
         public bool DriverRunning { get { return DriverError == null && (Interop != null || Health != null || Dpm != null); } }
@@ -469,10 +481,13 @@ namespace AmdgpuWddmControl
             "game-log-on", "game-log-off",
             // The driver's own switches of the Graphics page (DriverFeatures.cs): the second queue for calculations
             // and the hardware acceleration of classic Windows drawing.
-            "compute-queue-on", "compute-queue-off", "gdi-accel-on", "gdi-accel-off" };
+            "compute-queue-on", "compute-queue-off", "gdi-accel-on", "gdi-accel-off",
+            // The hardware mouse pointer (HardwarePointerSetting.cs), a raw value of the Parameters key.
+            HardwarePointerSetting.ActionOn, HardwarePointerSetting.ActionOff };
 
         public static bool Allowed(string path, string name)
         {
+            if (HardwarePointerSetting.Allowed(path, name)) return true;
             if (string.Equals(path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return ParameterNames.Contains(name);
             if (string.Equals(path, RouterPath, StringComparison.OrdinalIgnoreCase)) return RouterNames.Contains(name);
             if (TdrSetting.Allowed(path, name)) return true;
@@ -1814,6 +1829,14 @@ namespace AmdgpuWddmControl
                 case "gdi-accel-off":
                 {
                     var why = DriverFeatures.Fill(action, s, p);
+                    if (why != null) return Refuse(p, why);
+                    break;
+                }
+
+                case HardwarePointerSetting.ActionOn:
+                case HardwarePointerSetting.ActionOff:
+                {
+                    var why = HardwarePointerSetting.Fill(action, s, p);
                     if (why != null) return Refuse(p, why);
                     break;
                 }

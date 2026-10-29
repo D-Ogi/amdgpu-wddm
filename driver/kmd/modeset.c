@@ -507,6 +507,8 @@ NTSTATUS ModesetCommit(_Inout_ BC250_DEVICE* Device, ULONG Width, ULONG Height, 
         m->LastStatus=status;
     }
     ExReleaseFastMutex(&m->Lock);
+    // The hardware pointer is placed on the new source size (dcn_cursor.c).
+    if (status >= 0) DcnCursorRefresh(Device);
     GuardLog("display modes: commit %lux%lu %s -> 0x%08X%s", Width, Height, Bc250ScalingName(Scaling), (ULONG)status,
              invalidate ? ", firmware surface first" : "");
     GuardLog("display modes: viewport %lux%lu recout %lux%lu at %lu,%lu", plan.Viewport.Width, plan.Viewport.Height,

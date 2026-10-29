@@ -94,7 +94,7 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs', 'OcUnlock.cs',
     'GameLog.cs', 'HangRecord.cs',
     'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs', 'DriverState.cs',
-    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs', 'ClosureNotice.cs', 'DriverFeatures.cs' |
+    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs', 'ClosureNotice.cs', 'DriverFeatures.cs', 'HardwarePointerSetting.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 # The start of the window: the order of the loading window and the guard against a second window (Launch.cs).
 $pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }

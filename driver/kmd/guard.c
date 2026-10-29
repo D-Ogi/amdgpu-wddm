@@ -120,8 +120,8 @@ static NTSTATUS OpenParameters(_Out_ HANDLE* Key)
 static NTSTATUS ReadDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
 {
     UNICODE_STRING name;
-    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)];
-    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    union { KEY_VALUE_PARTIAL_INFORMATION Info; UCHAR Bytes[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)]; } buffer;
+    PKEY_VALUE_PARTIAL_INFORMATION info = &buffer.Info;     // the union aligns the bytes as the structure
     ULONG length;
     NTSTATUS status;
 
@@ -215,6 +215,52 @@ ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default)
     return 0;
 }
 
+// A REG_DWORD of the driver's Parameters key, read only. Absent is STATUS_OBJECT_NAME_NOT_FOUND, another type
+// STATUS_OBJECT_TYPE_MISMATCH; *Value is 0 then.
+static NTSTATUS ParameterDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
+{
+    union { KEY_VALUE_PARTIAL_INFORMATION Info; UCHAR Bytes[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)]; } buffer;
+    PKEY_VALUE_PARTIAL_INFORMATION info = &buffer.Info;     // the union aligns the bytes as the structure
+    UNICODE_STRING name;
+    ULONG length = 0;
+    NTSTATUS status;
+
+    *Value = 0;
+    RtlInitUnicodeString(&name, Name);
+    status = ZwQueryValueKey(Key, &name, KeyValuePartialInformation, info, sizeof(buffer), &length);
+    if (!NT_SUCCESS(status)) return status;
+    if (info->Type != REG_DWORD || info->DataLength != sizeof(ULONG)) return STATUS_OBJECT_TYPE_MISMATCH;
+    RtlCopyMemory(Value, info->Data, sizeof(ULONG));
+    return STATUS_SUCCESS;
+}
+
+// The hardware pointer switch, both flavours: EnableHardwarePointer (REG_DWORD under Parameters, read only in
+// DriverEntry), the BC250_CURSOR_SETTING_* bits of dcn_cursor_shape.h. Absent, unreadable or of another type is 1,
+// the hardware pointer on. Not a catalog setting: a catalog entry changes the CatalogId, which needs every consumer
+// of the catalog built again (the reason of LabScaledPlane below). An administrator sets it with reg.exe; it takes
+// effect at the next start of the driver.
+static ULONG g_HardwarePointer = 1;
+
+void GuardReadHardwarePointer(_In_ PDRIVER_OBJECT DriverObject)
+{
+    HANDLE key;
+    NTSTATUS status;
+    ULONG value = 0;
+
+    status = IoOpenDriverRegistryKey(DriverObject, DriverRegKeyParameters, KEY_QUERY_VALUE, 0, &key);
+    if (NT_SUCCESS(status)) {
+        status = ParameterDword(key, L"EnableHardwarePointer", &value);
+        ZwClose(key);
+    }
+    g_HardwarePointer = NT_SUCCESS(status) ? value : 1;
+    GuardLog("cursor: setting EnableHardwarePointer %lu (Parameters, read only, 0x%08X)", g_HardwarePointer, status);
+}
+
+ULONG GuardHardwarePointerSetting(void)
+{
+    return g_HardwarePointer;
+}
+
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only, not a catalog setting: the paging ring's start pointer.
 // The seed is PagingRingStartBytes (REG_QWORD) with PagingRingStartNonce (REG_QWORD, nonzero), both in the driver's
@@ -237,27 +283,11 @@ static NTSTATUS g_LabSeedRead = STATUS_OBJECT_NAME_NOT_FOUND;
 // those of the installed package.
 static ULONG g_LabBoundaryMode = BC250_PAGING_BOUNDARY_RELEASE_MODE;
 
-static NTSTATUS LabQueryDword(HANDLE Key, PCWSTR Name, _Out_ ULONG* Value)
-{
-    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)];
-    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
-    UNICODE_STRING name;
-    ULONG length = 0;
-    NTSTATUS status;
-
-    *Value = 0;
-    RtlInitUnicodeString(&name, Name);
-    status = ZwQueryValueKey(Key, &name, KeyValuePartialInformation, info, sizeof(buffer), &length);
-    if (!NT_SUCCESS(status)) return status;
-    if (info->Type != REG_DWORD || info->DataLength != sizeof(ULONG)) return STATUS_OBJECT_TYPE_MISMATCH;
-    RtlCopyMemory(Value, info->Data, sizeof(ULONG));
-    return STATUS_SUCCESS;
-}
 
 static NTSTATUS LabQueryQword(HANDLE Key, PCWSTR Name, _Out_ ULONGLONG* Value)
 {
-    UCHAR buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONGLONG)];
-    PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
+    union { KEY_VALUE_PARTIAL_INFORMATION Info; UCHAR Bytes[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONGLONG)]; } buffer;
+    PKEY_VALUE_PARTIAL_INFORMATION info = &buffer.Info;     // the union aligns the bytes as the structure
     UNICODE_STRING name;
     ULONG length = 0;
     NTSTATUS status;
@@ -287,7 +317,7 @@ void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject)
     }
     g_LabSeedRead = LabQueryQword(key, L"PagingRingStartBytes", &g_LabSeed);
     nonce = LabQueryQword(key, L"PagingRingStartNonce", &g_LabNonce);
-    mode = LabQueryDword(key, L"PagingBoundaryMode", &value);
+    mode = ParameterDword(key, L"PagingBoundaryMode", &value);
     ZwClose(key);
     if (mode == STATUS_OBJECT_NAME_NOT_FOUND)
         GuardLog("lab: paging boundary mode %lu: PagingBoundaryMode absent, the default (pad)", g_LabBoundaryMode);
@@ -327,7 +357,7 @@ void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject)
         GuardLog("lab: GDI selector: Parameters key not opened for reading (0x%08X), not used", status);
         return;
     }
-    status = LabQueryDword(key, L"LabGdiHwAccel", &value);
+    status = ParameterDword(key, L"LabGdiHwAccel", &value);
     ZwClose(key);
     if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
         GuardLog("lab: GDI selector absent, the gate is EnableGdiHwAccel (the default)");
@@ -357,7 +387,7 @@ void GuardLabReadScaledPlane(_In_ PDRIVER_OBJECT DriverObject)
         GuardLog("lab: scaled plane selector: Parameters key not opened for reading (0x%08X), 0", status);
         return;
     }
-    status = LabQueryDword(key, L"LabScaledPlane", &value);
+    status = ParameterDword(key, L"LabScaledPlane", &value);
     ZwClose(key);
     if (status == STATUS_OBJECT_NAME_NOT_FOUND) {
         GuardLog("lab: scaled plane selector absent, 0 (the default)");
