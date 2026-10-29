@@ -17,7 +17,7 @@ namespace AmdgpuWddmControl
         // image -> the chosen shader model ceiling ("6.8", "6.7", "6.6"), only when it differs from the stored one.
         readonly Dictionary<string, string> _smEdits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        static readonly string[] GfxGraphicsNames = { "FrameRateLimit", "VSync", "Anisotropy", "MaxFrameLatency", "PerformanceOverlay", "RenderOnCpu" };
+        static readonly string[] GfxGraphicsNames = { "FrameRateLimit", "VSync", "Anisotropy", "MaxFrameLatency", "PerformanceOverlay", "RenderOnCpu", "FsrUpgrade" };
         // MemoryOverflow waits for its ICD (GraphicsSettings.AwaitingIcd). WsiRoute is for all games only, so a game's
         // editor has no Vulkan row and shows no Vulkan section.
         static readonly string[] GfxVulkanNames = { "WsiRoute" };

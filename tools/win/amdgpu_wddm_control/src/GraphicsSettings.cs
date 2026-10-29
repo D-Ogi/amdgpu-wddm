@@ -10,6 +10,8 @@
 //     MaxFrameLatency     1-3 frames queued ahead ("Low latency")
 //     PerformanceOverlay  1 on (works in DirectX 11 games for now), 0 off
 //     RenderOnCpu         1: the game's DirectX 11 runs on the processor (much slower, a last resort), 0 off
+//     FsrUpgrade          1 (the default): a game that ships FSR 4 may use it; 0 off. Games with anti-cheat protection
+//                         stay off whatever the value (the KMD's list)
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan                           REG_SZ values for all games
 //   HKLM\SOFTWARE\amdgpu-wddm\Vulkan\Applications\<image>      REG_SZ values for one game (MemoryOverflow only)
 //     WsiRoute            for all games only: the system Vulkan ICD reads no WsiRoute of a game's key
@@ -123,6 +125,9 @@ namespace AmdgpuWddmControl
                 Valid = n => n >= 1 && n <= 3 },
             new GfxSetting { Name = "PerformanceOverlay", Id = "overlay", Root = GraphicsPath, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
             new GfxSetting { Name = "RenderOnCpu", Id = "cpu-render", Root = GraphicsPath, GameFirst = true, SameAsAbsent = "0", AbsentTextId = "gfx.choice.off", Presets = new[] { "1", "0" }, Valid = Bool },
+            // On when absent: the driver lets a game's own FSR 4 files select their RDNA 2 path, except in its list of
+            // games with anti-cheat protection, which no value changes (docs/design/fsr4-identity.md).
+            new GfxSetting { Name = "FsrUpgrade", Id = "fsr4", Root = GraphicsPath, SameAsAbsent = "1", AbsentTextId = "gfx.choice.on", Presets = new[] { "1", "0" }, Valid = Bool, DefaultMeans = "1" },
             // How Vulkan games present, for all games at once. The system Vulkan ICD (64-bit, and 32-bit from tester.31)
             // presents through DXGI when the value is absent (BD-197: the decision, back once the
             // route presented on the lab), so "Fast (flip)" is the absent value and "Compatible" (gdi) the rollback a

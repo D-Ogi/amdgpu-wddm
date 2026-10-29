@@ -141,7 +141,7 @@ namespace AmdgpuWddmControl
             new Regex(@"(?i)\b(fence|escapes?|exit code|error code|dxgkrnl|registry)\b"),
             new Regex(@"0x[0-9A-Fa-f]+"),
             new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd|ComputeQueue|GdiHwAccel)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*|OcTier\w*)\b"),
-            new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
+            new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|FsrUpgrade|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };
 

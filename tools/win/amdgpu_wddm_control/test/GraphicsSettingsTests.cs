@@ -45,7 +45,7 @@ static partial class UnitTests
     // Every value of the contract: what is valid, how it reads and what it is called.
     static void GfxContract()
     {
-        Equal(7, GraphicsSettings.All.Length, "contract: seven settings offered");
+        Equal(8, GraphicsSettings.All.Length, "contract: eight settings offered");
         Equal(1, GraphicsSettings.AwaitingIcd.Length, "contract: one Vulkan setting waits for its ICD");
         Check(GraphicsSettings.AwaitingIcd.All(s => GraphicsSettings.Find(s.Name) == null && s.Root == GraphicsSettings.VulkanPath), "contract: a Vulkan setting that waits is not offered");
         var routeSetting = GraphicsSettings.Find("WsiRoute");
@@ -77,7 +77,7 @@ static partial class UnitTests
             Equal(n == 0 || n == 1, valid("VSync", n), "VSync " + n);
             Equal(n == 1 || n == 2 || n == 4 || n == 8 || n == 16, valid("Anisotropy", n), "Anisotropy " + n);
             Equal(n >= 1 && n <= 3, valid("MaxFrameLatency", n), "MaxFrameLatency " + n);
-            foreach (var b in new[] { "PerformanceOverlay", "RenderOnCpu" }) Equal(n == 0 || n == 1, valid(b, n), b + " " + n);
+            foreach (var b in new[] { "PerformanceOverlay", "RenderOnCpu", "FsrUpgrade" }) Equal(n == 0 || n == 1, valid(b, n), b + " " + n);
         }
         Check(!valid("FrameRateLimit", 0xFFFFFFFFL) && !valid("FrameRateLimit", -1), "FrameRateLimit: 0xFFFFFFFF and -1 are not valid");
         var fps = GraphicsSettings.Find("FrameRateLimit");
@@ -92,6 +92,13 @@ static partial class UnitTests
         Equal("1 frame ahead (lowest latency)", GraphicsSettings.Label(GraphicsSettings.Find("MaxFrameLatency"), "1"), "label: one frame ahead");
         Equal("3 frames ahead", GraphicsSettings.Label(GraphicsSettings.Find("MaxFrameLatency"), "3"), "label: three frames ahead");
         Equal("Always on", GraphicsSettings.Label(GraphicsSettings.Find("VSync"), "1"), "label: vsync on");
+        // FsrUpgrade: on when absent, offered for all games and per game, and the KMD default it reports is on.
+        var fsr = GraphicsSettings.Find("FsrUpgrade");
+        Check(fsr != null && !fsr.GlobalOnly && !fsr.GameFirst && fsr.SameAsAbsent == "1" && fsr.DefaultMeans == "1" && Strings.T(fsr.AbsentTextId) == "On",
+            "contract: FsrUpgrade is on when absent, for all games and per game");
+        Equal("Allow FSR 4 in games that include it", fsr.Title, "contract: FsrUpgrade title");
+        Check(GraphicsSettings.Allowed(GraphicsSettings.GraphicsPath, "FsrUpgrade") && GraphicsSettings.Allowed(W3G, "FsrUpgrade") && !GraphicsSettings.Allowed(W3V, "FsrUpgrade"),
+            "Allowed: FsrUpgrade for all games and one game, under Graphics only");
 
         // The Vulkan strings: case does not matter, an empty string is absent, dxgi-composition is valid but not offered.
         var route = AnySetting("WsiRoute");
@@ -310,6 +317,7 @@ static partial class UnitTests
             plan("witcher3.exe", new Dictionary<string, string> { { "FrameRateLimit", null }, { "VSync", "0" } }), "plan: a value removed and one written keep the key");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\new.exe RenderOnCpu = 1 (DWord)", plan("new.exe", new Dictionary<string, string> { { "RenderOnCpu", "1" } }), "plan: a new game key");
         Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\new.exe PerformanceOverlay = 0 (DWord)", plan("new.exe", new Dictionary<string, string> { { "PerformanceOverlay", "0" } }), "plan: Off for one game is written (it overrides On for all games)");
+        Equal(@"set HKLM\SOFTWARE\amdgpu-wddm\Graphics\Applications\new.exe FsrUpgrade = 0 (DWord)", plan("new.exe", new Dictionary<string, string> { { "FsrUpgrade", "0" } }), "plan: FSR 4 off for one game is written");
         Equal("", plan("new.exe", new Dictionary<string, string> { { "VSync", null } }), "plan: Same as all games on a game without a key writes nothing");
         Throws<ArgumentException>(() => GraphicsSettings.PlanWrites(keys, "witcher3.exe", new Dictionary<string, string> { { "ReportAmdDriverVersion", "1" } }), "plan: ReportAmdDriverVersion is not per game");
         Throws<ArgumentException>(() => GraphicsSettings.PlanWrites(keys, null, new Dictionary<string, string> { { "FrameRateLimit", "19" } }), "plan: 19 fps is refused");
