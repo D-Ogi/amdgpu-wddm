@@ -255,8 +255,8 @@ D3D12 has no CPU route. No CPU route through lavapipe exists in any repository o
 
 The value 0 stops a game that ships AMD's FSR 4 upscaler DLL from selecting its RDNA 2 path on this GPU. The value
 1 or no value lets it select that path. Only a game that ships the 4.x `amd_fidelityfx_upscaler_dx12.dll` gets
-FSR 4. A game with FSR 3.1 or older keeps what it has. The D3D12 shell sends the value to the KMD once per process,
-after the first device of the process exists (`driver/umd/d3d12/fsr-identity.h`). The KMD answers AMD's 608-byte
+FSR 4. A game with FSR 3.1 or older keeps what it has. The D3D12 shell sends the value (or "no value") and the
+image name to the KMD after each device exists (`driver/umd/d3d12/fsr-identity.h`). The KMD answers AMD's 608-byte
 identity query with it, and keeps the games of its anti-cheat list off whatever the value. The contract, the list
 and its sources are in [fsr4-identity.md](fsr4-identity.md).
 

@@ -30,7 +30,8 @@ NTSTATUS APIENTRY escape(const D3DKMT_ESCAPE* e) {
     if(e->PrivateDriverDataSize==sizeof(fake.seen))std::memcpy(&fake.seen,e->pPrivateDriverData,sizeof(fake.seen));
     if(fake.escape_status==0){
         auto* p=static_cast<BC250_ESCAPE_PROCESS_POLICY*>(e->pPrivateDriverData);
-        p->Status=fake.reply_status;p->Answer=p->FsrIdentity;p->Source=BC250_AMD_IDENTITY_SOURCE_SHELL;
+        p->Status=fake.reply_status;p->Answer=p->FsrIdentity==BC250_PROCESS_POLICY_FSR_OFF?0:1;
+        p->Source=p->FsrIdentity==BC250_PROCESS_POLICY_FSR_UNSET?BC250_AMD_IDENTITY_SOURCE_DEFAULT:BC250_AMD_IDENTITY_SOURCE_SHELL;
         p->NameFlags=BC250_AMD_IDENTITY_NAME_KNOWN;
     }
     return fake.escape_status;
@@ -52,14 +53,37 @@ void request_tests() {
     CHECK(q.Image[BC250_PROCESS_POLICY_IMAGE_CHARS-2]==L'a' && q.Image[BC250_PROCESS_POLICY_IMAGE_CHARS-1]==0);
     const auto n=native12::fsr_identity_request(0,nullptr);
     CHECK(n.Image[0]==0);
+    // The setting's word: its value when set, UNSET when not (whatever the value field holds).
+    CHECK(native12::fsr_identity_word(true,0)==BC250_PROCESS_POLICY_FSR_OFF);
+    CHECK(native12::fsr_identity_word(true,1)==BC250_PROCESS_POLICY_FSR_ON);
+    CHECK(native12::fsr_identity_word(false,0)==BC250_PROCESS_POLICY_FSR_UNSET);
+    CHECK(native12::fsr_identity_word(false,1)==BC250_PROCESS_POLICY_FSR_UNSET);
+    CHECK(BC250_PROCESS_POLICY_FSR_OFF==BC250_AMD_IDENTITY_FSR_OFF && BC250_PROCESS_POLICY_FSR_ON==BC250_AMD_IDENTITY_FSR_ON &&
+          BC250_PROCESS_POLICY_FSR_UNSET==BC250_AMD_IDENTITY_FSR_UNSET);
+    // A long image name, as dxgkrnl may shorten it: the shell sends the whole file name.
+    const auto t=native12::fsr_identity_request(BC250_PROCESS_POLICY_FSR_UNSET,L"FortniteClient-Win64-Shipping.exe");
+    CHECK(t.FsrIdentity==BC250_PROCESS_POLICY_FSR_UNSET && t.Image[32]==L'e' && t.Image[33]==0);
 }
 
 void send_tests() {
     LUID luid{};luid.LowPart=0x1234;luid.HighPart=5;
-    {   // Not set: nothing is opened or sent.
+    {   // Not set: sent as UNSET with the image name, so that the KMD's list sees the shell's name.
+        for(unsigned v=0;v<=7;v+=7){
+            fake=Fake{};
+            const auto r=native12::send_fsr_identity(luid,kmt,false,v,L"EscapeFromTarkov.exe");
+            CHECK(r.hr==S_OK && fake.opens==1 && fake.escapes==1 && fake.closes==1);
+            CHECK(fake.seen.FsrIdentity==BC250_PROCESS_POLICY_FSR_UNSET);
+            CHECK(!std::wcscmp(reinterpret_cast<const wchar_t*>(fake.seen.Image),L"EscapeFromTarkov.exe"));
+            CHECK(r.status==BC250_ESCAPE_STATUS_DONE && r.source==BC250_AMD_IDENTITY_SOURCE_DEFAULT);
+        }
+    }
+    {   // Every device creation sends again (the KMD's process object may be new): two sends, two identical escapes.
         fake=Fake{};
-        const auto r=native12::send_fsr_identity(luid,kmt,false,1,L"game.exe");
-        CHECK(r.hr==S_FALSE && fake.opens==0 && fake.escapes==0 && fake.closes==0);
+        CHECK(native12::send_fsr_identity(luid,kmt,true,0,L"game.exe").hr==S_OK);
+        const BC250_ESCAPE_PROCESS_POLICY first=fake.seen;
+        CHECK(native12::send_fsr_identity(luid,kmt,true,0,L"game.exe").hr==S_OK);
+        CHECK(fake.opens==2 && fake.escapes==2 && fake.closes==2);
+        CHECK(first.FsrIdentity==fake.seen.FsrIdentity && !std::memcmp(first.Image,fake.seen.Image,sizeof(first.Image)));
     }
     {   // 0 and 1 are sent once, on the adapter of the LUID, which is closed again.
         for(unsigned v=0;v<=1;++v){
@@ -74,9 +98,12 @@ void send_tests() {
             CHECK(!std::strcmp(native12::fsr_identity_source_name(r.source),"shell"));
         }
     }
-    {   // A value out of range and missing entry points are refused before any call.
+    {   // A set value out of range and missing entry points are refused before any call.
         fake=Fake{};
-        CHECK(native12::send_fsr_identity(luid,kmt,true,2,L"game.exe").hr==E_INVALIDARG && fake.opens==0);
+        // UNSET is not a value of the setting: a set value of 2 is refused like any other out of range.
+        CHECK(native12::send_fsr_identity(luid,kmt,true,BC250_PROCESS_POLICY_FSR_UNSET,L"game.exe").hr==E_INVALIDARG &&
+              fake.opens==0);
+        CHECK(native12::send_fsr_identity(luid,kmt,true,9,L"game.exe").hr==E_INVALIDARG && fake.opens==0);
         native12::FsrIdentityKmt none{};
         CHECK(native12::send_fsr_identity(luid,none,true,1,L"game.exe").hr==E_INVALIDARG);
     }

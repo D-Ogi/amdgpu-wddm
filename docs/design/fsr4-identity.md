@@ -55,9 +55,13 @@ The KMD decides for each query. The first rule that matches gives the answer:
 4. The KMD knows no image name for the process: OFF, because it cannot check the list.
 5. Otherwise: ON.
 
-The KMD checks the list against two names: dxgkrnl's process name (`DXGKARG_CREATEPROCESS.pProcessName`, a file
-name or a full path) and the image name that the shell sends. A match on either name is a match. The compare uses
-only the part after the last `\` or `/`, and ignores case for A-Z.
+The KMD checks the list against two names: dxgkrnl's process name (`DXGKARG_CREATEPROCESS.pProcessName`) and the
+image name that the shell sends. A match on either name is a match. The compare uses only the part after the last
+`\` or `/`, and ignores case for A-Z. The WDK does not say if dxgkrnl's name is a full path, a file name or a
+shortened name (for example the 15 characters of the EPROCESS image file name). With a shortened name,
+`FortniteClient-Win64-Shipping.exe` and `EscapeFromTarkov.exe` do not match. Thus the list must not depend on that
+name alone: the shell sends its full image name at every device creation, also when the setting has no value. The
+lab log of the KMD records the length and the form of dxgkrnl's name, so that the form is measured.
 
 ## The setting
 
@@ -71,22 +75,27 @@ The D3D12 shell resolves the setting and sends it to the KMD.
 
 ## The escape
 
-The D3D12 shell sends `BC250_ESCAPE_SET_PROCESS_POLICY` (38, `BC250_ESCAPE_PROCESS_POLICY`, 176 bytes, ABI 1) once per
-process (`driver/umd/d3d12/fsr-identity.h`):
+The D3D12 shell sends `BC250_ESCAPE_SET_PROCESS_POLICY` (38, `BC250_ESCAPE_PROCESS_POLICY`, 176 bytes, ABI 1) at
+every device creation (`driver/umd/d3d12/fsr-identity.h`):
 
-- It sends the escape only when `FsrUpgrade` has a value. Without a value, the KMD rules 4 and 5 apply.
-- It sends the escape after the first device of the process exists. dxgkrnl creates the KMD process object with
-  the first device of a process, and the escape needs that object (`hKmdProcessHandle`).
+- `FsrIdentity` is the value of `FsrUpgrade` (`BC250_PROCESS_POLICY_FSR_OFF` 0, `_ON` 1), or
+  `BC250_PROCESS_POLICY_FSR_UNSET` (2) when the setting has no value. With UNSET the KMD records only the facts of
+  the image name, and rules 4 and 5 apply.
+- It sends the escape after each device exists. The escape needs the KMD process object (`hKmdProcessHandle`),
+  which dxgkrnl creates with the first device of a process. dxgkrnl ends that object when the last adapter handle
+  of the process closes. A game that closes a probe device and opens its real device gets a new object, so the shell
+  sends the escape again at each device creation. The escape writes the same state each time.
 - It opens the adapter by its LUID, sends the escape and closes the adapter. It creates no device, context or
   allocation.
-- A failure gives one log line (`d3d12-fsr-identity`) and does not stop device creation.
+- A failure gives a log line (`d3d12-fsr-identity`) and does not stop device creation.
 
 The FSR DLL needs an `ID3D12Device` before it creates its context, so the escape arrives before the DLL's query.
 A change of the setting applies at the next start of the game.
 
 The KMD accepts the escape from any user, in both flavours and with any escape flags. The escape changes only the
-calling process's own record. It touches no register. It refuses an ABI other than 1, a value other than 0 or 1, a
-`Reserved0` that is not 0, and a call without a process handle.
+calling process's own record. It touches no register. It refuses an ABI other than 1, a value above 2, a
+`Reserved0` that is not 0, and a call without a process handle. A KMD from before UNSET refuses the value 2. The
+shell then logs the refusal and the KMD's own rules apply, as before.
 
 ## The anti-cheat list
 
@@ -109,15 +118,21 @@ Call of Duty is not in the list, because no source names its image. For any othe
 
 ## Log lines
 
-The lab flavour of the KMD writes at most 32 lines: one for the first answer of each process, and one for each
-escape. The release flavour writes none.
+The lab flavour of the KMD writes at most 32 lines. It writes two lines for the first answer of each process. It
+writes one line for an escape that changes the record, if the escape has a value, or if only the shell's name is in
+the list. The release flavour writes none.
 
 ```
 fsr4-identity: query image game.exe source default revision 0x32 names 0x1 shell 0
+fsr4-identity: dxgkrnl name game.exe chars 8 at 0 names 0x1
 fsr4-identity: shell image game.exe FsrUpgrade 0 source shell revision 0x84 names 0x1
 ```
 
-The D3D12 shell writes one line when it sends the escape:
+The `dxgkrnl name` line gives dxgkrnl's name as it came: `chars` is `ProcessNameLength`, `at` is the index of the
+file name in that name (0: no path), and `names` holds the flags of that name alone.
+
+The D3D12 shell writes one line each time it sends the escape (`FsrUpgrade=unset/unset` when the setting has no
+value):
 
 ```
 d3d12-fsr-identity FsrUpgrade=0/application result=00000000 status=0 answer=0 source=shell names=1 open=00000000 escape=00000000 close=00000000
@@ -140,7 +155,8 @@ d3d12-fsr-identity FsrUpgrade=0/application result=00000000 status=0 answer=0 so
 Tests:
 
 - `driver/kmd/test/run_amd_identity.ps1` (the `amd-identity` check of `tools/quality/quick.ps1`): the list, the
-  precedence, the reply bytes and the sizes that are not 608.
+  precedence, the escape's shell word (UNSET, and shortened dxgkrnl names of listed games), the reply bytes and the
+  sizes that are not 608.
 - `driver/umd/d3d12/fsr-identity-test.cpp` (run by `tools/build/build-umd-d3d12.ps1`): the escape that the shell
   sends, against fake KMT entry points.
 - `driver/umd/app-settings/app-settings-test.cpp`: the setting and its precedence.
