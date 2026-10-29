@@ -101,3 +101,35 @@
 # define DP_LINK_BW_5_4			    0x14    /* 1.2 */
 
 # define DP_LINK_BW_8_1			    0x1e    /* 1.4 */
+
+#define DP_DOWNSTREAMPORT_PRESENT           0x005
+
+# define DP_DWN_STRM_PORT_PRESENT           (1 << 0)
+
+# define DP_DWN_STRM_PORT_TYPE_MASK         0x06
+
+# define DP_DWN_STRM_PORT_TYPE_DP           (0 << 1)
+
+# define DP_DWN_STRM_PORT_TYPE_ANALOG       (1 << 1)
+
+# define DP_DWN_STRM_PORT_TYPE_TMDS         (2 << 1)
+
+# define DP_DETAILED_CAP_INFO_AVAILABLE	    (1 << 4) /* DPI */
+
+#define DP_DOWN_STREAM_PORT_COUNT	    0x007
+
+# define DP_PORT_COUNT_MASK		    0x0f
+
+#define DP_DOWNSTREAM_PORT_0		    0x80
+
+# define DP_DS_PORT_TYPE_MASK		    (7 << 0)
+
+# define DP_DS_PORT_TYPE_DP		    0
+
+# define DP_DS_PORT_TYPE_VGA		    1
+
+# define DP_DS_PORT_TYPE_DVI		    2
+
+# define DP_DS_PORT_TYPE_HDMI		    3
+
+# define DP_DS_PORT_TYPE_DP_DUALMODE        5

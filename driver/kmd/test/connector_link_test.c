@@ -1646,6 +1646,32 @@ static void philips_hbr2(void)
     philips_cold(3);
     CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_NOT_SUPPORTED && !device.ConnectorLink);
     CHECK(logged("connector-link: inherited link rate 20 lanes 3 refused check link-settings"));balanced();
+    /* Review: the same monitor behind an active DP-to-HDMI converter that states 340 MHz (sink_test.c decodes it).
+     * The DP link is HBR2 x4, but the converter is the limit: 1080p60 and 4K30 are offered, both 4K60 timings are
+     * the sink's refusal, and one line names the port and its cap. A native DP sink writes no such line. */
+    philips_cold(4);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && !logged("downstream"));
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    philips_cold(4);snapshot.Sink.MaxPixelClockKhz=340000;
+    snapshot.Sink.Dpcd[DP_DOWNSTREAMPORT_PRESENT]=0x15;snapshot.Sink.Dpcd[DP_DOWN_STREAM_PORT_COUNT]=1;
+    snapshot.Sink.DownstreamRead=1;snapshot.Sink.DownstreamType=BC250_DP_DOWNSTREAM_HDMI;
+    snapshot.Sink.DownstreamKhz=340000;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && snapshot.Sink.TargetCount==2);
+    CHECK(logged("connector-link: sink generation 7 downstream hdmi ports 1 read 1 cap 340000 kHz"));
+    CHECK(logged("connector-link: target 3840x2160 533250 kHz refused C00000BB check clock-sink"));
+    CHECK(logged("connector-link: target 3840x2160 594000 kHz refused C00000BB check clock-sink"));
+    CHECK(link.Current.Inherited && link.Current.Rate==0x14);
+    memset(log_ring,0,sizeof(log_ring));steps=boundary_steps;
+    CHECK(commit_timing(&philips[2])==STATUS_NOT_SUPPORTED && boundary_steps==steps);balanced();
+    CHECK(logged("connector-link: commit 3840x2160 533250 kHz refused C00000BB check clock-sink"));
+    CHECK(commit_timing(&philips[0])==STATUS_SUCCESS && link.Current.Rate==10);balanced();
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    /* A hub (DP downstream port) logs its port with no cap. */
+    philips_cold(4);snapshot.Sink.Dpcd[DP_DOWNSTREAMPORT_PRESENT]=0x11;snapshot.Sink.Dpcd[DP_DOWN_STREAM_PORT_COUNT]=2;
+    snapshot.Sink.DownstreamRead=1;snapshot.Sink.DownstreamType=BC250_DP_DOWNSTREAM_DP;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS && snapshot.Sink.TargetCount==4);
+    CHECK(logged("connector-link: sink generation 7 downstream dp ports 2 read 1 cap 0 kHz"));
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
     printf("GitHub #45 Philips 4K on HBR2: %u checks, %u failures; inherited HBR2 x2/x4, 1080p60, 4K60, fallback, TMDS\n",
         checks-begin,failures-bad);
 }

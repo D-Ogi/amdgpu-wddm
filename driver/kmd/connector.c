@@ -568,9 +568,16 @@ NTSTATUS ConnectorStart(BC250_DEVICE* Device)
     snapshot->Sink.EdidLength = Device->Modeset.EdidLength;
     RtlCopyMemory(snapshot->Sink.Edid, Device->Modeset.Edid, sizeof(snapshot->Sink.Edid));
     RtlCopyMemory(snapshot->Sink.Dpcd, Device->Modeset.Dpcd, sizeof(snapshot->Sink.Dpcd));
+    RtlCopyMemory(snapshot->Sink.DownstreamPort, Device->Modeset.DownstreamPort, sizeof(snapshot->Sink.DownstreamPort));
+    snapshot->Sink.DownstreamRead = Device->Modeset.DownstreamRead;
     {
-        ULONG limit = Device->Modeset.DpcdValid ? Bc250DpMaxPixelClock(snapshot->Sink.Dpcd) :
-            Device->Modeset.Adapter.max_tmds_khz;
+        // GitHub #45 review: a DP sink is its link's limit under the limit of an active converter behind it, the
+        // same as in sink discovery (bc250_sink.c).
+        uint32_t converter = 0;
+        ULONG limit = Device->Modeset.DpcdValid ? Bc250DpSinkMaxPixelClock(snapshot->Sink.Dpcd,
+            Device->Modeset.DownstreamRead ? snapshot->Sink.DownstreamPort : NULL, &snapshot->Sink.DownstreamType,
+            &converter) : Device->Modeset.Adapter.max_tmds_khz;
+        snapshot->Sink.DownstreamKhz = converter;
         if (limit < snapshot->Sink.MaxPixelClockKhz) snapshot->Sink.MaxPixelClockKhz = limit;
     }
     snapshot->Sink.TargetCount = Bc250EdidTargetList(&snapshot->Sink.Info,
@@ -698,6 +705,9 @@ NTSTATUS ConnectorResumeDisplay(BC250_DEVICE* Device)
         old->Sink.Adapter.type==next->Sink.Adapter.type &&
         old->Sink.Adapter.max_tmds_khz==next->Sink.Adapter.max_tmds_khz &&
         RtlCompareMemory(old->Sink.Dpcd,next->Sink.Dpcd,sizeof(old->Sink.Dpcd))==sizeof(old->Sink.Dpcd) &&
+        old->Sink.DownstreamRead==next->Sink.DownstreamRead &&
+        RtlCompareMemory(old->Sink.DownstreamPort,next->Sink.DownstreamPort,sizeof(old->Sink.DownstreamPort))==
+            sizeof(old->Sink.DownstreamPort) &&
         old->Sink.EdidLength && old->Sink.EdidLength<=sizeof(old->Sink.Edid) &&
         RtlCompareMemory(old->Sink.Edid,next->Sink.Edid,old->Sink.EdidLength)==old->Sink.EdidLength;
     if (same) {

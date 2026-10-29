@@ -47,7 +47,17 @@ long Bc250SinkDiscover(BC250_DISP_IO* raw,const BC250_SINK_GUARD* guard,unsigned
             // DPCD success fixes the protocol. An unsupported DP receiver is
             // not reclassified as TMDS just because its mode or EDID fails.
             r->Kind=BC250_SINK_DP;
-            r->MaxPixelClockKhz=Bc250DpMaxPixelClock(r->Dpcd);
+            // GitHub #45 review: a failed read of the port leaves the class that DPCD 0x005 gives, as Linux does.
+            if(Bc250DpDownstreamPortReadable(r->Dpcd))
+                r->DownstreamRead=Bc250AuxDpcdRead(&aux,BC250_DP_DOWNSTREAM_PORT_DPCD,r->DownstreamPort,
+                    sizeof(r->DownstreamPort))>=0;
+            if(!r->DownstreamRead)memset(r->DownstreamPort,0,sizeof(r->DownstreamPort));
+            {
+                uint32_t converter;
+                r->MaxPixelClockKhz=Bc250DpSinkMaxPixelClock(r->Dpcd,r->DownstreamRead?r->DownstreamPort:NULL,
+                    &r->DownstreamType,&converter);
+                r->DownstreamKhz=converter;
+            }
             if(!r->MaxPixelClockKhz) status=BC250_DISP_STATUS_NOT_SUPPORTED;
             else {
                 r->Phase=BC250_SINK_PHASE_AUX_EDID;

@@ -208,6 +208,51 @@ unsigned Bc250DpFirstRate(const uint8_t caps[16],uint32_t pixel)
     lanes=caps[DP_MAX_LANE_COUNT]&DP_MAX_LANE_COUNT_MASK;
     return pixel>capacity(rate,lanes)?0u:firstRate(rate,lanes,pixel);
 }
+typedef char downstreamPortAddress[BC250_DP_DOWNSTREAM_PORT_DPCD==DP_DOWNSTREAM_PORT_0?1:-1];
+int Bc250DpDownstreamPortReadable(const uint8_t caps[16])
+{
+    return caps && (caps[DP_DOWNSTREAMPORT_PRESENT]&DP_DWN_STRM_PORT_PRESENT) && caps[DP_DPCD_REV]>=DP_DPCD_REV_11;
+}
+// Linux get_active_converter_info: DPCD 0x005 gives the class of the port, and on DPCD 1.1 and later the type of
+// 0x080 replaces it (a DP type there means no converter). Only the first port is read, as Linux reads it.
+// Deviation: Linux dp_active_dongle_validate_timing limits only an HDMI converter that states its clock. This
+// driver also limits a VGA or DVI converter by its own byte, and gives every converter port that states no clock
+// BC250_DP_CONVERTER_DEFAULT_KHZ, the TMDS limit of this driver's own HDMI and DVI route. Before the flat 300 MHz
+// DP limit went (BD-139), that limit covered these converters.
+uint32_t Bc250DpDownstreamLimit(const uint8_t caps[16],const uint8_t *port,unsigned *type)
+{
+    unsigned kind=BC250_DP_DOWNSTREAM_NONE;uint32_t khz=0;
+    if(caps && (caps[DP_DOWNSTREAMPORT_PRESENT]&DP_DWN_STRM_PORT_PRESENT)) {
+        switch(caps[DP_DOWNSTREAMPORT_PRESENT]&DP_DWN_STRM_PORT_TYPE_MASK) {
+        case DP_DWN_STRM_PORT_TYPE_DP: kind=BC250_DP_DOWNSTREAM_DP;break;
+        case DP_DWN_STRM_PORT_TYPE_ANALOG: kind=BC250_DP_DOWNSTREAM_VGA;break;
+        case DP_DWN_STRM_PORT_TYPE_TMDS: kind=BC250_DP_DOWNSTREAM_DVI;break;   // Linux: DVI until 0x080 says more
+        default: kind=BC250_DP_DOWNSTREAM_OTHER;break;
+        }
+        if(port && Bc250DpDownstreamPortReadable(caps)) {
+            switch(port[0]&DP_DS_PORT_TYPE_MASK) {
+            case DP_DS_PORT_TYPE_DP: kind=BC250_DP_DOWNSTREAM_DP;break;
+            case DP_DS_PORT_TYPE_VGA: kind=BC250_DP_DOWNSTREAM_VGA;break;
+            case DP_DS_PORT_TYPE_DVI: kind=BC250_DP_DOWNSTREAM_DVI;break;
+            case DP_DS_PORT_TYPE_HDMI: case DP_DS_PORT_TYPE_DP_DUALMODE: kind=BC250_DP_DOWNSTREAM_HDMI;break;
+            default: kind=BC250_DP_DOWNSTREAM_OTHER;break;
+            }
+            if(caps[DP_DOWNSTREAMPORT_PRESENT]&DP_DETAILED_CAP_INFO_AVAILABLE) {
+                if(kind==BC250_DP_DOWNSTREAM_VGA) khz=port[1]*8000u;
+                else if(kind==BC250_DP_DOWNSTREAM_DVI || kind==BC250_DP_DOWNSTREAM_HDMI) khz=port[1]*2500u;
+            }
+        }
+        if(kind!=BC250_DP_DOWNSTREAM_DP && !khz) khz=BC250_DP_CONVERTER_DEFAULT_KHZ;
+    }
+    if(type) *type=kind;
+    return khz;
+}
+uint32_t Bc250DpSinkMaxPixelClock(const uint8_t caps[16],const uint8_t *port,unsigned *type,uint32_t *converter)
+{
+    uint32_t link=Bc250DpMaxPixelClock(caps),khz=Bc250DpDownstreamLimit(caps,port,type);
+    if(converter) *converter=khz;
+    return khz && khz<link?khz:link;
+}
 static int cleanup(struct dc_link *l)
 {
     uint8_t off=DP_TRAINING_PATTERN_DISABLE;int rc=0;

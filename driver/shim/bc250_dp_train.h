@@ -46,5 +46,30 @@ typedef struct BC250_DP_TRAIN_RESULT {
 uint32_t Bc250DpMaxPixelClock(const uint8_t Caps[16]);
 // The rate Bc250DpTrain tries first for this pixel clock, 0 when no rate of these caps carries it.
 unsigned Bc250DpFirstRate(const uint8_t Caps[16], uint32_t PixelKHz);
+
+// GitHub #45 review: the first downstream port of a DP branch device, as Linux get_active_converter_info reads it
+// (DPCD 0x005, then the detailed capabilities at 0x080 on DPCD 1.1 and later).
+enum BC250_DP_DOWNSTREAM {
+    BC250_DP_DOWNSTREAM_NONE,   // no branch device: the receiver is the sink
+    BC250_DP_DOWNSTREAM_DP,     // a branch device with a DP port (a hub or a repeater): the DP link is the limit
+    BC250_DP_DOWNSTREAM_VGA,    // active converters: they end the DP link and have their own pixel-clock limit
+    BC250_DP_DOWNSTREAM_DVI,
+    BC250_DP_DOWNSTREAM_HDMI,   // HDMI and DP++ downstream ports (DP 1.4: a DP++ port is an HDMI port)
+    BC250_DP_DOWNSTREAM_OTHER   // a type this driver has no limit for
+};
+// The pixel clock the converter on a converter port takes when it states none, or when it is a type without one.
+#define BC250_DP_CONVERTER_DEFAULT_KHZ 300000u
+// DPCD DP_DOWNSTREAM_PORT_0, the 16 bytes of detailed capabilities that Port below holds.
+#define BC250_DP_DOWNSTREAM_PORT_DPCD 0x80u
+// Whether DPCD 0x080 is to be read for these caps: a branch device on DPCD 1.1 or later.
+int Bc250DpDownstreamPortReadable(const uint8_t Caps[16]);
+// The pixel-clock limit of the converter behind the DP receiver, 0 when there is none (no branch device, or a DP
+// downstream port). Port is DPCD 0x080-0x08F, NULL when it was not read. Type receives enum BC250_DP_DOWNSTREAM.
+// A DVI or HDMI port with detailed capabilities states its maximum TMDS clock (byte 1, 2.5 MHz units), a VGA port
+// its maximum pixel rate (byte 1, 8 MHz units). Without that byte, or at 0, or for another type, the limit is
+// BC250_DP_CONVERTER_DEFAULT_KHZ.
+uint32_t Bc250DpDownstreamLimit(const uint8_t Caps[16], const uint8_t *Port, unsigned *Type);
+// What a DP sink takes: Bc250DpMaxPixelClock under the converter limit. 0 when the caps are not valid.
+uint32_t Bc250DpSinkMaxPixelClock(const uint8_t Caps[16], const uint8_t *Port, unsigned *Type, uint32_t *ConverterKHz);
 enum BC250_DP_TRAIN_STATUS Bc250DpTrain(const BC250_DP_TRAIN_IO *Io,
     const uint8_t Caps[16], uint32_t PixelKHz, BC250_DP_TRAIN_RESULT *Result);

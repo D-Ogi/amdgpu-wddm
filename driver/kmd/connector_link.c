@@ -613,6 +613,15 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
     GuardLog("connector-link: sink generation %lu kind %u adapter %u max %lu kHz limit %lu kHz",
         Generation,(unsigned)Sink->Kind,(unsigned)Sink->Adapter.type,
         (ULONG)Sink->Adapter.max_tmds_khz,(ULONG)Sink->MaxPixelClockKhz);
+    // GitHub #45 review: a DP branch device names its first downstream port and the converter limit (0 for a DP
+    // port) that "limit" above is under, so a support report shows why a mode of a converter was not offered.
+    if(Sink->Kind==BC250_SINK_DP && Sink->DownstreamType!=BC250_DP_DOWNSTREAM_NONE) {
+        static const char* const types[]={"none","dp","vga","dvi","hdmi","other"};
+        GuardLog("connector-link: sink generation %lu downstream %s ports %lu read %u cap %lu kHz",Generation,
+            Sink->DownstreamType<RTL_NUMBER_OF(types)?types[Sink->DownstreamType]:"invalid",
+            (ULONG)(Sink->Dpcd[DP_DOWN_STREAM_PORT_COUNT]&DP_PORT_COUNT_MASK),Sink->DownstreamRead,
+            (ULONG)Sink->DownstreamKhz);
+    }
     if(!c) {status=OpenContext(Device,Generation,&c);if(!NT_SUCCESS(status))return status;Device->ConnectorLink=c;}
     Begin(c,Generation,FALSE);
     // BD-139: a new discovery is a new attachment; what a failed training or measurement left does not carry over.
