@@ -99,9 +99,17 @@ static int native_log_has(const char *needle)
 static int native_setting_present;
 static ULONG native_setting_value;
 static int native_setting_reads;
+static int native_layout_present;           /* SmuMetricsLayout */
+static ULONG native_layout_value;
+static int native_layout_reads;
 
 static ULONG GuardReadSetting(_In_z_ PCWSTR name, ULONG fallback)
 {
+    if (wcscmp(name, L"SmuMetricsLayout") == 0) {
+        CHECK(fallback == 0);
+        native_layout_reads++;
+        return native_layout_present ? native_layout_value : fallback;
+    }
     CHECK(wcscmp(name, L"EnableSmuMetrics") == 0);
     native_setting_reads++;
     return native_setting_present ? native_setting_value : fallback;
@@ -127,22 +135,27 @@ typedef struct _BC250_DEVICE {
     BC250_SMU_METRICS SmuMetrics;
 } BC250_DEVICE;
 
-/* The SMU owner (smu.c SmuReadMetrics), modelled: the result the test chose, and on success the table it chose,
- * written into the page at the address the binding named and copied out the way the owner copies it. */
+/* The SMU owner (smu.c SmuReadMetrics), modelled: the result the test chose, and on success the page poisoned for
+ * the whole length the binding asked for, then the first native_dma bytes of the table the test chose written over
+ * it (the firmware's DMA: 244 bytes for the stock firmware, 284 for the eight-core one), and copied out the way the
+ * owner copies it. */
 static int native_reads;
 static int native_result;
 static ULONGLONG native_expect_mc;
-static unsigned char native_table[BC250_SMU_METRICS_BYTES];
+static unsigned char native_table[BC250_SMU_METRICS_COPY_BYTES];
+static ULONG native_dma = BC250_SMU_METRICS_BYTES;
 
 static int SmuReadMetrics(BC250_SMU_OWNER_NATIVE *owner, ULONGLONG tableMc, volatile ULONG *table, UCHAR *copy, ULONG length)
 {
     ULONG i;
     native_reads++;
     CHECK(owner != NULL && tableMc == native_expect_mc && table == (volatile ULONG *)native_page);
-    CHECK(copy != NULL && length == BC250_SMU_METRICS_BYTES);
+    CHECK(copy != NULL && length == BC250_SMU_METRICS_COPY_BYTES);
     if (!owner->Online) return BC250_SMU_METRICS_OFFLINE;
     if (native_result != 0) return native_result;
-    memcpy((void *)native_page, native_table, sizeof(native_table));
+    memset((void *)native_page, BC250_SMU_METRICS_POISON, length);
+    CHECK(native_dma <= sizeof(native_table));
+    memcpy((void *)native_page, native_table, native_dma);
     for (i = 0; i < length; i++) copy[i] = ((volatile UCHAR *)table)[i];
     return 0;
 }

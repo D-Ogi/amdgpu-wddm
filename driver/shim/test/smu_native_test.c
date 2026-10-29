@@ -539,7 +539,7 @@ int main(void) {
         CHECK(calls==before+3 && metrics_logged==3 && metrics_log[0]==PPSMC_MSG_SetDriverTableDramAddrHigh &&
               metrics_log[1]==PPSMC_MSG_SetDriverTableDramAddrLow && metrics_log[2]==PPSMC_MSG_TransferTableSmu2Dram);
         CHECK(metrics_hi==0xF4u && metrics_lo==0x008CF000u && owner.MetricsTableMc==metrics_page_mc && !owner.Caller);
-        CHECK(bc250_smu_metrics_parse(copy,sizeof(copy),&m)==BC250_SMU_METRICS_PARSE_OK);
+        CHECK(bc250_smu_metrics_parse(copy,sizeof(copy),BC250_SMU_METRICS_LAYOUT_STOCK,&m)==BC250_SMU_METRICS_PARSE_OK);
         CHECK(m.socket_mw==78000 && m.socket_avg_mw==77400 && m.gfx_mw==48000 && m.soc_mw==21000);
         CHECK(m.gfx_mv==919 && m.soc_mv==900 && m.gfx_mhz==1500 && m.gfx_cc==6200 && m.soc_cc==6000);
         // Every later read of this owner start: the transfer alone.
@@ -549,7 +549,7 @@ int main(void) {
         metrics_nowrite=1;
         CHECK(SmuReadMetrics(&owner,metrics_page_mc,metrics_page,copy,sizeof(copy))==0);
         for(i=0;i<sizeof(copy) && copy[i]==BC250_SMU_METRICS_POISON;i++);
-        CHECK(i==sizeof(copy) && bc250_smu_metrics_parse(copy,sizeof(copy),&m)==BC250_SMU_METRICS_PARSE_UNWRITTEN);
+        CHECK(i==sizeof(copy) && bc250_smu_metrics_parse(copy,sizeof(copy),BC250_SMU_METRICS_LAYOUT_STOCK,&m)==BC250_SMU_METRICS_PARSE_UNWRITTEN);
         metrics_nowrite=0;
         // A refusal of the transfer: a non-zero result that is not OFFLINE, which the reader latches.
         metrics_refuse=1;before=calls;

@@ -10,6 +10,10 @@
 //   EnableSmuMetrics   1 (the default, and what the INF and the release installer write) reads the table. 0 sends
 //                      no metrics message at all and maps nothing: the driver then behaves as 0.7.214.1 did, and
 //                      RUN_DPM ABI 3 reports state OFF. Read once per start.
+//   SmuMetricsLayout   diagnostic, not in the GUI or the INF. 0 (absent, the default) detects the table's layout from
+//                      the firmware's DMA length and latches it after three good tables; 1 forces the stock six-core
+//                      decode and 2 the eight-core one, both without the tail check. Any other value detects. Read
+//                      once per start.
 //
 // The safety rules, each one in code:
 //   - Bounded. Every message is the transport's bounded poll (20 ms, smu.c). A refusal comes back at once.
@@ -26,6 +30,7 @@
 #include "bc250kmd.h"
 
 #define SMU_METRICS_SETTING L"EnableSmuMetrics"
+#define SMU_METRICS_LAYOUT_SETTING L"SmuMetricsLayout"
 
 // A refusal latches here for as long as this driver image is loaded: a later start of the adapter (a PnP stop, a
 // display-only restart) sends nothing again. Interlocked only.
@@ -34,9 +39,17 @@ static volatile LONG g_SmuMetricsRefused;
 static const char* const g_SmuMetricsState[] = { "off", "waiting", "ok", "refused", "no table", "bad table" };
 C_ASSERT(ARRAYSIZE(g_SmuMetricsState) == BC250_SMU_METRICS_STATE_COUNT);
 
+static const char* const g_SmuMetricsLayout[] = { "auto", "stock", "8-core" };
+C_ASSERT(ARRAYSIZE(g_SmuMetricsLayout) == BC250_SMU_METRICS_LAYOUT_COUNT);
+
 static const char* StateText(ULONG State)
 {
     return State < ARRAYSIZE(g_SmuMetricsState) ? g_SmuMetricsState[State] : "?";
+}
+
+static const char* LayoutText(ULONG Layout)
+{
+    return Layout < ARRAYSIZE(g_SmuMetricsLayout) ? g_SmuMetricsLayout[Layout] : "?";
 }
 
 static ULONGLONG NowMs(void)
@@ -72,7 +85,7 @@ void SmuMetricsInitialize(BC250_DEVICE* Device)
     BC250_SMU_METRICS* m = &Device->SmuMetrics;
     RtlZeroMemory(m, sizeof(*m));
     KeInitializeSpinLock(&m->SnapLock);
-    bc250_smu_metrics_reader_init(&m->Reader, 0, 0, 0);
+    bc250_smu_metrics_reader_init(&m->Reader, 0, 0, 0, BC250_SMU_METRICS_LAYOUT_AUTO);
     m->Snap.State = BC250_SMU_METRICS_STATE_OFF;
 }
 
@@ -85,6 +98,7 @@ void SmuMetricsStart(BC250_DEVICE* Device)
 
     SmuMetricsStop(Device);             // a start after a start that never stopped: no mapping leaks
     m->Enabled = GuardReadSetting(SMU_METRICS_SETTING, 1) != 0;
+    m->LayoutSetting = GuardReadSetting(SMU_METRICS_LAYOUT_SETTING, 0);
     m->LoggedEnd = FALSE;
     m->TableMc = 0;
     m->Physical.QuadPart = 0;
@@ -98,7 +112,7 @@ void SmuMetricsStart(BC250_DEVICE* Device)
             tableOk = m->Page != NULL;
         }
     }
-    bc250_smu_metrics_reader_init(&m->Reader, m->Enabled, tableOk, refused);
+    bc250_smu_metrics_reader_init(&m->Reader, m->Enabled, tableOk, refused, m->LayoutSetting);
     // The first read waits one period, so the start transaction and the governor's first ticks go out alone.
     m->Reader.next_ms = NowMs() + BC250_SMU_METRICS_PERIOD_MS;
     Publish(m);
@@ -112,6 +126,11 @@ void SmuMetricsStart(BC250_DEVICE* Device)
     else
         GuardLog("smu metrics: table page MC 0x%llX, physical 0x%llX, one read every %lu ms", m->TableMc,
                  (ULONGLONG)m->Physical.QuadPart, (ULONG)BC250_SMU_METRICS_PERIOD_MS);
+    if (m->Enabled && m->Reader.layout_forced)
+        GuardLog("smu metrics: SmuMetricsLayout %lu: %s layout forced, no tail check", m->LayoutSetting,
+                 LayoutText(m->Reader.layout));
+    else if (m->Enabled && m->LayoutSetting != BC250_SMU_METRICS_LAYOUT_AUTO)
+        GuardLog("smu metrics: SmuMetricsLayout %lu is not 0, 1 or 2: the layout is detected", m->LayoutSetting);
 }
 
 void SmuMetricsStop(BC250_DEVICE* Device)
@@ -120,30 +139,37 @@ void SmuMetricsStop(BC250_DEVICE* Device)
     if (m->Page != NULL) {
         MmUnmapIoSpace((PVOID)m->Page, BC250_SMU_METRICS_PAGE);
         m->Page = NULL;
-        GuardLog("smu metrics: stop after %lu tables, %lu failures, state %s", m->Reader.reads, m->Reader.failures,
-                 StateText(m->Reader.state));
+        GuardLog("smu metrics: stop after %lu tables, %lu failures, state %s, layout %s", m->Reader.reads,
+                 m->Reader.failures, StateText(m->Reader.state), LayoutText(m->Reader.layout));
     }
 }
 
 void SmuMetricsSample(BC250_DEVICE* Device)
 {
     BC250_SMU_METRICS* m = &Device->SmuMetrics;
-    UCHAR copy[BC250_SMU_METRICS_BYTES];
+    // The poison window is the larger table (bc250_smu_metrics.h): the stock firmware leaves its tail poisoned.
+    UCHAR copy[BC250_SMU_METRICS_COPY_BYTES];
     ULONGLONG now = NowMs();
+    ULONG layout = m->Reader.layout;
     int status, ended;
 
-    C_ASSERT(BC250_SMU_METRICS_BYTES % 4u == 0);
+    C_ASSERT(BC250_SMU_METRICS_COPY_BYTES % 4u == 0 && BC250_SMU_METRICS_COPY_BYTES >= BC250_SMU_METRICS_BYTES);
     if (m->Page == NULL || !bc250_smu_metrics_due(&m->Reader, now)) return;
     RtlZeroMemory(copy, sizeof(copy));
     status = SmuReadMetrics(&Device->Smu, m->TableMc, m->Page, copy, sizeof(copy));
     ended = bc250_smu_metrics_record(&m->Reader, NowMs(), status, copy, sizeof(copy));
     if (ended) InterlockedExchange(&g_SmuMetricsRefused, 1);
     Publish(m);
+    if (layout != m->Reader.layout)
+        GuardLog("smu metrics: %s layout latched after %lu tables in a row", LayoutText(m->Reader.layout),
+                 (ULONG)BC250_SMU_METRICS_LATCH_TABLES);
     if (!m->LoggedEnd && m->Reader.state != BC250_SMU_METRICS_STATE_OK &&
         m->Reader.state != BC250_SMU_METRICS_STATE_WAITING) {
         m->LoggedEnd = TRUE;
         GuardLog("smu metrics: %s, status %d parse %lu, %lu tables: off until next %s", StateText(m->Reader.state),
                  m->Reader.last_status, m->Reader.last_parse, m->Reader.reads, ended ? "boot" : "start");
+        GuardLog("smu metrics: layout %s, last tail %s, run %lu", LayoutText(m->Reader.layout),
+                 LayoutText(m->Reader.last_tail), m->Reader.layout_run);
     }
 }
 

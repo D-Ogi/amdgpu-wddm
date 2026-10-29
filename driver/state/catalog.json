@@ -3018,6 +3018,31 @@
     },
     {
       "path": "",
+      "name": "SmuMetricsLayout",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/smu_metrics.c"
+      ]
+    },
+    {
+      "path": "",
       "name": "StageHistory",
       "kind": "record",
       "type": "sz",
