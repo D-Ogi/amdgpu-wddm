@@ -609,6 +609,8 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='display-rotation';s='driver\kmd\test\run_display_rotation.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   @{n='display-rotation-controls';s='driver\kmd\test\run_display_rotation.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
+  @{n='dcn-cursor';s='driver\kmd\test\run_dcn_cursor.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
+  @{n='dcn-cursor-controls';s='driver\kmd\test\run_dcn_cursor.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
   @{n='dcn-observation';s='driver\kmd\test\run_dcn_observation.ps1';a=@('-Root',$Workspace)}
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}
