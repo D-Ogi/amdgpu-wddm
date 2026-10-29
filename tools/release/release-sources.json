@@ -93,7 +93,7 @@
     "flags": 1
   },
   "sources": {
-    "kmd": "bc250-win e6a7db0abca641506477fb01e493f9d70028e4e8 (KMD 0.7.216.65): the tester.34 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
+    "kmd": "bc250-win 64d86e13f57476dd502a5938e613451014317172 (KMD 0.7.216.65): the tester.34 KMD, both flavours built by the release set at that commit; the rows of payload/kmd/bc250kmd.sys name the recipe and its arguments.",
     "d3d12_shell": "Current tester.34 payload sources. release payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f; lab payload/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_engine": "Current tester.34 payload sources. release payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 507890134f8e3e1313d45f03c6bbe7ddde8bda7a; lab payload/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 507890134f8e3e1313d45f03c6bbe7ddde8bda7a. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d12_icd": "Current tester.34 payload sources. release payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535; lab payload/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -101,7 +101,7 @@
     "d3d11_engine": "Current tester.34 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_icd": "Current tester.34 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_umd": "Current tester.34 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm e6a7db0abca641506477fb01e493f9d70028e4e8; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm e6a7db0abca641506477fb01e493f9d70028e4e8; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 088a15881c6115549956743b8d9bfda1a1f15e10; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 088a15881c6115549956743b8d9bfda1a1f15e10; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "vulkan_icd": "Current tester.34 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 243a2064e902fc71264173b6794ca268121738b0; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 243a2064e902fc71264173b6794ca268121738b0; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "vulkan_icd": "Current tester.34 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 5673438898df44282928d6cfd4a7c41b6f11e4c5; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 5673438898df44282928d6cfd4a7c41b6f11e4c5; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b1afec48d2acf32c6b650954aaf0f33a54c54bb9; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm b1afec48d2acf32c6b650954aaf0f33a54c54bb9; release payload/control/bc250control.dll: amdgpu-wddm b1afec48d2acf32c6b650954aaf0f33a54c54bb9; lab payload/control/bc250control.dll: amdgpu-wddm b1afec48d2acf32c6b650954aaf0f33a54c54bb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.34 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm e6a7db0abca641506477fb01e493f9d70028e4e8; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm e6a7db0abca641506477fb01e493f9d70028e4e8; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 507890134f8e3e1313d45f03c6bbe7ddde8bda7a; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 507890134f8e3e1313d45f03c6bbe7ddde8bda7a; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm bf42b898250e4125d25a149e21025e86d4708535; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 763755607be690bd9225e19cebc404e565153cef; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 763755607be690bd9225e19cebc404e565153cef; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.34 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -117,10 +117,10 @@
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.inf",
       "source": "scratch/t34/release/set/artifacts/release/kmd-rel/bc250kmd.inf",
-      "sha256": "59692302761B24F657F1F5E7C4DB8B5907256CF0E8F394C0C5687F7B2E7DA58E",
+      "sha256": "DC4388C428D387A70FDACE77C4BF5C7D2554F02673EE48C0C63ACFEDF5340284",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e6a7db0abca641506477fb01e493f9d70028e4e8",
+        "commit": "64d86e13f57476dd502a5938e613451014317172",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -144,10 +144,10 @@
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
       "source": "scratch/t34/release/set/artifacts/release/kmd-rel/bc250kmd.sys",
-      "sha256": "80FBE5221C1750217254F88AF3A85D24985E36E69F3FD645A0E18EBCA6AE6665",
+      "sha256": "72C44A0EDCF16BCA3B6A91175904D7F21C59D0C63733A7CC52A768AED105826A",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e6a7db0abca641506477fb01e493f9d70028e4e8",
+        "commit": "64d86e13f57476dd502a5938e613451014317172",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -164,19 +164,19 @@
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1185168,
-      "unsigned_sha256": "5F127DE5F332CB639E3D99203863EC65A0020519A21A7E2B99A7CB728AB4E7D8",
-      "authenticode_sha256": "A7B34F1282FC90B08A4781530CE7347DDF2073EAE357099FB89B3F18F31EB975",
+      "size": 1187216,
+      "unsigned_sha256": "9BBF20DD44AAAE80E1B22994706B53693FF76F1BA0239D9A75284994F06F133D",
+      "authenticode_sha256": "785486F5020BF06388263256A799D8FF0D7CFDB30B67BE920D9D0B469A4334AE",
       "flavour": "release"
     },
     {
       "component": "kmd",
       "path": "payload/kmd/bc250kmd.sys",
       "source": "scratch/t34/release/set/artifacts/lab/kmd-lab/bc250kmd.sys",
-      "sha256": "DFC338080BC3E3D5A00AD6DD27CFDBE20200FED1D1DB2CB6693E24FAC18CBE7F",
+      "sha256": "5C794D1403EC5EE5103C6751E9B18A805557A54C87EE0900ADFD5B7385F3CA46",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e6a7db0abca641506477fb01e493f9d70028e4e8",
+        "commit": "64d86e13f57476dd502a5938e613451014317172",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -193,9 +193,9 @@
         "output": "package/bc250kmd.sys",
         "unsigned_output": "bc250kmd.unsigned.sys"
       },
-      "size": 1241488,
-      "unsigned_sha256": "D2923A775D8F78157A1469EF79FBDE888A3D2724D1E352362902DFAFBF5797E2",
-      "authenticode_sha256": "FB17BDA122AE40261D3B07AB2F30FF0AF3EC21F309EFF2F85427188084855978",
+      "size": 1242512,
+      "unsigned_sha256": "8BB4C3A58C3B4B9DB219C6B880509A088EBB1DC9D709897063FDF68ADE32B938",
+      "authenticode_sha256": "A917A72E3BE0C9930A0AE0473990AA5F1D36A3C30A4184A606028ECBD0E48052",
       "flavour": "lab"
     },
     {
@@ -1121,10 +1121,10 @@
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
       "source": "scratch/t34/release/set/artifacts/release/system-x64-rel/vulkan_radeon.dll",
-      "sha256": "E5FDAFD55E1885A4476515763DA2ADDBC3D3F837E3DCC8617539E442A375B992",
+      "sha256": "273CD1A4F1E67D4F1ED2EB1255D0662BD0F3B2AD10C407D5A806C951CCFAF939",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "243a2064e902fc71264173b6794ca268121738b0",
+        "commit": "5673438898df44282928d6cfd4a7c41b6f11e4c5",
         "recipe_commit": "2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1161,10 +1161,10 @@
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
       "source": "scratch/t34/release/set/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
-      "sha256": "179E6F8D9BFF5BFBDF8BDF19C904D60CDEE756AF99F925D830339F4A12219535",
+      "sha256": "4A972A6F7D6517149AFB8D5C967EBF3D4CA436932807E88510A5CDD4F3420831",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "243a2064e902fc71264173b6794ca268121738b0",
+        "commit": "5673438898df44282928d6cfd4a7c41b6f11e4c5",
         "recipe_commit": "2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -2004,7 +2004,7 @@
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
       "size": 17789440,
-      "pair_skew": "The x86 system Vulkan row 76375560 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row 243a2064 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work.",
+      "pair_skew": "The x86 system Vulkan row 76375560 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row 56734388 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7), and the async compute threadgroup workaround on GFX1013 (1f3f6938); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
@@ -2046,7 +2046,7 @@
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
       "size": 17853952,
-      "pair_skew": "The x86 system Vulkan row 76375560 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row 243a2064 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work.",
+      "pair_skew": "The x86 system Vulkan row 76375560 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row 56734388 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7), and the async compute threadgroup workaround on GFX1013 (1f3f6938); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -2874,10 +2874,10 @@
       "component": "kmd",
       "path": "payload/kmd/amdgpu-state.bin",
       "source": "scratch/t34/release/set/artifacts/release/kmd-rel/amdgpu-state.bin",
-      "sha256": "548A5DEC8E04CAD23608CA9D01C341759E94386267C68F7C3DA188C881A37D03",
+      "sha256": "109E6D1485AD9975CE82D7D568F4643283F1DE72140717E39DF396B98BB30225",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "e6a7db0abca641506477fb01e493f9d70028e4e8",
+        "commit": "64d86e13f57476dd502a5938e613451014317172",
         "recipe": "driver/kmd/build.ps1",
         "args": [
           "-Kits",
@@ -2893,7 +2893,7 @@
         ],
         "output": "package/amdgpu-state.bin"
       },
-      "size": 2384,
+      "size": 2396,
       "flavour": "shared"
     },
     {
