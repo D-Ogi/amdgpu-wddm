@@ -184,6 +184,7 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_range.h"
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
+#include "display_rotation.h"        // BD-247: no DirectFlip while the path is rotated
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
 #include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
 #include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
@@ -894,6 +895,7 @@ typedef struct _BC250_WDDM {
     // R8G8B8A8 chain shows it here, apart from the compositor's B8G8R8A8 flips.
     volatile LONG ScanoutFlipsByFormat[BC250_PLANE_FORMATS];
     volatile LONG RedirectedPresents;           // DxgkDdiPresent calls carrying Flags.RedirectedFlip
+    volatile LONG RotatedPresentsRefused;       // BD-247: Blt presents carrying Flags.Rotate, all refused
     // The operator's switch for the handshake, read once at WddmStart (EnableDirectFlipHandshake, absent
     // = on from 0.7.213, and 0 is its bisect switch) and ANDed with ScanoutAdmitGate. It is published to the compositor's user-mode driver in the
     // bc250_scanout_caps trailer and nowhere else: the kernel driver's own admission does not read it, so
@@ -4872,8 +4874,8 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     //  - PerEngineTDR: the three DDIs are in the table. ResetEngine soft-recovers node 0 under HangRecoveryMode
     //    (M15.12 stage 1, M835, M836) and refuses every other case. ResetFromTimeout always fails, because the
     //    part has no proven reset (M53).
-    //  - SmoothRotation: "must support updating path rotation in UpdateActiveVidPnPresentPath"; ours does, and
-    //    the only rotation it offers is identity.
+    //  - SmoothRotation: "must support updating path rotation in UpdateActiveVidPnPresentPath"; ours does, for
+    //    the identity and the three rotations (BD-247, display_rotation.h). The modes differ only in orientation.
     //  - DirectFlip: held while the DirectFlip handshake is on (M15.14 increment 2, EnableDirectFlipHandshake
     //    and the scan-out gate). The compositor's user-mode driver answers CheckDirectFlipSupport from the
     //    scan-out caps trailer, and SetVidPnSourceAddress scans out a primary that Bc250ScanoutAdmit admits
@@ -5217,7 +5219,11 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.magic = BC250_SCANOUT_CAPS_MAGIC;
             scanout.version = BC250_SCANOUT_CAPS_VERSION;
             scanout.size = sizeof(scanout);
-            scanout.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+            // BD-247: no DirectFlip while the path is rotated. The plane does not rotate, so only a chain that its
+            // application drew already rotated could be scanned out, and the shells cannot tell one from another;
+            // with the flag clear they compose (rule "gated"), and the compositor rotates the chain with the
+            // desktop. The scan-out primaries of the shells follow the same flag.
+            scanout.flags = Bc250RotationAngle((ULONG)device->Rotation, TRUE) == 0 ? BC250_SCANOUT_CAPS_DIRECT_FLIP : 0u;
             // M15.14 (0.7.216.20): the plane takes the table's non-firmware SCANOUT_PRIMARY rows (R8G8B8A8,
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
             // BD-197: and only while the flip path programs them, which is the rule of DcnPlaneFormatsOpen.
@@ -10109,6 +10115,21 @@ static NTSTATUS Bc250WddmPresent(_In_ const HANDLE hContext, _Inout_ DXGKARG_PRE
     {
         const NTSTATUS flip = WddmPresentDmaFlip(context ? (BC250_WDDM*)context->Device->Wddm : NULL, pPresent);
         if (!NT_SUCCESS(flip)) return flip;
+    }
+    // BD-247: Rotate asks for a copy that turns the source onto the rotated primary (d3dkmddi.md, DxgkDdiPresent).
+    // Both producers below copy whole rows, the GPU one with CP DMA spans and the diagnostic one on the CPU, so
+    // neither can turn a rectangle. Before BD-247 such a call was refused by the GPU producer's flags check or,
+    // with both producers off, dropped with STATUS_SUCCESS. It is now refused in every case and counted. The
+    // compositor draws a rotated desktop itself (display_rotation.h), so this asks for the rare blt to the primary
+    // without composition; a rotating compute copy is the follow-up of docs/design/display-rotation.md.
+    if (pPresent->Flags.Blt && pPresent->Flags.Rotate) {
+        const LONG refused = context != NULL ?
+            InterlockedIncrement(&((BC250_WDDM*)context->Device->Wddm)->RotatedPresentsRefused) : 1;
+        if (refused <= BC250_WDDM_LOG_CALLS)
+            GuardLog("wddm: Present refused a rotated Blt (%ld): flags 0x%08X dst (%d,%d)-(%d,%d), rotation %u",
+                refused, pPresent->Flags.Value, pPresent->DstRect.left, pPresent->DstRect.top, pPresent->DstRect.right,
+                pPresent->DstRect.bottom, context != NULL ? (UINT)context->Device->Rotation : 0u);
+        return STATUS_INVALID_PARAMETER;
     }
     if (context != NULL && pPresent->Flags.Blt &&
         ((BC250_WDDM*)context->Device->Wddm)->GpuPresentGate) {
