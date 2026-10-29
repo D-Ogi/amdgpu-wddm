@@ -26,7 +26,6 @@
       "EnableGpuVa": 1,
       "EnableHandleIdentityProbe": 1,
       "EnableHangBugcheck": 0,
-      "EnableHardwarePointer": 1,
       "EnableHwmon": 1,
       "EnableIh": 1,
       "EnableMmio": 1,

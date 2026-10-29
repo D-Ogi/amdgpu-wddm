@@ -116,8 +116,10 @@ under `ShapeLock` only.
 
 ## The setting
 
-`EnableHardwarePointer` (catalog setting, DWORD, admin, next start, factory 1, code 1). The allowed values are 0, 1,
-3, 5 and 7:
+`EnableHardwarePointer` is a REG_DWORD in the Parameters key of the driver service
+(`HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters`). The driver reads it once in `DriverEntry` and does
+not write it. When the value is absent, cannot be read or has another type, the driver uses 1. A change takes effect
+at the next start of the driver. The useful values are 0, 1, 3, 5 and 7:
 
 | Bit | Meaning |
 | --- | --- |
@@ -125,8 +127,9 @@ under `ShapeLock` only.
 | 1 | Color pointers as premultiplied alpha (A/B check of the alpha contract). |
 | 2 | X and Y are the hot spot position (A/B check of the position contract). |
 
-The catalog change makes a new catalog identity. The consumers that pin the catalog (the router, the control app and
-the state worker rows of the release set) must be built again.
+The value is not a setting of the state catalog. A catalog entry changes the catalog identity, and then every release
+component that pins the catalog must be built again. A later catalog entry can replace the value. The KMD log line
+`cursor: setting EnableHardwarePointer <n>` shows the value of each start.
 
 ## Gates
 
@@ -135,11 +138,10 @@ the state worker rows of the release set) must be built again.
 | `dcn-cursor` | `dcn_cursor_test.c` on the production header. It checks the verdicts and the three formats (monochrome with an odd width and a padded pitch, with an inverting pixel). It checks the hot spot rule and the placement: negative clamp, edges, the 8-bit hot spot and the destination offset. It checks a scaled plane with a viewport origin, and the rotated image against `Bc250RotationMapPixel`. |
 | `dcn-cursor-controls` | 11 mutations of the header. Each one must fail the test. |
 | `dcn-write-sites` | Each cursor write names a register on the write list. |
-| `driver-state-*` | The catalog entry, its source reference and the update from the tester.33 catalog. |
 
 ## Open points
 
-These points have no evidence on this disk. The lab kit (`scratch/hw-cursor/kit1`) decides them:
+These points have no evidence on this disk. Lab trials of the pointer decide them:
 
 1. The alpha of Color pointers: straight (mode 3) or premultiplied (mode 2). Setting 1 against 3.
 2. The meaning of the alpha byte in mode 1: the driver uses 0xFF as "keep the screen and XOR the RGB value". A

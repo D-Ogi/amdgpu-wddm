@@ -90,6 +90,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
     PagingJournalInit();
     InteropDriverInit();    // \Callback\PowerState: a clean restart ends the GPU DWM session (BD-059)
     GuardStage(StageDriverEntry);
+    GuardReadHardwarePointer(DriverObject);        // read only, taken by DcnCursorPrepare at StartDevice
     // BD-167: the flavour line is also the marker tools/quality/flavour_gate.py finds in the SYS.
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
     GuardLog("kmd: BD-167 flavour lab (raw diagnostic escapes, test signing + LabDiagnostics)");

@@ -1706,33 +1706,6 @@
     },
     {
       "path": "",
-      "name": "EnableHardwarePointer",
-      "kind": "setting",
-      "type": "dword",
-      "min": 0,
-      "max": 4294967295,
-      "allowed": [
-        0,
-        1,
-        3,
-        5,
-        7
-      ],
-      "max_bytes": 4,
-      "factory": 1,
-      "code": 1,
-      "legacy_absent": null,
-      "group": "none",
-      "access": "admin",
-      "readable": "user",
-      "apply": "next-start",
-      "migration": "raw-once",
-      "source": [
-        "driver/kmd/dcn_cursor.c"
-      ]
-    },
-    {
-      "path": "",
       "name": "EnableHdmiTakeover",
       "kind": "setting",
       "type": "dword",

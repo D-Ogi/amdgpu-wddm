@@ -674,8 +674,8 @@ int main(void)
     // schema (a release that added settings); without a handoff such a generation is refused. The last scenario
     // is the update from the catalog of tester.32 (0.7.216.104): the settings that catalog does not have are absent
     // from its generation, so the new generation reads them at their installation default, never at 0. The update
-    // from the catalog of tester.33 (0.7.216.105) gives AdapterRecoveryMode its code default, reads
-    // EnableHardwarePointer at its installation default and writes no overclock tier.
+    // from the catalog of tester.33 (0.7.216.105) gives AdapterRecoveryMode its code default and writes no overclock
+    // tier.
     for(i=0;i<7;i++) {
         static const WCHAR same[]=L"02000000000000000000000000000000";
         static const WCHAR fake[]=L"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -722,7 +722,6 @@ int main(void)
         if(i==6){
             unsigned data=Key(DataPath,FALSE);
             CheckNumber(L"EnableComputeQueue",1);CheckNumber(L"EnableGdiHwAccel",1);CheckNumber(L"AdapterRecoveryMode",2);
-            CheckNumber(L"EnableHardwarePointer",1);
             CHECK(data && !Value(data,L"OcTier",FALSE) && !Value(data,L"OcTierBoard",FALSE));
         }
         gen=Key(GenerationPath,FALSE);stored=Value(gen,L"CatalogId",FALSE);

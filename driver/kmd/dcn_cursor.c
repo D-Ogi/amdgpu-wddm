@@ -31,7 +31,7 @@
 typedef struct _DCN_CURSOR {
     KSPIN_LOCK Lock;
     FAST_MUTEX ShapeLock;
-    ULONG Setting;                      // EnableHardwarePointer, read once at start
+    ULONG Setting;                      // EnableHardwarePointer of the Parameters key, read in DriverEntry
     PHYSICAL_ADDRESS Physical;          // surface 0; surface 1 is BC250_CURSOR_BUFFER_BYTES above it
     PUCHAR Cpu;                         // the CPU view of both surfaces
     PUCHAR Raw;                         // the copy of the last shape, BC250_CURSOR_RAW_MAX_BYTES
@@ -341,7 +341,7 @@ NTSTATUS DcnCursorPrepare(_Inout_ BC250_DEVICE* Device)
     NTSTATUS status = STATUS_SUCCESS;
 
     if (Device->Cursor) DcnCursorRelease(Device);
-    setting = GuardReadSetting(L"EnableHardwarePointer", 1) & BC250_CURSOR_SETTING_MASK;
+    setting = GuardHardwarePointerSetting() & BC250_CURSOR_SETTING_MASK;
     if (!(setting & BC250_CURSOR_SETTING_ON)) status = STATUS_NOT_SUPPORTED;
     // Before WddmStart, which sets Device->FullWddm from the same selection.
     else if (!WddmFullTableSelected() || !Device->DcnWriteEnabled || !Device->RuntimeFramebuffer ||

@@ -680,6 +680,10 @@ void GuardReleaseStart(void);       // orderly stop of a started device: give th
 void GuardLog(_In_z_ const char* Format, ...);                  // DbgPrintEx and the log ring; IRQL <= DISPATCH_LEVEL
 ULONG GuardReadSetting(_In_z_ PCWSTR Name, ULONG Default);     // REG_DWORD under Parameters, PASSIVE_LEVEL
 ULONG GuardConsumeSetting(_In_z_ PCWSTR Name, ULONG Default);  // the same, and a value of 1 is written back as 0
+// EnableHardwarePointer (REG_DWORD under Parameters, read only in DriverEntry, both flavours, absent = 1): the
+// BC250_CURSOR_SETTING_* bits that dcn_cursor.c takes at the start. Not a catalog setting (guard.c says why).
+void GuardReadHardwarePointer(_In_ PDRIVER_OBJECT DriverObject);
+ULONG GuardHardwarePointerSetting(void);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 // BD-235 lab experiment, lab flavour only: PagingRingStartBytes and PagingRingStartNonce (REG_QWORDs under the
 // driver's Parameters key) and PagingBoundaryMode (REG_DWORD), read only in DriverEntry (PASSIVE_LEVEL); the seed is
