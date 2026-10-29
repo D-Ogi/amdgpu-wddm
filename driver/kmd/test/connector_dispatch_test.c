@@ -25,6 +25,7 @@ typedef struct {
     void* pPrivateDriverData;
     ULONG PrivateDriverDataSize;
     HANDLE hContext;
+    HANDLE hKmdProcessHandle;
 } DXGKARG_ESCAPE;
 typedef struct {
     D3DKMT_HANDLE hAdapter,hDevice;
@@ -66,6 +67,7 @@ static void Unexpected(void) { ++UnexpectedCalls;CHECK(0); }
 #define HwmonRequest(...) Unexpected()
 #define FanRequest(...) Unexpected()
 #define InteropRequest(...) Unexpected()
+#define AmdIdentityEscape(...) Unexpected()
 #define DcnObserve(...) Unexpected()
 #define DpAudioRequest(...) Unexpected()
 #define CpuRequest(...) Unexpected()

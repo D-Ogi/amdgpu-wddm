@@ -4017,6 +4017,11 @@
    "reason": "user feature: the per-process override of the registry value RenderOnCpu, which the Games page of the control application writes (GraphicsSettings.cs)"
   },
   {
+   "name": "AMDGPU_WDDM_FSR_UPGRADE",
+   "where": "bc250-win driver/umd/app-settings/app-settings-core.h (D3D11 and D3D12 shells, router)",
+   "reason": "user feature: the per-process override of the registry value FsrUpgrade, which the Games page of the control application writes (GraphicsSettings.cs); the D3D12 shell sends it to the KMD (fsr-identity.h)"
+  },
+  {
    "name": "AMDGPU_WDDM_VK_MEM_OVERFLOW",
    "where": "mesa-wddm src/amd/vulkan/winsys/wddm2/radv_wddm2_winsys.c (triplet line)",
    "reason": "user feature: the per-process override of the registry value MemoryOverflow, which the Games page of the control application writes (GraphicsSettings.cs)"

@@ -452,6 +452,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  CheckIf 'firmware-metadata' "$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu" `
    { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_firmware_metadata.ps1" -Root $Workspace -Out "$Out\firmware-metadata" -Kits "$Kits" }
  Check 'interop-policy' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_interop_policy.ps1" -Root $Workspace -Out "$Out\interop-policy" -Kits "$Kits" }
+Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_identity.ps1" -Root $Workspace -Out "$Out\amd-identity" -Kits "$Kits" }
  # The router and its M15.14 D3D11_1 front. This gate builds the router and its host-test binaries and runs the
  # suites that need nothing from the lab: the route policy, the two table fills with their completeness counts,
  # the DirectFlip rule with one refusal per clause, and the E26R and LB7A decoders. A null entry in the front's

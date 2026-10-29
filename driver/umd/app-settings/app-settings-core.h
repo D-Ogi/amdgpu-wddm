@@ -29,7 +29,7 @@
 namespace amdgpu_wddm {
 namespace app_settings {
 
-enum class Setting : unsigned {FrameRateLimit,VSync,Anisotropy,MaxFrameLatency,PerformanceOverlay,RenderOnCpu,Count};
+enum class Setting : unsigned {FrameRateLimit,VSync,Anisotropy,MaxFrameLatency,PerformanceOverlay,RenderOnCpu,FsrUpgrade,Count};
 enum : unsigned {kCount=static_cast<unsigned>(Setting::Count),kAll=(1u<<kCount)-1u};
 inline constexpr unsigned bit(Setting s) noexcept {return 1u<<static_cast<unsigned>(s);}
 
@@ -51,6 +51,7 @@ inline const Descriptor& descriptor(Setting s) noexcept {
         {L"MaxFrameLatency","MaxFrameLatency","AMDGPU_WDDM_MAX_FRAME_LATENCY","1-3"},
         {L"PerformanceOverlay","PerformanceOverlay","AMDGPU_WDDM_PERFORMANCE_OVERLAY","0, 1"},
         {L"RenderOnCpu","RenderOnCpu","AMDGPU_WDDM_RENDER_ON_CPU","0, 1"},
+        {L"FsrUpgrade","FsrUpgrade","AMDGPU_WDDM_FSR_UPGRADE","0, 1"},
     };
     return table[static_cast<unsigned>(s)<kCount ? static_cast<unsigned>(s) : 0u];
 }
@@ -65,6 +66,7 @@ inline bool valid(Setting s,uint32_t v) noexcept {
     case Setting::MaxFrameLatency:return v>=1 && v<=3;
     case Setting::PerformanceOverlay:return v<=1;
     case Setting::RenderOnCpu:return v<=1;
+    case Setting::FsrUpgrade:return v<=1;
     default:return false;
     }
 }

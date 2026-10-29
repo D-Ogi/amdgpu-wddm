@@ -6,6 +6,7 @@
 #include "hip_journal.h"
 #include "paging_journal.h"
 #include "escape_commands.h"
+#include "amd_identity.h"
 #include "log_rate.h"
 #include "display_timing.h"
 #include "hdmi_link.h"
@@ -770,6 +771,12 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
     if (data->Command == BC250_ESCAPE_RUN_INTEROP) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_INTEROP)) return STATUS_INVALID_PARAMETER;
         InteropRequest(device,(BC250_ESCAPE_INTEROP*)data,Escape->Flags.Value);
+        return STATUS_SUCCESS;
+    }
+    // The shell's FSR 4 identity value for the calling process: software state of our process object (amd_identity.c).
+    if (command == BC250_ESCAPE_SET_PROCESS_POLICY) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_PROCESS_POLICY)) return STATUS_INVALID_PARAMETER;
+        AmdIdentityEscape(WddmProcessIdentity(Escape->hKmdProcessHandle), (BC250_ESCAPE_PROCESS_POLICY*)data);
         return STATUS_SUCCESS;
     }
     // Only adapter-owned health, the separately joined SMU owner and the two

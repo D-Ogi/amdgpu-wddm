@@ -94,6 +94,7 @@ void range_tests() {
         {Setting::MaxFrameLatency,4,false},
         {Setting::PerformanceOverlay,0,true},{Setting::PerformanceOverlay,1,true},{Setting::PerformanceOverlay,2,false},
         {Setting::RenderOnCpu,0,true},{Setting::RenderOnCpu,1,true},{Setting::RenderOnCpu,2,false},
+        {Setting::FsrUpgrade,0,true},{Setting::FsrUpgrade,1,true},{Setting::FsrUpgrade,2,false},
     };
     for(const auto& c:cases)CHECK(as::valid(c.s,c.v)==c.ok);
     CHECK(!as::valid(Setting::Count,0));
@@ -104,8 +105,10 @@ void range_tests() {
     CHECK(!std::strcmp(as::descriptor(Setting::MaxFrameLatency).env,"AMDGPU_WDDM_MAX_FRAME_LATENCY"));
     CHECK(!std::strcmp(as::descriptor(Setting::PerformanceOverlay).env,"AMDGPU_WDDM_PERFORMANCE_OVERLAY"));
     CHECK(!std::strcmp(as::descriptor(Setting::RenderOnCpu).env,"AMDGPU_WDDM_RENDER_ON_CPU"));
+    CHECK(!std::strcmp(as::descriptor(Setting::FsrUpgrade).env,"AMDGPU_WDDM_FSR_UPGRADE"));
     CHECK(!std::wcscmp(as::descriptor(Setting::FrameRateLimit).value,L"FrameRateLimit"));
     CHECK(!std::wcscmp(as::descriptor(Setting::RenderOnCpu).value,L"RenderOnCpu"));
+    CHECK(!std::wcscmp(as::descriptor(Setting::FsrUpgrade).value,L"FsrUpgrade"));
 }
 
 void precedence_tests() {
@@ -144,6 +147,14 @@ void precedence_tests() {
         const auto s=run(f);
         CHECK(s[Setting::FrameRateLimit].set() && as::frame_rate_limit(s)==0);
         CHECK(s[Setting::RenderOnCpu].source==Source::Application && !as::render_on_cpu(s));
+    }
+    {   // FsrUpgrade: a game 0 turns a global 1 off for that game; the environment wins over both keys.
+        Fake f;f.dword(L"",L"FsrUpgrade",1);f.dword(L"game.exe",L"FsrUpgrade",0);
+        const auto s=run(f);
+        CHECK(s[Setting::FsrUpgrade].source==Source::Application && s[Setting::FsrUpgrade].value==0);
+        f.env["AMDGPU_WDDM_FSR_UPGRADE"]="1";
+        const auto t=run(f);
+        CHECK(t[Setting::FsrUpgrade].source==Source::Environment && t[Setting::FsrUpgrade].value==1);
     }
     {   // An ignored value is as if absent: the next source is read, and one rejection is recorded per ignored value.
         Fake f;f.env["AMDGPU_WDDM_FRAME_RATE_LIMIT"]="5";f.dword(L"game.exe",L"FrameRateLimit",400);
@@ -188,6 +199,7 @@ void precedence_tests() {
         if(f.asked.size()==as::kCount*2){
             CHECK(f.asked[0]==L"game.exe|FrameRateLimit" && f.asked[1]==L"|FrameRateLimit");
             CHECK(f.asked[10]==L"game.exe|RenderOnCpu" && f.asked[11]==L"|RenderOnCpu");
+            CHECK(f.asked[12]==L"game.exe|FsrUpgrade" && f.asked[13]==L"|FsrUpgrade");
         }
     }
 }
@@ -198,7 +210,7 @@ void output_tests() {
     const auto s=run(f);
     const std::string all=effective(s);
     CHECK(has(all,"amdgpu-wddm settings: api=d3d11 app=Game.EXE FrameRateLimit=60/global VSync=1/global "
-                  "Anisotropy=16/application MaxFrameLatency=2/global PerformanceOverlay=1/environment RenderOnCpu=unset"));
+                  "Anisotropy=16/application MaxFrameLatency=2/global PerformanceOverlay=1/environment RenderOnCpu=unset FsrUpgrade=unset"));
     // A shell marks what it does not apply (the D3D12 shell: no overlay, and RenderOnCpu is the router's).
     const unsigned d3d12=as::kAll & ~as::bit(Setting::PerformanceOverlay) & ~as::bit(Setting::RenderOnCpu);
     const std::string part=effective(s,d3d12);

@@ -697,9 +697,13 @@ int main(int argc, char** argv)
         }
     }
     if (kmt_fixture) {
-        Say("KMT fixture: private=%u refused=%u segments=%u\n", ags_kmt_fixture::private_queries,
-            ags_kmt_fixture::foreign_refusals, ags_kmt_fixture::segment_queries);
-        if (gpu_info && (!ags_kmt_fixture::private_queries || !ags_kmt_fixture::foreign_refusals)) rc = 1;
+        Say("KMT fixture: private=%u refused=%u segments=%u identity=%u\n", ags_kmt_fixture::private_queries,
+            ags_kmt_fixture::foreign_refusals, ags_kmt_fixture::segment_queries, ags_kmt_fixture::identity_answers);
+        // AGS 6.3 asks 608 bytes first. With the KMD's identity answer it stops there and takes nothing from the
+        // block; without it (the legacy policy) it asks 17248 bytes next, which the KMD refuses. Either way the
+        // device list above is the one ADL gave (docs/design/fsr4-identity.md).
+        if (gpu_info && (!ags_kmt_fixture::private_queries ||
+                         (!ags_kmt_fixture::foreign_refusals && !ags_kmt_fixture::identity_answers))) rc = 1;
     }
     Say("%s ags-client %s\n", rc == 0 ? "PASS" : "FAIL", mode);
     if (g_out) {

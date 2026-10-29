@@ -927,9 +927,11 @@ search.graphics.af|rev|527a4439|Filtrowanie tekstur
 search.graphics.af.terms|rev|ef806f34|AF|anizotropowe|filtrowanie anizotropowe|filtrowanie|tekstury
 search.display.scaling.terms|rev|4245cba4|skalowanie|upscaling|skalowanie całkowite|integer scaling|proporcje|rozciąganie|skalowanie GPU|skalowanie ekranu|wyśrodkowanie
 search.graphics.overlay.terms|rev|72342a7f|licznik FPS|FPS|czas klatki|frame time|nakładka|overlay|klatki na sekundę|nakładka wydajności|HUD|OSD
+search.graphics.fsr4.terms|mt|096e626c|FSR|FSR 4|FidelityFX|skalowanie|upscaling|super rozdzielczość|AMD|jakość obrazu
 search.graphics.latency|rev|f3bcef3c|Niskie opóźnienie
 search.graphics.latency.terms|rev|5b07cf0e|opóźnienie|input lag|opóźnienie sterowania|kolejka klatek|Anti-Lag|Reflex
 search.graphics.overlay|rev|37d49e6c|Nakładka wydajności
+search.graphics.fsr4|mt-safe|72fac2c4|Zezwalaj na FSR 4 w grach, które go zawierają
 search.graphics.vk-present|rev|cdee9cc4|Wyświetlanie w grach Vulkan
 search.graphics.vk-present.terms|mt|f2d57cd4|Vulkan|wyświetlanie|czarny ekran|zamrożony obraz|zgodność|zgodny|szybki|flip
 search.graphics.vk-memory|rev|542ed595|Gdy pamięć wideo jest pełna
@@ -941,6 +943,7 @@ search.games.cpu-render.terms|rev|927301e2|renderowanie na CPU|renderowanie prog
 search.display.scaling|rev|22b1cb79|Skalowanie GPU
 help.setting.latency|mt|4d3900ab|Ile klatek procesor może przygotować przed układem graficznym. Mniej klatek sprawia, że gra szybciej reaguje na mysz i klawiaturę, ale może obniżyć liczbę klatek na sekundę. Działa w grach DirectX 11, DirectX 12, Vulkan oraz w 64-bitowych grach OpenGL. Gra, która już teraz przygotowuje mniej klatek, zostaje bez zmian.
 help.setting.overlay|rev|78ee0e43|Pokazuje liczbę klatek na sekundę i czasy klatek w rogu gry. Na razie działa w grach DirectX 11.
+help.setting.fsr4|mt|cf7167d8|Pozwala grze, która zawiera FSR 4, korzystać z niego. Dostają go tylko gry, które mają własne pliki FSR 4; gra z FSR 3 lub starszym zostaje przy tym, co ma. Gry z ochroną przed oszustwami (anti-cheat) nigdy go nie dostają, nawet gdy to jest włączone. Po zmianie uruchom grę ponownie.
 help.setting.vk-present|mt|31f80141|Sposób, w jaki gry Vulkan wyświetlają klatki, dla wszystkich gier naraz. Domyślny jest tryb Szybki (flip): karta graficzna kopiuje każdą klatkę, a gra na pełnym ekranie trafia prosto na ekran. Tryb Zgodny kopiuje każdą klatkę przez procesor. Jest wolniejszy, ale działa tam, gdzie Szybki (flip) nie działa. Jeśli gra Vulkan pokazuje czarny lub zamrożony obraz, wybierz Zgodny.
 help.setting.vk-memory|mt|50303e03|Co dostaje gra DirectX 11 lub DirectX 12, gdy pamięć wideo jest pełna, dla jednej gry lub dla wszystkich gier. Nie dotyczy gier Vulkan. „Użyj pamięci systemowej” utrzymuje grę w działaniu, ale wolniej. „Zgłoś brak pamięci” informuje grę, aby mogła obniżyć swoje ustawienia.
 help.setting.sm|rev|f3b2ff18|Najwyższy model shaderów, który sterownik zgłasza grze DirectX 12. Domyślny to 6.8. Niektóre gry nie działają z nowszym modelem shaderów; dla takiej gry wybierz 6.7 lub 6.6.
@@ -974,6 +977,7 @@ gfx.origin.default|rev|04e6cbc0|Nie ustawiono: {0}.
 gfx.origin.stored|rev|2b5c4aeb|Zapisane dla wszystkich gier.
 gfx.origin.global|rev|6617fcee|Z ustawień dla wszystkich gier: {0}.
 gfx.note.overlay|rev|a4263f23|Na razie działa w grach DirectX 11.
+gfx.note.fsr4|mt|f3f48859|Tylko w grach, które zawierają FSR 4. Gry z ochroną przed oszustwami (anti-cheat) są wyłączone.
 gfx.note.cpu-render|mt|b48a21b3|Znacznie wolniej, a większość gier wydanych po 2012 roku się z tym nie uruchomi. Ostateczność dla starszej gry DirectX 11, która nie działa na układzie graficznym.
 gfx.note.vk-present|mt|87500394|Jeśli gra Vulkan pokazuje czarny lub zamrożony obraz, wybierz Zgodny. Gra, w której Szybki (flip) nie działa, sama przechodzi na Zgodny.
 gfx.note.sm|rev|3efcfd20|Niektóre gry nie działają z nowszym modelem shaderów. Niższy wybierz tylko dla takiej gry.

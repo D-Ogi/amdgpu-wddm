@@ -20,7 +20,7 @@ typedef void* HANDLE;
 typedef struct {void* Mmio;int FullWddm;volatile long DcnSurfaceSequence;volatile long RetainedPowerPhase;} BC250_DEVICE;
 /* WDK 10.0.26100 d3dukmdt.h: HardwareAccess 0x1, NoAdapterSynchronization 0x8. */
 typedef union {ULONG Value;struct {ULONG HardwareAccess:1,Unused:2,NoAdapterSynchronization:1;};} D3DDDI_ESCAPEFLAGS;
-typedef struct {void*pPrivateDriverData;ULONG PrivateDriverDataSize;D3DDDI_ESCAPEFLAGS Flags;} DXGKARG_ESCAPE;
+typedef struct {void*pPrivateDriverData;ULONG PrivateDriverDataSize;D3DDDI_ESCAPEFLAGS Flags;HANDLE hKmdProcessHandle;} DXGKARG_ESCAPE;
 #define STATUS_SUCCESS ((NTSTATUS)0)
 #define STATUS_ACCESS_DENIED ((NTSTATUS)0xC0000022u)
 #define STATUS_INVALID_PARAMETER ((NTSTATUS)0xC000000Du)
@@ -50,6 +50,9 @@ static void DpmRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM*p,ULONG n,BOOLEAN a,ULONG
 static void DpmTuneRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_TUNE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void InteropRequest(BC250_DEVICE*d,BC250_ESCAPE_INTEROP*p,ULONG f){(void)d;(void)p;(void)f;others++;}
 static void HwmonRequest(BC250_DEVICE*d,BC250_ESCAPE_HWMON*p,ULONG f){(void)d;(void)p;(void)f;others++;}
+/* The per-process FSR 4 policy (amd_identity.c): a record of the calling process, no register. */
+static void* WddmProcessIdentity(HANDLE p){return p;}
+static void AmdIdentityEscape(void*r,BC250_ESCAPE_PROCESS_POLICY*p){(void)r;(void)p;others++;}
 /* The two surfaces of 0.7.210: the V/F curve answers with the software snapshots, the CPU surface past the gate. */
 static void DpmCurveRequest(BC250_DEVICE*d,BC250_ESCAPE_DPM_CURVE*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
 static void CpuRequest(BC250_DEVICE*d,BC250_ESCAPE_CPU*p,ULONG n,BOOLEAN a,ULONG f){(void)d;(void)p;(void)n;(void)a;(void)f;others++;}
@@ -75,7 +78,7 @@ int main(void)
 {
     BC250_DEVICE d={0};BC250_ESCAPE_DCN_OBSERVE o;
     d.Mmio=(void*)1;d.FullWddm=TRUE;d.DcnSurfaceSequence=12;
-    DXGKARG_ESCAPE e={&o,sizeof(o),{1}};unsigned flag;
+    DXGKARG_ESCAPE e={&o,sizeof(o),{1},0};unsigned flag;
     C_ASSERT(sizeof(o)==128);
     Prepare(&o);CHECK(Bc250Escape(&d,&e)==STATUS_SUCCESS);
     CHECK(o.Status==BC250_ESCAPE_STATUS_DONE && o.NtStatus==0);
@@ -137,7 +140,7 @@ int main(void)
     /* The fan reading (0.7.213.1): a published snapshot, so the dispatcher answers it with
        NoAdapterSynchronization alone and ahead of the power-phase check, and only at its exact size. */
     {
-        BC250_ESCAPE_HWMON h;DXGKARG_ESCAPE he={&h,sizeof(h),{8}};
+        BC250_ESCAPE_HWMON h;DXGKARG_ESCAPE he={&h,sizeof(h),{8},0};
         memset(&h,0xCC,sizeof(h));h.Magic=BC250_ESCAPE_MAGIC;h.Command=BC250_ESCAPE_RUN_HWMON;
         reads=0;d.RetainedPowerPhase=2;
         CHECK(Bc250Escape(&d,&he)==STATUS_SUCCESS);CHECK(others==1 && reads==0);
@@ -149,7 +152,7 @@ int main(void)
        even with the adapter suspended. Its refusal status must propagate. */
     CHECK(hipUploads==0);
     {
-        BC250_HIP_JOURNAL_UPLOAD h={0};DXGKARG_ESCAPE he={&h,sizeof(h),{8}};
+        BC250_HIP_JOURNAL_UPLOAD h={0};DXGKARG_ESCAPE he={&h,sizeof(h),{8},0};
         h.Magic=BC250_HIP_JOURNAL_MAGIC;h.Command=BC250_HIP_JOURNAL_COMMAND;
         reads=0;d.RetainedPowerPhase=2;
         CHECK(Bc250Escape(&d,&he)==STATUS_ACCESS_DENIED);CHECK(hipUploads==1 && reads==0);

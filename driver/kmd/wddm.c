@@ -30,6 +30,7 @@
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
 #include "notify_pairing.h"      // C50: which pass pairs a completion report with DxgkCbNotifyDpc
 #include "flip_state.h"          // BD-170 r6: the decisions of the flip state machine
+#include "amd_identity.h"        // the 608-byte AMD identity answer per process (FSR 4)
 #include <limits.h>               // UINT_MAX, ULLONG_MAX: the UNKNOWN values of shared/d3dkmdt.h (BD-170 E5)
 // shared/d3dkmdt.h writes DXGK_PRIMITIVE_API_SEQUENCE_NUMBER_UNKNOWN as ULONGLONG_MAX, a name of ntintsafe.h. That
 // header redefines stdint.h's UINT32_MAX in this file, so the name gets limits.h's value of the same type instead.
@@ -314,6 +315,7 @@ typedef struct _BC250_WDDM_OBJECT {
     unsigned long CreatorProcessId;     // allocations and contexts: PsGetCurrentProcessId at creation
     volatile LONG InteropUser;          // devices: 1 once an interop Blt present of it was counted (interop.c)
     BC250_HIP_JOURNAL_OWNER HipJournalOwner;
+    BC250_AMD_IDENTITY_PROCESS AmdIdentity; // processes: the FSR 4 identity record (amd_identity.c)
 } BC250_WDDM_OBJECT;
 
 #define BC250_PRESENT_OBSERVATIONS 16
@@ -1175,6 +1177,13 @@ static BC250_WDDM_OBJECT* WddmObject(_In_opt_ const HANDLE Handle, ULONG Magic)
     BC250_WDDM_OBJECT* object = (BC250_WDDM_OBJECT*)Handle;
 
     return (object != NULL && object->Magic == Magic) ? object : NULL;
+}
+
+BC250_AMD_IDENTITY_PROCESS* WddmProcessIdentity(_In_opt_ HANDLE KmdProcess)
+{
+    BC250_WDDM_OBJECT* object = WddmObject(KmdProcess, BC250_WDDM_MAGIC_PROCESS);
+
+    return object != NULL ? &object->AmdIdentity : NULL;
 }
 
 // For a handle that did not come back through a DDI's own handle parameter but out of an array dxgkrnl filled - the
@@ -5289,6 +5298,12 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             status = STATUS_INVALID_PARAMETER;
             break;
         }
+        // AMD's 608-byte identity block, which our UMDs never ask for: the FSR 4 answer per process (amd_identity.c).
+        if (Bc250AmdIdentityExtent(QueryAdapterInfo->OutputDataSize)) {
+            status = AmdIdentityQuery(WddmProcessIdentity(QueryAdapterInfo->hKmdProcessHandle),
+                QueryAdapterInfo->pOutputData, QueryAdapterInfo->OutputDataSize);
+            break;
+        }
         if (QueryAdapterInfo->OutputDataSize < UMD_CAPS_BYTES) { status = STATUS_BUFFER_TOO_SMALL; break; }
         status=PspReadFirmware(device,&firmware);
         if(!NT_SUCCESS(status))break;
@@ -5647,6 +5662,7 @@ static NTSTATUS Bc250WddmCreateProcess(_In_ const HANDLE hAdapter, _Inout_ DXGKA
     BC250_WDDM_OBJECT* object = WddmNewObject(device, BC250_WDDM_MAGIC_PROCESS);
 
     if (object == NULL) return STATUS_INSUFFICIENT_RESOURCES;
+    AmdIdentityProcessCreate(&object->AmdIdentity, pArgs->pProcessName, pArgs->ProcessNameLength);
     pArgs->hKmdProcess = object;
     if (WddmFirstCalls(wddm, WddmDdiCreateProcess)) GuardLog("wddm: CreateProcess flags 0x%08X pasids %u", pArgs->Flags.Value, pArgs->NumPasid);
     return STATUS_SUCCESS;

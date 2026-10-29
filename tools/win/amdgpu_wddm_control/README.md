@@ -92,6 +92,7 @@ wait because each present copies a finished frame. The help text of each of the 
 | | `MaxFrameLatency` | DWORD | 1-3 | Low latency: frames ahead |
 | | `PerformanceOverlay` | DWORD | 1 on, 0 off | Performance overlay (DirectX 11 games for now) |
 | | `RenderOnCpu` | DWORD | 1 on, 0 off | Run DirectX 11 on the processor, a last resort. On the Games page. The card for all games shows it only when it is stored |
+| | `FsrUpgrade` | DWORD | 1 on (default), 0 off | Allow FSR 4 in games that include it. Only games that ship FSR 4 files get it. Games with anti-cheat protection never get it (docs/design/fsr4-identity.md) |
 | `Vulkan` | `WsiRoute` | REG_SZ | `dxgi` (default, BD-197), `gdi` | Vulkan presentation for all games: Fast (flip) or Compatible. The ICD reads no `WsiRoute` of `Vulkan\Applications\<exe>`, so the Games page has no such row |
 | `Vulkan`, `Vulkan\Applications\<exe>` | `MemoryOverflow` | REG_SZ | `allow` (default), `strict` | When the VRAM is full (DirectX 11 and 12 games only): use system memory, or report out of memory (not shown now, see below) |
 
