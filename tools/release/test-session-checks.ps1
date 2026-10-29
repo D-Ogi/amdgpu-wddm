@@ -71,27 +71,31 @@ if ($Inf) {
 'INSTALL_AS_SET transport and restart receipt (no native driver operation)'
 $stageDir = Join-Path $WorkRoot ('driver-set-' + [Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($stageDir)
-$stageInf = Join-Path $stageDir 'bc250kmd.inf'
-[IO.File]::WriteAllText($stageInf, $lab)
-$script:StageCalls = 0
-foreach ($answer in @($true, $false)) {
-    $script:StageAnswer = $answer
-    $staged = Invoke-DriverSetStage $stageInf { param($Directory, $Flags)
-        Check ($Directory -eq $stageDir -and $Flags -eq 0x40) 'native call gets the directory and INSTALL_AS_SET only' | Out-Host
-        $script:StageCalls++; return $script:StageAnswer
+# The stage directory goes on every exit path: a throw in a check must not leave it in the tree.
+try {
+    $stageInf = Join-Path $stageDir 'bc250kmd.inf'
+    [IO.File]::WriteAllText($stageInf, $lab)
+    $script:StageCalls = 0
+    foreach ($answer in @($true, $false)) {
+        $script:StageAnswer = $answer
+        $staged = Invoke-DriverSetStage $stageInf { param($Directory, $Flags)
+            Check ($Directory -eq $stageDir -and $Flags -eq 0x40) 'native call gets the directory and INSTALL_AS_SET only' | Out-Host
+            $script:StageCalls++; return $script:StageAnswer
+        }
+        Check ($staged.deferred -and $staged.api_need_reboot -eq $answer) 'both API restart answers retain the shutdown boundary'
     }
-    Check ($staged.deferred -and $staged.api_need_reboot -eq $answer) 'both API restart answers retain the shutdown boundary'
-}
-[IO.File]::WriteAllText((Join-Path $stageDir 'extra.inf'), $lab)
-$threw = $false; try { Invoke-DriverSetStage $stageInf { $script:StageCalls++; return $true } } catch { $threw = $true }
-Check ($threw -and $script:StageCalls -eq 2) 'extra INF is refused before native staging'
-Remove-Item -LiteralPath (Join-Path $stageDir 'extra.inf')
-[IO.File]::WriteAllText($stageInf, $rel)
-$threw = $false; try { Invoke-DriverSetStage $stageInf { $script:StageCalls++; return $true } } catch { $threw = $true }
-Check ($threw -and $script:StageCalls -eq 2) 'forbidden display directive is refused before native staging'
-[IO.File]::WriteAllText($stageInf, $lab)
-$threw = $false; try { Invoke-DriverSetStage $stageInf { throw 'injected native staging failure' } } catch { $threw = $true }
-Check $threw 'native failure produces no successful receipt'
+    [IO.File]::WriteAllText((Join-Path $stageDir 'extra.inf'), $lab)
+    $threw = $false; try { Invoke-DriverSetStage $stageInf { $script:StageCalls++; return $true } } catch { $threw = $true }
+    Check ($threw -and $script:StageCalls -eq 2) 'extra INF is refused before native staging'
+    Remove-Item -LiteralPath (Join-Path $stageDir 'extra.inf')
+    [IO.File]::WriteAllText($stageInf, $rel)
+    $threw = $false; try { Invoke-DriverSetStage $stageInf { $script:StageCalls++; return $true } } catch { $threw = $true }
+    Check ($threw -and $script:StageCalls -eq 2) 'forbidden display directive is refused before native staging'
+    [IO.File]::WriteAllText($stageInf, $lab)
+    $threw = $false; try { Invoke-DriverSetStage $stageInf { throw 'injected native staging failure' } } catch { $threw = $true }
+    Check $threw 'native failure produces no successful receipt'
+} finally { Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue }
+Check (-not (Test-Path -LiteralPath $stageDir)) 'the stage directory is removed after the staging checks'
 $receipt = [pscustomobject]@{ method = 'di-install-as-set'; inf_sha256 = 'A'; boot_id = 'boot1'; staged = $true }
 Check ((Get-DriverSetAction $null 'A' 'boot1') -eq 'stage') 'first install stages'
 Check ((Get-DriverSetAction $receipt 'A' 'boot1') -eq 'restart') 'same boot cannot verify or stage twice'
