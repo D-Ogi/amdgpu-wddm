@@ -57,6 +57,10 @@ static void NegotiationCases(void)
             !commitPath.ContentTransformation.ScalingSupport.Centered &&
             !commitPath.ContentTransformation.ScalingSupport.AspectRatioCenteredMax);
         CHECK(commitPath.ContentTransformation.RotationSupport.Identity && commitPath.ContentTransformation.RotationSupport.Offset0);
+        // BD-247: the three rotations, and no offset but 0 (E16 run 007).
+        CHECK(commitPath.ContentTransformation.RotationSupport.Rotate90 && commitPath.ContentTransformation.RotationSupport.Rotate180 &&
+            commitPath.ContentTransformation.RotationSupport.Rotate270 && !commitPath.ContentTransformation.RotationSupport.Offset90 &&
+            !commitPath.ContentTransformation.RotationSupport.Offset180 && !commitPath.ContentTransformation.RotationSupport.Offset270);
         CHECK(offeredTarget.VideoSignalInfo.PixelRate==(size==2?241500000ull:174490000ull) &&
             offeredTarget.VideoSignalInfo.ActiveSize.cx==(size==2?2560ul:1920ul));
         CHECK(offeredTarget.WireFormatAndPreference.Rgb==D3DKMDT_BITS_PER_COMPONENT_08);
@@ -82,6 +86,12 @@ static void NegotiationCases(void)
         CHECK(CommitVidPnCore(&d,&commit)==0 && d.ModeActive && d.CommitSeen);
         CHECK(d.CommittedSourceWidth==d.Post.Width && d.CommittedSourceHeight==d.Post.Height);
         CHECK(d.Modeset.Scaling==(ULONG)(custom?BC250_SCALING_CUSTOM:BC250_SCALING_STRETCHED));
+        CHECK(!memcmp(&saved,&d.Modeset.InheritedPipe,sizeof(saved)) && !pipeWrites && !commitPrograms && !commitTransactions);
+        CHECK(d.Rotation==D3DKMDT_VPPR_IDENTITY);
+        // BD-247: the same commit with portrait pinned keeps the pipe and records the rotation.
+        commitPath.ContentTransformation.Rotation=2;
+        CHECK(Bc250IsSupportedVidPn(&d,&supported)==0 && supported.IsVidPnSupported);
+        CHECK(CommitVidPnCore(&d,&commit)==0 && d.ModeActive && d.Rotation==2);
         CHECK(!memcmp(&saved,&d.Modeset.InheritedPipe,sizeof(saved)) && !pipeWrites && !commitPrograms && !commitTransactions);
     }
     for(pivot=D3DKMDT_EPT_VIDPNSOURCE;pivot<=D3DKMDT_EPT_ROTATION;pivot++) {
@@ -112,7 +122,7 @@ static void NegotiationCases(void)
         if(n==6)commitPath.VidPnTargetId=0;
         if(n==7)commitPath.VidPnSourceId=1;
         if(n==8)commitPath.ContentTransformation.Scaling=D3DKMDT_VPPS_IDENTITY;
-        if(n==9)commitPath.ContentTransformation.Rotation=3;
+        if(n==9)commitPath.ContentTransformation.Rotation=6;    /* BD-247: an offset; 3 (180) is admitted */
         if(n==10)commitPath.VisibleFromActiveBROffset.cx=1;
         if(n==11)commitPaths=2;
         CHECK(Bc250IsSupportedVidPn(&d,&supported)==0 && !supported.IsVidPnSupported);

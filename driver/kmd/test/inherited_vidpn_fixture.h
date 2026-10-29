@@ -10,7 +10,7 @@ enum {D3DKMDT_RMT_GRAPHICS=1};
 typedef struct {unsigned Type;struct {struct {REGION PrimSurfSize,VisibleRegionSize;ULONG Stride,PixelFormat;
     unsigned ColorBasis,PixelValueAccessMode;} Graphics;} Format;} D3DKMDT_VIDPN_SOURCE_MODE;
 typedef struct {unsigned Identity,Centered,Stretched,AspectRatioCenteredMax,Custom;} TEST_SCALING_SUPPORT;
-typedef struct {unsigned Identity,Offset0;} TEST_ROTATION_SUPPORT;
+typedef struct {unsigned Identity,Rotate90,Rotate180,Rotate270,Offset0,Offset90,Offset180,Offset270;} TEST_ROTATION_SUPPORT;
 typedef struct {ULONG VidPnSourceId,VidPnTargetId;struct {unsigned Scaling,Rotation;
     TEST_SCALING_SUPPORT ScalingSupport;TEST_ROTATION_SUPPORT RotationSupport;} ContentTransformation;
     REGION VisibleFromActiveTLOffset,VisibleFromActiveBROffset;} D3DKMDT_VIDPN_PRESENT_PATH;
@@ -19,7 +19,8 @@ typedef struct {ULONG Generation;} BC250_CONNECTOR_SNAPSHOT;
 static BC250_CONNECTOR_SNAPSHOT* ConnectorSnapshotAcquire(BC250_DEVICE* d)
 {(void)d;UnexpectedConnector();return NULL;}
 static void ConnectorSnapshotRelease(BC250_CONNECTOR_SNAPSHOT* s){(void)s;UnexpectedConnector();}
-static BOOLEAN ConnectorPathValid(const D3DKMDT_VIDPN_PRESENT_PATH* p){(void)p;UnexpectedConnector();return FALSE;}
+static BOOLEAN ConnectorPathValid(const BC250_DEVICE* d,const D3DKMDT_VIDPN_PRESENT_PATH* p)
+{(void)d;(void)p;UnexpectedConnector();return FALSE;}
 static const BC250_TARGET_TIMING* ConnectorFindTiming(const BC250_DEVICE* d,
     const BC250_CONNECTOR_SNAPSHOT* s,const D3DKMDT_VIDPN_SOURCE_MODE* m,const D3DKMDT_VIDEO_SIGNAL_INFO* v)
 {(void)d;(void)s;(void)m;(void)v;UnexpectedConnector();return NULL;}

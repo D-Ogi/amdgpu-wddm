@@ -9,7 +9,7 @@ $last=$source.IndexOf('static NTSTATUS OfferSourceMode(',$first)
 $code=$source.Substring($first,$last-$first)
 [IO.File]::WriteAllText((Join-Path $Out 'display_timing_actual.inc'),$code)
 $vidpn=''
-foreach($signature in @('static ULONG ScalingFromPath(','static BOOLEAN ScalingPinned(','static const char* DisplayInheritedModeRefusal(','static BOOLEAN DisplayInheritedModeMatches(','NTSTATUS Bc250UpdateActiveVidPnPresentPath(')){
+foreach($signature in @('static ULONG ScalingFromPath(','static BOOLEAN ScalingPinned(','static void DisplayRecordRotation(','static const char* DisplayInheritedModeRefusal(','static BOOLEAN DisplayInheritedModeMatches(','NTSTATUS Bc250UpdateActiveVidPnPresentPath(')){
     $first=$source.IndexOf($signature)
     $last=$source.IndexOf("`n}",$first)+3
     if($first -lt 0 -or $last -lt $first){throw "Missing body: $signature"}

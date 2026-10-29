@@ -51,6 +51,7 @@ typedef struct {UINT Numerator,Denominator;} RATIONAL;
 typedef struct {UINT VideoStandard;REGION TotalSize,ActiveSize;RATIONAL VSyncFreq,HSyncFreq;SIZE_T PixelRate;UINT ScanLineOrdering;} D3DKMDT_VIDEO_SIGNAL_INFO;
 struct TEST_VIDPN_INTERFACE;
 #include "dcn_scale.h"
+#include "display_rotation.h"
 #include "flip_state.h"
 #include "edid.h"
 #include "../shim/bc250_ddc.h"
@@ -65,6 +66,7 @@ typedef struct {BC250_INHERITED_PIPE InheritedPipe;NTSTATUS InheritedPipeStatus;
 typedef struct {void* Mmio;int FullWddm,ComposedSourceModes,DcnWriteEnabled;struct {ULONG Width,Height,Pitch;} Post;
     D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;BOOLEAN InheritedSignalValid,InheritedTmds;BC250_MODESET Modeset;
     BOOLEAN ModeActive,CommitSeen; ULONG CommittedSourceWidth,CommittedSourceHeight,CommittedSourceFormat;
+    ULONG Rotation;                     /* BD-247: the committed path rotation value */
     volatile long CommitPowerOnly;      /* BD-195: power transitions answered without programming */
     struct {ULONG StartAccepted,StartPreserved;} Connector;
     struct {NTSTATUS (*DxgkCbQueryVidPnInterface)(void*,unsigned,const struct TEST_VIDPN_INTERFACE**);
