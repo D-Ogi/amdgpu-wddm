@@ -1057,12 +1057,66 @@ try {
 
 # The engine's side: phase 2 checks the file, runs it only on the decision, never stops the installation for it, and
 # the uninstall leaves the loader alone. Verify reports both loaders and creates a 32-bit Vulkan instance.
-$vkStep = [regex]::Match($installText, '(?s)\$vkNow = Get-VulkanLoaderState.{0,3000}?Enter-Stage ''firmware''')
+$vkStep = [regex]::Match($installText, '(?s)\$vkRecord = Invoke-VulkanLoaderStep -PackageRoot \$package.{0,400}?Enter-Stage ''firmware''')
 Check ($vkStep.Success) 'phase 2 has the loader step before the firmware stage'
-Check ($vkStep.Value -match 'if \(\$vkNow\.install\)' -and $vkStep.Value -match 'Test-RedistInstaller -Path \$vkExe' -and $vkStep.Value -match 'Invoke-VulkanLoaderInstall -Path \$vkExe') 'the step runs only on the decision, and checks the file before it runs it'
-Check ($vkStep.Value -notmatch '\bthrow\b') 'a loader that cannot be installed never stops the installation'
-Check ($installText.IndexOf('Invoke-VulkanLoaderInstall') -gt $installText.IndexOf('Invoke-VcRuntimeInstall -Path $vcExe') -and $installText.IndexOf('Invoke-VulkanLoaderInstall') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the loader comes after the Visual C++ runtime and before our own files'
-Check ($verify -match "Add-Result 'Vulkan loader'" -and $verify -match "Add-Result 'Vulkan \(32-bit\)'" -and $verify -match 'SysWOW64\\WindowsPowerShell\\v1\.0\\powershell\.exe') 'verify reports both loaders and runs the Vulkan check in the 32-bit PowerShell'
+Check ($vkStep.Value -match "Set-StateValue \`$state 'vulkan_loader' \`$vkRecord" -and $vkStep.Value -notmatch '\bthrow\b') 'phase 2 keeps the record in the state object and never stops the installation for the loader'
+Check ($installText.IndexOf('Invoke-VulkanLoaderStep') -gt $installText.IndexOf('Invoke-VcRuntimeInstall -Path $vcExe') -and $installText.IndexOf('Invoke-VulkanLoaderStep') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the loader comes after the Visual C++ runtime and before our own files'
+# state.json is not written between the loader step and the mark of phase 2: the state object holds the new
+# package_version with the phase of phase 1 there, and a stop in that window must not leave it on disk as installed.
+$vkWindowStart = $installText.IndexOf('$vkRecord = Invoke-VulkanLoaderStep')
+$vkWindowEnd = $installText.IndexOf('$script:InPhase2 = $true')
+Check ($vkWindowStart -gt 0 -and $vkWindowEnd -gt $vkWindowStart -and $installText.Substring($vkWindowStart, $vkWindowEnd - $vkWindowStart) -notmatch 'Save-InstallState \$state') 'no Save-InstallState $state between the loader step and $script:InPhase2 = $true'
+$commonText = [IO.File]::ReadAllText((Join-Path $Installer 'common.ps1'))
+$vkFn = [regex]::Match($commonText, '(?s)function Invoke-VulkanLoaderStep \{.*?\r?\n\}\r?\n')
+Check ($vkFn.Success -and $vkFn.Value -notmatch 'Save-InstallState|Save-Phase' -and $vkFn.Value -match '\btry \{' -and $vkFn.Value -match '\} catch \{') 'the step writes no state itself and catches every error of its own'
+Check ($verify -match "Get-VulkanLoaderVerdict -Readings \`$vkReadings -Record \`$vkRecord" -and $verify -match 'SysWOW64\\WindowsPowerShell\\v1\.0\\powershell\.exe') 'verify judges both loaders with the record of the step and runs the Vulkan check in the 32-bit PowerShell'
+Check ($verify -notmatch "Add-Result 'Vulkan \(32-bit\)' \`$false" -and $verify -match "Add-Warning 'Vulkan \(32-bit\)'" -and $verify -match "Add-Result 'Vulkan \(32-bit\)' \`$true") 'a 32-bit Vulkan problem is a warning, never a failed verify'
+
+# The step itself, over a test Windows folder and a test package: every error of it is a warning, never a throw.
+function Invoke-VkStep([scriptblock]$Runner, [scriptblock]$Reader = $lunarg, [string]$Sha = $vkFakeSha, [string]$Win) {
+    $script:vkStepRecord = $null; $script:vkStepThrew = $null
+    $mutated = $script:Mutated; $step = $script:CurrentStep
+    try {
+        $text = (& { try { $script:vkStepRecord = Invoke-VulkanLoaderStep -PackageRoot $vkPkg -Runner $Runner -SignatureReader $Reader -WindowsDir $Win -ExpectedSha256 $Sha } catch { $script:vkStepThrew = $_ } } 6>&1 2>&1 | ForEach-Object { [string]$_ }) -join "`n"
+    } finally { $script:Mutated = $mutated; $script:CurrentStep = $step }
+    return $text
+}
+$vkPkg = Join-Path $work 'vkpkg'
+Write-Text (Join-Path $vkPkg $script:VulkanLoaderPackagePath) 'not the real Vulkan Runtime installer'
+Check ((Get-Sha256 (Join-Path $vkPkg $script:VulkanLoaderPackagePath)) -eq $vkFakeSha) 'the test package carries the stand-in installer of the cases above'
+$vkCleanWin = Join-Path $work 'vkwin-clean'
+[void][IO.Directory]::CreateDirectory((Join-Path $vkCleanWin 'System32')); [void][IO.Directory]::CreateDirectory((Join-Path $vkCleanWin 'SysWOW64'))
+$vkRan = 0
+$t = Invoke-VkStep -Runner { param($p, $a) $script:vkRan++; throw 'This program is blocked by group policy.' } -Win $vkCleanWin
+Check ($null -eq $vkStepThrew -and $null -eq $vkStepRecord -and $vkRan -eq 1 -and $t -match 'WARNING: the Vulkan loader is not installed: This program is blocked by group policy\.' -and $t -match 'vulkan\.lunarg\.com/sdk/home#windows') 'a runner that throws (antivirus or application control) is a warning with the remedy, not a throw'
+$t = Invoke-VkStep -Runner { param($p, $a) 0 } -Reader { param($p) throw 'the signature store cannot be read' } -Win $vkCleanWin
+Check ($null -eq $vkStepThrew -and $null -eq $vkStepRecord -and $t -match 'signature store cannot be read' -and $t -match 'vulkan\.lunarg\.com') 'a signature read that throws is a warning with the remedy'
+$vkRan = 0
+$t = Invoke-VkStep -Runner { param($p, $a) $script:vkRan++; 0 } -Sha ('0' * 64) -Win $vkCleanWin
+Check ($null -eq $vkStepThrew -and $null -eq $vkStepRecord -and $vkRan -eq 0 -and $t -match 'not installed: SHA256 of') 'a changed package file never runs, and the warning names the hash'
+$t = Invoke-VkStep -Runner { param($p, $a) 0 } -Win $vkCleanWin
+Check ($null -eq $vkStepThrew -and $vkStepRecord -and -not $vkStepRecord.ok -and $vkStepRecord.code -eq 0 -and $t -match 'still not in place') 'exit 0 with no loader after the run: a record with ok false and a warning'
+$t = Invoke-VkStep -Runner { param($p, $a) Copy-Item -LiteralPath $vkPe -Destination (Join-Path $vkCleanWin 'System32\vulkan-1.dll'); Copy-Item -LiteralPath $vkPe -Destination (Join-Path $vkCleanWin 'SysWOW64\vulkan-1.dll'); 0 } -Win $vkCleanWin
+Check ($null -eq $vkStepThrew -and $vkStepRecord -and $vkStepRecord.ok -and $vkStepRecord.version -eq $vkShip -and $vkStepRecord.before -match 'missing' -and $t -match 'is in place') 'a run that puts both loaders in place: a record with ok true, the shipped version and the readings before and after'
+$vkRan = 0
+$t = Invoke-VkStep -Runner { param($p, $a) $script:vkRan++; 0 } -Win $vkCleanWin
+Check ($null -eq $vkStepThrew -and $null -eq $vkStepRecord -and $vkRan -eq 0 -and $t -match 'Vulkan loader: System32\\vulkan-1\.dll ') 'loaders that are there (newer than the shipped version here) run nothing and give no record'
+
+# The verify line, from the readings and the record of the step.
+$vkHave = @{ x64 = (New-VkReading $vkShip); x86 = (New-VkReading $vkShip) }
+$vkNoX86 = @{ x64 = (New-VkReading $vkShip); x86 = $null }
+$recOk = [ordered]@{ version = $vkShip; ok = $true; at = '2026-10-29T04:00:00Z' }
+$recBad = [ordered]@{ version = $vkShip; ok = $false; at = '2026-10-29T04:00:00Z' }
+$v = Get-VulkanLoaderVerdict -Readings $vkHave -Record $recOk
+Check ($v.level -eq 'pass' -and $v.text -match 'ran the Vulkan Runtime 1\.4\.363\.0 at 2026-10-29T04:00:00Z') 'both loaders there: pass, and the line says this installer ran the runtime'
+Check ((Get-VulkanLoaderVerdict -Readings $vkHave -Record $null).text -match 'did not install it') 'a loader that another program installed: the line says so'
+Check ((Get-VulkanLoaderVerdict -Readings $vkNoX86 -Record $recOk).level -eq 'fail') 'a loader missing although the step reported success: fail'
+Check ((Get-VulkanLoaderVerdict -Readings $vkNoX86 -Record ($recOk | ConvertTo-Json | ConvertFrom-Json)).level -eq 'fail') 'the same with the record as state.json gives it back'
+$v = Get-VulkanLoaderVerdict -Readings $vkNoX86 -Record $null
+Check ($v.level -eq 'warn' -and $v.text -match 'SysWOW64\\vulkan-1\.dll missing' -and $v.text -match 'vulkan\.lunarg\.com') 'a loader missing with no record of the step: warning with the remedy'
+Check ((Get-VulkanLoaderVerdict -Readings $vkNoX86 -Record $recBad).level -eq 'warn') 'a loader missing after a step that reported its failure: warning'
+Check ((Get-VulkanLoaderVerdict -Readings @{ x64 = (New-VkReading '1.3.296.0'); x86 = (New-VkReading $vkShip) } -Record $null).level -eq 'warn') 'an older loader: warning'
+Check ((Get-VulkanLoaderVerdict -Readings @{ x64 = (New-VkReading '1.4.999.0' 'Another GPU Vendor'); x86 = (New-VkReading '1.5.0.0' 'Another GPU Vendor') } -Record $null).level -eq 'pass') 'newer loaders of another vendor: pass'
 $uninstallText = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
 Check ($uninstallText -notmatch '(?i)vulkan-1\.dll|VulkanRT|VulkanLoader') 'the uninstall leaves the Vulkan loader in place: it names neither the loader nor its installer'
 Check ((Get-InstalledPathOfPackageFile -PackagePath "payload/redist/VulkanRT-X64-$vkShip-Installer.exe" -InstallRoot 'C:\X') -eq $null) 'the Vulkan Runtime installer runs from the package and is copied nowhere'

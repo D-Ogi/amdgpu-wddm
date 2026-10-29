@@ -1927,6 +1927,75 @@ function Invoke-VulkanLoaderInstall {
     return [pscustomobject]@{ code = $n.code; text = [string]$n.text; timed_out = [bool]$n.timed_out }
 }
 
+# The remedy of every loader warning: LunarG's own download.
+$script:VulkanLoaderRemedy = 'Vulkan and OpenGL programs need it: install the Vulkan Runtime from https://vulkan.lunarg.com/sdk/home#windows yourself.'
+
+# The loader step of phase 2 (install.ps1). The driver works without a loader for Direct3D and the desktop, so no
+# part of this step stops the installation: a package file that fails its check, a program that Windows, antivirus or
+# application control does not let start, or any other error is a warning with the remedy. -Runner and
+# -SignatureReader are for the tests. Returns the record for state.json ("vulkan_loader") when LunarG's installer
+# ran, else $null. The caller keeps the record in the state object only; the next Save-Phase writes it, so this step
+# never writes state.json with the phase of an earlier stage.
+function Invoke-VulkanLoaderStep {
+    param([Parameter(Mandatory)][string]$PackageRoot, [scriptblock]$Runner, [scriptblock]$SignatureReader,
+          [string]$WindowsDir = $env:windir, [string]$ExpectedSha256 = $script:VulkanLoaderSha256)
+    try {
+        $now = Get-VulkanLoaderState -WindowsDir $WindowsDir
+        Write-Info "Vulkan loader: $($now.detail)"
+        if (-not $now.install) { return $null }
+        $exe = Join-Path $PackageRoot $script:VulkanLoaderPackagePath
+        $file = Test-RedistInstaller -Path $exe -ExpectedSha256 $ExpectedSha256 -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader $SignatureReader
+        if (-not $file.ok) { Write-Warn2 "the Vulkan loader is not installed: $($file.problem). Download the release again, or: $($script:VulkanLoaderRemedy)"; return $null }
+        $run = Invoke-Change "install the Vulkan loader $($script:VulkanLoaderVersion) (x64 in System32, x86 in SysWOW64) from $($script:VulkanLoaderPackagePath) ($($script:VulkanLoaderArguments -join ' '); SHA256 $($file.sha256.Substring(0, 16)) and the LunarG signature checked)" {
+            Invoke-VulkanLoaderInstall -Path $exe -Runner $Runner
+        }
+        if ($null -eq $run) { return $null }
+        if ($run.text) { Write-Log ($run.text) }
+        $after = Get-VulkanLoaderState -WindowsDir $WindowsDir
+        $out = Get-VulkanLoaderOutcome -Before $now -After $after -Code $run.code -TimedOut $run.timed_out -Pending (Get-VulkanLoaderPendingReplacements)
+        if ($out.ok) { Write-Info $out.message } else { Write-Warn2 $out.message }
+        if (@($out.downgraded).Count) { Write-Warn2 "the Vulkan loader of $($out.downgraded -join ' and ') is older after the run than before it: $($after.detail)" }
+        return [ordered]@{ version = $script:VulkanLoaderVersion; ok = [bool]$out.ok; restart = [bool]$out.restart; code = $run.code
+            before = $now.detail; after = $after.detail; at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') }
+    } catch {
+        Write-Warn2 "the Vulkan loader is not installed: $($_.Exception.Message). $($script:VulkanLoaderRemedy)"
+        return $null
+    }
+}
+
+# Pure: the verify line "Vulkan loader" from the readings of both loaders and the record of the loader step
+# (state.json "vulkan_loader", $null when the installer of this driver did not run LunarG's installer).
+#   fail  a loader is missing although the loader step reported success: the step and the files disagree
+#   warn  a loader is missing otherwise, or older than the one the package carries; the text gives the remedy
+#   pass  both loaders are there, of the shipped version or newer
+# -Readings is a hashtable x64/x86 -> the object of Get-VulkanLoaderReading -WithSigner ($null = no file).
+# Returns { level, text }.
+function Get-VulkanLoaderVerdict {
+    param([Parameter(Mandatory)][hashtable]$Readings, $Record, [string]$Shipped = $script:VulkanLoaderVersion)
+    $parts = @(); $missing = @(); $older = @()
+    foreach ($arch in $script:VulkanLoaderFiles.Keys) {
+        $file = $script:VulkanLoaderFiles[$arch]
+        $r = $null
+        if ($Readings.ContainsKey($arch)) { $r = $Readings[$arch] }
+        $standing = Get-VulkanLoaderStanding $r $Shipped
+        if ($standing -eq 'missing') { $missing += $file; $parts += "$file missing"; continue }
+        if ($standing -eq 'older') { $older += $file }
+        $company = $(if ($r.PSObject.Properties['company']) { [string]$r.company } else { '' })
+        $signer = $(if ($r.PSObject.Properties['signer']) { [string]$r.signer } else { '' })
+        $signature = $(if ($r.PSObject.Properties['signature']) { [string]$r.signature } else { 'not read' })
+        $who = @(@($company, $(if ($signer -and $signer -ne $company) { "signed by $signer" })) | Where-Object { $_ }) -join ', '
+        $parts += "$file $($r.major).$($r.minor).$($r.build).$($r.revision) ($who, signature $signature)"
+    }
+    $ran = ($null -ne $Record) -and ($Record.PSObject.Properties['version'] -or ($Record -is [Collections.IDictionary] -and $Record.Contains('version')))
+    $by = $(if ($ran) { "; the installer of this driver ran the Vulkan Runtime $($Record.version) at $($Record.at)" } else { '; the installer of this driver did not install it' })
+    $text = ($parts -join '; ') + $by
+    $stepOk = $ran -and [bool]$Record.ok
+    if ($missing.Count -and $stepOk) { return [pscustomobject]@{ level = 'fail'; text = "$text. The loader step reported success, but $($missing -join ' and ') is not there. Run install.cmd again, or: $($script:VulkanLoaderRemedy)" } }
+    if ($missing.Count) { return [pscustomobject]@{ level = 'warn'; text = "$text. Run install.cmd again, or: $($script:VulkanLoaderRemedy)" } }
+    if ($older.Count) { return [pscustomobject]@{ level = 'warn'; text = "$text. $($older -join ' and ') older than $Shipped`: run install.cmd again to bring it forward" } }
+    return [pscustomobject]@{ level = 'pass'; text = $text }
+}
+
 # ---- which Windows this driver is made for ---------------------------------------------------------------------
 # The support policy is n-2, without Canary builds. Supported are Windows 11 23H2 (22631), 24H2 (26100), 25H2 (26200) and the general builds
 # after them. A Windows 11 older than 22631 is a line that says so and advises an update, never a refusal. An Insider build and an LTSC edition are lines of the same kind. The one
