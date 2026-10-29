@@ -1,0 +1,233 @@
+--- a/tools/win/bd201scratch/bd201scratch_d3d12.cpp
++++ b/tools/win/bd201scratch/bd201scratch_d3d12.cpp
+@@ -413,6 +413,7 @@
+    Usage memory;
+    memory.open(adapter.Get());
+ 
++   bd201_record_identity("before-device");
+    ComPtr<ID3D12Device> device;
+    if (!ck("D3D12CreateDevice",
+            create_device(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))))
+@@ -498,6 +499,7 @@
+          return 3;
+       }
+       cal_ms = ms_since(t0);
++      bd201_record_first_submit();
+       /* The first attempt is the warm-up: the cost of a first submission, a pipeline's first use and the
+        * fence round trip, which has nothing to do with the iteration count. It is subtracted from every
+        * later measurement, so the scaling sees the dispatch alone and the long dispatch really lasts
+--- a/tools/win/bd201scratch/bd201scratch_modules.h
++++ b/tools/win/bd201scratch/bd201scratch_modules.h
+@@ -12,6 +12,7 @@
+ 
+ #include <windows.h>
+ #include <psapi.h>
++#include <bcrypt.h>
+ #include <stdio.h>
+ #include <string.h>
+ 
+@@ -47,4 +48,111 @@
+    fflush(stdout);
+ }
+ 
++/* Success records must retain module bases too. The CPU is sampled here, not at an earlier fault. */
++static void
++bd201_identity_string(const char *s)
++{
++   putchar('"');
++   for (const unsigned char *p = (const unsigned char *)s; *p; ++p) {
++      if (*p == '"' || *p == '\\') printf("\\%c", *p);
++      else if (*p < 32) printf("\\u%04x", (unsigned)*p);
++      else putchar(*p);
++   }
++   putchar('"');
++}
++
++static DWORD
++bd201_identity_sha256(const char *path, char digest[65])
++{
++   HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
++                            NULL, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, NULL);
++   if (file == INVALID_HANDLE_VALUE) return GetLastError();
++   BCRYPT_ALG_HANDLE alg = NULL;
++   BCRYPT_HASH_HANDLE hash = NULL;
++   NTSTATUS status = BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, NULL, 0);
++   if (status >= 0) status = BCryptCreateHash(alg, &hash, NULL, 0, NULL, 0, 0);
++   unsigned char block[16384], raw[32];
++   DWORD error = 0, got = 0;
++   while (status >= 0) {
++      if (!ReadFile(file, block, sizeof(block), &got, NULL)) { error = GetLastError(); break; }
++      if (!got) {
++         status = BCryptFinishHash(hash, raw, sizeof(raw), 0);
++         if (status >= 0) {
++            static const char hex[] = "0123456789abcdef";
++            for (unsigned i = 0; i < 32; ++i) { digest[i * 2] = hex[raw[i] >> 4]; digest[i * 2 + 1] = hex[raw[i] & 15]; }
++            digest[64] = '\0';
++         }
++         break;
++      }
++      status = BCryptHashData(hash, block, got, 0);
++   }
++   if (status < 0) error = (DWORD)status;
++   if (hash) BCryptDestroyHash(hash);
++   if (alg) BCryptCloseAlgorithmProvider(alg, 0);
++   CloseHandle(file);
++   return error;
++}
++
++static void
++bd201_record_identity(const char *stage)
++{
++   HMODULE modules[512];
++   DWORD needed = 0;
++   const BOOL modules_ok = K32EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &needed);
++   const DWORD modules_error = modules_ok ? 0 : GetLastError();
++   PROCESSOR_NUMBER cpu;
++   GetCurrentProcessorNumberEx(&cpu);
++   DWORD_PTR process_mask = 0, system_mask = 0;
++   const BOOL affinity_ok = GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask);
++   const DWORD affinity_error = affinity_ok ? 0 : GetLastError();
++   GROUP_AFFINITY group;
++   memset(&group, 0, sizeof(group));
++   const BOOL group_ok = GetThreadGroupAffinity(GetCurrentThread(), &group);
++   const DWORD group_error = group_ok ? 0 : GetLastError();
++   printf("bd201scratch: identity {\"stage\":");
++   bd201_identity_string(stage);
++   printf(",\"pid\":%lu,\"tid\":%lu,\"tick_ms\":%llu,\"processor_at_snapshot\":{\"group\":%u,\"number\":%u},"
++          "\"process_affinity\":{\"ok\":%s,\"error\":%lu,\"process_mask\":\"0x%llx\",\"system_mask\":\"0x%llx\"},"
++          "\"thread_group_affinity\":{\"ok\":%s,\"error\":%lu,\"group\":%u,\"mask\":\"0x%llx\"},"
++          "\"modules_ok\":%s,\"modules_error\":%lu,\"modules_truncated\":%s,\"modules\":[",
++          GetCurrentProcessId(), GetCurrentThreadId(), (unsigned long long)GetTickCount64(),
++          (unsigned)cpu.Group, (unsigned)cpu.Number, affinity_ok ? "true" : "false", affinity_error,
++          (unsigned long long)process_mask, (unsigned long long)system_mask,
++          group_ok ? "true" : "false", group_error, (unsigned)group.Group, (unsigned long long)group.Mask,
++          modules_ok ? "true" : "false", modules_error, needed > sizeof(modules) ? "true" : "false");
++   unsigned count = modules_ok ? needed / sizeof(HMODULE) : 0;
++   if (count > 512) count = 512;
++   unsigned printed = 0;
++   for (unsigned i = 0; i < count; ++i) {
++      char path[32768];
++      const DWORD n = GetModuleFileNameA(modules[i], path, sizeof(path));
++      if (!n || n >= sizeof(path)) continue;
++      const char *name = strrchr(path, '\\');
++      name = name ? name + 1 : path;
++      const size_t len = strlen(name);
++      if (_strnicmp(name, "amdgpu_wddm", 11) || len < 4 || _stricmp(name + len - 4, ".dll")) continue;
++      MODULEINFO info;
++      memset(&info, 0, sizeof(info));
++      const BOOL info_ok = K32GetModuleInformation(GetCurrentProcess(), modules[i], &info, sizeof(info));
++      const DWORD info_error = info_ok ? 0 : GetLastError();
++      char digest[65] = "";
++      const DWORD hash_error = bd201_identity_sha256(path, digest);
++      if (printed++) putchar(',');
++      printf("{\"name\":"); bd201_identity_string(name);
++      printf(",\"base\":\"0x%llx\",\"size\":\"0x%llx\",\"info_ok\":%s,\"info_error\":%lu,\"sha256\":\"%s\",\"hash_error\":%lu}",
++             (unsigned long long)(ULONG_PTR)modules[i], (unsigned long long)info.SizeOfImage,
++             info_ok ? "true" : "false", info_error, digest, hash_error);
++   }
++   printf("]}\n");
++   fflush(stdout);
++}
++
++static void
++bd201_record_first_submit(void)
++{
++   static volatile LONG recorded = 0;
++   if (InterlockedCompareExchange(&recorded, 1, 0) == 0)
++      bd201_record_identity("after-first-submit");
++}
++
+ #endif /* BD201SCRATCH_MODULES_H */
+--- a/tools/win/bd201scratch/bd201scratch_vk.c
++++ b/tools/win/bd201scratch/bd201scratch_vk.c
+@@ -349,6 +349,7 @@
+                                            .pQueueCreateInfos = &queue_info,
+                                            .enabledExtensionCount = capture_replay_ok ? 1u : 0u,
+                                            .ppEnabledExtensionNames = device_extensions};
++   bd201_record_identity("before-device");
+    if (vk_failed("vkCreateDevice", vkCreateDevice(phys, &device_info, NULL, &device)))
+       return 1;
+ 
+@@ -833,6 +834,7 @@
+          return 3;
+       res = vkWaitForFences(device, 1, &fence[0], VK_TRUE, (uint64_t)timeout_ms * 1000000ull);
+       cal_ms = ms_since(t0);
++      bd201_record_first_submit();
+       if (res != VK_SUCCESS)
+          break;
+       /* The first attempt is the warm-up: the cost of a first submission, a pipeline's first use and the
+--- a/tools/win/bd201scratch/bd201scratch_wsi.c
++++ b/tools/win/bd201scratch/bd201scratch_wsi.c
+@@ -372,6 +372,7 @@
+                                 .pSignalSemaphores = &rendered};
+    if ((res = vkQueueSubmit(queue, 1, &submit, fence)) != VK_SUCCESS)
+       return res;
++   bd201_record_first_submit();
+ 
+    const VkPresentInfoKHR present = {.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                                      .waitSemaphoreCount = 1,
+@@ -543,6 +544,7 @@
+                                            .pQueueCreateInfos = &queue_info,
+                                            .enabledExtensionCount = 1,
+                                            .ppEnabledExtensionNames = device_extensions};
++   bd201_record_identity("before-device");
+    if (vk_failed("vkCreateDevice", vkCreateDevice(phys, &device_info, NULL, &device)))
+       return 3;
+ #define LOAD_DEVICE(f) f = (PFN_##f)vkGetDeviceProcAddr(device, #f);
+--- a/tools/win/bd201scratch/build.ps1
++++ b/tools/win/bd201scratch/build.ps1
+@@ -69,12 +69,12 @@
+     "/imsvc$sdk\Include\$KitVersion\um", "/imsvc$sdk\Include\$KitVersion\shared")
+ $common = @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/D_CRT_SECURE_NO_WARNINGS') + $includes
+ $link = @('/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64",
+-    "/LIBPATH:$sdkLib\um\x64", 'kernel32.lib')
++    "/LIBPATH:$sdkLib\um\x64", 'kernel32.lib', 'bcrypt.lib')
+ # The 32-bit client needs the target triple as well as the 32-bit libraries: clang-cl's own default
+ # target is the host's, and no environment variable changes it.
+ $targetX86 = '--target=i386-pc-windows-msvc'
+ $linkX86 = @('/link', '/Brepro', "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x86')", "/LIBPATH:$sdkLibX86\ucrt\x86",
+-    "/LIBPATH:$sdkLibX86\um\x86", 'kernel32.lib')
++    "/LIBPATH:$sdkLibX86\um\x86", 'kernel32.lib', 'bcrypt.lib')
+ 
+ function Invoke-Cl([string[]]$Arguments, [string]$What) {
+     $env:INCLUDE = ''; $env:LIB = ''
+--- a/tools/win/bd201scratch/run.ps1
++++ b/tools/win/bd201scratch/run.ps1
+@@ -91,6 +91,7 @@
+     [ValidateRange(0, 16)][int]$CrashRetries = 2,
+     # Passed to the client as it stands: --adapter-index for a second GPU, --device-index for a second
+     # Vulkan device, --warp for a development-PC check of this script (no row comes out of that).
++    [string]$Collector = '',
+     [string[]]$ExtraArgs = @()
+ )
+ 
+@@ -235,6 +236,15 @@
+ function Start-Bd201Client([string]$client, [string]$arguments, [string]$stdout, [string]$stderr,
+                            [int]$bound, [string]$launch, [string]$prefix, [hashtable]$variables) {
+     $result = @{ how = 'session0'; user = $null; note = $null; exit = -1; ended = $false }
++    $collectorResult = $null
++    if ($Collector) {
++        if ($launch -eq 'console') { throw 'BD-215 collector currently supports session0 compute rows only' }
++        if (-not (Test-Path -LiteralPath $Collector)) { throw 'BD-215 collector not found' }
++        $collectorOut = $prefix + '.bd215'
++        $collectorResult = Join-Path $collectorOut 'run-result.json'
++        $arguments = '--out ' + (Arg $collectorOut) + ' --seconds ' + [math]::Max(1, ($bound - 2)) + ' --module amdgpu_wddm -- ' + (Arg $client) + ' ' + $arguments
++        $client = $Collector
++    }
+     if ($launch -eq 'console') {
+         $who = $null
+         try { $who = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName } catch { }
+@@ -316,6 +326,13 @@
+     Set-Content -LiteralPath $stdout -Value $outReader.Result
+     Set-Content -LiteralPath $stderr -Value $errReader.Result
+     if ($result['ended']) { $result['exit'] = $process.ExitCode }
++    if ($Collector) {
++        if (-not (Test-Path -LiteralPath $collectorResult)) { throw 'BD-215 collector wrote no run-result.json' }
++        $capture = Get-Content -LiteralPath $collectorResult -Raw | ConvertFrom-Json
++        if ($capture.collector_exit -eq 20 -or $capture.timed_out -or -not $capture.debuggee_exited) { throw 'BD-215 collection failed or timed out' }
++        $result['exit'] = [BitConverter]::ToInt32([BitConverter]::GetBytes([uint32]$capture.debuggee_exit_code), 0)
++        $result['bd215'] = $capture
++    }
+     return $result
+ }
+ 

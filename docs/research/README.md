@@ -38,3 +38,4 @@ ASD-STE100 pass that the rest of the documentation gets.
 | `h264-encoder-literature-entropy-pipelining-check.md` | The independent re-check of that survey | Check record, newer than the survey |
 | `h264-encoder-literature-rate-control.md` | M15.11: rate control and perceptual quality, which is where our measured quality gap against the inbox encoder sits | Literature survey, 2026-10-06. Check beside it. STE pass owed |
 | `h264-encoder-literature-rate-control-check.md` | The independent re-check of that survey | Check record, newer than the survey |
+| `ser-reordering-literature.md` | SER stage 2 on gfx1013: ray and shader-invocation reordering in software, with the measured results of each source in short form | Literature list, 2026-10-23. No quotations |
