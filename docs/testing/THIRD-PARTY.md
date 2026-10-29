@@ -24,7 +24,7 @@ and NOTICE in the package root).
 | `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `cba98e67ec7297484fa57e9cb9b14917c4f15500` (the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
 | `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `c281df214cde2c008a8a6e26827b494a76d22e29` (`driver/umd/mft-h264`) |
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `c281df214cde2c008a8a6e26827b494a76d22e29` (`tools/win/d3d12caps`) |
-| `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `64d86e13f57476dd502a5938e613451014317172`, the state installer at `cba98e67ec7297484fa57e9cb9b14917c4f15500` |
+| `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `64d86e13f57476dd502a5938e613451014317172`, the state installer at `6d41768b7da193c59735e6074f3fd73bb1286257` |
 | `tools\d3d11bench.exe` | amdgpu-wddm `c281df214cde2c008a8a6e26827b494a76d22e29` (`tools/win/d3d11bench`) |
 | `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `c281df214cde2c008a8a6e26827b494a76d22e29` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `cba98e67ec7297484fa57e9cb9b14917c4f15500` (`tools/win/amdgpu_wddm_control`) |

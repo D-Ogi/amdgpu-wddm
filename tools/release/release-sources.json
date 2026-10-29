@@ -2900,10 +2900,10 @@
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
       "source": "scratch/t34/release/set/artifacts/release/state-worker-rel/amdgpu-state-installer.exe",
-      "sha256": "3F7327135A432A52798AB0E1D9FAF99AF20FE3C57A0FFB92B62FA3A44215F020",
+      "sha256": "492A1A32973C49227DE02C64A8BA234F25EECCC4BE84E10A06E20746F9B64861",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "cba98e67ec7297484fa57e9cb9b14917c4f15500",
+        "commit": "6d41768b7da193c59735e6074f3fd73bb1286257",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
           "-Compiler",
@@ -2920,18 +2920,18 @@
         ],
         "output": "amdgpu-state-installer.exe"
       },
-      "size": 240640,
-      "authenticode_sha256": "C198C466BAB91A357DE983C58E418FACB3EE280EC6BEB685A8E47B457EC6EE1D",
+      "size": 260608,
+      "authenticode_sha256": "13C900FE545C87F7FC652A4805DB872215D650C462DEBDD42C69ADF24E820522",
       "flavour": "release"
     },
     {
       "component": "tool",
       "path": "payload/tools/amdgpu-state-installer.exe",
       "source": "scratch/t34/release/set/artifacts/lab/state-worker-lab/amdgpu-state-installer.exe",
-      "sha256": "B8DA080E44E7E391DC6187D365060C43629240F67104E15F5B5470C2CF4F72FB",
+      "sha256": "1EEB5821B4591AD9BA6325A068FF3BD096F246E70802F0FA15940984110CE837",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "cba98e67ec7297484fa57e9cb9b14917c4f15500",
+        "commit": "6d41768b7da193c59735e6074f3fd73bb1286257",
         "recipe": "driver/state/installer-build.ps1",
         "args": [
           "-Compiler",
@@ -2948,8 +2948,8 @@
         ],
         "output": "amdgpu-state-installer.exe"
       },
-      "size": 240640,
-      "authenticode_sha256": "CDB183B14B906564877ED033BB8B7D0AD959F55F6616CCAEB6620E950AA878E9",
+      "size": 260608,
+      "authenticode_sha256": "A4B1A9DF223B6276C6A445226EE91E6F3736E4FF5F9D3CCE78E5DFB914E4B2CE",
       "flavour": "lab"
     },
     {
