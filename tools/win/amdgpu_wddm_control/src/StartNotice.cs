@@ -31,14 +31,13 @@ namespace AmdgpuWddmControl
     public sealed class StartReading
     {
         public bool Read;                       // the settings key answered
-        // The driver's settings key is there: Services\bc250kmd\Parameters, which the INF writes with the service
-        // itself (the AddReg of its AddService, UnconfirmedStarts among the values), so it exists from the install
-        // on and not only from the first start of the driver image. This is the same reading of "installed" that
+        // The driver state store opens (DriverStateKey.Open, the active StateV2 generation of the service's shared
+        // state), so the driver is installed. This is the same reading of "installed" that
         // RecoverySnapshot.DriverInstalled uses, so the notice, the Home banner and the support view agree.
         public bool Installed;
         public bool Running;                    // the driver answered a reading of its own state
-        public uint? UnconfirmedStarts;         // Parameters\UnconfirmedStarts, null when absent
-        public uint? LastStage;                 // Parameters\LastStage, null when absent
+        public uint? UnconfirmedStarts;         // the store's UnconfirmedStarts record, null when absent
+        public uint? LastStage;                 // the store's LastStage record, null when absent
         public string DriverError;              // why the driver gave no answer; null when it did
     }
 
@@ -83,7 +82,10 @@ namespace AmdgpuWddmControl
 
     // The one write the enable-driver action makes on the driver's settings: the count of starts that nothing
     // confirmed back to zero, flushed, and read again. Pure over IRegApi (CuRegistry.cs), so the tests inject the
-    // native return codes and the elevated helper uses Win32RegApi on the live key.
+    // native return codes and the elevated helper uses Win32RegApi, which writes the driver state store through
+    // bc250control.dll. Since the shared state store, guard.c reads the count from the store (DriverStateOpenData),
+    // so a write to the raw Services\bc250kmd\Parameters key does not reset the guard (BD-257). The store needs no
+    // running driver: it is a registry key of the service, so the reset works while the driver is stopped.
     //
     // This value is deliberately NOT in Recovery.ParameterNames: an undo must never be able to put a refusal count
     // back on a machine, and no other action may touch this counter. The reset therefore runs here, with its own
@@ -104,6 +106,9 @@ namespace AmdgpuWddmControl
     public static class GuardReset
     {
         public const string ValueName = "UnconfirmedStarts";
+        // Where the value lives, for the plan text and the log (driver/state/windows.c, the Data key of the active
+        // generation; the catalog path of the record is the root, "").
+        public const string StoreLocation = @"StateV2\Generations\<active>\Data";
 
         // Reads the count, writes 0, flushes and requires an exact zero readback.
         // Only an absent value is a fresh count; access/type failures refuse the reset. Nothing throws.

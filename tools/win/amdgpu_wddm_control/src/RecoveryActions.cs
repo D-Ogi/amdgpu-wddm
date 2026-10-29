@@ -1660,7 +1660,7 @@ namespace AmdgpuWddmControl
                 Log("result: failed: the driver's settings key cannot be opened (" + e.Message + "). Nothing was changed.");
                 return Failed;
             }
-            Log("guard count: " + reset);
+            Log("guard count in the driver state store (" + GuardReset.StoreLocation + "): " + reset);
             if (!reset.Written) { Log("result: failed: the count of unconfirmed starts could not be cleared. Nothing else was tried."); return Failed; }
 
             var device = BoardDevice();
