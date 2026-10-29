@@ -14,6 +14,15 @@
 #include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
 #include "lab_gate.h"               // BD-167: the raw diagnostic escapes below are lab-only
 #include "boot_logo.h"              // the boot-screen mascot drawn into the firmware's framebuffer at start
+#include "display_rotation.h"       // BD-247: which path rotations this driver shows, and the rotated bugcheck screen
+
+// display_rotation.h names the path rotation values as plain numbers for its host test; these are the WDK's.
+C_ASSERT(BC250_VPPR_UNINITIALIZED == D3DKMDT_VPPR_UNINITIALIZED && BC250_VPPR_IDENTITY == D3DKMDT_VPPR_IDENTITY);
+C_ASSERT(BC250_VPPR_ROTATE90 == D3DKMDT_VPPR_ROTATE90 && BC250_VPPR_ROTATE180 == D3DKMDT_VPPR_ROTATE180);
+C_ASSERT(BC250_VPPR_ROTATE270 == D3DKMDT_VPPR_ROTATE270);
+C_ASSERT(BC250_VPPR_IDENTITY_OFFSET90 == D3DKMDT_VPPR_IDENTITY_OFFSET90);
+C_ASSERT(BC250_VPPR_ROTATE270_OFFSET270 == D3DKMDT_VPPR_ROTATE270_OFFSET270);
+C_ASSERT(BC250_VPPR_UNPINNED == D3DKMDT_VPPR_UNPINNED && BC250_VPPR_NOTSPECIFIED == D3DKMDT_VPPR_NOTSPECIFIED);
 
 // The settings DisplayDrawBootLogo reads. On by default: a new feature of a release is usable after the install.
 #define BC250_BOOT_LOGO_DEFAULT 1ul
@@ -1189,6 +1198,18 @@ static NTSTATUS TargetModeIsPinned(_In_ const DXGK_VIDPN_INTERFACE* VidPn, D3DKM
     return (status == STATUS_GRAPHICS_MODE_NOT_PINNED) ? STATUS_SUCCESS : status;
 }
 
+// BD-247: the angle of the committed path, which the bugcheck screen (SystemDisplayWrite) and the scan-out caps
+// trailer (wddm.c) read. The pipe itself is not reprogrammed: the compositor draws a rotated path's content already
+// rotated into a primary of the physical size (display_rotation.h). Each change is logged once.
+static void DisplayRecordRotation(BC250_DEVICE* Device, ULONG Angle, const char* Where)
+{
+    const ULONG value = Bc250RotationValue(Angle);
+    if ((ULONG)Device->Rotation == value) return;
+    GuardLog("display: rotation %lu -> %lu degrees (%s)",
+        (ULONG)Bc250RotationAngle((ULONG)Device->Rotation, TRUE), Angle, Where);
+    Device->Rotation = value;
+}
+
 // Exact inherited tuple only. The same check serves IsSupportedVidPn and the
 // final commit, so a saved OS mode cannot silently reprogram this pipeline.
 static const char* DisplayInheritedModeRefusal(const BC250_DEVICE* Device,
@@ -1200,10 +1221,9 @@ static const char* DisplayInheritedModeRefusal(const BC250_DEVICE* Device,
     if (!Device->InheritedSignalValid) return "signal-invalid";
     if (Mode->Type != D3DKMDT_RMT_GRAPHICS) return "source-type";
     if (Path->VidPnSourceId != 0 || Path->VidPnTargetId != BC250_CHILD_UID) return "path-ids";
-    if (Path->ContentTransformation.Rotation != D3DKMDT_VPPR_IDENTITY &&
-        Path->ContentTransformation.Rotation != D3DKMDT_VPPR_UNPINNED &&
-        Path->ContentTransformation.Rotation != D3DKMDT_VPPR_UNINITIALIZED &&
-        Path->ContentTransformation.Rotation != D3DKMDT_VPPR_NOTSPECIFIED) return "rotation";
+    // BD-247: the retained pipe does not rotate either; the compositor's content arrives rotated.
+    if (Bc250RotationAngle((ULONG)Path->ContentTransformation.Rotation, Device->FullWddm) == BC250_ROTATION_REFUSED)
+        return "rotation";
     if (!Device->Modeset.InheritedSupport || (ScalingPinned(Path->ContentTransformation.Scaling) &&
         (scaling >= BC250_SCALING_COUNT || !(Device->Modeset.InheritedSupport & BC250_SCALING_BIT(scaling))))) return "scaling";
     if (Path->VisibleFromActiveTLOffset.cx || Path->VisibleFromActiveTLOffset.cy ||
@@ -1252,12 +1272,12 @@ static void ConnectorSignal(const BC250_TARGET_TIMING* Timing, D3DKMDT_VIDEO_SIG
     Signal->ScanLineOrdering = D3DDDI_VSSLO_PROGRESSIVE;
 }
 
-static BOOLEAN ConnectorPathValid(const D3DKMDT_VIDPN_PRESENT_PATH* Path)
+// BD-247: the identity and, on the full table, the three rotations (display_rotation.h). A rotation changes no
+// timing and no plane setting: the source mode keeps the target's size, and its content arrives rotated.
+static BOOLEAN ConnectorPathValid(const BC250_DEVICE* Device, const D3DKMDT_VIDPN_PRESENT_PATH* Path)
 {
     return Path->VidPnSourceId == 0 && Path->VidPnTargetId == BC250_CHILD_UID &&
-        (Path->ContentTransformation.Rotation == D3DKMDT_VPPR_IDENTITY ||
-         Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED ||
-         Path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNINITIALIZED) &&
+        Bc250RotationAngle((ULONG)Path->ContentTransformation.Rotation, Device->FullWddm) != BC250_ROTATION_REFUSED &&
         (!ScalingPinned(Path->ContentTransformation.Scaling) ||
          Path->ContentTransformation.Scaling == D3DKMDT_VPPS_IDENTITY) &&
         !Path->VisibleFromActiveTLOffset.cx && !Path->VisibleFromActiveTLOffset.cy &&
@@ -1459,7 +1479,7 @@ static NTSTATUS ConnectorVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handle,
     if (count != 1 || snapshot->Sink.Kind == BC250_SINK_NONE) goto unsupported;
     status = topology->pfnAcquireFirstPathInfo(topologyHandle, &path);
     if (!NT_SUCCESS(status)) goto done;
-    if (!path || !ConnectorPathValid(path)) goto unsupported;
+    if (!path || !ConnectorPathValid(Device, path)) goto unsupported;
     status = SourceModeIsPinned(vidpn, Handle, 0, &sourcePinned, &source);
     if (NT_SUCCESS(status)) status = TargetModeIsPinned(vidpn, Handle, BC250_CHILD_UID, &targetPinned, &target);
     if (!NT_SUCCESS(status)) goto done;
@@ -1475,6 +1495,8 @@ static NTSTATUS ConnectorVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handle,
         Device->CommittedSourceWidth = source.Format.Graphics.PrimSurfSize.cx;
         Device->CommittedSourceHeight = source.Format.Graphics.PrimSurfSize.cy;
         Device->ModeActive = TRUE;
+        DisplayRecordRotation(Device, Bc250RotationAngle((ULONG)path->ContentTransformation.Rotation, Device->FullWddm),
+            "connector commit");
     } else if (Enum) {
         D3DKMDT_VIDPN_PRESENT_PATH update = *path;
         BOOLEAN changed = FALSE;
@@ -1498,14 +1520,11 @@ static NTSTATUS ConnectorVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handle,
             update.ContentTransformation.ScalingSupport.Identity = 1;
             changed = TRUE;
         }
-        if (path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED && Enum->EnumPivotType != D3DKMDT_EPT_ROTATION) {
-            RtlZeroMemory(&update.ContentTransformation.RotationSupport, sizeof(update.ContentTransformation.RotationSupport));
-            update.ContentTransformation.RotationSupport.Identity = 1;
+        if (path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED && Enum->EnumPivotType != D3DKMDT_EPT_ROTATION)
             changed = TRUE;
-        }
+        // BD-247: dxgkrnl reads the rotation support on every update, so every update states all of it.
         if (changed) {
-            update.ContentTransformation.RotationSupport.Identity = 1;
-            if (Device->FullWddm) update.ContentTransformation.RotationSupport.Offset0 = 1;
+            BC250_ROTATION_SUPPORT_FILL(update.ContentTransformation.RotationSupport, Device->FullWddm);
             status = topology->pfnUpdatePathSupportInfo(topologyHandle, &update);
         }
     }
@@ -1585,6 +1604,9 @@ NTSTATUS Bc250IsSupportedVidPn(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_ISSUP
                 if (ScalingPinned(scaling) && (!native || device->Modeset.InheritedFixed) &&
                     (ScalingFromPath(scaling) == BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(ScalingFromPath(scaling)))))
                     IsSupportedVidPn->IsVidPnSupported = FALSE;
+                if (Bc250RotationAngle((ULONG)path->ContentTransformation.Rotation, device->FullWddm) ==
+                    BC250_ROTATION_REFUSED)
+                    IsSupportedVidPn->IsVidPnSupported = FALSE;     // BD-247: an offset, or display-only
                 if (device->Modeset.InheritedFixed) {
                     BOOLEAN targetPinned;
                     D3DKMDT_VIDEO_SIGNAL_INFO target;
@@ -1681,21 +1703,18 @@ NTSTATUS Bc250EnumVidPnCofuncModality(_In_ const HANDLE hAdapter, _In_ const DXG
             if (path->ContentTransformation.Rotation == D3DKMDT_VPPR_UNPINNED && Enum->EnumPivotType != D3DKMDT_EPT_ROTATION)
             {
                 RtlZeroMemory(&update.ContentTransformation.RotationSupport, sizeof(update.ContentTransformation.RotationSupport));
-                update.ContentTransformation.RotationSupport.Identity = 1;
                 // A WDDM 1.3+ driver has "path independent rotation" and must say which offsets it supports: on a
                 // test-signed system dxgkrnl bugchecks (0x113, subtype 0x1C) when the primary path's support lacks
                 // Offset0 or carries any other offset (E16 run 007, read in DMMVIDPNPRESENTPATH::SetRotationSupport).
                 // For a display-only driver dxgkrnl sets the bit by itself, so that path stays as it was.
-                if (device->FullWddm) update.ContentTransformation.RotationSupport.Offset0 = 1;
+                // BD-247: the full table also offers the three rotations (display_rotation.h).
+                BC250_ROTATION_SUPPORT_FILL(update.ContentTransformation.RotationSupport, device->FullWddm);
                 changed = TRUE;
             }
             // dxgkrnl judges RotationSupport on EVERY pfnUpdatePathSupportInfo call, also when only the scaling
             // branch above asked for it, and the copy taken from the path may still be all zero there.
             if (changed && device->FullWddm)
-            {
-                update.ContentTransformation.RotationSupport.Identity = 1;
-                update.ContentTransformation.RotationSupport.Offset0 = 1;
-            }
+                BC250_ROTATION_SUPPORT_FILL(update.ContentTransformation.RotationSupport, TRUE);
             if (changed) step = topology->pfnUpdatePathSupportInfo(hTopology, &update);
         }
 
@@ -1744,10 +1763,14 @@ static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG
     LONG call=InterlockedIncrement(&device->VisibilityCalls);
     LONGLONG begin=KeQueryPerformanceCounter(NULL).QuadPart;
     NTSTATUS status=STATUS_SUCCESS;
+    // The first 32 calls, every power of two, and a request that changes the state within the first 1024 calls.
+    // BD-247: after a rotated commit dxgkrnl repeated FALSE past call 32, and a later TRUE was not in the log.
+    const BOOLEAN logged=call<=32 || (call&(call-1))==0 ||
+        (call<=1024 && (Visibility->Visible ? TRUE : FALSE)!=device->SourceVisible);
 
     // Normal PASSIVE_LEVEL visibility DDI only. The shared quiet restore helper
     // must remain usable at bugcheck without a logger, allocation or lock.
-    if (call<=32) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
+    if (logged) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
         call,Visibility->VidPnSourceId,Visibility->Visible,device->SourceVisible,device->VidPnFlipEnabled,device->DcnBlanked);
     if (Visibility->VidPnSourceId != 0) status=STATUS_INVALID_PARAMETER;
     else if (device->DcnWriteEnabled || device->VidPnFlipEnabled ||
@@ -1771,7 +1794,7 @@ static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG
         WddmSourceVisibility(device, Visibility->Visible);
     }
     DisplayRetainVisibility(device,Visibility,status,begin);
-    if (call<=32) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
+    if (logged) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
         call,status,device->SourceVisible,device->DcnBlanked);
     // BD-195: visibility alone never programs a link. A visible source over a connected sink whose link is off means
     // that no commit has applied a mode since the plug. Logged past the 32-call bound, for the first 16 such calls.
@@ -1877,12 +1900,14 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
     {
         const D3DKMDT_VIDPN_PRESENT_PATH* path = NULL;
         ULONG scaling = BC250_SCALING_COUNT;            // no preference: modeset.c takes the default
+        ULONG angle = 0;                                // BD-247: no path pins nothing
         status = topology->pfnAcquireFirstPathInfo(hTopology, &path);
         if (device->Modeset.InheritedFixed && (!NT_SUCCESS(status) || path == NULL))
             return NT_SUCCESS(status) ? STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED : status;
         if (NT_SUCCESS(status) && path != NULL)
         {
             scaling = ScalingFromPath(path->ContentTransformation.Scaling);
+            angle = Bc250RotationAngle((ULONG)path->ContentTransformation.Rotation, device->FullWddm);
             if (device->Modeset.InheritedFixed) {
                 D3DKMDT_VIDEO_SIGNAL_INFO target;
                 BOOLEAN targetPinned = FALSE;
@@ -1890,12 +1915,14 @@ static NTSTATUS CommitVidPnCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG_C
                 if (NT_SUCCESS(status) && (!targetPinned || !DisplayInheritedModeMatches(device,&mode,path,&target)))
                     status = STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
             }
+            if (NT_SUCCESS(status) && angle == BC250_ROTATION_REFUSED) status = STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
             topology->pfnReleasePathInfo(hTopology, path);
             if (!NT_SUCCESS(status)) return status;
         }
         status = ModesetCommit(device, (ULONG)mode.Format.Graphics.PrimSurfSize.cx,
                                (ULONG)mode.Format.Graphics.PrimSurfSize.cy, scaling);
         if (!NT_SUCCESS(status)) return status;
+        DisplayRecordRotation(device, angle, "commit");
     }
     if (device->CommittedSourceFormat != (ULONG)mode.Format.Graphics.PixelFormat ||
         device->CommittedSourceWidth != (ULONG)mode.Format.Graphics.PrimSurfSize.cx ||
@@ -1940,7 +1967,8 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     const D3DKMDT_VIDPN_PRESENT_PATH_SCALING scaling = Update->VidPnPresentPathInfo.ContentTransformation.Scaling;
-    ULONG width, height, support;
+    ULONG width, height, support, angle;
+    NTSTATUS result;
 
     if (ConnectorIsEnabled(device)) {
         BC250_CONNECTOR_SNAPSHOT* snapshot = ConnectorSnapshotAcquire(device);
@@ -1948,7 +1976,7 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
         const BC250_TARGET_TIMING* timing;
         NTSTATUS status = STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
         if (!snapshot) return STATUS_DEVICE_NOT_READY;
-        if (ConnectorPathValid(&Update->VidPnPresentPathInfo) && device->ModeActive) {
+        if (ConnectorPathValid(device, &Update->VidPnPresentPathInfo) && device->ModeActive) {
             status = ConnectorLinkCurrentSignal(device, &signal);
             timing = NT_SUCCESS(status) ? ConnectorFindTiming(device, snapshot, NULL, &signal) : NULL;
             if (!timing || timing->HActive != device->CommittedSourceWidth ||
@@ -1956,8 +1984,12 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
                 status = STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
             if (!ConnectorGenerationCurrent(device, snapshot->Generation)) status = STATUS_DEVICE_BUSY;
         }
-        // Identity-only: updating the path cannot change the already selected
+        // Identity scaling only: updating the path cannot change the already selected
         // timing. A timing change goes through CommitVidPN with both modes pinned.
+        // BD-247: the rotation can change here (smooth rotation); the timing and the plane stay as they are.
+        if (NT_SUCCESS(status))
+            DisplayRecordRotation(device, Bc250RotationAngle(
+                (ULONG)Update->VidPnPresentPathInfo.ContentTransformation.Rotation, device->FullWddm), "connector update");
         ConnectorSnapshotRelease(snapshot);
         return status;
     }
@@ -1971,17 +2003,19 @@ NTSTATUS Bc250UpdateActiveVidPnPresentPath(_In_ const HANDLE hAdapter, _In_ cons
          Update->VidPnPresentPathInfo.VisibleFromActiveBROffset.cx != 0 ||
          Update->VidPnPresentPathInfo.VisibleFromActiveBROffset.cy != 0))
         return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
-    if (Update->VidPnPresentPathInfo.ContentTransformation.Rotation != D3DKMDT_VPPR_IDENTITY &&
-        Update->VidPnPresentPathInfo.ContentTransformation.Rotation != D3DKMDT_VPPR_UNINITIALIZED)
-        return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
+    // BD-247: the identity or, on the full table, a rotation; it reprograms nothing (display_rotation.h).
+    angle = Bc250RotationAngle((ULONG)Update->VidPnPresentPathInfo.ContentTransformation.Rotation, device->FullWddm);
+    if (angle == BC250_ROTATION_REFUSED) return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
     // The scaling of the active path (the user's "GPU scaling" choice): the same source mode, a new placement.
-    if (!ScalingPinned(scaling)) return STATUS_SUCCESS;
+    if (!ScalingPinned(scaling)) { DisplayRecordRotation(device, angle, "update"); return STATUS_SUCCESS; }
     width = DisplaySourceWidth(device);
     height = DisplaySourceHeight(device);
     support = ModesetScalingSupport(device, width, height);
     if (ScalingFromPath(scaling) == BC250_SCALING_COUNT || !(support & BC250_SCALING_BIT(ScalingFromPath(scaling))))
         return STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED;
-    return ModesetCommit(device, width, height, ScalingFromPath(scaling));
+    result = ModesetCommit(device, width, height, ScalingFromPath(scaling));
+    if (NT_SUCCESS(result)) DisplayRecordRotation(device, angle, "update");
+    return result;
 }
 
 NTSTATUS Bc250RecommendMonitorModes(_In_ const HANDLE hAdapter, _In_ const DXGKARG_RECOMMENDMONITORMODES* const Recommend)
@@ -2050,11 +2084,15 @@ NTSTATUS Bc250RecommendMonitorModes(_In_ const HANDLE hAdapter, _In_ const DXGKA
 
 NTSTATUS Bc250QueryVidPnHWCapability(_In_ const HANDLE hAdapter, _Inout_ DXGKARG_QUERYVIDPNHWCAPABILITY* Capability)
 {
-    UNREFERENCED_PARAMETER(hAdapter);
+    const BC250_DEVICE* device = (const BC250_DEVICE*)hAdapter;
     // DriverScaling=0 means scaling in the display pipeline (including a
     // retained firmware scaler), not an absence of scaling support. A value
     // of 1 promises a software/graphics-engine scaling implementation.
     RtlZeroMemory(&Capability->VidPnHWCaps, sizeof(Capability->VidPnHWCaps));
+    // BD-247: a rotated image is drawn by the graphics engine (the compositor renders it rotated), never by the
+    // display pipeline, which scans out linear surfaces unrotated. The OS clears the bit on a path that is not
+    // rotated (display/querying-vidpnhardware-capabilities.md).
+    Capability->VidPnHWCaps.DriverRotation = device->FullWddm ? 1 : 0;
     return STATUS_SUCCESS;
 }
 
@@ -2132,8 +2170,9 @@ NTSTATUS Bc250SystemDisplayEnable(_In_ const PVOID MiniportDeviceContext, _In_ c
     status=DcnRestorePostDisplaySerialized(device);
     if (!NT_SUCCESS(status)) return status;
     if (!runtime) ModesetRestoreQuiet(device);
-    *Width = post->Width;
-    *Height = post->Height;
+    // BD-247: the OS draws the bugcheck screen in the desktop's orientation, so a rotated path reports its logical
+    // size and SystemDisplayWrite turns each block onto the unrotated firmware surface.
+    Bc250RotationLogicalSize(Bc250RotationAngle((ULONG)device->Rotation, TRUE), post->Width, post->Height, Width, Height);
     *ColorFormat = post->ColorFormat;
     device->SystemDisplayReady=TRUE;
     return STATUS_SUCCESS;
@@ -2148,16 +2187,12 @@ void Bc250SystemDisplayWrite(_In_ const PVOID MiniportDeviceContext, _In_ const 
     const DXGK_DISPLAY_INFORMATION* post = runtime ? &device->RuntimePost : &device->Post;
     UCHAR* framebuffer = runtime ? device->RuntimeFramebuffer : device->Framebuffer;
     SIZE_T length = runtime ? device->RuntimeFramebufferLength : device->FramebufferLength;
-    UINT y, width, height;
-
     if (!runtime && InterlockedCompareExchange(&device->RuntimeDisplayChanged, 0, 0)) return;
     if (!device->SystemDisplayReady || !framebuffer || !Source ||
-        (ULONGLONG)post->Width * 4 > post->Pitch || (ULONGLONG)post->Pitch * post->Height > length ||
-        PositionX >= post->Width || PositionY >= post->Height) return;
-    width = min(SourceWidth, post->Width - PositionX);
-    width = min(width, SourceStride / 4);
-    height = min(SourceHeight, post->Height - PositionY);
-    for (y = 0; y < height; y++)
-        RtlCopyMemory(framebuffer + (SIZE_T)(PositionY + y) * post->Pitch + (SIZE_T)PositionX * 4,
-                      (const UCHAR*)Source + (SIZE_T)y * SourceStride, (SIZE_T)width * 4);
+        (ULONGLONG)post->Width * 4 > post->Pitch || (ULONGLONG)post->Pitch * post->Height > length) return;
+    // BD-247: the position and the block are logical (SystemDisplayEnable reported the logical size); the clip to
+    // that size and to the source stride, and the turn onto the physical surface, are display_rotation.h's.
+    Bc250RotationWriteBlock(Bc250RotationAngle((ULONG)device->Rotation, TRUE), framebuffer, (unsigned int)post->Pitch,
+        (unsigned int)post->Width, (unsigned int)post->Height, (const unsigned char*)Source, SourceWidth, SourceHeight,
+        SourceStride, PositionX, PositionY);
 }

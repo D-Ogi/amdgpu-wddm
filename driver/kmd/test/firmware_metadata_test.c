@@ -8,8 +8,11 @@
 // M15.14 increment 2: the branch now writes a second optional trailer, so the extracted case block needs
 // its contract as well. BOOLEAN is the driver's; here it is the one field of the wddm stub below.
 #include "../../contract/bc250_scanout_caps.h"
+// BD-247: the trailer closes DirectFlip while the path is rotated.
+#include "../display_rotation.h"
 typedef long NTSTATUS;
 typedef unsigned long ULONG;
+typedef long LONG;
 typedef unsigned char* PUCHAR;
 typedef unsigned char BOOLEAN;
 #define STATUS_SUCCESS 0L
@@ -47,10 +50,12 @@ typedef struct {void* Psp;int GartLock,GpuStopUnconfirmed,Smu;
     // LONGs of bc250kmd.h).
     volatile long RuntimeDisplayChanged,RuntimePostValid;
     struct {BOOLEAN InheritedFixed;} Modeset;
+    ULONG Rotation;     // BD-247: the committed path rotation value (D3DKMDT_VIDPN_PRESENT_PATH_ROTATION)
 } BC250_DEVICE;
 /* BD-197 step 2: dcn.c's own DcnPlaneFormatsOpen, extracted as DcnPlaneFormatsOpenActual by the generator;
    dcn_flip_test.c holds the same function to the flip path. This wrapper counts the branch's questions. */
 #define FALSE 0
+#define TRUE 1
 static long InterlockedCompareExchange(volatile long* p,long v,long c){long old=*p;if(old==c)*p=v;return old;}
 static BOOLEAN DcnPlaneFormatsOpenActual(BC250_DEVICE* Device);
 static unsigned planeFormatQuestions;
@@ -65,7 +70,11 @@ typedef struct {void* pOutputData;ULONG OutputDataSize;} QUERY;
 // drive both answers of the branch.
 // NodeCount is latched at WddmStart; with three nodes the branch opens node 2 in submittable_node_mask.
 #define BC250_WDDM_NODE_COMPUTE 2u
-typedef struct {BOOLEAN DirectFlipHandshake;unsigned NodeCount;} BC250_WDDM;
+// BD-247: ScanoutCapsLogged holds the trailer flags last logged, plus 1, so a line is written only on a change.
+typedef struct {BOOLEAN DirectFlipHandshake;unsigned NodeCount;volatile long ScanoutCapsLogged;} BC250_WDDM;
+static long InterlockedExchange(volatile long* p,long v){long old=*p;*p=v;return old;}
+static unsigned trailerLines;
+static void GuardLog(const char* format,...){(void)format;trailerLines++;}
 static BC250_WDDM wddmStorage;
 static BC250_WDDM* wddm=&wddmStorage;
 static NTSTATUS SmuReadFirmwareVersion(int* smu,ULONG* version)
@@ -217,6 +226,25 @@ int main(int argc,char**argv)
         CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && scanout.version==BC250_SCANOUT_CAPS_VERSION &&
               scanout.size==sizeof(scanout) && scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
         CHECK(scanout.post_width==1920 && scanout.post_height==1200);
+        // BD-247: a rotated path clears the DirectFlip flag, so the shells compose; the identity and the values
+        // that pin no rotation keep it.
+        // The guard log gets one line when the answer changes and none for a repeated answer.
+        trailerLines=0;
+        for(j=2;j<=4;j++){
+            d.Rotation=(ULONG)j;
+            memset(extended,0xA5,sizeof(extended));
+            CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+            memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+            CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && !(scanout.flags&BC250_SCANOUT_CAPS_DIRECT_FLIP));
+        }
+        CHECK(trailerLines==1);
+        d.Rotation=1;
+        memset(extended,0xA5,sizeof(extended));
+        CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
+        memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
+        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(trailerLines==2);
+        d.Rotation=0;
         // Display modes: with a smaller source mode committed, the trailer carries that mode, the geometry
         // the kernel's admission uses now. Back at the native mode it carries the POST geometry again.
         d.SourceWidth=1920;d.SourceHeight=1080;

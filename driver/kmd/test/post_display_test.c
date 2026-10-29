@@ -15,6 +15,7 @@ typedef struct _BC250_DCN_REG_INFO { const char* Name; unsigned long Offset; } B
 #include "plane_format.h"
 #include "display_io.h"
 #include "dcn_translate.h"
+#include "display_rotation.h"
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
 typedef long LONG;
@@ -50,6 +51,7 @@ typedef struct _BC250_DEVICE {
     /* BD-197: the connector commit's DET plane-1 base, which the format registers keep after a commit. */
     BOOLEAN DcnPipeConnector;
     ULONG DcnPipeDetPlane1;
+    ULONG Rotation;                 /* BD-247: the committed path rotation value */
 } BC250_DEVICE;
 #include "connector_surface.h"
 #define TRUE 1
@@ -259,7 +261,7 @@ static void init(BC250_DEVICE*d,ULONG*fb)
 }
 int main(void)
 {
-    BC250_DEVICE d;ULONG fb[24],src[8]={1,2,3,4,5,6,7,8};UINT width,height;D3DDDIFORMAT fmt;unsigned writes;
+    BC250_DEVICE d;ULONG fb[24],src[8]={1,2,3,4,5,6,7,8};UINT width,height;D3DDDIFORMAT fmt;unsigned writes,restores;
     init(&d,fb);
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
     CHECK(d.SystemDisplayReady && width==4 && height==3 && fmt==D3DDDIFMT_X8R8G8B8);
@@ -270,6 +272,26 @@ int main(void)
     CHECK(fb[9]==1 && fb[10]==2 && fb[11]==3 && fb[17]==5 && fb[18]==6 && fb[19]==7);
     CHECK(fb[8]==0 && fb[12]==0 && fb[20]==0); // preserve pitch padding and clipped right edge
     writes=model.writes;CHECK(DcnRestorePostDisplay(&d)==STATUS_SUCCESS);CHECK(model.writes==writes);
+    // BD-247: a rotated path. The OS draws the logical screen (3x4 here), and each block turns onto the 4x3
+    // firmware surface counter-clockwise: at 90 degrees logical (x,y) is physical (y, 2-x).
+    restores=modeset_restores;
+    init(&d,fb);d.Rotation=2;
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);
+    CHECK(d.SystemDisplayReady && width==3 && height==4 && fmt==D3DDDIFMT_X8R8G8B8);
+    Bc250SystemDisplayWrite(&d,src,2,2,8,1,1);
+    CHECK(fb[9]==1 && fb[1]==2 && fb[10]==3 && fb[2]==4 && fb[0]==0 && fb[8]==0 && fb[17]==0);
+    memset(fb,0,96);Bc250SystemDisplayWrite(&d,src,2,2,8,2,3);     // clipped to x<3 and y<4: one pixel
+    CHECK(fb[3]==1 && fb[1]==0 && fb[11]==0);
+    memset(fb,0,96);Bc250SystemDisplayWrite(&d,src,2,2,8,3,0);CHECK(fb[0]==0 && fb[16]==0); // past the logical width
+    init(&d,fb);d.Rotation=3;
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS && width==4 && height==3);
+    Bc250SystemDisplayWrite(&d,src,2,1,8,0,0);CHECK(fb[19]==1 && fb[18]==2 && fb[0]==0);
+    init(&d,fb);d.Rotation=4;
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS && width==3 && height==4);
+    Bc250SystemDisplayWrite(&d,src,2,1,8,0,0);CHECK(fb[3]==1 && fb[11]==2 && fb[0]==0);
+    init(&d,fb);d.Rotation=6;       // an offset is never committed; the screen stays unrotated
+    CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS && width==4 && height==3);
+    modeset_restores=restores;      // the counts below are those of the cases without a rotation
     // Mid-publication crash: diverged flag has not been published, cached POST is valid.
     init(&d,fb);d.DcnDiverged=0;
     CHECK(Bc250SystemDisplayEnable(&d,BC250_CHILD_UID,NULL,&width,&height,&fmt)==STATUS_SUCCESS);

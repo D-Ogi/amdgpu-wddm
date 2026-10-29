@@ -78,6 +78,8 @@ static NTSTATUS DisplayInheritedVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handl
         Device->CommittedSourceHeight = source.Format.Graphics.PrimSurfSize.cy;
         Device->CommittedSourceFormat = (ULONG)source.Format.Graphics.PixelFormat;
         Device->ModeActive = TRUE;
+        // BD-247: DisplayInheritedModeRefusal admitted the rotation; the retained pipe stays as it is.
+        DisplayRecordRotation(Device, Bc250RotationAngle(rotation, Device->FullWddm), "inherited commit");
         *Supported = TRUE; reason = "ok"; goto done;
     }
     if (!Enum) { *Supported = TRUE; reason = "ok"; goto done; }
@@ -111,8 +113,7 @@ static NTSTATUS DisplayInheritedVidPn(BC250_DEVICE* Device, D3DKMDT_HVIDPN Handl
     if (Enum->EnumPivotType != D3DKMDT_EPT_ROTATION) {
         RtlZeroMemory(&update.ContentTransformation.RotationSupport,
             sizeof(update.ContentTransformation.RotationSupport));
-        update.ContentTransformation.RotationSupport.Identity = 1;
-        if (Device->FullWddm) update.ContentTransformation.RotationSupport.Offset0 = 1;
+        BC250_ROTATION_SUPPORT_FILL(update.ContentTransformation.RotationSupport, Device->FullWddm);
         changed = TRUE;
     }
     reason = "update-support";
@@ -131,11 +132,13 @@ done:
             GuardLog("ivpn %c%ld path %lu/%lu scale %lu->%lu rot %lu update %u",
                 op, call, path->VidPnSourceId, path->VidPnTargetId, scaling,
                 (ULONG)update.ContentTransformation.Scaling, rotation, changed);
-            GuardLog("ivpn %c%ld support I%u C%u S%u A%u X%u rot I%u O%u", op, call,
+            GuardLog("ivpn %c%ld support I%u C%u S%u A%u X%u rot I%u R%u%u%u O%u", op, call,
                 update.ContentTransformation.ScalingSupport.Identity, update.ContentTransformation.ScalingSupport.Centered,
                 update.ContentTransformation.ScalingSupport.Stretched, update.ContentTransformation.ScalingSupport.AspectRatioCenteredMax,
                 update.ContentTransformation.ScalingSupport.Custom,
-                update.ContentTransformation.RotationSupport.Identity, update.ContentTransformation.RotationSupport.Offset0);
+                update.ContentTransformation.RotationSupport.Identity, update.ContentTransformation.RotationSupport.Rotate90,
+                update.ContentTransformation.RotationSupport.Rotate180, update.ContentTransformation.RotationSupport.Rotate270,
+                update.ContentTransformation.RotationSupport.Offset0);
             GuardLog("ivpn %c%ld source pinned %u type %u size %lux%lu",
                 op, call, sourcePinned, source.Type, source.Format.Graphics.PrimSurfSize.cx,
                 source.Format.Graphics.PrimSurfSize.cy);

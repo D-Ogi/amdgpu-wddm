@@ -39,10 +39,11 @@ typedef struct {
     UINT Type;
     struct { struct { REGION PrimSurfSize,VisibleRegionSize; ULONG PixelFormat,Stride; } Graphics; } Format;
 } D3DKMDT_VIDPN_SOURCE_MODE;
-typedef struct { int ComposedSourceModes; } BC250_DEVICE;
+typedef struct { int ComposedSourceModes; int FullWddm; } BC250_DEVICE;
 #include "edid.h"
 #include "display_modes.h"
 #include "dcn_translate.h"
+#include "display_rotation.h"
 typedef struct {
     struct { ULONG Kind,TargetCount; BC250_TARGET_TIMING Targets[BC250_EDID_MAX_MODES]; } Sink;
 } BC250_CONNECTOR_SNAPSHOT;
@@ -98,13 +99,23 @@ int main(void)
     path.VidPnTargetId = BC250_CHILD_UID;
     path.ContentTransformation.Rotation = D3DKMDT_VPPR_IDENTITY;
     path.ContentTransformation.Scaling = D3DKMDT_VPPS_IDENTITY;
-    CHECK(ConnectorPathValid(&path));
-    path.VidPnTargetId++; CHECK(!ConnectorPathValid(&path)); path.VidPnTargetId--;
-    path.ContentTransformation.Rotation = 2; CHECK(!ConnectorPathValid(&path));
+    device.FullWddm = 1;
+    CHECK(ConnectorPathValid(&device,&path));
+    path.VidPnTargetId++; CHECK(!ConnectorPathValid(&device,&path)); path.VidPnTargetId--;
+    /* BD-247: the three rotations on the full table, no offset, and the identity alone on the display-only one. */
+    path.ContentTransformation.Rotation = 2; CHECK(ConnectorPathValid(&device,&path));
+    path.ContentTransformation.Rotation = 3; CHECK(ConnectorPathValid(&device,&path));
+    path.ContentTransformation.Rotation = 4; CHECK(ConnectorPathValid(&device,&path));
+    path.ContentTransformation.Rotation = 5; CHECK(!ConnectorPathValid(&device,&path));
+    path.ContentTransformation.Rotation = 14; CHECK(!ConnectorPathValid(&device,&path));
+    path.ContentTransformation.Rotation = D3DKMDT_VPPR_UNPINNED; CHECK(ConnectorPathValid(&device,&path));
+    device.FullWddm = 0;
+    path.ContentTransformation.Rotation = 2; CHECK(!ConnectorPathValid(&device,&path));
+    device.FullWddm = 1;
     path.ContentTransformation.Rotation = D3DKMDT_VPPR_IDENTITY;
-    path.ContentTransformation.Scaling = 2; CHECK(!ConnectorPathValid(&path));
-    path.ContentTransformation.Scaling = D3DKMDT_VPPS_UNPINNED; CHECK(ConnectorPathValid(&path));
-    path.VisibleFromActiveBROffset.cx = 1; CHECK(!ConnectorPathValid(&path));
+    path.ContentTransformation.Scaling = 2; CHECK(!ConnectorPathValid(&device,&path));
+    path.ContentTransformation.Scaling = D3DKMDT_VPPS_UNPINNED; CHECK(ConnectorPathValid(&device,&path));
+    path.VisibleFromActiveBROffset.cx = 1; CHECK(!ConnectorPathValid(&device,&path));
     printf("connector modes: %u checks, %u failures\n",checks,failures);
     return failures ? 1 : 0;
 }

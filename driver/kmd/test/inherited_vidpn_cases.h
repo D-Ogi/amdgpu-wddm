@@ -31,7 +31,23 @@ static void InheritedVidpnCases(void)
     CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.ContentTransformation.Scaling=253;
     CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
-    other=path;other.ContentTransformation.Rotation=2;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    // BD-247: the full table shows the three rotations and no offset; the display-only table the identity alone.
+    other=path;other.ContentTransformation.Rotation=2;CHECK(DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    other.ContentTransformation.Rotation=4;CHECK(DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    other.ContentTransformation.Rotation=5;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    other.ContentTransformation.Rotation=16;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    other.ContentTransformation.Rotation=17;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    d.FullWddm=0;other.ContentTransformation.Rotation=2;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
+    d.FullWddm=1;
+    // Smooth rotation: an update with a rotation succeeds, programs nothing and records the angle.
+    update.VidPnPresentPathInfo=path;update.VidPnPresentPathInfo.ContentTransformation.Scaling=D3DKMDT_VPPS_UNPINNED;
+    update.VidPnPresentPathInfo.ContentTransformation.Rotation=3;
+    CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==0 && d.Rotation==3);
+    update.VidPnPresentPathInfo.ContentTransformation.Rotation=6;
+    CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED && d.Rotation==3);
+    update.VidPnPresentPathInfo.ContentTransformation.Rotation=D3DKMDT_VPPR_IDENTITY;
+    CHECK(Bc250UpdateActiveVidPnPresentPath(&d,&update)==0 && d.Rotation==1);
+    CHECK(commitPrograms==0 && commitTransactions==0 && pipeWrites==0);
     other=path;other.VidPnTargetId=0;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.VidPnSourceId=1;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
     other=path;other.VisibleFromActiveTLOffset.cx=1;CHECK(!DisplayInheritedModeMatches(&d,&mode,&other,&s));
