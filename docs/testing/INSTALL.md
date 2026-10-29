@@ -24,7 +24,9 @@ Use this package only on a BC-250. The installer stops on every other computer a
   `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll` in `System32`, or when one of them is older than
   14.44. It checks the SHA-256 and the Microsoft signature of that file first, and it needs no internet for this
   step. Nothing happens when the runtime is already there. If Windows answers that the runtime is registered but a
-  file of it is missing, the installer repairs it with the same file.
+  file of it is missing, the installer repairs it with the same file. In the same way, the package carries LunarG's
+  installer for the Vulkan loader, which Vulkan and OpenGL programs need. The installer runs it when this PC has no
+  `vulkan-1.dll` in `System32` or `SysWOW64`, or an older one than 1.4.363.0.
 - 2 GB of free space on the system drive.
 - A keyboard and a monitor on the BC-250.
 - An internet connection during the installation: the installer downloads the AMD GPU firmware (see "GPU firmware"
@@ -341,9 +343,10 @@ longer have to run the release installer again for this.
 | Test signing | `bcdedit /set '{current}' testsigning on` |
 | Test certificate | LocalMachine Root and TrustedPublisher stores |
 | Microsoft Visual C++ 2015-2022 Redistributable (x64) | installed by Microsoft's own installer from `payload\redist\vc_redist.x64.exe`, only when `System32` has no `vcruntime140.dll`, `vcruntime140_1.dll` or `msvcp140.dll`, or one of them is older than 14.44. Microsoft's files go where Microsoft puts them. `uninstall.cmd` leaves this runtime in place, because other programs use it |
+| Vulkan loader (Vulkan Runtime 1.4.363.0 of LunarG) | `C:\Windows\System32\vulkan-1.dll` (64-bit programs) and `C:\Windows\SysWOW64\vulkan-1.dll` (32-bit programs). LunarG's own signed installer puts them there from `payload\redist\VulkanRT-X64-1.4.363.0-Installer.exe` (`/S`). It runs only when one of the two files is missing or older than 1.4.363.0. A loader of the same or a newer version, also from another vendor, stays as it is. The installer checks the SHA-256 and the LunarG signature of the file before it runs it. If the loader cannot be installed, the installation continues with a warning, and `verify.cmd` shows the line `Vulkan loader`. `uninstall.cmd` leaves the loader in place, because other programs use it |
 | Kernel-mode driver | driver package `bc250kmd.inf` (driver store, service `bc250kmd`) |
 | Driver settings | The shared service state returned by Windows. Nagi Control App and `bc250kmd_cli state` use the same reader. Installation defaults remain separate from user choices and driver records. See `docs/design/driver-state.md` |
-| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). Nothing goes into `C:\Windows\System32` or `C:\Windows\SysWOW64`. An install over an earlier release removes the `bc250umd.dll` that it put there |
+| User-mode drivers | `C:\Program Files\amdgpu-wddm\` (`d3d12`, `desktop`, `d3d11`, `vulkan`, `opengl`, `wow64`, `tools`, `control`, `mft`). No file of ours goes into `C:\Windows\System32` or `C:\Windows\SysWOW64` (the Microsoft runtime and the Vulkan loader above are the files of their vendors). An install over an earlier release removes the `bc250umd.dll` that it put there |
 | H.264 encoder (Media Foundation) | `HKLM\SOFTWARE\Classes\CLSID\{A32438F0-0D79-4CA9-A5BF-9F3C80837253}` with its `InprocServer32`, `HKLM\SOFTWARE\Classes\MediaFoundation\Transforms` (the encoder's own key and its membership in the video encoder category). These keys are for the whole computer. `uninstall.cmd` removes them, and so does a later release that does not install the encoder |
 | Licence texts | `C:\Program Files\amdgpu-wddm\licenses` (the package's `licenses\` and `THIRD-PARTY.md`) |
 | Graphics registration | the GPU's software key: `UserModeDriverName`, `VulkanDriverName`, `OpenGLDriverName`, `OpenGLVersion`, `OpenGLFlags`. For 32-bit applications: `UserModeDriverNameWow` and `VulkanDriverNameWow`. This release writes no `OpenGLDriverNameWow`, `OpenGLVersionWow` or `OpenGLFlagsWow`: it has no 32-bit OpenGL driver (see "What this release does" below). The first entry of each `UserModeDriverName` value, the Direct3D 9 entry, holds `<>`. Also `HKLM\SOFTWARE\Khronos\Vulkan\Drivers` and `HKLM\SOFTWARE\WOW6432Node\Khronos\Vulkan\Drivers`. `uninstall.cmd` puts back an `OpenGL` value from before the install, with the registry type it had. It removes the ones it added, even when the installer state file is gone. An `OpenGL` value that belongs to another driver stays. It does all that whether or not Windows still shows the GPU, because the files the values name go with the install |
@@ -393,14 +396,12 @@ the whole description.
   for every 64-bit OpenGL program of the computer, with no file beside the program. `verify.cmd` shows the
   line `OpenGL ICD` with the registration and the driver file. Without this driver Windows gives an OpenGL
   program its own software renderer, which is OpenGL 1.1.
-- 32-bit OpenGL applications keep that software renderer of Windows, which is OpenGL 1.1. This release has no
-  32-bit OpenGL driver: that driver draws through Vulkan, and a 32-bit program reaches Vulkan through the
-  32-bit Vulkan loader of the computer, `C:\Windows\SysWOW64\vulkan-1.dll`. No release of ours installs that
-  loader, and the test computer has none, so the 32-bit OpenGL driver would load and then give the program no
-  OpenGL at all. `verify.cmd` says so in one line. 32-bit Direct3D programs are not affected and run on the
-  GPU: the 32-bit Direct3D 10, 11 and 12 drivers of this release use our Vulkan driver directly, without that
-  loader. A 32-bit Vulkan application does need it. This release registers its 32-bit Vulkan driver for a
-  computer that has one.
+- 32-bit OpenGL applications keep that software renderer of Windows, which is OpenGL 1.1. This release does not
+  register its 32-bit OpenGL driver. That driver draws through Vulkan, and a 32-bit program reaches Vulkan through
+  the 32-bit Vulkan loader, `C:\Windows\SysWOW64\vulkan-1.dll`. The installer now installs that loader (see "What
+  the installer changes"), but the 32-bit OpenGL driver on it has not passed its test on the test computer yet.
+  `verify.cmd` says so in one line. 32-bit Direct3D programs are not affected and run on the GPU: the 32-bit
+  Direct3D 10, 11 and 12 drivers of this release use our Vulkan driver directly, without that loader.
 - Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
   Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
@@ -418,9 +419,10 @@ the whole description.
   driver. The installer writes `<>` in the Direct3D 9 entry of `UserModeDriverName`, and Windows then loads
   `d3d9on12.dll` by itself. Windows 11 24H2 and 25H2 do not start a GPU whose Direct3D 9 entry is empty.
 - 32-bit Direct3D 10/11/12 and Vulkan applications use 32-bit builds of the same drivers (folder `wow64`), with the
-  same routing rules as 64-bit applications. A 32-bit Vulkan application also needs the 32-bit Vulkan loader of the
-  computer, which no release of ours installs (see the two OpenGL entries above). 32-bit Direct3D 9 applications use
-  D3D9On12 on the 32-bit Direct3D 12 driver, as 64-bit ones do.
+  same routing rules as 64-bit applications. A 32-bit Vulkan application uses the 32-bit Vulkan loader,
+  `C:\Windows\SysWOW64\vulkan-1.dll`, which the installer installs when the computer has none.
+  `verify.cmd` shows the line `Vulkan (32-bit)`: a 32-bit program that finds the GPU through that loader. 32-bit
+  Direct3D 9 applications use D3D9On12 on the 32-bit Direct3D 12 driver, as 64-bit ones do.
 - The Witcher 3 (Direct3D 12 version) has an application profile.
 - A program that records video can use the H.264 encoder of the GPU through Media Foundation. The encoder works only
   while Windows runs the BC-250 on this driver: if the driver did not start, the encoder refuses, and the program

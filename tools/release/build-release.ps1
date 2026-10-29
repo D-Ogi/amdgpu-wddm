@@ -742,7 +742,9 @@ function Get-InstallLocation([string]$PackagePath) {
         '^payload/cert/' { return 'LocalMachine Root and TrustedPublisher' }
         # The Microsoft Visual C++ runtime installer runs from the package and is never copied anywhere: the files it
         # installs are Microsoft's own, in System32, under Microsoft's version rules. install.ps1 copies the payload
-        # directories it names in $dirs, and redist is not one of them.
+        # directories it names in $dirs, and redist is not one of them. LunarG's Vulkan Runtime installer is the same
+        # kind of file: it runs from the package and puts the two Vulkan loaders in System32 and SysWOW64.
+        '^payload/redist/VulkanRT-' { return 'run from the package (LunarG installs the Vulkan loader in System32 and SysWOW64)' }
         '^payload/redist/' { return 'run from the package (Microsoft installs its own files in System32)' }
         '^payload/(.+)$' { return ('<InstallDir>\' + $Matches[1].Replace('/', '\')) }
     }

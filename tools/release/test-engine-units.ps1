@@ -959,6 +959,114 @@ Check ($installText.IndexOf('Invoke-VcRuntimeInstall') -lt $installText.IndexOf(
 Check (-not (Get-Command Get-VcRuntimeMissing -ErrorAction SilentlyContinue)) 'the reader of the old refusal is gone from common.ps1'
 Check ($installText -notmatch 'VcRuntimeNeeded') 'the preflight keeps no value about the runtime that nothing reads'
 
+'the Vulkan loader: the installer brings LunarG''s Vulkan Runtime'
+# The decision, over readings of System32\vulkan-1.dll (x64) and SysWOW64\vulkan-1.dll (x86). $null = no file.
+function New-VkReading([string]$Version, [string]$Company = 'LunarG, Inc.') {
+    if (-not $Version) { return $null }
+    $p = $Version.Split('.')
+    return [pscustomobject]@{ major = [int]$p[0]; minor = [int]$p[1]; build = [int]$p[2]; revision = [int]$p[3]; company = $Company }
+}
+$vkShip = $script:VulkanLoaderVersion
+$vkAbsent = Get-VulkanLoaderDecision -Readings @{ x64 = $null; x86 = $null }
+Check ($vkAbsent.install -and (@($vkAbsent.arches | ForEach-Object standing) -join ',') -eq 'missing,missing' -and $vkAbsent.detail -match 'System32\\vulkan-1\.dll missing; SysWOW64\\vulkan-1\.dll missing') 'absent: a clean PC without both loaders runs the Vulkan Runtime installer, and the detail names both files'
+$vkOld = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading '1.3.296.0'); x86 = (New-VkReading '1.3.296.0') }
+Check ($vkOld.install -and (@($vkOld.arches | ForEach-Object standing) -join ',') -eq 'older,older' -and $vkOld.detail -match "1\.3\.296\.0 older than $([regex]::Escape($vkShip))") 'older: two 1.3.296 loaders are brought forward, and the detail says older than the shipped version'
+$vkSame = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading $vkShip); x86 = (New-VkReading $vkShip) }
+Check (-not $vkSame.install -and (@($vkSame.arches | ForEach-Object standing) -join ',') -eq 'same,same') 'same: the loaders of the shipped version stay, nothing runs'
+$vkNewer = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading '1.4.999.0' 'Another GPU Vendor'); x86 = (New-VkReading '1.5.0.0' 'Another GPU Vendor') }
+Check (-not $vkNewer.install -and (@($vkNewer.arches | ForEach-Object standing) -join ',') -eq 'newer,newer' -and $vkNewer.detail -match 'Another GPU Vendor') 'newer: a newer loader of another vendor is never replaced, nothing runs, and the detail names the vendor'
+$vkX86 = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading $vkShip); x86 = $null }
+Check ($vkX86.install -and (@($vkX86.arches | ForEach-Object standing) -join ',') -eq 'same,missing') 'x86 missing only: the x64 loader is there (the lab state), the x86 one is not, so the installer runs'
+$vkX86New = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading '1.4.999.0'); x86 = (New-VkReading '1.3.0.0') }
+Check ($vkX86New.install -and (@($vkX86New.arches | ForEach-Object standing) -join ',') -eq 'newer,older') 'a newer x64 loader with an older x86 one: the installer runs for x86 (LunarG keeps the newer x64 file)'
+$vkRev = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading '1.4.363.1'); x86 = (New-VkReading '1.4.362.9') } -Shipped '1.4.363.0'
+Check ($vkRev.install -and (@($vkRev.arches | ForEach-Object standing) -join ',') -eq 'newer,older') 'all four parts of the version count, compared as numbers'
+Check ((Get-VulkanLoaderStanding (New-VkReading '1.4.1000.0') '1.4.363.0') -eq 'newer') 'negative control: 1.4.1000 is newer than 1.4.363, not older as a text comparison would say'
+Check (((@($script:VulkanLoaderFiles.Keys)) -join ',') -eq 'x64,x86' -and $script:VulkanLoaderFiles.x64 -eq 'System32\vulkan-1.dll' -and $script:VulkanLoaderFiles.x86 -eq 'SysWOW64\vulkan-1.dll') 'the two loaders are System32\vulkan-1.dll and SysWOW64\vulkan-1.dll'
+# The reading of the files, over a folder of this test: a copy of a real PE with a version resource stands in for a
+# loader of that version, and a missing file reads as $null.
+$vkWin = Join-Path $work 'vkwin'
+[void][IO.Directory]::CreateDirectory((Join-Path $vkWin 'System32'))
+[void][IO.Directory]::CreateDirectory((Join-Path $vkWin 'SysWOW64'))
+$vkPe = Join-Path $env:windir 'System32\kernel32.dll'
+Copy-Item -LiteralPath $vkPe -Destination (Join-Path $vkWin 'System32\vulkan-1.dll')
+$vkPeV = (Get-Item -LiteralPath $vkPe).VersionInfo
+$vkRead = Get-VulkanLoaderState -WindowsDir $vkWin
+$vkRead64 = @($vkRead.arches | Where-Object arch -eq 'x64')[0]
+$vkRead86 = @($vkRead.arches | Where-Object arch -eq 'x86')[0]
+Check ($vkRead64.version -eq ('{0}.{1}.{2}.{3}' -f $vkPeV.FileMajorPart, $vkPeV.FileMinorPart, $vkPeV.FileBuildPart, $vkPeV.FilePrivatePart) -and $vkRead64.company -eq ([string]$vkPeV.CompanyName).Trim()) "the reading takes the file version and the company of the file ($($vkRead64.version), $($vkRead64.company))"
+Check ($vkRead86.standing -eq 'missing' -and $vkRead.install) 'a SysWOW64 without vulkan-1.dll reads as missing, and the installer runs'
+
+# The file the package carries: the SHA-256, then a Valid signature of LunarG, whose name has a comma, so the subject
+# writes it in quotes.
+$vkFake = Join-Path $vcWork 'VulkanRT-X64-fake-Installer.exe'
+Write-Text $vkFake 'not the real Vulkan Runtime installer'
+$vkFakeSha = Get-Sha256 $vkFake
+$lunarg = { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = [pscustomobject]@{ Subject = 'CN="LunarG, Inc.", O="LunarG, Inc.", L=Fort Collins, S=Colorado, C=US' } } }
+$vkOk = Test-RedistInstaller -Path $vkFake -ExpectedSha256 $vkFakeSha -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader $lunarg
+Check ($vkOk.ok) 'the right bytes with a valid LunarG signature are accepted (quoted common name)'
+Check (-not (Test-RedistInstaller -Path $vkFake -ExpectedSha256 ('0' * 64) -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader $lunarg).ok) 'negative control: another SHA-256 is refused'
+Check (-not (Test-RedistInstaller -Path $vkFake -ExpectedSha256 $vkFakeSha -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader $valid).ok) 'negative control: a Microsoft signature is not a LunarG signature'
+Check (-not (Test-RedistInstaller -Path $vkFake -ExpectedSha256 $vkFakeSha -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader { param($p) [pscustomobject]@{ Status = 'Valid'; SignerCertificate = [pscustomobject]@{ Subject = 'CN="LunarG, Inc. Of Nowhere", O=Nowhere' } } }).ok) 'negative control: a quoted name that only starts with LunarG, Inc. is refused'
+Check (-not (Test-RedistInstaller -Path $vkFake -ExpectedSha256 $vkFakeSha -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader { param($p) [pscustomobject]@{ Status = 'UnknownError'; SignerCertificate = $null } }).ok) 'negative control: a signature that is not Valid is refused'
+Check ((Test-VcRuntimeInstaller -Path $vcFake -ExpectedSha256 $vcFakeSha -SignatureReader $valid).ok) 'the Visual C++ check still accepts the unquoted Microsoft name through the shared check'
+$vkReal = @((Join-Path (Split-Path (Split-Path $Installer)) $script:VulkanLoaderPackagePath), "P:\BC-250\toolchain\vulkan-runtime\$($script:VulkanLoaderVersion)\VulkanRT-X64-$($script:VulkanLoaderVersion)-Installer.exe") | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if ($vkReal) {
+    $vkRealCheck = Test-RedistInstaller -Path $vkReal -ExpectedSha256 $script:VulkanLoaderSha256 -ExpectedSigner $script:VulkanLoaderSigner
+    Check ($vkRealCheck.ok) "LunarG's installer in hand passes the pinned SHA-256 and Windows' signature reading ($vkReal, $($vkRealCheck.status))"
+    Check ((Get-Item -LiteralPath $vkReal).Length -eq $script:VulkanLoaderSize) "its size is the pinned $($script:VulkanLoaderSize) bytes"
+    Check (([string](Get-Item -LiteralPath $vkReal).VersionInfo.FileVersion).Trim() -eq $script:VulkanLoaderVersion) "its file version is the pinned $($script:VulkanLoaderVersion)"
+    Check ((Split-Path $script:VulkanLoaderPackagePath -Leaf) -eq "VulkanRT-X64-$($script:VulkanLoaderVersion)-Installer.exe") 'the package path names the same version'
+} else { Check $true 'LunarG''s installer is not in this checkout: the pinned-hash case is covered by the package test' }
+
+# The runner, with the code handed in: never the real installer.
+$vkSeen = $null
+$vkRun0 = Invoke-VulkanLoaderInstall -Path $vkFake -Runner { param($p, $a) $script:vkSeen = @($a); 0 }
+Check ($vkRun0.code -eq 0 -and -not $vkRun0.timed_out -and (($vkSeen -join ' ') -eq '/S')) 'the install runs LunarG''s installer with /S'
+# The outcome comes from the files read again after the run, not from the exit code.
+$vkAfterOk = Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading $vkShip); x86 = (New-VkReading $vkShip) }
+$o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAfterOk -Code 0
+Check ($o.ok -and -not $o.restart -and $o.message -match 'in place') 'absent before, both loaders after: the step is done'
+$o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAfterOk -Code 7
+Check ($o.ok -and $o.message -match 'exit code 7') 'an unknown exit code with both loaders in place is still done, and the code is reported'
+$o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAbsent -Code 0
+Check (-not $o.ok -and $o.message -match 'still not in place' -and $o.message -match 'vulkan\.lunarg\.com') 'negative control: exit 0 with no loader after the run is a warning with its remedy'
+$o = Get-VulkanLoaderOutcome -Before $vkOld -After $vkOld -Code 0 -Pending @('\??\C:\Windows\System32\vulkan-1.dll')
+Check ($o.ok -and $o.restart -and $o.message -match 'next start') 'a loader in use that Windows replaces at the next start is done, with the restart this installation makes anyway'
+$o = Get-VulkanLoaderOutcome -Before $vkAbsent -After $vkAbsent -Code $null -TimedOut $true -TimeoutSeconds 300
+Check (-not $o.ok -and $o.message -match 'did not finish within 300 s') 'negative control: an installer that passes the deadline is a warning'
+$o = Get-VulkanLoaderOutcome -Before $vkX86New -After (Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading $vkShip); x86 = (New-VkReading $vkShip) }) -Code 0
+Check ((@($o.downgraded) -join ',') -eq 'x64') 'a newer loader that is lower after the run is reported as a downgrade'
+Check ((@((Get-VulkanLoaderOutcome -Before $vkX86New -After (Get-VulkanLoaderDecision -Readings @{ x64 = (New-VkReading '1.4.999.0'); x86 = (New-VkReading $vkShip) }) -Code 0).downgraded)).Count -eq 0) 'negative control: a newer loader that LunarG left alone is no downgrade'
+$pend = @(Get-VulkanLoaderPendingReplacements -FromTest -Value @('\??\C:\Windows\SysWOW64\vulkan-1.dll.old', '', '\??\C:\Windows\SysWOW64\vulkan-1.dll', '\??\C:\Windows\System32\drivers\x.sys', ''))
+Check ($pend.Count -eq 1 -and $pend[0] -match 'SysWOW64\\vulkan-1\.dll$') 'the pending replacements are the entries that name a loader, nothing else'
+# The host-test reading, for the dry runs, and only in a dry run.
+$script:DryRunMode = $true
+try {
+    foreach ($c in @(@{ v = 'missing'; want = 'missing,missing'; install = $true }, @{ v = 'old'; want = 'older,older'; install = $true },
+                     @{ v = 'x86-missing'; want = 'same,missing'; install = $true }, @{ v = 'newer'; want = 'newer,newer'; install = $false },
+                     @{ v = 'ok'; want = 'same,same'; install = $false })) {
+        $env:AMDGPU_WDDM_TEST_VULKANLOADER = $c.v
+        $s = Get-VulkanLoaderState
+        Check ((@($s.arches | ForEach-Object standing) -join ',') -eq $c.want -and $s.install -eq $c.install) "a dry run can read the loaders as '$($c.v)' ($($c.want))"
+    }
+    $script:DryRunMode = $false
+    $env:AMDGPU_WDDM_TEST_VULKANLOADER = 'missing'
+    Check ((Get-VulkanLoaderState -WindowsDir $vkWin).detail -eq $vkRead.detail) 'negative control: a run that is not a dry run ignores the host-test reading'
+} finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VULKANLOADER -ErrorAction SilentlyContinue; $script:DryRunMode = $false }
+
+# The engine's side: phase 2 checks the file, runs it only on the decision, never stops the installation for it, and
+# the uninstall leaves the loader alone. Verify reports both loaders and creates a 32-bit Vulkan instance.
+$vkStep = [regex]::Match($installText, '(?s)\$vkNow = Get-VulkanLoaderState.{0,3000}?Enter-Stage ''firmware''')
+Check ($vkStep.Success) 'phase 2 has the loader step before the firmware stage'
+Check ($vkStep.Value -match 'if \(\$vkNow\.install\)' -and $vkStep.Value -match 'Test-RedistInstaller -Path \$vkExe' -and $vkStep.Value -match 'Invoke-VulkanLoaderInstall -Path \$vkExe') 'the step runs only on the decision, and checks the file before it runs it'
+Check ($vkStep.Value -notmatch '\bthrow\b') 'a loader that cannot be installed never stops the installation'
+Check ($installText.IndexOf('Invoke-VulkanLoaderInstall') -gt $installText.IndexOf('Invoke-VcRuntimeInstall -Path $vcExe') -and $installText.IndexOf('Invoke-VulkanLoaderInstall') -lt $installText.IndexOf("Enter-Stage 'files' 'Files'")) 'the loader comes after the Visual C++ runtime and before our own files'
+Check ($verify -match "Add-Result 'Vulkan loader'" -and $verify -match "Add-Result 'Vulkan \(32-bit\)'" -and $verify -match 'SysWOW64\\WindowsPowerShell\\v1\.0\\powershell\.exe') 'verify reports both loaders and runs the Vulkan check in the 32-bit PowerShell'
+$uninstallText = [IO.File]::ReadAllText((Join-Path $Installer 'uninstall.ps1'))
+Check ($uninstallText -notmatch '(?i)vulkan-1\.dll|VulkanRT|VulkanLoader') 'the uninstall leaves the Vulkan loader in place: it names neither the loader nor its installer'
+Check ((Get-InstalledPathOfPackageFile -PackagePath "payload/redist/VulkanRT-X64-$vkShip-Installer.exe" -InstallRoot 'C:\X') -eq $null) 'the Vulkan Runtime installer runs from the package and is copied nowhere'
+
 'the shortcuts of the control application: Start menu and desktop, both by default'
 $scKnown = @(Get-ControlShortcutPaths)
 $scAll = @($scKnown | Where-Object { -not $_.legacy })
