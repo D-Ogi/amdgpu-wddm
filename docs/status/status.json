@@ -2839,7 +2839,7 @@
       {
        "name": "pfnCalcPrivateDeviceSize",
        "function": "device_size",
-       "source": "driver/umd/d3d12/adapter.cpp:105",
+       "source": "driver/umd/d3d12/adapter.cpp:107",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -2851,7 +2851,7 @@
       {
        "name": "pfnCreateDevice",
        "function": "create_device",
-       "source": "driver/umd/d3d12/adapter.cpp:111",
+       "source": "driver/umd/d3d12/adapter.cpp:113",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2863,7 +2863,7 @@
       {
        "name": "pfnCloseAdapter",
        "function": "close_adapter",
-       "source": "driver/umd/d3d12/adapter.cpp:151",
+       "source": "driver/umd/d3d12/adapter.cpp:153",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2875,7 +2875,7 @@
       {
        "name": "pfnGetSupportedVersions",
        "function": "versions",
-       "source": "driver/umd/d3d12/adapter.cpp:157",
+       "source": "driver/umd/d3d12/adapter.cpp:159",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2887,7 +2887,7 @@
       {
        "name": "pfnGetCaps",
        "function": "caps",
-       "source": "driver/umd/d3d12/adapter.cpp:169",
+       "source": "driver/umd/d3d12/adapter.cpp:171",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2899,7 +2899,7 @@
       {
        "name": "pfnGetOptionalDDITables",
        "function": "optional_tables",
-       "source": "driver/umd/d3d12/adapter.cpp:229",
+       "source": "driver/umd/d3d12/adapter.cpp:231",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros",
        "applicability": {
@@ -2911,7 +2911,7 @@
       {
        "name": "pfnFillDDITable",
        "function": "fill_table",
-       "source": "driver/umd/d3d12/adapter.cpp:233",
+       "source": "driver/umd/d3d12/adapter.cpp:235",
        "done": true,
        "reason": "forwards to fill_native_tables: does work",
        "partial": true,
@@ -2924,7 +2924,7 @@
       {
        "name": "pfnDestroyDevice",
        "function": "destroy_device",
-       "source": "driver/umd/d3d12/adapter.cpp:239",
+       "source": "driver/umd/d3d12/adapter.cpp:241",
        "done": true,
        "reason": "does work",
        "applicability": {
