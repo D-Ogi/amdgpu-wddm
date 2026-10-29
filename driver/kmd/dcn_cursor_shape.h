@@ -70,6 +70,7 @@ enum bc250_cursor_shape_verdict {
     BC250_CURSOR_SHAPE_PITCH = 4,           // a pitch that does not hold one row
     BC250_CURSOR_SHAPE_BYTES = 5,           // the input is larger than BC250_CURSOR_RAW_MAX_BYTES
     BC250_CURSOR_SHAPE_ANGLE = 6,           // a rotation other than 0, 90, 180, 270
+    BC250_CURSOR_SHAPE_HOTSPOT = 7,         // XHot or YHot outside the image (the hot spot register is 8 bits)
     BC250_CURSOR_SHAPE_VERDICTS
 };
 
@@ -107,6 +108,9 @@ static __inline unsigned int Bc250CursorShapeCheck(const BC250_CURSOR_SHAPE* Sha
     row = Shape->Flags == BC250_POINTER_MONOCHROME ? (Shape->Width + 7u) / 8u : Shape->Width * 4u;
     if (Shape->Pitch < row) return BC250_CURSOR_SHAPE_PITCH;
     if (!Bc250CursorShapeBytes(Shape)) return BC250_CURSOR_SHAPE_BYTES;
+    // The hot spot is a pixel of the image. One outside it would move the pointer by more than its size, and the
+    // placement subtracts it from the position with no bound.
+    if (Shape->XHot >= Shape->Width || Shape->YHot >= Shape->Height) return BC250_CURSOR_SHAPE_HOTSPOT;
     return BC250_CURSOR_SHAPE_OK;
 }
 

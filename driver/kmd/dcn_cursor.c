@@ -388,7 +388,17 @@ ULONG DcnCursorPlanWidth(_In_ const BC250_DEVICE* Device)
     return c && (c->Setting & BC250_CURSOR_SETTING_ON) ? BC250_CURSOR_MAX_SIZE : 0u;
 }
 
-// DXGK_DRIVERCAPS: a hardware pointer only on a start whose pipe this driver drives with a cursor in its plan.
+// A pipe of this start had the cursor, the connector still drives the link, and no stop ran. A gap without a ready pipe
+// is then a mode change, a power transition or a detach, and the next DcnCursorPipeReady shows the stored shape.
+static BOOLEAN CursorExpectedLocked(_In_ BC250_DEVICE* Device, _In_ const DCN_CURSOR* c)
+{
+    return c->EverReady && !c->Stopped && ConnectorIsEnabled(Device);
+}
+
+// DXGK_DRIVERCAPS: a hardware pointer only on a start whose pipe this driver drives with a cursor in its plan, on a
+// connector that is enabled (a start refused after the inherited pipe was adopted releases the link and keeps the
+// static path: no pointer there). dxgkrnl reads the caps at the adapter start, after StartDevice: a start whose first
+// pipe has no cursor in its plan keeps the software pointer to its end, because a later pipe cannot change the caps.
 BOOLEAN DcnCursorCaps(_In_ BC250_DEVICE* Device)
 {
     DCN_CURSOR* c = CursorOf(Device);
@@ -396,7 +406,7 @@ BOOLEAN DcnCursorCaps(_In_ BC250_DEVICE* Device)
     KIRQL irql;
     if (!c || !Device->FullWddm || !Device->DcnWriteEnabled || !Device->VidPnFlipEnabled) return FALSE;
     KeAcquireSpinLock(&c->Lock, &irql);
-    caps = c->EverReady && !c->Stopped;
+    caps = CursorExpectedLocked(Device, c);
     KeReleaseSpinLock(&c->Lock, irql);
     if (CursorLogLine(c)) GuardLog("cursor: caps %u setting %lu", (UINT)caps, c->Setting);
     return caps;
@@ -532,7 +542,12 @@ void DcnCursorRefresh(_Inout_ BC250_DEVICE* Device)
 // ---- the DDIs ---------------------------------------------------------------------------------------------------------
 
 // DxgkDdiSetPointerShape: PASSIVE_LEVEL, the pointer class of Level One (serialized with SetPointerPosition only).
-// A shape this cursor cannot show is refused, and dxgkrnl then draws the pointer itself.
+// A shape this cursor cannot show is refused, and dxgkrnl then draws the pointer itself. A valid shape that arrives
+// while the pipe changes (CursorExpectedLocked) is stored and answered with success, and DcnCursorPipeReady shows it:
+// the same result as a shape that came just before the change, which DcnCursorPipeReady shows again. A refusal there
+// would keep the software pointer until the next shape change. The decision is made under ShapeLock, which
+// DcnCursorPipeReady holds for its whole run, so a shape is never stored after that run without being shown. A shape
+// with no pipe expected (no cursor pipe in this start, a released link, the stop) is refused.
 NTSTATUS DcnCursorSetShape(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETPOINTERSHAPE* Arg)
 {
     DCN_CURSOR* c = CursorOf(Device);
@@ -540,8 +555,8 @@ NTSTATUS DcnCursorSetShape(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETP
     BC250_CURSOR_IMAGE image;
     unsigned int verdict, bytes;
     ULONG surface = 0;
-    NTSTATUS status;
-    BOOLEAN ready;
+    NTSTATUS status = STATUS_SUCCESS;
+    BOOLEAN ready = FALSE, expected = FALSE;
     KIRQL irql;
 
     RtlZeroMemory(&image, sizeof(image));
@@ -555,30 +570,37 @@ NTSTATUS DcnCursorSetShape(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETP
     in.YHot = Arg->YHot;
     in.Pixels = (const unsigned char*)Arg->pPixels;
     verdict = Bc250CursorShapeCheck(&in);
-    KeAcquireSpinLock(&c->Lock, &irql);
-    ready = c->Ready && !c->Stopped;
-    KeReleaseSpinLock(&c->Lock, irql);
-    if (verdict == BC250_CURSOR_SHAPE_OK && !ready) verdict = BC250_CURSOR_SHAPE_VERDICTS;     // no pipe: refused
+    if (verdict == BC250_CURSOR_SHAPE_OK) {
+        ExAcquireFastMutex(&c->ShapeLock);
+        KeAcquireSpinLock(&c->Lock, &irql);
+        ready = c->Ready && !c->Stopped;
+        expected = CursorExpectedLocked(Device, c);
+        KeReleaseSpinLock(&c->Lock, irql);
+        if (ready || expected) {
+            bytes = Bc250CursorShapeBytes(&in);
+            RtlCopyMemory(c->Raw, in.Pixels, bytes);
+            c->Shape = in;
+            c->Shape.Pixels = c->Raw;
+            c->ShapeValid = TRUE;
+            // Drawn only on a ready pipe: between the pipes the surfaces stay as they are (the device may be on its
+            // way to D3), and DcnCursorPipeReady draws the stored shape for the new pipe.
+            if (ready) status = CursorShow(Device, c, &surface, &image);
+        } else verdict = BC250_CURSOR_SHAPE_VERDICTS;     // no pipe in this start: refused
+        ExReleaseFastMutex(&c->ShapeLock);
+    }
     if (verdict != BC250_CURSOR_SHAPE_OK) {
         InterlockedIncrement(&c->ShapeRefusals);
         if (CursorLogLine(c))
-            GuardLog("cursor: shape refused verdict %u flags 0x%X %lux%lu pitch %lu ready %u", verdict,
-                in.Flags, (ULONG)in.Width, (ULONG)in.Height, (ULONG)in.Pitch, (UINT)ready);
+            GuardLog("cursor: shape refused verdict %u flags 0x%X %lux%lu pitch %lu hot %lu,%lu ready %u", verdict,
+                in.Flags, (ULONG)in.Width, (ULONG)in.Height, (ULONG)in.Pitch, (ULONG)in.XHot, (ULONG)in.YHot,
+                (UINT)ready);
         return verdict == BC250_CURSOR_SHAPE_VERDICTS ? STATUS_DEVICE_NOT_READY : STATUS_NOT_SUPPORTED;
     }
-    bytes = Bc250CursorShapeBytes(&in);
-    ExAcquireFastMutex(&c->ShapeLock);
-    RtlCopyMemory(c->Raw, in.Pixels, bytes);
-    c->Shape = in;
-    c->Shape.Pixels = c->Raw;
-    c->ShapeValid = TRUE;
-    status = CursorShow(Device, c, &surface, &image);
-    ExReleaseFastMutex(&c->ShapeLock);
     InterlockedIncrement(&c->Shapes);
     if (CursorLogLine(c))
-        GuardLog("cursor: shape 0x%X %lux%lu pitch %lu hot %lu,%lu mode %u xor %u at %lu %08lX",
+        GuardLog("cursor: shape 0x%X %lux%lu pitch %lu hot %lu,%lu mode %u xor %u at %lu ready %u %08lX",
             in.Flags, (ULONG)in.Width, (ULONG)in.Height, (ULONG)in.Pitch, (ULONG)in.XHot, (ULONG)in.YHot,
-            image.Mode, image.XorPixels, surface, (ULONG)status);
+            image.Mode, image.XorPixels, surface, (UINT)ready, (ULONG)status);
     return status;
 }
 

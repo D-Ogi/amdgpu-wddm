@@ -57,6 +57,12 @@ static void Verdicts(void)
     s = Shape(BC250_POINTER_MONOCHROME, 256, 256, 32); CHECK(Bc250CursorShapeBytes(&s) == 2u * 256u * 32u);
     s = Shape(BC250_POINTER_MONOCHROME, 256, 256, 512); CHECK(Bc250CursorShapeCheck(&s) == BC250_CURSOR_SHAPE_OK);
     s.Pitch = 513; CHECK(Bc250CursorShapeCheck(&s) == BC250_CURSOR_SHAPE_BYTES);
+    /* The hot spot is a pixel of the image: the last one passes, one past it on either axis is refused. For
+     * Monochrome the height is that of one mask. */
+    s = Shape(BC250_POINTER_COLOR, 32, 16, 128); s.XHot = 31; s.YHot = 15; CHECK(Bc250CursorShapeCheck(&s) == BC250_CURSOR_SHAPE_OK);
+    s.XHot = 32; CHECK(Bc250CursorShapeCheck(&s) == BC250_CURSOR_SHAPE_HOTSPOT);
+    s.XHot = 0; s.YHot = 16; CHECK(Bc250CursorShapeCheck(&s) == BC250_CURSOR_SHAPE_HOTSPOT);
+    s = Shape(BC250_POINTER_MONOCHROME, 32, 32, 4); s.YHot = 32; CHECK(Bc250CursorShapeCheck(&s) == BC250_CURSOR_SHAPE_HOTSPOT);
     s = Shape(BC250_POINTER_COLOR, 32, 32, 128);
     { BC250_CURSOR_IMAGE image; Fill(); CHECK(Bc250CursorRender(&s, 45u, 0, surface, &image) == BC250_CURSOR_SHAPE_ANGLE); }
     CHECK(Bc250CursorRender(&s, 0u, 0, NULL, NULL) == BC250_CURSOR_SHAPE_ARGS);

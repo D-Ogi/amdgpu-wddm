@@ -18,7 +18,7 @@ param(
     [string]$KitVersion = '10.0.26100.0',
     [ValidateSet('', 'all', 'xor-mask-offset', 'lsb-first', 'no-negative-clamp', 'rotate-90-clockwise',
                  'mask-not-normalized', 'xor-ignored', 'edge-viewport-origin', 'dst-ratio-inverted', 'hotspot-swapped',
-                 'pitch-ignored', 'bytes-one-mask')][string]$Mutation = ''
+                 'pitch-ignored', 'bytes-one-mask', 'hotspot-unbounded')][string]$Mutation = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +58,9 @@ $mutations = [ordered]@{
     'bytes-one-mask' = @{ find = '(Shape->Flags == BC250_POINTER_MONOCHROME ? 2u : 1u)'
         with = '(Shape->Flags == BC250_POINTER_MONOCHROME ? 1u : 1u)'
         why = 'the copy of a monochrome shape leaves out its XOR mask' }
+    'hotspot-unbounded' = @{ find = 'if (Shape->XHot >= Shape->Width || Shape->YHot >= Shape->Height) return BC250_CURSOR_SHAPE_HOTSPOT;'
+        with = 'if (Shape->XHot > Shape->Width || Shape->YHot > Shape->Height) return BC250_CURSOR_SHAPE_HOTSPOT;'
+        why = 'a hot spot one pixel outside the image is taken' }
 }
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
