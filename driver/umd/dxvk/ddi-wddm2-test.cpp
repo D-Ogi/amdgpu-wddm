@@ -653,6 +653,39 @@ void scanout_primary() {
     // rather than assuming it.
     CHECK(scanout_primary_decide(&on,true,0,87,1920,1200,7936).reason==R::Pitch);
     CHECK(scanout_primary_decide(&on,true,0,87,1920,1200,7680).reason==R::Admitted);
+    // BD-223: with the trailer's MPO flag a primary that is not the mode asks for scan-out, for the overlay
+    // plane: the 1920x1080 chain on the committed 1920x1200 mode gets the scan-out record through the
+    // conversion, at the scan-out pitch. The kernel driver's plane check decides each flip of it. The limits
+    // are the shared rule's (bc250_scanout_mpo_geometry); the 1280x720 chain asks although the kernel
+    // driver's present stage refuses its pitch at the plane check. A windowed buffer without a primary
+    // descriptor still cannot ask, because the kernel driver's SCANOUT policy demands PRIMARY.
+    trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_MPO;
+    mip.TexelHeight=1080;
+    CHECK(convert(&on)==S_OK && request.scanout && request.primary && request.surface.Height==1080 &&
+          request.surface.Pitch==bc250_scanout_primary_pitch(1920,4) &&
+          request.texture.Access==(BC250_SURFACE_RESOURCE_PRIMARY|BC250_SURFACE_RESOURCE_SCANOUT));
+    CHECK(WddmGdiRecordScannable(&request.texture,sizeof(request.texture)));
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1080,7680).reason==R::Admitted);
+    CHECK(scanout_primary_decide(&on,true,0,87,1280,720,5120).reason==R::Admitted);
+    CHECK(scanout_primary_decide(&on,true,0,87,120,75,512).reason==R::Admitted);
+    CHECK(scanout_primary_decide(&on,true,0,87,119,75,512).reason==R::SourceGeometry);
+    CHECK(scanout_primary_decide(&on,true,0,87,63,1200,256).reason==R::SourceGeometry);
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1201,7680).reason==R::SourceGeometry);
+    CHECK(scanout_primary_decide(&on,true,0,87,1280,720,5376).reason==R::Pitch);
+    CHECK(scanout_primary_decide(&on,true,0,UINT(DXGI_FORMAT_R16G16B16A16_FLOAT),1280,720,10240).reason==R::Format);
+    CHECK(composed(&cpu) && scanout_primary_decide(&cpu,true,0,87,1920,1080,7680).reason==R::ForceCpu);
+    CHECK(composed(&unread) && scanout_primary_decide(&unread,true,0,87,1920,1080,7680).reason==R::DesktopRoute);
+    CHECK(composed(&off) && scanout_primary_decide(&off,true,0,87,1920,1080,7680).reason==R::Off);
+    CHECK(scanout_primary_decide(&on,false,0,87,1920,1080,7680).reason==R::NotPrimary);
+    CHECK(scanout_primary_decide(&on,true,1,87,1920,1080,7680).reason==R::VidPnSource);
+    CHECK(convert_runtime_resource(window,&runtimeResource,request,texture,&on)==S_OK && !request.scanout &&
+          !request.primary && request.displayable && !request.texture.Access);
+    // The MPO flag alone is no trailer, and without it the same chain stays composed.
+    trailerFlags=BC250_SCANOUT_CAPS_MPO;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1080,7680).reason==R::CapsClosed);
+    trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1080,7680).reason==R::SourceGeometry);
+    mip.TexelHeight=1200;
     CHECK(trailerWidth==1920 && trailerHeight==1200 && trailerFlags==BC250_SCANOUT_CAPS_DIRECT_FLIP && !trailerFail);
 }
 void test_wddm2_0_ddi() {
