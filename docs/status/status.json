@@ -277,7 +277,7 @@
        "since": null,
        "targeted": true,
        "function": "Bc250Unload",
-       "source": "driver/kmd/pnp.c:712",
+       "source": "driver/kmd/pnp.c:706",
        "done": true,
        "reason": "does work",
        "applicability": {

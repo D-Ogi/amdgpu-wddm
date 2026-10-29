@@ -812,6 +812,11 @@
         "host"
       ]
     },
+    "connector-link-resume-suspended": {
+      "inputs": [
+        "host"
+      ]
+    },
     "connector-link-optc-term": {
       "inputs": [
         "host"
@@ -963,6 +968,26 @@
       ]
     },
     "power-coordinator": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "power-coordinator-old-display-gate": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "power-coordinator-old-post-gate": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-resume": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "connector-resume-refusal-fails-d0": {
       "inputs": [
         "host"
       ]

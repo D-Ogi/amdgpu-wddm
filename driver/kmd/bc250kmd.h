@@ -985,6 +985,8 @@ void GartEscape(_Inout_ BC250_DEVICE* Device, _Inout_ struct _BC250_ESCAPE_GART*
 // Retained-power ownership predicates require GartLock; they do not touch MMIO.
 BOOLEAN GfxPowerIsSuspended(const BC250_DEVICE* Device);
 NTSTATUS GpuSetPowerRetained(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action);
+// The way down: display half, then GpuSetPowerRetained, which runs whatever the display half answers (BD-188).
+NTSTATUS PowerAdapterDown(BC250_DEVICE* Device, DEVICE_POWER_STATE State, POWER_ACTION Action);
 NTSTATUS GfxSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);
 BOOLEAN PspPowerIsSuspended(const BC250_DEVICE* Device);
 NTSTATUS GartSetPowerRetained(BC250_DEVICE* Device, BOOLEAN Resume);

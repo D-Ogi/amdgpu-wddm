@@ -666,16 +666,10 @@ NTSTATUS Bc250SetPowerState(_In_ const PVOID MiniportDeviceContext, _In_ ULONG D
             WddmFlipFlushed(device);
             HangDetectorPause(); CpuPause(device); DpmPause(device); FanPause(device);
             DpAudioStop(device);    // AUDIO_ENABLED 0 before the display block goes down
-            if (ConnectorIsEnabled(device)) {
-                status=ConnectorSuspend(device);
-                if (!NT_SUCCESS(status)) return status;
-            }
-            if (!InterlockedCompareExchange(&device->RuntimeDisplayChanged,0,0)) {
-                if (!HdmiLinkStop(device)) return STATUS_DEVICE_DATA_ERROR;
-                ModesetPowerDown(device);
-            }
-        }
-        status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
+            // The display half, then the engines: a failed display step no longer skips the save of the
+            // engines (power.c, BD-188).
+            status=PowerAdapterDown(device,DevicePowerState,ActionType);
+        } else status=GpuSetPowerRetained(device,DevicePowerState,ActionType);
         // A failed transition down keeps the device in D0 with the desktop up: the committed shape goes back at once,
         // or the smaller surface of that desktop would be read through the native viewport.
         if (DevicePowerState!=PowerDeviceD0 && !NT_SUCCESS(status) && !ConnectorIsEnabled(device)) {

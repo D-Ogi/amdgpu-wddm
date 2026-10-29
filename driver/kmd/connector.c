@@ -697,7 +697,7 @@ NTSTATUS ConnectorResumeDisplay(BC250_DEVICE* Device)
     c->OperationGeneration=generation;
     InterlockedExchange(&c->Restoring,1);
     next=AllocateSnapshot(generation);
-    if (!next) {status=STATUS_INSUFFICIENT_RESOURCES;goto done;}
+    if (!next) {status=STATUS_INSUFFICIENT_RESOURCES;goto fallback;}
     c->DiscoveryIo.StalledUs=0;
     status=Bc250SinkDiscover(&c->DiscoveryIo,&guard,BC250_DP_MAX_PIXEL_KHZ,300000ul,4096ul,2160ul,&next->Sink);
     same=NT_SUCCESS(status) && old && old->Sink.Kind!=BC250_SINK_NONE &&
@@ -712,18 +712,28 @@ NTSTATUS ConnectorResumeDisplay(BC250_DEVICE* Device)
         RtlCompareMemory(old->Sink.Edid,next->Sink.Edid,old->Sink.EdidLength)==old->Sink.EdidLength;
     if (same) {
         status=ConnectorLinkResume(Device,generation);
-        if (!NT_SUCCESS(status)) goto done;
-        // Retain the already admitted target plans, not an unfiltered reparse.
-        next->Sink=old->Sink;
-        if (!Publish(Device,next)) {status=STATUS_RETRY;goto done;}
-        next=NULL;
-    } else {
-        // Changed/absent/unreadable sink: never replay a cached timing. Worker
-        // rediscovers and publishes the Windows notifications after phase 0.
-        InterlockedExchange(&c->Pending,1);
-        Device->ModeActive=FALSE;
-        status=STATUS_SUCCESS;
+        if (NT_SUCCESS(status)) {
+            // Retain the already admitted target plans, not an unfiltered reparse.
+            next->Sink=old->Sink;
+            if (Publish(Device,next)) next=NULL;
+            else status=STATUS_RETRY;
+        }
+        if (NT_SUCCESS(status)) goto done;
     }
+fallback:
+    // Changed/absent/unreadable sink: never replay a cached timing. Worker
+    // rediscovers and publishes the Windows notifications after phase 0.
+    // BD-188: a same sink that this resume could not restore (link resume
+    // refused, no snapshot memory, a stale publish) takes this way as well.
+    // A failed display restore must not keep the engines suspended: the next
+    // paging job would then wait for a TDR that this part cannot recover.
+    if (!NT_SUCCESS(status))
+        GuardLog("connector: resume generation %lu same %u failed %08lX; the sink is found again",
+            generation,same,(ULONG)status);
+    ConnectorLinkResumeChanged(Device);
+    InterlockedExchange(&c->Pending,1);
+    Device->ModeActive=FALSE;
+    status=STATUS_SUCCESS;
 done:
     InterlockedExchange(&c->Restoring,0);
     InterlockedExchange(&c->Running,0);

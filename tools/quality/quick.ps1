@@ -551,6 +551,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='connector-link-write-requested';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WriteRequestedValue','-ExpectFailure')}
   @{n='connector-link-recovery-target';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-WrongRecoveryTarget','-ExpectFailure')}
   @{n='connector-link-surface-adopt';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitSurfaceAdopt','-ExpectFailure')}
+  @{n='connector-link-resume-suspended';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-KeepResumeSuspended','-ExpectFailure')}
   @{n='connector-link-detached-mode';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitDetachedMode','-ExpectFailure')}
   @{n='connector-link-optc-term';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-DropOptcTerm','-ExpectFailure')}
   @{n='connector-link-rate-limit';s='driver\kmd\test\run_connector_link.ps1';a=@('-Kits',$Kits,'-OmitRateLimit','-ExpectFailure')}
@@ -609,6 +610,12 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='retained-gtt';s='driver\kmd\test\run_retained_gtt.ps1';a=@('-Root',$Workspace)}
   @{n='retained-power';s='driver\kmd\test\run_retained_power.ps1';a=@('-Root',$Workspace)}
   @{n='power-coordinator';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace)}
+  # BD-188: the pre-fix way down (a failed display step skips the save of the engines) and the pre-fix D0 (a refused
+  # POST answer keeps the engines suspended on the connector path), one control each.
+  @{n='power-coordinator-old-display-gate';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-OldDisplayGate');Fails=$true}
+  @{n='power-coordinator-old-post-gate';s='driver\kmd\test\run_power_coordinator.ps1';a=@('-Root',$Workspace,'-OldPostGate');Fails=$true}
+  @{n='connector-resume';s='driver\kmd\test\run_connector_resume.ps1';a=@('-Root',$Workspace)}
+  @{n='connector-resume-refusal-fails-d0';s='driver\kmd\test\run_connector_resume.ps1';a=@('-Root',$Workspace,'-RefusalFailsD0');Fails=$true}
   @{n='vram-geometry';s='driver\kmd\test\run_vram_geometry.ps1';a=@('-Root',$Workspace)}
   @{n='guard-start';s='driver\kmd\test\run_guard_start.ps1';a=@('-Root',$Workspace)}
   # BD-122: the start record, and the four pre-fix behaviours as its controls, one per requirement.

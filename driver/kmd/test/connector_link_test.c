@@ -714,6 +714,29 @@ static void disable_suspend_resume(void)
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkDisable(&device,7)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
     reset(BC250_SINK_HDMI);audio_debt=1;CHECK(ConnectorLinkSuspend(&device)==STATUS_DEVICE_NOT_READY && !primary_enters && !boundary_steps);balanced();
 }
+/* BD-188, lab 2026-10-20 (31v3): hibernate with a DP sink on a runtime mode, and the sink compare after D0 differs
+ * ("resume discovery generation 15 same 0"). The changed-sink resume replays no timing and writes nothing, but the
+ * link leaves its suspended state; the worker's disable and the OS commit follow. Before the fix the link stayed
+ * suspended: the commit lit the link ("enabled generation 15 ... active 1"), and ConnectorLinkCurrentSignal still
+ * answered NOT_READY to DescribeAllocation and DP audio, so the monitor stayed dark until a restart. */
+static void changed_sink_resume(void)
+{
+    D3DKMDT_VIDEO_SIGNAL_INFO s;unsigned steps,enters;BOOLEAN active,connected;
+    reset(BC250_SINK_DP);CHECK(commit()==0);balanced();
+    CHECK(ConnectorLinkSuspend(&device)==0 && link.Suspended);balanced();
+    steps=boundary_steps;enters=primary_enters;
+    ConnectorLinkResumeChanged(&device);
+    CHECK(!link.Suspended && boundary_steps==steps && primary_enters==enters);balanced();
+    CHECK(ConnectorLinkDisable(&device,7)==0);balanced();CHECK(!link.Active);
+    sink_connected=1;
+    CHECK(ConnectorLinkNeedsPowerOn(&device,&active,&connected) && !active && connected);balanced();
+    sink_connected=0;
+    CHECK(commit()==0);balanced();CHECK(link.Active && !link.Suspended);
+    CHECK(ConnectorLinkCurrentSignal(&device,&s)==0 && s.PixelRate==148500000);
+    /* No link context: nothing to resume, nothing touched. */
+    device.ConnectorLink=NULL;ConnectorLinkResumeChanged(&device);
+    CHECK(!operation_locks);
+}
 /* BD-195, 31v2's sequence: the firmware display is inherited and no runtime mode was ever applied (RuntimePost empty,
  * RuntimePostValid 0). The detach adopts the reserved buffer inside its writer before it sets RuntimeDisplayChanged
  * (I3, which the fake End checks for every writer). A re-plug on DP, on HDMI, and from one to the other then commits.
@@ -1766,7 +1789,7 @@ int main(void)
     cold_recovery();
     cold_prepare();
     release_then_fresh_start();
-    success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();ownership_and_cleanup();retained_aux_journal();
+    success();refusal();failure_sweep();rollback();cancellation_and_power();disable_suspend_resume();changed_sink_resume();ownership_and_cleanup();retained_aux_journal();
     detach_before_apply();
     keep_breadcrumbs();
     release_handoff();

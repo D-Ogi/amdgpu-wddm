@@ -18,6 +18,7 @@ def main():
     p.add_argument("--write-requested-value", action="store_true")
     p.add_argument("--wrong-recovery-target", action="store_true")
     p.add_argument("--omit-surface-adopt", action="store_true")
+    p.add_argument("--keep-resume-suspended", action="store_true")
     p.add_argument("--omit-detached-mode", action="store_true")
     p.add_argument("--drop-optc-term", action="store_true")
     p.add_argument("--omit-rate-limit", action="store_true")
@@ -31,7 +32,7 @@ def main():
         "LinkNow LinkOwned Begin End ClockSessionEnter ClockSessionLeave LinkStep SaveFailure RetainFailure PreviousTargetRecord RetainRecovery LogTarget LogFailure TargetRecord AtomAllowed AtomRead AtomWrite AtomNow LinkDelay LinkRead LinkWrite LinkStall Protocol SignalFor LinkCaps LowerRate LinkSettingsValid Plan LogPlanRefusal CloseAux LogOpenDiagnostic ConnectorLinkLogOpen OpenResult OpenContext InheritedTarget ConnectorLinkPrepare "
         "TrainRead TrainWrite TrainEnable TrainPattern TrainDrive TrainDisable "
         "DisableOwned ConnectorLinkDisable TrainingResult MeasureDto Apply ConnectorLinkCommit "
-        "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume "
+        "ConnectorLinkCurrentSignal ConnectorLinkNeedsPowerOn ConnectorLinkSuspend ConnectorLinkResume ConnectorLinkResumeChanged "
         "HandoffTarget ConnectorLinkHandoff ConnectorLinkRelease"
     ).split()
     chunks = []
@@ -53,6 +54,12 @@ def main():
             if body.count(needle) != 1:
                 raise SystemExit("Expected one previous-plan recovery")
             body = body.replace(needle, "Apply(c,&c->Next,c->Caps,&previousSurface)")
+        if args.keep_resume_suspended and name == "ConnectorLinkResumeChanged":
+            # BD-188: 31v3's changed-sink resume, which left the link suspended.
+            needle = "if(c)c->Suspended=FALSE;"
+            if body.count(needle) != 1:
+                raise SystemExit("Changed-sink resume mutation anchor changed")
+            body = body.replace(needle, "(void)c;")
         if args.omit_surface_adopt and name == "ConnectorLinkDisable":
             # BD-195: 31v2's detach, which set RuntimeDisplayChanged over an empty RuntimePost.
             needle = "DcnLinkSurfaceAdopt(Device);"
