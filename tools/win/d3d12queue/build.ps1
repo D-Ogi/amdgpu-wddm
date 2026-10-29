@@ -192,7 +192,7 @@ Get-Item "$Out\amdgpu_wddm_d3d12_queue.exe" | ForEach-Object { '{0,9}  {1}  sha2
 if ($LASTEXITCODE -ne 2) { throw "Invalid CLI accepted" }
 
 # Pure command/selection checks do not enumerate adapters or call D3D.
-foreach ($test in @('parser-test','interactive-test','resetchurn-test','recordbench-test')) {
+foreach ($test in @('parser-test','interactive-test','flip-test','resetchurn-test','recordbench-test')) {
 & $cl @(@(if ($test -eq 'resetchurn-test') { $churn } elseif ($test -eq 'recordbench-test') { $bench }) + '/nologo', '/W4', '/WX', '/O2', '/MT', '/EHsc', '/std:c++17', '/DUNICODE', '/D_UNICODE',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared", "/I$sdk\Include\$KitVersion\winrt", "/Fo$Out\$test.obj",

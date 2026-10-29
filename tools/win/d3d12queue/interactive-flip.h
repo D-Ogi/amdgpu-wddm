@@ -3,7 +3,8 @@
 // interactive, after Session. The "copy" verb then creates a window that covers the whole output - borderless,
 // or an exclusive-fullscreen chain with -FlipFullscreen - and a flip-model swap chain of -FlipBuffers buffers at
 // the output's own size in B8G8R8A8_UNORM (or the format AMDGPU_WDDM_D3D12_FLIP_FORMAT names, see
-// flip_format_from), and presents -FlipFrames frames, each cleared to its own exact colour. After every frame it compares a probe of the back buffer it is about to present, and at the first and
+// flip_format_from; a smaller chain that DXGI stretches to the window if AMDGPU_WDDM_D3D12_FLIP_CHAIN names one,
+// see flip_chain_from), and presents -FlipFrames frames, each cleared to its own exact colour. After every frame it compares a probe of the back buffer it is about to present, and at the first and
 // the last frame every texel of it. It then reports DXGI's present statistics.
 //
 // This is the M15.14 client: the case in which a buffer the application owns may be scanned out instead of
@@ -72,6 +73,26 @@ inline UINT64 flip_texel_of(DXGI_FORMAT format,bool r,bool g,bool b){
 static_assert(DXGI_FORMAT_R8G8B8A8_UNORM==28 && DXGI_FORMAT_R10G10B10A2_UNORM==24 &&
               DXGI_FORMAT_R16G16B16A16_FLOAT==10 && DXGI_FORMAT_B8G8R8A8_UNORM==87);
 
+// BD-223: the swap chain's size, "<width>x<height>", for the shape of a game that renders below the panel mode in
+// a borderless window (DXGI_SCALING_STRETCH): a candidate for a scaled overlay plane, never for the primary. Each
+// side is 64 or more and at most the output's own; anything else, or no variable, keeps the output's size, and
+// the plan line says which size the run used.
+inline bool flip_chain_from(const char* variable,UINT output_width,UINT output_height,UINT& width,UINT& height){
+    width=output_width;height=output_height;
+    char text[24]{};
+    const DWORD n=GetEnvironmentVariableA(variable,text,sizeof(text));
+    if(!n || n>=sizeof(text))return false;
+    UINT side[2]{};UINT at=0;bool digit=false;
+    for(const char* c=text;*c;++c){
+        if(*c=='x' && at==0 && digit){at=1;digit=false;continue;}
+        if(*c<'0' || *c>'9' || side[at]>100000u)return false;
+        side[at]=side[at]*10u+UINT(*c-'0');digit=true;
+    }
+    if(at!=1 || !digit || side[0]<64u || side[1]<64u || side[0]>output_width || side[1]>output_height)return false;
+    width=side[0];height=side[1];
+    return true;
+}
+
 inline LRESULT CALLBACK flip_window_proc(HWND window,UINT message,WPARAM w,LPARAM l){
     // The chain owns what is on screen; nothing is painted from the message loop. WM_CLOSE is ignored: the
     // session ends on its own command, its deadline or abort.request, never because a stray click closed it.
@@ -111,18 +132,24 @@ inline HRESULT flip(Session& s){
         buffers,frames,chosen.name,static_cast<int>(format));s.event("after",label);}
 
     // The output's desktop rectangle is the only size at which a scan-out candidate can match the POST mode, so
-    // the client never picks a size of its own.
+    // the window always covers it and the chain has that size unless AMDGPU_WDDM_D3D12_FLIP_CHAIN names a smaller
+    // one (flip_chain_from).
     ComPtr<IDXGIOutput> output;
     hr=s.api("EnumOutputs 0",[&]{return s.adapter->EnumOutputs(0,&output);});if(FAILED(hr))return hr;
     DXGI_OUTPUT_DESC output_desc{};
     hr=s.api("Output GetDesc",[&]{return output->GetDesc(&output_desc);});if(FAILED(hr))return hr;
     const LONG left=output_desc.DesktopCoordinates.left,top=output_desc.DesktopCoordinates.top;
-    const UINT width=static_cast<UINT>(output_desc.DesktopCoordinates.right-left);
-    const UINT height=static_cast<UINT>(output_desc.DesktopCoordinates.bottom-top);
+    const UINT output_width=static_cast<UINT>(output_desc.DesktopCoordinates.right-left);
+    const UINT output_height=static_cast<UINT>(output_desc.DesktopCoordinates.bottom-top);
     {char label[128]{};sprintf_s(label,"Output desktop %ld,%ld %ux%u rotation %d attached %d",
-        left,top,width,height,static_cast<int>(output_desc.Rotation),output_desc.AttachedToDesktop?1:0);
-     s.event("after",label,width && height && output_desc.AttachedToDesktop?S_OK:E_UNEXPECTED);}
-    if(!width || !height || !output_desc.AttachedToDesktop)return E_UNEXPECTED;
+        left,top,output_width,output_height,static_cast<int>(output_desc.Rotation),output_desc.AttachedToDesktop?1:0);
+     s.event("after",label,output_width && output_height && output_desc.AttachedToDesktop?S_OK:E_UNEXPECTED);}
+    if(!output_width || !output_height || !output_desc.AttachedToDesktop)return E_UNEXPECTED;
+    UINT width=0,height=0;
+    const bool named=flip_chain_from("AMDGPU_WDDM_D3D12_FLIP_CHAIN",output_width,output_height,width,height);
+    const bool stretched=width!=output_width || height!=output_height;
+    {char label[128]{};sprintf_s(label,"Flip chain %ux%u on the output's %ux%u (%s, scaling %s)",width,height,
+        output_width,output_height,named?"named":"the output's size",stretched?"STRETCH":"NONE");s.event("after",label);}
 
     WNDCLASSEXW window_class{};window_class.cbSize=sizeof(window_class);window_class.lpfnWndProc=flip_window_proc;
     window_class.hInstance=GetModuleHandleW(nullptr);window_class.lpszClassName=L"amdgpu_wddm_d3d12_queue_flip";
@@ -134,10 +161,10 @@ inline HRESULT flip(Session& s){
     // WS_EX_TOPMOST, because a window that is merely always on top is not what makes a flip eligible, and a
     // topmost window would also outlive a hung session on the operator's screen.
     const HWND window=CreateWindowExW(0,window_class.lpszClassName,L"amdgpu-wddm D3D12 fullscreen flip",
-        WS_POPUP,left,top,static_cast<int>(width),static_cast<int>(height),nullptr,nullptr,window_class.hInstance,nullptr);
+        WS_POPUP,left,top,static_cast<int>(output_width),static_cast<int>(output_height),nullptr,nullptr,window_class.hInstance,nullptr);
     if(!window){hr=HRESULT_FROM_WIN32(GetLastError());s.event("after","CreateWindowEx",hr);return hr;}
     guard.window=window;
-    {char label[80]{};sprintf_s(label,"CreateWindowEx WS_POPUP %ux%u covering the output",width,height);s.event("after",label);}
+    {char label[80]{};sprintf_s(label,"CreateWindowEx WS_POPUP %ux%u covering the output",output_width,output_height);s.event("after",label);}
     ShowWindow(window,SW_SHOW);
     s.event("after","SetForegroundWindow",SetForegroundWindow(window)?S_OK:S_FALSE);
     {MSG message{};while(PeekMessageW(&message,window,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}}
@@ -145,8 +172,10 @@ inline HRESULT flip(Session& s){
     DXGI_SWAP_CHAIN_DESC1 desc{};desc.Width=width;desc.Height=height;desc.Format=format;
     desc.SampleDesc.Count=1;desc.BufferUsage=DXGI_USAGE_RENDER_TARGET_OUTPUT;desc.BufferCount=buffers;
     // SCALING_NONE and no multisampling: the buffer is the size of the output and needs no stretch on the way
-    // to the plane, which is what a scanned-out buffer must be.
-    desc.Scaling=DXGI_SCALING_NONE;desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
+    // to the plane, which is what a scanned-out buffer must be. A smaller named chain is STRETCH, the scaling a
+    // game's borderless chain below the panel mode asks for, so that only a scaled overlay plane can take it.
+    desc.Scaling=stretched?DXGI_SCALING_STRETCH:DXGI_SCALING_NONE;
+    desc.SwapEffect=DXGI_SWAP_EFFECT_FLIP_DISCARD;desc.AlphaMode=DXGI_ALPHA_MODE_IGNORE;
 #ifdef INTERACTIVE_FLIP_FULLSCREEN
     desc.Flags=DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 #endif
