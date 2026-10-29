@@ -1711,6 +1711,15 @@ function Get-VcRuntimeState {
 function Test-VcRuntimeInstaller {
     param([Parameter(Mandatory)][string]$Path, [string]$ExpectedSha256 = $script:VcRuntimeSha256,
           [string]$ExpectedSigner = $script:VcRuntimeSigner, [scriptblock]$SignatureReader)
+    return (Test-RedistInstaller -Path $Path -ExpectedSha256 $ExpectedSha256 -ExpectedSigner $ExpectedSigner -SignatureReader $SignatureReader)
+}
+
+# The check of one vendor installer of payload\redist: the SHA-256 first, then the Authenticode signature: Valid, and
+# the common name of the signer is $ExpectedSigner. A common name with a comma is written in quotes in the subject
+# (CN="LunarG, Inc."), so the quotes are optional around the name, and nothing may follow it but the next field.
+function Test-RedistInstaller {
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$ExpectedSha256,
+          [Parameter(Mandatory)][string]$ExpectedSigner, [scriptblock]$SignatureReader)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         return [pscustomobject]@{ ok = $false; problem = "the package does not carry $Path"; sha256 = $null; status = $null; signer = $null }
     }
@@ -1725,7 +1734,7 @@ function Test-VcRuntimeInstaller {
     if ($status -ne 'Valid') {
         return [pscustomobject]@{ ok = $false; problem = "the signature of $Path is not valid (status $status)"; sha256 = $sha; status = $status; signer = $signer }
     }
-    if ($signer -notmatch ("CN=" + [regex]::Escape($ExpectedSigner) + "(,|$)")) {
+    if ($signer -notmatch ('CN=("?)' + [regex]::Escape($ExpectedSigner) + '\1(,|$)')) {
         return [pscustomobject]@{ ok = $false; problem = "$Path is not signed by $ExpectedSigner (signer '$signer')"; sha256 = $sha; status = $status; signer = $signer }
     }
     return [pscustomobject]@{ ok = $true; problem = $null; sha256 = $sha; status = $status; signer = $signer }
@@ -1761,6 +1770,230 @@ function Invoke-VcRuntimeInstall {
     }
     $out = Get-VcRuntimeOutcome $code
     return [pscustomobject]@{ ok = $out.ok; restart = $out.restart; message = $out.message; code = $code; text = $text }
+}
+
+# ---- the Vulkan loader ------------------------------------------------------------------------------------------
+# A Vulkan program loads vulkan-1.dll, the Khronos loader, from System32 (64-bit) or SysWOW64 (32-bit), and the loader
+# finds our ICD through the registration of the settings stage. Windows has no loader of its own: a GPU vendor's
+# installer brings it. Without it a clean PC runs no Vulkan program, and no OpenGL program either, because the OpenGL
+# ICD draws through Vulkan (zink). The package carries LunarG's signed Vulkan Runtime installer
+# (payload\redist\VulkanRT-X64-<version>-Installer.exe, release-sources.json), the one that the Vulkan SDK
+# distributes for this purpose. The x64 installer puts the x64 loader in System32 and the x86 loader in SysWOW64.
+# It compares the version of each file itself and does not replace a newer one ("is newer version ... and was NOT
+# updated"), and it replaces a file in use by rename or at the next start. It has no uninstaller and no entry in
+# Installed apps: the loader is a shared file of Windows, like the Visual C++ runtime, and the uninstall of this
+# driver leaves it where it is.
+$script:VulkanLoaderPackagePath = 'payload\redist\VulkanRT-X64-1.4.363.0-Installer.exe'
+# The version the package carries: the file version of both loaders in it, and of the installer.
+$script:VulkanLoaderVersion = '1.4.363.0'
+$script:VulkanLoaderSha256 = '3F03BDA2522D1D10D05461CE8A47364F9AF6F5DC8642B7C45E43943DBA164303'
+$script:VulkanLoaderSize = 25699768
+$script:VulkanLoaderSigner = 'LunarG, Inc.'
+# /S: silent, the switch of the winget manifest KhronosGroup.VulkanRT 1.4.363.0. The exit codes are not documented,
+# so the code is logged and the files decide the result: both loaders are read again after the run.
+$script:VulkanLoaderArguments = @('/S')
+$script:VulkanLoaderTimeoutSeconds = 300
+# The two loaders, by the architecture of the programs that load them. Join-Path at use: tests give other folders.
+$script:VulkanLoaderFiles = [ordered]@{ x64 = 'System32\vulkan-1.dll'; x86 = 'SysWOW64\vulkan-1.dll' }
+
+# The file version of one loader with who made it: the company of the version resource. $null when the file is not
+# there. -WithSigner adds the common name of the Authenticode signer (verify only: the signature read takes time).
+function Get-VulkanLoaderReading([string]$Path, [switch]$WithSigner) {
+    $v = Get-FileVersionNumbers $Path
+    if ($null -eq $v) { return $null }
+    $company = ''
+    try { $company = [string](Get-Item -LiteralPath $Path).VersionInfo.CompanyName } catch { }
+    $v | Add-Member -NotePropertyName company -NotePropertyValue $company.Trim()
+    if ($WithSigner) {
+        $cn = ''
+        try {
+            $sig = Get-AuthenticodeSignature -LiteralPath $Path
+            if ($sig.SignerCertificate -and $sig.SignerCertificate.Subject -match '^CN=(?:"([^"]*)"|([^,]*))') { $cn = $(if ($Matches[1]) { $Matches[1] } else { $Matches[2] }) }
+            $v | Add-Member -NotePropertyName signature -NotePropertyValue ([string]$sig.Status)
+        } catch { $v | Add-Member -NotePropertyName signature -NotePropertyValue 'unknown' }
+        $v | Add-Member -NotePropertyName signer -NotePropertyValue $cn
+    }
+    return $v
+}
+
+# Pure: one loader reading against the version the package carries: 'missing', 'older', 'same' or 'newer'.
+function Get-VulkanLoaderStanding($Reading, [string]$Shipped = $script:VulkanLoaderVersion) {
+    if ($null -eq $Reading) { return 'missing' }
+    $have = [version]('{0}.{1}.{2}.{3}' -f $Reading.major, $Reading.minor, $Reading.build, $Reading.revision)
+    $c = $have.CompareTo([version]$Shipped)
+    if ($c -lt 0) { return 'older' }
+    if ($c -eq 0) { return 'same' }
+    return 'newer'
+}
+
+# Pure: does a reading of the loaders mean the installer has to run LunarG's installer? -Readings is a hashtable
+# x64/x86 -> the object of Get-VulkanLoaderReading ($null = the file is not there). A loader that is missing or older
+# than the one the package carries makes 'install' true. A loader of the same or a newer version, from LunarG or from
+# another vendor, stays: with both in that state nothing runs, and when only the other one needs it, LunarG's
+# installer leaves the newer file alone by its own version rule.
+# Returns { install, arches = @({ arch, file, standing, version, company }), detail }.
+function Get-VulkanLoaderDecision {
+    param([Parameter(Mandatory)][hashtable]$Readings, [string]$Shipped = $script:VulkanLoaderVersion)
+    $arches = @(); $parts = @()
+    foreach ($arch in $script:VulkanLoaderFiles.Keys) {
+        $r = $null
+        if ($Readings.ContainsKey($arch)) { $r = $Readings[$arch] }
+        $standing = Get-VulkanLoaderStanding $r $Shipped
+        $version = $(if ($r) { '{0}.{1}.{2}.{3}' -f $r.major, $r.minor, $r.build, $r.revision } else { $null })
+        $company = $(if ($r -and $r.PSObject.Properties['company']) { [string]$r.company } else { '' })
+        $arches += [pscustomobject]@{ arch = $arch; file = $script:VulkanLoaderFiles[$arch]; standing = $standing; version = $version; company = $company }
+        $parts += $(switch ($standing) {
+                'missing' { "$($script:VulkanLoaderFiles[$arch]) missing" }
+                'older' { "$($script:VulkanLoaderFiles[$arch]) $version older than $Shipped" }
+                default { "$($script:VulkanLoaderFiles[$arch]) $version$(if ($company) { " ($company)" })" }
+            })
+    }
+    $install = [bool](@($arches | Where-Object { $_.standing -in @('missing', 'older') }).Count)
+    return [pscustomobject]@{ install = $install; arches = $arches; detail = ($parts -join '; ') }
+}
+
+# The same decision for the running PC. Host tests only, and only in a dry run (AMDGPU_WDDM_TEST_VULKANLOADER):
+# 'missing' reads as a PC without both loaders, 'old' as two 1.3.296 loaders, 'x86-missing' as an x64 loader of the
+# shipped version and no x86 one, 'newer' as two 1.4.999 loaders, 'ok' as two of the shipped version. A real install
+# always reads the files. -WindowsDir is for the tests.
+function Get-VulkanLoaderState([string]$WindowsDir = $env:windir) {
+    if ($script:DryRunMode -and $env:AMDGPU_WDDM_TEST_VULKANLOADER) {
+        $s = [version]$script:VulkanLoaderVersion
+        $mk = { param($a, $b, $c, $d) [pscustomobject]@{ major = $a; minor = $b; build = $c; revision = $d; company = 'LunarG, Inc.' } }
+        $same = & $mk $s.Major $s.Minor $s.Build $s.Revision
+        $fake = switch ([string]$env:AMDGPU_WDDM_TEST_VULKANLOADER) {
+            'missing' { @{ x64 = $null; x86 = $null } }
+            'old' { @{ x64 = (& $mk 1 3 296 0); x86 = (& $mk 1 3 296 0) } }
+            'x86-missing' { @{ x64 = $same; x86 = $null } }
+            'newer' { @{ x64 = (& $mk 1 4 999 0); x86 = (& $mk 1 4 999 0) } }
+            default { @{ x64 = $same; x86 = $same } }
+        }
+        return Get-VulkanLoaderDecision -Readings $fake
+    }
+    $readings = @{}
+    foreach ($arch in $script:VulkanLoaderFiles.Keys) { $readings[$arch] = Get-VulkanLoaderReading (Join-Path $WindowsDir $script:VulkanLoaderFiles[$arch]) }
+    return Get-VulkanLoaderDecision -Readings $readings
+}
+
+# The replacements of a loader that Windows does at the next start: the entries of PendingFileRenameOperations that
+# name vulkan-1.dll. LunarG's installer queues one when a program holds the loader open. -Value is for the tests.
+function Get-VulkanLoaderPendingReplacements {
+    param([string[]]$Value = $null, [switch]$FromTest)
+    if (-not $FromTest) {
+        try {
+            $Value = @((Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name PendingFileRenameOperations -ErrorAction Stop).PendingFileRenameOperations)
+        } catch { $Value = @() }
+    }
+    return @(@($Value) | Where-Object { $_ -match '(?i)\\(System32|SysWOW64)\\vulkan-1\.dll$' })
+}
+
+# Pure: what one run of LunarG's installer did, from the decisions before and after it. The exit code is not
+# documented, so it is only reported. { ok, restart, message, downgraded }:
+#   ok        both loaders are now the shipped version or newer, or the missing ones wait for the next start
+#   restart   Windows replaces a loader at the next start (pending replacements), which this installation makes anyway
+#   downgraded  the architectures whose loader was newer before the run and is lower after it (never expected)
+function Get-VulkanLoaderOutcome {
+    param([Parameter(Mandatory)]$Before, [Parameter(Mandatory)]$After, $Code, [bool]$TimedOut = $false,
+          [string[]]$Pending = @(), [double]$TimeoutSeconds = $script:VulkanLoaderTimeoutSeconds)
+    $downgraded = @()
+    foreach ($b in @($Before.arches)) {
+        $a = @($After.arches | Where-Object { $_.arch -eq $b.arch })[0]
+        if ($b.standing -eq 'newer' -and $a -and ($null -eq $a.version -or [version]$a.version -lt [version]$b.version)) { $downgraded += $b.arch }
+    }
+    $codeText = $(if ($null -eq $Code) { 'no exit code' } else { "exit code $Code" })
+    if ($TimedOut) {
+        return [pscustomobject]@{ ok = $false; restart = $false; downgraded = $downgraded
+            message = "LunarG's Vulkan Runtime installer did not finish within $TimeoutSeconds s. Vulkan and OpenGL programs need it: install the Vulkan Runtime from https://vulkan.lunarg.com/sdk/home#windows yourself. Loaders now: $($After.detail)" }
+    }
+    if (-not $After.install) {
+        return [pscustomobject]@{ ok = $true; restart = $false; downgraded = $downgraded; message = "the Vulkan loader is in place ($codeText): $($After.detail)" }
+    }
+    if (@($Pending).Count) {
+        return [pscustomobject]@{ ok = $true; restart = $true; downgraded = $downgraded
+            message = "Windows replaces the Vulkan loader at the next start, which this installation makes anyway ($codeText; $(@($Pending) -join ', ')). Loaders now: $($After.detail)" }
+    }
+    return [pscustomobject]@{ ok = $false; restart = $false; downgraded = $downgraded
+        message = "LunarG's Vulkan Runtime installer ended ($codeText), but the loader is still not in place: $($After.detail). Vulkan and OpenGL programs need it: install the Vulkan Runtime from https://vulkan.lunarg.com/sdk/home#windows yourself." }
+}
+
+# Runs LunarG's installer under a deadline and reads its exit code. -Runner is for the tests (it gets the path and the
+# arguments and returns the exit code). A program that passes the deadline is not killed (Invoke-NativeBounded).
+# Returns { code, text, timed_out }.
+function Invoke-VulkanLoaderInstall {
+    param([Parameter(Mandatory)][string]$Path, [scriptblock]$Runner, [double]$TimeoutSeconds = $script:VulkanLoaderTimeoutSeconds,
+          [string[]]$Arguments = $script:VulkanLoaderArguments)
+    if ($Runner) { return [pscustomobject]@{ code = [int](& $Runner $Path $Arguments); text = ''; timed_out = $false } }
+    $n = Invoke-NativeBounded -File $Path -Arguments $Arguments -TimeoutSeconds $TimeoutSeconds
+    return [pscustomobject]@{ code = $n.code; text = [string]$n.text; timed_out = [bool]$n.timed_out }
+}
+
+# The remedy of every loader warning: LunarG's own download.
+$script:VulkanLoaderRemedy = 'Vulkan and OpenGL programs need it: install the Vulkan Runtime from https://vulkan.lunarg.com/sdk/home#windows yourself.'
+
+# The loader step of phase 2 (install.ps1). The driver works without a loader for Direct3D and the desktop, so no
+# part of this step stops the installation: a package file that fails its check, a program that Windows, antivirus or
+# application control does not let start, or any other error is a warning with the remedy. -Runner and
+# -SignatureReader are for the tests. Returns the record for state.json ("vulkan_loader") when LunarG's installer
+# ran, else $null. The caller keeps the record in the state object only; the next Save-Phase writes it, so this step
+# never writes state.json with the phase of an earlier stage.
+function Invoke-VulkanLoaderStep {
+    param([Parameter(Mandatory)][string]$PackageRoot, [scriptblock]$Runner, [scriptblock]$SignatureReader,
+          [string]$WindowsDir = $env:windir, [string]$ExpectedSha256 = $script:VulkanLoaderSha256)
+    try {
+        $now = Get-VulkanLoaderState -WindowsDir $WindowsDir
+        Write-Info "Vulkan loader: $($now.detail)"
+        if (-not $now.install) { return $null }
+        $exe = Join-Path $PackageRoot $script:VulkanLoaderPackagePath
+        $file = Test-RedistInstaller -Path $exe -ExpectedSha256 $ExpectedSha256 -ExpectedSigner $script:VulkanLoaderSigner -SignatureReader $SignatureReader
+        if (-not $file.ok) { Write-Warn2 "the Vulkan loader is not installed: $($file.problem). Download the release again, or: $($script:VulkanLoaderRemedy)"; return $null }
+        $run = Invoke-Change "install the Vulkan loader $($script:VulkanLoaderVersion) (x64 in System32, x86 in SysWOW64) from $($script:VulkanLoaderPackagePath) ($($script:VulkanLoaderArguments -join ' '); SHA256 $($file.sha256.Substring(0, 16)) and the LunarG signature checked)" {
+            Invoke-VulkanLoaderInstall -Path $exe -Runner $Runner
+        }
+        if ($null -eq $run) { return $null }
+        if ($run.text) { Write-Log ($run.text) }
+        $after = Get-VulkanLoaderState -WindowsDir $WindowsDir
+        $out = Get-VulkanLoaderOutcome -Before $now -After $after -Code $run.code -TimedOut $run.timed_out -Pending (Get-VulkanLoaderPendingReplacements)
+        if ($out.ok) { Write-Info $out.message } else { Write-Warn2 $out.message }
+        if (@($out.downgraded).Count) { Write-Warn2 "the Vulkan loader of $($out.downgraded -join ' and ') is older after the run than before it: $($after.detail)" }
+        return [ordered]@{ version = $script:VulkanLoaderVersion; ok = [bool]$out.ok; restart = [bool]$out.restart; code = $run.code
+            before = $now.detail; after = $after.detail; at = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ') }
+    } catch {
+        Write-Warn2 "the Vulkan loader is not installed: $($_.Exception.Message). $($script:VulkanLoaderRemedy)"
+        return $null
+    }
+}
+
+# Pure: the verify line "Vulkan loader" from the readings of both loaders and the record of the loader step
+# (state.json "vulkan_loader", $null when the installer of this driver did not run LunarG's installer).
+#   fail  a loader is missing although the loader step reported success: the step and the files disagree
+#   warn  a loader is missing otherwise, or older than the one the package carries; the text gives the remedy
+#   pass  both loaders are there, of the shipped version or newer
+# -Readings is a hashtable x64/x86 -> the object of Get-VulkanLoaderReading -WithSigner ($null = no file).
+# Returns { level, text }.
+function Get-VulkanLoaderVerdict {
+    param([Parameter(Mandatory)][hashtable]$Readings, $Record, [string]$Shipped = $script:VulkanLoaderVersion)
+    $parts = @(); $missing = @(); $older = @()
+    foreach ($arch in $script:VulkanLoaderFiles.Keys) {
+        $file = $script:VulkanLoaderFiles[$arch]
+        $r = $null
+        if ($Readings.ContainsKey($arch)) { $r = $Readings[$arch] }
+        $standing = Get-VulkanLoaderStanding $r $Shipped
+        if ($standing -eq 'missing') { $missing += $file; $parts += "$file missing"; continue }
+        if ($standing -eq 'older') { $older += $file }
+        $company = $(if ($r.PSObject.Properties['company']) { [string]$r.company } else { '' })
+        $signer = $(if ($r.PSObject.Properties['signer']) { [string]$r.signer } else { '' })
+        $signature = $(if ($r.PSObject.Properties['signature']) { [string]$r.signature } else { 'not read' })
+        $who = @(@($company, $(if ($signer -and $signer -ne $company) { "signed by $signer" })) | Where-Object { $_ }) -join ', '
+        $parts += "$file $($r.major).$($r.minor).$($r.build).$($r.revision) ($who, signature $signature)"
+    }
+    $ran = ($null -ne $Record) -and ($Record.PSObject.Properties['version'] -or ($Record -is [Collections.IDictionary] -and $Record.Contains('version')))
+    $by = $(if ($ran) { "; the installer of this driver ran the Vulkan Runtime $($Record.version) at $($Record.at)" } else { '; the installer of this driver did not install it' })
+    $text = ($parts -join '; ') + $by
+    $stepOk = $ran -and [bool]$Record.ok
+    if ($missing.Count -and $stepOk) { return [pscustomobject]@{ level = 'fail'; text = "$text. The loader step reported success, but $($missing -join ' and ') is not there. Run install.cmd again, or: $($script:VulkanLoaderRemedy)" } }
+    if ($missing.Count) { return [pscustomobject]@{ level = 'warn'; text = "$text. Run install.cmd again, or: $($script:VulkanLoaderRemedy)" } }
+    if ($older.Count) { return [pscustomobject]@{ level = 'warn'; text = "$text. $($older -join ' and ') older than $Shipped`: run install.cmd again to bring it forward" } }
+    return [pscustomobject]@{ level = 'pass'; text = $text }
 }
 
 # ---- which Windows this driver is made for ---------------------------------------------------------------------
@@ -2052,7 +2285,8 @@ function Test-WowRegistration {
 # which is OpenGL 1.1 but draws, for an ICD that loads and gives a 32-bit program no context at all. So the list
 # decides, not the presence of a file, and a later release that ships a 32-bit Vulkan loader adds "x86" to it with
 # no other change: every function below works from the list, and the x86 half of them is tested either way
-# (tools\release\test-opengl-icd.ps1).
+# (tools\release\test-opengl-icd.ps1). The installer now brings the 32-bit loader (see "the Vulkan loader" above);
+# "x86" joins the list when the x86 ICD passes tools\win\gltest on that loader on the lab.
 $script:OpenGlPackagePath    = 'payload/opengl/amdgpu_wddm_gl.dll'
 $script:OpenGlPackagePathWow = 'payload/wow64/opengl/amdgpu_wddm_gl.dll'
 $script:OpenGlVersion        = 1
@@ -3176,8 +3410,9 @@ function Get-InstalledPathOfPackageFile {
     if ($p -match '\.\.') { return $null }
     if ($p -match '^payload\\system32\\(.+)$') { return (Join-Path $SystemDir $Matches[1]) }
     if ($p -match '^payload\\syswow64\\(.+)$') { return (Join-Path $SysWowDir $Matches[1]) }
-    # payload\redist carries Microsoft's installer for the Visual C++ runtime: the install runs it from the package
-    # and copies no file of it, so nothing of this folder has an installed path either (BD-089 orphan plan).
+    # payload\redist carries Microsoft's installer for the Visual C++ runtime and LunarG's installer for the Vulkan
+    # loader: the install runs them from the package and copies no file of them, so nothing of this folder has an
+    # installed path either (BD-089 orphan plan).
     if ($p -match '^payload\\(kmd|cert|firmware|redist)\\') { return $null }
     if ($p -match '^payload\\(.+\\.+)$') { return (Join-Path $InstallRoot $Matches[1]) }
     if ($p -match '^(installer|licenses)\\(.+)$') { return (Join-Path $InstallRoot $p) }

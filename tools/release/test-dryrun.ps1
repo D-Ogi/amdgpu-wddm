@@ -164,6 +164,7 @@ Check ($r.text -notmatch 'doing:|Administrator rights are needed') 'walk-through
 Check ($r.text -match 'shortcuts: Start menu entry, Start menu repair entry, desktop icon') 'the summary names the three shortcuts as a person reads them'
 Check ($r.text -notmatch 'desktop desktop') 'no line says "desktop desktop"'
 Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dll') 'this PC has the runtime, and phase 2 says so'
+Check ($r.text -match 'Vulkan loader: System32\\vulkan-1\.dll [^\r\n]*; SysWOW64\\vulkan-1\.dll ') 'phase 2 reads both Vulkan loaders of this PC and says what it found'
 
 # The two paths of the new steps that this PC would otherwise never walk: a PC without the Microsoft Visual C++
 # runtime (AMDGPU_WDDM_TEST_VCRUNTIME, a dry run only), and an install that was asked for no desktop icon. Both
@@ -171,8 +172,9 @@ Check ($r.text -match 'Microsoft Visual C\+\+ runtime: present: vcruntime140\.dl
 'install -DryRun with the runtime missing, no desktop icon and Smart App Control in evaluation'
 $env:AMDGPU_WDDM_TEST_VCRUNTIME = 'missing'
 $env:AMDGPU_WDDM_TEST_SAC = 'evaluation'
+$env:AMDGPU_WDDM_TEST_VULKANLOADER = 'missing'
 try { $r2 = Invoke-Ps51 @((Join-Path $Package 'installer\install.ps1'), '-DryRun', '-DryRunIgnoreBoard', '-NoDesktopShortcut', '-NoWallpaper', '-NoBootLogo') }
-finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC }
+finally { Remove-Item Env:\AMDGPU_WDDM_TEST_VCRUNTIME; Remove-Item Env:\AMDGPU_WDDM_TEST_SAC; Remove-Item Env:\AMDGPU_WDDM_TEST_VULKANLOADER }
 $r2.text
 Check ($r2.code -eq 0) "walk-through without the runtime exit $($r2.code)"
 Check ($r2.text -match '\[warn\]\s+Smart App Control\s+evaluation \(source: CI\\Policy VerifiedAndReputablePolicyState = 2\): if Windows turns Smart App Control on later, Windows blocks the programs of the graphics driver, and the desktop and games lose the driver\. Turn it off now: open Windows Security > App & browser control > Smart App Control settings, select Off, then "Yes, I''m sure", then Yes in the administrator prompt \(see INSTALL\.md, section Smart App Control and SmartScreen\)') 'Smart App Control in evaluation is a warning that says what Windows blocks, with the steps, not a refusal'
@@ -182,6 +184,14 @@ Check ($r2.text -match 'would: install the Microsoft Visual C\+\+ 2015-2022 Redi
 $iVc = $r2.text.IndexOf('would: install the Microsoft Visual C++')
 $iCopy = $r2.text.IndexOf('would: copy payload\')
 Check ($iVc -ge 0 -and $iCopy -gt $iVc) "the runtime step comes before the first file of ours (runtime at $iVc, first copy at $iCopy)"
+# The same run reads the Vulkan loaders as missing (AMDGPU_WDDM_TEST_VULKANLOADER): phase 2 names LunarG's installer,
+# its switch, its hash and its signature, after the Visual C++ runtime and before our own files.
+Check ($r2.text -match 'Vulkan loader: System32\\vulkan-1\.dll missing; SysWOW64\\vulkan-1\.dll missing') 'phase 2 states the two missing loaders'
+Check ($r2.text -match 'would: install the Vulkan loader 1\.4\.363\.0 \(x64 in System32, x86 in SysWOW64\) from payload\\redist\\VulkanRT-X64-1\.4\.363\.0-Installer\.exe \(/S; SHA256 3F03BDA2522D1D10 and the LunarG signature checked\)') 'phase 2 shows the loader step with the file, its switch, its hash and its signature'
+Check ($r2.text -notmatch 'WARNING: the Vulkan loader is not installed') 'the package carries the Vulkan Runtime installer unchanged'
+$iVk = $r2.text.IndexOf('would: install the Vulkan loader')
+Check ($iVk -gt $iVc -and $iCopy -gt $iVk) "the loader step comes after the runtime and before the first file of ours (loader at $iVk)"
+Check ($r.text -notmatch 'would: install the Vulkan loader' -or $r.text -match 'Vulkan loader: [^\r\n]*(missing|older than)') 'negative control: the first walk-through installs no loader unless this PC lacks one'
 Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; left out: desktop icon') 'the run asked for no desktop icon leaves it out and says so'
 Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
 Check (($r2.text -match 'wallpaper: not set \(-NoWallpaper\)') -and ($r2.text -match 'Release: Wallpaper = 0, WallpaperStamp = ')) 'the run asked for no wallpaper records 0 and says so'

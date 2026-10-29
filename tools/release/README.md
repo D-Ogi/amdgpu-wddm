@@ -25,6 +25,12 @@ that the install never copies anywhere: `install.ps1` runs the file when the run
 and Microsoft installs its own files in `System32`. The rule "every payload image is x64" does not cover it, because
 Microsoft builds that bootstrapper as a 32-bit program even in the x64 package (`test-wow64.ps1`).
 
+The same folder carries LunarG's signed Vulkan Runtime installer, `payload\redist\VulkanRT-X64-<version>-Installer.exe`,
+also a `third_party` row with its SHA-256 and its size and no second signature. `install.ps1` runs it (`/S`) when
+`System32\vulkan-1.dll` or `SysWOW64\vulkan-1.dll` is missing or older than the version it carries, and LunarG puts
+the x64 and the x86 Vulkan loader in place. A loader of the same or a newer version stays. The uninstall leaves the
+loader, as it leaves the Visual C++ runtime. That installer is an x64 program (`test-wow64.ps1`).
+
 Builds the folder and zip that external testers run on their own ASRock BC-250 (Windows 11 x64). The tester guide
 is `docs/testing/INSTALL.md`; it is copied into the package as `INSTALL.md`. The package's own third-party list is
 `docs/testing/THIRD-PARTY.md` (one row per bundled component with its exact commit), with the licence texts in

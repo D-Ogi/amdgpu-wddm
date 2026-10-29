@@ -746,8 +746,9 @@ What is deployed on the lab right now is recorded outside this repository.
   while the unpacked SDK packages are 10.0.26100.6584.
 - **Download origins not recorded** for the win_flex_bison and glslang zips and the MSYS2 CMake and Ninja
   packages; only versions and hashes are known.
-- **Not produced by these recipes:** the Vulkan loader (`vulkan-1.dll`) the lab installs, and the ICD
-  manifest JSON.
+- **Not produced by these recipes:** the Vulkan loader (`vulkan-1.dll`), and the ICD manifest JSON. The release
+  package carries LunarG's signed Vulkan Runtime installer (`payload\redist`, `tools/release/release-sources.json`),
+  and the installer runs it when a loader is missing or older (`tools/release/installer/common.ps1`).
 - **Standalone operation** is not yet packaged: the KMD's boot-loop guard (`driver/kmd/guard.c`, ADR 0006)
   needs a user-mode confirmation after each start (`bc250kmd_cli health confirm` or the lab monitor's automatic
   confirmation) or it refuses to start after two unconfirmed boots; the feature gates in the service key

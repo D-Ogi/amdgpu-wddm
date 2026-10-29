@@ -857,6 +857,35 @@ function Invoke-Verify {
         if ($vkOut -match '^SKIP') { Write-Host "   [skip] Vulkan               $vkOut" -ForegroundColor Yellow; Write-Log "   verify Vulkan: $vkOut" }
         else { Add-Result 'Vulkan' ($vkOut -match '(?m)^device 0x1002:0x13FE') $vkOut }
     }
+    # The two Vulkan loaders that Vulkan and OpenGL programs load (common.ps1, "the Vulkan loader"): present, the
+    # version, who made and signed the file, and whether the installer of this driver installed it
+    # (Get-VulkanLoaderVerdict). A missing loader fails only when the loader step reported success: then the step and
+    # the files disagree. Every other missing or older loader is a warning with its remedy, because the driver itself
+    # is installed and works for Direct3D and the desktop.
+    $vkReadings = @{}
+    foreach ($arch in $script:VulkanLoaderFiles.Keys) { $vkReadings[$arch] = Get-VulkanLoaderReading (Join-Path $env:windir $script:VulkanLoaderFiles[$arch]) -WithSigner }
+    $vkState = Read-InstallState
+    $vkRecord = $(if ($vkState -and $vkState.PSObject.Properties['vulkan_loader']) { $vkState.vulkan_loader } else { $null })
+    $vkVerdict = Get-VulkanLoaderVerdict -Readings $vkReadings -Record $vkRecord
+    switch ($vkVerdict.level) {
+        'fail' { Add-Result 'Vulkan loader' $false $vkVerdict.text }
+        'warn' { Add-Warning 'Vulkan loader' $vkVerdict.text }
+        default { Add-Result 'Vulkan loader' $true $vkVerdict.text }
+    }
+    # 32-bit Vulkan through SysWOW64\vulkan-1.dll and the WOW6432Node registration: the same check in the 32-bit
+    # powershell.exe, whose System32 is SysWOW64. A failure is a warning: a problem of 32-bit enumeration does not
+    # make the verify of the driver installation fail.
+    $ps32 = Join-Path $env:windir 'SysWOW64\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not $startState.started) {
+        Add-Skipped 'Vulkan (32-bit)' "$($startState.reason); the loader enumerates no device of an adapter without a running driver"
+    } elseif (-not (Test-Path -LiteralPath $ps32 -PathType Leaf)) {
+        Add-Info 'Vulkan (32-bit)' "not checked: $ps32 is not on this computer"
+    } else {
+        $vkOut32 = (Invoke-Native $ps32 @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $vk)).text.Trim()
+        if ($vkOut32 -match '^SKIP') { Add-Warning 'Vulkan (32-bit)' ($vkOut32 -replace 'System32', 'SysWOW64') }
+        elseif ($vkOut32 -match '(?m)^device 0x1002:0x13FE') { Add-Result 'Vulkan (32-bit)' $true $vkOut32 }
+        else { Add-Warning 'Vulkan (32-bit)' "$vkOut32. 32-bit Vulkan programs and games may not find the GPU: report it with the logs of this verify" }
+    }
 
     # The 64-bit registration: the four UserModeDriverName slots (the D3D9 slot holds '<>', so that D3D9 goes
     # through D3D9On12) and VulkanDriverName. Registration only: the D3D12 and Vulkan checks above create the devices.
@@ -1358,6 +1387,16 @@ else {
         Write-Info "Microsoft Visual C++ runtime after the step: $($vcAfter.detail)"
     }
 }
+# The Vulkan loader (common.ps1, "the Vulkan loader"): LunarG's installer runs only when System32\vulkan-1.dll or
+# SysWOW64\vulkan-1.dll is missing or older than the version the package carries, and only after its SHA-256 and its
+# LunarG signature are checked. A loader of the same or a newer version stays as it is. The driver works without a
+# loader for Direct3D and the desktop, so a loader that cannot be installed is a warning with its remedy, and verify
+# reports it; it does not stop the installation (Invoke-VulkanLoaderStep catches every error of the step).
+# The record goes into the state object only. state.json is not written here: at this point the object already
+# holds the new package_version with the phase of phase 1, and a stop before phase 2 marks itself (InPhase2) would
+# leave a state.json that reads as this version installed. The next Save-Phase writes the record with its phase.
+$vkRecord = Invoke-VulkanLoaderStep -PackageRoot $package
+if ($null -ne $vkRecord) { Set-StateValue $state 'vulkan_loader' $vkRecord }
 Enter-Stage 'firmware' 'GPU firmware'
 # Every step below can run again over its own result: files are compared by SHA256 and a file in use is replaced
 # by rename, registry values and the task are overwritten, a staged driver set is checked after its restart.
@@ -1444,8 +1483,9 @@ if ($mft.register) {
 # naming a file that is not there leaves an OpenGL program of that architecture with no driver at all, instead of the
 # software renderer Windows gives it without a registration. The x86 ICD rides in the wow64 tree, which goes in
 # anyway, so only the 64-bit directory ever joins the list of payload directories.
-# This release lists x64 alone (common.ps1 holds the lab measurement behind that): the 32-bit ICD loads but has no
-# 32-bit Vulkan loader to run zink on, so a 32-bit program is better off with the renderer of Windows itself.
+# This release lists x64 alone (common.ps1 holds the lab measurement behind that): the 32-bit ICD loaded but had no
+# 32-bit Vulkan loader to run zink on, so a 32-bit program was better off with the renderer of Windows itself. The
+# loader step of phase 2 now brings that loader; the list gets "x86" after a lab pass of the x86 ICD on it.
 $gl = Get-OpenGlReleaseSwitch -Manifest $script:Manifest -PackageRoot $package
 $glDir = Split-Path (Join-Path $InstallRoot $gl.install_path)         # <install root>\opengl, the x64 ICD
 $glDirWow = Split-Path (Join-Path $InstallRoot $gl.install_path_wow)  # <install root>\wow64\opengl, the x86 ICD
