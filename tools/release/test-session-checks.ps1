@@ -101,6 +101,56 @@ Check ((Get-DriverSetAction $receipt 'A' '') -eq 'unknown-boot') 'unknown boot c
 $receipt.staged = $false
 Check ((Get-DriverSetAction $receipt 'A' 'boot2') -eq 'invalid-receipt') 'an incomplete receipt cannot permit verification'
 
+'BD-227: a driver set that Windows would not bind is refused before the state handoff'
+# The INFs differ in their KMD identity line only, as two builds of one release do (tester.32 round 6 lab over round
+# 5c lab: both 40.7.216.104, the GPU stayed on the old package and its KMD did not start after the restart).
+function New-RankInf([string]$DriverVer, [string]$Kmd) { return ($lab -replace 'DriverVer   = [^\r]+', "DriverVer   = $DriverVer") + "; kmd $Kmd`r`n" }
+function Get-InfTextSha([string]$Text) { return ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))) -replace '-', '') }
+function Get-Rank([string]$Staged, $Bound) { return Get-DriverSetRankDecision -StagedInfText $Staged -StagedInfSha (Get-InfTextSha $Staged) -Bound $Bound }
+function New-Bound([string]$Text, [string]$Service = 'bc250kmd', [string]$Inf = 'oem3.inf') {
+    return [pscustomobject]@{ service = $Service; ours = ($Service -eq 'bc250kmd'); inf = $Inf; inf_sha256 = $(if ($null -ne $Text) { Get-InfTextSha $Text }); inf_text = $Text }
+}
+$r5c = New-RankInf '10/23/2026,40.7.216.104' 'CDE214D4'
+$r6 = New-RankInf '10/23/2026,40.7.216.104' 'C35DCDD0'
+$d = Get-Rank $r6 (New-Bound $r5c)
+Check (-not $d.ok -and $d.id -eq 'not-above' -and $d.detail -match 'oem3\.inf' -and $d.detail -match 'uninstall\.cmd') "same DriverVer, another KMD: refused ($($d.detail))"
+$d = Get-Rank $r6 (New-Bound $r6)
+Check ($d.ok -and $d.id -eq 'ok') 'the same INF as the bound package (a repair of the same build) passes'
+$d = Get-Rank $r6 (New-Bound $r6.ToUpperInvariant())
+Check (-not $d.ok -and $d.id -eq 'not-above') 'an INF that differs in any byte is another package, also with an equal DriverVer'
+$d = Get-Rank (New-RankInf '10/24/2026,40.7.216.104' 'C35DCDD0') (New-Bound $r5c)
+Check ($d.ok -and $d.id -eq 'ok') 'a newer DriverVer date with the same version passes'
+$d = Get-Rank (New-RankInf '10/23/2026,40.7.216.105' 'C35DCDD0') (New-Bound $r5c)
+Check ($d.ok -and $d.id -eq 'ok') 'the same date with a higher version passes'
+$d = Get-Rank (New-RankInf '10/22/2026,40.7.216.200' 'C35DCDD0') (New-Bound $r5c)
+Check (-not $d.ok -and $d.id -eq 'not-above') 'an older date refuses even with a higher version: PnP compares the date first'
+$d = Get-Rank (New-RankInf '10/23/2026,40.7.216.103' 'C35DCDD0') (New-Bound $r5c)
+Check (-not $d.ok -and $d.id -eq 'not-above') 'a lower version on the same date (a downgrade) refuses'
+$d = Get-Rank (New-RankInf '10/23/2026,40.7.216.9' 'C35DCDD0') (New-Bound (New-RankInf '10/23/2026,40.7.216.10' 'CDE214D4'))
+Check (-not $d.ok) 'versions compare as numbers, not as text (40.7.216.9 is below 40.7.216.10)'
+$d = Get-Rank $r6 (New-Bound $null 'BasicDisplay' $null)
+Check ($d.ok -and $d.id -eq 'ok') 'a GPU on another driver (Microsoft Basic Display) passes'
+$d = Get-Rank $r6 $null
+Check ($d.ok -and $d.id -eq 'ok') 'a GPU with no driver service passes'
+$d = Get-Rank $r6 (New-Bound $null)
+Check (-not $d.ok -and $d.id -eq 'unreadable') 'our service with an unreadable bound INF refuses (it is not known that Windows moves the GPU)'
+$d = Get-Rank $r6 ([pscustomobject]@{ service = 'bc250kmd'; ours = $true; inf = $null; inf_sha256 = $null; inf_text = $null })
+Check (-not $d.ok -and $d.id -eq 'unreadable') 'our service with no published INF name refuses'
+$d = Get-Rank $r6 (New-Bound ($r5c -replace 'DriverVer   = [^\r]+\r\n', ''))
+Check (-not $d.ok -and $d.id -eq 'unreadable') 'a bound INF without a DriverVer refuses'
+$d = Get-Rank ($r6 -replace 'DriverVer   = [^\r]+\r\n', '') (New-Bound $r5c)
+Check (-not $d.ok -and $d.id -eq 'unreadable') 'a package INF without a DriverVer refuses'
+# The wiring in install.ps1: the preflight runs the check before any change, -Force does not pass it, and the freeze of
+# the state handoff reads it again first.
+$installText = [IO.File]::ReadAllText((Join-Path $Installer 'install.ps1'))
+Check ($installText -match "(?m)^\s+\`$rank = Test-DriverSetRank -InstallState \`$st\r?\n\s+if \(\`$rank\) \{ Add-Check 'driver package rank' \`$\(if \(\`$rank\.ok\) \{ 'ok' \} else \{ 'fail' \}\)") 'the preflight adds the rank check, as fail when it refuses, with no -Force exception'
+$freeze = $installText.IndexOf("Invoke-Change 'freeze state writers and publish the protected state handoff before INF staging'")
+$guard = $installText.IndexOf('if ($rank -and -not $rank.ok) { throw "driver package rank: $($rank.detail)" }')
+$compare = $installText.IndexOf('Save-DriverSettingsComparison -State $state')
+Check ($freeze -gt 0 -and $guard -gt $freeze -and $compare -gt $guard) 'the freeze reads the rank again and throws before it saves or freezes anything'
+Check ($installText -match "(?m)^function Test-DriverSetRank\(\`$InstallState\) \{\r?\n\s+if \(\`$legacyRollback -or -not \`$script:Device -or \`$action\.action -notin @\('install', 'upgrade', 'repair', 'resume'\)\) \{ return \`$null \}") 'only a run that installs checks the rank, and a rollback removes the other ranks itself'
+Check ($installText -match "\(Get-DriverSetAction \`$receipt \`$sha \(\[string\]\(Get-BootIdentity\)\.boot_id\)\) -ne 'stage'\) \{ return \`$null \}") 'a driver set that is staged already is left to the binding check after the restart'
+
 'pnputil outcomes: only what the exit code establishes'
 $o = Get-DriverPackageOutcome 3010
 Check ($o.ok -and $o.deferred -and ($o.text -eq 'pnputil exit 3010: completed, a system restart is required')) "3010: $($o.text)"
