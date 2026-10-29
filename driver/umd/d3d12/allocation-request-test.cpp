@@ -460,7 +460,10 @@ int main() {
             {none,planes_only,0,true,AMDGPU_WDDM_DXGI_R8G8B8A8_UNORM,1920,1200,pitch,
              ScanoutStandDown::CapsClosed,ScanoutSwitch::Default},
             // BD-223: with the MPO flag a chain that is not the mode is a scan-out primary for the plane, from
-            // 64 pixels up to the mode and to a stretch of 16 in each direction (bc250_scanout_mpo_geometry).
+            // 64 pixels up to a stretch of 16 and down to the S2 shrink limits in each direction
+            // (bc250_scanout_mpo_geometry): 1920x1201 is a small downscale and is admitted; more than
+            // BC250_MPO_MAX_SHRINK_MILLI / 1000 times down, or wider than both the mode and
+            // BC250_MPO_MAX_SHRINK_WIDTH, is refused.
             // The 1920x1080 chain on the 1920x1200 mode is the case of the defect. The 1280x720 chain is
             // admitted here although the kernel driver's present stage refuses its pitch at the plane check:
             // that refusal composes the frame and goes away with that stage, so the shell does not copy it.
@@ -470,7 +473,12 @@ int main() {
             {none,mpo,0,true,bgra,1920,1200,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
             {none,mpo,0,true,bgra,119,75,512,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
             {none,mpo,0,true,bgra,63,1200,256,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
-            {none,mpo,0,true,bgra,1920,1201,pitch,ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,1920,1201,pitch,ScanoutStandDown::Admitted,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,1920,1200*BC250_MPO_MAX_SHRINK_MILLI/1000+1,pitch,
+             ScanoutStandDown::SourceGeometry,ScanoutSwitch::Default},
+            {none,mpo,0,true,bgra,BC250_MPO_MAX_SHRINK_WIDTH+1,1200,
+             bc250_scanout_primary_pitch(BC250_MPO_MAX_SHRINK_WIDTH+1,4),ScanoutStandDown::SourceGeometry,
+             ScanoutSwitch::Default},
             {none,mpo,0,true,bgra,1280,720,5376,ScanoutStandDown::Pitch,ScanoutSwitch::Default},
             {none,mpo,0,true,AMDGPU_WDDM_DXGI_R16G16B16A16_FLOAT,1280,720,10240,ScanoutStandDown::Format,
              ScanoutSwitch::Default},
