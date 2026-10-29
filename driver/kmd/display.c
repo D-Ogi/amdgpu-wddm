@@ -13,6 +13,9 @@
 #include "display_modes.h"
 #include "dcn_translate.h"          // DcnPrimaryPitch: the pitch of a primary of a smaller source mode
 #include "lab_gate.h"               // BD-167: the raw diagnostic escapes below are lab-only
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+#include "dcn_latch_escape.h"
+#endif
 #include "boot_logo.h"              // the boot-screen mascot drawn into the firmware's framebuffer at start
 #include "display_rotation.h"       // BD-247: which path rotations this driver shows, and the rotated bugcheck screen
 
@@ -297,6 +300,10 @@ static BOOLEAN WddmDiagnosticAllowed(const BC250_ESCAPE* Data, ULONG Bytes)
     // BD-167: the raw diagnostic commands are not compiled into the release dispatch, so the release allow-list
     // must not name them either. In the lab flavour they remain admissible under FullWddm.
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    // Controlled writer: the dedicated handler requires Level Two and the
+    // primary exclusive owner, unlike the refused raw RUN_DCNFLIP path.
+    case BC250_ESCAPE_LATCH_PROBE_COMMAND:
+        return TRUE;
     case BC250_ESCAPE_READ_REG:
     case BC250_ESCAPE_GET_MEMORY:
     case BC250_ESCAPE_VRAM_READ:
@@ -619,6 +626,48 @@ static void ConnectorReplugEscape(BC250_DEVICE* Device, BC250_ESCAPE_CONNECTOR_R
 }
 #endif
 
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+static void LatchProbeEscape(BC250_DEVICE* Device, BC250_ESCAPE_LATCH_PROBE* Data,
+                             BOOLEAN Admin, ULONG Flags)
+{
+    ULONG abi=Data->AbiVersion, arm=Data->Arm, expected=Data->ExpectedVersion;
+    ULONG reserved=0, i;
+    NTSTATUS status=STATUS_INVALID_PARAMETER;
+    D3DDDI_ESCAPEFLAGS required={0};
+    for (i=0;i<RTL_NUMBER_OF(Data->Reserved);++i) reserved|=Data->Reserved[i];
+    RtlZeroMemory(Data,sizeof(*Data));
+    Data->Magic=BC250_ESCAPE_MAGIC;
+    Data->Command=BC250_ESCAPE_LATCH_PROBE_COMMAND;
+    Data->Version=BC250_KMD_VERSION;
+    Data->AbiVersion=BC250_LATCH_PROBE_ABI;
+    Data->Arm=arm;
+    Data->ExpectedVersion=expected;
+    Data->Status=BC250_ESCAPE_STATUS_REFUSED;
+    // Zero means NT_SUCCESS, so explicitly mark steps that did not run.
+    Data->Result.Status=Data->Result.UnlockStatus=Data->Result.RestoreStatus=
+        Data->Result.EndStatus=STATUS_INVALID_DEVICE_STATE;
+    required.HardwareAccess=1;
+    if (!Admin) {
+        status=STATUS_ACCESS_DENIED;
+        Data->Status=BC250_ESCAPE_STATUS_NOT_ADMIN;
+    } else if (KeGetCurrentIrql()!=PASSIVE_LEVEL) {
+        status=STATUS_INVALID_DEVICE_STATE;
+    } else if (Flags==required.Value && abi==BC250_LATCH_PROBE_ABI &&
+               expected==BC250_KMD_VERSION && arm<Bc250LatchArmCount && !reserved) {
+        if (!LabDiagnosticsAllowed()) status=STATUS_ACCESS_DENIED;
+        else if (!Device->FullWddm ||
+                 InterlockedCompareExchange(&Device->RetainedPowerPhase,0,0)!=0)
+            status=STATUS_DEVICE_NOT_READY;
+        else {
+            LabEscapeAdmitted(LabEscapeLatchProbe,"lab:latch-probe");
+            status=DcnLatchProbe(Device,arm,&Data->Result);
+            if (NT_SUCCESS(status)) Data->Status=BC250_ESCAPE_STATUS_DONE;
+        }
+    }
+    Data->NtStatus=(ULONG)status;
+}
+#endif
+
 NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Escape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
@@ -743,6 +792,13 @@ NTSTATUS Bc250Escape(_In_ const HANDLE hAdapter, _In_ const DXGKARG_ESCAPE* Esca
         data->Status=BC250_ESCAPE_STATUS_REFUSED;
         return STATUS_DEVICE_BUSY;
     }
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+    if (command == BC250_ESCAPE_LATCH_PROBE_COMMAND) {
+        if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_LATCH_PROBE)) return STATUS_INVALID_PARAMETER;
+        LatchProbeEscape(device,(BC250_ESCAPE_LATCH_PROBE*)data,CallerIsAdmin(),Escape->Flags.Value);
+        return STATUS_SUCCESS; // measurement and cleanup statuses remain separate
+    }
+#endif
     if (data->Command == BC250_ESCAPE_OBSERVE_DCN) {
         if (Escape->PrivateDriverDataSize != sizeof(BC250_ESCAPE_DCN_OBSERVE)) return STATUS_INVALID_PARAMETER;
         DcnObserve(device,(BC250_ESCAPE_DCN_OBSERVE*)data,CallerIsAdmin(),Escape->Flags.Value);

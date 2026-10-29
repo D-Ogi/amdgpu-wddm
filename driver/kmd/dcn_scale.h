@@ -4,15 +4,17 @@
 // The OTG timing never changes here. A source mode of SourceWidth x SourceHeight is read whole by HUBP0 (the
 // viewport), scaled up by DSCL0 into a rectangle of the native active area (the recout), and MPCC0 fills the rest
 // of the active area with its background colour (black). The math and the register sequence are Linux amdgpu's
-// for DCN 2.0.1 (MIT, v6.18), reduced to one pipe, RGB, no rotation, no mirror and an upscale or 1:1 only:
+// for DCN 2.0.1 (MIT, v6.18), reduced to one pipe, RGB, no rotation, no mirror and an upscale or 1:1 only (a plane
+// of BD-223 also down to a quarter, Bc250ScalerPlanRecout):
 //   core/dc_resource.c calculate_scaling_ratios, calculate_init_and_vp;
 //   dpp/dcn201/dcn201_dpp.c dpp201_get_optimal_number_of_taps;
 //   dpp/dcn20/dcn20_dpp.c dscl2_calc_lb_num_partitions;
 //   dpp/dcn10/dcn10_dpp_dscl.c dpp1_dscl_get_dscl_mode, dpp1_dscl_find_lb_memory_config, dpp1_dscl_set_lb,
 //     dpp1_dscl_set_scaler_filter, dpp1_dscl_set_scl_filter, dpp1_dscl_set_manual_ratio_init,
 //     dpp1_dscl_set_scaler_manual_scale;
-//   hubp/dcn10/dcn10_hubp.c min_set_viewport; dce/dce_scl_filters.c filter_4tap_64p_upscale (the only filter an
-//   upscale with 4 taps uses; extracted, not retyped: scl_filter_4tap_64p_upscale.inc).
+//   hubp/dcn10/dcn10_hubp.c min_set_viewport; dce/dce_scl_filters.c get_filter_4tap_64p (the table of the ratio,
+//   through ../shim/bc250_scaler_filter.h; filter_4tap_64p_upscale is also kept as scl_filter_4tap_64p_upscale.inc
+//   for the test).
 // docs/design/display-modes.md has the design and the deviations.
 #pragma once
 #include "display_io.h"
@@ -27,6 +29,10 @@ enum bc250_scaling {
     BC250_SCALING_COUNT
 };
 #define BC250_SCALING_BIT(s) (1ul << (s))
+// BD-223: the Scaling of a plan made by Bc250ScalerPlanRecout, from a plane's own rectangle. It is not a VidPN
+// scaling, so no mode offers it, and every loop over the VidPN scalings stops before it. It is not
+// BC250_SCALING_COUNT either, which display.c and modeset.c use as "no preference".
+#define BC250_SCALING_PLANE (BC250_SCALING_COUNT + 1)
 
 typedef struct _BC250_RECT {
     unsigned long X, Y, Width, Height;
@@ -42,12 +48,13 @@ typedef struct _BC250_SCALER_PLAN {
     unsigned long TapsH, TapsV, TapsHC, TapsVC;
     unsigned long DsclMode;             // 0 = 444 bypass (1:1), 1 = 444 RGB scaling enabled
     unsigned long LbConfig;             // LB_MEMORY_CTRL.MEMORY_CONFIG
-    int FilterH, FilterV;               // the 4-tap upscale filter is loaded for this direction
+    int FilterH, FilterV;               // a 4-tap filter is loaded for this direction (the table of its ratio)
 } BC250_SCALER_PLAN;
 
 // The scaler limits of this code (not of the hardware): a source mode is never larger than the target, and a
 // ratio is 1 or below (dpp201_get_optimal_number_of_taps allows up to 8:1 down, which needs DPP clock and DCHUB
-// request changes that stage A does not make).
+// request changes that stage A does not make). A BD-223 plane goes down to 4:1, with 4 taps: its flip programs the
+// DCHUB request of its own DML plan, and its check holds DML's DPP clock to the clock that runs.
 #define BC250_SCALE_MIN_DIMENSION 16ul
 #define BC250_SCALE_MAX_DIMENSION 0x3FFFul      // the 14-bit width/height fields of the viewport and recout
 
@@ -56,9 +63,16 @@ typedef struct _BC250_SCALER_PLAN {
 // is asked for a source of another size.
 long Bc250ScalingRecout(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                         unsigned long TargetHeight, unsigned long Scaling, BC250_RECT* Recout);
-// The whole plan (Linux's scaler_data for this pipe). Same returns as Bc250ScalingRecout.
+// The whole plan (Linux's scaler_data for this pipe). Same returns as Bc250ScalingRecout,
+// plus _NOT_SUPPORTED when the selected vertical taps do not fit the line buffer.
 long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                      unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan);
+// BD-223: the same plan for a recout the caller chose (a plane's destination rectangle). The source is read whole,
+// and each direction is 1:1, up, or down to a quarter (stage S2). _INVALID for a zero or oversized dimension or a
+// recout outside the target, _NOT_SUPPORTED for a recout under a quarter of the source in either direction or one
+// whose vertical taps do not fit the line buffer.
+long Bc250ScalerPlanRecout(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+                           unsigned long TargetHeight, const BC250_RECT* Recout, BC250_SCALER_PLAN* Plan);
 // The scalings display.c offers for a source mode on a target, as BC250_SCALING_BIT()s, for a display-modes
 // level (edid.h BC250_DISPLAY_MODES_*). 0 when the mode is not offered at all. The native size reports identity
 // and every scaling of its level (each is the 1:1 shape), so that a scaling dxgkrnl pinned for the monitor never
@@ -192,6 +206,15 @@ typedef struct _BC250_SCALER_RESULT {
 } BC250_SCALER_RESULT;
 
 long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
+// BD-223: program a plan from Bc250ScalerPlan inside the caller's existing
+// live OTG0 transaction. The caller serializes all display writers and holds
+// the acknowledged OTG0 update lock, then writes the matching surface address
+// before it unlocks/triggers. This function verifies the selected/held lock;
+// it never acquires, releases or triggers it and never stalls. On a failed
+// write the caller still owns the lock and must restore a coherent previous
+// plane before releasing it. Success is programming, not flip completion.
+long Bc250ScalerProgramLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan,
+                              BC250_SCALER_RESULT* Result);
 // Caller owns the pipe and has completed optc1_disable_crtc. Verify MASTER_EN=0,
 // OTG_BUSY=0 and no held update lock before programming. No lock, stall or
 // manual trigger: the caller programs timing and enables the OTG afterwards.

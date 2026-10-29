@@ -13,6 +13,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "../dcn_scale.h"
 #include "../edid.h"
+#include "../../shim/bc250_scaler_filter.h"
 #include "edid_lab_redacted.h"
 
 static int g_failures, g_checks;
@@ -151,6 +152,37 @@ static void TestFilterTable(void)
     }
     CHECK(g_Bc250SclFilter4tapUpscale[1] == 0x1000);    // phase 0 is the identity tap
     CHECK(g_Bc250SclFilter4tapUpscale[131] == 0x3F04);  // the last entry of dce_scl_filters.c line 483
+}
+
+// BD-223 stage S2: the writer takes get_filter_4tap_64p's table of the ratio (the shim's copy of dce_scl_filters.c).
+// Below 1 it is the upscale table, the same words as scl_filter_4tap_64p_upscale.inc; from 1 the downscale tables
+// 116, 149 and 183 at the boundaries 4/3 and 5/3. 4/3 is 699050.67 in 19 fraction bits, 5/3 873813.33.
+static void TestFilterSelection(void)
+{
+    const unsigned short* up = Bc250ScalerFilterTable(4, 419430ul);
+    const unsigned short* t116 = Bc250ScalerFilterTable(4, 1ul << 19);
+    const unsigned short* t149 = Bc250ScalerFilterTable(4, 699051ul);
+    const unsigned short* t183 = Bc250ScalerFilterTable(4, 873814ul);
+    const unsigned short* each[3];
+    unsigned long i, p, t;
+
+    CHECK(up && t116 && t149 && t183);
+    if (!up || !t116 || !t149 || !t183) return;
+    CHECK(memcmp(up, g_Bc250SclFilter4tapUpscale, sizeof(g_Bc250SclFilter4tapUpscale)) == 0);
+    CHECK(Bc250ScalerFilterTable(4, (1ul << 19) - 1ul) == up);
+    CHECK(t116 != up && t149 != t116 && t183 != t149 && t183 != up);
+    CHECK(Bc250ScalerFilterTable(4, 699050ul) == t116);         // 1.333332, below 4/3
+    CHECK(Bc250ScalerFilterTable(4, 873813ul) == t149);         // 1.666666, below 5/3
+    CHECK(Bc250ScalerFilterTable(4, 4ul << 19) == t183);
+    CHECK(Bc250ScalerFilterTable(4, 0) == NULL && Bc250ScalerFilterTable(4, 8ul << 19) == NULL);
+    CHECK(Bc250ScalerFilterTable(1, 1ul << 19) == NULL && Bc250ScalerFilterTable(9, 1ul << 19) == NULL);
+    each[0] = t116; each[1] = t149; each[2] = t183;
+    for (i = 0; i < 3; i++)
+        for (p = 0; p < BC250_SCL_PHASES; p++) {
+            int sum = 0;
+            for (t = 0; t < BC250_SCL_TAPS; t++) sum += Sign14(each[i][p * BC250_SCL_TAPS + t]);
+            CHECK(sum == 4096);
+        }
 }
 
 static void TestLayouts(void)
@@ -503,9 +535,284 @@ static void TestLiveAccessFailures(void)
     CHECK(REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==0);
 }
 
+// BD-223: a plan for a recout the caller chose. The full-screen and the letterboxed recouts give the plans of
+// stretched and aspect-ratio scaling (positive controls against the code that is already on the lab); a recout
+// elsewhere keeps its position; a recout outside the target or under the source is refused.
+static void TestPlanRecout(void)
+{
+    BC250_SCALER_PLAN a, b;
+    BC250_RECT r;
+
+    r.X = 0; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1920, 1080, 1920, 1200, &r, &a) == 0);
+    CHECK(a.Scaling == BC250_SCALING_PLANE);
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_STRETCHED, &b) == 0);
+    b.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&a, &b, sizeof(a)) == 0);
+    r.Y = 60; r.Height = 1080;
+    CHECK(Bc250ScalerPlanRecout(1920, 1080, 1920, 1200, &r, &a) == 0);
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_ASPECT, &b) == 0);
+    b.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&a, &b, sizeof(a)) == 0);
+    r.X = 0; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1920, 1200, 1920, 1200, &r, &a) == 0);
+    CHECK(Bc250ScalerPlan(1920, 1200, 1920, 1200, BC250_SCALING_IDENTITY, &b) == 0);
+    b.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&a, &b, sizeof(a)) == 0);
+    // 1280x720 into a recout at 100,50 of 1600x900: both directions 0.8, the position kept.
+    r.X = 100; r.Y = 50; r.Width = 1600; r.Height = 900;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == 0);
+    CHECK(a.Recout.X == 100 && a.Recout.Y == 50 && a.Recout.Width == 1600 && a.Recout.Height == 900);
+    CHECK(a.RatioH19 == 419430ul && a.RatioV19 == 419430ul && a.FilterH && a.FilterV);
+    CHECK(a.Viewport.Width == 1280 && a.Viewport.Height == 720);
+    // Refusals.
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, NULL, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 1; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 0; r.Y = 1;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 0xFFFFFFF0ul; r.Y = 0; r.Width = 100;
+    CHECK(Bc250ScalerPlanRecout(64, 64, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 0; r.Y = 0; r.Width = 0; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    // Stage S2: down to a quarter, with 4 taps; under a quarter is refused.
+    r.Width = 320; r.Height = 180;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == 0);
+    CHECK(a.RatioH19 == (4ul << 19) && a.RatioV19 == (4ul << 19) && a.TapsH == 4 && a.TapsV == 4);
+    CHECK(a.Viewport.Width == 1280 && a.Viewport.Height == 720);
+    r.Width = 319; r.Height = 180;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    r.Width = 320; r.Height = 179;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    // 2560x1440 on the whole 1920x1200: 4/3 across (truncated below it), 1.2 down; the source read whole.
+    r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(2560, 1440, 1920, 1200, &r, &a) == 0);
+    CHECK(a.RatioH19 == 699050ul && a.RatioV19 == 629145ul);
+    CHECK(a.TapsH == 4 && a.TapsV == 4 && a.TapsHC == 2 && a.TapsVC == 2 && a.FilterH && a.FilterV);
+    CHECK(a.Viewport.X == 0 && a.Viewport.Y == 0 && a.Viewport.Width == 2560 && a.Viewport.Height == 1440);
+    CHECK(a.DsclMode == 1 && a.InitH19 == ((699050ul + (5ul << 19)) >> 1));
+    // One direction down, the other 1:1: the 1:1 direction keeps 1 tap and no filter.
+    r.Width = 1920; r.Height = 1080;
+    CHECK(Bc250ScalerPlanRecout(2560, 1080, 1920, 1200, &r, &a) == 0);
+    CHECK(a.TapsV == 1 && !a.FilterV && a.TapsH == 4 && a.FilterH);
+    // The line buffer holds lines of the narrower of the viewport and the recout (dscl2_calc_lb_num_partitions), so
+    // 3840 across into 1920 fits 4 times down vertically: 2744 / ceil(1920 / 6) = 8 partitions of config 0.
+    r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(3840, 4800, 1920, 1200, &r, &a) == 0 && a.TapsV == 4 && a.LbConfig == 0);
+    // 4 times down vertically needs 4 taps + ceil(4) - 2 = 6 partitions (dpp1_dscl_is_lb_conf_valid): a line of
+    // 2742 pixels leaves 2744 / 457 = 6, one of 2748 leaves 2744 / 458 = 5, and that plan is refused.
+    r.Width = 2742; r.Height = 300;
+    CHECK(Bc250ScalerPlanRecout(2742, 1200, 2742, 1200, &r, &a) == 0 && a.TapsH == 1 && a.TapsV == 4);
+    r.Width = 2748;
+    CHECK(Bc250ScalerPlanRecout(2748, 1200, 2748, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    // A refused plan carries no ratio, tap or filter (it programs nothing).
+    CHECK(a.TapsH == 0 && a.TapsV == 0 && !a.FilterH && !a.FilterV && a.RatioH19 == 0);
+}
+
+// BD-223 stage S2: the downscale program loads the table of each direction's ratio, not the upscale table.
+static void TestProgramDownscale(void)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_PLAN p;
+    BC250_SCALER_RESULT res;
+    BC250_RECT r;
+    const unsigned short *h, *v;
+    unsigned long i, ph;
+
+    r.X = 0; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(2560, 2000, 1920, 1200, &r, &p) == 0);     // 1.333332 across, 1.666666 down
+    h = Bc250ScalerFilterTable(4, p.RatioH19);
+    v = Bc250ScalerFilterTable(4, p.RatioV19);
+    CHECK(h && v && h != v && h != Bc250ScalerFilterTable(4, 1ul << 18));
+    if (!h || !v) return;
+    FirmwareState();
+    g_f.lockDelay = 2;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgram(&io, &p, &res) == 0 && res.CoefWrites == 132);
+    CHECK(REG(BC250_REG_DMU_DSCL0_SCL_HORZ_FILTER_SCALE_RATIO) == (p.RatioH19 << 5));
+    CHECK(REG(BC250_REG_DMU_DSCL0_SCL_VERT_FILTER_SCALE_RATIO) == (p.RatioV19 << 5));
+    CHECK(REG(BC250_REG_DMU_DSCL0_SCL_TAP_CONTROL) == 0x1133ul);          // V 4, H 4, V_C 2, H_C 2 (minus one)
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION) == ((2000ul << 16) | 2560ul));
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE) == 0x04B00780ul);
+    for (ph = 0; ph < 33; ph++)
+        for (i = 0; i < 4; i++) {
+            CHECK(g_f.coef[1][ph][i / 2][i % 2] == h[ph * 4 + i]);     // type 1: luma horizontal
+            CHECK(g_f.coef[0][ph][i / 2][i % 2] == v[ph * 4 + i]);     // type 0: luma vertical
+        }
+}
+
+// BD-223: the writer inside a caller's lock. It writes the same registers as Bc250ScalerProgram, never the lock or
+// the trigger, and writes nothing when the lock is not held and acknowledged or cannot be read.
+static unsigned long g_locked[REGS];
+
+static void TestWriteLocked(void)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_PLAN p;
+    BC250_SCALER_RESULT res;
+    unsigned long i, differ;
+
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_STRETCHED, &p) == 0);
+    // Not held: refused before any write.
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
+    CHECK(g_f.logCount == 0 && res.LockStatusValid && res.LockStatus == 0);
+    // Held but never acknowledged.
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+    g_f.lockDelay = -1;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
+    CHECK(g_f.logCount == 0);
+    // The lock read fails (the third read: SCL_MODE and OTG_CONTROL come first).
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+    g_f.failReadAt = 3;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) < 0);
+    CHECK(g_f.logCount == 0 && !res.LockStatusValid);
+    // Held and acknowledged: the pipe registers of the live sequence, and no lock or trigger write.
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgramLocked(&io, &p, &res) == 0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) == 0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG) == 0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) == 0);
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE) == 0x04B00780ul && REG(BC250_REG_DMU_DSCL0_SCL_TAP_CONTROL) == 0x103ul);
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION) == 0x04380780ul);
+    CHECK(res.CoefWrites == 66ul);
+    // The same register values as Bc250ScalerProgram leaves, the lock, its select and SCL_MODE aside (the bank
+    // swap of SCL_MODE happens at the trigger, which the caller of the locked writer sends).
+    memcpy(g_locked, g_f.r, sizeof(g_locked));
+    FirmwareState();
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgram(&io, &p, &res) == 0);
+    for (i = 0, differ = 0; i < REGS; i++) {
+        unsigned long o = i * 4ul;
+        if (o == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK || o == BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0 ||
+            o == BC250_REG_DMU_DSCL0_SCL_MODE) continue;
+        if (g_locked[i] != g_f.r[i]) { differ++; fprintf(stderr, "write-locked differs at 0x%lX\n", o); }
+    }
+    CHECK(differ == 0);
+}
+
+static void LockedState(void)
+{
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) =
+        OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+}
+
+static void CheckCallerOwnsLatch(void)
+{
+    CHECK(REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) ==
+          OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK);
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK));
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG));
+    CHECK(!CountWrites(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0));
+    CHECK(!g_f.nowUs);
+}
+
+static void TestCallerOwnedTransaction(void)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_PLAN p;
+    BC250_SCALER_RESULT res;
+    unsigned long i, writes, reads;
+    int post;
+    CHECK(Bc250ScalerPlan(1920,1080,1920,1200,BC250_SCALING_STRETCHED,&p)==0);
+    LockedState();IoInit(&io,0);
+    CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==0);
+    CHECK(res.LockStatusValid && !res.LockWaitUs);
+    CheckCallerOwnsLatch();
+    writes=g_f.writeAttempts;
+    // The two final readbacks are diagnostics, not part of admission/programming.
+    reads=g_f.readAttempts-2;
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION)==0x04380780ul);
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE)==0x04B00780ul);
+    // The caller appends the surface pair through its scan-out accessor before
+    // the single unlock/trigger. The scaler's restricted display accessor must
+    // not itself gain permission to select an arbitrary scan-out address.
+    CHECK(FWrite(NULL,BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH,1)==0);
+    CHECK(FWrite(NULL,BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS,0x20000ul)==0);
+    CHECK(Bc250DispWrite(&io,BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK,0)==0);
+    CHECK(Bc250DispWrite(&io,BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG,
+        OTG0_OTG_TRIGA_MANUAL_TRIG__OTG_TRIGA_MANUAL_TRIG_MASK)==0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==1);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG)==1);
+    CHECK(IndexOf(BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS)>
+          IndexOf(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION));
+    CHECK(IndexOf(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)>
+          IndexOf(BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS));
+
+    // Every failed write, including a posted write that reached the register,
+    // leaves recovery and the latch with the caller. No partial plan is released.
+    for(post=0;post<2;++post)for(i=1;i<=writes;++i) {
+        LockedState();IoInit(&io,0);g_f.failWriteAt=i;g_f.failAfterWrite=post;
+        CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==(long)0xC0000185L);
+        CHECK(g_f.writeAttempts==i);
+        CheckCallerOwnsLatch();
+    }
+    for(i=1;i<=reads;++i) {
+        LockedState();IoInit(&io,0);g_f.failReadAt=i;
+        CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==(long)0xC0000185L);
+        CheckCallerOwnsLatch();
+        if(i<=4) CHECK(!g_f.writeAttempts);
+    }
+    // Wrong controller, no lock, unacknowledged lock, ACK without a request,
+    // and a stopped controller all refuse before the first write.
+    for(i=0;i<5;++i) {
+        LockedState();IoInit(&io,0);
+        if(i==0)REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0)=
+            Bc250DispField(OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK,1);
+        if(i==1)REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)=0;
+        if(i==2)g_f.lockDelay=-1;
+        if(i==3)REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)=
+            OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+        if(i==4)REG(BC250_REG_DMU_OTG0_OTG_CONTROL)=0;
+        CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==BC250_DISP_STATUS_MISMATCH);
+        CHECK(!g_f.writeAttempts && !g_f.nowUs);
+    }
+    // Native-size restoration uses the same caller-owned latch.
+    CHECK(Bc250ScalerPlan(1920,1200,1920,1200,BC250_SCALING_IDENTITY,&p)==0);
+    LockedState();IoInit(&io,0);
+    CHECK(Bc250ScalerProgramLocked(&io,&p,&res)==0 && !res.CoefWrites);
+    CHECK((res.SclModeAfter&DSCL0_SCL_MODE__DSCL_MODE_MASK)==0);
+    CheckCallerOwnsLatch();
+}
+
+static void TestLineBufferAdmission(void)
+{
+    BC250_SCALER_PLAN p, zero = {0};
+    // Four vertical taps need four partitions. DCN20 config 0 has 2744 entries,
+    // so ceil(width/6) <= 686 is the boundary for the current RGB upscale path.
+    CHECK(Bc250ScalerPlan(4116, 720, 5000, 1200, BC250_SCALING_STRETCHED, &p) == 0);
+    CHECK(p.LbConfig == 0 && p.TapsV == 4);
+    CHECK(Bc250ScalerPlan(4117, 720, 5000, 1200, BC250_SCALING_STRETCHED, &p) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    CHECK(memcmp(&p, &zero, sizeof(p)) == 0);
+    CHECK(Bc250ScalingSupport(BC250_DISPLAY_MODES_SCALED, 4117, 720, 5000, 1200) ==
+          BC250_SCALING_BIT(BC250_SCALING_CENTERED));
+    CHECK(Bc250ScalingDefault(BC250_DISPLAY_MODES_SCALED, 4117, 720, 5000, 1200) == BC250_SCALING_CENTERED);
+    CHECK(Bc250ScalerPlan(4117, 720, 5000, 1200, BC250_SCALING_CENTERED, &p) == 0);
+    CHECK(p.TapsV == 1);
+    CHECK(Bc250ScalerPlan(16383, 720, 16383, 1200, BC250_SCALING_STRETCHED, &p) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    CHECK(Bc250ScalerPlan(16383, 720, 16383, 720, BC250_SCALING_IDENTITY, &p) == 0);
+}
+
 int main(void)
 {
     TestFilterTable();
+    TestFilterSelection();
+    TestPlanRecout();
+    TestProgramDownscale();
+    TestWriteLocked();
     TestLayouts();
     TestEveryLabMode();
     TestSupport();
@@ -514,6 +821,8 @@ int main(void)
     TestProgramRefusals();
     TestStoppedProgram();
     TestLiveAccessFailures();
+    TestCallerOwnedTransaction();
+    TestLineBufferAdmission();
     printf("dcn_scale_test: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

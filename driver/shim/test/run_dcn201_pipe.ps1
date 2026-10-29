@@ -8,13 +8,17 @@ $env:TEMP=$Out;$env:TMP=$Out
 if($LASTEXITCODE){throw 'DCN201 pipe extraction check failed'}
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
-$cl="$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
+$cl=Join-Path (Split-Path $Kits -Parent) 'llvm-23.1.4-win64\bin\clang-cl.exe'
+& $cl --version
+if($LASTEXITCODE){throw 'Explicit clang-cl unavailable'}
 $sdk="$Kits\microsoft.windows.sdk.cpp\c\Include\10.0.26100.0"
 $lib="$Kits\microsoft.windows.sdk.cpp.x64\c"
-$argsList=@('/nologo','/TC','/W4','/WX','/O2','/MT','/fp:precise',
+$argsList=@('/nologo','/TC','/W4','/WX','/O2','/MT','/fp:precise','-fuse-ld=lld',
     "/I$($msvc.FullName)\include","/I$sdk\ucrt","/I$repo\driver\shim\dml201","/I$repo\third_party\linux-amdgpu",
     "/Fo$Out\","/Fe$Out\dcn201_pipe_test.exe","$PSScriptRoot\dcn201_pipe_test.c",
     "$repo\driver\shim\bc250_dcn201_pipe.c","$repo\driver\shim\bc250_dml201.c","$repo\driver\kmd\display_io.c",
+    "$repo\driver\shim\bc250_scaler_plan.c","$repo\driver\shim\bc250_scaler_geometry.c",
+    "$repo\driver\shim\bc250_scaler_buffer.c","$repo\driver\shim\bc250_scaler_filter.c",
     '/link',"/LIBPATH:$($msvc.FullName)\lib\x64","/LIBPATH:$lib\ucrt\x64","/LIBPATH:$lib\um\x64")
 & $cl @argsList
 if($LASTEXITCODE){throw 'DCN201 pipe host compilation failed'}

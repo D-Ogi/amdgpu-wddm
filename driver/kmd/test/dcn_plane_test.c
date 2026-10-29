@@ -1,0 +1,351 @@
+// Host test of dcn_plane.c: the admission of multiplane-overlay plane 0 (BD-223), and its DML step with the real
+// DML201 plan (bc250_dml201.c) of the lab's timing. Built with no WDK header by run_modeset.ps1.
+//
+// Positive controls: the lab case of BD-223 (a 1920x1080 chain on the Lenovo's 1920x1200 CVT-RB mode, the
+// Cyberpunk 2077 session), the identity plane (the committed 1:1 pipe, which needs no DML), a letterboxed 720p
+// plane, the 16x upscale limit exactly, the 4x downscale limit exactly, a 2560x1440 plane on the mode (stage S2),
+// and RGB10A2 under a 10-bit source mode. Negative controls: one request for every verdict, a DML failure, a clock
+// budget the scaled pipe does not fit in, and a 4x downscale whose DPP clock is above the one that runs.
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "../dcn_plane.h"
+#include "../plane_format.h"
+#include "../../shim/bc250_dml201.h"
+
+static int g_failures, g_checks;
+
+#define CHECK(cond) \
+    do { g_checks++; if (!(cond)) { fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); g_failures++; } } while (0)
+
+static void Rect(BC250_PLANE_RECT* R, long Left, long Top, long Right, long Bottom)
+{
+    R->Left = Left; R->Top = Top; R->Right = Right; R->Bottom = Bottom;
+}
+
+// The lab case: a 1920x1080 flip-model chain, stretched by DWM today onto the 1920x1200 desktop mode.
+static BC250_PLANE_REQUEST LabRequest(void)
+{
+    BC250_PLANE_REQUEST r;
+    memset(&r, 0, sizeof(r));
+    r.PlaneCount = 1;
+    r.Enabled = 1;
+    r.SurfaceWidth = 1920; r.SurfaceHeight = 1080;
+    r.SurfacePitch = r.RequiredPitch = 7680;
+    r.PlaneFormat = BC250_PLANE_FORMAT_ARGB8888;
+    r.SourceModeWidth = 1920; r.SourceModeHeight = 1200;
+    r.TargetWidth = 1920; r.TargetHeight = 1200;
+    Rect(&r.Src, 0, 0, 1920, 1080);
+    Rect(&r.Dst, 0, 0, 1920, 1200);
+    r.Clip = r.Dst;
+    r.StretchQualityKnown = 1;
+    return r;
+}
+
+static unsigned long Verdict(const BC250_PLANE_REQUEST* R)
+{
+    BC250_PLANE_PLAN p;
+    unsigned long v = Bc250PlanePrepare(R, &p);
+    if (v != BC250_PLANE_OK) {
+        // A refusal leaves a zero plan.
+        static BC250_PLANE_PLAN zero;
+        CHECK(memcmp(&p, &zero, sizeof(p)) == 0);
+    }
+    return v;
+}
+
+static void TestVerdicts(void)
+{
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN p;
+
+    r = LabRequest(); CHECK(Verdict(&r) == BC250_PLANE_OK);
+    CHECK(Bc250PlanePrepare(NULL, &p) == BC250_PLANE_ARGS);
+    CHECK(Bc250PlanePrepare(&r, NULL) == BC250_PLANE_ARGS);
+    r = LabRequest(); r.PlaneCount = 2; CHECK(Verdict(&r) == BC250_PLANE_COUNT);
+    r = LabRequest(); r.PlaneCount = 0; CHECK(Verdict(&r) == BC250_PLANE_COUNT);
+    r = LabRequest(); r.LayerIndex = 1; CHECK(Verdict(&r) == BC250_PLANE_LAYER);
+    r = LabRequest(); r.Enabled = 0; CHECK(Verdict(&r) == BC250_PLANE_DISABLED);
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 0, 1200); CHECK(Verdict(&r) == BC250_PLANE_ARGS);
+    r = LabRequest(); Rect(&r.Src, 10, 0, 5, 1080); CHECK(Verdict(&r) == BC250_PLANE_ARGS);
+    r = LabRequest(); Rect(&r.Clip, -1, 0, 1920, 1200); CHECK(Verdict(&r) == BC250_PLANE_ARGS);
+    // A 1920x1080 source mode that stage A scales to the 1920x1200 timing.
+    r = LabRequest(); r.SourceModeHeight = 1080; Rect(&r.Dst, 0, 0, 1920, 1080); r.Clip = r.Dst;
+    CHECK(Verdict(&r) == BC250_PLANE_SOURCE_MODE);
+    r = LabRequest(); r.Mirror = 1; CHECK(Verdict(&r) == BC250_PLANE_MIRROR);
+    r = LabRequest(); r.Rotated = 1; CHECK(Verdict(&r) == BC250_PLANE_ROTATION);
+    r = LabRequest(); r.AlphaBlend = 1; CHECK(Verdict(&r) == BC250_PLANE_BLEND);
+    r = LabRequest(); r.Interlaced = 1; CHECK(Verdict(&r) == BC250_PLANE_INTERLACED);
+    r = LabRequest(); r.Stereo = 1; CHECK(Verdict(&r) == BC250_PLANE_STEREO);
+    r = LabRequest(); r.NotSrgb = 1; CHECK(Verdict(&r) == BC250_PLANE_COLOR_SPACE);
+    r = LabRequest(); r.StretchQualityKnown = 0; CHECK(Verdict(&r) == BC250_PLANE_STRETCH_QUALITY);
+    r = LabRequest(); r.PlaneFormat = BC250_PLANE_FORMAT_NONE; CHECK(Verdict(&r) == BC250_PLANE_FORMAT);
+    r = LabRequest(); r.PlaneFormat = BC250_PLANE_FORMATS; CHECK(Verdict(&r) == BC250_PLANE_FORMAT);
+    r = LabRequest(); r.PlaneFormat = BC250_PLANE_FORMAT_ABGR2101010; CHECK(Verdict(&r) == BC250_PLANE_FORMAT);
+    r.TenBitSource = 1; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r = LabRequest(); r.PlaneFormat = BC250_PLANE_FORMAT_ABGR8888; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r = LabRequest(); r.SurfaceWidth = 63; Rect(&r.Src, 0, 0, 63, 1080); CHECK(Verdict(&r) == BC250_PLANE_SURFACE);
+    r = LabRequest(); r.SurfaceHeight = 0x4000; Rect(&r.Src, 0, 0, 1920, 0x4000); CHECK(Verdict(&r) == BC250_PLANE_SURFACE);
+    r = LabRequest(); Rect(&r.Src, 0, 0, 1280, 720); CHECK(Verdict(&r) == BC250_PLANE_SRC_CROP);
+    // Stage S2: any pitch, because the flip programs the plane's own requestor. The committed pipe's pitch decides
+    // only whether a full-size plane is the identity plane (TestPlans).
+    r = LabRequest(); r.SurfacePitch = 8192; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r.RequiredPitch = 0; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r = LabRequest(); Rect(&r.Src, 1, 0, 1921, 1080); CHECK(Verdict(&r) == BC250_PLANE_SRC_CROP);
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 1920, 1201); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DST_BOUNDS);
+    r = LabRequest(); Rect(&r.Dst, 1, 0, 1921, 1200); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DST_BOUNDS);
+    r = LabRequest(); Rect(&r.Clip, 0, 0, 1920, 1199); CHECK(Verdict(&r) == BC250_PLANE_CLIP);
+    r = LabRequest(); Rect(&r.Clip, 0, 1, 1920, 1200); CHECK(Verdict(&r) == BC250_PLANE_CLIP);
+    // A clip larger than the plane leaves it whole.
+    r = LabRequest(); Rect(&r.Dst, 0, 60, 1920, 1140); Rect(&r.Clip, 0, 0, 1920, 1200); CHECK(Verdict(&r) == BC250_PLANE_OK);
+    // Stage S2: down to a quarter in each direction (max_downscale_factor 250). Until S2 both were DOWNSCALE.
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 1280, 1200); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 1920, 1000); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 480, 270); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 479, 270); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DOWNSCALE);
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 480, 269); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DOWNSCALE);
+    // A source wider than the timing and than 3840 (dpp201 max_downscale_src_width), and 3840 itself.
+    r = LabRequest(); r.SurfaceWidth = 3841; Rect(&r.Src, 0, 0, 3841, 1080); CHECK(Verdict(&r) == BC250_PLANE_DOWNSCALE);
+    r = LabRequest(); r.SurfaceWidth = 3840; r.SurfaceHeight = 2160; Rect(&r.Src, 0, 0, 3840, 2160);
+    CHECK(Verdict(&r) == BC250_PLANE_OK);
+    // On a timing wider than 3840 the same source is not wider than the timing, so the rule does not apply.
+    r = LabRequest(); r.SurfaceWidth = 3841; Rect(&r.Src, 0, 0, 3841, 1080);
+    r.SourceModeWidth = r.TargetWidth = 4096; Rect(&r.Dst, 0, 0, 1920, 1200); r.Clip = r.Dst;
+    CHECK(Verdict(&r) == BC250_PLANE_OK);
+    // 16 times up is the limit: 120x75 fills 1920x1200 exactly; one pixel less in either direction is refused.
+    r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 120; r.SurfaceHeight = 75; Rect(&r.Src, 0, 0, 120, 75);
+    CHECK(Verdict(&r) == BC250_PLANE_OK);
+    r.SurfaceWidth = 119; Rect(&r.Src, 0, 0, 119, 75); CHECK(Verdict(&r) == BC250_PLANE_UPSCALE);
+    r.SurfaceWidth = 120; r.SurfaceHeight = 74; Rect(&r.Src, 0, 0, 120, 74); CHECK(Verdict(&r) == BC250_PLANE_UPSCALE);
+    // A target wider than the scaler's fields: dcn_scale.c refuses the plan.
+    r = LabRequest(); r.SourceModeWidth = r.TargetWidth = 0x4000; CHECK(Verdict(&r) == BC250_PLANE_SCALER);
+    // The vocabulary.
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_OK), "ok") == 0);
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_STRETCH_QUALITY), "stretch-quality") == 0);
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_PITCH), "pitch") == 0);
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_GLOBAL_SYNC), "global-sync") == 0);
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_VERDICTS), "?") == 0);
+}
+
+static void TestPlans(void)
+{
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN p, q;
+    BC250_SCALER_PLAN stretched;
+
+    // The lab case is the stretched plan of stage A for the same sizes, with the plane's own scaling tag.
+    r = LabRequest();
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_STRETCHED, &stretched) == 0);
+    stretched.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&p.Scaler, &stretched, sizeof(stretched)) == 0);
+    CHECK(!p.Identity);
+    CHECK(p.DmlViewportWidth == 1920 && p.DmlViewportHeight == 1080);
+    CHECK(p.DmlRecoutWidth == 1920 && p.DmlRecoutHeight == 1200);
+    CHECK(p.DmlHTaps == 1 && p.DmlVTaps == 4);
+    // The identity plane.
+    r.SurfaceHeight = 1200; Rect(&r.Src, 0, 0, 1920, 1200);
+    CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK);
+    CHECK(q.Identity && q.DmlHTaps == 1 && q.DmlVTaps == 1);
+    CHECK(!Bc250PlaneSameShape(&p, &q));
+    // The same geometry at another pitch is a plane with a 1:1 scaler and its own requestor, not the identity plane;
+    // with no pitch rule (0) it is the identity plane again.
+    r.SurfacePitch = 8192;
+    CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK);
+    CHECK(!q.Identity && q.DmlHTaps == 1 && q.DmlVTaps == 1 && q.Scaler.Scaling == BC250_SCALING_PLANE);
+    r.RequiredPitch = 0;
+    CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK && q.Identity);
+    // A full-size plane away from the origin is not the identity: it has the position of a recout.
+    r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
+    Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
+    CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK);
+    CHECK(!q.Identity && q.Scaler.Recout.Y == 60 && q.Scaler.Recout.Height == 1080);
+    CHECK(q.DmlHTaps == 4 && q.DmlVTaps == 4);
+    CHECK(q.Scaler.Viewport.Width == 1280 && q.Scaler.Viewport.Height == 720);
+    // The same request twice: the same shape, so a second flip writes no scaler register.
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    CHECK(Bc250PlaneSameShape(&p, &q));
+    r.Dst.Top = 61; r.Dst.Bottom = 1141; r.Clip = r.Dst;
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    CHECK(!Bc250PlaneSameShape(&p, &q));
+}
+
+// The lab's mode, as dml201_test.c gives it: the Lenovo's 1920x1200 CVT-RB timing over DP.
+static BC250_DML201_INPUT LabTiming(void)
+{
+    BC250_DML201_INPUT i;
+    memset(&i, 0, sizeof(i));
+    i.HActive = 1920; i.HTotal = 2080; i.HFrontPorch = 48; i.HSyncWidth = 32;
+    i.VActive = 1200; i.VTotal = 1235; i.VFrontPorch = 3; i.VSyncWidth = 6;
+    i.PixelClockKhz = 154000; i.PitchPixels = 1920; i.Output = BC250_DML201_DP;
+    i.DpLanes = 4; i.DchubRefClockKhz = 48000; i.DentistVcoKhz = 3000000;
+    return i;
+}
+
+static int Dml(const BC250_PLANE_PLAN* P, unsigned long Pitch, void* W, size_t Bytes, BC250_DML201_PLAN* Out)
+{
+    BC250_DML201_INPUT i = LabTiming();
+    i.PitchPixels = (unsigned int)Pitch;
+    i.ViewportWidth = (unsigned int)P->DmlViewportWidth;
+    i.ViewportHeight = (unsigned int)P->DmlViewportHeight;
+    i.RecoutWidth = (unsigned int)P->DmlRecoutWidth;
+    i.RecoutHeight = (unsigned int)P->DmlRecoutHeight;
+    i.HTaps = (unsigned int)P->DmlHTaps;
+    i.VTaps = (unsigned int)P->DmlVTaps;
+    return Bc250Dml201Plan(&i, W, Bytes, Out);
+}
+
+static void TestDml(void)
+{
+    size_t bytes = Bc250Dml201WorkspaceSize();
+    void* w = malloc(bytes);
+    BC250_DML201_INPUT lab = LabTiming();
+    BC250_DML201_PLAN native, scaled;
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN p;
+    int s;
+
+    CHECK(w != NULL);
+    if (!w) return;
+    // The committed pipe: its clocks are the budget a flip cannot change.
+    CHECK(Bc250Dml201Plan(&lab, w, bytes, &native) == 0 && native.Valid == 1);
+    // The lab case.
+    r = LabRequest();
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    s = Dml(&p, 1920, w, bytes, &scaled);
+    printf("plane 1920x1080->1920x1200: dml=%d valid=%u dispclk=%u/%u dppclk=%u/%u\n", s, scaled.Valid,
+           scaled.DispClockKhz, native.DispClockKhz, scaled.DppClockKhz, native.DppClockKhz);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_OK);
+    // The same answer from DML with one kHz less of either budget is a refusal, and so is no budget.
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               scaled.DispClockKhz - 1, native.DppClockKhz) == BC250_PLANE_CLOCKS);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               native.DispClockKhz, scaled.DppClockKhz - 1) == BC250_PLANE_CLOCKS);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz, 0, 0) == BC250_PLANE_CLOCKS);
+    // A DML failure.
+    CHECK(Bc250PlaneDmlVerdict(&p, BC250_DML201_UNSUPPORTED, 0, 0, 0, native.DispClockKhz, native.DppClockKhz) ==
+          BC250_PLANE_DML);
+    CHECK(Bc250PlaneDmlVerdict(&p, 0, 0, 0, 0, native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_DML);
+    // A pitch under the viewport: DML refuses the input, so the plane is refused.
+    s = Dml(&p, 1280, w, bytes, &scaled);
+    CHECK(s != 0);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_DML);
+    // The letterboxed 720p plane: 4 taps both ways.
+    r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
+    Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    s = Dml(&p, 1280, w, bytes, &scaled);
+    printf("plane 1280x720->1920x1080 at y 60: dml=%d valid=%u dispclk=%u dppclk=%u\n", s, scaled.Valid,
+           scaled.DispClockKhz, scaled.DppClockKhz);
+    CHECK(s == 0 && scaled.Valid == 1);
+    // Stage S2, the acceptance case of docs/design/mpo.md: a 2560x1440 chain on the whole 1920x1200 mode, 4/3 across
+    // and 1.2 down, 4 taps both ways, at its own pitch. It fits in the clocks of the committed pipe.
+    r = LabRequest(); r.SurfaceWidth = 2560; r.SurfaceHeight = 1440; r.SurfacePitch = 2560 * 4;
+    Rect(&r.Src, 0, 0, 2560, 1440);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && !p.Identity && p.DmlHTaps == 4 && p.DmlVTaps == 4);
+    CHECK(p.DmlViewportWidth == 2560 && p.DmlViewportHeight == 1440 && p.DmlRecoutWidth == 1920);
+    s = Dml(&p, 2560, w, bytes, &scaled);
+    printf("plane 2560x1440->1920x1200: dml=%d valid=%u dispclk=%u/%u dppclk=%u/%u\n", s, scaled.Valid,
+           scaled.DispClockKhz, native.DispClockKhz, scaled.DppClockKhz, native.DppClockKhz);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_OK);
+    // 2 times down both ways, 3840x2400 into the whole mode: DML's DPP clock is the pixel clock times
+    // hratio * vratio / 4 (the scaler's 4 pixels per clock), 1.0 here, so it still fits.
+    r = LabRequest(); r.SurfaceWidth = 3840; r.SurfaceHeight = 2400; r.SurfacePitch = 3840 * 4;
+    Rect(&r.Src, 0, 0, 3840, 2400);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    s = Dml(&p, 3840, w, bytes, &scaled);
+    printf("plane 3840x2400->1920x1200: dml=%d valid=%u dispclk=%u/%u dppclk=%u/%u\n", s, scaled.Valid,
+           scaled.DispClockKhz, native.DispClockKhz, scaled.DppClockKhz, native.DppClockKhz);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_OK);
+    // 4 times down both ways, 1920x1080 into 480x270: the plan admits it, DML's DPP clock is 4 times the pixel
+    // clock, above the clock that runs, so the check refuses it with clocks (the flip changes no clock).
+    r = LabRequest(); Rect(&r.Dst, 0, 0, 480, 270); r.Clip = r.Dst;
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
+    s = Dml(&p, 1920, w, bytes, &scaled);
+    printf("plane 1920x1080->480x270: dml=%d valid=%u dispclk=%u/%u dppclk=%u/%u\n", s, scaled.Valid,
+           scaled.DispClockKhz, native.DispClockKhz, scaled.DppClockKhz, native.DppClockKhz);
+    CHECK(s == 0 && scaled.Valid == 1 && scaled.DppClockKhz > native.DppClockKhz);
+    CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
+                               native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_CLOCKS);
+    // The identity plane needs no DML answer: it is the committed pipe.
+    r = LabRequest(); r.SurfaceHeight = 1200; Rect(&r.Src, 0, 0, 1920, 1200);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && p.Identity);
+    CHECK(Bc250PlaneDmlVerdict(&p, BC250_DML201_INVALID, 0, 0, 0, 0, 0) == BC250_PLANE_OK);
+    CHECK(Bc250PlaneDmlVerdict(NULL, 0, 1, 0, 0, 1, 1) == BC250_PLANE_ARGS);
+    free(w);
+}
+
+// Stage S2: the plane's global sync against OTG0. DCN 2.0.1 plans VSTARTUP at its maximum for the timing, so a plane on
+// the committed timing has the committed VSTARTUP and VUPDATE offset, and only VREADY and the VUPDATE width move.
+static void TestSync(void)
+{
+    size_t bytes = Bc250Dml201WorkspaceSize();
+    void* w = malloc(bytes);
+    BC250_DML201_INPUT lab = LabTiming();
+    BC250_DML201_PLAN native, scaled;
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN p;
+    int s;
+
+    CHECK(w != NULL);
+    if (!w) return;
+    CHECK(Bc250Dml201Plan(&lab, w, bytes, &native) == 0 && native.Valid == 1 && native.VStartup != 0);
+    // The letterboxed 720p plane at its own pitch.
+    r = LabRequest(); r.SurfaceWidth = 1280; r.SurfaceHeight = 720; r.SurfacePitch = 1280 * 4;
+    Rect(&r.Src, 0, 0, 1280, 720); Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && !p.Identity);
+    s = Dml(&p, 1280, w, bytes, &scaled);
+    printf("plane 1280x720 at pitch 1280: vstartup %u/%u vupdate offset %u/%u width %u/%u vready %u/%u\n",
+           scaled.VStartup, native.VStartup, scaled.VUpdateOffset, native.VUpdateOffset, scaled.VUpdateWidth,
+           native.VUpdateWidth, scaled.VReady, native.VReady);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset, native.VStartup, native.VUpdateOffset) ==
+          BC250_PLANE_OK);
+    // Another VSTARTUP or VUPDATE offset than OTG0's, or no VSTARTUP, is refused.
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup + 1, scaled.VUpdateOffset, scaled.VStartup,
+                                scaled.VUpdateOffset) == BC250_PLANE_GLOBAL_SYNC);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset + 1, scaled.VStartup,
+                                scaled.VUpdateOffset) == BC250_PLANE_GLOBAL_SYNC);
+    CHECK(Bc250PlaneSyncVerdict(&p, 0, scaled.VUpdateOffset, 0, scaled.VUpdateOffset) == BC250_PLANE_GLOBAL_SYNC);
+    // The full-size plane at another pitch: the committed sync again, with its own requestor.
+    r = LabRequest(); r.SurfaceHeight = 1200; r.SurfacePitch = 2048 * 4; Rect(&r.Src, 0, 0, 1920, 1200);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && !p.Identity);
+    s = Dml(&p, 2048, w, bytes, &scaled);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset, native.VStartup, native.VUpdateOffset) ==
+          BC250_PLANE_OK);
+    // Stage S2, the downscaled 2560x1440 plane: the committed VSTARTUP and VUPDATE offset too.
+    r = LabRequest(); r.SurfaceWidth = 2560; r.SurfaceHeight = 1440; r.SurfacePitch = 2560 * 4;
+    Rect(&r.Src, 0, 0, 2560, 1440);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && !p.Identity);
+    s = Dml(&p, 2560, w, bytes, &scaled);
+    printf("plane 2560x1440 at pitch 2560: vstartup %u/%u vupdate offset %u/%u width %u/%u vready %u/%u\n",
+           scaled.VStartup, native.VStartup, scaled.VUpdateOffset, native.VUpdateOffset, scaled.VUpdateWidth,
+           native.VUpdateWidth, scaled.VReady, native.VReady);
+    CHECK(s == 0 && scaled.Valid == 1);
+    CHECK(Bc250PlaneSyncVerdict(&p, scaled.VStartup, scaled.VUpdateOffset, native.VStartup, native.VUpdateOffset) ==
+          BC250_PLANE_OK);
+    // The identity plane is the committed pipe: no sync step.
+    r = LabRequest(); r.SurfaceHeight = 1200; Rect(&r.Src, 0, 0, 1920, 1200);
+    CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK && p.Identity);
+    CHECK(Bc250PlaneSyncVerdict(&p, 0, 0, 1, 1) == BC250_PLANE_OK);
+    CHECK(Bc250PlaneSyncVerdict(NULL, 1, 1, 1, 1) == BC250_PLANE_ARGS);
+    free(w);
+}
+
+int main(void)
+{
+    TestVerdicts();
+    TestPlans();
+    TestDml();
+    TestSync();
+    printf("dcn_plane: %d checks, %d failures\n", g_checks, g_failures);
+    return g_failures ? 1 : 0;
+}

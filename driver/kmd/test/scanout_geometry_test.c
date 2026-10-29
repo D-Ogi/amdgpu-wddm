@@ -44,6 +44,7 @@ typedef struct {
  SIZE_T FramebufferLength,DcnScanoutMapLength;
  PVOID DcnScanoutMap;
  int DcnPlaneFormats;ULONG DcnPlaneFormat;   /* M15.14 (dcn.c DcnCaptureFirmwareFormat) */
+ int DcnPlaneScaled;                         /* BD-223: plane 0 has a shape of its own size */
 } BC250_DEVICE;
 /* Display modes (bc250kmd.h): the committed source size, else the inherited one. No mode is committed here. */
 static ULONG DisplaySourceWidth(const BC250_DEVICE *d){return d->Post.Width;}
@@ -252,6 +253,9 @@ int main(void){
    }
    d.DcnPlaneFormats=0;d.DcnPlaneFormat=BC250_PLANE_FORMAT_ABGR8888;
    CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));d.DcnPlaneFormat=0;}
+  /* BD-223: a scaled plane 0 is smaller than the source mode, so the copy of the source mode's size gets no mapping. */
+  d.DcnPlaneScaled=1;CHECK(!DcnScanoutMapping(&d,&mapping,&length,&pitch));CHECK(!mapping && !length && !pitch);
+  d.DcnPlaneScaled=0;CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));
   DcnUnmapScanout(&d);
   // Firmware pitch is wider than destination; last row must still be copied.
   {SIZE_T srcsize=d.FramebufferLength;UCHAR *src=malloc(srcsize);UCHAR *dst=malloc((SIZE_T)bytes+128);int exact=1;

@@ -29,6 +29,7 @@ param(
                  'resume-unlocked-fallback', 'recovery-without-section', 'recovery-request-dropped',
                  'exclusive-refused-success', 'writer-refusal-uncounted',
                  'unsafe-next-vsync-deposit', 'unsafe-immediate-deposit',
+                 'shape-not-a-change', 'null-drops-shape', 'shape-without-allocation',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted')][string]$Mutation = '',
     [switch]$Lab
@@ -149,6 +150,16 @@ $mutations = [ordered]@{
     'unsafe-immediate-deposit' = @{ find = "if (device->VidPnFlipEnabled) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         with = "if (device->VidPnFlipEnabled && !immediate) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         why = 'an immediate request is accepted without programming its requested surface in the call' }
+    # The call stays and its answer is dropped: without a call the host mock is an unused function, and clang -Werror
+    # refuses the build instead of running the mutant.
+    'shape-not-a-change' = @{ find = ' || !DcnPlaneShapeIs(device, shape);'; with = ' || (DcnPlaneShapeIs(device, shape), FALSE);'
+        why = 'a flip to the same address in another pipe shape (BD-223) writes nothing' }
+    'null-drops-shape' = @{ find = 'DcnPlaneShapeCurrent(device, &kept)) shape = &kept;'
+        with = 'DcnPlaneShapeCurrent(device, &kept)) shape = NULL;'
+        why = 'a flip with no allocation drops the shape of the plane and reads past its smaller surface' }
+    'shape-without-allocation' = @{ find = 'if (flip->Shape && (args->hAllocation == NULL || !device->VidPnFlipEnabled)) status = STATUS_NOT_SUPPORTED;'
+        with = ''
+        why = 'a shape is programmed with no allocation to hold it to' }
 }
 
 # The lab flavour's controls (-Lab): the witnesses read after the shipping decision and never change it.
@@ -169,7 +180,9 @@ if ($Lab) { $flavour = @('/DAMDGPU_WDDM_LAB_FLAVOUR=1'); $mutations = $labMutati
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = "$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
+$cl = Join-Path $Root 'toolchain\llvm-23.1.4-win64\bin\clang-cl.exe'
+& $cl --version
+if ($LASTEXITCODE) { throw 'Explicit clang-cl unavailable' }
 $sdk = "$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
 $libs = "$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -185,7 +198,11 @@ function Invoke-VidPnFlip([string]$Dir, [string]$Actual) {
     $obj = Join-Path $Dir 'obj'
     New-Item -ItemType Directory -Force $Dir, $obj | Out-Null
     Remove-Item "$obj\*.obj" -Force -ErrorAction SilentlyContinue
-    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT') @flavour @("/I$repo\driver\kmd", "/I$repo\third_party\linux-amdgpu",
+    # Intentional rule removal uses x && !x to keep variables in use. Require
+    # runtime rejection of these mutants, not a compiler-warning substitute.
+    [string[]]$mutationWarnings = @()
+    if ($Mutation) { $mutationWarnings = @('-Wno-tautological-negation-compare') }
+    & $cl @('/nologo', '/TC', '/W4', '/WX', '/wd4201', '/O2', '/MT', '-fuse-ld=lld') @mutationWarnings @flavour @("/I$repo\driver\kmd", "/I$repo\third_party\linux-amdgpu",
         "/I$($msvc.FullName)\include", "/I$sdk\Include\10.0.26100.0\ucrt", "/Fo$obj\", "/Fe$Dir\vidpn_flip_test.exe", $Actual,
         "$repo\driver\kmd\dcn_translate.c", '/link', "/LIBPATH:$($msvc.FullName)\lib\x64", "/LIBPATH:$libs\ucrt\x64",
         "/LIBPATH:$libs\um\x64") | Out-Host

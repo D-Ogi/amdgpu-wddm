@@ -95,6 +95,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING Regi
     GuardLog("kmd: BD-167 flavour lab (raw diagnostic escapes, test signing + LabDiagnostics)");
     GuardLabReadPagingRingStart(DriverObject);     // BD-235 experiment: read only, consumed at StartDevice
     GuardLabReadGdiHwAccel(DriverObject);          // GDI swap arm: read only, latched at WddmStart
+    GuardLabReadScaledPlane(DriverObject);         // BD-223 scaled plane arm: read only, latched at WddmStart
 #else
     GuardLog("kmd: BD-167 flavour release (no raw diagnostic escapes)");
 #endif

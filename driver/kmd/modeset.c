@@ -420,6 +420,7 @@ static long ProgramLocked(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_
         *Invalidate = TRUE;
     }
     IoOpen(Device, &io, MODESET_PIPE_BUDGET_US);
+    DcnPlaneShapeModeset(Device, FALSE);       // BD-223: the mode shape replaces the shape of a plane
     status = Bc250ScalerProgram(&io, Plan, &m->LastResult);
     if ((m->LastResult.HubpCntlAfter & HUBP0_DCHUBP_CNTL__HUBP_UNDERFLOW_STATUS_MASK) != 0) m->Underflows++;
     return status;
@@ -525,6 +526,7 @@ static long RestoreNative(_Inout_ BC250_DEVICE* Device, _Out_ BC250_SCALER_RESUL
     BC250_DISP_IO io;
 
     IoOpen(Device, &io, MODESET_PIPE_BUDGET_US);
+    DcnPlaneShapeModeset(Device, FALSE);       // BD-223
     return Bc250ScalerRestoreNative(&io, Device->Post.Width, Device->Post.Height, Result);
 }
 
@@ -641,6 +643,7 @@ void ModesetPowerUp(_Inout_ BC250_DEVICE* Device)
         return;
     }
     IoOpen(Device, &io, MODESET_PIPE_BUDGET_US);
+    DcnPlaneShapeModeset(Device, FALSE);       // BD-223
     status = Bc250ScalerProgram(&io, &m->Plan, &m->LastResult);
     {
         const NTSTATUS finish=WddmPrimaryExclusiveEnd(Device, generation, FALSE);

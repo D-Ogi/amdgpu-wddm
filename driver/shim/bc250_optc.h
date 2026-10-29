@@ -36,6 +36,14 @@ long Bc250OptcDisable(BC250_DISP_IO* Io);
 long Bc250OptcProgram(BC250_DISP_IO* Io,const BC250_TARGET_TIMING* Timing,
     const BC250_OPTC_SYNC* Sync,int DisplayPort);
 long Bc250OptcEnable(BC250_DISP_IO* Io);
+// BD-223: the global sync of OTG0 (VREADY, VSTARTUP, VUPDATE offset and width) as the registers hold it now.
+long Bc250OptcReadGlobalSync(BC250_DISP_IO* Io,BC250_OPTC_SYNC* Sync);
+// BD-223: AMD optc1_program_global_sync on a running OTG0, inside the caller's acknowledged OTG0 master update lock,
+// for a multiplane-overlay plane whose display plan moves VREADY or the VUPDATE width only. VSTARTUP and the VUPDATE
+// offset must equal the registers: a new VSTARTUP also needs set_vtg_params, which moves VTG0_FP2
+// with it (dcn10_program_pipe), and the flip does not program the VTG, and the VUPDATE offset is where the flip latches. Refused before
+// any write otherwise. No wait.
+long Bc250OptcGlobalSyncLocked(BC250_DISP_IO* Io,const BC250_OPTC_SYNC* Sync);
 // Read-only inverse of optc1_program_timing for the admitted progressive RGB
 // path. Caller supplies the measured clock and excludes concurrent modesets.
 // Two identical snapshots are required; every refusal clears the output.

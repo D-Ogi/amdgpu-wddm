@@ -44,6 +44,9 @@ param(
     # The swap chain's format as its DXGI number (interactive-flip.h, flip_format_from): 28 R8G8B8A8_UNORM, 24
     # R10G10B10A2_UNORM, 10 R16G16B16A16_FLOAT. Empty keeps the client's default, B8G8R8A8_UNORM (87).
     [ValidateSet('', '87', '28', '24', '10')][string]$Format = '',
+    # The swap chain's size, "<width>x<height>" (interactive-flip.h, flip_chain_from): a smaller chain that DXGI
+    # stretches over the output, the shape of a game below the panel mode (BD-223). Empty keeps the output's size.
+    [ValidatePattern('^([0-9]{2,5}x[0-9]{2,5})?$')][string]$Chain = '',
     # The interactive account the client runs as, and the task that carries it.
     [string]$User = 'bc250',
     [string]$TaskName = 'Scanout flip trial',
@@ -406,6 +409,7 @@ $lines += 'set AMDGPU_WDDM_D3D12_EXPERIMENT='
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_FRAMES=$Frames"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_BUFFERS=$Buffers"
 if ($Format) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_FORMAT=$Format" }
+if ($Chain) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_CHAIN=$Chain" }
 foreach ($pair in $ClientEnvironment) {
     if ($pair -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw "ClientEnvironment entry is not NAME=VALUE: $pair" }
     $lines += "set $pair"
@@ -510,6 +514,7 @@ $trialResult = [pscustomobject]@{
     frames       = $Frames
     buffers      = $Buffers
     format       = $(if ($Format) { [int]$Format } else { 87 })
+    chain        = $(if ($Chain) { $Chain } else { 'output' })
     task_state   = $taskState
     exit_code    = $exit
     session      = if (Test-Path -LiteralPath $session) { Get-Content -LiteralPath $session -Raw | ConvertFrom-Json } else { $null }

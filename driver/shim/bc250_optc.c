@@ -177,6 +177,34 @@ long Bc250OptcEnable(BC250_DISP_IO* io)
     (void)optc2_enable_crtc(&o.base);return o.status;
 }
 
+long Bc250OptcReadGlobalSync(BC250_DISP_IO* io,BC250_OPTC_SYNC* s)
+{
+    struct optc o;uint32_t start,update,ready;
+    if(!s)return BC250_DISP_STATUS_INVALID;
+    memset(s,0,sizeof(*s));
+    if(!init(&o,io))return BC250_DISP_STATUS_INVALID;
+    start=readReg(&o,REG_OTG_VSTARTUP_PARAM);update=readReg(&o,REG_OTG_VUPDATE_PARAM);ready=readReg(&o,REG_OTG_VREADY_PARAM);
+    if(o.status<0)return o.status;
+    s->VStartup=Bc250DispGet(start,MASK_OTG_VSTARTUP_PARAM_VSTARTUP_START);
+    s->VUpdateOffset=Bc250DispGet(update,MASK_OTG_VUPDATE_PARAM_VUPDATE_OFFSET);
+    s->VUpdateWidth=Bc250DispGet(update,MASK_OTG_VUPDATE_PARAM_VUPDATE_WIDTH);
+    s->VReady=Bc250DispGet(ready,MASK_OTG_VREADY_PARAM_VREADY_OFFSET);
+    return BC250_DISP_STATUS_SUCCESS;
+}
+long Bc250OptcGlobalSyncLocked(BC250_DISP_IO* io,const BC250_OPTC_SYNC* s)
+{
+    struct optc o;BC250_OPTC_SYNC now;long status;
+    if(!s || !s->VStartup || s->VStartup>Bc250DispGet(MASK_OTG_VSTARTUP_PARAM_VSTARTUP_START,MASK_OTG_VSTARTUP_PARAM_VSTARTUP_START) ||
+       s->VReady>Bc250DispGet(MASK_OTG_VREADY_PARAM_VREADY_OFFSET,MASK_OTG_VREADY_PARAM_VREADY_OFFSET) ||
+       s->VUpdateOffset>Bc250DispGet(MASK_OTG_VUPDATE_PARAM_VUPDATE_OFFSET,MASK_OTG_VUPDATE_PARAM_VUPDATE_OFFSET) ||
+       s->VUpdateWidth>Bc250DispGet(MASK_OTG_VUPDATE_PARAM_VUPDATE_WIDTH,MASK_OTG_VUPDATE_PARAM_VUPDATE_WIDTH) ||
+       !init(&o,io))return BC250_DISP_STATUS_INVALID;
+    status=Bc250OptcReadGlobalSync(io,&now);if(status<0)return status;
+    if(now.VStartup!=s->VStartup || now.VUpdateOffset!=s->VUpdateOffset)return BC250_DISP_STATUS_NOT_SUPPORTED;
+    optc1_program_global_sync(&o.base,(int)s->VReady,(int)s->VStartup,(int)s->VUpdateOffset,(int)s->VUpdateWidth,0);
+    return o.status;
+}
+
 long Bc250OptcReadTiming(BC250_DISP_IO* io,unsigned long pixelKhz,BC250_TARGET_TIMING* output)
 {
     // Original AMD optc1_program_timing: total=N-1, sync start=0,

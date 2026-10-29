@@ -15,7 +15,9 @@ typedef int int32_t;
 #include "pipe_registers.inc"
 #include "pipe_layouts.inc"
 
-struct access { BC250_DISP_IO* io; long status; unsigned validate; };
+// capture (BD-223): the AMD setters run, and each register write records the fields it would write, with the
+// values they have now, in place of the write.
+struct access { BC250_DISP_IO* io; long status; unsigned validate, hubp; BC250_DCN201_REQUESTOR_SAVE* capture; };
 struct hubp { unsigned mpcc_id,opp_id; };
 struct dcn10_hubp { struct hubp base; struct access* a; };
 #define dcn20_hubp dcn10_hubp
@@ -76,32 +78,57 @@ struct dcn10_hubbub { struct hubbub base;struct access* a;union dcn_watermark_se
 static bool resource_is_pipe_type(const struct pipe_ctx* p,int type)
 { return p && p->stream_res.stream_enc && type==OTG_MASTER; }
 
+static uint32_t selectedReg(const struct access* a,uint32_t reg)
+{
+    if(a->hubp==1) {
+        switch(reg) {
+#include "pipe_hubp_remap.inc"
+        default:break; // Global/output state always remains on OTG/OPP0.
+        }
+    }
+    return reg;
+}
 static uint32_t readReg(struct access* a,uint32_t reg)
 {
     unsigned long value=0;
     if(a->status>=0 && !a->validate) {
         if(!reg)a->status=BC250_DISP_STATUS_INVALID;
-        else a->status=Bc250DispRead(a->io,reg,&value);
+        else a->status=Bc250DispRead(a->io,selectedReg(a,reg),&value);
         if(a->status>=0 && value==0xfffffffful)a->status=BC250_DISP_STATUS_DEVICE;
     }
     return (uint32_t)value;
+}
+static void record(struct access* a,uint32_t reg,uint32_t mask)
+{
+    BC250_DCN201_REQUESTOR_SAVE* s=a->capture;uint32_t value;
+    if(a->status<0)return;
+    if(!reg || s->Count>=BC250_DCN201_REQUESTOR_FIELDS) { a->status=BC250_DISP_STATUS_INVALID;return; }
+    value=readReg(a,reg);
+    if(a->status<0)return;
+    s->Register[s->Count]=selectedReg(a,reg);s->Mask[s->Count]=mask;s->Value[s->Count]=value&mask;++s->Count;
 }
 static void writeReg(struct access* a,uint32_t reg,uint32_t value)
 {
     if(a->status<0)return;
     if(!reg) { if(value)a->status=BC250_DISP_STATUS_INVALID;return; }
-    if(!a->validate)a->status=Bc250DispWrite(a->io,reg,value);
+    if(a->capture) { record(a,reg,0xffffffffu);return; }
+    if(!a->validate)a->status=Bc250DispWrite(a->io,selectedReg(a,reg),value);
 }
 static void fields(struct access* a,uint32_t reg,int fresh,unsigned count,...)
 {
-    uint32_t value=fresh?0:readReg(a,reg);unsigned i;va_list ap;
+    uint32_t value=fresh||a->capture?0:readReg(a,reg),touched=0;unsigned i;va_list ap;
     va_start(ap,count);
     for(i=0;i<count;++i) {
         uint32_t mask=va_arg(ap,uint32_t),x=va_arg(ap,uint32_t);
         if(x>Bc250DispGet(mask,mask) && a->status>=0)a->status=BC250_DISP_STATUS_INVALID;
-        value=(value&~mask)|(uint32_t)Bc250DispField(mask,x);
+        value=(value&~mask)|(uint32_t)Bc250DispField(mask,x);touched|=mask;
     }
-    va_end(ap);writeReg(a,reg,value);
+    va_end(ap);
+    // A fresh write (REG_SET) replaces the whole register, so the capture keeps all of it.
+    // An absent register (reg 0) takes only zero, as in writeReg.
+    if(!a->capture)writeReg(a,reg,value);
+    else if(reg)record(a,reg,fresh?0xffffffffu:touched);
+    else if(value && a->status>=0)a->status=BC250_DISP_STATUS_INVALID;
 }
 static void waitReg(struct access* a,uint32_t reg,uint32_t mask,unsigned want,unsigned delay,unsigned count)
 {
@@ -132,7 +159,7 @@ static void waitReg(struct access* a,uint32_t reg,uint32_t mask,unsigned want,un
 #define REG_WAIT(r,f,w,d,n) waitReg(CTX,REG(r),MASK(r,f),w,d,n)
 #define DC_LOG_BANDWIDTH_CALCS(...) ((void)0)
 #pragma warning(push)
-#pragma warning(disable: 4100 4127 4018 4244) // unchanged AMD helpers, one admitted pipe
+#pragma warning(disable: 4100 4127 4018 4244) // unchanged AMD helpers, shared OTG0
 #define CTX hubp1->a
 #include "pipe_hubp1.inc"
 #undef CTX
@@ -214,10 +241,11 @@ long Bc250Dcn201ReadClocks(BC250_DISP_IO* io,unsigned int crystal,BC250_DCN201_C
     *out=c;return BC250_DISP_STATUS_SUCCESS;
 }
 
-long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
+long Bc250Dcn201PlaneBlankAt(BC250_DISP_IO* io,unsigned pipe,int blank)
 {
     struct access a;struct dcn10_hubp h;uint32_t value;
-    if(!initialize(&a,io) || (blank!=0 && blank!=1))return BC250_DISP_STATUS_INVALID;
+    if(!initialize(&a,io) || pipe>1 || (blank!=0 && blank!=1))return BC250_DISP_STATUS_INVALID;
+    a.hubp=pipe;
     memset(&h,0,sizeof(h));h.a=&a;hubp1_set_blank(&h.base,(bool)blank);
     value=readReg(&a,REG(DCHUBP_CNTL));
     if(a.status<0)return a.status;
@@ -227,16 +255,46 @@ long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
     return a.status;
 }
 
-static void programPlane(struct access* a,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* clocks)
+long Bc250Dcn201PlaneBlank(BC250_DISP_IO* io,int blank)
+{ return Bc250Dcn201PlaneBlankAt(io,0,blank); }
+
+static void programRequestor(struct access* a,const BC250_DML201_PLAN* p)
 {
-    struct dcn10_hubp h;struct dcn10_hubbub b;union dcn_watermark_set wm;
-    struct dc dc;struct dc_context ctx;unsigned i;
+    struct dcn10_hubp h;
     memset(&h,0,sizeof(h));h.a=a;
     // AMD's helpers take mutable pointers but only read these plan fields.
     hubp1_vtg_sel(&h.base,0);
     hubp201_setup(&h.base,(display_dlg_regs_st*)&p->Dlg,(display_ttu_regs_st*)&p->Ttu,
         (display_rq_regs_st*)&p->Rq,(display_pipe_dest_params_st*)&p->Destination);
     hubp2_setup_interdependent(&h.base,(display_dlg_regs_st*)&p->Dlg,(display_ttu_regs_st*)&p->Ttu);
+}
+// Raise (BD-223): AMD's safe_to_lower=false. AMD compares each new watermark with hubbub->watermarks, its cache of
+// the values it programmed. This driver keeps no such cache across owners (the firmware, a commit, a plane), so the
+// cache is what the registers hold now, converted back to ns. convert_and_clamp truncates, so a cache value of
+// floor(register * 1000 / MHz) makes AMD write exactly the watermarks whose register value is not lower.
+static uint32_t watermarkNs(struct access* a,uint32_t reg,uint32_t mask,unsigned mhz)
+{ return (uint32_t)(((unsigned long long)get(a,reg,mask)*1000u)/mhz); }
+static void programWatermarks(struct access* a,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* clocks,int raise)
+{
+    static const uint32_t urgent[4]={REG(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A),REG(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_B),
+        REG(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_C),REG(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_D)};
+    static const uint32_t urgentMask[4]={
+        MASK(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A),
+        MASK(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_B,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_B),
+        MASK(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_C,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_C),
+        MASK(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_D,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_D)};
+    static const uint32_t pte[4]={REG(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_A),REG(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_B),
+        REG(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_C),REG(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_D)};
+    static const uint32_t dram[4]={REG(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_A),
+        REG(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_B),REG(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_C),
+        REG(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_D)};
+    static const uint32_t dramMask[4]={
+        MASK(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_A,DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_A),
+        MASK(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_B,DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_B),
+        MASK(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_C,DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_C),
+        MASK(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_D,DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_D)};
+    struct dcn10_hubbub b;union dcn_watermark_set wm;
+    struct dc dc;struct dc_context ctx;unsigned i,mhz=clocks->DchubRefClockKhz/1000u;
     memset(&b,0,sizeof(b));memset(&dc,0,sizeof(dc));memset(&wm,0,sizeof(wm));
     ctx.dc=&dc;b.base.ctx=&ctx;b.a=a;
     // This plan was computed without cstate. Do not enable an unplanned state.
@@ -245,19 +303,24 @@ static void programPlane(struct access* a,const BC250_DML201_PLAN* p,const BC250
         wm.sets[i].urgent_ns=p->Watermarks[i].UrgentNs;
         wm.sets[i].pte_meta_urgent_ns=p->Watermarks[i].MemoryTripNs;
         wm.sets[i].cstate_pstate.pstate_change_ns=p->Watermarks[i].DramClockChangeNs;
+        if(raise) {
+            b.watermarks.sets[i].urgent_ns=watermarkNs(a,urgent[i],urgentMask[i],mhz);
+            b.watermarks.sets[i].pte_meta_urgent_ns=watermarkNs(a,pte[i],0xffffffffu,mhz);
+            b.watermarks.sets[i].cstate_pstate.pstate_change_ns=watermarkNs(a,dram[i],dramMask[i],mhz);
+        }
     }
-    (void)hubbub201_program_watermarks(&b.base,&wm,clocks->DchubRefClockKhz/1000u,true);
+    if(a->status<0)return;
+    (void)hubbub201_program_watermarks(&b.base,&wm,mhz,raise?false:true);
+}
+static void programPlane(struct access* a,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* clocks)
+{
+    programRequestor(a,p);programWatermarks(a,p,clocks,0);
 }
 
-long Bc250Dcn201PipeApply(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* clocks)
+static long validatePlane(struct access* a,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* clocks)
 {
-    struct access a;BC250_DCN201_CLOCKS fresh;unsigned i;uint32_t ctl,override;
-    struct clk_mgr_internal clk;struct dc_state state;struct dc dc;struct dc_context ctx;
-    struct resource_pool pool;struct dcn_dccg dccg;struct dcn10_stream_encoder encoder;
-    struct timing_generator tg;long cleanup;
-    static const struct dccg_funcs df={dccg2_set_fifo_errdet_ovr_en,dccg2_otg_add_pixel,dccg2_otg_drop_pixel};
-    static const struct encoder_funcs ef={enc2_get_fifo_cal_average_level};
-    if(!initialize(&a,io) || !p || !clocks || p->Valid!=1 || p->Assertions || p->CStateEnabled ||
+    unsigned i;
+    if(!p || !clocks || p->Valid!=1 || p->Assertions || p->CStateEnabled ||
        !p->DispClockKhz || p->DispClockKhz>1200000 || !p->DppClockKhz || p->DppClockKhz>1200000 ||
        !p->Destination.htotal || p->Destination.htotal>16384 ||
        p->VStartup!=p->Destination.vstartup_start || p->VReady!=p->Destination.vready_offset ||
@@ -272,7 +335,19 @@ long Bc250Dcn201PipeApply(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,const BC2
     }
     // Run precisely the same AMD setters in validation mode before any MMIO.
     // Every shifted field is range checked; absent DCN201 cursor1 accepts zero.
-    a.validate=1;programPlane(&a,p,clocks);a.validate=0;if(a.status<0)return a.status;
+    a->validate=1;programPlane(a,p,clocks);a->validate=0;return a->status;
+}
+
+long Bc250Dcn201PipeApply(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,const BC250_DCN201_CLOCKS* clocks)
+{
+    struct access a;BC250_DCN201_CLOCKS fresh;uint32_t ctl,override;
+    struct clk_mgr_internal clk;struct dc_state state;struct dc dc;struct dc_context ctx;
+    struct resource_pool pool;struct dcn_dccg dccg;struct dcn10_stream_encoder encoder;
+    struct timing_generator tg;long cleanup;
+    static const struct dccg_funcs df={dccg2_set_fifo_errdet_ovr_en,dccg2_otg_add_pixel,dccg2_otg_drop_pixel};
+    static const struct encoder_funcs ef={enc2_get_fifo_cal_average_level};
+    if(!initialize(&a,io))return BC250_DISP_STATUS_INVALID;
+    a.status=validatePlane(&a,p,clocks);if(a.status<0)return a.status;
     a.status=Bc250Dcn201ReadClocks(io,clocks->CrystalClockKhz,&fresh);
     if(a.status<0)return a.status;
     if(memcmp(&fresh,clocks,sizeof(fresh)))return BC250_DISP_STATUS_MISMATCH;
@@ -300,6 +375,101 @@ long Bc250Dcn201PipeApply(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,const BC2
     if(a.status<0)return a.status;
     if(fresh.DispClockKhz<p->DispClockKhz || fresh.DppClockKhz<p->DppClockKhz)return BC250_DISP_STATUS_MISMATCH;
     programPlane(&a,p,clocks);return a.status;
+}
+
+long Bc250Dcn201RequestorValidate(const BC250_DML201_PLAN* p,unsigned int refKhz)
+{
+    struct access a;BC250_DCN201_CLOCKS clocks;
+    memset(&a,0,sizeof(a));memset(&clocks,0,sizeof(clocks));clocks.DchubRefClockKhz=refKhz;
+    return validatePlane(&a,p,&clocks);
+}
+
+long Bc250Dcn201RequestorLocked(BC250_DISP_IO* io,const BC250_DML201_PLAN* p,unsigned int refKhz,
+    BC250_DCN201_REQUESTOR_SAVE* save)
+{
+    struct access a;BC250_DCN201_CLOCKS clocks;
+    if(!initialize(&a,io) || !save || save->Count>BC250_DCN201_REQUESTOR_FIELDS)return BC250_DISP_STATUS_INVALID;
+    memset(&clocks,0,sizeof(clocks));clocks.DchubRefClockKhz=refKhz;
+    a.status=validatePlane(&a,p,&clocks);if(a.status<0)return a.status;
+    if(!save->Count) {
+        // Reads only. A failed capture leaves Save empty and writes nothing.
+        a.capture=save;programRequestor(&a,p);a.capture=NULL;
+        if(a.status<0) { save->Count=0;return a.status; }
+    }
+    // dcn20_prepare_bandwidth raises the watermarks before the pipe update, then dcn10_update_dchubp_dpp programs
+    // the requestor. A raised watermark is safe for the requestor on the pipe now as well.
+    programWatermarks(&a,p,&clocks,1);
+    programRequestor(&a,p);
+    return a.status;
+}
+
+long Bc250Dcn201RequestorRestoreLocked(BC250_DISP_IO* io,const BC250_DCN201_REQUESTOR_SAVE* s)
+{
+    unsigned i;long status=BC250_DISP_STATUS_SUCCESS;
+    if(!io || !io->Read || !io->Write || !s || !s->Count || s->Count>BC250_DCN201_REQUESTOR_FIELDS)
+        return BC250_DISP_STATUS_INVALID;
+    for(i=0;i<s->Count;++i)
+        if(!s->Register[i] || !s->Mask[i] || (s->Value[i]&~s->Mask[i]))return BC250_DISP_STATUS_INVALID;
+    for(i=0;i<s->Count && status>=0;++i) {
+        unsigned long value=s->Value[i],now=0;
+        if(s->Mask[i]!=0xffffffffu) {
+            status=Bc250DispRead(io,s->Register[i],&now);
+            if(status>=0 && now==0xfffffffful)status=BC250_DISP_STATUS_DEVICE;
+            value|=now&~(unsigned long)s->Mask[i];
+        }
+        if(status>=0)status=Bc250DispWrite(io,s->Register[i],value);
+    }
+    return status;
+}
+
+static int sameOutput(const display_pipe_dest_params_st* x,const display_pipe_dest_params_st* y)
+{
+    display_pipe_dest_params_st a=*x,b=*y;
+    /* All remaining bytes describe shared output timing. Plans are private,
+     * zero-initialized DML results. No floating arithmetic in this writer. */
+    a.recout_width=b.recout_width=0;a.recout_height=b.recout_height=0;
+    a.full_recout_width=b.full_recout_width=0;a.full_recout_height=b.full_recout_height=0;
+    a.vstartup_start=b.vstartup_start=0;a.vupdate_offset=b.vupdate_offset=0;
+    a.vupdate_width=b.vupdate_width=0;a.vready_offset=b.vready_offset=0;
+    return !memcmp(&a,&b,sizeof(a));
+}
+
+long Bc250Dcn201GroupProgramBlanked(BC250_DISP_IO* io,const BC250_DML201_GROUP_PLAN* g,
+    const unsigned* pipes,const BC250_DCN201_CLOCKS* clocks)
+{
+    struct access a;BC250_DCN201_CLOCKS fresh;unsigned n;uint32_t ctl;
+    const BC250_DML201_PLAN* first;
+    if(!initialize(&a,io) || !g || !pipes || !clocks || g->Valid!=1 ||
+       g->Assertions || g->Count<1 || g->Count>2 || pipes[0]>1 ||
+       (g->Count==2 && (pipes[1]>1 || pipes[0]==pipes[1])))return BC250_DISP_STATUS_INVALID;
+    first=&g->Plane[0];
+    for(n=0;n<g->Count;++n) {
+        const BC250_DML201_PLAN* p=&g->Plane[n];
+        a.hubp=pipes[n];a.status=validatePlane(&a,p,clocks);if(a.status<0)return a.status;
+        if(p->Destination.otg_inst || p->Destination.odm_combine || p->Destination.interlaced ||
+           !sameOutput(&first->Destination,&p->Destination) ||
+           p->DispClockKhz!=first->DispClockKhz || p->VoltageLevel!=first->VoltageLevel ||
+           p->DcfClockKhz!=first->DcfClockKhz || p->SocClockKhz!=first->SocClockKhz ||
+           p->DcfDeepSleepKhz!=first->DcfDeepSleepKhz || p->FabricClockKhz!=first->FabricClockKhz ||
+           p->DramClockKhz!=first->DramClockKhz || p->PStateSupported!=first->PStateSupported ||
+           memcmp(p->Watermarks,first->Watermarks,sizeof(p->Watermarks)))return BC250_DISP_STATUS_INVALID;
+    }
+    a.status=Bc250Dcn201ReadClocks(io,clocks->CrystalClockKhz,&fresh);if(a.status<0)return a.status;
+    if(memcmp(&fresh,clocks,sizeof(fresh)))return BC250_DISP_STATUS_MISMATCH;
+    for(n=0;n<g->Count;++n)
+        if(fresh.DispClockKhz<g->Plane[n].DispClockKhz || fresh.DppClockKhz<g->Plane[n].DppClockKhz)
+            return BC250_DISP_STATUS_NOT_SUPPORTED;
+    // Shared watermarks can change. BOTH physical consumers must be quiet,
+    // even when this new group contains only one enabled plane.
+    for(n=0;n<2;++n) {
+        a.hubp=n;ctl=readReg(&a,REG(DCHUBP_CNTL));if(a.status<0)return a.status;
+        if(!Bc250DispGet(ctl,MASK(DCHUBP_CNTL,HUBP_BLANK_EN)) ||
+           !Bc250DispGet(ctl,MASK(DCHUBP_CNTL,HUBP_TTU_DISABLE)) ||
+           !Bc250DispGet(ctl,MASK(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ)))return BC250_DISP_STATUS_BUSY;
+    }
+    for(n=0;n<g->Count;++n) { a.hubp=pipes[n];programRequestor(&a,&g->Plane[n]); }
+    a.hubp=0;programWatermarks(&a,first,clocks,0);
+    return a.status;
 }
 
 static void outputPattern(struct access* a,unsigned width,unsigned height,int blank)

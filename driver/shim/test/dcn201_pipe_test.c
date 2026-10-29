@@ -2,6 +2,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "../dml201/reference/pipe/clk_mask.h"
 #include "../pipe_registers.inc"
+#include "../../kmd/regs.generated.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,26 +13,28 @@ static unsigned checks,failures;
 #define F(r,f,v) Bc250DispField(M(r,f),v)
 typedef struct MOCK {
     unsigned long reg[0x70000/4];unsigned ops,fail_at,failed,after_failure,zero,readonly;
-    unsigned writes,stalls,drop,add,no_done,power_gated;
+    unsigned writes,stalls,drop,add,no_done,power_gated,fail_after;
+    unsigned writes_on[0x70000/4];
 } MOCK;
 static long readMmio(void* ctx,unsigned long r,unsigned long* v)
 {
     MOCK* m=ctx;++m->ops;
-    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
+    if(m->ops==m->fail_at && !m->fail_after){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     if(!r || r>=sizeof(m->reg)){++m->zero;return BC250_DISP_STATUS_ACCESS_DENIED;}
     *v=m->reg[r/4];
     if(r==R(DCHUBP_CNTL) && m->power_gated)*v=0;
+    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     return 0;
 }
 static long writeMmio(void* ctx,unsigned long r,unsigned long v)
 {
     MOCK* m=ctx;++m->ops;
-    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
+    if(m->ops==m->fail_at && !m->fail_after){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     if(!r || r>=sizeof(m->reg)){++m->zero;return BC250_DISP_STATUS_ACCESS_DENIED;}
     if(r==R(REFCLK_CNTL) || r==R(DCHUBBUB_GLOBAL_TIMER_CNTL) || r==R(CLK4_CLK_PLL_REQ) ||
        r==R(CLK4_CLK2_CURRENT_CNT) || r==R(DIG_FIFO_STATUS) || r==R(DPG_STATUS))++m->readonly;
     if(m->failed && r!=R(DISPCLK_FREQ_CHANGE_CNTL))++m->after_failure;
-    ++m->writes;m->reg[r/4]=v;
+    ++m->writes;++m->writes_on[r/4];m->reg[r/4]=v;
     if(r==R(DENTIST_DISPCLK_CNTL)) {
         if(!m->no_done)m->reg[r/4]|=M(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_CHG_DONE)|M(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_CHG_DONE);
         else m->reg[r/4]&=~(M(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_CHG_DONE)|M(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_CHG_DONE));
@@ -40,6 +43,7 @@ static long writeMmio(void* ctx,unsigned long r,unsigned long v)
         if(v&M(OTG_PIXEL_RATE_CNTL,OTG_ADD_PIXEL))++m->add;
         if(v&M(OTG_PIXEL_RATE_CNTL,OTG_DROP_PIXEL))++m->drop;
     }
+    if(m->ops==m->fail_at){m->failed=1;return BC250_DISP_STATUS_DEVICE;}
     return 0;
 }
 static void stallMmio(void* ctx,unsigned long us) {((MOCK*)ctx)->stalls+=(unsigned)us;}
@@ -55,6 +59,7 @@ static void init(MOCK* m,BC250_DISP_IO* io)
     m->reg[R(DENTIST_DISPCLK_CNTL)/4]=F(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_WDIVIDER,40)|
         F(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_WDIVIDER,40)|M(DENTIST_DISPCLK_CNTL,DENTIST_DISPCLK_CHG_DONE)|M(DENTIST_DISPCLK_CNTL,DENTIST_DPPCLK_CHG_DONE);
     m->reg[R(DCHUBP_CNTL)/4]=M(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ);
+    m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]=M(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ);
     m->reg[R(DIG_FIFO_STATUS)/4]=F(DIG_FIFO_STATUS,DIG_FIFO_CAL_AVERAGE_LEVEL,32);
 }
 static BC250_DML201_PLAN plan(void)
@@ -66,10 +71,236 @@ static BC250_DML201_PLAN plan(void)
     i.PixelClockKhz=148500;i.PitchPixels=1920;i.DchubRefClockKhz=48000;i.DentistVcoKhz=3000000;
     CHECK(Bc250Dml201Plan(&i,ws,n,&p)==0);free(ws);return p;
 }
+// BD-223: the plan of a scaled plane on the timing of plan(): a viewport scaled into a recout, at its own pitch.
+static BC250_DML201_PLAN planeAt(unsigned vw,unsigned vh,unsigned rw,unsigned rh,unsigned taps,unsigned pitch)
+{
+    BC250_DML201_INPUT i;BC250_DML201_PLAN p;size_t n=Bc250Dml201WorkspaceSize();void* ws=malloc(n);
+    memset(&i,0,sizeof(i));memset(&p,0,sizeof(p));CHECK(ws!=NULL);if(!ws)return p;
+    i.HActive=1920;i.HTotal=2200;i.HFrontPorch=88;i.HSyncWidth=44;
+    i.VActive=1080;i.VTotal=1125;i.VFrontPorch=4;i.VSyncWidth=5;
+    i.PixelClockKhz=148500;i.PitchPixels=pitch;i.DchubRefClockKhz=48000;i.DentistVcoKhz=3000000;
+    i.ViewportWidth=vw;i.ViewportHeight=vh;i.RecoutWidth=rw;i.RecoutHeight=rh;i.HTaps=taps;i.VTaps=taps;
+    CHECK(Bc250Dml201Plan(&i,ws,n,&p)==0 && p.Valid==1);free(ws);return p;
+}
 static void ready(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
 {
     init(m,io);CHECK(Bc250Dcn201ReadClocks(io,48000,c)==0);CHECK(Bc250Dcn201PlaneBlank(io,1)==0);
     m->ops=0;m->writes=0;io->Reads=0;io->Writes=0;
+}
+
+static BC250_DML201_GROUP_PLAN groupPlan(unsigned nv12)
+{
+    BC250_DML201_INPUT i={0};BC250_SCALER_REQUEST r={0};
+    BC250_SCALER_PREPARED s[2];BC250_DML201_PLANE_INPUT planes[2];
+    BC250_DML201_GROUP_PLAN g={0};size_t size=Bc250Dml201WorkspaceSize();void* ws=malloc(size);
+    CHECK(ws!=NULL);if(!ws)return g;
+    i.HActive=1920;i.HTotal=2200;i.HFrontPorch=88;i.HSyncWidth=44;
+    i.VActive=1080;i.VTotal=1125;i.VFrontPorch=4;i.VSyncWidth=5;
+    i.PixelClockKhz=148500;i.DchubRefClockKhz=48000;i.DentistVcoKhz=3000000;
+    r.Geometry.Horizontal=(BC250_SCALER_AXIS_INPUT){1920,1920,0,1920,0,1920,0,1920,0,0};
+    r.Geometry.ChromaDivisor=1;
+    for(unsigned n=0;n<2;++n) {
+        unsigned h=1080*(n+1);
+        r.Geometry.ChromaDivisor=nv12 && n==1?2:1;
+        r.Geometry.Vertical=(BC250_SCALER_AXIS_INPUT){h,1080,0,(int)h,0,1080,0,1080,0,0};
+        CHECK(Bc250ScalerPrepare(&r,&s[n])==BC250_SCALER_GEOMETRY_OK);
+        planes[n]=(BC250_DML201_PLANE_INPUT){&s[n],1920,h,1920,1920,h,32,BC250_DML201_RGB32,0};
+        if(nv12 && n==1) {
+            planes[n].Format=BC250_DML201_NV12;planes[n].StorageBits=8;
+            planes[n].PitchPixels=2048;planes[n].ChromaPitchSamples=1024;
+        }
+    }
+    CHECK(Bc250Dml201PlanGroup(&i,planes,2,ws,size,&g)==BC250_DML201_OK);
+    free(ws);return g;
+}
+
+static void groupReady(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
+{
+    ready(m,io,c);CHECK(Bc250Dcn201PlaneBlankAt(io,1,1)==0);
+    m->ops=m->writes=0;io->Reads=io->Writes=0;
+    memset(m->writes_on,0,sizeof(m->writes_on));
+}
+
+static void groupTest(MOCK* m,BC250_DISP_IO* io)
+{
+    BC250_DCN201_CLOCKS c;BC250_DML201_GROUP_PLAN g=groupPlan(0),bad;
+    unsigned pipes[2]={0,1},reverse[2]={1,0},duplicate[2]={1,1},outside[2]={0,2};
+    unsigned total,first,second;
+    groupReady(m,io,&c);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)==0);total=m->ops;
+    CHECK(!m->zero && !m->readonly && !m->drop && !m->add && !m->stalls);
+    CHECK(!m->writes_on[R(DENTIST_DISPCLK_CNTL)/4]);
+    CHECK(m->writes_on[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4]==1);
+    first=(unsigned)Bc250DispGet(m->reg[R(PER_LINE_DELIVERY)/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L));
+    second=(unsigned)Bc250DispGet(m->reg[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L));
+    CHECK(first==g.Plane[0].Dlg.refcyc_per_line_delivery_l);
+    CHECK(second==g.Plane[1].Dlg.refcyc_per_line_delivery_l);CHECK(first!=second);
+    CHECK(m->writes_on[BC250_REG_DMU_HUBP1_DCHUBP_REQ_SIZE_CONFIG/4]>0);
+    CHECK(m->reg[R(DCHUBP_CNTL)/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+    CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+    printf("group program: %u MMIO operations, %u writes, line delivery %u/%u\n",total,m->writes,first,second);
+    /* Mixed RGB/NV12 requestors: chroma delivery must reach the selected HUBP.
+     * This is still blanked setup, without addresses, CSC, latch or scanout. */
+    {
+        BC250_DML201_GROUP_PLAN video=groupPlan(1);
+        groupReady(m,io,&c);
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&video,pipes,&c)==0);
+        CHECK(video.Plane[1].Dlg.refcyc_per_line_delivery_c>0);
+        CHECK(Bc250DispGet(m->reg[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4],
+            M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_C))==video.Plane[1].Dlg.refcyc_per_line_delivery_c);
+        CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+        groupReady(m,io,&c);
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&video,reverse,&c)==0);
+        CHECK(Bc250DispGet(m->reg[R(PER_LINE_DELIVERY)/4],
+            M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_C))==video.Plane[1].Dlg.refcyc_per_line_delivery_c);
+    }
+    for(unsigned after=0;after<2;++after) for(unsigned n=1;n<=total;++n) {
+        groupReady(m,io,&c);m->fail_at=n;m->fail_after=after;
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)<0);
+        CHECK(m->failed && !m->after_failure && !m->zero && !m->readonly);
+        CHECK(m->reg[R(DCHUBP_CNTL)/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+        CHECK(m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]&M(DCHUBP_CNTL,HUBP_BLANK_EN));
+    }
+    groupReady(m,io,&c);CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,reverse,&c)==0);
+    CHECK(Bc250DispGet(m->reg[R(PER_LINE_DELIVERY)/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L))==second);
+    CHECK(Bc250DispGet(m->reg[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4],M(PER_LINE_DELIVERY,REFCYC_PER_LINE_DELIVERY_L))==first);
+    groupReady(m,io,&c);bad=g;bad.Count=1;
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,reverse,&c)==0);
+    CHECK(!m->writes_on[R(PER_LINE_DELIVERY)/4]);
+    CHECK(m->writes_on[BC250_REG_DMU_HUBPREQ1_PER_LINE_DELIVERY/4]==1);
+#define BAD_GROUP(field,value) do { groupReady(m,io,&c);bad=g;bad.field=(value); \
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,pipes,&c)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0); } while(0)
+    BAD_GROUP(Count,0);BAD_GROUP(Count,3);BAD_GROUP(Valid,0);
+    BAD_GROUP(Plane[1].Rq.rq_regs_l.chunk_size,0xffffffffu);
+    BAD_GROUP(Plane[1].Ttu.refcyc_per_req_delivery_pre_cur1,1);
+    BAD_GROUP(Plane[1].Watermarks[0].UrgentNs,g.Plane[0].Watermarks[0].UrgentNs+1);
+    BAD_GROUP(Plane[1].Destination.htotal,2201);BAD_GROUP(Plane[1].Destination.otg_inst,1);
+    BAD_GROUP(Plane[1].Destination.interlaced,1);BAD_GROUP(Plane[1].DcfClockKhz,1);
+    groupReady(m,io,&c);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,duplicate,&c)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,outside,&c)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,NULL,&c)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    groupReady(m,io,&c);bad=g;bad.Plane[1].DppClockKhz=c.DppClockKhz+1;
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,pipes,&c)==BC250_DISP_STATUS_NOT_SUPPORTED);CHECK(m->writes==0);
+    groupReady(m,io,&c);c.DentistVcoKhz++;
+    CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)==BC250_DISP_STATUS_MISMATCH);CHECK(m->writes==0);
+    for(unsigned n=0;n<2;++n) for(unsigned missing=0;missing<3;++missing) {
+        const unsigned long bits[]={M(DCHUBP_CNTL,HUBP_BLANK_EN),M(DCHUBP_CNTL,HUBP_TTU_DISABLE),
+            M(DCHUBP_CNTL,HUBP_NO_OUTSTANDING_REQ)};
+        groupReady(m,io,&c);
+        m->reg[(n?BC250_REG_DMU_HUBP1_DCHUBP_CNTL:R(DCHUBP_CNTL))/4]&=~bits[missing];
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&g,pipes,&c)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
+        bad=g;bad.Count=1;
+        CHECK(Bc250Dcn201GroupProgramBlanked(io,&bad,pipes,&c)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
+    }
+    init(m,io);CHECK(Bc250Dcn201PlaneBlankAt(io,2,1)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]=0;io->BudgetUs=7;
+    CHECK(Bc250Dcn201PlaneBlankAt(io,1,1)==BC250_DISP_STATUS_BUDGET);CHECK(io->StalledUs==7);
+}
+// BD-223 stage S2: the live requestor of a plane over a running mode, and the way back. The mode is what PipeApply
+// wrote; a plane write captures the fields it changes, raises the watermarks only, and the restore gives the mode's
+// register file back. The watermarks are compared apart: they stay raised until the next commit.
+static int isWatermark(unsigned long r)
+{
+    return r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A) || r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_B) ||
+           r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_C) || r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_D) ||
+           r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_A) || r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_B) ||
+           r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_C) || r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_D) ||
+           r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_A) || r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_B) ||
+           r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_C) || r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_D);
+}
+static unsigned differences(const MOCK* m,const unsigned long* mode,int watermarks)
+{
+    unsigned long r;unsigned n=0;
+    for(r=0;r<sizeof(m->reg);r+=4)
+        if(m->reg[r/4]!=mode[r/4] && (watermarks || !isWatermark(r)))++n;
+    return n;
+}
+static void modePipe(MOCK* m,BC250_DISP_IO* io,const BC250_DML201_PLAN* p)
+{
+    BC250_DCN201_CLOCKS c;
+    ready(m,io,&c);CHECK(Bc250Dcn201PipeApply(io,p,&c)==0);CHECK(Bc250Dcn201PlaneBlank(io,0)==0);
+    m->ops=0;m->writes=0;m->failed=0;m->after_failure=0;m->fail_at=0;io->Reads=0;io->Writes=0;
+    memset(m->writes_on,0,sizeof(m->writes_on));
+}
+static void requestorTest(MOCK* m,BC250_DISP_IO* io,const BC250_DML201_PLAN* p)
+{
+    unsigned long* mode=malloc(sizeof(m->reg));
+    BC250_DML201_PLAN q=planeAt(1280,720,1920,1080,4,1280),q2=planeAt(1600,900,1920,1080,4,1600),bad;
+    BC250_DCN201_REQUESTOR_SAVE s,s2;
+    unsigned total,i,writes;
+    unsigned long urgentMode;
+    CHECK(mode!=NULL);if(!mode)return;
+    // The plane write: the mode's fields captured, the plane's written, and nothing else changed but watermarks.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    CHECK(Bc250Dcn201RequestorValidate(&q,48000)==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,&s)==0);
+    CHECK(s.Count>0 && s.Count<=BC250_DCN201_REQUESTOR_FIELDS);CHECK(differences(m,mode,0)>0);
+    CHECK(!m->zero && !m->readonly);
+    for(i=0;i<s.Count;++i) CHECK(s.Register[i]!=0 && (mode[s.Register[i]/4]&s.Mask[i])==s.Value[i]);
+    total=m->ops;writes=m->writes;
+    printf("plane requestor: %u MMIO operations, %u writes, %u fields saved\n",total,writes,s.Count);
+    // A second plane over the first keeps the mode's capture (Count is not 0), and the restore gives the mode back.
+    memcpy(&s2,&s,sizeof(s));
+    CHECK(Bc250Dcn201RequestorLocked(io,&q2,48000,&s)==0);CHECK(memcmp(&s,&s2,sizeof(s))==0);
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);CHECK(differences(m,mode,0)==0);
+    // Watermarks: raised only. The plane's are not above the mode's here, so the registers keep the mode's values.
+    CHECK(differences(m,mode,1)==0);
+    // A plane with a higher urgent watermark raises it; the restore does not lower it.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    urgentMode=Bc250DispGet(mode[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4],
+        M(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A));
+    bad=q;bad.Watermarks[0].UrgentNs=p->Watermarks[0].UrgentNs*2u;
+    CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==0);
+    CHECK(Bc250DispGet(m->reg[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4],
+        M(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A))>urgentMode);
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);CHECK(differences(m,mode,0)==0);
+    CHECK(Bc250DispGet(m->reg[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4],
+        M(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A))>urgentMode);
+    // A plane with a lower urgent watermark leaves the register as it is.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    bad=q;bad.Watermarks[0].UrgentNs=p->Watermarks[0].UrgentNs/2u;
+    CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==0);CHECK(differences(m,mode,1)==differences(m,mode,0));
+    // The checks come before any MMIO: a plan the setters cannot write, or no DCHUB reference clock.
+    modePipe(m,io,p);memset(&s,0,sizeof(s));
+    bad=q;bad.Rq.rq_regs_l.chunk_size=0xffffffffu;
+    CHECK(Bc250Dcn201RequestorValidate(&bad,48000)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0 && s.Count==0);
+    bad=q;bad.Valid=0;CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,0,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,NULL,48000,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,NULL)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    // A save that is not one: refused before any MMIO.
+    memset(&s,0,sizeof(s));s.Count=BC250_DCN201_REQUESTOR_FIELDS+1u;
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    memset(&s,0,sizeof(s));s.Count=1;s.Register[0]=0;s.Mask[0]=~0u;
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,NULL)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    memset(&s,0,sizeof(s));CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    // Every MMIO failure of the plane write: nothing after it, and the restore of what was saved gives the mode back.
+    // A failure while the fields are read leaves an empty save and no write.
+    for(i=1;i<=total;++i) {
+        long status;
+        modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));m->fail_at=i;
+        status=Bc250Dcn201RequestorLocked(io,&q,48000,&s);
+        CHECK(status<0);CHECK(m->failed==1 && m->after_failure==0);
+        m->fail_at=0;m->failed=0;
+        if(s.Count==0)CHECK(m->writes==0 && differences(m,mode,1)==0);
+        else CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);
+        CHECK(differences(m,mode,0)==0);
+    }
+    // Every MMIO failure of the restore: nothing after it, and the same save can be written again.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,&s)==0);
+    m->ops=0;CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);total=m->ops;
+    for(i=1;i<=total;++i) {
+        modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+        CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,&s)==0);
+        m->ops=0;m->fail_at=i;CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)<0);CHECK(m->after_failure==0);
+        m->fail_at=0;m->failed=0;
+        CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);CHECK(differences(m,mode,0)==0);
+    }
+    free(mode);
 }
 int main(void)
 {
@@ -177,5 +408,21 @@ int main(void)
     init(m,&io);m->reg[R(DIG_BE_CNTL)/4]=F(DIG_BE_CNTL,DIG_FE_SOURCE_SELECT,2);
     CHECK(Bc250Dcn201Route(&io,3,1)==BC250_DISP_STATUS_BUSY);CHECK(m->writes==0);
     init(m,&io);CHECK(Bc250Dcn201Route(&io,1,1)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    // Validate before conversion to the AMD bool argument. In particular,
+    // 256 must not silently become either false (byte) or true (_Bool).
+    {
+        static const int invalid[]={-2147483647-1,-65536,-256,-1,2,127,128,255,256,257,65536,2147483647};
+        unsigned n;
+        for(n=0;n<sizeof(invalid)/sizeof(invalid[0]);++n) {
+            init(m,&io);CHECK(Bc250Dcn201Route(&io,3,invalid[n])==BC250_DISP_STATUS_INVALID);
+            CHECK(m->ops==0);
+            init(m,&io);CHECK(Bc250Dcn201PlaneBlankAt(&io,0,invalid[n])==BC250_DISP_STATUS_INVALID);
+            CHECK(m->ops==0);
+            init(m,&io);CHECK(Bc250Dcn201PlaneBlankAt(&io,1,invalid[n])==BC250_DISP_STATUS_INVALID);
+            CHECK(m->ops==0);
+        }
+    }
+    groupTest(m,&io);
+    requestorTest(m,&io,&p);
     free(m);printf("dcn201 pipe: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }

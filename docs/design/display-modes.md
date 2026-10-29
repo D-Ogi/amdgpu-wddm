@@ -10,7 +10,7 @@ This document has three stages:
 | --- | --- | --- |
 | A | Reads the EDID over DP AUX, gives the monitor descriptor to Windows, offers smaller source modes and scales them to the unchanged native timing | KMD 0.7.216.19, host tests only |
 | B | Changes the timing on the cable: other refresh rates and native sizes (OTG timing, pixel clock, link training) | design only, this document |
-| C | Multiplane overlay (MPO) on the free DCN pipes | design only, [mpo.md](mpo.md) |
+| C | Multiplane overlay (MPO) on the free DCN pipes | In progress (BD-223): [mpo.md](mpo.md), [scaled-flip.md](scaled-flip.md) for the lab stage, [requirements](multiplane-overlay-requirements.md) |
 
 The code of stage A:
 

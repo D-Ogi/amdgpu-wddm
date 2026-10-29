@@ -661,6 +661,21 @@
         "host"
       ]
     },
+    "scaler-geometry": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "dc-types": {
+      "inputs": [
+        "host"
+      ]
+    },
+    "latch-probe": {
+      "inputs": [
+        "host"
+      ]
+    },
     "atom-display": {
       "inputs": [
         "host"

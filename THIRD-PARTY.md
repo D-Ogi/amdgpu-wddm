@@ -8,6 +8,36 @@ Our own code and documentation: PolyForm Noncommercial 1.0.0, licensor D-Ogi (`L
 |---|---|---|---|
 | `third_party/linux-amdgpu/*.h` | Linux kernel, `drivers/gpu/drm/amd/include/` (per-file commit in `PROVENANCE.md` there) | MIT (notice in each file), Copyright Advanced Micro Devices, Inc. | Unmodified register headers: offsets, field masks and shifts, reset defaults, the memory-type enum, hardware IP ids. Input of `tools/regcalc` and of the imports below |
 | `driver/amdgpu-import/*.c`, `*.h` | Linux kernel, `drivers/gpu/drm/amd/amdgpu/`, tag v6.18, commit `7d0a66e4bb90` (see `PROVENANCE.md` there) | MIT (notice checked in each file), Copyright Advanced Micro Devices, Inc. | Unmodified IP-block sources (ADR 0002): the GFXHUB and MMHUB GART setup, the Cyan Skillfish register base table, the SOC15 register macros, the PSP 11.0.8 ring code and the PSP interface header. Compiled against `driver/shim`, never edited |
+| `driver/amdgpu-import/reference/{dc_resource.c,fixed31_32.h,fixpt31_32.c}`, `driver/shim/generated/dc_scaler_geometry.inc` | Linux amdgpu DC, v6.18, commit `7d0a66e4bb90` | MIT, Copyright 2012-15 Advanced Micro Devices, Inc. | Verbatim scaler geometry and fixed-point functions. The separate checked Windows adapter uses the project license |
+| `driver/amdgpu-import/reference/{dcn20_dpp.c,dcn10_dpp_dscl.c,dc_spl_types.h}`, `driver/shim/generated/dc_scaler_buffer.inc` | Linux amdgpu DC, v6.18, commit `7d0a66e4bb90` | MIT, Copyright Advanced Micro Devices, Inc. | Verbatim line-buffer accounting and configuration enum. The separate checked Windows adapter uses the project license |
+
+`driver/shim/generated/dc_scaler_filters.inc` retains the AMD MIT tables,
+selectors and fixed-point helpers from Linux amdgpu DC v6.18 `7d0a66e4bb90`.
+Its notices are included. The separate filter-packing adapter and linear
+weight generation use the project license.
+
+`driver/amdgpu-import/reference/dcn201_dpp.c` and the extracted tap-selection
+block in `driver/shim/generated/dc_scaler_taps.inc` retain AMD MIT notices.
+The latter also contains the AMD MIT fixed-point ceiling function. Both are
+from Linux amdgpu DC v6.18 `7d0a66e4bb90`; the combined planner is project code.
+
+`driver/amdgpu-import/reference/{dcn201_mpc.c,dcn20_mpc.c,mpc.h}` and
+`driver/shim/generated/dc_mpc_blend.inc` retain the AMD MIT notices.
+The extracted DCN201 defaults, blend packing and enums are unchanged except
+for line endings. The checked two-plane transaction adapter uses the project
+license. Source revision: Linux amdgpu DC v6.18 `7d0a66e4bb90`.
+
+`driver/amdgpu-import/reference/dcn10_hubp.c` and the existing
+`reference/hdmi-link/dc_hw_types.h` supply `driver/shim/generated/dc_surface_layout.inc`.
+These AMD MIT sources are Linux v6.18 `7d0a66e4bb90`. The extractor retains
+the declarations and functions with LF endings, and adds private-linkage
+prototypes. The checked Windows layout adapter uses the project license.
+
+`driver/shim/generated/dc_cnvc_color.inc` retains the AMD MIT notices,
+CNVC setup, declarations and input CSC table from Linux v6.18 `7d0a66e4bb90`.
+Its reference inputs are `dcn201_dpp.c`, `dpp.h`, `hw_shared.h`, `dcn10_dpp.h`
+and `hdmi-link/dc_hw_types.h`. The separate CPU capture adapter defers CSC
+bank selection and power operations, and explicitly disables XRGB alpha.
 
 ## Fetched at build time, not stored here
 

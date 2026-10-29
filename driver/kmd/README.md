@@ -462,6 +462,25 @@ wddm: plane formats on
 The summary line `wddm summary: plane formats ...` counts the flips of each format, the format changes
 and the refusals.
 
+## Scaled plane 0 (BD-223, lab flavour)
+
+`LabScaledPlane` is a REG_DWORD under the service's `Parameters` key, read once at `DriverEntry`. Only the lab
+flavour reads it. It is not a catalog setting, so a lab arm can swap the KMD image over the installed package.
+Absent means 0, and the installer does not write it. Bit 0 offers the multiplane-overlay caps
+and the Check answer for one plane 0 that is smaller than the source mode and that DSCL0 scales up. Bit 1 reports
+the VSync as the MPO type. Bit 2 says `MaxOverlayPlanes` 2. The switch is open only while the DirectFlip handshake
+is on. The design is in [scaled-flip.md](../../docs/design/scaled-flip.md). The start log says which way it went:
+
+```
+lab: scaled plane selector read (read only; value 0x1, 0x00000000)
+wddm: scaled plane 0x1 (LabScaledPlane 0x1, handshake 1)
+```
+
+After each DRIVERCAPS line comes `wddm: DRIVERCAPS mpo <SupportMultiPlaneOverlay> planes <MaxOverlayPlanes>`.
+
+The summary lines `wddm summary: scaled plane ...`, `wddm summary: plane shape ...` and
+`wddm summary: plane check <verdict> <count>` count the Check answers, the flips and the shape writes.
+
 ## VMID pool (0.7.214.1)
 
 `EnableVmidPool` decides how many VMIDs the WDDM jobs use. It is a REG_DWORD under the service's

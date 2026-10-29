@@ -16,6 +16,7 @@ typedef struct _BC250_DCN_REG_INFO { const char* Name; unsigned long Offset; } B
 #include "display_io.h"
 #include "dcn_translate.h"
 #include "display_rotation.h"
+#include "dcn_scale.h"      /* BD-223: BC250_SCALER_PLAN, the shape argument of the write sequence */
 typedef int32_t NTSTATUS;
 typedef unsigned long ULONG;
 typedef long LONG;
@@ -246,6 +247,10 @@ static NTSTATUS WddmWriterResume(BC250_DEVICE*d)
     writer.writes_at_resume=model.writes;
     return writer.status;
 }
+/* BD-223: no write sequence of these paths carries a plane shape, and their pipe is never scaled for a plane, so
+ * the shape step writes nothing (dcn.c DcnPlaneShapeLocked with NULL and DcnPlaneScaled FALSE). */
+static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d,const BC250_SCALER_PLAN *shape,ULONG pitch)
+{(void)d;(void)pitch;return shape?STATUS_INVALID_PARAMETER:STATUS_SUCCESS;}
 /* ACTUAL_SOURCE */
 static void init(BC250_DEVICE*d,ULONG*fb)
 {

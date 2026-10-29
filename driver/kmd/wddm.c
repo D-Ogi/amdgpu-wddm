@@ -185,6 +185,8 @@ typedef struct _BC250_WDDM_KIND {
 #include "present_snapshot.h"        // BD-065: the refusal reasons of the GPU Present allocation snapshot
 #include "scanout_admit.h"           // M15.14: which allocation SetVidPnSourceAddress may scan out
 #include "display_rotation.h"        // BD-247: no DirectFlip while the path is rotated
+#include "dcn_plane.h"               // BD-223: the multiplane-overlay plane 0 and its verdicts
+#include "connector.h"               // BD-223: ConnectorLinkPlaneDml
 #include "gdi_emit.h"                // HLK gap G1: the GDI contract layer and its DMA_DATA stream
 #include "gdi_dispatch.h"            // HLK gap G1 increment 2: the compute dispatch of the six kernels
 #include "gdi_batch.h"               // HLK gap G1 increment 2: the capacity contract of one call
@@ -425,6 +427,16 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 {
     return Version <= BC250_WDDM_RECORD_V3 ? (ULONG)Version : BC250_WDDM_RECORD_OTHER;
 }
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// BD-223 (lab flavour): the bits of LabScaledPlane. CHECK offers the multiplane-overlay caps and answers
+// CheckMultiPlaneOverlaySupport2; MPO_VSYNC reports a VSync as DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY;
+// TWO_PLANES says MaxOverlayPlanes 2 in place of 1 (a lab question: Check still refuses a second plane).
+#define BC250_WDDM_SCALED_PLANE_CHECK 0x1ul
+#define BC250_WDDM_SCALED_PLANE_MPO_VSYNC 0x2ul
+#define BC250_WDDM_SCALED_PLANE_TWO_PLANES 0x4ul
+#define BC250_WDDM_SCALED_PLANE_MASK 0x7ul
+#endif
 
 typedef struct _BC250_WDDM {
     BC250_DEVICE* Device;
@@ -992,6 +1004,17 @@ typedef struct _BC250_WDDM {
     volatile LONG64 GdiRenderDmaAppend, GdiRenderDmaSmall, GdiRenderDmaUnknown;
     volatile LONG64 GdiRenderDmaFull, GdiRenderDmaLost, GdiRenderDmaSubmitted;
     volatile LONG64 GdiRenderDmaRaced, GdiRenderDwordsCommitted;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-223 (lab flavour), docs/design/scaled-flip.md: plane 0 of the multiplane-overlay DDIs, with its own size.
+    // ScaledPlane is LabScaledPlane (read at DriverEntry, latched at WddmStart, absent = 0) while the DirectFlip handshake is on for
+    // this start, else 0: BC250_WDDM_SCALED_PLANE_* bits.
+    ULONG ScaledPlane;
+    volatile LONG PlaneChecks[BC250_PLANE_VERDICTS];   // CheckMultiPlaneOverlaySupport2 answers, by verdict
+    volatile LONG PlaneChecksOff;                       // Check calls with bit 0 off: answered "not supported"
+    volatile LONG PlaneSets, PlaneSetsScaled, PlaneSetsRefused, PlaneSetsUnapproved;
+    volatile LONG PlaneNotes;                           // the log budget of both DDIs
+    // The planes that DML approved, with their display plans, are dcn.c's (DcnPlaneCheck, DcnPlaneApproved).
+#endif
 } BC250_WDDM;
 
 // The gate-closed starting value of wddm->NodeCount (WddmStart) and of the DXGK_DRIVERCAPS answer before
@@ -1243,6 +1266,53 @@ static void WddmFreeObject(_In_opt_ BC250_WDDM_OBJECT* Object)
 
 // ---- reporting a packet as finished ----------------------------------------------------------------------------
 
+// The call of DxgkCbNotifyInterrupt, inside L at DIRQL. BD-223, lab flavour: with LabScaledPlane bit 1, a VSync
+// goes to the OS as DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY, with plane 0 as its one layer and the shape
+// the pipe has (DcnPlaneShapeCurrent) as its rectangles. The caller keeps its own copy of the data, so DesiredOwed
+// is decided on the CRTC_VSYNC address either way.
+static void WddmNotifyCall(_In_ BC250_DEVICE* Device, _In_ DXGKARGCB_NOTIFY_INTERRUPT_DATA* Data)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    const BC250_WDDM* wddm = (const BC250_WDDM*)Device->Wddm;
+    if (wddm != NULL && (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_MPO_VSYNC) != 0 &&
+        Data->InterruptType == DXGK_INTERRUPT_CRTC_VSYNC)
+    {
+        DXGKARGCB_NOTIFY_INTERRUPT_DATA mpo;
+        DXGK_MULTIPLANE_OVERLAY_VSYNC_INFO layer;
+        BC250_SCALER_PLAN shape;
+        RtlZeroMemory(&mpo, sizeof(mpo));
+        RtlZeroMemory(&layer, sizeof(layer));
+        layer.LayerIndex = 0;
+        layer.Enabled = TRUE;
+        layer.PhysicalAddress = Data->CrtcVsync.PhysicalAddress;
+        if (DcnPlaneShapeCurrent(Device, &shape)) {
+            layer.PlaneAttributes.SrcRect.right = (LONG)shape.SourceWidth;
+            layer.PlaneAttributes.SrcRect.bottom = (LONG)shape.SourceHeight;
+            layer.PlaneAttributes.DstRect.left = (LONG)shape.Recout.X;
+            layer.PlaneAttributes.DstRect.top = (LONG)shape.Recout.Y;
+            layer.PlaneAttributes.DstRect.right = (LONG)(shape.Recout.X + shape.Recout.Width);
+            layer.PlaneAttributes.DstRect.bottom = (LONG)(shape.Recout.Y + shape.Recout.Height);
+        } else {
+            layer.PlaneAttributes.SrcRect.right = layer.PlaneAttributes.DstRect.right = (LONG)DisplaySourceWidth(Device);
+            layer.PlaneAttributes.SrcRect.bottom = layer.PlaneAttributes.DstRect.bottom =
+                (LONG)DisplaySourceHeight(Device);
+        }
+        layer.PlaneAttributes.ClipRect = layer.PlaneAttributes.DstRect;
+        layer.PlaneAttributes.Rotation = D3DDDI_ROTATION_IDENTITY;
+        layer.PlaneAttributes.StretchQuality = DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_BILINEAR;
+        mpo.InterruptType = DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY;
+        mpo.Flags = Data->Flags;
+        mpo.CrtcVsyncWithMultiPlaneOverlay.VidPnTargetId = Data->CrtcVsync.VidPnTargetId;
+        mpo.CrtcVsyncWithMultiPlaneOverlay.PhysicalAdapterMask = Data->CrtcVsync.PhysicalAdapterMask;
+        mpo.CrtcVsyncWithMultiPlaneOverlay.MultiPlaneOverlayVsyncInfoCount = 1;
+        mpo.CrtcVsyncWithMultiPlaneOverlay.pMultiPlaneOverlayVsyncInfo = &layer;
+        Device->Dxgk.DxgkCbNotifyInterrupt(Device->Dxgk.DeviceHandle, &mpo);
+        return;
+    }
+#endif
+    Device->Dxgk.DxgkCbNotifyInterrupt(Device->Dxgk.DeviceHandle, Data);
+}
+
 typedef struct _BC250_WDDM_NOTIFY {
     BC250_DEVICE* Device;
     DXGKARGCB_NOTIFY_INTERRUPT_DATA Data;
@@ -1257,7 +1327,7 @@ static BOOLEAN WddmNotifyRoutine(_In_ PVOID Context)
     BC250_WDDM_NOTIFY* notify = (BC250_WDDM_NOTIFY*)Context;
     BC250_WDDM* wddm = (BC250_WDDM*)notify->Device->Wddm;
 
-    notify->Device->Dxgk.DxgkCbNotifyInterrupt(notify->Device->Dxgk.DeviceHandle, &notify->Data);
+    WddmNotifyCall(notify->Device, &notify->Data);
     if (notify->Data.InterruptType == DXGK_INTERRUPT_CRTC_VSYNC)
     {
         InterlockedExchange64(&notify->Device->DcnVsyncNotifyTime, (LONG64)KeQueryInterruptTime());
@@ -3552,6 +3622,27 @@ static void WddmSummaryOf(_In_ BC250_WDDM* Wddm)
     // driver" cannot be told from "nobody was asked", which is the one distinction the whole handshake is
     // about. It is a state, so it is printed as a word, not as a count.
     GuardLog("wddm summary: DirectFlip handshake %s", Wddm->DirectFlipHandshake ? "on" : "off");
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-223: the scaled plane, with the shape writes of dcn.c. Verdicts with no count are left out.
+    {
+        const BC250_DEVICE* device = Wddm->Device;
+        ULONG v;
+        GuardLog("wddm summary: scaled plane 0x%lX checks off %ld sets %ld scaled %ld refused %ld unapproved %ld",
+                 Wddm->ScaledPlane, Wddm->PlaneChecksOff, Wddm->PlaneSets, Wddm->PlaneSetsScaled,
+                 Wddm->PlaneSetsRefused, Wddm->PlaneSetsUnapproved);
+        if (device != NULL)
+            GuardLog("wddm summary: plane shape writes %ld restores %ld failures %ld mode stamp %ld",
+                     device->DcnPlaneShapeWrites, device->DcnPlaneShapeRestores, device->DcnPlaneShapeFailures,
+                     device->DcnPlaneModeStamp);
+        if (device != NULL)
+            GuardLog("wddm summary: plane requestor writes %ld restores %ld dropped %ld",
+                     device->DcnPlaneRequestorWrites, device->DcnPlaneRequestorRestores,
+                     device->DcnPlaneRequestorDropped);
+        for (v = 0; v < BC250_PLANE_VERDICTS; v++)
+            if (Wddm->PlaneChecks[v])
+                GuardLog("wddm summary: plane check %s %ld", Bc250PlaneVerdictText(v), Wddm->PlaneChecks[v]);
+    }
+#endif
     // Cumulative counters are not bounded by the detailed-log budget. Read
     // closure after quiescence; individual atomic reads are not one snapshot.
     GuardLog("wddm: CDD interop%u GPU Present gate%u identity probe%u",
@@ -4117,6 +4208,16 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
             GuardLog("wddm: plane formats %s", Device->DcnPlaneFormats ? "on" :
                      formats ? "off (firmware format not decoded)" : "off (EnableScanoutPlaneFormats 0)");
         }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        // BD-223: LabScaledPlane, read once at DriverEntry (guard.c), absent = 0. The plane needs the flip path and the
+        // scan-out rule, so it follows the DirectFlip handshake: a closed handshake closes it too.
+        {
+            const ULONG scaled = GuardLabScaledPlane() & BC250_WDDM_SCALED_PLANE_MASK;
+            wddm->ScaledPlane = ((scaled & BC250_WDDM_SCALED_PLANE_CHECK) && wddm->DirectFlipHandshake) ? scaled : 0;
+            GuardLog("wddm: scaled plane 0x%lX (LabScaledPlane 0x%lX, handshake %u)", wddm->ScaledPlane, scaled,
+                     (ULONG)(wddm->DirectFlipHandshake ? 1 : 0));
+        }
+#endif
     }
     // C50, read once for this start: absent = ON. The DDI text asks for the pairing (d3dkmddi.md:2392) and the
     // hop it removes is pure latency, so the finished behaviour rides the release, which is the project's release
@@ -4885,6 +4986,15 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->SupportPerEngineTDR = TRUE;
     caps->SupportDirectFlip = TRUE;
     caps->SupportSurpriseRemoval = FALSE;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
+    // question; Check still refuses a second plane). WDDM 2.0 has no MPO immediate-flip cap.
+    if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
+        caps->SupportMultiPlaneOverlay = TRUE;
+        caps->MaxOverlayPlanes =
+            (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) ? 2u : 1u;
+    }
+#endif
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
 
     // Kernel-mode GDI acceleration: every one of these is a "cannot", and they have to be said out loud, because a
@@ -5034,14 +5144,18 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     // it is talking to. A cap that is wrong but accepted leaves no other trace (E16 run 1). Worst case 139 of
     // the 160 bytes of a log line: count before adding a field. Our own sizeof and the paging node are not in
     // it: both are constants of the build (592 = 0x250 at interface 0xE003, which is what the lab's dxgkrnl offers
-    // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0).
-    if (WddmAnswersLogged(Device))
+    // to a table declaring >= 0xE003; it was 576 at 0x5023; node 0). BD-223: the multiplane-overlay caps go on a
+    // line of their own (the line above has no room), the witness of the lab arms of LabScaledPlane.
+    if (WddmAnswersLogged(Device)) {
         GuardLog("wddm: DRIVERCAPS into %u bytes: wddm %u sched 0x%X mm 0x%X flip 0x%X slots %u "
                  "tdr %u dflip %u rot %u",
              Query->OutputDataSize, (ULONG)caps->WDDMVersion, caps->SchedulingCaps.Value,
              caps->MemoryManagementCaps.Value, caps->FlipCaps.Value,
              caps->MaxAllocationListSlotId, caps->SupportPerEngineTDR ? 1u : 0u, caps->SupportDirectFlip ? 1u : 0u,
              caps->SupportSmoothRotation ? 1u : 0u);
+        GuardLog("wddm: DRIVERCAPS mpo %u planes %lu", caps->SupportMultiPlaneOverlay ? 1u : 0u,
+                 (ULONG)caps->MaxOverlayPlanes);
+    }
     return STATUS_SUCCESS;
 }
 
@@ -5229,6 +5343,12 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
             // BD-197: and only while the flip path programs them, which is the rule of DcnPlaneFormatsOpen.
             if (DcnPlaneFormatsOpen(device)) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+            // BD-223 (docs/design/mpo.md): the user-mode half of the MPO contract follows DRIVERCAPS
+            // SupportMultiPlaneOverlay (WddmDriverCaps). MPO_PLANE1 stays clear: LabScaledPlane bit 2 reports
+            // two planes as a lab question, but no second pipe scans out yet.
+            if (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) scanout.flags |= BC250_SCANOUT_CAPS_MPO;
+#endif
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
@@ -10660,6 +10780,34 @@ NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device)
     return w.Status;
 }
 
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+static BOOLEAN WddmLatchProbeCheckLocked(_In_ PVOID Context)
+{
+    BC250_WDDM_WRITER* w = (BC250_WDDM_WRITER*)Context;
+    BC250_WDDM* d = w->Wddm;
+    (void)WddmWriterRecoveryLocked(w->Device);
+    w->Status = STATUS_INVALID_DEVICE_STATE;
+    if (!d->WriterActive || d->WriterKind != BC250_WRITER_LATCH_PROBE ||
+        (ULONG)d->PrimarySequence != w->Generation + 1u) return TRUE;
+    if (w->Invalidate) WddmFlipFault(w->Device,d,BC250_FLIP_FAULT_SECTION,BC250_WDDM_NODE_3D);
+    if (!d->WriterReady || !d->WriterResumed) return TRUE;
+    w->Status = d->Faulting ? STATUS_DEVICE_HARDWARE_ERROR : STATUS_SUCCESS;
+    return TRUE;
+}
+
+NTSTATUS WddmLatchProbeCheck(BC250_DEVICE* Device, ULONG Generation, BOOLEAN Fail)
+{
+    BC250_WDDM_WRITER w;
+    NTSTATUS status;
+    RtlZeroMemory(&w,sizeof(w));
+    w.Device=Device;w.Wddm=WddmOf(Device);w.Generation=Generation;w.Invalidate=Fail;
+    if (!w.Wddm || KeGetCurrentIrql()!=PASSIVE_LEVEL) return STATUS_INVALID_DEVICE_STATE;
+    status=WddmSection(Device,WddmLatchProbeCheckLocked,&w);
+    if (!NT_SUCCESS(status)) { WddmWriterSectionFailure(Device,w.Wddm,status);return status; }
+    return w.Status;
+}
+#endif
+
 // The fields DestroyAllocation and an invalidating End reset when the plane goes back to the firmware surface, the
 // plane format included (M15.14): the firmware surface is ARGB8888 (DcnFlipToFirmwareSurface).
 static void WddmPrimaryInvalidate(_Inout_ BC250_WDDM* Wddm)
@@ -10834,10 +10982,12 @@ static NTSTATUS WddmDestroyRestore(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_W
 }
 
 // One flip request: the DDI's arguments, the answer, and what the low entry logs after its section.
+// BD-223: Shape is a plane 0 of its own size from the multiplane-overlay flip DDI, NULL for a full-size flip.
 typedef struct _BC250_WDDM_FLIP {
     BC250_DEVICE* Device;
     BC250_WDDM* Wddm;
     const DXGKARG_SETVIDPNSOURCEADDRESS* Args;
+    const BC250_SCALER_PLAN* Shape;
     NTSTATUS Result;
     BOOLEAN LogRefusal;                 // the scan-out refusal line, with Admit and Candidate
     int Admit;
@@ -10891,6 +11041,14 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
     BOOLEAN changed, scanout = FALSE;
     BC250_WDDM_OBJECT* scanoutObject = NULL;
     NTSTATUS status = STATUS_SUCCESS;
+    // BD-223: the surface has the shape's source size. A full-size flip with no allocation keeps the properties of
+    // the plane (the DDI's rule for a NULL hAllocation), and the shape is one of them: its surface is the same.
+    BC250_SCALER_PLAN kept;
+    const BC250_SCALER_PLAN* shape = flip->Shape;
+    ULONG width, height;
+    if (shape == NULL && args->hAllocation == NULL && DcnPlaneShapeCurrent(device, &kept)) shape = &kept;
+    width = shape ? shape->SourceWidth : DisplaySourceWidth(device);
+    height = shape ? shape->SourceHeight : DisplaySourceHeight(device);
 
     // M15.14 increment 2, the kernel-side witness of the OS's flip mode, counted for every call, admitted or refused:
     // these flags describe the video present source's mode, not this allocation. The bitfields are read, never a
@@ -10908,8 +11066,7 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
         (device->RuntimePostValid?device->RuntimePost.Pitch:device->Post.Pitch);
     planeFormat=wddm->PrimaryPlaneFormat?wddm->PrimaryPlaneFormat:BC250_PLANE_FORMAT_ARGB8888;
     plane=Bc250PlaneEncoding(planeFormat);
-    if (!plane || !DcnLinearSurfaceBytes(DisplaySourceWidth(device),DisplaySourceHeight(device),pitch,
-                                         plane->BytesPerPixel,&bytes))
+    if (!plane || !DcnLinearSurfaceBytes(width,height,pitch,plane->BytesPerPixel,&bytes))
         status=STATUS_INVALID_PARAMETER;
     if (args->hAllocation)
     {
@@ -10942,8 +11099,7 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
             ((device->VramMcBase | (ULONGLONG)device->VramPhysical.QuadPart) & 0xFFFull))
             admit=BC250_SCANOUT_ALIGNMENT;
         else
-            admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,DisplaySourceWidth(device),DisplaySourceHeight(device),
-                                    BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
+            admit=Bc250ScanoutAdmit(allocation?&candidate:NULL,width,height,BC250_WDDM_SEGMENT_VRAM,&pitch,&bytes);
         InterlockedIncrement(&wddm->ScanoutAdmits[admit]);
         if (candidate.ScanoutRequested) InterlockedIncrement(&wddm->ScanoutRequests);
         if (admit!=BC250_SCANOUT_ADMIT_OK) {
@@ -10960,6 +11116,9 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
             status=STATUS_SUCCESS;
         }
     }
+    // BD-223: a shape of the multiplane-overlay DDI needs its allocation and the flip path; the deposit of a closed
+    // flip gate has no pipe to shape.
+    if (flip->Shape && (args->hAllocation == NULL || !device->VidPnFlipEnabled)) status = STATUS_NOT_SUPPORTED;
 
     RtlZeroMemory(&facts, sizeof(facts));
     (void)WddmWriterRecoveryLocked(device);
@@ -10975,8 +11134,9 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
     edge = Bc250FlipEdge(&facts);
     InterlockedIncrement(&wddm->FlipEdges[edge]);
     // The format is part of what the plane shows: the same address in another format is a change.
+    // BD-223: so is the same address in another pipe shape.
     changed = wddm->PrimaryNeedsRestore || wddm->PrimaryAddress.QuadPart != address || pitch != wddm->PrimaryPitch ||
-              planeFormat != wddm->PrimaryPlaneFormat;
+              planeFormat != wddm->PrimaryPlaneFormat || !DcnPlaneShapeIs(device, shape);
 
     switch (edge)
     {
@@ -11060,8 +11220,10 @@ static BOOLEAN WddmFlipTransaction(_In_ PVOID Context)
         DcnWitnessArm(device, immediate, &witnessArm);
 #endif
         programStart = KeQueryPerformanceCounter(NULL).QuadPart;
-        status = DcnFlipSourceAddress(device, (ULONGLONG)address, pitch, planeFormat, bytes, immediate, &physical,
-                                      &wrote);
+        status = shape ? DcnFlipSourceAddressShaped(device, (ULONGLONG)address, pitch, planeFormat, bytes, immediate,
+                                                    shape, &physical, &wrote)
+                       : DcnFlipSourceAddress(device, (ULONGLONG)address, pitch, planeFormat, bytes, immediate,
+                                              &physical, &wrote);
         if (wrote && NT_SUCCESS(status) && immediate)
         {
             const LONGLONG programEnd = KeQueryPerformanceCounter(NULL).QuadPart;
@@ -11150,9 +11312,11 @@ static BOOLEAN WddmFlipLocked(_In_ PVOID Context)
     return TRUE;
 }
 
-static DXGKDDI_SETVIDPNSOURCEADDRESS Bc250WddmSetVidPnSourceAddress;
-static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
-                                               _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* pSetVidPnSourceAddress)
+// The two entries of a flip (below), for SetVidPnSourceAddress and, with Shape, for the plane 0 of
+// SetVidPnSourceAddressWithMultiPlaneOverlay2 (BD-223).
+static NTSTATUS WddmFlipEntry(_In_ const HANDLE hAdapter,
+                              _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* pSetVidPnSourceAddress,
+                              _In_opt_ const BC250_SCALER_PLAN* Shape)
 {
     BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
     BC250_WDDM* wddm = WddmOf(hAdapter);
@@ -11171,6 +11335,7 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
     flip.Device = device;
     flip.Wddm = wddm;
     flip.Args = pSetVidPnSourceAddress;
+    flip.Shape = Shape;
     if (high)
     {
         (void)WddmFirstCalls(wddm, WddmDdiSetVidPnSourceAddress);  // the count only: FALSE above DISPATCH_LEVEL
@@ -11203,6 +11368,16 @@ static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
                  (ULONG)flip.Result);
     WddmVSyncArm(device, TRUE);         // a flip has been queued: something must retire it
     return flip.Result;
+}
+
+static DXGKDDI_SETVIDPNSOURCEADDRESS Bc250WddmSetVidPnSourceAddress;
+static NTSTATUS Bc250WddmSetVidPnSourceAddress(_In_ const HANDLE hAdapter,
+                                               _In_ const DXGKARG_SETVIDPNSOURCEADDRESS* pSetVidPnSourceAddress)
+{
+    // The contract of an adapter with overlay planes: this DDI disables every plane but the primary, and the primary
+    // keeps the shape of its last flip when the allocation is NULL (WddmFlipTransaction). This adapter has plane 0
+    // only.
+    return WddmFlipEntry(hAdapter, pSetVidPnSourceAddress, NULL);
 }
 
 // ---- interrupts ---------------------------------------------------------------------------------------------------
@@ -11286,6 +11461,209 @@ Report:
                  pGetScanLine->ScanLine, pGetScanLine->InVerticalBlank ? 1u : 0u);
     return STATUS_SUCCESS;
 }
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+// ---- BD-223 (lab flavour): plane 0 of the multiplane-overlay DDIs ---------------------------------------------------
+//
+// docs/design/scaled-flip.md. One plane, layer 0, the whole allocation scaled 1:1 or up into its DstRect by DSCL0, at
+// any pitch (stage S2: the flip programs the plane's own display plan). Check answers yes only for that and only when
+// DML fits the scaled pipe into the clocks that run and the global sync of OTG0; everything else is composed by DWM
+// as before. The flip DDI programs a plane that Check approved,
+// through the same transaction as SetVidPnSourceAddress (WddmFlipEntry), with the shape inside the same OTG lock as
+// the address (dcn.c DcnFlipWriteSequence).
+
+// The DDI's plane, in the terms of dcn_plane.h. *Scanout is the scan-out rule's answer for the allocation, with the
+// residency and the address left to the flip, which has them (WddmFlipTransaction admits again with both). Any level.
+static void WddmPlaneRequestOf(_In_ BC250_DEVICE* Device, _In_ const BC250_WDDM* Wddm, UINT PlaneCount,
+                               UINT LayerIndex, BOOL Enabled, _In_opt_ HANDLE hAllocation,
+                               _In_ const DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2* A, _Out_ BC250_PLANE_REQUEST* R,
+                               _Out_ int* Scanout)
+{
+    BC250_WDDM_OBJECT* allocation = hAllocation ? WddmObject(hAllocation, BC250_WDDM_MAGIC_ALLOCATION) : NULL;
+    BC250_SCANOUT_CANDIDATE candidate;
+    ULONG pitch = 0;
+    ULONGLONG bytes = 0;
+
+    RtlZeroMemory(R, sizeof(*R));
+    RtlZeroMemory(&candidate, sizeof(candidate));
+    R->PlaneCount = PlaneCount;
+    R->LayerIndex = LayerIndex;
+    R->Enabled = Enabled ? 1 : 0;
+    if (allocation) {
+        // The description of the transaction (WddmFlipTransaction): a BC2A allocation describes itself in its
+        // scan-out words, an LB7A one in its own.
+        candidate.UmdAlloc = allocation->UmdAlloc ? 1 : 0;
+        candidate.ScanoutRequested = allocation->ScanoutRequested ? 1 : 0;
+        candidate.Width = allocation->UmdAlloc ? allocation->ScanoutWidth : allocation->Allocation.Width;
+        candidate.Height = allocation->UmdAlloc ? allocation->ScanoutHeight : allocation->Allocation.Height;
+        candidate.Pitch = allocation->UmdAlloc ? allocation->ScanoutPitch : allocation->Allocation.Pitch;
+        candidate.Format = allocation->UmdAlloc ? allocation->ScanoutFormat : allocation->Allocation.Format;
+        candidate.Size = allocation->UmdAlloc ? allocation->UmdBytes : allocation->Allocation.Size;
+        candidate.Segment = BC250_WDDM_SEGMENT_VRAM;
+        candidate.Address = 0;
+    }
+    if (allocation == NULL) *Scanout = BC250_SCANOUT_NO_ALLOCATION;
+    else if (candidate.ScanoutRequested && !Wddm->ScanoutAdmitGate) *Scanout = BC250_SCANOUT_GATED;
+    else *Scanout = Bc250ScanoutAdmit(&candidate, candidate.Width, candidate.Height, BC250_WDDM_SEGMENT_VRAM, &pitch,
+                                      &bytes);
+    R->SurfaceWidth = candidate.Width;
+    R->SurfaceHeight = candidate.Height;
+    R->SurfacePitch = candidate.Pitch;
+    R->RequiredPitch = DcnPlanePitch(Device);
+    // A format other than the firmware's needs the plane formats of this start (dcn.c DcnPlaneFormatsOpen), which the
+    // flip asks again. This start publishes no 10-bit source mode (bc250_scanout_caps.h SOURCE_MODE_10BIT).
+    R->PlaneFormat = Bc250PlaneFormatOf(candidate.Format);
+    if (R->PlaneFormat != BC250_PLANE_FORMAT_ARGB8888 && !DcnPlaneFormatsOpen(Device))
+        R->PlaneFormat = BC250_PLANE_FORMAT_NONE;
+    R->TenBitSource = 0;
+    R->SourceModeWidth = DisplaySourceWidth(Device);
+    R->SourceModeHeight = DisplaySourceHeight(Device);
+    // The active area of the timing: the firmware's, or the one a runtime display change committed (the rule of
+    // DcnPlanePitch). dcn_plane.c refuses a source mode of another size, which stage A scales already.
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged, 0, 0)) {
+        R->TargetWidth = Device->RuntimePost.Width;
+        R->TargetHeight = Device->RuntimePost.Height;
+    } else {
+        R->TargetWidth = Device->Post.Width;
+        R->TargetHeight = Device->Post.Height;
+    }
+    R->Src.Left = A->SrcRect.left; R->Src.Top = A->SrcRect.top;
+    R->Src.Right = A->SrcRect.right; R->Src.Bottom = A->SrcRect.bottom;
+    R->Dst.Left = A->DstRect.left; R->Dst.Top = A->DstRect.top;
+    R->Dst.Right = A->DstRect.right; R->Dst.Bottom = A->DstRect.bottom;
+    R->Clip.Left = A->ClipRect.left; R->Clip.Top = A->ClipRect.top;
+    R->Clip.Right = A->ClipRect.right; R->Clip.Bottom = A->ClipRect.bottom;
+    R->Mirror = (A->Flags.VerticalFlip || A->Flags.HorizontalFlip) ? 1 : 0;
+    R->Rotated = A->Rotation != D3DDDI_ROTATION_IDENTITY ? 1 : 0;
+    R->AlphaBlend = A->Blend.AlphaBlend ? 1 : 0;
+    R->Interlaced = A->VideoFrameFormat != DXGK_MULTIPLANE_OVERLAY_VIDEO_FRAME_FORMAT_PROGRESSIVE ? 1 : 0;
+    R->Stereo = (A->StereoFormat != DXGK_MULTIPLANE_OVERLAY_STEREO_FORMAT_MONO ||
+                 A->StereoFlipMode != DXGK_MULTIPLANE_OVERLAY_STEREO_FLIP_NONE || A->StereoLeftViewFrame0 ||
+                 A->StereoBaseViewFrame0) ? 1 : 0;
+    R->NotSrgb = A->ColorSpaceType != D3DDDI_COLOR_SPACE_RGB_FULL_G22_NONE_P709 ? 1 : 0;
+    // The 4-tap polyphase filter of the upscale table is better than bilinear, so both qualities are met.
+    R->StretchQualityKnown = (A->StretchQuality == DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_BILINEAR ||
+                              A->StretchQuality == DXGK_MULTIPLANE_OVERLAY_STRETCH_QUALITY_HIGH) ? 1 : 0;
+}
+
+static DXGKDDI_CHECKMULTIPLANEOVERLAYSUPPORT2 Bc250WddmCheckMultiPlaneOverlaySupport2;
+static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport2(_In_ const HANDLE hAdapter,
+                                                        _Inout_ DXGKARG_CHECKMULTIPLANEOVERLAYSUPPORT2* pCheck)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    const DXGK_MULTIPLANE_OVERLAY_PLANE_WITH_SOURCE* p = NULL;
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN plan;
+    ULONG verdict = BC250_PLANE_ARGS;
+    int scanout = BC250_SCANOUT_NO_ALLOCATION;
+
+    pCheck->Supported = FALSE;
+    pCheck->ReturnInfo.Value = 0;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    if ((wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) == 0) {
+        InterlockedIncrement(&wddm->PlaneChecksOff);
+        return STATUS_SUCCESS;
+    }
+    RtlZeroMemory(&r, sizeof(r));
+    RtlZeroMemory(&plan, sizeof(plan));
+    if (pCheck->PlaneCount != 0 && pCheck->pPlanes != NULL && pCheck->pPlanes[0].VidPnSourceId == 0) {
+        p = &pCheck->pPlanes[0];
+        WddmPlaneRequestOf(device, wddm, pCheck->PlaneCount, p->LayerIndex, TRUE, p->hAllocation,
+                           &p->PlaneAttributes, &r, &scanout);
+        verdict = Bc250PlanePrepare(&r, &plan);
+        // The scan-out rule after the geometry: a refused count or layer says more than the allocation does.
+        if (verdict == BC250_PLANE_OK && scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_PLANE_SCANOUT;
+    }
+    if (verdict == BC250_PLANE_OK && !plan.Identity) {
+        // DML at PASSIVE_LEVEL with the floating-point state saved, the clock budget, the global sync against OTG0 and
+        // the requestor's range checks (dcn.c DcnPlaneCheck). The approval keeps the plane's whole display plan under
+        // the mode stamp read first: a mode program during the plan makes it stale, and the flip refuses it.
+        const BC250_PLANE_ENCODING* encoding = Bc250PlaneEncoding(r.PlaneFormat);
+        BC250_DCN_PLANE_CHECK dml;
+        RtlZeroMemory(&dml, sizeof(dml));
+        verdict = encoding ? DcnPlaneCheck(device, &plan, r.SurfacePitch, encoding->BytesPerPixel, &dml)
+                           : BC250_PLANE_FORMAT;
+        if (InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS) {
+            GuardLog("wddm: MPO check DML 0x%08X result %d valid %lu disp %lu/%lu dpp %lu/%lu kHz -> %s",
+                     (ULONG)dml.Status, dml.Result, dml.Valid, dml.DispClockKhz, dml.BudgetDispKhz, dml.DppClockKhz,
+                     dml.BudgetDppKhz, Bc250PlaneVerdictText(verdict));
+            GuardLog("wddm: MPO check sync vstartup %lu/%lu vupdate %lu/%lu vready %lu width %lu", dml.VStartup,
+                     dml.OtgVStartup, dml.VUpdateOffset, dml.OtgVUpdateOffset, dml.VReady, dml.VUpdateWidth);
+        }
+    }
+    if (verdict < BC250_PLANE_VERDICTS) InterlockedIncrement(&wddm->PlaneChecks[verdict]);
+    pCheck->Supported = verdict == BC250_PLANE_OK ? TRUE : FALSE;
+    // FailingPlane is the first plane this adapter cannot take: the second one when only the count refused.
+    if (!pCheck->Supported) pCheck->ReturnInfo.FailingPlane = verdict == BC250_PLANE_COUNT ? 1u : 0u;
+    if (InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS)
+    {
+        // Two lines: one with every field is wider than BC250_LOG_TEXT (guardlog-width).
+        GuardLog("wddm: MPO check n %u surf %lux%lu p %lu f %lu -> %s/%s", pCheck->PlaneCount, r.SurfaceWidth,
+                 r.SurfaceHeight, r.SurfacePitch, r.PlaneFormat, Bc250PlaneVerdictText(verdict),
+                 Bc250ScanoutStatusText(scanout));
+        GuardLog("wddm: MPO check dst %ld,%ld,%ld,%ld clip %ld,%ld,%ld,%ld", r.Dst.Left, r.Dst.Top, r.Dst.Right,
+                 r.Dst.Bottom, r.Clip.Left, r.Clip.Top, r.Clip.Right, r.Clip.Bottom);
+    }
+    return STATUS_SUCCESS;
+}
+
+static DXGKDDI_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY2 Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2;
+static NTSTATUS Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2(_In_ const HANDLE hAdapter,
+    _In_ const DXGKARG_SETVIDPNSOURCEADDRESSWITHMULTIPLANEOVERLAY2* pSet)
+{
+    BC250_DEVICE* device = (BC250_DEVICE*)hAdapter;
+    BC250_WDDM* wddm = WddmOf(hAdapter);
+    const DXGK_MULTIPLANE_OVERLAY_PLANE2* p;
+    DXGKARG_SETVIDPNSOURCEADDRESS flip;
+    BC250_PLANE_REQUEST r;
+    BC250_PLANE_PLAN plan;
+    BC250_SCALER_PLAN shape;
+    ULONG verdict, i;
+    int scanout;
+
+    if (pSet->VidPnSourceId != 0) return STATUS_INVALID_PARAMETER;
+    if (wddm == NULL) return STATUS_DEVICE_NOT_READY;
+    InterlockedIncrement(&wddm->PlaneSets);
+    // Check approved one enabled plane 0 and nothing else, so nothing else arrives here from a correct OS. The
+    // contract allows STATUS_INVALID_PARAMETER for data that is not correct (multiplane-overlay-vidpn-presentation.md).
+    if (pSet->PlaneCount != 1 || pSet->pPlanes == NULL) { verdict = BC250_PLANE_COUNT; goto refused; }
+    p = &pSet->pPlanes[0];
+    if (p->LayerIndex != 0) { verdict = BC250_PLANE_LAYER; goto refused; }
+    if (!p->Enabled) { verdict = BC250_PLANE_DISABLED; goto refused; }
+    RtlZeroMemory(&flip, sizeof(flip));
+    flip.VidPnSourceId = 0;
+    flip.PrimarySegment = p->AllocationSegment;
+    flip.PrimaryAddress = p->AllocationAddress;
+    flip.hAllocation = p->hAllocation;
+    flip.ContextCount = pSet->ContextCount < RTL_NUMBER_OF(flip.Context) ? pSet->ContextCount : RTL_NUMBER_OF(flip.Context);
+    for (i = 0; i < flip.ContextCount; i++) flip.Context[i] = pSet->Context[i];
+    flip.Flags = pSet->Flags;
+    flip.Duration = pSet->Duration;
+    // No allocation: the plane keeps its surface and its shape, as for SetVidPnSourceAddress.
+    if (p->hAllocation == NULL) return WddmFlipEntry(hAdapter, &flip, NULL);
+    WddmPlaneRequestOf(device, wddm, 1, 0, TRUE, p->hAllocation, &p->PlaneAttributes, &r, &scanout);
+    verdict = Bc250PlanePrepare(&r, &plan);
+    if (verdict == BC250_PLANE_OK && scanout != BC250_SCANOUT_ADMIT_OK) verdict = BC250_PLANE_SCANOUT;
+    if (verdict != BC250_PLANE_OK) goto refused;
+    // A plane of the source mode's own size at its origin is the full-size flip of today.
+    if (plan.Identity) return WddmFlipEntry(hAdapter, &flip, NULL);
+    if (!DcnPlaneApproved(device, &plan.Scaler, r.SurfacePitch)) {
+        InterlockedIncrement(&wddm->PlaneSetsUnapproved);
+        verdict = BC250_PLANE_DML;
+        goto refused;
+    }
+    shape = plan.Scaler;
+    InterlockedIncrement(&wddm->PlaneSetsScaled);
+    return WddmFlipEntry(hAdapter, &flip, &shape);
+refused:
+    InterlockedIncrement(&wddm->PlaneSetsRefused);
+    // GuardLog drops a line above DISPATCH_LEVEL, so only the low entry logs.
+    if (KeGetCurrentIrql() <= DISPATCH_LEVEL && InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS)
+        GuardLog("wddm: MPO flip refused: planes %u -> %s", pSet->PlaneCount, Bc250PlaneVerdictText(verdict));
+    return STATUS_INVALID_PARAMETER;
+}
+#endif
 
 // ---- the table --------------------------------------------------------------------------------------------------
 
@@ -11523,9 +11901,15 @@ void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data)
     // switch the VSync on and no way to ask where the beam is, and a queued flip is then never retired.
     Data->DxgkDdiControlInterrupt = Bc250WddmControlInterrupt;
     Data->DxgkDdiGetScanLine = Bc250WddmGetScanLine;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-223: plane 0 of the multiplane-overlay DDIs, both in the WDDM 2.0 block of the table. dxgkrnl calls them only
+    // for a start whose DRIVERCAPS says SupportMultiPlaneOverlay (LabScaledPlane bit 0, WddmDriverCaps).
+    Data->DxgkDdiCheckMultiPlaneOverlaySupport2 = Bc250WddmCheckMultiPlaneOverlaySupport2;
+    Data->DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2 = Bc250WddmSetVidPnSourceAddressWithMultiPlaneOverlay2;
+#endif
 
     // Left NULL on purpose: Patch and Render (physical addressing only), QueryCurrentFence, RecommendVidPnTopology,
-    // StopCapture, every overlay and multi-plane member, LinkDevice, SetDisplayPrivateDriverFormat,
+    // StopCapture, every overlay and multi-plane member (in the release flavour; BD-223 sets two in the lab one), LinkDevice, SetDisplayPrivateDriverFormat,
     // ControlInterrupt2 (WDDM 2.1+), CancelCommand (CancelCommandAware = 0), MapCpuHostAperture and
     // UnmapCpuHostAperture (no host aperture), SetVideoProtectedRegion, and everything the 2.1-3.1 headers append
     // after SetStablePowerState: the hardware-queue and hardware-scheduling DDIs (no HWS), the native-fence and

@@ -46,6 +46,7 @@ static __inline void Bc250EscapeCommandsUnique(void)
     case BC250_ESCAPE_GET_WAVES:
     case BC250_HIP_JOURNAL_COMMAND:
     case BC250_ESCAPE_CONNECTOR_REPLUG:
+    case BC250_ESCAPE_LATCH_PROBE_COMMAND:
     default:
         break;
     }

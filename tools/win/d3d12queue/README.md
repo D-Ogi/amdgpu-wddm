@@ -74,6 +74,12 @@ increment's subject.
 executable hashes. The frame default is 600, ten seconds at 60 Hz: an ETW session on this lab has been seen to
 lead by 2 to 7.6 s with no events of any process, so a two-second client can fall entirely inside that lead.
 
+`AMDGPU_WDDM_D3D12_FLIP_CHAIN=<width>x<height>` (`scanout-trial.ps1 -Chain`) makes the chain smaller than the
+output, with `SCALING_STRETCH`, while the window still covers the output. This is the shape of a game that
+renders below the panel mode in a borderless window, which only a scaled overlay plane can scan out
+(docs/design/scaled-flip.md). Each side must be 64 or more and at most the output's own. Another value keeps the
+output's size. The "Flip chain" trace line gives the size that the run used. `flip-test.cpp` checks the parser.
+
 It then presents the frames with `Present(1, 0)`, each cleared to its own colour: every channel is
 0.0 or 1.0, so the clear has no rounding tie and each frame's `B8G8R8A8` word is exact, and the eight
 combinations cycle, so a frame still showing the previous one, or a buffer presented twice, differs in at

@@ -936,6 +936,7 @@ static NTSTATUS Apply(CONNECTOR_LINK* c,LINK_MODE* m,const UCHAR* Caps,const BC2
     sync.VUpdateOffset=m->Dml.VUpdateOffset;sync.VUpdateWidth=m->Dml.VUpdateWidth;
     LINK_CALL(c,BC250_LINK_TIMING,Bc250OptcProgram(&c->Io,&m->Timing,&sync,m->Protocol==BC250_LINK_DP));
     LINK_CALL(c,BC250_LINK_OUTPUT,Bc250Dcn201OutputProgram(&c->Io,&m->Dml));
+    DcnPlaneShapeModeset(d,TRUE);            // BD-223: the mode shape replaces the shape of a plane
     LINK_CALL(c,BC250_LINK_SCALER,Bc250ScalerProgramStopped(&c->Io,&m->Scaler,&c->ScalerResult));
     LINK_CALL(c,BC250_LINK_ROUTE,Bc250Dcn201Route(&c->Io,m->Protocol,1));
     c->Protocol=m->Protocol;c->PixelKhz=m->Timing.PixelClockKhz;c->Lanes=m->Lanes;c->Rate=m->Rate;
@@ -1160,6 +1161,44 @@ NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE* Device,D3DKMDT_VIDEO_SIGNAL_IN
     if(c && c->Active && !c->Suspended && ConnectorGenerationCurrent(Device,c->Generation)) {
         *Signal=c->Signal;status=STATUS_SUCCESS;
     }
+    ConnectorOperationRelease(Device);return status;
+}
+
+// BD-223: Plan's display plan for the timing on the cable with a scaled plane 0 in place of the full-size one. The
+// inputs are Plan's own for this mode, the plane's fields replace the pipe's size, and the budget is what runs: the
+// firmware's clocks on an inherited link, the plan's own on a link this driver applied (Bc250Dcn201PipeApply).
+NTSTATUS ConnectorLinkPlaneDml(BC250_DEVICE* Device,const BC250_LINK_PLANE* Plane,BC250_LINK_PLANE_DML* Out,
+    BC250_DML201_PLAN* plan)
+{
+    CONNECTOR_LINK* c;BC250_DML201_INPUT input={0};XSTATE_SAVE state;NTSTATUS status=STATUS_DEVICE_NOT_READY;
+    const BC250_TARGET_TIMING* t;
+    if(!Plane || !Out || !plan)return STATUS_INVALID_PARAMETER;
+    RtlZeroMemory(Out,sizeof(*Out));Out->Result=BC250_DML201_INVALID;RtlZeroMemory(plan,sizeof(*plan));
+    ConnectorOperationAcquire(Device);c=Device->ConnectorLink;
+    if(!c || !c->Active || c->Suspended || !c->Current.Valid || !ConnectorGenerationCurrent(Device,c->Generation) ||
+       !c->DmlWorkspace)goto done;
+    t=&c->Current.Timing;
+    input.HActive=t->HActive;input.HTotal=t->HActive+t->HBlank;
+    input.HFrontPorch=t->HSyncOffset;input.HSyncWidth=t->HSyncWidth;
+    input.VActive=t->VActive;input.VTotal=t->VActive+t->VBlank;
+    input.VFrontPorch=t->VSyncOffset;input.VSyncWidth=t->VSyncWidth;
+    input.PixelClockKhz=t->PixelClockKhz;input.PitchPixels=Plane->PitchPixels;
+    input.Output=c->Current.Protocol==BC250_LINK_DP?BC250_DML201_DP:BC250_DML201_HDMI;
+    input.DpLanes=c->Current.Lanes;input.CursorWidth=0;input.AudioSampleRateKhz=192;
+    input.DchubRefClockKhz=c->Current.Clocks.DchubRefClockKhz;input.DentistVcoKhz=c->Current.Clocks.DentistVcoKhz;
+    input.ViewportWidth=Plane->ViewportWidth;input.ViewportHeight=Plane->ViewportHeight;
+    input.RecoutWidth=Plane->RecoutWidth;input.RecoutHeight=Plane->RecoutHeight;
+    input.HTaps=Plane->HTaps;input.VTaps=Plane->VTaps;
+    Out->BudgetDispKhz=c->Current.Inherited?c->Current.Clocks.DispClockKhz:c->Current.Dml.DispClockKhz;
+    Out->BudgetDppKhz=c->Current.Inherited?c->Current.Clocks.DppClockKhz:c->Current.Dml.DppClockKhz;
+    Out->DchubRefClockKhz=c->Current.Clocks.DchubRefClockKhz;
+    status=KeSaveExtendedProcessorState(XSTATE_MASK_LEGACY,&state);
+    if(!NT_SUCCESS(status))goto done;
+    Out->Result=Bc250Dml201Plan(&input,c->DmlWorkspace,Bc250Dml201WorkspaceSize(),plan);
+    KeRestoreExtendedProcessorState(&state);
+    Out->Valid=plan->Valid?1ul:0ul;Out->DispClockKhz=plan->DispClockKhz;Out->DppClockKhz=plan->DppClockKhz;
+    status=STATUS_SUCCESS;
+done:
     ConnectorOperationRelease(Device);return status;
 }
 

@@ -237,8 +237,9 @@ def main():
         ('the admission decision disabled', 'Bc250Escape: the admission decision is not the pinned statement',
          mutate(sources, 'display.c', guard, guard.replace(')) {', ') && 0) {'))),
         ('the admission refusal without its return', 'Bc250Escape: the admission decision is not the pinned statement',
-         mutate(sources, 'display.c', '        return STATUS_DEVICE_BUSY;\n    }\n    if (data->Command == BC250_ESCAPE_OBSERVE_DCN)',
-                '    }\n    if (data->Command == BC250_ESCAPE_OBSERVE_DCN)')),
+         mutate(sources, 'display.c', '        return STATUS_DEVICE_BUSY;\n    }\n#ifdef AMDGPU_WDDM_LAB_FLAVOUR\n'
+                '    if (command == BC250_ESCAPE_LATCH_PROBE_COMMAND)',
+                '    }\n#ifdef AMDGPU_WDDM_LAB_FLAVOUR\n    if (command == BC250_ESCAPE_LATCH_PROBE_COMMAND)')),
         ('an indented definition that writes the ring', 'a ring write outside a parsed function',
          dict(sources, **{'gfx.c': sources['gfx.c'] + '\n static int LabUnseenWriter(struct amdgpu_ring* ring)\n {\n'
                                                      '    return amdgpu_ring_alloc(ring, 16);\n }\n'})),

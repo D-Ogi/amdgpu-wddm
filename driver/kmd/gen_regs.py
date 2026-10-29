@@ -426,6 +426,37 @@ DISPLAY_PIPE_READS = ["mmOTG0_OTG_V_TOTAL_CONTROL", "mmOTG0_OTG_STEREO_CONTROL",
                       "mmMPCC0_MPCC_CONTROL", "mmMPC_OUT0_MUX"]
 DISPLAY_DATA_PORTS = ["mmDP_AUX0_AUX_SW_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_DATA", "mmDSCL0_SCL_COEF_RAM_TAP_SELECT",
                       "mmDC_I2C_DATA"]
+# BD-223 checked scaler geometry and coefficient preparation on the second pipe.
+# Surface addresses, routing and enable remain separate. No raw escape writes.
+DISPLAY_PIPE_WRITES += [f"mmDSCL1_{r}" for r in _DSCL_WRITES]
+DISPLAY_PIPE_WRITES += [f"mmHUBP1_{r}" for r in _VIEWPORT]
+DISPLAY_PIPE_READS += ["mmDSCL1_DSCL_MEM_PWR_CTRL", "mmDSCL1_DSCL_MEM_PWR_STATUS"]
+DISPLAY_DATA_PORTS += ["mmDSCL1_SCL_COEF_RAM_TAP_SELECT", "mmDSCL1_SCL_COEF_RAM_TAP_DATA"]
+# BD-223 two reserved MPCCs feeding OPP0. Lock selectors are read-only here:
+# the owner must arm them while the instances are quiesced, before OTG lock.
+_MPC_WRITES = ["MPCC_CONTROL", "MPCC_TOP_GAIN", "MPCC_BOT_GAIN_INSIDE", "MPCC_BOT_GAIN_OUTSIDE",
+               "MPCC_BG_R_CR", "MPCC_BG_G_Y", "MPCC_BG_B_CB", "MPCC_TOP_SEL", "MPCC_BOT_SEL",
+               "MPCC_OPP_ID", "MPCC_SM_CONTROL"]
+DISPLAY_PIPE_WRITES += [f"mmMPCC{p}_{r}" for p in (0, 1) for r in _MPC_WRITES
+                        if f"mmMPCC{p}_{r}" not in DISPLAY_PIPE_WRITES]
+DISPLAY_PIPE_WRITES += ["mmMPC_OUT0_MUX"]
+DISPLAY_PIPE_READS += [f"mmMPCC{p}_MPCC_UPDATE_LOCK_SEL" for p in (0, 1)]
+# BD-223 caller-locked linear HUBP surface configuration/address transaction.
+# No enable, power, VM, metadata or lock-selector write is granted here.
+DISPLAY_PIPE_WRITES += [f"mm{block}{p}_{r}" for p in (0, 1) for block, regs in (
+    ('HUBP', ('DCSURF_ADDR_CONFIG', 'DCSURF_TILING_CONFIG', 'DCSURF_SURFACE_CONFIG')),
+    ('HUBPRET', ('HUBPRET_CONTROL',)),
+    ('HUBPREQ', ('DCSURF_SURFACE_CONTROL', 'DCSURF_SURFACE_PITCH', 'DCSURF_SURFACE_PITCH_C',
+                 'DCSURF_FLIP_CONTROL', 'DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH', 'DCSURF_PRIMARY_SURFACE_ADDRESS')))
+    for r in regs if f"mm{block}{p}_{r}" not in DISPLAY_PIPE_WRITES]
+DISPLAY_PIPE_READS += ['mmHUBP1_DCHUBP_CNTL']
+# BD-223 bounded latch observation. Read only, no diagnostic write admission.
+DISPLAY_LATCH_PRIVATE_READS = ['mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE',
+                               'mmHUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH',
+                               'mmOTG0_OTG_STATUS_FRAME_COUNT']
+DISPLAY_PIPE_READS += DISPLAY_LATCH_PRIVATE_READS
+DISPLAY_PIPE_READS += [f'mmHUBPREQ{p}_DCSURF_FLIP_CONTROL2' for p in (0, 1)]
+DISPLAY_PIPE_READS = [r for r in DISPLAY_PIPE_READS if r not in DISPLAY_PIPE_WRITES]
 # Exact DCN201 timing entry points, extracted from AMD DC. The clock-control
 # register is only polled by optc1_disable_crtc; no clock write is granted here.
 DISPLAY_OPTC_REGS = json.loads((ROOT / 'driver/shim/optc_registers.json').read_text())
@@ -469,7 +500,7 @@ for _name in DISPLAY_DCN201_PIPE_RO:
 DISPLAY_NAMED = (DISPLAY_AUX_WRITES + DISPLAY_AUX_READS + DISPLAY_PIPE_WRITES + DISPLAY_PIPE_READS +
                  DISPLAY_DDC_WRITES + DISPLAY_DDC_READS)
 EXTRA_READS += [("DMU", n) for n in DISPLAY_NAMED
-                if n not in DISPLAY_DATA_PORTS + DISPLAY_OPTC_NEW + DISPLAY_DP_STREAM_NEW + DISPLAY_DCN201_PIPE_NEW and ("DMU", n) not in EXTRA_READS and
+                if n not in DISPLAY_DATA_PORTS + DISPLAY_OPTC_NEW + DISPLAY_DP_STREAM_NEW + DISPLAY_DCN201_PIPE_NEW + DISPLAY_LATCH_PRIVATE_READS and ("DMU", n) not in EXTRA_READS and
                 n not in ("mmOTG0_OTG_MASTER_UPDATE_LOCK", "mmOTG0_OTG_TRIGA_MANUAL_TRIG")]
 
 LINE = re.compile(r"^([A-Z0-9]+)\.(\S+) (0x[0-9a-f]+)$")
@@ -690,8 +721,8 @@ def main():
         sys.exit("a display write register is not on the display read table - a write must be verifiable")
     if disp_read[-1] >= BAR5_LENGTH:
         sys.exit(f"display: 0x{disp_read[-1]:X} is beyond BAR5")
-    out += ["// Display modes (dpaux.c, dcn_scale.c, modeset.c): DP AUX0 with its DDC1 pads, pipe 0's viewport, scaler,",
-            "// line buffer and MPCC 0 background, and the OTG 0 lock. Sorted, unique. For those three files alone.",
+    out += ["// Display owner: DP AUX0/DDC, DSCL/HUBP0/1 geometry and coefficients, MPCC0/1 and OPP0,",
+            "// and the OTG0 lock. Sorted, unique. Not a general or diagnostic write permission.",
             "#ifdef BC250_REGS_WITH_DISPLAY_TABLES",
             f"#define BC250_MMIO_DISPLAY_ALLOW_COUNT {len(disp_read)}",
             "static const unsigned long g_MmioDisplayAllow[BC250_MMIO_DISPLAY_ALLOW_COUNT] = {"]

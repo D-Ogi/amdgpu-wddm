@@ -80,6 +80,12 @@ static void Unexpected(void) { ++UnexpectedCalls;CHECK(0); }
 #define DcnFlipEscape(...) Unexpected()
 #define FbdumpEscape(...) Unexpected()
 #define SdmaCopyEscape(...) Unexpected()
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+/* BD-223: the lab latch probe has a fixed 480-byte packet (dcn_latch_escape.h). Only its size matters to the
+ * dispatcher, and its handler never runs for the commands tested here. */
+typedef struct { unsigned char Bytes[480]; } BC250_ESCAPE_LATCH_PROBE;
+#define LatchProbeEscape(...) Unexpected()
+#endif
 #define MmioWrite(...) (Unexpected(),STATUS_ACCESS_DENIED)
 #define MmioRead(...) (Unexpected(),STATUS_ACCESS_DENIED)
 #define GuardLastStage() (Unexpected(),0)

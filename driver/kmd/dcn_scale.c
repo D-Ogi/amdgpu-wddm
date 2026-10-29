@@ -5,6 +5,8 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "dcn_scale.h"
 #include "edid.h"
+#include "../shim/bc250_scaler_buffer.h"
+#include "../shim/bc250_scaler_filter.h"
 
 // filter_4tap_64p_upscale of dce_scl_filters.c, extracted by tools/import/extract_table.py (PROVENANCE.md).
 const unsigned short g_Bc250SclFilter4tapUpscale[BC250_SCL_PHASES * BC250_SCL_TAPS] = {
@@ -14,9 +16,6 @@ const unsigned short g_Bc250SclFilter4tapUpscale[BC250_SCL_PHASES * BC250_SCL_TA
 #define ONE19 (1ul << 19)
 #define DSCL_MODE_444_BYPASS 0ul            // dcn10_dpp.c enum dscl_mode_sel
 #define DSCL_MODE_444_RGB_ENABLE 1ul
-#define LB_MEMORY_CONFIG_0 0ul              // dc/inc/hw/transform.h enum lb_memory_config
-#define LB_MEMORY_CONFIG_1 1ul
-#define LB_MEMORY_CONFIG_2 2ul
 #define LB_MAX_PARTITIONS 63ul              // dpp1_dscl_set_lb: "hardcoded on all ASICs before DCN 3.2"
 #define COEF_LUMA_VERT 0ul                  // dcn10_dpp_dscl.c enum dcn10_coef_filter_type_sel
 #define COEF_LUMA_HORZ 1ul
@@ -81,27 +80,6 @@ long Bc250ScalingRecout(unsigned long SourceWidth, unsigned long SourceHeight, u
     return BC250_DISP_STATUS_SUCCESS;
 }
 
-// dscl2_calc_lb_num_partitions for RGB (viewport_c == viewport), alpha off.
-static unsigned long LbPartitions(unsigned long LineSize, unsigned long Config)
-{
-    unsigned long memoryLine = (LineSize + 5ul) / 6ul, size, parts;
-    if (memoryLine == 0) memoryLine = 1;
-    size = Config == LB_MEMORY_CONFIG_1 ? 970ul : Config == LB_MEMORY_CONFIG_2 ? 1290ul : 970ul + 1290ul + 484ul;
-    parts = size / memoryLine;
-    return parts > 64ul ? 64ul : parts;
-}
-
-// dpp1_dscl_find_lb_memory_config: the first of config 1 and 2 that holds the vertical taps, else config 0. Every
-// ratio here is 1 or below, so dpp1_dscl_is_lb_conf_valid reduces to taps <= partitions.
-static unsigned long LbConfig(unsigned long LineSize, unsigned long VTaps, unsigned long VTapsC)
-{
-    unsigned long p = LbPartitions(LineSize, LB_MEMORY_CONFIG_1);
-    if (VTaps <= p && VTapsC <= p) return LB_MEMORY_CONFIG_1;
-    p = LbPartitions(LineSize, LB_MEMORY_CONFIG_2);
-    if (VTaps <= p && VTapsC <= p) return LB_MEMORY_CONFIG_2;
-    return LB_MEMORY_CONFIG_0;
-}
-
 // calculate_init_and_vp for a recout offset of 0 within the full recout: the viewport starts at 0, and its size is
 // floor(init + ratio * (recout - 1)) capped at the source size.
 static unsigned long ViewportSize(unsigned long Init19, unsigned long Ratio19, unsigned long Recout,
@@ -111,12 +89,11 @@ static unsigned long ViewportSize(unsigned long Init19, unsigned long Ratio19, u
     return v > Source ? Source : (unsigned long)v;
 }
 
-long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+static void PlanOpen(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                      unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan)
 {
     unsigned char* clear = (unsigned char*)Plan;
-    unsigned long line, i;
-    long s;
+    unsigned long i;
 
     for (i = 0; i < sizeof(*Plan); i++) clear[i] = 0;      // a refused plan programs nothing (Bc250ScalerProgram)
     Plan->SourceWidth = SourceWidth;
@@ -124,12 +101,22 @@ long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsi
     Plan->TargetWidth = TargetWidth;
     Plan->TargetHeight = TargetHeight;
     Plan->Scaling = Scaling;
-    s = Bc250ScalingRecout(SourceWidth, SourceHeight, TargetWidth, TargetHeight, Scaling, &Plan->Recout);
-    if (s < 0) return s;
+}
+
+// The rest of the plan, from the source size and Plan->Recout.
+static long PlanFromRecout(BC250_SCALER_PLAN* Plan)
+{
+    const unsigned long SourceWidth = Plan->SourceWidth, SourceHeight = Plan->SourceHeight;
+    unsigned char* clear = (unsigned char*)Plan;
+    unsigned long i;
+    BC250_SCALER_BUFFER_INPUT buffer = {0};
+    BC250_SCALER_BUFFER_PLAN capacity;
+
     // calculate_scaling_ratios: source / destination, truncated to 19 fraction bits. Chroma = luma for RGB.
     Plan->RatioH19 = (unsigned long)(((unsigned long long)SourceWidth << 19) / Plan->Recout.Width);
     Plan->RatioV19 = (unsigned long)(((unsigned long long)SourceHeight << 19) / Plan->Recout.Height);
-    // dpp201_get_optimal_number_of_taps for ratios of 1 or below: 4 luma and 2 chroma taps, 1 for an identity ratio.
+    // dpp201_get_optimal_number_of_taps for ratios of 4 or below (ceil(ratio) > 4 selects 8 taps, which no caller
+    // asks for: Bc250ScalerPlanRecout refuses it): 4 luma and 2 chroma taps, 1 for an identity ratio.
     Plan->TapsH = Plan->RatioH19 == ONE19 ? 1ul : 4ul;
     Plan->TapsV = Plan->RatioV19 == ONE19 ? 1ul : 4ul;
     Plan->TapsHC = Plan->RatioH19 == ONE19 ? 1ul : 2ul;
@@ -141,25 +128,65 @@ long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsi
     Plan->Viewport.Width = ViewportSize(Plan->InitH19, Plan->RatioH19, Plan->Recout.Width, SourceWidth);
     Plan->Viewport.Height = ViewportSize(Plan->InitV19, Plan->RatioV19, Plan->Recout.Height, SourceHeight);
     // A viewport smaller than the source would crop it. It cannot happen for these ratios (dcn_scale_test.c checks
-    // every mode of every list); refuse it rather than program a picture with a missing edge.
+    // every mode of every list): init + ratio * (recout - 1) is ratio * recout + (5 - ratio) / 2, at least half a
+    // pixel over the source for a ratio of 4 or below. Refuse it rather than program a picture with a missing edge.
     if (Plan->Viewport.Width != SourceWidth || Plan->Viewport.Height != SourceHeight)
         return BC250_DISP_STATUS_NOT_SUPPORTED;
     // dpp1_dscl_get_dscl_mode.
     Plan->DsclMode = (Plan->RatioH19 == ONE19 && Plan->RatioV19 == ONE19) ? DSCL_MODE_444_BYPASS
                                                                            : DSCL_MODE_444_RGB_ENABLE;
-    line = Plan->Viewport.Width < Plan->Recout.Width ? Plan->Viewport.Width : Plan->Recout.Width;
-    Plan->LbConfig = LbConfig(line, Plan->TapsV, Plan->TapsVC);
-    // get_filter_4tap_64p: filter_4tap_64p_upscale for a ratio below 1; no filter for 1 tap.
+    buffer.ViewportWidth = buffer.ChromaViewportWidth = Plan->Viewport.Width;
+    buffer.RecoutWidth = Plan->Recout.Width;
+    buffer.VerticalRatio19 = buffer.ChromaVerticalRatio19 = Plan->RatioV19;
+    buffer.VerticalTaps = Plan->TapsV;
+    buffer.ChromaVerticalTaps = Plan->TapsVC;
+    if (!Bc250ScalerBufferPlan(&buffer, &capacity)) {
+        // Config 0 is not an unconditional fallback: it can lack lines too.
+        for (i = 0; i < sizeof(*Plan); ++i) clear[i] = 0;
+        return BC250_DISP_STATUS_NOT_SUPPORTED;
+    }
+    Plan->LbConfig = capacity.Config;
+    // get_filter_4tap_64p for 4 taps (WriteFilter takes the table of the ratio); no filter for 1 tap.
     Plan->FilterH = Plan->TapsH == 4ul;
     Plan->FilterV = Plan->TapsV == 4ul;
     return BC250_DISP_STATUS_SUCCESS;
 }
 
+long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+                     unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan)
+{
+    long s;
+
+    PlanOpen(SourceWidth, SourceHeight, TargetWidth, TargetHeight, Scaling, Plan);
+    s = Bc250ScalingRecout(SourceWidth, SourceHeight, TargetWidth, TargetHeight, Scaling, &Plan->Recout);
+    if (s < 0) return s;
+    return PlanFromRecout(Plan);
+}
+
+long Bc250ScalerPlanRecout(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+                           unsigned long TargetHeight, const BC250_RECT* Recout, BC250_SCALER_PLAN* Plan)
+{
+    PlanOpen(SourceWidth, SourceHeight, TargetWidth, TargetHeight, BC250_SCALING_PLANE, Plan);
+    if (!Recout || !DimensionOk(SourceWidth) || !DimensionOk(SourceHeight) || !DimensionOk(TargetWidth) ||
+        !DimensionOk(TargetHeight) || !DimensionOk(Recout->Width) || !DimensionOk(Recout->Height) ||
+        Recout->X > TargetWidth - Recout->Width || Recout->Y > TargetHeight - Recout->Height ||
+        Recout->Width > TargetWidth || Recout->Height > TargetHeight)
+        return BC250_DISP_STATUS_INVALID;
+    // BD-223 stage S2: a plane may be scaled down to a quarter in each direction, the plane cap of DCN 2.0.1
+    // (dcn201_resource.c max_downscale_factor 250); then dpp201_get_optimal_number_of_taps keeps 4 taps. The source
+    // modes of stage A stay 1:1 or up (Bc250ScalingRecout).
+    if (SourceWidth > 4ul * Recout->Width || SourceHeight > 4ul * Recout->Height)
+        return BC250_DISP_STATUS_NOT_SUPPORTED;
+    Plan->Recout = *Recout;
+    return PlanFromRecout(Plan);
+}
+
 unsigned long Bc250ScalingSupport(unsigned long Level, unsigned long SourceWidth, unsigned long SourceHeight,
                                   unsigned long TargetWidth, unsigned long TargetHeight)
 {
-    unsigned long long sw = SourceWidth, sh = SourceHeight, tw = TargetWidth, th = TargetHeight;
+    unsigned long support = 0, scaling;
     BC250_RECT r;
+    BC250_SCALER_PLAN plan;
 
     if (Bc250ScalingRecout(SourceWidth, SourceHeight, TargetWidth, TargetHeight, BC250_SCALING_CENTERED, &r) < 0)
         return 0;
@@ -167,19 +194,20 @@ unsigned long Bc250ScalingSupport(unsigned long Level, unsigned long SourceWidth
     // level offers is reported. dxgkrnl keeps a scaling per monitor in its display database and pins it again for
     // the next mode; a native mode that answered Identity alone would drop out of a source mode set whose path
     // has aspect-ratio scaling pinned.
-    if (sw == tw && sh == th) {
-        if (Level == BC250_DISPLAY_MODES_CENTERED)
-            return BC250_SCALING_BIT(BC250_SCALING_IDENTITY) | BC250_SCALING_BIT(BC250_SCALING_CENTERED);
-        if (Level != BC250_DISPLAY_MODES_SCALED) return BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
-        return BC250_SCALING_BIT(BC250_SCALING_IDENTITY) | BC250_SCALING_BIT(BC250_SCALING_CENTERED) |
-               BC250_SCALING_BIT(BC250_SCALING_STRETCHED) | BC250_SCALING_BIT(BC250_SCALING_ASPECT);
-    }
-    if (Level == BC250_DISPLAY_MODES_CENTERED) return BC250_SCALING_BIT(BC250_SCALING_CENTERED);
-    if (Level != BC250_DISPLAY_MODES_SCALED) return 0;
+    if (SourceWidth == TargetWidth && SourceHeight == TargetHeight)
+        support |= BC250_SCALING_BIT(BC250_SCALING_IDENTITY);
+    if (Level == BC250_DISPLAY_MODES_CENTERED || Level == BC250_DISPLAY_MODES_SCALED)
+        support |= BC250_SCALING_BIT(BC250_SCALING_CENTERED);
     // Same aspect ratio: aspect-ratio scaling is the same picture as stretched. It is offered all the same, for the
     // reason above: the pinned scaling of the path must not hide a mode.
-    return BC250_SCALING_BIT(BC250_SCALING_CENTERED) | BC250_SCALING_BIT(BC250_SCALING_STRETCHED) |
-           BC250_SCALING_BIT(BC250_SCALING_ASPECT);
+    if (Level == BC250_DISPLAY_MODES_SCALED)
+        support |= BC250_SCALING_BIT(BC250_SCALING_STRETCHED) | BC250_SCALING_BIT(BC250_SCALING_ASPECT);
+    // Mode enumeration and programming must agree about line-buffer admission.
+    for (scaling = 0; scaling < BC250_SCALING_CUSTOM; ++scaling)
+        if ((support & BC250_SCALING_BIT(scaling)) &&
+            Bc250ScalerPlan(SourceWidth, SourceHeight, TargetWidth, TargetHeight, scaling, &plan) < 0)
+            support &= ~BC250_SCALING_BIT(scaling);
+    return support;
 }
 
 unsigned long Bc250ScalingDefault(unsigned long Level, unsigned long SourceWidth, unsigned long SourceHeight,
@@ -477,16 +505,19 @@ static unsigned long Init(unsigned long FracMask, unsigned long IntMask, unsigne
 }
 
 // dpp1_dscl_set_scaler_filter for 4 taps: the select once, then 33 phases of two tap pairs; the data port
-// advances by itself.
-static long WriteFilter(BC250_DISP_IO* Io, unsigned long FilterType, BC250_SCALER_RESULT* Result)
+// advances by itself. The table is get_filter_4tap_64p's for the ratio of that direction (BD-223: the downscale
+// tables 116, 149 and 183 as well as the upscale one).
+static long WriteFilter(BC250_DISP_IO* Io, unsigned long FilterType, unsigned long Ratio19, BC250_SCALER_RESULT* Result)
 {
+    const unsigned short* table = Bc250ScalerFilterTable(BC250_SCL_TAPS, Ratio19);
     unsigned long phase, pair;
+    if (!table) return BC250_DISP_STATUS_INVALID;
     TRY(Bc250DispWrite(Io, BC250_REG_DMU_DSCL0_SCL_COEF_RAM_TAP_SELECT,
                        Bc250DispField(DSCL0_SCL_COEF_RAM_TAP_SELECT__SCL_COEF_RAM_FILTER_TYPE_MASK, FilterType)));
     for (phase = 0; phase < BC250_SCL_PHASES; phase++)
         for (pair = 0; pair < (BC250_SCL_TAPS + 1ul) / 2ul; pair++) {
-            unsigned long even = g_Bc250SclFilter4tapUpscale[phase * BC250_SCL_TAPS + 2ul * pair];
-            unsigned long odd = g_Bc250SclFilter4tapUpscale[phase * BC250_SCL_TAPS + 2ul * pair + 1ul];
+            unsigned long even = table[phase * BC250_SCL_TAPS + 2ul * pair];
+            unsigned long odd = table[phase * BC250_SCL_TAPS + 2ul * pair + 1ul];
             TRY(Bc250DispWrite(Io, BC250_REG_DMU_DSCL0_SCL_COEF_RAM_TAP_DATA,
                                Bc250DispField(DSCL0_SCL_COEF_RAM_TAP_DATA__SCL_COEF_RAM_EVEN_TAP_COEF_MASK, even) |
                                DSCL0_SCL_COEF_RAM_TAP_DATA__SCL_COEF_RAM_EVEN_TAP_COEF_EN_MASK |
@@ -573,8 +604,8 @@ static long WritePipe(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* P, BC250_SCALE
         TRY(Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &sclMode));
         // Deviation: Linux skips the load when the filter equals the one it loaded last (dpp->filter_h/_v); this
         // code keeps no such cache across a stop and a restart, so it loads and swaps every time it scales.
-        if (P->FilterH) TRY(WriteFilter(Io, COEF_LUMA_HORZ, Result));
-        if (P->FilterV) TRY(WriteFilter(Io, COEF_LUMA_VERT, Result));
+        if (P->FilterH) TRY(WriteFilter(Io, COEF_LUMA_HORZ, P->RatioH19, Result));
+        if (P->FilterV) TRY(WriteFilter(Io, COEF_LUMA_VERT, P->RatioV19, Result));
         if (P->FilterH || P->FilterV) {
             unsigned long current = Bc250DispGet(sclMode, DSCL0_SCL_MODE__SCL_COEF_RAM_SELECT_CURRENT_MASK);
             sclMode &= ~(DSCL0_SCL_MODE__SCL_COEF_RAM_SELECT_MASK | DSCL0_SCL_MODE__SCL_CHROMA_COEF_MODE_MASK);
@@ -646,6 +677,28 @@ static void ScalerAfter(BC250_DISP_IO* Io, BC250_SCALER_RESULT* Result)
 {
     (void)Bc250DispRead(Io, BC250_REG_DMU_DSCL0_SCL_MODE, &Result->SclModeAfter);
     (void)Bc250DispRead(Io, BC250_REG_DMU_HUBP0_DCHUBP_CNTL, &Result->HubpCntlAfter);
+}
+
+long Bc250ScalerProgramLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan,
+                              BC250_SCALER_RESULT* Result)
+{
+    unsigned long select;
+    const unsigned long held = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+                               OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+    long status = ScalerBegin(Io, Plan, Result, 0);
+    if (status < 0) return status;
+    // AMD dcn20_pipe_control_lock protects scaler, viewport and address updates
+    // with the top pipe's TG lock. Do not create a second latch boundary here.
+    TRY(Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0, &select));
+    if (select & OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK)
+        return BC250_DISP_STATUS_MISMATCH;
+    status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &Result->LockStatus);
+    Result->LockStatusValid = status >= 0;
+    if (status < 0) { Result->LockStatus = 0; return status; }
+    if ((Result->LockStatus & held) != held) return BC250_DISP_STATUS_MISMATCH;
+    status = WritePipe(Io, Plan, Result);
+    ScalerAfter(Io, Result);
+    return status;
 }
 
 long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)

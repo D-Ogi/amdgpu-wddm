@@ -1,0 +1,420 @@
+// Actual probe with a deterministic device model. H1/H2 are hypotheses only.
+#include <stdint.h>
+#include <limits.h>
+#include <stdio.h>
+#include <string.h>
+#include "dcn_latch_probe.h"
+#include "regs.generated.h"
+#include "dcn_2_0_1_sh_mask.h"
+#include "flip_state.h"
+typedef long NTSTATUS, LONG;
+typedef unsigned long ULONG;
+typedef long long LONGLONG;
+typedef unsigned long long ULONGLONG;
+typedef unsigned char BOOLEAN;
+typedef struct { LONGLONG QuadPart; } LARGE_INTEGER;
+typedef struct {
+    struct { ULONG Numerator,Denominator; } VSyncFreq;
+    ULONG ScanLineOrdering;
+} D3DKMDT_VIDEO_SIGNAL_INFO;
+#define D3DDDI_VSSLO_PROGRESSIVE 1
+#define D3DKMDT_FREQUENCY_NOTSPECIFIED 0xfffffffful
+typedef struct _BC250_DEVICE {
+    void *Mmio, *RuntimeFramebuffer;
+    BOOLEAN VidPnFlipEnabled,VramEnabled,DcnWriteEnabled,RuntimePostValid;
+    LONG RetainedPowerPhase,RuntimeDisplayChanged;
+    D3DKMDT_VIDEO_SIGNAL_INFO InheritedSignal;
+    BOOLEAN InheritedSignalValid;
+    struct { ULONG Width,Height,Pitch; } Post,RuntimePost;
+    struct { ULONG PipeChanged,InheritedFixed; } Modeset;
+    LARGE_INTEGER VramPhysical,RuntimeFramebufferPhysical;
+    ULONGLONG VramMcBase,VramLength,RuntimeFramebufferLength;
+} BC250_DEVICE;
+#define TRUE 1
+#define FALSE 0
+#define PASSIVE_LEVEL 0
+#define MAXULONGLONG ULLONG_MAX
+#define MAXLONGLONG LLONG_MAX
+#define RtlZeroMemory(p,n) memset(p,0,n)
+#define NT_SUCCESS(s) ((long)(s)>=0)
+#define STATUS_SUCCESS 0L
+#define STATUS_INVALID_PARAMETER ((long)0xc000000d)
+#define STATUS_INVALID_DEVICE_STATE ((long)0xc0000184)
+#define STATUS_DEVICE_NOT_READY ((long)0xc00000a3)
+#define STATUS_DEVICE_BUSY ((long)0x80000011)
+#define STATUS_IO_TIMEOUT ((long)0xc00000b5)
+#define STATUS_NOT_SUPPORTED ((long)0xc00000bb)
+#define STATUS_BUFFER_TOO_SMALL ((long)0xc0000023)
+#define STATUS_RETRY ((long)0xc000022d)
+#define STATUS_IO_DEVICE_ERROR ((long)0xc0000185)
+static unsigned checks,fails;
+#define CHECK(x) do { ++checks; if (!(x)) { ++fails; printf("FAIL line %d: %s\n",__LINE__,#x); } } while (0)
+static ULONG frame, lock, high, selector, surface, flip, triple, reads,writes,guards;
+static ULONGLONG live,pending;
+static LONGLONG clock_us;
+static unsigned h2,deferred_acceptance,armed,owner,resumed,ended,fault,begin_fail,resume_fail,end_fail;
+static unsigned fail_read,fail_write,fail_guard,after_write,unlock_stuck,lock_stuck;
+static unsigned no_frames,restore_fail,programs,invalid_owner_writes,power_on_read;
+static unsigned unlock_delay,unlock_inflight,qpc_frozen,unlock_read_cost_us,qpc_backwards;
+static LONGLONG unlock_due;
+static unsigned refuse_after_begin,program_refused;
+static unsigned signal_fail;
+static ULONG model_frame_us=1000,vupdate_delay_us;
+static ULONG earliest_lag_us,prelock_latency_us;
+static ULONGLONG earliest_next;
+static LONGLONG earliest_due;
+static int irql,otg;
+static long InterlockedCompareExchange(volatile LONG *p,LONG v,LONG cmp)
+{ LONG old=*p;if(old==cmp)*p=v;return old; }
+static int KeGetCurrentIrql(void) { return irql; }
+static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER *f)
+{ LARGE_INTEGER r;if(f)f->QuadPart=1000000;r.QuadPart=qpc_frozen?0:(qpc_backwards && clock_us?-1:clock_us);return r; }
+static void KeStallExecutionProcessor(ULONG us)
+{
+    LONGLONG before=clock_us;
+    clock_us+=us;
+    if(!no_frames) {
+        frame=(ULONG)(clock_us/model_frame_us);
+        // VSync advances the frame counter. VUPDATE is a distinct event at a
+        // configurable offset within that frame; it is not the counter read.
+        if((before+model_frame_us-vupdate_delay_us)/model_frame_us !=
+           (clock_us+model_frame_us-vupdate_delay_us)/model_frame_us &&
+           pending && (!lock || (h2 && armed))) {
+            earliest_next=pending;earliest_due=clock_us+earliest_lag_us;pending=0;
+        }
+    }
+    if(earliest_next && clock_us>=earliest_due) {live=earliest_next;earliest_next=0;}
+}
+static ULONG DisplaySourceWidth(const BC250_DEVICE *d) {return d->Post.Width;}
+static ULONG DisplaySourceHeight(const BC250_DEVICE *d) {return d->Post.Height;}
+static int DcnOtgRunning(const BC250_DEVICE *d) {(void)d;return otg;}
+static NTSTATUS ConnectorLinkCurrentSignal(BC250_DEVICE *d,D3DKMDT_VIDEO_SIGNAL_INFO *s)
+{ *s=d->InheritedSignal;return signal_fail?STATUS_DEVICE_NOT_READY:STATUS_SUCCESS; }
+static NTSTATUS MmioDcnRead(BC250_DEVICE *d,ULONG offset,ULONG *v)
+{
+    ++reads;
+    if(reads==power_on_read)d->RetainedPowerPhase=1;
+    if(reads==fail_read)return STATUS_IO_DEVICE_ERROR;
+    switch(offset) {
+    case BC250_REG_DMU_OTG0_OTG_STATUS_FRAME_COUNT:*v=frame;break;
+    case BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0:*v=selector;break;
+    case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:
+        if(unlock_inflight && unlock_read_cost_us)KeStallExecutionProcessor(unlock_read_cost_us);
+        if(unlock_inflight && clock_us>=unlock_due) {lock=0;unlock_inflight=0;}
+        *v=lock;break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE_HIGH:*v=(ULONG)(live>>32);break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE:*v=(ULONG)live;break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_SURFACE_CONTROL:*v=surface;break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL:
+        *v=flip|(pending?HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK:0);break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL2:*v=triple;break;
+    default:CHECK(0);return STATUS_INVALID_PARAMETER;
+    }
+    return STATUS_SUCCESS;
+}
+static NTSTATUS MmioDcnWriteEx(BC250_DEVICE *d,ULONG offset,ULONG value,BOOLEAN quiet)
+{
+    (void)quiet;++writes;
+    if(!owner || !d->Mmio || d->RetainedPowerPhase)++invalid_owner_writes;
+    if(writes==fail_write && !after_write)return STATUS_IO_DEVICE_ERROR;
+    switch(offset) {
+    case BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK:
+        // Model elapsed time between Program(B) and the later lock write.
+        // VUPDATE may consume B while EARLIEST still reports A.
+        if(value && programs==2 && prelock_latency_us)KeStallExecutionProcessor(prelock_latency_us);
+        if(value)lock=value|(lock_stuck?0:OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK);
+        else if(!unlock_stuck) {unlock_due=clock_us+unlock_delay;unlock_inflight=1;}
+        break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH:high=value;break;
+    case BC250_REG_DMU_HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS:
+        pending=((ULONGLONG)high<<32)|value;armed=0;break;
+    // A submitted trigger need not prove that the pending bank accepted B.
+    // Model 2 defers that acceptance until an unlocked update opportunity.
+    case BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG:armed=deferred_acceptance?0:1;break;
+    default:CHECK(0);return STATUS_INVALID_PARAMETER;
+    }
+    return writes==fail_write?STATUS_IO_DEVICE_ERROR:STATUS_SUCCESS;
+}
+static BOOLEAN WddmPrimaryExclusiveBegin(BC250_DEVICE *d,ULONG kind,ULONG *g)
+{
+    CHECK(kind==BC250_WRITER_LATCH_PROBE);if(begin_fail)return FALSE;owner=1;*g=12;
+    if(refuse_after_begin==1)otg=0;
+    if(refuse_after_begin==2) {d->RuntimeDisplayChanged=1;d->RuntimePostValid=0;}
+    if(refuse_after_begin==3) {d->RuntimeDisplayChanged=1;d->RuntimePost.Height++;}
+    if(refuse_after_begin==4)d->InheritedSignal.VSyncFreq.Numerator=0;
+    return TRUE;
+}
+static NTSTATUS WddmWriterResume(BC250_DEVICE *d)
+{ (void)d;if(resume_fail)return STATUS_IO_DEVICE_ERROR;resumed=1;return STATUS_SUCCESS; }
+static NTSTATUS WddmLatchProbeCheck(BC250_DEVICE *d,ULONG gen,BOOLEAN fail)
+{
+    (void)d;++guards;CHECK(gen==12);
+    if(fail)fault=1;
+    if(guards==fail_guard || !owner || !resumed || fault)return STATUS_INVALID_DEVICE_STATE;
+    return STATUS_SUCCESS;
+}
+static NTSTATUS WddmPrimaryExclusiveEnd(BC250_DEVICE *d,ULONG gen,BOOLEAN invalidate)
+{
+    (void)d;CHECK(gen==12 && !invalidate && owner);ended++;owner=0;
+    return end_fail || fault?STATUS_IO_DEVICE_ERROR:STATUS_SUCCESS;
+}
+static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG card,ULONG pitch,ULONG format,
+    ULONGLONG bytes,BOOLEAN immediate,void *witness,BOOLEAN *wrote)
+{
+    (void)format;(void)witness;
+    CHECK(owner && resumed && !lock && !immediate);
+    CHECK(pitch==d->Post.Pitch && bytes==(ULONGLONG)pitch*d->Post.Height);
+    ++programs;*wrote=FALSE;
+    if(program_refused)return STATUS_NOT_SUPPORTED;
+    if(restore_fail && programs>=3)return STATUS_IO_DEVICE_ERROR;
+    *wrote=TRUE;pending=card-d->VramMcBase+(ULONGLONG)d->VramPhysical.QuadPart;
+    armed=deferred_acceptance?0:1;return STATUS_SUCCESS;
+}
+/* ACTUAL_PROBE */
+static void Setup(BC250_DEVICE *d)
+{
+    memset(d,0,sizeof(*d));d->Mmio=d;d->RuntimeFramebuffer=d;
+    d->Post.Width=1920;d->Post.Height=1200;d->Post.Pitch=7680;
+    d->RuntimePost=d->Post;d->RuntimePostValid=1;
+    d->InheritedSignalValid=1;d->InheritedSignal.ScanLineOrdering=D3DDDI_VSSLO_PROGRESSIVE;
+    d->InheritedSignal.VSyncFreq.Numerator=1000000;d->InheritedSignal.VSyncFreq.Denominator=1000;
+    d->VidPnFlipEnabled=d->VramEnabled=d->DcnWriteEnabled=1;
+    d->VramPhysical.QuadPart=0x100000000ull;d->VramMcBase=0x200000000ull;
+    d->VramLength=0x80000000ull;d->RuntimeFramebufferPhysical.QuadPart=0x101000000ull;
+    d->RuntimeFramebufferLength=4096ull*2160*4;
+    frame=lock=high=selector=surface=flip=triple=reads=writes=guards=0;
+    live=(ULONGLONG)d->RuntimeFramebufferPhysical.QuadPart;pending=0;clock_us=0;
+    h2=deferred_acceptance=armed=owner=resumed=ended=fault=begin_fail=resume_fail=end_fail=0;
+    fail_read=fail_write=fail_guard=after_write=unlock_stuck=lock_stuck=0;
+    no_frames=restore_fail=programs=invalid_owner_writes=power_on_read=0;
+    unlock_delay=unlock_inflight=qpc_frozen=unlock_read_cost_us=qpc_backwards=0;unlock_due=0;irql=0;otg=1;
+    refuse_after_begin=program_refused=0;
+    model_frame_us=1000;vupdate_delay_us=0;
+    earliest_lag_us=prelock_latency_us=0;earliest_next=0;earliest_due=0;
+    signal_fail=0;
+}
+#include "dcn_latch_escape.h"
+// Serialize the actual core result in the client's ABI for an independent
+// offline decoder control. Timings are synthetic and explicitly model-only.
+static void EmitModel(unsigned model,unsigned arm,const BC250_LATCH_PROBE_RESULT* r)
+{
+    BC250_ESCAPE_LATCH_PROBE packet={0};
+    unsigned long words[sizeof(packet)/sizeof(unsigned long)],i;
+    unsigned long long begin=(arm+1)*1000000ull,end=begin+(unsigned long long)clock_us;
+    packet.Magic=BC250_ESCAPE_MAGIC;packet.Command=BC250_ESCAPE_LATCH_PROBE_COMMAND;
+    packet.Version=packet.ExpectedVersion=BC250_KMD_VERSION;
+    packet.AbiVersion=BC250_LATCH_PROBE_ABI;packet.Arm=arm;packet.Result=*r;
+    for(i=0;i<2;++i)if(packet.Result.Unlock[i].Attempted) {
+        packet.Result.Unlock[i].StartQpc+=begin;
+        if(packet.Result.Unlock[i].Reads)packet.Result.Unlock[i].LastQpc+=begin;
+        if(packet.Result.Unlock[i].Reads>1)packet.Result.Unlock[i].LastSetQpc+=begin;
+    }
+    memcpy(words,&packet,sizeof(words));
+    printf("{\"model\":%u,\"records\":[{\"type\":\"header\",\"schema\":1,\"arm\":%u,\"expected_version\":%u,\"qpc_frequency\":1000000,\"hardware_access\":true,\"atomic\":false},",model,arm,BC250_KMD_VERSION);
+    printf("{\"type\":\"result\",\"begin_qpc\":%llu,\"end_qpc\":%llu,\"escape_status\":0,\"nt_status\":0,\"measurement_status\":%lu,\"unlock_status\":%lu,\"restore_status\":%lu,\"end_status\":%lu,\"samples\":%lu,\"writes_attempted\":%lu,\"boundary_observed\":%lu,\"reserved_a_restored\":%lu,\"raw_dwords\":[",
+           begin,end,(ULONG)r->Status,(ULONG)r->UnlockStatus,(ULONG)r->RestoreStatus,(ULONG)r->EndStatus,
+           r->Samples,r->WritesAttempted,r->BoundaryObserved,r->Restored);
+    for(i=0;i<sizeof(words)/sizeof(words[0]);++i)printf("%s%lu",i?",":"",words[i]);
+    puts("]},{\"type\":\"end\",\"exit_code\":0,\"hardware_verdict\":null}]}");
+}
+int main(int argc,char** argv)
+{
+    BC250_DEVICE d;BC250_LATCH_PROBE_RESULT r;
+    unsigned model,arm,i,nread,nwrite,nguard,applied,delay;long status;
+    int emit=argc==2 && !strcmp(argv[1],"--emit-model-records");
+    if(argc!=1 && !emit)return 2;
+    for(model=0;model<3;model++)for(arm=0;arm<Bc250LatchArmCount;arm++) {
+        Setup(&d);h2=model!=0;deferred_acceptance=model==2;
+        CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_SUCCESS);
+        CHECK(r.Restored && r.BoundaryObserved && ended==1 && !owner && !lock && !fault);
+        CHECK(r.Boundary.Physical==((arm==0 || (arm==2 && model==1))?r.AddressB:r.AddressA));
+        CHECK(r.AfterUnlock.Physical==r.AddressB && live==r.AddressA);
+        CHECK(!invalid_owner_writes && clock_us<100000);
+        if(emit)EmitModel(model,arm,&r);
+    }
+    if(emit)return fails?1:0;
+    // Before VUPDATE, the lock can still cover B (positive control). At or
+    // after VUPDATE the pending bit is clear, even while the old A address
+    // survives in EARLIEST for 60 us. Reject that false discriminator.
+    for(i=19;i<=22;++i) {
+        Setup(&d);vupdate_delay_us=20;earliest_lag_us=60;prelock_latency_us=i;
+        status=DcnLatchProbe(&d,Bc250LatchLockAfterProgram,&r);
+        CHECK(status==(i<20?STATUS_SUCCESS:STATUS_RETRY));
+        CHECK(r.Armed.Physical==r.AddressA && r.Armed.LockHeld);
+        CHECK(!!(r.Armed.Word[Bc250LatchFlipControl] & HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_PENDING_MASK)==(i<20));
+        CHECK(r.BoundaryObserved==(i<20));
+        CHECK(r.Restored && ended==1 && !owner && !lock && !fault && live==r.AddressA);
+    }
+    // Start just after VUPDATE, so the next counter transition is too early.
+    // Cover every 20 us phase including a VUPDATE just before the next VSync.
+    for(delay=20;delay<1000;delay+=20)for(model=0;model<3;model++)
+        for(arm=0;arm<Bc250LatchArmCount;arm++) {
+            Setup(&d);h2=model!=0;deferred_acceptance=model==2;
+            vupdate_delay_us=delay;clock_us=delay+1;
+            CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_SUCCESS);
+            CHECK(r.Boundary.Physical==((arm==0 || (arm==2 && model==1))?r.AddressB:r.AddressA));
+            CHECK(r.Restored && r.AfterUnlock.Physical==r.AddressB && live==r.AddressA);
+        }
+    {
+        static const ULONG rates[]={20,24,25,50,60,144};
+        for(i=0;i<sizeof(rates)/sizeof(rates[0]);i++)for(arm=0;arm<3;arm++) {
+            Setup(&d);model_frame_us=(1000000+rates[i]-1)/rates[i];
+            d.InheritedSignal.VSyncFreq.Numerator=rates[i];
+            d.InheritedSignal.VSyncFreq.Denominator=1;
+            vupdate_delay_us=135;clock_us=136;
+            if(arm==2)d.RuntimeDisplayChanged=1; // both timing sources
+            CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_SUCCESS);
+            CHECK(r.Boundary.Physical==(arm==0?r.AddressB:r.AddressA));
+            CHECK(clock_us<500000 && r.Restored && !fault);
+        }
+        Setup(&d);model_frame_us=50000;no_frames=1;
+        d.InheritedSignal.VSyncFreq.Numerator=20;d.InheritedSignal.VSyncFreq.Denominator=1;
+        CHECK(DcnLatchProbe(&d,0,&r)==STATUS_IO_TIMEOUT && clock_us<=204000 && ended==1);
+        for(i=0;i<8;i++) {
+            Setup(&d);
+            switch(i) {
+            case 0:d.InheritedSignalValid=0;break;
+            case 1:d.InheritedSignal.ScanLineOrdering=2;break;
+            case 2:d.InheritedSignal.VSyncFreq.Numerator=0;break;
+            case 3:d.InheritedSignal.VSyncFreq.Denominator=0;break;
+            case 4:d.InheritedSignal.VSyncFreq.Numerator=D3DKMDT_FREQUENCY_NOTSPECIFIED;break;
+            case 5:d.InheritedSignal.VSyncFreq.Numerator=19;d.InheritedSignal.VSyncFreq.Denominator=1;break;
+            case 6:d.RuntimeDisplayChanged=1;signal_fail=1;break;
+            case 7:d.InheritedSignal.VSyncFreq.Denominator=D3DKMDT_FREQUENCY_NOTSPECIFIED;break;
+            }
+            CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !writes && !ended && !fault);
+        }
+    }
+    deferred_acceptance=0;
+    {
+        static const unsigned delays[]={0,1,5,10,11,57,100,999,1000};
+        for(i=0;i<sizeof(delays)/sizeof(delays[0]);++i) {
+            Setup(&d);unlock_delay=delays[i];
+            CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS && !lock && r.Restored);
+            CHECK(r.Unlock[0].Attempted==1 && r.Unlock[0].ClearObserved==1 && r.Unlock[0].Status==0);
+            CHECK(r.Unlock[0].Reads==delays[i]+1 && !r.Unlock[0].LastValue);
+            CHECK(r.Unlock[0].LastQpc-r.Unlock[0].StartQpc==delays[i]);
+            CHECK(!delays[i] || r.Unlock[0].LastQpc-r.Unlock[0].LastSetQpc==1);
+            CHECK(!r.Unlock[1].Attempted && r.QpcFrequency==1000000);
+        }
+        Setup(&d);unlock_delay=1001;
+        CHECK(DcnLatchProbe(&d,1,&r)==STATUS_IO_TIMEOUT && fault && !r.Restored && ended==1);
+        for(i=0;i<2;++i) {
+            CHECK(r.Unlock[i].Attempted && r.Unlock[i].Reads==1001 && !r.Unlock[i].ClearObserved);
+            CHECK(r.Unlock[i].LastQpc-r.Unlock[i].StartQpc==1000 && r.Unlock[i].Status==STATUS_IO_TIMEOUT);
+        }
+        // A failed lock still owes cleanup; retain its independent measurement.
+        Setup(&d);lock_stuck=1;unlock_delay=57;
+        CHECK(DcnLatchProbe(&d,1,&r)==STATUS_IO_TIMEOUT && r.Restored && !fault);
+        CHECK(!r.Unlock[0].Attempted && r.Unlock[1].ClearObserved);
+        CHECK(r.Unlock[1].LastQpc-r.Unlock[1].StartQpc==57);
+        // A clear read can finish outside the observation allowance. Both the
+        // normal unlock and the cleanup unlock must still restore A once clear.
+        // The original measurement remains failed; restoration is independent.
+        for(arm=1;arm<3;++arm)for(i=0;i<2;++i) {
+            Setup(&d);unlock_read_cost_us=2000;lock_stuck=i;
+            CHECK(DcnLatchProbe(&d,arm,&r)==STATUS_IO_TIMEOUT);
+            CHECK(r.Status==STATUS_IO_TIMEOUT && r.UnlockStatus==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[i].ClearObserved && r.Unlock[i].Status==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[i].LastQpc-r.Unlock[i].StartQpc==2000);
+            CHECK(!r.Unlock[1-i].Attempted);
+            CHECK(r.RestoreStatus==STATUS_SUCCESS && r.Restored && live==r.AddressA);
+            CHECK(ended==1 && !owner && !lock && !fault && !invalid_owner_writes);
+        }
+        // A separate restore failure still requests recovery after a late clear.
+        Setup(&d);unlock_read_cost_us=2000;restore_fail=1;
+        CHECK(DcnLatchProbe(&d,2,&r)==STATUS_IO_TIMEOUT);
+        CHECK(r.Unlock[0].ClearObserved && r.RestoreStatus==STATUS_IO_DEVICE_ERROR);
+        CHECK(!r.Restored && fault && ended==1 && !owner && !lock);
+        // A stopped clock cannot make a stuck unlock spin indefinitely.
+        {
+            LATCH_CONTEXT c;
+            Setup(&d);memset(&c,0,sizeof(c));memset(&r,0,sizeof(r));
+            c.Device=&d;c.Result=&r;c.Frequency=1000000;c.LockOwned=1;
+            owner=resumed=1;lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+            unlock_stuck=qpc_frozen=1;
+            CHECK(LatchUnlock(&c,&r.Unlock[0])==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[0].Reads==1001 && clock_us==1000 && c.LockOwned);
+            // A clear read after a scheduling/read delay is retained but cannot
+            // become a successful in-budget observation or send a trigger.
+            Setup(&d);memset(&r,0,sizeof(r));c.LockOwned=1;
+            owner=resumed=1;lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+            unlock_read_cost_us=2000;
+            CHECK(LatchUnlock(&c,&r.Unlock[0])==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[0].ClearObserved && r.Unlock[0].LastQpc==2000 && !c.LockOwned && writes==1);
+            Setup(&d);memset(&r,0,sizeof(r));c.LockOwned=1;
+            owner=resumed=1;lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+            unlock_delay=100;qpc_backwards=1;
+            CHECK(LatchUnlock(&c,&r.Unlock[0])==STATUS_IO_TIMEOUT);
+            CHECK(r.Unlock[0].Reads==1 && !r.Unlock[0].ClearObserved && writes==1);
+        }
+    }
+    Setup(&d);CHECK(DcnLatchProbe(&d,1,&r)==STATUS_SUCCESS);
+    nread=reads;nwrite=writes;nguard=guards;
+    // Every MMIO read, write (before/after effect) and ownership checkpoint can fail.
+    for(i=1;i<=nread;i++) {
+        Setup(&d);fail_read=i;status=DcnLatchProbe(&d,1,&r);
+        CHECK(!NT_SUCCESS(status));CHECK(!owner && !lock && !invalid_owner_writes);
+        CHECK(clock_us<500000 && (!ended || !r.WritesAttempted || r.Restored || fault));
+        if(ended && !r.WritesAttempted)CHECK(!fault && !r.Restored && !programs);
+    }
+    for(applied=0;applied<2;applied++)for(i=1;i<=nwrite;i++) {
+        Setup(&d);fail_write=i;after_write=applied;status=DcnLatchProbe(&d,1,&r);
+        CHECK(!NT_SUCCESS(status));CHECK(!owner && !lock && !invalid_owner_writes);
+        CHECK(clock_us<500000 && (r.Restored || fault));
+    }
+    for(i=1;i<=nguard;i++) {
+        Setup(&d);fail_guard=i;status=DcnLatchProbe(&d,1,&r);
+        CHECK(!NT_SUCCESS(status));CHECK(!owner && !lock && !invalid_owner_writes);
+        CHECK(clock_us<500000 && (!r.WritesAttempted || r.Restored || fault));
+        if(!r.WritesAttempted)CHECK(!fault && !r.Restored && !programs);
+    }
+    // Power withdrawal prohibits further MMIO writes, including cleanup.
+    for(i=1;i<=nread;i++) {
+        Setup(&d);power_on_read=i;status=DcnLatchProbe(&d,1,&r);
+        CHECK(!NT_SUCCESS(status));CHECK(!owner && !invalid_owner_writes);
+        CHECK(clock_us<500000 && (!ended || !r.WritesAttempted || fault));
+        if(!r.WritesAttempted)CHECK(!fault && !r.Restored);
+    }
+    Setup(&d);unlock_stuck=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,1,&r)) && fault && !r.Restored && ended==1);
+    Setup(&d);lock_stuck=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,1,&r)) && !lock && r.Restored);
+    Setup(&d);no_frames=1;CHECK(DcnLatchProbe(&d,0,&r)==STATUS_IO_TIMEOUT && clock_us<100000 && ended==1);
+    Setup(&d);restore_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && fault && !r.Restored);
+    Setup(&d);begin_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !writes && !programs && !ended);
+    Setup(&d);resume_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !fault && ended==1);
+    for(i=1;i<=4;i++) {
+        Setup(&d);refuse_after_begin=i;
+        CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !programs && !writes && !fault && ended==1);
+        CHECK(!r.WritesAttempted && !r.Restored && r.RestoreStatus==STATUS_SUCCESS);
+    }
+    Setup(&d);program_refused=1;
+    CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && programs==1 && !writes && !fault && ended==1);
+    CHECK(!r.WritesAttempted && !r.Restored && r.RestoreStatus==STATUS_SUCCESS);
+    Setup(&d);end_fail=1;CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && r.Restored);
+    for(i=0;i<15;i++) {
+        Setup(&d);
+        switch(i) {
+        case 0:d.RuntimeFramebufferLength=1;break;
+        case 1:d.Post.Pitch++;break;
+        case 2:d.Modeset.PipeChanged=1;break;
+        case 3:d.Modeset.InheritedFixed=1;break;
+        case 4:d.RetainedPowerPhase=1;break;
+        case 5:d.Mmio=NULL;break;
+        case 6:otg=0;break;
+        case 7:surface=HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_DCC_EN_MASK;break;
+        case 8:triple=HUBPREQ0_DCSURF_FLIP_CONTROL2__SURFACE_TRIPLE_BUFFER_ENABLE_MASK;break;
+        case 9:selector=OTG0_OTG_GLOBAL_CONTROL0__OTG_MASTER_UPDATE_LOCK_SEL_MASK;break;
+        case 10:lock=OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;break;
+        case 11:irql=2;break;
+        case 12:d.RuntimeDisplayChanged=1;d.RuntimePostValid=0;break;
+        case 13:d.RuntimeDisplayChanged=1;d.RuntimePost.Width++;break;
+        case 14:d.RuntimeDisplayChanged=1;d.RuntimePost.Height++;break;
+        }
+        CHECK(!NT_SUCCESS(DcnLatchProbe(&d,0,&r)) && !writes && !programs && !ended);
+    }
+    Setup(&d);CHECK(DcnLatchProbe(NULL,0,&r)==r.Status && !NT_SUCCESS(r.Status));
+    Setup(&d);CHECK(DcnLatchProbe(&d,Bc250LatchArmCount,&r)==r.Status && !NT_SUCCESS(r.Status));
+    Setup(&d);CHECK(DcnLatchProbe(&d,0,NULL)==STATUS_INVALID_PARAMETER);
+    printf("latch probe: %u checks, %u failures (software H1/H2 and fault injection only)\n",checks,fails);
+    return fails?1:0;
+}

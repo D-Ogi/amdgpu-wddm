@@ -73,6 +73,11 @@
     "escapes": "CONNECTOR_REPLUG (BD-170 writer-overlap witness)",
     "marker": "lab:connector-replug",
     "source": "driver/kmd/display.c"
+   },
+   {
+    "escapes": "LATCH_PROBE (BD-223 reserved-buffer experiment)",
+    "marker": "lab:latch-probe",
+    "source": "driver/kmd/display.c"
    }
   ]
  },
@@ -3888,6 +3893,16 @@
    "name": "LABGDIHWACCEL",
    "where": "bc250-win driver/kmd/guard.c GuardLabReadGdiHwAccel (lab flavour only), a REG_DWORD value under the driver's Parameters key; the KMD holds the CamelCase name as a UTF-16LE string",
    "does": "GDI hardware acceleration swap arm: 1 opens the GDI gate whatever EnableGdiHwAccel says, 2 opens it with the engine path only (no compute dispatch); the release flavour has only EnableGdiHwAccel",
+   "lab": {
+    "every": [
+     "bc250kmd.sys"
+    ]
+   }
+  },
+  {
+   "name": "LABSCALEDPLANE",
+   "where": "bc250-win driver/kmd/guard.c GuardLabReadScaledPlane (lab flavour only), a REG_DWORD value under the driver's Parameters key; the KMD holds the CamelCase name as a UTF-16LE string",
+   "does": "BD-223 scaled plane arm: bit 0 offers the multiplane-overlay caps and the Check answer for a scaled plane 0, bit 1 reports the VSync as the MPO type, bit 2 says MaxOverlayPlanes 2; the release flavour reports no multiplane overlay",
    "lab": {
     "every": [
      "bc250kmd.sys"

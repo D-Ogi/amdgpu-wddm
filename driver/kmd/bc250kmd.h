@@ -300,6 +300,28 @@ typedef struct _BC250_DEVICE {
     ULONGLONG DcnCurrentAddress;
     BOOLEAN DcnDiverged;
     BOOLEAN DcnBlanked;                // this driver requested blank; restore must unblank
+    // BD-223 (lab flavour, LabScaledPlane): a flip of a multiplane-overlay plane 0 left pipe 0 in a scaled shape
+    // (DcnPlaneShape) and not in the 1:1 shape of the source mode (DcnPlaneNative). Every other write of the flip
+    // sequence puts DcnPlaneNative back in the same update (dcn.c DcnFlipWriteSequence). Published under
+    // DcnSurfaceSequence; the CPU copy of the present path refuses a scaled plane (DcnScanoutMapping).
+    BOOLEAN DcnPlaneScaled;
+    BC250_SCALER_PLAN DcnPlaneShape;
+    BC250_SCALER_PLAN DcnPlaneNative;
+    volatile LONG DcnPlaneShapeWrites;      // flips that wrote a scaled shape
+    volatile LONG DcnPlaneShapeRestores;    // writes of the native shape after a scaled one
+    volatile LONG DcnPlaneShapeFailures;    // shape writes refused or failed (the lock not held, an MMIO failure)
+    // Incremented by DcnPlaneShapeModeset at every program of the pipe by a mode: a plane that DML approved for one
+    // mode is not flipped under the next one (dcn.c DcnPlaneApproved).
+    volatile LONG DcnPlaneModeStamp;
+    // BD-223 stage S2 (dcn.c DCN_PLANE_STATE): Check's approvals with their DML plans, the flip's copy of one, and the
+    // requestor and global sync of the mode while a plane's own are on the pipe. Opaque here, because the DML types
+    // do not compile with every unit that includes this header (their bool is not the one of amdgpu.h). dcn.c has a
+    // C_ASSERT that the state fits.
+#define BC250_DCN_PLANE_STATE_BYTES 6144u
+    ULONGLONG DcnPlaneState[BC250_DCN_PLANE_STATE_BYTES / sizeof(ULONGLONG)];   // 8-byte aligned, as the state needs
+    volatile LONG DcnPlaneRequestorWrites;  // flips that wrote a plane's requestor
+    volatile LONG DcnPlaneRequestorRestores; // writes of the mode's requestor after a plane's
+    volatile LONG DcnPlaneRequestorDropped;  // mode programs that found a plane's requestor on the pipe
     // M15.14 plane format (0.7.216.20, plane_format.h). The firmware's three format registers, read once per start
     // by DcnCaptureFirmwareFormat (WddmStart). DcnPlaneFormats is TRUE only when they decode to ARGB8888, and
     // only then may a flip program another format or restore check one. DcnPlaneFormat is the plane format the
@@ -666,6 +688,9 @@ void GuardLabReadPagingRingStart(_In_ PDRIVER_OBJECT DriverObject);
 // Lab flavour only: LabGdiHwAccel (REG_DWORD under Parameters, read only in DriverEntry), 1 opens the GDI gate, 2
 // opens it with the engine path only.
 void GuardLabReadGdiHwAccel(_In_ PDRIVER_OBJECT DriverObject);
+// Lab flavour only (BD-223): LabScaledPlane (REG_DWORD under Parameters, read only in DriverEntry), the scaled plane
+// bits that WddmStart latches (wddm.c BC250_WDDM_SCALED_PLANE_*).
+void GuardLabReadScaledPlane(_In_ PDRIVER_OBJECT DriverObject);
 ULONGLONG GuardLabCommitPagingRingStart(void);
 extern unsigned long long bc250_sdma_lab_ring_start;    // shim/bc250_sdma.c, consumed at the SDMA0 bring-up
 extern int bc250_ring_boundary_pad;                     // shim/bc250_ring.c, 0 only in a lab control run
@@ -681,6 +706,8 @@ ULONG GuardPagingBoundaryMode(void);    // any IRQL: a value fixed at DriverEntr
 BOOLEAN GuardLabGdiHwAccel(void);
 // TRUE only in the lab flavour with LabGdiHwAccel 2: RenderGdi submits no compute dispatch. Any IRQL.
 BOOLEAN GuardLabGdiEngineOnly(void);
+// BD-223: the LabScaledPlane bits read at DriverEntry in the lab flavour; 0 in the release flavour. Any IRQL.
+ULONG GuardLabScaledPlane(void);
 // BD-114: a REG_DWORD under Windows' own HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers, read only. The
 // one value this driver reads there is TdrDelay, the OS's own timeout budget, which our private submit watchdog
 // must never undercut (submit_watchdog.h). Read-only: nothing in this driver writes that key - the installer
@@ -860,6 +887,39 @@ NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same w
 // and a failure with Wrote TRUE is unknown, never proof that nothing was written.
 NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
     ULONGLONG AllocationBytes, BOOLEAN Immediate, _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote);
+// BD-223: the same flip for a multiplane-overlay plane 0 of its own size. Shape is the plane's scaler plan
+// (dcn_plane.c Bc250PlanePrepare), whose source size is the surface's; NULL is DcnFlipSourceAddress. The shape is
+// written inside the same OTG lock as the address, and only when it differs from the one on the pipe.
+NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch,
+    ULONG PlaneFormat, ULONGLONG AllocationBytes, BOOLEAN Immediate, _In_opt_ const BC250_SCALER_PLAN* Shape,
+    _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote);
+// BD-223: the pitch a full-size flip must have on the pipe as it is committed (DcnFlipSourceAddress's own rule).
+ULONG DcnPlanePitch(_In_ BC250_DEVICE* Device);
+// BD-223 stage S2: what Check's DML step answered, for its log line. Status is ConnectorLinkPlaneDml's; the rest is
+// that call's summary (connector.h) and the global sync of the plan and of OTG0.
+typedef struct _BC250_DCN_PLANE_CHECK {
+    NTSTATUS Status;
+    int Result;
+    ULONG Valid, DispClockKhz, DppClockKhz, BudgetDispKhz, BudgetDppKhz;
+    ULONG VStartup, VReady, VUpdateOffset, VUpdateWidth;
+    ULONG OtgVStartup, OtgVUpdateOffset;
+} BC250_DCN_PLANE_CHECK;
+struct _BC250_PLANE_PLAN;
+// PASSIVE_LEVEL (CheckMultiPlaneOverlaySupport2). DML for the plane at Pitch (bytes, BytesPerPixel its unit), the
+// clock budget, the global sync against OTG0 and the requestor's own range checks. An approved plane is kept with
+// its whole plan under the mode stamp read before DML ran, so that a flip can program the plan (DcnPlaneShapeLocked)
+// without DML. Returns the verdict (dcn_plane.h enum bc250_plane_verdict).
+ULONG DcnPlaneCheck(_Inout_ BC250_DEVICE* Device, _In_ const struct _BC250_PLANE_PLAN* Plan, ULONG Pitch,
+    ULONG BytesPerPixel, _Out_ BC250_DCN_PLANE_CHECK* Out);
+// Any level, no lock: TRUE when Check approved Shape at Pitch under the mode on the screen now, or when the pipe
+// shows that plane already.
+BOOLEAN DcnPlaneApproved(_In_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape, ULONG Pitch);
+// MmioStart: an empty approval table and no plane requestor on the pipe.
+void DcnPlaneStateReset(_Inout_ BC250_DEVICE* Device);
+// Every mode program of the pipe. PipeProgrammed: the caller writes the mode's requestor and global sync too.
+void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device, BOOLEAN PipeProgrammed);
+BOOLEAN DcnPlaneShapeIs(_In_ const BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape);
+BOOLEAN DcnPlaneShapeCurrent(_In_ const BC250_DEVICE* Device, _Out_ BC250_SCALER_PLAN* Shape);
 // BD-170: after an immediate flip, sample P' (SURFACE_FLIP_PENDING clear and PRIMARY_SURFACE_ADDRESS read back as
 // Physical) for at most BC250_DCN_IMMEDIATE_OBSERVE_US after the programming and record the result (dcn.c says why).
 // ProgramStartQpc and ProgramEndQpc are KeQueryPerformanceCounter just before DcnFlipSourceAddress and just after it
@@ -1407,6 +1467,11 @@ NTSTATUS WddmPrimaryExclusiveEnd(_Inout_ BC250_DEVICE* Device, ULONG Generation,
 // Resume authorizes only reserved-buffer writes. An error prohibits those writes as well. Bugcheck/stop callbacks
 // use a distinct, explicitly OS-serialized entry; IRQL or a failed section never selects that entry implicitly.
 NTSTATUS WddmWriterResume(_Inout_ BC250_DEVICE* Device);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+// Probe calls remain inside one OS-synchronized escape. A failure requests
+// display recovery before End, so failed cleanup cannot restore an app buffer.
+NTSTATUS WddmLatchProbeCheck(BC250_DEVICE* Device, ULONG Generation, BOOLEAN Fail);
+#endif
 // pnp.c's Bc250SetPowerState at the start of D3: dxgmms2 flushed the flip queue, so nothing is owed any more.
 void WddmFlipFlushed(_Inout_ BC250_DEVICE* Device);
 // pnp.c's Bc250DpcRoutine: E5's notification (DMA_PAGE_FAULTED) and drain record, a no-op unless E5 queued it.

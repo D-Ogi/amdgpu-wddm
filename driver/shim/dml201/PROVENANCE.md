@@ -11,7 +11,7 @@ The numerical sources remain unchanged. Two platform adaptations are generated:
 portable variadic logging macros, and a NaN result for the math helpers' zero-divisor assertion.
 The planner rejects non-finite outputs. Other AMD assertions record a failure in the caller's workspace.
 
-The planner admits one progressive, full-size linear RGB8 plane with physical addressing and no DCC.
+`Bc250Dml201Plan` admits one progressive, full-size linear RGB8 plane with physical addressing and no DCC.
 It has no MMIO, allocation, firmware call or global mutable state. The caller supplies an aligned heap
 workspace and protects floating-point state. A successful plan does not prove a hardware mode change.
 The caller must program clocks, watermarks, RQ/DLG/TTU and OTG sync before unblanking.
@@ -26,7 +26,8 @@ The caller must program clocks, watermarks, RQ/DLG/TTU and OTG sync before unbla
   The planner requires this input. It does not silently substitute the upstream 3 GHz fallback.
 - DCN201 IP limits and SoC clock/latency bounds come from `dcn201_resource.c`.
   `BboxDefaults=1` records this origin. They are not measurements of the current hardware.
-  The one-pipe restriction changes the available DPP/OTG count to one.
+  The single-plane entry changes the available DPP/OTG count to one. The group
+  entry permits one DPP per supplied plane and one OTG for the whole group.
   It does not change the numerical algorithms.
 
 Native Linux selects DML20 for DCN201. Its DCN201 clock manager does not use the `pp_smu` argument or
@@ -53,13 +54,42 @@ The isolated host test covers admitted modes, reference-clock changes, bounds an
 It verifies timing-dependent register values so that inherited DLG values cannot stand in for a new calculation.
 It does not test register programming, memory-service latency, clock transitions or display output.
 
+The same runner uses explicit clang-cl 23.1.4 and also runs `dml201_mpo_test.c`.
+That separate host experiment supplies two synthetic RGB pipes to the original
+numerical code. It verifies shared versus separate timing and insufficient DPP/OTG
+counts. It is separate from the public adapter test, `dml201_group_test.c`.
+The latter binds actual scaler preparation to `Bc250Dml201PlanGroup`. That
+entry keeps per-plane RQ/DLG/TTU and shared watermarks together. It supports
+one or two unsplit linear RGB32 or NV12 planes and an 8-bpc RGB output.
+Its geometry uses the same quantized ratios and final taps as the scaler plan.
+Format admission, cursor placement, the hardware clock/service contract and
+complete MPO transactions remain the caller's responsibility. Cursors are
+budgeted on each RGB pipe and disabled on each video pipe as in AMD's population
+function. No hardware or
+capability admission follows from this numerical result.
+
+NV12 uses the separate component fields in `dcn20_fpu.c:1615-1694`. The
+chroma-pitch unit follows `amdgpu_dm/amdgpu_dm_plane.c:889-890`, relative to
+`drivers/gpu/drm/amd/display/`: framebuffer byte pitch divided by component
+bytes per pixel. For NV12 this is a two-byte UV sample. The adapter verifies
+even surface dimensions and separate 256-byte row alignment before numerical
+evaluation. It retains original source extents and actual prepared component
+viewports, quantized ratios and taps. Subsampled chroma enables scaling even
+when luma is 1:1. The numerical AMD files remain unchanged.
+
+`dml201_nv12_test.c` includes the real adapter for mapping controls and tests
+the public group entry with real scaler preparation. It does not establish
+NV12 surface addresses, chroma siting, CSC correctness or hardware admission.
+See the [MPO requirements](../../../docs/design/multiplane-overlay-requirements.md)
+for results and the remaining integration work.
+
 ## Hardware application
 
 `bc250_dcn201_pipe.c` imports the DCN201 hardware hooks through `extract_dcn201_pipe.py`.
 `reference/pipe/manifest.json` pins the originals. The extractor also emits register lists through
 `tools/regcalc`. `pipe_registers_readonly.json` separates status and clock-source reads from writes.
 
-The wrapper admits only HUBP0, DPP0, MPC0, OPP0, OTG0 and DIG0. It verifies all field ranges before
+The original modeset entry uses HUBP0, DPP0, MPC0, OPP0, OTG0 and DIG0. It verifies all field ranges before
 the first write. The caller blanks and drains the plane, serializes the full mode change, and supplies
 the ATOM crystal clock. A failed write requires a full replay of the previous plan.
 The wrapper preserves the first I/O error and restores the FIFO override even after a clock error.
@@ -67,12 +97,25 @@ All polls consume the caller's bounded stall budget.
 
 The following adaptations are explicit:
 
-- Upstream array selectors are fixed to pipe and OTG zero.
+- Output array selectors are fixed to OTG/OPP zero. HUBP-local registers can
+  select slice zero or one through `pipe_hubp_remap.inc`. The generator resolves
+  each name through regcalc and verifies that the field masks match. No register
+  stride is assumed and no global/output register is remapped.
 - DCN201 omits VM-only NOM0-3 and cursor1. An absent field accepts only a zero payload.
 - The wrapper rejects a power-gated HUBP instead of treating its skipped drain wait as success.
 - The wrapper has no 3 GHz or 600 MHz fallback when a clock-source read is invalid.
 - It disables stutter to match the computed plan, which has no C-state admission.
 - Only RGB8 video and black output are exposed. Other imported test-pattern branches have no public entry point.
+
+`Bc250Dcn201GroupProgramBlanked` programs separate RQ/DLG/TTU plans for unique
+HUBP0/HUBP1 selections and then writes the shared watermarks once. It verifies
+the complete group before MMIO. Both physical HUBPs must be powered, blanked
+and drained, including when the new group contains only one active plane.
+Read-back DISP/DPP clocks must satisfy every plane. This entry changes no
+clocks and does not establish the DCF/SOC/DRAM service contract. The caller
+owns that contract, the stopped/locked OTG and replay after an attempted-write
+failure. The function does not unblank, trigger or release a lock. It is a
+setup/recovery building block, not the live independent-plane update path.
 
 | Hardware contract | Source |
 | --- | --- |

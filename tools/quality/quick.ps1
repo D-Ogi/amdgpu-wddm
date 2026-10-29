@@ -416,6 +416,11 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
+ # BD-223: the scaler, MPC, surface and colour helpers, the DC types and the latch probe are gates of their own. Inside
+ # modeset they made it run past its 180 s deadline.
+ Check 'scaler-geometry' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scaler_geometry.ps1" -Root $Workspace -Out "$Out\scaler-geometry" }
+ Check 'dc-types' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dc_types.ps1" -Root $Workspace -Out "$Out\dc-types" }
+ Check 'latch-probe' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_latch_probe.ps1" -Root $Workspace -Out "$Out\latch-probe" -Mutations }
  Check 'atom-display' {
   $atomArgs=@('-Root',$Workspace,'-Out',"$Out\atom-display",'-Kits',$Kits)
   if($env:BC250_LINK_TEST_ROM){$atomArgs+=@('-PrivateRom',$env:BC250_LINK_TEST_ROM)}
@@ -592,6 +597,13 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='dcn-flip-retire-irql';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireAtDirql');Fails=$true}
   @{n='dcn-flip-retire-frame';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeRetireOneFrame');Fails=$true}
   @{n='dcn-flip-bridge-adopt';s='driver\kmd\test\run_dcn_flip.ps1';a=@('-Root',$Workspace,'-Mutation','BridgeAdoptIgnored');Fails=$true}
+@{n='dcn-plane-state';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace)}
+@{n='dcn-plane-state-save-every-flip';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','SaveEveryFlip');Fails=$true}
+@{n='dcn-plane-state-stamp';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','StampIgnored');Fails=$true}
+@{n='dcn-plane-state-sync-saved';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','SyncNotSaved');Fails=$true}
+@{n='dcn-plane-state-pitch';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','OnPipeIgnoresPitch');Fails=$true}
+@{n='dcn-plane-state-staged';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','StagedKept');Fails=$true}
+@{n='dcn-plane-state-modeset';s='driver\kmd\test\run_dcn_plane_state.ps1';a=@('-Root',$Workspace,'-Mutation','ModesetNoRestore');Fails=$true}
   @{n='flip-state';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits)}
   # Its deadline is 600 s in gate-inputs.json: 22 s to 92.3 s on 2026-10-28, half of the old 180 s under load.
   @{n='flip-state-controls';s='driver\kmd\test\run_flip_state.ps1';a=@('-Root',$Workspace,'-Kits',$Kits,'-Mutation','all')}
