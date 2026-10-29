@@ -1008,6 +1008,22 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
     },
@@ -1059,6 +1075,24 @@
           "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
           "component": "d3d11-umd-wow64"
         }
+      ],
+      "tests": [
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x86"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
       ]
     },
     {
@@ -1104,6 +1138,24 @@
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
           "pair_skew": "The x86 system Vulkan row 53ccb05f is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b) and the fixes it shares with the x64 system row d12fb4fd (tester.33 line ad130cc2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x86"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
     },
@@ -1197,6 +1249,22 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
     },
@@ -1273,6 +1341,22 @@
             "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
@@ -1357,6 +1441,22 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
     },
@@ -1409,6 +1509,24 @@
           "path": "payload/wow64/d3d11/amdgpu_wddm_radv.dll",
           "component": "d3d11-umd-wow64"
         }
+      ],
+      "tests": [
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x86"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        }
       ]
     },
     {
@@ -1455,6 +1573,24 @@
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
           "pair_skew": "The x86 system Vulkan row 53ccb05f is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b) and the fixes it shares with the x64 system row d12fb4fd (tester.33 line ad130cc2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
+        }
+      ],
+      "tests": [
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x86"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
     },
@@ -1549,6 +1685,22 @@
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_ib2_gather_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
     },
@@ -1626,6 +1778,22 @@
             "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c"
           ],
           "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_deferred_destroy_test.c",
+          "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
+        },
+        {
+          "name": "radv-bo-lifetime",
+          "run": "tools/build/build-radv-bo-lifetime-test.ps1",
+          "args": [
+            "-Source",
+            "{src}",
+            "-Build",
+            "{out}",
+            "-OutputDir",
+            "{testout}/lifetime",
+            "-Arch",
+            "x64"
+          ],
+          "requires": "src/amd/vulkan/winsys/wddm2/tests/radv_wddm2_bo_lifetime_test.c",
           "summary": "checks=(?<checks>\\d+), failures=(?<failures>\\d+)"
         }
       ]
