@@ -2108,7 +2108,9 @@ static void FrontWddm13Checks(const Opened &o, bool admitted, const char *(*reco
     const UINT wantCaps = DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_RGB |
                           DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_BILINEAR_FILTER |
                           DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_HIGH_FILTER;
-    CHECK(group.NumPlanes == 2 && group.MaxStretchFactor == 16.0f && group.MaxShrinkFactor == 1.0f &&
+    // The factors are the shared rule's (bc250_scanout_mpo_geometry): S2 admits a downscale on the plane.
+    CHECK(group.NumPlanes == 2 && group.MaxStretchFactor == (float)BC250_MPO_MAX_STRETCH_MILLI / 1000.0f &&
+              group.MaxShrinkFactor == (float)BC250_MPO_MAX_SHRINK_MILLI / 1000.0f &&
               group.OverlayCaps == wantCaps && group.StereoCaps == 0,
           "group 0: %u planes, stretch %.3f, shrink %.3f, caps %08x, stereo %08x", group.NumPlanes,
           group.MaxStretchFactor, group.MaxShrinkFactor, group.OverlayCaps, group.StereoCaps);
