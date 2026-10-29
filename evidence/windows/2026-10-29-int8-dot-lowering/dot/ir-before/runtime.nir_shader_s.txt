@@ -1,0 +1,94 @@
+shader: MESA_SHADER_COMPUTE
+source_blake3: {0x229b0b20, 0x206517e4, 0x15eb49bc, 0x09fcc385, 0xbea34f58, 0xe1f4c3fb, 0xcd3af0fa, 0x0cd148c0}
+name: 
+workgroup_size: 64, 1, 1
+num_ssbos: 2
+system_values_read: 0x00000000'00000000'00008400'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x20
+separate_shader: true
+flrp_lowered: true
+writes_memory: true
+decl_var ssbo INTERP_MODE_NONE restrict readonly In #0 (~0, 0, 0)
+decl_var ssbo INTERP_MODE_NONE restrict writeonly Out #1 (~0, 0, 1)
+decl_function main () (entrypoint)
+
+impl main {
+    con block b0:       // preds:
+    con 32     %0 = @load_scalar_arg_amd (base=2)
+    div 32     %1 = @load_vector_arg_amd (base=4, arg_upper_bound_u32_amd=63)
+    con 32     %2 = load_const (0x00000006)
+    con 32     %3 = ishl %0, %2 (0x6)
+    div 32     %4 = iadd %3, %1
+    con 32     %5 = @load_scalar_arg_amd (base=1, arg_num_lsb_zero=2)
+    con 32     %6 = load_const (0x00000001)
+    con 64     %7 = pack_64_2x32_split %5, %6 (0x1)
+    con 32     %8 = load_const (0x00000000)
+    con 32x8   %9 = @load_global_amd (%7, %8 (0x0)) (base=0, access=readonly|reorderable|smem-amd, align_mul=4, align_offset=0)
+    con 32x4  %10 = vec4 %9.a, %9.b, %9.c, %9.d
+    con 32    %11 = load_const (0x00000004)
+    div 32    %12 = ishl %4, %11 (0x4)
+    div 32x3  %13 = @load_ssbo (%10, %12) (access=readonly|reorderable, align_mul=16, align_offset=0, offset_shift=0)
+    div 32    %14 = extract_i8 %13.y, %8 (0x0)
+    div 32    %15 = extract_i8 %13.x, %8 (0x0)
+    div 32    %16 = imul24_relaxed %15, %14
+    div 32    %17 = extract_i8 %13.y, %6 (0x1)
+    div 32    %18 = extract_i8 %13.x, %6 (0x1)
+    div 32    %19 = imul24_relaxed %18, %17
+    div 32    %20 = iadd %16, %19
+    con 32    %21 = load_const (0x00000002)
+    div 32    %22 = extract_i8 %13.y, %21 (0x2)
+    div 32    %23 = extract_i8 %13.x, %21 (0x2)
+    div 32    %24 = imul24_relaxed %23, %22
+    con 32    %25 = load_const (0x00000003)
+    div 32    %26 = extract_i8 %13.y, %25 (0x3)
+    div 32    %27 = extract_i8 %13.x, %25 (0x3)
+    div 32    %28 = imul24_relaxed %27, %26
+    div 32    %29 = iadd %24, %28
+    div 32    %30 = iadd %20, %29
+    div 32    %31 = extract_u8 %13.y, %8 (0x0)
+    div 32    %32 = extract_u8 %13.x, %8 (0x0)
+    div 32    %33 = umul24_relaxed %32, %31
+    div 32    %34 = extract_u8 %13.y, %6 (0x1)
+    div 32    %35 = extract_u8 %13.x, %6 (0x1)
+    div 32    %36 = umul24_relaxed %35, %34
+    div 32    %37 = iadd %33, %36
+    div 32    %38 = extract_u8 %13.y, %21 (0x2)
+    div 32    %39 = extract_u8 %13.x, %21 (0x2)
+    div 32    %40 = umul24_relaxed %39, %38
+    div 32    %41 = extract_u8 %13.y, %25 (0x3)
+    div 32    %42 = extract_u8 %13.x, %25 (0x3)
+    div 32    %43 = umul24_relaxed %42, %41
+    div 32    %44 = iadd %40, %43
+    div 32    %45 = iadd %37, %44
+    div 32    %46 = imul24_relaxed %15, %31
+    div 32    %47 = imul24_relaxed %18, %34
+    div 32    %48 = iadd %46, %47
+    div 32    %49 = imul24_relaxed %23, %38
+    div 32    %50 = imul24_relaxed %27, %41
+    div 32    %51 = iadd %49, %50
+    div 32    %52 = iadd %48, %51
+    div 32    %53 = iadd %30, %13.z
+    div 32x4  %54 = vec4 %30, %45, %52, %53
+    con 32x4  %55 = vec4 %9.e, %9.f, %9.g, %9.h
+    con 32    %56 = load_const (0x00000030 = 48)
+    div 32    %57 = imul %4, %56 (0x30)
+                    @store_ssbo (%54, %55, %57) (wrmask=xyzw, access=writeonly, align_mul=16, align_offset=0, offset_shift=0)
+    div 32    %58 = iadd %45, %13.z
+    div 32    %59 = iadd %52, %13.z
+    div 32    %60 = iadd_sat %30, %13.z
+    div 32    %61 = uadd_sat %45, %13.z
+    div 32x4  %62 = vec4 %58, %59, %60, %61
+    con 32    %63 = load_const (0x00000010 = 16)
+    div 32    %64 = iadd %57, %63 (0x10)
+                    @store_ssbo (%62, %55, %64) (wrmask=xyzw, access=writeonly, align_mul=16, align_offset=0, offset_shift=0)
+    div 32    %65 = iadd_sat %52, %13.z
+    con 32    %66 = load_const (0x00000020 = 32)
+    div 32    %67 = iadd %57, %66 (0x20)
+                    @store_ssbo (%65, %55, %67) (wrmask=x, access=writeonly, align_mul=16, align_offset=0, offset_shift=0)
+                    // succs: b1
+    block b1:
+}
+

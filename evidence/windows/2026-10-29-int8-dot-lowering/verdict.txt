@@ -1,0 +1,81 @@
+  ok   after RESULT PASS {'shaders_failed': '0', 'accelerated_reported': '0', 'v_dot': '0', 'layer_mad24': '74', 'dxil_mad24': '62', 'scalar_bfe': '10', 'scalar_mul': '73', 'wrong_sign': '0', 'ms': '1717'}
+  ok   after: no accelerated dot property, no v_dot
+  ok   after runtime: mismatches=0 records=1051648
+  ok   runtime: out_fnv1a after 7e2bc410075dd03b = before 7e2bc410075dd03b
+  ok   after layer: mismatches=0 records=311296
+  ok   layer: out_fnv1a after 1c4788c65ce68699 = before 1c4788c65ce68699
+  ok   after scalar: mismatches=0 records=8192
+  ok   scalar: out_fnv1a after 292c8534d3f5c0d6 = before 292c8534d3f5c0d6
+  ok   after dxil: mismatches=0 records=262144
+  ok   dxil: out_fnv1a after 263e40f9465482b5 = before 263e40f9465482b5
+  ok   --wrong-sign control fails: RESULT FAIL, mismatches 9625073
+  ok   after: the ACO IR representation is there for every shader (else the listing gates are undecided)
+  listing            before (mad24 bfe mul dot)   after (mad24 bfe mul dot)   offline after
+    runtime                       0 0 0 0                      0 0 0 0   -
+    layer                         0 0 0 0                     74 0 0 0   mad24 37
+    scalar                       0 2 52 0                    0 10 73 0   bfe 6, mul 35
+    dxil                          0 0 0 0                     62 0 0 0   mad24 31
+  ok   layer: v_mad_i32_i24 > 0 (constant weights lowered as MAD24 chains)
+  ok   dxil: v_mad_i32_i24 > 0
+  ok   scalar: s_bfe_i32 after > before (SALU path)
+  note the lab listing differs from the offline harness (37, 31, 6): compare the ir-after dumps
+ARM 1 (vkdotcheck) PASS
+  ok   after RESULT DONE {'shaders': '14', 'build_failed': '0', 'total_median_ms': '45.4679', 'ms': '17617'}
+  shader         family    det  hash   vgpr b>a (offline)   spill b>a (offline)   median ms b > a   ratio
+  ok   blob_0815.spv: after deterministic
+  ok   blob_0815.spv: written resources identical before and after (1 hashed)
+  blob_0815.spv  pass1    1/1  same   256>168   (256>168)      0>0         (0>0)     2.3803 >   0.7773   0.327
+  ok   blob_0060.spv: after deterministic
+  ok   blob_0060.spv: written resources identical before and after (1 hashed)
+  blob_0060.spv  pass2    1/1  same   256>168   (256>168)     40>0        (40>0)     9.7487 >   6.1293   0.629
+  ok   blob_0036.spv: after deterministic
+  ok   blob_0036.spv: written resources identical before and after (1 hashed)
+  blob_0036.spv  pass3    1/1  same    56>56      (56>56)      0>0         (0>0)     0.7390 >   0.6892   0.933
+  ok   blob_0760.spv: after deterministic
+  ok   blob_0760.spv: written resources identical before and after (1 hashed)
+  blob_0760.spv  pass4    1/1  same   256>168   (256>168)      0>0         (0>0)     9.9234 >   5.5744   0.562
+  ok   blob_0811.spv: after deterministic
+  ok   blob_0811.spv: written resources identical before and after (1 hashed)
+  blob_0811.spv  pass5    1/1  same   256>168   (256>168)      0>0         (0>0)     1.0774 >   0.4569   0.424
+  ok   blob_0759.spv: after deterministic
+  ok   blob_0759.spv: written resources identical before and after (1 hashed)
+  blob_0759.spv  pass6    1/1  same    84>84      (84>84)      0>0         (0>0)     2.1306 >   1.1717   0.550
+  ok   blob_0824.spv: after deterministic
+  ok   blob_0824.spv: written resources identical before and after (1 hashed)
+  blob_0824.spv  pass7    1/1  same    64>64      (64>64)      0>0         (0>0)     2.4945 >   2.4296   0.974
+  ok   blob_0798.spv: after deterministic
+  ok   blob_0798.spv: written resources identical before and after (1 hashed)
+  blob_0798.spv  pass8    1/1  same    64>64      (64>64)      0>0         (0>0)     0.5875 >   0.6792   1.156
+  ok   blob_0842.spv: after deterministic
+  ok   blob_0842.spv: written resources identical before and after (1 hashed)
+  blob_0842.spv  pass9    1/1  same    84>72      (84>72)      0>0         (0>0)     2.8390 >   3.2937   1.160
+  ok   blob_1010.spv: after deterministic
+  ok   blob_1010.spv: written resources identical before and after (1 hashed)
+  blob_1010.spv  pass10   1/1  same   256>168   (256>168)     27>0        (27>0)     1.0389 >   0.5319   0.512
+  ok   blob_0412.spv: after deterministic
+  ok   blob_0412.spv: written resources identical before and after (1 hashed)
+  blob_0412.spv  pass11   1/1  same    56>56      (56>56)      0>0         (0>0)    10.4095 >   9.6910   0.931
+  ok   blob_0765.spv: after deterministic
+  ok   blob_0765.spv: written resources identical before and after (1 hashed)
+  blob_0765.spv  pass12   1/1  same   256>168   (256>168)      0>0         (0>0)     4.0271 >   2.9004   0.720
+  ok   blob_0068.spv: after deterministic
+  ok   blob_0068.spv: written resources identical before and after (5 hashed)
+  blob_0068.spv  postpass 1/1  same   128>100   (128>100)      0>0         (0>0)     6.6388 >   5.5788   0.840
+  ok   blob_0192.spv: after deterministic
+  ok   blob_0192.spv: written resources identical before and after (4 hashed)
+  blob_0192.spv  postpass 1/1  same   128>84     (128>84)      0>0         (0>0)     6.6322 >   5.5646   0.839
+  note sum of medians before 60.667 ms, after 45.468 ms, ratio 0.749 (reported, not a gate)
+ARM 2 (vkcorpusbench) PASS
+  after-cold 1706x960->2560x1440: fnv1a per run ['d7ddba1725c13731', 'd7ddba1725c13731', 'd7ddba1725c13731'], medians [11.9352, 11.9357, 11.937], warm_runs_identical=1 (reported only)
+  after-cold 1280x800->1920x1200: fnv1a per run ['2ef44e5b44bc9553', '0afef84d8baab0a8', '6e820094ffd8ca86'], medians [11.8279, 9.6616, 8.6302], warm_runs_identical=0 (reported only)
+  after-cold RESULT FAIL 1280x800->1920x1200:FAIL:4.1.2:11.8279,1706x960->2560x1440:PASS:4.1.2:11.9352
+  ok   1706x960->2560x1440: outputs logged before (3 runs) and after (3 runs)
+  ok   1706x960->2560x1440: fnv1a before ['d7ddba1725c13731'] after ['d7ddba1725c13731'] (kit3 13:45Z: d7ddba1725c13731)
+  ok   1706x960->2560x1440: warm_runs_identical after = 1
+  ok   1706x960->2560x1440: GEOMETRY median after 12.5392 ms <= before 16.2450 ms (kit3 13:45Z: 16.40 ms)
+  note 1706x960->2560x1440: lowest run median before 16.2247, after 11.9344 ms (GEOMETRY uses run 0; the runs of one session spread by up to 2.5 % at 13:45Z)
+  1706x960->2560x1440: run medians before 16.2450 16.8824 16.2247 | after 12.5392 11.9344 13.9727
+  1280x800->1920x1200: run medians before 10.9625 10.5793 10.9776 | after 7.7883 7.7932 7.8017   (reported only)
+  before RESULT FAIL 1280x800->1920x1200:FAIL:4.1.2:10.9625,1706x960->2560x1440:PASS:4.1.2:16.2450
+  after  RESULT FAIL 1280x800->1920x1200:FAIL:4.1.2:7.7883,1706x960->2560x1440:PASS:4.1.2:12.5392
+ARM 3 (FSR 4.1.2 navi2, hosted ICD swap) PASS

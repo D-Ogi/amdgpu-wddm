@@ -1,0 +1,38 @@
+vkdotcheck seed=0xb0c2500f5a4 wrong_sign=0
+icd C:\BC250\tmp\fsr4-v3-port\kit1\rows\system-x64-lab\vulkan_radeon.dll sha256 5C987CE9B32042161BB87E2EA3D8011C35FBF467084B29228327B4FCA2D47CCF (direct)
+device AMD BC-250 (RADV GFX1013) vendor 0x1002 device 0x13fe driver radv Mesa 27.0.0-devel (git-67d3864e05) api 1.4.363
+queue family 0 (flags 0xf)
+dot accelerated (packed u s su, accsat packed u s su, 8bit u s su): 0 0 0 0 0 0 0 0 0
+PIPELINE runtime compile_ms=4.5 records=1051648
+STATS runtime driver_pipeline_hash=5182202135767909267 sgprs=108 vgprs=20 spilled_sgprs=0 spilled_vgprs=0 code_size=276 lds_size=0 scratch_size=0 subgroups_per_simd=40 combined_inputs=0 combined_outputs=0 hash=3494803011 instructions=41 copies=6 branches=0 latency=749 inverse_throughput=68 vmem_clause=3 smem_clause=1 pre_sched_sgprs=8 pre_sched_vgprs=13 valu=31 salu=2 vmem=4 smem=1 vopd=0
+REPRESENTATION runtime name=nir_shader_s bytes=4278
+REPRESENTATION runtime name=aco_ir bytes=2983
+REPRESENTATION runtime name=assembly bytes=3019
+LISTING runtime v_mad_i32_i24=0 s_bfe_i32=0 s_mul_i32=0 v_dot=0 aco_ir=1
+DISPATCH runtime workgroups=16432 ms=1.40
+CHECK runtime records=1051648 words=9464832 mismatches=0 out_fnv1a=7e2bc410075dd03b
+PIPELINE layer compile_ms=4.8 records=311296
+STATS layer driver_pipeline_hash=5973341858638599079 sgprs=108 vgprs=24 spilled_sgprs=0 spilled_vgprs=0 code_size=632 lds_size=0 scratch_size=0 subgroups_per_simd=40 combined_inputs=0 combined_outputs=0 hash=3065577172 instructions=88 copies=5 branches=0 latency=851 inverse_throughput=148 vmem_clause=5 smem_clause=1 pre_sched_sgprs=8 pre_sched_vgprs=12 valu=74 salu=5 vmem=5 smem=1 vopd=0
+REPRESENTATION layer name=nir_shader_s bytes=7615
+REPRESENTATION layer name=aco_ir bytes=5400
+REPRESENTATION layer name=assembly bytes=5675
+LISTING layer v_mad_i32_i24=74 s_bfe_i32=0 s_mul_i32=0 v_dot=0 aco_ir=1
+DISPATCH layer workgroups=4864 ms=0.58
+CHECK layer records=311296 words=4980736 mismatches=0 out_fnv1a=1c4788c65ce68699
+PIPELINE scalar compile_ms=5.6 records=8192
+STATS scalar driver_pipeline_hash=13197637937648914304 sgprs=108 vgprs=4 spilled_sgprs=0 spilled_vgprs=0 code_size=720 lds_size=0 scratch_size=0 subgroups_per_simd=40 combined_inputs=0 combined_outputs=0 hash=2872450657 instructions=152 copies=22 branches=1 latency=697 inverse_throughput=128 vmem_clause=4 smem_clause=3 pre_sched_sgprs=31 pre_sched_vgprs=4 valu=16 salu=124 vmem=4 smem=3 vopd=0
+REPRESENTATION scalar name=nir_shader_s bytes=7879
+REPRESENTATION scalar name=aco_ir bytes=8526
+REPRESENTATION scalar name=assembly bytes=8925
+LISTING scalar v_mad_i32_i24=0 s_bfe_i32=10 s_mul_i32=73 v_dot=0 aco_ir=1
+DISPATCH scalar workgroups=8192 ms=0.46
+CHECK scalar records=8192 words=131072 mismatches=0 out_fnv1a=292c8534d3f5c0d6
+PIPELINE dxil compile_ms=6.4 records=262144
+STATS dxil driver_pipeline_hash=1000966761407631184 sgprs=108 vgprs=32 spilled_sgprs=0 spilled_vgprs=0 code_size=1060 lds_size=0 scratch_size=0 subgroups_per_simd=32 combined_inputs=0 combined_outputs=0 hash=4255546514 instructions=141 copies=5 branches=0 latency=988 inverse_throughput=250 vmem_clause=2 smem_clause=1 pre_sched_sgprs=8 pre_sched_vgprs=24 valu=122 salu=5 vmem=6 smem=1 vopd=0
+REPRESENTATION dxil name=nir_shader_s bytes=12553
+REPRESENTATION dxil name=aco_ir bytes=9759
+REPRESENTATION dxil name=assembly bytes=10575
+LISTING dxil v_mad_i32_i24=62 s_bfe_i32=0 s_mul_i32=0 v_dot=0 aco_ir=1
+DISPATCH dxil workgroups=4096 ms=0.46
+CHECK dxil records=262144 words=786432 mismatches=0 out_fnv1a=263e40f9465482b5
+RESULT PASS shaders_failed=0 accelerated_reported=0 v_dot=0 layer_mad24=74 dxil_mad24=62 scalar_bfe=10 scalar_mul=73 wrong_sign=0 ms=1717

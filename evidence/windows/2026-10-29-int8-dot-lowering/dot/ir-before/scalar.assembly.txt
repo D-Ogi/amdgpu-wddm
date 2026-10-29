@@ -1,0 +1,147 @@
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, branch, */
+	 s1: %0:s[0] = s_mov_b32 %138:s[3]
+	 s1: %0:s[3] = s_mov_b32 1
+	 s4: %6:s[4-7] = s_load_dwordx4 %4:s[2-3], 0 storage:buffer semantics:private,reorder
+	 s1: %8:s[1],  s1: %149:scc = s_lshl_b32 %254:s[0], 3
+	s_waitcnt lgkmcnt(0)
+	 s2: %9:s[4-5] = s_buffer_load_dwordx2 %6:s[4-7], %8:s[1] storage:buffer semantics:private,reorder
+	 s1: %0:s[8] = s_movk_i32 imm:127
+	 s1: %0:s[9] = s_movk_i32 imm:-128
+	 s2: %0:s[6-7] = s_mov_b64 1
+	s_waitcnt lgkmcnt(0)
+	 s1: %10:s[10],  s1: %152:scc = s_bfe_i32 %150:s[4], 0x80008
+	 s1: %11:s[11] = s_sext_i32_i8 %150:s[4]
+	 s1: %23:s[18] = s_mul_i32 %10:s[10], %18:s[9]
+	 s1: %30:s[22] = s_mul_i32 %10:s[10], (is16bit)%13:s[8]
+	 s1: %31:s[23] = s_mul_i32 %11:s[11], (is16bit)%13:s[8]
+	 s1: %24:s[19] = s_mul_i32 %11:s[11], %18:s[9]
+	 s1: %12:s[12],  s1: %154:scc = s_sub_i32 %11:s[11], %10:s[10]
+	 s1: %14:s[13],  s1: %155:scc = s_ashr_i32 %150:s[4], 24
+	 s1: %17:s[15],  s1: %156:scc = s_bfe_i32 %150:s[4], 0x80010
+	 s1: %26:s[20] = s_mul_i32 %14:s[13], %18:s[9]
+	 s1: %15:s[14] = s_mul_i32 %14:s[13], (is16bit)%13:s[8]
+	 s1: %33:s[25] = s_mul_i32 %17:s[15], (is16bit)%13:s[8]
+	 s1: %19:s[16] = s_mul_i32 %17:s[15], %18:s[9]
+	 s1: %20:s[17],  s1: %157:scc = s_add_u32 %19:s[16], %15:s[14]
+	 s1: %21:s[12],  s1: %158:scc = s_add_u32 %12:s[12], %20:s[17]
+	 s1: %43:s[29] = s_mul_i32 %10:s[10], 3
+	 s1: %22:s[12],  s1: %159:scc = s_add_u32 %21:s[12], %151:s[5]
+	 s1: %25:s[18],  s1: %160:scc = s_add_u32 %24:s[19], %23:s[18]
+	 s1: %27:s[16],  s1: %161:scc = s_add_u32 %19:s[16], %26:s[20]
+	 s1: %28:s[18],  s1: %162:scc = s_add_u32 %25:s[18], %27:s[16]
+	 s1: %51:s[31] = s_mul_i32 %10:s[10], -4
+	 s1: %53:s[32] = s_mul_i32 %11:s[11], -5
+	 s1: %29:s[21],  s1: %163:scc = s_add_u32 %28:s[18], %151:s[5]
+	 s1: %32:s[24],  s1: %164:scc = s_add_u32 %31:s[23], %30:s[22]
+	 s1: %34:s[25],  s1: %165:scc = s_add_u32 %33:s[25], %15:s[14]
+	 s1: %56:s[33] = s_mul_i32 %14:s[13], -2
+	 s1: %58:s[34] = s_mul_i32 %17:s[15], -3
+	 s1: %35:s[24],  s1: %166:scc = s_add_u32 %32:s[24], %34:s[25]
+	 s1: %36:s[26],  s1: %167:scc = s_add_u32 %35:s[24], %151:s[5]
+	 s1: %37:s[27],  s1: %168:scc = s_sub_i32 0, %11:s[11]
+	 s1: %38:s[27],  s1: %169:scc = s_sub_i32 %37:s[27], %10:s[10]
+	 s1: %39:s[28],  s1: %170:scc = s_sub_i32 0, %17:s[15]
+	 s1: %69:s[37] = s_mul_i32 %17:s[15], 0xffffffc0
+	 s1: %40:s[28],  s1: %171:scc = s_sub_i32 %39:s[28], %14:s[13]
+	 s1: %41:s[27],  s1: %172:scc = s_add_u32 %38:s[27], %40:s[28]
+	 s1: %42:s[27],  s1: %173:scc = s_add_u32 %41:s[27], %151:s[5]
+	 s1: %45:s[29],  s1: %175:scc = s_lshl2_add_u32 %11:s[11], %43:s[29]
+	 s1: %47:s[30],  s1: %177:scc = s_lshl1_add_u32 %17:s[15], %14:s[13]
+	 s1: %48:s[29],  s1: %178:scc = s_add_u32 %45:s[29], %47:s[30]
+	 s1: %49:s[29],  s1: %179:scc = s_add_u32 %48:s[29], %151:s[5]
+	 s1: %54:s[32],  s1: %180:scc = s_add_u32 %53:s[32], %51:s[31]
+	 s1: %59:s[34],  s1: %181:scc = s_add_u32 %58:s[34], %56:s[33]
+	 s1: %60:s[32],  s1: %182:scc = s_add_u32 %54:s[32], %59:s[34]
+	 s1: %61:s[32],  s1: %183:scc = s_add_u32 %60:s[32], %151:s[5]
+	 s1: %62:s[19],  s1: %184:scc = s_add_u32 %24:s[19], %151:s[5]
+	 s1: %64:s[35],  s1: %185:scc = s_lshl_b32 %10:s[10], 5
+	 s1: %78:s[10] = s_mulk_i32 %10:s[10] imm:-85
+	 s1: %80:s[39] = s_mul_i32 %11:s[11], 55
+	 s1: %83:s[40] = s_mul_i32 %14:s[13], 19
+	 s1: %65:s[23],  s1: %186:scc = s_add_u32 %31:s[23], %64:s[35]
+	 s1: %67:s[36],  s1: %187:scc = s_lshl_b32 %14:s[13], 6
+	 s1: %85:s[41] = s_mul_i32 %17:s[15], -15
+	 s1: %70:s[37],  s1: %188:scc = s_add_u32 %69:s[37], %67:s[36]
+	 s1: %71:s[23],  s1: %189:scc = s_add_u32 %65:s[23], %70:s[37]
+	 s1: %72:s[20],  s1: %190:scc = s_sub_i32 %26:s[20], %17:s[15]
+	 s1: %73:s[20],  s1: %191:scc = s_add_u32 %30:s[22], %72:s[20]
+	 s1: %192:scc = s_cmp_lt_i32 %151:s[5], 0
+	 s1: %194:s[38],  s1: %193:scc = s_add_u32 0x7fffffff, %192:scc
+	 s1: %196:s[20],  s1: %195:scc = s_add_i32 %73:s[20], %151:s[5]
+	 s1: %74:s[20] = s_cselect_b32 %194:s[38], %196:s[20], %195:scc
+	 s1: %201:s[24],  s1: %200:scc = s_add_i32 %35:s[24], %151:s[5]
+	 s1: %75:s[24] = s_cselect_b32 %194:s[38], %201:s[24], %200:scc
+	 s1: %206:s[18],  s1: %205:scc = s_add_i32 %28:s[18], %151:s[5]
+	 s1: %76:s[18] = s_cselect_b32 %194:s[38], %206:s[18], %205:scc
+	 s1: %81:s[39],  s1: %207:scc = s_add_u32 %80:s[39], %78:s[10]
+	 s1: %86:s[41],  s1: %208:scc = s_add_u32 %85:s[41], %83:s[40]
+	 s1: %87:s[39],  s1: %209:scc = s_add_u32 %81:s[39], %86:s[41]
+	 s1: %214:s[39],  s1: %213:scc = s_add_i32 %87:s[39], %151:s[5]
+	 s1: %88:s[39] = s_cselect_b32 %194:s[38], %214:s[39], %213:scc
+	 s1: %89:s[42],  s1: %215:scc = s_bfe_u32 %150:s[4], 0x80008
+	 s1: %90:s[43],  s1: %216:scc = s_bfe_u32 %150:s[4], 0x80000
+	 s1: %103:s[48] = s_mul_i32 (is24bit)%89:s[42], 15
+	 s1: %91:s[44] = s_mul_i32 (is24bit)%90:s[43], (is24bit)%13:s[8]
+	 s1: %104:s[43] = s_mul_i32 (is24bit)%90:s[43], 15
+	 s1: %92:s[44],  s1: %217:scc = s_add_u32 %91:s[44], %89:s[42]
+	 s1: %94:s[45],  s1: %218:scc = s_lshr_b32 %150:s[4], 24
+	 s1: %96:s[4],  s1: %219:scc = s_bfe_u32 %150:s[4], 0x80010
+	 s1: %113:s[15] = s_mulk_i32 %17:s[15] imm:255
+	 s1: %95:s[46] = s_mul_i32 (is24bit)%94:s[45], 0xff
+	 s1: %106:s[49] = s_mul_i32 (is24bit)%94:s[45], 15
+	 s1: %98:s[47],  s1: %220:scc = s_lshl_b32 (is16bit)%96:s[4], 7
+	 s1: %107:s[50] = s_mul_i32 (is24bit)%96:s[4], 15
+	 s1: %117:s[8] = s_mul_i32 (is16bit)%13:s[8], (is16bit)%94:s[45]
+	 s1: %119:s[9] = s_mul_i32 %18:s[9], (is16bit)%89:s[42]
+	 s1: %99:s[47],  s1: %221:scc = s_add_u32 %98:s[47], %95:s[46]
+	 s1: %100:s[44],  s1: %222:scc = s_add_u32 %92:s[44], %99:s[47]
+	 s2: %0:exec = s_mov_b64 %122:s[6-7]
+	 s1: %101:s[44],  s1: %223:scc = s_add_u32 %100:s[44], %151:s[5]
+	 s1: %105:s[43],  s1: %224:scc = s_add_u32 %104:s[43], %103:s[48]
+	 s1: %108:s[50],  s1: %225:scc = s_add_u32 %107:s[50], %106:s[49]
+	 s1: %109:s[43],  s1: %226:scc = s_add_u32 %105:s[43], %108:s[50]
+	 s1: %227:s[43],  s1: %228:scc = s_add_u32 %109:s[43], %151:s[5]
+	 s1: %110:s[43] = s_cselect_b32 -1, %227:s[43], %228:scc
+	 s1: %111:s[11],  s1: %229:scc = s_add_u32 %11:s[11], %30:s[22]
+	 s1: %112:s[13],  s1: %230:scc = s_lshl_b32 %14:s[13], 7
+	 s1: %114:s[15],  s1: %231:scc = s_add_u32 %113:s[15], %112:s[13]
+	 s1: %115:s[11],  s1: %232:scc = s_add_u32 %111:s[11], %114:s[15]
+	 s1: %116:s[11],  s1: %233:scc = s_add_u32 %115:s[11], %151:s[5]
+	 s1: %118:s[8],  s1: %234:scc = s_sub_i32 %117:s[8], %96:s[4]
+	 s1: %120:s[9],  s1: %235:scc = s_add_u32 %119:s[9], %118:s[8]
+	 s1: %240:s[9],  s1: %239:scc = s_add_i32 %120:s[9], %151:s[5]
+	 s1: %121:s[38] = s_cselect_b32 %194:s[38], %240:s[9], %239:scc
+	s_cbranch_execz block:BB6
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	 s4: %124:s[4-7] = s_load_dwordx4 %4:s[2-3], 16 storage:buffer semantics:private,reorder
+	 s1: %126:s[0],  s1: %245:scc = s_lshl_b32 %254:s[0], 6
+	 v1: %0:v[0] = v_mov_b32 %22:s[12]
+	 v1: %0:v[1] = v_mov_b32 %29:s[21]
+	 v2: %0:v[2-3] = v_lshrrev_b64 0, %0:s[26-27]
+	s_waitcnt lgkmcnt(0)
+	buffer_store_dwordx4 %124:s[4-7],  v1: undef, %126:s[0], %246:v[0-3] storage:buffer
+	 v1: %0:v[0] = v_mov_b32 %49:s[29]
+	 v1: %0:v[1] = v_mov_b32 %61:s[32]
+	 v1: %0:v[2] = v_mov_b32 %62:s[19]
+	 v1: %0:v[3] = v_mov_b32 %71:s[23]
+	buffer_store_dwordx4 %124:s[4-7],  v1: undef, %126:s[0], %248:v[0-3] offset:16 storage:buffer
+	 v1: %0:v[0] = v_mov_b32 %74:s[20]
+	 v1: %0:v[1] = v_mov_b32 %75:s[24]
+	 v1: %0:v[2] = v_mov_b32 %76:s[18]
+	 v1: %0:v[3] = v_mov_b32 %88:s[39]
+	buffer_store_dwordx4 %124:s[4-7],  v1: undef, %126:s[0], %250:v[0-3] offset:32 storage:buffer
+	 v1: %0:v[0] = v_mov_b32 %101:s[44]
+	 v1: %0:v[1] = v_mov_b32 %110:s[43]
+	 v1: %0:v[2] = v_mov_b32 %116:s[11]
+	 v1: %0:v[3] = v_mov_b32 %121:s[38]
+	buffer_store_dwordx4 %124:s[4-7],  v1: undef, %126:s[0], %252:v[0-3] offset:48 storage:buffer
+BB6
+/* logical preds: BB1, BB0, / linear preds: BB1, BB0, / kind: uniform, top-level, merge, */
+	s_endpgm
+

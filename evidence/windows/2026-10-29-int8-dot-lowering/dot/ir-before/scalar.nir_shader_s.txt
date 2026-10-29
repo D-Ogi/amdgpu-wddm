@@ -1,0 +1,169 @@
+shader: MESA_SHADER_COMPUTE
+source_blake3: {0x0c78552e, 0x1f3e5491, 0x4a3fdd5c, 0x59fbd088, 0xfe1f129f, 0x757643fc, 0x82235960, 0xba70b7b3}
+name: 
+workgroup_size: 64, 1, 1
+num_ssbos: 2
+system_values_read: 0x00000000'00000000'00008400'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x21
+separate_shader: true
+flrp_lowered: true
+writes_memory: true
+decl_var ssbo INTERP_MODE_NONE restrict readonly In #0 (~0, 0, 0)
+decl_var ssbo INTERP_MODE_NONE restrict writeonly Out #1 (~0, 0, 1)
+decl_function main () (entrypoint)
+
+impl main {
+    con block b0:        // preds:
+    con 32      %0 = @load_scalar_arg_amd (base=2)
+    con 32      %1 = @load_scalar_arg_amd (base=1, arg_num_lsb_zero=2)
+    con 32      %2 = load_const (0x00000001)
+    con 64      %3 = pack_64_2x32_split %1, %2 (0x1)
+    con 32      %4 = load_const (0x00000000)
+    con 32x4    %5 = @load_global_amd (%3, %4 (0x0)) (base=0, access=readonly|reorderable|smem-amd, align_mul=4, align_offset=0)
+    con 32      %6 = load_const (0x00000003)
+    con 32      %7 = ishl %0, %6 (0x3)
+    con 32x2    %8 = @load_ssbo (%5, %7) (access=readonly|reorderable|speculatable|smem-amd, align_mul=8, align_offset=0, offset_shift=0)
+    con 32      %9 = extract_i8 %8.x, %2 (0x1)
+    con 32     %10 = extract_i8 %8.x, %4 (0x0)
+    con 32     %11 = isub %10, %9
+    con 32     %12 = load_const (0x0000007f = 127)
+    con 32     %13 = extract_i8 %8.x, %6 (0x3)
+    con 32     %14 = imul24_relaxed %13, %12 (0x7f)
+    con 32     %15 = load_const (0x00000002)
+    con 32     %16 = extract_i8 %8.x, %15 (0x2)
+    con 32     %17 = load_const (0xffffff80 = -128 = 4294967168)
+    con 32     %18 = imul24_relaxed %16, %17 (0xffffff80)
+    con 32     %19 = iadd %18, %14
+    con 32     %20 = iadd %11, %19
+    con 32     %21 = iadd %20, %8.y
+    con 32     %22 = imul24_relaxed %9, %17 (0xffffff80)
+    con 32     %23 = imul24_relaxed %10, %17 (0xffffff80)
+    con 32     %24 = iadd %23, %22
+    con 32     %25 = imul24_relaxed %13, %17 (0xffffff80)
+    con 32     %26 = iadd %18, %25
+    con 32     %27 = iadd %24, %26
+    con 32     %28 = iadd %27, %8.y
+    con 32     %29 = imul24_relaxed %9, %12 (0x7f)
+    con 32     %30 = imul24_relaxed %10, %12 (0x7f)
+    con 32     %31 = iadd %30, %29
+    con 32     %32 = imul24_relaxed %16, %12 (0x7f)
+    con 32     %33 = iadd %32, %14
+    con 32     %34 = iadd %31, %33
+    con 32     %35 = iadd %34, %8.y
+    con 32     %36 = isub %4 (0x0), %10
+    con 32     %37 = isub %36, %9
+    con 32     %38 = isub %4 (0x0), %16
+    con 32     %39 = isub %38, %13
+    con 32     %40 = iadd %37, %39
+    con 32     %41 = iadd %40, %8.y
+    con 32     %42 = imul24_relaxed %9, %6 (0x3)
+    con 32     %43 = ishl %10, %15 (0x2)
+    con 32     %44 = iadd %43, %42
+    con 32     %45 = ishl %16, %2 (0x1)
+    con 32     %46 = iadd %45, %13
+    con 32     %47 = iadd %44, %46
+    con 32     %48 = iadd %47, %8.y
+    con 32     %49 = load_const (0xfffffffc = -4 = 4294967292)
+    con 32     %50 = imul24_relaxed %9, %49 (0xfffffffc)
+    con 32     %51 = load_const (0xfffffffb = -5 = 4294967291)
+    con 32     %52 = imul24_relaxed %10, %51 (0xfffffffb)
+    con 32     %53 = iadd %52, %50
+    con 32     %54 = load_const (0xfffffffe = -2 = 4294967294)
+    con 32     %55 = imul24_relaxed %13, %54 (0xfffffffe)
+    con 32     %56 = load_const (0xfffffffd = -3 = 4294967293)
+    con 32     %57 = imul24_relaxed %16, %56 (0xfffffffd)
+    con 32     %58 = iadd %57, %55
+    con 32     %59 = iadd %53, %58
+    con 32     %60 = iadd %59, %8.y
+    con 32     %61 = iadd %23, %8.y
+    con 32     %62 = load_const (0x00000005)
+    con 32     %63 = ishl %9, %62 (0x5)
+    con 32     %64 = iadd %30, %63
+    con 32     %65 = load_const (0x00000006)
+    con 32     %66 = ishl %13, %65 (0x6)
+    con 32     %67 = load_const (0xffffffc0 = -64 = 4294967232)
+    con 32     %68 = imul24_relaxed %16, %67 (0xffffffc0)
+    con 32     %69 = iadd %68, %66
+    con 32     %70 = iadd %64, %69
+    con 32     %71 = isub %25, %16
+    con 32     %72 = iadd %29, %71
+    con 32     %73 = iadd_sat %72, %8.y
+    con 32     %74 = iadd_sat %34, %8.y
+    con 32     %75 = iadd_sat %27, %8.y
+    con 32     %76 = load_const (0xffffffab = -85 = 4294967211)
+    con 32     %77 = imul24_relaxed %9, %76 (0xffffffab)
+    con 32     %78 = load_const (0x00000037 = 55)
+    con 32     %79 = imul24_relaxed %10, %78 (0x37)
+    con 32     %80 = iadd %79, %77
+    con 32     %81 = load_const (0x00000013 = 19)
+    con 32     %82 = imul24_relaxed %13, %81 (0x13)
+    con 32     %83 = load_const (0xfffffff1 = -15 = 4294967281)
+    con 32     %84 = imul24_relaxed %16, %83 (0xfffffff1)
+    con 32     %85 = iadd %84, %82
+    con 32     %86 = iadd %80, %85
+    con 32     %87 = iadd_sat %86, %8.y
+    con 32     %88 = extract_u8 %8.x, %2 (0x1)
+    con 32     %89 = extract_u8 %8.x, %4 (0x0)
+    con 32     %90 = umul24_relaxed %89, %12 (0x7f)
+    con 32     %91 = iadd %90, %88
+    con 32     %92 = load_const (0x000000ff = 255)
+    con 32     %93 = extract_u8 %8.x, %6 (0x3)
+    con 32     %94 = umul24_relaxed %93, %92 (0xff)
+    con 32     %95 = extract_u8 %8.x, %15 (0x2)
+    con 32     %96 = load_const (0x00000007)
+    con 32     %97 = ishl %95, %96 (0x7)
+    con 32     %98 = iadd %97, %94
+    con 32     %99 = iadd %91, %98
+    con 32    %100 = iadd %99, %8.y
+    con 32    %101 = load_const (0x0000000f = 15)
+    con 32    %102 = umul24_relaxed %88, %101 (0xf)
+    con 32    %103 = umul24_relaxed %89, %101 (0xf)
+    con 32    %104 = iadd %103, %102
+    con 32    %105 = umul24_relaxed %93, %101 (0xf)
+    con 32    %106 = umul24_relaxed %95, %101 (0xf)
+    con 32    %107 = iadd %106, %105
+    con 32    %108 = iadd %104, %107
+    con 32    %109 = uadd_sat %108, %8.y
+    con 32    %110 = iadd %10, %29
+    con 32    %111 = ishl %13, %96 (0x7)
+    con 32    %112 = imul24_relaxed %16, %92 (0xff)
+    con 32    %113 = iadd %112, %111
+    con 32    %114 = iadd %110, %113
+    con 32    %115 = iadd %114, %8.y
+    con 32    %116 = imul24_relaxed %12 (0x7f), %93
+    con 32    %117 = isub %116, %95
+    con 32    %118 = imul24_relaxed %17 (0xffffff80), %88
+    con 32    %119 = iadd %118, %117
+    con 32    %120 = iadd_sat %119, %8.y
+    con 64    %121 = load_const (0x0000000000000001 = 0.000000)
+    div 1     %122 = @inverse_ballot (%121 (0x1))
+                     // succs: b1 b2
+    if %122 {
+        div block b1:        // preds: b0
+        con 32x4  %123 = @load_global_amd (%3, %4 (0x0)) (base=16, access=readonly|reorderable|smem-amd, align_mul=4, align_offset=0)
+        con 32x4  %124 = vec4 %21, %28, %35, %41
+        con 32    %125 = ishl %0, %65 (0x6)
+                         @store_ssbo (%124, %123, %125) (wrmask=xyzw, access=writeonly, align_mul=64, align_offset=0, offset_shift=0)
+        con 32x4  %126 = vec4 %48, %60, %61, %70
+        con 32    %127 = load_const (0x00000010 = 16)
+        con 32    %128 = iadd.nuw %125, %127 (0x10)
+                         @store_ssbo (%126, %123, %128) (wrmask=xyzw, access=writeonly, align_mul=64, align_offset=16, offset_shift=0)
+        con 32x4  %129 = vec4 %73, %74, %75, %87
+        con 32    %130 = load_const (0x00000020 = 32)
+        con 32    %131 = iadd.nuw %125, %130 (0x20)
+                         @store_ssbo (%129, %123, %131) (wrmask=xyzw, access=writeonly, align_mul=64, align_offset=32, offset_shift=0)
+        con 32x4  %132 = vec4 %100, %109, %115, %120
+        con 32    %133 = load_const (0x00000030 = 48)
+        con 32    %134 = iadd.nuw %125, %133 (0x30)
+                         @store_ssbo (%132, %123, %134) (wrmask=xyzw, access=writeonly, align_mul=64, align_offset=48, offset_shift=0)
+                         // succs: b3
+    } else {
+        div block b2:  // preds: b0, succs: b3
+    }
+    con block b3:  // preds: b1 b2, succs: b4
+    block b4:
+}
+

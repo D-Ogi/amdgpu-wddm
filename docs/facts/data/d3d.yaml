@@ -797,3 +797,12 @@ facts:
     status_text: "MEASURED (unit A, 12 cases, one process each)"
     detail: "Each case writes the complement of the expected result into its readback first, and each iteration changes its seed, so untouched memory cannot pass. The format is R32_UINT, which removes colour-conversion ambiguity. This is a positive control of the tested paths and not a result for the benchmark. The series ran no texture, no depth, no indirect draw, no asynchronous compute, no ray tracing and no Present. The log does not prove which internal compiler path the pass-through hull shader took, because the accepting branch writes no record on success. The analysis is `docs/research/bd180-time-spy-device-loss-and-timeout.md`"
     evidence: "[BD-180 Time Spy rounds](../evidence/windows/2026-10-21-bd180-time-spy-rounds/README.md)"
+  - id: M930
+    status: MEASURED
+    date: "2026-10-29"
+    claim: "With the dot-product lowering of M928 in the hosted D3D12 ICD, the FSR 4.1.2 RDNA 2 model through D3D12 on unit A upscales 1706x960 to 2560x1440 in 11.9344 ms instead of 16.2247 ms (lowest run median, 0.736), with the same output in all nine runs (FNV-1a d7ddba1725c13731). At 1280x800 to 1920x1200 the lowest run median goes from 10.5793 ms to 7.7883 ms"
+    status_text: "MEASURED (unit A, three runs of 300 frames for each geometry and each side, lab flavour)"
+    detail: "Median GPU time of frames 150 to 299 of each run. Only `d3d12\\amdgpu_wddm_radv_d3d12.dll` of the active DriverStore folder changed (D5D29702 to the lab row 2B519C17) and was put back after the run. The first set after the change compiled the pipelines again and is reported apart. At 1200p the output differs between runs on both sides, so that geometry gives times only"
+    evidence: "[INT8 dot lowering, lab](../evidence/windows/2026-10-29-int8-dot-lowering/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M928"}

@@ -1,0 +1,592 @@
+[   0.000] fsr4host frames=300 score_first=150 runs=3 bound_s=170 version=auto probe_versions=0 geometries=2 header_upscaler_version=4.1.2
+[   0.000] IDENT_WRAP on family=0x8f erev=0x28
+[   0.001] STAGE device
+[   0.005] ADAPTER index=0 vendor=0x1002 device=0x13fe subsys=0x00001022 rev=0x00 flags=0x0 vram_mib=8117 name="BC-250 GPU (amdgpu-wddm)"
+[   0.005] ADAPTER index=1 vendor=0x1414 device=0x008c subsys=0x00000000 rev=0x00 flags=0x2 vram_mib=0 name="Microsoft Basic Render Driver"
+[   0.005] SELECTED vendor=0x1002 device=0x13fe luid=00000000:00008526
+[   1.573] D3D12CreateDevice hr=0x00000000
+[   1.573] CAPS shader_model hr=0x00000000 highest=0x66
+[   1.573] CAPS min_precision=0x2 typed_uav_load_additional=1 resource_binding_tier=3 resource_heap_tier=2
+[   1.573] CAPS wave_ops=1 wave_lanes=32..64 total_lanes=1536 int64=1 native16=1
+[   1.583] QUEUE timestamp_hz=100000000
+[   1.583] MODULE after_device C:\Windows\SYSTEM32\d3d12.dll
+[   1.583] MODULE after_device C:\Windows\SYSTEM32\dxgi.dll
+[   1.583] MODULE after_device C:\Windows\SYSTEM32\D3D12Core.dll
+[   1.583] MODULE after_device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_d3d12.dll
+[   1.583] MODULE after_device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_vkd3d.dll
+[   1.583] MODULE after_device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_radv_d3d12.dll
+[   1.583] STAGE load_ffx
+[   1.583] PROBE amdxc64_loaded_before=0
+[   1.585] LOAD C:\BC250\tmp\fsr4-t34\kit3\amd_fidelityfx_upscaler_dx12.dll handle=00007FF944D10000 error=0
+[   1.585] TRACE patched_imports module=upscaler count=9
+[   1.586] TRACE patched_imports module=loader count=4
+[   1.586] LOAD C:\BC250\tmp\fsr4-t34\kit3\amd_fidelityfx_loader_dx12.dll handle=00007FF9BC670000 error=0
+[   1.586] STAGE versions
+[   1.586] TRACE GetModuleHandleA name=amd_fidelityfx_upscaler_dx12.dll result=00007FF944D10000
+[   1.586] TRACE GetProcAddress module=amd_fidelityfx_upscaler_dx12.dll name=ffxCreateContext found=1
+[   1.586] TRACE GetProcAddress module=amd_fidelityfx_upscaler_dx12.dll name=ffxDestroyContext found=1
+[   1.586] TRACE GetProcAddress module=amd_fidelityfx_upscaler_dx12.dll name=ffxConfigure found=1
+[   1.586] TRACE GetProcAddress module=amd_fidelityfx_upscaler_dx12.dll name=ffxQuery found=1
+[   1.586] TRACE GetProcAddress module=amd_fidelityfx_upscaler_dx12.dll name=ffxDispatch found=1
+[   1.586] TRACE GetModuleHandleA name=amdxc64.dll result=0000000000000000
+[   1.586] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[   1.586] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[   1.586] TRACE CreateDXGIFactory1 iid=1bc6ea02-ef36-464f-bf0c21ca39e5168a hr=0x00000000
+[   1.586] TRACE LoadLibraryA name=gdi32.dll result=00007FF9C33C0000 error=0
+[   1.586] TRACE GetProcAddress module=GDI32.dll name=D3DKMTEnumAdapters found=1
+[   1.586] TRACE GetProcAddress module=GDI32.dll name=D3DKMTQueryAdapterInfo found=1
+[   1.586] TRACE D3DKMTEnumAdapters status=0x00000000 count=2
+[   1.586] TRACE   kmt_adapter 0 luid=00000000:00008526 sources=0 selected=1
+[   1.586] TRACE   kmt_adapter 1 luid=00000000:00009610 sources=0 selected=0
+[   1.586] IDENT_WRAP answered type=0 size=608 family=0x8f erev=0x28 (the kernel driver is not asked)
+[   1.586] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[   1.586] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[   1.586] VERSIONS count rc=OK count=3
+[   1.586] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[   1.586] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[   1.586] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[   1.586] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[   1.586] VERSIONS list rc=OK count=3
+[   1.586] VERSION index=0 id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[   1.586] VERSION index=1 id=0xf5a5ca1e00c01006 driver=0 name="3.1.6"
+[   1.586] VERSION index=2 id=0xf5a5ca1e00803004 driver=0 name="2.3.4"
+[   1.586] PROBE amdxc64_loaded_after_query=0
+[   1.586] STAGE inputs
+[   1.644] INPUTS 1280x800 world_w=1580 pan_px=1 box=213x266 box_speed_px=3
+[   1.645] STAGE create_context
+[   1.645] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[   1.645] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[   1.656] TRACE CreateDXGIFactory2 flags=0x0 iid=7b7166ec-21c7-44ae-b21ac9ae321ae369 hr=0x00000000
+[   1.656] TRACE getenv_s name=MLSR-WATERMARK present=0
+[   1.687] TRACE LoadLibraryExA name=amdihk64.dll flags=0x0 result=0000000000000000 error=126
+[   1.687] CREATE rc=OK(0) override=0x0000000000000000 seconds=0.042
+[   1.687] PROVIDER rc=OK id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[   1.687] GPU_MEMORY rc=OK total_mib=172.1 aliasable_mib=0.0
+[   1.687] MODULE after_create C:\Windows\SYSTEM32\d3d12.dll
+[   1.687] MODULE after_create C:\Windows\SYSTEM32\dxgi.dll
+[   1.687] MODULE after_create C:\Windows\SYSTEM32\D3D12Core.dll
+[   1.687] MODULE after_create C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_d3d12.dll
+[   1.687] MODULE after_create C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_vkd3d.dll
+[   1.687] MODULE after_create C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_radv_d3d12.dll
+[   1.687] MODULE after_create C:\BC250\tmp\fsr4-t34\kit3\amd_fidelityfx_upscaler_dx12.dll
+[   1.687] MODULE after_create C:\BC250\tmp\fsr4-t34\kit3\amd_fidelityfx_loader_dx12.dll
+[   1.687] JITTER_PHASES rc=OK phases=0
+[   1.687] STAGE dispatch_loop
+[   1.687] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.687] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.688] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.688] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.688] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.688] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.688] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.688] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.689] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.689] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.689] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.689] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.689] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.689] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.689] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.689] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.690] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.690] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.690] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.690] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.690] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.690] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.691] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.691] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.691] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.691] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.692] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.692] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.692] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.692] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.692] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.692] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.693] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.693] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.693] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.693] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.693] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.693] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.693] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.693] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.693] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.693] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.694] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.694] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.694] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.694] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.695] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.695] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.695] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.695] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.695] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.695] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.695] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.695] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.696] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.696] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.696] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.696] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   1.696] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[   1.696] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[   7.249] FIRST_FRAME 1280x800->1920x1200 run0 done seconds=5.562
+[   7.984] FRAMES 1280x800->1920x1200 run0 50/300 seconds=6.297
+[   8.703] FRAMES 1280x800->1920x1200 run0 100/300 seconds=7.015
+[   9.383] FRAMES 1280x800->1920x1200 run0 150/300 seconds=7.695
+[  10.032] FRAMES 1280x800->1920x1200 run0 200/300 seconds=8.344
+[  10.663] FRAMES 1280x800->1920x1200 run0 250/300 seconds=8.975
+[  11.257] FRAMES 1280x800->1920x1200 run0 300/300 seconds=9.569
+[  11.257] STAGE timestamps
+[  11.260] TIMING 1280x800->1920x1200 run0 frames=150..299 median_ms=11.8279 p90_ms=12.7727 min_ms=10.9866 max_ms=12.7871 mean_ms=11.6983 first_ms=29.9886 second_ms=20.8316
+[  11.260] STAGE readback
+[  11.297] OUTPUT 1280x800->1920x1200 run0 fnv1a=2ef44e5b44bc9553 bytes=18432000 constant=0 nonfinite_halfs=0
+[  11.305] OUTPUT_STATS 1280x800->1920x1200 run0 mean_r=0.5302 mean_g=0.5017 mean_b=0.4773
+[  11.511] PNG C:\BC250\tmp\fsr4-t34\navi2-20261029T145849Z\out_1920x1200.png 1920x1200 hr=0x00000000
+[  11.584] PNG C:\BC250\tmp\fsr4-t34\navi2-20261029T145849Z\in_1280x800.png 1280x800 hr=0x00000000
+[  11.588] DESTROY rc=OK
+[  11.588] STAGE create_context
+[  11.588] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[  11.588] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[  11.598] TRACE CreateDXGIFactory2 flags=0x0 iid=7b7166ec-21c7-44ae-b21ac9ae321ae369 hr=0x00000000
+[  11.598] TRACE getenv_s name=MLSR-WATERMARK present=0
+[  11.621] TRACE LoadLibraryExA name=amdihk64.dll flags=0x0 result=0000000000000000 error=126
+[  11.621] CREATE rc=OK(0) override=0x0000000000000000 seconds=0.033
+[  11.621] PROVIDER rc=OK id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[  11.621] GPU_MEMORY rc=OK total_mib=172.1 aliasable_mib=0.0
+[  11.621] JITTER_PHASES rc=OK phases=0
+[  11.621] STAGE dispatch_loop
+[  11.621] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.621] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.621] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.621] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.622] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.622] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.622] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.622] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.622] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.622] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.622] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.622] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.623] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.623] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.623] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.623] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.623] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.623] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.623] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.623] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.624] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.624] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.624] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.624] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.624] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.624] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.625] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.625] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.625] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.625] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.625] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.625] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.625] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.625] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.625] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.625] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.625] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.625] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.626] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.626] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.626] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.626] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.626] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.626] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.626] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.626] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.627] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.627] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.627] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.627] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.627] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.627] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.628] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.628] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.628] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.628] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.628] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.628] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.628] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  11.628] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  11.642] FIRST_FRAME 1280x800->1920x1200 run1 done seconds=0.021
+[  12.222] FRAMES 1280x800->1920x1200 run1 50/300 seconds=0.601
+[  12.805] FRAMES 1280x800->1920x1200 run1 100/300 seconds=1.184
+[  13.359] FRAMES 1280x800->1920x1200 run1 150/300 seconds=1.738
+[  13.902] FRAMES 1280x800->1920x1200 run1 200/300 seconds=2.281
+[  14.423] FRAMES 1280x800->1920x1200 run1 250/300 seconds=2.802
+[  14.935] FRAMES 1280x800->1920x1200 run1 300/300 seconds=3.314
+[  14.935] STAGE timestamps
+[  14.935] TIMING 1280x800->1920x1200 run1 frames=150..299 median_ms=9.6616 p90_ms=10.2897 min_ms=9.1210 max_ms=10.2978 mean_ms=9.7350 first_ms=11.6196 second_ms=11.8300
+[  14.935] STAGE readback
+[  14.973] OUTPUT 1280x800->1920x1200 run1 fnv1a=0afef84d8baab0a8 bytes=18432000 constant=0 nonfinite_halfs=0
+[  14.981] OUTPUT_STATS 1280x800->1920x1200 run1 mean_r=0.5302 mean_g=0.5017 mean_b=0.4773
+[  14.985] DESTROY rc=OK
+[  14.985] STAGE create_context
+[  14.985] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[  14.985] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[  14.994] TRACE CreateDXGIFactory2 flags=0x0 iid=7b7166ec-21c7-44ae-b21ac9ae321ae369 hr=0x00000000
+[  14.994] TRACE getenv_s name=MLSR-WATERMARK present=0
+[  15.016] TRACE LoadLibraryExA name=amdihk64.dll flags=0x0 result=0000000000000000 error=126
+[  15.016] CREATE rc=OK(0) override=0x0000000000000000 seconds=0.031
+[  15.016] PROVIDER rc=OK id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[  15.016] GPU_MEMORY rc=OK total_mib=172.1 aliasable_mib=0.0
+[  15.016] JITTER_PHASES rc=OK phases=0
+[  15.016] STAGE dispatch_loop
+[  15.016] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.016] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.017] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.017] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.017] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.017] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.017] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.017] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.017] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.017] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.018] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.018] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.018] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.018] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.018] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.018] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.018] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.018] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.019] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.019] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.019] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.019] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.019] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.019] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.019] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.019] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.020] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.020] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.020] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.020] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.020] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.020] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.020] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.020] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.020] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.020] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.021] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.021] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.021] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.021] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.021] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.021] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.021] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.021] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.021] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.021] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.022] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.022] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.022] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.022] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.022] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.022] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.023] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.023] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.023] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.023] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.023] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.023] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.023] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  15.023] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  15.034] FIRST_FRAME 1280x800->1920x1200 run2 done seconds=0.017
+[  15.518] FRAMES 1280x800->1920x1200 run2 50/300 seconds=0.502
+[  16.003] FRAMES 1280x800->1920x1200 run2 100/300 seconds=0.987
+[  16.473] FRAMES 1280x800->1920x1200 run2 150/300 seconds=1.456
+[  16.942] FRAMES 1280x800->1920x1200 run2 200/300 seconds=1.926
+[  17.402] FRAMES 1280x800->1920x1200 run2 250/300 seconds=2.386
+[  17.850] FRAMES 1280x800->1920x1200 run2 300/300 seconds=2.834
+[  17.850] STAGE timestamps
+[  17.850] TIMING 1280x800->1920x1200 run2 frames=150..299 median_ms=8.6302 p90_ms=8.6385 min_ms=8.1842 max_ms=8.6422 mean_ms=8.4221 first_ms=8.9384 second_ms=9.1186
+[  17.850] STAGE readback
+[  17.888] OUTPUT 1280x800->1920x1200 run2 fnv1a=6e820094ffd8ca86 bytes=18432000 constant=0 nonfinite_halfs=0
+[  17.896] OUTPUT_STATS 1280x800->1920x1200 run2 mean_r=0.5302 mean_g=0.5017 mean_b=0.4773
+[  17.899] DESTROY rc=OK
+[  17.931] DETERMINISM 1280x800->1920x1200 run0_vs_run1 same_size=1 differ_halfs=8400511/9216000 first_half=2 max_abs=0.257812 mean_abs=0.00330552
+[  17.963] DETERMINISM 1280x800->1920x1200 run0_vs_run2 same_size=1 differ_halfs=8402762/9216000 first_half=0 max_abs=0.288574 mean_abs=0.00330336
+[  17.995] DETERMINISM 1280x800->1920x1200 run1_vs_run2 same_size=1 differ_halfs=8400767/9216000 first_half=0 max_abs=0.299561 mean_abs=0.00331219
+[  17.995] DETERMINISM_CLASS 1280x800->1920x1200 warm_runs_identical=0 (run0 is the cold context; equal warm runs with a differing run0 is the cold-first-context class)
+[  17.995] PROVIDER_MAJOR 1280x800->1920x1200 major=4 allow_fallback=0
+[  17.995] DIFF 1280x800->1920x1200 worst_max_abs=0.299561 tolerance=0 bounded=0
+[  17.995] GEOMETRY 1280x800->1920x1200 FAIL provider="4.1.2" provider_id=0xf5a5ca1e01001002 median_ms=11.8279 identical=0 reason=not_bit_identical
+[  18.000] STAGE inputs
+[  18.065] INPUTS 1706x960 world_w=2006 pan_px=1 box=284x320 box_speed_px=3
+[  18.066] STAGE create_context
+[  18.066] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[  18.066] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[  18.076] TRACE CreateDXGIFactory2 flags=0x0 iid=7b7166ec-21c7-44ae-b21ac9ae321ae369 hr=0x00000000
+[  18.076] TRACE getenv_s name=MLSR-WATERMARK present=0
+[  18.107] TRACE LoadLibraryExA name=amdihk64.dll flags=0x0 result=0000000000000000 error=126
+[  18.107] CREATE rc=OK(0) override=0x0000000000000000 seconds=0.040
+[  18.107] PROVIDER rc=OK id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[  18.107] GPU_MEMORY rc=OK total_mib=210.5 aliasable_mib=0.0
+[  18.107] MODULE after_create C:\Windows\SYSTEM32\d3d12.dll
+[  18.107] MODULE after_create C:\Windows\SYSTEM32\dxgi.dll
+[  18.107] MODULE after_create C:\Windows\SYSTEM32\D3D12Core.dll
+[  18.107] MODULE after_create C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_d3d12.dll
+[  18.107] MODULE after_create C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_vkd3d.dll
+[  18.107] MODULE after_create C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\d3d12\amdgpu_wddm_radv_d3d12.dll
+[  18.107] MODULE after_create C:\BC250\tmp\fsr4-t34\kit3\amd_fidelityfx_upscaler_dx12.dll
+[  18.107] MODULE after_create C:\BC250\tmp\fsr4-t34\kit3\amd_fidelityfx_loader_dx12.dll
+[  18.107] JITTER_PHASES rc=OK phases=0
+[  18.107] STAGE dispatch_loop
+[  18.107] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.107] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.107] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.107] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.107] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.107] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.108] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.108] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.108] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.108] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.108] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.108] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.108] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.108] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.109] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.109] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.109] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.109] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.109] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.109] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.109] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.109] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.110] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.110] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.110] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.110] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.110] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.110] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.110] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.110] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.111] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.111] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.111] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.111] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.111] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.111] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.111] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.111] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.111] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.111] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.111] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.111] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.112] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.112] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.112] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.112] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.112] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.112] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.113] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.113] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.113] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.113] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.113] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.113] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.113] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.113] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.113] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.114] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.114] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  18.114] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  18.129] FIRST_FRAME 1706x960->2560x1440 run0 done seconds=0.022
+[  18.786] FRAMES 1706x960->2560x1440 run0 50/300 seconds=0.679
+[  19.455] FRAMES 1706x960->2560x1440 run0 100/300 seconds=1.348
+[  20.124] FRAMES 1706x960->2560x1440 run0 150/300 seconds=2.017
+[  20.762] FRAMES 1706x960->2560x1440 run0 200/300 seconds=2.655
+[  21.400] FRAMES 1706x960->2560x1440 run0 250/300 seconds=3.294
+[  22.039] FRAMES 1706x960->2560x1440 run0 300/300 seconds=3.932
+[  22.039] STAGE timestamps
+[  22.039] TIMING 1706x960->2560x1440 run0 frames=150..299 median_ms=11.9352 p90_ms=11.9393 min_ms=11.9274 max_ms=11.9696 mean_ms=11.9356 first_ms=12.9537 second_ms=13.2167
+[  22.039] STAGE readback
+[  22.096] OUTPUT 1706x960->2560x1440 run0 fnv1a=d7ddba1725c13731 bytes=29491200 constant=0 nonfinite_halfs=0
+[  22.109] OUTPUT_STATS 1706x960->2560x1440 run0 mean_r=0.5343 mean_g=0.5014 mean_b=0.4772
+[  22.426] PNG C:\BC250\tmp\fsr4-t34\navi2-20261029T145849Z\out_2560x1440.png 2560x1440 hr=0x00000000
+[  22.539] PNG C:\BC250\tmp\fsr4-t34\navi2-20261029T145849Z\in_1706x960.png 1706x960 hr=0x00000000
+[  22.543] DESTROY rc=OK
+[  22.543] STAGE create_context
+[  22.543] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[  22.543] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[  22.551] TRACE CreateDXGIFactory2 flags=0x0 iid=7b7166ec-21c7-44ae-b21ac9ae321ae369 hr=0x00000000
+[  22.551] TRACE getenv_s name=MLSR-WATERMARK present=0
+[  22.577] TRACE LoadLibraryExA name=amdihk64.dll flags=0x0 result=0000000000000000 error=126
+[  22.577] CREATE rc=OK(0) override=0x0000000000000000 seconds=0.035
+[  22.578] PROVIDER rc=OK id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[  22.578] GPU_MEMORY rc=OK total_mib=210.5 aliasable_mib=0.0
+[  22.578] JITTER_PHASES rc=OK phases=0
+[  22.578] STAGE dispatch_loop
+[  22.578] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.578] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.578] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.578] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.578] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.578] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.578] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.578] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.579] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.579] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.579] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.579] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.579] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.579] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.579] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.579] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.579] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.579] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.580] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.580] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.580] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.580] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.580] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.580] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.580] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.580] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.581] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.581] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.581] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.581] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.581] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.581] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.581] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.581] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.582] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.582] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.582] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.582] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.582] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.582] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.582] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.582] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.582] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.582] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.583] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.583] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.583] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.583] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.583] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.583] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.583] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.583] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.583] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.583] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.584] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.584] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.584] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.584] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.584] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  22.584] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  22.599] FIRST_FRAME 1706x960->2560x1440 run1 done seconds=0.022
+[  23.228] FRAMES 1706x960->2560x1440 run1 50/300 seconds=0.650
+[  23.866] FRAMES 1706x960->2560x1440 run1 100/300 seconds=1.288
+[  24.504] FRAMES 1706x960->2560x1440 run1 150/300 seconds=1.927
+[  25.143] FRAMES 1706x960->2560x1440 run1 200/300 seconds=2.565
+[  25.781] FRAMES 1706x960->2560x1440 run1 250/300 seconds=3.203
+[  26.419] FRAMES 1706x960->2560x1440 run1 300/300 seconds=3.841
+[  26.419] STAGE timestamps
+[  26.419] TIMING 1706x960->2560x1440 run1 frames=150..299 median_ms=11.9357 p90_ms=11.9389 min_ms=11.9293 max_ms=11.9438 mean_ms=11.9357 first_ms=12.9622 second_ms=13.2208
+[  26.419] STAGE readback
+[  26.476] OUTPUT 1706x960->2560x1440 run1 fnv1a=d7ddba1725c13731 bytes=29491200 constant=0 nonfinite_halfs=0
+[  26.489] OUTPUT_STATS 1706x960->2560x1440 run1 mean_r=0.5343 mean_g=0.5014 mean_b=0.4772
+[  26.492] DESTROY rc=OK
+[  26.492] STAGE create_context
+[  26.492] TRACE GetModuleHandleW name=amdxc64.dll result=0000000000000000
+[  26.492] TRACE GetProcAddress module=null name=AmdExtD3DCreateInterface found=0
+[  26.500] TRACE CreateDXGIFactory2 flags=0x0 iid=7b7166ec-21c7-44ae-b21ac9ae321ae369 hr=0x00000000
+[  26.500] TRACE getenv_s name=MLSR-WATERMARK present=0
+[  26.527] TRACE LoadLibraryExA name=amdihk64.dll flags=0x0 result=0000000000000000 error=126
+[  26.527] CREATE rc=OK(0) override=0x0000000000000000 seconds=0.034
+[  26.527] PROVIDER rc=OK id=0xf5a5ca1e01001002 driver=0 name="4.1.2"
+[  26.527] GPU_MEMORY rc=OK total_mib=210.5 aliasable_mib=0.0
+[  26.527] JITTER_PHASES rc=OK phases=0
+[  26.527] STAGE dispatch_loop
+[  26.527] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.527] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.527] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.527] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.527] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.527] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.528] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.528] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.528] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.528] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.528] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.528] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.528] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.528] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.528] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.529] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.529] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.529] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.529] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.529] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.529] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.529] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.530] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.530] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.530] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.530] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.530] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.530] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.530] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.530] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.530] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.530] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.531] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.531] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.531] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.531] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.531] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.531] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.531] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.531] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.531] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.531] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.532] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.532] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.532] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.532] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.532] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.532] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.532] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.532] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.533] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.533] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.533] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.533] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.533] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.533] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.533] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.533] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.534] TRACE GetModuleHandleW name=D3D12.dll result=00007FF97D090000
+[  26.534] TRACE GetProcAddress module=d3d12.dll name=D3D12SerializeRootSignature found=1
+[  26.547] FIRST_FRAME 1706x960->2560x1440 run2 done seconds=0.020
+[  27.173] FRAMES 1706x960->2560x1440 run2 50/300 seconds=0.646
+[  27.812] FRAMES 1706x960->2560x1440 run2 100/300 seconds=1.285
+[  28.450] FRAMES 1706x960->2560x1440 run2 150/300 seconds=1.923
+[  29.089] FRAMES 1706x960->2560x1440 run2 200/300 seconds=2.562
+[  29.727] FRAMES 1706x960->2560x1440 run2 250/300 seconds=3.200
+[  30.366] FRAMES 1706x960->2560x1440 run2 300/300 seconds=3.839
+[  30.366] STAGE timestamps
+[  30.366] TIMING 1706x960->2560x1440 run2 frames=150..299 median_ms=11.9370 p90_ms=11.9404 min_ms=11.9313 max_ms=11.9456 mean_ms=11.9373 first_ms=11.6960 second_ms=11.9383
+[  30.366] STAGE readback
+[  30.422] OUTPUT 1706x960->2560x1440 run2 fnv1a=d7ddba1725c13731 bytes=29491200 constant=0 nonfinite_halfs=0
+[  30.435] OUTPUT_STATS 1706x960->2560x1440 run2 mean_r=0.5343 mean_g=0.5014 mean_b=0.4772
+[  30.439] DESTROY rc=OK
+[  30.556] DETERMINISM_CLASS 1706x960->2560x1440 warm_runs_identical=1 (run0 is the cold context; equal warm runs with a differing run0 is the cold-first-context class)
+[  30.556] PROVIDER_MAJOR 1706x960->2560x1440 major=4 allow_fallback=0
+[  30.556] GEOMETRY 1706x960->2560x1440 PASS provider="4.1.2" provider_id=0xf5a5ca1e01001002 median_ms=11.9352 identical=1 
+[  30.562] RESULT FAIL 1280x800->1920x1200:FAIL:4.1.2:11.8279,1706x960->2560x1440:PASS:4.1.2:11.9352

@@ -1,0 +1,14 @@
+﻿{
+    "arm":  "navi2",
+    "exit_code":  1,
+    "seconds":  21.6,
+    "utc":  "20261029T145920Z",
+    "exe_sha256":  "6DD48A6D42ADE029B3E9739A1132E35BF5FCD46973F22107C007D206659BF842",
+    "log":  "C:\\BC250\\tmp\\fsr4-t34\\navi2-20261029T145920Z\\fsr4host.log",
+    "png":  [
+                "in_1280x800.png",
+                "in_1706x960.png",
+                "out_1920x1200.png",
+                "out_2560x1440.png"
+            ]
+}

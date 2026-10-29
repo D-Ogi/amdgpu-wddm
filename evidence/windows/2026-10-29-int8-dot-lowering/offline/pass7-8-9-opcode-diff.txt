@@ -1,0 +1,22 @@
+== blob_0824.spv pass7: opcode counts after lowering to hardware instructions, before > after (changes of 1 or more)
+total before 2762 after 2600
+  v_add_u32                       342 >      6  -336
+  s_mov_b32                        31 >     30  -1
+  s_clause                         10 >     12  +2
+  s_mov_b64                         0 >      5  +5
+  v_add3_u32                      523 >    691  +168
+== blob_0798.spv pass8: opcode counts after lowering to hardware instructions, before > after (changes of 1 or more)
+total before 2763 after 2601
+  v_add_u32                       342 >      6  -336
+  s_mov_b32                        31 >     30  -1
+  s_clause                         10 >     12  +2
+  s_mov_b64                         0 >      5  +5
+  v_add3_u32                      523 >    691  +168
+== blob_0842.spv pass9: opcode counts after lowering to hardware instructions, before > after (changes of 1 or more)
+total before 3369 after 3169
+  v_add_u32                       409 >      9  -400
+  s_mov_b64                         9 >      1  -8
+  s_mov_b32                        38 >     40  +2
+  s_xor_b32                         0 >      3  +3
+  s_clause                         11 >     14  +3
+  v_add3_u32                      619 >    819  +200

@@ -1,0 +1,35 @@
+{
+    "arm":  "dot",
+    "only":  "both",
+    "utc":  "20261029T145700Z",
+    "flavour":  "lab",
+    "driver":  "40.7.216.106",
+    "state":  "DONE",
+    "seconds":  5.5,
+    "steps":  [
+                  {
+                      "step":  "before",
+                      "icd":  "C:\\Windows\\System32\\DriverStore\\FileRepository\\bc250kmd.inf_amd64_fa19bfda2f17fd60\\vulkan\\vulkan_radeon.dll",
+                      "icd_sha256":  "4DCDFAC96A8855AB77932F271E84ADA32E84AE4A67AC34A9C10B03601DB2CEF4",
+                      "exit":  0,
+                      "want":  0,
+                      "result":  "RESULT PASS shaders_failed=0 accelerated_reported=0 v_dot=0 layer_mad24=0 dxil_mad24=0 scalar_bfe=2 scalar_mul=52 wrong_sign=0 ms=708"
+                  },
+                  {
+                      "step":  "after",
+                      "icd":  "C:\\BC250\\tmp\\fsr4-v3-port\\kit1\\rows\\system-x64-lab\\vulkan_radeon.dll",
+                      "icd_sha256":  "5C987CE9B32042161BB87E2EA3D8011C35FBF467084B29228327B4FCA2D47CCF",
+                      "exit":  0,
+                      "want":  0,
+                      "result":  "RESULT PASS shaders_failed=0 accelerated_reported=0 v_dot=0 layer_mad24=74 dxil_mad24=62 scalar_bfe=10 scalar_mul=73 wrong_sign=0 ms=1717"
+                  },
+                  {
+                      "step":  "after-wrong-sign",
+                      "icd":  "C:\\BC250\\tmp\\fsr4-v3-port\\kit1\\rows\\system-x64-lab\\vulkan_radeon.dll",
+                      "icd_sha256":  "5C987CE9B32042161BB87E2EA3D8011C35FBF467084B29228327B4FCA2D47CCF",
+                      "exit":  1,
+                      "want":  1,
+                      "result":  "RESULT FAIL shaders_failed=4 accelerated_reported=0 v_dot=0 layer_mad24=74 dxil_mad24=62 scalar_bfe=10 scalar_mul=73 wrong_sign=1 ms=897"
+                  }
+              ]
+}

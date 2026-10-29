@@ -1,0 +1,264 @@
+shader: MESA_SHADER_COMPUTE
+source_blake3: {0x98f4497b, 0x529f3394, 0x46aabe70, 0xaab69e62, 0x1b9b9374, 0x78625444, 0xad077680, 0xcc7ecf71}
+name: 
+workgroup_size: 64, 1, 1
+num_ssbos: 2
+system_values_read: 0x00000000'00000000'00008400'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x20
+separate_shader: true
+flrp_lowered: true
+writes_memory: true
+decl_var ssbo INTERP_MODE_NONE restrict readonly In #0 (~0, 0, 0)
+decl_var ssbo INTERP_MODE_NONE restrict writeonly Out #1 (~0, 0, 1)
+decl_function main () (entrypoint)
+
+impl main {
+    con block b0:        // preds:
+    con 32      %0 = @load_scalar_arg_amd (base=2)
+    div 32      %1 = @load_vector_arg_amd (base=4, arg_upper_bound_u32_amd=63)
+    con 32      %2 = load_const (0x00000006)
+    con 32      %3 = ishl %0, %2 (0x6)
+    div 32      %4 = iadd %3, %1
+    con 32      %5 = @load_scalar_arg_amd (base=1, arg_num_lsb_zero=2)
+    con 32      %6 = load_const (0x00000001)
+    con 64      %7 = pack_64_2x32_split %5, %6 (0x1)
+    con 32      %8 = load_const (0x00000000)
+    con 32x8    %9 = @load_global_amd (%7, %8 (0x0)) (base=0, access=readonly|reorderable|smem-amd, align_mul=4, align_offset=0)
+    con 32x4   %10 = vec4 %9.a, %9.b, %9.c, %9.d
+    con 32     %11 = load_const (0x00000050 = 80)
+    div 32     %12 = imul %4, %11 (0x50)
+    con 32     %13 = load_const (0x00000040 = 64)
+    div 32     %14 = iadd %12, %13 (0x40)
+    div 32     %15 = @load_ssbo (%10, %14) (access=readonly|reorderable, align_mul=16, align_offset=0, offset_shift=0)
+    div 32x4   %16 = @load_ssbo (%10, %12) (access=readonly|reorderable, align_mul=16, align_offset=0, offset_shift=0)
+    con 32     %17 = load_const (0x00000010 = 16)
+    div 32     %18 = iadd %12, %17 (0x10)
+    div 32x4   %19 = @load_ssbo (%10, %18) (access=readonly|reorderable, align_mul=16, align_offset=0, offset_shift=0)
+    con 32     %20 = load_const (0x00000020 = 32)
+    div 32     %21 = iadd %12, %20 (0x20)
+    div 32x4   %22 = @load_ssbo (%10, %21) (access=readonly|reorderable, align_mul=16, align_offset=0, offset_shift=0)
+    div 32     %23 = extract_i8 %22.x, %8 (0x0)
+    div 32     %24 = extract_i8 %16.x, %8 (0x0)
+    div 32     %25 = imul24_relaxed %24, %23
+    div 32     %26 = extract_i8 %22.x, %6 (0x1)
+    div 32     %27 = extract_i8 %16.x, %6 (0x1)
+    div 32     %28 = imul24_relaxed %27, %26
+    con 32     %29 = load_const (0x00000002)
+    div 32     %30 = extract_i8 %22.x, %29 (0x2)
+    div 32     %31 = extract_i8 %16.x, %29 (0x2)
+    div 32     %32 = imul24_relaxed %31, %30
+    div 32     %33 = iadd %28, %32
+    div 32     %34 = iadd %25, %33
+    con 32     %35 = load_const (0x00000003)
+    div 32     %36 = extract_i8 %22.x, %35 (0x3)
+    div 32     %37 = extract_i8 %16.x, %35 (0x3)
+    div 32     %38 = imul24_relaxed %37, %36
+    div 32     %39 = iadd %38, %15
+    div 32     %40 = iadd %34, %39
+    div 32     %41 = extract_i8 %22.y, %8 (0x0)
+    div 32     %42 = extract_i8 %16.y, %8 (0x0)
+    div 32     %43 = imul24_relaxed %42, %41
+    div 32     %44 = extract_i8 %22.y, %6 (0x1)
+    div 32     %45 = extract_i8 %16.y, %6 (0x1)
+    div 32     %46 = imul24_relaxed %45, %44
+    div 32     %47 = extract_i8 %22.y, %29 (0x2)
+    div 32     %48 = extract_i8 %16.y, %29 (0x2)
+    div 32     %49 = imul24_relaxed %48, %47
+    div 32     %50 = iadd %46, %49
+    div 32     %51 = iadd %43, %50
+    div 32     %52 = extract_i8 %22.y, %35 (0x3)
+    div 32     %53 = extract_i8 %16.y, %35 (0x3)
+    div 32     %54 = imul24_relaxed %53, %52
+    div 32     %55 = iadd %54, %40
+    div 32     %56 = iadd %51, %55
+    div 32     %57 = extract_i8 %22.z, %8 (0x0)
+    div 32     %58 = extract_i8 %16.z, %8 (0x0)
+    div 32     %59 = imul24_relaxed %58, %57
+    div 32     %60 = extract_i8 %22.z, %6 (0x1)
+    div 32     %61 = extract_i8 %16.z, %6 (0x1)
+    div 32     %62 = imul24_relaxed %61, %60
+    div 32     %63 = extract_i8 %22.z, %29 (0x2)
+    div 32     %64 = extract_i8 %16.z, %29 (0x2)
+    div 32     %65 = imul24_relaxed %64, %63
+    div 32     %66 = iadd %62, %65
+    div 32     %67 = iadd %59, %66
+    div 32     %68 = extract_i8 %22.z, %35 (0x3)
+    div 32     %69 = extract_i8 %16.z, %35 (0x3)
+    div 32     %70 = imul24_relaxed %69, %68
+    div 32     %71 = iadd %70, %56
+    div 32     %72 = iadd %67, %71
+    div 32     %73 = extract_i8 %22.w, %8 (0x0)
+    div 32     %74 = extract_i8 %16.w, %8 (0x0)
+    div 32     %75 = imul24_relaxed %74, %73
+    div 32     %76 = extract_i8 %22.w, %6 (0x1)
+    div 32     %77 = extract_i8 %16.w, %6 (0x1)
+    div 32     %78 = imul24_relaxed %77, %76
+    div 32     %79 = extract_i8 %22.w, %29 (0x2)
+    div 32     %80 = extract_i8 %16.w, %29 (0x2)
+    div 32     %81 = imul24_relaxed %80, %79
+    div 32     %82 = iadd %78, %81
+    div 32     %83 = iadd %75, %82
+    div 32     %84 = extract_i8 %22.w, %35 (0x3)
+    div 32     %85 = extract_i8 %16.w, %35 (0x3)
+    div 32     %86 = imul24_relaxed %85, %84
+    div 32     %87 = iadd %86, %72
+    div 32     %88 = iadd %83, %87
+    con 32     %89 = load_const (0x00000030 = 48)
+    div 32     %90 = iadd %12, %89 (0x30)
+    div 32x4   %91 = @load_ssbo (%10, %90) (access=readonly|reorderable, align_mul=16, align_offset=0, offset_shift=0)
+    div 32     %92 = extract_i8 %91.x, %8 (0x0)
+    div 32     %93 = extract_i8 %19.x, %8 (0x0)
+    div 32     %94 = imul24_relaxed %93, %92
+    div 32     %95 = extract_i8 %91.x, %6 (0x1)
+    div 32     %96 = extract_i8 %19.x, %6 (0x1)
+    div 32     %97 = imul24_relaxed %96, %95
+    div 32     %98 = extract_i8 %91.x, %29 (0x2)
+    div 32     %99 = extract_i8 %19.x, %29 (0x2)
+    div 32    %100 = imul24_relaxed %99, %98
+    div 32    %101 = iadd %97, %100
+    div 32    %102 = iadd %94, %101
+    div 32    %103 = extract_i8 %91.x, %35 (0x3)
+    div 32    %104 = extract_i8 %19.x, %35 (0x3)
+    div 32    %105 = imul24_relaxed %104, %103
+    div 32    %106 = iadd %105, %88
+    div 32    %107 = iadd %102, %106
+    div 32    %108 = extract_i8 %91.y, %8 (0x0)
+    div 32    %109 = extract_i8 %19.y, %8 (0x0)
+    div 32    %110 = imul24_relaxed %109, %108
+    div 32    %111 = extract_i8 %91.y, %6 (0x1)
+    div 32    %112 = extract_i8 %19.y, %6 (0x1)
+    div 32    %113 = imul24_relaxed %112, %111
+    div 32    %114 = extract_i8 %91.y, %29 (0x2)
+    div 32    %115 = extract_i8 %19.y, %29 (0x2)
+    div 32    %116 = imul24_relaxed %115, %114
+    div 32    %117 = iadd %113, %116
+    div 32    %118 = iadd %110, %117
+    div 32    %119 = extract_i8 %91.y, %35 (0x3)
+    div 32    %120 = extract_i8 %19.y, %35 (0x3)
+    div 32    %121 = imul24_relaxed %120, %119
+    div 32    %122 = iadd %121, %107
+    div 32    %123 = iadd %118, %122
+    div 32    %124 = extract_i8 %91.z, %8 (0x0)
+    div 32    %125 = extract_i8 %19.z, %8 (0x0)
+    div 32    %126 = imul24_relaxed %125, %124
+    div 32    %127 = extract_i8 %91.z, %6 (0x1)
+    div 32    %128 = extract_i8 %19.z, %6 (0x1)
+    div 32    %129 = imul24_relaxed %128, %127
+    div 32    %130 = extract_i8 %91.z, %29 (0x2)
+    div 32    %131 = extract_i8 %19.z, %29 (0x2)
+    div 32    %132 = imul24_relaxed %131, %130
+    div 32    %133 = iadd %129, %132
+    div 32    %134 = iadd %126, %133
+    div 32    %135 = extract_i8 %91.z, %35 (0x3)
+    div 32    %136 = extract_i8 %19.z, %35 (0x3)
+    div 32    %137 = imul24_relaxed %136, %135
+    div 32    %138 = iadd %137, %123
+    div 32    %139 = iadd %134, %138
+    div 32    %140 = extract_i8 %91.w, %8 (0x0)
+    div 32    %141 = extract_i8 %19.w, %8 (0x0)
+    div 32    %142 = imul24_relaxed %141, %140
+    div 32    %143 = extract_i8 %91.w, %6 (0x1)
+    div 32    %144 = extract_i8 %19.w, %6 (0x1)
+    div 32    %145 = imul24_relaxed %144, %143
+    div 32    %146 = extract_i8 %91.w, %29 (0x2)
+    div 32    %147 = extract_i8 %19.w, %29 (0x2)
+    div 32    %148 = imul24_relaxed %147, %146
+    div 32    %149 = iadd %145, %148
+    div 32    %150 = iadd %142, %149
+    div 32    %151 = extract_i8 %91.w, %35 (0x3)
+    div 32    %152 = extract_i8 %19.w, %35 (0x3)
+    div 32    %153 = imul24_relaxed %152, %151
+    div 32    %154 = iadd %153, %139
+    div 32    %155 = iadd %150, %154
+    div 32    %156 = iadd %24, %15
+    con 32    %157 = load_const (0xffffffff = -1 = 4294967295)
+    div 32    %158 = imad24_ir3 %157 (0xffffffff), %27, %156
+    con 32    %159 = load_const (0xffffff80 = -128 = 4294967168)
+    div 32    %160 = imad24_ir3 %159 (0xffffff80), %31, %158
+    con 32    %161 = load_const (0x0000007f = 127)
+    div 32    %162 = imad24_ir3 %161 (0x7f), %37, %160
+    div 32    %163 = imad24_ir3 %159 (0xffffff80), %42, %162
+    div 32    %164 = imad24_ir3 %159 (0xffffff80), %45, %163
+    div 32    %165 = imad24_ir3 %159 (0xffffff80), %48, %164
+    div 32    %166 = imad24_ir3 %159 (0xffffff80), %53, %165
+    div 32    %167 = imul24_relaxed %64, %161 (0x7f)
+    div 32    %168 = imul24_relaxed %61, %161 (0x7f)
+    div 32    %169 = iadd %168, %167
+    div 32    %170 = imul24_relaxed %58, %161 (0x7f)
+    div 32    %171 = iadd %170, %169
+    div 32    %172 = imul24_relaxed %69, %161 (0x7f)
+    div 32    %173 = iadd %172, %166
+    div 32    %174 = iadd %171, %173
+    div 32    %175 = isub %8 (0x0), %77
+    div 32    %176 = isub %175, %80
+    div 32    %177 = isub %176, %74
+    div 32    %178 = isub %174, %85
+    div 32    %179 = iadd %177, %178
+    div 32    %180 = ishl %99, %6 (0x1)
+    div 32    %181 = imul24_relaxed %96, %35 (0x3)
+    div 32    %182 = iadd %181, %180
+    div 32    %183 = ishl %93, %29 (0x2)
+    div 32    %184 = iadd %183, %182
+    div 32    %185 = iadd %104, %179
+    div 32    %186 = iadd %184, %185
+    con 32    %187 = load_const (0xfffffffd = -3 = 4294967293)
+    div 32    %188 = imul24_relaxed %115, %187 (0xfffffffd)
+    con 32    %189 = load_const (0xfffffffc = -4 = 4294967292)
+    div 32    %190 = imul24_relaxed %112, %189 (0xfffffffc)
+    div 32    %191 = iadd %190, %188
+    con 32    %192 = load_const (0xfffffffb = -5 = 4294967291)
+    div 32    %193 = imul24_relaxed %109, %192 (0xfffffffb)
+    div 32    %194 = iadd %193, %191
+    con 32    %195 = load_const (0xfffffffe = -2 = 4294967294)
+    div 32    %196 = imul24_relaxed %120, %195 (0xfffffffe)
+    div 32    %197 = iadd %196, %186
+    div 32    %198 = iadd %194, %197
+    div 32    %199 = imul24_relaxed %125, %159 (0xffffff80)
+    div 32    %200 = iadd %199, %198
+    con 32    %201 = load_const (0xffffffc0 = -64 = 4294967232)
+    div 32    %202 = imul24_relaxed %147, %201 (0xffffffc0)
+    con 32    %203 = load_const (0x00000005)
+    div 32    %204 = ishl %144, %203 (0x5)
+    div 32    %205 = iadd %204, %202
+    div 32    %206 = imul24_relaxed %141, %161 (0x7f)
+    div 32    %207 = iadd %206, %205
+    div 32    %208 = ishl %152, %2 (0x6)
+    div 32    %209 = iadd %208, %200
+    div 32    %210 = iadd %207, %209
+    div 32    %211 = imad24_ir3 %159 (0xffffff80), %24, %162
+    div 32    %212 = imad24_ir3 %159 (0xffffff80), %27, %211
+    div 32    %213 = imad24_ir3 %159 (0xffffff80), %31, %212
+    div 32    %214 = imad24_ir3 %159 (0xffffff80), %37, %213
+    div 32    %215 = imad24_ir3 %161 (0x7f), %24, %214
+    div 32    %216 = imad24_ir3 %161 (0x7f), %27, %215
+    div 32    %217 = imad24_ir3 %161 (0x7f), %31, %216
+    div 32    %218 = imad24_ir3 %161 (0x7f), %37, %217
+    div 32    %219 = imad24_ir3 %157 (0xffffffff), %24, %218
+    div 32    %220 = imad24_ir3 %157 (0xffffffff), %27, %219
+    div 32    %221 = imad24_ir3 %157 (0xffffffff), %31, %220
+    div 32    %222 = imad24_ir3 %157 (0xffffffff), %37, %221
+    con 32    %223 = load_const (0x00000004)
+    div 32    %224 = imad24_ir3 %223 (0x4), %42, %222
+    div 32    %225 = imad24_ir3 %35 (0x3), %45, %224
+    div 32    %226 = imad24_ir3 %29 (0x2), %48, %225
+    div 32    %227 = iadd %53, %226
+    div 32    %228 = imad24_ir3 %192 (0xfffffffb), %42, %227
+    div 32    %229 = imad24_ir3 %189 (0xfffffffc), %45, %228
+    div 32    %230 = imad24_ir3 %187 (0xfffffffd), %48, %229
+    div 32    %231 = imad24_ir3 %195 (0xfffffffe), %53, %230
+    div 32    %232 = imad24_ir3 %159 (0xffffff80), %42, %231
+    div 32    %233 = imad24_ir3 %161 (0x7f), %42, %232
+    div 32    %234 = imad24_ir3 %20 (0x20), %45, %233
+    div 32    %235 = imad24_ir3 %201 (0xffffffc0), %48, %234
+    div 32    %236 = imad24_ir3 %13 (0x40), %53, %235
+    div 32x3  %237 = vec3 %155, %210, %236
+    con 32x4  %238 = vec4 %9.e, %9.f, %9.g, %9.h
+    div 32    %239 = ishl %4, %223 (0x4)
+                     @store_ssbo (%237, %238, %239) (wrmask=xyz, access=writeonly, align_mul=16, align_offset=0, offset_shift=0)
+                     // succs: b1
+    block b1:
+}
+

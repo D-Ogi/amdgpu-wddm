@@ -1,0 +1,49 @@
+After Spilling:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	 s2: %69:s[0-1],  s1: %70:s[2],  s1: %71:s[3],  s1: %72:s[4],  v1: %73:v[0],  v1: (kill)%74:v[1],  v1: (kill)%75:v[2] = p_startpgm
+	 s2: (kill)%77,  s1: (kill)%76:scc = p_init_scratch (kill)%69, (lateKill)%72
+	p_logical_start
+	 v1: %5 = v_lshl_add_u32 (kill)%71, 6, (kill)%73
+	 s2: %8 = p_create_vector (kill)%70, 1
+	 s8: %10 = s_load_dwordx8 (kill)%8, 0 storage:buffer semantics:private,reorder
+	 s1: %79,  s1: %80,  s1: %81,  s1: %82,  s1: %83,  s1: %84,  s1: %85,  s1: %86 = p_split_vector (kill)%10
+	 s4: %11 = p_create_vector (kill)%79, (kill)%80, (kill)%81, (kill)%82
+	 v1: %13 = v_lshlrev_b32 4, %5
+	 v3: %14 = buffer_load_dwordx3 (kill)%11, (kill)%13, 0 offen storage:buffer semantics:private,reorder
+	 v1: %87,  v1: %88,  v1: %89 = p_split_vector (kill)%14
+	 v1: %17 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %20 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %21 = v_add_u32 (kill)%17, (kill)%20
+	 v1: %25 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %29 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %31 = v_add3_u32 (kill)%21, (kill)%25, (kill)%29
+	 v1: %34 = v_mul_u32_u24 (is16bit)%87, (is16bit)%88 dst_sel:dword src0_sel:ubyte0 src1_sel:ubyte0
+	 v1: %37 = v_mul_u32_u24 (is16bit)%87, (is16bit)%88 dst_sel:dword src0_sel:ubyte1 src1_sel:ubyte1
+	 v1: %38 = v_add_u32 (kill)%34, (kill)%37
+	 v1: %41 = v_mul_u32_u24 (is16bit)%87, (is16bit)%88 dst_sel:dword src0_sel:ubyte2 src1_sel:ubyte2
+	 v1: %44 = v_mul_u32_u24 (is16bit)%87, (is16bit)%88 dst_sel:dword src0_sel:ubyte3 src1_sel:ubyte3
+	 v1: %46 = v_add3_u32 (kill)%38, (kill)%41, (kill)%44
+	 v1: %47 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte0 src1_sel:ubyte0
+	 v1: %48 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte1 src1_sel:ubyte1
+	 v1: %49 = v_add_u32 (kill)%47, (kill)%48
+	 v1: %50 = v_mul_i32_i24 %87, %88 dst_sel:dword src0_sel:sbyte2 src1_sel:ubyte2
+	 v1: %51 = v_mul_i32_i24 (kill)%87, (kill)%88 dst_sel:dword src0_sel:sbyte3 src1_sel:ubyte3
+	 v1: %53 = v_add3_u32 (kill)%49, (kill)%50, (kill)%51
+	 v1: %54 = v_add_u32 %31, %89
+	 v4: %55 = p_create_vector %31, %46, %53, (kill)%54
+	 s4: %56 = p_create_vector (kill)%83, (kill)%84, (kill)%85, (kill)%86
+	 v1: %58 = v_mul_lo_u32 48, (kill)%5
+	buffer_store_dwordx4 %56, %58, 0, (kill)%55 offen storage:buffer
+	 v1: %59 = v_add_u32 %46, %89
+	 v1: %60 = v_add_u32 %53, %89
+	 v1: %61 = v_add_i32 (kill)%31, %89 clamp
+	 v1: %62 = v_add_u32 (kill)%46, %89 clamp
+	 v4: %63 = p_create_vector (kill)%59, (kill)%60, (kill)%61, (kill)%62
+	buffer_store_dwordx4 %56, %58, 0, (kill)%63 offset:16 offen storage:buffer
+	 v1: %66 = v_add_i32 (kill)%53, (kill)%89 clamp
+	buffer_store_dword (kill)%56, (kill)%58, 0, (kill)%66 offset:32 offen storage:buffer
+	p_logical_end
+	s_endpgm
+

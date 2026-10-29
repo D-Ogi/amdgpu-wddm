@@ -1,0 +1,153 @@
+vkcorpusbench plan=C:\BC250\tmp\fsr4-v3-port\kit1\corpus\plan.txt shaders=14 seed=0xb0c2500c0de runs<=30 budget_ms=2500 ssbo_max_mib=320
+icd C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\vulkan\vulkan_radeon.dll sha256 4DCDFAC96A8855AB77932F271E84ADA32E84AE4A67AC34A9C10B03601DB2CEF4 (direct)
+device AMD BC-250 (RADV GFX1013) vendor 0x1002 device 0x13fe driver radv Mesa 27.0.0-devel (git-d12fb4fd8c) api 1.4.363
+queue family 0 (flags 0xf)
+dot accelerated (packed u s su, accsat packed u s su, 8bit u s su): 0 0 0 0 0 0 0 0 0
+SHADER blob_0815.spv family=pass1 grid=15,540,1 ssbo_mib=64 bindings=3 spv_sha256=FCFDB6A1164B93D95DF8331D0CDFC0E6A946123C25F7FF05626110F0786301D1
+PIPELINE blob_0815.spv compile_ms=294.0
+STATS blob_0815.spv driver_pipeline_hash=6267476110338122648 sgprs=108 vgprs=256 spilled_sgprs=0 spilled_vgprs=0 code_size=39240 lds_size=0 scratch_size=0 subgroups_per_simd=4 combined_inputs=0 combined_outputs=0 hash=851204294 instructions=5418 copies=147 branches=1 latency=8456 inverse_throughput=7809 vmem_clause=5 smem_clause=9 pre_sched_sgprs=121 pre_sched_vgprs=180 valu=5205 salu=162 vmem=13 smem=16 vopd=0
+REPRESENTATION blob_0815.spv name=nir_shader_s bytes=369301
+REPRESENTATION blob_0815.spv name=aco_ir bytes=378879
+REPRESENTATION blob_0815.spv name=assembly bytes=440890
+LISTING blob_0815.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0815.spv binding=77 kind=ssbo-rw sha256=76CBE5F7AADC118C8603B6D13FC2C72DD1C90C16EFCD1F0990A34F29D8E5AF3E
+DETERMINISM blob_0815.spv identical=1
+TIMING blob_0815.spv runs=30 median_ms=2.3803 min_ms=1.8442 mean_ms=2.2850 max_ms=2.3835
+SHADER blob_0060.spv family=pass2 grid=30,1080,1 ssbo_mib=320 bindings=3 spv_sha256=94578D44BEF54691D8EDE502F31760B06423323ABEFCB6137EE03F24F8CE6DD3
+PIPELINE blob_0060.spv compile_ms=1290.0
+STATS blob_0060.spv driver_pipeline_hash=17177217191556911872 sgprs=108 vgprs=256 spilled_sgprs=0 spilled_vgprs=40 code_size=73644 lds_size=10240 scratch_size=0 subgroups_per_simd=4 combined_inputs=0 combined_outputs=0 hash=1761362311 instructions=10224 copies=217 branches=1 latency=15933 inverse_throughput=14695 vmem_clause=10 smem_clause=14 pre_sched_sgprs=158 pre_sched_vgprs=293 valu=9796 salu=242 vmem=18 smem=25 vopd=0
+REPRESENTATION blob_0060.spv name=nir_shader_s bytes=694872
+REPRESENTATION blob_0060.spv name=aco_ir bytes=711643
+REPRESENTATION blob_0060.spv name=assembly bytes=832869
+LISTING blob_0060.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0060.spv binding=77 kind=ssbo-rw sha256=C7ECA16898E91569021BED69C41576B9116EA6FE7DDE00B8D0058B20B3697F50
+DETERMINISM blob_0060.spv identical=1
+TIMING blob_0060.spv runs=30 median_ms=9.7487 min_ms=9.7420 mean_ms=10.7334 max_ms=17.5581
+SHADER blob_0036.spv family=pass3 grid=8,270,1 ssbo_mib=64 bindings=3 spv_sha256=CB5076534669282E39A5EF3714DF08939BB74677C4CE9E898A19C7EE14D61CF3
+PIPELINE blob_0036.spv compile_ms=90.4
+STATS blob_0036.spv driver_pipeline_hash=9413410068867679131 sgprs=108 vgprs=56 spilled_sgprs=0 spilled_vgprs=0 code_size=21408 lds_size=0 scratch_size=0 subgroups_per_simd=18 combined_inputs=0 combined_outputs=0 hash=1777480119 instructions=3113 copies=50 branches=25 latency=57911 inverse_throughput=46314 vmem_clause=11 smem_clause=33 pre_sched_sgprs=84 pre_sched_vgprs=41 valu=2706 salu=261 vmem=16 smem=66 vopd=0
+REPRESENTATION blob_0036.spv name=nir_shader_s bytes=354449
+REPRESENTATION blob_0036.spv name=aco_ir bytes=239642
+REPRESENTATION blob_0036.spv name=assembly bytes=258502
+LISTING blob_0036.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0036.spv binding=77 kind=ssbo-rw sha256=DFFD73A795CF1DE1989478A0586684EB7BEDB8C9E7B2B19401B071E7E6702460
+DETERMINISM blob_0036.spv identical=1
+TIMING blob_0036.spv runs=30 median_ms=0.7390 min_ms=0.7387 mean_ms=0.7395 max_ms=0.7519
+SHADER blob_0760.spv family=pass4 grid=30,1080,1 ssbo_mib=224 bindings=3 spv_sha256=6DB318DF75C98AF97BBD06D2B22501663CEE53CA4174BEF1BC632CD944F90B92
+PIPELINE blob_0760.spv compile_ms=1326.6
+STATS blob_0760.spv driver_pipeline_hash=554692542776336177 sgprs=108 vgprs=256 spilled_sgprs=0 spilled_vgprs=0 code_size=75612 lds_size=0 scratch_size=0 subgroups_per_simd=4 combined_inputs=0 combined_outputs=0 hash=3590186198 instructions=10576 copies=470 branches=1 latency=15989 inverse_throughput=15021 vmem_clause=10 smem_clause=15 pre_sched_sgprs=181 pre_sched_vgprs=201 valu=10013 salu=494 vmem=18 smem=25 vopd=0
+REPRESENTATION blob_0760.spv name=nir_shader_s bytes=713049
+REPRESENTATION blob_0760.spv name=aco_ir bytes=736558
+REPRESENTATION blob_0760.spv name=assembly bytes=857916
+LISTING blob_0760.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0760.spv binding=77 kind=ssbo-rw sha256=B8B86A779C3E04FC2539FCE3D42F8C064B0D13D9FACDD6A8809EF8BDD554AE79
+DETERMINISM blob_0760.spv identical=1
+TIMING blob_0760.spv runs=30 median_ms=9.9234 min_ms=9.9164 mean_ms=10.9599 max_ms=16.3618
+SHADER blob_0811.spv family=pass5 grid=8,270,1 ssbo_mib=64 bindings=3 spv_sha256=F01A4E079EBC337115D10C87AC0913D77E7EBCF6875192CF978641C37A71EFF1
+PIPELINE blob_0811.spv compile_ms=1314.9
+STATS blob_0811.spv driver_pipeline_hash=12737783207799117387 sgprs=108 vgprs=256 spilled_sgprs=0 spilled_vgprs=0 code_size=76052 lds_size=0 scratch_size=0 subgroups_per_simd=4 combined_inputs=0 combined_outputs=0 hash=3822176244 instructions=10621 copies=492 branches=1 latency=16052 inverse_throughput=15061 vmem_clause=10 smem_clause=17 pre_sched_sgprs=186 pre_sched_vgprs=214 valu=10040 salu=514 vmem=18 smem=25 vopd=0
+REPRESENTATION blob_0811.spv name=nir_shader_s bytes=714746
+REPRESENTATION blob_0811.spv name=aco_ir bytes=739732
+REPRESENTATION blob_0811.spv name=assembly bytes=864970
+LISTING blob_0811.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0811.spv binding=77 kind=ssbo-rw sha256=260C7E2D8FC9035E37FAA89FB9D9AD6C51125BAB8A8DE43B357EDBD120FE5B89
+DETERMINISM blob_0811.spv identical=1
+TIMING blob_0811.spv runs=30 median_ms=1.0774 min_ms=1.0413 mean_ms=1.0762 max_ms=1.0784
+SHADER blob_0759.spv family=pass6 grid=8,270,1 ssbo_mib=96 bindings=2 spv_sha256=FA2F9369A234E8FBD167197DB27FFB67B648EE22217485EA3CCCAC25A5D74539
+PIPELINE blob_0759.spv compile_ms=6809.3
+STATS blob_0759.spv driver_pipeline_hash=17650467392387892931 sgprs=108 vgprs=84 spilled_sgprs=4 spilled_vgprs=0 code_size=106592 lds_size=0 scratch_size=0 subgroups_per_simd=12 combined_inputs=0 combined_outputs=0 hash=1271636717 instructions=14931 copies=622 branches=1 latency=29990 inverse_throughput=20656 vmem_clause=9 smem_clause=229 pre_sched_sgprs=114 pre_sched_vgprs=78 valu=13770 salu=773 vmem=12 smem=273 vopd=0
+REPRESENTATION blob_0759.spv name=nir_shader_s bytes=1415345
+REPRESENTATION blob_0759.spv name=aco_ir bytes=1126021
+REPRESENTATION blob_0759.spv name=assembly bytes=1289297
+LISTING blob_0759.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0759.spv binding=77 kind=ssbo-rw sha256=DA597755A00AEB3C92CB886ED792003E64D10D4B657E7737E2F6D3D7C1BD598D
+DETERMINISM blob_0759.spv identical=1
+TIMING blob_0759.spv runs=30 median_ms=2.1306 min_ms=1.2710 mean_ms=1.9464 max_ms=2.5339
+SHADER blob_0824.spv family=pass7 grid=8,270,1 ssbo_mib=96 bindings=2 spv_sha256=685F89C42FFC73EEB46E8C1C7839A8A1CDE201DB032911FF3C51FFF4417BC890
+PIPELINE blob_0824.spv compile_ms=115.9
+STATS blob_0824.spv driver_pipeline_hash=12971850263542621855 sgprs=108 vgprs=64 spilled_sgprs=0 spilled_vgprs=0 code_size=19160 lds_size=0 scratch_size=0 subgroups_per_simd=16 combined_inputs=0 combined_outputs=0 hash=1884673040 instructions=2761 copies=40 branches=33 latency=18101 inverse_throughput=13738 vmem_clause=7 smem_clause=26 pre_sched_sgprs=87 pre_sched_vgprs=58 valu=2342 salu=285 vmem=14 smem=55 vopd=0
+REPRESENTATION blob_0824.spv name=nir_shader_s bytes=325121
+REPRESENTATION blob_0824.spv name=aco_ir bytes=220868
+REPRESENTATION blob_0824.spv name=assembly bytes=231569
+LISTING blob_0824.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0824.spv binding=77 kind=ssbo-rw sha256=BDE1759C90DC4B7BA6BB007BFE479CD5461A32ED695EDB9CC2E1C0218AA3C12A
+DETERMINISM blob_0824.spv identical=1
+TIMING blob_0824.spv runs=30 median_ms=2.4945 min_ms=2.3562 mean_ms=2.7557 max_ms=3.2261
+SHADER blob_0798.spv family=pass8 grid=4,135,1 ssbo_mib=64 bindings=2 spv_sha256=EB1504308E8784EB94F973EE4A32D9E4C20F8B0D6ECCDEA9C9FCE76338A0C961
+PIPELINE blob_0798.spv compile_ms=115.2
+STATS blob_0798.spv driver_pipeline_hash=14983422708707211350 sgprs=108 vgprs=64 spilled_sgprs=0 spilled_vgprs=0 code_size=19164 lds_size=0 scratch_size=0 subgroups_per_simd=16 combined_inputs=0 combined_outputs=0 hash=743192299 instructions=2762 copies=41 branches=33 latency=18104 inverse_throughput=13738 vmem_clause=7 smem_clause=26 pre_sched_sgprs=87 pre_sched_vgprs=58 valu=2342 salu=286 vmem=14 smem=55 vopd=0
+REPRESENTATION blob_0798.spv name=nir_shader_s bytes=325103
+REPRESENTATION blob_0798.spv name=aco_ir bytes=220912
+REPRESENTATION blob_0798.spv name=assembly bytes=231620
+LISTING blob_0798.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0798.spv binding=77 kind=ssbo-rw sha256=8DE3107A11A4225E87D710DCEEF4B0B60F5EC12E26A24723F553CAB9B11817DD
+DETERMINISM blob_0798.spv identical=1
+TIMING blob_0798.spv runs=30 median_ms=0.5875 min_ms=0.5872 mean_ms=0.5875 max_ms=0.5886
+SHADER blob_0842.spv family=pass9 grid=8,270,1 ssbo_mib=96 bindings=3 spv_sha256=78779A5785E5B49BD639AA57CE4BB528AA34046931DE4FFAED3DFE815CF68E93
+PIPELINE blob_0842.spv compile_ms=97.4
+STATS blob_0842.spv driver_pipeline_hash=7281236277807786025 sgprs=108 vgprs=84 spilled_sgprs=0 spilled_vgprs=0 code_size=23068 lds_size=0 scratch_size=0 subgroups_per_simd=12 combined_inputs=0 combined_outputs=0 hash=278482891 instructions=3368 copies=61 branches=45 latency=40336 inverse_throughput=30419 vmem_clause=8 smem_clause=28 pre_sched_sgprs=93 pre_sched_vgprs=73 valu=2821 salu=384 vmem=15 smem=63 vopd=0
+REPRESENTATION blob_0842.spv name=nir_shader_s bytes=406343
+REPRESENTATION blob_0842.spv name=aco_ir bytes=269912
+REPRESENTATION blob_0842.spv name=assembly bytes=281033
+LISTING blob_0842.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0842.spv binding=77 kind=ssbo-rw sha256=BEE49C2FC541F294AB138553C993746399F5B334B6276A744F862BA8525E14FE
+DETERMINISM blob_0842.spv identical=1
+TIMING blob_0842.spv runs=30 median_ms=2.8390 min_ms=2.6515 mean_ms=3.1048 max_ms=3.5568
+SHADER blob_1010.spv family=pass10 grid=8,270,1 ssbo_mib=64 bindings=3 spv_sha256=83896954425F58CFECDBD50F7E21CEFAF0C44650AA393624450AED14FF97D101
+PIPELINE blob_1010.spv compile_ms=1259.0
+STATS blob_1010.spv driver_pipeline_hash=4400173285180010954 sgprs=108 vgprs=256 spilled_sgprs=0 spilled_vgprs=27 code_size=72852 lds_size=7168 scratch_size=0 subgroups_per_simd=4 combined_inputs=0 combined_outputs=0 hash=4047058508 instructions=10085 copies=182 branches=1 latency=15654 inverse_throughput=14602 vmem_clause=10 smem_clause=15 pre_sched_sgprs=151 pre_sched_vgprs=280 valu=9734 salu=201 vmem=18 smem=25 vopd=0
+REPRESENTATION blob_1010.spv name=nir_shader_s bytes=690178
+REPRESENTATION blob_1010.spv name=aco_ir bytes=701828
+REPRESENTATION blob_1010.spv name=assembly bytes=822522
+LISTING blob_1010.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_1010.spv binding=77 kind=ssbo-rw sha256=D50ADEF4BBB9C7BBFEA40082C08751CA3B16BB175C94A0B915DB4C06D3A02826
+DETERMINISM blob_1010.spv identical=1
+TIMING blob_1010.spv runs=30 median_ms=1.0389 min_ms=1.0048 mean_ms=1.0378 max_ms=1.0403
+SHADER blob_0412.spv family=pass11 grid=30,1080,1 ssbo_mib=224 bindings=3 spv_sha256=897E5757AC9705AA373E76E99AE86DF8CA8441B67EB8E44FEC60F887155B8066
+PIPELINE blob_0412.spv compile_ms=68.2
+STATS blob_0412.spv driver_pipeline_hash=6346184893974122158 sgprs=108 vgprs=56 spilled_sgprs=0 spilled_vgprs=0 code_size=16092 lds_size=0 scratch_size=0 subgroups_per_simd=18 combined_inputs=0 combined_outputs=0 hash=2259027319 instructions=2355 copies=67 branches=28 latency=28621 inverse_throughput=18993 vmem_clause=8 smem_clause=26 pre_sched_sgprs=84 pre_sched_vgprs=41 valu=1946 salu=275 vmem=13 smem=59 vopd=0
+REPRESENTATION blob_0412.spv name=nir_shader_s bytes=273652
+REPRESENTATION blob_0412.spv name=aco_ir bytes=184929
+REPRESENTATION blob_0412.spv name=assembly bytes=195374
+LISTING blob_0412.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0412.spv binding=77 kind=ssbo-rw sha256=1F8065335ED77EA5FE8457ACCC79288EFF03C49D6B50E4635C0F65F7F367A66E
+DETERMINISM blob_0412.spv identical=1
+TIMING blob_0412.spv runs=30 median_ms=10.4095 min_ms=10.4063 mean_ms=11.0948 max_ms=15.5442
+SHADER blob_0765.spv family=pass12 grid=30,1080,1 ssbo_mib=96 bindings=3 spv_sha256=D9874378DE48E30E877241BEB9CA239F165077CFC53D58AE24DF20FBA6A70F32
+PIPELINE blob_0765.spv compile_ms=279.4
+STATS blob_0765.spv driver_pipeline_hash=17015716506490644811 sgprs=108 vgprs=256 spilled_sgprs=0 spilled_vgprs=0 code_size=37684 lds_size=0 scratch_size=0 subgroups_per_simd=4 combined_inputs=0 combined_outputs=0 hash=329877848 instructions=5179 copies=108 branches=1 latency=8144 inverse_throughput=7506 vmem_clause=5 smem_clause=8 pre_sched_sgprs=102 pre_sched_vgprs=243 valu=5003 salu=124 vmem=13 smem=16 vopd=0
+REPRESENTATION blob_0765.spv name=nir_shader_s bytes=354478
+REPRESENTATION blob_0765.spv name=aco_ir bytes=364096
+REPRESENTATION blob_0765.spv name=assembly bytes=422073
+LISTING blob_0765.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0765.spv binding=77 kind=ssbo-rw sha256=263C6C385C5D22DEDA3791AF7F966BBFDED3A0F4200E643896102C7DF4FAEA1C
+DETERMINISM blob_0765.spv identical=1
+TIMING blob_0765.spv runs=30 median_ms=4.0271 min_ms=4.0246 mean_ms=4.1721 max_ms=4.7190
+SHADER blob_0068.spv family=postpass grid=120,68,1 ssbo_mib=64 bindings=10 spv_sha256=17E09D0B9284F890661E13F17AD930258912B80A03FA5CE9BC7D797F40D5CF87
+PIPELINE blob_0068.spv compile_ms=404.1
+STATS blob_0068.spv driver_pipeline_hash=8911767805819647620 sgprs=108 vgprs=128 spilled_sgprs=0 spilled_vgprs=0 code_size=86644 lds_size=0 scratch_size=0 subgroups_per_simd=8 combined_inputs=0 combined_outputs=0 hash=2515756158 instructions=12834 copies=633 branches=21 latency=19975 inverse_throughput=14415 vmem_clause=56 smem_clause=19 pre_sched_sgprs=83 pre_sched_vgprs=117 valu=12028 salu=592 vmem=77 smem=22 vopd=0
+REPRESENTATION blob_0068.spv name=nir_shader_s bytes=983063
+REPRESENTATION blob_0068.spv name=aco_ir bytes=863090
+REPRESENTATION blob_0068.spv name=assembly bytes=973814
+LISTING blob_0068.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0068.spv binding=65 kind=simage sha256=5A5A2C2F25A2CF6D031657EDCB7705777569F721B81332ED4C9AD622B29C388E
+HASH blob_0068.spv binding=66 kind=simage sha256=5A5A2C2F25A2CF6D031657EDCB7705777569F721B81332ED4C9AD622B29C388E
+HASH blob_0068.spv binding=70 kind=simage sha256=DF892B3F443EF4C3CE902D61CDD1F235C59527436E33637EFABE7F658CF79B51
+HASH blob_0068.spv binding=73 kind=simage sha256=5CD1199CB0906805FF4C5349769A10265B122471DF501E8AFFD553A3DFA47AE6
+HASH blob_0068.spv binding=76 kind=simage sha256=FFC22DFA1415EC7E2646D3275061B3F36F44E23A7E0619C9404ECCA6357DB2BC
+DETERMINISM blob_0068.spv identical=1
+TIMING blob_0068.spv runs=30 median_ms=6.6388 min_ms=6.6338 mean_ms=6.8826 max_ms=8.2434
+SHADER blob_0192.spv family=postpass grid=120,68,1 ssbo_mib=288 bindings=9 spv_sha256=5272AC5B37CF9C5DB02175509450225993F6E2B0AFFD21A53ECD91CFC8E74A7C
+PIPELINE blob_0192.spv compile_ms=408.7
+STATS blob_0192.spv driver_pipeline_hash=3185189552833625840 sgprs=108 vgprs=128 spilled_sgprs=0 spilled_vgprs=0 code_size=86552 lds_size=0 scratch_size=0 subgroups_per_simd=8 combined_inputs=0 combined_outputs=0 hash=3144738058 instructions=12818 copies=622 branches=21 latency=20024 inverse_throughput=14399 vmem_clause=56 smem_clause=19 pre_sched_sgprs=83 pre_sched_vgprs=115 valu=12017 salu=592 vmem=73 smem=21 vopd=0
+REPRESENTATION blob_0192.spv name=nir_shader_s bytes=981333
+REPRESENTATION blob_0192.spv name=aco_ir bytes=862359
+REPRESENTATION blob_0192.spv name=assembly bytes=973422
+LISTING blob_0192.spv v_mad_i32_i24=0 s_bfe_i32=0 v_dot=0 aco_ir=1
+HASH blob_0192.spv binding=65 kind=simage sha256=C439212FDB0D8DA6C918BE21EC4506BBE8602DB47F13045C0D4E89228BEF8D81
+HASH blob_0192.spv binding=66 kind=simage sha256=C439212FDB0D8DA6C918BE21EC4506BBE8602DB47F13045C0D4E89228BEF8D81
+HASH blob_0192.spv binding=70 kind=simage sha256=8E44C165B8F31C4C9374DEF666DD443DD7894A5542CAF161893B411CBB6A194F
+HASH blob_0192.spv binding=73 kind=simage sha256=5CD1199CB0906805FF4C5349769A10265B122471DF501E8AFFD553A3DFA47AE6
+DETERMINISM blob_0192.spv identical=1
+TIMING blob_0192.spv runs=30 median_ms=6.6322 min_ms=6.6212 mean_ms=7.0564 max_ms=8.7664
+RESULT DONE shaders=14 build_failed=0 total_median_ms=60.6670 ms=24391

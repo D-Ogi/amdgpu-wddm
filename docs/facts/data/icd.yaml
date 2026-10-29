@@ -623,3 +623,21 @@ facts:
     status_text: "MEASURED (unit A, one timedemo run for each ICD and API, two photo runs for each ICD)"
     detail: "One boot, Windows 22631, 40 CU, kernel driver `CDE214D4`. Each timedemo run started at a Tctl of 55.2 C or less and took 631 frames in a window, with no dynamic resolution, no FSR and no VSync. The clock samples come every 10 s and do not show the clock during the 7 s timedemo. 12 s after the start, the pipeline run of the `055dbb9f` ICD was at 1000 MHz and the pipeline run of the installed ICD was at 2000 MHz. The photo accumulation was not complete at the screenshot, so path tracing noise stays in each image. Inside the box (0,0)-(520,700) the PSNR is 36.36 to 38.13 dB between the ICDs and 36.68 and 38.19 dB inside each ICD, and the mean luma is 47.03 to 47.29 in all four screenshots"
     evidence: "[System ICD with IB2 calls](../evidence/windows/2026-10-22-bd207-ib2-system-icd/README.md)"
+  - id: M928
+    status: MEASURED
+    date: "2026-10-29"
+    claim: "The software lowering of packed 4x8 dot products with the nine commits of docs/design/int8-dot-lowering.md is bit-exact on gfx1013: a Vulkan client that compares every output word with a CPU reference finds 0 mismatches in 1633280 records before and after the change, with equal output hashes, while the driver reports no accelerated dot-product property and the program has no `v_dot` instruction. The hardware-instruction listing after the change has 37 `v_mad_i32_i24` in the constant-weight layer, 31 in the dxil-spirv form and 6 `s_bfe_i32` on the scalar path (0, 0 and 2 before), the same counts as the offline harness"
+    status_text: "MEASURED (unit A, one run on each side, lab flavour, driver 40.7.216.106)"
+    detail: "The four shaders cover run-time operands with and without `_sat` (1051648 records: every byte pair in every lane, edge vectors with 12 edge accumulators, a seeded random set), a constant-weight layer (311296), uniform data on the scalar path (8192) and the dxil-spirv form (262144). The reference sums with 64-bit integers and applies the SPIR-V wrap and clamp rules. A run whose reference zero-extends the bytes fails with 9625073 mismatches, which is the negative control. Before is the installed `vulkan_radeon.dll` 4DCDFAC9, after the lab row 5C987CE9. The client loads each ICD directly, without the Vulkan loader"
+    evidence: "[INT8 dot lowering, lab](../evidence/windows/2026-10-29-int8-dot-lowering/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M865"}
+  - id: M929
+    status: MEASURED
+    date: "2026-10-29"
+    claim: "On 14 compute shaders of the FSR 4.1.2 INT8 upscaler (dxil-spirv, one of each network pass and two post-pass variants), the dot-product lowering of M928 writes the same bytes as the installed driver into every written buffer and image, and the sum of the median GPU times goes from 60.667 ms to 45.468 ms (0.749). The six large network passes go from 256 to 168 VGPRs with no spill left (pass2 had 40 spilled VGPRs, pass10 27). pass8 is the one shader that gets slower: 0.5875 to 0.6792 ms (1.156x) with a narrow spread on both sides"
+    status_text: "MEASURED (unit A, one run on each side, 30 timed dispatches for each shader)"
+    detail: "Seeded inputs, the grid of each shader's entry guard, GPU timestamps. Lab VGPRs and spills equal the offline harness rows. The pass9 median also reads 1.160x, but its dispatches spread up to 1.68x and its fastest dispatch after the change is 0.954x of the fastest before. pass7 and pass8 have the same offline instruction changes (336 fewer `v_add_u32`, 168 more `v_add3_u32`) and pass7 gains (median 0.974x, minimum 0.912x). pass7 runs 2160 workgroups and pass8 540. That the small grid causes the pass8 loss is an inference from these counts, not a measurement"
+    evidence: "[INT8 dot lowering, lab](../evidence/windows/2026-10-29-int8-dot-lowering/RESULT.md)"
+    edges:
+      - {"type": "uses", "to": "M928"}

@@ -1,0 +1,27 @@
+{
+    "arm":  "corpus",
+    "only":  "both",
+    "utc":  "20261029T145710Z",
+    "flavour":  "lab",
+    "driver":  "40.7.216.106",
+    "state":  "DONE",
+    "seconds":  51.8,
+    "steps":  [
+                  {
+                      "step":  "before",
+                      "icd":  "C:\\Windows\\System32\\DriverStore\\FileRepository\\bc250kmd.inf_amd64_fa19bfda2f17fd60\\vulkan\\vulkan_radeon.dll",
+                      "icd_sha256":  "4DCDFAC96A8855AB77932F271E84ADA32E84AE4A67AC34A9C10B03601DB2CEF4",
+                      "exit":  0,
+                      "want":  0,
+                      "result":  "RESULT DONE shaders=14 build_failed=0 total_median_ms=60.6670 ms=24391"
+                  },
+                  {
+                      "step":  "after",
+                      "icd":  "C:\\BC250\\tmp\\fsr4-v3-port\\kit1\\rows\\system-x64-lab\\vulkan_radeon.dll",
+                      "icd_sha256":  "5C987CE9B32042161BB87E2EA3D8011C35FBF467084B29228327B4FCA2D47CCF",
+                      "exit":  0,
+                      "want":  0,
+                      "result":  "RESULT DONE shaders=14 build_failed=0 total_median_ms=45.4679 ms=17617"
+                  }
+              ]
+}

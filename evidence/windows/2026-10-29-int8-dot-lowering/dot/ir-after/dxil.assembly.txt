@@ -1,0 +1,148 @@
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	 s1: %0:s[0] = s_mov_b32 %243:s[3]
+	 s1: %0:s[3] = s_mov_b32 1
+	 s8: %10:s[8-15] = s_load_dwordx8 %8:s[2-3], 0 storage:buffer semantics:private,reorder
+	 v1: %5:v[0] = v_lshl_add_u32 %276:s[0], 6, %245:v[0]
+	 v1: %13:v[1] = v_mul_lo_u32 0x50, %5:v[0]
+	s_waitcnt lgkmcnt(0)
+	s_clause imm:4
+	 v1: %16:v[2] = buffer_load_dword %11:s[8-11], %13:v[1], 0 offset:64 offen storage:buffer semantics:private,reorder
+	 v4: %17:v[4-7] = buffer_load_dwordx4 %11:s[8-11], %13:v[1], 0 offen storage:buffer semantics:private,reorder
+	 v4: %20:v[8-11] = buffer_load_dwordx4 %11:s[8-11], %13:v[1], 0 offset:16 offen storage:buffer semantics:private,reorder
+	 v4: %23:v[12-15] = buffer_load_dwordx4 %11:s[8-11], %13:v[1], 0 offset:32 offen storage:buffer semantics:private,reorder
+	 v4: %92:v[16-19] = buffer_load_dwordx4 %11:s[8-11], %13:v[1], 0 offset:48 offen storage:buffer semantics:private,reorder
+	 s1: %0:s[1] = s_movk_i32 imm:-128
+	 s1: %0:s[2] = s_movk_i32 imm:127
+	 s1: %0:s[3] = s_movk_i32 imm:-64
+	 v1: %240:v[0] = v_lshlrev_b32 4, %5:v[0]
+	s_waitcnt vmcnt(3)
+	 v1: %32:v[21] = v_bfe_i32 %260:v[4], 16, 8
+	 v1: %43:v[22] = v_bfe_i32 %261:v[5], 0, 8
+	 v1: %46:v[23] = v_bfe_i32 %261:v[5], 8, 8
+	 v1: %49:v[24] = v_bfe_i32 %261:v[5], 16, 8
+	 v1: %54:v[5] = v_ashrrev_i32 24, %261:v[5]
+	 v1: %168:v[25] = v_mul_i32_i24 %162:s[2], %262:v[6] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %169:v[26] = v_mul_i32_i24 %162:s[2], %262:v[6] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %171:v[27] = v_mul_i32_i24 %162:s[2], %262:v[6] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %176:v[28] = v_sub_u32 0, %263:v[7] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %25:v[3] = v_bfe_i32 %260:v[4], 0, 8
+	 v1: %28:v[20] = v_bfe_i32 %260:v[4], 8, 8
+	 v1: %38:v[4] = v_ashrrev_i32 24, %260:v[4]
+	s_waitcnt vmcnt(2)
+	 v1: %182:v[30] = v_mul_i32_i24 3, %264:v[8] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %181:v[29] = v_lshlrev_b32 1, %264:v[8] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %184:v[31] = v_lshlrev_b32 2, %264:v[8] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %189:v[1] = v_mul_i32_i24 -3, %265:v[9] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %172:v[27] = v_add3_u32 %171:v[27], %169:v[26], %168:v[25]
+	 v1: %191:v[25] = v_mul_i32_i24 -4, %265:v[9] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %194:v[26] = v_mul_i32_i24 -5, %265:v[9] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %177:v[28] = v_sub_u32 %176:v[28], %263:v[7] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %185:v[31] = v_add3_u32 %184:v[31], %182:v[30], %181:v[29]
+	 v1: %203:v[29] = v_mul_i32_i24 %202:s[3], %267:v[11] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %205:v[30] = v_lshlrev_b32 5, %267:v[11] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %195:v[26] = v_add3_u32 %194:v[26], %191:v[25], %189:v[1]
+	 v1: %207:v[1] = v_mul_i32_i24 %162:s[2], %267:v[11] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	s_waitcnt vmcnt(1)
+	 v1: %26:v[25] = v_mul_i32_i24 %25:v[3], %268:v[12] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %178:v[28] = v_sub_u32 %177:v[28], %263:v[7] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %208:v[1] = v_add3_u32 %207:v[1], %205:v[30], %203:v[29]
+	 v1: %33:v[30] = v_mul_i32_i24 %32:v[21], %268:v[12] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %29:v[29] = v_mul_i32_i24 %28:v[20], %268:v[12] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %39:v[12] = v_mul_i32_i24 %38:v[4], %268:v[12] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %35:v[25] = v_add3_u32 %26:v[25], %29:v[29], %33:v[30]
+	 v1: %47:v[29] = v_mul_i32_i24 %46:v[23], %269:v[13] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %50:v[30] = v_mul_i32_i24 %49:v[24], %269:v[13] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %41:v[25] = v_add3_u32 %35:v[25], %39:v[12], %16:v[2]
+	 v1: %44:v[12] = v_mul_i32_i24 %43:v[22], %269:v[13] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %55:v[13] = v_mul_i32_i24 %54:v[5], %269:v[13] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %157:v[2] = v_add_u32 %25:v[3], %16:v[2]
+	 v1: %52:v[12] = v_add3_u32 %44:v[12], %47:v[29], %50:v[30]
+	 v1: %66:v[29] = v_mul_i32_i24 %262:v[6], %270:v[14] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %76:v[30] = v_mul_i32_i24 %263:v[7], %271:v[15] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %159:v[2] = v_mad_i32_i24 -1, %28:v[20], %157:v[2]
+	 v1: %57:v[12] = v_add3_u32 %52:v[12], %55:v[13], %41:v[25]
+	 v1: %60:v[13] = v_mul_i32_i24 %262:v[6], %270:v[14] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %63:v[25] = v_mul_i32_i24 %262:v[6], %270:v[14] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %71:v[14] = v_mul_i32_i24 %262:v[6], %270:v[14] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %173:v[6] = v_mul_i32_i24 %162:s[2], %262:v[6] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %161:v[2] = v_mad_i32_i24 %160:s[1], %32:v[21], %159:v[2]
+	 v1: %68:v[13] = v_add3_u32 %60:v[13], %63:v[25], %66:v[29]
+	 v1: %163:v[2] = v_mad_i32_i24 %162:s[2], %38:v[4], %161:v[2]
+	 v1: %73:v[13] = v_add3_u32 %68:v[13], %71:v[14], %57:v[12]
+	 v1: %79:v[12] = v_mul_i32_i24 %263:v[7], %271:v[15] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %82:v[14] = v_mul_i32_i24 %263:v[7], %271:v[15] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %87:v[15] = v_mul_i32_i24 %263:v[7], %271:v[15] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %84:v[30] = v_add3_u32 %76:v[30], %79:v[12], %82:v[14]
+	 v1: %89:v[30] = v_add3_u32 %84:v[30], %87:v[15], %73:v[13]
+	 v1: %164:v[15] = v_mad_i32_i24 %160:s[1], %43:v[22], %163:v[2]
+	 v1: %212:v[2] = v_mad_i32_i24 %160:s[1], %25:v[3], %163:v[2]
+	 v1: %165:v[15] = v_mad_i32_i24 %160:s[1], %46:v[23], %164:v[15]
+	 v1: %213:v[2] = v_mad_i32_i24 %160:s[1], %28:v[20], %212:v[2]
+	 v1: %166:v[15] = v_mad_i32_i24 %160:s[1], %49:v[24], %165:v[15]
+	 v1: %214:v[2] = v_mad_i32_i24 %160:s[1], %32:v[21], %213:v[2]
+	 v1: %167:v[15] = v_mad_i32_i24 %160:s[1], %54:v[5], %166:v[15]
+	 v1: %215:v[2] = v_mad_i32_i24 %160:s[1], %38:v[4], %214:v[2]
+	 v1: %175:v[27] = v_add3_u32 %172:v[27], %173:v[6], %167:v[15]
+	 v1: %216:v[2] = v_mad_i32_i24 %162:s[2], %25:v[3], %215:v[2]
+	 v1: %179:v[27] = v_sub_u32 %175:v[27], %263:v[7] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %217:v[2] = v_mad_i32_i24 %162:s[2], %28:v[20], %216:v[2]
+	 v1: %180:v[28] = v_add_u32 %178:v[28], %179:v[27]
+	 v1: %218:v[2] = v_mad_i32_i24 %162:s[2], %32:v[21], %217:v[2]
+	s_waitcnt vmcnt(0)
+	 v1: %101:v[25] = v_mul_i32_i24 %264:v[8], %272:v[16] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %219:v[2] = v_mad_i32_i24 %162:s[2], %38:v[4], %218:v[2]
+	 v1: %220:v[3] = v_mad_i32_i24 -1, %25:v[3], %219:v[2]
+	 v1: %221:v[20] = v_mad_i32_i24 -1, %28:v[20], %220:v[3]
+	 v1: %111:v[27] = v_mul_i32_i24 %265:v[9], %273:v[17] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %114:v[29] = v_mul_i32_i24 %265:v[9], %273:v[17] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %222:v[21] = v_mad_i32_i24 -1, %32:v[21], %221:v[20]
+	 v1: %95:v[20] = v_mul_i32_i24 %264:v[8], %272:v[16] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %223:v[4] = v_mad_i32_i24 -1, %38:v[4], %222:v[21]
+	 v1: %98:v[21] = v_mul_i32_i24 %264:v[8], %272:v[16] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %106:v[16] = v_mul_i32_i24 %264:v[8], %272:v[16] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %127:v[2] = v_mul_i32_i24 %266:v[10], %274:v[18] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %130:v[3] = v_mul_i32_i24 %266:v[10], %274:v[18] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %133:v[6] = v_mul_i32_i24 %266:v[10], %274:v[18] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %138:v[18] = v_mul_i32_i24 %266:v[10], %274:v[18] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %225:v[4] = v_mad_i32_i24 4, %43:v[22], %223:v[4]
+	 v1: %103:v[20] = v_add3_u32 %95:v[20], %98:v[21], %101:v[25]
+	 v1: %143:v[7] = v_mul_i32_i24 %267:v[11], %275:v[19] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %146:v[12] = v_mul_i32_i24 %267:v[11], %275:v[19] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %149:v[13] = v_mul_i32_i24 %267:v[11], %275:v[19] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %135:v[2] = v_add3_u32 %127:v[2], %130:v[3], %133:v[6]
+	 v1: %154:v[19] = v_mul_i32_i24 %267:v[11], %275:v[19] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %226:v[4] = v_mad_i32_i24 3, %46:v[23], %225:v[4]
+	 v1: %108:v[20] = v_add3_u32 %103:v[20], %106:v[16], %89:v[30]
+	 v1: %117:v[30] = v_mul_i32_i24 %265:v[9], %273:v[17] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %122:v[17] = v_mul_i32_i24 %265:v[9], %273:v[17] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %186:v[8] = v_add_u32 %264:v[8], %180:v[28] dst_sel:dword src0_sel:sbyte3 src1_sel:dword
+	 v1: %197:v[9] = v_mul_i32_i24 -2, %265:v[9] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %200:v[10] = v_mul_i32_i24 %160:s[1], %266:v[10] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %151:v[7] = v_add3_u32 %143:v[7], %146:v[12], %149:v[13]
+	 v1: %209:v[11] = v_lshlrev_b32 6, %267:v[11] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %227:v[4] = v_mad_i32_i24 2, %49:v[24], %226:v[4]
+	 v1: %119:v[27] = v_add3_u32 %111:v[27], %114:v[29], %117:v[30]
+	 v1: %198:v[9] = v_add3_u32 %197:v[9], %185:v[31], %186:v[8]
+	 v1: %228:v[4] = v_add_u32 %54:v[5], %227:v[4]
+	 v1: %124:v[27] = v_add3_u32 %119:v[27], %122:v[17], %108:v[20]
+	 v1: %201:v[10] = v_add3_u32 %200:v[10], %195:v[26], %198:v[9]
+	 v1: %229:v[4] = v_mad_i32_i24 -5, %43:v[22], %228:v[4]
+	 v1: %140:v[2] = v_add3_u32 %135:v[2], %138:v[18], %124:v[27]
+	 v1: %211:v[15] = v_add3_u32 %208:v[1], %209:v[11], %201:v[10]
+	 v1: %230:v[4] = v_mad_i32_i24 -4, %46:v[23], %229:v[4]
+	 v1: %156:v[14] = v_add3_u32 %151:v[7], %154:v[19], %140:v[2]
+	 v1: %231:v[4] = v_mad_i32_i24 -3, %49:v[24], %230:v[4]
+	 v1: %232:v[4] = v_mad_i32_i24 -2, %54:v[5], %231:v[4]
+	 v1: %233:v[4] = v_mad_i32_i24 %160:s[1], %43:v[22], %232:v[4]
+	 v1: %234:v[22] = v_mad_i32_i24 %162:s[2], %43:v[22], %233:v[4]
+	 v1: %235:v[23] = v_mad_i32_i24 32, %46:v[23], %234:v[22]
+	 v1: %236:v[24] = v_mad_i32_i24 %202:s[3], %49:v[24], %235:v[23]
+	 v1: %237:v[16] = v_mad_i32_i24 64, %54:v[5], %236:v[24]
+	buffer_store_dwordx3 %239:s[12-15], %240:v[0], 0, %238:v[14-16] offen storage:buffer
+	s_endpgm
+

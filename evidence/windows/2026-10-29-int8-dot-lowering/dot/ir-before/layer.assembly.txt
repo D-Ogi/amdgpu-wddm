@@ -1,0 +1,105 @@
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	 s1: %0:s[0] = s_mov_b32 %140:s[3]
+	 s1: %0:s[3] = s_mov_b32 1
+	 s8: %10:s[8-15] = s_load_dwordx8 %8:s[2-3], 0 storage:buffer semantics:private,reorder
+	 v1: %5:v[0] = v_lshl_add_u32 %158:s[0], 6, %142:v[0]
+	 v1: %13:v[1] = v_lshlrev_b32 3, %5:v[0]
+	s_waitcnt lgkmcnt(0)
+	 v2: %14:v[2-3] = buffer_load_dwordx2 %11:s[8-11], %13:v[1], 0 offen storage:buffer semantics:private,reorder
+	 s1: %0:s[1] = s_movk_i32 imm:127
+	 s1: %0:s[2] = s_movk_i32 imm:-128
+	 s1: %0:s[3] = s_movk_i32 imm:-64
+	 s1: %0:s[4] = s_movk_i32 imm:-85
+	 s1: %0:s[5] = s_movk_i32 imm:255
+	 v1: %50:v[0] = v_lshlrev_b32 6, %5:v[0]
+	s_waitcnt vmcnt(0)
+	 v1: %28:v[7] = v_mul_i32_i24 %23:s[2], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %29:v[9] = v_mul_i32_i24 %23:s[2], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %31:v[10] = v_mul_i32_i24 %23:s[2], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %35:v[11] = v_mul_i32_i24 %18:s[1], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %36:v[12] = v_mul_i32_i24 %18:s[1], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %38:v[15] = v_mul_i32_i24 %18:s[1], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %17:v[4] = v_sub_u32 %156:v[2], %156:v[2] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte1
+	 v1: %20:v[5] = v_mul_i32_i24 %18:s[1], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %24:v[6] = v_mul_i32_i24 %23:s[2], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %42:v[16] = v_sub_u32 0, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %44:v[17] = v_sub_u32 0, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %30:v[7] = v_add_u32 %29:v[9], %28:v[7]
+	 v1: %37:v[14] = v_add_u32 %36:v[12], %35:v[11]
+	 v1: %26:v[4] = v_add3_u32 %17:v[4], %24:v[6], %20:v[5]
+	 v1: %43:v[16] = v_sub_u32 %42:v[16], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %45:v[17] = v_sub_u32 %44:v[17], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %33:v[7] = v_add3_u32 %30:v[7], %24:v[6], %31:v[10]
+	 v1: %40:v[14] = v_add3_u32 %37:v[14], %38:v[15], %20:v[5]
+	 v1: %27:v[8] = v_add_u32 %26:v[4], %157:v[3]
+	 v1: %47:v[15] = v_add3_u32 %157:v[3], %43:v[16], %45:v[17]
+	 v1: %34:v[13] = v_add_u32 %33:v[7], %157:v[3]
+	 v1: %41:v[18] = v_add_u32 %40:v[14], %157:v[3]
+	 v1: %0:v[16] = v_mov_b32 %27:v[8]
+	 v1: %0:v[19] = v_mov_b32 %47:v[15]
+	 v1: %0:v[17] = v_mov_b32 %34:v[13]
+	buffer_store_dwordx4 %49:s[12-15], %50:v[0], 0, %48:v[16-19] offen storage:buffer
+	 v1: %51:v[18] = v_mul_i32_i24 3, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %52:v[19] = v_lshlrev_b32 2, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %54:v[20] = v_lshlrev_b32 1, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %59:v[21] = v_mul_i32_i24 -4, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %61:v[22] = v_mul_i32_i24 -5, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %64:v[23] = v_mul_i32_i24 -2, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %66:v[1] = v_mul_i32_i24 -3, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %72:v[4] = v_lshlrev_b32 5, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %74:v[5] = v_lshlrev_b32 6, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %76:v[6] = v_mul_i32_i24 %75:s[3], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %55:v[20] = v_add_u32 %54:v[20], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %62:v[22] = v_add_u32 %61:v[22], %59:v[21]
+	 v1: %73:v[12] = v_add_u32 %36:v[12], %72:v[4]
+	 v1: %56:v[20] = v_add3_u32 %55:v[20], %52:v[19], %51:v[18]
+	 v1: %70:v[18] = v_add_u32 %29:v[9], %157:v[3]
+	 v1: %68:v[22] = v_add3_u32 %62:v[22], %66:v[1], %64:v[23]
+	 v1: %78:v[19] = v_add3_u32 %73:v[12], %76:v[6], %74:v[5]
+	 v1: %57:v[16] = v_add_u32 %56:v[20], %157:v[3]
+	 v1: %69:v[17] = v_add_u32 %68:v[22], %157:v[3]
+	buffer_store_dwordx4 %49:s[12-15], %50:v[0], 0, %79:v[16-19] offset:16 offen storage:buffer
+	 v1: %82:v[10] = v_sub_u32 %31:v[10], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %85:v[17] = v_add_i32 %40:v[14], %157:v[3] clamp
+	 v1: %86:v[18] = v_add_i32 %33:v[7], %157:v[3] clamp
+	 v1: %88:v[7] = v_mul_i32_i24 %87:s[4], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte1
+	 v1: %90:v[8] = v_mul_i32_i24 55, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte0
+	 v1: %93:v[9] = v_mul_i32_i24 19, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %83:v[10] = v_add_u32 %35:v[11], %82:v[10]
+	 v1: %91:v[8] = v_add_u32 %90:v[8], %88:v[7]
+	 v1: %84:v[16] = v_add_i32 %83:v[10], %157:v[3] clamp
+	 v1: %95:v[10] = v_mul_i32_i24 -15, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %97:v[8] = v_add3_u32 %91:v[8], %95:v[10], %93:v[9]
+	 v1: %98:v[19] = v_add_i32 %97:v[8], %157:v[3] clamp
+	buffer_store_dwordx4 %49:s[12-15], %50:v[0], 0, %99:v[16-19] offset:32 offen storage:buffer
+	 v1: %104:v[12] = v_mul_u32_u24 (is16bit)%18:s[1], (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte0
+	 v1: %108:v[13] = v_mul_u32_u24 (is16bit)%106:s[5], (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte3
+	 v1: %111:v[14] = v_lshlrev_b32 7, (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte2
+	 v1: %116:v[15] = v_mul_u32_u24 15, (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte1
+	 v1: %117:v[16] = v_mul_u32_u24 15, (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte0
+	 v1: %119:v[17] = v_mul_u32_u24 15, (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte3
+	 v1: %120:v[18] = v_mul_u32_u24 15, (is16bit)%156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte2
+	 v1: %124:v[11] = v_add_u32 %156:v[2], %35:v[11] dst_sel:dword src0_sel:sbyte0 src1_sel:dword
+	 v1: %125:v[19] = v_lshlrev_b32 7, %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte3
+	 v1: %126:v[20] = v_mul_i32_i24 %106:s[5], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:sbyte2
+	 v1: %130:v[21] = v_mul_i32_i24 %18:s[1], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte3
+	 v1: %105:v[12] = v_add_u32 %104:v[12], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte1
+	 v1: %118:v[16] = v_add_u32 %117:v[16], %116:v[15]
+	 v1: %128:v[11] = v_add3_u32 %124:v[11], %126:v[20], %125:v[19]
+	 v1: %131:v[21] = v_sub_u32 %130:v[21], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte2
+	 v1: %132:v[2] = v_mul_i32_i24 %23:s[2], %156:v[2] dst_sel:dword src0_sel:dword src1_sel:ubyte1
+	 v1: %113:v[12] = v_add3_u32 %105:v[12], %111:v[14], %108:v[13]
+	 v1: %122:v[16] = v_add3_u32 %118:v[16], %120:v[18], %119:v[17]
+	 v1: %129:v[6] = v_add_u32 %128:v[11], %157:v[3]
+	 v1: %133:v[2] = v_add_u32 %132:v[2], %131:v[21]
+	 v1: %114:v[4] = v_add_u32 %113:v[12], %157:v[3]
+	 v1: %123:v[5] = v_add_u32 %122:v[16], %157:v[3] clamp
+	 v1: %134:v[7] = v_add_i32 %133:v[2], %157:v[3] clamp
+	buffer_store_dwordx4 %49:s[12-15], %50:v[0], 0, %135:v[4-7] offset:48 offen storage:buffer
+	s_endpgm
+

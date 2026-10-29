@@ -1,0 +1,47 @@
+Shader disassembly is not supported in the current configuration (LLVM not available), falling back to print_program.
+
+After lowering to hw instructions:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	 s1: %0:s[0] = s_mov_b32 %71:s[3]
+	 s1: %0:s[3] = s_mov_b32 1
+	 s8: %10:s[8-15] = s_load_dwordx8 %8:s[2-3], 0 storage:buffer semantics:private,reorder
+	 v1: %5:v[0] = v_lshl_add_u32 %91:s[0], 6, %73:v[0]
+	 v1: %13:v[1] = v_lshlrev_b32 4, %5:v[0]
+	s_waitcnt lgkmcnt(0)
+	 v3: %14:v[2-4] = buffer_load_dwordx3 %11:s[8-11], %13:v[1], 0 offen storage:buffer semantics:private,reorder
+	 v1: %58:v[0] = v_mul_lo_u32 48, %5:v[0]
+	s_waitcnt vmcnt(0)
+	 v1: %41:v[11] = v_mul_u32_u24 (is16bit)%87:v[2], (is16bit)%88:v[3] dst_sel:dword src0_sel:ubyte2 src1_sel:ubyte2
+	 v1: %44:v[12] = v_mul_u32_u24 (is16bit)%87:v[2], (is16bit)%88:v[3] dst_sel:dword src0_sel:ubyte3 src1_sel:ubyte3
+	 v1: %47:v[13] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte0 src1_sel:ubyte0
+	 v1: %48:v[14] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte1 src1_sel:ubyte1
+	 v1: %50:v[15] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte2 src1_sel:ubyte2
+	 v1: %17:v[5] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte0 src1_sel:sbyte0
+	 v1: %20:v[6] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte1 src1_sel:sbyte1
+	 v1: %25:v[7] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte2 src1_sel:sbyte2
+	 v1: %29:v[8] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte3 src1_sel:sbyte3
+	 v1: %34:v[9] = v_mul_u32_u24 (is16bit)%87:v[2], (is16bit)%88:v[3] dst_sel:dword src0_sel:ubyte0 src1_sel:ubyte0
+	 v1: %37:v[10] = v_mul_u32_u24 (is16bit)%87:v[2], (is16bit)%88:v[3] dst_sel:dword src0_sel:ubyte1 src1_sel:ubyte1
+	 v1: %51:v[2] = v_mul_i32_i24 %87:v[2], %88:v[3] dst_sel:dword src0_sel:sbyte3 src1_sel:ubyte3
+	 v1: %49:v[13] = v_add_u32 %47:v[13], %48:v[14]
+	 v1: %21:v[5] = v_add_u32 %17:v[5], %20:v[6]
+	 v1: %38:v[9] = v_add_u32 %34:v[9], %37:v[10]
+	 v1: %53:v[13] = v_add3_u32 %49:v[13], %50:v[15], %51:v[2]
+	 v1: %31:v[5] = v_add3_u32 %21:v[5], %25:v[7], %29:v[8]
+	 v1: %46:v[9] = v_add3_u32 %38:v[9], %41:v[11], %44:v[12]
+	 v1: %0:v[7] = v_mov_b32 %53:v[13]
+	 v1: %60:v[17] = v_add_u32 %53:v[13], %89:v[4]
+	 v1: %66:v[13] = v_add_i32 %53:v[13], %89:v[4] clamp
+	 v1: %54:v[8] = v_add_u32 %31:v[5], %89:v[4]
+	 v1: %0:v[1] = v_mov_b32 %31:v[5]
+	 v1: %0:v[6] = v_mov_b32 %46:v[9]
+	 v1: %59:v[16] = v_add_u32 %46:v[9], %89:v[4]
+	 v1: %62:v[19] = v_add_u32 %46:v[9], %89:v[4] clamp
+	 v1: %61:v[18] = v_add_i32 %92:v[1], %89:v[4] clamp
+	buffer_store_dwordx4 %56:s[12-15], %58:v[0], 0, %55:v[5-8] offen storage:buffer
+	buffer_store_dwordx4 %56:s[12-15], %58:v[0], 0, %63:v[16-19] offset:16 offen storage:buffer
+	buffer_store_dword %56:s[12-15], %58:v[0], 0, %66:v[13] offset:32 offen storage:buffer
+	s_endpgm
+

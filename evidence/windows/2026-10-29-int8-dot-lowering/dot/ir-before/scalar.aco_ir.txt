@@ -1,0 +1,156 @@
+After Spilling:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: top-level, branch, */
+	 s2: %136:s[0-1],  s1: %137:s[2],  s1: %138:s[3],  s1: %139:s[4],  v1: (kill)%140:v[0],  v1: (kill)%141:v[1],  v1: (kill)%142:v[2] = p_startpgm
+	 s2: (kill)%144,  s1: (kill)%143:scc = p_init_scratch (kill)%136, (lateKill)%139
+	p_logical_start
+	 s2: %4 = p_create_vector (kill)%137, 1
+	 s4: %6 = s_load_dwordx4 %4, 0 storage:buffer semantics:private,reorder
+	 s1: %8,  s1: (kill)%149:scc = s_lshl_b32 %138, 3
+	 s2: %9 = s_buffer_load_dwordx2 (kill)%6, (kill)%8 storage:buffer semantics:private,reorder
+	 s1: %150,  s1: %151 = p_split_vector (kill)%9
+	 s1: %10,  s1: (kill)%152:scc = p_extract %150, 1, 8, 1
+	 s1: %11,  s1: (kill)%153:scc = p_extract %150, 0, 8, 1
+	 s1: %12,  s1: (kill)%154:scc = s_sub_i32 %11, %10
+	 s1: %13 = p_parallelcopy 0x7f
+	 s1: %14,  s1: (kill)%155:scc = p_extract %150, 3, 8, 1
+	 s1: %15 = s_mul_i32 %14, (is16bit)%13
+	 s1: %17,  s1: (kill)%156:scc = p_extract %150, 2, 8, 1
+	 s1: %18 = p_parallelcopy 0xffffff80
+	 s1: %19 = s_mul_i32 %17, %18
+	 s1: %20,  s1: (kill)%157:scc = s_add_u32 %19, %15
+	 s1: %21,  s1: (kill)%158:scc = s_add_u32 (kill)%12, (kill)%20
+	 s1: %22,  s1: (kill)%159:scc = s_add_u32 (kill)%21, %151
+	 s1: %23 = s_mul_i32 %10, %18
+	 s1: %24 = s_mul_i32 %11, %18
+	 s1: %25,  s1: (kill)%160:scc = s_add_u32 %24, (kill)%23
+	 s1: %26 = s_mul_i32 %14, %18
+	 s1: %27,  s1: (kill)%161:scc = s_add_u32 (kill)%19, %26
+	 s1: %28,  s1: (kill)%162:scc = s_add_u32 (kill)%25, (kill)%27
+	 s1: %29,  s1: (kill)%163:scc = s_add_u32 %28, %151
+	 s1: %30 = s_mul_i32 %10, (is16bit)%13
+	 s1: %31 = s_mul_i32 %11, (is16bit)%13
+	 s1: %32,  s1: (kill)%164:scc = s_add_u32 %31, %30
+	 s1: %33 = s_mul_i32 %17, (is16bit)%13
+	 s1: %34,  s1: (kill)%165:scc = s_add_u32 (kill)%33, (kill)%15
+	 s1: %35,  s1: (kill)%166:scc = s_add_u32 (kill)%32, (kill)%34
+	 s1: %36,  s1: (kill)%167:scc = s_add_u32 %35, %151
+	 s1: %37,  s1: (kill)%168:scc = s_sub_i32 0, %11
+	 s1: %38,  s1: (kill)%169:scc = s_sub_i32 (kill)%37, %10
+	 s1: %39,  s1: (kill)%170:scc = s_sub_i32 0, %17
+	 s1: %40,  s1: (kill)%171:scc = s_sub_i32 (kill)%39, %14
+	 s1: %41,  s1: (kill)%172:scc = s_add_u32 (kill)%38, (kill)%40
+	 s1: %42,  s1: (kill)%173:scc = s_add_u32 (kill)%41, %151
+	 s1: %43 = s_mul_i32 %10, 3
+	 s1: %45,  s1: (kill)%175:scc = s_lshl2_add_u32 %11, (kill)%43
+	 s1: %47,  s1: (kill)%177:scc = s_lshl1_add_u32 %17, %14
+	 s1: %48,  s1: (kill)%178:scc = s_add_u32 (kill)%45, (kill)%47
+	 s1: %49,  s1: (kill)%179:scc = s_add_u32 (kill)%48, %151
+	 s1: %51 = s_mul_i32 %10, -4
+	 s1: %53 = s_mul_i32 %11, -5
+	 s1: %54,  s1: (kill)%180:scc = s_add_u32 (kill)%53, (kill)%51
+	 s1: %56 = s_mul_i32 %14, -2
+	 s1: %58 = s_mul_i32 %17, -3
+	 s1: %59,  s1: (kill)%181:scc = s_add_u32 (kill)%58, (kill)%56
+	 s1: %60,  s1: (kill)%182:scc = s_add_u32 (kill)%54, (kill)%59
+	 s1: %61,  s1: (kill)%183:scc = s_add_u32 (kill)%60, %151
+	 s1: %62,  s1: (kill)%184:scc = s_add_u32 (kill)%24, %151
+	 s1: %64,  s1: (kill)%185:scc = s_lshl_b32 %10, 5
+	 s1: %65,  s1: (kill)%186:scc = s_add_u32 (kill)%31, (kill)%64
+	 s1: %67,  s1: (kill)%187:scc = s_lshl_b32 %14, 6
+	 s1: %69 = s_mul_i32 %17, 0xffffffc0
+	 s1: %70,  s1: (kill)%188:scc = s_add_u32 (kill)%69, (kill)%67
+	 s1: %71,  s1: (kill)%189:scc = s_add_u32 (kill)%65, (kill)%70
+	 s1: %72,  s1: (kill)%190:scc = s_sub_i32 (kill)%26, %17
+	 s1: %73,  s1: (kill)%191:scc = s_add_u32 %30, (kill)%72
+	 s1: %192:scc = s_cmp_lt_i32 %151, 0
+	 s1: %194,  s1: (kill)%193:scc = s_add_u32 0x7fffffff, (kill)%192
+	 s1: %196,  s1: %195:scc = s_add_i32 (kill)%73, %151
+	 s1: %74 = s_cselect_b32 %194, (kill)%196, (kill)%195:scc
+	 s1: %201,  s1: %200:scc = s_add_i32 (kill)%35, %151
+	 s1: %75 = s_cselect_b32 %194, (kill)%201, (kill)%200:scc
+	 s1: %206,  s1: %205:scc = s_add_i32 (kill)%28, %151
+	 s1: %76 = s_cselect_b32 %194, (kill)%206, (kill)%205:scc
+	 s1: %78 = s_mul_i32 (kill)%10, 0xffffffab
+	 s1: %80 = s_mul_i32 %11, 55
+	 s1: %81,  s1: (kill)%207:scc = s_add_u32 (kill)%80, (kill)%78
+	 s1: %83 = s_mul_i32 %14, 19
+	 s1: %85 = s_mul_i32 %17, -15
+	 s1: %86,  s1: (kill)%208:scc = s_add_u32 (kill)%85, (kill)%83
+	 s1: %87,  s1: (kill)%209:scc = s_add_u32 (kill)%81, (kill)%86
+	 s1: %214,  s1: %213:scc = s_add_i32 (kill)%87, %151
+	 s1: %88 = s_cselect_b32 %194, (kill)%214, (kill)%213:scc
+	 s1: %89,  s1: (kill)%215:scc = p_extract %150, 1, 8, 0
+	 s1: %90,  s1: (kill)%216:scc = p_extract %150, 0, 8, 0
+	 s1: %91 = s_mul_i32 (is24bit)%90, (is24bit)%13
+	 s1: %92,  s1: (kill)%217:scc = s_add_u32 (kill)%91, %89
+	 s1: %94,  s1: (kill)%218:scc = p_extract %150, 3, 8, 0
+	 s1: %95 = s_mul_i32 (is24bit)%94, 0xff
+	 s1: %96,  s1: (kill)%219:scc = p_extract (kill)%150, 2, 8, 0
+	 s1: %98,  s1: (kill)%220:scc = s_lshl_b32 (is16bit)%96, 7
+	 s1: %99,  s1: (kill)%221:scc = s_add_u32 (kill)%98, (kill)%95
+	 s1: %100,  s1: (kill)%222:scc = s_add_u32 (kill)%92, (kill)%99
+	 s1: %101,  s1: (kill)%223:scc = s_add_u32 (kill)%100, %151
+	 s1: %103 = s_mul_i32 (is24bit)%89, 15
+	 s1: %104 = s_mul_i32 (is24bit)(kill)%90, 15
+	 s1: %105,  s1: (kill)%224:scc = s_add_u32 (kill)%104, (kill)%103
+	 s1: %106 = s_mul_i32 (is24bit)%94, 15
+	 s1: %107 = s_mul_i32 (is24bit)%96, 15
+	 s1: %108,  s1: (kill)%225:scc = s_add_u32 (kill)%107, (kill)%106
+	 s1: %109,  s1: (kill)%226:scc = s_add_u32 (kill)%105, (kill)%108
+	 s1: %227,  s1: %228:scc = s_add_u32 (kill)%109, %151
+	 s1: %110 = s_cselect_b32 -1, (kill)%227, (kill)%228:scc
+	 s1: %111,  s1: (kill)%229:scc = s_add_u32 (kill)%11, (kill)%30
+	 s1: %112,  s1: (kill)%230:scc = s_lshl_b32 (kill)%14, 7
+	 s1: %113 = s_mul_i32 (kill)%17, 0xff
+	 s1: %114,  s1: (kill)%231:scc = s_add_u32 (kill)%113, (kill)%112
+	 s1: %115,  s1: (kill)%232:scc = s_add_u32 (kill)%111, (kill)%114
+	 s1: %116,  s1: (kill)%233:scc = s_add_u32 (kill)%115, %151
+	 s1: %117 = s_mul_i32 (is16bit)(kill)%13, (is16bit)(kill)%94
+	 s1: %118,  s1: (kill)%234:scc = s_sub_i32 (kill)%117, (kill)%96
+	 s1: %119 = s_mul_i32 (kill)%18, (is16bit)(kill)%89
+	 s1: %120,  s1: (kill)%235:scc = s_add_u32 (kill)%119, (kill)%118
+	 s1: %240,  s1: %239:scc = s_add_i32 (kill)%120, (kill)%151
+	 s1: %121 = s_cselect_b32 (kill)%194, (kill)%240, (kill)%239:scc
+	 s2: %122 = p_create_vector 1, 0
+	p_logical_end
+	 s2: %0:exec = p_parallelcopy (kill)%122
+	p_cbranch_z %0:exec BB2, BB1
+BB1
+/* logical preds: BB0, / linear preds: BB0, / kind: uniform, */
+	p_logical_start
+	 s4: %124 = s_load_dwordx4 (kill)%4, 16 storage:buffer semantics:private,reorder
+	 s1: %126,  s1: (kill)%245:scc = s_lshl_b32 (kill)%138, 6
+	 v4: %246 = p_create_vector (kill)%22, (kill)%29, (kill)%36, (kill)%42
+	buffer_store_dwordx4 %124,  v1: undef, %126, (kill)%246 storage:buffer
+	 v4: %248 = p_create_vector (kill)%49, (kill)%61, (kill)%62, (kill)%71
+	buffer_store_dwordx4 %124,  v1: undef, %126, (kill)%248 offset:16 storage:buffer
+	 v4: %250 = p_create_vector (kill)%74, (kill)%75, (kill)%76, (kill)%88
+	buffer_store_dwordx4 %124,  v1: undef, %126, (kill)%250 offset:32 storage:buffer
+	 v4: %252 = p_create_vector (kill)%101, (kill)%110, (kill)%116, (kill)%121
+	buffer_store_dwordx4 (kill)%124,  v1: undef, (kill)%126, (kill)%252 offset:48 storage:buffer
+	p_logical_end
+	p_branch BB3
+BB2
+/* logical preds: / linear preds: BB0, / kind: uniform, */
+	p_branch BB3
+BB3
+/* logical preds: / linear preds: BB1, BB2, / kind: invert, */
+	 s2: %0:exec,  s1: (kill)%253:scc = s_andn2_b64 -1, %0:exec
+	p_cbranch_z %0:exec BB5, BB4
+BB4
+/* logical preds: BB0, / linear preds: BB3, / kind: uniform, */
+	p_logical_start
+	p_logical_end
+	p_branch BB6
+BB5
+/* logical preds: / linear preds: BB3, / kind: uniform, */
+	p_branch BB6
+BB6
+/* logical preds: BB1, BB4, / linear preds: BB4, BB5, / kind: uniform, top-level, merge, */
+	 s2: %0:exec = p_parallelcopy -1
+	p_logical_start
+	p_logical_end
+	s_endpgm
+

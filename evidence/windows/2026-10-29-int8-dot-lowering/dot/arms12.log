@@ -1,0 +1,12 @@
+[    0.0] utc 20261029T145700Z arm dot only both bound 170s kit C:\BC250\tmp\fsr4-v3-port\kit1
+[    0.8] kit files verified
+[    1.2] device PCI\VEN_1002&DEV_13FE&SUBSYS_00001022&REV_00\4&19CAF403&0&0041 status OK driver 40.7.216.106
+[    1.4] before C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\vulkan\vulkan_radeon.dll 4DCDFAC96A8855AB77932F271E84ADA32E84AE4A67AC34A9C10B03601DB2CEF4 (lab, not known to the kit)
+[    1.4] after  C:\BC250\tmp\fsr4-v3-port\kit1\rows\system-x64-lab\vulkan_radeon.dll 5C987CE9B32042161BB87E2EA3D8011C35FBF467084B29228327B4FCA2D47CCF (lab row)
+[    1.4] step before: vkdotcheck.exe --icd C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_fa19bfda2f17fd60\vulkan\vulkan_radeon.dll --dump C:\BC250\tmp\fsr4-v3-port\dot-20261029T145700Z\ir-before (at most 167 s)
+[    2.8] step before exit 0 (want 0) RESULT PASS shaders_failed=0 accelerated_reported=0 v_dot=0 layer_mad24=0 dxil_mad24=0 scalar_bfe=2 scalar_mul=52 wrong_sign=0 ms=708
+[    2.8] step after: vkdotcheck.exe --icd C:\BC250\tmp\fsr4-v3-port\kit1\rows\system-x64-lab\vulkan_radeon.dll --dump C:\BC250\tmp\fsr4-v3-port\dot-20261029T145700Z\ir-after (at most 165 s)
+[    4.6] step after exit 0 (want 0) RESULT PASS shaders_failed=0 accelerated_reported=0 v_dot=0 layer_mad24=74 dxil_mad24=62 scalar_bfe=10 scalar_mul=73 wrong_sign=0 ms=1717
+[    4.6] step after-wrong-sign: vkdotcheck.exe --icd C:\BC250\tmp\fsr4-v3-port\kit1\rows\system-x64-lab\vulkan_radeon.dll --wrong-sign (at most 163 s)
+[    5.5] step after-wrong-sign exit 1 (want 1) RESULT FAIL shaders_failed=4 accelerated_reported=0 v_dot=0 layer_mad24=74 dxil_mad24=62 scalar_bfe=10 scalar_mul=73 wrong_sign=1 ms=897
+[    5.6] RESULT DONE arm=dot steps=3 unexpected_exit=0 out=C:\BC250\tmp\fsr4-v3-port\dot-20261029T145700Z
