@@ -291,6 +291,33 @@ static void witness_ownership(void)
     StartHealthFaultPendingReset(&d);
     CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
     CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0);
+    /* TDR recovery S1 in the order of the tester.34 lab (S1-C): the OS TDR finds the witness open, the refusal
+     * tail runs first, then the close of ResetFromTimeout, then the restart. The adapter reset adopts the
+     * refusal's close, on node 1 and on node 0 with the mode on; with the mode off a node-0 refusal stays sticky. */
+    admission_setup(&d, &w, &g);
+    MockTailWddm = &w;
+    w.AdapterRecovery = 1;
+    CHECK(run_refusal_tail_node(&d, 1) == STATUS_NOT_SUPPORTED);
+    CHECK(run_refusal_tail_node(&d, 1) == STATUS_NOT_SUPPORTED);
+    CHECK(d.HealthFault && !d.HealthPendingReset);
+    StartHealthFaultPendingReset(&d);
+    CHECK(d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 1);
+    CHECK(StartHealthRecovered(&d, &epoch) == 2);   /* S1-E after it: the witness is open */
+    CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
+    StartHealthFaultPendingReset(&d);
+    CHECK(d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 1);
+    w.AdapterRecovery = BC250_ADAPTER_RECOVERY_OFF;
+    CHECK(run_refusal_tail(&d) == STATUS_NOT_SUPPORTED);
+    StartHealthFaultPendingReset(&d);
+    CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0);
+    /* A real fault between the refusal and the adapter reset stays sticky. */
+    admission_setup(&d, &w, &g);
+    MockTailWddm = &w;
+    w.AdapterRecovery = 1;
+    CHECK(run_refusal_tail_node(&d, 1) == STATUS_NOT_SUPPORTED);
+    GfxSubmitFail(&d);
+    StartHealthFaultPendingReset(&d);
+    CHECK(!d.HealthPendingReset && StartHealthRecovered(&d, &epoch) == 0);
     MockTailWddm = NULL;
     admission_setup(&d, &w, &g);
     CHECK(TestResetAdmit(&d, &w, 0) == 0);

@@ -20,6 +20,7 @@ void StartHealthInitialize(BC250_DEVICE* Device)
     // BD-120. Both are zero in the device context already and StartHealthBegin clears them before anything can
     // read them, but the two marks are stated here with Closed, like the rest of this file.
     Device->StartHealth.PendingReset=FALSE;
+    Device->StartHealth.RefusedReset=FALSE;
     Device->StartHealth.Recovered=FALSE;
 }
 static void HealthInvalidate(BC250_START_HEALTH_STATE* H)
@@ -63,6 +64,7 @@ void StartHealthBegin(BC250_DEVICE* Device, BOOLEAN Full)
     h->Mode=FALSE;
     h->Closed=FALSE;
     h->PendingReset=FALSE;
+    h->RefusedReset=FALSE;
     h->Recovered=FALSE;
     h->ConfirmedGeneration=0;
     h->ConfirmedEpoch=0;
@@ -97,6 +99,7 @@ void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode)
     h->ConfirmedEpoch=0;
     h->Closed=FALSE;
     h->PendingReset=FALSE;
+    h->RefusedReset=FALSE;
     h->Engines=TRUE;
     h->Visible=FALSE;
     h->Mode=Mode;
@@ -114,12 +117,22 @@ void StartHealthResumeReady(BC250_DEVICE* Device, BOOLEAN Mode)
 //   Mark < 0  a close that says nothing about node 0: today only a ResetEngine refusal on another node. The
 //             witness closes, as it always did on a refusal, but node 0's own reset keeps the answer it is
 //             owed. Such a close never creates a mark.
+//
+// TDR recovery S1. Mark > 0 is today the close of DxgkDdiResetFromTimeout (wddm.c, WddmAdapterReset step 1):
+// the private timers do not close the witness (BD-152), so the OS TDR usually finds it open. A ResetEngine
+// refusal comes before that close (tester.34 lab, S1-C: node 1 refused twice, then ResetFromTimeout). The
+// refusal closes an open witness with Mark < 0 and records RefusedReset; the adapter reset's close then adopts
+// that close and takes the mark, as it does over an open witness. A real fault (Mark 0) between the two takes
+// RefusedReset away, so the adapter reset finds a fault of its own and the witness stays closed. A refusal
+// over a closed witness records nothing: whatever closed it first keeps its own answer.
 static void HealthCloseLocked(BC250_START_HEALTH_STATE* H, int Mark)
 {
     if (!H->Closed) {
         HealthInvalidate(H);
         if (Mark>0 && H->Engines) H->PendingReset=TRUE;
-    }
+        if (Mark<0 && H->Engines) H->RefusedReset=TRUE;
+    } else if (Mark>0 && H->RefusedReset) H->PendingReset=TRUE;
+    if (Mark>=0) H->RefusedReset=FALSE;
     if (Mark==0) H->PendingReset=FALSE;
     H->Closed=TRUE;
     H->Engines=FALSE;
@@ -193,10 +206,13 @@ BC250_START_HEALTH_RECOVERY StartHealthRecovered(BC250_DEVICE* Device, _Out_ ULO
         HealthInvalidate(h);
         h->Closed=FALSE;
         h->PendingReset=FALSE;
+        h->RefusedReset=FALSE;
         h->Engines=TRUE;
         HealthClock(h);
         result=BC250_START_HEALTH_RECOVERY_REOPENED;
-    } else result=BC250_START_HEALTH_RECOVERY_STICKY;
+    } else result=BC250_START_HEALTH_RECOVERY_STICKY;   // RefusedReset stays: a recovered node-0 reset after a
+                                                        // node-1 refusal reopens nothing, but the adapter reset
+                                                        // that answers the refusal can still adopt that close
     *Epoch=h->Epoch;
     KeReleaseSpinLock(&h->Lock,irql);
     return result;
@@ -211,6 +227,7 @@ void StartHealthClose(BC250_DEVICE* Device)
 // like any other refusal's, but it leaves node 0's pending-reset mark standing: node 1 is never soft-recovered
 // by policy (Bc250SoftRecoveryWanted), so its refusal is no evidence about node 0, and clearing the mark there
 // would leave the node-0 reset that follows with nothing to reopen - the BD-120 symptom, unfixed.
+// TDR recovery S1: over an open witness it also records RefusedReset, for the adapter reset that follows.
 void StartHealthCloseKeepPendingReset(BC250_DEVICE* Device)
 {
     BC250_START_HEALTH_STATE* h=&Device->StartHealth;

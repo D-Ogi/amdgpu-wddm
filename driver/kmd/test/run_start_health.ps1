@@ -1,7 +1,8 @@
 param([string]$Root='P:\bc-250',[string]$Out='P:\bc-250\scratch\build\health145',[switch]$IgnoreFlush,
       [switch]$NoWitnessReopen,[switch]$ReopenAnyClose,[switch]$StickyFaultKeepsMark,[switch]$ConfirmCertifiesNewEpoch,
       [switch]$MarkOverFailedEngines,[switch]$RefusalDropsOtherNodeMark,[switch]$RearmSkipsOpenWitness,
-      [switch]$ConfirmHungRequest,[switch]$QuietIgnoresOwedFlip,[switch]$NoQuiet)
+      [switch]$ConfirmHungRequest,[switch]$QuietIgnoresOwedFlip,[switch]$NoQuiet,
+      [switch]$AdapterResetIgnoresRefusal,[switch]$FaultKeepsRefusal)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -25,6 +26,11 @@ if($StickyFaultKeepsMark){$source=Mutate $source 'if (Mark==0) H->PendingReset=F
 if($MarkOverFailedEngines){$source=Mutate $source 'if (Mark>0 && H->Engines) H->PendingReset=TRUE;' 'if (Mark>0) H->PendingReset=TRUE;'}
 # A refusal on another node that clears node 0's mark anyway, which is the defect in one ordering.
 if($RefusalDropsOtherNodeMark){$source=Mutate $source 'if (Mark==0) H->PendingReset=FALSE;' 'if (Mark<=0) H->PendingReset=FALSE;'}
+# TDR recovery S1: an adapter reset that does not adopt the close of a ResetEngine refusal before it, which is
+# the tester.34 lab defect (S1-C: the witness stayed closed after a successful restart).
+if($AdapterResetIgnoresRefusal){$source=Mutate $source '} else if (Mark>0 && H->RefusedReset) H->PendingReset=TRUE;' '}'}
+# A real fault after a refusal that leaves the refusal record standing, so the adapter reset undoes the fault.
+if($FaultKeepsRefusal){$source=Mutate $source 'if (Mark>=0) H->RefusedReset=FALSE;' 'if (Mark>0) H->RefusedReset=FALSE;'}
 # A recovery that leaves an open witness alone, so a measured interval can span the hang.
 if($RearmSkipsOpenWitness){$source=Mutate $source 'if (!h->Closed) {' 'if (0) {'}
 # A start that hung node 0 confirming its own clock/voltage and CU request as the next boot's default.

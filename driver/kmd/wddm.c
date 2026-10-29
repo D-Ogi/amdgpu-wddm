@@ -8092,7 +8092,8 @@ static BOOLEAN WddmAdapterReset(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_WDDM
 
     // 1. Close every node for the duration, without a health fault of its own. The watchdogs are stopped, so no
     //    private timeout fires while the reset decides. The start witness gets the mark that a recovered reset may
-    //    undo (BD-120); a fault that closed it first has cleared that mark and keeps it closed.
+    //    undo (BD-120); a fault that closed it first has cleared that mark and keeps it closed. A ResetEngine
+    //    refusal that closed it first (the refusal tail below) is adopted: this close takes the mark for it.
     KeAcquireSpinLock(&Wddm->Lock, &irql);
     for (n = 0; n < nodeCount; n++) Wddm->WatchdogFaulted[n] = TRUE;
     KeCancelTimer(&Wddm->SubmitTimer);
@@ -8636,7 +8637,9 @@ refuseReset:
     // leave the node-0 reset that follows with nothing to reopen.
     // TDR recovery S1: with AdapterRecoveryMode on, node 0's refusal keeps the mark too. The scheduler answers the
     // refusal with ResetFromTimeout, which reopens the witness only when it proves every engine idle; when it
-    // cannot, it closes the witness for good, as this line did before S1.
+    // cannot, it closes the witness for good, as this line did before S1. The OS TDR usually finds the witness
+    // open (BD-152), so there is often no mark to keep: the keep-mark close then records the refusal, and the
+    // close of ResetFromTimeout takes the mark for it (start_health.c, RefusedReset).
     if (pResetEngine->NodeOrdinal == BC250_WDDM_NODE_3D &&
         (wddm == NULL || wddm->AdapterRecovery == BC250_ADAPTER_RECOVERY_OFF)) StartHealthClose(device);
     else StartHealthCloseKeepPendingReset(device);

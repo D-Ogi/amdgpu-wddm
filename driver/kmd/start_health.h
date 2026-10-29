@@ -13,6 +13,12 @@ typedef struct _BC250_START_HEALTH_STATE {
     // to. Such a close, and only such a close, is undone by a recovered engine reset. Every other fault clears
     // it, so a fault recorded before the reset is never cleared by the reset.
     BOOLEAN PendingReset;
+    // TDR recovery S1. TRUE while Closed came only from a ResetEngine refusal that leaves the mark (node 1, or
+    // node 0 with AdapterRecoveryMode on) over an open witness with its engines up, and no fault came after it.
+    // The scheduler answers such a refusal with ResetFromTimeout, whose close adopts this close as its own and
+    // takes the pending-reset mark. Without this, the refusal closes the witness first, the adapter reset finds
+    // it closed with no mark, and a successful restart leaves it closed for the rest of the start.
+    BOOLEAN RefusedReset;
     // BD-120. TRUE once an engine reset of this device start has recovered node 0, whether the witness was
     // closed at the time or not. The witness itself re-arms; this says that the start needed a GPU reset to get
     // there, which is what keeps a clock/voltage or CU request that hung node 0 from becoming the durable
