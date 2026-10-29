@@ -1763,10 +1763,14 @@ static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG
     LONG call=InterlockedIncrement(&device->VisibilityCalls);
     LONGLONG begin=KeQueryPerformanceCounter(NULL).QuadPart;
     NTSTATUS status=STATUS_SUCCESS;
+    // The first 32 calls, every power of two, and a request that changes the state within the first 1024 calls.
+    // BD-247: after a rotated commit dxgkrnl repeated FALSE past call 32, and a later TRUE was not in the log.
+    const BOOLEAN logged=call<=32 || (call&(call-1))==0 ||
+        (call<=1024 && (Visibility->Visible ? TRUE : FALSE)!=device->SourceVisible);
 
     // Normal PASSIVE_LEVEL visibility DDI only. The shared quiet restore helper
     // must remain usable at bugcheck without a logger, allocation or lock.
-    if (call<=32) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
+    if (logged) GuardLog("display visibility: call %ld source 0x%08X visible %u previous %u hardware %u blanked %u",
         call,Visibility->VidPnSourceId,Visibility->Visible,device->SourceVisible,device->VidPnFlipEnabled,device->DcnBlanked);
     if (Visibility->VidPnSourceId != 0) status=STATUS_INVALID_PARAMETER;
     else if (device->DcnWriteEnabled || device->VidPnFlipEnabled ||
@@ -1790,7 +1794,7 @@ static NTSTATUS SetVisibilityCore(_In_ const HANDLE hAdapter, _In_ const DXGKARG
         WddmSourceVisibility(device, Visibility->Visible);
     }
     DisplayRetainVisibility(device,Visibility,status,begin);
-    if (call<=32) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
+    if (logged) GuardLog("display visibility: call %ld status 0x%08X current %u blanked %u",
         call,status,device->SourceVisible,device->DcnBlanked);
     // BD-195: visibility alone never programs a link. A visible source over a connected sink whose link is off means
     // that no commit has applied a mode since the plug. Logged past the 32-call bound, for the first 16 such calls.
