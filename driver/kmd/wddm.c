@@ -11549,9 +11549,9 @@ static NTSTATUS Bc250WddmCheckMultiPlaneOverlaySupport2(_In_ const HANDLE hAdapt
         // the mode stamp read first: a mode program during the plan makes it stale, and the flip refuses it.
         const BC250_PLANE_ENCODING* encoding = Bc250PlaneEncoding(r.PlaneFormat);
         BC250_DCN_PLANE_CHECK dml;
+        RtlZeroMemory(&dml, sizeof(dml));
         verdict = encoding ? DcnPlaneCheck(device, &plan, r.SurfacePitch, encoding->BytesPerPixel, &dml)
                            : BC250_PLANE_FORMAT;
-        if (encoding == NULL) RtlZeroMemory(&dml, sizeof(dml));
         if (InterlockedIncrement(&wddm->PlaneNotes) <= BC250_WDDM_LOG_CALLS) {
             GuardLog("wddm: MPO check DML 0x%08X result %d valid %lu disp %lu/%lu dpp %lu/%lu kHz -> %s",
                      (ULONG)dml.Status, dml.Result, dml.Valid, dml.DispClockKhz, dml.BudgetDispKhz, dml.DppClockKhz,
