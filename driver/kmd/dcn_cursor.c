@@ -598,8 +598,8 @@ NTSTATUS DcnCursorSetShape(_Inout_ BC250_DEVICE* Device, _In_ const DXGKARG_SETP
     }
     InterlockedIncrement(&c->Shapes);
     if (CursorLogLine(c))
-        GuardLog("cursor: shape 0x%X %lux%lu pitch %lu hot %lu,%lu mode %u xor %u at %lu ready %u %08lX",
-            in.Flags, (ULONG)in.Width, (ULONG)in.Height, (ULONG)in.Pitch, (ULONG)in.XHot, (ULONG)in.YHot,
+        GuardLog("cursor: shape 0x%X %lux%lu hot %lu,%lu mode %u xor %u at %lu ready %u %08lX",
+            in.Flags, (ULONG)in.Width, (ULONG)in.Height, (ULONG)in.XHot, (ULONG)in.YHot,
             image.Mode, image.XorPixels, surface, (UINT)ready, (ULONG)status);
     return status;
 }
