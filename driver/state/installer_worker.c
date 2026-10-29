@@ -431,7 +431,7 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
     if(h.origin==AMDGPU_TRANSFER_FRESH) {
         void *removed=NULL;DWORD removed_bytes=0;
-        error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes);
+        error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes,archive);
         if(!error) {
             AMDGPU_TRANSFER_HEADER old;ARCHIVE_READ read;
             if(AmdgpuTransferCheck(removed,removed_bytes,&old) || memcmp(old.device_hash,h.device_hash,32))error=ERROR_REVISION_MISMATCH;
@@ -450,10 +450,20 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
                 else {
                     read.data=removed;read.bytes=removed_bytes;
                     result=AmdgpuTransferCapture(&old,ArchiveFetch,&read,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes);
-                    error=AsError(result,0);if(!error)error=AmdgpuWindowsPublishHandoff(buffer,bytes);
+                    error=AsError(result,0);
+                    // An older removal record beside this one moves aside, so that the acknowledgment finds one.
+                    if(!error)error=AmdgpuWindowsRetireRemoval(h.transaction,TRUE);
+                    if(!error)error=AmdgpuWindowsPublishHandoff(buffer,bytes);
                 }
             }
             HeapFree(GetProcessHeap(),0,removed);if(buffer)HeapFree(GetProcessHeap(),0,buffer);return error;
+        }
+        // A record of another state catalog cannot give settings to this catalog: an install after the uninstall of
+        // another release (BD-262). The record moves aside as evidence, and the install continues as on a computer
+        // without a record. A resumed uninstall accepts only its own record.
+        if(error==ERROR_UNSUPPORTED_TYPE && !archive) {
+            error=AmdgpuWindowsRetireRemoval(h.transaction,FALSE);if(error)return error;
+            error=ERROR_FILE_NOT_FOUND;
         }
         if(error!=ERROR_FILE_NOT_FOUND)return error;
     }

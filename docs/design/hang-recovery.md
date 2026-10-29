@@ -166,12 +166,17 @@ The record survives the installer:
 - An update in place: the first start of the new package reads the records from the stopped old generation. Thus
   the record of a hang after the installer prepared the update is also kept.
 - An uninstall: the uninstaller archives all records of the stopped driver in
-  `%DriverData%\amdgpu-wddm\StateV2\removed.bin` before it removes the service key.
+  `%DriverData%\amdgpu-wddm\StateV2\removed-v2.bin` before it removes the service key. The releases up to
+  0.7.216.105 wrote and read `removed.bin`.
 - The next install: the installer gives that archive to the new package, which writes the records into its first
   generation.
 
 `driver/state/lifecycle_test.c` and `driver/state/installer_worker_test.c` check the three steps. The archive is
-strict: after an uninstall, an install of a package with another state catalog refuses the archive and stops.
+bound to its state catalog. An install of a package with another state catalog does not import it: the worker
+renames the archive to `retired-<transaction>-<name>` in the same directory, and the install continues without the
+records. An uninstall renames an older archive that no install read in the same way. The releases up to 0.7.216.105 stop on an archive of another catalog with error 13 (BD-262). They read
+only `removed.bin`, so they do not see `removed-v2.bin`, and an install of such a release after the uninstall of
+this one continues without the records.
 
 A write failure is logged and otherwise ignored: the record is evidence, never a gate.
 

@@ -12,7 +12,7 @@ extern DWORD AmdgpuInstallerTestExecute(DWORD,WCHAR**);
 extern DWORD AmdgpuInstallerTestSettings(PCWSTR,DWORD*);
 static BYTE saved[AMDGPU_TRANSFER_MAX_BYTES],removed[AMDGPU_TRANSFER_MAX_BYTES];
 static UINT saved_bytes,removed_bytes,origin,failure,freeze,stop,publish,archives,captured,checks,strict_opens,source_opens;
-static DWORD board_error,pending_error,remove_error,origin_error,device_error;static BOOL current_package;
+static DWORD board_error,pending_error,remove_error,origin_error,device_error,removal_moves,removal_keeps,removal_own;static BOOL current_package;
 static int failed;
 ULONG AmdgpuInstallerTestBoot=91;
 static BYTE rollback[AMDGPU_ROLLBACK_MAX],completed[AMDGPU_ROLLBACK_MAX],active_rollback[AMDGPU_ROLLBACK_MAX];
@@ -21,7 +21,7 @@ static DWORD rb_bytes,complete_bytes,active_bytes,restores,retired,enabled,sourc
 static void Reset(UINT source)
 {
     saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=strict_opens=source_opens=0;
-    board_error=pending_error=remove_error=origin_error=device_error=0;origin=source;current_package=FALSE;
+    board_error=pending_error=remove_error=origin_error=device_error=removal_moves=removal_keeps=removal_own=0;origin=source;current_package=FALSE;
     rb_bytes=complete_bytes=active_bytes=restores=retired=enabled=source_removed=target_error=restore_error=retire_error=complete_error=0;
     AmdgpuInstallerTestBoot=91;
 }
@@ -128,7 +128,10 @@ static DWORD Read(const BYTE *source,UINT size,DWORD error,void **out,DWORD *byt
     memcpy(*out,source,size);*bytes=size;return 0;
 }
 DWORD AmdgpuWindowsReadHandoff(void **out,DWORD *bytes){return Read(saved,saved_bytes,pending_error,out,bytes);}
-DWORD AmdgpuWindowsReadRemoval(void **out,DWORD *bytes){return Read(removed,removed_bytes,remove_error,out,bytes);}
+DWORD AmdgpuWindowsReadRemoval(void **out,DWORD *bytes,BOOL own){removal_own+=!!own;return Read(removed,removed_bytes,remove_error,out,bytes);}
+// keep FALSE moves every removal record aside: an install after it finds none.
+DWORD AmdgpuWindowsRetireRemoval(const BYTE tx[16],BOOL keep)
+{(void)tx;if(keep){removal_keeps++;return 0;}removal_moves++;remove_error=0;removed_bytes=0;return 0;}
 DWORD AmdgpuWindowsRollbackRead(const BYTE tx[16],BOOL complete,void **out,DWORD *bytes)
 {
     DWORD error=Read(complete==2?active_rollback:complete?completed:rollback,complete==2?active_bytes:complete?complete_bytes:rb_bytes,0,out,bytes);
@@ -206,7 +209,15 @@ int main(void)
     Reset(AMDGPU_TRANSFER_CURRENT);pending_error=ERROR_ACCESS_DENIED;
     CHECK(Run(L"prepare",tx)==ERROR_ACCESS_DENIED);CHECK(freeze==0 && publish==0);
     Reset(AMDGPU_TRANSFER_FRESH);remove_error=ERROR_INVALID_DATA;
-    CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(publish==0);
+    CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(publish==0 && !removal_moves);
+    // The uninstall of another release left a record of another state catalog: it moves aside and the install
+    // continues fresh. A resumed uninstall accepts only its own record and stops.
+    Reset(AMDGPU_TRANSFER_FRESH);remove_error=ERROR_UNSUPPORTED_TYPE;
+    CHECK(!Run(L"prepare",tx));CHECK(publish==1 && removal_moves==1 && !removal_own);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_FRESH && h.board_kind==AMDGPU_BOARD_FRESH);
+    CHECK(!Run(L"prepare",tx));CHECK(publish==1 && removal_moves==1);
+    Reset(AMDGPU_TRANSFER_FRESH);remove_error=ERROR_UNSUPPORTED_TYPE;
+    CHECK(Run(L"archive",tx)==ERROR_UNSUPPORTED_TYPE);CHECK(removal_own==1 && !removal_moves && !publish && !archives);
     Reset(AMDGPU_TRANSFER_LEGACY);board_error=ERROR_INVALID_SECURITY_DESCR;
     CHECK(Run(L"prepare",tx)==ERROR_INVALID_SECURITY_DESCR);CHECK(publish==0);
     Reset(AMDGPU_TRANSFER_CURRENT);origin_error=ERROR_ACCESS_DENIED;
@@ -221,7 +232,7 @@ int main(void)
     CHECK(!Run(L"prepare",L"02020202020202020202020202020202"));
     CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_ARCHIVE);
     CHECK(h.board_kind==AMDGPU_BOARD_UNPROVEN);CHECK(h.source_generation[0]==2);
-    CHECK(h.transaction[0]==2);CHECK(h.source_version[0]!=0);
+    CHECK(h.transaction[0]==2);CHECK(h.source_version[0]!=0);CHECK(removal_keeps==1 && !removal_moves);
     // The reinstall after the uninstall hands the archived hang recovery record to the new package.
     HangRecordIn(saved,saved_bytes);
     Reset(AMDGPU_TRANSFER_CURRENT);failure=6;

@@ -96,7 +96,7 @@ static BOOL WINAPI Seek(HANDLE handle,LARGE_INTEGER position,PLARGE_INTEGER actu
 static BOOL WINAPI Move(LPCWSTR from,LPCWSTR to,DWORD flags)
 {
     FAKE_FILE *f;(void)flags;if(Fault())return FALSE;
-    f=Find(from);if(!f || Find(to)){FakeError=ERROR_FILE_EXISTS;return FALSE;}
+    f=Find(from);if(!f){FakeError=ERROR_FILE_NOT_FOUND;return FALSE;}if(Find(to)){FakeError=ERROR_ALREADY_EXISTS;return FALSE;}
     (void)StringCchCopyW(f->name,200,to);return TRUE;
 }
 static BOOL WINAPI Dispose(HANDLE handle,FILE_INFO_BY_HANDLE_CLASS kind,LPVOID data,DWORD bytes)
@@ -169,6 +169,80 @@ static void BoardFixture(BOOL pending)
 }
 static UINT Empty(void *context,UINT source,const AMDGPU_STATE_SPEC *spec,AMDGPU_STATE_VALUE *value,void *data,UINT capacity)
 {(void)context;(void)source;(void)spec;(void)value;(void)data;(void)capacity;return AMDGPU_STATE_ABSENT;}
+// The same frame as another release writes it under its own state catalog: one changed catalog character and a
+// valid checksum (FNV-1a over the record, without the checksum field). Two calls give the original record again.
+static void OtherCatalog(BYTE *p,UINT bytes)
+{
+    AMDGPU_TRANSFER_HEADER h;UINT i,sum=2166136261u,at=offsetof(AMDGPU_TRANSFER_HEADER,checksum);
+    p[offsetof(AMDGPU_TRANSFER_HEADER,catalog)]^=1;
+    for(i=0;i<bytes;i++){sum^=(i>=at && i<at+4)?0:p[i];sum*=16777619u;}
+    memcpy(&h,p,sizeof(h));h.checksum=sum;memcpy(p,&h,sizeof(h));
+}
+// The named fake file exists and holds exactly these bytes.
+static BOOL Holds(PCWSTR name,const void *data,DWORD bytes)
+{FAKE_FILE *f=Find(name);return f && f->bytes==bytes && !memcmp(f->data,data,bytes);}
+static void RemovalRecords(const BYTE *snapshot,UINT bytes)
+{
+    static const WCHAR old[]=L"fixture\\amdgpu-wddm\\StateV2\\removed.bin",cur[]=L"fixture\\amdgpu-wddm\\StateV2\\removed-v2.bin",
+        old_retired[]=L"fixture\\amdgpu-wddm\\StateV2\\retired-01010101010101010101010101010101-removed.bin",
+        cur_retired[]=L"fixture\\amdgpu-wddm\\StateV2\\retired-01010101010101010101010101010101-removed-v2.bin";
+    BYTE tx[16],*other=HeapAlloc(GetProcessHeap(),0,bytes),*record=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);
+    BYTE *pending=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);
+    AMDGPU_TRANSFER_HEADER h;void *read=NULL;DWORD got=0;UINT record_bytes=0,pending_bytes=0;
+    memset(tx,1,16);memcpy(other,snapshot,bytes);
+    OtherCatalog(other,bytes);CHECK(AmdgpuTransferCheck(other,bytes,NULL)!=0);
+    OtherCatalog(other,bytes);CHECK(!memcmp(other,snapshot,bytes));OtherCatalog(other,bytes);
+    // The uninstall writes removed-v2.bin. A release up to 0.7.216.105 reads only removed.bin, and it stops on a
+    // record of another catalog (the check above): after this uninstall it finds no record and installs fresh.
+    Reset();CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));CHECK(Find(cur)!=NULL && !Find(old));
+    CHECK(!AmdgpuWindowsReadRemoval(&read,&got,TRUE));CHECK(got==bytes && !memcmp(read,snapshot,bytes));HeapFree(GetProcessHeap(),0,read);
+    // The removal record of another release under either name: not imported, moved aside as evidence.
+    Reset();Put(old,other,bytes);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_UNSUPPORTED_TYPE);CHECK(!read && !got);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_FILE_NOT_FOUND);
+    CHECK(!AmdgpuWindowsRetireRemoval(tx,FALSE));CHECK(!Find(old) && Find(old_retired)!=NULL);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_FILE_NOT_FOUND);
+    CHECK(!AmdgpuWindowsRetireRemoval(tx,FALSE));CHECK(Holds(old_retired,other,bytes));CHECK(!Handles && !LockCount);
+    Reset();Put(cur,other,bytes);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_UNSUPPORTED_TYPE);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_UNSUPPORTED_TYPE);
+    CHECK(!AmdgpuWindowsRetireRemoval(tx,FALSE));CHECK(!Find(cur) && Find(cur_retired)!=NULL);
+    // Evidence is never overwritten: an existing retired name stops the move.
+    Reset();Put(old,other,bytes);Put(old_retired,other,bytes);
+    CHECK(AmdgpuWindowsRetireRemoval(tx,FALSE)==ERROR_ALREADY_EXISTS);CHECK(Find(old)!=NULL);
+    // Damage is not another catalog: a wrong magic or a wrong checksum stays an error.
+    Reset();Put(old,other,bytes);Find(old)->data[0]^=1;
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_INVALID_DATA);
+    Reset();Put(old,snapshot,bytes);Find(old)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_INVALID_DATA);
+    // removed.bin beside removed-v2.bin is the newer record. Keep moves only the older one.
+    Reset();Put(old,snapshot,bytes);Put(cur,other,bytes);
+    CHECK(!AmdgpuWindowsReadRemoval(&read,&got,FALSE));CHECK(got==bytes && !memcmp(read,snapshot,bytes));HeapFree(GetProcessHeap(),0,read);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_UNSUPPORTED_TYPE);
+    CHECK(!AmdgpuWindowsRetireRemoval(tx,TRUE));CHECK(Find(old)!=NULL && !Find(cur) && Find(cur_retired)!=NULL);
+    Reset();Put(cur,snapshot,bytes);CHECK(!AmdgpuWindowsRetireRemoval(tx,TRUE));CHECK(Find(cur)!=NULL);
+    // The acknowledgment of the reinstall removes the record that the prepare imported, under either name.
+    memset(&h,0,sizeof(h));h.origin=AMDGPU_TRANSFER_CURRENT;h.source_schema=AmdgpuStateSchema();h.board_kind=AMDGPU_BOARD_UNPROVEN;
+    memset(h.transaction,9,16);memset(h.source_generation,2,16);memset(h.device_hash,7,32);AmdgpuStateBootToken(90,h.source_boot);
+    memcpy(h.catalog,AmdgpuStateCatalogId(),64);strcpy_s(h.source_version,32,"0.7.216.100");strcpy_s(h.destination_version,32,"0.7.216.100");
+    CHECK(!AmdgpuTransferCapture(&h,Empty,NULL,record,AMDGPU_TRANSFER_MAX_BYTES,&record_bytes));
+    h.origin=AMDGPU_TRANSFER_ARCHIVE;memcpy(h.transaction,tx,16);strcpy_s(h.destination_version,32,"0.7.216.102");AmdgpuStateBootToken(91,h.source_boot);
+    CHECK(!AmdgpuTransferCapture(&h,Empty,NULL,pending,AMDGPU_TRANSFER_MAX_BYTES,&pending_bytes));
+    Reset();Put(cur,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
+    CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(cur));
+    Reset();Put(old,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
+    CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(old));
+    // An uninstall after an install that did not read the earlier record (an older release ignores removed-v2.bin):
+    // the earlier records move aside, the new record is written, and a retry of the same uninstall keeps it.
+    Reset();Put(cur,record,record_bytes);Put(old,other,bytes);
+    CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));CHECK(!Find(old) && Find(old_retired)!=NULL);
+    CHECK(Holds(cur,snapshot,bytes));CHECK(Holds(cur_retired,record,record_bytes));
+    CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));CHECK(Find(cur)!=NULL && !Find(old));
+    Reset();Put(cur,snapshot,bytes);Find(cur)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsArchiveState(snapshot,bytes)==ERROR_INVALID_DATA);CHECK(!Find(cur_retired));
+    CHECK(!Handles && !LockCount);
+    HeapFree(GetProcessHeap(),0,other);HeapFree(GetProcessHeap(),0,record);HeapFree(GetProcessHeap(),0,pending);
+}
 int main(void)
 {
     BYTE *snapshot=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);AMDGPU_TRANSFER_HEADER h={0};UINT bytes=0,total,i;
@@ -211,16 +285,17 @@ int main(void)
     CHECK(AmdgpuWindowsReadHandoff(&read,&got)==ERROR_INVALID_DATA);
     CHECK(AmdgpuWindowsAcknowledgeHandoff(h.transaction,h.device_hash,h.destination_version)==ERROR_INVALID_DATA);CHECK(f->exists);
     Reset();CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));
-    CHECK(!AmdgpuWindowsReadRemoval(&read,&got));CHECK(got==bytes && !memcmp(read,snapshot,bytes));HeapFree(GetProcessHeap(),0,read);
+    CHECK(!AmdgpuWindowsReadRemoval(&read,&got,FALSE));CHECK(got==bytes && !memcmp(read,snapshot,bytes));HeapFree(GetProcessHeap(),0,read);
     CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));
     Reset();CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));total=IoCount;
     for(i=1;i<=total;i++) {
         Reset();FailAt=i;error=AmdgpuWindowsArchiveState(snapshot,bytes);CHECK(error!=0);FailAt=0;
-        error=AmdgpuWindowsReadRemoval(&read,&got);
+        error=AmdgpuWindowsReadRemoval(&read,&got,FALSE);
         CHECK(error==ERROR_FILE_NOT_FOUND || error==ERROR_INVALID_DATA ||
               (!error && got==bytes && !memcmp(read,snapshot,bytes)));
         if(read)HeapFree(GetProcessHeap(),0,read);CHECK(!Handles && !LockCount);
     }
+    RemovalRecords(snapshot,bytes);
     Reset();CHECK(!AmdgpuWindowsPublishHandoff(snapshot,bytes));IoCount=0;
     CHECK(!AmdgpuWindowsAcknowledgeHandoff(h.transaction,h.device_hash,h.destination_version));total=IoCount;
     for(i=1;i<=total;i++) {
