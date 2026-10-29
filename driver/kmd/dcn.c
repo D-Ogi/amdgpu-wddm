@@ -415,6 +415,11 @@ static NTSTATUS FillSurface(_In_ const BC250_DEVICE* Device, ULONGLONG Physical,
 }
 #endif /* AMDGPU_WDDM_LAB_FLAVOUR (DcnFlip FillSurface) */
 
+// BD-223: the pipe's shape for a multiplane-overlay plane 0 (DcnPlaneShapeLocked and DcnPlaneShapeAdmit, defined with
+// the pipe's own accessors below). The flip sequence and the source-address admission call them.
+static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape);
+static BOOLEAN DcnPlaneShapeAdmit(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape);
+
 // M15.14 (0.7.216.20): the three register values of PlaneFormat (plane_format.h), composed from the firmware's own
 // values with only the format fields replaced: SURFACE_PIXEL_FORMAT, CROSSBAR_SRC_CB_B, CROSSBAR_SRC_CR_R and
 // CNVC_SURFACE_PIXEL_FORMAT, the fields hubp1_program_pixel_format and dpp201_cnv_setup set for a format. So the
@@ -526,8 +531,13 @@ void DcnCaptureFirmwareFormat(_Inout_ BC250_DEVICE* Device)
 // 1 is AMD's immediate flip, which dcn201_update_plane_addr records as the current address at once
 // (dc/hwss/dcn201/dcn201_hwseq.c:156-157). FALSE writes the value 0.7.216.64 wrote. The two stereo-sync fields
 // hubp1 clears for a mono plane stay as the firmware left them, as since M87, so a vsync flip is unchanged.
+// Shape (BD-223) is the scaler plan of a multiplane-overlay plane 0 that is not the source mode's size, written inside
+// the same acknowledged lock, before the address, as dcn20_program_pipe calls dpp_setup before update_plane_addr.
+// NULL is the source mode's own 1:1 shape: nothing is written for it unless a scaled plane is on the pipe now
+// (DcnPlaneShapeLocked), so every caller that passes NULL writes exactly the register set it wrote before BD-223.
 static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Target, ULONG Pitch,
-    ULONG BytesPerPixel, _In_opt_ const BC250_PLANE_REGISTERS* Format, BOOLEAN Immediate, BOOLEAN Quiet)
+    ULONG BytesPerPixel, _In_opt_ const BC250_PLANE_REGISTERS* Format, _In_opt_ const BC250_SCALER_PLAN* Shape,
+    BOOLEAN Immediate, BOOLEAN Quiet)
 {
     NTSTATUS status;
     ULONG value = 0, waited = 0;
@@ -552,6 +562,7 @@ static NTSTATUS DcnFlipWriteSequence(_Inout_ BC250_DEVICE* Device, ULONGLONG Tar
             waited++;
         }
     }
+    if (NT_SUCCESS(status)) status = DcnPlaneShapeLocked(Device, Shape);
     if (NT_SUCCESS(status)) status = MmioDcnRead(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL, &value);
     if (NT_SUCCESS(status)) status = MmioDcnWriteEx(Device, BC250_REG_DMU_HUBPREQ0_DCSURF_FLIP_CONTROL,
         (value & ~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK) |
@@ -837,7 +848,7 @@ static void DcnFlipCore(_Inout_ BC250_DEVICE* Device, ULONGLONG Physical, BOOLEA
     if (Device->DcnPlaneFormats && Device->DcnPlaneFormat!=BC250_PLANE_FORMAT_ARGB8888 &&
         DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers)) format=&registers;
     InterlockedIncrement(&Device->DcnSurfaceSequence);
-    status=DcnFlipWriteSequence(Device,target,pitch,4,format,FALSE,FALSE);
+    status=DcnFlipWriteSequence(Device,target,pitch,4,format,NULL,FALSE,FALSE);
     if (!NT_SUCCESS(status))
     {
         InterlockedIncrement(&Device->DcnSurfaceSequence);
@@ -1202,7 +1213,7 @@ static NTSTATUS DcnFirmwareSurfaceCore(_Inout_ BC250_DEVICE* Device, BOOLEAN Unb
         BC250_PLANE_REGISTERS registers;
         const BC250_PLANE_REGISTERS* format=
             DcnPlaneFormatRegisters(Device,BC250_PLANE_FORMAT_ARGB8888,&registers) ? &registers : NULL;
-        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,4,format,FALSE,TRUE);
+        status=DcnFlipWriteSequence(Device,Device->DcnFirmwareAddress,Device->DcnFirmwarePitch,4,format,NULL,FALSE,TRUE);
         if (!NT_SUCCESS(status)) return status;
         status=DcnResumeOwnedFetch(Device);
         if (!NT_SUCCESS(status)) return status;
@@ -1278,6 +1289,96 @@ static void RuntimeStall(void* Context, unsigned long Microseconds)
 {
     UNREFERENCED_PARAMETER(Context);
     KeStallExecutionProcessor(Microseconds);
+}
+
+// BD-223: a plane 0 shape is for the source mode on the screen now: its target is that mode, which is also the
+// timing's active area (dcn_plane.c refuses a source mode that stage A scales). The 1:1 shape of that mode is kept
+// next to it, so that the next full-size flip, a restore or a writer can put it back in its own update.
+static BOOLEAN DcnPlaneShapeAdmit(_Inout_ BC250_DEVICE* Device, _In_ const BC250_SCALER_PLAN* Shape)
+{
+    const ULONG width = DisplaySourceWidth(Device), height = DisplaySourceHeight(Device);
+    BC250_SCALER_PLAN native;
+    if (Shape->Scaling != BC250_SCALING_PLANE || Shape->TargetWidth != width || Shape->TargetHeight != height)
+        return FALSE;
+    return Bc250ScalerPlan(width, height, width, height, BC250_SCALING_IDENTITY, &native) >= 0;
+}
+
+// Inside DcnFlipWriteSequence's acknowledged lock, before the address. Shape NULL: the source mode's 1:1 shape,
+// written only when a scaled one is on the pipe. A shape equal to the one on the pipe is not written again, so a run
+// of game frames writes the scaler once. No log, no wait, no floating point: this runs at DIRQL in the transaction.
+static NTSTATUS DcnPlaneShapeLocked(_Inout_ BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_RESULT result;
+    const BC250_SCALER_PLAN* write;
+    long status;
+
+    if (Shape == NULL) {
+        if (!Device->DcnPlaneScaled) return STATUS_SUCCESS;
+        // The 1:1 shape of the source mode on the screen now, planned again here: DcnPlaneShapeModeset clears the
+        // scaled state at every mode program, so this is the mode the scaled shape was admitted for.
+        if (Bc250ScalerPlan(DisplaySourceWidth(Device), DisplaySourceHeight(Device), DisplaySourceWidth(Device),
+                            DisplaySourceHeight(Device), BC250_SCALING_IDENTITY, &Device->DcnPlaneNative) < 0) {
+            InterlockedIncrement(&Device->DcnPlaneShapeFailures);
+            return STATUS_INVALID_DEVICE_STATE;
+        }
+        write = &Device->DcnPlaneNative;
+    } else {
+        if (Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape)))
+            return STATUS_SUCCESS;
+        write = Shape;
+    }
+    RtlZeroMemory(&io, sizeof(io));
+    io.Context = Device; io.Read = RuntimeRead; io.Write = RuntimeWrite; io.Stall = RuntimeStall;
+    status = Bc250ScalerWriteLocked(&io, write, &result);
+    if (status < 0) {
+        // Unknown after a failed write: the pipe counts as scaled with no known shape, so the next flip writes its
+        // own shape again, and a full-size one writes the 1:1 shape.
+        InterlockedIncrement(&Device->DcnPlaneShapeFailures);
+        Device->DcnPlaneScaled = TRUE;
+        RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
+        return (NTSTATUS)status;
+    }
+    if (Shape == NULL) {
+        Device->DcnPlaneScaled = FALSE;
+        InterlockedIncrement(&Device->DcnPlaneShapeRestores);
+    } else {
+        Device->DcnPlaneShape = *Shape;
+        Device->DcnPlaneScaled = TRUE;
+        InterlockedIncrement(&Device->DcnPlaneShapeWrites);
+    }
+    return STATUS_SUCCESS;
+}
+
+// Every program of the pipe shape by a mode (modeset.c, connector_link.c) replaces the shape of a plane, so the pipe
+// is no longer scaled for a plane. The callers hold the primary as a writer or own a stopped pipe: no flip transaction
+// reads these fields meanwhile.
+void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device)
+{
+    Device->DcnPlaneScaled = FALSE;
+    RtlZeroMemory(&Device->DcnPlaneShape, sizeof(Device->DcnPlaneShape));
+    InterlockedIncrement(&Device->DcnPlaneModeStamp);
+}
+
+// The view of the pipe for the flip transaction: TRUE when it shows Shape (NULL: the 1:1 shape of the source mode).
+// Inside L.
+BOOLEAN DcnPlaneShapeIs(_In_ const BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape)
+{
+    if (Shape == NULL) return !Device->DcnPlaneScaled;
+    return Device->DcnPlaneScaled && RtlEqualMemory(Shape, &Device->DcnPlaneShape, sizeof(*Shape));
+}
+
+// A copy of the scaled shape on the pipe, for a vsync report. FALSE when the pipe has the 1:1 shape. Inside L.
+BOOLEAN DcnPlaneShapeCurrent(_In_ const BC250_DEVICE* Device, _Out_ BC250_SCALER_PLAN* Shape)
+{
+    *Shape = Device->DcnPlaneShape;
+    return Device->DcnPlaneScaled && Shape->Scaling == BC250_SCALING_PLANE;
+}
+
+ULONG DcnPlanePitch(_In_ BC250_DEVICE* Device)
+{
+    if (InterlockedCompareExchange(&Device->RuntimeDisplayChanged,0,0)) return Device->RuntimePost.Pitch;
+    return Device->Post.Pitch;
 }
 
 // BD-170 r6, the facts of docs/design/vidpn-flip.md section 7.2 that wddm.c reads inside L. No wait, no log: these run
@@ -1431,7 +1532,7 @@ static NTSTATUS DcnReservedSurfaceCore(_Inout_ BC250_DEVICE* Device, ULONG Width
     // Begin already proved a driver-owned bridge before publishing the writer. Only reserved buffers can be
     // programmed outside L; application requests are refused while the writer owns the display.
     status=DcnFlipWriteSequence(Device,(ULONGLONG)Device->RuntimeFramebufferPhysical.QuadPart,
-        Pitch,4,&format,FALSE,TRUE);
+        Pitch,4,&format,NULL,FALSE,TRUE);
     if (!NT_SUCCESS(status)) goto failed;
     // DCN201 selects dcn10_program_pipe (Linux dcn201_init.c:101), which
     // programs the address then unblanks HUBP (dcn10_hwseq.c:3133-3136).
@@ -1613,18 +1714,24 @@ void DcnPipeConnectorPlan(_Inout_ BC250_DEVICE* Device, ULONG DetPlane1)
 // current format, the three format registers the same update writes. The plane stays in a format until a flip of
 // another one, so a run of game frames writes the format once and the desktop's next BGRA8 flip writes it back.
 // BD-170: Immediate is the request's FlipImmediate; the write sequence above says what the hardware does with it.
-NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
-    ULONGLONG AllocationBytes, BOOLEAN Immediate, _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote)
+// BD-223: Shape, when not NULL, is a multiplane-overlay plane 0 of its own size (Shape->SourceWidth and
+// SourceHeight): the surface checks below use that size, every pipe rule stays (the pitch included), and
+// DcnPlaneShapeAdmit holds the plan to the source mode before anything is written.
+NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch,
+    ULONG PlaneFormat, ULONGLONG AllocationBytes, BOOLEAN Immediate, _In_opt_ const BC250_SCALER_PLAN* Shape,
+    _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote)
 {
     ULONGLONG physical,bytes;
     NTSTATUS status;
     const BC250_PLANE_ENCODING* plane=Bc250PlaneEncoding(PlaneFormat);
     BC250_PLANE_REGISTERS registers;
     const BC250_PLANE_REGISTERS* format=NULL;
-    ULONG current;
+    ULONG current,width,height;
 
     *Wrote = FALSE;
     if (Device->Mmio == NULL || !Device->VidPnFlipEnabled) return STATUS_DEVICE_NOT_READY;
+    width=Shape ? Shape->SourceWidth : DisplaySourceWidth(Device);
+    height=Shape ? Shape->SourceHeight : DisplaySourceHeight(Device);
     // The scaled inherited path retains the GOP viewport and surface layout.
     // A new pitch or format needs a separately admitted pipe configuration.
     // BD-197: a runtime mode's pipe is the connector commit's own. Its DML plan is for a 32-bit 444 surface at
@@ -1638,10 +1745,9 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
             DisplaySourceHeight(Device)!=Device->RuntimePost.Height) return STATUS_NOT_SUPPORTED;
     } else if (Device->Modeset.InheritedFixed && (!Device->Modeset.InheritedSupport ||
         Pitch != Device->Post.Pitch || PlaneFormat != BC250_PLANE_FORMAT_ARGB8888)) return STATUS_NOT_SUPPORTED;
-    if (plane==NULL ||
-        !DcnLinearSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),Pitch,plane->BytesPerPixel,
-                               &bytes) ||
+    if (plane==NULL || !DcnLinearSurfaceBytes(width,height,Pitch,plane->BytesPerPixel,&bytes) ||
         bytes>AllocationBytes) return STATUS_INVALID_PARAMETER;
+    if (Shape && !DcnPlaneShapeAdmit(Device,Shape)) return STATUS_NOT_SUPPORTED;
     // A format other than the firmware's needs the firmware's format captured at start: restore writes it back.
     // Refused before any register is touched, so the plane keeps its frame. wddm.c does not offer the flip to the
     // compositor's driver in that case (BC250_SCANOUT_CAPS_PLANE_FORMATS), so this is a guard, not a path.
@@ -1660,7 +1766,7 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     if (!Device->VramEnabled ||
         !DcnTranslateCardAddress(CardAddress, Device->VramMcBase, (ULONGLONG)Device->VramPhysical.QuadPart,
                                  Device->VramLength, &physical) ||
-        !AddressAllowed(Device,physical,Pitch,DisplaySourceWidth(Device),DisplaySourceHeight(Device)))
+        !AddressAllowed(Device,physical,Pitch,width,height))
     {
         InterlockedIncrement(&Device->DcnFlipRefused);
         return STATUS_ACCESS_DENIED;
@@ -1674,7 +1780,7 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     InterlockedIncrement(&Device->DcnSurfaceSequence);
     // BD-170 r6: from here on a failure is not proof that nothing was written (an MMIO failure is unknown).
     *Wrote = TRUE;
-    status=DcnFlipWriteSequence(Device,physical,Pitch,plane->BytesPerPixel,format,Immediate,TRUE);
+    status=DcnFlipWriteSequence(Device,physical,Pitch,plane->BytesPerPixel,format,Shape,Immediate,TRUE);
     if (NT_SUCCESS(status))
     {
         if (Immediate) InterlockedIncrement(&Device->DcnImmediateFlips);
@@ -1694,6 +1800,13 @@ NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddres
     else InterlockedIncrement(&Device->DcnFlipRefused);
     InterlockedIncrement(&Device->DcnSurfaceSequence);
     return status;
+}
+
+NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
+    ULONGLONG AllocationBytes, BOOLEAN Immediate, _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote)
+{
+    return DcnFlipSourceAddressShaped(Device,CardAddress,Pitch,PlaneFormat,AllocationBytes,Immediate,NULL,PhysicalOut,
+                                      Wrote);
 }
 
 static BOOLEAN DcnWriterBridgeCurrent(_In_ const BC250_DEVICE* Device, ULONGLONG Physical, ULONG Pitch)
@@ -2118,8 +2231,10 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     // M15.14: the CPU copy writes B8G8R8A8 pixels 4 bytes apart, so it lands only on a plane of that format. A
     // client buffer of another format scanned out (0.7.216.20) gets no CPU copy; the next desktop flip ends it.
     format=Device->DcnPlaneFormats ? Device->DcnPlaneFormat : BC250_PLANE_FORMAT_ARGB8888;
+    // BD-223: a scaled plane 0 is smaller than the source mode, so a copy of the source mode's size would run past
+    // the allocation. The next full-size flip ends it, as for a plane of another format.
     if (InterlockedCompareExchange(&Device->DcnSurfaceSequence,0,0)!=generation || !diverged ||
-        format!=BC250_PLANE_FORMAT_ARGB8888 ||
+        format!=BC250_PLANE_FORMAT_ARGB8888 || Device->DcnPlaneScaled ||
         !DcnSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),pitch,&bytes)) return FALSE;
     if (Device->DcnScanoutMap && Device->DcnScanoutMapAddress==target && Device->DcnScanoutMapLength==bytes)
     {

@@ -300,6 +300,19 @@ typedef struct _BC250_DEVICE {
     ULONGLONG DcnCurrentAddress;
     BOOLEAN DcnDiverged;
     BOOLEAN DcnBlanked;                // this driver requested blank; restore must unblank
+    // BD-223 (lab flavour, EnableScaledPlane): a flip of a multiplane-overlay plane 0 left pipe 0 in a scaled shape
+    // (DcnPlaneShape) and not in the 1:1 shape of the source mode (DcnPlaneNative). Every other write of the flip
+    // sequence puts DcnPlaneNative back in the same update (dcn.c DcnFlipWriteSequence). Published under
+    // DcnSurfaceSequence; the CPU copy of the present path refuses a scaled plane (DcnScanoutMapping).
+    BOOLEAN DcnPlaneScaled;
+    BC250_SCALER_PLAN DcnPlaneShape;
+    BC250_SCALER_PLAN DcnPlaneNative;
+    volatile LONG DcnPlaneShapeWrites;      // flips that wrote a scaled shape
+    volatile LONG DcnPlaneShapeRestores;    // writes of the native shape after a scaled one
+    volatile LONG DcnPlaneShapeFailures;    // shape writes refused or failed (the lock not held, an MMIO failure)
+    // Incremented by DcnPlaneShapeModeset at every program of the pipe by a mode: a plane that DML approved for one
+    // mode is not flipped under the next one (wddm.c WddmPlaneApproved).
+    volatile LONG DcnPlaneModeStamp;
     // M15.14 plane format (0.7.216.20, plane_format.h). The firmware's three format registers, read once per start
     // by DcnCaptureFirmwareFormat (WddmStart). DcnPlaneFormats is TRUE only when they decode to ARGB8888, and
     // only then may a flip program another format or restore check one. DcnPlaneFormat is the plane format the
@@ -860,6 +873,17 @@ NTSTATUS DcnFlipToFirmwareSurface(_Inout_ BC250_DEVICE* Device);   // the same w
 // and a failure with Wrote TRUE is unknown, never proof that nothing was written.
 NTSTATUS DcnFlipSourceAddress(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch, ULONG PlaneFormat,
     ULONGLONG AllocationBytes, BOOLEAN Immediate, _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote);
+// BD-223: the same flip for a multiplane-overlay plane 0 of its own size. Shape is the plane's scaler plan
+// (dcn_plane.c Bc250PlanePrepare), whose source size is the surface's; NULL is DcnFlipSourceAddress. The shape is
+// written inside the same OTG lock as the address, and only when it differs from the one on the pipe.
+NTSTATUS DcnFlipSourceAddressShaped(_Inout_ BC250_DEVICE* Device, ULONGLONG CardAddress, ULONG Pitch,
+    ULONG PlaneFormat, ULONGLONG AllocationBytes, BOOLEAN Immediate, _In_opt_ const BC250_SCALER_PLAN* Shape,
+    _Out_opt_ ULONGLONG* PhysicalOut, _Out_ BOOLEAN* Wrote);
+// BD-223: the pitch a plane 0 must have on the pipe as it is committed (DcnFlipSourceAddress's own rule).
+ULONG DcnPlanePitch(_In_ BC250_DEVICE* Device);
+void DcnPlaneShapeModeset(_Inout_ BC250_DEVICE* Device);
+BOOLEAN DcnPlaneShapeIs(_In_ const BC250_DEVICE* Device, _In_opt_ const BC250_SCALER_PLAN* Shape);
+BOOLEAN DcnPlaneShapeCurrent(_In_ const BC250_DEVICE* Device, _Out_ BC250_SCALER_PLAN* Shape);
 // BD-170: after an immediate flip, sample P' (SURFACE_FLIP_PENDING clear and PRIMARY_SURFACE_ADDRESS read back as
 // Physical) for at most BC250_DCN_IMMEDIATE_OBSERVE_US after the programming and record the result (dcn.c says why).
 // ProgramStartQpc and ProgramEndQpc are KeQueryPerformanceCounter just before DcnFlipSourceAddress and just after it

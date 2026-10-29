@@ -30,6 +30,7 @@ static BC250_PLANE_REQUEST LabRequest(void)
     r.PlaneCount = 1;
     r.Enabled = 1;
     r.SurfaceWidth = 1920; r.SurfaceHeight = 1080;
+    r.SurfacePitch = r.RequiredPitch = 7680;
     r.PlaneFormat = BC250_PLANE_FORMAT_ARGB8888;
     r.SourceModeWidth = 1920; r.SourceModeHeight = 1200;
     r.TargetWidth = 1920; r.TargetHeight = 1200;
@@ -85,6 +86,9 @@ static void TestVerdicts(void)
     r = LabRequest(); r.SurfaceWidth = 63; Rect(&r.Src, 0, 0, 63, 1080); CHECK(Verdict(&r) == BC250_PLANE_SURFACE);
     r = LabRequest(); r.SurfaceHeight = 0x4000; Rect(&r.Src, 0, 0, 1920, 0x4000); CHECK(Verdict(&r) == BC250_PLANE_SURFACE);
     r = LabRequest(); Rect(&r.Src, 0, 0, 1280, 720); CHECK(Verdict(&r) == BC250_PLANE_SRC_CROP);
+    // The committed pipe's pitch: a wider row is refused, and 0 means no rule.
+    r = LabRequest(); r.SurfacePitch = 8192; CHECK(Verdict(&r) == BC250_PLANE_PITCH);
+    r.RequiredPitch = 0; CHECK(Verdict(&r) == BC250_PLANE_OK);
     r = LabRequest(); Rect(&r.Src, 1, 0, 1921, 1080); CHECK(Verdict(&r) == BC250_PLANE_SRC_CROP);
     r = LabRequest(); Rect(&r.Dst, 0, 0, 1920, 1201); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DST_BOUNDS);
     r = LabRequest(); Rect(&r.Dst, 1, 0, 1921, 1200); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DST_BOUNDS);
@@ -95,7 +99,7 @@ static void TestVerdicts(void)
     r = LabRequest(); Rect(&r.Dst, 0, 0, 1280, 1200); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DOWNSCALE);
     r = LabRequest(); Rect(&r.Dst, 0, 0, 1920, 1000); r.Clip = r.Dst; CHECK(Verdict(&r) == BC250_PLANE_DOWNSCALE);
     // 16 times up is the limit: 120x75 fills 1920x1200 exactly; one pixel less in either direction is refused.
-    r = LabRequest(); r.SurfaceWidth = 120; r.SurfaceHeight = 75; Rect(&r.Src, 0, 0, 120, 75);
+    r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 120; r.SurfaceHeight = 75; Rect(&r.Src, 0, 0, 120, 75);
     CHECK(Verdict(&r) == BC250_PLANE_OK);
     r.SurfaceWidth = 119; Rect(&r.Src, 0, 0, 119, 75); CHECK(Verdict(&r) == BC250_PLANE_UPSCALE);
     r.SurfaceWidth = 120; r.SurfaceHeight = 74; Rect(&r.Src, 0, 0, 120, 74); CHECK(Verdict(&r) == BC250_PLANE_UPSCALE);
@@ -104,6 +108,7 @@ static void TestVerdicts(void)
     // The vocabulary.
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_OK), "ok") == 0);
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_STRETCH_QUALITY), "stretch-quality") == 0);
+    CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_PITCH), "pitch") == 0);
     CHECK(strcmp(Bc250PlaneVerdictText(BC250_PLANE_VERDICTS), "?") == 0);
 }
 
@@ -129,7 +134,7 @@ static void TestPlans(void)
     CHECK(q.Identity && q.DmlHTaps == 1 && q.DmlVTaps == 1);
     CHECK(!Bc250PlaneSameShape(&p, &q));
     // A full-size plane away from the origin is not the identity: it has the position of a recout.
-    r = LabRequest(); r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
+    r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
     Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
     CHECK(Bc250PlanePrepare(&r, &q) == BC250_PLANE_OK);
     CHECK(!q.Identity && q.Scaler.Recout.Y == 60 && q.Scaler.Recout.Height == 1080);
@@ -207,7 +212,7 @@ static void TestDml(void)
     CHECK(Bc250PlaneDmlVerdict(&p, s, scaled.Valid, scaled.DispClockKhz, scaled.DppClockKhz,
                                native.DispClockKhz, native.DppClockKhz) == BC250_PLANE_DML);
     // The letterboxed 720p plane: 4 taps both ways.
-    r = LabRequest(); r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
+    r = LabRequest(); r.RequiredPitch = 0; r.SurfaceWidth = 1280; r.SurfaceHeight = 720; Rect(&r.Src, 0, 0, 1280, 720);
     Rect(&r.Dst, 0, 60, 1920, 1140); r.Clip = r.Dst;
     CHECK(Bc250PlanePrepare(&r, &p) == BC250_PLANE_OK);
     s = Dml(&p, 1280, w, bytes, &scaled);

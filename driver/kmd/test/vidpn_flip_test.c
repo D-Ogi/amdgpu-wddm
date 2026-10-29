@@ -16,6 +16,7 @@
 #include "surface_format.h"
 #include "scanout_admit.h"
 #include "flip_state.h"
+#include "dcn_scale.h"   /* BD-223: BC250_SCALER_PLAN, the shape of a multiplane-overlay plane 0 */
 typedef int32_t NTSTATUS;
 typedef long LONG;
 typedef unsigned long ULONG;
@@ -426,6 +427,15 @@ static LONGLONG observed_address,qpc=1000;
 /* One tick a call. The frequency is the device's, never asked for here. */
 static LARGE_INTEGER KeQueryPerformanceCounter(LARGE_INTEGER *frequency)
 {LARGE_INTEGER now;CHECK(frequency==NULL);now.QuadPart=++qpc;return now;}
+/* BD-223: the pipe shape of dcn.c. A full-size write puts the 1:1 shape back (shape_on 0); a shaped write leaves
+ * its shape on the pipe. Both are read only inside L, by the transaction. */
+static int shape_on;
+static BC250_SCALER_PLAN shape_now;
+static unsigned shaped_writes;
+static BOOLEAN DcnPlaneShapeIs(const BC250_DEVICE *d,const BC250_SCALER_PLAN *shape)
+{(void)d;CHECK(in_lock);return shape?(shape_on && memcmp(shape,&shape_now,sizeof(*shape))==0):!shape_on;}
+static BOOLEAN DcnPlaneShapeCurrent(const BC250_DEVICE *d,BC250_SCALER_PLAN *shape)
+{(void)d;CHECK(in_lock);*shape=shape_now;return shape_on;}
 static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pitch,ULONG format,ULONGLONG bytes,
     BOOLEAN immediate,ULONGLONG *out,BOOLEAN *wrote)
 {
@@ -455,10 +465,26 @@ static NTSTATUS DcnFlipSourceAddress(BC250_DEVICE *d,ULONGLONG address,ULONG pit
      * that reads it on another processor now waits for L and then restores. */
     if(expect_record){CHECK(d->Wddm->ScanoutObject==expect_record);++record_checked;expect_record=0;}
     *wrote=NT_SUCCESS(hardware_result) || hardware_wrote;
-    if(NT_SUCCESS(hardware_result)){plane_card=(LONGLONG)address;programmed_pitch=pitch;programmed_format=format;
+    if(NT_SUCCESS(hardware_result)){plane_card=(LONGLONG)address;programmed_pitch=pitch;programmed_format=format;shape_on=0;
         programmed_immediate=immediate;if(immediate)++immediate_writes;if(out)*out=PHYS(address);}
     return hardware_result;
 }
+/* The shaped write: every check of the full-size write, at the shape's source size (the allocation is that size). */
+static NTSTATUS DcnFlipSourceAddressShaped(BC250_DEVICE *d,ULONGLONG address,ULONG pitch,ULONG format,ULONGLONG bytes,
+    BOOLEAN immediate,const BC250_SCALER_PLAN *shape,ULONGLONG *out,BOOLEAN *wrote)
+{
+    const ULONG width=d->Post.Width,height=d->Post.Height;
+    NTSTATUS status;
+    CHECK(shape!=NULL && shape->Scaling==BC250_SCALING_PLANE);
+    d->Post.Width=shape->SourceWidth;d->Post.Height=shape->SourceHeight;
+    status=DcnFlipSourceAddress(d,address,pitch,format,bytes,immediate,out,wrote);
+    d->Post.Width=width;d->Post.Height=height;
+    if(NT_SUCCESS(status)){shape_on=1;shape_now=*shape;++shaped_writes;}
+    return status;
+}
+/* The report's call (wddm.c WddmNotifyCall): the shipping flavour passes the data on as it is. */
+static void WddmNotifyCall(BC250_DEVICE *d,DXGKARGCB_NOTIFY_INTERRUPT_DATA *data)
+{d->Dxgk.DxgkCbNotifyInterrupt(d->Dxgk.DeviceHandle,data);}
 /* P' is observed inside L, in the transaction that wrote the plane: the generation is the odd value the transaction
  * holds it at, passed by reference; the physical address is the one the write returned; the programming time is taken
  * around the write, start before end. Nothing is published yet. */
@@ -605,6 +631,7 @@ static void Setup(BC250_DEVICE *d,BC250_WDDM *w,int level)
     immediate_writes=observed=pending_samples=0;programmed_immediate=0;
     observe_outcome=BC250_DCN_IMMEDIATE_DONE;observed_flags=0;observed_address=0;
     ringGapVsyncs=0;begin_kind=BC250_WRITER_MODESET_COMMIT;
+    shape_on=0;memset(&shape_now,0,sizeof(shape_now));shaped_writes=0;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     witness_arms=witness_reads=0;witness_fresh=witness_event=witness_r1=witness_r2=1;witness_status=STATUS_SUCCESS;
     witness_pending_before=witness_pending_after=0;
@@ -2037,6 +2064,67 @@ static void Witnesses(int level)
     }
 }
 #endif
+/* BD-223: plane 0 of the multiplane-overlay flip DDI, smaller than the source mode (a 1366x704 game chain on the
+ * 1366x768 mode), through the same entry and transaction as SetVidPnSourceAddress. The surface checks use the
+ * shape's size, a shape is part of what the plane shows, a NULL allocation keeps the shape, a full-size flip ends it,
+ * and a shape is refused with no allocation or with the flip gate closed. */
+static NTSTATUS ShapedFlip(BC250_DEVICE *d,const DXGKARG_SETVIDPNSOURCEADDRESS *request,const BC250_SCALER_PLAN *shape)
+{
+    NTSTATUS status;
+    if(irq<=DISPATCH_LEVEL) return WddmFlipEntry(d,request,shape);
+    CHECK(!in_lock);
+    in_lock=1;status=WddmFlipEntry(d,request,shape);in_lock=0;
+    return status;
+}
+static void PlaneShapeFlips(int level)
+{
+    BC250_WDDM w;BC250_DEVICE d;
+    DXGKARG_SETVIDPNSOURCEADDRESS request={0};
+    BC250_WDDM_OBJECT game={0},desktop={0};
+    BC250_SCALER_PLAN shape,other;
+    Setup(&d,&w,level);
+    memset(&shape,0,sizeof(shape));
+    shape.SourceWidth=1366;shape.SourceHeight=704;shape.TargetWidth=1366;shape.TargetHeight=768;
+    shape.Scaling=BC250_SCALING_PLANE;shape.Recout.Width=1366;shape.Recout.Height=768;
+    other=shape;other.Recout.Y=32;other.Recout.Height=704;
+    game.Magic=BC250_WDDM_MAGIC_ALLOCATION;game.Serial=0x7101;game.UmdAlloc=1;game.ScanoutRequested=1;
+    game.ScanoutWidth=1366;game.ScanoutHeight=704;game.ScanoutPitch=5632;game.UmdBytes=5632ull*704;
+    game.ScanoutFormat=D3DDDIFMT_A8R8G8B8;
+    desktop.Magic=BC250_WDDM_MAGIC_ALLOCATION;desktop.Serial=0x7102;
+    desktop.Allocation.Width=1366;desktop.Allocation.Height=768;desktop.Allocation.Pitch=5632;
+    desktop.Allocation.Format=D3DDDIFMT_A8R8G8B8;desktop.Allocation.Size=5632ull*768;
+    request.PrimarySegment=BC250_WDDM_SEGMENT_VRAM;
+    /* Full size, the game chain is the wrong geometry, as before this work. */
+    request.hAllocation=&game;request.PrimaryAddress.QuadPart=0x50000;
+    CHECK(Flip(&d,&request)==STATUS_INVALID_PARAMETER && hardware==0);
+    /* Shaped, it is the plane's own size: programmed with the shape, published like any scan-out flip. */
+    CHECK(ShapedFlip(&d,&request,&shape)==STATUS_SUCCESS);
+    CHECK(hardware==1 && shaped_writes==1 && shape_on && plane_card==0x50000 && programmed_pitch==5632);
+    CHECK(w.PrimaryAddress.QuadPart==0x50000 && w.PrimaryBytes==5632ull*704 && w.ScanoutObject==(LONGLONG)game.Serial);
+    CHECK(!in_lock);
+    /* The same flip again is no change; the same address in another shape is one. */
+    CHECK(ShapedFlip(&d,&request,&shape)==STATUS_SUCCESS && hardware==1);
+    CHECK(ShapedFlip(&d,&request,&other)==STATUS_SUCCESS && hardware==2 && shaped_writes==2 && shape_now.Recout.Y==32);
+    /* A NULL allocation keeps the surface and its shape (the DDI's rule): the shaped write at the kept shape. */
+    request.hAllocation=NULL;request.PrimaryAddress.QuadPart=0x60000;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && hardware==3 && shaped_writes==3 && shape_on && shape_now.Recout.Y==32);
+    /* A shape needs its allocation. */
+    CHECK(ShapedFlip(&d,&request,&shape)==STATUS_NOT_SUPPORTED && hardware==3);
+    /* The compositor's full-size primary at the published address ends the shape: a change, so written. */
+    request.hAllocation=&desktop;
+    CHECK(Flip(&d,&request)==STATUS_SUCCESS && hardware==4 && !shape_on && w.ScanoutObject==0);
+    CHECK(w.PrimaryBytes==5632ull*768);
+    /* The flip gate closed: no pipe to shape, refused; the full-size flip publishes as before. */
+    request.hAllocation=&game;
+    d.VidPnFlipEnabled=0;
+    CHECK(ShapedFlip(&d,&request,&shape)==STATUS_NOT_SUPPORTED && hardware==4);
+    d.VidPnFlipEnabled=1;
+    /* A refused shaped write leaves the plane as it is. */
+    hardware_result=STATUS_ACCESS_DENIED;
+    CHECK(ShapedFlip(&d,&request,&shape)==STATUS_ACCESS_DENIED && !shape_on && w.PrimaryAddress.QuadPart==0x60000);
+    hardware_result=STATUS_SUCCESS;
+    CHECK(!in_lock);
+}
 int main(void)
 {
     int level;
@@ -2054,6 +2142,7 @@ int main(void)
 #endif
         GateClosed(level);
         Exclusive(level);
+        PlaneShapeFlips(level);
     }
     FlipFlagBits();
     PlaneFormatFlips();

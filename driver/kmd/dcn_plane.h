@@ -21,6 +21,8 @@ typedef struct _BC250_PLANE_REQUEST {
     unsigned long LayerIndex;
     int Enabled;
     unsigned long SurfaceWidth, SurfaceHeight;  // the allocation's own description
+    unsigned long SurfacePitch;                 // its pitch in bytes
+    unsigned long RequiredPitch;                // the pitch the committed pipe was planned for, 0 for none
     unsigned long PlaneFormat;                  // plane_format.h BC250_PLANE_FORMAT_*, NONE for any other format
     int TenBitSource;                           // the committed source mode is 10-bit (scan-out caps flag)
     unsigned long SourceModeWidth, SourceModeHeight;    // the committed VidPN source mode
@@ -61,6 +63,8 @@ enum bc250_plane_verdict {
     BC250_PLANE_DML = 20,               // DML refused the scaled pipe, or could not run
     BC250_PLANE_CLOCKS = 21,            // DML needs a DISPCLK or DPPCLK above the programmed one
     BC250_PLANE_STRETCH_QUALITY = 22,   // StretchQuality is neither BILINEAR nor HIGH
+    BC250_PLANE_PITCH = 23,             // not the committed pipe's pitch: its request and delivery registers stay
+    BC250_PLANE_SCANOUT = 24,           // the allocation fails the scan-out rule (scanout_admit.h); wddm.c decides it
     BC250_PLANE_VERDICTS
 };
 const char* Bc250PlaneVerdictText(unsigned long Verdict);

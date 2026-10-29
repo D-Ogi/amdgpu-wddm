@@ -8,6 +8,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "plane_format.h"
 #include "dcn_translate.h"
+#include "dcn_scale.h"           /* BD-223: BC250_SCALER_PLAN */
 typedef unsigned long ULONG;
 typedef uint64_t ULONGLONG;
 typedef int32_t NTSTATUS;
@@ -341,6 +342,26 @@ static NTSTATUS MmioDcnWriteEx(const BC250_DEVICE *d, ULONG reg, ULONG value, BO
     }
     return STATUS_SUCCESS;
 }
+/* BD-223: the pipe's shape. DcnPlaneShapeLocked runs inside the acknowledged lock, before either address half,
+   and once per write sequence; DcnPlaneShapeAdmit answers as shape_model.admit says. dcn_scale_test.c tests the
+   register writes of the shape itself (Bc250ScalerWriteLocked). */
+static struct { unsigned calls, shaped, admits; int admit; NTSTATUS status; const BC250_SCALER_PLAN *last; } shape_model;
+static NTSTATUS DcnPlaneShapeLocked(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape)
+{
+    (void)d;
+    CHECK(model.locked && model.acknowledged && model.address_writes == 0);
+    shape_model.calls++;
+    shape_model.last = shape;
+    if (shape) shape_model.shaped++;
+    return shape_model.status;
+}
+static BOOLEAN DcnPlaneShapeAdmit(BC250_DEVICE *d, const BC250_SCALER_PLAN *shape)
+{
+    (void)d; (void)shape;
+    CHECK(!model.locked && model.writes == 0);
+    shape_model.admits++;
+    return shape_model.admit;
+}
 /* ACTUAL_SOURCE */
 /* BD-170: the flip type. Every bit of DCSURF_FLIP_CONTROL is kept, the stereo-sync fields included, and only
    SURFACE_FLIP_TYPE follows the request: 1 for an immediate flip, 0 for a vsync flip (the value 0.7.216.64 wrote).
@@ -357,14 +378,14 @@ static void FlipTypes(void)
                 const ULONG original = 1ul << bit;
                 memset(&model, 0, sizeof(model));
                 model.ack_after = delay; model.flip = original; model.quiet = 1;
-                CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, immediate, TRUE) == STATUS_SUCCESS);
+                CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, NULL, immediate, TRUE) == STATUS_SUCCESS);
                 CHECK(model.flip == (immediate ? (original | HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK) :
                                                  (original & ~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK)));
                 CHECK(model.latched == target && model.triggers == 1 && !model.locked && model.writes == 8);
             }
     memset(&model, 0, sizeof(model));
     model.ack_after = 11; model.flip = 0; model.quiet = 1;
-    CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, TRUE, TRUE) == STATUS_IO_TIMEOUT);
+    CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, NULL, TRUE, TRUE) == STATUS_IO_TIMEOUT);
     CHECK(model.flip == 0 && model.address_writes == 0 && !model.locked);
 }
 /* BD-170 r6: DcnImmediateObserve. P' = SURFACE_FLIP_PENDING first observed clear and DCSURF_PRIMARY_SURFACE_ADDRESS,
@@ -991,6 +1012,58 @@ static void RuntimeModeFormats(void)
           STATUS_NOT_SUPPORTED && !wrote && model.writes == 0);
     CHECK(protected_logs == 0);
 }
+/* BD-223: a multiplane-overlay plane 0 of its own size. The surface checks use the shape's source size, the
+   admission runs before any write, the shape reaches the write sequence inside the lock, and a refusal by either
+   writes nothing. The full-size flip passes no shape. */
+static void ShapedSourceAddress(void)
+{
+    BC250_DEVICE d;
+    BC250_SCALER_PLAN shape;
+    BOOLEAN wrote;
+    ULONGLONG physical;
+    protected_logs = 0; protected_call = 1;
+    memset(&shape, 0, sizeof(shape));
+    shape.SourceWidth = 64; shape.SourceHeight = 8; shape.TargetWidth = 64; shape.TargetHeight = 16;
+    /* 64x8 at pitch 256 is 2048 bytes: an allocation of 2048 is enough for the plane, not for the source mode. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,
+                                     &physical, &wrote) == STATUS_SUCCESS);
+    CHECK(wrote && physical == 0x201000 && model.latched == physical && !model.locked);
+    CHECK(shape_model.admits == 1 && shape_model.calls == 1 && shape_model.shaped == 1 && shape_model.last == &shape);
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE,
+                               &physical, &wrote) == STATUS_INVALID_PARAMETER);
+    CHECK(!wrote && model.writes == 0 && shape_model.calls == 0);
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    CHECK(DcnFlipSourceAddress(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE,
+                               &physical, &wrote) == STATUS_SUCCESS);
+    CHECK(wrote && shape_model.admits == 0 && shape_model.calls == 1 && shape_model.shaped == 0);
+    /* The admission refuses: nothing written. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = FALSE;
+    CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,
+                                     &physical, &wrote) == STATUS_NOT_SUPPORTED);
+    CHECK(!wrote && model.writes == 0 && shape_model.calls == 0);
+    /* The pipe's pitch rule stays: a runtime mode at another pitch refuses the plane before the admission. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    d.RuntimeDisplayChanged = 1; d.RuntimePostValid = 1;
+    CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 512, BC250_PLANE_FORMAT_ARGB8888, 4096, FALSE, &shape,
+                                     &physical, &wrote) == STATUS_NOT_SUPPORTED);
+    CHECK(!wrote && model.writes == 0 && shape_model.admits == 0);
+    /* The address of a plane must fit the carve-out for the plane's own size. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    CHECK(DcnFlipSourceAddressShaped(&d, 0x0, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,
+                                     &physical, &wrote) == STATUS_ACCESS_DENIED);
+    CHECK(!wrote && model.writes == 0);
+    /* The shape write fails inside the lock: unknown, so Wrote; no address, the lock released, no trigger. */
+    SourceDevice(&d); memset(&shape_model, 0, sizeof(shape_model)); shape_model.admit = TRUE;
+    shape_model.status = STATUS_IO_TIMEOUT;
+    CHECK(DcnFlipSourceAddressShaped(&d, 0x101000, 256, BC250_PLANE_FORMAT_ARGB8888, 2048, FALSE, &shape,
+                                     &physical, &wrote) == STATUS_IO_TIMEOUT);
+    CHECK(wrote && model.address_writes == 0 && model.triggers == 0 && !model.locked && d.DcnFlipRefused == 1);
+    CHECK(protected_logs == 0);
+    protected_call = 0;
+    memset(&shape_model, 0, sizeof(shape_model));
+}
 int main(void)
 {
     BC250_DEVICE device = {0};
@@ -1003,7 +1076,7 @@ int main(void)
                 ULONG original = (1ul << bit) | HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK;
                 memset(&model, 0, sizeof(model));
                 model.ack_after = delay; model.flip = original; model.surface = original; model.pitch = original; model.quiet = quiet;
-                CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, FALSE, quiet) == STATUS_SUCCESS);
+                CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, NULL, FALSE, quiet) == STATUS_SUCCESS);
                 CHECK(model.stalls == delay && model.reads == delay + 1);
                 CHECK(model.flip == (original & ~HUBPREQ0_DCSURF_FLIP_CONTROL__SURFACE_FLIP_TYPE_MASK));
                 CHECK(model.surface == (original & ~(HUBPREQ0_DCSURF_SURFACE_CONTROL__PRIMARY_SURFACE_TMZ_MASK |
@@ -1015,7 +1088,7 @@ int main(void)
         }
         memset(&model, 0, sizeof(model));
         model.ack_after = 11; model.quiet = quiet; device.DcnLockTimeouts = 0;
-        CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, FALSE, quiet) == STATUS_IO_TIMEOUT);
+        CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, NULL, NULL, FALSE, quiet) == STATUS_IO_TIMEOUT);
         CHECK(model.stalls == 10 && model.reads == 11);
         CHECK(!model.locked && model.address_writes == 0 && model.triggers == 0);
         CHECK(model.writes == 2);
@@ -1026,22 +1099,21 @@ int main(void)
         unsigned i;
         for(i=0;i<3;i++){
             memset(&model,0,sizeof(model));model.pitch=0xA5A5FFFFul;
-            CHECK(DcnFlipWriteSequence(&device,target,pitches[i],4,NULL,FALSE,FALSE)==STATUS_SUCCESS);
+            CHECK(DcnFlipWriteSequence(&device,target,pitches[i],4,NULL,NULL,FALSE,FALSE)==STATUS_SUCCESS);
             CHECK(model.pitch==((0xA5A5FFFFul&~HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)|(pitches[i]/4-1)));
         }
     }
     /* M15.14: the pitch field counts pixels of the plane's format, never 4 bytes by assumption. */
     {
         memset(&model,0,sizeof(model));model.pitch=0xA5A5FFFFul;
-        CHECK(DcnFlipWriteSequence(&device,target,15360,8,NULL,FALSE,FALSE)==STATUS_SUCCESS);
+        CHECK(DcnFlipWriteSequence(&device,target,15360,8,NULL,NULL,FALSE,FALSE)==STATUS_SUCCESS);
         CHECK((model.pitch&HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK)==1919);
         memset(&model,0,sizeof(model));
-        CHECK(DcnFlipWriteSequence(&device,target,7682,4,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
-        CHECK(DcnFlipWriteSequence(&device,target,7684,8,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
-        CHECK(DcnFlipWriteSequence(&device,target,7680,0,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
-        CHECK(DcnFlipWriteSequence(&device,target,0,4,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
-        CHECK(DcnFlipWriteSequence(&device,target,
-            (HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK+2ul)*4ul,4,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
+        CHECK(DcnFlipWriteSequence(&device,target,7682,4,NULL,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
+        CHECK(DcnFlipWriteSequence(&device,target,7684,8,NULL,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
+        CHECK(DcnFlipWriteSequence(&device,target,7680,0,NULL,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
+        CHECK(DcnFlipWriteSequence(&device,target,0,4,NULL,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
+        CHECK(DcnFlipWriteSequence(&device,target,(HUBPREQ0_DCSURF_SURFACE_PITCH__PITCH_MASK+2ul)*4ul,4,NULL,NULL,FALSE,FALSE)==STATUS_INVALID_PARAMETER);
         CHECK(model.writes==0);
     }
     /* M15.14: the firmware's format, decoded at start, and every plane format composed from it. */
@@ -1078,7 +1150,7 @@ int main(void)
                 model.config = fwConfig; model.crossbar = fwCrossbar; model.cnvc = fwCnvc; model.ack_after = ack;
                 model.quiet = 1;
                 CHECK(DcnPlaneFormatRegisters(&fmt, f, &regs));
-                CHECK(DcnFlipWriteSequence(&device, target, 7680, Bc250PlaneEncoding(f)->BytesPerPixel, &regs, FALSE, TRUE) ==
+                CHECK(DcnFlipWriteSequence(&device, target, 7680, Bc250PlaneEncoding(f)->BytesPerPixel, &regs, NULL, FALSE, TRUE) ==
                       STATUS_SUCCESS);
                 CHECK(model.format_writes == 3 && model.writes == 11 && model.triggers == 1 && !model.locked);
                 CHECK(model.latched == target);
@@ -1093,7 +1165,7 @@ int main(void)
         /* An unacknowledged lock writes no format either. */
         memset(&model,0,sizeof(model)); model.ack_after = 11; model.quiet = 1;
         CHECK(DcnPlaneFormatRegisters(&fmt, BC250_PLANE_FORMAT_ABGR2101010, &regs));
-        CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, &regs, FALSE, TRUE) == STATUS_IO_TIMEOUT);
+        CHECK(DcnFlipWriteSequence(&device, target, 7680, 4, &regs, NULL, FALSE, TRUE) == STATUS_IO_TIMEOUT);
         CHECK(model.format_writes == 0 && model.writes == 2 && !model.locked);
         /* A firmware plane that is not ARGB8888 (ABGR8888, and format pairs no encoding has) keeps the start
          * at the firmware's format: no composition, so no flip may change it. */
@@ -1146,6 +1218,7 @@ int main(void)
     ObserveAdmissionBoundary();
     SourceAddressNoLog();
     PlaneFormatsOpenAgrees();
+    ShapedSourceAddress();
     WitnessQualification();
     WriterBridge();
     WriterBridgeAfterDetach();

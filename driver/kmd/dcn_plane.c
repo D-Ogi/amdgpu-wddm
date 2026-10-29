@@ -7,7 +7,7 @@ const char* Bc250PlaneVerdictText(unsigned long Verdict)
     static const char* const text[BC250_PLANE_VERDICTS] = {
         "ok", "args", "count", "layer", "disabled", "source-mode", "format", "surface", "src-crop", "dst-bounds",
         "clip", "mirror", "rotation", "blend", "interlaced", "stereo", "color-space", "downscale", "upscale",
-        "scaler", "dml", "clocks", "stretch-quality",
+        "scaler", "dml", "clocks", "stretch-quality", "pitch", "scanout",
     };
     return Verdict < BC250_PLANE_VERDICTS ? text[Verdict] : "?";
 }
@@ -68,6 +68,9 @@ unsigned long Bc250PlanePrepare(const BC250_PLANE_REQUEST* R, BC250_PLANE_PLAN* 
     if (R->SurfaceWidth < BC250_PLANE_MIN_DIMENSION || R->SurfaceHeight < BC250_PLANE_MIN_DIMENSION ||
         R->SurfaceWidth > BC250_SCALE_MAX_DIMENSION || R->SurfaceHeight > BC250_SCALE_MAX_DIMENSION)
         return BC250_PLANE_SURFACE;
+    // The flip writes the viewport and the scaler, not the request (RQ) and delivery (DLG/TTU) registers that the
+    // commit programmed for its pitch (connector_link.c Plan, dcn.c DcnFlipSourceAddress), so the pitch stays.
+    if (R->RequiredPitch && R->SurfacePitch != R->RequiredPitch) return BC250_PLANE_PITCH;
     // The viewport is the whole allocation: dcn_scale.c reads the source from its origin, and a crop needs the
     // viewport start and the init phases of a clipped source (calculate_init_and_vp with an offset), not here.
     if (R->Src.Left != 0 || R->Src.Top != 0 || Width(&R->Src) != R->SurfaceWidth || Height(&R->Src) != R->SurfaceHeight)

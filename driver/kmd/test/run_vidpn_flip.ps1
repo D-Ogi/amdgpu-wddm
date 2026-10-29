@@ -29,6 +29,7 @@ param(
                  'resume-unlocked-fallback', 'recovery-without-section', 'recovery-request-dropped',
                  'exclusive-refused-success', 'writer-refusal-uncounted',
                  'unsafe-next-vsync-deposit', 'unsafe-immediate-deposit',
+                 'shape-not-a-change', 'null-drops-shape', 'shape-without-allocation',
                  'witness-before-decision', 'witness-changes-answer', 'witness-stale-compared',
                  'witness-lost-uncounted')][string]$Mutation = '',
     [switch]$Lab
@@ -149,6 +150,14 @@ $mutations = [ordered]@{
     'unsafe-immediate-deposit' = @{ find = "if (device->VidPnFlipEnabled) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         with = "if (device->VidPnFlipEnabled && !immediate) {`n            InterlockedIncrement(&wddm->WriterBusy);"
         why = 'an immediate request is accepted without programming its requested surface in the call' }
+    'shape-not-a-change' = @{ find = ' || !DcnPlaneShapeIs(device, shape);'; with = ';'
+        why = 'a flip to the same address in another pipe shape (BD-223) writes nothing' }
+    'null-drops-shape' = @{ find = 'DcnPlaneShapeCurrent(device, &kept)) shape = &kept;'
+        with = 'DcnPlaneShapeCurrent(device, &kept)) shape = NULL;'
+        why = 'a flip with no allocation drops the shape of the plane and reads past its smaller surface' }
+    'shape-without-allocation' = @{ find = 'if (flip->Shape && (args->hAllocation == NULL || !device->VidPnFlipEnabled)) status = STATUS_NOT_SUPPORTED;'
+        with = ''
+        why = 'a shape is programmed with no allocation to hold it to' }
 }
 
 # The lab flavour's controls (-Lab): the witnesses read after the shipping decision and never change it.

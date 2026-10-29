@@ -14,8 +14,10 @@ end = s.index("// M87's poll:", start)
 body = s[start:end]
 start = s.index('static BOOLEAN AddressAllowed(')
 body += s[start:s.index('// Fill\'s own pattern:', start)]
-start = s.index('NTSTATUS DcnFlipSourceAddress(')
-body += s[start:s.index('\n}\n', start)+3]
+# BD-223: the shaped admission holds the body; the full-size entry is its wrapper.
+for name in ['NTSTATUS DcnFlipSourceAddressShaped(', 'NTSTATUS DcnFlipSourceAddress(']:
+    start = s.index(name)
+    body += s[start:s.index('\n}\n', start)+3]
 # BD-197: the scan-out caps trailer's PLANE_FORMATS rule, held to the source-address admission above, and the
 # connector commit's DET base, which the format registers keep.
 for name in ['BOOLEAN DcnPlaneFormatsOpen(', 'void DcnPipeConnectorPlan(']:
@@ -43,6 +45,7 @@ fixture = re.sub(r'typedef struct \{ ULONGLONG Physical; ULONG Pitch; LONGLONG P
 assert fixture.count('/* ACTUAL_SOURCE */') == 1
 assert body.count('static NTSTATUS DcnFlipWriteSequence(') == 1
 assert body.count('NTSTATUS DcnFlipSourceAddress(') == 1
+assert body.count('NTSTATUS DcnFlipSourceAddressShaped(') == 1
 assert body.count('void DcnWitnessArm(') == 1
 a.out.write_text(fixture.replace('/* ACTUAL_SOURCE */', body))
 print('Extracted actual flip programming, source-address admission, observation and witnesses from', a.source)
