@@ -939,7 +939,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "bf42b898250e4125d25a149e21025e86d4708535",
+      "commit": "7def507b03541117ce0f48482f3f4022263ad763",
       "base": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1037,7 +1037,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "bf42b898250e4125d25a149e21025e86d4708535",
+      "commit": "7def507b03541117ce0f48482f3f4022263ad763",
       "base": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1105,7 +1105,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "763755607be690bd9225e19cebc404e565153cef",
+      "commit": "9d8168c994752cd5c6fda8ae485022849c751e7d",
       "base": "20d7c8c95669fe94122cb948c75037f98b2583e7",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1141,7 +1141,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The x86 system Vulkan row 76375560 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row 56734388 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7), and the async compute threadgroup workaround on GFX1013 (1f3f6938); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
+          "pair_skew": "The x86 system Vulkan row 9d8168c9 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row de66c413 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): the async compute threadgroup workaround on GFX1013 (x86 c0c1f240, x64 1f3f6938), the gfx1013 lowering of signed packed 4x8 dot products ported from dmorazasanchez/bc250-fsr4 v3 (x86 0f49b0ee to 8c452da1, x64 7ffc66ef to 67d3864e), driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
         }
       ],
       "tests": [
@@ -1169,7 +1169,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "5673438898df44282928d6cfd4a7c41b6f11e4c5",
+      "commit": "de66c413f971331bef60046309444d8e60425f6e",
       "base": "ad130cc22883fc80ff36926ac5eebfdfbaefcdbc",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1371,7 +1371,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "bf42b898250e4125d25a149e21025e86d4708535",
+      "commit": "7def507b03541117ce0f48482f3f4022263ad763",
       "base": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1470,7 +1470,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "bf42b898250e4125d25a149e21025e86d4708535",
+      "commit": "7def507b03541117ce0f48482f3f4022263ad763",
       "base": "cf46ce17e9a8888f53efb3a58e55f0989642071c",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1539,7 +1539,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "763755607be690bd9225e19cebc404e565153cef",
+      "commit": "9d8168c994752cd5c6fda8ae485022849c751e7d",
       "base": "20d7c8c95669fe94122cb948c75037f98b2583e7",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1576,7 +1576,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The x86 system Vulkan row 76375560 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row 56734388 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7), and the async compute threadgroup workaround on GFX1013 (1f3f6938); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
+          "pair_skew": "The x86 system Vulkan row 9d8168c9 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system row de66c413 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): the async compute threadgroup workaround on GFX1013 (x86 c0c1f240, x64 1f3f6938), the gfx1013 lowering of signed packed 4x8 dot products ported from dmorazasanchez/bc250-fsr4 v3 (x86 0f49b0ee to 8c452da1, x64 7ffc66ef to 67d3864e), driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
         }
       ],
       "tests": [
@@ -1604,7 +1604,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "5673438898df44282928d6cfd4a7c41b6f11e4c5",
+      "commit": "de66c413f971331bef60046309444d8e60425f6e",
       "base": "ad130cc22883fc80ff36926ac5eebfdfbaefcdbc",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
