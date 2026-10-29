@@ -111,12 +111,11 @@ static unsigned long ViewportSize(unsigned long Init19, unsigned long Ratio19, u
     return v > Source ? Source : (unsigned long)v;
 }
 
-long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+static void PlanOpen(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                      unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan)
 {
     unsigned char* clear = (unsigned char*)Plan;
-    unsigned long line, i;
-    long s;
+    unsigned long i;
 
     for (i = 0; i < sizeof(*Plan); i++) clear[i] = 0;      // a refused plan programs nothing (Bc250ScalerProgram)
     Plan->SourceWidth = SourceWidth;
@@ -124,8 +123,14 @@ long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsi
     Plan->TargetWidth = TargetWidth;
     Plan->TargetHeight = TargetHeight;
     Plan->Scaling = Scaling;
-    s = Bc250ScalingRecout(SourceWidth, SourceHeight, TargetWidth, TargetHeight, Scaling, &Plan->Recout);
-    if (s < 0) return s;
+}
+
+// The rest of the plan, from the source size and Plan->Recout.
+static long PlanFromRecout(BC250_SCALER_PLAN* Plan)
+{
+    const unsigned long SourceWidth = Plan->SourceWidth, SourceHeight = Plan->SourceHeight;
+    unsigned long line;
+
     // calculate_scaling_ratios: source / destination, truncated to 19 fraction bits. Chroma = luma for RGB.
     Plan->RatioH19 = (unsigned long)(((unsigned long long)SourceWidth << 19) / Plan->Recout.Width);
     Plan->RatioV19 = (unsigned long)(((unsigned long long)SourceHeight << 19) / Plan->Recout.Height);
@@ -153,6 +158,32 @@ long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsi
     Plan->FilterH = Plan->TapsH == 4ul;
     Plan->FilterV = Plan->TapsV == 4ul;
     return BC250_DISP_STATUS_SUCCESS;
+}
+
+long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+                     unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan)
+{
+    long s;
+
+    PlanOpen(SourceWidth, SourceHeight, TargetWidth, TargetHeight, Scaling, Plan);
+    s = Bc250ScalingRecout(SourceWidth, SourceHeight, TargetWidth, TargetHeight, Scaling, &Plan->Recout);
+    if (s < 0) return s;
+    return PlanFromRecout(Plan);
+}
+
+long Bc250ScalerPlanRecout(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+                           unsigned long TargetHeight, const BC250_RECT* Recout, BC250_SCALER_PLAN* Plan)
+{
+    PlanOpen(SourceWidth, SourceHeight, TargetWidth, TargetHeight, BC250_SCALING_PLANE, Plan);
+    if (!Recout || !DimensionOk(SourceWidth) || !DimensionOk(SourceHeight) || !DimensionOk(TargetWidth) ||
+        !DimensionOk(TargetHeight) || !DimensionOk(Recout->Width) || !DimensionOk(Recout->Height) ||
+        Recout->X > TargetWidth - Recout->Width || Recout->Y > TargetHeight - Recout->Height ||
+        Recout->Width > TargetWidth || Recout->Height > TargetHeight)
+        return BC250_DISP_STATUS_INVALID;
+    if (SourceWidth > Recout->Width || SourceHeight > Recout->Height)
+        return BC250_DISP_STATUS_NOT_SUPPORTED;                         // no downscale, as in stage A
+    Plan->Recout = *Recout;
+    return PlanFromRecout(Plan);
 }
 
 unsigned long Bc250ScalingSupport(unsigned long Level, unsigned long SourceWidth, unsigned long SourceHeight,
@@ -652,6 +683,22 @@ long Bc250ScalerProgramStopped(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan,
 {
     long status = ScalerBegin(Io, Plan, Result, 1);
     if (status < 0) return status;
+    status = WritePipe(Io, Plan, Result);
+    ScalerAfter(Io, Result);
+    return status;
+}
+
+long Bc250ScalerWriteLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result)
+{
+    const unsigned long held = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK |
+                               OTG0_OTG_MASTER_UPDATE_LOCK__UPDATE_LOCK_STATUS_MASK;
+    long status = ScalerBegin(Io, Plan, Result, 0);
+
+    if (status < 0) return status;
+    status = Bc250DispRead(Io, BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK, &Result->LockStatus);
+    Result->LockStatusValid = status >= 0;
+    if (status < 0) { Result->LockStatus = 0; return status; }
+    if ((Result->LockStatus & held) != held) return BC250_DISP_STATUS_MISMATCH;
     status = WritePipe(Io, Plan, Result);
     ScalerAfter(Io, Result);
     return status;

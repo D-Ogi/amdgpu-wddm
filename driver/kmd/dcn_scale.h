@@ -27,6 +27,10 @@ enum bc250_scaling {
     BC250_SCALING_COUNT
 };
 #define BC250_SCALING_BIT(s) (1ul << (s))
+// BD-223: the Scaling of a plan made by Bc250ScalerPlanRecout, from a plane's own rectangle. It is not a VidPN
+// scaling, so no mode offers it, and every loop over the VidPN scalings stops before it. It is not
+// BC250_SCALING_COUNT either, which display.c and modeset.c use as "no preference".
+#define BC250_SCALING_PLANE (BC250_SCALING_COUNT + 1)
 
 typedef struct _BC250_RECT {
     unsigned long X, Y, Width, Height;
@@ -59,6 +63,11 @@ long Bc250ScalingRecout(unsigned long SourceWidth, unsigned long SourceHeight, u
 // The whole plan (Linux's scaler_data for this pipe). Same returns as Bc250ScalingRecout.
 long Bc250ScalerPlan(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
                      unsigned long TargetHeight, unsigned long Scaling, BC250_SCALER_PLAN* Plan);
+// BD-223: the same plan for a recout the caller chose (a plane's destination rectangle), with the same rules: the
+// source is read whole, and each direction is 1:1 or up. _INVALID for a zero or oversized dimension or a recout
+// outside the target, _NOT_SUPPORTED for a recout smaller than the source in either direction.
+long Bc250ScalerPlanRecout(unsigned long SourceWidth, unsigned long SourceHeight, unsigned long TargetWidth,
+                           unsigned long TargetHeight, const BC250_RECT* Recout, BC250_SCALER_PLAN* Plan);
 // The scalings display.c offers for a source mode on a target, as BC250_SCALING_BIT()s, for a display-modes
 // level (edid.h BC250_DISPLAY_MODES_*). 0 when the mode is not offered at all. The native size reports identity
 // and every scaling of its level (each is the 1:1 shape), so that a scaling dxgkrnl pinned for the monitor never
@@ -192,6 +201,11 @@ typedef struct _BC250_SCALER_RESULT {
 } BC250_SCALER_RESULT;
 
 long Bc250ScalerProgram(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
+// BD-223: the same register sequence for a caller that holds OTG0's update lock and has seen UPDATE_LOCK_STATUS
+// (dcn.c's DcnFlipWriteSequence), so that a plane's shape and its surface address latch at the same update. It reads
+// the lock register once and refuses with _MISMATCH, before any write, when the lock is not held and acknowledged.
+// No lock, unlock, trigger or stall here; a failed write leaves the caller's transaction to restore.
+long Bc250ScalerWriteLocked(BC250_DISP_IO* Io, const BC250_SCALER_PLAN* Plan, BC250_SCALER_RESULT* Result);
 // Caller owns the pipe and has completed optc1_disable_crtc. Verify MASTER_EN=0,
 // OTG_BUSY=0 and no held update lock before programming. No lock, stall or
 // manual trigger: the caller programs timing and enables the OTG afterwards.

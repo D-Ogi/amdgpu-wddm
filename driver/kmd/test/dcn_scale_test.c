@@ -503,9 +503,118 @@ static void TestLiveAccessFailures(void)
     CHECK(REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK)==0);
 }
 
+// BD-223: a plan for a recout the caller chose. The full-screen and the letterboxed recouts give the plans of
+// stretched and aspect-ratio scaling (positive controls against the code that is already on the lab); a recout
+// elsewhere keeps its position; a recout outside the target or under the source is refused.
+static void TestPlanRecout(void)
+{
+    BC250_SCALER_PLAN a, b;
+    BC250_RECT r;
+
+    r.X = 0; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1920, 1080, 1920, 1200, &r, &a) == 0);
+    CHECK(a.Scaling == BC250_SCALING_PLANE);
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_STRETCHED, &b) == 0);
+    b.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&a, &b, sizeof(a)) == 0);
+    r.Y = 60; r.Height = 1080;
+    CHECK(Bc250ScalerPlanRecout(1920, 1080, 1920, 1200, &r, &a) == 0);
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_ASPECT, &b) == 0);
+    b.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&a, &b, sizeof(a)) == 0);
+    r.X = 0; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1920, 1200, 1920, 1200, &r, &a) == 0);
+    CHECK(Bc250ScalerPlan(1920, 1200, 1920, 1200, BC250_SCALING_IDENTITY, &b) == 0);
+    b.Scaling = BC250_SCALING_PLANE;
+    CHECK(memcmp(&a, &b, sizeof(a)) == 0);
+    // 1280x720 into a recout at 100,50 of 1600x900: both directions 0.8, the position kept.
+    r.X = 100; r.Y = 50; r.Width = 1600; r.Height = 900;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == 0);
+    CHECK(a.Recout.X == 100 && a.Recout.Y == 50 && a.Recout.Width == 1600 && a.Recout.Height == 900);
+    CHECK(a.RatioH19 == 419430ul && a.RatioV19 == 419430ul && a.FilterH && a.FilterV);
+    CHECK(a.Viewport.Width == 1280 && a.Viewport.Height == 720);
+    // Refusals.
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, NULL, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 1; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 0; r.Y = 1;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 0xFFFFFFF0ul; r.Y = 0; r.Width = 100;
+    CHECK(Bc250ScalerPlanRecout(64, 64, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.X = 0; r.Y = 0; r.Width = 0; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
+    r.Width = 1279; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    r.Width = 1920; r.Height = 719;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+}
+
+// BD-223: the writer inside a caller's lock. It writes the same registers as Bc250ScalerProgram, never the lock or
+// the trigger, and writes nothing when the lock is not held and acknowledged or cannot be read.
+static unsigned long g_locked[REGS];
+
+static void TestWriteLocked(void)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_PLAN p;
+    BC250_SCALER_RESULT res;
+    unsigned long i, differ;
+
+    CHECK(Bc250ScalerPlan(1920, 1080, 1920, 1200, BC250_SCALING_STRETCHED, &p) == 0);
+    // Not held: refused before any write.
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
+    CHECK(g_f.logCount == 0 && res.LockStatusValid && res.LockStatus == 0);
+    // Held but never acknowledged.
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+    g_f.lockDelay = -1;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) == BC250_DISP_STATUS_MISMATCH);
+    CHECK(g_f.logCount == 0);
+    // The lock read fails (the third read: SCL_MODE and OTG_CONTROL come first).
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+    g_f.failReadAt = 3;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) < 0);
+    CHECK(g_f.logCount == 0 && !res.LockStatusValid);
+    // Held and acknowledged: the pipe registers of the live sequence, and no lock or trigger write.
+    FirmwareState();
+    REG(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) = 0;
+    REG(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) = OTG0_OTG_MASTER_UPDATE_LOCK__OTG_MASTER_UPDATE_LOCK_MASK;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerWriteLocked(&io, &p, &res) == 0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK) == 0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_TRIGA_MANUAL_TRIG) == 0);
+    CHECK(CountWrites(BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0) == 0);
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE) == 0x04B00780ul && REG(BC250_REG_DMU_DSCL0_SCL_TAP_CONTROL) == 0x103ul);
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION) == 0x04380780ul);
+    CHECK(res.CoefWrites == 66ul);
+    // The same register values as Bc250ScalerProgram leaves, the lock, its select and SCL_MODE aside (the bank
+    // swap of SCL_MODE happens at the trigger, which the caller of the locked writer sends).
+    memcpy(g_locked, g_f.r, sizeof(g_locked));
+    FirmwareState();
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgram(&io, &p, &res) == 0);
+    for (i = 0, differ = 0; i < REGS; i++) {
+        unsigned long o = i * 4ul;
+        if (o == BC250_REG_DMU_OTG0_OTG_MASTER_UPDATE_LOCK || o == BC250_REG_DMU_OTG0_OTG_GLOBAL_CONTROL0 ||
+            o == BC250_REG_DMU_DSCL0_SCL_MODE) continue;
+        if (g_locked[i] != g_f.r[i]) { differ++; fprintf(stderr, "write-locked differs at 0x%lX\n", o); }
+    }
+    CHECK(differ == 0);
+}
+
 int main(void)
 {
     TestFilterTable();
+    TestPlanRecout();
+    TestWriteLocked();
     TestLayouts();
     TestEveryLabMode();
     TestSupport();

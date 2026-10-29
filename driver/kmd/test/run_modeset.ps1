@@ -53,10 +53,15 @@ $tests = [ordered]@{
     'optc_test'      = @('../shim/bc250_optc.c', 'display_io.c')
     'dp_stream_test' = @('../shim/bc250_dp_stream.c', '../shim/bc250_optc.c', 'display_io.c')
     'dcn_scale_test' = @('dcn_scale.c', 'display_io.c', 'edid.c')
+    'dcn_plane_test' = @('dcn_plane.c', 'dcn_scale.c', 'display_io.c', 'edid.c', '../shim/bc250_dml201.c')
     'mode_admit_test' = @('../shim/bc250_dml201.c', '../shim/bc250_optc.c', '../shim/bc250_dp_train.c', 'display_io.c', 'edid.c')
 }
 # BD-139: the display plan builds as run_dml201.ps1 builds it, with its imported headers and strict floating point.
-$extra = @{ 'mode_admit_test' = @('/fp:precise', "/I$repo\driver\shim\dml201") }
+# BD-223: dcn_plane_test runs the scaled plane through the same plan.
+$extra = @{
+    'mode_admit_test' = @('/fp:precise', "/I$repo\driver\shim\dml201")
+    'dcn_plane_test'  = @('/fp:precise', "/I$repo\driver\shim\dml201")
+}
 $failed = @()
 & python (Join-Path $repo 'tools\import\extract_display.py') --check
 if ($LASTEXITCODE -ne 0) { throw 'AMD display imports are stale' }
