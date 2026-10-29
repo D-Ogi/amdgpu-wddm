@@ -29,9 +29,34 @@ typedef struct BC250_DML201_WORKSPACE {
 
 size_t Bc250Dml201WorkspaceSize(void) { return sizeof(BC250_DML201_WORKSPACE); }
 
+static int scaled(const BC250_DML201_INPUT *i)
+{
+    return i->ViewportWidth || i->ViewportHeight || i->RecoutWidth || i->RecoutHeight || i->HTaps || i->VTaps;
+}
+
+/* BD-223. The limits are AMD's DCN201 scaler limits as dcn20_validate_bandwidth
+ * reaches them: 8 taps at most, 1 tap only for a 1:1 direction, a recout inside
+ * the active area. The ratio bounds themselves are the planner's (dcn_plane.c);
+ * DML answers only whether the pipe fits the clocks and the return bandwidth. */
+static int validScale(const BC250_DML201_INPUT *i)
+{
+    if (!scaled(i)) return 1;
+    if (!i->ViewportWidth || !i->ViewportHeight || !i->RecoutWidth || !i->RecoutHeight ||
+        i->RecoutWidth > i->HActive || i->RecoutHeight > i->VActive ||
+        i->ViewportWidth > 16384 || i->ViewportHeight > 16384 ||
+        i->HTaps < 1 || i->HTaps > 8 || i->VTaps < 1 || i->VTaps > 8 ||
+        (i->HTaps == 1 && i->ViewportWidth != i->RecoutWidth) ||
+        (i->VTaps == 1 && i->ViewportHeight != i->RecoutHeight))
+        return 0;
+    return 1;
+}
+
 static int validInput(const BC250_DML201_INPUT *i)
 {
-    if (!i || !i->HActive || !i->VActive || i->HTotal > 8192 || i->VTotal > 8192 ||
+    unsigned int width;
+    if (!i || !validScale(i)) return 0;
+    width = scaled(i) ? i->ViewportWidth : i->HActive;
+    if (!i->HActive || !i->VActive || i->HTotal > 8192 || i->VTotal > 8192 ||
         i->HActive >= i->HTotal || i->VActive >= i->VTotal ||
         !i->HFrontPorch || !i->HSyncWidth || !i->VFrontPorch || !i->VSyncWidth ||
         i->HFrontPorch >= i->HTotal - i->HActive ||
@@ -39,7 +64,7 @@ static int validInput(const BC250_DML201_INPUT *i)
         i->VFrontPorch >= i->VTotal - i->VActive ||
         i->VSyncWidth > i->VTotal - i->VActive - i->VFrontPorch ||
         i->VTotal - i->VActive < dcn201_ip.min_vblank_lines ||
-        i->PitchPixels < i->HActive || i->PitchPixels > 16384 || (i->PitchPixels & 63) ||
+        i->PitchPixels < width || i->PitchPixels > 16384 || (i->PitchPixels & 63) ||
         i->PixelClockKhz < 10000 || i->PixelClockKhz > 1200000 ||
         i->DchubRefClockKhz < 40000 || i->DchubRefClockKhz > 60000 ||
         i->DchubRefClockKhz >= i->PixelClockKhz * 4u ||
@@ -78,6 +103,30 @@ static void pipeInput(const BC250_DML201_INPUT *i, display_e2e_pipe_params_st *p
     p->pipe.scale_ratio_depth.lb_depth = dm_lb_16;
     p->pipe.scale_ratio_depth.hscl_ratio = p->pipe.scale_ratio_depth.vscl_ratio = 1.0;
     p->pipe.scale_taps.htaps = p->pipe.scale_taps.vtaps = 1;
+    if (scaled(i)) {
+        /* dcn20_populate_dml_pipes_from_context: viewport and surface from
+         * plane_res.scl_data.viewport, recout from scl_data.recout, ratios
+         * from scl_data.ratios (source over destination), taps from
+         * scl_data.taps. The surface is the viewport: the plane reads its
+         * allocation from the origin (dcn_plane.c refuses a crop). For RGB the
+         * chroma ratios equal the luma ones, and the chroma taps are the ones
+         * dcn_scale.c programs (2, or 1 for a 1:1 direction); DML's 444 path
+         * does not read them. */
+        s->viewport_width = s->viewport_width_max = s->surface_width_y = i->ViewportWidth;
+        s->viewport_height = s->viewport_height_max = s->surface_height_y = i->ViewportHeight;
+        d->recout_width = d->full_recout_width = i->RecoutWidth;
+        d->recout_height = d->full_recout_height = i->RecoutHeight;
+        p->pipe.scale_ratio_depth.hscl_ratio = p->pipe.scale_ratio_depth.hscl_ratio_c =
+            (double)i->ViewportWidth / (double)i->RecoutWidth;
+        p->pipe.scale_ratio_depth.vscl_ratio = p->pipe.scale_ratio_depth.vscl_ratio_c =
+            (double)i->ViewportHeight / (double)i->RecoutHeight;
+        p->pipe.scale_ratio_depth.scl_enable =
+            i->ViewportWidth != i->RecoutWidth || i->ViewportHeight != i->RecoutHeight;
+        p->pipe.scale_taps.htaps = i->HTaps;
+        p->pipe.scale_taps.vtaps = i->VTaps;
+        p->pipe.scale_taps.htaps_c = i->HTaps == 1 ? 1 : 2;
+        p->pipe.scale_taps.vtaps_c = i->VTaps == 1 ? 1 : 2;
+    }
     p->clks_cfg.refclk_mhz = i->DchubRefClockKhz / 1000.0;
     p->dout.output_type = i->Output == BC250_DML201_DP ? dm_dp : dm_hdmi;
     p->dout.output_format = dm_444; p->dout.output_bpp = 24;

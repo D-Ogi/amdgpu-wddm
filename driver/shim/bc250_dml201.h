@@ -17,6 +17,13 @@ typedef struct BC250_DML201_INPUT {
     unsigned int CursorWidth, AudioSampleRateKhz;
     /* Measured/firmware-derived inputs, never silently replaced by constants. */
     unsigned int DchubRefClockKhz, DentistVcoKhz;
+    /* BD-223: a scaled plane. All six zero is the full-size 1:1 pipe of the
+     * active area. Otherwise all six are set: the viewport the pipe reads, the
+     * recout it fills (inside the active area) and the scaler taps for each
+     * direction (1 only for a 1:1 direction). PitchPixels then bounds the
+     * viewport width, not the active width. */
+    unsigned int ViewportWidth, ViewportHeight, RecoutWidth, RecoutHeight;
+    unsigned int HTaps, VTaps;
 } BC250_DML201_INPUT;
 typedef struct BC250_DML201_WATERMARKS {
     unsigned int UrgentNs, StutterEnterExitNs, StutterExitNs;
@@ -37,7 +44,8 @@ typedef struct BC250_DML201_PLAN {
 size_t Bc250Dml201WorkspaceSize(void);
 /* Workspace must be naturally aligned, private to this call, and at least the
  * returned size. All output is zero/invalid on failure except diagnostic fields.
- * One progressive, full-size linear RGB8 pipe, physical addressing, no DCC.
+ * One progressive linear RGB8 pipe, physical addressing, no DCC: full size,
+ * or the scaled plane of the six BD-223 fields (validScale says which sets).
  * BboxDefaults=1 identifies the pinned AMD DCN201 SoC/IP model, not measurement.
  * Success is a computed plan, not a hardware admission or application result. */
 int Bc250Dml201Plan(const BC250_DML201_INPUT *input, void *workspace,
