@@ -896,6 +896,7 @@ typedef struct _BC250_WDDM {
     volatile LONG ScanoutFlipsByFormat[BC250_PLANE_FORMATS];
     volatile LONG RedirectedPresents;           // DxgkDdiPresent calls carrying Flags.RedirectedFlip
     volatile LONG RotatedPresentsRefused;       // BD-247: Blt presents carrying Flags.Rotate, all refused
+    volatile LONG ScanoutCapsLogged;            // BD-247: the trailer flags of the last logged query, plus 1 (0: none)
     // The operator's switch for the handshake, read once at WddmStart (EnableDirectFlipHandshake, absent
     // = on from 0.7.213, and 0 is its bisect switch) and ANDed with ScanoutAdmitGate. It is published to the compositor's user-mode driver in the
     // bc250_scanout_caps trailer and nowhere else: the kernel driver's own admission does not read it, so
@@ -5232,6 +5233,11 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);
             RtlCopyMemory((PUCHAR)QueryAdapterInfo->pOutputData+BC250_SCANOUT_CAPS_OFFSET,
                           &scanout,sizeof(scanout));
+            // BD-247: one line each time the answer changes (a rotation opens or closes DirectFlip), not one per query.
+            if (InterlockedExchange(&wddm->ScanoutCapsLogged, (LONG)scanout.flags + 1) != (LONG)scanout.flags + 1)
+                GuardLog("wddm: scan-out caps trailer flags 0x%X direct-flip %u rotation %u source %ux%u", scanout.flags,
+                         (scanout.flags & BC250_SCANOUT_CAPS_DIRECT_FLIP) ? 1u : 0u,
+                         Bc250RotationAngle((ULONG)device->Rotation, TRUE), scanout.post_width, scanout.post_height);
         }
         break;
     }
