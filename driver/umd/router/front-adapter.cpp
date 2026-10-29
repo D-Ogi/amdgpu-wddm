@@ -7,6 +7,11 @@
 // a build version above 0 and a build version of 1 would put the four multiplane-overlay entries into the
 // front's obligation for no gain (front-dxgi.cpp).
 //
+// BD-223: on an adapter at FrontLevel::Wddm1_3 the list also ends with `D3DWDDM1_3_DDI_SUPPORTED`, after
+// D3D11_1. That version has build version 1, so the overlay entries are part of the obligation there, and the
+// WDDM 1.3 tables fill every one of them (front-dxgi.cpp, FillDxgiFuncs13). The level is decided once per
+// adapter open (Install), so that the list and the device create cannot disagree.
+//
 // GetCaps answers the D3D11-era caps types itself. The hosted driver's GetCaps zeroes the output buffer
 // and returns S_OK for every type (Adapter.cpp), and at the D3D11 DDI a zeroed `3DPIPELINESUPPORT` says
 // "no 3D pipeline level at all", which is a device the runtime cannot create. The front therefore answers
@@ -27,7 +32,8 @@
 // table of 101 entries, not 155, and the DXGI block at 7 entries, not 15: filling the 11.1 shapes into them
 // writes 432 and 64 bytes past the runtime's own buffers inside dwm.exe, with S_OK as the answer. Both
 // entries therefore forward a non-11.1 create to the hosted driver untouched, which is byte for byte the
-// route the desktop had before the front, and say so once in the log.
+// route the desktop had before the front, and say so once in the log. A WDDM 1.3 create is a front create
+// only on an adapter at that level (FrontInterface); on any other adapter it is forwarded the same way.
 
 #include "front-resource.h"
 #include <cstdarg>
@@ -232,11 +238,14 @@ HRESULT APIENTRY GetSupportedVersions(D3D10DDI_HADAPTER hAdapter, UINT32 *entrie
 {
     Adapter *adapter = AdapterOf(hAdapter);
     if (!adapter || !entries) return E_INVALIDARG;
-    // The count query first: ask the hosted driver how many it has, then add one for D3D11_1.
+    // The count query first: ask the hosted driver how many it has, then add one for D3D11_1 and, on a start
+    // at the WDDM 1.3 level, one more for D3DWDDM1_3 (BD-223). The newer one goes last: the runtime takes the
+    // highest version it knows, and a list in ascending order is what every other driver answers.
+    const bool wddm13 = adapter->level == FrontLevel::Wddm1_3;
     UINT32 hosted_count = 0;
     HRESULT hr = adapter->hosted.pfnGetSupportedVersions(hAdapter, &hosted_count, nullptr);
     if (FAILED(hr)) return hr;
-    const UINT32 total = hosted_count + 1;
+    const UINT32 total = hosted_count + (wddm13 ? 2u : 1u);
     if (!versions) {
         *entries = total;
         return S_OK;
@@ -249,9 +258,11 @@ HRESULT APIENTRY GetSupportedVersions(D3D10DDI_HADAPTER hAdapter, UINT32 *entrie
     if (FAILED(hr)) return hr;
     if (written != hosted_count || written >= total) return E_UNEXPECTED;
     versions[written] = D3D11_1_DDI_SUPPORTED;
-    *entries = written + 1;
-    LogPrintf(&adapter->log, "bc250d3d_front supported_versions hosted=%u total=%u added=%016llx\n",
-              hosted_count, *entries, (unsigned long long)D3D11_1_DDI_SUPPORTED);
+    if (wddm13) versions[written + 1] = D3DWDDM1_3_DDI_SUPPORTED;
+    *entries = total;
+    LogPrintf(&adapter->log, "bc250d3d_front supported_versions hosted=%u total=%u added=%016llx wddm13=%016llx\n",
+              hosted_count, *entries, (unsigned long long)D3D11_1_DDI_SUPPORTED,
+              wddm13 ? (unsigned long long)D3DWDDM1_3_DDI_SUPPORTED : 0ull);
     return S_OK;
 }
 
@@ -315,6 +326,19 @@ HRESULT APIENTRY GetCaps(D3D10DDI_HADAPTER hAdapter, const D3D10_2DDIARG_GETCAPS
         caps.AllOtherStagesMinPrecision = 0;
         return WriteCaps(args, caps);
     }
+    case D3DWDDM1_3DDICAPS_D3D11_OPTIONS1: {
+        // BD-223: the WDDM 1.3 caps type a runtime asks of a driver that offers D3DWDDM1_3. No tiled
+        // resources at any tier: the hosted frontend has no sparse binding, and every tiled entry of the
+        // WDDM 1.3 table refuses (front-device.cpp, FillDeviceFuncs13).
+        D3DWDDM1_3DDI_D3D11_OPTIONS_DATA1 caps;
+        caps.TiledResourcesSupportFlags = 0;
+        return WriteCaps(args, caps);
+    }
+    case D3DWDDM1_3DDICAPS_MARKER: {
+        // No profile markers: the runtime then has no reason to call pfnSetMarker or pfnSetMarkerMode.
+        D3DWDDM1_3DDI_MARKER_TYPE caps = D3DWDDM1_3DDI_MARKER_TYPE_NONE;
+        return WriteCaps(args, caps);
+    }
     default:
         break;
     }
@@ -348,12 +372,19 @@ SIZE_T FrontOffset(SIZE_T hosted_size)
     return (hosted_size + align - 1) & ~(align - 1);
 }
 
-// The one interface version the front publishes a table for. Everything else the runtime may pick from
-// GetSupportedVersions belongs to the hosted driver alone.
-bool FrontInterface(unsigned int interface_version)
+}  // namespace
+
+// D3D11_1 on every adapter the front took over, and D3DWDDM1_3 on an adapter at that level. A WDDM 1.3 create
+// on an adapter whose list did not offer it is a runtime that did not read the list, and it is forwarded to
+// the hosted driver like any other version the front does not publish.
+bool FrontInterface(const Adapter *adapter, unsigned int interface_version)
 {
-    return interface_version == D3D11_1_DDI_INTERFACE_VERSION;
+    if (interface_version == D3D11_1_DDI_INTERFACE_VERSION) return true;
+    return adapter && adapter->level == FrontLevel::Wddm1_3 &&
+           interface_version == D3DWDDM1_3_DDI_INTERFACE_VERSION;
 }
+
+namespace {
 
 SIZE_T APIENTRY CalcPrivateDeviceSize(D3D10DDI_HADAPTER hAdapter,
                                       const D3D10DDIARG_CALCPRIVATEDEVICESIZE *args)
@@ -362,11 +393,11 @@ SIZE_T APIENTRY CalcPrivateDeviceSize(D3D10DDI_HADAPTER hAdapter,
     if (!adapter || !args) return 0;
     // A create the front does not front: the hosted driver answers the runtime's own question, unchanged.
     // CreateDevice forwards the same create, so the two cannot disagree about the block's layout.
-    if (!FrontInterface(args->Interface)) {
+    if (!FrontInterface(adapter, args->Interface)) {
         static volatile LONG once = 0;
         if (InterlockedCompareExchange(&once, 1, 0) == 0)
             LogPrintf(&adapter->log,
-                      "bc250d3d_front calc_private_device_size forwarded interface=%08x: not D3D11_1\n",
+                      "bc250d3d_front calc_private_device_size forwarded interface=%08x: not a front interface\n",
                       args->Interface);
         return adapter->hosted.pfnCalcPrivateDeviceSize(hAdapter, args);
     }
@@ -393,15 +424,18 @@ HRESULT APIENTRY CreateDevice(D3D10DDI_HADAPTER hAdapter, D3D10DDIARG_CREATEDEVI
     // D3D10.1 create is forwarded exactly as the runtime wrote it: the union member it filled is a table of
     // 101 entries and its DXGI block has 7, and the front publishes neither. No front record is created for
     // such a device, so every entry of it is the hosted driver's own and the route is the one that shipped.
-    if (!FrontInterface(args->Interface)) {
+    if (!FrontInterface(adapter, args->Interface)) {
         static volatile LONG once = 0;
         if (InterlockedCompareExchange(&once, 1, 0) == 0)
             LogPrintf(&adapter->log,
-                      "bc250d3d_front create_device forwarded interface=%08x version=%08x: not D3D11_1, the "
-                      "hosted driver's own table reaches the runtime\n",
+                      "bc250d3d_front create_device forwarded interface=%08x version=%08x: not a front interface, "
+                      "the hosted driver's own table reaches the runtime\n",
                       args->Interface, args->Version);
         return adapter->hosted.pfnCreateDevice(hAdapter, args);
     }
+    // p11_1DeviceFuncs and pWDDM1_3DeviceFuncs are one pointer in the union; which table it points at is
+    // decided by Interface alone.
+    const bool wddm13 = args->Interface == D3DWDDM1_3_DDI_INTERFACE_VERSION;
     if (!args->hDrvDevice.pDrvPrivate || !args->p11_1DeviceFuncs) return E_INVALIDARG;
     // Where the front's record goes. The hosted private size is recomputed from the create arguments
     // rather than remembered from CalcPrivateDeviceSize, so two devices created at once cannot swap
@@ -433,6 +467,7 @@ HRESULT APIENTRY CreateDevice(D3D10DDI_HADAPTER hAdapter, D3D10DDIARG_CREATEDEVI
     record->hRTCoreLayer = args->hRTCoreLayer;
     record->interface_version = args->Interface;
     record->create_flags = args->Flags;
+    record->dxgi_callbacks = args->DXGIBaseDDI.pDXGIBaseCallbacks;
     // The hosted create. Everything the runtime passed is kept except the interface version and the
     // device-funcs pointer: the hosted frontend accepts the D3D10.0 pair alone (Device.cpp) and must fill
     // the front's own storage, not the runtime's 11.1 table.
@@ -466,7 +501,13 @@ HRESULT APIENTRY CreateDevice(D3D10DDI_HADAPTER hAdapter, D3D10DDIARG_CREATEDEVI
         memcpy(&record->hosted_dxgi, args->DXGIBaseDDI.pDXGIDDIBaseFunctions3,
                sizeof(record->hosted_dxgi));
         hosted_resolve = args->DXGIBaseDDI.pDXGIDDIBaseFunctions3->pfnResolveSharedResource != nullptr;
-        FillDxgiFuncs(args->DXGIBaseDDI.pDXGIDDIBaseFunctions3, record->hosted_dxgi);
+        // The DXGI table has the shape of the interface: 15 entries at D3D11_1, 18 at WDDM 1.3 (dxgiddi.h,
+        // DXGI_DDI_BASE_ARGS). Both start with the same eleven, so the hosted driver's seven and slot 7 are
+        // where either fill expects them.
+        if (wddm13)
+            FillDxgiFuncs13(args->DXGIBaseDDI.pDXGIDDIBaseFunctions4, record->hosted_dxgi);
+        else
+            FillDxgiFuncs(args->DXGIBaseDDI.pDXGIDDIBaseFunctions3, record->hosted_dxgi);
     }
     if (!PublishDevice(args->hDrvDevice.pDrvPrivate, record)) {
         // No slot left. The front cannot answer a single entry for this device, so the device must not be
@@ -475,7 +516,10 @@ HRESULT APIENTRY CreateDevice(D3D10DDI_HADAPTER hAdapter, D3D10DDIARG_CREATEDEVI
         record->hosted.pfnDestroyDevice(args->hDrvDevice);
         return E_OUTOFMEMORY;
     }
-    FillDeviceFuncs(args->p11_1DeviceFuncs, record->hosted);
+    if (wddm13)
+        FillDeviceFuncs13(args->pWDDM1_3DeviceFuncs, record->hosted);
+    else
+        FillDeviceFuncs(args->p11_1DeviceFuncs, record->hosted);
     // `version` and `dxgi_resolve` are here because they are the two inputs of the hosted driver's own DXGI
     // table shape (IS_DXGI1_1_BASE_FUNCTIONS reads the runtime's version), and increment 2 needs to know
     // which of them this lab really sees. `retrieve_subobject` names the one entry the front forwards blind.
@@ -515,7 +559,8 @@ HRESULT APIENTRY CloseAdapter(D3D10DDI_HADAPTER hAdapter)
 
 // ---------------------------------------------------------------- the install
 
-Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, const wchar_t *exe)
+Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, const wchar_t *exe,
+                 FrontWddm13 wddm13)
 {
     if (!args || !args->pAdapterFuncs_2 || !args->hAdapter.pDrvPrivate) return nullptr;
     const D3D10_2DDI_ADAPTERFUNCS &hosted = *args->pAdapterFuncs_2;
@@ -554,15 +599,19 @@ Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, co
     args->pAdapterFuncs_2->pfnCloseAdapter = CloseAdapter;
     args->pAdapterFuncs_2->pfnGetSupportedVersions = GetSupportedVersions;
     args->pAdapterFuncs_2->pfnGetCaps = GetCaps;
-    // The trailer as this adapter open sees it, for the log alone: the answer reads it again at every
-    // question. A failed read changes nothing here.
+    // The trailer as this adapter open sees it. The DirectFlip answer reads it again at every question; the
+    // interface level is the one thing decided from this read, because GetSupportedVersions and CreateDevice
+    // must agree for the adapter's life. A failed read is a zero trailer, which Follow reads as D3D11_1.
     bc250_scanout_caps caps;
     const HRESULT query = ReadScanoutCaps(adapter, &caps);
+    adapter->level = FrontLevelFor(wddm13, caps);
     LogPrintf(&adapter->log,
               "bc250d3d_front installed adapter=%p interface=%08x version=%08x caps_query=%08lx "
-              "caps_flags=%08x source=%ux%u\n",
+              "caps_flags=%08x source=%ux%u wddm13=%s level=%s\n",
               args->hAdapter.pDrvPrivate, args->Interface, args->Version, (unsigned long)query, caps.flags,
-              caps.post_width, caps.post_height);
+              caps.post_width, caps.post_height,
+              wddm13 == FrontWddm13::On ? "on" : wddm13 == FrontWddm13::Off ? "off" : "follow",
+              adapter->level == FrontLevel::Wddm1_3 ? "wddm1_3" : "d3d11_1");
     return adapter;
 }
 

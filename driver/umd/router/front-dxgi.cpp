@@ -27,9 +27,22 @@
 // DXGI_ERROR_UNSUPPORTED, the same refusal our own UMD gives in make_dxgi_device_table(), and say so once:
 // an entry nobody should call is the entry that costs a crash in address zero when the assumption is wrong,
 // and the whole point of the completeness assert is that no slot is left null.
+//
+// BD-223: the WDDM 1.3 table. On an adapter at FrontLevel::Wddm1_3 the runtime may create the compositor's
+// device at D3DWDDM1_3_DDI_INTERFACE_VERSION, and then it hands the driver a DXGI1_3_DDI_BASE_FUNCTIONS of 18
+// entries (dxgiddi.h). The first eleven are the DXGI1_2 ones. Slots 11 to 15 are the overlay block of WDDM 1.3:
+// pfnGetMultiplaneOverlayCaps, pfnGetMultiplaneOverlayGroupCaps (where DXGI1_2 had the filter range),
+// pfnReserved1 (where DXGI1_2 had pfnCheckMultiplaneOverlaySupport: at WDDM 1.3 the check of a plane set goes
+// to the kernel driver, DxgkDdiCheckMultiPlaneOverlaySupport), pfnPresentMultiplaneOverlay and pfnReserved2.
+// Slot 16 is pfnPresent1 and slot 17 pfnCheckPresentDurationSupport, and IS_DXGI1_3_BASE_FUNCTIONS
+// (d3d10umddi.h) says a driver at this interface must fill all of them. pfnPresent1 is the present entry of
+// this interface, so it carries the desktop and never refuses; it is translated to the hosted pfnPresent,
+// which keeps the hosted driver's flush, ordering and allocation of each surface on the path (Mesa d3d10umd
+// DxgiFns.cpp, _Present).
 
 #include "front-adapter.h"
 #include <cstdio>
+#include <cstring>
 
 namespace bc250front {
 namespace {
@@ -56,6 +69,9 @@ namespace {
 // process would be a different route, which the router does not create.
 typedef HRESULT(APIENTRY *HostedBltFn)(DXGI_DDI_ARG_BLT *);
 HostedBltFn HostedBlt;
+// The hosted pfnPresent, published the same way and for the same reason, for pfnPresent1 (BD-223).
+typedef HRESULT(APIENTRY *HostedPresentFn)(DXGI_DDI_ARG_PRESENT *);
+HostedPresentFn HostedPresent;
 
 HRESULT APIENTRY ResolveSharedResource(DXGI_DDI_ARG_RESOLVESHAREDRESOURCE *args)
 {
@@ -166,7 +182,86 @@ HRESULT APIENTRY PresentMultiplaneOverlay(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY 
     return DXGI_ERROR_UNSUPPORTED;
 }
 
+// BD-223: the WDDM 1.3 slot that took the filter range's place. It answers like the other overlay entries
+// until the kernel driver admits a plane.
+HRESULT APIENTRY GetMultiplaneOverlayGroupCaps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS *args)
+{
+    (void)args;
+    FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayGroupCaps: the kernel driver has no overlay DDI");
+    return DXGI_ERROR_UNSUPPORTED;
+}
+
+// The two reserved slots of DXGI1_3. The operating system defines no call through them; a call is named once
+// and refused, so that a wrong assumption is a line in the log and not a call into address zero.
+HRESULT APIENTRY Reserved1(void *args)
+{
+    (void)args;
+    FRONT_DXGI_REFUSE_ONCE("dxgi pfnReserved1 (DXGI1_3 slot 13)");
+    return DXGI_ERROR_UNSUPPORTED;
+}
+
+HRESULT APIENTRY Reserved2(void *args)
+{
+    (void)args;
+    FRONT_DXGI_REFUSE_ONCE("dxgi pfnReserved2 (DXGI1_3 slot 15)");
+    return DXGI_ERROR_UNSUPPORTED;
+}
+
+// The present of the WDDM 1.3 interface, on the desktop's path, translated to the D3D10.0 pfnPresent.
+//   The surfaces: "phSurfacesToPresent is always a valid handle" and SurfacesToPresent "must not be zero"; when
+// many are presented, hDstResource is NULL "and the driver must only translate the last source resource
+// handle for use with the pfnPresentCb function" (ref/ddi-display/dxgiddi.md, DXGI_DDI_ARG_PRESENT1). So the
+// last surface is the one presented, which is also exactly the one surface of the one-surface case. The
+// others are released by that present, which the hosted driver does not track per surface; the drop is named
+// once. An empty list breaks the contract and would reach the hosted driver as a null surface, which it
+// dereferences: it is refused with E_INVALIDARG instead.
+//   The dirty rectangles: the driver "should never fail a function call based on the provided dirty
+// rectangles" and need not use them (same page). The D3D10.0 present has no field for them, so the whole
+// surface is presented, which is correct for any set of dirty rectangles.
+//   BackBufferMultiplicity is written by WDDM 2.0 drivers only (dxgiddi.h), so this one leaves it alone.
+HRESULT APIENTRY Present1(DXGI_DDI_ARG_PRESENT1 *args)
+{
+    if (!args) return E_INVALIDARG;
+    if (!HostedPresent) {
+        FRONT_DXGI_REFUSE_ONCE("dxgi pfnPresent1 (no hosted pfnPresent)");
+        return E_NOTIMPL;
+    }
+    if (!args->SurfacesToPresent || !args->phSurfacesToPresent) {
+        FRONT_DXGI_REFUSE_ONCE("dxgi pfnPresent1 with no surface");
+        return E_INVALIDARG;
+    }
+    if (args->SurfacesToPresent > 1)
+        FRONT_DXGI_DROPPED_ONCE("dxgi pfnPresent1",
+                                "every surface but the last of a multi-surface present: the D3D10.0 pfnPresent "
+                                "names one, and the last is the one pfnPresentCb takes");
+    const DXGI_DDI_ARG_PRESENTSURFACE &last = args->phSurfacesToPresent[args->SurfacesToPresent - 1];
+    DXGI_DDI_ARG_PRESENT present;
+    ZeroMemory(&present, sizeof(present));
+    present.hDevice = args->hDevice;
+    present.hSurfaceToPresent = last.hSurface;
+    present.SrcSubResourceIndex = last.SubResourceIndex;
+    present.hDstResource = args->hDstResource;
+    present.DstSubResourceIndex = args->DstSubResourceIndex;
+    present.pDXGIContext = args->pDXGIContext;
+    present.Flags = args->Flags;
+    present.FlipInterval = args->FlipInterval;
+    return HostedPresent(&present);
+}
+
+// A present duration other than the mode's refresh is a seamless refresh-rate change this kernel driver does
+// not offer. Both outputs zero is the contract's way to say so: "if both are zero, the device cannot
+// seamlessly switch to a new refresh rate" (ref/ddi-display/dxgiddi.md, DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT).
+// That is an answer and not a refusal, so the call is not counted.
+HRESULT APIENTRY CheckPresentDurationSupport(DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT *args)
+{
+    if (!args) return E_INVALIDARG;
+    args->ClosestSmallerDuration = 0;
+    args->ClosestLargerDuration = 0;
+    return S_OK;
+}
+
 #undef FRONT_DXGI_REFUSE_ONCE
+#undef FRONT_DXGI_DROPPED_ONCE
 
 }  // namespace
 
@@ -174,6 +269,7 @@ void FillDxgiFuncs(DXGI1_2_DDI_BASE_FUNCTIONS *out, const DXGI_DDI_BASE_FUNCTION
 {
     if (!out) return;
     HostedBlt = hosted.pfnBlt;
+    HostedPresent = hosted.pfnPresent;
     // 0 .. 6: the hosted driver's own entries, which it wrote into the first seven slots of this very
     // struct through the union member. They are copied here all the same, so that FillDxgiFuncs is a
     // complete function of its input and the host gate can drive it with a table of its own.
@@ -198,6 +294,31 @@ void FillDxgiFuncs(DXGI1_2_DDI_BASE_FUNCTIONS *out, const DXGI_DDI_BASE_FUNCTION
     out->pfnGetMultiplaneOverlayFilterRange = GetMultiplaneOverlayFilterRange;
     out->pfnCheckMultiplaneOverlaySupport = CheckMultiplaneOverlaySupport;
     out->pfnPresentMultiplaneOverlay = PresentMultiplaneOverlay;
+}
+
+// BD-223: the WDDM 1.3 table. Slots 0 to 10 are the DXGI1_2 ones and the D3D11_1 fill writes them; its own
+// four overlay slots do not have the WDDM 1.3 meaning in every position (slot 12 is the group caps here and slot
+// 13 is reserved), so the overlay block and the two WDDM 1.3 entries are written here, each by name.
+void FillDxgiFuncs13(DXGI1_3_DDI_BASE_FUNCTIONS *out, const DXGI_DDI_BASE_FUNCTIONS &hosted)
+{
+    if (!out) return;
+    // The head through the D3D11_1 fill, so that slot 7 keeps the hosted driver's own entry under the same
+    // rule. The fill reads its output's prior slot 7, so the head is copied out, filled and copied back:
+    // DXGI1_2_DDI_BASE_FUNCTIONS is the first 15 slots of this struct (front-adapter.h holds the offsets of the
+    // overlay slots), and its last four are overwritten below.
+    DXGI1_2_DDI_BASE_FUNCTIONS head;
+    memcpy(&head, out, sizeof(head));
+    FillDxgiFuncs(&head, hosted);
+    memcpy(out, &head, sizeof(head));
+    // 11 .. 15: the WDDM 1.3 overlay block.
+    out->pfnGetMultiplaneOverlayCaps = GetMultiplaneOverlayCaps;
+    out->pfnGetMultiplaneOverlayGroupCaps = GetMultiplaneOverlayGroupCaps;
+    out->pfnReserved1 = Reserved1;
+    out->pfnPresentMultiplaneOverlay = PresentMultiplaneOverlay;
+    out->pfnReserved2 = Reserved2;
+    // 16 .. 17: the WDDM 1.3 present and the present-duration question.
+    out->pfnPresent1 = Present1;
+    out->pfnCheckPresentDurationSupport = CheckPresentDurationSupport;
 }
 
 }  // namespace bc250front

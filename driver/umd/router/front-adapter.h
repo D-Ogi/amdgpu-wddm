@@ -36,6 +36,7 @@
 #define BC250_FRONT_ADAPTER_H
 
 #include <windows.h>
+#include <cstddef>
 #pragma warning(push)
 #pragma warning(disable:4201)
 #define D3D10DDI_MINOR_HEADER_VERSION 2
@@ -58,6 +59,39 @@ struct Log {
 void LogLine(const Log *log, const char *text, int bytes);
 void LogPrintf(const Log *log, const char *format, ...);
 
+// BD-223: the interfaces the front publishes a table for on one adapter. D3D11_1 is the front that shipped
+// with M15.14. Wddm1_3 adds D3DWDDM1_3_DDI_SUPPORTED to the version list as well, and with it the
+// DXGI1_3_DDI_BASE_FUNCTIONS table, which is where the WDDM 1.3 multiplane-overlay entries of the
+// compositor's user-mode driver are: pfnGetMultiplaneOverlayCaps, pfnGetMultiplaneOverlayGroupCaps and
+// pfnPresentMultiplaneOverlay (dxgiddi.h, DXGI1_3_DDI_BASE_FUNCTIONS). A D3D11_1 table has no group-caps
+// slot and no clip rectangle in its plane attributes, so the overlay model of WDDM 1.3 needs the newer
+// interface and not only new bodies in the old table.
+enum class FrontLevel { D3D11_1, Wddm1_3 };
+
+// The router's FrontWddm13 value (router.cpp): absent follows the kernel driver, 1 asks for the WDDM 1.3
+// table on every start that has the front, 0 keeps the D3D11_1 front. Another value kind reads as Off,
+// which is the front of the release before, as every switch of the router fails safe.
+enum class FrontWddm13 { Follow, On, Off };
+
+// What Follow means: the WDDM 1.3 table rides only a start whose kernel driver admits an overlay plane.
+// The compositor then has a reason to ask the overlay entries, and a start without that admission keeps
+// exactly the table it had before BD-223. The trailer bit that says so is part of the BD-223 contract
+// (docs/design/mpo.md); until a kernel driver publishes it, Follow is the D3D11_1 front.
+inline bool FrontOverlayAdmitted(const bc250_scanout_caps &caps)
+{
+    (void)caps;
+    return false;
+}
+
+// The level a start gets, a pure function of the request and the trailer read at adapter open, so that the
+// host gate drives the production rule.
+inline FrontLevel FrontLevelFor(FrontWddm13 request, const bc250_scanout_caps &caps)
+{
+    if (request == FrontWddm13::On) return FrontLevel::Wddm1_3;
+    if (request == FrontWddm13::Off) return FrontLevel::D3D11_1;
+    return FrontOverlayAdmitted(caps) ? FrontLevel::Wddm1_3 : FrontLevel::D3D11_1;
+}
+
 // Per-adapter state. One per successful hosted OpenAdapter10_2 that the front took over. The hosted
 // adapter table is saved here because the front overwrites the runtime's copy of it.
 struct Adapter {
@@ -77,7 +111,15 @@ struct Adapter {
     // runtime passed no callback table: every read then answers with a zero trailer.
     D3D10DDI_HRTADAPTER rt_adapter;
     PFND3DDDI_QUERYADAPTERINFOCB query_adapter_info;
+    // The interfaces the front publishes on this adapter, latched at Install: GetSupportedVersions and
+    // CreateDevice must agree for the adapter's whole life, and the runtime may create a device long after
+    // it read the list.
+    FrontLevel level;
 };
+
+// Whether the front publishes a table for this interface on this adapter. Every other interface the
+// runtime may pick from GetSupportedVersions belongs to the hosted driver alone.
+bool FrontInterface(const Adapter *adapter, unsigned int interface_version);
 
 // M15.14 increment 2: the kernel driver's scan-out caps trailer, read now. The buffer is sized
 // BC250_SCANOUT_CAPS_TOTAL, because the kernel driver writes the trailer only into a buffer that holds all
@@ -104,6 +146,10 @@ struct Device {
     // so, and a runtime that was not told believes the object exists.
     D3D10DDI_HRTCORELAYER hRTCoreLayer;
     unsigned int interface_version;        // what the runtime asked for, before the front rewrote it
+    // BD-223: the runtime's DXGI callbacks of this device (DXGI_DDI_BASE_ARGS), kept for the overlay present,
+    // which the front calls itself (pfnPresentMultiplaneOverlayCb). The runtime owns the table and keeps it
+    // valid for the device's life ("The driver should record this pointer for later use", dxgiddi.h).
+    DXGI_DDI_BASE_CALLBACKS *dxgi_callbacks;
     unsigned int create_flags;             // D3D11DDI_CREATEDEVICE_FLAG_*: carries the pipeline level
     // Witnesses. Every one of them is a count, so a trial reads one line and knows what happened.
     volatile LONG direct_flip_calls;
@@ -119,7 +165,9 @@ static const unsigned int kDeviceMagic = 0x4E463242u;  // "B2FN"
 // hosted open succeeded; `Install` keeps the hosted five in the Adapter it returns.
 //   Install returns 0 when the front cannot take the adapter over (no 10_2 table, no free slot, an
 //   incomplete hosted table). The caller then leaves the hosted table alone: the route is unchanged.
-Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, const wchar_t *exe);
+//   `wddm13` is the router's FrontWddm13 request; the level it gives is latched in the Adapter.
+Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, const wchar_t *exe,
+                 FrontWddm13 wddm13);
 
 // Device lookup. Published by CreateDevice, cleared by DestroyDevice.
 Device *DeviceOf(D3D10DDI_HDEVICE device);
@@ -130,6 +178,12 @@ void RetireDevice(Device *record);
 // code rather than a copy of it (tests/test-router.cpp). Every slot of the output is written.
 void FillDeviceFuncs(D3D11_1DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNCS &hosted);
 void FillDxgiFuncs(DXGI1_2_DDI_BASE_FUNCTIONS *out, const DXGI_DDI_BASE_FUNCTIONS &hosted);
+// BD-223: the same two fills at the WDDM 1.3 interface. The device table is the D3D11_1 one, entry for entry
+// and in the same order, with two signatures changed and nine entries appended (FillDeviceFuncs13 in
+// front-device.cpp says which); the DXGI table is the DXGI1_2 one with the three overlay slots of WDDM 1.3,
+// two reserved slots, pfnPresent1 and pfnCheckPresentDurationSupport.
+void FillDeviceFuncs13(D3DWDDM1_3DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNCS &hosted);
+void FillDxgiFuncs13(DXGI1_3_DDI_BASE_FUNCTIONS *out, const DXGI_DDI_BASE_FUNCTIONS &hosted);
 
 // The entry counts the two fills cover. 157 and 15 are the counts of the WDK declaration; the device
 // table compiles to 155 members here because the two D3D10PSGP members are reserved for system use and
@@ -146,6 +200,34 @@ static_assert(sizeof(DXGI1_2_DDI_BASE_FUNCTIONS) == kDxgiEntries * sizeof(void *
               "revisited entry by entry");
 static_assert(sizeof(D3D10DDI_DEVICEFUNCS) == 101 * sizeof(void *),
               "D3D10DDI_DEVICEFUNCS changed shape: every field copy in FillDeviceFuncs must be rechecked");
+// The WDDM 1.3 shapes. FillDeviceFuncs13 copies the 155 slots of the D3D11_1 fill into the head of the WDDM 1.3
+// table, which is right only while the head is the same member list in the same order: in WDK 10.0.26100 the
+// two declarations name the same 155 members in the same order (d3d10umddi.h, D3D11_1DDI_DEVICEFUNCS and
+// D3DWDDM1_3DDI_DEVICEFUNCS), and the asserts below hold the ends of that head and the two members whose
+// signatures differ. The host gate compares every slot by offset as well (tests/test-router.cpp).
+static const size_t kDeviceEntries13 = 164;
+static const size_t kDxgiEntries13 = 18;
+static_assert(sizeof(D3DWDDM1_3DDI_DEVICEFUNCS) == kDeviceEntries13 * sizeof(void *),
+              "D3DWDDM1_3DDI_DEVICEFUNCS is no longer 164 function pointers: FillDeviceFuncs13 must be "
+              "revisited entry by entry");
+static_assert(offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnUpdateTileMappings) == sizeof(D3D11_1DDI_DEVICEFUNCS),
+              "the WDDM 1.3 device table no longer starts with the D3D11_1 table");
+static_assert(offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnClearView) == offsetof(D3D11_1DDI_DEVICEFUNCS, pfnClearView) &&
+              offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnRelocateDeviceFuncs) ==
+                  offsetof(D3D11_1DDI_DEVICEFUNCS, pfnRelocateDeviceFuncs) &&
+              offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnCheckMultisampleQualityLevels) ==
+                  offsetof(D3D11_1DDI_DEVICEFUNCS, pfnCheckMultisampleQualityLevels) &&
+              offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnCheckDirectFlipSupport) ==
+                  offsetof(D3D11_1DDI_DEVICEFUNCS, pfnCheckDirectFlipSupport),
+              "a member of the shared head moved between D3D11_1DDI_DEVICEFUNCS and D3DWDDM1_3DDI_DEVICEFUNCS");
+static_assert(sizeof(DXGI1_3_DDI_BASE_FUNCTIONS) == kDxgiEntries13 * sizeof(void *),
+              "DXGI1_3_DDI_BASE_FUNCTIONS is no longer 18 function pointers: FillDxgiFuncs13 must be "
+              "revisited entry by entry");
+static_assert(offsetof(DXGI1_3_DDI_BASE_FUNCTIONS, pfnGetMultiplaneOverlayCaps) ==
+                  offsetof(DXGI1_2_DDI_BASE_FUNCTIONS, pfnGetMultiplaneOverlayCaps) &&
+              offsetof(DXGI1_3_DDI_BASE_FUNCTIONS, pfnPresentMultiplaneOverlay) ==
+                  offsetof(DXGI1_2_DDI_BASE_FUNCTIONS, pfnPresentMultiplaneOverlay),
+              "the overlay slots moved between DXGI1_2 and DXGI1_3");
 
 // A refusal, from an entry a device at 3D pipeline level 10_0 cannot reach. Counted on every call and
 // logged on the first one: "the runtime called it at all" is the interesting fact, and a line per call

@@ -25,7 +25,14 @@
 //                                    front is finished and rides the desktop; 0 = off, which is the router that
 //                                    shipped, byte for byte, and is this feature's bisect switch; any other
 //                                    value kind = invalid, which is also off
-//   HKLM\SOFTWARE\amdgpu-wddm\AppRouter       (applications only; never read for dwm.exe or a HostedClients entry)
+//     FrontWddm13         REG_DWORD  BD-223: the interface the front publishes besides D3D11_1. Absent = follow
+//                                    the kernel driver: D3DWDDM1_3 and its DXGI1_3 table (the overlay entries of
+//                                    WDDM 1.3) only on a start whose scan-out caps trailer admits an overlay
+//                                    plane (front-adapter.h FrontOverlayAdmitted); 1 = on every start that has
+//                                    the front; 0 = the D3D11_1 front alone, this feature's bisect switch; any
+//                                    other value kind = 0. Read with DirectFlipFront and only when the front is
+//                                    on; the front's own log names the level (installed ... level=)
+//   HKLM\SOFTWARE\amdgpu-wddm\AppRouter      (applications only; never read for dwm.exe or a HostedClients entry)
 //     Mode                REG_SZ     cpu | allowlist | gpu-default. Absent = cpu (the application kill switch); any
 //                                    other string or value kind = invalid, which routes like cpu
 //     GpuUmdPath          REG_SZ     test loader only, as CpuUmdPath; the shipped router loads
@@ -141,6 +148,7 @@ struct Config {
     bool blit_on, interop_on;
     const char *switch_source; // "latched" (InteropLastState), "settings" (older KMD), "latched-invalid", "unreadable"
     Front front;
+    bc250front::FrontWddm13 wddm13;
 };
 
 // The application policy (AppRouter key), read only for processes the desktop decision does not route.
@@ -235,6 +243,13 @@ static void ReadConfig(Config *c)
         case Dword::Absent: c->front = Front::Requested; break;
         case Dword::Value: c->front = v ? Front::Requested : Front::Off; break;
         case Dword::Other: c->front = Front::Invalid; break;
+        }
+        // Fail safe the other way round from DirectFlipFront's absent value: a value that cannot be read
+        // keeps the D3D11_1 front, the one that shipped before BD-223.
+        switch (ReadDword(key, L"FrontWddm13", &v)) {
+        case Dword::Absent: c->wddm13 = bc250front::FrontWddm13::Follow; break;
+        case Dword::Value: c->wddm13 = v ? bc250front::FrontWddm13::On : bc250front::FrontWddm13::Off; break;
+        case Dword::Other: c->wddm13 = bc250front::FrontWddm13::Off; break;
         }
         DWORD bytes = ClientsBytes;
         if (RegGetValueW(key, nullptr, L"HostedClients", RRF_RT_REG_MULTI_SZ, nullptr, c->clients, &bytes) != ERROR_SUCCESS)
@@ -440,7 +455,7 @@ static const char *InstallFront(const Config &c, const char *entry, D3D10DDIARG_
     if (c.front == Front::Invalid) return "invalid";
     if (c.front != Front::Requested) return "off";
     if (strcmp(entry, "OpenAdapter10_2")) return "unavailable";
-    return bc250front::Install(args, c.log_directory, exe) ? "on" : "unavailable";
+    return bc250front::Install(args, c.log_directory, exe, c.wddm13) ? "on" : "unavailable";
 }
 
 // The application line: the same leading fields, gpu_hr in place of hosted_hr, then the AppRouter state, then the
