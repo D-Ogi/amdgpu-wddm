@@ -207,6 +207,9 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # BD-190: every setting the KMD reads is a catalog entry with the same code default. A name outside the catalog
  # reads as 0 at run time, which turned the boot logo and the lab diagnostics off without a log line.
  Check 'driver-state-settings' { & python "$repo\tools\state\check_settings.py" --root "$repo"; if($LASTEXITCODE -eq 0){ & python -I -m unittest discover -s "$repo\tools\state" -p 'test_check_settings.py' } }
+ # BD-262: the catalog of the previous published tester tag is in driver/state/history, so the state worker reads the
+ # removal record of that release by setting name. The release-set build runs the same check on each state worker row.
+ Check 'driver-state-history' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\driver-state-history").FullName; & python "$repo\tools\state\check_history.py" --repo "$repo"; if($LASTEXITCODE -eq 0){ & python -I -m unittest discover -s "$repo\tools\state" -p 'test_check_history.py' } }
  Check 'driver-state-x64' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x64" -Arch x64 }
  Check 'driver-state-x86' { & pwsh -NoProfile -File "$repo\tools\state\test.ps1" -Kits "$Kits" -Out "$Out\driver-state-x86" -Arch x86 }
  Check 'stored-fan-choice' { & pwsh -NoProfile -File "$repo\tools\state\test-fan-choice.ps1" -Kits "$Kits" -Out "$Out\stored-fan-choice" }
