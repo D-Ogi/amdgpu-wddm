@@ -134,6 +134,9 @@ struct PsoJob {
     PsoPlan plan;
     ID3D12RootSignature* root_ref = nullptr;            // the plan's root signature, one reference
     std::atomic<uint32_t> state{static_cast<uint32_t>(PsoState::Queued)};
+    // The thread that runs the job, stored under the pool's lock with Running: a consumer that waits names it to
+    // the engine (V14 of bc250_vkd3d_engine.h, BD-226).
+    std::atomic<uint32_t> runner{0};
     ID3D12PipelineState* pso = nullptr;                  // the runner's result, before the Done store
     HRESULT hr = S_OK;                                   // the engine create's result, likewise
     bool compiled = false;                              // the run hook called its body; only the runner writes
@@ -169,6 +172,9 @@ struct PsoAsync {
     std::atomic<uint64_t> waits{0};                     // consumers that waited for a running job
     std::atomic<uint64_t> wait_qpc{0};                  // their waiting time together
     std::atomic<uint64_t> longest_wait_qpc{0};
+    std::atomic<uint64_t> consumer_qpc{0};              // the compiles a consumer made on its own thread, together
+    std::atomic<uint64_t> longest_consumer_qpc{0};
+    std::atomic<uint64_t> urgent{0};                    // creations marked urgent on the engine device (V14)
     std::atomic<uint64_t> failures{0};                  // engine creates that failed after the S_OK
     std::atomic<uint64_t> retried{0};                   // once per failed pool job, on a consumer thread
     std::atomic<uint64_t> retry_failures{0};            // separate from failures, which counts the first creates
@@ -191,10 +197,12 @@ HRESULT pso_create_now(DeviceContext* context, PsoPlan& plan, ID3D12PipelineStat
 PsoJob* pso_submit(DeviceContext* context, PsoPlan&& plan) noexcept;
 
 // The pipeline of a job, on a DDI thread: runs the job here when no worker has started it, else waits for the
-// worker. A failed pool create gets one synchronous retry; concurrent consumers share that result. A queued job
-// first compiled by its consumer is already synchronous and is not retried. *hr gets the final engine result
-// (S_OK with a pipeline, or the failure, with null). Calls the
-// policy's drained hook, so a device removal a pool thread saw is reported from this thread.
+// worker. Either way the frame now waits for that creation, so it is marked urgent on the engine device first (V14
+// of bc250_vkd3d_engine.h): the engine's compile limiter then admits it at once instead of behind the pool's other
+// compiles (BD-226). A failed pool create gets one synchronous retry; concurrent consumers share that result. A
+// queued job first compiled by its consumer is already synchronous and is not retried. *hr gets the final engine
+// result (S_OK with a pipeline, or the failure, with null). Calls the policy's drained hook, so a device removal a
+// pool thread saw is reported from this thread.
 ID3D12PipelineState* pso_resolve(PsoJob* job, HRESULT* hr) noexcept;
 
 // The record's destroy: ends the job (takes it over and ends it without a create when it is still queued, waits

@@ -67,17 +67,21 @@ void write_summary(PsoAsync* a, const char* reason, uint32_t stranded) noexcept 
     const uint64_t waits = a->waits.load(std::memory_order_relaxed);
     const uint64_t wait_us = a->wait_qpc.load(std::memory_order_relaxed) * 1000000 / a->qpf;
     const uint64_t longest_us = a->longest_wait_qpc.load(std::memory_order_relaxed) * 1000000 / a->qpf;
+    const uint64_t consumer_us = a->consumer_qpc.load(std::memory_order_relaxed) * 1000000 / a->qpf;
+    const uint64_t longest_consumer_us = a->longest_consumer_qpc.load(std::memory_order_relaxed) * 1000000 / a->qpf;
     pso_log(a, "pso summary (%s, device %u): %llu queued, %llu synchronous, %llu by a pool thread, "
-               "%llu by the consumer, %llu waits (%llu us, longest %llu us), %llu failures, "
-               "%llu ended without a create, %u stranded, %u outstanding, %llu retries, %llu retry failures, "
-               "qpc=%llu",
+               "%llu by the consumer (%llu us, longest %llu us), %llu waits (%llu us, longest %llu us), "
+               "%llu urgent, %llu failures, %llu ended without a create, %u stranded, %u outstanding, "
+               "%llu retries, %llu retry failures, qpc=%llu",
             reason, a->number,
             static_cast<unsigned long long>(a->queued.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->synchronous.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->by_worker.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->by_consumer.load(std::memory_order_relaxed)),
+            static_cast<unsigned long long>(consumer_us), static_cast<unsigned long long>(longest_consumer_us),
             static_cast<unsigned long long>(waits), static_cast<unsigned long long>(wait_us),
             static_cast<unsigned long long>(longest_us),
+            static_cast<unsigned long long>(a->urgent.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->failures.load(std::memory_order_relaxed)),
             static_cast<unsigned long long>(a->aborted.load(std::memory_order_relaxed)), stranded,
             a->outstanding.load(std::memory_order_relaxed),
@@ -165,6 +169,7 @@ bool claim_locked(PsoJob* job) noexcept {
     const bool linked = g_pool.head == job || job->prev || job->next;
     if (!linked) return false;
     unlink_locked(job);
+    job->runner.store(GetCurrentThreadId(), std::memory_order_relaxed);
     job->state.store(static_cast<uint32_t>(PsoState::Running), std::memory_order_relaxed);
     return true;
 }
@@ -238,6 +243,7 @@ PsoJob* take_job() noexcept {
     for (;;) {
         if (PsoJob* job = g_pool.head) {
             unlink_locked(job);
+            job->runner.store(GetCurrentThreadId(), std::memory_order_relaxed);
             job->state.store(static_cast<uint32_t>(PsoState::Running), std::memory_order_relaxed);
             ReleaseSRWLockExclusive(&g_pool.lock);
             return job;
@@ -343,22 +349,55 @@ PsoJob* pso_submit(DeviceContext* context, PsoPlan&& plan) noexcept {
 }
 
 namespace {
+void add_time(std::atomic<uint64_t>& total, std::atomic<uint64_t>& longest, uint64_t ticks) noexcept {
+    total.fetch_add(ticks, std::memory_order_relaxed);
+    uint64_t seen = longest.load(std::memory_order_relaxed);
+    while (ticks > seen && !longest.compare_exchange_weak(seen, ticks, std::memory_order_relaxed)) {
+    }
+}
+
+// V14 of bc250_vkd3d_engine.h (BD-226): the creation that thread makes now, or begins next, is one the frame waits
+// for, and the engine's compile limiter admits it at once, past its bound and its thermal band; urgent false clears
+// the mark. The mark ends with that creation in the engine. Before this, a pool compile that a consumer waited for
+// stood in the limiter's arrival order behind up to ten other pool compiles, one at a time in the thermal band: the
+// render thread of Clair Obscur: Expedition 33 waited up to 831 ms for one pipeline. A mark that comes after the
+// runner has finished the job makes the runner's next creation urgent once, which costs one pool compile its place in
+// the order and nothing else. An engine before V14 stores the data and gives no urgency.
+void urge(DeviceContext* c, PsoAsync* a, uint32_t thread, bool urgent) noexcept {
+    static constexpr GUID kCompileUrgency = BC250_VKD3D_COMPILE_URGENCY_GUID_INIT;
+    if (!thread || !c->device) return;
+    const BC250_VKD3D_COMPILE_URGENCY data{sizeof(data), thread, urgent ? 1u : 0u};
+    if (SUCCEEDED(c->device->SetPrivateData(kCompileUrgency, sizeof(data), &data)) && urgent && a)
+        a->urgent.fetch_add(1, std::memory_order_relaxed);
+}
+
+// The engine create of a job on the consumer's own thread, marked urgent for its length: the frame waits for it.
+// The consumer clears its own mark afterwards, for a create that the engine refused before its limiter saw it.
+void run_urgent(PsoJob* job, PsoAsync* a) noexcept {
+    DeviceContext* c = job->context;
+    const uint32_t self = GetCurrentThreadId();
+    urge(c, a, self, true);
+    const uint64_t start = qpc();
+    run_claimed(job);
+    add_time(a->consumer_qpc, a->longest_consumer_qpc, qpc() - start);
+    urge(c, a, self, false);
+}
+
 // Waits for a job that another thread is running. On the pool's generation word, with a bound, so that a wake lost
-// between the Done store and the bump is a latency and never a hang (P3).
-void wait_for_done(PsoJob* job, PsoAsync* a) noexcept {
+// between the Done store and the bump is a latency and never a hang (P3). urgent: a consumer that needs the pipeline
+// now names the runner to the engine first (urge); a destroy does not, because nobody will use the pipeline.
+void wait_for_done(PsoJob* job, PsoAsync* a, bool urgent) noexcept {
     const uint64_t start = qpc();
     a->waits.fetch_add(1, std::memory_order_relaxed);
     bump(a);                                    // a wait moves the counters: the next line has something to say
+    if (urgent && job->state.load(std::memory_order_acquire) != static_cast<uint32_t>(PsoState::Done))
+        urge(job->context, a, job->runner.load(std::memory_order_relaxed), true);
     uint32_t seen = g_pool.generation.load(std::memory_order_acquire);
     while (job->state.load(std::memory_order_acquire) != static_cast<uint32_t>(PsoState::Done)) {
         WaitOnAddress(&g_pool.generation, &seen, sizeof(seen), 20);
         seen = g_pool.generation.load(std::memory_order_acquire);
     }
-    const uint64_t ticks = qpc() - start;
-    a->wait_qpc.fetch_add(ticks, std::memory_order_relaxed);
-    uint64_t longest = a->longest_wait_qpc.load(std::memory_order_relaxed);
-    while (ticks > longest && !a->longest_wait_qpc.compare_exchange_weak(longest, ticks, std::memory_order_relaxed)) {
-    }
+    add_time(a->wait_qpc, a->longest_wait_qpc, qpc() - start);
 }
 
 // The initial result is immutable once state == Done. A separate publication word keeps concurrent consumers
@@ -374,13 +413,7 @@ void wait_for_retry(PsoJob* job, PsoAsync* a) noexcept {
         WaitOnAddress(&g_pool.generation, &seen, sizeof(seen), 20);
         seen = g_pool.generation.load(std::memory_order_acquire);
     }
-    if (a) {
-        const uint64_t ticks = qpc() - start;
-        a->wait_qpc.fetch_add(ticks, std::memory_order_relaxed);
-        uint64_t longest = a->longest_wait_qpc.load(std::memory_order_relaxed);
-        while (ticks > longest && !a->longest_wait_qpc.compare_exchange_weak(longest, ticks, std::memory_order_relaxed)) {
-        }
-    }
+    if (a) add_time(a->wait_qpc, a->longest_wait_qpc, qpc() - start);
 }
 
 void resolve_retry(PsoJob* job) noexcept {
@@ -388,7 +421,10 @@ void resolve_retry(PsoJob* job) noexcept {
     if (state == static_cast<uint32_t>(PsoRetry::Available) &&
         job->retry.compare_exchange_strong(state, static_cast<uint32_t>(PsoRetry::Running), std::memory_order_acq_rel)) {
         PsoAsync* a = job->context->pso;
+        const uint32_t self = GetCurrentThreadId();
+        urge(job->context, a, self, true);       // a consumer waits for the retry, as for run_urgent
         job->retry_hr = pso_create_now(job->context, job->plan, &job->retry_pso);
+        urge(job->context, a, self, false);
         log_create(job, "retry", job->retry_hr);    // both outcomes, before publishing the result
         if (a) {
             a->retried.fetch_add(1, std::memory_order_relaxed);
@@ -413,12 +449,12 @@ ID3D12PipelineState* pso_resolve(PsoJob* job, HRESULT* hr) noexcept {
             log_refusal("pso: job %llu has no policy to finish it", static_cast<unsigned long long>(job->id));
         } else if (claim(job)) {
             a->by_consumer.fetch_add(1, std::memory_order_relaxed);
-            run_claimed(job);
+            run_urgent(job, a);
         } else {
-            wait_for_done(job, a);
+            wait_for_done(job, a, true);
         }
     }
-    resolve_retry(job);                          // on this consumer thread, at most once for a failed pool create
+    resolve_retry(job);                         // on this consumer thread, at most once for a failed pool create
     // A pool thread cannot call the runtime's error callback. This is a DDI thread with no lock held, which is
     // where the shell reports what the thread that compiled could not (the replay drain hook's contract). Outside
     // the branch above: a compile that failed while no consumer was waiting is reported by the first consumer that
@@ -451,7 +487,7 @@ void pso_destroy(PsoJob* job) noexcept {
             a->outstanding.fetch_sub(1, std::memory_order_relaxed);
             publish(job, nullptr, S_OK);
         } else {
-            wait_for_done(job, a);
+            wait_for_done(job, a, false);
         }
     }
     if (job->retry.load(std::memory_order_acquire) == static_cast<uint32_t>(PsoRetry::Running))

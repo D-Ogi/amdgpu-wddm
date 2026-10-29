@@ -791,7 +791,8 @@ HRESULT set_replay_policy(DeviceContext* c, const ReplayPolicy* policy) noexcept
 // rest is what the device's own waits took of it. waits/wait_ms and kinds: the ring waits (an API thread blocked
 // until the worker passed its entry, so the engine was inside that entry) by drain kind as count/ms; last_long_*:
 // the latest long wait's length and entry; pso_*: binds that waited for a pipeline the pool was still compiling, and
-// pipelines the consumer compiled itself. ms far above wait_ms + pso_ms: the frame was long for a reason the shell
+// pipelines the consumer compiled itself and their time (pso_consumer_ms). ms far above wait_ms + pso_ms +
+// pso_consumer_ms: the frame was long for a reason the shell
 // does not time (the application, a kernel call of the shell, the engine inside a direct call). The mark is per
 // device: the counters are read, their deltas against the mark printed, the mark moved; nothing is reset.
 void present_frame(DeviceContext* context) noexcept {
@@ -817,6 +818,7 @@ void present_frame(DeviceContext* context) noexcept {
     const uint64_t pso_waits = pso ? pso->waits.load(std::memory_order_relaxed) : 0;
     const uint64_t pso_qpc = pso ? pso->wait_qpc.load(std::memory_order_relaxed) : 0;
     const uint64_t pso_consumer = pso ? pso->by_consumer.load(std::memory_order_relaxed) : 0;
+    const uint64_t pso_consumer_qpc = pso ? pso->consumer_qpc.load(std::memory_order_relaxed) : 0;
     if (before && now - before >= rp->qpf * kFrameStallMilliseconds / 1000) {
         const uint64_t n = ++f.stalls;
         if (n <= kFrameStallLines || power_of_two(n)) {
@@ -832,7 +834,8 @@ void present_frame(DeviceContext* context) noexcept {
                 used += static_cast<size_t>(w);
             }
             replay_log(rp, "frame stall: n=%llu ms=%.1f qpc=%llu thread=%lu waits=%llu wait_ms=%.1f long_waits=%llu "
-                       "last_long_ms=%.1f last_long_rva=0x%llx pso_waits=%llu pso_ms=%.1f pso_consumer=%llu kinds:%s",
+                       "last_long_ms=%.1f last_long_rva=0x%llx pso_waits=%llu pso_ms=%.1f pso_consumer=%llu "
+                       "pso_consumer_ms=%.1f kinds:%s",
                        static_cast<unsigned long long>(n), milliseconds(rp, now - before),
                        static_cast<unsigned long long>(now), GetCurrentThreadId(),
                        static_cast<unsigned long long>(sum_waits), milliseconds(rp, sum_qpc),
@@ -841,7 +844,11 @@ void present_frame(DeviceContext* context) noexcept {
                        rva_of(rp->last_long_run.load(std::memory_order_relaxed)),
                        static_cast<unsigned long long>(pso_waits - f.pso_waits),
                        pso ? static_cast<double>(pso_qpc - f.pso_wait_qpc) * 1000.0 / static_cast<double>(pso->qpf) : 0.0,
-                       static_cast<unsigned long long>(pso_consumer - f.pso_consumer), text);
+                       static_cast<unsigned long long>(pso_consumer - f.pso_consumer),
+                       pso ? static_cast<double>(pso_consumer_qpc - f.pso_consumer_qpc) * 1000.0 /
+                                 static_cast<double>(pso->qpf)
+                           : 0.0,
+                       text);
         }
     }
     for (size_t k = 0; k < kinds; ++k) {
@@ -852,6 +859,7 @@ void present_frame(DeviceContext* context) noexcept {
     f.pso_waits = pso_waits;
     f.pso_wait_qpc = pso_qpc;
     f.pso_consumer = pso_consumer;
+    f.pso_consumer_qpc = pso_consumer_qpc;
     ReleaseSRWLockExclusive(&f.lock);
 }
 

@@ -932,8 +932,10 @@ Gate g_hook_return;                            // BD-180: hold a hook after its 
 std::atomic<unsigned> g_runs{0};                // run hook entries: jobs handed to a pool thread
 std::atomic<unsigned> g_bodies{0};              // bodies completed, whether or not the hook has returned
 std::atomic<unsigned> g_drains{0};              // drained hook calls, every one of them on a DDI thread
+std::atomic<DWORD> g_run_thread{0};             // the pool thread of the latest run hook entry
 
 void APIENTRY async_run(void*, PsoBody body, void* job) {
+    g_run_thread = GetCurrentThreadId();
     ++g_runs;
     g_gate.wait();
     body(job);
@@ -989,6 +991,31 @@ public:
     std::atomic<long> result{S_OK};             // what a create answers, as an HRESULT
     Gate* create_gate = nullptr;               // set before the test starts its consumer threads
     std::vector<DWORD> create_threads;         // under lock, one per create
+    // BD-226: the urgent marks of V14 (bc250_vkd3d_engine.h), as the engine receives them through SetPrivateData.
+    struct Urge {
+        DWORD from;                             // the thread that set the mark
+        uint32_t thread;                        // the thread it names
+        uint32_t urgent;
+    };
+    std::vector<Urge> urges;                    // under lock, in the order they came
+    std::atomic<unsigned> urge_count{0};
+    std::atomic<unsigned> bad_private_data{0};  // any other private data, or a V14 payload of another shape
+
+    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID guid, UINT size, const void* data) override {
+        static constexpr GUID kUrgency = BC250_VKD3D_COMPILE_URGENCY_GUID_INIT;
+        const auto* urgency = static_cast<const BC250_VKD3D_COMPILE_URGENCY*>(data);
+        if (guid != kUrgency || size != sizeof(BC250_VKD3D_COMPILE_URGENCY) || !urgency ||
+            urgency->Size != sizeof(BC250_VKD3D_COMPILE_URGENCY) || !urgency->ThreadId) {
+            ++bad_private_data;
+            return E_INVALIDARG;
+        }
+        {
+            std::lock_guard<std::mutex> held(lock);
+            urges.push_back({GetCurrentThreadId(), urgency->ThreadId, urgency->Urgent});
+        }
+        ++urge_count;
+        return S_OK;
+    }
 
     HRESULT STDMETHODCALLTYPE CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* desc, REFIID riid,
                                                  void** out) override {
@@ -1875,6 +1902,8 @@ int main() {
         const PsoAsync* counters = f.context.pso;
         const uint64_t by_consumer = counters ? counters->by_consumer.load() : 0;
         const uint64_t waits = counters ? counters->waits.load() : 0;
+        const uint64_t urgent = counters ? counters->urgent.load() : 0;
+        const uint64_t consumer_qpc = counters ? counters->consumer_qpc.load() : 0;
         g_gate.release();
         check(held_hr == S_OK && mine_hr == S_OK && parked && stored == S_OK && by_consumer == 1 && !waits &&
                   creates_after == 1 && g_runs.load() == 1,
@@ -1882,9 +1911,87 @@ int main() {
               "(stored %08lx, by the consumer %llu, waits %llu, engine creates %u, run hooks %u)",
               static_cast<unsigned long>(stored), static_cast<unsigned long long>(by_consumer),
               static_cast<unsigned long long>(waits), creates_after, g_runs.load());
+        // BD-226: the frame waits for that compile, so the consumer marks its own thread urgent for the length of
+        // the engine create and clears the mark after it; the time goes into the consumer's own counter.
+        std::vector<AsyncDevice::Urge> urges;
+        {
+            std::lock_guard<std::mutex> held_lock(device.lock);
+            urges = device.urges;
+        }
+        const DWORD self = GetCurrentThreadId();
+        check(urges.size() == 2 && urges[0].from == self && urges[0].thread == self && urges[0].urgent == 1 &&
+                  urges[1].from == self && urges[1].thread == self && urges[1].urgent == 0 && urgent == 1 &&
+                  consumer_qpc > 0 && !device.bad_private_data.load(),
+              "async consumer before worker: the consumer's own compile is marked urgent and cleared after it "
+              "(%zu marks, %llu counted urgent, consumer ticks %llu, other private data %u)", urges.size(),
+              static_cast<unsigned long long>(urgent), static_cast<unsigned long long>(consumer_qpc),
+              device.bad_private_data.load());
         g_core.pfnDestroyPipelineState(f.h, mine);
         g_core.pfnDestroyPipelineState(f.h, held);
         g_core.pfnDestroyPipelineLibrary(f.h, library);
+    }
+
+    // 7u. BD-226: a consumer that needs a pipeline a pool thread is compiling names that pool thread to the engine
+    // (V14), so that the engine's compile limiter admits it at once. A destroy of a running job waits too, but
+    // nobody needs that pipeline, so it names nobody.
+    {
+        AsyncDevice device;
+        Fixture f(&device);
+        g_runs = 0;
+        g_run_thread = 0;
+        Async async(&f.context, 1);
+        g_gate.shut();                                               // the pool thread claims the job and stops
+        const D3D12DDIARG_CREATE_PIPELINE_STATE_0075 args = graphics_args(f, FALSE);
+        D3D12DDI_HPIPELINESTATE pso{};
+        const HRESULT hr = create(f, args, pso);
+        const bool parked = until([] { return g_runs.load() == 1; });
+        const DWORD runner = g_run_thread.load();
+        // The engine of this test answers the mark by letting the compile go, as the limiter does.
+        std::thread engine([&device] {
+            (void)until([&device] { return device.urge_count.load() >= 1; });
+            g_gate.release();
+        });
+        const D3D12DDI_HPIPELINELIBRARY library = f.pipeline_library(nullptr, 0);
+        const HRESULT stored = g_core.pfnAddPipelineStateToLibrary(f.h, library, pso, 0);
+        g_core.pfnCalcSerializedLibrarySize(f.h, library);           // the consumer waits for the pool thread here
+        engine.join();
+        const PsoAsync* counters = f.context.pso;
+        const uint64_t waits = counters ? counters->waits.load() : 0;
+        const uint64_t urgent = counters ? counters->urgent.load() : 0;
+        const uint64_t by_consumer = counters ? counters->by_consumer.load() : 0;
+        std::vector<AsyncDevice::Urge> urges;
+        {
+            std::lock_guard<std::mutex> held_lock(device.lock);
+            urges = device.urges;
+        }
+        check(hr == S_OK && parked && runner && stored == S_OK && waits == 1 && by_consumer == 0 && urgent == 1 &&
+                  urges.size() == 1 && urges[0].from == GetCurrentThreadId() && urges[0].thread == runner &&
+                  urges[0].urgent == 1 && !device.bad_private_data.load(),
+              "async wait for a running job: the consumer marks the pool thread that runs it urgent (hr %08lx, "
+              "parked %d, stored %08lx, waits %llu, by the consumer %llu, %llu counted urgent, %zu marks, first "
+              "names thread %lu, runner %lu)", static_cast<unsigned long>(hr), parked ? 1 : 0,
+              static_cast<unsigned long>(stored), static_cast<unsigned long long>(waits),
+              static_cast<unsigned long long>(by_consumer), static_cast<unsigned long long>(urgent), urges.size(),
+              urges.empty() ? 0ul : static_cast<unsigned long>(urges[0].thread), static_cast<unsigned long>(runner));
+        g_core.pfnDestroyPipelineState(f.h, pso);
+        g_core.pfnDestroyPipelineLibrary(f.h, library);
+
+        // The destroy of a job a pool thread is still compiling.
+        g_runs = 0;
+        g_gate.shut();
+        D3D12DDI_HPIPELINESTATE dropped{};
+        const HRESULT dropped_hr = create(f, graphics_args(f, FALSE), dropped);
+        const bool dropped_parked = until([] { return g_runs.load() == 1; });
+        std::thread opener([] {
+            Sleep(20);
+            g_gate.release();
+        });
+        g_core.pfnDestroyPipelineState(f.h, dropped);                // waits for the pool thread
+        opener.join();
+        const unsigned marks_after = device.urge_count.load();
+        check(dropped_hr == S_OK && dropped_parked && marks_after == 1,
+              "async destroy of a running job: the destroy waits and names nobody urgent (hr %08lx, parked %d, "
+              "marks %u)", static_cast<unsigned long>(dropped_hr), dropped_parked ? 1 : 0, marks_after);
     }
 
     // 7g. A compile that fails after the create answered S_OK: every consumer gets a failure of its own, the
