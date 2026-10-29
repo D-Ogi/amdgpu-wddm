@@ -18,10 +18,26 @@ static unsigned long long div64_u64_rem(unsigned long long n,
 }
 #include "generated/dc_scaler_filters.inc"
 
+const uint16_t* Bc250ScalerFilterTable(uint32_t Taps, uint32_t Ratio19)
+{
+    struct fixed31_32 ratio;
+    if (!Ratio19 || Ratio19 >= (8u << 19)) return NULL;
+    ratio.value = (long long)Ratio19 << 13;
+    switch (Taps) {
+    case 2: return get_filter_2tap_64p();
+    case 3: return get_filter_3tap_64p(ratio);
+    case 4: return get_filter_4tap_64p(ratio);
+    case 5: return get_filter_5tap_64p(ratio);
+    case 6: return get_filter_6tap_64p(ratio);
+    case 7: return get_filter_7tap_64p(ratio);
+    case 8: return get_filter_8tap_64p(ratio);
+    default: return NULL;
+    }
+}
+
 int Bc250ScalerFilterPlan(uint32_t Kind, uint32_t Taps, uint32_t Ratio19,
                          BC250_SCALER_FILTER_PLAN* Plan)
 {
-    struct fixed31_32 ratio;
     const uint16_t* coefficients = NULL;
     uint32_t phase, tap, stride;
     if (!Plan) return 0;
@@ -34,17 +50,9 @@ int Bc250ScalerFilterPlan(uint32_t Kind, uint32_t Taps, uint32_t Ratio19,
         return 1;
     }
     if (Kind == BC250_SCALER_FILTER_LINEAR && Taps != 2) return 0;
-    ratio.value = (long long)Ratio19 << 13;
     if (Kind == BC250_SCALER_FILTER_AMD) {
-        switch (Taps) {
-        case 2: coefficients = get_filter_2tap_64p(); break;
-        case 3: coefficients = get_filter_3tap_64p(ratio); break;
-        case 4: coefficients = get_filter_4tap_64p(ratio); break;
-        case 5: coefficients = get_filter_5tap_64p(ratio); break;
-        case 6: coefficients = get_filter_6tap_64p(ratio); break;
-        case 7: coefficients = get_filter_7tap_64p(ratio); break;
-        case 8: coefficients = get_filter_8tap_64p(ratio); break;
-        }
+        coefficients = Bc250ScalerFilterTable(Taps, Ratio19);
+        if (!coefficients) return 0;
     }
     stride = ((Taps + 1) / 2) * 2;
     Plan->Taps = Taps;

@@ -23,3 +23,9 @@ typedef struct BC250_SCALER_FILTER_PLAN {
 // Refusal clears the entire plan. NULL output is refused.
 int Bc250ScalerFilterPlan(uint32_t Kind, uint32_t Taps, uint32_t Ratio19,
                          BC250_SCALER_FILTER_PLAN* Plan);
+
+// AMD's own table for Taps 2..8 and a 3.19 Ratio, nonzero and below 8
+// (dce_scl_filters.c get_filter_<n>tap_64p): 33 phases of Taps coefficients,
+// phase-major, in the encoding the coefficient RAM takes. NULL otherwise.
+// A pointer into constant data: no copy, safe at any IRQL.
+const uint16_t* Bc250ScalerFilterTable(uint32_t Taps, uint32_t Ratio19);

@@ -13,6 +13,7 @@
 #include "dcn_2_0_1_sh_mask.h"
 #include "../dcn_scale.h"
 #include "../edid.h"
+#include "../../shim/bc250_scaler_filter.h"
 #include "edid_lab_redacted.h"
 
 static int g_failures, g_checks;
@@ -151,6 +152,37 @@ static void TestFilterTable(void)
     }
     CHECK(g_Bc250SclFilter4tapUpscale[1] == 0x1000);    // phase 0 is the identity tap
     CHECK(g_Bc250SclFilter4tapUpscale[131] == 0x3F04);  // the last entry of dce_scl_filters.c line 483
+}
+
+// BD-223 stage S2: the writer takes get_filter_4tap_64p's table of the ratio (the shim's copy of dce_scl_filters.c).
+// Below 1 it is the upscale table, the same words as scl_filter_4tap_64p_upscale.inc; from 1 the downscale tables
+// 116, 149 and 183 at the boundaries 4/3 and 5/3. 4/3 is 699050.67 in 19 fraction bits, 5/3 873813.33.
+static void TestFilterSelection(void)
+{
+    const unsigned short* up = Bc250ScalerFilterTable(4, 419430ul);
+    const unsigned short* t116 = Bc250ScalerFilterTable(4, 1ul << 19);
+    const unsigned short* t149 = Bc250ScalerFilterTable(4, 699051ul);
+    const unsigned short* t183 = Bc250ScalerFilterTable(4, 873814ul);
+    const unsigned short* each[3];
+    unsigned long i, p, t;
+
+    CHECK(up && t116 && t149 && t183);
+    if (!up || !t116 || !t149 || !t183) return;
+    CHECK(memcmp(up, g_Bc250SclFilter4tapUpscale, sizeof(g_Bc250SclFilter4tapUpscale)) == 0);
+    CHECK(Bc250ScalerFilterTable(4, (1ul << 19) - 1ul) == up);
+    CHECK(t116 != up && t149 != t116 && t183 != t149 && t183 != up);
+    CHECK(Bc250ScalerFilterTable(4, 699050ul) == t116);         // 1.333332, below 4/3
+    CHECK(Bc250ScalerFilterTable(4, 873813ul) == t149);         // 1.666666, below 5/3
+    CHECK(Bc250ScalerFilterTable(4, 4ul << 19) == t183);
+    CHECK(Bc250ScalerFilterTable(4, 0) == NULL && Bc250ScalerFilterTable(4, 8ul << 19) == NULL);
+    CHECK(Bc250ScalerFilterTable(1, 1ul << 19) == NULL && Bc250ScalerFilterTable(9, 1ul << 19) == NULL);
+    each[0] = t116; each[1] = t149; each[2] = t183;
+    for (i = 0; i < 3; i++)
+        for (p = 0; p < BC250_SCL_PHASES; p++) {
+            int sum = 0;
+            for (t = 0; t < BC250_SCL_TAPS; t++) sum += Sign14(each[i][p * BC250_SCL_TAPS + t]);
+            CHECK(sum == 4096);
+        }
 }
 
 static void TestLayouts(void)
@@ -543,10 +575,70 @@ static void TestPlanRecout(void)
     CHECK(Bc250ScalerPlanRecout(64, 64, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
     r.X = 0; r.Y = 0; r.Width = 0; r.Height = 1200;
     CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_INVALID);
-    r.Width = 1279; r.Height = 1200;
+    // Stage S2: down to a quarter, with 4 taps; under a quarter is refused.
+    r.Width = 320; r.Height = 180;
+    CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == 0);
+    CHECK(a.RatioH19 == (4ul << 19) && a.RatioV19 == (4ul << 19) && a.TapsH == 4 && a.TapsV == 4);
+    CHECK(a.Viewport.Width == 1280 && a.Viewport.Height == 720);
+    r.Width = 319; r.Height = 180;
     CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
-    r.Width = 1920; r.Height = 719;
+    r.Width = 320; r.Height = 179;
     CHECK(Bc250ScalerPlanRecout(1280, 720, 1920, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    // 2560x1440 on the whole 1920x1200: 4/3 across (truncated below it), 1.2 down; the source read whole.
+    r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(2560, 1440, 1920, 1200, &r, &a) == 0);
+    CHECK(a.RatioH19 == 699050ul && a.RatioV19 == 629145ul);
+    CHECK(a.TapsH == 4 && a.TapsV == 4 && a.TapsHC == 2 && a.TapsVC == 2 && a.FilterH && a.FilterV);
+    CHECK(a.Viewport.X == 0 && a.Viewport.Y == 0 && a.Viewport.Width == 2560 && a.Viewport.Height == 1440);
+    CHECK(a.DsclMode == 1 && a.InitH19 == ((699050ul + (5ul << 19)) >> 1));
+    // One direction down, the other 1:1: the 1:1 direction keeps 1 tap and no filter.
+    r.Width = 1920; r.Height = 1080;
+    CHECK(Bc250ScalerPlanRecout(2560, 1080, 1920, 1200, &r, &a) == 0);
+    CHECK(a.TapsV == 1 && !a.FilterV && a.TapsH == 4 && a.FilterH);
+    // The line buffer holds lines of the narrower of the viewport and the recout (dscl2_calc_lb_num_partitions), so
+    // 3840 across into 1920 fits 4 times down vertically: 2744 / ceil(1920 / 6) = 8 partitions of config 0.
+    r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(3840, 4800, 1920, 1200, &r, &a) == 0 && a.TapsV == 4 && a.LbConfig == 0);
+    // 4 times down vertically needs 4 taps + ceil(4) - 2 = 6 partitions (dpp1_dscl_is_lb_conf_valid): a line of
+    // 2742 pixels leaves 2744 / 457 = 6, one of 2748 leaves 2744 / 458 = 5, and that plan is refused.
+    r.Width = 2742; r.Height = 300;
+    CHECK(Bc250ScalerPlanRecout(2742, 1200, 2742, 1200, &r, &a) == 0 && a.TapsH == 1 && a.TapsV == 4);
+    r.Width = 2748;
+    CHECK(Bc250ScalerPlanRecout(2748, 1200, 2748, 1200, &r, &a) == BC250_DISP_STATUS_NOT_SUPPORTED);
+    // A refused plan carries no ratio, tap or filter (it programs nothing).
+    CHECK(a.TapsH == 0 && a.TapsV == 0 && !a.FilterH && !a.FilterV && a.RatioH19 == 0);
+}
+
+// BD-223 stage S2: the downscale program loads the table of each direction's ratio, not the upscale table.
+static void TestProgramDownscale(void)
+{
+    BC250_DISP_IO io;
+    BC250_SCALER_PLAN p;
+    BC250_SCALER_RESULT res;
+    BC250_RECT r;
+    const unsigned short *h, *v;
+    unsigned long i, ph;
+
+    r.X = 0; r.Y = 0; r.Width = 1920; r.Height = 1200;
+    CHECK(Bc250ScalerPlanRecout(2560, 2000, 1920, 1200, &r, &p) == 0);     // 1.333332 across, 1.666666 down
+    h = Bc250ScalerFilterTable(4, p.RatioH19);
+    v = Bc250ScalerFilterTable(4, p.RatioV19);
+    CHECK(h && v && h != v && h != Bc250ScalerFilterTable(4, 1ul << 18));
+    if (!h || !v) return;
+    FirmwareState();
+    g_f.lockDelay = 2;
+    IoInit(&io, 100);
+    CHECK(Bc250ScalerProgram(&io, &p, &res) == 0 && res.CoefWrites == 132);
+    CHECK(REG(BC250_REG_DMU_DSCL0_SCL_HORZ_FILTER_SCALE_RATIO) == (p.RatioH19 << 5));
+    CHECK(REG(BC250_REG_DMU_DSCL0_SCL_VERT_FILTER_SCALE_RATIO) == (p.RatioV19 << 5));
+    CHECK(REG(BC250_REG_DMU_DSCL0_SCL_TAP_CONTROL) == 0x1133ul);          // V 4, H 4, V_C 2, H_C 2 (minus one)
+    CHECK(REG(BC250_REG_DMU_HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION) == ((2000ul << 16) | 2560ul));
+    CHECK(REG(BC250_REG_DMU_DSCL0_RECOUT_SIZE) == 0x04B00780ul);
+    for (ph = 0; ph < 33; ph++)
+        for (i = 0; i < 4; i++) {
+            CHECK(g_f.coef[1][ph][i / 2][i % 2] == h[ph * 4 + i]);     // type 1: luma horizontal
+            CHECK(g_f.coef[0][ph][i / 2][i % 2] == v[ph * 4 + i]);     // type 0: luma vertical
+        }
 }
 
 // BD-223: the writer inside a caller's lock. It writes the same registers as Bc250ScalerProgram, never the lock or
@@ -717,7 +809,9 @@ static void TestLineBufferAdmission(void)
 int main(void)
 {
     TestFilterTable();
+    TestFilterSelection();
     TestPlanRecout();
+    TestProgramDownscale();
     TestWriteLocked();
     TestLayouts();
     TestEveryLabMode();

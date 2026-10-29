@@ -78,7 +78,14 @@ unsigned long Bc250PlanePrepare(const BC250_PLANE_REQUEST* R, BC250_PLANE_PLAN* 
         return BC250_PLANE_DST_BOUNDS;
     if (!ClipKeepsDst(&R->Clip, &R->Dst)) return BC250_PLANE_CLIP;
     sw = R->SurfaceWidth; sh = R->SurfaceHeight; dw = Width(&R->Dst); dh = Height(&R->Dst);
-    if (dw < sw || dh < sh) return BC250_PLANE_DOWNSCALE;
+    // Down to a quarter (stage S2): max_downscale_factor 250 of dcn201_resource.c, the same 4 taps as an upscale
+    // (dpp201_get_optimal_number_of_taps) with the downscale tables of the ratio. dpp201 also refuses a downscaled
+    // source wider than the timing and than max_downscale_src_width (3840, debug_defaults_drv). The DPP clock of a
+    // downscale is DML's answer (Bc250PlaneDmlVerdict).
+    if ((unsigned long long)dw * 1000ull < (unsigned long long)sw * BC250_PLANE_MAX_DOWNSCALE_MILLI ||
+        (unsigned long long)dh * 1000ull < (unsigned long long)sh * BC250_PLANE_MAX_DOWNSCALE_MILLI)
+        return BC250_PLANE_DOWNSCALE;
+    if (sw > R->TargetWidth && sw > BC250_PLANE_MAX_DOWNSCALE_SOURCE_WIDTH) return BC250_PLANE_DOWNSCALE;
     if ((unsigned long long)dw * 1000ull > (unsigned long long)sw * BC250_PLANE_MAX_UPSCALE_MILLI ||
         (unsigned long long)dh * 1000ull > (unsigned long long)sh * BC250_PLANE_MAX_UPSCALE_MILLI)
         return BC250_PLANE_UPSCALE;

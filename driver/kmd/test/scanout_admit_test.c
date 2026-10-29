@@ -358,14 +358,17 @@ int main(void)
         struct bc250_scanout_caps lone = mpo;
         flip.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
         lone.flags = BC250_SCANOUT_CAPS_MPO;
-        // Compile-time: the bits are new, and the limits are the kernel driver's stage limits (dcn_plane.h),
-        // so a change of one without the other fails the build. MAX_SHRINK is 1.0 because
-        // BC250_PLANE_DOWNSCALE refuses every downscale.
+        // Compile-time: the bits are new, and the limits are the kernel driver's stage limits (dcn_plane.h,
+        // dcn_scale.h), so a change of one without the other fails the build. MAX_SHRINK is 4.0 since stage S2:
+        // BC250_PLANE_DOWNSCALE refuses under a quarter, and a source wider than 3840 and than the mode.
         typedef char mpo_bits[(BC250_SCANOUT_CAPS_MPO == 0x8u && BC250_SCANOUT_CAPS_MPO_PLANE1 == 0x10u &&
             !(BC250_SCANOUT_CAPS_MPO & (BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
                                         BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT))) ? 1 : -1];
         typedef char mpo_limits[(BC250_MPO_MAX_STRETCH_MILLI == BC250_PLANE_MAX_UPSCALE_MILLI &&
-            BC250_MPO_MIN_DIMENSION == BC250_PLANE_MIN_DIMENSION && BC250_MPO_MAX_SHRINK_MILLI == 1000u) ? 1 : -1];
+            BC250_MPO_MIN_DIMENSION == BC250_PLANE_MIN_DIMENSION &&
+            BC250_MPO_MAX_SHRINK_MILLI * BC250_PLANE_MAX_DOWNSCALE_MILLI == 1000000u &&
+            BC250_MPO_MAX_SHRINK_WIDTH == BC250_PLANE_MAX_DOWNSCALE_SOURCE_WIDTH &&
+            BC250_MPO_MAX_DIMENSION == BC250_SCALE_MAX_DIMENSION) ? 1 : -1];
         (void)sizeof(mpo_bits); (void)sizeof(mpo_limits);
         CHECK(bc250_scanout_mpo_geometry(&mpo, 1920u, 1080u));
         CHECK(bc250_scanout_mpo_geometry(&mpo, 1280u, 720u));
@@ -374,7 +377,22 @@ int main(void)
         CHECK(!bc250_scanout_mpo_geometry(&mpo, 119u, 75u));       // more than 16 times across
         CHECK(!bc250_scanout_mpo_geometry(&mpo, 120u, 74u));       // more than 16 times down
         CHECK(!bc250_scanout_mpo_geometry(&mpo, 63u, 1200u) && !bc250_scanout_mpo_geometry(&mpo, 1920u, 63u));
-        CHECK(!bc250_scanout_mpo_geometry(&mpo, 1921u, 1080u) && !bc250_scanout_mpo_geometry(&mpo, 1920u, 1201u));
+        // Larger than the mode (stage S2): down to a quarter in each direction, and a width over the mode's at most
+        // 3840 (dpp201 max_downscale_src_width).
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 1921u, 1080u) && bc250_scanout_mpo_geometry(&mpo, 1920u, 1201u));
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 2560u, 1440u) && bc250_scanout_mpo_geometry(&mpo, 3840u, 2160u));
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 3840u, 4800u));     // exactly 4 times down vertically
+        CHECK(!bc250_scanout_mpo_geometry(&mpo, 1920u, 4801u));    // more than 4 times down
+        CHECK(!bc250_scanout_mpo_geometry(&mpo, 3841u, 1200u));    // wider than 3840 and than the mode
+        CHECK(bc250_scanout_mpo_geometry(&mpo, 1280u, 2400u));     // up across, down vertically
+        {
+            struct bc250_scanout_caps wide = mpo;
+            wide.post_width = 7680u; wide.post_height = 4320u;
+            CHECK(bc250_scanout_mpo_geometry(&wide, 3840u, 2160u)); // a width up to the mode's needs no 3840 rule
+            CHECK(bc250_scanout_mpo_geometry(&wide, 7680u, 4320u));
+            wide.post_width = 4096u; wide.post_height = 4096u;
+            CHECK(bc250_scanout_mpo_geometry(&wide, 1024u, 16383u) && !bc250_scanout_mpo_geometry(&wide, 1024u, 16384u));
+        }
         CHECK(!bc250_scanout_mpo_geometry(&flip, 1920u, 1080u));   // no MPO bit
         CHECK(!bc250_scanout_mpo_geometry(&lone, 1920u, 1080u));   // MPO without DIRECT_FLIP is no trailer
         CHECK(!bc250_scanout_mpo_geometry(NULL, 1920u, 1080u));
@@ -382,6 +400,8 @@ int main(void)
         CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
               BC250_SCANOUT_PRIMARY_ADMITTED);
         CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1280u, 720u, 5120u, 0) ==
+              BC250_SCANOUT_PRIMARY_ADMITTED);
+        CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 2560u, 1440u, 10240u, 0) ==
               BC250_SCANOUT_PRIMARY_ADMITTED);
         CHECK(bc250_scanout_primary_rule(&flip, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
               BC250_SCANOUT_PRIMARY_SOURCE_GEOMETRY);

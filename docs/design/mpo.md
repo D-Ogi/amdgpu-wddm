@@ -56,7 +56,7 @@ table, as before BD-223. The caps come from constants in the same header, not fr
 | `NumCapabilityGroups` | 1 |
 | Group `NumPlanes` | `MaxPlanes` |
 | Group `MaxStretchFactor` | `BC250_MPO_MAX_STRETCH_MILLI` / 1000 (16.0) |
-| Group `MaxShrinkFactor` | `BC250_MPO_MAX_SHRINK_MILLI` / 1000 (1.0: no downscale yet) |
+| Group `MaxShrinkFactor` | `BC250_MPO_MAX_SHRINK_MILLI` / 1000 (4.0 from step S2) |
 | Group `OverlayCaps` | `RGB`, `BILINEAR_FILTER` and `HIGH_FILTER`. `YUV` only when a KMD stage admits a YUV plane |
 | Group `StereoCaps` | 0 |
 
@@ -119,7 +119,7 @@ own. The steps change what the KMD check admits and the constants of the header.
 | `DXGK_MULTIPLANE_OVERLAY_ATTRIBUTES2` | Request | Present stage |
 | --- | --- | --- |
 | `SrcRect` | `Src` | The whole allocation only (`src-crop`) |
-| `DstRect` | `Dst` | Inside the source mode, at least the source size (`dst-bounds`, `downscale`, `upscale`) |
+| `DstRect` | `Dst` | Inside the source mode, from a quarter of the source size to 16 times it in each direction (`dst-bounds`, `downscale`, `upscale`) |
 | `ClipRect` | `Clip` | Must not cut `DstRect` (`clip`) |
 | `Flags.HorizontalFlip`, `Flags.VerticalFlip` | `Mirror` | Refused |
 | `Rotation` | `Rotated` | Identity only |
@@ -143,7 +143,7 @@ pipe 0 for its one display. Pipes 1 to 3 are free.
 | Planes for a source | 1 primary and 1 overlay | 2 | 1 now, 2 at step S3 |
 | YUV | `nv12` and `p010` false | NV12 on one plane, BT.601 and BT.709, both ranges | Open: see below |
 | Upscale | 16 times for ARGB8888 | Stretch | 16 times |
-| Downscale | 4 times (`max_downscale_factor` 250) | Shrink | None now, 4 times at step S2 |
+| Downscale | 4 times (`max_downscale_factor` 250) | Shrink | 4 times from step S2, if DML fits the DPP clock |
 | Blending | Per-pixel alpha, global alpha | Premultiplied alpha | Opaque now, alpha at step S3 |
 | Filter | Polyphase taps | Bilinear or better | The polyphase upscale filter |
 | Clipping | Viewport and recout | Source and destination clipping | Whole surface now, crop and clip at step S3 |

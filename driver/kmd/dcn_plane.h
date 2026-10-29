@@ -1,5 +1,6 @@
 // BD-223: one multiplane-overlay plane on pipe 0, with its own source and destination rectangles. The plane is
-// read whole from its allocation, scaled 1:1 or up by DSCL0 into its destination rectangle, and MPCC0 fills the
+// read whole from its allocation, scaled 1:1, up, or down to a quarter (stage S2) by DSCL0 into its destination
+// rectangle, and MPCC0 fills the
 // rest of the active area with black, as the source-mode scaler of dcn_scale.c does for a smaller desktop mode.
 // docs/design/scaled-flip.md has the design, the Microsoft contract and the stages.
 //
@@ -57,7 +58,8 @@ enum bc250_plane_verdict {
     BC250_PLANE_INTERLACED = 14,
     BC250_PLANE_STEREO = 15,
     BC250_PLANE_COLOR_SPACE = 16,       // not sRGB: no input CSC is programmed here
-    BC250_PLANE_DOWNSCALE = 17,         // DstRect smaller than SrcRect in a direction (DPP clock and DCHUB: not here)
+    BC250_PLANE_DOWNSCALE = 17,         // DstRect under a quarter of SrcRect in a direction, or a downscaled source
+                                        // wider than 3840 (until stage S2: any DstRect smaller than SrcRect)
     BC250_PLANE_UPSCALE = 18,           // more than 16 times up (DCN 2.0.1 plane cap max_upscale_factor 16000)
     BC250_PLANE_SCALER = 19,            // the scaler plan refused the rectangles (dcn_scale.c)
     BC250_PLANE_DML = 20,               // DML refused the scaled pipe, or could not run
@@ -71,10 +73,12 @@ enum bc250_plane_verdict {
 };
 const char* Bc250PlaneVerdictText(unsigned long Verdict);
 
-// The DCN 2.0.1 plane caps of Linux dcn201_resource.c (plane_cap: min_width, min_height, max_upscale_factor for
-// ARGB8888 in thousandths).
+// The DCN 2.0.1 plane caps of Linux dcn201_resource.c (plane_cap: min_width, min_height, max_upscale_factor and
+// max_downscale_factor for ARGB8888 in thousandths; debug_defaults_drv max_downscale_src_width).
 #define BC250_PLANE_MIN_DIMENSION 64ul
 #define BC250_PLANE_MAX_UPSCALE_MILLI 16000ul
+#define BC250_PLANE_MAX_DOWNSCALE_MILLI 250ul
+#define BC250_PLANE_MAX_DOWNSCALE_SOURCE_WIDTH 3840ul
 
 // What the scan-out of an admitted plane needs. Identity is a plane of the source mode's own size at its origin and
 // at the committed pipe's pitch: the native 1:1 shape of dcn_scale.c (Bc250ScalerRestoreNative), which DirectFlip

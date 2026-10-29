@@ -69,12 +69,16 @@
 
 // The plane limits that the user-mode multiplane-overlay caps report and that the shells apply to a scan-out
 // primary smaller than the source mode. They are the kernel driver's stage limits (driver/kmd/dcn_plane.h):
-// the DCN 2.0.1 plane cap of 16 times up (Linux dcn201_resource.c plane_cap max_upscale_factor 16000), no
-// downscale yet (max_downscale_factor 250 needs the DPP clock and DCHUB step), and the 64-pixel minimum of
-// the same plane cap. A kernel driver that lifts a limit changes it here in the same commit.
+// the DCN 2.0.1 plane cap of 16 times up (Linux dcn201_resource.c plane_cap max_upscale_factor 16000), 4 times
+// down since stage S2 (max_downscale_factor 250, and max_downscale_src_width 3840 for a source wider than the
+// mode), the 64-pixel minimum of the same plane cap and the 14-bit viewport fields (BC250_SCALE_MAX_DIMENSION).
+// A kernel driver that lifts a limit changes it here in the same commit. A kernel driver before stage S2 refuses
+// a downscale in its check, so such a primary stays composed there.
 #define BC250_MPO_MAX_STRETCH_MILLI 16000u
-#define BC250_MPO_MAX_SHRINK_MILLI 1000u
+#define BC250_MPO_MAX_SHRINK_MILLI 4000u
+#define BC250_MPO_MAX_SHRINK_WIDTH 3840u
 #define BC250_MPO_MIN_DIMENSION 64u
+#define BC250_MPO_MAX_DIMENSION 0x3FFFu
 
 struct bc250_scanout_caps {
     unsigned int magic;
@@ -112,18 +116,24 @@ static __inline int bc250_scanout_format_admitted(const AMDGPU_WDDM_SURFACE_FORM
 
 // BD-223: may a scan-out primary of width x height exist although it is not the source mode? Only while the
 // kernel driver answers the multiplane-overlay check (BC250_SCANOUT_CAPS_MPO), and only for a surface that
-// plane 0 can scale to the whole source mode: at least BC250_MPO_MIN_DIMENSION in each direction, not larger
-// than the mode, and at most BC250_MPO_MAX_STRETCH_MILLI / 1000 times up. Such a primary is never flipped by
-// SetVidPnSourceAddress (Bc250ScanoutAdmit refuses a size other than the mode, and the front's
-// CheckDirectFlipSupport answers only for the committed geometry): it reaches the plane only through
+// plane 0 can scale to the whole source mode: in each direction at least BC250_MPO_MIN_DIMENSION, at most
+// BC250_MPO_MAX_STRETCH_MILLI / 1000 times up and at most BC250_MPO_MAX_SHRINK_MILLI / 1000 times down, at most
+// BC250_MPO_MAX_DIMENSION, and a width larger than the mode's at most BC250_MPO_MAX_SHRINK_WIDTH. Such a primary
+// is never flipped by SetVidPnSourceAddress (Bc250ScanoutAdmit refuses a size other than the mode, and the
+// front's CheckDirectFlipSupport answers only for the committed geometry): it reaches the plane only through
 // SetVidPnSourceAddressWithMultiPlaneOverlay2, after the kernel driver's check approved its shape.
+static __inline int bc250_scanout_mpo_side(unsigned int side, unsigned int mode)
+{
+    return side >= BC250_MPO_MIN_DIMENSION && side <= BC250_MPO_MAX_DIMENSION &&
+           (unsigned long long)mode * 1000ull <= (unsigned long long)side * BC250_MPO_MAX_STRETCH_MILLI &&
+           (unsigned long long)side * 1000ull <= (unsigned long long)mode * BC250_MPO_MAX_SHRINK_MILLI;
+}
 static __inline int bc250_scanout_mpo_geometry(const struct bc250_scanout_caps* caps, unsigned int width,
     unsigned int height)
 {
     if (!caps || !(caps->flags & BC250_SCANOUT_CAPS_MPO) || !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP))
         return 0;
-    if (width < BC250_MPO_MIN_DIMENSION || height < BC250_MPO_MIN_DIMENSION) return 0;
-    if (width > caps->post_width || height > caps->post_height) return 0;
-    return (unsigned long long)caps->post_width * 1000ull <= (unsigned long long)width * BC250_MPO_MAX_STRETCH_MILLI &&
-           (unsigned long long)caps->post_height * 1000ull <= (unsigned long long)height * BC250_MPO_MAX_STRETCH_MILLI;
+    if (!bc250_scanout_mpo_side(width, caps->post_width) || !bc250_scanout_mpo_side(height, caps->post_height))
+        return 0;
+    return width <= caps->post_width || width <= BC250_MPO_MAX_SHRINK_WIDTH;
 }

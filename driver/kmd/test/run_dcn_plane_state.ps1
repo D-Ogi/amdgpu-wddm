@@ -46,7 +46,7 @@ if($Mutation) {
     [IO.File]::WriteAllText($path,$text.Replace($find,$m[1].Replace("`r`n","`n")))
 }
 $kmd="$repo\driver\kmd"
-& $cl /nologo /TC /W4 /WX /O2 /MT -Wno-multichar -fuse-ld=lld "/I$kmd" "/I$repo\driver\kmd\test" "/I$repo\driver\shim\dml201" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\dcn_plane_state_test.exe" "$Out\dcn_plane_state_actual.c" "$kmd\dcn_plane.c" "$kmd\dcn_scale.c" "$repo\driver\shim\bc250_scaler_buffer.c" "$kmd\display_io.c" "$kmd\edid.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
+& $cl /nologo /TC /W4 /WX /O2 /MT -Wno-multichar -fuse-ld=lld "/I$kmd" "/I$repo\driver\kmd\test" "/I$repo\driver\shim\dml201" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\dcn_plane_state_test.exe" "$Out\dcn_plane_state_actual.c" "$kmd\dcn_plane.c" "$kmd\dcn_scale.c" "$repo\driver\shim\bc250_scaler_buffer.c" "$repo\driver\shim\bc250_scaler_filter.c" "$kmd\display_io.c" "$kmd\edid.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}
 & "$Out\dcn_plane_state_test.exe"
 exit $LASTEXITCODE

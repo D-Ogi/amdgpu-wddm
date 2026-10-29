@@ -77,7 +77,7 @@ DDI's plane into `BC250_PLANE_REQUEST`. Each refusal has a verdict number, which
 | Any pitch (stage S2) | - | The flip programs the plane's own display plan. See below. `pitch` is the verdict of stage S1 and is not given now |
 | `SrcRect` is the whole allocation | `src-crop` | A crop needs the viewport start and the init phases of a clipped source |
 | `DstRect` inside the source mode, `ClipRect` contains `DstRect` | `dst-bounds`, `clip` | The `ClipRect` text says "relative to the DstRect". A clip that cuts the plane is refused, so both readings give the same answer |
-| 1:1 or up, at most 16 times | `downscale`, `upscale` | `max_upscale_factor` 16000. Downscale needs DPP clock and DCHUB changes |
+| At most 4 times down and 16 times up in each direction. A downscaled source wider than the timing is at most 3840 wide | `downscale`, `upscale` | `max_downscale_factor` 250, `max_upscale_factor` 16000 and `max_downscale_src_width` 3840 of `dcn201_resource.c`. Downscale is from stage S2 |
 | The scaler plan | `scaler` | `Bc250ScalerPlanRecout` (`dcn_scale.c`) |
 | DML fits the scaled pipe into the clocks that run | `dml`, `clocks` | The flip changes no clock. The DENTIST belongs to the commit |
 | The plan's VSTARTUP and VUPDATE offset are the ones of OTG0 | `global-sync` | See below |
@@ -122,8 +122,9 @@ These are the deviations from Linux:
 | `DET_BUF_PLANE1_BASE_ADDRESS` of the plan | The format registers keep the commit's value (`DcnPlaneFormatRegisters`) | Plane 1 holds chroma only. For an RGB plane the field has no effect. The YUV step (S4) must write the plan's value |
 
 On the lab timing (1920x1200, HTotal 2080, VTotal 1235, 154000 kHz, DP x4, DCHUB reference 50000 kHz) every plane of
-this stage gives VSTARTUP 22 and VUPDATE offset 520, the values of the mode. The DPP clock is 154462 kHz for 1:1 and
-up. A 4 times downscale needs 617848 kHz, more than the budget, so it is refused with `clocks`.
+this stage gives VSTARTUP 22 and VUPDATE offset 520, the values of the mode. The DPP clock is 154462 kHz for 1:1, for up and for a downscale to a half in each direction (2560x1440 and
+3840x2400 on the mode). DML multiplies the pixel clock by the product of the two ratios over 4. A 4 times downscale in
+both directions thus needs 617848 kHz, more than the budget, so it is refused with `clocks`.
 
 ### DML
 
@@ -178,7 +179,7 @@ The HLK MPO tests are not expected to pass at this stage. These are the known ga
 
 | Requirement | This stage |
 | --- | --- |
-| At least one plane can shrink and stretch | Stretch only. Shrink comes with the 4-tap downscale filters and the DPP clock budget |
+| At least one plane can shrink and stretch | Both from stage S2. Shrink to a quarter, if DML fits the DPP clock in the clocks that run |
 | More than one plane | Plane 0 only (`MaxOverlayPlanes` 1) |
 | Any `SrcRect` | The whole allocation only |
 | Any pitch of the plane | Any pitch from stage S2 |
