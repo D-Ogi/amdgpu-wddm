@@ -1740,6 +1740,73 @@ static void inherited_hbr2(void)
     CHECK(logged("connector-link: inherited 2560x1440 304250 kHz refused C00000BB check clock-ceiling"));
     balanced();
 }
+/* BD-168 (GitHub #40): the Acer KG271U N3 on DP directly. The DPCD caps are the report's read (rev 0x12, HBR2, 0xC4:
+ * four lanes, TPS3, enhanced framing; downspread 0x01), and so is the preferred timing (2560x1440 at 59.951 Hz,
+ * 241.5 MHz: CVT reduced blanking, total 2720x1481). The firmware ran 2560x1440 at 120 Hz, the one rate tester.30
+ * offered, but the report has no total for it. So 120 Hz (483.4 MHz) and 144 Hz (580.08 MHz) keep the preferred
+ * totals, and 180 Hz (the rate Linux offers) is a reduced-blanking reconstruction (total 2640x1490, 708.048 MHz). */
+static const BC250_TARGET_TIMING kg271u[4]={
+    {241500,2560,160,48,32,1440,41,3,5,0x1a},{483400,2560,160,48,32,1440,41,3,5,0x1a},
+    {580080,2560,160,48,32,1440,41,3,5,0x1a},{708048,2560,80,8,32,1440,50,3,8,0x1a}};
+static void acer_cold(void)
+{
+    reset(BC250_SINK_DP);device.ConnectorLink=NULL;
+    snapshot.Sink.Dpcd[DP_DPCD_REV]=0x12;snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=0x14;
+    snapshot.Sink.Dpcd[DP_MAX_LANE_COUNT]=0xc4;snapshot.Sink.Dpcd[DP_MAX_DOWNSPREAD]=0x01;
+    snapshot.Sink.MaxPixelClockKhz=720000;
+    /* The EDID's 60, 144 and 180 Hz; the firmware's 120 Hz is the inherited timing. */
+    snapshot.Sink.Targets[0]=kg271u[0];snapshot.Sink.Targets[1]=kg271u[2];snapshot.Sink.Targets[2]=kg271u[3];
+    snapshot.Sink.TargetCount=3;
+    inherited_rate=0x14;inherited_lanes=4;inherited_timing=kg271u[1];
+    device.InheritedSignal.PixelRate=483400000;
+    device.InheritedSignal.ActiveSize.cx=2560;device.InheritedSignal.ActiveSize.cy=1440;
+    device.InheritedSignal.TotalSize.cx=2720;device.InheritedSignal.TotalSize.cy=1481;
+    device.Post.Width=2560;device.Post.Height=1440;device.Post.Pitch=10240;
+    device.RuntimeFramebufferLength=10240ull*1440u;
+    memset(log_ring,0,sizeof(log_ring));
+}
+static void field_dp_monitors(void)
+{
+    unsigned begin=checks,bad=failures;
+    /* tester.30 refused this firmware link (HBR2) and its 483.4 MHz timing (above 300 MHz), so the static inherited
+     * path published 120 Hz only. Now the connector owns it and offers the EDID's 144 and 180 Hz next to it. */
+    acer_cold();
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS);balanced();
+    CHECK(link.Current.Valid && link.Current.Inherited && link.Rate==0x14 && link.Current.Rate==0x14 && link.Lanes==4);
+    CHECK(snapshot.Sink.TargetCount==4 && Bc250TargetTimingEqual(&snapshot.Sink.Targets[3],&kg271u[1]));
+    CHECK(logged("connector-link: inherited 2560x1440 483400 kHz total 2720x1481 offered, the EDID does not list it"));
+    CHECK(logged("connector-link: target 2560x1440 580080 kHz offered rate 20 lanes 4"));
+    CHECK(logged("connector-link: target 2560x1440 708048 kHz offered rate 20 lanes 4"));
+    CHECK(logged("connector-link: offered 3 of 3 targets fastest 2560x1440 708048 kHz rate 20"));
+    CHECK(logged("connector-link: prepare generation 7 targets 4 status 00000000"));
+    CHECK(!logged("refused"));
+    /* 144 Hz: the firmware's link goes off at its HBR2 symbol clock, HBR2 trains with TPS3, and nothing is measured
+     * under the 600 MHz DP DTO reference. */
+    CHECK(commit_timing(&kg271u[2])==STATUS_SUCCESS);balanced();
+    CHECK(tx_off_khz==540000 && tx_off_lanes==4 && link.Current.Rate==20 && link.Training.EqPattern==3);
+    CHECK(!measure_calls && device.SourceVisible && !plane_blank);
+    /* 180 Hz is above the reference: the refresh is measured with the clock it asked for. */
+    measure_hz=708048000;measure_pixel_khz=0;
+    CHECK(commit_timing(&kg271u[3])==STATUS_SUCCESS);balanced();
+    CHECK(measure_calls==1 && measure_pixel_khz==708048 && link.Current.Rate==20 && !link.PixelLimitKhz);
+    CHECK(logged("connector-link: dto check 708048 kHz ref 600000 kHz measured 708048000 Hz"));
+    /* The preferred 60 Hz fits HBR x4: HBR with TPS2, as before. The firmware's 120 Hz sets again at HBR2. */
+    CHECK(commit_timing(&kg271u[0])==STATUS_SUCCESS && link.Current.Rate==10 && link.Training.EqPattern==2);balanced();
+    CHECK(commit_timing(&kg271u[1])==STATUS_SUCCESS && link.Current.Rate==20 && link.Training.EqPattern==3);balanced();
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    /* BD-139: the HP X32's firmware timing (304.25 MHz) on an HBR x4 link, which carries 360 MHz. tester.31 to .33
+     * refused it at the 300 MHz ceiling; now the connector owns it, and 165 Hz trains at HBR2. */
+    inherited_cold(BC250_SINK_DP,DP_LINK_BW_2_7,&hpx32[3]);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS);balanced();
+    CHECK(link.Current.Inherited && link.Rate==DP_LINK_BW_2_7 && link.Current.Rate==DP_LINK_BW_2_7);
+    CHECK(snapshot.Sink.TargetCount==2 && !logged("refused"));
+    measure_hz=645100000;
+    CHECK(commit_timing(&hpx32[3])==STATUS_SUCCESS);balanced();
+    CHECK(tx_off_khz==270000 && link.Current.Rate==20 && link.Training.EqPattern==3 && measure_calls==1);
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    printf("Field DP monitors: %u checks, %u failures; Acer KG271U N3 inherited 120 Hz on HBR2, 144/180 Hz, HP X32 on HBR\n",
+        checks-begin,failures-bad);
+}
 int main(void)
 {
     end_failure_propagation();
@@ -1772,6 +1839,7 @@ int main(void)
     release_handoff();
     hbr2_admission();hbr2_commit();hbr2_training_fallback();dto_check();dto_window();inherited_hbr2();
     philips_hbr2();
+    field_dp_monitors();
     printf("connector transaction: %u checks, %u failures (software boundary model)\n",checks,failures);
     return failures?1:0;
 }

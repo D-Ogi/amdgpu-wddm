@@ -159,6 +159,27 @@ int main(void)
             CHECK(r.Plan.DispClockKhz>=fast[i].PixelClockKhz && r.Plan.DispClockKhz<=1200000);
         }
     }
+    // BD-168 (GitHub #40): the Acer KG271U N3 on DP directly, with the DPCD caps the report read (rev 0x12, HBR2, 0xC4
+    // four lanes with TPS3 and enhanced framing, downspread 0x01). 60 Hz is the report's preferred timing (241.5 MHz,
+    // CVT reduced blanking, total 2720x1481). The firmware's 120 Hz has no total in the report: 120 and 144 Hz keep
+    // the preferred totals, 180 Hz (the rate Linux offers) is a reduced-blanking reconstruction (total 2640x1490).
+    // 60 Hz trains at HBR, the others at HBR2; 180 Hz is the edge of HBR2 x4 (720 MHz at RGB8).
+    {
+        static const BC250_TARGET_TIMING kg271u[4]={
+            {241500,2560,160,48,32,1440,41,3,5,0x1a},{483400,2560,160,48,32,1440,41,3,5,0x1a},
+            {580080,2560,160,48,32,1440,41,3,5,0x1a},{708048,2560,80,8,32,1440,50,3,8,0x1a}};
+        static const unsigned rate[4]={DP_LINK_BW_2_7,DP_LINK_BW_5_4,DP_LINK_BW_5_4,DP_LINK_BW_5_4};
+        static const unsigned char acer[16]={0x12,DP_LINK_BW_5_4,0xc4,0x01};
+        printf("Acer KG271U N3 (report DPCD: 1.2, HBR2 x4)\n");
+        CHECK(Bc250DpMaxPixelClock(acer)==720000);
+        for(i=0;i<4;++i) {
+            r=admit(&kg271u[i],acer,1);
+            CHECK(r.Rate==rate[i] && admitted(&r));
+            CHECK(r.Plan.VStartup<kg271u[i].VBlank && r.Plan.DispClockKhz>=kg271u[i].PixelClockKhz);
+        }
+        // On the Lenovo's HBR x4 only the 60 Hz timing has a rate.
+        for(i=0;i<4;++i)CHECK(Bc250DpFirstRate(lenovo,kg271u[i].PixelClockKhz)==(i?0u:DP_LINK_BW_2_7));
+    }
     free(workspace);
     printf("mode_admit_test: %u checks, %u failures\n",checks,failures);
     return failures?1:0;

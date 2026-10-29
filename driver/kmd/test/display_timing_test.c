@@ -444,12 +444,13 @@ int main(int argc,char** argv)
          * halves of the expected refresh over 60 Hz frames (at least 4). The fake QPC runs at 12 MHz; period is in
          * its ticks. */
         ULONG pixel,milli;ULONGLONG want,diff;
-        static const struct {ULONG w,h,ht,vt,khz;ULONGLONG period;} fast[3]={
+        static const struct {ULONG w,h,ht,vt,khz;ULONGLONG period;} fast[4]={
             {1920,1080,2000,1111,799920,33333},     /* 1080p360 */
             {2560,1440,2640,1525,966240,50000},     /* 1440p240 */
-            {2560,1440,2640,1481,645100,72727}};    /* 1440p165 */
+            {2560,1440,2640,1481,645100,72727},     /* 1440p165 (BD-139, HP X32) */
+            {2560,1440,2640,1490,708048,66667}};    /* 1440p180 (BD-168, Acer KG271U N3) */
         unsigned i;
-        for(i=0;i<3;++i) {
+        for(i=0;i<4;++i) {
             Mode(&d,fast[i].w,fast[i].h,fast[i].ht,fast[i].vt,0);period=fast[i].period;
             CHECK(DisplayMeasureFast(&d,fast[i].ht,fast[i].vt,fast[i].khz,&pixel,&milli)==STATUS_SUCCESS);
             want=(ULONGLONG)fast[i].khz*1000u;diff=pixel>want?pixel-want:want-pixel;
