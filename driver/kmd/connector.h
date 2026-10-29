@@ -95,3 +95,6 @@ BOOLEAN ConnectorLinkNeedsPowerOn(struct _BC250_DEVICE* Device, BOOLEAN* Active,
 // hardware in retained power phase 3, before notifications reopen in phase 0.
 NTSTATUS ConnectorLinkSuspend(struct _BC250_DEVICE* Device);
 NTSTATUS ConnectorLinkResume(struct _BC250_DEVICE* Device, ULONG Generation);
+// The resume that replays no timing (BD-188): the sink changed, could not be read or could not be restored. No
+// hardware access; the connector worker's disable at phase 0 takes down what is lit.
+void ConnectorLinkResumeChanged(struct _BC250_DEVICE* Device);

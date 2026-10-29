@@ -1220,6 +1220,17 @@ NTSTATUS ConnectorLinkResume(BC250_DEVICE* Device,ULONG Generation)
     return NT_SUCCESS(finish)?status:finish;
 }
 
+// BD-188 (lab 2026-10-20, 31v3): a resume through the changed-sink branch never called ConnectorLinkResume, so the
+// link stayed suspended for the rest of the device start. ConnectorLinkCurrentSignal then answered NOT_READY to
+// DescribeAllocation, the cofunctional modes and DP audio ("resume refused: no DP stream encoder has its video
+// stream on" after "enabled generation 15 ... active 1"), and the monitor stayed dark until a restart. The link
+// leaves the suspended state here without a replay; the worker's ConnectorLinkDisable follows at phase 0.
+void ConnectorLinkResumeChanged(BC250_DEVICE* Device)
+{
+    CONNECTOR_LINK* c=Device->ConnectorLink;
+    if(c)c->Suspended=FALSE;
+}
+
 // BD-090. dispmprt.md, DxgkDdiStopDeviceAndReleasePostDisplayOwnership, required steps 2, 5 and 6: a target with no
 // display connected answers STATUS_NOT_SUPPORTED; with no target active the driver should enable one, at the current
 // resolution if it can, else at the native or another mode of at least 800x600. An OS detach (ConnectorLinkCommit
