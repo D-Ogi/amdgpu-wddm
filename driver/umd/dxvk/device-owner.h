@@ -47,6 +47,8 @@ public:
     // Failed cleanup is quarantined; its soon-invalid runtime handle is never reused.
     HRESULT release_surface_handle(RuntimeSurface &);
     size_t surface_count() const { return surfaces_.size(); }
+    // The paging queue of the surfaces (prepare_surface_import creates it). The close tests set it.
+    SurfacePagingQueue &surface_queue() { return surface_queue_; }
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.
     PresentShadows &present_shadows() { return present_shadows_; }
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).

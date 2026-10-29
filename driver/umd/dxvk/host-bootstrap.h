@@ -66,6 +66,16 @@ struct bc250_host_policy {
 #define BC250_HOST_PUBLISH_PROGRESS 3u
 #define BC250_HOST_CHECK_STATUS 4u
 #define BC250_HOST_REPORT_LOST 5u
+/* The optional argument of BC250_HOST_REPORT_LOST: which read saw the lost-device value, so that the host's loss line
+ * names the fence (BD-258). A host that does not know it ignores it, and an ICD without it passes 0. site is a fixed
+ * name, handle the sync object (0 when the caller has none), value the value that was read. */
+#define BC250_HOST_LOST_REPORT_STYPE 0x42434837u
+struct bc250_host_lost_report {
+   uint32_t sType, size;
+   const char *site;
+   uint32_t handle, reserved;
+   uint64_t value;
+};
 struct bc250_host_progress {
    uint32_t context, sync;
    uint64_t value;
@@ -88,10 +98,14 @@ static inline int32_t bc250_host_check_status(const struct bc250_host *host)
 {
    return host->dispatch ? host->dispatch(host->userdata, BC250_HOST_CHECK_STATUS, 0) : 0;
 }
-static inline int bc250_host_fence_valid(const struct bc250_host *host, uint64_t value)
+static inline int bc250_host_fence_valid(const struct bc250_host *host, uint64_t value, const char *site,
+                                         uint32_t handle)
 {
    if (host->dispatch && value == UINT64_MAX) {
-      host->dispatch(host->userdata, BC250_HOST_REPORT_LOST, 0);
+      struct bc250_host_lost_report report = {
+         BC250_HOST_LOST_REPORT_STYPE, sizeof(report), site, handle, 0, value,
+      };
+      host->dispatch(host->userdata, BC250_HOST_REPORT_LOST, &report);
       return 0;
    }
    return bc250_host_check_status(host) >= 0;

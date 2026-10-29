@@ -45,9 +45,9 @@ struct HostBridge {
    const UINT64 *present_cpu;
    D3DKMT_HANDLE present_sync;
    UINT64 present_value, present_waited[16];
-   // BD-253: settle_device_work found that no work of this device runs any more (work_ended), or its one bounded
-   // wait for that ended without the proof (drain_tried and not work_ended).
-   bool drain_tried, work_ended;
+   // BD-253: settle_device_work did its one bounded wait for this device. The answer itself is not kept: each call
+   // reads the fences again.
+   bool drain_tried;
 };
 // Latch a loss whose status the caller already carries: the entry that got it reports it through its
 // own error class, so the bridge must not report it a second time.
@@ -67,17 +67,16 @@ inline bool device_lost_status(HRESULT hr) {
    return hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET ||
           hr==DXGI_ERROR_DEVICE_HUNG || hr==DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }
-// BD-253: TRUE when each fence of the bridge reached the last value that this device gave it: the present fence its
-// last signalled value, and each progress fence of the hosted ICD the value it published. The ICD publishes a value
-// before its submission and, when that submission fails, signals the same value on the same context again
-// (radv_wddm2_progress_repair), so a reached value proves that every submission of that context before it is done.
-// A fence that reads the lost-device value also counts (kernel_ended_device_work).
-bool device_work_drained(const HostBridge &bridge);
-// BD-253: TRUE when no work of a lost device runs any more, so that its close can free what the work used. The first
-// call waits at most timeout_ms for device_work_drained; later calls give the same answer without a wait. A device
-// whose work did not drain in time stays kept (retire_device_handle), as before. One line for each wait, in both
-// flavours.
-bool settle_device_work(HostBridge &bridge, DWORD timeout_ms=2000);
+// BD-253: TRUE when no work of a lost device runs any more, so that its close can free what the work used. The only
+// proof is kernel_ended_device_work. The values of the host records (bc250_host_progress, present_value) are not a
+// proof: the ICD publishes a progress value only after its submission and its signal succeeded
+// (radv_wddm2_progress_signalled), so a record can stay at k-1 while an accepted submission k still runs (an accepted
+// IB whose signal or publish failed). Each call reads the fences again, so a later kernel error is seen and an earlier
+// TRUE is not kept. With timeout_ms nonzero, the first such call of a bridge waits at most timeout_ms for the proof;
+// every other call returns at once. Only DeviceOwner::close waits: the other callers (DestroyResource, Present) run on
+// the threads of the application's UI. A device without the proof stays kept (retire_device_handle), as before. One
+// line for each wait, in both flavours.
+bool settle_device_work(HostBridge &bridge, DWORD timeout_ms);
 using FlushEngine = HRESULT (*)(void *);
 // The per-application VSync setting (docs/design/per-app-graphics-settings.md): when valid, the Present callback
 // carries interval as DXGIDDICB_PRESENT.SyncIntervalOverride in place of the application's sync interval.

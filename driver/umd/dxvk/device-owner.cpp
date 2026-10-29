@@ -166,9 +166,11 @@ HRESULT DeviceOwner::close() {
         hr=wait_present_idle(bridge_);
         if (FAILED(hr) && hr!=D3DDDIERR_DEVICEREMOVED) return hr;
     }
-    // BD-253: for a device that latched a loss, decide once, while the progress fences of the hosted ICD are still
-    // known (close-session forgets them), whether its work ended. The steps below use that answer.
-    if (bridge_.device_lost || bridge_.submission_failed) (void)settle_device_work(bridge_);
+    // BD-253: for a device that latched a loss, wait once, while the progress fences of the hosted ICD are still
+    // known (close-session forgets them), for the kernel's proof that its work ended. Only TRUE is kept for the
+    // steps below: the kernel never takes a device out of its error state, so the proof stays true, and no step of a
+    // device in that state can start GPU work. A FALSE is read again at each step, without a wait.
+    const bool kernelEnded=(bridge_.device_lost || bridge_.submission_failed) && settle_device_work(bridge_,2000);
     // Drop bound views before releasing imported textures, while the engine and
     // hosted Vulkan device still exist. A pending/failed close retains everything.
     if (!surfaces_.empty() && context_) context_->ClearState();
@@ -180,7 +182,9 @@ HRESULT DeviceOwner::close() {
     present_shadows_={};
     // BD-253: a runtime callback that reports the loss of a device whose work ended is done: the kernel frees the
     // object together with the device. Then a lost device is freed, not kept for the life of the process.
-    const auto ended=[&](HRESULT status) { return device_lost_status(status) && settle_device_work(bridge_); };
+    const auto ended=[&](HRESULT status) {
+        return device_lost_status(status) && (kernelEnded || settle_device_work(bridge_,0));
+    };
     step_="close-paging-queue";
     hr=destroy_surface_paging_queue(runtime_,surface_queue_);
     if (hr!=S_OK) {
