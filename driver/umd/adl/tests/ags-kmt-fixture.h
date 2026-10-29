@@ -5,6 +5,7 @@
 #pragma once
 #include "../../../contract/bc250_caps_query.h"
 #include "../../../kmd/umd_caps.c"
+#include "../../../kmd/amd_identity_policy.c"
 
 namespace ags_kmt_fixture {
 struct Adapter { UINT handle; LUID luid; UINT sources; BOOL present; };
@@ -14,6 +15,7 @@ static bool legacy;
 static unsigned private_queries;
 static unsigned foreign_refusals;
 static unsigned segment_queries;
+static unsigned identity_answers;
 
 static LONG WINAPI Enumerate(Adapters* a)
 {
@@ -41,6 +43,12 @@ static LONG WINAPI QueryInfo(Query* q)
     if (!legacy && !Bc250CapsQueryExtentSupported(q->bytes)) {
         ++foreign_refusals;
         return (LONG)0xc000000d;
+    }
+    // The KMD answers AMD's 608-byte identity block before its caps (driver/kmd/amd_identity.c), with the Navi 22
+    // revision of a process that is ON. AGS must take nothing from it (docs/design/fsr4-identity.md).
+    if (!legacy && Bc250AmdIdentityExtent(q->bytes)) {
+        ++identity_answers;
+        return Bc250AmdIdentityFill(q->data, q->bytes, 1) ? 0 : (LONG)0xc000000d;
     }
     if (q->bytes < UMD_CAPS_BYTES) return (LONG)0xc0000023;
     memcpy(q->data, umd_caps_blob, UMD_CAPS_BYTES);
