@@ -1,8 +1,9 @@
 """The state-history gate (check_history.py) on small git repositories made from the catalogs of this tree.
 
-Positive: the tag of the previous release holds the tester.33 catalog, and driver/state/history holds it. Negative
-controls: the tester.33 history file removed, a history file whose contents are another catalog, a history file
-with a name that is not a catalog identity, and a checkout without tags.
+Positive: the tags of the earlier releases hold the tester.32 and tester.33 catalogs, and driver/state/history holds
+them; a tag from before the state store needs nothing. Negative controls: the tester.33 or the tester.32 history file
+removed, a history file whose contents are another catalog, a history file with a name that is not a catalog
+identity, and a checkout without tags.
 """
 import json
 import os
@@ -41,6 +42,10 @@ class StateHistoryGate(unittest.TestCase):
         self.state = self.dir / "driver" / "state"
         (self.state / "history").mkdir(parents=True)
         git(self.dir, "init", "-q")
+        # A release before the state store: no catalog.json.
+        (self.dir / "README.txt").write_text("a release before the state store\n", encoding="utf-8")
+        self.commit("tester.20")
+        git(self.dir, "tag", "v0.7.216.90-tester.20")
         # tester.32, then tester.33: catalog.json as each release tag holds it, no history yet.
         for identity, tag in ((T32, "v0.7.216.104-tester.32"), (T33, "v0.7.216.105-tester.33")):
             shutil.copyfile(HISTORY / f"{identity}.json", self.state / "catalog.json")
@@ -69,11 +74,26 @@ class StateHistoryGate(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertTrue(any(l.startswith("v0.7.216.105-tester.33: catalog 55ac2dce is in") for l in lines), lines)
 
-    def test_highest_tag_below_the_version(self):
+    def test_every_tag_below_the_version(self):
+        failures, lines = self.run_check()
+        self.assertTrue(any(l.startswith("v0.7.216.104-tester.32: catalog 49c220dc is in") for l in lines), lines)
         failures, lines = self.run_check("0.7.216.105-tester.33")
         self.assertEqual(failures, [])
         self.assertTrue(any(l.startswith("v0.7.216.104-tester.32:") for l in lines), lines)
         self.assertFalse(any("tester.33" in l for l in lines), lines)
+
+    def test_an_older_release_removed(self):
+        (self.state / "history" / f"{T32}.json").unlink()
+        self.commit("remove the tester.32 catalog")
+        failures, _ = self.run_check()
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(f"v0.7.216.104-tester.32: catalog {T32} is not in driver/state/history", failures[0])
+
+    def test_a_tag_before_the_state_store(self):
+        failures, lines = self.run_check()
+        self.assertEqual(failures, [])
+        self.assertTrue(any("1 tags without driver/state/catalog.json" in l and "v0.7.216.90-tester.20" in l
+                            for l in lines), lines)
 
     def test_tester33_history_removed(self):
         (self.state / "history" / f"{T33}.json").unlink()

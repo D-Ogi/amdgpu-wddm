@@ -178,6 +178,23 @@ static void OtherCatalog(BYTE *p,UINT bytes)
     for(i=0;i<bytes;i++){sum^=(i>=at && i<at+4)?0:p[i];sum*=16777619u;}
     memcpy(&h,p,sizeof(h));h.checksum=sum;memcpy(p,&h,sizeof(h));
 }
+#include "catalog_history.generated.h"
+// A removal record under the catalog of the release 0.7.216.105 (driver/state/history), as its uninstall writes it:
+// the header fields of h, one absent entry for each persistent value of that catalog.
+static UINT EarlierRecord(const AMDGPU_TRANSFER_HEADER *h,BYTE *p)
+{
+    const AMDGPU_STATE_HISTORY *s=NULL;AMDGPU_TRANSFER_HEADER r=*h;UINT i,used=sizeof(r),count=0,sum=2166136261u;
+    for(i=0;i<AMDGPU_STATE_HISTORY_COUNT;i++)if(!memcmp(StateHistory[i].catalog,"55ac2dce",8))s=&StateHistory[i];
+    if(!s)return 0;
+    for(i=0;i<s->count;i++) {
+        AMDGPU_TRANSFER_ENTRY e;if(s->names[i].kind==AMDGPU_STATE_VOLATILE)continue;
+        memset(&e,0,sizeof(e));e.index=i;memcpy(p+used,&e,sizeof(e));used+=sizeof(e);count++;
+    }
+    r.magic=AMDGPU_TRANSFER_MAGIC;r.version=AMDGPU_TRANSFER_VERSION;r.bytes=used;r.count=count;r.checksum=0;
+    memcpy(r.catalog,s->catalog,64);memcpy(p,&r,sizeof(r));
+    for(i=0;i<used;i++){sum^=(i>=28 && i<32)?0:p[i];sum*=16777619u;}
+    r.checksum=sum;memcpy(p,&r,sizeof(r));return used;
+}
 // The named fake file exists and holds exactly these bytes.
 static BOOL Holds(PCWSTR name,const void *data,DWORD bytes)
 {FAKE_FILE *f=Find(name);return f && f->bytes==bytes && !memcmp(f->data,data,bytes);}
@@ -237,10 +254,20 @@ static void RemovalRecords(const BYTE *snapshot,UINT bytes)
     Reset();Put(old,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
     CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(old));
     // The prepare read a record of an earlier catalog by setting name: the acknowledgment removes that record too.
-    OtherCatalog(record,record_bytes);
-    Reset();Put(old,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
-    CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(old));
-    OtherCatalog(record,record_bytes);
+    {BYTE *earlier=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);AMDGPU_TRANSFER_HEADER e;UINT earlier_bytes;
+     memcpy(&e,record,sizeof(e));earlier_bytes=EarlierRecord(&e,earlier);CHECK(earlier_bytes!=0);
+     Reset();Put(old,earlier,earlier_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
+     CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(old));
+     // A record that the prepare cannot have read stays: an unknown catalog, or a released one with a damaged entry.
+     OtherCatalog(record,record_bytes);
+     Reset();Put(old,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
+     CHECK(AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version)==ERROR_INVALID_DATA);CHECK(Holds(old,record,record_bytes));
+     OtherCatalog(record,record_bytes);
+     earlier[sizeof(e)]^=1;memcpy(&e,earlier,sizeof(e));e.checksum=0;memcpy(earlier,&e,sizeof(e));
+     {UINT n,sum=2166136261u;for(n=0;n<earlier_bytes;n++){sum^=(n>=28 && n<32)?0:earlier[n];sum*=16777619u;}e.checksum=sum;memcpy(earlier,&e,sizeof(e));}
+     Reset();Put(old,earlier,earlier_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
+     CHECK(AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version)==ERROR_INVALID_DATA);CHECK(Holds(old,earlier,earlier_bytes));
+     HeapFree(GetProcessHeap(),0,earlier);}
     // An uninstall after an install that did not read the earlier record (an older release ignores removed-v2.bin):
     // the earlier records move aside, the new record is written, and a retry of the same uninstall keeps it.
     Reset();Put(cur,record,record_bytes);Put(old,other,bytes);

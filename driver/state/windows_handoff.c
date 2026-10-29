@@ -349,7 +349,8 @@ DWORD AmdgpuWindowsAcknowledgeHandoff(const unsigned char transaction[16],
             error=Directory(&removed);if(!error)error=ReadLeaf(removed,RemovedOld,&old,&old_bytes,&old_file,TRUE);
         }
         // The prepare reads a record of an earlier catalog by setting name; its intact frame names the same source.
-        if(error==ERROR_UNSUPPORTED_TYPE)error=0;
+        // Only a record that the prepare can have read is removed: a released catalog with entries in bounds.
+        if(error==ERROR_UNSUPPORTED_TYPE){unsigned int catalog;error=AmdgpuHistoryCheck(old,old_bytes,&catalog)?ERROR_INVALID_DATA:0;}
         if(!error){memcpy(&original,old,sizeof(original));
             if(memcmp(original.source_generation,h.source_generation,16) || memcmp(original.device_hash,h.device_hash,32))
                 error=ERROR_REVISION_MISMATCH;}

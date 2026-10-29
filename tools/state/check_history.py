@@ -8,8 +8,9 @@ user loses the settings (BD-262). This gate reads one commit of the repository, 
 
 - every file driver/state/history/<id>.json at the commit is named by the catalog identity of its contents (the
   SHA-256 of the canonical JSON, as tools/state/generate.py makes it);
-- for the published tester tags (git tag v*-tester.*) with the highest version below the release version, the
-  catalog identity of driver/state/catalog.json at each tag is the catalog at the commit or a file of the history.
+- for every published tester tag (git tag v*-tester.*) with a version below the release version, the catalog
+  identity of driver/state/catalog.json at the tag is the catalog at the commit or a file of the history. A user
+  can uninstall any of those releases before the install of this one.
 
 No tag below the release version is a failure: a checkout without its tags cannot prove the history. A tag without
 driver/state/catalog.json is from before the state store and needs no history. Exit 1 on any failure.
@@ -75,15 +76,15 @@ def check(repo, commit, version):
     lines.append(f'{commit[:8]}: catalog {current[:8]}, history {", ".join(sorted(h[:8] for h in history)) or "empty"}')
     below = numbers(version)
     code, text = git(repo, 'tag', '--list', 'v*-tester.*')
-    tags = [t for t in text.split() if TAG.match(t) and numbers(t) < below]
+    tags = sorted((t for t in text.split() if TAG.match(t) and numbers(t) < below), key=lambda t: (numbers(t), t))
     if not tags:
         failures.append(f'no tag v*-tester.* below {version} in {repo}: fetch the tags, then run again')
         return failures, lines
-    top = max(numbers(t) for t in tags)
-    for tag in sorted(t for t in tags if numbers(t) == top):
+    without = []
+    for tag in tags:
         identity = catalog_at(repo, tag)
         if identity is None:
-            lines.append(f'{tag}: no {CATALOG}, nothing to read')
+            without.append(tag)
         elif identity == current:
             lines.append(f'{tag}: catalog {identity[:8]} is the current catalog')
         elif identity in history:
@@ -91,6 +92,9 @@ def check(repo, commit, version):
         else:
             failures.append(f'{tag}: catalog {identity} is not in {HISTORY} of {commit[:8]}: add the catalog.json of '
                             f'that tag as {HISTORY}/{identity}.json and run tools/state/generate.py')
+    if without:
+        lines.append(f'{len(without)} tags without {CATALOG} (before the state store), nothing to read: '
+                     f'{without[0]} to {without[-1]}')
     return failures, lines
 
 

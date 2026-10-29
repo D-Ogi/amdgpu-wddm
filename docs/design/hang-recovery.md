@@ -179,7 +179,7 @@ bound to the state catalog that wrote it. An install of a package with another s
   checks each value against the current catalog when it applies the transfer. The `catalog.json` of each released
   package is in `driver/state/history/`, under its catalog identifier. `tools/state/generate.py` makes
   `catalog_history.generated.h` from them and checks the identifiers. The gate `state-history` of the release-set
-  build (and `driver-state-history` of `quick.ps1`) fails when the catalog of the previous published tester tag is
+  build (and `driver-state-history` of `quick.ps1`) fails when the catalog of an earlier published tester tag is
   not in that directory (`tools/state/check_history.py`).
 - A catalog that no released package has (a lab build): the worker renames the archive to
   `retired-<transaction>-<name>` in the same directory, and the install continues without the records.

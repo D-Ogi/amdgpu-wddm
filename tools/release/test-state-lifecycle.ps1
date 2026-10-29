@@ -44,6 +44,34 @@ $badReply={param($exe,$arguments) @{code=0;text='{"abi":1}'}}
 Refuses {Invoke-DriverStateWorker fixture.exe prepare $tx '0.7.216.102' $device -Runner $badReply} 'zero process exit with missing durable ack is failure'
 $badReply={param($exe,$arguments) @{code=0;text='{"abi":99,"error":0}'}}
 Refuses {Invoke-DriverStateWorker fixture.exe prepare $tx '0.7.216.102' $device -Runner $badReply} 'ABI mismatch is failure'
+# BD-262: a removal record that the prepare moved aside (an unreadable catalog, fresh handoff) is a warning in the log.
+# A record that the prepare read by setting name (handoff origin 4) and a clean computer give no warning.
+$dir=Join-Path $(if($env:BC250_TEST_OUT){$env:BC250_TEST_OUT}else{[IO.Path]::GetTempPath()}) ("state-retired-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Force $dir | Out-Null
+$script:LogPath=Join-Path $dir 'install.log'
+try {
+    function Pending([uint32]$Origin){$b=New-Object byte[] 360;[BitConverter]::GetBytes([uint32]0x32545341).CopyTo($b,0)
+        [BitConverter]::GetBytes($Origin).CopyTo($b,16);[IO.File]::WriteAllBytes((Join-Path $dir 'pending.bin'),$b)}
+    function Prepared {
+        $p=[pscustomobject]@{driver_state=[pscustomobject]@{schema=2;transaction=('ab'*16);phase='prepared';
+            product='0.7.216.106';device=$device;inf_sha256=$sha}}
+        [void](Start-DriverStateTransaction -State $p -Worker fixture.exe -Product '0.7.216.106' -Device $device -InfSha256 $sha `
+            -Save $save -Runner $run -StateDirectory $dir)
+        $text=if(Test-Path -LiteralPath $script:LogPath){[IO.File]::ReadAllText($script:LogPath)}else{''}
+        Remove-Item -LiteralPath $script:LogPath -ErrorAction SilentlyContinue
+        return $text
+    }
+    Pending 1
+    Check (-not ((Prepared) -match 'WARNING')) 'fresh install without a moved record has no warning'
+    [IO.File]::WriteAllBytes((Join-Path $dir "retired-$('ab'*16)-removed.bin"),[byte[]](1,2,3))
+    $log=Prepared
+    Check ($log -match 'WARNING: The saved settings of the driver version that was removed before this install cannot be carried over' -and
+        $log -match 'default settings' -and $log -match "retired-$('ab'*16)-removed\.bin") 'moved record is a warning with the file name in the log'
+    Pending 4
+    Check (-not ((Prepared) -match 'WARNING')) 'record read by setting name has no warning'
+    Pending 1
+    Check (@(Get-DriverStateRetiredRecords -Transaction ('cd'*16) -Directory $dir).Count -eq 0) 'record of another transaction is not this install'
+} finally { $script:LogPath=$null; Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
 
 function Item([string]$Name,[string]$Kind,[string]$Status,$Value,[string]$Path='') {
     $read=[pscustomobject]@{status=$Status;os_error=0;source='override';type=4;bytes=4;value=$Value}

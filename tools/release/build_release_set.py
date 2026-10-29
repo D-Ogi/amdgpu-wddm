@@ -700,8 +700,8 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
         comp += compiler_findings(b, entry.get("params"))
     gates.append({"name": "compiler", "status": "FAIL" if comp else "PASS",
                   "lines": comp or [f"{len(plan['builds'])} rows name an allowed compiler on the command line"]})
-    # The state worker of each row reads the removal record of the previous release only when driver/state/history at
-    # the row's commit holds that release's catalog (BD-262, tools/state/check_history.py).
+    # The state worker of each row reads the removal record of an earlier release only when driver/state/history at
+    # the row's commit holds that release's catalog (BD-262, tools/state/check_history.py): every earlier tester tag.
     hist, hist_failed = [], False
     for (repo, commit), ids in sorted(state_worker_commits(plan).items()):
         checkout = repos.find(repo, commit)
