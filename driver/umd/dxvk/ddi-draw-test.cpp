@@ -877,6 +877,43 @@ int main() {
     if (retire_device_handle(failedCleanup)!=S_OK || failedCleanup.owner) fail(__LINE__);
     if (std::memcmp(&unchangedTable,&originalTable,sizeof(unchangedTable))) fail(__LINE__);
     if(std::memcmp(&unchangedDxgi,&originalDxgi,sizeof(unchangedDxgi))) fail(__LINE__);
+    // BD-258: the third bound. A retired device that was lost less than kShortLostDeviceMs after its creation adds
+    // one; any other retired device resets the count. At kShortLostDeviceLimit CreateDevice fails at once with
+    // kKeptDeviceStatus, before it creates anything, and an argument error still has its own status.
+    if (short_lost_device_count() || short_lost_device_limit_reached()) fail(__LINE__);
+    {
+        // DestroyDevice reads the loss and the lifetime before the close clears the bridge.
+        DdiDeviceHandle lostDevice{new DeviceOwner};
+        lostDevice.owner->bridge().device_lost=true; lostDevice.owner->set_created_ms(GetTickCount64());
+        if (retire_device_handle(lostDevice)!=S_OK || lostDevice.owner || short_lost_device_count()!=1) fail(__LINE__);
+        DdiDeviceHandle oldLostDevice{new DeviceOwner};
+        oldLostDevice.owner->bridge().device_lost=true;
+        oldLostDevice.owner->set_created_ms(GetTickCount64()-kShortLostDeviceMs-1);
+        if (retire_device_handle(oldLostDevice)!=S_OK || short_lost_device_count()) fail(__LINE__);
+        DdiDeviceHandle lostAgain{new DeviceOwner};
+        lostAgain.owner->bridge().device_lost=true; lostAgain.owner->set_created_ms(GetTickCount64());
+        if (retire_device_handle(lostAgain)!=S_OK || short_lost_device_count()!=1) fail(__LINE__);
+        DdiDeviceHandle healthyDevice{new DeviceOwner}; healthyDevice.owner->set_created_ms(GetTickCount64());
+        if (retire_device_handle(healthyDevice)!=S_OK || short_lost_device_count()) fail(__LINE__);
+    }
+    for (unsigned i=0;i+1<kShortLostDeviceLimit;++i) note_retired_device(true,kShortLostDeviceMs-1);
+    if (short_lost_device_count()!=kShortLostDeviceLimit-1 || short_lost_device_limit_reached()) fail(__LINE__);
+    const unsigned createsBelowShortLimit=createCount;
+    // Below the bound the creation runs: it gets to the engine, which this test does not give.
+    if (attemptCreate()!=E_NOINTERFACE || createCount!=createsBelowShortLimit+1 || newHandle.owner ||
+        failedCleanup.owner) fail(__LINE__);
+    note_retired_device(true,kShortLostDeviceMs);
+    if (short_lost_device_count()) fail(__LINE__);
+    for (unsigned i=0;i<kShortLostDeviceLimit;++i) note_retired_device(true,0);
+    if (!short_lost_device_limit_reached()) fail(__LINE__);
+    const unsigned createsAtShortLimit=createCount;
+    if (attemptCreate()!=kKeptDeviceStatus || createCount!=createsAtShortLimit || newHandle.owner ||
+        failedCleanup.owner) fail(__LINE__);
+    createArgs.Flags=0;
+    if (attemptCreate()!=E_INVALIDARG || createCount!=createsAtShortLimit) fail(__LINE__);
+    createArgs.Flags=negotiatedFlags;
+    note_retired_device(false,0);
+    if (short_lost_device_count() || short_lost_device_limit_reached()) fail(__LINE__);
     // BD-253: the second bound. When the process keeps kKeptDeviceLimit devices, CreateDevice fails at once with
     // kKeptDeviceStatus, before it creates anything; an argument error still has its own status.
     if (retained_device_count()>=kKeptDeviceLimit || kept_device_limit_reached()) fail(__LINE__);

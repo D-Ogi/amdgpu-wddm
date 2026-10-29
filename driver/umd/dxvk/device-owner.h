@@ -61,6 +61,10 @@ public:
     // M15.14: the adapter's scan-out source, copied at CreateDevice (scanout-primary.h).
     const ScanoutSource &scanout() const { return scanout_; }
     void set_scanout(const ScanoutSource &source) { scanout_=source; }
+    // BD-258: the GetTickCount64 time of the CreateDevice that published this owner, 0 before it. DestroyDevice
+    // uses it for the bound of the short lost devices (ddi-lifecycle.h).
+    ULONGLONG created_ms() const { return created_ms_; }
+    void set_created_ms(ULONGLONG ms) { created_ms_=ms; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -82,6 +86,7 @@ private:
     amdgpu_wddm::app_settings::FrameLimiter frame_limiter_;
     VBlankPacer vblank_pacer_;
     ScanoutSource scanout_{};
+    ULONGLONG created_ms_=0;
     RuntimeDevice runtime_;
     HostBridge bridge_{};
     HostedInstance instance_;

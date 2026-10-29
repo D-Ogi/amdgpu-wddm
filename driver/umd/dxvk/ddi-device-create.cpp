@@ -33,12 +33,13 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     HRESULT negotiated=requested_feature_level(args.Flags,requested,args.Interface);
     if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) ||
         level>advertised.maximum) return E_INVALIDARG;
-    if (kept_device_limit_reached()) {
-        // BD-253: the second bound (ddi-lifecycle.h). One line for each refusal, in both flavours, bounded.
+    if (kept_device_limit_reached() || short_lost_device_limit_reached()) {
+        // BD-253 and BD-258: the second and third bounds (ddi-lifecycle.h). One line for each refusal, in both
+        // flavours, bounded.
         static std::atomic_uint notes{16};
-        device_life_note(notes,"BC250 BD-253: CreateDevice refused: kept-devices=%u limit=%u hr=%08X runtime=%p\n",
-            retained_device_count(),kKeptDeviceLimit,unsigned(kKeptDeviceStatus),
-            reinterpret_cast<void *>(args.hRTDevice.handle));
+        device_life_note(notes,"BC250 BD-253: CreateDevice refused: kept-devices=%u limit=%u short-lost-devices=%u "
+            "limit=%u hr=%08X runtime=%p\n",retained_device_count(),kKeptDeviceLimit,short_lost_device_count(),
+            kShortLostDeviceLimit,unsigned(kKeptDeviceStatus),reinterpret_cast<void *>(args.hRTDevice.handle));
         return kKeptDeviceStatus;
     }
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;
@@ -112,6 +113,7 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         *args.DXGIBaseDDI.pDXGIDDIBaseFunctions3=make_dxgi_device_table();
         *args.p11_1DeviceFuncs=make_render_device_table();
     }
+    owner->set_created_ms(GetTickCount64());
     storage->owner=owner;
     {
         // BD-253: one line for each new device, in both flavours (an ordinary error-report line: fixed text and
@@ -120,8 +122,8 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
         auto &runtime=owner->runtime();
         static std::atomic_uint notes{16};
         device_life_note(notes,"BC250 BD-253: CreateDevice runtime=%p identity=%p handle-of-kept-device=%u "
-            "kept-devices=%u\n",runtime.hDevice,runtime.host_identity(),
-            unsigned(retained_runtime_handle(runtime.hDevice)),retained_device_count());
+            "kept-devices=%u short-lost-devices=%u\n",runtime.hDevice,runtime.host_identity(),
+            unsigned(retained_runtime_handle(runtime.hDevice)),retained_device_count(),short_lost_device_count());
     }
     return S_OK;
 }

@@ -28,4 +28,19 @@ inline constexpr unsigned kKeptDeviceLimit=8;
 // removed status tells the application that a device was lost, and a lost device is what started that loop.
 inline constexpr HRESULT kKeptDeviceStatus=E_FAIL;
 bool kept_device_limit_reached() noexcept;
+// BD-258: the third bound, of the devices that are lost soon after their creation. In tester.34 explorer created a
+// second device, the kernel put that device in error after its first submission, and explorer created a new device
+// after each loss: more than 1000 devices in one lab capture, each one closed without error, so the kept-device bound
+// above did not stop it. A retired device is a short lost device when its loss was latched and it lived less than
+// kShortLostDeviceMs from CreateDevice to DestroyDevice. A retired device that is not one resets the count. When the
+// count gets to kShortLostDeviceLimit, CreateDevice fails at once with kKeptDeviceStatus, as at the kept-device bound.
+// The count only goes down at a retire, and a refused CreateDevice retires nothing, so the refusal stays for the life
+// of the process. A loss after a long life (one TDR in a game) resets the count instead, so a process can recover from
+// any number of such losses.
+inline constexpr unsigned kShortLostDeviceLimit=8;
+inline constexpr ULONGLONG kShortLostDeviceMs=10000;
+// lost: the loss was latched before the close. lifetime_ms: from CreateDevice to DestroyDevice.
+void note_retired_device(bool lost,ULONGLONG lifetime_ms) noexcept;
+unsigned short_lost_device_count() noexcept;
+bool short_lost_device_limit_reached() noexcept;
 }

@@ -28,10 +28,24 @@ unsigned retained_device_count() noexcept {
     return r.total;
 }
 bool kept_device_limit_reached() noexcept { return retained_device_count()>=kKeptDeviceLimit; }
+namespace {
+std::atomic_uint g_short_lost_devices{0};
+}
+void note_retired_device(bool lost,ULONGLONG lifetime_ms) noexcept {
+    if (lost && lifetime_ms<kShortLostDeviceMs) g_short_lost_devices.fetch_add(1);
+    else g_short_lost_devices.store(0);
+}
+unsigned short_lost_device_count() noexcept { return g_short_lost_devices.load(); }
+bool short_lost_device_limit_reached() noexcept { return short_lost_device_count()>=kShortLostDeviceLimit; }
 HRESULT retire_device_handle(DdiDeviceHandle &handle) noexcept {
     auto *owner=handle.owner;
     if (!owner) return S_OK;
     HRESULT hr=E_FAIL;
+    // A successful close clears the bridge, so the loss and the lifetime are read before it.
+    const bool lost=owner->bridge().device_lost;
+    const ULONGLONG created=owner->created_ms();
+    const ULONGLONG now=GetTickCount64();
+    note_retired_device(lost,created && now>=created ? now-created : 0);
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);
         try { hr=owner->close(); }
