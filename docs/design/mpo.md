@@ -178,6 +178,41 @@ points. They apply to every step:
 - The flip state of each plane is separate: the address, the present ID, the pending flip and the vsync report.
   The present code has one state for plane 0. Step S3 makes it an array.
 
+## Step S3: plane 1 on pipe 1
+
+### The Linux path of DCN 2.0.1
+
+`dcn201_init.c` sets `program_pipe` to `dcn10_program_pipe`. So DCN 2.0.1 programs a plane through the DCN 1.0
+functions, not through `dcn20_program_pipe`. For each pipe of the tree, from the top:
+
+1. The top pipe only: `optc1_program_global_sync`, then `set_vtg_params` and `blank_pixel_data`.
+2. A full update: `dcn10_enable_plane`. `power_on_plane_resources` does nothing on DCN 2.0.1: the
+   `dcn_2_0_1_offset.h` header has no `DC_IP_REQUEST_CNTL` and no `DOMAIN*_PG` register (regcalc: not found). Then
+   `hubp_clk_cntl` (`HUBP_CLOCK_ENABLE`) and `opp_pipe_clock_control` of OPP0.
+3. `dcn10_update_dchubp_dpp`, in this order:
+   - `dpp_dppclk_control` and the DCCG DTO of the DPP (`update_dpp_dto`)
+   - `hubp_vtg_sel` (OTG0), `hubp_setup` and `hubp_setup_interdependent`
+   - `dcn10_update_dpp` (the format) and `update_mpcc` (`dcn201_update_mpcc`)
+   - the scaler and `mem_program_viewport`
+   - `hubp_program_surface_config` and the address
+   - the HUBP unblank of a visible tree.
+
+The firmware leaves HUBP1 blanked on VTG 1 (facts, `display.yaml`). The kit-s3p probe reads what the running KMD
+leaves on pipe 1 (the HUBP and DPP clock enables, the DPPCLK1 DTO, VTG_SEL, the MPCC links). It is the positive
+control for this sequence.
+
+### What S3 adds to the driver
+
+- The enable of pipe 1 at the first two-plane flip, in steps 2 and 3 above, inside the OTG0 lock. The disable at the
+  last two-plane flip: `dcn201_plane_atomic_disconnect` (MPCC1 out of the tree), then the HUBP1 blank and the clocks
+  off after the latch.
+- MPCC1 above MPCC0 in the OPP0 tree, with per-pixel premultiplied alpha (`dcn_mpc.c`).
+- The DML201 plan of the two planes (the grouped requestors of `bc250_dcn201_pipe.c`). The DPP clock DTO of each
+  pipe is from the plan, and the DISPCLK must fit as for one plane.
+- The check of two planes: `LayerIndex` order, the source crop and the clip.
+- The flip state of each plane: the address, the present ID and the vsync report.
+- `MPO_PLANE1` and `MaxOverlayPlanes` 2 in the lab flavour.
+
 ## Steps
 
 | Step | What | Go when |
