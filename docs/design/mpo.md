@@ -101,11 +101,12 @@ Stage S1 refused 1280x720 on the 1920x1200 mode with verdict `pitch`. Step S2 ad
 clocks that run and its VSTARTUP and VUPDATE offset are the ones of OTG0 (verdict `global-sync` otherwise). The
 shells have no pitch rule of their own.
 
-Open: a D3D11 borderless or windowed flip-model chain is a `DISPLAYABLE_SURFACE` without `pPrimaryDesc`, and the
-surface record refuses `SCANOUT` without `PRIMARY` (`surface_resource_private.h`). Such a chain cannot reach a
-plane, and DWM composes it. A D3D12 chain always has a `PRIMARY` heap. A record rule for displayable surfaces
-(scan-out with a displayable bit in place of `PRIMARY`, with no video present source) needs a decision of the lead
-before a shell asks for it.
+Known limit of tester.34: a D3D11 borderless or windowed flip-model chain is a `DISPLAYABLE_SURFACE` without
+`pPrimaryDesc`, and the surface record refuses `SCANOUT` without `PRIMARY` (`surface_resource_private.h`). Such a
+chain cannot reach a plane, and DWM composes it. A D3D12 chain always has a `PRIMARY` heap. Tester.34 keeps the
+record rule as it is: MPO is a lab-flavour feature and is off by default there. A record rule for displayable
+surfaces (scan-out with a displayable bit in place of `PRIMARY`, with no video present source) is work for a later
+release.
 
 ### When UNSUPPORTED ends
 
