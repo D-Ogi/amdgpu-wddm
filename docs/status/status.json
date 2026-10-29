@@ -754,7 +754,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250SystemDisplayEnable",
-       "source": "driver/kmd/display.c:2096",
+       "source": "driver/kmd/display.c:2104",
        "done": true,
        "reason": "does work",
        "partial": true,
@@ -769,7 +769,7 @@
        "since": "WIN8",
        "targeted": true,
        "function": "Bc250SystemDisplayWrite",
-       "source": "driver/kmd/display.c:2134",
+       "source": "driver/kmd/display.c:2142",
        "done": true,
        "reason": "does work",
        "applicability": {
