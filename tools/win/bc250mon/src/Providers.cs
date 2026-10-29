@@ -30,6 +30,8 @@ namespace Bc250Mon
         public void Poll(State state)
         {
             var p = new Panel { Name = Name, Title = "SoC / GPU", Order = 10 };
+            // Which control DLL the driver calls go through: the installed one, or the private copy beside the exe.
+            p.Rows.Add(new Row("Control DLL", ControlDll.Describe(), ControlDll.Level == Level.Good ? Level.Info : ControlDll.Level));
             try
             {
                 ClockSnapshot sample = _driver.ReadClock();

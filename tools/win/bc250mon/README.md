@@ -518,6 +518,17 @@ The build stops when the DLL is not x64, or when an entry point of a `[DllImport
 imports it checked. On 2026-10-11 the lab overlay was built against the lab's DLL of 2026-10-06, and its fan row
 showed "no Bc250Hwmon" until the installed DLL replaced that copy.
 
+At start, the monitor loads the installed `bc250control.dll` before its first driver call (`src\ControlDll.cs`). The
+install folder is `HKLM\SOFTWARE\amdgpu-wddm\Release` `InstallDir`, else `%ProgramFiles%\amdgpu-wddm`. In that
+folder the monitor uses `control\bc250control.dll`, else `tools\bc250control.dll`. The copy beside `bc250mon.exe` is
+used only when no install folder has the DLL, or when the installed DLL does not load. The reason is the state
+catalog: the catalog of a private copy can be older than the catalog of the installed driver, and then
+`open driver state` fails with Windows error 1306 (lab 2026-10-29). The `Control DLL` row of the SoC / GPU panel
+shows `installed` or `private`, the path and the first 8 hex digits of the SHA-256. It also names the entry points
+that the loaded DLL does not export. `test-control-load.ps1` (run by the build) loads the DLL from fake install
+folders and checks which module each call uses. The positive control is a run without the preload, which uses the
+private copy.
+
 Copy `bc250mon.exe` to `C:\BC250\mon\` and register a task "at logon of the lab user, interactive, highest
 privileges" that runs it. To replace a running one, stop the process, overwrite the file and start the task
 again, so the new one lands back in the interactive session:
