@@ -1110,18 +1110,33 @@ static void FrontTableTests13()
               !duration.ClosestLargerDuration,
           "pfnCheckPresentDurationSupport answered %u and %u, expected 0 and 0", duration.ClosestSmallerDuration,
           duration.ClosestLargerDuration);
-    // The overlay block answers DXGI_ERROR_UNSUPPORTED until the kernel driver admits a plane.
-    CHECK(live.pfnGetMultiplaneOverlayCaps(nullptr) == DXGI_ERROR_UNSUPPORTED, "pfnGetMultiplaneOverlayCaps");
-    CHECK(live.pfnGetMultiplaneOverlayGroupCaps(nullptr) == DXGI_ERROR_UNSUPPORTED,
-          "pfnGetMultiplaneOverlayGroupCaps");
+    // The overlay block over a handle the front never published: no device, so no trailer that admits a plane.
+    // The caps answer DXGI_ERROR_UNSUPPORTED, the present refuses the handle, and a null argument is refused.
+    CHECK(live.pfnGetMultiplaneOverlayCaps(nullptr) == E_INVALIDARG, "a null pfnGetMultiplaneOverlayCaps argument");
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS mpoCaps;
+    memset(&mpoCaps, 0, sizeof(mpoCaps));
+    mpoCaps.hDevice = 0x7A10;
+    CHECK(live.pfnGetMultiplaneOverlayCaps(&mpoCaps) == DXGI_ERROR_UNSUPPORTED && !mpoCaps.MultiplaneOverlayCaps.MaxPlanes,
+          "pfnGetMultiplaneOverlayCaps over an unknown device");
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS groupCaps;
+    memset(&groupCaps, 0, sizeof(groupCaps));
+    groupCaps.hDevice = 0x7A10;
+    CHECK(live.pfnGetMultiplaneOverlayGroupCaps(nullptr) == E_INVALIDARG &&
+              live.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == DXGI_ERROR_UNSUPPORTED,
+          "pfnGetMultiplaneOverlayGroupCaps over an unknown device");
     CHECK(live.pfnReserved1(nullptr) == DXGI_ERROR_UNSUPPORTED, "pfnReserved1");
-    CHECK(live.pfnPresentMultiplaneOverlay(nullptr) == DXGI_ERROR_UNSUPPORTED, "pfnPresentMultiplaneOverlay");
+    DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY mpoPresent;
+    memset(&mpoPresent, 0, sizeof(mpoPresent));
+    mpoPresent.hDevice = 0x7A10;
+    CHECK(live.pfnPresentMultiplaneOverlay(nullptr) == E_INVALIDARG &&
+              live.pfnPresentMultiplaneOverlay(&mpoPresent) == E_INVALIDARG,
+          "pfnPresentMultiplaneOverlay over an unknown device was not refused");
     CHECK(live.pfnReserved2(nullptr) == DXGI_ERROR_UNSUPPORTED, "pfnReserved2");
     CHECK(PresentCalls == 2, "an overlay entry reached the hosted pfnPresent");
 
     // The interface level of an adapter. On and Off are the registry's word. Follow takes WDDM 1.3 only when
-    // the kernel driver admits an overlay plane, and no flag of the caps trailer says so yet: whatever the
-    // trailer holds, Follow gives D3D11_1.
+    // the kernel driver admits an overlay plane: BC250_SCANOUT_CAPS_MPO, which comes with DIRECT_FLIP. MPO
+    // without DIRECT_FLIP is a trailer no kernel driver writes, and it admits nothing.
     bc250_scanout_caps none;
     memset(&none, 0, sizeof(none));
     bc250_scanout_caps all = none;
@@ -1132,8 +1147,21 @@ static void FrontTableTests13()
     CHECK(FrontLevelFor(FrontWddm13::Off, all) == FrontLevel::D3D11_1, "Off did not give D3D11_1");
     CHECK(FrontLevelFor(FrontWddm13::Follow, none) == FrontLevel::D3D11_1,
           "Follow gave WDDM 1.3 over an empty caps trailer");
-    CHECK(FrontLevelFor(FrontWddm13::Follow, all) == FrontLevel::D3D11_1,
-          "Follow gave WDDM 1.3 although no caps flag admits an overlay plane");
+    bc250_scanout_caps flipOnly = all, mpoOnly = all, mpo = all;
+    flipOnly.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
+                     BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
+    mpoOnly.flags = BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_MPO_PLANE1;
+    mpo.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO;
+    CHECK(!FrontOverlayAdmitted(none) && !FrontOverlayAdmitted(flipOnly) && !FrontOverlayAdmitted(mpoOnly) &&
+              FrontOverlayAdmitted(mpo) && FrontOverlayAdmitted(all),
+          "FrontOverlayAdmitted is not MPO together with DIRECT_FLIP");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, flipOnly) == FrontLevel::D3D11_1,
+          "Follow gave WDDM 1.3 to a start without the MPO bit");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, mpoOnly) == FrontLevel::D3D11_1,
+          "Follow gave WDDM 1.3 to an MPO bit without DIRECT_FLIP");
+    CHECK(FrontLevelFor(FrontWddm13::Follow, mpo) == FrontLevel::Wddm1_3,
+          "Follow did not give WDDM 1.3 to a start that admits an overlay plane");
+    CHECK(FrontLevelFor(FrontWddm13::Off, mpo) == FrontLevel::D3D11_1, "Off did not win over the MPO bit");
 }
 
 // ---------------------------------------------------------------- the DirectFlip rule (pure)
@@ -2034,8 +2062,60 @@ static void FrontWddm13Checks(const Opened &o, bool admitted, const char *(*reco
     CHECK(dxgi.pfnCheckPresentDurationSupport(&duration) == S_OK && !duration.ClosestSmallerDuration &&
               !duration.ClosestLargerDuration,
           "pfnCheckPresentDurationSupport did not answer zero and zero");
-    CHECK(dxgi.pfnGetMultiplaneOverlayGroupCaps(nullptr) == DXGI_ERROR_UNSUPPORTED,
-          "pfnGetMultiplaneOverlayGroupCaps did not answer DXGI_ERROR_UNSUPPORTED");
+    // The overlay caps follow the trailer at every question: no MPO bit, then the bit with plane 0 alone, then
+    // with the overlay plane on pipe 1, then the bit without DIRECT_FLIP, which no kernel driver writes.
+    const unsigned savedFlags = ScanoutFlags;
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS overlayCaps;
+    memset(&overlayCaps, 0, sizeof(overlayCaps));
+    overlayCaps.hDevice = (DXGI_DDI_HDEVICE)hDevice.pDrvPrivate;
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS groupCaps;
+    memset(&groupCaps, 0, sizeof(groupCaps));
+    groupCaps.hDevice = overlayCaps.hDevice;
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED &&
+              dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == DXGI_ERROR_UNSUPPORTED,
+          "the overlay caps did not answer DXGI_ERROR_UNSUPPORTED without the MPO bit");
+    ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == S_OK && overlayCaps.MultiplaneOverlayCaps.MaxPlanes == 1 &&
+              overlayCaps.MultiplaneOverlayCaps.NumCapabilityGroups == 1,
+          "plane 0 alone: %u planes in %u groups", overlayCaps.MultiplaneOverlayCaps.MaxPlanes,
+          overlayCaps.MultiplaneOverlayCaps.NumCapabilityGroups);
+    ScanoutFlags |= BC250_SCANOUT_CAPS_MPO_PLANE1;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == S_OK && overlayCaps.MultiplaneOverlayCaps.MaxPlanes == 2,
+          "with the pipe 1 plane: %u planes", overlayCaps.MultiplaneOverlayCaps.MaxPlanes);
+    CHECK(dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == S_OK, "the group caps of group 0 failed");
+    const DXGI_DDI_MULTIPLANE_OVERLAY_GROUP_CAPS &group = groupCaps.MultiplaneOverlayGroupCaps;
+    const UINT wantCaps = DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_RGB |
+                          DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_BILINEAR_FILTER |
+                          DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_HIGH_FILTER;
+    CHECK(group.NumPlanes == 2 && group.MaxStretchFactor == 16.0f && group.MaxShrinkFactor == 1.0f &&
+              group.OverlayCaps == wantCaps && group.StereoCaps == 0,
+          "group 0: %u planes, stretch %.3f, shrink %.3f, caps %08x, stereo %08x", group.NumPlanes,
+          group.MaxStretchFactor, group.MaxShrinkFactor, group.OverlayCaps, group.StereoCaps);
+    groupCaps.GroupIndex = 1;
+    CHECK(dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == E_INVALIDARG, "group 1 of one group was not refused");
+    ScanoutFlags = BC250_SCANOUT_CAPS_MPO;
+    CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED,
+          "the MPO bit without DIRECT_FLIP admitted a plane");
+    ScanoutFlags = savedFlags;
+    // The present reaches the hosted driver's own overlay present with the runtime's argument, and only it:
+    // no pfnPresent first, which would be a second present to dxgkrnl.
+    DXGI_DDI_PRESENT_MULTIPLANE_OVERLAY planes[2];
+    memset(planes, 0, sizeof(planes));
+    planes[0].Enabled = TRUE;
+    planes[0].hResource = 0x5103;
+    planes[1].LayerIndex = 1;
+    DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY overlay;
+    memset(&overlay, 0, sizeof(overlay));
+    overlay.hDevice = overlayCaps.hDevice;
+    overlay.pDXGIContext = (void *)(UINT_PTR)0x5300;
+    overlay.PresentPlaneCount = 2;
+    overlay.pPresentPlanes = planes;
+    recordReset();
+    CHECK(dxgi.pfnPresentMultiplaneOverlay(&overlay) == S_OK &&
+              strstr(record(), "mpo-present planes=2 first=5103 context=5300") != nullptr &&
+              !strstr(record(), "dxgi-present"),
+          "the overlay present did not reach the hosted overlay present alone: %s", record());
 
     // pfnRelocateDeviceFuncs at WDDM 1.3 fills the moved table in its full length, entry for entry the same.
     std::vector<void *> moved(deviceSlots + 16, guard);
@@ -2394,6 +2474,15 @@ static void Child(const std::string &s)
         if (s == "front-wddm13") SetDw(RouterKey, L"FrontWddm13", 1);
         else if (s == "front-wddm13-zero") SetDw(RouterKey, L"FrontWddm13", 0);
         else if (s == "front-wddm13-wrong-type") SetSz(RouterKey, L"FrontWddm13", L"1");
+        // The WDDM 1.3 scenarios run over a trailer of a start that flips. front-wddm13-follow has no
+        // FrontWddm13 value, and its trailer admits an overlay plane from the adapter open on.
+        if (s.rfind("front-wddm13", 0) == 0) {
+            ScanoutTrailer = true;
+            ScanoutWidth = 1920;
+            ScanoutHeight = 1200;
+            ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+            if (s == "front-wddm13-follow") ScanoutFlags |= BC250_SCANOUT_CAPS_MPO;
+        }
         // front-answer is front-on with the scan-out caps trailer of a start that admits a client flip; the
         // adapter open sees it too, and its install line says so.
         if (s == "front-answer" || s == "front-log") {
@@ -2441,7 +2530,7 @@ static void Child(const std::string &s)
         // D3D11_1_DDI_SUPPORTED exactly (build version 0). With FrontWddm13 1 it is two longer, and
         // D3DWDDM1_3_DDI_SUPPORTED is last (BD-223).
         const bool on = !strcmp(wantColumn, "front=on");
-        const bool wddm13 = s == "front-wddm13";
+        const bool wddm13 = s == "front-wddm13" || s == "front-wddm13-follow";
         if (entry10) {
             // The D3D10.0 entry has no GetSupportedVersions and no GetCaps, and the front needs both: the
             // route is unchanged and CalcPrivateDeviceSize is the hosted driver's own, with no front record
@@ -2484,11 +2573,18 @@ static void Child(const std::string &s)
             // The adapter open names the level it decided, once, in the front log.
             const std::string installLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                                    std::to_wstring(GetCurrentProcessId()) + L".log");
-            const char *wantLevel = wddm13 ? "wddm13=on level=wddm1_3"
+            const char *wantLevel = s == "front-wddm13" ? "wddm13=on level=wddm1_3"
+                                    : s == "front-wddm13-follow" ? "wddm13=follow level=wddm1_3"
                                     : s == "front-wddm13-zero" || s == "front-wddm13-wrong-type"
                                         ? "wddm13=off level=d3d11_1"
                                         : "wddm13=follow level=d3d11_1";
             CHECK(Has(installLog, wantLevel), "the install line has no %s: %s", wantLevel, installLog.c_str());
+            // The hosted overlay present was resolved exactly when the hosted module exports it: the double does,
+            // and the real hosted UMD does from the BD-223 Mesa change on.
+            const bool exportsMpo = GetProcAddress(hosted, "Bc250PresentMultiplaneOverlay") != nullptr;
+            const char *wantMpo = exportsMpo ? "hosted_mpo=1" : "hosted_mpo=0";
+            CHECK(Has(installLog, wantMpo) && (real || exportsMpo), "the install line has no %s: %s", wantMpo,
+                  installLog.c_str());
         } else {
             for (UINT32 i = 0; i < n; ++i)
                 CHECK(versions[i] != D3D11_1_DDI_SUPPORTED, "D3D11_1 is offered although the front is off");
@@ -2860,13 +2956,16 @@ static void Child(const std::string &s)
                                            std::to_wstring(GetCurrentProcessId()) + L".log");
         CHECK(Has(bltLog, "pfnBlt1 dropped a source rectangle"),
               "the dropped source rectangle is not in the front log: %s", bltLog.c_str());
-        // The four multiplane-overlay entries answer DXGI_ERROR_UNSUPPORTED, not E_NOTIMPL, and their lines
-        // reach the file through the process-wide log although they have no device record.
-        CHECK(dxgi.pfnPresentMultiplaneOverlay(nullptr) == DXGI_ERROR_UNSUPPORTED,
-              "pfnPresentMultiplaneOverlay did not answer DXGI_ERROR_UNSUPPORTED");
+        // The overlay caps over this device answer DXGI_ERROR_UNSUPPORTED, not E_NOTIMPL: the start has no
+        // MPO bit in its trailer. The line reaches the file through the process-wide log.
+        DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS overlayCaps;
+        memset(&overlayCaps, 0, sizeof(overlayCaps));
+        overlayCaps.hDevice = (DXGI_DDI_HDEVICE)create.hDrvDevice.pDrvPrivate;
+        CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED,
+              "pfnGetMultiplaneOverlayCaps did not answer DXGI_ERROR_UNSUPPORTED without the MPO bit");
         const std::string mpoLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                            std::to_wstring(GetCurrentProcessId()) + L".log");
-        CHECK(Has(mpoLog, "refused dxgi pfnPresentMultiplaneOverlay"),
+        CHECK(Has(mpoLog, "refused dxgi pfnGetMultiplaneOverlayCaps"),
               "a DXGI refusal did not reach the front log: %s", mpoLog.c_str());
 
         // What the front forwards, and what it does not. ClearView with no rectangle list is the whole-view
@@ -3223,7 +3322,7 @@ static int RunAll(const std::wstring &out)
         // BD-223: the WDDM 1.3 interface of the front. One pure suite and one scenario per state of FrontWddm13
         // that changes the interface; Absent is front-on.
         {"front-tables13", nullptr, {}}, {"front-wddm13", nullptr, {}}, {"front-wddm13-zero", nullptr, {}},
-        {"front-wddm13-wrong-type", nullptr, {}},
+        {"front-wddm13-wrong-type", nullptr, {}}, {"front-wddm13-follow", nullptr, {}},
         // Application policy (AppRouter).
         {"app-absent-key", nullptr, {}}, {"app-mode-absent", nullptr, {}}, {"app-mode-cpu", nullptr, {}},
         {"app-mode-invalid", nullptr, {}}, {"app-mode-wrong-type", nullptr, {}},

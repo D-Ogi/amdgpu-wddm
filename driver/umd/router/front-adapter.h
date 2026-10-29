@@ -75,13 +75,18 @@ enum class FrontWddm13 { Follow, On, Off };
 
 // What Follow means: the WDDM 1.3 table rides only a start whose kernel driver admits an overlay plane.
 // The compositor then has a reason to ask the overlay entries, and a start without that admission keeps
-// exactly the table it had before BD-223. The trailer bit that says so is part of the BD-223 contract
-// (docs/design/mpo.md); until a kernel driver publishes it, Follow is the D3D11_1 front.
+// exactly the table it had before BD-223. The kernel driver says so with BC250_SCANOUT_CAPS_MPO, which it
+// sets only together with DIRECT_FLIP (bc250_scanout_caps.h, docs/design/mpo.md). The same test gates the
+// overlay caps the DXGI entries answer (front-dxgi.cpp).
 inline bool FrontOverlayAdmitted(const bc250_scanout_caps &caps)
 {
-    (void)caps;
-    return false;
+    return (caps.flags & BC250_SCANOUT_CAPS_MPO) && (caps.flags & BC250_SCANOUT_CAPS_DIRECT_FLIP);
 }
+
+// The multiplane-overlay present of the hosted driver (Mesa d3d10umd DxgiFns.cpp). That driver publishes
+// the D3D10.0 DXGI table, which has no such entry, so the front resolves the export by name.
+typedef HRESULT(APIENTRY *HostedPresentMpoFn)(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *);
+static const char kHostedPresentMpoExport[] = "Bc250PresentMultiplaneOverlay";
 
 // The level a start gets, a pure function of the request and the trailer read at adapter open, so that the
 // host gate drives the production rule.
@@ -115,6 +120,9 @@ struct Adapter {
     // CreateDevice must agree for the adapter's whole life, and the runtime may create a device long after
     // it read the list.
     FrontLevel level;
+    // BD-223: the hosted driver's Bc250PresentMultiplaneOverlay, or null when its module has no such export.
+    // Resolved once at Install from the module that holds the hosted adapter entries.
+    HostedPresentMpoFn hosted_present_mpo;
 };
 
 // Whether the front publishes a table for this interface on this adapter. Every other interface the
@@ -146,10 +154,6 @@ struct Device {
     // so, and a runtime that was not told believes the object exists.
     D3D10DDI_HRTCORELAYER hRTCoreLayer;
     unsigned int interface_version;        // what the runtime asked for, before the front rewrote it
-    // BD-223: the runtime's DXGI callbacks of this device (DXGI_DDI_BASE_ARGS), kept for the overlay present,
-    // which the front calls itself (pfnPresentMultiplaneOverlayCb). The runtime owns the table and keeps it
-    // valid for the device's life ("The driver should record this pointer for later use", dxgiddi.h).
-    DXGI_DDI_BASE_CALLBACKS *dxgi_callbacks;
     unsigned int create_flags;             // D3D11DDI_CREATEDEVICE_FLAG_*: carries the pipeline level
     // Witnesses. Every one of them is a count, so a trial reads one line and knows what happened.
     volatile LONG direct_flip_calls;

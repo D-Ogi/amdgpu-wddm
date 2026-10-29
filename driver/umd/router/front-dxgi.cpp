@@ -22,11 +22,13 @@
 // clause of `IS_DXGI_MULTIPLANE_OVERLAY_FUNCTIONS` (d3d10umddi.h:8012) is `major == 11 && minor >
 // D3D11_1_DDI_MINOR_VERSION_RC`, which is 15 > 14 for `D3D11_1_DDI_INTERFACE_VERSION` whatever the build
 // version is - our own DXVK shell relies on exactly that (driver/umd/dxvk/ddi-device-create.cpp:59). What
-// keeps the operating system off them is the kernel driver, which implements no multiplane-overlay DDI at
-// all (no DxgkDdiGetMultiPlaneOverlayCaps), so DXGI has nothing to build an overlay plan from. They answer
-// DXGI_ERROR_UNSUPPORTED, the same refusal our own UMD gives in make_dxgi_device_table(), and say so once:
-// an entry nobody should call is the entry that costs a crash in address zero when the assumption is wrong,
-// and the whole point of the completeness assert is that no slot is left null.
+// keeps the operating system off them is the kernel driver: a start without BC250_SCANOUT_CAPS_MPO in the
+// caps trailer reports no multiplane-overlay support, so DXGI has nothing to build an overlay plan from. The
+// caps entries then answer DXGI_ERROR_UNSUPPORTED, the same refusal our own UMD gives in
+// make_dxgi_device_table(), and say so once: an entry nobody should call is the entry that costs a crash in
+// address zero when the assumption is wrong, and the whole point of the completeness assert is that no slot
+// is left null. The two DXGI1_2 plane questions (the filter range and the plane check) answer it on every
+// start: at WDDM 1.3 the plane check is the kernel driver's (DxgkDdiCheckMultiPlaneOverlaySupport2).
 //
 // BD-223: the WDDM 1.3 table. On an adapter at FrontLevel::Wddm1_3 the runtime may create the compositor's
 // device at D3DWDDM1_3_DDI_INTERFACE_VERSION, and then it hands the driver a DXGI1_3_DDI_BASE_FUNCTIONS of 18
@@ -149,16 +151,49 @@ HRESULT APIENTRY ReclaimResources(DXGI_DDI_ARG_RECLAIMRESOURCES *args)
     return S_OK;
 }
 
-// The four multiplane-overlay entries. The build version does not exclude them (the note at the head of this
-// file): what keeps the operating system off them is that the kernel driver implements no overlay DDI, so
-// DXGI has nothing to plan an overlay from. DXGI_ERROR_UNSUPPORTED is what our own UMD answers for the same
-// entries (driver/umd/dxvk/ddi-dxgi-table.h), and it is the one answer a caller can tell from "this driver
-// is broken". These bodies exist so that no slot is null and so that a wrong assumption is a line in the log.
+// The multiplane-overlay entries. The build version does not exclude them (the note at the head of this
+// file). DXGI_ERROR_UNSUPPORTED is what our own UMD answers for the same entries
+// (driver/umd/dxvk/ddi-dxgi-table.h), and it is the one answer a caller can tell from "this driver is
+// broken".
+//   BD-223: the caps come from the caps trailer of the device's adapter and from the plane constants of
+// bc250_scanout_caps.h (docs/design/mpo.md). They are advisory: the kernel driver checks every plane set
+// (DxgkDdiCheckMultiPlaneOverlaySupport2) and refuses what its stage cannot show, and DWM composes such a set.
+// So the user-mode side decides nothing per plane; it reports the bound and carries the present.
+//   The DXGI hDevice is the hDrvDevice.pDrvPrivate of the device (the hosted driver's CastDevice relies on the
+// same), so the front's record is found from it as from any device entry.
+static Device *DxgiDevice(DXGI_DDI_HDEVICE hDevice)
+{
+    D3D10DDI_HDEVICE device;
+    device.pDrvPrivate = (void *)hDevice;
+    return DeviceOf(device);
+}
+
+// True when the device's kernel driver admits an overlay plane now, with the trailer it read.
+static bool OverlayAdmitted(DXGI_DDI_HDEVICE hDevice, bc250_scanout_caps *caps)
+{
+    memset(caps, 0, sizeof(*caps));
+    Device *dev = DxgiDevice(hDevice);
+    if (!dev || FAILED(ReadScanoutCaps(dev->adapter, caps))) return false;
+    return FrontOverlayAdmitted(*caps);
+}
+
+// The planes a start offers: plane 0 always, and the overlay plane on pipe 1 when the kernel driver has it.
+static UINT OverlayPlanes(const bc250_scanout_caps &caps)
+{
+    return (caps.flags & BC250_SCANOUT_CAPS_MPO_PLANE1) ? 2u : 1u;
+}
+
 HRESULT APIENTRY GetMultiplaneOverlayCaps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS *args)
 {
-    (void)args;
-    FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayCaps: the kernel driver has no overlay DDI");
-    return DXGI_ERROR_UNSUPPORTED;
+    if (!args) return E_INVALIDARG;
+    bc250_scanout_caps caps;
+    if (!OverlayAdmitted(args->hDevice, &caps)) {
+        FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayCaps: the kernel driver admits no overlay plane");
+        return DXGI_ERROR_UNSUPPORTED;
+    }
+    args->MultiplaneOverlayCaps.MaxPlanes = OverlayPlanes(caps);
+    args->MultiplaneOverlayCaps.NumCapabilityGroups = 1;
+    return S_OK;
 }
 
 HRESULT APIENTRY GetMultiplaneOverlayFilterRange(void *args)
@@ -175,20 +210,45 @@ HRESULT APIENTRY CheckMultiplaneOverlaySupport(DXGI_DDI_ARG_CHECKMULTIPLANEOVERL
     return DXGI_ERROR_UNSUPPORTED;
 }
 
+// The overlay present is one present to dxgkrnl, and the hosted driver makes it: its own flush, present
+// order and surface setup must come before the callback, exactly as for its pfnPresent, and a hosted
+// pfnPresent first would be a second present. The plane attributes go from the runtime to dxgkrnl, so
+// nothing is translated here. The trailer is not read again: the runtime calls this entry once per frame,
+// only after the caps above said yes, and the kernel driver refuses a plane set it cannot show.
 HRESULT APIENTRY PresentMultiplaneOverlay(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *args)
 {
-    (void)args;
-    FRONT_DXGI_REFUSE_ONCE("dxgi pfnPresentMultiplaneOverlay: the kernel driver has no overlay DDI");
-    return DXGI_ERROR_UNSUPPORTED;
+    if (!args) return E_INVALIDARG;
+    Device *dev = DxgiDevice(args->hDevice);
+    if (!dev) return E_INVALIDARG;
+    if (!dev->adapter || !dev->adapter->hosted_present_mpo) {
+        FRONT_DXGI_REFUSE_ONCE("dxgi pfnPresentMultiplaneOverlay: the hosted driver has no overlay present");
+        return DXGI_ERROR_UNSUPPORTED;
+    }
+    return dev->adapter->hosted_present_mpo(args);
 }
 
-// BD-223: the WDDM 1.3 slot that took the filter range's place. It answers like the other overlay entries
-// until the kernel driver admits a plane.
+// BD-223: the WDDM 1.3 slot that took the filter range's place. One capability group: every plane the
+// kernel driver has, 8-bit RGB and RGB10A2, scaled up by at most BC250_MPO_MAX_STRETCH_MILLI / 1000 and down
+// by at most BC250_MPO_MAX_SHRINK_MILLI / 1000 with a filter better than bilinear (the DSCL scaler), no YUV
+// and no stereo.
 HRESULT APIENTRY GetMultiplaneOverlayGroupCaps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS *args)
 {
-    (void)args;
-    FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayGroupCaps: the kernel driver has no overlay DDI");
-    return DXGI_ERROR_UNSUPPORTED;
+    if (!args) return E_INVALIDARG;
+    bc250_scanout_caps caps;
+    if (!OverlayAdmitted(args->hDevice, &caps)) {
+        FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayGroupCaps: the kernel driver admits no overlay plane");
+        return DXGI_ERROR_UNSUPPORTED;
+    }
+    if (args->GroupIndex != 0) return E_INVALIDARG;
+    DXGI_DDI_MULTIPLANE_OVERLAY_GROUP_CAPS &group = args->MultiplaneOverlayGroupCaps;
+    group.NumPlanes = OverlayPlanes(caps);
+    group.MaxStretchFactor = (float)BC250_MPO_MAX_STRETCH_MILLI / 1000.0f;
+    group.MaxShrinkFactor = (float)BC250_MPO_MAX_SHRINK_MILLI / 1000.0f;
+    group.OverlayCaps = DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_RGB |
+                        DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_BILINEAR_FILTER |
+                        DXGI_DDI_MULTIPLANE_OVERLAY_FEATURE_CAPS_HIGH_FILTER;
+    group.StereoCaps = 0;
+    return S_OK;
 }
 
 // The two reserved slots of DXGI1_3. The operating system defines no call through them; a call is named once

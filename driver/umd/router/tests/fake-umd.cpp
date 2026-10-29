@@ -273,6 +273,23 @@ static HRESULT Fill(D3D10DDIARG_OPENADAPTER *a, bool v2, UINT_PTR entry)
 #endif
 #endif
 extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10(D3D10DDIARG_OPENADAPTER *a) { return Fill(a, false, 10); }
+#ifndef FAKE_FAIL
+// BD-223: the overlay present the front resolves from the hosted module by name (Mesa d3d10umd DxgiFns.cpp).
+// It notes what it was given, so the gate sees that the runtime's argument arrived unchanged.
+#ifndef _WIN64
+#pragma comment(linker, "/EXPORT:Bc250PresentMultiplaneOverlay=_Bc250PresentMultiplaneOverlay@4")
+#endif
+extern "C" UMD_EXPORT HRESULT APIENTRY Bc250PresentMultiplaneOverlay(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *args)
+{
+    char line[128];
+    if (!args) return E_INVALIDARG;
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "mpo-present planes=%u first=%Ix context=%Ix", args->PresentPlaneCount,
+                args->pPresentPlanes ? (UINT_PTR)args->pPresentPlanes[0].hResource : (UINT_PTR)0,
+                (UINT_PTR)args->pDXGIContext);
+    Note(line);
+    return S_OK;
+}
+#endif
 #ifndef FAKE_NO_OA102
 extern "C" UMD_EXPORT HRESULT APIENTRY OpenAdapter10_2(D3D10DDIARG_OPENADAPTER *a) { return Fill(a, true, 102); }
 #endif

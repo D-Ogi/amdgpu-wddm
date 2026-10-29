@@ -467,7 +467,6 @@ HRESULT APIENTRY CreateDevice(D3D10DDI_HADAPTER hAdapter, D3D10DDIARG_CREATEDEVI
     record->hRTCoreLayer = args->hRTCoreLayer;
     record->interface_version = args->Interface;
     record->create_flags = args->Flags;
-    record->dxgi_callbacks = args->DXGIBaseDDI.pDXGIBaseCallbacks;
     // The hosted create. Everything the runtime passed is kept except the interface version and the
     // device-funcs pointer: the hosted frontend accepts the D3D10.0 pair alone (Device.cpp) and must fill
     // the front's own storage, not the runtime's 11.1 table.
@@ -605,13 +604,22 @@ Adapter *Install(D3D10DDIARG_OPENADAPTER *args, const wchar_t *log_directory, co
     bc250_scanout_caps caps;
     const HRESULT query = ReadScanoutCaps(adapter, &caps);
     adapter->level = FrontLevelFor(wddm13, caps);
+    // The hosted overlay present. The module is the one that holds the hosted adapter entries, so the export
+    // comes from the same image as the device it presents for, whatever path the router loaded it from. It is
+    // read from the saved copy: `hosted` refers to the runtime's table, which now holds the front's entries.
+    HMODULE hosted_module = nullptr;
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           (LPCWSTR)(void *)adapter->hosted.pfnCreateDevice, &hosted_module))
+        adapter->hosted_present_mpo =
+            (HostedPresentMpoFn)(void *)GetProcAddress(hosted_module, kHostedPresentMpoExport);
     LogPrintf(&adapter->log,
               "bc250d3d_front installed adapter=%p interface=%08x version=%08x caps_query=%08lx "
-              "caps_flags=%08x source=%ux%u wddm13=%s level=%s\n",
+              "caps_flags=%08x source=%ux%u wddm13=%s level=%s hosted_mpo=%u\n",
               args->hAdapter.pDrvPrivate, args->Interface, args->Version, (unsigned long)query, caps.flags,
               caps.post_width, caps.post_height,
               wddm13 == FrontWddm13::On ? "on" : wddm13 == FrontWddm13::Off ? "off" : "follow",
-              adapter->level == FrontLevel::Wddm1_3 ? "wddm1_3" : "d3d11_1");
+              adapter->level == FrontLevel::Wddm1_3 ? "wddm1_3" : "d3d11_1",
+              adapter->hosted_present_mpo ? 1u : 0u);
     return adapter;
 }
 
