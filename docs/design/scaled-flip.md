@@ -206,7 +206,7 @@ The KMD part alone does not give a game the scaled flip. The user-mode half is t
 Until both lanes exist, the lab trial of this stage measures the caps, the Check calls that DWM makes, and the
 absence of a regression. It cannot measure the Cyberpunk case.
 
-The lab trials of 2026-10-29 ran both lanes. DWM made no Check call with `MaxOverlayPlanes` 1, so no chain flips
+The lab trials of 2026-10-29 ran both lanes. DWM made no Check call with `MaxOverlayPlanes` 1 or 2, so no chain flips
 scaled yet. The results and the next question are in [mpo.md](mpo.md#lab-status).
 
 ## Host tests
