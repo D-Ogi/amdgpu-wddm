@@ -65,6 +65,7 @@ UINT64 surfaceFence=0;
 RuntimeSurface *closingSurface=nullptr;
 unsigned surfaceAllocates=0,surfaceUnmaps=0,surfaceDeallocates=0;
 bool failSurfaceDeallocate=false,failSurfaceResident=false;
+HRESULT lostSurfaceDeallocate=S_OK;
 HRESULT APIENTRY surface_allocate(HANDLE h,D3DDDICB_ALLOCATE *a) {
     check(h==&identity); ++surfaceAllocates;
     a->pAllocationInfo2[0].hAllocation=31; return S_OK;
@@ -74,6 +75,7 @@ HRESULT APIENTRY surface_deallocate(HANDLE,const D3DDDICB_DEALLOCATE2 *a) {
     check(closingSurface && !closingSurface->texture.image.image && !closingSurface->texture.image.memory && !closingSurface->texture.texture);
     check(!a->Flags.Value);
     if (failSurfaceDeallocate) return E_FAIL;
+    if (lostSurfaceDeallocate!=S_OK) return lostSurfaceDeallocate;
     ++surfaceDeallocates; return S_OK;
 }
 HRESULT APIENTRY surface_map(HANDLE,D3DDDI_MAPGPUVIRTUALADDRESS *m) {
@@ -269,6 +271,18 @@ int main() {
     const unsigned releasedOnce=releases;
     failSurfaceDeallocate=false; check(close()==S_OK && surfaceDeallocates==1 && releases==releasedOnce);
     check(close()==S_OK && surfaceDeallocates==1 && surface.phase==SurfacePhase::empty);
+    // BD-253: a Deallocate2 that reports a lost device. Without the kernel's proof the surface keeps its allocation;
+    // with it the close completes, and the kernel frees the allocation together with the device. This path does not
+    // wait (DestroyResource runs on the application's thread), and a FALSE is not kept.
+    check(begin()==S_FALSE && finish()==S_OK && surface.allocation.allocation);
+    lostSurfaceDeallocate=D3DDDIERR_DEVICEREMOVED; bridge.device_lost=true;
+    UINT64 surfaceProgress=3; bridge.progress[1].cpu_address=&surfaceProgress;
+    const ULONGLONG lostStart=GetTickCount64();
+    check(close()==D3DDDIERR_DEVICEREMOVED && surface.allocation.allocation && !bridge.drain_tried);
+    check(GetTickCount64()-lostStart<500);
+    surfaceProgress=UINT64_MAX;
+    check(close()==S_OK && !surface.allocation.allocation && surface.phase==SurfacePhase::empty && surfaceDeallocates==1);
+    lostSurfaceDeallocate=S_OK; bridge.device_lost=false; bridge.progress[1]={};
     surfaceFence=0; failSurfaceResident=true;
     check(begin()==E_OUTOFMEMORY && surface.mapping.address && !surface.mapping.resident);
     check(finish()==E_UNEXPECTED && close()==S_OK && surfaceDeallocates==2 && !surface.mapping.address && !surfaceUnmaps);

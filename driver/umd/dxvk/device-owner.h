@@ -47,6 +47,8 @@ public:
     // Failed cleanup is quarantined; its soon-invalid runtime handle is never reused.
     HRESULT release_surface_handle(RuntimeSurface &);
     size_t surface_count() const { return surfaces_.size(); }
+    // The paging queue of the surfaces (prepare_surface_import creates it). The close tests set it.
+    SurfacePagingQueue &surface_queue() { return surface_queue_; }
     // BD-065: the B8G8R8A8 shadows of windowed Blt presents. Their surfaces are owned by surfaces_.
     PresentShadows &present_shadows() { return present_shadows_; }
     // The per-application FrameRateLimit of this device's presents (docs/design/per-app-graphics-settings.md).
@@ -61,6 +63,10 @@ public:
     // M15.14: the adapter's scan-out source, copied at CreateDevice (scanout-primary.h).
     const ScanoutSource &scanout() const { return scanout_; }
     void set_scanout(const ScanoutSource &source) { scanout_=source; }
+    // BD-258: the GetTickCount64 time of the CreateDevice that published this owner, 0 before it. DestroyDevice
+    // uses it for the bound of the short lost devices (ddi-lifecycle.h).
+    ULONGLONG created_ms() const { return created_ms_; }
+    void set_created_ms(ULONGLONG ms) { created_ms_=ms; }
 
     // Acquire loader references by code address, never by a searched DLL name.
     HRESULT retain_code_modules(const void *engineEntry,const void *icdEntry);
@@ -82,6 +88,7 @@ private:
     amdgpu_wddm::app_settings::FrameLimiter frame_limiter_;
     VBlankPacer vblank_pacer_;
     ScanoutSource scanout_{};
+    ULONGLONG created_ms_=0;
     RuntimeDevice runtime_;
     HostBridge bridge_{};
     HostedInstance instance_;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-lifecycle.h"
+#include <atomic>
 #include <mutex>
 namespace bc250::umd {
 namespace {
@@ -27,10 +28,32 @@ unsigned retained_device_count() noexcept {
     std::lock_guard<std::mutex> lock(r.mutex);
     return r.total;
 }
+bool kept_device_limit_reached() noexcept { return retained_device_count()>=kKeptDeviceLimit; }
+namespace {
+std::atomic_uint g_short_lost_devices{0};
+std::atomic<ULONGLONG> g_short_lost_refused_until{0};
+}
+void note_retired_device(bool lost,ULONGLONG lifetime_ms,ULONGLONG now_ms) noexcept {
+    if (lost && lifetime_ms<kShortLostDeviceMs) {
+        if (g_short_lost_devices.fetch_add(1)+1>=kShortLostDeviceLimit)
+            g_short_lost_refused_until.store(now_ms+kShortLostRefusalMs);
+    } else {
+        g_short_lost_devices.store(0); g_short_lost_refused_until.store(0);
+    }
+}
+unsigned short_lost_device_count() noexcept { return g_short_lost_devices.load(); }
+bool short_lost_device_limit_reached(ULONGLONG now_ms) noexcept {
+    return short_lost_device_count()>=kShortLostDeviceLimit && now_ms<g_short_lost_refused_until.load();
+}
 HRESULT retire_device_handle(DdiDeviceHandle &handle) noexcept {
     auto *owner=handle.owner;
     if (!owner) return S_OK;
     HRESULT hr=E_FAIL;
+    // A successful close clears the bridge, so the loss and the lifetime are read before it.
+    const bool lost=owner->bridge().device_lost;
+    const ULONGLONG created=owner->created_ms();
+    const ULONGLONG now=GetTickCount64();
+    note_retired_device(lost,created && now>=created ? now-created : 0,now);
     {
         RuntimeDomain::Scope scope(owner->runtime().domain);
         try { hr=owner->close(); }

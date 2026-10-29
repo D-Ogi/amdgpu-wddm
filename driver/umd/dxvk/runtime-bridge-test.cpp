@@ -209,6 +209,27 @@ int main() {
         require(host_dispatch(&reporting, BC250_HOST_CHECK_STATUS, nullptr)<0);
         require(hostReports==1); // One report per loss, whatever follows.
     }
+    // BD-258: the loss report of the ICD may name the read that saw the lost value. A report, a malformed one and none
+    // all latch the loss; a value that is not the lost value reports nothing.
+    for (int form=0;form<3;++form) {
+        RuntimeDevice losing; losing.hDevice=&identity;
+        HostBridge reporting{}; reporting.device=&losing;
+        RuntimeDomain::Scope reportingScope(losing.domain);
+        ddi_entry_class=DdiErrorClass::nothing;
+        bc250_host_lost_report report{BC250_HOST_LOST_REPORT_STYPE,sizeof(report),"progress fence before submit",7,0,
+            UINT64_MAX};
+        if (form==1) report.sType=0;
+        require(host_dispatch(&reporting, BC250_HOST_REPORT_LOST, form==2 ? nullptr : &report)<0);
+        require(reporting.device_lost && reporting.submission_failed);
+    }
+    {
+        RuntimeDevice losing; losing.hDevice=&identity;
+        HostBridge reporting{}; reporting.device=&losing;
+        RuntimeDomain::Scope reportingScope(losing.domain);
+        const bc250_host host=host_descriptor(reporting,1);
+        require(bc250_host_fence_valid(&host,5,"sync value",3) && !reporting.device_lost);
+        require(!bc250_host_fence_valid(&host,UINT64_MAX,"sync value",3) && reporting.device_lost);
+    }
     std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, teardown\n";
 }
 

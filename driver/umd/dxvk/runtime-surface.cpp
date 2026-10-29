@@ -84,7 +84,12 @@ HRESULT close_runtime_surface(HostBridge &bridge,VkDevice device,const RuntimeIm
     // destruction behind queued work. Explicit FreeGpuVirtualAddress here could
     // make the address reusable before pending mapping/submission retires.
     hr=deallocate_runtime_surface(*surface.owner,surface.allocation);
-    if (hr!=S_OK) return hr;
+    if (hr!=S_OK) {
+        // BD-253: on a lost device whose work ended, the kernel frees the allocation together with the device. No
+        // wait here (settle_device_work): DestroyResource calls this on the application's thread.
+        if (!device_lost_status(hr) || !settle_device_work(bridge,0)) return hr;
+        surface.allocation={};
+    }
     surface.mapping={};
     surface.owner=nullptr; surface.queue={}; surface.desc={}; surface.pitch=0; surface.bytes=0;
     surface.phase=SurfacePhase::empty;

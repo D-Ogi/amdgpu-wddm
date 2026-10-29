@@ -34,21 +34,38 @@ namespace bc250::umd {
 // BD-253: one line when a bridge first latches a loss, in both flavours (an ordinary error report, at most 16
 // lines per process): the reason, the host operation and its status where one caused it, the device and the
 // thread. The engine's own line ("Command submission failed: VK_ERROR_DEVICE_LOST") does not name the cause.
-static void Bc250HostLossNote(HostBridge *s, const char *reason, unsigned op, HRESULT hr)
+// BD-258: the line also names the read of the ICD that saw the lost-device value (site, the sync object), and what
+// the fences this bridge knows read at that time. When every known fence reads the lost value, the kernel put the
+// device in error. When only the fence of the site does, something else wrote that value to that one fence.
+static const char *Bc250FenceState(const volatile UINT64 *cpu)
 {
+   return !cpu ? "none" : *cpu==UINT64_MAX ? "lost" : "live";
+}
+static void Bc250HostLossNote(HostBridge *s, const char *reason, unsigned op, HRESULT hr,
+   const bc250_host_lost_report *report=nullptr)
+{
+   unsigned known=0, lost=0;
+   for (const auto &p:s->progress) {
+      if (!p.cpu_address) continue;
+      ++known; if (*(const volatile UINT64 *)p.cpu_address==UINT64_MAX) ++lost;
+   }
    static std::atomic_uint notes{16};
-   device_life_note(notes,"BC250 BD-253: host loss latched: reason=%s op=%u hr=%08X runtime=%p identity=%p "
-      "thread=%lu\n",reason,op,unsigned(hr),s->device ? s->device->hDevice : nullptr,
-      s->device ? s->device->host_identity() : nullptr,(unsigned long)GetCurrentThreadId());
+   device_life_note(notes,"BC250 BD-253: host loss latched: reason=%s op=%u hr=%08X site=%s handle=%u runtime=%p "
+      "identity=%p thread=%lu; fences at the loss: progress lost %u of %u, present %s, paging %s\n",reason,op,
+      unsigned(hr),report && report->site ? report->site : "-",report ? report->handle : 0u,
+      s->device ? s->device->hDevice : nullptr,s->device ? s->device->host_identity() : nullptr,
+      (unsigned long)GetCurrentThreadId(),lost,known,Bc250FenceState(s->present_cpu),
+      Bc250FenceState(s->device ? s->device->pagingFence : nullptr));
 }
 // The device is gone. This is the one report that happens outside a DDI entry's own code: the loss is
 // detected inside the engine's submission path, under whichever entry is running. That entry's page
 // decides whether the runtime accepts device removal here, so the status passes through the entry
 // class that enter_context put on this thread. A capability-check entry accepts no status at all, and
 // then the report waits for the next entry whose page allows it (BD-071 review).
-static HRESULT Bc250HostLost(HostBridge *s, const char *reason="unnamed", unsigned op=~0u, HRESULT hr=S_OK)
+static HRESULT Bc250HostLost(HostBridge *s, const char *reason="unnamed", unsigned op=~0u, HRESULT hr=S_OK,
+   const bc250_host_lost_report *report=nullptr)
 {
-   if (!s->device_lost) Bc250HostLossNote(s,reason,op,hr);
+   if (!s->device_lost) Bc250HostLossNote(s,reason,op,hr,report);
    s->device_lost=true;
    s->submission_failed=true;
    if (!s->lost_reported) {
@@ -93,7 +110,12 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
    auto &cb = s->device->KTCallbacks;
    HANDLE rt = s->device->hDevice;
    if (op==BC250_HOST_CHECK_STATUS) return Bc250HostStatus(s);
-   if (op==BC250_HOST_REPORT_LOST) return Bc250HostLost(s,"the ICD reports a loss",op);
+   if (op==BC250_HOST_REPORT_LOST) {
+      // The argument is optional: an ICD before BD-258 passes 0.
+      const auto *report=static_cast<const bc250_host_lost_report *>(argument);
+      if (report && (report->sType!=BC250_HOST_LOST_REPORT_STYPE || report->size<sizeof(*report))) report=nullptr;
+      return Bc250HostLost(s,"the ICD reports a loss",op,S_OK,report);
+   }
    if (!argument) return E_INVALIDARG;
 #define HOST_CALL(name, arg) (cb.pfn##name##Cb ? cb.pfn##name##Cb(rt, arg) : E_NOTIMPL)
    switch (op) {
@@ -389,6 +411,22 @@ HRESULT signal_present(HostBridge &bridge)
    if (SUCCEEDED(hr)) s->present_value=value;
    else s->submission_failed=true;
    return hr;
+}
+
+bool settle_device_work(HostBridge &bridge, DWORD timeout_ms)
+{
+   if (kernel_ended_device_work(bridge)) return true;
+   if (!timeout_ms || bridge.drain_tried) return false;
+   bridge.drain_tried=true;
+   const ULONGLONG start=GetTickCount64();
+   bool drained=false;
+   while (!drained && GetTickCount64()-start<timeout_ms) { Sleep(1); drained=kernel_ended_device_work(bridge); }
+   static std::atomic_uint notes{16};
+   device_life_note(notes,"BC250 BD-253: lost device work %s after %llu ms: kernel-ended=%u runtime=%p identity=%p\n",
+      drained ? "ended" : "did not end",(unsigned long long)(GetTickCount64()-start),
+      unsigned(kernel_ended_device_work(bridge)),bridge.device ? bridge.device->hDevice : nullptr,
+      bridge.device ? bridge.device->host_identity() : nullptr);
+   return drained;
 }
 
 HRESULT wait_present_idle(HostBridge &bridge)
