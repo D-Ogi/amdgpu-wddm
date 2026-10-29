@@ -9,6 +9,7 @@
 #include "transfer.h"
 #include "windows_migration.h"
 #include "installer_rollback.h"
+#include "installer_history.h"
 #include "../kmd/board_memory_format.h"
 static DWORD SystemIdentity(void)
 {
@@ -173,8 +174,8 @@ static void TransactionLeaf(const BYTE transaction[16],WCHAR out[46])
     for(i=0;i<16;i++){out[9+2*i]=hex[transaction[i]>>4];out[10+2*i]=hex[transaction[i]&15];}
     (void)StringCchCopyW(out+41,5,L".bin");
 }
-// With catalog set, an intact record of another state catalog gives ERROR_UNSUPPORTED_TYPE: it is a record of
-// another release, not damage. Its bytes are not returned.
+// With catalog set, an intact record of another state catalog gives ERROR_UNSUPPORTED_TYPE together with its bytes:
+// it is a record of another release, not damage. The caller frees them.
 static DWORD ReadLeaf(HANDOFF_DIRECTORY *d,PCWSTR leaf,void **out,DWORD *bytes,HANDLE *opened,BOOL catalog)
 {
     HANDLE file;DWORD error,got=0;LARGE_INTEGER size;BYTE *data=NULL;
@@ -190,12 +191,11 @@ static DWORD ReadLeaf(HANDOFF_DIRECTORY *d,PCWSTR leaf,void **out,DWORD *bytes,H
     if(!ReadFile(file,data,(DWORD)size.QuadPart,&got,NULL)){error=GetLastError();goto done;}
     if(got!=(DWORD)size.QuadPart){error=ERROR_INVALID_DATA;goto done;}
     if(AmdgpuTransferCheck(data,got,NULL)) {
-        AMDGPU_TRANSFER_HEADER h;memcpy(&h,data,sizeof(h));error=ERROR_INVALID_DATA;
-        if(catalog && h.magic==AMDGPU_TRANSFER_MAGIC && h.version==AMDGPU_TRANSFER_VERSION && h.bytes==got &&
-           memcmp(h.catalog,AmdgpuStateCatalogId(),64))error=ERROR_UNSUPPORTED_TYPE;
-        goto done;
-    }
-    *out=data;*bytes=got;data=NULL;error=0;
+        AMDGPU_TRANSFER_HEADER h;memcpy(&h,data,sizeof(h));
+        if(!catalog || AmdgpuHistoryFrame(data,got) || !memcmp(h.catalog,AmdgpuStateCatalogId(),64)){error=ERROR_INVALID_DATA;goto done;}
+        error=ERROR_UNSUPPORTED_TYPE;
+    } else error=0;
+    *out=data;*bytes=got;data=NULL;
     if(opened){*opened=file;file=INVALID_HANDLE_VALUE;}
 done:
     if(data)HeapFree(GetProcessHeap(),0,data);if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);return error;
@@ -290,13 +290,14 @@ static DWORD Archive(HANDOFF_DIRECTORY *d,const void *buffer,DWORD bytes,PCWSTR 
 // The record of this transaction stays: a resumed uninstall writes the same bytes again.
 static DWORD RetireStale(const void *buffer,PCWSTR leaf)
 {
-    HANDOFF_DIRECTORY *d=NULL;AMDGPU_TRANSFER_HEADER h,old;void *data=NULL;DWORD got=0,error;
+    HANDOFF_DIRECTORY *d=NULL;AMDGPU_TRANSFER_HEADER h,old={0};void *data=NULL;DWORD got=0,error;
     memcpy(&h,buffer,sizeof(h));
     error=Directory(&d);if(!error)error=ReadLeaf(d,leaf,&data,&got,NULL,TRUE);
     if(d)CloseDirectory(d);
-    if(!error){memcpy(&old,data,sizeof(old));HeapFree(GetProcessHeap(),0,data);if(!memcmp(old.transaction,h.transaction,16))return 0;}
-    else if(error==ERROR_FILE_NOT_FOUND)return 0;
-    else if(error!=ERROR_UNSUPPORTED_TYPE)return error;
+    if(data){memcpy(&old,data,sizeof(old));HeapFree(GetProcessHeap(),0,data);}
+    if(!error && !memcmp(old.transaction,h.transaction,16))return 0;
+    if(error==ERROR_FILE_NOT_FOUND)return 0;
+    if(error && error!=ERROR_UNSUPPORTED_TYPE)return error;
     return RetireLeaf(h.transaction,leaf);
 }
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
@@ -342,14 +343,16 @@ DWORD AmdgpuWindowsAcknowledgeHandoff(const unsigned char transaction[16],
         AMDGPU_TRANSFER_HEADER original;
         error=Directory(&removed);
         // The prepare of this transaction moved every other removal record aside: one of the two names remains.
-        if(!error)error=ReadLeaf(removed,RemovedLeaf,&old,&old_bytes,&old_file,FALSE);
+        if(!error)error=ReadLeaf(removed,RemovedLeaf,&old,&old_bytes,&old_file,TRUE);
         if(error==ERROR_FILE_NOT_FOUND) {
             CloseDirectory(removed);removed=NULL;
-            error=Directory(&removed);if(!error)error=ReadLeaf(removed,RemovedOld,&old,&old_bytes,&old_file,FALSE);
+            error=Directory(&removed);if(!error)error=ReadLeaf(removed,RemovedOld,&old,&old_bytes,&old_file,TRUE);
         }
-        if(!error && (AmdgpuTransferCheck(old,old_bytes,&original) ||
-           memcmp(original.source_generation,h.source_generation,16) || memcmp(original.device_hash,h.device_hash,32)))
-            error=ERROR_REVISION_MISMATCH;
+        // The prepare reads a record of an earlier catalog by setting name; its intact frame names the same source.
+        if(error==ERROR_UNSUPPORTED_TYPE)error=0;
+        if(!error){memcpy(&original,old,sizeof(original));
+            if(memcmp(original.source_generation,h.source_generation,16) || memcmp(original.device_hash,h.device_hash,32))
+                error=ERROR_REVISION_MISMATCH;}
         if(!error && !SetFileInformationByHandle(old_file,FileDispositionInfo,&dispose,sizeof(dispose)))error=GetLastError();
         // A prior acknowledgment may have removed this marker already. The
         // transaction archive and Active remain the replay guard on that retry.

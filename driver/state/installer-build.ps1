@@ -19,7 +19,7 @@ $sdk=Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
 $libs=Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
 $env:INCLUDE="$($msvc.FullName)\include;$sdk\Include\10.0.26100.0\ucrt;$sdk\Include\10.0.26100.0\shared;$sdk\Include\10.0.26100.0\um"
 $env:LIB="$($msvc.FullName)\lib\x64;$libs\ucrt\x64;$libs\um\x64"
-$inputs=@('state','transfer','identity','windows','windows_lock','windows_migration','windows_handoff','installer_rollback','installer_store','installer_worker') |
+$inputs=@('state','transfer','identity','windows','windows_lock','windows_migration','windows_handoff','installer_history','installer_rollback','installer_store','installer_worker') |
     ForEach-Object { Join-Path $PSScriptRoot "$_.c" }
 # BD-167: the release flavour compiles the shipped program with NDEBUG, so an assert() added later is gone from the
 # release and live in the lab build.
@@ -48,7 +48,7 @@ if($LASTEXITCODE){throw 'the version stamp of amdgpu-state-installer.exe failed'
 # device and must not run on the development PC. Service verbs change SCM too.
 if($Test) {
     & "$repo\tools\state\test-service-root.ps1" -Out "$Out\service-root" -Kits $Kits -Arch x64
-    $testInputs=@('state','transfer','installer_rollback','installer_worker','installer_worker_test') |
+    $testInputs=@('state','transfer','installer_history','installer_rollback','installer_worker','installer_worker_test') |
         ForEach-Object {Join-Path $PSScriptRoot "$_.c"}
     $fixtureFlags=ConvertTo-StateFlags @('/nologo','/TC','/W4','/WX','/O2','/MT')
     Invoke-Bc250UmdCompiler $cc @fixtureFlags /DAMDGPU_INSTALLER_TEST `
@@ -58,7 +58,7 @@ if($Test) {
     if($LASTEXITCODE){throw 'Installer worker fixture tests failed'}
     Invoke-Bc250UmdCompiler $cc @fixtureFlags `
         "/Fo$Out\" "/Fe$Out\installer_store_test.exe" "$PSScriptRoot\state.c" "$PSScriptRoot\transfer.c" `
-        "$PSScriptRoot\installer_rollback.c" "$PSScriptRoot\installer_store_test.c" /link advapi32.lib bcrypt.lib
+        "$PSScriptRoot\installer_history.c" "$PSScriptRoot\installer_rollback.c" "$PSScriptRoot\installer_store_test.c" /link advapi32.lib bcrypt.lib
     if($LASTEXITCODE){throw 'Installer store fixture compile failed'}
     & "$Out\installer_store_test.exe"
     if($LASTEXITCODE){throw 'Installer store fixture tests failed'}

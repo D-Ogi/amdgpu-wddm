@@ -196,29 +196,33 @@ static void RemovalRecords(const BYTE *snapshot,UINT bytes)
     // record of another catalog (the check above): after this uninstall it finds no record and installs fresh.
     Reset();CHECK(!AmdgpuWindowsArchiveState(snapshot,bytes));CHECK(Find(cur)!=NULL && !Find(old));
     CHECK(!AmdgpuWindowsReadRemoval(&read,&got,TRUE));CHECK(got==bytes && !memcmp(read,snapshot,bytes));HeapFree(GetProcessHeap(),0,read);
-    // The removal record of another release under either name: not imported, moved aside as evidence.
-    Reset();Put(old,other,bytes);
-    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_UNSUPPORTED_TYPE);CHECK(!read && !got);
+    // The removal record of another release under either name: its intact bytes go to the worker, which maps or
+    // retires it; retire moves it aside as evidence.
+    Reset();Put(old,other,bytes);read=NULL;got=0;
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_UNSUPPORTED_TYPE);CHECK(got==bytes && read && !memcmp(read,other,bytes));
+    HeapFree(GetProcessHeap(),0,read);read=NULL;
     CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_FILE_NOT_FOUND);
     CHECK(!AmdgpuWindowsRetireRemoval(tx,FALSE));CHECK(!Find(old) && Find(old_retired)!=NULL);
     CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_FILE_NOT_FOUND);
     CHECK(!AmdgpuWindowsRetireRemoval(tx,FALSE));CHECK(Holds(old_retired,other,bytes));CHECK(!Handles && !LockCount);
     Reset();Put(cur,other,bytes);
-    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_UNSUPPORTED_TYPE);
-    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_UNSUPPORTED_TYPE);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_UNSUPPORTED_TYPE);HeapFree(GetProcessHeap(),0,read);read=NULL;
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_UNSUPPORTED_TYPE);HeapFree(GetProcessHeap(),0,read);read=NULL;
     CHECK(!AmdgpuWindowsRetireRemoval(tx,FALSE));CHECK(!Find(cur) && Find(cur_retired)!=NULL);
     // Evidence is never overwritten: an existing retired name stops the move.
     Reset();Put(old,other,bytes);Put(old_retired,other,bytes);
     CHECK(AmdgpuWindowsRetireRemoval(tx,FALSE)==ERROR_ALREADY_EXISTS);CHECK(Find(old)!=NULL);
-    // Damage is not another catalog: a wrong magic or a wrong checksum stays an error.
+    // Damage is not another catalog: a wrong magic or a wrong checksum stays an error, under either catalog.
     Reset();Put(old,other,bytes);Find(old)->data[0]^=1;
-    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_INVALID_DATA);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_INVALID_DATA);CHECK(!read);
+    Reset();Put(old,other,bytes);Find(old)->data[bytes-1]^=1;
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_INVALID_DATA);CHECK(!read);
     Reset();Put(old,snapshot,bytes);Find(old)->data[bytes-1]^=1;
     CHECK(AmdgpuWindowsReadRemoval(&read,&got,FALSE)==ERROR_INVALID_DATA);
     // removed.bin beside removed-v2.bin is the newer record. Keep moves only the older one.
     Reset();Put(old,snapshot,bytes);Put(cur,other,bytes);
     CHECK(!AmdgpuWindowsReadRemoval(&read,&got,FALSE));CHECK(got==bytes && !memcmp(read,snapshot,bytes));HeapFree(GetProcessHeap(),0,read);
-    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_UNSUPPORTED_TYPE);
+    CHECK(AmdgpuWindowsReadRemoval(&read,&got,TRUE)==ERROR_UNSUPPORTED_TYPE);HeapFree(GetProcessHeap(),0,read);read=NULL;
     CHECK(!AmdgpuWindowsRetireRemoval(tx,TRUE));CHECK(Find(old)!=NULL && !Find(cur) && Find(cur_retired)!=NULL);
     Reset();Put(cur,snapshot,bytes);CHECK(!AmdgpuWindowsRetireRemoval(tx,TRUE));CHECK(Find(cur)!=NULL);
     // The acknowledgment of the reinstall removes the record that the prepare imported, under either name.
@@ -232,6 +236,11 @@ static void RemovalRecords(const BYTE *snapshot,UINT bytes)
     CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(cur));
     Reset();Put(old,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
     CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(old));
+    // The prepare read a record of an earlier catalog by setting name: the acknowledgment removes that record too.
+    OtherCatalog(record,record_bytes);
+    Reset();Put(old,record,record_bytes);CHECK(!AmdgpuWindowsPublishHandoff(pending,pending_bytes));
+    CHECK(!AmdgpuWindowsAcknowledgeHandoff(tx,h.device_hash,h.destination_version));CHECK(!Find(old));
+    OtherCatalog(record,record_bytes);
     // An uninstall after an install that did not read the earlier record (an older release ignores removed-v2.bin):
     // the earlier records move aside, the new record is written, and a retry of the same uninstall keeps it.
     Reset();Put(cur,record,record_bytes);Put(old,other,bytes);

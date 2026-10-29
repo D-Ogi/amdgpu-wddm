@@ -9,7 +9,7 @@ DWORD AmdgpuWindowsReadHandoff(void **buffer,DWORD *bytes);
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes);
 // The removal record that an uninstall archived. own: only the record that this release writes (a resumed
 // uninstall); otherwise the newest record of either name (an install). ERROR_UNSUPPORTED_TYPE: the record is
-// intact, but of another state catalog, and no bytes are returned.
+// intact, but of another state catalog; its bytes are returned and the caller frees them.
 DWORD AmdgpuWindowsReadRemoval(void **buffer,DWORD *bytes,BOOL own);
 // Moves removal records aside as retired-<transaction>-<name> evidence; deletes nothing. keep: the record that
 // ReadRemoval returns stays. Otherwise every removal record moves.

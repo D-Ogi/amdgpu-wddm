@@ -29,7 +29,7 @@ if ($LASTEXITCODE) { throw 'State Windows adapter compile failed' }
 if ($LASTEXITCODE) { throw 'Legacy migration adapter compile failed' }
 & "$($msvc.FullName)\bin\Hostx64\$Arch\cl.exe" /nologo /TC /W4 /WX /O2 /MT /c "/Fo$Out\windows_lock.obj" "$repo\driver\state\windows_lock.c"
 if ($LASTEXITCODE) { throw 'Writer lock compile failed' }
-foreach($source in 'identity','windows_handoff') {
+foreach($source in 'identity','windows_handoff','installer_history') {
     & "$($msvc.FullName)\bin\Hostx64\$Arch\cl.exe" /nologo /TC /W4 /WX /O2 /MT /c "/Fo$Out\$source.obj" "$repo\driver\state\$source.c"
     if ($LASTEXITCODE) { throw "$source compile failed" }
 }

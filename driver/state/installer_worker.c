@@ -12,6 +12,7 @@
 #include "windows_handoff.h"
 #include "identity.h"
 #include "installer_rollback.h"
+#include "installer_history.h"
 #include <bcrypt.h>
 #include <newdev.h>
 
@@ -392,13 +393,17 @@ static DWORD ReadSettings(PCWSTR device,INSTALLER_SETTING *values)
     }
     if(state)AmdgpuWindowsStateClose(state);return error;
 }
-typedef struct archive_read {void *data;UINT bytes;} ARCHIVE_READ;
+// history: AMDGPU_HISTORY_NONE for a record of this catalog, else the earlier catalog that wrote the record.
+typedef struct archive_read {void *data;UINT bytes,history;} ARCHIVE_READ;
 static UINT ArchiveFetch(void *context,UINT source,const AMDGPU_STATE_SPEC *spec,
     AMDGPU_STATE_VALUE *value,void *out,UINT capacity)
 {
     ARCHIVE_READ *a=context;const void *data;UINT i,result;(void)source;
-    for(i=0;i<AmdgpuStateCount();i++)if(AmdgpuStateAt(i)==spec)break;
-    result=AmdgpuTransferFind(a->data,a->bytes,i,value,&data);
+    if(a->history!=AMDGPU_HISTORY_NONE)result=AmdgpuHistoryFind(a->history,a->data,a->bytes,spec,value,&data);
+    else {
+        for(i=0;i<AmdgpuStateCount();i++)if(AmdgpuStateAt(i)==spec)break;
+        result=AmdgpuTransferFind(a->data,a->bytes,i,value,&data);
+    }
     if(!result){if(value->bytes>capacity)return AMDGPU_STATE_BUFFER;memcpy(out,data,value->bytes);}
     return result;
 }
@@ -430,11 +435,29 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
     error=Origin(&h.origin);if(error)return error;
     if(h.source_schema==AmdgpuStateSchema() && h.origin!=AMDGPU_TRANSFER_CURRENT)return ERROR_INVALID_DATA;
     if(h.origin==AMDGPU_TRANSFER_FRESH) {
-        void *removed=NULL;DWORD removed_bytes=0;
+        void *removed=NULL;DWORD removed_bytes=0;UINT history=AMDGPU_HISTORY_NONE;
         error=AmdgpuWindowsReadRemoval(&removed,&removed_bytes,archive);
+        if(error==ERROR_UNSUPPORTED_TYPE) {
+            // A record of another state catalog: an install after the uninstall of another release (BD-262). A
+            // record of the catalog of an earlier released package is read by setting name, as an update in place
+            // reads the generation of an earlier catalog: names that this catalog does not have are dropped, and the
+            // KMD validates each value against this catalog. A record of an unknown catalog moves aside as evidence,
+            // and the install continues as on a computer without a record. A damaged record stops the install. A
+            // resumed uninstall accepts only its own record.
+            result=archive?AMDGPU_STATE_SCHEMA:AmdgpuHistoryCheck(removed,removed_bytes,&history);
+            if(result!=AMDGPU_STATE_OK) {
+                HeapFree(GetProcessHeap(),0,removed);removed=NULL;
+                if(archive)return ERROR_UNSUPPORTED_TYPE;
+                if(result!=AMDGPU_STATE_UNKNOWN)return ERROR_INVALID_DATA;
+                error=AmdgpuWindowsRetireRemoval(h.transaction,FALSE);if(error)return error;
+                error=ERROR_FILE_NOT_FOUND;
+            } else error=0;
+        }
         if(!error) {
             AMDGPU_TRANSFER_HEADER old;ARCHIVE_READ read;
-            if(AmdgpuTransferCheck(removed,removed_bytes,&old) || memcmp(old.device_hash,h.device_hash,32))error=ERROR_REVISION_MISMATCH;
+            if(history!=AMDGPU_HISTORY_NONE){memcpy(&old,removed,sizeof(old));memcpy(old.catalog,AmdgpuStateCatalogId(),64);}
+            if((history==AMDGPU_HISTORY_NONE && AmdgpuTransferCheck(removed,removed_bytes,&old)) ||
+               memcmp(old.device_hash,h.device_hash,32))error=ERROR_REVISION_MISMATCH;
             else if(archive) {
                 // A resumed uninstall after SCM deletion can use only the exact
                 // protected final archive it created before that deletion.
@@ -448,7 +471,7 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
                 buffer=HeapAlloc(GetProcessHeap(),0,AMDGPU_TRANSFER_MAX_BYTES);
                 if(!buffer)error=ERROR_NOT_ENOUGH_MEMORY;
                 else {
-                    read.data=removed;read.bytes=removed_bytes;
+                    read.data=removed;read.bytes=removed_bytes;read.history=history;
                     result=AmdgpuTransferCapture(&old,ArchiveFetch,&read,buffer,AMDGPU_TRANSFER_MAX_BYTES,&bytes);
                     error=AsError(result,0);
                     // An older removal record beside this one moves aside, so that the acknowledgment finds one.
@@ -458,13 +481,7 @@ static DWORD Execute(DWORD argc,WCHAR **argv)
             }
             HeapFree(GetProcessHeap(),0,removed);if(buffer)HeapFree(GetProcessHeap(),0,buffer);return error;
         }
-        // A record of another state catalog cannot give settings to this catalog: an install after the uninstall of
-        // another release (BD-262). The record moves aside as evidence, and the install continues as on a computer
-        // without a record. A resumed uninstall accepts only its own record.
-        if(error==ERROR_UNSUPPORTED_TYPE && !archive) {
-            error=AmdgpuWindowsRetireRemoval(h.transaction,FALSE);if(error)return error;
-            error=ERROR_FILE_NOT_FOUND;
-        }
+        if(removed)HeapFree(GetProcessHeap(),0,removed);
         if(error!=ERROR_FILE_NOT_FOUND)return error;
     }
     if(h.origin==AMDGPU_TRANSFER_FRESH)ZeroMemory(h.source_version,sizeof(h.source_version));

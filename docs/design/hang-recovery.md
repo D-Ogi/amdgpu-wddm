@@ -172,11 +172,20 @@ The record survives the installer:
   generation.
 
 `driver/state/lifecycle_test.c` and `driver/state/installer_worker_test.c` check the three steps. The archive is
-bound to its state catalog. An install of a package with another state catalog does not import it: the worker
-renames the archive to `retired-<transaction>-<name>` in the same directory, and the install continues without the
-records. An uninstall renames an older archive that no install read in the same way. The releases up to 0.7.216.105 stop on an archive of another catalog with error 13 (BD-262). They read
-only `removed.bin`, so they do not see `removed-v2.bin`, and an install of such a release after the uninstall of
-this one continues without the records.
+bound to the state catalog that wrote it. An install of a package with another state catalog reads it as follows:
+
+- The catalog of an earlier released package: the worker reads the archive by setting name, as an update in place
+  reads a generation of an earlier catalog. Names that the current catalog does not have are dropped, and the KMD
+  checks each value against the current catalog when it applies the transfer. The `catalog.json` of each released
+  package is in `driver/state/history/`, under its catalog identifier. `tools/state/generate.py` makes
+  `catalog_history.generated.h` from them and checks the identifiers.
+- A catalog that no released package has (a lab build): the worker renames the archive to
+  `retired-<transaction>-<name>` in the same directory, and the install continues without the records.
+- A damaged archive (frame, checksum or entries) stops the install.
+
+An uninstall renames an older archive that no install read in the same way. The releases up to 0.7.216.105 stop on
+an archive of another catalog with error 13 (BD-262). They read only `removed.bin`, so they do not see
+`removed-v2.bin`, and an install of such a release after the uninstall of this one continues without the records.
 
 A write failure is logged and otherwise ignored: the record is evidence, never a gate.
 
