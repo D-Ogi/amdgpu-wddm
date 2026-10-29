@@ -20,6 +20,7 @@ these scripts are its executable half.
 | `test-umd-adl-ags.ps1` | the AGS 6.3 host tests of that output: the real `amd_ags_x64.dll` or `amd_ags_x86.dll` with the shipped, injected and host builds and the two negative controls |
 | `pe_compare.py` | compares two PE images apart from the per-build timestamps and PDB GUID of a non-`/Brepro` link, and the CheckSum that covers them |
 | `build-radv-queue-tests.ps1`, `radv-queue-tests.py` | host tests of the hosted queue winsys in a built RADV tree ([driver/icd/mesa-wddm2-runtime-queues](../../driver/icd/mesa-wddm2-runtime-queues/README.md)) |
+| `build-radv-bo-lifetime-test.ps1`, `radv-bo-lifetime-test.py` | the BO lifetime test (BD-201, BD-212) of a built RADV tree, x64 or x86. A mock D3DKMT host checks each release of a BO against the queue values |
 | `build-radv-unorm10-export-test.ps1`, `radv-unorm10-export-test.py` | host test of the 10-bit UNORM colour export rounding (BD-049) in a built RADV tree: the epilog key, the NIR export and the ACO epilog over about 1.3 million inputs, and a negative control without the rounding that must fail |
 | `common.ps1` | shared helpers: workspace root, Visual Studio environment, tool versions, source identity |
 
