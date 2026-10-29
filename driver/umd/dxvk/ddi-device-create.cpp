@@ -33,7 +33,7 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     HRESULT negotiated=requested_feature_level(args.Flags,requested,args.Interface);
     if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) ||
         level>advertised.maximum) return E_INVALIDARG;
-    if (kept_device_limit_reached() || short_lost_device_limit_reached()) {
+    if (kept_device_limit_reached() || short_lost_device_limit_reached(GetTickCount64())) {
         // BD-253 and BD-258: the second and third bounds (ddi-lifecycle.h). One line for each refusal, in both
         // flavours, bounded.
         static std::atomic_uint notes{16};

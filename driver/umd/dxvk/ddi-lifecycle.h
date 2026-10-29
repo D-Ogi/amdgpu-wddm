@@ -33,14 +33,17 @@ bool kept_device_limit_reached() noexcept;
 // after each loss: more than 1000 devices in one lab capture, each one closed without error, so the kept-device bound
 // above did not stop it. A retired device is a short lost device when its loss was latched and it lived less than
 // kShortLostDeviceMs from CreateDevice to DestroyDevice. A retired device that is not one resets the count. When the
-// count gets to kShortLostDeviceLimit, CreateDevice fails at once with kKeptDeviceStatus, as at the kept-device bound.
-// The count only goes down at a retire, and a refused CreateDevice retires nothing, so the refusal stays for the life
-// of the process. A loss after a long life (one TDR in a game) resets the count instead, so a process can recover from
-// any number of such losses.
+// count gets to kShortLostDeviceLimit, CreateDevice fails with kKeptDeviceStatus for kShortLostRefusalMs from that
+// retire, as at the kept-device bound. Then one CreateDevice runs again; when that device is lost soon too, the next
+// refusal period starts at its retire. So the refusal is not for the life of the process: dwm.exe, which also
+// creates its devices here, gets a new device at most kShortLostRefusalMs after a burst of losses. A loss after a long
+// life (one TDR in a game) resets the count instead, so a process can recover from any number of such losses.
 inline constexpr unsigned kShortLostDeviceLimit=8;
 inline constexpr ULONGLONG kShortLostDeviceMs=10000;
-// lost: the loss was latched before the close. lifetime_ms: from CreateDevice to DestroyDevice.
-void note_retired_device(bool lost,ULONGLONG lifetime_ms) noexcept;
+inline constexpr ULONGLONG kShortLostRefusalMs=60000;
+// lost: the loss was latched before the close. lifetime_ms: from CreateDevice to DestroyDevice. now_ms: the
+// GetTickCount64 time of the retire.
+void note_retired_device(bool lost,ULONGLONG lifetime_ms,ULONGLONG now_ms) noexcept;
 unsigned short_lost_device_count() noexcept;
-bool short_lost_device_limit_reached() noexcept;
+bool short_lost_device_limit_reached(ULONGLONG now_ms) noexcept;
 }
