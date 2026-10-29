@@ -601,6 +601,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
   @{n='dcn-observe';s='driver\kmd\test\run_dcn_observe.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace)}
   @{n='display-timing-old-describe';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribe60');Fails=$true}
+  @{n='display-timing-old-describe-rotation';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldDescribeIdentity');Fails=$true}
   @{n='display-timing-phase-hz';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-AssumePhaseHz');Fails=$true}
   @{n='display-timing-old-power-return';s='driver\kmd\test\run_display_timing.ps1';a=@('-Root',$Workspace,'-OldPowerReturn');Fails=$true}
   @{n='gart-retained';s='driver\kmd\test\run_gart_retained.ps1';a=@('-Root',$Workspace)}

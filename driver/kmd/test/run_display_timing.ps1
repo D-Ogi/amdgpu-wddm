@@ -1,4 +1,4 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldPixelRateFixed,[switch]$OldPowerReturn)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\bd018",[switch]$AssumePhaseHz,[switch]$OldDescribe60,[switch]$OldDescribeIdentity,[switch]$OldPixelRateFixed,[switch]$OldPowerReturn)
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
@@ -81,6 +81,12 @@ if($OldDescribe60){
     $anchor='pDescribeAllocation->RefreshRate = signal.VSyncFreq;'
     if (!$describe.Contains($anchor)) { throw 'Describe refresh mutation anchor missing' }
     $describe=$describe.Replace($anchor, 'pDescribeAllocation->RefreshRate.Numerator=60000; pDescribeAllocation->RefreshRate.Denominator=1000;')
+}
+# BD-247 mutation control: put back the IDENTITY that every primary stated before BD-247. The rotated path cases must fail.
+if($OldDescribeIdentity){
+    $anchor='(D3DDDI_ROTATION)Bc250RotationValue(Bc250RotationAngle((ULONG)device->Rotation, TRUE));'
+    if (!$describe.Contains($anchor)) { throw 'Describe rotation mutation anchor missing' }
+    $describe=$describe.Replace($anchor, 'D3DDDI_ROTATION_IDENTITY;')
 }
 [IO.File]::WriteAllText((Join-Path $Out 'describe_timing_actual.inc'),$describe)
 $test=Get-Content (Join-Path $PSScriptRoot 'display_timing_test.c') -Raw

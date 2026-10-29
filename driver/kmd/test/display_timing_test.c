@@ -91,6 +91,7 @@ static BOOLEAN ConnectorLinkNeedsPowerOn(BC250_DEVICE* d,BOOLEAN* active,BOOLEAN
 {(void)d;if(!testConnectorEnabled)UnexpectedConnector();testPowerQueries++;*active=testLinkActive;
  *connected=testSinkConnected;return testSinkConnected && !testLinkActive;}
 typedef UINT D3DDDIFORMAT;
+typedef UINT D3DDDI_ROTATION;
 typedef struct {struct {UINT Width,Height,Format;} Allocation;} BC250_WDDM_OBJECT;
 typedef struct {HANDLE hAllocation;UINT Width,Height;D3DDDIFORMAT Format;
     struct {UINT NumSamples,NumQualityLevels;} MultisampleMethod;RATIONAL RefreshRate;
@@ -257,6 +258,19 @@ int main(int argc,char** argv)
         CHECK((ULONGLONG)description.RefreshRate.Numerator*1000u !=
               (ULONGLONG)60000u*description.RefreshRate.Denominator); // old60Hz must differ
         CHECK(reads==before); // allocation description never queries MMIO
+        // BD-247: the primary states the rotation of the committed path; an unset path is IDENTITY.
+        CHECK(d.Rotation==0u && description.Rotation==D3DDDI_ROTATION_IDENTITY);
+        {
+            static const ULONG paths[]={BC250_VPPR_IDENTITY,BC250_VPPR_ROTATE90,BC250_VPPR_ROTATE180,BC250_VPPR_ROTATE270};
+            static const UINT stated[]={1u,2u,3u,4u}; // D3DDDI_ROTATION_IDENTITY, _90, _180, _270 (d3dukmdt.h)
+            unsigned i;
+            for (i=0;i<RTL_NUMBER_OF(paths);i++) {
+                d.Rotation=paths[i];
+                CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS && description.Rotation==stated[i] &&
+                      description.Width==1920 && description.Height==1200);
+            }
+            d.Rotation=0u;
+        }
         values[TimingPhase]++; // subsequent reads must retain the published mode
         CHECK(FillSignalInfo(&d,&s)==STATUS_SUCCESS && reads==before && s.PixelRate==154000000);
         CHECK(Bc250WddmDescribeAllocation(&d,&description)==STATUS_SUCCESS && reads==before &&

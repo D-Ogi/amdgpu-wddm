@@ -49,6 +49,7 @@ The driver uses route 3. It does these things:
 | Path support | `BC250_ROTATION_SUPPORT_FILL`: `Identity`, `Rotate90`, `Rotate180`, `Rotate270` and `Offset0`, on the connector route, the inherited route and the legacy modeset route. No other offset: a full miniport that offers one on the primary path gets bugcheck 0x113 subtype 0x1C (E16 run 007). |
 | Path admission | `Bc250RotationAngle`: the identity, the three rotations and the values that pin no rotation are admitted. Each offset value is refused with `STATUS_GRAPHICS_VIDPN_MODALITY_NOT_SUPPORTED` or `IsVidPnSupported` FALSE. The source mode and the timing are the same as at identity. |
 | Commit and smooth rotation | Each route records the committed angle in `BC250_DEVICE.Rotation` (`DisplayRecordRotation`, one guard-log line for each change). `DxgkDdiUpdateActiveVidPnPresentPath` accepts a change of rotation and programs nothing for it. |
+| Primary description | `DxgkDdiDescribeAllocation` gives the rotation of the committed path in `Rotation`. The `d3dkmddi.h` comment is "Rotation for display mode". The refresh is that of the committed mode. Before this change the rotation was `D3DDDI_ROTATION_IDENTITY` on every path. In the first lab trial (rot1), dxgkrnl set the source to not visible after each rotated commit. It did not set the source visible again. A primary that does not agree with the mode can cause this (E26/M147 for the refresh) |
 | Hardware caps | `DXGK_VIDPN_HW_CAPABILITY.DriverRotation` is 1 on the full table: the rotation is done by software, not by the scan-out hardware. |
 | Bugcheck screen | `DxgkDdiSystemDisplayEnable` returns the logical size (width and height swap at 90 and 270 degrees). `DxgkDdiSystemDisplayWrite` maps each logical pixel onto the physical frame (`Bc250RotationWriteBlock`). |
 | Cursor | No change. The driver has no hardware cursor (`MaxPointerWidth` 0), so the OS draws the cursor into the rotated desktop. |
@@ -87,19 +88,25 @@ surface or a rotating copy, as route 1 and route 2 above.
 | --- | --- |
 | `display-rotation` | `display_rotation_test.c` on the production header. It checks the angle table, the support macro and the logical size. It checks the pixel map (corners, bijection on odd sizes, inverse turn) and the rotated bugcheck copy against the map |
 | `display-rotation-controls` | Seven negative controls on a copy of the header, each of which must fail. They are: clockwise portrait, an offset admitted, rotation on the display-only table, `Offset90` stated, size not swapped, stride not clipped, 180 recorded as 270 |
-| `display-timing` | The inherited route: admission of the three rotations, refusal of the offsets, the recorded angle at commit and at `UpdateActiveVidPnPresentPath`, no pipe write |
+| `display-timing` | The inherited route: admission of the three rotations, refusal of the offsets, the recorded angle at commit and at `UpdateActiveVidPnPresentPath`, no pipe write. `DxgkDdiDescribeAllocation` gives the path rotation (1 to 4) and the unrotated size |
+| `display-timing-old-describe-rotation` | Negative control: `DxgkDdiDescribeAllocation` with the old `D3DDDI_ROTATION_IDENTITY`. It must fail |
 | `connector-modes` | `ConnectorPathValid` for the three rotations, the offsets and the display-only table |
 | `post-display` | The rotated bugcheck screen: size, pixel map and clipping at 90, 180 and 270 degrees |
 
 ## Lab check (three minutes)
 
-Not done yet. One trial on unit A with the KMD of this change:
+The first trial (rot1) used `CDS_FULLSCREEN`, and Windows set the mode back when the script exited, after about 3.5 s.
+Each commit was accepted, and the pictures were taken after the return to landscape. The second trial (rot2) holds
+each orientation for 20 s with `CDS_UPDATEREGISTRY` and always returns to landscape at the end. The guard log gives
+each visibility request that changes the state, for the first 1024 calls. One trial on unit A with the KMD of this
+change:
 
 1. Install or swap the KMD. Check the SHA256 of the loaded KMD.
 2. For each of portrait, landscape (flipped), portrait (flipped) and landscape, in this order:
    - set the orientation with `ChangeDisplaySettingsEx` (`DMDO_90`, `DMDO_180`, `DMDO_270`, `DMDO_DEFAULT`, with the
      width and height swapped at 90 and 270 degrees) from a script that runs in the user's session.
-   - wait 5 s, then take `mon.py screenshot`.
+   - hold the orientation for 20 s. During the hold take `mon.py screenshot` and a camera frame, and read the
+     visibility, present and scan-out trailer lines of the guard log.
    - call `SetCursorPos` to a known logical point (for example 100, 200), read `GetCursorPos`, and click a test
      window at that point. The window must get the click at the same client coordinates.
 3. In portrait, before the return to landscape, run the full-screen flip client for 20 s
@@ -115,5 +122,8 @@ Not done yet. One trial on unit A with the KMD of this change:
 ## Follow-up
 
 - A rotating compute copy for `Flags.Rotate`, if the lab finds that CDD or the shells send it.
+- The DWM user-mode driver (Zink `d3d10umd`) refuses a DXGI `Blt` with a rotation (`E_NOTIMPL`). If DWM asks for
+  such a copy to the rotated primary, the desktop stays black although the KMD admits the path. rot2 tells if this
+  occurs: a rotated desktop with no `visible 1` request after the commit points to it.
 - DirectFlip on a rotated path, for a chain that its application drew already rotated. This needs a way for the
   shells to identify such a chain.

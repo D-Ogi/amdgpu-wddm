@@ -6141,11 +6141,16 @@ static NTSTATUS Bc250WddmDescribeAllocation(_In_ const HANDLE hAdapter,
     // PASSIVE_LEVEL DDI: copy the tuple under the connector operation owner.
     pDescribeAllocation->RefreshRate = signal.VSyncFreq;
     pDescribeAllocation->PrivateDriverFormatAttribute = 0;
-    pDescribeAllocation->Rotation = D3DDDI_ROTATION_IDENTITY;
+    // BD-247: d3dkmddi.h declares Rotation as "out: Rotation for display mode", and the primary takes the
+    // rotation of the committed path, as it takes its refresh above. IDENTITY on a rotated path is the same
+    // kind of difference as the E26/M147 refresh. D3DDDI_ROTATION and the VidPN path rotation use the same
+    // values 1-4 (d3dukmdt.h), and the round trip through the angle gives IDENTITY for an unset path.
+    pDescribeAllocation->Rotation =
+        (D3DDDI_ROTATION)Bc250RotationValue(Bc250RotationAngle((ULONG)device->Rotation, TRUE));
     if (WddmFirstCalls(WddmOf(hAdapter), WddmDdiDescribeAllocation))
-        GuardLog("wddm: DescribeAllocation %ux%u format %u refresh %u/%u", pDescribeAllocation->Width, pDescribeAllocation->Height,
-                 (ULONG)pDescribeAllocation->Format,pDescribeAllocation->RefreshRate.Numerator,
-                 pDescribeAllocation->RefreshRate.Denominator);
+        GuardLog("wddm: DescribeAllocation %ux%u format %u refresh %u/%u rotation %u", pDescribeAllocation->Width,
+                 pDescribeAllocation->Height, (ULONG)pDescribeAllocation->Format,pDescribeAllocation->RefreshRate.Numerator,
+                 pDescribeAllocation->RefreshRate.Denominator, (ULONG)pDescribeAllocation->Rotation);
     return STATUS_SUCCESS;
 }
 
