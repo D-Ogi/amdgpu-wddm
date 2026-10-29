@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.34",
   "version": "0.7.216.106-tester.34",
-  "note": "tester.34 release manifest: every row moves to the tester.34 integration head of its line (bc250-win, vkd3d-proton, dxvk and the seven Mesa lines). Row bases are the tester.33 row commits, so that the attribution scan reads exactly the commits that are new since tester.33. New row tests: app-options and cache-quota on the dxvk rows, cache-policy on the engine12 rows.",
+  "note": "tester.34 release manifest: every row moves to the tester.34 integration head of its line (bc250-win, vkd3d-proton, dxvk and the seven Mesa lines). Row bases are the tester.33 row commits, so that the attribution scan reads exactly the commits that are new since tester.33. New row tests: app-options and cache-quota on the dxvk rows, cache-policy on the engine12 rows. Respin: the KMD rows (start witness after an S1 refusal) and the control app rows (BD-257 guard reset texts) move to b1afec48; every other row keeps its build.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
   "repositories": {
@@ -80,7 +80,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
+      "commit": "b1afec48d2acf32c6b650954aaf0f33a54c54bb9",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -126,7 +126,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
+      "commit": "b1afec48d2acf32c6b650954aaf0f33a54c54bb9",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -2102,7 +2102,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
+      "commit": "b1afec48d2acf32c6b650954aaf0f33a54c54bb9",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2219,7 +2219,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "c281df214cde2c008a8a6e26827b494a76d22e29",
+      "commit": "b1afec48d2acf32c6b650954aaf0f33a54c54bb9",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
