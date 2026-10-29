@@ -52,3 +52,12 @@ $nv12Args=@('/nologo','/TC','/W4','/WX','/O2','/MT','/fp:precise','-fuse-ld=lld'
 if($LASTEXITCODE){throw 'DML NV12 host compilation failed'}
 & "$Out\dml201_nv12_test.exe"
 if($LASTEXITCODE){throw 'DML NV12 host assertions failed'}
+$cursorArgs=@('/nologo','/TC','/W4','/WX','/O2','/MT','/fp:precise','-fuse-ld=lld',
+    "/I$($msvc.FullName)\include","/I$sdk\ucrt","/I$repo\driver\shim\dml201",
+    "/Fo$Out\","/Fe$Out\dml201_cursor_plane_test.exe","$PSScriptRoot\dml201_cursor_plane_test.c",
+    "$repo\driver\shim\bc250_dml201.c",
+    '/link',"/LIBPATH:$($msvc.FullName)\lib\x64","/LIBPATH:$lib\ucrt\x64","/LIBPATH:$lib\um\x64")
+& $cl @cursorArgs
+if($LASTEXITCODE){throw 'DML cursor plane host compilation failed'}
+& "$Out\dml201_cursor_plane_test.exe"
+if($LASTEXITCODE){throw 'DML cursor plane host assertions failed'}

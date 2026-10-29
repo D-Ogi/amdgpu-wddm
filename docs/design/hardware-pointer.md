@@ -103,6 +103,15 @@ Why this write on the inherited pipe is safe, and why it stays:
   urgent too early (more memory priority for at most 1 KiB of cursor data per line). It does not change the plane fetch.
 - The write happens with the cursor off, so no cursor fetch runs while the value changes.
 
+The scaled plane of BD-223 (`DcnPlaneCheck`, lab flavour) plans with the cursor width of the committed plan
+(`ConnectorLinkPlaneDml`). Its verdicts use DML's validity, the DISPCLK and DPPCLK against the clocks that run, and the
+VSTARTUP and VUPDATE offset against the timing generator. The host test `dml201_cursor_plane_test.c` runs the real DML
+for eight scaled shapes (1280x720 up to the output, 3840x2160 down to it) on the lab's timing, HDMI and DP, with each
+reference clock of the lab. Each of the 32 plans is valid, and each input of the verdicts is the same with the cursor
+and without it. Only the cursor TTU changes. Thus the pointer does not change which scaled planes are admitted. The
+requestor check of the plane (`Bc250Dcn201RequestorValidate`, the AMD setters in validation mode) also range-checks
+the cursor TTU of the plan.
+
 ## Life cycle
 
 | Event | What the cursor does |
@@ -168,6 +177,7 @@ component that pins the catalog must be built again. A later catalog entry can r
 | `dcn-cursor-life-controls` | 10 mutations of `dcn_cursor.c`. Each one must fail the test. |
 | `connector-link`, `power-coordinator` | The cursor goes off on a refused suspend, a refused disable, the release, and first in `PowerAdapterDown`. |
 | `dcn-write-sites` | Each cursor write names a register on the write list. |
+| `dml201` | `dml201_cursor_plane_test.c`: the scaled-plane plan with the cursor and without it gives the same validity, clocks, VSTARTUP and VUPDATE offset. |
 
 ## Open points
 
