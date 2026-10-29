@@ -2,7 +2,7 @@
   "schema": 1,
   "release": "tester.34",
   "version": "0.7.216.106-tester.34",
-  "note": "tester.34 release manifest: every row moves to the tester.34 integration head of its line (bc250-win, vkd3d-proton, dxvk and the seven Mesa lines). Row bases are the tester.33 row commits, so that the attribution scan reads exactly the commits that are new since tester.33. New row tests: app-options and cache-quota on the dxvk rows, cache-policy on the engine12 rows. Respin: the KMD rows (start witness after an S1 refusal) and the control app rows (BD-257 guard reset texts) move to b1afec48; every other row keeps its build. Respin 2: the KMD rows moved to d1f61f56, the merge of the GitHub #45 DP link fix (HBR2 and HBR3 training, DP modes above 300 MHz with fallback). The KMD and router rows move to the BD-223 merges. The KMD rows move to 64d86e13 (SMU metrics: overclock tier bounds and the eight-core layout). The router, control and state-worker rows move to cba98e67, so that they compile the state catalog of the KMD rows (193 entries, from the eight-core SMU metrics change). The state worker rows moved to the merge of the BD-262 state rollback fix (6d41768b). The D3D11 and D3D12 shell rows moved to the shell line of the FSR 4 identity answer (fix/fsr4-identity-shell a9b5bd92, base 2c4c01a3, no scan-out contract change). The router and control rows moved to the FSR 4 identity merge with the build fix of the SDK boundary control (62271f60).",
+  "note": "tester.34 release manifest: every row moves to the tester.34 integration head of its line (bc250-win, vkd3d-proton, dxvk and the seven Mesa lines). Row bases are the tester.33 row commits, so that the attribution scan reads exactly the commits that are new since tester.33. New row tests: app-options and cache-quota on the dxvk rows, cache-policy on the engine12 rows. Respin: the KMD rows (start witness after an S1 refusal) and the control app rows (BD-257 guard reset texts) move to b1afec48; every other row keeps its build. Respin 2: the KMD rows moved to d1f61f56, the merge of the GitHub #45 DP link fix (HBR2 and HBR3 training, DP modes above 300 MHz with fallback). The KMD and router rows move to the BD-223 merges. The KMD rows move to 64d86e13 (SMU metrics: overclock tier bounds and the eight-core layout). The router, control and state-worker rows move to cba98e67, so that they compile the state catalog of the KMD rows (193 entries, from the eight-core SMU metrics change). The state worker rows moved to the merge of the BD-262 state rollback fix (6d41768b). The D3D11 and D3D12 shell rows moved to the shell line of the FSR 4 identity answer (fix/fsr4-identity-shell a9b5bd92, base 2c4c01a3, no scan-out contract change). The router and control rows moved to the FSR 4 identity merge with the build fix of the SDK boundary control (62271f60). The KMD and control rows moved to the merge of the hardware mouse pointer (86c19b9a), which also holds the FSR 4 identity answer.",
   "recipe_repository": "amdgpu-wddm",
   "recipe_commit": "2c4c01a300a4bcf4fe3cc14aa2f9c93bc62d0f6f",
   "repositories": {
@@ -80,7 +80,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "64d86e13f57476dd502a5938e613451014317172",
+      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -126,7 +126,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "64d86e13f57476dd502a5938e613451014317172",
+      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -2282,7 +2282,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "62271f6009f5de2003f3f4947a821a17f7cf21f3",
+      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2399,7 +2399,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "62271f6009f5de2003f3f4947a821a17f7cf21f3",
+      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
