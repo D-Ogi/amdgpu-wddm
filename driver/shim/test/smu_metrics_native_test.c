@@ -36,6 +36,9 @@ static void unit_a(void)
     native_lines = 0;
     native_setting_present = 0;
     native_setting_reads = 0;
+    native_layout_present = 0;
+    native_layout_reads = 0;
+    native_dma = BC250_SMU_METRICS_BYTES;   /* the stock firmware, as on unit A */
     SmuMetricsInitialize(&device);
 }
 
@@ -129,18 +132,25 @@ static void reading(void)
     CHECK(native_setting_reads == 1 && native_maps == 1);
     CHECK(native_log_has("table page MC 0xF5FFFEC000"));
     CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_WAITING);
-    /* The first read waits one period after the start. */
+    CHECK(native_layout_reads == 1);
+    /* The first read waits one period after the start. The tail stays poisoned (stock firmware): the first two
+     * tables count toward the latch and are not published, the third latches the stock layout and is read. */
     ticks(975);
     CHECK(native_reads == 0);
     ticks(25);
     CHECK(native_reads == 1);
+    CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_WAITING && x.MetricsFailures == 0);
+    ticks(1000);
+    CHECK(native_reads == 2 && !SmuMetricsFill(&device, &x) && !native_log_has("latched"));
+    ticks(1000);
+    CHECK(native_reads == 3 && native_log_has("stock layout latched after 3 tables in a row"));
     CHECK(SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OK);
     CHECK(x.SocketPowerMw == 78000 && x.SocketPowerAvgMw == 77400 && x.GfxPowerMw == 48000 && x.SocPowerMw == 21000);
     CHECK(x.GfxMv == 919 && x.SocMv == 900 && x.GfxMHz == 1500 && x.GfxTemperatureCc == 6200 && x.SocTemperatureCc == 6050);
     CHECK(x.ThrottlerStatus == 4 && x.MetricsReads == 1 && x.MetricsFailures == 0 && x.MetricsAgeMs == 0);
     /* Rate: 40 ticks a second, one read a second. */
     ticks(10000);
-    CHECK(native_reads == 11);
+    CHECK(native_reads == 13);
     native_advance_ms(640);
     CHECK(SmuMetricsFill(&device, &x) && x.MetricsAgeMs == 640);
     /* The log line fits the ring and says what the escape says. */
@@ -158,18 +168,18 @@ static void reading(void)
     /* Offline owner (between SmuOwnerStop and Start): counted as nothing, retried a period later. */
     device.Smu.Online = FALSE;
     ticks(2000);
-    CHECK(native_reads == 13);
+    CHECK(native_reads == 15);
     CHECK(!SmuMetricsFill(&device, &x) && x.MetricsFailures == 0);
     device.Smu.Online = TRUE;
     ticks(1000);
-    CHECK(native_reads == 14 && SmuMetricsFill(&device, &x));
+    CHECK(native_reads == 16 && SmuMetricsFill(&device, &x));
     SmuMetricsStop(&device);
-    CHECK(native_unmaps == 1 && native_log_has("stop after"));
+    CHECK(native_unmaps == 1 && native_log_has("stop after") && native_log_has("state ok, layout stock"));
     SmuMetricsStop(&device);                                /* idempotent */
     CHECK(native_unmaps == 1);
     /* A sample after the stop touches nothing. */
     ticks(3000);
-    CHECK(native_reads == 14);
+    CHECK(native_reads == 16);
 }
 
 static void bad_tables(void)
@@ -182,12 +192,13 @@ static void bad_tables(void)
     CHECK(native_reads == 3);                               /* the third bad table ends this start */
     CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_BAD_TABLE && x.MetricsFailures == 3);
     CHECK(native_log_has("bad table") && native_log_has("off until next start"));
+    CHECK(native_log_has("layout auto, last tail stock, run 0"));   /* never latched */
     /* Not latched for the boot: the next start reads again. */
     good_table();
     SmuMetricsStart(&device);
     CHECK(native_unmaps == 1 && native_maps == 2);          /* the earlier mapping went first */
-    ticks(1000);
-    CHECK(native_reads == 4 && SmuMetricsFill(&device, &x));
+    ticks(3000);
+    CHECK(native_reads == 6 && SmuMetricsFill(&device, &x));
     SmuMetricsStop(&device);
 }
 
@@ -198,7 +209,7 @@ static void overflow_and_age(void)
     unit_a();
     good_table();
     SmuMetricsStart(&device);
-    ticks(1000);
+    ticks(3000);
     CHECK(SmuMetricsFill(&device, &x));
     put16(68, 100); put16(70, 99); /* C0Residency[6] and [7] overwrote the GPU pair */
     native_table[114] = 0x67;      /* marker does not admit corrupt fields */
@@ -213,13 +224,13 @@ static void overflow_and_age(void)
     SmuMetricsLogLine(&device, "telemetry");
     CHECK(native_log_has("reject 3 why 5 sp00000067 m67 1") && native_log_has("no fresh table"));
     ticks(5000);
-    CHECK(native_reads == 4 && !SmuMetricsFill(&device, &x));
+    CHECK(native_reads == 6 && !SmuMetricsFill(&device, &x));
     SmuMetricsStop(&device);
 
     /* A transient refusal followed by a valid table recovers, preserving the last refusal reason. */
     good_table();
     SmuMetricsStart(&device);
-    ticks(1000);
+    ticks(3000);
     put16(68, 100); put16(70, 99);
     ticks(1000);
     good_table();
@@ -235,6 +246,127 @@ static void overflow_and_age(void)
     SmuMetricsStop(&device);
 }
 
+/* A board with the patched 8-core SMU firmware: a 284-byte DMA in the eight-core layout. */
+static void eight_table(void)
+{
+    ULONG i;
+    memset(native_table, 0, sizeof(native_table));
+    for (i = 0; i < 8; i++) put16(i * 2, 3500);                           /* CoreFrequency[8] */
+    put16(0x44, 5500); put16(0x46, 5500);                                 /* L3Temperature[2]: offset 68 */
+    put16(BC250_SMU_METRICS_8C_OFF_GFXCLK, 1750);
+    put16(BC250_SMU_METRICS_8C_OFF_GFX_TEMP, 6400);
+    put32(BC250_SMU_METRICS_8C_OFF_VOLTAGE, 1100);
+    put32(BC250_SMU_METRICS_8C_OFF_VOLTAGE + 4, 950);
+    put32(BC250_SMU_METRICS_8C_OFF_POWER, 33000);
+    put32(BC250_SMU_METRICS_8C_OFF_POWER + 4, 61000);
+    put32(BC250_SMU_METRICS_8C_OFF_SOCKET, 112000);
+    put16(BC250_SMU_METRICS_8C_OFF_SOC_TEMP, 6600);
+    put16(BC250_SMU_METRICS_8C_OFF_THROTTLER, 0x10);
+    put32(BC250_SMU_METRICS_8C_HALF + BC250_SMU_METRICS_8C_OFF_SOCKET, 109500);
+    put16(BC250_SMU_METRICS_8C_HALF + BC250_SMU_METRICS_8C_OFF_GFXCLK, 1740);
+    put16(BC250_SMU_METRICS_8C_HALF + BC250_SMU_METRICS_8C_OFF_GFX_TEMP, 6350);
+    put32(BC250_SMU_METRICS_8C_HALF + BC250_SMU_METRICS_8C_OFF_VOLTAGE, 1100);
+    put32(BC250_SMU_METRICS_8C_HALF + BC250_SMU_METRICS_8C_OFF_VOLTAGE + 4, 945);
+    put16(BC250_SMU_METRICS_8C_HALF + BC250_SMU_METRICS_8C_OFF_SOC_TEMP, 6550);
+    put32(BC250_SMU_METRICS_8C_OFF_ACCNT, 42);
+    native_dma = BC250_SMU_METRICS_8C_BYTES;
+}
+
+static void eight_core_board(void)
+{
+    BC250_DPM_METRICS x;
+    unit_a();
+    eight_table();
+    SmuMetricsStart(&device);
+    ticks(2000);
+    CHECK(native_reads == 2 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_WAITING);
+    ticks(1000);
+    CHECK(native_reads == 3 && native_log_has("8-core layout latched after 3 tables in a row"));
+    CHECK(SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_OK && x.MetricsFailures == 0);
+    CHECK(x.SocketPowerMw == 112000 && x.SocketPowerAvgMw == 109500 && x.GfxPowerMw == 61000 && x.SocPowerMw == 33000);
+    CHECK(x.GfxMv == 950 && x.SocMv == 1100 && x.GfxMHz == 1750 && x.GfxTemperatureCc == 6400);
+    CHECK(x.SocTemperatureCc == 6600 && x.ThrottlerStatus == 0x10 && x.MetricsReads == 1);
+    native_lines = 0;
+    SmuMetricsLogLine(&device, "telemetry");
+    CHECK(native_lines == 2 && native_log_has("mW p112000 a109500 g61000 s33000 reject 0 why 0"));
+    CHECK(native_log_has("gfx 950 mV 1750 MHz 64.0 C soc 1100 mV 66.0 C thr 10"));
+    /* The DMA shrinks to the stock length after the latch: the tail is poisoned again. Refused with reason 7 and
+     * never latched again; three in a row stop the reader for this start. */
+    native_dma = BC250_SMU_METRICS_BYTES;
+    ticks(3000);
+    CHECK(native_reads == 6 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_BAD_TABLE);
+    CHECK(x.MetricsFailures == 3 && x.GfxMHz == 1750);
+    native_lines = 0;
+    SmuMetricsLogLine(&device, "telemetry");
+    CHECK(native_log_has("reject 3 why 7"));
+    SmuMetricsStop(&device);
+    CHECK(native_log_has("state bad table, layout 8-core"));
+}
+
+static void tail_change(void)
+{
+    BC250_DPM_METRICS x;
+    unit_a();
+    good_table();
+    SmuMetricsStart(&device);
+    ticks(3000);
+    CHECK(SmuMetricsFill(&device, &x) && x.MetricsReads == 1);
+    /* One tail byte written while the stock layout is latched: refused with reason 7, the last table kept. */
+    native_table[BC250_SMU_METRICS_COPY_BYTES - 1u] = 0x00;
+    native_dma = BC250_SMU_METRICS_COPY_BYTES;
+    ticks(1000);
+    CHECK(SmuMetricsFill(&device, &x) && x.MetricsFailures == 1 && x.MetricsReads == 1 && x.MetricsAgeMs == 1000);
+    native_dma = BC250_SMU_METRICS_BYTES;
+    ticks(1000);
+    CHECK(SmuMetricsFill(&device, &x) && x.MetricsReads == 2 && x.MetricsAgeMs == 0);
+    native_lines = 0;
+    SmuMetricsLogLine(&device, "telemetry");
+    CHECK(native_log_has("reject 1 why 7"));
+    SmuMetricsStop(&device);
+}
+
+static void forced_layout(void)
+{
+    BC250_DPM_METRICS x;
+    /* SmuMetricsLayout 1 on the stock firmware: no latch wait, the first table is read. */
+    unit_a();
+    good_table();
+    native_layout_present = 1; native_layout_value = 1;
+    SmuMetricsStart(&device);
+    CHECK(native_layout_reads == 1 && native_log_has("SmuMetricsLayout 1: stock layout forced, no tail check"));
+    ticks(1000);
+    CHECK(native_reads == 1 && SmuMetricsFill(&device, &x) && x.GfxMHz == 1500 && !native_log_has("latched"));
+    SmuMetricsStop(&device);
+    /* SmuMetricsLayout 2 on the stock firmware: the average lies in the poisoned tail, every table is refused. */
+    unit_a();
+    good_table();
+    native_layout_present = 1; native_layout_value = 2;
+    SmuMetricsStart(&device);
+    CHECK(native_log_has("SmuMetricsLayout 2: 8-core layout forced, no tail check"));
+    ticks(5000);
+    CHECK(native_reads == 3 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_BAD_TABLE);
+    CHECK(native_log_has("status 0 parse 2") && native_log_has("layout 8-core, last tail stock, run 0"));
+    SmuMetricsStop(&device);
+    /* SmuMetricsLayout 1 on the eight-core firmware: offset 68 is L3Temperature[0], refused as a clock. */
+    unit_a();
+    eight_table();
+    native_layout_present = 1; native_layout_value = 1;
+    SmuMetricsStart(&device);
+    ticks(5000);
+    CHECK(native_reads == 3 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_BAD_TABLE);
+    CHECK(native_log_has("status 0 parse 6"));
+    SmuMetricsStop(&device);
+    /* Any other value detects, and says so once. */
+    unit_a();
+    eight_table();
+    native_layout_present = 1; native_layout_value = 9;
+    SmuMetricsStart(&device);
+    CHECK(native_log_has("SmuMetricsLayout 9 is not 0, 1 or 2: the layout is detected"));
+    ticks(3000);
+    CHECK(SmuMetricsFill(&device, &x) && x.GfxMHz == 1750 && native_log_has("8-core layout latched"));
+    SmuMetricsStop(&device);
+}
+
 /* Last: the latch is the image's (a static in smu_metrics.c), as on the lab. */
 static void refusal(void)
 {
@@ -242,21 +374,21 @@ static void refusal(void)
     unit_a();
     good_table();
     SmuMetricsStart(&device);
-    ticks(1000);
-    CHECK(native_reads == 1 && SmuMetricsFill(&device, &x));
+    ticks(3000);
+    CHECK(native_reads == 3 && SmuMetricsFill(&device, &x));
     native_result = 0xFE;                                   /* the firmware refuses the transfer */
     ticks(1000);
-    CHECK(native_reads == 2);
+    CHECK(native_reads == 4);
     CHECK(!SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_REFUSED && x.MetricsFailures == 1);
     CHECK(native_log_has("refused") && native_log_has("off until next boot"));
     native_result = 0;
     ticks(10000);
-    CHECK(native_reads == 2);                               /* never again in this start */
+    CHECK(native_reads == 4);                               /* never again in this start */
     /* A new start of the adapter in the same boot: nothing is mapped and nothing is sent. */
     SmuMetricsStart(&device);
     CHECK(native_maps == 1 && native_unmaps == 1);
     ticks(10000);
-    CHECK(native_reads == 2 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_REFUSED);
+    CHECK(native_reads == 4 && !SmuMetricsFill(&device, &x) && x.MetricsState == BC250_DPM_METRICS_REFUSED);
     CHECK(native_log_has("refused the table earlier in this boot"));
     /* The switch still wins: EnableSmuMetrics 0 reports off, not refused. */
     native_setting_present = 1; native_setting_value = 0;
@@ -276,6 +408,9 @@ int main(void)
     reading();
     bad_tables();
     overflow_and_age();
+    eight_core_board();
+    tail_change();
+    forced_layout();
     refusal();
     printf("SMU metrics binding: %ld checks, %ld failures\n", native_checks, native_failures);
     return native_failures ? 1 : 0;

@@ -8,7 +8,7 @@
 // Where the page lives: a carve-out page below the PSP's fence page (end - 0x17000, psp.c) and above the last 64 KB,
 // which hold the IP discovery table. It is in the top 2 MB, which Windows' memory segment never covers, so the SMU's
 // write can reach nothing but this page. The number is in the reservation table of bc250kmd.h.
-C_ASSERT(BC250_SMU_METRICS_BYTES <= BC250_SMU_METRICS_PAGE);
+C_ASSERT(BC250_SMU_METRICS_BYTES <= BC250_SMU_METRICS_PAGE && BC250_SMU_METRICS_COPY_BYTES <= BC250_SMU_METRICS_PAGE);
 C_ASSERT(BC250_DPM_METRICS_OFF == BC250_SMU_METRICS_STATE_OFF && BC250_DPM_METRICS_WAITING == BC250_SMU_METRICS_STATE_WAITING &&
          BC250_DPM_METRICS_OK == BC250_SMU_METRICS_STATE_OK && BC250_DPM_METRICS_REFUSED == BC250_SMU_METRICS_STATE_REFUSED &&
          BC250_DPM_METRICS_NO_TABLE == BC250_SMU_METRICS_STATE_NO_TABLE &&
@@ -29,6 +29,7 @@ typedef struct _BC250_SMU_METRICS_SNAP {
 typedef struct _BC250_SMU_METRICS {
     KSPIN_LOCK SnapLock;                    // Snap, written by the governor thread and read by the escape
     BOOLEAN Enabled;                        // EnableSmuMetrics at this start
+    ULONG LayoutSetting;                    // SmuMetricsLayout at this start: 0 detect, 1 stock, 2 eight-core
     volatile ULONG* Page;                   // the uncached mapping of the page, NULL when there is none
     PHYSICAL_ADDRESS Physical;
     ULONGLONG TableMc;                      // the page's GPU (MC) address, the one the firmware is told

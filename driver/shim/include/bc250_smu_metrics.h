@@ -51,19 +51,63 @@
 #define BC250_SMU_METRICS_OFF_SPARE 114u        /* uint16 Spare, diagnostic only */
 #define BC250_SMU_METRICS_OFF_ACCNT 240u        /* uint32 Accnt, after SampleStartTime and SampleStopTime */
 
+/* The eight-core layout. The patched SMU firmware of the community 8-core BIOS (bc250-smu-unlock "metrics-8core")
+ * widens every per-core array of SmuMetricsTable_t from 6 to 8 entries IN PLACE, so every field after them moves.
+ * Source, facts only: the community CachyOS BC-250 kernel (GPL; study in the workspace, no code copied). Its
+ * export DMA is 0x11C bytes. Byte offsets in one half, natural alignment:
+ *   CoreFrequency[8] 0x00, CorePower[8] 0x10, CoreTemperature[8] 0x30, L3Frequency[2] 0x40, L3Temperature[2] 0x44,
+ *   C0Residency[8] 0x48, GfxclkFrequency 0x58, GfxTemperature 0x5A, Socclk 0x5C, Vclk 0x5E, Dclk 0x60,
+ *   Memclk 0x62, Voltage[2] 0x64, Current[2] 0x6C, Power[2] 0x74, CurrentSocketPower 0x7C, SocTemperature 0x80,
+ *   EdgeTemperature 0x82, ThrottlerStatus 0x84, Spare 0x86. Half 0x88 bytes; Average follows Current, then the
+ *   same three uint32 counters. With the stock decode, offset 68 of such a table is L3Temperature[0]. */
+#define BC250_SMU_METRICS_8C_HALF 136u
+#define BC250_SMU_METRICS_8C_BYTES 284u         /* 0x11C, the firmware's DMA length */
+#define BC250_SMU_METRICS_8C_OFF_C0 72u         /* uint16 C0Residency[8] */
+#define BC250_SMU_METRICS_8C_OFF_GFXCLK 88u
+#define BC250_SMU_METRICS_8C_OFF_GFX_TEMP 90u
+#define BC250_SMU_METRICS_8C_OFF_VOLTAGE 100u
+#define BC250_SMU_METRICS_8C_OFF_CURRENT 108u
+#define BC250_SMU_METRICS_8C_OFF_POWER 116u
+#define BC250_SMU_METRICS_8C_OFF_SOCKET 124u
+#define BC250_SMU_METRICS_8C_OFF_SOC_TEMP 128u
+#define BC250_SMU_METRICS_8C_OFF_THROTTLER 132u
+#define BC250_SMU_METRICS_8C_OFF_SPARE 134u
+#define BC250_SMU_METRICS_8C_OFF_ACCNT 280u
+
+/* The bytes the miniport poisons, transfers and copies: the larger of the two tables. The firmware writes only its
+ * own table. Bytes BC250_SMU_METRICS_BYTES .. BC250_SMU_METRICS_COPY_BYTES - 1 (the tail) therefore keep the poison
+ * under the stock firmware, and a changed byte there means the firmware's DMA is longer than the stock table. The
+ * layout is detected from the DMA length, never from the CPU core count: an unlocked board with the stock SMU
+ * firmware writes the stock 244 bytes (BD-148) and stays on the stock decode and its overflow refusal. */
+#define BC250_SMU_METRICS_COPY_BYTES BC250_SMU_METRICS_8C_BYTES
+/* Consistent tables in a row before the reader latches a detected layout. No table is accepted before the latch. */
+#define BC250_SMU_METRICS_LATCH_TABLES 3u
+
+/* The layouts. The values are also those of the diagnostic REG_DWORD SmuMetricsLayout (driver/kmd/smu_metrics.c):
+ * 0 detects, 1 and 2 force a decode. Any other value of the setting detects. */
+enum bc250_smu_metrics_layout {
+	BC250_SMU_METRICS_LAYOUT_AUTO = 0,      /* not latched yet; as a setting: detect */
+	BC250_SMU_METRICS_LAYOUT_STOCK = 1,     /* 244 bytes, six cores (interface 0x8) */
+	BC250_SMU_METRICS_LAYOUT_8CORE = 2,     /* 284 bytes, eight cores, in place */
+	BC250_SMU_METRICS_LAYOUT_COUNT
+};
+
 /* The byte the owner fills the page with before every transfer. A field that still holds it afterwards was not
  * written by the firmware, so the table is refused instead of read as 4294967 W. */
 #define BC250_SMU_METRICS_POISON 0xFFu
 
 /* Acceptance bounds, not control limits. The board has a 300 W PSU. The GPU uses 500..2000 MHz and at most
- * 1000 mV (docs/hardware.md). Allow 5% clock and 100 mV readback margin, not higher setpoints. The CPU rail's
+ * 1000 mV (docs/hardware.md), and an opt-in overclock tier admits up to 2300 MHz and 1075 mV
+ * (BC250_CLOCK_OC_CEILING_MHZ/_MV in bc250_board_envelope.h; smu_metrics_test.c checks the relation). Allow 5%
+ * clock and 100 mV readback margin over that ceiling, not higher setpoints. A lower bound here stops the
+ * reader after BC250_SMU_METRICS_BAD_LIMIT tables at a tier clock, and the fan curve then loses its input. The CPU rail's
  * readback envelope is at most 1600 mV there. Zero voltage/clock is allowed for a gated rail. Temperature must
  * remain visible ABOVE the thermal trip: 150 C is a decode ceiling, never permission to operate that hot. */
 #define BC250_SMU_METRICS_MAX_MW 300000u
-#define BC250_SMU_METRICS_MAX_GFX_MV 1100u
+#define BC250_SMU_METRICS_MAX_GFX_MV 1175u
 #define BC250_SMU_METRICS_MAX_SOC_MV 1600u
 #define BC250_SMU_METRICS_MIN_GFX_MHZ 500u
-#define BC250_SMU_METRICS_MAX_GFX_MHZ 2100u
+#define BC250_SMU_METRICS_MAX_GFX_MHZ 2415u
 #define BC250_SMU_METRICS_MAX_CC 15000u
 #define BC250_SMU_METRICS_MAX_RESIDENCY 100u /* C0Residency is percentage, upstream interface 0x8 */
 
@@ -94,12 +138,13 @@ enum bc250_smu_metrics_state {
 /* Why one table was not accepted. */
 enum bc250_smu_metrics_parse {
 	BC250_SMU_METRICS_PARSE_OK = 0,
-	BC250_SMU_METRICS_PARSE_SHORT = 1,      /* fewer than BC250_SMU_METRICS_BYTES bytes */
+	BC250_SMU_METRICS_PARSE_SHORT = 1,      /* fewer bytes than the layout's table, or the reader's copy */
 	BC250_SMU_METRICS_PARSE_UNWRITTEN = 2,  /* the poison is still in a field the firmware always writes */
 	BC250_SMU_METRICS_PARSE_RANGE = 3,      /* a value outside the bounds above */
 	BC250_SMU_METRICS_PARSE_ZERO_POWER = 4, /* the current or average socket power reads 0 mW: a skipped sample */
-	BC250_SMU_METRICS_PARSE_CORE_OVERFLOW = 5, /* clock AND temperature look like C0Residency[6..7] */
-	BC250_SMU_METRICS_PARSE_CLOCK = 6      /* nonzero GPU clock outside the readback envelope */
+	BC250_SMU_METRICS_PARSE_CORE_OVERFLOW = 5, /* clock AND temperature look like C0Residency entries */
+	BC250_SMU_METRICS_PARSE_CLOCK = 6,     /* nonzero GPU clock outside the readback envelope */
+	BC250_SMU_METRICS_PARSE_LAYOUT = 7     /* no known layout, or the tail disagrees with the latched layout */
 };
 
 /* One accepted table, in the units of the header. */
@@ -124,7 +169,12 @@ struct bc250_smu_metrics_reader {
 	unsigned int rejected_tables;   /* saturating count of parse refusals, no transport failures */
 	unsigned int last_reject;       /* last non-OK parse, retained across successful reads */
 	unsigned int marker_mask;       /* 0x67 seen in Spare bytes 114,115,230,231: bits 0..3; diagnostic only */
-	unsigned int spare_bytes;       /* raw bytes at 114,115,230,231, packed from least to most significant */
+	unsigned int spare_bytes;       /* raw Spare bytes of both halves, packed from least to most significant */
+	unsigned int layout;            /* enum bc250_smu_metrics_layout: the latched decode, AUTO until the latch */
+	unsigned int layout_forced;     /* 1: SmuMetricsLayout chose the layout; the tail check is off */
+	unsigned int layout_candidate;  /* the detected layout of the current run of good tables */
+	unsigned int layout_run;        /* good tables in a row with that layout, toward BC250_SMU_METRICS_LATCH_TABLES */
+	unsigned int last_tail;         /* enum bc250_smu_metrics_layout detected in the last copy, AUTO for a short one */
 	unsigned long long next_ms;     /* no read before this time */
 	unsigned long long last_ok_ms;  /* the time of the last accepted table */
 	int has_last;
@@ -141,21 +191,35 @@ int bc250_smu_metrics_message_allowed(unsigned int message, unsigned int paramet
  * keeps BC250_VRAM_TOP_RESERVED, which is larger, out of the segment). */
 int bc250_smu_metrics_table_allowed(unsigned long long table_mc, unsigned long long vram_mc,
 				    unsigned long long vram_len);
-/* Decodes one table. On BC250_SMU_METRICS_PARSE_OK *out holds it; on anything else *out is zeroed. */
+/* Decodes one table in the given layout (STOCK or 8CORE; any other value is PARSE_LAYOUT). On
+ * BC250_SMU_METRICS_PARSE_OK *out holds it; on anything else *out is zeroed. */
 enum bc250_smu_metrics_parse bc250_smu_metrics_parse(const unsigned char *raw, unsigned int length,
-						     struct bc250_smu_metrics *out);
-/* Only inspect the four named Spare bytes. The community marker's exact byte is not specified. No marker
- * admits a layout or overrides validation; this function never follows an address or reads another table. */
-unsigned int bc250_smu_metrics_marker(const unsigned char *raw, unsigned int length);
+						     unsigned int layout, struct bc250_smu_metrics *out);
+/* The layout one copy shows: STOCK when all of the tail still holds the poison, 8CORE when any byte of it changed,
+ * AUTO when the copy is shorter than BC250_SMU_METRICS_COPY_BYTES and there is no tail to read. */
+unsigned int bc250_smu_metrics_detect(const unsigned char *raw, unsigned int length);
+/* Only inspect the four named Spare bytes of the layout. The community marker's exact byte is not specified. No
+ * marker admits a layout or overrides validation; this function never follows an address or reads another table. */
+unsigned int bc250_smu_metrics_marker(const unsigned char *raw, unsigned int length, unsigned int layout);
 /* A reader for one start. enabled: EnableSmuMetrics. table_ok: the page exists and the SMU owner is online.
- * refused_this_boot: an earlier start of this driver image saw a refusal, so this one sends nothing. */
+ * refused_this_boot: an earlier start of this driver image saw a refusal, so this one sends nothing.
+ * layout_setting: SmuMetricsLayout. STOCK or 8CORE latch that layout at once and turn the tail check off; any other
+ * value detects the layout from the first BC250_SMU_METRICS_LATCH_TABLES good tables. */
 void bc250_smu_metrics_reader_init(struct bc250_smu_metrics_reader *r, int enabled, int table_ok,
-				   int refused_this_boot);
+				   int refused_this_boot, unsigned int layout_setting);
 /* 1 when a read is due at now_ms: the state is WAITING or OK and the period since the last attempt is over. */
 int bc250_smu_metrics_due(const struct bc250_smu_metrics_reader *r, unsigned long long now_ms);
-/* Records one attempt: the transport's result and, when it is 0, the page as copied. Returns 1 when this attempt
- * ended the reader for the rest of the boot (a refusal), which the miniport latches. An OFFLINE result changes
- * nothing but the time of the next attempt. */
+/* Records one attempt: the transport's result and, when it is 0, the page as copied (BC250_SMU_METRICS_COPY_BYTES;
+ * a shorter copy is PARSE_SHORT). Returns 1 when this attempt ended the reader for the rest of the boot (a refusal),
+ * which the miniport latches. An OFFLINE result changes nothing but the time of the next attempt.
+ * The layout rules, for a detected layout:
+ *   - Before the latch, a table is decoded in the layout its tail shows. A good table extends the run when its
+ *     layout equals the run's, and starts a new run of 1 when it does not. Any refused table, a zero-power one
+ *     included, ends the run. The table that makes the run BC250_SMU_METRICS_LATCH_TABLES long latches the layout
+ *     and is the first one accepted; the tables before it are not published.
+ *   - After the latch, a table whose tail shows the other layout is refused (PARSE_LAYOUT) and counts toward the
+ *     bad-table limit. The reader never latches again in this start: the SMU firmware does not change while the
+ *     board runs, so a changed tail is a fault, not a new layout. */
 int bc250_smu_metrics_record(struct bc250_smu_metrics_reader *r, unsigned long long now_ms, int status,
 			     const unsigned char *raw, unsigned int length);
 /* 1 when the last accepted table is at most BC250_SMU_METRICS_FRESH_MS old and the state is OK. */

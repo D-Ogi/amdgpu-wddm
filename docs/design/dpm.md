@@ -153,6 +153,7 @@ application and `bc250kmd_cli dpm` show the package power.
 | Messages | 0x4 and 0x5 (the page's MC address, high half first), then 0x6 with argument 6 | `driver/amdgpu-import/smu_v11_8_ppsmc.h`; Linux v6.18 `smu_v11_0_set_driver_table_location`, `smu_cmn_update_table` |
 | Seen on unit A | amdgpu sends 0x4 (`0xF4`), 0x5 (`0x8CF000`) and 0x6 at every init | `init-sequence.md` (E03) |
 | Table | `SmuMetrics_t`: `Current` and `Average` (116 bytes each), then three counters; 244 bytes; driver interface 0x8 | Linux v6.18 `smu11_driver_if_cyan_skillfish.h` (AMD, MIT) |
+| Eight-core table | The patched SMU firmware of the community 8-core BIOS widens the core arrays in place: 136-byte halves, 284 bytes. The KMD detects it by the DMA length | [Metrics validation](smu-metrics.md), "Eight-core layout" |
 | Fields read | `CurrentSocketPower` (mW, offset 104), `Power[2]` (96), `Voltage[2]` (80), `GfxclkFrequency` (68), `GfxTemperature` (70), `SocTemperature` (108), `ThrottlerStatus` (112); `Average.CurrentSocketPower` (220) | the same header; `cyan_skillfish_ppt.c` reads the same fields |
 
 How it runs (`driver/shim/bc250_smu_metrics.c` for the rules, `driver/kmd/smu.c` `SmuReadMetrics` for the
@@ -163,9 +164,10 @@ messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
   uncached for the start. The list admits only a page-aligned address in that window.
 - The governor thread reads the table at most once a second, after the tick's own SMU traffic. The first read waits
   one second after the start. The escape never sends a message: it copies the published snapshot.
-- Each read fills the page with `0xFF` first. The parser rejects unwritten fields and checks the values before it publishes them.
-  [Metrics validation](smu-metrics.md) lists the field offsets, bounds and checks for overwritten core data.
-  Three bad tables stop the reads for this start.
+- Each read fills the first 284 bytes of the page with `0xFF` first. The parser rejects unwritten fields and checks
+  the values before it publishes them. [Metrics validation](smu-metrics.md) lists the field offsets of both layouts,
+  the layout detection, the bounds and the checks for overwritten core data. Three bad tables stop the reads for this
+  start. The first value is published after three good tables, when the layout is latched.
 - A table whose current or average socket power reads 0 mW is skipped: it is counted, it keeps the previous reading,
   and it does not count toward the three. A Linux stress run on unit A (2026-10-07, four parallel readers, 316 000
   tables in 90 s, no error and no kernel message) read 0 W for the average in about one sample of three, and one
@@ -176,6 +178,8 @@ messages, `driver/kmd/smu_metrics.c` for the page, the gate and the snapshot):
   transition) costs nothing: the next second tries again. After each owner start the address goes out again before
   the first transfer.
 - `EnableSmuMetrics` (REG_DWORD, default 1 in the INF and the installer): 0 sends no metrics message and maps no page.
+- `SmuMetricsLayout` (REG_DWORD, diagnostic, not in the INF or the GUI): 0 or absent detects the layout, 1 forces
+  the stock decode and 2 the eight-core decode.
 - RUN_DPM ABI 3 (248 bytes) carries the values. `BC250_DPM_FLAG_POWER` is set only for a table at most three
   seconds old. Without it the application shows "No reading", never an older value.
 - What the figure is: the SMU's own estimate for the whole package, processor and graphics together. The board, the
