@@ -102,10 +102,14 @@ Not done yet. One trial on unit A with the KMD of this change:
    - wait 5 s, then take `mon.py screenshot`.
    - call `SetCursorPos` to a known logical point (for example 100, 200), read `GetCursorPos`, and click a test
      window at that point. The window must get the click at the same client coordinates.
-3. Read the guard log. Expected: one `display: rotation` line for each change, no `Present refused a rotated Blt`
+3. In portrait, before the return to landscape, run the full-screen flip client for 20 s
+   (`tools/win/d3d12queue/scanout-trial.ps1 -Seconds 20 -Experiment scanout-flip`). Expected: the client presents
+   each frame, its picture in a screenshot is turned with the desktop, and the scan-out counters of application
+   buffers do not move (the chain is composed).
+4. Read the guard log. Expected: one `display: rotation` line for each change, no `Present refused a rotated Blt`
    line (if there are some, CDD or a shell asked for a rotated Blt, which is the follow-up of route 2), and the
    scan-out trailer without DirectFlip while rotated.
-4. Expected failures: none. A bugcheck 0x113, a TDR or a black screen fails the trial. The last step returns to
+5. Expected failures: none. A bugcheck 0x113, a TDR or a black screen fails the trial. The last step returns to
    landscape.
 
 ## Follow-up
