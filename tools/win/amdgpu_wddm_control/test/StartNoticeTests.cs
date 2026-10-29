@@ -161,6 +161,7 @@ static partial class UnitTests
         Check(actionsSource.Contains("GuardReset.Run(api)") && actionsSource.Contains("guard count again"),
             "the helper clears the count before the device and again when the new start stays unconfirmed");
         Check(actionsSource.Contains("Confirm(EnableConfirmSeconds)"), "the helper confirms the start it got with the existing confirmation");
+        GuardStoreTests(root, actionsSource, p);
         Check(noticeSource.Contains("RecoveryRunner.RestartNeeded ? \"notice.restart-needed\""), "the notice turns that code into the restart advice");
         Check(noticeSource.Contains("\"--action\", \"enable-driver\""), "the notice runs the same action as the Home banner");
 
@@ -205,6 +206,88 @@ static partial class UnitTests
             Check(!Regex.IsMatch(startText, @"Start-Process[^\r\n]*--start-notice[^\r\n]*-WindowStyle") &&
                 !Regex.IsMatch(startText, @"-WindowStyle[^\r\n]*--start-notice"), "the notice is not started with a window style, so its window is shown");
         }
+    }
+
+    // ---- BD-257: the reset and the readings use the driver state store, never the raw Parameters key ----------
+    // guard.c reads UnconfirmedStarts through DriverStateOpenData, the Data key of the store's active generation.
+    // A write to HKLM\SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters reads back 0 and changes nothing that the
+    // driver reads: on the lab the next start was refused again with the count 2. The helper and the native store
+    // are not part of this program, so these are scans of their sources and of the catalog.
+    static void GuardStoreTests(string root, string actionsSource, ActionPlan enable)
+    {
+        string src = Path.Combine(root, @"tools\win\amdgpu_wddm_control\src");
+        // The driver side of the contract: the guard's count, its stage and its history are records of the store.
+        var guard = File.ReadAllText(Path.Combine(root, @"driver\kmd\guard.c"));
+        Check(Regex.IsMatch(guard, @"static NTSTATUS OpenParameters\([^)]*\)\s*\{[^}]*return DriverStateOpenData\(Key\);"),
+            "guard.c reads and writes its records through the driver state store");
+        var access = CatalogAccess(root);
+        foreach (var name in new[] { "UnconfirmedStarts", "LastStage", "StageHistory", "DpmPending" })
+            Check(access.ContainsKey(name) && access[name][0] == "record", name + " is a record at the root of the driver state store");
+        // The store client refuses a write to a value whose access is "driver" (driver/state/windows.c Change), so
+        // the reset works only while the catalog lets an administrator write the count.
+        Check(access.ContainsKey(GuardReset.ValueName) && access[GuardReset.ValueName][1] == "admin",
+            "an administrator may write " + GuardReset.ValueName + " through the store client");
+        var catalog = File.ReadAllText(Path.Combine(root, @"driver\state\catalog.json"));
+        foreach (var record in new[] { "StartRecord", "StopRecord" })
+            Check(Regex.IsMatch(catalog, "\"path\":\\s*\"" + record + "\",\\s*\"name\":\\s*\"[^\"]+\",\\s*\"kind\":\\s*\"record\""),
+                record + " is a child of the driver state store");
+
+        // The application side: the identifier the reset and the readings use resolves to the store.
+        Check(DriverStateKey.IsPath(Recovery.ParametersPath) && DriverStateKey.IsPath(CuMode.ParametersPath),
+            "the identifier of the driver's settings resolves to the driver state store");
+        var regApi = File.ReadAllText(Path.Combine(src, "CuRegistry.cs"));
+        int at = regApi.IndexOf("public sealed class Win32RegApi", StringComparison.Ordinal);
+        Check(at > 0, "CuRegistry.cs has Win32RegApi");
+        var regApiClass = at > 0 ? regApi.Substring(at) : "";
+        Check(regApiClass.Contains("DriverStateBatch.Begin()") && regApiClass.Contains("batch.OpenPath(path)") &&
+            regApiClass.Contains("state.SetDword(name, value)"), "Win32RegApi writes through one batch of the driver state store");
+        Check(!Regex.IsMatch(regApiClass, @"\bRegistry\.|RegistryKey|OpenSubKey|CreateSubKey|RegOpenKey|RegSetValue"),
+            "Win32RegApi opens no registry key of its own");
+        Equal(2, Regex.Matches(actionsSource, @"new Win32RegApi\(Recovery\.ParametersPath\)\)[^\r\n]*GuardReset\.Run\(api\)").Count,
+            "both resets of enable-driver go through Win32RegApi on the store identifier");
+        Equal(2, Regex.Matches(actionsSource, @"GuardReset\.Run\(").Count, "enable-driver has no other reset of the count");
+        Check(Regex.IsMatch(actionsSource, @"SettingsStore\.ReadDword\(Recovery\.ParametersPath, ""UnconfirmedStarts""\)"),
+            "the read-back after the confirmation reads the store through SettingsStore");
+        var program = File.ReadAllText(Path.Combine(src, "Program.cs"));
+        Check(Regex.IsMatch(program, @"using \(var key = DriverStateKey\.Open\(\)\)[\s\S]{0,400}GetValue\(""UnconfirmedStarts""\)[\s\S]{0,100}GetValue\(""LastStage""\)"),
+            "the sign-in notice reads the count and the stage from the store");
+        var diagnostics = File.ReadAllText(Path.Combine(src, "StartupDiagnostics.cs"));
+        Check(diagnostics.Contains("DriverStateKey.Open(record)") && diagnostics.Contains("RegistryRecord(data, \"StartRecord\")") &&
+            diagnostics.Contains("RegistryRecord(data, \"StopRecord\")"), "the start diagnostics read StartRecord and StopRecord from the store");
+        // The general helpers take the store branch before any registry key.
+        var inventory = File.ReadAllText(Path.Combine(src, "Inventory.cs"));
+        Check(GuardedBefore(inventory, "public static uint? ReadDword(string path, string name)", "DriverStateKey.IsPath(path)", "Machine.OpenSubKey(path)"),
+            "SettingsStore.ReadDword takes the store for the driver's identifier");
+        Check(GuardedBefore(inventory, "public static Dictionary<string, string> ReadAll(string path)", "DriverStateKey.IsPath(path)", "Registry.LocalMachine.OpenSubKey(path)"),
+            "SettingsStore.ReadAll takes the store for the driver's identifier");
+        Check(GuardedBefore(actionsSource, "static BackupValue Saved(", "DriverStateKey.IsPath(path)", "SettingsStore.Machine.OpenSubKey(path)"),
+            "the backup of an action reads the store for the driver's identifier");
+        Check(GuardedBefore(actionsSource, "static void Write(RegWrite w, DriverStateBatch batch)", "DriverStateKey.IsPath(w.Path)", "SettingsStore.Machine.OpenSubKey(w.Path, true)"),
+            "an action writes the store for the driver's identifier");
+        Check(GuardedBefore(actionsSource, "static bool ReadsBack(RegWrite w, DriverStateBatch batch)", "DriverStateKey.IsPath(w.Path)", "SettingsStore.Machine.OpenSubKey(w.Path)"),
+            "an action reads back from the store for the driver's identifier");
+        Check(Regex.IsMatch(actionsSource, @"public static RecoverySnapshot Read\([^)]*\)\s*\{[\s\S]{0,300}?using \(var k = batch == null \? DriverStateKey\.Open\(\) : batch\.Open\(\)\)"),
+            "the snapshot reads the driver's values from the store");
+        // No file of the application opens the service's Parameters key as a registry key.
+        var raw = new Regex(@"(OpenSubKey|CreateSubKey|DeleteSubKey\w*|Registry\.GetValue|Registry\.SetValue)\(\s*(Recovery\.ParametersPath|DpmSettings\.RegistryPath|CuMode\.ParametersPath|@?""[^""]*bc250kmd\\{1,2}Parameters)");
+        foreach (var file in Directory.GetFiles(src, "*.cs"))
+            foreach (Match m in raw.Matches(File.ReadAllText(file)))
+                Check(false, "a raw registry open of the driver's Parameters key in " + Path.GetFileName(file) + ": " + m.Value);
+
+        // The plan the person confirms names the place the helper writes.
+        var text = enable.Text();
+        Check(text.Contains("driver state store") && text.Contains(GuardReset.StoreLocation),
+            "the enable-driver plan names the driver state store: " + text);
+        Check(!text.Contains(@"HKLM\" + Recovery.ParametersPath), "the enable-driver plan names no raw Parameters key: " + text);
+    }
+
+    // In the source after `start`, the text `guard` comes before the first `raw`.
+    static bool GuardedBefore(string source, string start, string guard, string raw)
+    {
+        int s = source.IndexOf(start, StringComparison.Ordinal);
+        if (s < 0) return false;
+        int g = source.IndexOf(guard, s, StringComparison.Ordinal), r = source.IndexOf(raw, s, StringComparison.Ordinal);
+        return g > 0 && r > 0 && g < r;
     }
 
     // A reading of a machine whose last start the driver's own guard refused: nothing of the driver answers, the

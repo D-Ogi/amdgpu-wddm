@@ -9,6 +9,7 @@
 //   interop.c / interop_policy.c   EnableGpuPresentBlit, EnableCddDwmInterop (absent = 1), InteropClosedReason,
 //                                  InteropLastState (effective | requested << 8), read at the next driver start
 //   guard.c                        UnconfirmedStarts: at BC250_MAX_UNCONFIRMED_STARTS (2) the driver refuses to start
+//                                  (a record in the driver state store, DriverStateOpenData, not the raw Parameters key)
 //   dpm.c                          DpmMode, DpmMaxMHz, DpmPending/DpmConfirmed, read at the next driver start
 //   start_health.c                 the confirmation milestone; the release's start-confirm-core.ps1
 //                                  (Test-StartConfirmEligible) is the rule this app applies before it confirms
@@ -25,9 +26,9 @@ namespace AmdgpuWddmControl
     // Everything the rules look at, read once. Serializable (JavaScriptSerializer) for --snapshot and the dry run.
     public sealed class RecoverySnapshot
     {
-        public bool DriverInstalled { get; set; }                   // Services\bc250kmd\Parameters exists
+        public bool DriverInstalled { get; set; }                   // the driver state store opens (DriverState.cs)
         public bool RouterInstalled { get; set; }                   // SOFTWARE\amdgpu-wddm\DesktopRouter exists
-        public Dictionary<string, long> Parameters { get; set; }    // REG_DWORD values of Parameters (absent: not listed)
+        public Dictionary<string, long> Parameters { get; set; }    // DWORD values at the root of the driver state store (absent: not listed)
         public int StateSchema { get; set; }                        // 2: common service state; 0: old saved snapshot
         public Dictionary<string, long> ParameterOverrides { get; set; } // raw values, distinct from effective defaults
         public long? DwmForceCpu { get; set; }
@@ -237,7 +238,10 @@ namespace AmdgpuWddmControl
             if (ConfirmStart) w.AppendLine("  confirm this driver start (start-health CONFIRM with this start's generation and epoch)");
             if (EnableDriver)
             {
-                w.AppendLine(@"  set HKLM\" + Recovery.ParametersPath + " " + GuardReset.ValueName + " = 0 (DWord), flushed and read back");
+                // Not "HKLM\...\Parameters": the helper writes the driver state store (Win32RegApi), and a reader who
+                // copied a raw Parameters path from this line reset a value that the driver does not read (BD-257).
+                w.AppendLine("  set " + GuardReset.ValueName + " = 0 (DWord) in the driver state store (" + GuardReset.StoreLocation +
+                    ", the value the driver's guard reads), flushed and read back");
                 w.AppendLine("  then a kernel restart of the graphics device, a bounded wait for the device and the driver,");
                 w.AppendLine("  then the start-health CONFIRM of the new start, and the count to 0 again if it stays unconfirmed");
             }

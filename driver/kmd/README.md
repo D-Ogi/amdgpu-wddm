@@ -59,8 +59,11 @@ no code from Microsoft's MS-PL sample.
 
 ## Built for a lab without a kernel debugger
 
-- **Start budget.** `Services\bc250kmd\Parameters\UnconfirmedStarts` is incremented at every
+- **Start budget.** The `UnconfirmedStarts` record of the driver state store (the `Data` key of the active
+  `StateV2` generation, [docs/design/driver-state.md](../../docs/design/driver-state.md)) is incremented at every
   `DxgkDdiStartDevice`. At 2 the driver refuses to start and Windows falls back to the Basic Display driver.
+  A value written to the raw `Services\bc250kmd\Parameters` key has no effect on the count. To reset it, use
+  `bc250kmd_cli state set UnconfirmedStarts 0` or the control app's "Enable the driver".
   Under the full table a start is confirmed through its health witness (`start_health.c`,
   [docs/design/wddm-start-confirmation.md](../../docs/design/wddm-start-confirmation.md)): the monitor watches
   60 s of fresh completed-primary flips for one start identity, then asks `health confirm <generation> <epoch>`,
