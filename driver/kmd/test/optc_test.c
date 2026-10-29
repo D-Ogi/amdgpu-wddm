@@ -92,11 +92,61 @@ static void readTimingTests(BC250_DISP_IO* io)
     memset(&out,0xcc,sizeof(out));CHECK(Bc250OptcReadTiming(io,0,&out)==BC250_DISP_STATUS_INVALID);
     CHECK(!memcmp(&out,&zero,sizeof(out)));
 }
+// BD-223 stage S2: the global sync of a multiplane-overlay plane on a running OTG0. The read gives what the program
+// wrote; the locked write moves VREADY and the VUPDATE width only, and refuses another VSTARTUP or VUPDATE offset, or a
+// value outside its field, before any write.
+static void globalSyncTests(BC250_DISP_IO* io)
+{
+    BC250_OPTC_SYNC now,plane,back;unsigned i,total,writes;
+    memset(&model,0,sizeof(model));
+    CHECK(Bc250OptcProgram(io,&hd,&sync,0)==0);CHECK(Bc250OptcEnable(io)==0);
+    model.access=0;writes=model.writes;memset(&now,0xcc,sizeof(now));
+    CHECK(Bc250OptcReadGlobalSync(io,&now)==0);CHECK(memcmp(&now,&sync,sizeof(now))==0 && model.writes==writes);
+    total=model.access;
+    for(i=1;i<=total;++i) {
+        model.access=0;model.failAt=i;model.after=0;memset(&back,0xcc,sizeof(back));
+        CHECK(Bc250OptcReadGlobalSync(io,&back)==BC250_DISP_STATUS_DEVICE);
+        CHECK(back.VStartup==0 && back.VReady==0 && back.VUpdateOffset==0 && back.VUpdateWidth==0);
+        CHECK(model.access==i && !model.after && model.writes==writes);
+    }
+    model.failAt=0;
+    CHECK(Bc250OptcReadGlobalSync(io,NULL)==BC250_DISP_STATUS_INVALID);
+    // A plane's VREADY and VUPDATE width; the OTG keeps running and its other fields stay.
+    plane=sync;plane.VReady=sync.VReady+5;plane.VUpdateWidth=sync.VUpdateWidth+3;
+    model.access=0;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==0);total=model.access;
+    CHECK(F(OTG_VREADY_PARAM,VREADY_OFFSET)==plane.VReady && F(OTG_VSTARTUP_PARAM,VSTARTUP_START)==sync.VStartup);
+    CHECK(F(OTG_VUPDATE_PARAM,VUPDATE_OFFSET)==sync.VUpdateOffset && F(OTG_VUPDATE_PARAM,VUPDATE_WIDTH)==plane.VUpdateWidth);
+    CHECK(F(OTG_CONTROL,OTG_MASTER_EN)==1);
+    CHECK(Bc250OptcReadGlobalSync(io,&back)==0 && memcmp(&back,&plane,sizeof(back))==0);
+    // The way back is the same call with the saved values.
+    CHECK(Bc250OptcGlobalSyncLocked(io,&now)==0);
+    CHECK(Bc250OptcReadGlobalSync(io,&back)==0 && memcmp(&back,&sync,sizeof(back))==0);
+    // Refusals before any write.
+    writes=model.writes;
+    plane=sync;plane.VStartup++;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_NOT_SUPPORTED);
+    plane=sync;plane.VUpdateOffset++;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_NOT_SUPPORTED);
+    CHECK(model.writes==writes);
+    model.access=0;
+    plane=sync;plane.VStartup=0;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_INVALID);
+    plane=sync;plane.VReady=0xffffffff;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_INVALID);
+    plane=sync;plane.VUpdateWidth=0xffffffff;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_INVALID);
+    plane=sync;plane.VUpdateOffset=0xffffffff;CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250OptcGlobalSyncLocked(io,NULL)==BC250_DISP_STATUS_INVALID);
+    CHECK(model.access==0 && model.writes==writes);
+    // Every access failure: nothing after it.
+    plane=sync;plane.VReady=sync.VReady+5;
+    for(i=1;i<=total;++i) {
+        model.access=0;model.failAt=i;model.after=0;
+        CHECK(Bc250OptcGlobalSyncLocked(io,&plane)==BC250_DISP_STATUS_DEVICE);
+        CHECK(model.access==i && !model.after);
+    }
+    model.failAt=0;
+}
 int main(void)
 {
     BC250_DISP_IO io={0};unsigned n,i,total;BC250_TARGET_TIMING bad;BC250_OPTC_SYNC bs;
     io.Context=&model;io.Read=Read;io.Write=Write;io.Stall=Stall;io.BudgetUs=100000;
-    readTimingTests(&io);memset(&model,0,sizeof(model));
+    readTimingTests(&io);globalSyncTests(&io);memset(&model,0,sizeof(model));
     CHECK(Bc250OptcProgram(&io,&hd,&sync,0)==0);
     CHECK(F(OTG_H_TOTAL,OTG_H_TOTAL)==2199 && F(OTG_V_TOTAL,OTG_V_TOTAL)==1124);
     CHECK(F(OTG_H_BLANK_START_END,OTG_H_BLANK_START)==2112 && F(OTG_H_BLANK_START_END,OTG_H_BLANK_END)==192);

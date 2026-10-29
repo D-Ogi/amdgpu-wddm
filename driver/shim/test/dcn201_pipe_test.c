@@ -71,6 +71,17 @@ static BC250_DML201_PLAN plan(void)
     i.PixelClockKhz=148500;i.PitchPixels=1920;i.DchubRefClockKhz=48000;i.DentistVcoKhz=3000000;
     CHECK(Bc250Dml201Plan(&i,ws,n,&p)==0);free(ws);return p;
 }
+// BD-223: the plan of a scaled plane on the timing of plan(): a viewport scaled into a recout, at its own pitch.
+static BC250_DML201_PLAN planeAt(unsigned vw,unsigned vh,unsigned rw,unsigned rh,unsigned taps,unsigned pitch)
+{
+    BC250_DML201_INPUT i;BC250_DML201_PLAN p;size_t n=Bc250Dml201WorkspaceSize();void* ws=malloc(n);
+    memset(&i,0,sizeof(i));memset(&p,0,sizeof(p));CHECK(ws!=NULL);if(!ws)return p;
+    i.HActive=1920;i.HTotal=2200;i.HFrontPorch=88;i.HSyncWidth=44;
+    i.VActive=1080;i.VTotal=1125;i.VFrontPorch=4;i.VSyncWidth=5;
+    i.PixelClockKhz=148500;i.PitchPixels=pitch;i.DchubRefClockKhz=48000;i.DentistVcoKhz=3000000;
+    i.ViewportWidth=vw;i.ViewportHeight=vh;i.RecoutWidth=rw;i.RecoutHeight=rh;i.HTaps=taps;i.VTaps=taps;
+    CHECK(Bc250Dml201Plan(&i,ws,n,&p)==0 && p.Valid==1);free(ws);return p;
+}
 static void ready(MOCK* m,BC250_DISP_IO* io,BC250_DCN201_CLOCKS* c)
 {
     init(m,io);CHECK(Bc250Dcn201ReadClocks(io,48000,c)==0);CHECK(Bc250Dcn201PlaneBlank(io,1)==0);
@@ -185,6 +196,111 @@ static void groupTest(MOCK* m,BC250_DISP_IO* io)
     init(m,io);CHECK(Bc250Dcn201PlaneBlankAt(io,2,1)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
     m->reg[BC250_REG_DMU_HUBP1_DCHUBP_CNTL/4]=0;io->BudgetUs=7;
     CHECK(Bc250Dcn201PlaneBlankAt(io,1,1)==BC250_DISP_STATUS_BUDGET);CHECK(io->StalledUs==7);
+}
+// BD-223 stage S2: the live requestor of a plane over a running mode, and the way back. The mode is what PipeApply
+// wrote; a plane write captures the fields it changes, raises the watermarks only, and the restore gives the mode's
+// register file back. The watermarks are compared apart: they stay raised until the next commit.
+static int isWatermark(unsigned long r)
+{
+    return r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A) || r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_B) ||
+           r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_C) || r==R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_D) ||
+           r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_A) || r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_B) ||
+           r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_C) || r==R(DCHUBBUB_ARB_PTE_META_URGENCY_WATERMARK_D) ||
+           r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_A) || r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_B) ||
+           r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_C) || r==R(DCHUBBUB_ARB_ALLOW_DRAM_CLK_CHANGE_WATERMARK_D);
+}
+static unsigned differences(const MOCK* m,const unsigned long* mode,int watermarks)
+{
+    unsigned long r;unsigned n=0;
+    for(r=0;r<sizeof(m->reg);r+=4)
+        if(m->reg[r/4]!=mode[r/4] && (watermarks || !isWatermark(r)))++n;
+    return n;
+}
+static void modePipe(MOCK* m,BC250_DISP_IO* io,const BC250_DML201_PLAN* p)
+{
+    BC250_DCN201_CLOCKS c;
+    ready(m,io,&c);CHECK(Bc250Dcn201PipeApply(io,p,&c)==0);CHECK(Bc250Dcn201PlaneBlank(io,0)==0);
+    m->ops=0;m->writes=0;m->failed=0;m->after_failure=0;m->fail_at=0;io->Reads=0;io->Writes=0;
+    memset(m->writes_on,0,sizeof(m->writes_on));
+}
+static void requestorTest(MOCK* m,BC250_DISP_IO* io,const BC250_DML201_PLAN* p)
+{
+    unsigned long* mode=malloc(sizeof(m->reg));
+    BC250_DML201_PLAN q=planeAt(1280,720,1920,1080,4,1280),q2=planeAt(1600,900,1920,1080,4,1600),bad;
+    BC250_DCN201_REQUESTOR_SAVE s,s2;
+    unsigned total,i,writes;
+    unsigned long urgentMode;
+    CHECK(mode!=NULL);if(!mode)return;
+    // The plane write: the mode's fields captured, the plane's written, and nothing else changed but watermarks.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    CHECK(Bc250Dcn201RequestorValidate(&q,48000)==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,&s)==0);
+    CHECK(s.Count>0 && s.Count<=BC250_DCN201_REQUESTOR_FIELDS);CHECK(differences(m,mode,0)>0);
+    CHECK(!m->zero && !m->readonly);
+    for(i=0;i<s.Count;++i) CHECK(s.Register[i]!=0 && (mode[s.Register[i]/4]&s.Mask[i])==s.Value[i]);
+    total=m->ops;writes=m->writes;
+    printf("plane requestor: %u MMIO operations, %u writes, %u fields saved\n",total,writes,s.Count);
+    // A second plane over the first keeps the mode's capture (Count is not 0), and the restore gives the mode back.
+    memcpy(&s2,&s,sizeof(s));
+    CHECK(Bc250Dcn201RequestorLocked(io,&q2,48000,&s)==0);CHECK(memcmp(&s,&s2,sizeof(s))==0);
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);CHECK(differences(m,mode,0)==0);
+    // Watermarks: raised only. The plane's are not above the mode's here, so the registers keep the mode's values.
+    CHECK(differences(m,mode,1)==0);
+    // A plane with a higher urgent watermark raises it; the restore does not lower it.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    urgentMode=Bc250DispGet(mode[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4],
+        M(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A));
+    bad=q;bad.Watermarks[0].UrgentNs=p->Watermarks[0].UrgentNs*2u;
+    CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==0);
+    CHECK(Bc250DispGet(m->reg[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4],
+        M(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A))>urgentMode);
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);CHECK(differences(m,mode,0)==0);
+    CHECK(Bc250DispGet(m->reg[R(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A)/4],
+        M(DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A,DCHUBBUB_ARB_DATA_URGENCY_WATERMARK_A))>urgentMode);
+    // A plane with a lower urgent watermark leaves the register as it is.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    bad=q;bad.Watermarks[0].UrgentNs=p->Watermarks[0].UrgentNs/2u;
+    CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==0);CHECK(differences(m,mode,1)==differences(m,mode,0));
+    // The checks come before any MMIO: a plan the setters cannot write, or no DCHUB reference clock.
+    modePipe(m,io,p);memset(&s,0,sizeof(s));
+    bad=q;bad.Rq.rq_regs_l.chunk_size=0xffffffffu;
+    CHECK(Bc250Dcn201RequestorValidate(&bad,48000)==BC250_DISP_STATUS_INVALID);
+    CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0 && s.Count==0);
+    bad=q;bad.Valid=0;CHECK(Bc250Dcn201RequestorLocked(io,&bad,48000,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,0,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,NULL,48000,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,NULL)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    // A save that is not one: refused before any MMIO.
+    memset(&s,0,sizeof(s));s.Count=BC250_DCN201_REQUESTOR_FIELDS+1u;
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    memset(&s,0,sizeof(s));s.Count=1;s.Register[0]=0;s.Mask[0]=~0u;
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    CHECK(Bc250Dcn201RequestorRestoreLocked(io,NULL)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    memset(&s,0,sizeof(s));CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==BC250_DISP_STATUS_INVALID);CHECK(m->ops==0);
+    // Every MMIO failure of the plane write: nothing after it, and the restore of what was saved gives the mode back.
+    // A failure while the fields are read leaves an empty save and no write.
+    for(i=1;i<=total;++i) {
+        long status;
+        modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));m->fail_at=i;
+        status=Bc250Dcn201RequestorLocked(io,&q,48000,&s);
+        CHECK(status<0);CHECK(m->failed==1 && m->after_failure==0);
+        m->fail_at=0;m->failed=0;
+        if(s.Count==0)CHECK(m->writes==0 && differences(m,mode,1)==0);
+        else CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);
+        CHECK(differences(m,mode,0)==0);
+    }
+    // Every MMIO failure of the restore: nothing after it, and the same save can be written again.
+    modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+    CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,&s)==0);
+    m->ops=0;CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);total=m->ops;
+    for(i=1;i<=total;++i) {
+        modePipe(m,io,p);memcpy(mode,m->reg,sizeof(m->reg));memset(&s,0,sizeof(s));
+        CHECK(Bc250Dcn201RequestorLocked(io,&q,48000,&s)==0);
+        m->ops=0;m->fail_at=i;CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)<0);CHECK(m->after_failure==0);
+        m->fail_at=0;m->failed=0;
+        CHECK(Bc250Dcn201RequestorRestoreLocked(io,&s)==0);CHECK(differences(m,mode,0)==0);
+    }
+    free(mode);
 }
 int main(void)
 {
@@ -307,5 +423,6 @@ int main(void)
         }
     }
     groupTest(m,&io);
+    requestorTest(m,&io,&p);
     free(m);printf("dcn201 pipe: %u checks, %u failures\n",checks,failures);return failures?1:0;
 }
