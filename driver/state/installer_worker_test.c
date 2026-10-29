@@ -8,11 +8,12 @@
 #include "windows_migration.h"
 #include "windows_handoff.h"
 #include "installer_rollback.h"
+#include "catalog_history.generated.h"
 extern DWORD AmdgpuInstallerTestExecute(DWORD,WCHAR**);
 extern DWORD AmdgpuInstallerTestSettings(PCWSTR,DWORD*);
 static BYTE saved[AMDGPU_TRANSFER_MAX_BYTES],removed[AMDGPU_TRANSFER_MAX_BYTES];
 static UINT saved_bytes,removed_bytes,origin,failure,freeze,stop,publish,archives,captured,checks,strict_opens,source_opens;
-static DWORD board_error,pending_error,remove_error,origin_error,device_error;static BOOL current_package;
+static DWORD board_error,pending_error,remove_error,origin_error,device_error,removal_moves,removal_keeps,removal_own;static BOOL current_package;
 static int failed;
 ULONG AmdgpuInstallerTestBoot=91;
 static BYTE rollback[AMDGPU_ROLLBACK_MAX],completed[AMDGPU_ROLLBACK_MAX],active_rollback[AMDGPU_ROLLBACK_MAX];
@@ -21,7 +22,7 @@ static DWORD rb_bytes,complete_bytes,active_bytes,restores,retired,enabled,sourc
 static void Reset(UINT source)
 {
     saved_bytes=removed_bytes=failure=freeze=stop=publish=archives=captured=strict_opens=source_opens=0;
-    board_error=pending_error=remove_error=origin_error=device_error=0;origin=source;current_package=FALSE;
+    board_error=pending_error=remove_error=origin_error=device_error=removal_moves=removal_keeps=removal_own=0;origin=source;current_package=FALSE;
     rb_bytes=complete_bytes=active_bytes=restores=retired=enabled=source_removed=target_error=restore_error=retire_error=complete_error=0;
     AmdgpuInstallerTestBoot=91;
 }
@@ -128,7 +129,59 @@ static DWORD Read(const BYTE *source,UINT size,DWORD error,void **out,DWORD *byt
     memcpy(*out,source,size);*bytes=size;return 0;
 }
 DWORD AmdgpuWindowsReadHandoff(void **out,DWORD *bytes){return Read(saved,saved_bytes,pending_error,out,bytes);}
-DWORD AmdgpuWindowsReadRemoval(void **out,DWORD *bytes){return Read(removed,removed_bytes,remove_error,out,bytes);}
+// remove_error ERROR_UNSUPPORTED_TYPE: the record of another catalog, whose bytes come with the error.
+DWORD AmdgpuWindowsReadRemoval(void **out,DWORD *bytes,BOOL own)
+{
+    DWORD error;removal_own+=!!own;
+    if(remove_error!=ERROR_UNSUPPORTED_TYPE)return Read(removed,removed_bytes,remove_error,out,bytes);
+    error=Read(removed,removed_bytes,0,out,bytes);return error?error:ERROR_UNSUPPORTED_TYPE;
+}
+// The checksum of transfer.c (FNV-1a over the record, the checksum DWORD read as zero) after a change.
+static void Reseal(BYTE *p,UINT bytes)
+{
+    AMDGPU_TRANSFER_HEADER h;UINT i,sum=2166136261u;
+    for(i=0;i<bytes;i++){sum^=(i>=28 && i<32)?0:p[i];sum*=16777619u;}
+    memcpy(&h,p,sizeof(h));h.checksum=sum;memcpy(p,&h,sizeof(h));
+}
+// A removal record as the uninstall of an earlier release writes it: the frame of transfer.c under the catalog of
+// that release, one entry for each persistent value of that catalog, CpuTune 1 and HangRecovery LastVerdict 2.
+static UINT EarlierRecord(const char *catalog,BYTE *p)
+{
+    const AMDGPU_STATE_HISTORY *s=NULL;AMDGPU_TRANSFER_HEADER h;UINT i,used=sizeof(h),count=0;
+    for(i=0;i<AMDGPU_STATE_HISTORY_COUNT;i++)if(!memcmp(StateHistory[i].catalog,catalog,8))s=&StateHistory[i];
+    if(!s)return 0;
+    memset(&h,0,sizeof(h));h.magic=AMDGPU_TRANSFER_MAGIC;h.version=AMDGPU_TRANSFER_VERSION;h.origin=AMDGPU_TRANSFER_CURRENT;
+    h.source_schema=AmdgpuStateSchema();memset(h.transaction,5,16);memset(h.source_generation,2,16);memset(h.device_hash,7,32);
+    AmdgpuStateBootToken(80,h.source_boot);memcpy(h.catalog,s->catalog,64);
+    strcpy_s(h.source_version,32,"0.7.216.105");strcpy_s(h.destination_version,32,"0.7.216.105");
+    for(i=0;i<s->count;i++) {
+        AMDGPU_TRANSFER_ENTRY e;DWORD value=0;
+        if(s->names[i].kind==AMDGPU_STATE_VOLATILE)continue;
+        if(!s->names[i].path[0] && !strcmp(s->names[i].name,"CpuTune"))value=1;
+        if(!strcmp(s->names[i].path,"HangRecovery") && !strcmp(s->names[i].name,"LastVerdict"))value=2;
+        memset(&e,0,sizeof(e));e.index=i;if(value){e.present=1;e.type=REG_DWORD;e.bytes=4;}
+        memcpy(p+used,&e,sizeof(e));used+=sizeof(e);if(value){memcpy(p+used,&value,4);used+=4;}count++;
+    }
+    h.bytes=used;h.count=count;memcpy(p,&h,sizeof(h));Reseal(p,used);return used;
+}
+// The value of a current setting in a record of this catalog: 0 for an absent entry.
+static DWORD ValueIn(const BYTE *buffer,UINT bytes,const char *path,const char *name)
+{
+    const AMDGPU_STATE_SPEC *spec=AmdgpuStateFind(path,name);AMDGPU_STATE_VALUE v;const void *data;UINT i;
+    if(!spec)return ~0u;for(i=0;i<AmdgpuStateCount();i++)if(AmdgpuStateAt(i)==spec)break;
+    if(AmdgpuTransferFind(buffer,bytes,i,&v,&data)!=AMDGPU_STATE_OK)return 0;
+    return v.type==REG_DWORD && v.bytes==4?*(const DWORD*)data:~0u;
+}
+// The number of present entries in a record of this catalog.
+static UINT Present(const BYTE *buffer,UINT bytes)
+{
+    UINT used=sizeof(AMDGPU_TRANSFER_HEADER),n=0;
+    while(used+sizeof(AMDGPU_TRANSFER_ENTRY)<=bytes){AMDGPU_TRANSFER_ENTRY e;memcpy(&e,buffer+used,sizeof(e));used+=sizeof(e)+e.bytes;n+=e.present;}
+    return n;
+}
+// keep FALSE moves every removal record aside: an install after it finds none.
+DWORD AmdgpuWindowsRetireRemoval(const BYTE tx[16],BOOL keep)
+{(void)tx;if(keep){removal_keeps++;return 0;}removal_moves++;remove_error=0;removed_bytes=0;return 0;}
 DWORD AmdgpuWindowsRollbackRead(const BYTE tx[16],BOOL complete,void **out,DWORD *bytes)
 {
     DWORD error=Read(complete==2?active_rollback:complete?completed:rollback,complete==2?active_bytes:complete?complete_bytes:rb_bytes,0,out,bytes);
@@ -206,7 +259,43 @@ int main(void)
     Reset(AMDGPU_TRANSFER_CURRENT);pending_error=ERROR_ACCESS_DENIED;
     CHECK(Run(L"prepare",tx)==ERROR_ACCESS_DENIED);CHECK(freeze==0 && publish==0);
     Reset(AMDGPU_TRANSFER_FRESH);remove_error=ERROR_INVALID_DATA;
-    CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(publish==0);
+    CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(publish==0 && !removal_moves);
+    // The uninstall of an earlier release (0.7.216.105, 0.7.216.104, 0.7.216.102) left a record of its own catalog. The
+    // install reads it by setting name into a record of this catalog: the settings stay, settings that the earlier
+    // catalog does not have stay absent, and the record is not moved aside. The 0.7.216.102 catalog has CpuTune at
+    // another index, so a read by index gives another value.
+    {static const char *const earlier[]={"55ac2dce","49c220dc","f9c68061"};UINT k;
+     for(k=0;k<3;k++) {
+        Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord(earlier[k],removed);CHECK(removed_bytes!=0);
+        remove_error=ERROR_UNSUPPORTED_TYPE;
+        CHECK(!Run(L"prepare",L"02020202020202020202020202020202"));CHECK(publish==1 && !removal_moves && removal_keeps==1 && !removal_own);
+        CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_ARCHIVE && h.board_kind==AMDGPU_BOARD_UNPROVEN);
+        CHECK(h.transaction[0]==2 && h.source_generation[0]==2 && !strcmp(h.source_version,"0.7.216.105"));
+        CHECK(ValueIn(saved,saved_bytes,"","CpuTune")==1);
+        CHECK(ValueIn(saved,saved_bytes,"HangRecovery","LastVerdict")==2);CHECK(Present(saved,saved_bytes)==2);
+        CHECK(!ValueIn(saved,saved_bytes,"HangRecovery","LastPath") && !ValueIn(saved,saved_bytes,"","OcTier"));
+     }}
+    // A record of a catalog that no released package has (a lab build): it moves aside, and the install continues
+    // as on a computer without a record.
+    Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord("55ac2dce",removed);removed[offsetof(AMDGPU_TRANSFER_HEADER,catalog)]^=1;
+    Reseal(removed,removed_bytes);
+    remove_error=ERROR_UNSUPPORTED_TYPE;
+    CHECK(!Run(L"prepare",tx));CHECK(publish==1 && removal_moves==1 && !removal_keeps && !removal_own);
+    CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_FRESH && h.board_kind==AMDGPU_BOARD_FRESH);
+    CHECK(!Run(L"prepare",tx));CHECK(publish==1 && removal_moves==1);
+    // A record of a released catalog with a damaged entry and a valid checksum stops the install, and stays.
+    Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord("55ac2dce",removed);
+    removed[sizeof(AMDGPU_TRANSFER_HEADER)]^=1;Reseal(removed,removed_bytes);
+    remove_error=ERROR_UNSUPPORTED_TYPE;
+    CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(!publish && !removal_moves && !removal_keeps && removed_bytes);
+    // The record of another device is not imported.
+    Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord("55ac2dce",removed);
+    removed[offsetof(AMDGPU_TRANSFER_HEADER,device_hash)]^=1;Reseal(removed,removed_bytes);
+    remove_error=ERROR_UNSUPPORTED_TYPE;
+    CHECK(Run(L"prepare",tx)==ERROR_REVISION_MISMATCH);CHECK(!publish && !removal_moves);
+    // A resumed uninstall accepts only its own record and stops.
+    Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord("55ac2dce",removed);remove_error=ERROR_UNSUPPORTED_TYPE;
+    CHECK(Run(L"archive",tx)==ERROR_UNSUPPORTED_TYPE);CHECK(removal_own==1 && !removal_moves && !publish && !archives);
     Reset(AMDGPU_TRANSFER_LEGACY);board_error=ERROR_INVALID_SECURITY_DESCR;
     CHECK(Run(L"prepare",tx)==ERROR_INVALID_SECURITY_DESCR);CHECK(publish==0);
     Reset(AMDGPU_TRANSFER_CURRENT);origin_error=ERROR_ACCESS_DENIED;
@@ -221,7 +310,7 @@ int main(void)
     CHECK(!Run(L"prepare",L"02020202020202020202020202020202"));
     CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_ARCHIVE);
     CHECK(h.board_kind==AMDGPU_BOARD_UNPROVEN);CHECK(h.source_generation[0]==2);
-    CHECK(h.transaction[0]==2);CHECK(h.source_version[0]!=0);
+    CHECK(h.transaction[0]==2);CHECK(h.source_version[0]!=0);CHECK(removal_keeps==1 && !removal_moves);
     // The reinstall after the uninstall hands the archived hang recovery record to the new package.
     HangRecordIn(saved,saved_bytes);
     Reset(AMDGPU_TRANSFER_CURRENT);failure=6;

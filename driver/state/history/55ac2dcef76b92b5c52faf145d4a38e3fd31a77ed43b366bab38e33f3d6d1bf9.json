@@ -1,0 +1,4264 @@
+{
+  "schema": 2,
+  "service": "bc250kmd",
+  "defaults_child": "DefaultsV2",
+  "values": [
+    {
+      "path": "",
+      "name": "ApertureSegmentMegabytes",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 384,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3256"
+      ]
+    },
+    {
+      "path": "",
+      "name": "BootLogo",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/display.c:166"
+      ]
+    },
+    {
+      "path": "",
+      "name": "BootLogoAnchorPermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 100,
+      "max": 900,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 350,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/display.c:182"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CoreMask",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        119,
+        255
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:994",
+        "driver/kmd/cpu.c:1002",
+        "driver/kmd/cpu.c:1381"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CoreMaskConfirmed",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:996",
+        "driver/kmd/cpu.c:1004",
+        "driver/kmd/cpu.c:1166",
+        "driver/kmd/cpu.c:1387"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CoreMaskPending",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:995",
+        "driver/kmd/cpu.c:1003",
+        "driver/kmd/cpu.c:1006",
+        "driver/kmd/cpu.c:1015",
+        "driver/kmd/cpu.c:1163",
+        "driver/kmd/cpu.c:1384",
+        "driver/kmd/cpu.c:1386"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuConfirmed",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:963",
+        "driver/kmd/cpu.c:1157",
+        "driver/kmd/cpu.c:1334",
+        "driver/kmd/cpu.c:1364",
+        "driver/kmd/cpu.c:973"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuLab",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:938"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuLastReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:1335",
+        "driver/kmd/cpu.c:1365",
+        "driver/kmd/cpu.c:805",
+        "driver/kmd/cpu.c:830",
+        "driver/kmd/cpu.c:833",
+        "driver/kmd/cpu.c:950",
+        "driver/kmd/cpu.c:974",
+        "driver/kmd/cpu.c:978",
+        "driver/kmd/cpu.c:982"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuMaxMHz",
+      "kind": "setting",
+      "type": "dword",
+      "min": 2800,
+      "max": 4000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:956",
+        "driver/kmd/cpu.c:1326",
+        "driver/kmd/cpu.c:1327",
+        "driver/kmd/cpu.c:1360",
+        "driver/kmd/cpu.c:969"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuPending",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:962",
+        "driver/kmd/cpu.c:1154",
+        "driver/kmd/cpu.c:1332",
+        "driver/kmd/cpu.c:1363",
+        "driver/kmd/cpu.c:972",
+        "driver/kmd/cpu.c:980",
+        "driver/kmd/cpu.c:990"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuTempC",
+      "kind": "setting",
+      "type": "dword",
+      "min": 85,
+      "max": 100,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:960",
+        "driver/kmd/cpu.c:1330",
+        "driver/kmd/cpu.c:1331",
+        "driver/kmd/cpu.c:1362",
+        "driver/kmd/cpu.c:971"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuTrialMs",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 180000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 25000,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:941"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuTune",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": 0,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "explicit-off-if-absent",
+      "source": [
+        "driver/kmd/cpu.c:937"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CpuUvSteps",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 16,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cpu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cpu.c:958",
+        "driver/kmd/cpu.c:1328",
+        "driver/kmd/cpu.c:1329",
+        "driver/kmd/cpu.c:1361",
+        "driver/kmd/cpu.c:970"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuDisableWgp",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 1048575,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:243"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuMode",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        24,
+        40
+      ],
+      "max_bytes": 4,
+      "factory": 24,
+      "code": 24,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:230",
+        "driver/kmd/cumode.c:172"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuModeChosen",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "admin",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "tools/win/amdgpu_wddm_control/src/CuMode.cs",
+        "tools/release/installer/common.ps1"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuModeClosedReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "admin_clear",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:246",
+        "driver/kmd/cumode.c:171",
+        "driver/kmd/cumode.c:262"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuModeConfirmed",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "admin_clear",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:245",
+        "driver/kmd/cumode.c:173",
+        "driver/kmd/cumode.c:381"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuModeLastApplied",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        24,
+        40
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:358"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuModeLastReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:175",
+        "driver/kmd/cumode.c:359"
+      ]
+    },
+    {
+      "path": "",
+      "name": "CuModePending",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "cu",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/cumode.c:244",
+        "driver/kmd/cumode.c:174",
+        "driver/kmd/cumode.c:258",
+        "driver/kmd/cumode.c:269",
+        "driver/kmd/cumode.c:378"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmClosedReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1426",
+        "driver/kmd/dpm.c:1441",
+        "driver/kmd/dpm.c:422"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmComputeDownPermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 200,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1232"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmComputeProfile",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1229"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmComputeTargetPermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 1,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 300,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1231"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmComputeUpPermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 1,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 400,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1230"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmConfirmed",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1424",
+        "driver/kmd/dpm.c:1666",
+        "driver/kmd/dpm.c:424"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1000",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1100",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1200",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1300",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1400",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1500",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1600",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1700",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1800",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve1900",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurve2000",
+      "kind": "setting",
+      "type": "dword",
+      "min": 820,
+      "max": 1000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:373",
+        "driver/kmd/dpm.c:393",
+        "driver/kmd/dpm.c:406"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurveConfirmed",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1328",
+        "driver/kmd/dpm.c:1345",
+        "driver/kmd/dpm.c:1685",
+        "driver/kmd/dpm.c:2122",
+        "driver/kmd/dpm.c:2145"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurveLastReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1324",
+        "driver/kmd/dpm.c:1346",
+        "driver/kmd/dpm.c:1354",
+        "driver/kmd/dpm.c:1360",
+        "driver/kmd/dpm.c:2123",
+        "driver/kmd/dpm.c:2146"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurvePending",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1327",
+        "driver/kmd/dpm.c:1344",
+        "driver/kmd/dpm.c:1352",
+        "driver/kmd/dpm.c:1682",
+        "driver/kmd/dpm.c:2120",
+        "driver/kmd/dpm.c:2144"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmCurveTrialMs",
+      "kind": "setting",
+      "type": "dword",
+      "min": 10000,
+      "max": 180000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 25000,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1315"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmIdleBusyPermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 100,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 2,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1178"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmIdleHoldMs",
+      "kind": "setting",
+      "type": "dword",
+      "min": 250,
+      "max": 60000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 3000,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1177"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmIdleLeavePermille",
+      "kind": "setting",
+      "type": "dword",
+      "min": 10,
+      "max": 400,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 150,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1186"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmIdleMHz",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        500,
+        600,
+        700,
+        800,
+        900
+      ],
+      "max_bytes": 4,
+      "factory": 500,
+      "code": 500,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1176"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmJointGovernor",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1204"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmLastMode",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1459"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmLastReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1460",
+        "driver/kmd/dpm.c:427"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmMaxMHz",
+      "kind": "setting",
+      "type": "dword",
+      "min": 1000,
+      "max": 2000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": 2000,
+      "code": 2000,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1422"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmMode",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1421",
+        "driver/kmd/dpm.c:423"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmPending",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1423",
+        "driver/kmd/dpm.c:1437",
+        "driver/kmd/dpm.c:1447",
+        "driver/kmd/dpm.c:1663",
+        "driver/kmd/dpm.c:425"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmSession",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1425",
+        "driver/kmd/dpm.c:1003",
+        "driver/kmd/dpm.c:1013",
+        "driver/kmd/dpm.c:1438",
+        "driver/kmd/dpm.c:1552",
+        "driver/kmd/dpm.c:426"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmThermalZone",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1265"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableCddDwmInterop",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:265",
+        "driver/kmd/interop.c:275"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableComputeQueue",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4917"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDcnWrite",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:157"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDirectFlipHandshake",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3113"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDisplayModes",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": 2,
+      "code": 2,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/modeset.c:237"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDpAudio",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpaudio.c:274",
+        "driver/kmd/hdmi_link.c:119"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDpAudioContainerId",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpaudio.c:277",
+        "driver/kmd/dpaudio.c:533"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDpAudioEndpoint",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpaudio.c:275",
+        "driver/kmd/hdmi_link.c:120"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableDpAudioStream",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpaudio.c:276",
+        "driver/kmd/hdmi_link.c:120"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableFanControl",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:514"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableFullWddm",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": 2,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:676",
+        "driver/kmd/wddm.c:676"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGart",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:150"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGdiHwAccel",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3988"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGfx",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:152"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGpuPresentBlit",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:264",
+        "driver/kmd/interop.c:274"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGpuSubmit",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4323"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableGpuVa",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/vidmm.c:142",
+        "driver/kmd/wddm.c:3237"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableHandleIdentityProbe",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3073"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableHangBugcheck",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 0,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hang.c:242"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableHdmiTakeover",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hdmi_link.c:119"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableHwmon",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "hwmon",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hwmon.c:365"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableIh",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:153"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableMmio",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:134"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableMmioWrite",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 0,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:149"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableNativePteCopy",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3064"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableNativeSmu",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/pnp.c:161"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnablePagingNode",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4329",
+        "driver/kmd/wddm.c:3208"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnablePresentBlit",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3077"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnablePsp",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:151"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableRingVmFlush",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4343"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableRlcReloadReset",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:497"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableScanoutAdmit",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3082"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableScanoutPlaneFormats",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3130"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableSdmaIbControl",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:864"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableSdmaPteControl",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:2534"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableSdmaVaControl",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:865",
+        "driver/kmd/gfx.c:885"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableSharedResidency",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3147"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableSmuMetrics",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/smu_metrics.c:87"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableVidPnFlip",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/mmio.c:161"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableVmidPool",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4337"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableVram",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/vram.c:96"
+      ]
+    },
+    {
+      "path": "",
+      "name": "EnableVramWrite",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/vram.c:136"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve0",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve1",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve2",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve3",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve4",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve5",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve6",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurve7",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:494",
+        "driver/kmd/fan.c:667",
+        "driver/kmd/fan.c:670"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanCurvePoints",
+      "kind": "setting",
+      "type": "dword",
+      "min": 2,
+      "max": 8,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:491",
+        "driver/kmd/fan.c:663"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanLoadBoost",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:523"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanMode",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:486",
+        "driver/kmd/fan.c:657"
+      ]
+    },
+    {
+      "path": "",
+      "name": "FanProfile",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 3,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c:487",
+        "driver/kmd/fan.c:660"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HangBugcheckSeconds",
+      "kind": "setting",
+      "type": "dword",
+      "min": 5,
+      "max": 60,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 10,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hang.c:243"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HangRecoveryMode",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3212"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HangRecoveryWaves",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3213"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HotSubmitLog",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:4332"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HwmonBasePort",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        2560,
+        2576,
+        2592
+      ],
+      "max_bytes": 4,
+      "factory": 0,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "hwmon",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hwmon.c:374"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HwmonDutyProven",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "hwmon",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hwmon.c:377"
+      ]
+    },
+    {
+      "path": "",
+      "name": "HwmonExpectId",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 65535,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "hwmon",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/hwmon.c:378"
+      ]
+    },
+    {
+      "path": "",
+      "name": "InteropClosedReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "admin_clear",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:267",
+        "driver/kmd/interop.c:276",
+        "driver/kmd/interop.c:278"
+      ]
+    },
+    {
+      "path": "",
+      "name": "InteropLastEnd",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:268",
+        "driver/kmd/interop.c:165"
+      ]
+    },
+    {
+      "path": "",
+      "name": "InteropLastReason",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:282"
+      ]
+    },
+    {
+      "path": "",
+      "name": "InteropLastState",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:281"
+      ]
+    },
+    {
+      "path": "",
+      "name": "InteropSession",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "interop",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/interop.c:266",
+        "driver/kmd/interop.c:147",
+        "driver/kmd/interop.c:166",
+        "driver/kmd/interop.c:280"
+      ]
+    },
+    {
+      "path": "",
+      "name": "KeepLog",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 0,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/gfx.c:912",
+        "driver/kmd/guard.c:647"
+      ]
+    },
+    {
+      "path": "",
+      "name": "KeepStatus",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c:536"
+      ]
+    },
+    {
+      "path": "",
+      "name": "LabDiagnostics",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/lab_gate.c:63"
+      ]
+    },
+    {
+      "path": "",
+      "name": "LargePages",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1,
+        2
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3470"
+      ]
+    },
+    {
+      "path": "",
+      "name": "LastStage",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c:186"
+      ]
+    },
+    {
+      "path": "",
+      "name": "NotifyDpcInReport",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": 1,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3150"
+      ]
+    },
+    {
+      "path": "",
+      "name": "OfferComposedSourceModes",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3041"
+      ]
+    },
+    {
+      "path": "",
+      "name": "StageHistory",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 512,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c:188"
+      ]
+    },
+    {
+      "path": "",
+      "name": "SubmitWatchdogMs",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3182"
+      ]
+    },
+    {
+      "path": "",
+      "name": "TelemetryIdleLogMs",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 120000,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c:1139"
+      ]
+    },
+    {
+      "path": "",
+      "name": "TraceUmdProbes",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/wddm.c:3065"
+      ]
+    },
+    {
+      "path": "",
+      "name": "UnconfirmedStarts",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "admin",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c:1359",
+        "driver/kmd/guard.c:278",
+        "driver/kmd/guard.c:1362",
+        "driver/kmd/guard.c:291",
+        "driver/kmd/guard.c:761"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockCc0",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockCc1",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockCc2",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockCc3",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockSpi0",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockSpi1",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockSpi2",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "StockSpi3",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "CuModeBoot",
+      "name": "Valid",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "Features",
+      "name": "ComputeQueue",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/wddm.c:4132"
+      ]
+    },
+    {
+      "path": "Features",
+      "name": "GdiHwAccel",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/wddm.c:3997"
+      ]
+    },
+    {
+      "path": "GuardBoot",
+      "name": "Confirmed",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "Attempts",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastFence",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastKills",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastMicros",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastSeq",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastTime",
+      "kind": "record",
+      "type": "qword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 8,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastVerdict",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "LastVersion",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "NotDrained",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "Recovered",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "Refused",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery",
+      "name": "WavesPending",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "HangRecovery/Waves",
+      "name": "Snapshot",
+      "kind": "record",
+      "type": "binary",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 196736,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "admin",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "InteropBoot",
+      "name": "Marked",
+      "kind": "volatile",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "never",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Detail",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Log",
+      "kind": "record",
+      "type": "multi_sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 262144,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Result",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Stage",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Status",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Step",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "SubStep",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "TimeUtc",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "UnconfirmedStarts",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StartRecord",
+      "name": "Version",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "BootId",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Detail",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Epoch",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 128,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Generation",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 128,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "HealthFlags",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Log",
+      "kind": "record",
+      "type": "multi_sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 262144,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "LogLines",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Result",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Stage",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "StartStage",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Status",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Step",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "StopTimeUtc",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 128,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "SubStep",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "TimeUtc",
+      "kind": "record",
+      "type": "sz",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 2048,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    },
+    {
+      "path": "StopRecord",
+      "name": "Version",
+      "kind": "record",
+      "type": "dword",
+      "min": 0,
+      "max": 4294967295,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": null,
+      "legacy_absent": null,
+      "group": "none",
+      "access": "driver",
+      "readable": "user",
+      "apply": "record",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/guard.c"
+      ]
+    }
+  ]
+}

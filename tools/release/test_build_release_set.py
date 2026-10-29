@@ -262,6 +262,40 @@ class ReleaseSetPlanAndGates(unittest.TestCase):
         self.assertEqual(result["status"], "PASS", json.dumps(result, indent=1))
         self.assertIn("1 commits, 0 hits", " ".join(gates["attribution"]["lines"]))
 
+    def test_the_state_history_gate(self):
+        # A row that builds the state worker: driver/state/history at its commit holds the catalog of the previous
+        # tester tag (BD-262). The tester.33 catalog of this tree is the previous release; then its file goes.
+        t33 = "55ac2dcef76b92b5c52faf145d4a38e3fd31a77ed43b366bab38e33f3d6d1bf9"
+        src, state = HERE.parents[1] / "driver" / "state", self.ws.repo / "driver" / "state"
+        (state / "history").mkdir(parents=True)
+        shutil.copyfile(src / "history" / f"{t33}.json", state / "catalog.json")
+        git(self.ws.repo, "add", "-A")
+        git(self.ws.repo, "commit", "-q", "-m", "the previous release")
+        git(self.ws.repo, "tag", "v1.2.3.3-tester.0")
+        shutil.copyfile(src / "catalog.json", state / "catalog.json")
+        for f in (src / "history").glob("*.json"):
+            shutil.copyfile(f, state / "history" / f.name)
+
+        def gate(message):
+            git(self.ws.repo, "add", "-A")
+            git(self.ws.repo, "commit", "-q", "-m", message)
+            commit = git(self.ws.repo, "rev-parse", "HEAD")
+            git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+            git(self.ws.repo, "fetch", "-q", "origin")
+            row = self.ws.row("state-worker-rel", commit=commit, recipe="driver/state/installer-build.ps1")
+            return self.gates(self.ws.manifest([row, self.ws.row("a")]))[1]["state-history"]
+
+        g = gate("this release, with the history")
+        self.assertEqual(g["status"], "PASS", g["lines"])
+        self.assertIn("v1.2.3.3-tester.0: catalog 55ac2dce is in driver/state/history", " ".join(g["lines"]))
+        (state / "history" / f"{t33}.json").unlink()
+        g = gate("the tester.33 catalog removed")
+        self.assertEqual(g["status"], "FAIL", g["lines"])
+        self.assertIn(f"v1.2.3.3-tester.0: catalog {t33} is not in driver/state/history", " ".join(g["lines"]))
+        _, gates = self.gates(self.ws.manifest([self.ws.row("a")]))
+        self.assertEqual(gates["state-history"]["status"], "PASS")
+        self.assertIn("no row builds the state worker", gates["state-history"]["lines"][0])
+
     def test_an_unpushed_commit_is_refused(self):
         commit = self.ws.commit("work that is not pushed")
         result, gates = self.gates(self.ws.manifest([self.ws.row("a", commit=commit)], recipe_commit=commit))

@@ -14,9 +14,28 @@ function Invoke-DriverStateWorker {
     if($json.abi -ne 1 -or $null -eq $json.error -or $json.error -ne 0) { throw "state $Operation did not confirm durable success" }
 }
 
+# The protected state directory of the worker (driver/state/windows_handoff.c). Administrators may read it.
+function Get-DriverStateDirectory {
+    $data=if($env:DriverData){$env:DriverData}else{Join-Path $env:SystemRoot 'System32\drivers\DriverData'}
+    return (Join-Path $data 'amdgpu-wddm\StateV2')
+}
+
+# BD-262: when the prepare of an install finds the removal record of a version whose state catalog this worker
+# cannot read (a lab or pre-release build), it moves that record aside as retired-<transaction>-<name> and publishes
+# a handoff without settings (origin 1, fresh). The record of an earlier release that the worker reads by setting
+# name gives origin 4. Reads only; returns the names of the records moved aside, or nothing.
+function Get-DriverStateRetiredRecords {
+    param([string]$Transaction,[string]$Directory=(Get-DriverStateDirectory))
+    $retired=@(Get-ChildItem -LiteralPath $Directory -Filter "retired-$Transaction-removed*.bin" -File -ErrorAction SilentlyContinue)
+    if(-not $retired.Count) { return @() }
+    try { $b=[IO.File]::ReadAllBytes((Join-Path $Directory 'pending.bin')) } catch { return @() }
+    if($b.Length -lt 360 -or [BitConverter]::ToUInt32($b,0) -ne 0x32545341 -or [BitConverter]::ToUInt32($b,16) -ne 1) { return @() }
+    return @($retired | ForEach-Object { $_.Name })
+}
+
 function Start-DriverStateTransaction {
     param($State,[string]$Worker,[string]$Product,[string]$Device,[string]$InfSha256,
-        [scriptblock]$Save,[scriptblock]$Runner)
+        [scriptblock]$Save,[scriptblock]$Runner,[string]$StateDirectory=(Get-DriverStateDirectory))
     $record=$State.driver_state
     if($record -and $record.phase -eq 'prepared') {
         if($record.product -cne $Product -or $record.device -cne $Device -or $record.inf_sha256 -ine $InfSha256) {
@@ -31,6 +50,13 @@ function Start-DriverStateTransaction {
         & $Save $State
     }
     Invoke-DriverStateWorker -Worker $Worker -Operation prepare -Transaction $record.transaction -Product $Product -Device $Device -Runner $Runner
+    $retired=@(Get-DriverStateRetiredRecords -Transaction $record.transaction -Directory $StateDirectory)
+    if($retired.Count) {
+        Write-Warn2 ('The saved settings of the driver version that was removed before this install cannot be carried over: ' +
+            'that version saved them in a form that this version cannot read. The driver starts with its default settings. ' +
+            'Set your choices again in the control app.')
+        Write-Log "   state: the removal record was kept as $($retired -join ', ') in $StateDirectory"
+    }
     return $record
 }
 

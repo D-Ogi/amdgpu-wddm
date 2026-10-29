@@ -45,6 +45,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import provenance  # noqa: E402
+sys.path.insert(0, str(HERE.parent / "state"))
+import check_history  # noqa: E402
 
 SCHEMA = HERE / "release-manifest.schema.json"
 PLACEHOLDER = re.compile(r"\{([a-z_]+)(?::([^}]+))?\}")
@@ -549,6 +551,18 @@ def compiler_findings(build, params):
     return found
 
 
+STATE_WORKER_RECIPE = "driver/state/installer-build.ps1"
+
+
+def state_worker_commits(plan):
+    """(repo, commit) -> row ids, for the rows that build the installer state worker."""
+    out = {}
+    for b in plan["builds"]:
+        if b["recipe"] == STATE_WORKER_RECIPE:
+            out.setdefault((b["repo"], b["commit"]), []).append(b["id"])
+    return out
+
+
 def run_gates(plan, recipe_params, allow_unpushed=False):
     repos = provenance.Repositories(plan["repositories"], plan["root"], plan["repo"])
     table = plan["repositories"]
@@ -686,6 +700,20 @@ def run_gates(plan, recipe_params, allow_unpushed=False):
         comp += compiler_findings(b, entry.get("params"))
     gates.append({"name": "compiler", "status": "FAIL" if comp else "PASS",
                   "lines": comp or [f"{len(plan['builds'])} rows name an allowed compiler on the command line"]})
+    # The state worker of each row reads the removal record of an earlier release only when driver/state/history at
+    # the row's commit holds that release's catalog (BD-262, tools/state/check_history.py): every earlier tester tag.
+    hist, hist_failed = [], False
+    for (repo, commit), ids in sorted(state_worker_commits(plan).items()):
+        checkout = repos.find(repo, commit)
+        if checkout is None:
+            hist.append(f"{repo} {commit[:8]} ({', '.join(ids)}): in no checkout")
+            hist_failed = True
+            continue
+        failures, lines = check_history.check(checkout, commit, plan["version"])
+        hist += [f"{repo} {', '.join(ids)}: {l}" for l in lines] + [f"{repo} {', '.join(ids)}: FAIL {f}" for f in failures]
+        hist_failed = hist_failed or bool(failures)
+    gates.append({"name": "state-history", "status": "FAIL" if hist_failed else "PASS",
+                  "lines": hist or [f"no row builds the state worker ({STATE_WORKER_RECIPE})"]})
     status = "FAIL" if any(g["status"] == "FAIL" for g in gates) else "PASS"
     return {"status": status, "gates": gates}
 

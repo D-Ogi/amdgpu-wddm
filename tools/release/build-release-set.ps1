@@ -21,6 +21,10 @@
 #                 agent or model as author, committer, co-author or in its message;
 #    compiler     each row names its compiler, the recipe's command line names it too where the recipe takes
 #                 -Compiler, and the compiler policy allows it (clang-cl for user mode, msvc with a reason);
+#    state-history  for each row that builds the state worker (driver/state/installer-build.ps1), the state catalog
+#                 of every published tester tag with a version below -Version is in driver/state/history at
+#                 the row's commit, and each history file is named by its catalog identity
+#                 (tools/state/check_history.py): else the worker moves the removal record of that release aside;
 #    size         the size guard (scratch\cleanup-250\size-guard.py) says the workspace is under its warning lines.
 #    host         a warning only: the compiler processes of other builds that run on this PC at the start.
 # 2. Builds, in parallel: at most -MaxParallel slots at once (a row may take several), each build with

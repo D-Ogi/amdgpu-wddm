@@ -9,6 +9,7 @@
 #include "transfer.h"
 #include "windows_migration.h"
 #include "installer_rollback.h"
+#include "installer_history.h"
 #include "../kmd/board_memory_format.h"
 static DWORD SystemIdentity(void)
 {
@@ -173,7 +174,9 @@ static void TransactionLeaf(const BYTE transaction[16],WCHAR out[46])
     for(i=0;i<16;i++){out[9+2*i]=hex[transaction[i]>>4];out[10+2*i]=hex[transaction[i]&15];}
     (void)StringCchCopyW(out+41,5,L".bin");
 }
-static DWORD ReadLeaf(HANDOFF_DIRECTORY *d,PCWSTR leaf,void **out,DWORD *bytes,HANDLE *opened)
+// With catalog set, an intact record of another state catalog gives ERROR_UNSUPPORTED_TYPE together with its bytes:
+// it is a record of another release, not damage. The caller frees them.
+static DWORD ReadLeaf(HANDOFF_DIRECTORY *d,PCWSTR leaf,void **out,DWORD *bytes,HANDLE *opened,BOOL catalog)
 {
     HANDLE file;DWORD error,got=0;LARGE_INTEGER size;BYTE *data=NULL;
     *out=NULL;*bytes=0;
@@ -186,8 +189,13 @@ static DWORD ReadLeaf(HANDOFF_DIRECTORY *d,PCWSTR leaf,void **out,DWORD *bytes,H
     if(size.QuadPart<(LONGLONG)sizeof(AMDGPU_TRANSFER_HEADER) || size.QuadPart>AMDGPU_TRANSFER_MAX_BYTES){error=ERROR_INVALID_DATA;goto done;}
     data=HeapAlloc(GetProcessHeap(),0,(SIZE_T)size.QuadPart);if(!data){error=ERROR_NOT_ENOUGH_MEMORY;goto done;}
     if(!ReadFile(file,data,(DWORD)size.QuadPart,&got,NULL)){error=GetLastError();goto done;}
-    if(got!=(DWORD)size.QuadPart || AmdgpuTransferCheck(data,got,NULL)){error=ERROR_INVALID_DATA;goto done;}
-    *out=data;*bytes=got;data=NULL;error=0;
+    if(got!=(DWORD)size.QuadPart){error=ERROR_INVALID_DATA;goto done;}
+    if(AmdgpuTransferCheck(data,got,NULL)) {
+        AMDGPU_TRANSFER_HEADER h;memcpy(&h,data,sizeof(h));
+        if(!catalog || AmdgpuHistoryFrame(data,got) || !memcmp(h.catalog,AmdgpuStateCatalogId(),64)){error=ERROR_INVALID_DATA;goto done;}
+        error=ERROR_UNSUPPORTED_TYPE;
+    } else error=0;
+    *out=data;*bytes=got;data=NULL;
     if(opened){*opened=file;file=INVALID_HANDLE_VALUE;}
 done:
     if(data)HeapFree(GetProcessHeap(),0,data);if(file!=INVALID_HANDLE_VALUE)CloseHandle(file);return error;
@@ -197,16 +205,57 @@ DWORD AmdgpuWindowsReadHandoff(void **buffer,DWORD *bytes)
     HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;DWORD error;
     if(!buffer || !bytes)return ERROR_INVALID_PARAMETER;*buffer=NULL;*bytes=0;
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
-    error=Directory(&d);if(!error)error=ReadLeaf(d,L"\\pending.bin",buffer,bytes,NULL);
+    error=Directory(&d);if(!error)error=ReadLeaf(d,L"\\pending.bin",buffer,bytes,NULL,FALSE);
     if(d)CloseDirectory(d);AmdgpuStateWriterUnlock(lock);return error;
 }
-DWORD AmdgpuWindowsReadRemoval(void **buffer,DWORD *bytes)
+// The removal record of an uninstall. The releases up to 0.7.216.105 read only removed.bin, and they stop on a
+// record of another state catalog (BD-262). Thus this release writes removed-v2.bin, which those releases do not
+// read, and an install goes back to such a release without a record. A removed.bin beside a removed-v2.bin is the
+// newer record: only an older release writes removed.bin, and each install of this release moves it aside.
+static const WCHAR RemovedOld[]=L"\\removed.bin",RemovedLeaf[]=L"\\removed-v2.bin";
+DWORD AmdgpuWindowsReadRemoval(void **buffer,DWORD *bytes,BOOL own)
 {
     HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;DWORD error;
     if(!buffer || !bytes)return ERROR_INVALID_PARAMETER;*buffer=NULL;*bytes=0;
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
-    error=Directory(&d);if(!error)error=ReadLeaf(d,L"\\removed.bin",buffer,bytes,NULL);
+    error=ERROR_FILE_NOT_FOUND;
+    if(!own){error=Directory(&d);if(!error)error=ReadLeaf(d,RemovedOld,buffer,bytes,NULL,TRUE);}
+    if(error==ERROR_FILE_NOT_FOUND) {
+        if(d)CloseDirectory(d);d=NULL;
+        error=Directory(&d);if(!error)error=ReadLeaf(d,RemovedLeaf,buffer,bytes,NULL,TRUE);
+    }
     if(d)CloseDirectory(d);AmdgpuStateWriterUnlock(lock);return error;
+}
+static DWORD RetireLeaf(const BYTE transaction[16],PCWSTR leaf)
+{
+    HANDOFF_DIRECTORY *d=NULL;WCHAR archive[46],*target;DWORD error;
+    error=Directory(&d);if(error)return error;
+    target=HeapAlloc(GetProcessHeap(),0,32768*sizeof(WCHAR));if(!target){CloseDirectory(d);return ERROR_NOT_ENOUGH_MEMORY;}
+    TransactionLeaf(transaction,archive);
+    if(FAILED(StringCchPrintfW(target,32768,L"%s\\retired-%.32s-%s",d->path,archive+9,leaf+1)) ||
+       FAILED(StringCchCatW(d->path,32768,leaf)))error=ERROR_FILENAME_EXCED_RANGE;
+    // No MOVEFILE_REPLACE_EXISTING: a retired record is evidence and is never overwritten.
+    else if(!MoveFileExW(d->path,target,MOVEFILE_WRITE_THROUGH)){error=GetLastError();if(error==ERROR_FILE_NOT_FOUND)error=0;}
+    HeapFree(GetProcessHeap(),0,target);CloseDirectory(d);return error;
+}
+DWORD AmdgpuWindowsRetireRemoval(const unsigned char transaction[16],BOOL keep)
+{
+    HANDLE lock=NULL;DWORD error;BOOL old=FALSE;
+    error=AmdgpuStateWriterLock(&lock);if(error)return error;
+    if(keep) {
+        // Keep the record that ReadRemoval returns. Only a removed-v2.bin beside a removed.bin is older.
+        HANDOFF_DIRECTORY *d=NULL;HANDLE file;
+        error=Directory(&d);
+        if(!error && FAILED(StringCchCatW(d->path,32768,RemovedOld)))error=ERROR_FILENAME_EXCED_RANGE;
+        if(!error) {
+            file=CreateFileW(d->path,READ_CONTROL,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,NULL);
+            if(file!=INVALID_HANDLE_VALUE){old=TRUE;CloseHandle(file);}
+            else{error=GetLastError();if(error==ERROR_FILE_NOT_FOUND)error=0;}
+        }
+        if(d)CloseDirectory(d);
+    } else error=RetireLeaf(transaction,RemovedOld);
+    if(!error && (!keep || old))error=RetireLeaf(transaction,RemovedLeaf);
+    AmdgpuStateWriterUnlock(lock);return error;
 }
 static DWORD Archive(HANDOFF_DIRECTORY *d,const void *buffer,DWORD bytes,PCWSTR fixed)
 {
@@ -236,14 +285,31 @@ static DWORD Archive(HANDOFF_DIRECTORY *d,const void *buffer,DWORD bytes,PCWSTR 
     if(!error)error=Matches(file,buffer,bytes);
     if(!CloseHandle(file) && !error)error=GetLastError();return error;
 }
+// A removal record of another transaction, or of another state catalog, is older than this uninstall: no install
+// read it (an install of an older release does not read removed-v2.bin). It moves aside before the new record.
+// The record of this transaction stays: a resumed uninstall writes the same bytes again.
+static DWORD RetireStale(const void *buffer,PCWSTR leaf)
+{
+    HANDOFF_DIRECTORY *d=NULL;AMDGPU_TRANSFER_HEADER h,old={0};void *data=NULL;DWORD got=0,error;
+    memcpy(&h,buffer,sizeof(h));
+    error=Directory(&d);if(!error)error=ReadLeaf(d,leaf,&data,&got,NULL,TRUE);
+    if(d)CloseDirectory(d);
+    if(data){memcpy(&old,data,sizeof(old));HeapFree(GetProcessHeap(),0,data);}
+    if(!error && !memcmp(old.transaction,h.transaction,16))return 0;
+    if(error==ERROR_FILE_NOT_FOUND)return 0;
+    if(error && error!=ERROR_UNSUPPORTED_TYPE)return error;
+    return RetireLeaf(h.transaction,leaf);
+}
 DWORD AmdgpuWindowsArchiveState(const void *buffer,DWORD bytes)
 {
     HANDOFF_DIRECTORY *d=NULL;HANDLE lock=NULL;DWORD error;
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
     error=Directory(&d);if(!error)error=Archive(d,buffer,bytes,NULL);
     if(d){CloseDirectory(d);d=NULL;}
+    if(!error)error=RetireStale(buffer,RemovedOld);
+    if(!error)error=RetireStale(buffer,RemovedLeaf);
     if(!error)error=Directory(&d);
-    if(!error)error=Archive(d,buffer,bytes,L"\\removed.bin");
+    if(!error)error=Archive(d,buffer,bytes,RemovedLeaf);
     if(d)CloseDirectory(d);AmdgpuStateWriterUnlock(lock);return error;
 }
 DWORD AmdgpuWindowsAcknowledgeHandoff(const unsigned char transaction[16],
@@ -254,10 +320,10 @@ DWORD AmdgpuWindowsAcknowledgeHandoff(const unsigned char transaction[16],
     AMDGPU_TRANSFER_HEADER h;FILE_DISPOSITION_INFO dispose={TRUE};BOOL retained=FALSE;WCHAR leaf[46];
     error=AmdgpuStateWriterLock(&lock);if(error)return error;
     error=Directory(&d);if(error)goto done;
-    error=ReadLeaf(d,L"\\pending.bin",&data,&bytes,&file);
+    error=ReadLeaf(d,L"\\pending.bin",&data,&bytes,&file,FALSE);
     if(error==ERROR_FILE_NOT_FOUND) {
         CloseDirectory(d);d=NULL;error=Directory(&d);if(error)goto done;
-        TransactionLeaf(transaction,leaf);error=ReadLeaf(d,leaf,&data,&bytes,NULL);retained=TRUE;
+        TransactionLeaf(transaction,leaf);error=ReadLeaf(d,leaf,&data,&bytes,NULL,FALSE);retained=TRUE;
     }
     if(error)goto done;
     if(AmdgpuTransferCheck(data,bytes,&h) || memcmp(h.transaction,transaction,16) ||
@@ -276,10 +342,18 @@ DWORD AmdgpuWindowsAcknowledgeHandoff(const unsigned char transaction[16],
         HANDOFF_DIRECTORY *removed=NULL;void *old=NULL;DWORD old_bytes=0;HANDLE old_file=INVALID_HANDLE_VALUE;
         AMDGPU_TRANSFER_HEADER original;
         error=Directory(&removed);
-        if(!error)error=ReadLeaf(removed,L"\\removed.bin",&old,&old_bytes,&old_file);
-        if(!error && (AmdgpuTransferCheck(old,old_bytes,&original) ||
-           memcmp(original.source_generation,h.source_generation,16) || memcmp(original.device_hash,h.device_hash,32)))
-            error=ERROR_REVISION_MISMATCH;
+        // The prepare of this transaction moved every other removal record aside: one of the two names remains.
+        if(!error)error=ReadLeaf(removed,RemovedLeaf,&old,&old_bytes,&old_file,TRUE);
+        if(error==ERROR_FILE_NOT_FOUND) {
+            CloseDirectory(removed);removed=NULL;
+            error=Directory(&removed);if(!error)error=ReadLeaf(removed,RemovedOld,&old,&old_bytes,&old_file,TRUE);
+        }
+        // The prepare reads a record of an earlier catalog by setting name; its intact frame names the same source.
+        // Only a record that the prepare can have read is removed: a released catalog with entries in bounds.
+        if(error==ERROR_UNSUPPORTED_TYPE){unsigned int catalog;error=AmdgpuHistoryCheck(old,old_bytes,&catalog)?ERROR_INVALID_DATA:0;}
+        if(!error){memcpy(&original,old,sizeof(original));
+            if(memcmp(original.source_generation,h.source_generation,16) || memcmp(original.device_hash,h.device_hash,32))
+                error=ERROR_REVISION_MISMATCH;}
         if(!error && !SetFileInformationByHandle(old_file,FileDispositionInfo,&dispose,sizeof(dispose)))error=GetLastError();
         // A prior acknowledgment may have removed this marker already. The
         // transaction archive and Active remain the replay guard on that retry.
