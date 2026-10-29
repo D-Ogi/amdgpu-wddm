@@ -126,6 +126,14 @@ New packages use `DiInstallDriverW` with `DIIRFLAG_INSTALL_AS_SET` (BD-152). The
 shutdown. The installer saves the INF hash and boot identity before its automatic restart. A continuation in
 the same boot requests that restart; after a new boot it checks the service and Driver Store image hashes before
 writing the GPU software key. A failed binding stops installation instead of restarting again.
+Windows installs the activated set only on a device that it is the best match for, and `DIIRFLAG_FORCE_INF` has
+no effect together with `DIIRFLAG_INSTALL_AS_SET`. Our packages have the same signer and hardware ID, so the
+DriverVer date and then its version decide, and a tie keeps the installed package (BD-227). The preflight check
+`driver package rank` (`driver-rank.*`) therefore refuses a package whose INF differs from the INF of the bound
+package of ours and does not rank above it, before any change. Without this check, the state handoff freezes the
+settings for a KMD that Windows does not install, and the old KMD does not start after the restart. `-Force` does
+not skip this check. The installer does not force the binding: that changes the driver of a running display device
+(BD-060). The remedy is `uninstall.cmd`, a restart, and the install again.
 
 The current sequence requires two automatic restarts: driver activation, then configuration. Test signing adds
 one when it is not active. The GUI plan and BitLocker suspension count these restarts. After each sign-in the

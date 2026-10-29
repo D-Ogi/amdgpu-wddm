@@ -304,7 +304,32 @@ function Invoke-Preflight {
     if ($st) { Add-Check 'installer state' 'ok' "phase $($st.phase) since $($st.updated_utc)" 'state.ok' }
     elseif ($script:DeviceService -eq $script:ServiceName -and -not $Force) { Add-Check 'existing installation' 'fail' 'bc250kmd is already installed without installer state; run uninstall.cmd first' 'existing.no-state' }
 
+    # BD-227: an install that stages a driver set needs Windows to move the GPU to it at the restart. -Force does not
+    # pass this check: the state handoff would leave the GPU on a KMD that does not start.
+    $rank = Test-DriverSetRank -InstallState $st
+    # One literal id per outcome: the setup window's contract test reads them from this file.
+    if ($rank) {
+        if ($rank.ok) { Add-Check 'driver package rank' 'ok' $rank.detail 'driver-rank.ok' }
+        elseif ($rank.id -eq 'not-above') { Add-Check 'driver package rank' 'fail' $rank.detail 'driver-rank.not-above' }
+        else { Add-Check 'driver package rank' 'fail' $rank.detail 'driver-rank.unreadable' }
+    }
+
     return $checks
+}
+
+# BD-227: the rank decision (deferred-driver.ps1) for a run that stages this package's driver set, else $null: no
+# device, a rollback (it removes the other driver ranks itself while the device stays disabled), an action that does
+# not install, or a driver set that is staged already (the binding check after the restart owns it).
+function Test-DriverSetRank($InstallState) {
+    if ($legacyRollback -or -not $script:Device -or $action.action -notin @('install', 'upgrade', 'repair', 'resume')) { return $null }
+    $inf = Join-Path $package 'payload\kmd\bc250kmd.inf'
+    if (-not (Test-Path -LiteralPath $inf -PathType Leaf)) { return $null }
+    $sha = Get-Sha256 $inf
+    $receipt = $null
+    if ($InstallState -and $InstallState.PSObject.Properties['driver_set']) { $receipt = $InstallState.driver_set }
+    if ((Get-DriverSetAction $receipt $sha ([string](Get-BootIdentity).boot_id)) -ne 'stage') { return $null }
+    return (Get-DriverSetRankDecision -StagedInfText ([IO.File]::ReadAllText($inf)) -StagedInfSha $sha `
+        -Bound (Read-DriverSetBinding -InstanceId $script:Device.DeviceID -ServiceName $script:ServiceName))
 }
 
 # RunOnce runs the continuation at the next logon (GUI plan A1): the installer of the staged closure ('continue') or
@@ -1672,6 +1697,10 @@ if ($driverSetAction -eq 'stage' -or $script:DryRunMode) {
     }
     if(-not $legacyRollback) {
     Invoke-Change 'freeze state writers and publish the protected state handoff before INF staging' {
+        # BD-227: the preflight refused this already; read again here, because a freeze for a set that Windows does not
+        # bind leaves the GPU on a KMD that does not start.
+        $rank = Test-DriverSetRank -InstallState $state
+        if ($rank -and -not $rank.ok) { throw "driver package rank: $($rank.detail)" }
         Save-DriverSettingsComparison -State $state -Worker $stateWorker -Device $script:Device.DeviceID `
             -InfSha256 $driverSetSha -Save {param($s) Save-InstallState $s}
         [void](Start-DriverStateTransaction -State $state -Worker $stateWorker -Product (Get-ProductPackageQuad $script:Manifest.version) `

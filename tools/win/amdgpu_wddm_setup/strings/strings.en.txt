@@ -110,6 +110,9 @@ check.lab-install.present|src|-|This PC has a development installation of the dr
 check.lab-install.forced|src|-|This PC has a development installation of the driver; setup continues because you asked it to.
 check.state.ok|src|-|An earlier installation of Nagi was found.
 check.existing.no-state|src|-|The driver is installed without setup's records. Uninstall it first, then start setup again.
+check.driver-rank.ok|src|-|Windows can change the graphics chip to the driver in this package.
+check.driver-rank.not-above|src|-|Windows would keep the driver that is installed now, because this package does not have a newer driver version. Uninstall the driver first, restart the PC, then start setup again.
+check.driver-rank.unreadable|src|-|Setup could not read which driver the graphics chip uses now. Uninstall the driver first, restart the PC, then start setup again.
 check.prepare.destination-inside|src|-|The folder is inside the setup files. Choose a folder elsewhere.
 check.prepare.destination-file|src|-|A file has this name. Choose a folder.
 check.prepare.destination-not-empty|src|-|The folder is not empty. Choose an empty folder or a folder prepared earlier.

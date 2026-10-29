@@ -110,6 +110,9 @@ check.lab-install.present|rev|c4ebe135|Na tym komputerze jest deweloperska insta
 check.lab-install.forced|rev|711bb1d9|Na tym komputerze jest deweloperska instalacja sterownika; instalator kontynuuje na Twoje żądanie.
 check.state.ok|mt|52525a38|Znaleziono wcześniejszą instalację Nagi.
 check.existing.no-state|rev|a46215ab|Sterownik jest zainstalowany, ale instalator nie ma o tym żadnych zapisów. Najpierw go odinstaluj, potem uruchom instalator ponownie.
+check.driver-rank.ok|mt|e792821d|Windows może przełączyć układ graficzny na sterownik z tego pakietu.
+check.driver-rank.not-above|mt|39cb4710|Windows zostawiłby obecnie zainstalowany sterownik, bo ten pakiet nie ma nowszej wersji sterownika. Najpierw odinstaluj sterownik, uruchom komputer ponownie, a potem uruchom instalator jeszcze raz.
+check.driver-rank.unreadable|mt|7961fbb0|Instalator nie mógł odczytać, którego sterownika używa teraz układ graficzny. Najpierw odinstaluj sterownik, uruchom komputer ponownie, a potem uruchom instalator jeszcze raz.
 check.prepare.destination-inside|rev|08b96974|Folder jest wewnątrz plików instalatora. Wybierz folder w innym miejscu.
 check.prepare.destination-file|rev|3d875a78|Taką nazwę ma już plik. Wybierz folder.
 check.prepare.destination-not-empty|rev|5a6961d7|Folder nie jest pusty. Wybierz pusty folder albo folder przygotowany wcześniej.
