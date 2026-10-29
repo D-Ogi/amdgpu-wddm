@@ -190,7 +190,7 @@ struct FrameMark {
     uint64_t frames = 0;                        // presents seen
     uint64_t stalls = 0;                        // frames of kFrameStallMilliseconds or more
     uint64_t long_waits = 0;
-    uint64_t pso_waits = 0, pso_wait_qpc = 0, pso_consumer = 0;
+    uint64_t pso_waits = 0, pso_wait_qpc = 0, pso_consumer = 0, pso_consumer_qpc = 0;
     uint64_t waits[static_cast<size_t>(Drain::Count)]{};
     uint64_t wait_qpc[static_cast<size_t>(Drain::Count)]{};
 };
