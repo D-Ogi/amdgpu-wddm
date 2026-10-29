@@ -122,6 +122,11 @@ try {
   if($LASTEXITCODE){throw 'Instance policy query test build failed'}
   & .\instance-policy-test.exe
   if($LASTEXITCODE){throw 'Instance policy query tests failed'}
+  # FsrUpgrade: the escape the shell sends to the KMD (fsr-identity.h), against fake KMT entry points.
+  & $compilerExe @dllFlags /Fe:fsr-identity-test.exe "$repo\driver\umd\d3d12\fsr-identity-test.cpp"
+  if($LASTEXITCODE){throw 'FSR identity test build failed'}
+  & .\fsr-identity-test.exe
+  if($LASTEXITCODE){throw 'FSR identity tests failed'}
   # Built only: the probe asks the BC-250's adapter key and belongs on the target.
   & cl.exe @flags /Fe:instance-policy-probe.exe "$repo\driver\umd\d3d12\instance-policy-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Instance policy probe build failed'}
