@@ -590,10 +590,10 @@ function Get-RouterDecision([string]$image){
   $allow=if($kind.Allow){@($key.GetValue('Allow'))}else{@()}
   if($deny -contains $image){return 'cpu app-denied'}
   if($mode -eq 'allowlist' -and $allow -notcontains $image){return 'cpu app-not-allowed'}
-  # The router's built-in default Deny list (router-policy.h IsCpuOnlyDialogHost, BD-126, and SecHealthUI.exe of the
-  # BD-168 class): the images measured to fail on the application GPU UMD. An entry in Allow lifts it; under
-  # allowlist the line above answers first.
-  if($image -in @('pickerhost.exe','sechealthui.exe') -and $allow -notcontains $image){return 'cpu app-dialog-host'}
+  # The router's built-in default Deny list (router-policy.h IsCpuOnlyDialogHost, BD-126, and SecHealthUI.exe and
+  # SearchHost.exe of the BD-168 class): the images measured to fail on the application GPU UMD. An entry in Allow
+  # lifts it; under allowlist the line above answers first.
+  if($image -in @('pickerhost.exe','sechealthui.exe','searchhost.exe') -and $allow -notcontains $image){return 'cpu app-dialog-host'}
   $gpu=if($kind.GpuUmdPath -eq 'String'){[string]$key.GetValue('GpuUmdPath')}else{''}
   if($gpu -notmatch '^[A-Za-z]:\\'){return 'cpu app-gpu-umd-unset'}
   if($mode -eq 'allowlist'){return 'gpu app-allowed'};return 'gpu app-default'

@@ -138,6 +138,11 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 //    DWM crash in a loop, about every 7 s (dwmcore.dll 0x8898008D), until its window closed; with the image in the
 //    registry Deny list it opened and worked with no crash (BD-168 class). Users open it to turn Smart App Control
 //    off. Like the entry above, this one routes around a failure that is not diagnosed yet.
+//  - SearchHost.exe, the Start menu search. On 2026-10-28 a tester (GitHub #44, tester.32 on 26300, 1080p59 over a
+//    DP-to-HDMI adapter) reported that typing in the search made DWM crash every 3 to 7 s (48 times in 8 minutes,
+//    dwmcore.dll 0x8898008D, the BD-168 class). The A/B of that tester: with the image in the registry Deny list,
+//    no crash; with the entry removed, 8 crashes in 2 minutes. This entry also routes around a failure that is not
+//    diagnosed yet; the search panel then draws on the CPU UMD.
 // The function name and the reason app-dialog-host come from the first entry; the list holds any image measured to
 // fail on the application GPU UMD, one image per failure.
 // The route decision is taken at OpenAdapter10_2, before any device or window exists, so the process image name is
@@ -148,7 +153,7 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 // allowlist, "not listed in Allow" answer before it and keep their own reasons.
 inline bool IsCpuOnlyDialogHost(const wchar_t *exe_base)
 {
-    static const wchar_t list[] = L"pickerhost.exe\0sechealthui.exe\0";
+    static const wchar_t list[] = L"pickerhost.exe\0sechealthui.exe\0searchhost.exe\0";
     return InList(exe_base, list);
 }
 

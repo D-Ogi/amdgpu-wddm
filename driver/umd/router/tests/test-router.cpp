@@ -220,7 +220,16 @@ static void PolicyTests()
           !IsCpuOnlyDialogHost(L"SecHealthUI"), "the built-in default Deny list matches a neighbour of SecHealthUI.exe");
     const wchar_t allowPicker[] = L"other.exe\0PICKERHOST.EXE\0";
     const wchar_t denyPicker[] = L"pickerhost.exe\0";
+    // BD-168 class, GitHub #44: typing in the Start menu search (SearchHost.exe) on the application GPU UMD made DWM
+    // crash every 3 to 7 s on 26300 (tester.32); with the image in the registry Deny list there was no crash, and
+    // with the entry removed the crashes came back. It joins the built-in list with the same rules.
+    CHECK(IsCpuOnlyDialogHost(L"SearchHost.exe") && IsCpuOnlyDialogHost(L"searchhost.EXE"),
+          "SearchHost.exe is not on the built-in default Deny list");
+    CHECK(!IsCpuOnlyDialogHost(L"SearchApp.exe") && !IsCpuOnlyDialogHost(L"SearchIndexer.exe") &&
+          !IsCpuOnlyDialogHost(L"SearchHost"), "the built-in default Deny list matches a neighbour of SearchHost.exe");
     const wchar_t allowSecHealth[] = L"SECHEALTHUI.EXE\0";
+    const wchar_t allowSearch[] = L"other.exe\0SEARCHHOST.EXE\0";
+    const wchar_t denySearch[] = L"searchhost.exe\0";
     const wchar_t denySecHealth[] = L"sechealthui.exe\0";
     struct DialogCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; bool cpu;
                         AppRoute route; AppReason reason; };
@@ -256,6 +265,17 @@ static void PolicyTests()
         // Its neighbours of the same package family keep the GPU route.
         {L"SecurityHealthSystray.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
         {L"SecurityHealthHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        // SearchHost.exe (BD-168 class, GitHub #44), below SystemApps: the same answers. Allow lifts it.
+        {L"SearchHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SEARCHHOST.EXE", Gd, allowDx, deny, U, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SearchHost.exe", Al, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"SearchHost.exe", Gd, allowSearch, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"SearchHost.exe", Al, allowSearch, nullptr, Y, false, AppRoute::Gpu, AppReason::Allowed},
+        {L"SearchHost.exe", Gd, allowSearch, denySearch, Y, false, AppRoute::Cpu, AppReason::Denied},
+        {L"SearchHost.exe", Gd, allowSearch, nullptr, Y, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        // The older search image and the indexer keep the GPU route.
+        {L"SearchApp.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"SearchIndexer.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
     };
     for (const DialogCase &c : dialogs) {
         AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component, c.cpu});

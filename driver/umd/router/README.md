@@ -22,7 +22,9 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   two minutes on the GPU route (BD-126, 2026-10-12 on tester.28). It also holds `SecHealthUI.exe`, the Windows
   Security app: opening it on the GPU route made DWM crash in a loop, about every 7 s (`dwmcore.dll` 0x8898008D),
   until its window closed, and with the image in `Deny` it opened and worked (BD-168 class, 2026-10-20 on
-  tester.31v2, 26100). Users open it to turn Smart App Control off. The function name and the reason name come
+  tester.31v2, 26100). Users open it to turn Smart App Control off. It also holds `SearchHost.exe`, the Start
+  menu search: typing in it on the GPU route made DWM crash every 3 to 7 s, and with the image in `Deny` there was
+  no crash (BD-168 class, GitHub #44, tester.32 on 26300). The function name and the reason name come
   from the first entry. It names one image per measured failure and never a
   class of images: the 2026-10-04 rule that sent every Windows component to the CPU UMD cost those processes
   FL 12_1 (BD-088), and BD-061, the defect that rule answered, is fixed since b20. An entry in `Allow` lifts the
