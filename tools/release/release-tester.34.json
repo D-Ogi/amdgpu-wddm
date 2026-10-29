@@ -2518,7 +2518,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "507890134f8e3e1313d45f03c6bbe7ddde8bda7a",
+      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2588,7 +2588,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "507890134f8e3e1313d45f03c6bbe7ddde8bda7a",
+      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2658,7 +2658,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "507890134f8e3e1313d45f03c6bbe7ddde8bda7a",
+      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2728,7 +2728,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "507890134f8e3e1313d45f03c6bbe7ddde8bda7a",
+      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
