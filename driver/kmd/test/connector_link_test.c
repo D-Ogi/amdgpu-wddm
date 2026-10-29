@@ -125,6 +125,8 @@ static unsigned scanned_surface, original_surface_restores;
 static BC250_TARGET_TIMING inherited_timing;
 static unsigned inherited_timing_fail;
 static unsigned inherited_rate;     /* BD-139: the LINK_BW_SET the firmware's link reads back with */
+static unsigned inherited_lanes;    /* GitHub #45: its LANE_COUNT_SET */
+static unsigned tx_off_khz,tx_off_lanes;   /* GitHub #45: the symbol clock and lanes of the last TX_OFF */
 static unsigned psp_locks,psp_wait_fail,psp_cancel_on_wait,psp_waits,psp_releases;
 static LONGLONG psp_last_timeout;
 static unsigned trace_recovery,clock_failures,clock_argument_count,timing_argument_count;
@@ -217,7 +219,7 @@ static BC250_LINK_SURFACE last_restored;
 static ULONG captured_visible;
 NTSTATUS DcnLinkSurfaceCapture(BC250_DEVICE* d,ULONG w,ULONG h,BC250_LINK_SURFACE* surface) {
     long status=boundary_step(d->ConnectorLink,"capture-surface",0);
-    CHECK(primary_locks && scanned_surface==2 && ((w==1920 && h==1080) || (w==2560 && h==1440)));
+    CHECK(primary_locks && scanned_surface==2 && ((w==1920 && h==1080) || (w==2560 && h==1440) || (w==3840 && h==2160)));
     if(!status) {
         captured_visible=!otg_blank && !plane_blank;
         // Only Visible is consumed. The deliberately different address and
@@ -387,7 +389,7 @@ size_t Bc250Dml201WorkspaceSize(void) { return sizeof(workspace); }
 int Bc250Dml201Plan(const BC250_DML201_INPUT* in,void* w,size_t size,BC250_DML201_PLAN* p)
 {
     ++plan_calls;CHECK(fp_saved==1 && w==workspace && size==sizeof(workspace));
-    CHECK((in->HActive==1920 || in->HActive==2560) && in->PitchPixels==in->HActive);
+    CHECK((in->HActive==1920 || in->HActive==2560 || in->HActive==3840) && in->PitchPixels==in->HActive);
     CHECK(in->DchubRefClockKhz==48000 && in->DentistVcoKhz==3000000);
     CHECK(in->CursorWidth==0 && in->AudioSampleRateKhz==192);
     CHECK(in->Output==(unsigned)(snapshot.Sink.Kind==BC250_SINK_DP?BC250_DML201_DP:BC250_DML201_HDMI));
@@ -445,6 +447,7 @@ BC250_ATOM_STATUS Bc250LinkAtomTransmitter(BC250_LINK_ATOM* a,enum bc250_link_tx
 {
     long s=step(a->Io.Context,action==BC250_LINK_TX_ON?"tx-on":action==BC250_LINK_TX_OFF?"tx-off":"tx-drive");
     CHECK(protocol==0 || protocol==2 || protocol==3);CHECK(khz && lanes && swing+pre<=3);
+    if(action==BC250_LINK_TX_OFF) {tx_off_khz=khz;tx_off_lanes=lanes;}
     if(!s) {if(action==BC250_LINK_TX_ON)tx_enabled=1;else if(action==BC250_LINK_TX_OFF)tx_enabled=0;}
     return s?BC250_ATOM_IO:BC250_ATOM_OK;
 }
@@ -497,7 +500,7 @@ long Bc250AuxOpenForDetection(BC250_AUX_SESSION* a,BC250_DISP_IO* io)
 long Bc250AuxClose(BC250_AUX_SESSION* a)
 { long s;if(!a->Open)return 0;s=io_step(a->Io,"aux-close");if(persistent_aux_fail)s=STATUS_IO_DEVICE_ERROR;a->CleanupStatus=s;if(!s) {a->Open=0;aux_open=0;}return s; }
 long Bc250AuxDpcdRead(BC250_AUX_SESSION* a,unsigned long address,unsigned char* data,unsigned long length)
-{ CHECK(aux_open && address && length);memset(data,0,length);if(address==DP_LINK_BW_SET && length==2){data[0]=(unsigned char)inherited_rate;data[1]=4;}return io_step(a->Io,"aux-read"); }
+{ CHECK(aux_open && address && length);memset(data,0,length);if(address==DP_LINK_BW_SET && length==2){data[0]=(unsigned char)inherited_rate;data[1]=(unsigned char)inherited_lanes;}return io_step(a->Io,"aux-read"); }
 long Bc250AuxTransfer(BC250_AUX_SESSION* a,unsigned long action,unsigned long address,unsigned char* data,unsigned long length,unsigned long* got)
 { CHECK(aux_open && action==BC250_AUX_DP_WRITE && address && data && length);*got=length;return io_step(a->Io,"aux-write"); }
 long Bc250DpPhyConfigure(BC250_DISP_IO* io,unsigned lanes,int enhanced)
@@ -573,7 +576,7 @@ static void reset(unsigned kind)
     link.PixelKhz=148500;link.Rate=10;link.Lanes=4;link.NeedsDisable=1;
     snapshot.Generation=7;snapshot.Sink.Kind=kind;snapshot.Sink.MaxPixelClockKhz=300000;
     snapshot.Sink.TargetCount=1;snapshot.Sink.Targets[0]=t;snapshot.Sink.Dpcd[DP_MAX_LANE_COUNT]=4;
-    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=10;inherited_rate=10;
+    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=10;inherited_rate=10;inherited_lanes=4;tx_off_khz=tx_off_lanes=0;
     train_fail=trained_caps_rate=measure_calls=measure_fail=measure_expire=0;measure_hz=0;
     device.InheritedSignalValid=1;device.Modeset.InheritedSupport=1;
     device.InheritedSignal.PixelRate=148500000;
@@ -1540,6 +1543,112 @@ static void inherited_cold(unsigned kind,unsigned rate,const BC250_TARGET_TIMING
     if(listed) {snapshot.Sink.Targets[0]=*listed;snapshot.Sink.TargetCount=1;}
     memset(log_ring,0,sizeof(log_ring));
 }
+/* GitHub #45: a Philips 27E1N8900 (DPCD 1.2, HBR2 x4, 4K at 60 Hz) behind a firmware 4K at 30 Hz on an HBR2 link.
+ * 1080p60, 4K30 and 4K60 are the CTA-861 VIC 16, 95 and 97 timings; 533.25 MHz is the report's preferred timing
+ * (3840x2160 at 59.997 Hz, total 4000x2222, CVT reduced blanking). */
+static const BC250_TARGET_TIMING philips[4]={
+    {148500,1920,280,88,44,1080,45,4,5,0x1a},{297000,3840,560,176,88,2160,90,8,10,0x1a},
+    {533250,3840,160,48,32,2160,62,3,5,0x1a},{594000,3840,560,176,88,2160,90,8,10,0x1a}};
+static void philips_cold(unsigned lanes)
+{
+    unsigned i;
+    reset(BC250_SINK_DP);device.ConnectorLink=NULL;
+    snapshot.Sink.Dpcd[DP_MAX_LINK_RATE]=0x14;snapshot.Sink.Dpcd[DP_MAX_LANE_COUNT]=0xc4;
+    /* connector.c: the HBR3 x4 ceiling, then Bc250DpMaxPixelClock of the sink's HBR2 x4. */
+    snapshot.Sink.MaxPixelClockKhz=720000;
+    for(i=0;i<4;++i)snapshot.Sink.Targets[i]=philips[i];
+    snapshot.Sink.TargetCount=4;
+    inherited_rate=0x14;inherited_lanes=lanes;inherited_timing=philips[1];
+    device.InheritedSignal.PixelRate=297000000;
+    device.InheritedSignal.ActiveSize.cx=3840;device.InheritedSignal.ActiveSize.cy=2160;
+    device.InheritedSignal.TotalSize.cx=4400;device.InheritedSignal.TotalSize.cy=2250;
+    device.Post.Width=3840;device.Post.Height=2160;device.Post.Pitch=15360;
+    device.RuntimeFramebufferLength=15360ull*2160u;
+    memset(log_ring,0,sizeof(log_ring));
+}
+static void philips_hbr2(void)
+{
+    unsigned lanes,steps,begin=checks,bad=failures;LINK_MODE mode;LINK_PLAN_REFUSAL refusal;
+    for(lanes=2;lanes<=4;lanes+=2) {
+        /* The start owns the firmware's HBR2 link (tester.32 refused it) and offers all four, 4K60 included. */
+        philips_cold(lanes);
+        CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS);balanced();
+        CHECK(snapshot.Sink.TargetCount==4 && link.Current.Valid && link.Current.Inherited);
+        CHECK(link.Rate==0x14 && link.Current.Rate==0x14 && link.Lanes==lanes && link.Current.Lanes==lanes);
+        CHECK(logged("connector-link: target 3840x2160 533250 kHz offered rate 20 lanes 4"));
+        CHECK(logged("connector-link: target 3840x2160 594000 kHz offered rate 20 lanes 4"));
+        CHECK(logged("connector-link: offered 4 of 4 targets fastest 3840x2160 594000 kHz rate 20"));
+        CHECK(logged("connector-link: prepare generation 7 targets 4 status 00000000"));
+        CHECK(!logged("check link-settings"));
+        /* 1080p60: the firmware's link goes off at its own symbol clock and lanes, then HBR trains as today. */
+        CHECK(commit_timing(&philips[0])==STATUS_SUCCESS);balanced();
+        CHECK(tx_off_khz==540000 && tx_off_lanes==lanes);
+        CHECK(link.Active && link.Current.Rate==10 && link.Current.Lanes==4 && link.Training.EqPattern==2);
+        /* 4K60 at 533.25 MHz: HBR x4 carries 360 MHz, so the lowest rate that carries it is HBR2, with TPS3. */
+        CHECK(commit_timing(&philips[2])==STATUS_SUCCESS);balanced();
+        CHECK(tx_off_khz==270000 && link.Current.Rate==20 && link.Training.FirstRate==20 && link.Training.EqPattern==3);
+        CHECK(logged("connector-link: enabled generation 7 protocol 0 3840x2160 pitch 15360 pixel 533250 kHz lanes 4 rate 20"));
+        CHECK(!measure_calls);      /* under the 600 MHz DP DTO reference: no refresh measurement */
+        /* 4K30 at 297 MHz fits HBR: it trains at HBR, not at the HBR2 the firmware used. */
+        CHECK(commit_timing(&philips[1])==STATUS_SUCCESS && tx_off_khz==540000 && link.Current.Rate==10);balanced();
+        CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    }
+    /* HBR2 does not lock on the first commit after the start: the firmware's 4K30 comes back at HBR, never black, and
+     * the HBR2 timings are refused before any hardware step from then on. What HBR carries still sets. */
+    philips_cold(2);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS);balanced();
+    memset(log_ring,0,sizeof(log_ring));train_fail=1;
+    CHECK(commit_timing(&philips[2])==STATUS_IO_DEVICE_ERROR);balanced();
+    CHECK(link.Active);CHECK(Bc250TargetTimingEqual(&link.Current.Timing,&philips[1]));
+    /* The firmware's own surface is scanned again (connector_link.c Apply: no runtime POST for an inherited restore). */
+    CHECK(link.Current.Inherited && !device.RuntimePostValid);
+    CHECK(link.Current.Rate==10 && link.RateLimit==10 && !train_fail);
+    CHECK(logged("connector-link: dp rate 20 failed for 533250 kHz; this sink trains at rate 10 or below until replugged"));
+    memset(log_ring,0,sizeof(log_ring));steps=boundary_steps;
+    CHECK(commit_timing(&philips[2])==STATUS_NOT_SUPPORTED && boundary_steps==steps);balanced();
+    CHECK(logged("connector-link: commit 3840x2160 533250 kHz refused C00000BB check link-rate"));
+    CHECK(commit_timing(&philips[3])==STATUS_NOT_SUPPORTED && boundary_steps==steps);balanced();
+    CHECK(commit_timing(&philips[0])==STATUS_SUCCESS && link.Current.Rate==10 && trained_caps_rate==10);balanced();
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    /* The same refusal after a mode the driver set: 1080p60 stays on the screen. */
+    philips_cold(4);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_SUCCESS);
+    CHECK(commit_timing(&philips[0])==STATUS_SUCCESS);train_fail=1;
+    CHECK(commit_timing(&philips[3])==STATUS_IO_DEVICE_ERROR);balanced();
+    CHECK(link.Active && Bc250TargetTimingEqual(&link.Current.Timing,&philips[0]) && link.RateLimit==10);
+    CHECK(ConnectorLinkRelease(&device)==STATUS_SUCCESS);balanced();
+    /* The same sink behind TMDS keeps the 300 MHz route: 4K30 plans, 4K60 is refused at the ceiling. */
+    reset(BC250_SINK_HDMI);snapshot.Sink.MaxPixelClockKhz=300000;device.RuntimeFramebufferLength=15360ull*2160u;
+    Begin(&link,snapshot.Generation,FALSE);
+    CHECK(Plan(&link,&snapshot.Sink,&philips[0],&mode,&refusal)==STATUS_SUCCESS);
+    CHECK(Plan(&link,&snapshot.Sink,&philips[1],&mode,&refusal)==STATUS_SUCCESS);
+    CHECK(Plan(&link,&snapshot.Sink,&philips[2],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_SINK);
+    snapshot.Sink.MaxPixelClockKhz=600000;   /* an adapter that claims HDMI 2.0: the route still ends at 300 MHz */
+    CHECK(Plan(&link,&snapshot.Sink,&philips[2],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_CEILING);
+    CHECK(Plan(&link,&snapshot.Sink,&philips[3],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_CEILING);
+    End(&link);balanced();
+    /* An HBR x4 sink (the Lenovo's caps): 4K30 plans at HBR, 4K60 is the sink's own refusal. */
+    reset(BC250_SINK_DP);snapshot.Sink.MaxPixelClockKhz=360000;device.RuntimeFramebufferLength=15360ull*2160u;
+    Begin(&link,snapshot.Generation,FALSE);
+    CHECK(Plan(&link,&snapshot.Sink,&philips[1],&mode,&refusal)==STATUS_SUCCESS);
+    CHECK(Plan(&link,&snapshot.Sink,&philips[2],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_CLOCK_SINK);
+    snapshot.Sink.MaxPixelClockKhz=720000;   /* a wrong ceiling still meets the sink's own rate */
+    CHECK(Plan(&link,&snapshot.Sink,&philips[2],&mode,&refusal)==STATUS_NOT_SUPPORTED && refusal.Check==LINK_PLAN_LINK_RATE);
+    End(&link);balanced();
+    /* Each refusal of the firmware's link names its check (tester.32 logged none of them). */
+    philips_cold(4);inherited_timing_fail=1;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_DEVICE_DATA_ERROR && !device.ConnectorLink);
+    CHECK(logged("connector-link: inherited timing 297000000 Hz refused C000009C check otg-read"));balanced();
+    philips_cold(4);device.Post.Width=800;device.Post.Height=600;device.Post.Pitch=3328;
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_NOT_SUPPORTED && !device.ConnectorLink);
+    CHECK(logged("connector-link: inherited 3840x2160 total 4400x2250 post 800x600 pitch 3328 refused check post-size"));
+    balanced();
+    philips_cold(3);
+    CHECK(ConnectorLinkPrepare(&device,&snapshot.Sink,7)==STATUS_NOT_SUPPORTED && !device.ConnectorLink);
+    CHECK(logged("connector-link: inherited link rate 20 lanes 3 refused check link-settings"));balanced();
+    printf("GitHub #45 Philips 4K on HBR2: %u checks, %u failures; inherited HBR2 x2/x4, 1080p60, 4K60, fallback, TMDS\n",
+        checks-begin,failures-bad);
+}
 static void inherited_hbr2(void)
 {
     BC250_TARGET_TIMING near=hpx32[0];
@@ -1601,6 +1710,7 @@ int main(void)
     keep_breadcrumbs();
     release_handoff();
     hbr2_admission();hbr2_commit();hbr2_training_fallback();dto_check();inherited_hbr2();
+    philips_hbr2();
     printf("connector transaction: %u checks, %u failures (software boundary model)\n",checks,failures);
     return failures?1:0;
 }

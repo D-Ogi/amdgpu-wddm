@@ -647,13 +647,21 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
         // similar dimensions. Reject before mutation if no complete plan exists.
         LinkStep(c,BC250_LINK_INHERITED_PLAN,FALSE);
         status=Bc250OptcReadTiming(&c->Io,(ULONG)(Device->InheritedSignal.PixelRate/1000),&inherited);
-        if(!NT_SUCCESS(status))goto done;
+        // GitHub #45: every refusal of the firmware's link names its check, so a support report tells them apart.
+        if(!NT_SUCCESS(status)) {
+            GuardLog("connector-link: inherited timing %llu Hz refused %08lX check otg-read",
+                Device->InheritedSignal.PixelRate,(ULONG)status);
+            goto done;
+        }
         if(inherited.HActive!=Device->InheritedSignal.ActiveSize.cx ||
            inherited.VActive!=Device->InheritedSignal.ActiveSize.cy ||
            inherited.HActive+inherited.HBlank!=Device->InheritedSignal.TotalSize.cx ||
            inherited.VActive+inherited.VBlank!=Device->InheritedSignal.TotalSize.cy ||
            Device->Post.Width!=inherited.HActive || Device->Post.Height!=inherited.VActive ||
            Device->Post.Pitch!=DcnPrimaryPitch(inherited.HActive)) {
+            GuardLog("connector-link: inherited %lux%lu total %lux%lu post %lux%lu pitch %lu refused check post-size",
+                inherited.HActive,inherited.VActive,inherited.HActive+inherited.HBlank,inherited.VActive+inherited.VBlank,
+                Device->Post.Width,Device->Post.Height,Device->Post.Pitch);
             status=STATUS_NOT_SUPPORTED;goto done;
         }
         // BD-177: the inherited timing is the one refusal a start cannot explain from anywhere else, so it
@@ -672,7 +680,10 @@ NTSTATUS ConnectorLinkPrepare(BC250_DEVICE* Device,BC250_SINK* Sink,ULONG Genera
             status=Bc250AuxOpenForDetection(&c->Aux,&c->Io);
             if(NT_SUCCESS(status))status=Bc250AuxDpcdRead(&c->Aux,DP_LINK_BW_SET,settings,sizeof(settings));
             close=CloseAux(c);if(NT_SUCCESS(status))status=close;
-            if(!NT_SUCCESS(status))goto done;
+            if(!NT_SUCCESS(status)) {
+                GuardLog("connector-link: inherited link read refused %08lX check link-read",(ULONG)status);
+                goto done;
+            }
             c->Rate=settings[0];c->Lanes=settings[1]&DP_MAX_LANE_COUNT_MASK;
             // BD-139: HBR2 and HBR3 as well. A 304.25 MHz firmware timing (BD-122) runs on an HBR2 link.
             if(!LinkSettingsValid(c->Rate,c->Lanes)) {

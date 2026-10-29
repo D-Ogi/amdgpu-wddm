@@ -133,6 +133,22 @@ int main(int argc,char **argv)
             if(trace->writes-writes<100){printf("FAIL CHECK power-up branch not taken\n");status=BC250_ATOM_IO;break;}
         }
     }
+    else if(root==0){
+        /* GitHub #45: TX DISABLE of a DP link that the firmware trained, at its own symbol clock, on two and four
+         * lanes. DISABLE does not take the power-up branch and stays inside the global register list. */
+        const unsigned lanes[]={2,4};unsigned s;
+        for(s=0;s<2;++s){
+            unsigned writes=trace->writes;
+            /* The back end the firmware left enabled; with it off the table returns at once. */
+            Seed(trace,(uint32_t)strtoul(argv[3],NULL,0),0x100);
+            trace->registers[BC250_REG_DMU_DIG0_DIG_BE_EN_CNTL/4]=1;
+            status=Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_OFF,mode,khz,lanes[s],0,0);
+            printf("TX_OFF lanes%u status%u table%u offset%u instructions%u writes%u\n",lanes[s],status,
+                link.Last.Table,link.Last.Offset,link.Last.Instructions,trace->writes-writes);
+            if(status)break;
+            if(trace->writes==writes){printf("FAIL CHECK disable branch not taken\n");status=BC250_ATOM_IO;break;}
+        }
+    }
     else status=root==12?Bc250LinkAtomClock(&link,mode,khz):root==4?Bc250LinkAtomStream(&link,mode,khz,4,mode==0?10:0):Bc250LinkAtomTransmitter(&link,BC250_LINK_TX_ON,mode,mode==0?270000:khz,4,0,0);
     printf("status=%u instructions=%u reads=%u writes=%u table=%u offset=%u\n",status,link.Last.Instructions,link.Last.Reads,link.Last.Writes,link.Last.Table,link.Last.Offset);
     printf("last read dword=%08x value=%08x\n",trace->lastRead,trace->registers[trace->lastRead]);

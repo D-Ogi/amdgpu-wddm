@@ -98,6 +98,50 @@ int main(void)
     printf("LG FHD behind the passive adapter (TMDS)\n");
     r=admit(&lg75,hbr2,0);CHECK(admitted(&r));
     r=admit(&lg100,hbr2,0);CHECK(r.Dml==BC250_DML201_INVALID && !r.Plan.Valid && !admitted(&r));
+    // GitHub #45: the first rate for six pixel clocks on every rate and lane count a sink can name. Each value is
+    // the lowest of HBR, HBR2 and HBR3 under the sink's maximum whose capacity (rate x 27 MHz x lanes x 8/10 / 24
+    // bits) carries the clock, RBR only on an RBR sink, 0 when none does. Written out by hand, not computed.
+    {
+        static const unsigned clocks[6]={148500,297000,300000,360000,533250,594000};
+        static const unsigned char maxRates[4]={DP_LINK_BW_1_62,DP_LINK_BW_2_7,DP_LINK_BW_5_4,DP_LINK_BW_8_1};
+        static const unsigned char laneCounts[3]={1,2,4};
+        static const unsigned char expected[4][3][6]={
+            {{0,0,0,0,0,0},{0,0,0,0,0,0},{6,0,0,0,0,0}},                         // RBR x1, x2, x4
+            {{0,0,0,0,0,0},{10,0,0,0,0,0},{10,10,10,10,0,0}},                    // HBR
+            {{20,0,0,0,0,0},{10,20,20,20,0,0},{10,10,10,10,20,20}},              // HBR2
+            {{20,0,0,0,0,0},{10,20,20,20,30,0},{10,10,10,10,20,20}}};            // HBR3
+        unsigned m,l,k;unsigned char caps[16];
+        for(m=0;m<4;++m)for(l=0;l<3;++l) {
+            memset(caps,0,sizeof(caps));caps[DP_DPCD_REV]=0x12;caps[DP_MAX_LINK_RATE]=maxRates[m];
+            caps[DP_MAX_LANE_COUNT]=(unsigned char)(0x80u|laneCounts[l]);
+            for(k=0;k<6;++k)CHECK(Bc250DpFirstRate(caps,clocks[k])==expected[m][l][k]);
+            // The mode list ceiling of the sink (connector.c) is the capacity of its own maximum.
+            CHECK(Bc250DpMaxPixelClock(caps)==maxRates[m]*27000u*laneCounts[l]/3u);
+        }
+    }
+    // GitHub #45: the Philips 27E1N8900 (DPCD 1.2, HBR2 x4) timings through the real plan: 1080p60 (VIC 16), 4K30
+    // (VIC 95), the report's preferred 4K at 59.997 Hz (533.25 MHz, total 4000x2222) and 4K60 (VIC 97, 594 MHz), plus
+    // two reduced-blanking 2560x1440 timings at 300 and 360 MHz, the old cap and the edge of HBR x4. DISPCLK and
+    // DPPCLK stay under the 1.2 GHz of dcn201_resource.c (states 1 to 3), which PipeApply enforces.
+    {
+        static const BC250_TARGET_TIMING philips[6]={
+            {148500,1920,280,88,44,1080,45,4,5,0x1a},{297000,3840,560,176,88,2160,90,8,10,0x1a},
+            {300000,2560,160,48,32,1440,41,3,5,0x1a},{360000,2560,160,48,32,1440,41,3,5,0x1a},
+            {533250,3840,160,48,32,2160,62,3,5,0x1a},{594000,3840,560,176,88,2160,90,8,10,0x1a}};
+        static const unsigned rate[6]={DP_LINK_BW_2_7,DP_LINK_BW_2_7,DP_LINK_BW_2_7,DP_LINK_BW_2_7,
+            DP_LINK_BW_5_4,DP_LINK_BW_5_4};
+        printf("Philips 27E1N8900 (DPCD 1.2, HBR2 x4)\n");
+        for(i=0;i<6;++i) {
+            r=admit(&philips[i],hbr2,1);
+            CHECK(r.Rate==rate[i] && admitted(&r));
+            CHECK(r.Plan.DispClockKhz>=philips[i].PixelClockKhz);
+        }
+        // On the Lenovo's HBR x4 the two 4K60 timings have no rate; everything up to 360 MHz keeps HBR.
+        for(i=0;i<6;++i)CHECK(Bc250DpFirstRate(lenovo,philips[i].PixelClockKhz)==(i<4?DP_LINK_BW_2_7:0u));
+        // TMDS: the display plan itself takes 4K30; the 300 MHz route ceiling is Plan's (connector_link_test.c).
+        r=admit(&philips[0],hbr2,0);CHECK(admitted(&r));
+        r=admit(&philips[1],hbr2,0);CHECK(admitted(&r));
+    }
     free(workspace);
     printf("mode_admit_test: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
