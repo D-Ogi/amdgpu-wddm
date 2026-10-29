@@ -52,9 +52,9 @@ These are parser bounds, not permitted hardware settings.
 |---|---|---|
 | Each power field | 0 to 300000 mW | The board supply is 300 W |
 | Current and average socket power | Nonzero within that range | Zero samples already have a separate skip rule |
-| GPU voltage | 0 to 1100 mV | 1000 mV control ceiling plus 100 mV readback allowance |
+| GPU voltage | 0 to 1175 mV | 1075 mV overclock-tier ceiling plus 100 mV readback allowance |
 | CPU rail voltage | 0 to 1600 mV | Existing CPU voltage readback envelope |
-| GPU clock | 0, or 500 to 2100 MHz | Idle point through 2000 MHz ceiling plus 5 percent readback allowance |
+| GPU clock | 0, or 500 to 2415 MHz | Idle point through the 2300 MHz overclock-tier ceiling plus 5 percent readback allowance; a lower bound stops the reader at a tier clock |
 | Each published temperature | 0 to 15000 centi-Celsius | Existing broad parser envelope |
 | Throttler flags | 0 to 65534 | Preserve opaque bits, reject the complete poison word |
 

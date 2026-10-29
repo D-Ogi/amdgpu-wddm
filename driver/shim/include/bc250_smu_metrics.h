@@ -56,14 +56,17 @@
 #define BC250_SMU_METRICS_POISON 0xFFu
 
 /* Acceptance bounds, not control limits. The board has a 300 W PSU. The GPU uses 500..2000 MHz and at most
- * 1000 mV (docs/hardware.md). Allow 5% clock and 100 mV readback margin, not higher setpoints. The CPU rail's
+ * 1000 mV (docs/hardware.md), and an opt-in overclock tier admits up to 2300 MHz and 1075 mV
+ * (BC250_CLOCK_OC_CEILING_MHZ/_MV in bc250_board_envelope.h; smu_metrics_test.c checks the relation). Allow 5%
+ * clock and 100 mV readback margin over that ceiling, not higher setpoints. A lower bound here stops the
+ * reader after BC250_SMU_METRICS_BAD_LIMIT tables at a tier clock, and the fan curve then loses its input. The CPU rail's
  * readback envelope is at most 1600 mV there. Zero voltage/clock is allowed for a gated rail. Temperature must
  * remain visible ABOVE the thermal trip: 150 C is a decode ceiling, never permission to operate that hot. */
 #define BC250_SMU_METRICS_MAX_MW 300000u
-#define BC250_SMU_METRICS_MAX_GFX_MV 1100u
+#define BC250_SMU_METRICS_MAX_GFX_MV 1175u
 #define BC250_SMU_METRICS_MAX_SOC_MV 1600u
 #define BC250_SMU_METRICS_MIN_GFX_MHZ 500u
-#define BC250_SMU_METRICS_MAX_GFX_MHZ 2100u
+#define BC250_SMU_METRICS_MAX_GFX_MHZ 2415u
 #define BC250_SMU_METRICS_MAX_CC 15000u
 #define BC250_SMU_METRICS_MAX_RESIDENCY 100u /* C0Residency is percentage, upstream interface 0x8 */
 

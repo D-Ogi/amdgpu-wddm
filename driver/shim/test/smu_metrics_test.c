@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "bc250_smu_metrics.h"
+#include "bc250_board_envelope.h"
 
 static int checks, failures;
 
@@ -184,7 +185,7 @@ static void decode(void)
 	memcpy(raw, &t, sizeof(raw));
 	CHECK(bc250_smu_metrics_parse(raw, sizeof(raw), &m) == BC250_SMU_METRICS_PARSE_UNWRITTEN);
 
-	/* Out of range: 300 W + 1 mW, 1.2 V GPU, 151 C. The bounds themselves pass. */
+	/* Out of range: 300 W + 1 mW, GPU 100 mV over the bound, 151 C. The bounds themselves pass. */
 	good_table(&t);
 	t.current.socket_mw = BC250_SMU_METRICS_MAX_MW + 1u;
 	memcpy(raw, &t, sizeof(raw));
@@ -227,7 +228,8 @@ static void plausibility(void)
 	unsigned int i, half, core;
 	const unsigned int offsets[] = {104, 220, 96, 100, 80, 84, 68, 70, 108, 112};
 	const unsigned int widths[] = {4, 4, 4, 4, 4, 4, 2, 2, 2, 2};
-	const unsigned int maxima[] = {300000, 300000, 300000, 300000, 1600, 1100, 2100, 15000, 15000, 65534};
+	const unsigned int maxima[] = {300000, 300000, 300000, 300000, 1600, BC250_SMU_METRICS_MAX_GFX_MV,
+				       BC250_SMU_METRICS_MAX_GFX_MHZ, 15000, 15000, 65534};
 	for (i = 0; i < sizeof(offsets) / sizeof(offsets[0]); i++) {
 		unsigned int j, v;
 		good_table(&t);
@@ -247,6 +249,26 @@ static void plausibility(void)
 	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
 	t.current.gfx_mhz = 499;
 	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_CLOCK);
+	/* The opt-in overclock tiers: the table at the tier ceiling, and 5% above it, still parse. Under a tier the
+	 * reader must not stop, or the fan curve loses its input. One MHz over the margin is refused. */
+	{
+		struct oc_bounds {
+			SAME(clock_margin, BC250_SMU_METRICS_MAX_GFX_MHZ ==
+			     BC250_CLOCK_OC_CEILING_MHZ + BC250_CLOCK_OC_CEILING_MHZ / 20u);
+			SAME(volt_margin, BC250_SMU_METRICS_MAX_GFX_MV == BC250_CLOCK_OC_CEILING_MV + 100u);
+			SAME(tiers_in_ceiling, BC250_OC_AIR_GPU_MAX_MHZ <= BC250_CLOCK_OC_CEILING_MHZ &&
+			     BC250_OC_AIO_GPU_MAX_MHZ <= BC250_CLOCK_OC_CEILING_MHZ);
+		};
+	}
+	t.current.gfx_mhz = (unsigned short)BC250_OC_AIO_GPU_MAX_MHZ;
+	t.current.mv[1] = (unsigned short)BC250_OC_AIO_GPU_MAX_MV;
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK &&
+	      m.gfx_mhz == BC250_OC_AIO_GPU_MAX_MHZ);
+	t.current.gfx_mhz = (unsigned short)BC250_SMU_METRICS_MAX_GFX_MHZ;
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
+	t.current.gfx_mhz = (unsigned short)(BC250_SMU_METRICS_MAX_GFX_MHZ + 1u);
+	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_CLOCK);
+	good_table(&t);
 	t.current.gfx_mhz = 0; /* gated clock alone is not a corrupted table */
 	CHECK(bc250_smu_metrics_parse((const unsigned char *)&t, sizeof(t), &m) == BC250_SMU_METRICS_PARSE_OK);
 	t.current.gfx_cc = 8900; /* hot telemetry must not disappear at the thermal stop threshold */
