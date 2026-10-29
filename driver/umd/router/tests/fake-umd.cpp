@@ -69,6 +69,16 @@ extern "C" __declspec(dllexport) SIZE_T FakeDeviceSize(void) { return FakeDevice
 static VOID APIENTRY FakeDestroyDevice(D3D10DDI_HDEVICE) { Note("destroy-device"); }
 static VOID APIENTRY FakeFlush(D3D10DDI_HDEVICE) { Note("flush"); }
 static VOID APIENTRY FakeRelocateDeviceFuncs(D3D10DDI_HDEVICE, D3D10DDI_DEVICEFUNCS *) { Note("relocate-device-funcs"); }
+// BD-223: the D3D10.0 question the WDDM 1.3 entry forwards when its Flags ask about an ordinary resource. The
+// answer 7 is one no real format has, so the gate sees that it came from here.
+static VOID APIENTRY FakeCheckMultisampleQualityLevels(D3D10DDI_HDEVICE, DXGI_FORMAT format, UINT samples,
+                                                       UINT *levels)
+{
+    char line[96];
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "check-msaa format=%d samples=%u", (int)format, samples);
+    Note(line);
+    if (levels) *levels = 7;
+}
 static VOID APIENTRY FakeClearRenderTargetView(D3D10DDI_HDEVICE, D3D10DDI_HRENDERTARGETVIEW view, FLOAT color[4])
 {
     char line[128];
@@ -119,6 +129,7 @@ extern "C" __declspec(dllexport) void FakeDeviceFuncs(D3D10DDI_DEVICEFUNCS *out)
     out->pfnDestroyDevice = FakeDestroyDevice;
     out->pfnFlush = FakeFlush;
     out->pfnRelocateDeviceFuncs = FakeRelocateDeviceFuncs;
+    out->pfnCheckMultisampleQualityLevels = FakeCheckMultisampleQualityLevels;
     out->pfnClearRenderTargetView = FakeClearRenderTargetView;
     out->pfnClearDepthStencilView = FakeClearDepthStencilView;
     out->pfnCreateResource = FakeCreateResource;
@@ -151,6 +162,18 @@ static HRESULT APIENTRY FakeBlt(DXGI_DDI_ARG_BLT *args)
     return S_OK;
 }
 
+// BD-223: the DXGI present the WDDM 1.3 pfnPresent1 must reach. A real function for the same reason as FakeBlt.
+static HRESULT APIENTRY FakePresent(DXGI_DDI_ARG_PRESENT *args)
+{
+    char line[192];
+    if (!args) return E_INVALIDARG;
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "dxgi-present surface=%Ix sub=%u dst=%Ix dst_sub=%u flags=%08x interval=%d",
+                (UINT_PTR)args->hSurfaceToPresent, args->SrcSubResourceIndex, (UINT_PTR)args->hDstResource,
+                args->DstSubResourceIndex, args->Flags.Value, (int)args->FlipInterval);
+    Note(line);
+    return S_OK;
+}
+
 static HRESULT APIENTRY CreateDeviceFn(D3D10DDI_HADAPTER, D3D10DDIARG_CREATEDEVICE *args)
 {
     if (!args || !args->pDeviceFuncs) { Note("create-device-no-table"); return E_INVALIDARG; }
@@ -164,8 +187,10 @@ static HRESULT APIENTRY CreateDeviceFn(D3D10DDI_HADAPTER, D3D10DDIARG_CREATEDEVI
         void **dxgi = (void **)args->DXGIBaseDDI.pDXGIDDIBaseFunctions;
         for (unsigned i = 0; i < sizeof(DXGI_DDI_BASE_FUNCTIONS) / sizeof(void *); ++i)
             dxgi[i] = (void *)(FakeSlotBase + 0x1000 + i);
-        // Slot 6 is the one the front really calls, from its own pfnBlt1.
+        // Slot 6 is the one the front really calls, from its own pfnBlt1, and slot 0 the one its WDDM 1.3
+        // pfnPresent1 calls.
         args->DXGIBaseDDI.pDXGIDDIBaseFunctions->pfnBlt = FakeBlt;
+        args->DXGIBaseDDI.pDXGIDDIBaseFunctions->pfnPresent = FakePresent;
     }
     Note("create-device");
     // The Mesa frontend answers DXGI_STATUS_NO_REDIRECTION and not S_OK (Device.cpp). The double answers the
