@@ -670,7 +670,16 @@ void scanout_primary() {
     CHECK(scanout_primary_decide(&on,true,0,87,120,75,512).reason==R::Admitted);
     CHECK(scanout_primary_decide(&on,true,0,87,119,75,512).reason==R::SourceGeometry);
     CHECK(scanout_primary_decide(&on,true,0,87,63,1200,256).reason==R::SourceGeometry);
-    CHECK(scanout_primary_decide(&on,true,0,87,1920,1201,7680).reason==R::SourceGeometry);
+    // A chain larger than the mode is a downscale on the plane (S2): 1920x1201 is admitted. More than
+    // BC250_MPO_MAX_SHRINK_MILLI / 1000 times down, or wider than both the mode and BC250_MPO_MAX_SHRINK_WIDTH,
+    // is still refused.
+    CHECK(scanout_primary_decide(&on,true,0,87,1920,1201,7680).reason==R::Admitted);
+    {
+        const UINT tall=1200*BC250_MPO_MAX_SHRINK_MILLI/1000+1, wide=BC250_MPO_MAX_SHRINK_WIDTH+1;
+        CHECK(scanout_primary_decide(&on,true,0,87,1920,tall,7680).reason==R::SourceGeometry);
+        CHECK(scanout_primary_decide(&on,true,0,87,wide,1200,bc250_scanout_primary_pitch(wide,4)).reason==
+              R::SourceGeometry);
+    }
     CHECK(scanout_primary_decide(&on,true,0,87,1280,720,5376).reason==R::Pitch);
     CHECK(scanout_primary_decide(&on,true,0,UINT(DXGI_FORMAT_R16G16B16A16_FLOAT),1280,720,10240).reason==R::Format);
     CHECK(composed(&cpu) && scanout_primary_decide(&cpu,true,0,87,1920,1080,7680).reason==R::ForceCpu);
