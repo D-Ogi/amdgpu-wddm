@@ -10,6 +10,32 @@ a video or a game window. The display hardware scales and blends the planes at s
 these pixels with the 3D engine, and a window can get its own flips. A game chain smaller than the mode can also
 flip independently on plane 0, because the plane scales it to the mode.
 
+## Lab status
+
+Scaled MPO is not active. In tester.34 `LabScaledPlane` is 0 by default, and the release flavour reads no selector
+and has no MPO DDI. The lab results of 2026-10-29 on unit A, with the lab KMD of stage S2b:
+
+| Arm | UMD rows | Native chain | 1280x720 STRETCH chain |
+| --- | --- | --- | --- |
+| Selector 0 | Installed tester.34 | Scans out (1498 of 1556 flips) | Composed. No MPO caps, as expected |
+| Selector 1 or 3 | Installed tester.34 | Composed. DWM restarts its composition about every 0.4 s | Composed |
+| Selector 0, 1 or 3 | Router 9fd42f83 and zink 088a1588 | Scans out (1499 of 1557, 1500 of 1546) | Composed. No `CheckMultiPlaneOverlaySupport2` call |
+
+- The tester.34 router front refuses every DXGI overlay entry. With the MPO caps of the KMD, that refusal makes DWM
+  start its composition again and again: every flip is a mode-change flip, and `SetVisibility` comes 1297 times in
+  222 s. Thus the KMD caps must not go out without the user-mode half of [The KMD/UMD contract](#the-kmdumd-contract).
+- With the user-mode half, the caps are harmless: one DWM per start, VSync flips, no DWM event, no underflow. The
+  front publishes WDDM 1.3 (`level=wddm1_3 hosted_mpo=1`), and it refuses no entry.
+- dxgkrnl does not call `DxgkDdiCheckMultiPlaneOverlaySupport2` with `MaxOverlayPlanes` 1. The probable cause: `MaxOverlayPlanes` counts
+  the primary surface, so 1 gives DWM no overlay plane, and DWM does not make an overlay candidate. The plan of
+  plane 0 alone (step S1 in [Steps](#steps)) therefore does not reach the KMD.
+
+The next lab question is `MaxOverlayPlanes` 2 (`LabScaledPlane` bit 2, values 5 and 7): which plane sets DWM sends
+to the Check. The KMD log keeps the first Check calls (`wddm: MPO check n <planes> surf <size> ... dst ...`). If
+DWM sends the game chain over the desktop plane, plane 0 can take a set in which an opaque top plane covers the
+whole output and the plane below it is not visible. That is a change of the Check and of the flip, after
+tester.34.
+
 ## The route
 
 The KMD reports `WDDMVersion` 2.0 (ADR 0019). It therefore uses the WDDM 1.3/2.0 MPO model. dxgkrnl calls the KMD
@@ -17,7 +43,7 @@ DDIs of the "2" family, and the DXGI runtime calls the DXGI 1.3 entries of the c
 
 | Part | DDI | What it does here |
 | --- | --- | --- |
-| KMD | `DXGK_DRIVERCAPS.SupportMultiPlaneOverlay`, `MaxOverlayPlanes` | `MaxOverlayPlanes` counts the primary. 1 is plane 0 alone |
+| KMD | `DXGK_DRIVERCAPS.SupportMultiPlaneOverlay`, `MaxOverlayPlanes` | `MaxOverlayPlanes` counts the primary. 1 is plane 0 alone, and DWM then makes no Check call ([Lab status](#lab-status)) |
 | KMD | `DxgkDdiCheckMultiPlaneOverlaySupport2` | Decides a set of planes at PASSIVE_LEVEL, with no register write. The only authority for a plane configuration |
 | KMD | `DxgkDdiSetVidPnSourceAddressWithMultiPlaneOverlay2` | Programs the planes of the source in one OTG update |
 | KMD | VSync type `DXGK_INTERRUPT_CRTC_VSYNC_WITH_MULTIPLANE_OVERLAY` | Reports the address of each plane at the vsync |
