@@ -1344,6 +1344,17 @@ search.graphics.hw-pointer|src|-|Hardware mouse pointer
 search.graphics.hw-pointer.terms|src|-|mouse|pointer|cursor|hardware cursor|flicker|arrow
 help.setting.hw-pointer|src|-|Lets the display engine of the graphics chip draw the mouse pointer on top of the picture, so Windows does not have to draw it into every frame. It is on from the start. Switch it off if the pointer flickers, jumps or has wrong colours; a new setting works after you restart Windows.
 
+# ---- the full resolution after a scaled start of the screen (ScaledStart.cs, BD-196) ----
+display.full-res.small|src|-|Windows offers only {0} for this monitor, but the monitor can show {1}. The computer started the monitor in a small mode.
+display.full-res.fixed|src|-|The start settings of Windows set a small mode for the screen.
+display.full-res.help|src|-|With the button below, Windows starts the monitor in its highest mode. The full resolution is offered after you restart Windows.
+display.full-res.button|src|-|Use the full resolution
+plan.title.full-resolution-start|src|-|Use the full resolution of the screen
+plan.line.full-resolution-start|src|-|Windows starts the screen in its highest mode, so the full resolution is offered after the restart.
+plan.line.full-resolution-start-undo|src|-|Windows starts the screen with the settings from before the change.
+plan.full-res.refuse.unreadable|src|-|The start settings of Windows cannot be read, so they are not changed.
+plan.full-res.refuse.already|src|-|The start setting is made already. Restart Windows to use it.
+
 # ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
 oc.title|src|-|Higher clocks for your cooler
 oc.now|src|-|Now

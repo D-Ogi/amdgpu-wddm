@@ -1325,6 +1325,17 @@ search.graphics.hw-pointer|mt-safe|a49c1648|ハードウェア マウス ポイ�
 search.graphics.hw-pointer.terms|mt-safe|bb0a33b4|マウス|ポインター|カーソル|ハードウェア カーソル|ちらつき|矢印|mouse|cursor
 help.setting.hw-pointer|mt|458914a7|グラフィックス チップのディスプレイ エンジンが画像の上にマウス ポインターを描画するので、Windows がすべてのフレームにポインターを描画する必要がありません。最初から有効です。ポインターがちらついたり、飛んだり、色が正しくなかったりする場合は無効にしてください。新しい設定は Windows を再起動した後に有効になります。
 
+# ---- the full resolution after a scaled start of the screen (ScaledStart.cs, BD-196) ----
+display.full-res.small|mt|bde46d0f|Windows はこのモニターに {0} しか提示していませんが、モニターは {1} を表示できます。コンピューターがモニターを小さいモードで起動しました。
+display.full-res.fixed|mt|6c46c02f|Windows の起動設定で、画面に小さいモードが指定されています。
+display.full-res.help|mt|fd2af2ef|下のボタンを押すと、Windows はモニターを最も高いモードで起動します。Windows を再起動した後、フル解像度が提示されます。
+display.full-res.button|mt|3819939b|フル解像度を使う
+plan.title.full-resolution-start|mt|5bbbb857|画面のフル解像度を使う
+plan.line.full-resolution-start|mt|49a3cdbf|Windows は画面を最も高いモードで起動するため、再起動後にフル解像度が提示されます。
+plan.line.full-resolution-start-undo|mt|671892eb|Windows は変更前の設定で画面を起動します。
+plan.full-res.refuse.unreadable|mt|3dd425b8|Windows の起動設定を読み取れないため、変更しません。
+plan.full-res.refuse.already|mt|4299d1d9|この起動設定はすでに行われています。使うには Windows を再起動してください。
+
 # ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
 oc.title|mt|681c1eb4|クーラーに合わせた高いクロック
 oc.now|mt|fe18013d|現在

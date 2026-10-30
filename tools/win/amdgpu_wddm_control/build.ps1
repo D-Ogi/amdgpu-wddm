@@ -94,7 +94,7 @@ $pure = 'KmdReply.cs', 'Profiles.cs', 'Redactor.cs', 'ManifestCheck.cs', 'Recove
     'SettingsSearch.cs', 'HomeStatus.cs', 'PlainPlan.cs', 'HelpGuides.cs', 'CuRegistry.cs', 'Tuner.cs', 'TunerPlan.cs', 'TunerView.cs', 'FanPlan.cs', 'GraphicsSettings.cs', 'TdrSetting.cs', 'OcUnlock.cs',
     'GameLog.cs', 'HangRecord.cs',
     'LayoutRules.cs', 'UmaSetting.cs', 'BoardCapabilities.cs', 'SystemTuning.cs', 'Benchmark.cs', 'StartupDiagnosticData.cs', 'DiagnosticWorker.cs', 'DriverState.cs',
-    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs', 'ClosureNotice.cs', 'DriverFeatures.cs', 'HardwarePointerSetting.cs' |
+    'StartNotice.cs', 'Wallpaper.cs', 'Crash.cs', 'StartWindowHost.cs', 'BootLogoSetting.cs', 'ClosureNotice.cs', 'DriverFeatures.cs', 'HardwarePointerSetting.cs', 'ScaledStart.cs' |
     ForEach-Object { Join-Path $here "src\$_" }
 # The start of the window: the order of the loading window and the guard against a second window (Launch.cs).
 $pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $here "src\$_" }
@@ -433,6 +433,9 @@ if (-not $NoSmoke) {
         'cu-confirm'      = @(3, 'refused: No 40-core start is waiting for confirmation')
         'reset-defaults:keep' = @(0, 'note: Per-game settings are kept.')
         'game-undo'       = @(3, 'refused: There is no change of witcher3.exe to undo')
+        # BD-196: this snapshot has no reading of the boot settings (as in the window), so the plan sets highestmode
+        # only; the helper reads the store and plans again.
+        'full-resolution-start' = @(0, 'bcdedit /set {globalsettings} highestmode on', 'at the next restart of Windows', 'undo: yes')
     }
     foreach ($e in $expect.GetEnumerator()) {
         $action = $e.Key.Split(':')[0]
@@ -446,6 +449,20 @@ if (-not $NoSmoke) {
         }
         if (-not $r.Text.Contains('dry run: nothing was written')) { throw "dry run $($e.Key): no closing line" }
     }
+    # BD-196 with the boot settings read, as the helper reads them on the lab's bad start: highestmode off and a fixed
+    # start resolution. The plan sets the one and deletes the other.
+    $bcdSnapshot = Join-Path $obj 'snapshot-bd196.json'
+    $json = (Get-Content $snapshot -Raw).TrimStart()
+    if (-not $json.StartsWith('{')) { throw "$snapshot does not start with an object" }
+    $bcd = '{"Bcd":{"HighestMode":"off","HighestModeText":"No","GraphicsResolution":"800x600"},'
+    [IO.File]::WriteAllText($bcdSnapshot, $bcd + $json.Substring(1))
+    $r = Invoke-DryRun @('--action', 'full-resolution-start', '--dry-run', '--snapshot', $bcdSnapshot) 'full-resolution-start-bcd'
+    foreach ($want in 'bcdedit /set {globalsettings} highestmode on', 'bcdedit /deletevalue {globalsettings} graphicsresolution', 'undo: yes') {
+        if ($r.Code -ne 0 -or -not $r.Text.Contains($want)) { throw "dry run full-resolution-start with the boot settings: '$want' missing (exit $($r.Code)): $($r.Text)" }
+    }
+    [IO.File]::WriteAllText($bcdSnapshot, '{"Bcd":{"HighestMode":"on","HighestModeText":"Yes"},' + $json.Substring(1))
+    $r = Invoke-DryRun @('--action', 'full-resolution-start', '--dry-run', '--snapshot', $bcdSnapshot) 'full-resolution-start-done'
+    if ($r.Code -ne 3 -or -not $r.Text.Contains('refused:')) { throw "dry run full-resolution-start with highestmode on must be refused (exit $($r.Code)): $($r.Text)" }
     # The tuning page (docs/design/tuner.md): a reading with the curve and the processor surface, so each plan is
     # formed in full. These actions write no registry value, so the dry run shows the request the helper would send.
     $tuned = Join-Path $here 'test\snapshot-tuner.json'

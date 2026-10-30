@@ -101,6 +101,8 @@ namespace AmdgpuWddmControl
             ReadTdr(s);
             ReadHardwarePointer(s);
             ReadGameLog(s);
+            // An elevated --status shows the boot settings of the full-resolution start too (ScaledStart.cs).
+            if (observer == "status" && Program.IsElevated()) s.Bcd = Boot.Read();
             using (var k = Registry.LocalMachine.OpenSubKey(Recovery.RouterPath))
             {
                 s.RouterInstalled = k != null;
@@ -187,6 +189,18 @@ namespace AmdgpuWddmControl
                 return r != null && r.Schema == 1 && Recovery.Utc(r.Utc) != null ? r : null;
             }
             catch (Exception) { return null; }
+        }
+
+        // The boot settings of the full-resolution start (ScaledStart.cs, BD-196), through bcdedit.exe. Its calibration
+        // store goes to the temporary folder, under a new name each time, and is removed after the calibration.
+        public static readonly BcdEdit Boot = new BcdEdit(new BcdeditProcess(),
+            () => Path.Combine(Path.GetTempPath(), "amdgpu-wddm-bcd-probe-" + Guid.NewGuid().ToString("N") + ".dat"));
+
+        // bcdedit needs administrator, so a reading without it leaves Bcd null; and only the action that changes the
+        // two settings reads them, so that no other action runs bcdedit.
+        public static void ReadBoot(RecoverySnapshot s, string action)
+        {
+            if (action == ScaledStart.Action && Program.IsElevated()) s.Bcd = Boot.Read();
         }
 
         static long? Dword(RegistryKey k, string name)
@@ -551,6 +565,7 @@ namespace AmdgpuWddmControl
             w.AppendLine("states:");
             foreach (var l in Recovery.Describe(s))
                 w.AppendLine("  [" + l.Severity + "] " + l.Topic + ": " + l.Text + (l.Action != null ? "  -> recommended: " + l.Action : ""));
+            if (s.Bcd != null) w.AppendLine("boot settings: " + ScaledStart.StatusText(s.Bcd));
             return w.ToString();
         }
 
@@ -759,6 +774,41 @@ namespace AmdgpuWddmControl
         }
     }
 
+    // bcdedit.exe of this Windows for ScaledStart.cs, with a bound on each run. A run past the bound is NOT killed: a
+    // bcdedit stopped in the middle of a write can leave the store half written. The run is reported as failed.
+    sealed class BcdeditProcess : IBcdRunner
+    {
+        const int BoundMs = 15000;
+
+        public BcdRun Run(string arguments)
+        {
+            var info = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "bcdedit.exe"), arguments)
+            {
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            };
+            try
+            {
+                using (var p = Process.Start(info))
+                {
+                    var output = p.StandardOutput.ReadToEndAsync();
+                    var error = p.StandardError.ReadToEndAsync();
+                    if (!p.WaitForExit(BoundMs))
+                        return new BcdRun { Exit = -1, Output = "bcdedit process " + p.Id + " has not returned within " + BoundMs / 1000 + " s; it is left running" };
+                    return new BcdRun { Exit = p.ExitCode, Output = output.Result + error.Result };
+                }
+            }
+            catch (Exception e) { return new BcdRun { Exit = -1, Output = "bcdedit could not be started (" + e.Message + ")" }; }
+        }
+
+        // The calibration store and the log files Windows keeps beside a hive file.
+        public void RemoveStore(string path)
+        {
+            foreach (var f in new[] { path, path + ".LOG", path + ".LOG1", path + ".LOG2" })
+                try { if (File.Exists(f)) File.Delete(f); }
+                catch (Exception) { }
+        }
+    }
+
     public static class RecoveryRunner
     {
         public const int Done = 0, Failed = 1, Usage = 2, Refused = 3, NeedsAdministrator = 5;
@@ -903,6 +953,7 @@ namespace AmdgpuWddmControl
             try
             {
                 s = o.SnapshotFile != null ? new JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(o.SnapshotFile)) : RecoveryProbe.Read();
+                if (o.SnapshotFile == null) RecoveryProbe.ReadBoot(s, o.Action);
                 backups = o.SnapshotFile != null ? new List<BackupRecord>() : RecoveryProbe.Backups();
             }
             catch (Exception e) { Emit(o, "dry run failed: " + e.Message + "\n"); return Failed; }
@@ -1022,6 +1073,8 @@ namespace AmdgpuWddmControl
             try
             {
                 var s = RecoveryProbe.Read(o.Action == Recovery.OperatorEscape ? "escape" : "helper");
+                RecoveryProbe.ReadBoot(s, o.Action);
+                if (s.Bcd != null) Log("boot settings: " + ScaledStart.StatusText(s.Bcd));
                 var plan = Recovery.Plan(o.Action, s, o.Mode, o.Ceiling, RecoveryProbe.Backups(), o.AcceptBd060, o.More);
                 if (plan.Refused) { Log("result: refused: " + plan.Refusal); return Refused; }
                 if (plan.RestartCompositor) return StopCompositor(s);
@@ -1164,6 +1217,7 @@ namespace AmdgpuWddmControl
         // One value as found before an action. diagnosis: an unexpected type is recorded, not refused.
         static BackupValue Saved(string path, string name, bool diagnosis, DriverStateBatch batch)
         {
+            if (ScaledStart.Owns(path)) return RecoveryProbe.Boot.Saved(name);
             if (DriverStateKey.IsStateValue(path, name))
                 using (var state = batch == null ? DriverStateKey.OpenPath(path, false, false) : batch.OpenPath(path, false))
                 {
@@ -1555,6 +1609,8 @@ namespace AmdgpuWddmControl
         {
             if (w.DeleteKey) { RemoveEmptyKey(w.Path); return; }
             if (!Recovery.Allowed(w.Path, w.Name)) throw new InvalidOperationException(w.Name + " is not a value this app may write");
+            // The two boot settings of the full-resolution start go through bcdedit (ScaledStart.cs).
+            if (ScaledStart.Owns(w.Path)) { RecoveryProbe.Boot.Write(w); return; }
             if (DriverStateKey.IsStateValue(w.Path, w.Name))
             {
                 using (var state = batch.OpenPath(w.Path, false))
@@ -1604,6 +1660,7 @@ namespace AmdgpuWddmControl
 
         static bool ReadsBack(RegWrite w, DriverStateBatch batch)
         {
+            if (ScaledStart.Owns(w.Path)) return RecoveryProbe.Boot.ReadsBack(w);
             if (DriverStateKey.IsStateValue(w.Path, w.Name))
                 using (var state = batch.OpenPath(w.Path, false))
                 {

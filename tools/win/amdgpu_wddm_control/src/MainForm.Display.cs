@@ -122,6 +122,7 @@ namespace AmdgpuWddmControl
                 };
                 c.Add(Ui.WrapRow(c.Inner, RowLabel(Strings.T("display.refresh"), c.Inner), rate));
             }
+            AddFullResolution(c, m, modes);
 
             if (scalingNow == null) c.Add(Ui.Dim(Strings.T("display.scaling.unknown"), c.Inner));
             else
@@ -156,6 +157,22 @@ namespace AmdgpuWddmControl
                 discard.AccessibleName = Strings.T("ui.discard") + ": " + title;
                 c.Add(Ui.WrapRow(c.Inner, apply, discard));
             }
+        }
+
+        // BD-196 (ScaledStart.cs): the monitor started in a small mode that it stretches, so Windows offers that one mode.
+        // The row says so in plain words and offers the one action that makes the next start use the full mode.
+        void AddFullResolution(CardPanel c, DisplayMode m, List<DisplayChoice> modes)
+        {
+            if (!ScaledStart.Shown(_snap)) return;
+            var native = DisplayInfo.EdidNativeSize(m.Device);
+            var signal = ScaledStart.Detect(m, modes, native, _snap.Bcd);
+            if (signal == ScaledSignal.None) return;
+            c.Add(Ui.Label(signal == ScaledSignal.OneModeBelowNative
+                ? Strings.T("display.full-res.small", Strings.T("display.size", m.Width, m.Height), Strings.T("display.size", native.Value.Width, native.Value.Height))
+                : Strings.T("display.full-res.fixed"), null, Theme.Warn, c.Inner));
+            c.Add(Ui.Dim(Strings.T("display.full-res.help"), c.Inner));
+            var fix = Ui.Button(Strings.T("display.full-res.button"), (o, e) => RunAction(ScaledStart.Action), true);
+            c.Add(Ui.Row(fix));
         }
 
         // Applies the choices of one monitor (device) or of every monitor (null), one monitor at a time, each with

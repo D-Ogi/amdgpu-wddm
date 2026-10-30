@@ -107,6 +107,9 @@ namespace AmdgpuWddmControl
         // What the driver wrote at this start about its own switches (DriverFeatures.cs): the volatile records under
         // Features, absent when the driver wrote none. An older snapshot has no member, which reads as none.
         public Dictionary<string, long> Features { get; set; }
+        // The boot settings of Windows that the full-resolution start changes (ScaledStart.cs, BD-196). Null: not read,
+        // which is every reading without administrator rights; the helper reads them for that action only.
+        public BcdGlobalSettings Bcd { get; set; }
 
         public RecoverySnapshot() { Parameters = new Dictionary<string, long>(); DwmRoute = "unknown"; }
 
@@ -166,6 +169,7 @@ namespace AmdgpuWddmControl
 
         public override string ToString()
         {
+            if (ScaledStart.Owns(Path)) return ScaledStart.CommandText(this);
             if (DeleteKey) return @"delete key HKLM\" + Path + " (empty)";
             string where = @"HKLM\" + Path + " " + Name;
             if (Delete) return "delete " + where;
@@ -483,11 +487,14 @@ namespace AmdgpuWddmControl
             // and the hardware acceleration of classic Windows drawing.
             "compute-queue-on", "compute-queue-off", "gdi-accel-on", "gdi-accel-off",
             // The hardware mouse pointer (HardwarePointerSetting.cs), a raw value of the Parameters key.
-            HardwarePointerSetting.ActionOn, HardwarePointerSetting.ActionOff };
+            HardwarePointerSetting.ActionOn, HardwarePointerSetting.ActionOff,
+            // The full resolution after a scaled start of the screen (ScaledStart.cs, BD-196): two boot settings.
+            ScaledStart.Action };
 
         public static bool Allowed(string path, string name)
         {
             if (HardwarePointerSetting.Allowed(path, name)) return true;
+            if (ScaledStart.Allowed(path, name)) return true;
             if (string.Equals(path, ParametersPath, StringComparison.OrdinalIgnoreCase)) return ParameterNames.Contains(name);
             if (string.Equals(path, RouterPath, StringComparison.OrdinalIgnoreCase)) return RouterNames.Contains(name);
             if (TdrSetting.Allowed(path, name)) return true;
@@ -1841,6 +1848,13 @@ namespace AmdgpuWddmControl
                     break;
                 }
 
+                case ScaledStart.Action:
+                {
+                    var why = ScaledStart.Fill(s, p);
+                    if (why != null) return Refuse(p, why);
+                    break;
+                }
+
                 case "game-undo":
                 case "game-redo":
                 {
@@ -1868,8 +1882,13 @@ namespace AmdgpuWddmControl
                 }
             }
             foreach (var w in p.Writes)
+            {
                 if (w.DeleteKey ? !GraphicsSettings.KeyRemovalAllowed(w.Path) : !Allowed(w.Path, w.Name))
                     return Refuse(p, "internal: " + (w.DeleteKey ? "the key " + w.Path : w.Name) + " is not on the list of values this app may write");
+                // A boot setting is checked for its value too: an undo takes the value from a backup file.
+                if (ScaledStart.Owns(w.Path) && !ScaledStart.Valid(w))
+                    return Refuse(p, "internal: the boot setting write \"" + w.Name + "\" is not one this app may make");
+            }
             foreach (var g in p.GameWrites)
                 if (!GameAllowed(g.Key, g.Value)) return Refuse(p, "internal: " + g.Key + " is not a game this app may change");
             if (p.Cu != null && !p.Cu.Steps.All(CuMode.Allowed)) return Refuse(p, "internal: a graphics-core step is not allowed");
