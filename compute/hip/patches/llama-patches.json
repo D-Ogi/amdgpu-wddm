@@ -19,6 +19,8 @@
     { "patch": "llama-no-asm-dp4a.patch", "file": "ggml/src/ggml-cuda/common.cuh",
       "marker": "!defined(BC250_HIP_NO_ASM_DP4A)", "what": "the RDNA1 dp4a assembly behind a macro" },
     { "patch": "llama-bc250-allocation-cap.patch", "file": "ggml/src/ggml-cuda/ggml-cuda.cu",
-      "marker": "BC250_HIP_MAX_ALLOC_BYTES", "what": "the measured per-allocation limit" }
+      "marker": "BC250_HIP_MAX_ALLOC_BYTES", "what": "the measured per-allocation limit" },
+    { "patch": "llama-rdna1-mmvq.patch", "file": "ggml/src/ggml-cuda/mmvq.cu",
+      "marker": "MMVQ_PARAMETERS_RDNA1", "what": "RDNA1 matrix-vector table, v_sad_u8 sums and the float-activation matvec" }
   ]
 }
