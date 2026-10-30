@@ -2282,7 +2282,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
+      "commit": "e551740978f11be78d858b000bc63492cded775e",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2399,7 +2399,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
+      "commit": "e551740978f11be78d858b000bc63492cded775e",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
