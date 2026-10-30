@@ -2282,6 +2282,52 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
+      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
+      "tree": "shared",
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "args": [
+        "-Compiler",
+        "clang-cl",
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Flavour",
+        "release",
+        "-NoSmoke",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "bc250control.dll",
+          "path": "payload/control/bc250control.dll",
+          "authenticode": true
+        },
+        {
+          "file": "bc250control.dll",
+          "path": "payload/tools/bc250control.dll",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "bc250kmd_cli.exe",
+          "path": "payload/tools/bc250kmd_cli.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "control-exe-rel",
+      "component": "control",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
       "commit": "e551740978f11be78d858b000bc63492cded775e",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
@@ -2306,23 +2352,6 @@
         {
           "file": "amdgpu_wddm_control.exe",
           "path": "payload/control/amdgpu_wddm_control.exe",
-          "authenticode": true
-        },
-        {
-          "file": "bc250control.dll",
-          "path": "payload/control/bc250control.dll",
-          "authenticode": true
-        },
-        {
-          "file": "bc250control.dll",
-          "path": "payload/tools/bc250control.dll",
-          "component": "tool",
-          "authenticode": true
-        },
-        {
-          "file": "bc250kmd_cli.exe",
-          "path": "payload/tools/bc250kmd_cli.exe",
-          "component": "tool",
           "authenticode": true
         }
       ]
@@ -2399,6 +2428,52 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
+      "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
+      "tree": "shared",
+      "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
+      "args": [
+        "-Compiler",
+        "clang-cl",
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Flavour",
+        "lab",
+        "-NoSmoke",
+        "-Version",
+        "{version}"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": true,
+      "disk_peak_gb": 0.5,
+      "outputs": [
+        {
+          "file": "bc250control.dll",
+          "path": "payload/control/bc250control.dll",
+          "authenticode": true
+        },
+        {
+          "file": "bc250control.dll",
+          "path": "payload/tools/bc250control.dll",
+          "component": "tool",
+          "authenticode": true
+        },
+        {
+          "file": "bc250kmd_cli.exe",
+          "path": "payload/tools/bc250kmd_cli.exe",
+          "component": "tool",
+          "authenticode": true
+        }
+      ]
+    },
+    {
+      "id": "control-exe-lab",
+      "component": "control",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
       "commit": "e551740978f11be78d858b000bc63492cded775e",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
@@ -2423,23 +2498,6 @@
         {
           "file": "amdgpu_wddm_control.exe",
           "path": "payload/control/amdgpu_wddm_control.exe",
-          "authenticode": true
-        },
-        {
-          "file": "bc250control.dll",
-          "path": "payload/control/bc250control.dll",
-          "authenticode": true
-        },
-        {
-          "file": "bc250control.dll",
-          "path": "payload/tools/bc250control.dll",
-          "component": "tool",
-          "authenticode": true
-        },
-        {
-          "file": "bc250kmd_cli.exe",
-          "path": "payload/tools/bc250kmd_cli.exe",
-          "component": "tool",
           "authenticode": true
         }
       ]
