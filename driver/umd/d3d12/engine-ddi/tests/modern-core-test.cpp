@@ -107,6 +107,32 @@ void mandatory_entries(const D3D12DDI_DEVICE_FUNCS_CORE_0088& source) {
     entries.pipeline_create = nullptr;
     assert(!native12::upgrade_core(source, &core, error, entries));
 }
+// CORE 0113 application-specific driver state: the three slots go to the entries that the shell gives
+// (driver/umd/d3d12/app-state-ddi.h). A table without them keeps the stubs (checked on 0119 in main).
+int blob_calls = 0;
+UINT APIENTRY shell_blob_size(D3D12DDI_HDEVICE h) { ++blob_calls; return h.pDrvPrivate ? 140u : 0u; }
+HRESULT APIENTRY shell_blob(D3D12DDI_HDEVICE, void* data, UINT size) {
+    ++blob_calls; return data && size >= 140 ? S_OK : E_INVALIDARG;
+}
+D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS APIENTRY shell_blob_status(D3D12DDI_HDEVICE) {
+    ++blob_calls; return D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_USED;
+}
+void blob_entries(const D3D12DDI_DEVICE_FUNCS_CORE_0088& source) {
+    native12::ModernCoreEntries entries{};
+    entries.blob_size = shell_blob_size; entries.blob = shell_blob; entries.blob_status = shell_blob_status;
+    table<D3D12DDI_DEVICE_FUNCS_CORE_0113>(source, entries);
+    D3D12DDI_DEVICE_FUNCS_CORE_0113 core{};
+    assert(native12::upgrade_core(source, &core, error, entries));
+    int device = 0;
+    unsigned char bytes[140]{};
+    assert(core.pfnGetApplicationSpecificDriverStateBlobSize({&device}) == 140);
+    assert(core.pfnGetApplicationSpecificDriverState({&device}, bytes, sizeof(bytes)) == S_OK);
+    assert(core.pfnGetApplicationSpecificDriverState({&device}, bytes, 139) == E_INVALIDARG);
+    assert(core.pfnGetApplicationSpecificDriverBlobStatus({&device}) == D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_USED);
+    assert(blob_calls == 4);
+    // One set of entries per revision: the stubs are not put back over the published shell entries.
+    assert(!native12::upgrade_core(source, &core, error));
+}
 }
 
 int main() {
@@ -119,7 +145,7 @@ int main() {
 #define CHECK_TABLE(rev) table<D3D12DDI_DEVICE_FUNCS_CORE_##rev>(source)
     CHECK_TABLE(0095); CHECK_TABLE(0096); CHECK_TABLE(0099); CHECK_TABLE(0100);
     mandatory_entries(source); CHECK_TABLE(0108); CHECK_TABLE(0109); CHECK_TABLE(0111);
-    CHECK_TABLE(0112); CHECK_TABLE(0113); CHECK_TABLE(0116); CHECK_TABLE(0119);
+    CHECK_TABLE(0112); blob_entries(source); CHECK_TABLE(0116); CHECK_TABLE(0119);
 #undef CHECK_TABLE
 
     D3D12DDI_DEPTH_STENCIL_DESC_0095 ds{};
@@ -215,6 +241,7 @@ int main() {
     core.pfnGetTextureLayouts({}, nullptr, {}, {}, &count, nullptr); assert(count == 0);
     assert(core.pfnGetApplicationSpecificDriverStateBlobSize({}) == 0);
     assert(core.pfnGetApplicationSpecificDriverState({}, nullptr, 0) == E_NOTIMPL);
+    assert(core.pfnGetApplicationSpecificDriverBlobStatus({}) == D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_NOT_SPECIFIED);
     D3D12DDI_WORK_GRAPH_MEMORY_REQUIREMENTS_0108 memory{};
     memory.MinSizeInBytes = 99;
     core.pfnGetWorkGraphMemoryRequirements({}, nullptr, &memory); assert(memory.MinSizeInBytes == 0);
