@@ -33,6 +33,8 @@
     { "patch": "llama-rdna1-pkf16-batch128.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
       "marker": "GGML_RDNA1_PKF16_MINCOLS", "what": "the packed-fp16 GEMM from 128-token batches" },
     { "patch": "llama-rdna1-fattn-tile.patch", "file": "ggml/src/ggml-cuda/fattn-tile.cuh",
-      "marker": "ggml_cuda_fattn_tile_get_config_amd_rdna1", "what": "RDNA1 flash-attention tile rows without spill" }
+      "marker": "ggml_cuda_fattn_tile_get_config_amd_rdna1", "what": "RDNA1 flash-attention tile rows without spill" },
+    { "patch": "llama-rdna1-concat-transposed.patch", "file": "ggml/src/ggml-cuda/concat.cu",
+      "marker": "concat_dim0_transposed", "what": "concat of a transposed second source through a shared-memory tile" }
   ]
 }
