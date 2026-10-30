@@ -240,8 +240,9 @@ confirmed start, so `CuModeConfirmed` is 40 in both, and tester.30 never wrote a
 apart, so the upgrade needs its own record:
 
 - The control application writes `CuModeChosen` on every run of the CU setter (step `S1c`), and so does
-  `install.cmd -CuMode`. "Reset to defaults" removes it, which hands the number of cores back to the installed
-  release.
+  `install.cmd -CuMode`. "Reset to defaults" sets the number of the installed release and does not remove the
+  record: the state catalog lets the admin write `CuModeChosen` but not clear it (BD-270). A key without a record
+  gets none. A record of another request gets the request of the reset, so the record and the key agree.
 - The installer reads it before the `update` and `kept` rules (`Get-UserChoice`, decision `chosen`). The record
   has to describe `CuMode` and `CuDisableWgp` exactly as they are before the install. A record that does not (a
   driver fallback moved `CuMode`, or somebody edited the key) is stale and decides nothing. Nothing has to clear

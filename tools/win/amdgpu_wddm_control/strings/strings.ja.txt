@@ -42,7 +42,6 @@ cu.preview.remove-closed|mt|93f4029d|標準の 24 グラフィックス コア�
 cu.preview.write40-some|mt|0345f0c0|40 個のうち {0} 個のグラフィックスコアを選びます。
 cu.preview.set-disable|mt|0056c790|次のグラフィックスコアのペアをオフにします: {0}。
 cu.preview.write-chosen|mt|2acbb148|この数をあなたの選択として記録します。ドライバーを更新しても保たれます。
-cu.preview.remove-chosen|mt|4986238d|グラフィックスコアの数を、インストール済みドライバーの設定に戻します。
 cu.preview.remove-confirmed|mt|d10b327e|以前の 40 コアの確認を削除し、新しい設定がその起動で確認されるようにします。
 cu.preview.remove-disable|mt|7f38ddbb|グラフィックスコアのすべてのペアをもう一度オンにします。
 cu.result.nothing|mt|54ca5460|何も変更されていません。

@@ -42,7 +42,6 @@ cu.preview.remove-closed|mt|93f4029d|표준 그래픽 코어 24개가 드라이�
 cu.preview.write40-some|mt|0345f0c0|40개 중 그래픽 코어 {0}개를 선택합니다.
 cu.preview.set-disable|mt|0056c790|다음 그래픽 코어 쌍을 끕니다: {0}.
 cu.preview.write-chosen|mt|2acbb148|이 수를 사용자의 선택으로 기록하여 드라이버를 업데이트해도 유지합니다.
-cu.preview.remove-chosen|mt|4986238d|그래픽 코어 수를 설치된 드라이버의 설정으로 되돌립니다.
 cu.preview.remove-confirmed|mt|d10b327e|이전의 40코어 확인을 제거하여 새 설정이 자체 시작에서 확인되도록 합니다.
 cu.preview.remove-disable|mt|7f38ddbb|그래픽 코어의 모든 쌍을 다시 켭니다.
 cu.result.nothing|mt|54ca5460|아무것도 변경되지 않았습니다.

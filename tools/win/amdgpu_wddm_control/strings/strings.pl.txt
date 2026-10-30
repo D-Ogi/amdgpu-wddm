@@ -44,7 +44,6 @@ cu.preview.remove-closed|mt|93f4029d|Zapisuje, że standardowe 24 rdzenie grafic
 cu.preview.write40-some|mt|0345f0c0|Wybiera {0} z 40 rdzeni graficznych.
 cu.preview.set-disable|mt|0056c790|Wyłącza te pary rdzeni graficznych: {0}.
 cu.preview.write-chosen|mt|2acbb148|Zapisuje tę liczbę jako Twój wybór, aby aktualizacja sterownika ją zachowała.
-cu.preview.remove-chosen|mt|4986238d|Oddaje liczbę rdzeni graficznych ustawieniu zainstalowanego sterownika.
 cu.preview.remove-confirmed|rev|d10b327e|Usuwa wcześniejsze potwierdzenie 40 rdzeni, aby nowe ustawienie zostało potwierdzone przy własnym uruchomieniu.
 cu.preview.remove-disable|mt|7f38ddbb|Włącza ponownie każdą parę rdzeni graficznych.
 cu.result.nothing|rev|54ca5460|Nic nie zostało zmienione.
