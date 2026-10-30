@@ -8,6 +8,7 @@
 #if defined(D3D12DDI_BUILD_VERSION_0119)
 #include "engine-ddi/ddi-modern-core.h"
 #include "engine-ddi/ddi-modern-list.h"
+#include "app-state-ddi.h"
 #endif
 #include "ddi-trace.h"
 #include "entry-owner.h"
@@ -393,7 +394,7 @@ HRESULT present_outputs(Device& device,D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMM
     }
     stage=5;
     // The per-application VSync setting as the sync interval override of this present.
-    const auto vsync=amdgpu_wddm::app_settings::sync_override(amdgpu_wddm::app_settings::process_settings());
+    const auto vsync=amdgpu_wddm::app_settings::sync_override(device.settings());
     from.sync_override_valid=vsync.valid;
     from.sync_override=vsync.interval ? DXGI_DDI_FLIP_INTERVAL_ONE : DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
     hr=fill_present(from,result,contexts,queues);
@@ -406,7 +407,9 @@ void APIENTRY present(D3D12DDI_HCOMMANDLIST list,D3D12DDI_HCOMMANDQUEUE queue,
     // The entry path experiment's frame clock and arms (engine-ddi.h, "Entry path"); nothing without its knobs.
     engine_ddi::entry_frame();
     const auto device=EntryPolicy::resolve(list);
-    const auto& settings=amdgpu_wddm::app_settings::process_settings();
+    // The settings of this device (Device::settings): those of a used application-specific driver state blob, or
+    // else the process settings.
+    const auto& settings=device?device->settings():amdgpu_wddm::app_settings::process_settings();
     // The per-application FrameRateLimit (docs/design/per-app-graphics-settings.md): the wait comes before the
     // queue domain, so that no other queue operation of the device waits with this present.
     if(device)device->frame_limiter.frame(amdgpu_wddm::app_settings::frame_rate_limit(settings));
@@ -508,13 +511,25 @@ HRESULT fill_native_tables(Adapter& adapter,D3D12DDI_TABLE_TYPE type,void* outpu
         original.pfnCreateHeapAndResource=create_heap_and_resource;
         original.pfnDestroyHeapAndResource=destroy_heap_and_resource;
         original.pfnOpenHeapAndResource=open_heap_and_resource;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+        // The application-specific driver state is the shell's (app-state-ddi.h): type 1 of CheckDriverMatchingIdentifier
+        // is answered here, every other type by the engine.
+        if(!original.pfnCheckDriverMatchingIdentifier)return E_UNEXPECTED;
+        engine_check_identifier.store(original.pfnCheckDriverMatchingIdentifier,std::memory_order_release);
+        original.pfnCheckDriverMatchingIdentifier=check_driver_matching_identifier;
+#endif
         return with_ddi_layout(adapter.ddi_version.load(std::memory_order_acquire)>>16,[&](auto layout)->HRESULT {
             using Layout=decltype(layout); using C=typename Layout::Core;
             if(size!=sizeof(C))return E_INVALIDARG;
             C table{},wrapped_table{};
             if constexpr(std::is_same_v<C,Core>)table=original;
 #if defined(D3D12DDI_BUILD_VERSION_0119)
-            else if(!upgrade_core(original,&table,modern_core_error,engine_ddi::modern_core_entries()))return E_UNEXPECTED;
+            else {
+                ModernCoreEntries entries=engine_ddi::modern_core_entries();
+                entries.blob_size=app_state_blob_size;entries.blob=app_state_blob;
+                entries.blob_status=app_state_blob_status;
+                if(!upgrade_core(original,&table,modern_core_error,entries))return E_UNEXPECTED;
+            }
 #endif
             const HRESULT result=DdiEntryTables<EntryPolicy>::wrap_core(table,&wrapped_table);
             if(result!=S_OK)return result;

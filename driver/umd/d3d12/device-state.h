@@ -7,7 +7,18 @@
 #include "ddi-trace.h"
 #include "present-context.h"
 #include "../app-settings/app-settings.h"
+#include <memory>
 namespace native12 {
+// The application-specific driver state of one device (app-state.h, docs/design/app-specific-driver-state.md):
+// what CreateDevice found and, when the runtime gave a blob of this build, the profile of that blob. blob_status
+// holds a D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS value; the 26100 header has no such type.
+struct DeviceAppState {
+    UINT blob_status{};
+    bool used{};                       // the device applies settings and engine_flags below
+    amdgpu_wddm::app_settings::Settings settings;
+    bool engine_valid{};
+    UINT64 engine_flags{};
+};
 struct AdapterCapsOwner;
 class DeviceEngine;
 struct RecordingBinding;
@@ -63,6 +74,14 @@ struct Device {
     // BD-133: the context the kernel present of a copied source is made on, created at the first such present and
     // closed by DestroyDevice (present-context.h). A linear primary is presented on its queue's context instead.
     PresentContext present;
+    // The application-specific driver state, set by CreateDevice of a CORE 0113 or later device and null before
+    // and on an older one. The state is held through a pointer for the size reason below.
+    std::unique_ptr<DeviceAppState> app_state;
+    // The per-application settings this device applies: those of an application-specific driver state blob that
+    // CreateDevice used, or else the process settings (app-settings.h).
+    const amdgpu_wddm::app_settings::Settings& settings() const noexcept {
+        return app_state && app_state->used ? app_state->settings : amdgpu_wddm::app_settings::process_settings();
+    }
     // The per-application MaxFrameLatency of this device's presents lives with the engine, not here
     // (device-engine.h, engine_frame_gate): its ring of progress snapshots is half a kilobyte, and the runtime
     // allocates this structure for every device it creates.

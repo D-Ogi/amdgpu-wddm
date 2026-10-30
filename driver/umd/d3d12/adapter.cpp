@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 #include "device-state.h"
+#include "app-state-ddi.h"
 #include "device-engine.h"
 #include "engine-ddi/engine-ddi.h"              // pso_detach_summary, for DllMain below
 #include "native-tables.h"
@@ -125,10 +126,29 @@ HRESULT APIENTRY create_device(D3D12DDI_HADAPTER h,const D3D12DDIARG_CREATEDEVIC
     }
     auto device=new(a->hDrvDevice.pDrvPrivate) Device{adapter,a->hRTDevice,cb,*a->pKTCallbacks};
     device->ddi_version=a->Version;
+#if defined(D3D12DDI_BUILD_VERSION_0119)
+    // CORE 0113 and later: the application-specific driver state blob of this adapter, if the runtime has one
+    // (app-state-ddi.h). A used blob replaces the process settings of this device.
+    if((a->Version>>16)>=113){
+        const auto query_cb=adapter->callbacks.pfnQueryAdapterInfoCb2;
+        const HANDLE runtime_adapter=adapter->runtime.handle;
+        const auto query=[query_cb,runtime_adapter](D3DDDICB_QUERYADAPTERINFO2* q) noexcept {
+            return query_cb(runtime_adapter,q);
+        };
+        native12::app_state::Found found{};
+        if(!native12::open_app_state(*device,query_cb?&query:nullptr,&found)){
+            device->~Device();trace("CreateDevice-app-state-failed",static_cast<unsigned>(E_OUTOFMEMORY));
+            return E_OUTOFMEMORY;
+        }
+        amdgpu_wddm_log::print("d3d12-app-state blob=%s query=%08lx size=%u\n",
+            native12::app_state::status_name(found.status),static_cast<unsigned long>(found.query),found.size);
+        amdgpu_wddm_log::flush();
+    }
+#endif
     // The per-application settings: once per process, the effective values in the log; Anisotropy as the
     // vkd3d-proton fork's VKD3D_SAMPLER_ANISOTROPY, which the engine reads when it creates this device.
     namespace as=amdgpu_wddm::app_settings;
-    const as::Settings& settings=as::process_settings();
+    const as::Settings& settings=device->settings();
     as::log_once(settings,"d3d12",kAppliedSettings,[](const char* line) {
         char text[1100];
         std::snprintf(text,sizeof(text),"%s\n",line);
