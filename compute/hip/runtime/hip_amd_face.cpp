@@ -216,7 +216,10 @@ int module_get_function(void** function_out, void* handle, const char* name) {
     }
     const bc250hsa_kernel* kernel = bc250hsa_module_kernel_by_name(module->loaded, name);
     if (kernel == nullptr) {
-        bc250hip::log_line(BC250HSA_LOG_ERROR, "hipModuleGetFunction: no kernel named '%s'", name);
+        // Not an error of the runtime: rocBLAS (Tensile) looks a kernel up in each of its code
+        // objects in turn until one holds it, and each miss before that gets hipErrorNotFound.
+        bc250hip::log_line(BC250HSA_LOG_INFO,
+                           "hipModuleGetFunction: no kernel named '%s' in this module", name);
         return fail(kErrorNotFound);
     }
     ModuleFunction* function = new ModuleFunction();
