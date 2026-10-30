@@ -102,6 +102,24 @@ static partial class UnitTests
         clean.Parameters["CuModeConfirmed"] = 40;
         Check(!Recovery.Plan("reset-defaults", clean).Refused, "reset with a leftover CU confirmation: the cleanup runs");
 
+        // BD-270: the state catalog lets the admin write CuModeChosen but not clear it, so no reset plan deletes it.
+        // The lab case (CuMode 24, CuModeChosen 0x18): the CU part has nothing to do and the other settings still reset.
+        var lab = WithDefaults(); lab.Parameters["CuMode"] = 24; lab.Parameters["CuModeChosen"] = CuMode.Encode(24, 0); lab.Parameters["DpmMode"] = 0;
+        p = Recovery.Plan("reset-defaults", lab);
+        Check(!p.Refused && p.Cu == null && !p.Text().Contains("CuModeChosen"), "BD-270 reset over a recorded 24: no CU step, the record left as it is: " + p.Text());
+        // A record of 40 with a mask: the reset writes the record of the stock request over it.
+        var chosen30 = WithDefaults(); chosen30.Parameters["CuMode"] = 40; chosen30.Parameters["CuDisableWgp"] = 0x84218; chosen30.Parameters["CuModeChosen"] = CuMode.Encode(40, 0x84218);
+        p = Recovery.Plan("reset-defaults", chosen30);
+        Check(!p.Refused && p.Cu != null && !p.Cu.Record && p.Cu.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-disable", "write-chosen", "flush-readback" }),
+            "BD-270 reset over a chosen 30: the record is overwritten");
+        Check(p.Text().Contains("S1c set HKLM\\" + Recovery.ParametersPath + " CuModeChosen = 0x18 (DWord)") && !p.Text().Contains("delete HKLM\\" + Recovery.ParametersPath + " CuModeChosen")
+            && !p.Text().Contains("S1c delete"), "BD-270 reset over a chosen 30: the dry-run plan sets the record to 0x18 and deletes nothing of it");
+        Check(p.Preview.Contains(Strings.T("cu.preview.write-chosen")) && p.Preview.Contains(Strings.T("cu.preview.write24")), "BD-270 reset over a chosen 30: the preview names the 24 and the record");
+        // No record: the reset writes none.
+        var noRecord = WithDefaults(); noRecord.Parameters["CuMode"] = 40;
+        p = Recovery.Plan("reset-defaults", noRecord);
+        Check(!p.Refused && p.Cu != null && p.Cu.Steps.All(x => x.Name != "CuModeChosen") && !p.Text().Contains("S1c"), "BD-270 reset with no record: no record step");
+
         // reset-defaults with the release default of 40 graphics cores (BD-077): the setter takes the manifest's
         // CuMode, not the firmware's 24, and the cores are not counted among the settings left to the installer.
         var cu40 = WithDefaults(); cu40.DefaultParameters["CuMode"] = 40;

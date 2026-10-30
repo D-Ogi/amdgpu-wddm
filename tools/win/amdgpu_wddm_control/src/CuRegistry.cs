@@ -49,10 +49,11 @@ namespace AmdgpuWddmControl
 
         // An absent value counts as removed; every other status is an error. CuMode itself is never removed: the
         // stock choice is written as 24, so that the release installer reads it as a choice and not as a key it
-        // never configured (BD-077).
+        // never configured (BD-077). CuModeChosen is never removed either: the state catalog lets the admin write
+        // that record but not clear it, so the setter overwrites it instead (BD-270).
         public void Delete(string name)
         {
-            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason" && name != "CuModeChosen") throw new InvalidOperationException(name + " is not a value the setter removes");
+            if (name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason") throw new InvalidOperationException(name + " is not a value the setter removes");
             int s = _api.Delete(name);
             if (s != Success && s != FileNotFound) throw new CuRegistryException("delete", name, s);
         }

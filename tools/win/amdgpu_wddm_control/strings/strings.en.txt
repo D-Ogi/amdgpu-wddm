@@ -44,7 +44,6 @@ cu.preview.remove-closed|src|-|Records that the standard 24 graphics cores are y
 cu.preview.write40-some|src|-|Selects {0} of the 40 graphics cores.
 cu.preview.set-disable|src|-|Turns these pairs of graphics cores off: {0}.
 cu.preview.write-chosen|src|-|Records this number as your choice, so a driver update keeps it.
-cu.preview.remove-chosen|src|-|Gives the number of graphics cores back to the setting of the installed driver.
 cu.preview.remove-confirmed|src|-|Removes the earlier confirmation of 40 cores, so the new setting is confirmed on its own start.
 cu.preview.remove-disable|src|-|Turns every pair of graphics cores on again.
 cu.result.nothing|src|-|Nothing was changed.

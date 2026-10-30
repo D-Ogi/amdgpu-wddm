@@ -1509,9 +1509,9 @@ namespace AmdgpuWddmControl
                     // the release default of the manifest, not the firmware's 24 (BD-077): with 40 as the default,
                     // a reset to "Standard (24)" would take the cores away that an install gives. A release that
                     // names no CuMode gets 24, which is what the driver runs when the value is absent.
-                    // The run records no choice of a person (Plan record: false) and takes an earlier one away: a
-                    // reset hands the number of cores back to the installed release, so the next release's own
-                    // default applies to it again.
+                    // The run records no choice of a person (Plan record: false). The state catalog does not let the
+                    // admin clear an earlier record (CuModeChosen), so a record of another request is overwritten
+                    // with the release's number, and a key without a record gets none (BD-270).
                     long cuDefault;
                     bool cuNamed = s.DefaultParameters.TryGetValue("CuMode", out cuDefault);
                     if (!cuNamed) cuDefault = CuMode.Stock;

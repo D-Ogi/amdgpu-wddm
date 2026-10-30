@@ -117,8 +117,11 @@ static partial class UnitTests
         api.SetStatus = 0; api.DeleteStatus = 0; api.FlushStatus = 0;
         reg.SetDword("CuMode", CuMode.Stock); reg.Delete("CuModeClosedReason");
         Check(api.Values.ContainsKey("CuMode") && api.Values["CuMode"] == 24, "R1 CuMode = 24 and the driver's record go through the checked registry");
-        reg.SetDword("CuDisableWgp", 0x84218); reg.SetDword("CuModeChosen", CuMode.Encode(40, 0x84218)); reg.Delete("CuModeChosen");
-        Check(api.Values["CuDisableWgp"] == 0x84218 && !api.Values.ContainsKey("CuModeChosen"), "R1 the mask and the record go through the checked registry");
+        reg.SetDword("CuDisableWgp", 0x84218); reg.SetDword("CuModeChosen", CuMode.Encode(40, 0x84218));
+        Check(api.Values["CuDisableWgp"] == 0x84218 && api.Values["CuModeChosen"] == CuMode.Encode(40, 0x84218), "R1 the mask and the record go through the checked registry");
+        // BD-270: the state catalog lets the admin write the record but not clear it, so the setter never deletes it.
+        Throws<InvalidOperationException>(() => reg.Delete("CuModeChosen"), "R1 CuModeChosen is never removed (BD-270)");
+        Check(api.Values.ContainsKey("CuModeChosen"), "R1 the refused delete of the record reaches no native call");
 
         // Through the setter: the native codes decide the result.
         api = new FakeRegApi(); api.Values["CuMode"] = 24; api.Values["CuModeConfirmed"] = CuMode.Encode(40, 8); api.Values["CuDisableWgp"] = 8;
@@ -588,15 +591,66 @@ static partial class UnitTests
         // A mask outside the topology never becomes a plan (the driver would answer INVALID_DISABLE).
         Check(CuMode.Plan(St(24), CuMode.Full, 0x100000).Refused, "a mask outside the four arrays is refused before any step");
 
-        // 'Reset to defaults' hands the count back to the installed release: the record goes, nothing else.
-        reg = new FakeCu(); reg.Values["CuMode"] = 40; reg.Values["CuDisableWgp"] = 0x210; reg.Values["CuModeChosen"] = CuMode.Encode(40, 0x210);
+        // 'Reset to defaults' (record: false) sets the release's count and never deletes the record: the state
+        // catalog lets the admin write CuModeChosen but not clear it (BD-270). The fake refuses that delete the
+        // way the state client does, so a plan with the old step fails here as it failed on the lab.
+        Func<FakeCu> catalogLike = () => { var f = new FakeCu(); f.FailDelete.Add("CuModeChosen"); return f; };
+        // A record of another request (40 with a mask): overwritten with the encoded stock request.
+        reg = catalogLike(); reg.Values["CuMode"] = 40; reg.Values["CuDisableWgp"] = 0x210; reg.Values["CuModeChosen"] = CuMode.Encode(40, 0x210);
         plan = CuMode.Plan(reg.Stored(), CuMode.Stock, 0, false);
-        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-disable", "remove-chosen", "flush-readback" }),
-            "reset: the record is removed, not written");
-        Check(plan.Preview.Contains("Gives the number of graphics cores back to the setting of the installed driver."), "reset: the preview says what it gives back");
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "remove-disable", "write-chosen", "flush-readback" }),
+            "reset over a chosen 40 with a mask: the record is overwritten, not deleted: " + string.Join(", ", plan.Steps.Select(x => x.Kind).ToArray()));
+        Equal(CuMode.Encode(CuMode.Stock, 0), plan.Steps.Single(x => x.Kind == "write-chosen").Value, "reset over a chosen 40: the record names the stock request");
+        var lines = plan.Steps.Select(x => x.ToString()).ToArray();
+        Check(lines.Contains("S1c set HKLM\\" + CuMode.ParametersPath + " CuModeChosen = 0x18 (DWord)") && !lines.Any(x => x.Contains("delete") && x.Contains("CuModeChosen")),
+            "reset over a chosen 40: the dry-run line sets the record to 0x18: " + string.Join(" | ", lines));
+        Check(plan.Preview.SequenceEqual(new[] { Strings.T("cu.preview.write24"), Strings.T("cu.preview.remove-disable"), Strings.T("cu.preview.write-chosen") }),
+            "reset over a chosen 40: the preview names the 24, the mask and the record: " + string.Join(" | ", plan.Preview.ToArray()));
+        Equal("Records this number as your choice, so a driver update keeps it.", Strings.T("cu.preview.write-chosen"), "reset over a chosen 40: the record line in English");
         res = CuMode.Execute(plan, reg);
-        Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuModeChosen"), "reset: the 24 of the release without a record of a choice");
+        Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuDisableWgp") && reg.Values["CuModeChosen"] == CuMode.Encode(24, 0)
+            && !reg.Ops.Contains("delete CuModeChosen"), "reset over a chosen 40: completed, 24 with a record of 24, no delete of the record: " + res.Error);
+        // The lab case of BD-270: CuMode 24 and the record 0x18 already. Nothing of the CU part is left to do.
+        reg = catalogLike(); reg.Values["CuMode"] = 24; reg.Values["CuModeChosen"] = CuMode.Encode(24, 0);
+        plan = CuMode.Plan(reg.Stored(), CuMode.Stock, 0, false);
+        Equal("Standard (24) is selected already.", plan.Refusal, "reset over a recorded 24 (the lab case): nothing to change");
+        Check(plan.Steps.Count == 0 && plan.Preview.Count == 0, "reset over a recorded 24: no step, no preview line");
+        // A recorded 24 with a leftover confirmation: the cleanup runs and the record stays as it is.
+        reg = catalogLike(); reg.Values["CuMode"] = 24; reg.Values["CuModeConfirmed"] = 40; reg.Values["CuModeChosen"] = CuMode.Encode(24, 0);
+        plan = CuMode.Plan(reg.Stored(), CuMode.Stock, 0, false);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "verify-stock", "remove-confirmed", "flush-readback" }), "reset over a recorded 24 with a confirmation: no record step");
+        res = CuMode.Execute(plan, reg);
+        Check(res.Completed && reg.Values["CuModeChosen"] == CuMode.Encode(24, 0), "reset over a recorded 24 with a confirmation: completed, the record kept: " + res.Error);
+        // No record at all: the reset writes none.
+        reg = catalogLike(); reg.Values["CuMode"] = 40;
+        plan = CuMode.Plan(reg.Stored(), CuMode.Stock, 0, false);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-24", "verify-stock", "flush-readback" }), "reset with no record: no record step");
+        Check(plan.Preview.SequenceEqual(new[] { Strings.T("cu.preview.write24") }), "reset with no record: the preview names the 24 only");
+        res = CuMode.Execute(plan, reg);
+        Check(res.Completed && reg.Values["CuMode"] == 24 && !reg.Values.ContainsKey("CuModeChosen"), "reset with no record: completed, still no record: " + res.Error);
         Check(CuMode.Plan(St(24), CuMode.Stock, 0, false).Refused, "reset: a stock 24 without a record is already the release setting");
+        // A release default of 40 (record: false, target 40): a record of a 30-core map becomes the record of 40.
+        plan = CuMode.Plan(St(40, 0x84218, null, null, null, CuMode.Encode(40, 0x84218)), CuMode.Full, 0, false);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "remove-disable", "write-chosen", "flush-readback" })
+            && plan.Steps.Single(x => x.Kind == "write-chosen").Value == CuMode.Encode(40, 0), "reset to a release 40 over a chosen map: the record names 40");
+        Check(CuMode.Plan(St(40, null, null, null, null, CuMode.Encode(40, 0)), CuMode.Full, 0, false).Refused, "reset to a release 40 over a recorded 40: nothing to change");
+        // No plan the setter can build deletes the record (S5 over every start, target, mask and both record modes).
+        foreach (var start in new[] { St(), St(24), St(40), St(24, null, null, null, null, CuMode.Encode(24, 0)), St(24, null, null, null, null, CuMode.Encode(40, 0)),
+            St(40, 0x210, 40, null, 3, CuMode.Encode(40, 0x210)), St(40, null, null, null, null, CuMode.Encode(40, 0)) })
+            foreach (uint target in new uint[] { 24, 40 })
+                foreach (uint mask in new uint[] { 0, 0x210 })
+                    foreach (bool record in new[] { true, false })
+                    {
+                        var p = CuMode.Plan(start, target, mask, record);
+                        Check(!p.Steps.Any(x => x.Name == "CuModeChosen" && x.Kind != "write-chosen") && p.Steps.All(CuMode.Allowed),
+                            "BD-270 no plan deletes CuModeChosen: " + start + " -> " + target + "/" + mask + " record " + record);
+                    }
+        Check(!CuMode.Allowed(new CuStep { Kind = "remove-chosen", Name = "CuModeChosen" }), "BD-270 the setter has no step that deletes the record");
+        // A recorded choice still records the request (unchanged): 40 over a recorded 24 writes the record of 40.
+        plan = CuMode.Plan(St(24, null, null, null, null, CuMode.Encode(24, 0)), CuMode.Full);
+        Check(plan.Steps.Select(x => x.Kind).SequenceEqual(new[] { "write-40", "write-chosen", "flush-readback" })
+            && plan.Steps.Single(x => x.Kind == "write-chosen").Value == CuMode.Encode(40, 0), "a recorded choice: 40 over a recorded 24 writes the record of 40");
+        Check(plan.Preview.Contains("Records this number as your choice, so a driver update keeps it."), "a recorded choice: the preview names the record");
 
         // The map of the stored choice (lab arm of 2026-10-14, step 1): the number the picker shows and the pairs the
         // map draws are one answer, so the map of every stored choice draws exactly that many cores. A stored 24

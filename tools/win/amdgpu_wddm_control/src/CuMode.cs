@@ -89,7 +89,7 @@ namespace AmdgpuWddmControl
     public sealed class CuStep
     {
         // remove-confirmed, remove-disable, write-disable, write-40, write-24, remove-closed, write-chosen,
-        // remove-chosen, verify-stock, flush-readback
+        // verify-stock, flush-readback
         public string Kind;
         public string Name;      // the registry value, null for verify/flush
         public uint Value;
@@ -105,7 +105,6 @@ namespace AmdgpuWddmControl
                 case "write-24": return "S1 set " + where + "CuMode = 24 (DWord)";
                 case "remove-closed": return "S1b delete " + where + "CuModeClosedReason";
                 case "write-chosen": return "S1c set " + where + "CuModeChosen = " + hex + " (DWord)";
-                case "remove-chosen": return "S1c delete " + where + "CuModeChosen";
                 case "remove-confirmed": return "S2 delete " + where + "CuModeConfirmed";
                 case "remove-disable": return "S3 delete " + where + "CuDisableWgp";
                 case "write-disable": return "S3 set " + where + "CuDisableWgp = " + hex + " (DWord)";
@@ -120,7 +119,8 @@ namespace AmdgpuWddmControl
         public uint Target;                              // 24 or 40
         public uint Disable;                             // the WGPs 40 keeps masked; 0 for the stock target
         // Whether the run records the request as a person's choice (CuModeChosen). True for the window and the
-        // command line; false for "reset to defaults", which hands the setting back to the installed release.
+        // command line; false for "reset to defaults", which sets the number of the installed release and writes
+        // no new record. An earlier record of another request is overwritten with this one, never deleted (BD-270).
         public bool Record = true;
         public string Refusal;                           // the helper refuses before any step
         public readonly List<CuStep> Steps = new List<CuStep>();
@@ -523,9 +523,10 @@ namespace AmdgpuWddmControl
 
         // The plan from the stored values the helper read itself. target 24 or 40; disable the WGPs a 40 keeps
         // masked (0 for all of them on, and never anything but stock-inactive WGPs: the caller builds it from
-        // RequestFor or RequestForMap). record false hands the setting back to the installed release, so the
-        // person's own record goes instead of being written. Only steps that change something are listed in the
-        // preview; the verify and flush steps are part of the plan the helper runs.
+        // RequestFor or RequestForMap). record false sets the number of the installed release: it writes no record
+        // where none is, and it overwrites a record of another request with this one (AddChosen, BD-270). Only
+        // steps that change something are listed in the preview; the verify and flush steps are part of the plan
+        // the helper runs.
         public static CuSetterPlan Plan(CuStored before, uint target, uint disable = 0, bool record = true)
         {
             var p = new CuSetterPlan { Target = target, Disable = target == Full ? disable : 0, Record = record, Before = before };
@@ -536,7 +537,7 @@ namespace AmdgpuWddmControl
             Func<string, string, uint, CuStep> step = (kind, name, value) => new CuStep { Kind = kind, Name = name, Value = value };
             if (target == Full)
             {
-                if (before.Mode == Full && (before.Disable ?? 0) == p.Disable && (record ? before.Chosen == chosen : before.Chosen == null))
+                if (before.Mode == Full && (before.Disable ?? 0) == p.Disable && ChosenAsPlanned(p, before.Chosen))
                 {
                     p.Refusal = Strings.T(p.Disable == 0 ? "cu.refuse.already40" : "cu.refuse.already-some", p.Cores);
                     return p;
@@ -558,7 +559,7 @@ namespace AmdgpuWddmControl
                 // written out (BD-077, review 2 finding 1). The driver reads 24 and an absent value alike.
                 bool stored24 = before.Mode == Stock;
                 if (stored24 && before.Confirmed == null && before.Disable == null && before.Closed == null
-                    && (record ? before.Chosen == chosen : before.Chosen == null)) { p.Refusal = Strings.T("cu.refuse.already24"); return p; }
+                    && ChosenAsPlanned(p, before.Chosen)) { p.Refusal = Strings.T("cu.refuse.already24"); return p; }
                 // S1, flush, verify the stock selection; only then S1b, S2, S3, S1c, S4. S1b takes the driver's own
                 // fallback record away, so the 24 that stays is the user's choice and no later install reads it as
                 // a closure of the driver.
@@ -577,7 +578,6 @@ namespace AmdgpuWddmControl
                     case "write-24": p.Preview.Add(Strings.T("cu.preview.write24")); break;
                     case "remove-closed": p.Preview.Add(Strings.T("cu.preview.remove-closed")); break;
                     case "write-chosen": p.Preview.Add(Strings.T("cu.preview.write-chosen")); break;
-                    case "remove-chosen": p.Preview.Add(Strings.T("cu.preview.remove-chosen")); break;
                     case "remove-confirmed": p.Preview.Add(Strings.T("cu.preview.remove-confirmed")); break;
                     case "remove-disable": p.Preview.Add(Strings.T("cu.preview.remove-disable")); break;
                     case "write-disable": p.Preview.Add(Strings.T("cu.preview.set-disable", MaskText(p.Disable))); break;
@@ -594,16 +594,29 @@ namespace AmdgpuWddmControl
             return p;
         }
 
+        // The record CuModeChosen is never deleted. The state catalog (driver/state/catalog.json) keeps it as a
+        // record the admin may write but not clear, so a delete fails with ERROR_ACCESS_DENIED after the steps
+        // before it are written (BD-270). A run that records no choice therefore writes no record where none is,
+        // and overwrites a record of another request with the request of this run, so the record never names a
+        // number that the key does not hold.
         static void AddChosen(CuSetterPlan p, Func<string, string, uint, CuStep> step, uint chosen)
         {
-            if (p.Record) { if (p.Before.Chosen != chosen) p.Steps.Add(step("write-chosen", "CuModeChosen", chosen)); }
-            else if (p.Before.Chosen != null) p.Steps.Add(step("remove-chosen", "CuModeChosen", 0));
+            if (!ChosenAsPlanned(p, p.Before.Chosen)) p.Steps.Add(step("write-chosen", "CuModeChosen", chosen));
+        }
+
+        // Whether this value of CuModeChosen is what the plan leaves: the encoded request of the run, or for a run
+        // that records no choice, no record either.
+        static bool ChosenAsPlanned(CuSetterPlan p, uint? value)
+        {
+            uint chosen = Encode(p.Target, p.Disable);
+            return value == chosen || (!p.Record && value == null);
         }
 
         // The only registry operations the CU setter may make (G-PLAN, G-SRC): CuMode set to 40 or to 24,
         // CuDisableWgp set to a mask of the board's own topology, CuModeChosen set to an encoded request, and the
-        // deletion of CuDisableWgp, CuModeConfirmed, CuModeClosedReason and CuModeChosen. Never CuModePending,
-        // never the KMD's last-reason values, and CuMode is never deleted: the stock choice is written out (BD-077).
+        // deletion of CuDisableWgp, CuModeConfirmed and CuModeClosedReason. Never CuModePending, never the KMD's
+        // last-reason values, CuMode is never deleted (the stock choice is written out, BD-077), and CuModeChosen is
+        // never deleted (the state catalog refuses it, BD-270).
         public static bool Allowed(CuStep s)
         {
             switch (s.Kind)
@@ -612,7 +625,6 @@ namespace AmdgpuWddmControl
                 case "write-24": return s.Name == "CuMode" && s.Value == Stock;
                 case "write-disable": return s.Name == "CuDisableWgp" && s.Value != 0 && (s.Value & ~AllowedDisable) == 0;
                 case "write-chosen": return s.Name == "CuModeChosen" && EncodedRequest(s.Value);
-                case "remove-chosen": return s.Name == "CuModeChosen";
                 case "remove-closed": return s.Name == "CuModeClosedReason";
                 case "remove-confirmed": return s.Name == "CuModeConfirmed";
                 case "remove-disable": return s.Name == "CuDisableWgp";
@@ -659,7 +671,6 @@ namespace AmdgpuWddmControl
                         case "write-chosen": r.SetDword(s.Name, s.Value); break;
                         case "remove-closed":
                         case "remove-confirmed":
-                        case "remove-chosen":
                         case "remove-disable": r.Delete(s.Name); break;
                         case "verify-stock":
                         case "flush-readback":
@@ -699,7 +710,7 @@ namespace AmdgpuWddmControl
         static bool Matches(CuSetterPlan plan, CuStored back)
         {
             if (back.Confirmed != null && plan.Before.Confirmed != null) return false;
-            if (plan.Record ? back.Chosen != Encode(plan.Target, plan.Disable) : back.Chosen != null) return false;
+            if (!ChosenAsPlanned(plan, back.Chosen)) return false;
             if (plan.Target == Full) return back.Mode == Full && (back.Disable ?? 0) == plan.Disable;
             // The stock run writes the 24 out and takes the driver's record and the mask with it, so none of the
             // three may be left over.
