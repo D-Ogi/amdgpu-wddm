@@ -58,6 +58,18 @@ read never meets freed storage. Host test: driver/kmd/test/start_health_test.c
 with two negative controls (run_start_health.ps1 -NoQuiet,
 -QuietIgnoresOwedFlip).
 
+A recovered reset in the logon task's window (BD-269). A TDR that the driver
+recovers keeps the generation and moves the epoch, and readiness counts again
+from 0. The task's bound is 120 s. A reset at +80 s needs readiness until
++140 s, so before BD-269 such a start stayed unconfirmed although it had
+recovered, and two such starts made the guard refuse the next one. The task now
+moves its bound when the epoch moves inside one generation: to the time of the
+move plus 60 s of readiness plus 30 s. It does this twice at most, and never
+past 300 s. A start that resets more often stays unconfirmed. The task's time
+limit is 6 minutes, which holds that bound. Rules: start-confirm-core.ps1
+Get-StartConfirmStep. Host test: tools/release/test-start-confirm.ps1. The
+rules before this change fail its BD-269 cases.
+
 Close health admission before stop, adapter power-down and TDR handling; D0
 alone must not reopen it while full resume is unsupported. Visibility/mode
 changes invalidate the monitor's observation interval. Readiness must include

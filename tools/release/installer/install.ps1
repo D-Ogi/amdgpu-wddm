@@ -711,7 +711,8 @@ function Invoke-Verify {
     # driver version and LastStage through bc250kmd_cli, the KMD start health through bc250control.dll, the DPM
     # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
     # Verify starts at the same logon as the start-confirm task, which needs about a minute: wait for this boot's run
-    # of the task to end (at most 120 s), so that the confirmation and DPM lines below are final.
+    # of the task to end, so that the confirmation and DPM lines below are final. The task needs about a minute; a recovered
+    # GPU reset moves its bound (BD-269), so the wait ends at the latest bound of start-confirm-core.ps1 plus 15 s.
     #
     # Not on a device that did not start: the task confirms a start, it has nothing to confirm here, and the wait
     # would spend its whole bound before saying so (GitHub #38: 110 s of a 2 min 43 s verification). Its last result
@@ -729,8 +730,8 @@ function Invoke-Verify {
             $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
             if (($ranThisBoot -and -not $running) -or $script:DryRunMode) { break }
             if (Test-DeadlinePassed) { Write-DeadlineNotice 'verify:start-confirm-wait'; break }
-            if ($waited.Elapsed.TotalSeconds -ge 120) { break }
-            if (-not $announced) { Write-Info 'waiting for the start-confirm task of this logon to finish (at most 120 s)...'; $announced = $true }
+            if ($waited.Elapsed.TotalSeconds -ge $script:StartConfirmMaxSeconds + 15) { break }
+            if (-not $announced) { Write-Info "waiting for the start-confirm task of this logon to finish (at most $($script:StartConfirmMaxSeconds + 15) s; about a minute without a GPU reset)..."; $announced = $true }
             Start-Sleep -Seconds 2
         }
         if ($null -ne $noWaitWhy) { $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue }

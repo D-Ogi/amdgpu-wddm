@@ -2931,7 +2931,8 @@ function Get-LogonTaskPlan {
             arguments = "$host51 `"$ConfirmScript`" -NoWindow"
             principal = [ordered]@{ kind = 'user'; id = 'S-1-5-18'; logon_type = 'ServiceAccount'; run_level = 'Highest' }
             trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
-            minutes   = 3
+            # 6, not 3: a recovered GPU reset moves the script's bound up to 300 s (BD-269, start-confirm-core.ps1).
+            minutes   = 6
             what      = "at the logon of any user, as Local System (S-1-5-18), headless: $ConfirmScript"
         },
         [ordered]@{

@@ -203,7 +203,7 @@ if ($Probe) {
     catch { Write-StartConfirmLog "probe: start health no reading: $($_.Exception.Message)"; exit 5 }
 }
 
-Write-StartConfirmLog "start: bound $Seconds s, UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'), $(Format-Dpm)"
+Write-StartConfirmLog "start: bound $Seconds s (a recovered reset moves it, $($script:StartConfirmRecoveryLimit) times at most, to $($script:StartConfirmMaxSeconds) s at the latest), UnconfirmedStarts $(Read-Parameter 'UnconfirmedStarts'), $(Format-Dpm)"
 Write-StartRecordLog
 $state = New-StartConfirmState $Seconds
 $pollEvery = 5.0
@@ -266,7 +266,7 @@ function Invoke-Tick {
     $step = $null
     try { $step = Invoke-Poll }
     catch { Write-StartConfirmLog "poll error: $($_.Exception.Message)"; $script:nextPoll = $now + $pollEvery }
-    if (!$step -and $now -ge $Seconds + 10) { $step = [ordered]@{code = 1; reason = 'hard bound: polls kept failing' } }
+    if (!$step -and $now -ge $state.deadline + 10) { $step = [ordered]@{code = 1; reason = 'hard bound: polls kept failing' } }
     return $step
 }
 

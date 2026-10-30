@@ -1,5 +1,5 @@
 # Decision rules of the logon start-confirm task (start-confirm.ps1), pure functions without I/O, host-tested by
-# tests\test-start-confirm.ps1. The task confirms the boot's own KMD start once the KMD's confirmation milestone is
+# tools\release\test-start-confirm.ps1. The task confirms the boot's own KMD start once the KMD's confirmation milestone is
 # met (start_health.c StartHealthRequest: flags FULL|READY|VISIBLE, completions, ready >= 60 s, last completion
 # fresh or nothing owed, QUIET), the same milestone the overlay's auto-confirmation and route.py's dwm-route.ps1 use. It never confirms
 # another adapter start (a generation change ends it), never while a kit run presents its own heartbeat (that run
@@ -13,6 +13,14 @@
 $script:StartConfirmMinReadyMs = 60000   # BC250_START_HEALTH_MIN_MS
 $script:StartConfirmFreshMs = 5000       # stricter than BC250_START_HEALTH_FRESH_MS (15000): confirm on a live witness
 $script:StartConfirmRetrySeconds = 4     # between two confirm calls of the same task
+# BD-269: a recovered adapter reset moves the start-health epoch inside the same generation, and readiness counts
+# again from 0. A reset at +80 s then needs readiness until +140 s, past the bound of 120 s, and the start stayed
+# unconfirmed although it recovered. Each such move gives the task the time to see 60 s of readiness again, plus
+# the slack below, up to the limit of moves and the latest bound. A start that resets more often than the limit is
+# not healthy, and its bound does not move again.
+$script:StartConfirmRecoveryLimit = 2
+$script:StartConfirmRecoverySlack = 30
+$script:StartConfirmMaxSeconds = 300     # the confirm task's time limit of 6 min (common.ps1) holds it
 $script:StartConfirmAllowedTasks = @('BC250 monitor overlay','BC250 net watchdog')
 $script:StartConfirmKitHeartbeat = 'Lab-Present-Heartbeat'
 # The kits' competing-task pattern (preflight.ps1 / postflight.ps1 of the transition trees).
@@ -65,7 +73,9 @@ function Get-StartConfirmKitState {
 
 function New-StartConfirmState {
  param([Parameter(Mandatory)][double]$Seconds)
- return [ordered]@{seconds=$Seconds; generation=$null; yielded=$false; confirmed_here=$false; last_confirm=-1000.0; confirms=0}
+ # deadline starts at the bound; only an epoch move of BD-269 makes it later.
+ return [ordered]@{seconds=$Seconds; deadline=$Seconds; generation=$null; epoch=$null; recoveries=0; yielded=$false
+  confirmed_here=$false; last_confirm=-1000.0; confirms=0}
 }
 
 # Flag 16 is QUIET (BC250_START_HEALTH_QUIET, 0.7.216.104): every flip programmed in this interval has completed.
@@ -93,7 +103,7 @@ function Get-StartConfirmStep {
  if ($Stop) { return [ordered]@{action='exit'; code=4; reason='owner STOP: left unconfirmed'} }
  if ($Kit -and $Kit.transition) { return [ordered]@{action='exit'; code=2; reason="transition task running ($($Kit.transition)): its kit confirms"} }
  if ($null -eq $Reading) {
-  if ($Now -ge $State.seconds) { return [ordered]@{action='exit'; code=5; reason="no start-health reading within the bound: $ReadError"} }
+  if ($Now -ge $State.deadline) { return [ordered]@{action='exit'; code=5; reason="no start-health reading within the bound: $ReadError"} }
   return [ordered]@{action='wait'; reason="no reading: $ReadError"}
  }
  if (($Reading.flags -band 1) -eq 0) { return [ordered]@{action='exit'; code=5; reason="not a full-WDDM start (flags $($Reading.flags))"} }
@@ -101,11 +111,27 @@ function Get-StartConfirmStep {
  elseif ($Reading.generation -ne $State.generation) {
   return [ordered]@{action='exit'; code=3; reason="adapter restarted (generation $($State.generation) -> $($Reading.generation)): left to its owner"}
  }
- if ($Now -ge $State.seconds) {
+ $moved = $null
+ if ($null -eq $State.epoch) { $State.epoch = $Reading.epoch }
+ elseif ($Reading.epoch -ne $State.epoch) {
+  $State.recoveries = $State.recoveries + 1
+  $from = $State.epoch
+  $State.epoch = $Reading.epoch
+  if ($State.recoveries -le $script:StartConfirmRecoveryLimit) {
+   $latest = [Math]::Max([double]$State.seconds, [double]$script:StartConfirmMaxSeconds)
+   $want = [Math]::Min($latest, $Now + $script:StartConfirmMinReadyMs / 1000.0 + $script:StartConfirmRecoverySlack)
+   if ($want -gt $State.deadline) { $State.deadline = $want }
+   $moved = "epoch $from -> $($Reading.epoch), recovery $($State.recoveries) of $($script:StartConfirmRecoveryLimit): bound now $([int]$State.deadline) s"
+  } else {
+   $moved = "epoch $from -> $($Reading.epoch), recovery $($State.recoveries) is over the limit of $($script:StartConfirmRecoveryLimit): bound stays $([int]$State.deadline) s"
+  }
+ }
+ if ($Now -ge $State.deadline) {
   if ($State.yielded) { return [ordered]@{action='exit'; code=2; reason='bound reached while a kit heartbeat ran: left to the kit'} }
   return [ordered]@{action='exit'; code=1; reason="bound reached unconfirmed (flags $($Reading.flags) completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms))"}
  }
  if ($Kit -and $Kit.heartbeat) { $State.yielded = $true; return [ordered]@{action='wait'; reason='kit heartbeat running: that run confirms'} }
+ if ($moved) { return [ordered]@{action='wait'; reason="${moved}; ready_ms $($Reading.ready_ms)"} }
  if ((Test-StartConfirmEligible $Reading) -and ($Now - $State.last_confirm) -ge $script:StartConfirmRetrySeconds) {
   return [ordered]@{action='confirm'; generation=$Reading.generation; epoch=$Reading.epoch; reason="eligible: completed $($Reading.completed) age_ms $($Reading.age_ms) ready_ms $($Reading.ready_ms)"}
  }
