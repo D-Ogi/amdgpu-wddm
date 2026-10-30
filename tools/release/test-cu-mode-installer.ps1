@@ -230,9 +230,13 @@ if ((Test-Path -LiteralPath $cuApp) -and (Test-Path -LiteralPath $cuReg)) {
     Check (-not $appText.Contains('"remove-mode"')) 'the setter has no step that deletes CuMode'
     Check ($appText.Contains('step("remove-closed", "CuModeClosedReason", 0)')) "the setter takes the driver's record away with the chosen 24"
     Check ($appText.Contains('step("write-chosen", "CuModeChosen", chosen)')) 'the setter records the number as the choice of a person, so an upgrade keeps it'
-    Check ($appText.Contains('step("remove-chosen", "CuModeChosen", 0)')) "'reset to defaults' gives the number back to the installed release"
-    Check ($regText.Contains('name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason" && name != "CuModeChosen"')) `
-        'the checked registry removes four values and CuMode is not one of them'
+    # BD-270: the state catalog lets the administrator write CuModeChosen but not clear it, so 'reset to defaults'
+    # overwrites the record with the request of the run and never deletes it.
+    Check ((-not $appText.Contains('"remove-chosen"')) -and $appText.Contains('(!p.Record && value == null)')) `
+        "'reset to defaults' sets the number of the installed release and never deletes CuModeChosen"
+    Check ($regText.Contains('name != "CuDisableWgp" && name != "CuModeConfirmed" && name != "CuModeClosedReason")') -and
+           (-not $regText.Contains('name != "CuModeChosen"'))) `
+        'the checked registry removes three values, and CuMode and CuModeChosen are not among them'
     Check ($regText.Contains('(name == "CuMode" && (value == CuMode.Full || value == CuMode.Stock))')) 'the checked registry allows CuMode 24 and 40 only'
     Check ($regText.Contains('(name == "CuModeChosen" && CuMode.EncodedRequest(value))')) 'and CuModeChosen only as an encoded request the driver would take'
 } else {
