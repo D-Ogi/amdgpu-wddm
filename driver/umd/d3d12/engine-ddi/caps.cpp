@@ -999,7 +999,9 @@ HRESULT build_caps(const AdapterCaps* caps, uint32_t ddi_version, const D3D12DDI
         if (ddi_version < 113) return E_INVALIDARG;
         auto* d = payload<D3D12DDI_FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113>(r);
         if (!d) return E_INVALIDARG;
-        d->Supported = FALSE;
+        // The shell gives the three CORE 0113 slots and type 1 of CheckDriverMatchingIdentifier
+        // (driver/umd/d3d12/app-state-ddi.h, docs/design/app-specific-driver-state.md).
+        d->Supported = TRUE;
         return S_OK;
     }
     case D3D12DDICAPS_TYPE_OPTIONS_0118: {
