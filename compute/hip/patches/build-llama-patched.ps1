@@ -9,6 +9,10 @@ param(
     [Parameter(Mandatory=$true)][string]$CMake,
     [ValidateRange(1,4)][int]$Jobs = 4,
     [switch]$Bc250AllocationCap,
+    # The cap in bytes. The default is the measured per-allocation limit of the runtime. A smaller cap makes llama.cpp
+    # split the model into more buffers, and each buffer then fits whichever segment group still has room: the
+    # runtime places device memory in the carve-out while the local budget holds it and in system memory after that.
+    [UInt64]$Bc250AllocationCapBytes = 0xfffc0000,
     [switch]$ValidationTools,
     [switch]$AssetTools,
     [switch]$NoLto,
@@ -112,7 +116,7 @@ if ($Bc250AllocationCap) {
     if ($allocationSource -notmatch 'BC250_HIP_MAX_ALLOC_BYTES') {
         throw 'Apply llama-bc250-allocation-cap.patch before enabling the measured allocation cap.'
     }
-    $options += "-DCMAKE_CXX_FLAGS=$originalCxxFlags -DBC250_HIP_NO_DEVICE_PRINTF=1 -DBC250_HIP_MAX_ALLOC_BYTES=0xfffc0000ULL"
+    $options += "-DCMAKE_CXX_FLAGS=$originalCxxFlags -DBC250_HIP_NO_DEVICE_PRINTF=1 -DBC250_HIP_MAX_ALLOC_BYTES=0x$($Bc250AllocationCapBytes.ToString('x'))ULL"
 }
 $previousRocm = $env:ROCM_PATH
 try {
