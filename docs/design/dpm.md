@@ -910,7 +910,7 @@ keeps its busy gate for the same message.
 | `DpmComputeDownPermille` | the compute set's lowering threshold. Absent = 200 (`BC250_DPM_COMPUTE_DOWN_PERMILLE`). The three go through the same checks as the graphics thresholds. A refused set is logged and the start keeps the three defaults. `DpmComputeProfile` is not refused with them |
 | `DpmJointGovernor` | the joint power arm (0.7.216.7, C62). 1 runs it in a start that governs the clock. Absent or any other value leaves it off (the default). It also needs `CpuTune` 1 and a CPU read stage that answered. See "The joint power arm" above for what a lab trial must show before the default changes |
 | `DpmPending`, `DpmConfirmed` | guard marks, written by the driver |
-| `DpmSession` | written durably before the first raise above the floor, deleted after 10 s at the floor or on a clean stop |
+| `DpmSession` | written durably before the first raise above the floor. Deleted after 10 s at the floor, at a clean stop, or at the start of a system sleep or shutdown (BD-275) |
 | `DpmLastMode`, `DpmLastReason` | what the last start chose and why. Every start with the SMU online overwrites both |
 | `DpmClosedReason` | 0.7.208: the reason the driver itself wrote `DpmMode` 0 (3 UNCONFIRMED, 4 UNCLEAN, 8 SMU_ERROR). `PersistFallback` writes it, a start that reads a `DpmMode` other than 0 deletes it, a start that reads `DpmMode` 0 leaves it alone |
 
@@ -920,6 +920,20 @@ request's encoding and deletes the pending mark. A start that finds `DpmPending`
 healthy) or `DpmSession` (the machine went down above the floor) writes `DpmMode = 0` and runs fixed-lab, reason
 UNCONFIRMED or UNCLEAN. Changing `DpmMaxMHz` changes the encoding and asks for confirmation again. Settings are read
 at device start: change them, then restart the device or reboot.
+
+A restart or a shutdown does not stop the adapter. dxgkrnl only puts it into D3 (BD-059). Thus the start of a system
+power transition is the point where a start ends clean (BD-275). Two hooks do this, as for the interop marker:
+
+- The `\Callback\PowerState` notification `PO_CB_SYSTEM_STATE_LOCK` with Argument2 0 (`DpmSystemPower`). It comes
+  before the system set-power IRP, while the registry is still up.
+- `DxgkDdiSetPowerState` to D1-D3 for a system action, `PowerActionSleep` to `PowerActionShutdownOff` (`DpmPause`).
+  This hook is for a notification that did not come, or for a delete that failed.
+
+Each hook applies the floor. When the clock is not above the floor, the hook deletes `DpmSession`. From then until
+S0 (the release of the notification, or the adapter's D0), the governor holds the floor, so nothing marks the
+session again. Before this change, a restart less than 10 s after the last raise left the marker on disk. A restart
+with an administrator floor above 1000 MHz (`dpm floor`) always left it. In both cases the next start closed DPM
+with reason UNCLEAN. A sleep that resumes marks the session again before its first raise.
 
 The installer moves a stored 1500 MHz ceiling to 2000 MHz. Other stored limits stay as they are.
 An older release stored no record that distinguishes its default 1500 MHz from a manual choice of that value.

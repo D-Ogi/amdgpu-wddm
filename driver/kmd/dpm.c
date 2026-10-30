@@ -27,8 +27,9 @@
 //                   tier's ceiling runs at that ceiling and is kept as written.
 //   DpmPending      the encoded DPM request of a start nobody confirmed yet
 //   DpmConfirmed    the encoded DPM request a healthy start confirmed
-//   DpmSession      written when the governor first leaves the floor, deleted after 10 s at the floor or
-//                   at a clean stop: a start that finds it knows the last one died above the floor
+//   DpmSession      written when the governor first leaves the floor, deleted after 10 s at the floor, at a
+//                   clean stop, or at the start of a system sleep or shutdown (BD-275): a start that finds it
+//                   knows the last one died above the floor
 //   DpmIdleMHz      the idle point (0.7.207): a table clock below 1000 MHz, or 0 for no idle state at all,
 //                   which is exactly 0.7.205 behaviour. Absent = BC250_DPM_IDLE_MHZ (500).
 //   DpmIdleHoldMs   how long the GPU must have no work before the clock goes to the idle point. Absent =
@@ -1058,6 +1059,9 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
             DpmJointTick(Device, S, &in);
             if (bc250_joint_relaxed(cap, S->Joint.cap_mhz)) target = bc250_dpm_recall_revoke(&S->Gov, target);
         }
+        // BD-275: from the start of a system power transition until S0 the governor holds the floor, so the start that
+        // DpmSystemPower ended clean is not marked again on the way down.
+        target = bc250_dpm_system_down_target(target, InterlockedCompareExchange(&S->SystemDown, 0, 0) != 0);
         action = bc250_dpm_session_step(&S->Session, target, dtMs);
         if (action == BC250_DPM_SESSION_SET) {
             // Durable before the first raise, or no raise.
@@ -1428,6 +1432,108 @@ static void DpmConfigureCurve(BC250_DPM_STATE* S, BOOLEAN Dpm)
 }
 
 // StartDevice, last, after the start that set the floor (SmuPrepareClock) succeeded. PASSIVE_LEVEL.
+// "Not above the floor" ends a start clean: the marker goes, and its bit in the snapshot with it. A failed delete keeps
+// both, so the next start reads the marker as it reads a dead machine. The caller holds TickLock or has joined the
+// thread, so Session and Gov are its own.
+static void DpmSessionEndClean(BC250_DPM_STATE* S, const char* Why)
+{
+    NTSTATUS status;
+    KIRQL irql;
+    if (!bc250_dpm_session_ends_clean(&S->Session, S->Gov.level)) return;
+    status = GuardDeleteSetting(DPM_SETTING_SESSION);
+    GuardLog("dpm: session ended clean at the %s, marker delete 0x%08X", Why, status);
+    if (!NT_SUCCESS(status)) return;
+    S->Session.marked = 0;
+    S->Session.floor_ms = 0;
+    KeAcquireSpinLock(&S->SnapLock, &irql);
+    S->Snap.Flags &= ~BC250_DPM_FLAG_SESSION;
+    KeReleaseSpinLock(&S->SnapLock, irql);
+}
+
+// BD-275: the start of a system power transition (Down) and the return to S0. dxgkrnl does not stop the adapter at a
+// shutdown or a restart (interop.c, BD-059), so the start of the transition is where a clean restart can end the
+// start: the clock goes to the floor and the session ends clean, as at a stop. From there to S0 the governor holds the
+// floor (SystemDown), so nothing marks again on the way down. Before this, a restart less than
+// BC250_DPM_SESSION_CLEAR_MS after a raise, and every restart with an administrator floor above the lab floor, left
+// DpmSession on disk: the next start read a machine that died above the floor and closed DPM (DpmClosedReason 4).
+// Two hooks call it, as in BD-059: \Callback\PowerState (DpmPowerCallback), sent before the system set-power IRP while
+// the registry is still up, and DpmPause for a system action, for a notification that did not run or whose delete
+// failed. PASSIVE_LEVEL.
+static void DpmSystemPower(BC250_DEVICE* Device, BOOLEAN Down, const char* Why)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    DPM_TICK tick;
+
+    if (!Down) {
+        if (InterlockedExchange(&s->SystemDown, 0)) GuardLog("dpm: %s released: back in S0, the hold ends", Why);
+        return;
+    }
+    // The tick in flight finishes first; the governor's state is ours until the release.
+    KeWaitForSingleObject(&s->TickLock, Executive, KernelMode, FALSE, NULL);
+    if (!InterlockedExchange(&s->SystemDown, 1)) GuardLog("dpm: %s: the governor holds the floor until S0", Why);
+    RtlZeroMemory(&tick, sizeof(tick));
+    // Out of D0 (Paused) there is no SMU traffic: DpmPause has applied the floor already, or the marker stays.
+    if (!InterlockedCompareExchange(&s->Paused, 0, 0) && Governing(s) && s->Gov.level > BC250_DPM_FLOOR_LEVEL) {
+        ULONG serial;
+        KIRQL irql;
+        KeAcquireSpinLock(&s->SnapLock, &irql);
+        serial = s->Curve.serial;
+        KeReleaseSpinLock(&s->SnapLock, irql);
+        if (DpmApply(Device, s, &tick, BC250_DPM_FLOOR_LEVEL, "system power down")) DpmCurveApplied(s, serial);
+    }
+    DpmSessionEndClean(s, Why);
+    KeReleaseMutex(&s->TickLock, FALSE);
+}
+
+// \Callback\PowerState, one registration per start with the device as the context. PO_CB_SYSTEM_STATE_LOCK with
+// Argument2 0: a system sleep or shutdown is imminent, sent before the system set-power IRP; 1: back in S0. The
+// registry and the SMU need PASSIVE_LEVEL, so a notification above it is left to DpmPause.
+static VOID DpmPowerCallback(PVOID Context, PVOID Argument1, PVOID Argument2)
+{
+    if ((ULONG_PTR)Argument1 != PO_CB_SYSTEM_STATE_LOCK || Context == NULL) return;
+    if (KeGetCurrentIrql() != PASSIVE_LEVEL) return;
+    DpmSystemPower((BC250_DEVICE*)Context, Argument2 == NULL, "system power state lock");
+}
+
+// DpmStart, once the thread runs. Never fails the start: without the registration DpmPause is the only hook of a
+// system transition, and the log line says so.
+static void DpmPowerRegister(BC250_DEVICE* Device)
+{
+    BC250_DPM_STATE* s = &Device->Dpm;
+    UNICODE_STRING name;
+    OBJECT_ATTRIBUTES attributes;
+    NTSTATUS status;
+
+    RtlInitUnicodeString(&name, L"\\Callback\\PowerState");
+    InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+    status = ExCreateCallback(&s->PowerObject, &attributes, FALSE, TRUE);
+    if (NT_SUCCESS(status)) {
+        s->PowerRegistration = ExRegisterCallback(s->PowerObject, DpmPowerCallback, Device);
+        if (s->PowerRegistration == NULL) {
+            ObDereferenceObject(s->PowerObject);
+            s->PowerObject = NULL;
+            status = STATUS_UNSUCCESSFUL;
+        }
+    } else {
+        s->PowerObject = NULL;
+    }
+    GuardLog("dpm: \\Callback\\PowerState registration 0x%08X%s", status,
+             NT_SUCCESS(status) ? "" : ", only the adapter's D3 ends a start at a system transition");
+}
+
+// DpmStop, before the floor apply: ExUnregisterCallback returns after a notification in progress has finished.
+static void DpmPowerUnregister(BC250_DPM_STATE* S)
+{
+    if (S->PowerRegistration != NULL) {
+        ExUnregisterCallback(S->PowerRegistration);
+        S->PowerRegistration = NULL;
+    }
+    if (S->PowerObject != NULL) {
+        ObDereferenceObject(S->PowerObject);
+        S->PowerObject = NULL;
+    }
+}
+
 void DpmStart(BC250_DEVICE* Device)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
@@ -1461,6 +1567,7 @@ void DpmStart(BC250_DEVICE* Device)
     s->Pending = s->Confirmed = s->GaveUp = FALSE;
     s->ErrorsInRow = 0;
     InterlockedExchange(&s->Paused, 0);
+    InterlockedExchange(&s->SystemDown, 0);
     InterlockedExchange(&s->Resync, 0);
     InterlockedExchange(&s->Stable, 0);
     InterlockedExchange64(&s->BusySince, 0);
@@ -1569,6 +1676,7 @@ void DpmStart(BC250_DEVICE* Device)
             (void)ExSetTimer(s->HwTimer, -10ll * BC250_DPM_HW_SAMPLE_US, 10ll * BC250_DPM_HW_SAMPLE_US, NULL);
         GuardLog("dpm: hardware busy sampler %s, every %lu us", s->HwTimer != NULL ? "running" : "NOT allocated (submit accounting only)",
                  (ULONG)BC250_DPM_HW_SAMPLE_US);
+        DpmPowerRegister(Device);
     }
     DpmUnlock(s);
     return;
@@ -1597,6 +1705,8 @@ void DpmStop(BC250_DEVICE* Device)
 
     DpmLock(s);
     if (!s->Created) { DpmUnlock(s); return; }
+    // BD-275: no system power notification may run DpmSystemPower beside the floor apply below.
+    DpmPowerUnregister(s);
     // The sampler first: after this no callback runs or will run (Wait), before the mapping can go.
     if (s->HwTimer != NULL) {
         (void)ExDeleteTimer(s->HwTimer, TRUE, TRUE, NULL);
@@ -1632,9 +1742,7 @@ void DpmStop(BC250_DEVICE* Device)
     // (bc250_dpm_session_step): since 0.7.205 the thermal cap can leave the governor at 800 or 900 MHz, and a
     // stop from there is clean. Testing for the floor alone left the marker behind whenever the floor apply
     // above did not go through, and the next start then read it as an unclean end and wrote DpmMode = 0.
-    if (s->Session.marked && s->Gov.level <= BC250_DPM_FLOOR_LEVEL &&
-        NT_SUCCESS(GuardDeleteSetting(DPM_SETTING_SESSION)))
-        s->Session.marked = 0;
+    DpmSessionEndClean(s, "stop");
     InterlockedExchange(&Device->Smu.GovernorActive, 0);
     {
         BC250_DPM_SNAP snap;
@@ -1665,7 +1773,7 @@ void DpmStop(BC250_DEVICE* Device)
 
 // Before a transition out of D0: no SMU traffic from here until DpmResume, and the floor if it can be had.
 // The tick in flight, if any, finishes first (TickLock). PASSIVE_LEVEL.
-void DpmPause(BC250_DEVICE* Device)
+void DpmPause(BC250_DEVICE* Device, POWER_ACTION Action)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
     DPM_TICK tick;
@@ -1700,6 +1808,14 @@ void DpmPause(BC250_DEVICE* Device)
     // BD-228: the paused ticks do not run the governor, so nothing would age the recalled level across a transition
     // of any length. The resume's resync forgets it again and confirms nothing.
     bc250_dpm_recall_forget(&s->Gov);
+    // BD-275: the second hook of a system transition (sleep, hibernate, shutdown, restart, off: the set of
+    // bc250_interop_system_action), for a \Callback\PowerState notification that did not run or whose delete failed.
+    // The floor apply above has run, so "not above the floor" reads the clock that D3 is entered at.
+    if (bc250_interop_system_action((unsigned int)Action)) {
+        if (!InterlockedExchange(&s->SystemDown, 1))
+            GuardLog("dpm: power down for system action %d: the governor holds the floor until S0", (int)Action);
+        DpmSessionEndClean(s, "power down for a system action");
+    }
     KeReleaseMutex(&s->TickLock, FALSE);
 }
 
@@ -1708,6 +1824,8 @@ void DpmResume(BC250_DEVICE* Device)
 {
     BC250_DPM_STATE* s = &Device->Dpm;
     if (!s->Created) return;
+    // BD-275: the adapter is in D0 again, so the system is back in S0 even when no release of the notification came.
+    if (InterlockedExchange(&s->SystemDown, 0)) GuardLog("dpm: back in D0, the hold of the system transition ends");
     InterlockedExchange(&s->Resync, 1);
     InterlockedExchange(&s->Paused, 0);
 }

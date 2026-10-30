@@ -1197,6 +1197,16 @@ enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s
 	return s->floor_ms >= BC250_DPM_SESSION_CLEAR_MS ? BC250_DPM_SESSION_CLEAR : BC250_DPM_SESSION_NONE;
 }
 
+int bc250_dpm_session_ends_clean(const struct bc250_dpm_session *s, unsigned int level)
+{
+	return s->marked && level <= BC250_DPM_FLOOR_LEVEL;
+}
+
+unsigned int bc250_dpm_system_down_target(unsigned int target, int system_down)
+{
+	return system_down && target > BC250_DPM_FLOOR_LEVEL ? BC250_DPM_FLOOR_LEVEL : target;
+}
+
 /* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------ */
 
 void bc250_joint_init(struct bc250_joint *j)

@@ -69,6 +69,12 @@ typedef struct _BC250_DPM_STATE {
     BOOLEAN Created;                        // the thread exists
     BOOLEAN Pending, Confirmed;             // the guard's marks of this start
     volatile LONG Paused;                   // a power transition: no SMU traffic
+    // BD-275: a system power transition has started and the system is not back in S0. The governor holds the floor,
+    // so nothing marks the session. DpmSystemPower sets it at \Callback\PowerState and DpmPause for a system action;
+    // the release of that notification and DpmResume clear it.
+    volatile LONG SystemDown;
+    PCALLBACK_OBJECT PowerObject;           // \Callback\PowerState of this start, and the registration on it
+    PVOID PowerRegistration;
     volatile LONG Resync;                   // read the hardware's clock back before the next decision
     volatile LONG Stable;                   // SetStablePowerState(TRUE)
     // BD-127: live contexts of this adapter whose BC2C blob carried BC250_UMD_C_COMPUTE. wddm.c raises it in

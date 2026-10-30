@@ -677,8 +677,9 @@ unsigned int bc250_dpm_curve_remaining_ms(const struct bc250_dpm_curve_state *s)
 
 /* DpmSession is written (and flushed) when the governor first goes above the floor (a thermal-only level
  * under it counts as "not above the floor": it is no risk to carry into the next start), and deleted after
- * SESSION_CLEAR_MS at the floor or at a clean stop. A start that finds it knows the previous one
- * ended above the floor without a stop: a bugcheck, a hang, a power cut at a high clock. */
+ * SESSION_CLEAR_MS at the floor, at a clean stop, or at the start of a system power transition (BD-275). A start
+ * that finds it knows the previous one ended above the floor without a stop: a bugcheck, a hang, a power cut at a
+ * high clock. */
 enum bc250_dpm_session_action { BC250_DPM_SESSION_NONE = 0, BC250_DPM_SESSION_SET = 1, BC250_DPM_SESSION_CLEAR = 2 };
 struct bc250_dpm_session {
 	int		marked;			/* the caller sets it after a durable write, clears after a delete */
@@ -687,6 +688,13 @@ struct bc250_dpm_session {
 /* Call with the level about to be applied (SET must be durable before it) and after each tick. */
 enum bc250_dpm_session_action bc250_dpm_session_step(struct bc250_dpm_session *s, unsigned int level,
 						     unsigned int dt_ms);
+/* A stop or the start of a system power transition ends the start clean when it is not above the floor, the same
+ * reading as the step's own clear: 1 tells the caller to delete the marker (BD-275). */
+int bc250_dpm_session_ends_clean(const struct bc250_dpm_session *s, unsigned int level);
+/* From the start of a system power transition until S0 the governor holds the floor, so a start that ended clean is
+ * not marked again on the way down (BD-275). A target at or under the floor (the idle point, a thermal-only point)
+ * stays as it is. */
+unsigned int bc250_dpm_system_down_target(unsigned int target, int system_down);
 
 /* ---- the joint power arm (C62, 0.7.216.7) ------------------------------------------------------ */
 
