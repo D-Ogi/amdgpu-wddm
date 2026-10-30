@@ -554,6 +554,10 @@ bc250hsa_status bc250hsa_query_fault(struct bc250hsa_device* dev, bc250hsa_fault
         return bc250hsa_os_status("GetDeviceState(execution)", status);
     }
     if (state.ExecutionState != D3DKMT_DEVICEEXECUTION_ACTIVE) {
+        /* The reason of the operating system (d3dkmthk.h D3DKMT_DEVICEEXECUTION_STATE): 2
+         * reset, 3 hung, 4 stopped, 5 out of memory, 6 DMA fault, 7 DMA page fault. */
+        bc250hsa_log(BC250HSA_LOG_ERROR, "the device execution state is %d, not active",
+                     (int)state.ExecutionState);
         out->device_lost = 1u;
     }
     if (state.ExecutionState == D3DKMT_DEVICEEXECUTION_ERROR_DMAPAGEFAULT) {

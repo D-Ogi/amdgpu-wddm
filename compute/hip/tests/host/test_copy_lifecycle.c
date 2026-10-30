@@ -44,6 +44,7 @@
 #define D3DKMTEscape FakeEscape
 #define D3DKMTWaitForSynchronizationObjectFromCpu FakeWaitFromCpu
 #define D3DKMTGetDeviceState FakeGetDeviceState
+#define D3DKMTQueryVideoMemoryInfo FakeQueryVideoMemoryInfo
 #include "../../bc250hsa/kmt_device.h"
 /* windows.h is in now, so this rename reaches only the two files below. */
 static HANDLE WINAPI FakeCreateEventW(LPSECURITY_ATTRIBUTES attributes, BOOL manual, BOOL initial,
@@ -143,6 +144,11 @@ static uint32_t g_register_fail_at; /* the n-th fence wait registration fails, 0
 static uint32_t g_event_fail_at;    /* the n-th CreateEventW fails, 0 never */
 static int      g_context_fail;     /* bc250hsa_context_create fails */
 static int      g_error_next;       /* the next submission puts the device in its error state */
+/* The local segment group: its budget and what this process uses of it (0 budget: no limit),
+ * and a VidMm that refuses residency in the carve-out. MustSucceed puts the device in error. */
+static uint64_t g_local_budget, g_local_usage;
+static int      g_vram_resident_fail;
+static uint32_t g_must_succeed;
 
 /* What happened. */
 static uint32_t g_register_calls, g_event_calls, g_submits, g_creates, g_unlocks, g_free_vas;
@@ -334,7 +340,29 @@ NTSTATUS APIENTRY FakeMapGpuVirtualAddress(D3DDDI_MAPGPUVIRTUALADDRESS* map)
 
 NTSTATUS APIENTRY FakeMakeResident(D3DDDI_MAKERESIDENT* resident)
 {
+    fake_alloc* a = alloc_by_handle(resident->AllocationList[0]);
     resident->PagingFenceValue = 0u;
+    if (resident->Flags.MustSucceed) { ++g_must_succeed; }
+    if (a != NULL && a->heap == BC250HSA_HEAP_VRAM) {
+        /* VidMm without CantTrimFurther: a residency past the budget is refused. */
+        if (g_vram_resident_fail ||
+            (g_local_budget != 0u && g_local_usage + a->bytes > g_local_budget)) {
+            return STATUS_NO_MEMORY;
+        }
+        g_local_usage += a->bytes;
+    }
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS APIENTRY FakeQueryVideoMemoryInfo(D3DKMT_QUERYVIDEOMEMORYINFO* query)
+{
+    CHECK(query->hAdapter == g_dev->adapter);
+    if (query->MemorySegmentGroup != D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL) {
+        query->Budget = UINT64_MAX;
+        return STATUS_SUCCESS;
+    }
+    query->Budget = g_local_budget != 0u ? g_local_budget : UINT64_MAX;
+    query->CurrentUsage = g_local_usage;
     return STATUS_SUCCESS;
 }
 
@@ -642,6 +670,7 @@ static void dev_init(struct bc250hsa_device* d)
     g_hold = 0; g_delay_ms = 0u; g_submit_fail = 0; g_alloc_fail = 0; g_corrupt_host = 0;
     g_register_fail_at = 0u; g_event_fail_at = 0u;
     g_context_fail = 0; g_error_next = 0; g_device_error = 0; g_error_pending = 0;
+    g_local_budget = 0u; g_local_usage = 0u; g_vram_resident_fail = 0;
     g_exec_state = D3DKMT_DEVICEEXECUTION_ACTIVE;
     memset(g_contexts, 0, sizeof(g_contexts));
     g_contexts[0].handle = d->context;
@@ -1134,6 +1163,42 @@ static void case_submit_fails(void)
     CHECK(bc250hsa_fill_device(&d, &host_dst, 0u, 1u, 4096u, &r) == BC250HSA_EDEVICELOST);
     CHECK(r.state == BC250HSA_OP_NOT_SUBMITTED);
     dev_finish(&d, 1);
+}
+
+/* Device-local memory past the local budget goes to system memory and the device stays up.
+ * The lab shape: Qwen3-8B Q8_0 (8071 MiB of buffers) on an 8 GiB carve-out, where a
+ * MustSucceed residency put the device in error before the first launch. */
+static void case_local_budget_spills(void)
+{
+    struct bc250hsa_device d;
+    bc250hsa_mem           inside, spilled, refused, host_dst;
+    bc250hsa_op_receipt    r;
+    fake_alloc*            a;
+
+    printf("copy lifecycle: device-local memory past the local budget\n");
+    dev_ready(&d);
+    g_must_succeed = 0u;
+    g_local_budget = g_local_usage + 0x100000u;   /* 1 MiB left in the carve-out */
+    CHECK(alloc_mem(&d, 0x40000u, 0u, &inside));
+    a = alloc_by_handle(((bc250hsa_alloc_record*)inside.opaque)->handle);
+    CHECK(a != NULL && a->heap == BC250HSA_HEAP_VRAM);
+    CHECK(source_mem(&d, 0x200000u, &spilled));
+    a = alloc_by_handle(((bc250hsa_alloc_record*)spilled.opaque)->handle);
+    CHECK(a != NULL && a->heap == BC250HSA_HEAP_GTT);
+    /* Inside the budget, and VidMm refuses it anyway: the second heap answers. */
+    g_vram_resident_fail = 1;
+    CHECK(alloc_mem(&d, 0x10000u, 0u, &refused));
+    a = alloc_by_handle(((bc250hsa_alloc_record*)refused.opaque)->handle);
+    CHECK(a != NULL && a->heap == BC250HSA_HEAP_GTT);
+    g_vram_resident_fail = 0;
+    CHECK(g_must_succeed == 0u && !d.device_lost);
+    /* The spilled memory is ordinary device memory to the copy engine. */
+    CHECK(alloc_mem(&d, 0x10000u, BC250HSA_MEM_HOST, &host_dst));
+    r = receipt_new();
+    CHECK(bc250hsa_copy_device_to_device(&d, &host_dst, 0u, &spilled, 0x1000u, 8192u,
+                                         BC250HSA_COPY_HOST_READS_DST, &r) == BC250HSA_OK);
+    CHECK(memcmp(host_dst.host, (const uint8_t*)spilled.host + 0x1000u, 8192u) == 0);
+    dev_finish(&d, 0);
 }
 
 /* R4: with a control that failed, nothing the host processor can read is written by the
@@ -1701,6 +1766,7 @@ int main(void)
     case_staged_round_fails();
     case_fill_unretired();
     case_submit_fails();
+    case_local_budget_spills();
     case_alias_gate();
     DeleteCriticalSection(&g_fake);
     printf("copy lifecycle: %u checks, %u failures\n", checks, failures);
