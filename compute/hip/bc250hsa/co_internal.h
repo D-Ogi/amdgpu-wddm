@@ -52,8 +52,13 @@
 #define BC250HSA_SHT_DYNSYM  11u
 #define BC250HSA_SHT_STRTAB  3u
 
-/* The one relocation type a linked gfx1013 code object needs: B + A. */
+/* The relocation types of a linked code object (AMDGPUUsage.rst "Relocation Records"):
+ * RELATIVE64 is B + A, and ABS64 is S + A, where S is a symbol of the object itself.
+ * MEASURED: the Tensile code objects of rocBLAS 10.3.0a20261030 (gfx1010) carry one ABS64
+ * record each, against the local variable _ZL27hip_f8_bias_mode_bit_device. */
+#define BC250HSA_R_AMDGPU_ABS64      3u
 #define BC250HSA_R_AMDGPU_RELATIVE64 13u
+#define BC250HSA_SHN_UNDEF           0u
 
 /* NT_AMDGPU_METADATA, AMDGPUUsage.rst "Code Object Metadata". */
 #define BC250HSA_NT_AMDGPU_METADATA 32u

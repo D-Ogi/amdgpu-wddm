@@ -137,7 +137,9 @@ int module_load_file(const char* path, void** module_out) {
     // of another thread's launch.
     std::FILE* file = std::fopen(path, "rb");
     if (file == nullptr) {
-        return fail(kErrorFileNotFound);
+        // The path names a file of the application's own installation, not its data, so the
+        // log may carry it.
+        return refuse("hipModuleLoad", path, kErrorFileNotFound);
     }
     std::vector<unsigned char> bytes;
     unsigned char chunk[65536];
