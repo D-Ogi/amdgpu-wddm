@@ -37,6 +37,8 @@
     { "patch": "llama-rdna1-concat-transposed.patch", "file": "ggml/src/ggml-cuda/concat.cu",
       "marker": "concat_dim0_transposed", "what": "concat of a transposed second source through a shared-memory tile" },
     { "patch": "llama-rdna1-gdn-lanes.patch", "file": "ggml/src/ggml-cuda/gated_delta_net.cu",
-      "marker": "lanes_t", "what": "gated delta net lanes per column on RDNA1" }
+      "marker": "lanes_t", "what": "gated delta net lanes per column on RDNA1" },
+    { "patch": "llama-rdna1-iq-codebook.patch", "file": "ggml/src/ggml-cuda/mmvq-rdna1-f32.cu",
+      "marker": "iq_grid_dwords", "what": "the IQ codebook of the float-activation matvec in shared memory" }
   ]
 }
