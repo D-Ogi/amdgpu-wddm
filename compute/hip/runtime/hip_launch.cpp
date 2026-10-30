@@ -425,7 +425,11 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
         bc250hip::kernarg_settle(lease, 0);
         return fail(hipErrorNotSupported);
     }
-    std::vector<unsigned char> record;
+    // The record of State, reused: clear() keeps the capacity, so a launch makes no heap
+    // allocation for it after the first one. The lock stays held from here to the submission,
+    // and the backend copies the record before it returns (bc250hsa.h, the comment of
+    // bc250hsa_dispatch_submit_recorded), so no other launch writes it while it is in use.
+    std::vector<unsigned char>& record = runtime.launch_record;
     err = bc250hip::prepare_dispatch_record(dispatch, lease.host, kernarg_bytes,
                                             ++runtime.journal_dispatch_id, runtime.by_va, record);
     if (err != hipSuccess) {

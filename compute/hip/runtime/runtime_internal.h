@@ -216,6 +216,8 @@ struct State {
     KernargArena                            kernarg_arena;
     bc250hsa_mem                            kernarg_arena_mem{};
     bool                                    kernarg_arena_enabled = true;
+    // The dispatch journal record of the launch in progress (hip_launch.cpp), kept for its capacity.
+    std::vector<unsigned char>              launch_record;
     std::vector<ihipEvent_t*>               pending_events; // recorded, value not retired yet
     ihipStream_t                            null_stream{};
     int                                     current_device = 0;
