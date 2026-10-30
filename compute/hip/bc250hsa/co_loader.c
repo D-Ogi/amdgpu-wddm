@@ -17,6 +17,26 @@
 #include "internal.h"
 
 /* --------------------------------------------------------------------------
+ * The target alias
+ *
+ * A process-wide setting, because the loader has no device handle in the host test and
+ * the choice belongs to the runtime that loads the objects, not to one module. It is
+ * written once, before the first load, and read on every load.
+ * ------------------------------------------------------------------------ */
+
+static volatile long g_target_alias = 0;
+
+void bc250hsa_target_alias_set(uint32_t flags)
+{
+    g_target_alias = (long)(flags & BC250HSA_TARGET_ALIAS_GFX1010);
+}
+
+uint32_t bc250hsa_target_alias_get(void)
+{
+    return (uint32_t)g_target_alias;
+}
+
+/* --------------------------------------------------------------------------
  * The offload bundle
  * ------------------------------------------------------------------------ */
 
@@ -236,6 +256,11 @@ static bc250hsa_status check_header(const elf_view* v)
         return BC250HSA_EBADABIVERSION;
     }
     mach = eh->e_flags & BC250HSA_EF_AMDGPU_MACH;
+    if (mach == BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX1010 &&
+        (bc250hsa_target_alias_get() & BC250HSA_TARGET_ALIAS_GFX1010) != 0u) {
+        bc250hsa_log(BC250HSA_LOG_INFO, "code object for gfx1010 loads on gfx1013 under the alias");
+        return BC250HSA_OK;
+    }
     if (mach != BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX1013 &&
         mach != BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX10_1_GENERIC) {
         bc250hsa_log(BC250HSA_LOG_ERROR, "code object e_flags mach 0x%03x is not gfx1013", mach);

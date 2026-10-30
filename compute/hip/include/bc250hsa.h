@@ -45,7 +45,7 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 8u   /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 9u   /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
                                          * that ENABLE_SGPR_DISPATCH_PTR needs;
                                          * 1.3 adds fixed-private scratch PM4 environments;
@@ -66,7 +66,10 @@ extern "C" {
                                          * bc250hsa_copy_unretired,
                                          * bc250hsa_count_cpu_copy_exclusion_refusal,
                                          * and the counters after
-                                         * cpu_copy_fallback_ticks */
+                                         * cpu_copy_fallback_ticks;
+                                         * 1.9 adds bc250hsa_memory_budget_read and
+                                         * the target alias of section 6,
+                                         * bc250hsa_target_alias_set */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -365,6 +368,25 @@ bc250hsa_status bc250hsa_alloc(bc250hsa_device* dev, uint64_t bytes, uint64_t al
 
 /* Frees the allocation. The caller must know that no submission still reads it. */
 bc250hsa_status bc250hsa_free(bc250hsa_device* dev, bc250hsa_mem* mem);
+
+/* The budget and the use of this process in the two segment groups of the adapter, as
+ * D3DKMTQueryVideoMemoryInfo states them now. bc250hsa_alloc places device-local memory
+ * in the local group while its budget holds the request and in the non-local group after
+ * that, so the two together are what this process can allocate. A group whose query
+ * failed has its bit clear in `valid` and its two numbers 0. */
+#define BC250HSA_BUDGET_LOCAL     0x1u
+#define BC250HSA_BUDGET_NON_LOCAL 0x2u
+
+typedef struct bc250hsa_memory_budget {
+    uint32_t struct_bytes;   /* sizeof(bc250hsa_memory_budget) */
+    uint32_t valid;          /* BC250HSA_BUDGET_* */
+    uint64_t local_budget;
+    uint64_t local_used;
+    uint64_t non_local_budget;
+    uint64_t non_local_used;
+} bc250hsa_memory_budget;
+
+bc250hsa_status bc250hsa_memory_budget_read(bc250hsa_device* dev, bc250hsa_memory_budget* out);
 
 /* A host mapping for an allocation made without one. Refuses BC250HSA_MEM_DEVICE
  * without BC250HSA_MEM_MAPPABLE, with BC250HSA_EUNSUPPORTED.
@@ -685,6 +707,17 @@ typedef struct bc250hsa_kernel {
 bc250hsa_status bc250hsa_unbundle(const void* fatbin, size_t fatbin_bytes,
                                   const char* target_id,
                                   const void** image, size_t* image_bytes);
+
+/* The target alias. gfx1010 is gfx1013 without the GFX10_A encoding feature (LLVM
+ * AMDGPU.td: FeatureISAVersion10_1_Common, and gfx1013 adds FeatureGFX10_AEncoding), so
+ * a gfx1010 code object holds only instructions that gfx1013 also runs. A runtime that
+ * loads prebuilt gfx1010 code, such as the ROCm user libraries, sets this flag before its
+ * first load; then bc250hsa_module_load takes e_flags mach gfx1010 and logs each such
+ * load. Without the flag such an object is BC250HSA_EWRONGTARGET, as before. */
+#define BC250HSA_TARGET_ALIAS_GFX1010 0x1u
+
+void     bc250hsa_target_alias_set(uint32_t flags);
+uint32_t bc250hsa_target_alias_get(void);
 
 /* Loads one ELF code object onto the device: checks the header, allocates one
  * executable range that covers every PT_LOAD segment, copies p_filesz and zeroes the

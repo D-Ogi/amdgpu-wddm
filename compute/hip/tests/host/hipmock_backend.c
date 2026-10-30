@@ -578,6 +578,35 @@ bc250hsa_status bc250hsa_props_read(bc250hsa_device* dev, bc250hsa_props* out) {
     return BC250HSA_OK;
 }
 
+/* The two segment groups of an 8 GiB carve-out as unit A reports them (fact M827: a local
+ * budget of 7.2 GiB and a non-local one of 3.5 GiB). The use is the live bytes of the mock,
+ * which fill the local group first, as kmt_memory.c places them. */
+bc250hsa_status bc250hsa_memory_budget_read(bc250hsa_device* dev, bc250hsa_memory_budget* out) {
+    uint64_t live;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || out == NULL ||
+        out->struct_bytes != (uint32_t)sizeof(*out)) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    live = dev->live_bytes;
+    mock_unlock();
+    memset(out, 0, sizeof(*out));
+    out->struct_bytes = (uint32_t)sizeof(*out);
+    out->valid = BC250HSA_BUDGET_LOCAL | BC250HSA_BUDGET_NON_LOCAL;
+    out->local_budget = 7372ull * 1024ull * 1024ull;
+    out->non_local_budget = 3584ull * 1024ull * 1024ull;
+    out->local_used = live < out->local_budget ? live : out->local_budget;
+    out->non_local_used = live - out->local_used;
+    return BC250HSA_OK;
+}
+
+#if !defined(BC250_HIP_MOCK_PRODUCTION_LOADER)
+/* The mock's own loader takes every target, so the alias is only recorded. */
+static uint32_t g_target_alias;
+void bc250hsa_target_alias_set(uint32_t flags) { g_target_alias = flags & BC250HSA_TARGET_ALIAS_GFX1010; }
+uint32_t bc250hsa_target_alias_get(void) { return g_target_alias; }
+#endif
+
 /* ------------------------------------------------------------------------------------------
  * Memory
  * ---------------------------------------------------------------------------------------- */
