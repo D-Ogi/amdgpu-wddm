@@ -27,7 +27,7 @@ and NOTICE in the package root).
 | `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `86c19b9a6e634a0d149734c008bc3d03e3575033`, the state installer at `6d41768b7da193c59735e6074f3fd73bb1286257` |
 | `tools\d3d11bench.exe` | amdgpu-wddm `c281df214cde2c008a8a6e26827b494a76d22e29` (`tools/win/d3d11bench`) |
 | `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `c281df214cde2c008a8a6e26827b494a76d22e29` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
-| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `86c19b9a6e634a0d149734c008bc3d03e3575033` (`tools/win/amdgpu_wddm_control`) |
+| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `e551740978f11be78d858b000bc63492cded775e` (`tools/win/amdgpu_wddm_control`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `tools\release-witness.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 
 ## Third-party code in the package
