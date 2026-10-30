@@ -160,7 +160,7 @@ function Invoke-Cl([string[]]$Arguments, [string]$What) {
 }
 
 $runtimeSources = @('hip_device.cpp', 'hip_error.cpp', 'hip_event.cpp', 'hip_launch.cpp', 'hip_journal.cpp',
-    'hip_log.cpp', 'hip_memory.cpp', 'hip_module.cpp', 'hip_occupancy.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
+    'hip_kernarg_arena.cpp', 'hip_log.cpp', 'hip_memory.cpp', 'hip_module.cpp', 'hip_occupancy.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
     ForEach-Object { Join-Path $hip "runtime\$_" }
 $dllSource = Join-Path $hip 'runtime\dllmain.cpp'
 $mockSource = Join-Path $hip 'tests\host\hipmock_backend.c'
@@ -212,6 +212,13 @@ if (-not $SkipTests) {
         $includes + @('/link') + $libpaths) 'test_hip_occupancy'
     & $occupancyExe
     if ($LASTEXITCODE -ne 0) { throw 'HIP occupancy model gate failed' }
+    # The kernel argument arena of hipLaunchKernel, which is pure as well.
+    $arenaExe = Join-Path $Out 'test_hip_kernarg_arena.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', "/Fo$journalObjDir\", "/Fe$arenaExe",
+        (Join-Path $hip 'tests\host\test_hip_kernarg_arena.cpp'), (Join-Path $objDir 'hip_kernarg_arena.obj')) +
+        $includes + @('/link') + $libpaths) 'test_hip_kernarg_arena'
+    & $arenaExe
+    if ($LASTEXITCODE -ne 0) { throw 'HIP kernel argument arena gate failed' }
     $testExe = Join-Path $Out 'test_hip_mock.exe'
     $testObjDir = Join-Path $Out 'obj-test'
     New-Item -ItemType Directory -Force $testObjDir | Out-Null
@@ -281,6 +288,23 @@ if (-not $SkipTests) {
     } finally {
         Remove-Item env:BC250_HIP_BATCH -ErrorAction SilentlyContinue
         Remove-Item env:BC250_HIP_BARRIER -ErrorAction SilentlyContinue
+    }
+
+    # And again with the kernel argument arena off, so that the pool, which the arena falls
+    # back to and which is the control arm of its lab measurement, keeps its own coverage.
+    $env:BC250_HIP_KERNARG_ARENA = '0'
+    try {
+        foreach ($pair in @(@{ exe = $testExe; name = 'test_hip_mock' },
+                            @{ exe = $threadsExe; name = 'test_hip_threads' },
+                            @{ exe = $batchExe; name = 'test_hip_batch' })) {
+            & $pair.exe $fixture
+            if ($LASTEXITCODE -ne 0) {
+                throw "$($pair.name) failed with BC250_HIP_KERNARG_ARENA=0 ($LASTEXITCODE)"
+            }
+            Write-Host "  $($pair.name) passes with the kernel argument arena off"
+        }
+    } finally {
+        Remove-Item env:BC250_HIP_KERNARG_ARENA -ErrorAction SilentlyContinue
     }
 }
 

@@ -138,6 +138,78 @@ void kernarg_release(KernargBuffer* buffer, uint64_t fence) {
     buffer->busy = fence != 0;
 }
 
+// The arena of hip_kernarg_arena.cpp, with its one allocation made on the first launch. A
+// slice the arena cannot give (too large, the next block still held, or a second waiter) comes
+// from the pool, so the arena never makes a launch fail that the pool alone would run.
+hipError_t kernarg_take(Guard& guard, uint32_t bytes, uint32_t alignment, KernargLease* out) {
+    State& s = state();
+    bc250hsa_device* dev = nullptr;
+    const hipError_t err = device(&dev);
+    if (err != hipSuccess) {
+        return err;
+    }
+    *out = KernargLease{};
+    if (s.kernarg_arena_enabled && s.kernarg_arena_mem.host == nullptr) {
+        const uint64_t arena_bytes =
+            static_cast<uint64_t>(KernargArena::kBlocks) * KernargArena::kBlockBytes;
+        const bc250hsa_status status =
+            bc250hsa_alloc(dev, arena_bytes, 4096u, BC250HSA_MEM_HOST, &s.kernarg_arena_mem);
+        if (status != BC250HSA_OK || s.kernarg_arena_mem.host == nullptr) {
+            log_line(BC250HSA_LOG_ERROR, "the kernel argument arena does not allocate (%s); "
+                                         "every launch takes the pool",
+                     bc250hsa_status_string(status));
+            s.kernarg_arena_mem = bc250hsa_mem{};
+            s.kernarg_arena_enabled = false;
+        }
+    }
+    // Two rounds: the second one sees the arena after the wait of the first. A third would
+    // wait again for a block another thread took meanwhile, and the pool is the better answer.
+    for (int round = 0; s.kernarg_arena_enabled && round < 2; ++round) {
+        const uint64_t retired = bc250hsa_fence_read(dev);
+        if (retired == UINT64_MAX) {
+            return translate(BC250HSA_EDEVICELOST);
+        }
+        uint32_t offset = 0;
+        uint64_t wait_for = 0;
+        const ArenaTake taken =
+            arena_take(s.kernarg_arena, bytes, alignment, retired, &offset, &wait_for);
+        if (taken == ArenaTake::kTaken) {
+            out->host = static_cast<unsigned char*>(s.kernarg_arena_mem.host) + offset;
+            out->va = s.kernarg_arena_mem.va + offset;
+            out->offset = offset;
+            return hipSuccess;
+        }
+        if (taken == ArenaTake::kFallback) {
+            break;
+        }
+        // The claim keeps every other thread off this block while the lock is released. The
+        // arena is a member of State and never moves, so the offsets stay valid.
+        const hipError_t waited = guard.wait(dev, wait_for);
+        arena_unclaim(s.kernarg_arena, offset);
+        if (waited != hipSuccess) {
+            return waited;
+        }
+    }
+    KernargBuffer* buffer = nullptr;
+    const hipError_t pooled = kernarg_acquire(guard, bytes, alignment, &buffer);
+    if (pooled != hipSuccess) {
+        return pooled;
+    }
+    out->pooled = buffer;
+    out->host = static_cast<unsigned char*>(buffer->mem.host);
+    out->va = buffer->mem.va;
+    return hipSuccess;
+}
+
+void kernarg_settle(KernargLease& lease, uint64_t fence) {
+    if (lease.pooled != nullptr) {
+        kernarg_release(lease.pooled, fence);
+    } else if (lease.host != nullptr) {
+        arena_settle(state().kernarg_arena, lease.offset, fence);
+    }
+    lease = KernargLease{};
+}
+
 // The kernel behind a host stub, with the code object loaded on the first launch. A launch looks
 // it up again after every wait that opened the lock, because another thread may unregister the
 // fat binary in the meantime and the kernel records die with it.
@@ -280,20 +352,20 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
                                        status);
     }
 
-    bc250hip::KernargBuffer* buffer = nullptr;
-    err = bc250hip::kernarg_acquire(guard, kernarg_bytes, kernarg_align, &buffer);
+    bc250hip::KernargLease lease;
+    err = bc250hip::kernarg_take(guard, kernarg_bytes, kernarg_align, &lease);
     if (err != hipSuccess) {
         return bc250hip::refuse("hipLaunchKernel", kernel->name,
-                                "no kernel argument buffer of the pool", err);
+                                "no kernel argument memory in the arena or the pool", err);
     }
-    // A full pool waited, and a wait opens the lock.
+    // A full arena or pool waited, and a wait opens the lock.
     err = bc250hip::same_kernel_after_wait(function, kernel);
     if (err != hipSuccess) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return fail(err);
     }
-    if (buffer->mem.host == nullptr) {
-        bc250hip::kernarg_release(buffer, 0);
+    if (lease.host == nullptr) {
+        bc250hip::kernarg_settle(lease, 0);
         return fail(hipErrorOutOfMemory);
     }
 
@@ -301,9 +373,9 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     std::memset(&packed, 0, sizeof(packed));
     packed.struct_bytes = static_cast<uint32_t>(sizeof(packed));
     status = bc250hsa_kernarg_pack(kernel, &launch, args, kernel->explicit_arg_count,
-                                   buffer->mem.host, kernarg_bytes, buffer->mem.va, &packed);
+                                   lease.host, kernarg_bytes, lease.va, &packed);
     if (status != BC250HSA_OK) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return bc250hip::refuse_status("hipLaunchKernel/kernarg_pack", kernel->name, status);
     }
     if (packed.hostcall_buffer_requested != 0) {
@@ -313,7 +385,7 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
         std::fprintf(stderr, "amdhip64: kernel '%s' asks for a host call buffer (device printf), "
                              "which this build does not support\n",
                      kernel->name != nullptr ? kernel->name : "<unnamed>");
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return bc250hip::refuse("hipLaunchKernel", kernel->name,
                                 "the kernel asks for a host call buffer (device printf)",
                                 hipErrorNotSupported);
@@ -322,14 +394,14 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
 
     err = bc250hip::stream_drain_pending(guard, target);
     if (err != hipSuccess) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return fail(err);
     }
     // The event wait of this stream waited as well, and the packed buffer must still belong to
     // the kernel this launch resolved.
     err = bc250hip::same_kernel_after_wait(function, kernel);
     if (err != hipSuccess) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return fail(err);
     }
 
@@ -338,36 +410,36 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     dispatch.struct_bytes = static_cast<uint32_t>(sizeof(dispatch));
     dispatch.flags = bc250hip::state().dispatch_flags;
     dispatch.kernel = kernel;
-    dispatch.kernarg_va = buffer->mem.va;
+    dispatch.kernarg_va = lease.va;
     // The AQL dispatch packet of section 7.1 of bc250hsa.h, which a kernel that reads its own
-    // blockDim needs. It sits inside this same kernel argument buffer, so it retires with the
-    // dispatch that reads it and the pool owns its lifetime.
+    // blockDim needs. It sits inside this same kernel argument slice, so it retires with the
+    // dispatch that reads it and the arena or the pool owns its lifetime.
     if (packed.dispatch_packet_requested != 0 && !BC250_HIP_NO_DISPATCH_PACKET_BUILD) {
-        dispatch.dispatch_packet_va = buffer->mem.va + packed.dispatch_packet_offset;
+        dispatch.dispatch_packet_va = lease.va + packed.dispatch_packet_offset;
     }
     dispatch.launch = launch;
 
     uint64_t fence = 0;
     auto& runtime = bc250hip::state();
     if (runtime.journal_dispatch_id == UINT64_MAX) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return fail(hipErrorNotSupported);
     }
     std::vector<unsigned char> record;
-    err = bc250hip::prepare_dispatch_record(dispatch, buffer->mem.host, kernarg_bytes,
+    err = bc250hip::prepare_dispatch_record(dispatch, lease.host, kernarg_bytes,
                                             ++runtime.journal_dispatch_id, runtime.by_va, record);
     if (err != hipSuccess) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return bc250hip::refuse("hipLaunchKernel/journal", kernel->name,
                                 "cannot preserve complete dispatch diagnostics", err);
     }
     status = bc250hsa_dispatch_submit_recorded(dev, &dispatch, record.data(),
                                                static_cast<uint32_t>(record.size()), &fence);
     if (status != BC250HSA_OK) {
-        bc250hip::kernarg_release(buffer, 0);
+        bc250hip::kernarg_settle(lease, 0);
         return bc250hip::refuse_status("hipLaunchKernel/dispatch_submit", kernel->name, status);
     }
-    bc250hip::kernarg_release(buffer, fence);
+    bc250hip::kernarg_settle(lease, fence);
     target->last_fence = fence;
     return hipSuccess;
 }

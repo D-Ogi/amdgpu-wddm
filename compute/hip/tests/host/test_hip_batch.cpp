@@ -574,6 +574,68 @@ int main(int argc, char** argv) {
         }
     }
 
+    // -------------------------------------------------------------------------------------
+    std::printf("test_hip_batch: 6. where the kernel arguments of one batch lie\n");
+    // With the arena (runtime/hip_kernarg_arena.cpp) the arguments of consecutive launches lie
+    // side by side on 128-byte lines of their own, so the 32 dispatches of one batch read a few
+    // pages. With BC250_HIP_KERNARG_ARENA=0 every launch has a pool buffer of a page or more.
+    // In both cases the packed bytes are those of the first arm, and no two dispatches in
+    // flight at once share a line.
+    {
+        const char* arena_text = std::getenv("BC250_HIP_KERNARG_ARENA");
+        const bool arena = arena_text == nullptr || std::strcmp(arena_text, "0") != 0;
+        bc250hsa_batch_policy set = on;
+        set.struct_bytes = static_cast<uint32_t>(sizeof(set));
+        check(bc250hsa_batch_policy_set(dev, &set) == BC250HSA_OK, "batching on");
+        bc250hsa_mock_reset();
+        for (uint32_t i = 0; i < kBatchMax; ++i) {
+            check(hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u), args, 0,
+                                  stream) == hipSuccess,
+                  "a launch of the batch");
+        }
+        std::vector<uint64_t> vas;
+        std::vector<Seen>     packed = collect_dispatches();
+        const uint32_t count = bc250hsa_mock_record_count();
+        for (uint32_t i = 0; i < count; ++i) {
+            const bc250hsa_mock_record* record = bc250hsa_mock_record_at(i);
+            if (record != nullptr && record->kind == BC250HSA_MOCK_DISPATCH) {
+                vas.push_back(record->va);
+            }
+        }
+        check(hipStreamSynchronize(stream) == hipSuccess, "the batch ends");
+        check_u64(vas.size(), kBatchMax, "every launch of the batch reached the device");
+
+        uint64_t pages = 0;
+        bool     lines_own = true;
+        bool     bytes_same = true;
+        for (size_t i = 0; i < vas.size(); ++i) {
+            if (i == 0 || vas[i] / 4096u != vas[i - 1] / 4096u) {
+                pages++;
+            }
+            for (size_t j = 0; j < i; ++j) {
+                const uint64_t low = vas[j] < vas[i] ? vas[j] : vas[i];
+                const uint64_t high = vas[j] < vas[i] ? vas[i] : vas[j];
+                if (high - low < packed[i].kernarg_bytes || low / 128u == high / 128u) {
+                    lines_own = false;
+                }
+            }
+            if (i >= packed.size() || as_on.empty() ||
+                packed[i].kernarg_bytes != as_on[0].kernarg_bytes ||
+                std::memcmp(packed[i].kernarg, as_on[0].kernarg, packed[i].kernarg_bytes) != 0) {
+                bytes_same = false;
+            }
+        }
+        std::printf("test_hip_batch:    arena %s, %zu launches touch %llu pages of arguments\n",
+                    arena ? "on" : "off", vas.size(), (unsigned long long)pages);
+        check(lines_own, "no two launches of the batch share an argument line");
+        check(bytes_same, "the packed arguments are the same as in the first arm");
+        if (arena) {
+            check(pages * 4u <= kBatchMax, "the arena: the batch reads at most one page per 4 launches");
+        } else {
+            check_u64(pages, kBatchMax, "the pool: one page per launch");
+        }
+    }
+
     // Back to the default, so that the teardown below is the ordinary path.
     check(bc250hsa_batch_policy_set(dev, &off) == BC250HSA_OK, "batching off again");
     check(hipStreamDestroy(stream) == hipSuccess, "hipStreamDestroy");

@@ -23,6 +23,7 @@ section 4.9), and two of ours that are not HIP (`bc250hipGetCounters` and
 |---|---|
 | `hip_module.cpp` | the registration interface, the fat binary wrapper, the lazy module load |
 | `hip_launch.cpp` | the call configuration, `hipLaunchKernel`, the kernel argument pool |
+| `hip_kernarg_arena.cpp` | the dense kernel argument arena in front of the pool |
 | `hip_memory.cpp` | the allocation table and the memory entry points |
 | `hip_stream.cpp` | software streams over one hardware queue |
 | `hip_event.cpp` | events over the stream fence values |
@@ -97,6 +98,7 @@ been given.
 | `BC250_HIP_GPU_COPY` | `0`, `1` | `1`, the copy engine moves device memory to the host |
 | `BC250_HIP_GPU_COPY_MIN` | bytes, digits only, up to 4294967295. 0 puts every copy on the GPU route. Any other text keeps the default and says so | 4096, below which the host processor is cheaper |
 | `BC250_HIP_GPU_FILL` | `0`, `1` | `0`, `hipMemset` of a device allocation stays a CPU write |
+| `BC250_HIP_KERNARG_ARENA` | `0`, `1` | `1`, the arguments of consecutive launches lie side by side in one arena |
 
 Only a lab build reads these variables (`build-runtime.ps1 -Lab`, BD-167). The runtime of the release package reads
 none of them and always runs with the defaults of the last column.
@@ -116,6 +118,17 @@ reach it. On this part `hipMalloc` makes no such allocation, because it falls ba
 memory when the mapping fails, so the switch is the only way the GPU fill runs here. The switch
 covers device allocations. A `hipMemset` of a `hipHostMalloc` pointer stays a host-processor write,
 because the program holds that pointer and reads the memory itself.
+
+`BC250_HIP_KERNARG_ARENA` selects where `hipLaunchKernel` puts the kernel arguments. With the arena
+on, a launch takes the next 128-byte aligned slice of one 1 MiB host-visible allocation of 16 blocks,
+as the kernel argument ring of the ROCm runtime does, so the arguments of one batch lie in a few
+pages. With it off, each launch takes a buffer of its own, one page at the least, from a pool of
+64. The arena gives a request above 16 KiB to the pool, and also a request that finds the next
+block still in use by a launch that has not submitted or by another thread that waits for it.
+The synchronization is the same for the two: the host processor writes the arguments before the
+submission, the first packets of each indirect buffer invalidate all caches, and memory is written
+again only after the fence values of its readers have retired. Whether the arena is faster on
+unit A is not measured yet. `BC250_HIP_KERNARG_ARENA=0` is the control arm of that measurement.
 
 A copy or fill that the copy engine has accepted is never done again by the host processor.
 Layer 1 reports how far each call got (`bc250hsa_op_receipt`, `bc250hsa.h` section 5.1): nothing

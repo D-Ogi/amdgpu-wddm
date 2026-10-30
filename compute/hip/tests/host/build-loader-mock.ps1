@@ -22,7 +22,7 @@ $common=@('/nologo','/W4','/WX','/O2','/Brepro','/MD','/D_CRT_SECURE_NO_WARNINGS
 $c=@((Join-Path $hip 'tests/host/hipmock_backend.c'))+@('co_loader.c','co_metadata.c','co_msgpack.c','kernarg.c' | ForEach-Object {Join-Path $LoaderSource $_})
 & $cl @common /c /std:c11 "/Fo$Out/" @c
 if($LASTEXITCODE){throw 'host-only C compile failed'}
-$cpp=@('hip_device.cpp','hip_error.cpp','hip_event.cpp','hip_launch.cpp','hip_log.cpp','hip_memory.cpp','hip_module.cpp','hip_occupancy.cpp','hip_perf.cpp','hip_stream.cpp','dllmain.cpp' | ForEach-Object {Join-Path $hip "runtime/$_"})
+$cpp=@('hip_device.cpp','hip_error.cpp','hip_event.cpp','hip_launch.cpp','hip_kernarg_arena.cpp','hip_log.cpp','hip_memory.cpp','hip_module.cpp','hip_occupancy.cpp','hip_perf.cpp','hip_stream.cpp','dllmain.cpp' | ForEach-Object {Join-Path $hip "runtime/$_"})
 & $cl @common /c /std:c++17 /EHsc "/Fo$Out/" @cpp
 if($LASTEXITCODE){throw 'runtime compile failed'}
 $objects=@($c+$cpp | ForEach-Object {Join-Path $Out (([IO.Path]::GetFileNameWithoutExtension($_))+'.obj')})

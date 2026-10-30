@@ -139,6 +139,60 @@ struct KernargBuffer {
     bool         claimed = false;
 };
 
+// The dense kernel argument arena (hip_kernarg_arena.cpp). One host-visible allocation of
+// kBlocks blocks; a launch takes the next kGranule-aligned slice of the open block, and the
+// arguments of consecutive launches therefore lie side by side, as in the kernel argument ring
+// of the ROCm runtime (ManagedBuffer of ROCm/clr rocvirtual.cpp). A block is used again only
+// when no launch holds a slice of it and the highest fence value of its slices has retired.
+// The arena knows offsets only; hip_launch.cpp adds the base address and the waits.
+struct KernargArena {
+    static constexpr uint32_t kBlocks = 16;
+    static constexpr uint32_t kBlockBytes = 64u * 1024u;
+    // One GL2 cache line of GFX10. No two launches share a line, so a line that the GPU read
+    // for one launch never holds bytes the host processor writes later for another.
+    static constexpr uint32_t kGranule = 128;
+    // A request above this goes to the pool, so one large kernel cannot use up a block.
+    static constexpr uint32_t kMaxSlice = kBlockBytes / 4u;
+
+    struct Block {
+        uint64_t fence = 0;     // the highest fence value of a settled slice of this block
+        uint32_t takers = 0;    // slices that a launch took and has not settled yet
+        bool     claimed = false;   // one thread waits for `fence` with the lock released
+    };
+    Block    blocks[kBlocks];
+    // The open block and the first free byte in it. The start state is the last block, full,
+    // so the first take opens block 0.
+    uint32_t current = kBlocks - 1u;
+    uint32_t offset = kBlockBytes;
+};
+
+enum class ArenaTake {
+    kTaken,      // *offset_out is the slice; settle it with arena_settle
+    kWait,       // the next block waits for *wait_for, and it is claimed: *offset_out is its
+                 // start, for arena_unclaim
+    kFallback,   // use the pool for this launch
+};
+
+// Takes a slice of `bytes` at `alignment` (0 means 16). `retired` is the device fence value
+// that has retired. An offset is counted from the start of the arena, not of a block. The
+// caller holds the process lock.
+ArenaTake arena_take(KernargArena& arena, uint32_t bytes, uint32_t alignment, uint64_t retired,
+                     uint32_t* offset_out, uint64_t* wait_for);
+// Ends the claim of a kWait answer, after the wait (or its failure). The caller then takes
+// again, because the arena can change while the lock is released.
+void arena_unclaim(KernargArena& arena, uint32_t block_offset);
+// Settles one slice that started at `offset`: fence is the submission's value, or 0 when the
+// launch failed and nothing was submitted.
+void arena_settle(KernargArena& arena, uint32_t offset, uint64_t fence);
+
+// The kernel arguments of one launch: a slice of the arena, or a buffer of the pool.
+struct KernargLease {
+    unsigned char* host = nullptr;
+    uint64_t       va = 0;
+    KernargBuffer* pooled = nullptr;   // null for a slice of the arena
+    uint32_t       offset = 0;         // the offset of the slice in the arena
+};
+
 struct State {
     std::mutex                              lock;
     // Woken when a GPU copy or fill lets go of its allocations, for a hipFree that waits for
@@ -156,6 +210,12 @@ struct State {
     std::map<uint64_t, Allocation>          by_va;         // ordered, for a range lookup
     std::unordered_map<const void*, uint64_t> va_by_host;
     std::vector<KernargBuffer>              kernargs;
+    // The dense arena in front of the pool. BC250_HIP_KERNARG_ARENA=0 (lab flavour only) turns
+    // it off, so that a lab arm can measure the pool alone. An arena whose allocation fails is
+    // turned off for the process, and every launch then takes the pool.
+    KernargArena                            kernarg_arena;
+    bc250hsa_mem                            kernarg_arena_mem{};
+    bool                                    kernarg_arena_enabled = true;
     std::vector<ihipEvent_t*>               pending_events; // recorded, value not retired yet
     ihipStream_t                            null_stream{};
     int                                     current_device = 0;
@@ -401,6 +461,10 @@ hipError_t stream_drain_pending(Guard& guard, ihipStream_t* stream);
 hipError_t kernarg_acquire(Guard& guard, uint32_t bytes, uint32_t alignment,
                            KernargBuffer** out);
 void       kernarg_release(KernargBuffer* buffer, uint64_t fence);
+// The kernel arguments of one launch: the arena first, the pool when the arena cannot give a
+// slice. Both can wait, so both take the guard. kernarg_settle ends the lease exactly once.
+hipError_t kernarg_take(Guard& guard, uint32_t bytes, uint32_t alignment, KernargLease* out);
+void       kernarg_settle(KernargLease& lease, uint64_t fence);
 
 // Loads the code object of a module, once. The caller holds the lock.
 bc250hsa_status module_ensure_loaded(Module* module);

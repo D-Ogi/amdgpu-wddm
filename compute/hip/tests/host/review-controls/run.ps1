@@ -90,7 +90,9 @@ Compile (@('/std:c11',"/Fo$Out\review_copy_lost.obj","/Fe$Out\review_copy_lost.e
 "commit $full"
 Run 'review_copy_lost' "$Out\review_copy_lost.exe"
 $runtimeObjects = @()
-foreach ($name in 'hip_device','hip_error','hip_event','hip_launch','hip_journal','hip_log','hip_memory','hip_module','hip_perf','hip_stream') {
+foreach ($name in 'hip_device','hip_error','hip_event','hip_launch','hip_journal','hip_kernarg_arena','hip_log','hip_memory','hip_module','hip_occupancy','hip_perf','hip_stream') {
+    # A source that the commit under test does not have yet (hip_kernarg_arena, hip_occupancy) is skipped.
+    if (-not (Test-Path "$src\runtime\$name.cpp")) { continue }
     Compile @('/std:c++17','/EHsc','/c',"/Fo$Out\$name.obj","$src\runtime\$name.cpp")
     $runtimeObjects += "$Out\$name.obj"
 }

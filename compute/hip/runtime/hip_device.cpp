@@ -177,6 +177,19 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
     }
 }
 
+// The kernel argument arena of hip_kernarg_arena.cpp. It is on by default; BC250_HIP_KERNARG_ARENA=0
+// turns it off, and every launch then takes the pool of one buffer per launch, which is the
+// control arm of the arena's lab measurement.
+void apply_kernarg_policy() {
+    // BD-167: a measurement arm of a lab build. A release runtime keeps the arena on.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    char text[32];
+    if (read_text("BC250_HIP_KERNARG_ARENA", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
+        state().kernarg_arena_enabled = false;
+    }
+#endif
+}
+
 }  // namespace
 
 // strtoul alone is not enough here: it skips leading spaces, takes a sign, and turns "-1" into
@@ -245,6 +258,7 @@ hipError_t device(bc250hsa_device** out) {
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
             apply_batch_policy(s.dev);
             apply_gpu_copy_policy(s.dev);
+            apply_kernarg_policy();
         }
     }
     if (s.dev == nullptr) {
@@ -294,6 +308,7 @@ void memory_info(size_t* free_bytes, size_t* total_bytes) {
     for (const bc250hip::KernargBuffer& buffer : s.kernargs) {
         used += buffer.mem.bytes;
     }
+    used += s.kernarg_arena_mem.bytes;
     if (total_bytes != nullptr) {
         *total_bytes = static_cast<size_t>(total);
     }
