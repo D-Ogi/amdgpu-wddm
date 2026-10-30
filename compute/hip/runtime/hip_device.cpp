@@ -302,6 +302,31 @@ hipError_t Guard::wait(bc250hsa_device* dev, uint64_t value) {
 
 void memory_info(size_t* free_bytes, size_t* total_bytes) {
     State& s = state();
+#if BC250_HIP_AMD_ABI_BUILD
+    // The AMD face answers from the two budgets of the adapter. bc250hsa_alloc places
+    // device-local memory in the carve-out while its budget holds the request and in system
+    // memory after that, and refuses only when both are full, so the sum is what a program can
+    // still allocate. PyTorch's caching allocator sizes itself by this number, and a total of
+    // the carve-out alone would refuse work that fits.
+    if (s.dev != nullptr) {
+        bc250hsa_memory_budget budget;
+        std::memset(&budget, 0, sizeof(budget));
+        budget.struct_bytes = static_cast<uint32_t>(sizeof(budget));
+        const uint32_t both = BC250HSA_BUDGET_LOCAL | BC250HSA_BUDGET_NON_LOCAL;
+        if (bc250hsa_memory_budget_read(s.dev, &budget) == BC250HSA_OK &&
+            (budget.valid & both) == both) {
+            const uint64_t all = budget.local_budget + budget.non_local_budget;
+            const uint64_t in_use = budget.local_used + budget.non_local_used;
+            if (total_bytes != nullptr) {
+                *total_bytes = static_cast<size_t>(all);
+            }
+            if (free_bytes != nullptr) {
+                *free_bytes = static_cast<size_t>(all > in_use ? all - in_use : 0);
+            }
+            return;
+        }
+    }
+#endif
     uint64_t total = s.props_valid ? s.props.vram_bytes : 0;
     uint64_t used = 0;
     // Every allocation of the process counts, host visible ones as well: the memory of this

@@ -1,0 +1,154 @@
+; The export list of amdhip64_7.dll, the AMD ABI face of this runtime (runtime\amd_abi.cpp).
+; The ROCm user libraries of TheRock import their HIP names from a DLL of this name.
+;
+; 138 names:
+;   the 55 of amdhip64.def, less hipGetDeviceProperties: its structure is ours, and a program
+;     built against AMD's header calls hipGetDevicePropertiesR0600 instead;
+;   the 83 that the ROCm libraries import and amdhip64.def does not have, from the import census
+;     of the nightly 10.3.0a20261030 packages (scratch\t35\torch-hip\imp-hip.tsv);
+;   bc250amdGetFaceCounters, ours, which reads the counters of the face.
+; Three names mean something else in AMD's header than in ours, so they export a function of
+; amd_abi.cpp under AMD's name: hipDeviceGetAttribute (AMD's attribute numbers),
+; hipEventCreateWithFlags (AMD's flags) and hipLaunchCooperativeKernel (AMD's LDS size is an
+; unsigned int, ours a size_t). build-amd-abi.ps1 checks that every imported name is
+; here and that the built DLL exports exactly this list.
+LIBRARY amdhip64_7.dll
+EXPORTS
+bc250amdGetFaceCounters
+bc250hipGetCounters
+bc250hipResetCounters
+__hipPopCallConfiguration
+__hipPushCallConfiguration
+__hipRegisterFatBinary
+__hipRegisterFunction
+__hipRegisterManagedVar
+__hipRegisterVar
+__hipUnregisterFatBinary
+hipCtxGetCurrent
+hipCtxSetCurrent
+hipDeviceCanAccessPeer
+hipDeviceDisablePeerAccess
+hipDeviceEnablePeerAccess
+hipDeviceGet
+hipDeviceGetAttribute=bc250amd_hipDeviceGetAttribute
+hipDeviceGetDefaultMemPool
+hipDeviceGetGraphMemAttribute
+hipDeviceGetPCIBusId
+hipDeviceGetStreamPriorityRange
+hipDevicePrimaryCtxGetState
+hipDevicePrimaryCtxRetain
+hipDeviceSetGraphMemAttribute
+hipDeviceSynchronize
+hipDeviceTotalMem
+hipDriverGetVersion
+hipDrvGetErrorString
+hipDrvLaunchKernelEx
+hipEventCreate
+hipEventCreateWithFlags=bc250amd_hipEventCreateWithFlags
+hipEventDestroy
+hipEventElapsedTime
+hipEventQuery
+hipEventRecord
+hipEventRecordWithFlags
+hipEventSynchronize
+hipExtGetLastError
+hipExtMallocWithFlags
+hipExtModuleLaunchKernel
+hipExtStreamCreateWithCUMask
+hipFree
+hipFreeAsync
+hipFuncGetAttribute
+hipFuncGetAttributes
+hipFuncSetAttribute
+hipFuncSetCacheConfig
+hipGetDevice
+hipGetDeviceCount
+hipGetDevicePropertiesR0600
+hipGetErrorName
+hipGetErrorString
+hipGetLastError
+hipGetStreamDeviceId
+hipGetSymbolAddress
+hipGraphDestroy
+hipGraphExecDestroy
+hipGraphGetNodes
+hipGraphInstantiateWithFlags
+hipGraphLaunch
+hipGraphNodeGetDependencies
+hipHostFree
+hipHostGetDevicePointer
+hipHostMalloc
+hipHostRegister
+hipHostUnregister
+hipInit
+hipIpcCloseMemHandle
+hipIpcGetEventHandle
+hipIpcGetMemHandle
+hipIpcOpenEventHandle
+hipIpcOpenMemHandle
+hipLaunchCooperativeKernel=bc250amd_hipLaunchCooperativeKernel
+hipLaunchHostFunc
+hipLaunchKernel
+hipLinkAddData
+hipLinkComplete
+hipLinkCreate
+hipLinkDestroy
+hipMalloc
+hipMallocAsync
+hipMallocManaged
+hipMemAddressFree
+hipMemAddressReserve
+hipMemAdvise
+hipMemCreate
+hipMemGetInfo
+hipMemMap
+hipMemPoolGetAttribute
+hipMemPoolSetAccess
+hipMemPoolSetAttribute
+hipMemPoolTrimTo
+hipMemPtrGetInfo
+hipMemRelease
+hipMemSetAccess
+hipMemUnmap
+hipMemcpy
+hipMemcpy2D
+hipMemcpy2DAsync
+hipMemcpyAsync
+hipMemcpyFromSymbol
+hipMemcpyPeerAsync
+hipMemcpyToSymbol
+hipMemcpyWithStream
+hipMemset
+hipMemsetAsync
+hipModuleGetFunction
+hipModuleLaunchCooperativeKernel
+hipModuleLaunchKernel
+hipModuleLoad
+hipModuleLoadData
+hipModuleLoadDataEx
+hipModuleOccupancyMaxActiveBlocksPerMultiprocessor
+hipModuleUnload
+hipOccupancyMaxActiveBlocksPerMultiprocessor
+hipOccupancyMaxPotentialBlockSize
+hipPeekAtLastError
+hipPointerGetAttribute
+hipPointerGetAttributes
+hipRuntimeGetVersion
+hipSetDevice
+hipStreamBeginCapture
+hipStreamCreate
+hipStreamCreateWithFlags
+hipStreamCreateWithPriority
+hipStreamDestroy
+hipStreamEndCapture
+hipStreamGetCaptureInfo
+hipStreamGetCaptureInfo_v2
+hipStreamGetDevice
+hipStreamGetFlags
+hipStreamGetPriority
+hipStreamIsCapturing
+hipStreamQuery
+hipStreamSynchronize
+hipStreamWaitEvent
+hipStreamWaitValue32
+hipThreadExchangeStreamCaptureMode

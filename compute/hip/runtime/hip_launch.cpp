@@ -243,16 +243,221 @@ static hipError_t resolve_kernel(const void* function, const bc250hsa_kernel** o
     return hipSuccess;
 }
 
+hipError_t resolve_kernel_ref(const KernelRef& ref, const bc250hsa_kernel** out) {
+    if (ref.host_stub != nullptr) {
+        return resolve_kernel(ref.host_stub, out);
+    }
+    // A hipFunction_t. Its module loaded at hipModuleLoadData, so the kernel is already known;
+    // the lookup only proves that hipModuleUnload has not taken the handle away.
+    const auto found = state().module_functions.find(ref.module_function);
+    if (found == state().module_functions.end() || found->second->kernel == nullptr) {
+        return hipErrorInvalidHandle;   // AMD's hipErrorInvalidResourceHandle has this value
+    }
+    *out = found->second->kernel;
+    return hipSuccess;
+}
+
 // The same kernel after a wait, or a refusal. A fat binary that another thread unregistered
 // while this launch waited makes the launch invalid, and that is better than a dispatch of a
 // kernel whose code object is gone.
-static hipError_t same_kernel_after_wait(const void* function, const bc250hsa_kernel* kernel) {
+static hipError_t same_kernel_after_wait(const KernelRef& ref, const bc250hsa_kernel* kernel) {
     const bc250hsa_kernel* again = nullptr;
-    const hipError_t err = resolve_kernel(function, &again);
+    const hipError_t err = resolve_kernel_ref(ref, &again);
     if (err != hipSuccess) {
         return err;
     }
     return again == kernel ? hipSuccess : hipErrorInvalidDeviceFunction;
+}
+
+// The explicit arguments of a packed buffer as the pointer array that bc250hsa_kernarg_pack
+// takes: one pointer per explicit argument, into the buffer at the argument's own metadata
+// offset. The packer then copies each one exactly as it copies the arguments of hipLaunchKernel,
+// so the hidden arguments of a packed launch are written by the same code. A buffer that ends
+// before an argument ends is refused: the kernel would read bytes the caller never wrote.
+static hipError_t packed_arg_pointers(const bc250hsa_kernel* kernel, const void* packed,
+                                      size_t packed_bytes, std::vector<void*>& out) {
+    out.clear();
+    out.reserve(kernel->explicit_arg_count);
+    for (uint32_t i = 0; i < kernel->arg_count; ++i) {
+        const bc250hsa_arg& arg = kernel->args[i];
+        if (arg.size == 0u || arg.kind > BC250HSA_ARG_QUEUE) {
+            continue;   // the packer skips the same entries (kernarg.c)
+        }
+        if (static_cast<uint64_t>(arg.offset) + arg.size > packed_bytes) {
+            return hipErrorInvalidValue;
+        }
+        out.push_back(const_cast<unsigned char*>(static_cast<const unsigned char*>(packed)) +
+                      arg.offset);
+    }
+    return hipSuccess;
+}
+
+// The name of one stage of a launch in a refusal line, "hipLaunchKernel/dispatch_submit": the
+// evidence of earlier lab runs is searched for these names.
+static std::string stage(const char* call, const char* step) {
+    return std::string(call) + "/" + step;
+}
+
+hipError_t launch_kernel(Guard& guard, const char* call, const KernelRef& ref,
+                         const uint32_t grid[3], const uint32_t block[3], size_t shared_bytes,
+                         hipStream_t stream, void** args, const void* packed,
+                         size_t packed_bytes) {
+    if (grid[0] == 0 || grid[1] == 0 || grid[2] == 0 || block[0] == 0 || block[1] == 0 ||
+        block[2] == 0) {
+        return fail(hipErrorInvalidValue);
+    }
+    if (shared_bytes > UINT32_MAX) {
+        return fail(hipErrorInvalidValue);
+    }
+
+    bc250hsa_device* dev = nullptr;
+    hipError_t err = device(&dev);
+    if (err != hipSuccess) {
+        return fail(err);
+    }
+
+    const bc250hsa_kernel* kernel = nullptr;
+    err = resolve_kernel_ref(ref, &kernel);
+    if (err != hipSuccess) {
+        return refuse(call, nullptr, ref.host_stub != nullptr
+                                         ? "the host stub names no kernel of a loaded code object"
+                                         : "the function handle names no loaded kernel",
+                      err);
+    }
+
+    // A null args with no packed buffer goes to the packer as before, which decides whether the
+    // kernel can do without arguments.
+    std::vector<void*> packed_args;
+    if (args == nullptr && packed != nullptr) {
+        err = packed_arg_pointers(kernel, packed, packed_bytes, packed_args);
+        if (err != hipSuccess) {
+            return refuse(call, kernel->name,
+                          "the packed argument buffer ends before an argument ends", err);
+        }
+        args = packed_args.data();
+    }
+
+    // The stream is held for the whole launch: the two waits below open the lock, and another
+    // thread may call hipStreamDestroy on it meanwhile.
+    StreamRef held;
+    ihipStream_t* target = resolve_stream(stream);
+    if (target == nullptr) {
+        return fail(hipErrorInvalidHandle);
+    }
+    held.attach(target);
+
+    bc250hsa_launch launch;
+    std::memset(&launch, 0, sizeof(launch));
+    launch.struct_bytes = static_cast<uint32_t>(sizeof(launch));
+    for (int d = 0; d < 3; ++d) {
+        launch.grid[d] = grid[d];
+        launch.block[d] = block[d];
+    }
+    launch.dynamic_group_bytes = static_cast<uint32_t>(shared_bytes);
+
+    uint32_t kernarg_bytes = 0;
+    uint32_t kernarg_align = 0;
+    bc250hsa_status status =
+        bc250hsa_kernarg_requirements(kernel, &kernarg_bytes, &kernarg_align);
+    if (status != BC250HSA_OK) {
+        return refuse_status(stage(call, "kernarg_requirements").c_str(), kernel->name, status);
+    }
+
+    KernargLease lease;
+    err = kernarg_take(guard, kernarg_bytes, kernarg_align, &lease);
+    if (err != hipSuccess) {
+        return refuse(call, kernel->name, "no kernel argument memory in the arena or the pool",
+                      err);
+    }
+    // A full arena or pool waited, and a wait opens the lock.
+    err = same_kernel_after_wait(ref, kernel);
+    if (err != hipSuccess) {
+        kernarg_settle(lease, 0);
+        return fail(err);
+    }
+    if (lease.host == nullptr) {
+        kernarg_settle(lease, 0);
+        return fail(hipErrorOutOfMemory);
+    }
+
+    bc250hsa_pack_result result;
+    std::memset(&result, 0, sizeof(result));
+    result.struct_bytes = static_cast<uint32_t>(sizeof(result));
+    status = bc250hsa_kernarg_pack(kernel, &launch, args, kernel->explicit_arg_count,
+                                   lease.host, kernarg_bytes, lease.va, &result);
+    if (status != BC250HSA_OK) {
+        kernarg_settle(lease, 0);
+        return refuse_status(stage(call, "kernarg_pack").c_str(), kernel->name, status);
+    }
+    if (result.hostcall_buffer_requested != 0) {
+        // Device-side printf needs a host call service, which this build does not have. The
+        // counter of the library answers kill criterion K4 of the route document; the launch
+        // itself is refused, because a kernel that reads a null host call buffer faults.
+        std::fprintf(stderr, "amdhip64: kernel '%s' asks for a host call buffer (device printf), "
+                             "which this build does not support\n",
+                     kernel->name != nullptr ? kernel->name : "<unnamed>");
+        kernarg_settle(lease, 0);
+        return refuse(call, kernel->name, "the kernel asks for a host call buffer (device printf)",
+                      hipErrorNotSupported);
+    }
+    bc250hsa_write_barrier();
+
+    err = stream_drain_pending(guard, target);
+    if (err != hipSuccess) {
+        kernarg_settle(lease, 0);
+        return fail(err);
+    }
+    // The event wait of this stream waited as well, and the packed buffer must still belong to
+    // the kernel this launch resolved.
+    err = same_kernel_after_wait(ref, kernel);
+    if (err != hipSuccess) {
+        kernarg_settle(lease, 0);
+        return fail(err);
+    }
+
+    bc250hsa_dispatch dispatch;
+    std::memset(&dispatch, 0, sizeof(dispatch));
+    dispatch.struct_bytes = static_cast<uint32_t>(sizeof(dispatch));
+    dispatch.flags = state().dispatch_flags;
+    dispatch.kernel = kernel;
+    dispatch.kernarg_va = lease.va;
+    // The AQL dispatch packet of section 7.1 of bc250hsa.h, which a kernel that reads its own
+    // blockDim needs. It sits inside this same kernel argument slice, so it retires with the
+    // dispatch that reads it and the arena or the pool owns its lifetime.
+    if (result.dispatch_packet_requested != 0 && !BC250_HIP_NO_DISPATCH_PACKET_BUILD) {
+        dispatch.dispatch_packet_va = lease.va + result.dispatch_packet_offset;
+    }
+    dispatch.launch = launch;
+
+    uint64_t fence = 0;
+    State& runtime = state();
+    if (runtime.journal_dispatch_id == UINT64_MAX) {
+        kernarg_settle(lease, 0);
+        return fail(hipErrorNotSupported);
+    }
+    // The record of State, reused: clear() keeps the capacity, so a launch makes no heap
+    // allocation for it after the first one. The lock stays held from here to the submission,
+    // and the backend copies the record before it returns (bc250hsa.h, the comment of
+    // bc250hsa_dispatch_submit_recorded), so no other launch writes it while it is in use.
+    std::vector<unsigned char>& record = runtime.launch_record;
+    err = prepare_dispatch_record(dispatch, lease.host, kernarg_bytes,
+                                  ++runtime.journal_dispatch_id, runtime.by_va, record);
+    if (err != hipSuccess) {
+        kernarg_settle(lease, 0);
+        return refuse(stage(call, "journal").c_str(), kernel->name, "cannot preserve complete dispatch diagnostics", err);
+    }
+    status = bc250hsa_dispatch_submit_recorded(dev, &dispatch, record.data(),
+                                               static_cast<uint32_t>(record.size()), &fence);
+    if (status != BC250HSA_OK) {
+        kernarg_settle(lease, 0);
+        return refuse_status(stage(call, "dispatch_submit").c_str(), kernel->name, status);
+    }
+    kernarg_settle(lease, fence);
+    target->last_fence = fence;
+    if (packed != nullptr) {
+        runtime.face.packed_launches++;
+    }
+    return hipSuccess;
 }
 
 }  // namespace bc250hip
@@ -301,151 +506,11 @@ hipError_t hipLaunchKernel(const void* function, dim3 gridDim, dim3 blockDim, vo
     if (function == nullptr) {
         return fail(hipErrorInvalidDeviceFunction);
     }
-    if (gridDim.x == 0 || gridDim.y == 0 || gridDim.z == 0 || blockDim.x == 0 ||
-        blockDim.y == 0 || blockDim.z == 0) {
-        return fail(hipErrorInvalidValue);
-    }
-    if (sharedMemBytes > UINT32_MAX) {
-        return fail(hipErrorInvalidValue);
-    }
-
+    const uint32_t grid[3] = {gridDim.x, gridDim.y, gridDim.z};
+    const uint32_t block[3] = {blockDim.x, blockDim.y, blockDim.z};
     bc250hip::Guard guard;
-    bc250hsa_device* dev = nullptr;
-    hipError_t err = bc250hip::device(&dev);
-    if (err != hipSuccess) {
-        return fail(err);
-    }
-
-    const bc250hsa_kernel* kernel = nullptr;
-    err = bc250hip::resolve_kernel(function, &kernel);
-    if (err != hipSuccess) {
-        return bc250hip::refuse("hipLaunchKernel", nullptr,
-                                "the host stub names no kernel of a loaded code object", err);
-    }
-
-    // The stream is held for the whole launch: the two waits below open the lock, and another
-    // thread may call hipStreamDestroy on it meanwhile.
-    bc250hip::StreamRef held;
-    ihipStream_t* target = bc250hip::resolve_stream(stream);
-    if (target == nullptr) {
-        return fail(hipErrorInvalidHandle);
-    }
-    held.attach(target);
-
-    bc250hsa_launch launch;
-    std::memset(&launch, 0, sizeof(launch));
-    launch.struct_bytes = static_cast<uint32_t>(sizeof(launch));
-    launch.grid[0] = gridDim.x;
-    launch.grid[1] = gridDim.y;
-    launch.grid[2] = gridDim.z;
-    launch.block[0] = blockDim.x;
-    launch.block[1] = blockDim.y;
-    launch.block[2] = blockDim.z;
-    launch.dynamic_group_bytes = static_cast<uint32_t>(sharedMemBytes);
-
-    uint32_t kernarg_bytes = 0;
-    uint32_t kernarg_align = 0;
-    bc250hsa_status status =
-        bc250hsa_kernarg_requirements(kernel, &kernarg_bytes, &kernarg_align);
-    if (status != BC250HSA_OK) {
-        return bc250hip::refuse_status("hipLaunchKernel/kernarg_requirements", kernel->name,
-                                       status);
-    }
-
-    bc250hip::KernargLease lease;
-    err = bc250hip::kernarg_take(guard, kernarg_bytes, kernarg_align, &lease);
-    if (err != hipSuccess) {
-        return bc250hip::refuse("hipLaunchKernel", kernel->name,
-                                "no kernel argument memory in the arena or the pool", err);
-    }
-    // A full arena or pool waited, and a wait opens the lock.
-    err = bc250hip::same_kernel_after_wait(function, kernel);
-    if (err != hipSuccess) {
-        bc250hip::kernarg_settle(lease, 0);
-        return fail(err);
-    }
-    if (lease.host == nullptr) {
-        bc250hip::kernarg_settle(lease, 0);
-        return fail(hipErrorOutOfMemory);
-    }
-
-    bc250hsa_pack_result packed;
-    std::memset(&packed, 0, sizeof(packed));
-    packed.struct_bytes = static_cast<uint32_t>(sizeof(packed));
-    status = bc250hsa_kernarg_pack(kernel, &launch, args, kernel->explicit_arg_count,
-                                   lease.host, kernarg_bytes, lease.va, &packed);
-    if (status != BC250HSA_OK) {
-        bc250hip::kernarg_settle(lease, 0);
-        return bc250hip::refuse_status("hipLaunchKernel/kernarg_pack", kernel->name, status);
-    }
-    if (packed.hostcall_buffer_requested != 0) {
-        // Device-side printf needs a host call service, which this build does not have. The
-        // counter of the library answers kill criterion K4 of the route document; the launch
-        // itself is refused, because a kernel that reads a null host call buffer faults.
-        std::fprintf(stderr, "amdhip64: kernel '%s' asks for a host call buffer (device printf), "
-                             "which this build does not support\n",
-                     kernel->name != nullptr ? kernel->name : "<unnamed>");
-        bc250hip::kernarg_settle(lease, 0);
-        return bc250hip::refuse("hipLaunchKernel", kernel->name,
-                                "the kernel asks for a host call buffer (device printf)",
-                                hipErrorNotSupported);
-    }
-    bc250hsa_write_barrier();
-
-    err = bc250hip::stream_drain_pending(guard, target);
-    if (err != hipSuccess) {
-        bc250hip::kernarg_settle(lease, 0);
-        return fail(err);
-    }
-    // The event wait of this stream waited as well, and the packed buffer must still belong to
-    // the kernel this launch resolved.
-    err = bc250hip::same_kernel_after_wait(function, kernel);
-    if (err != hipSuccess) {
-        bc250hip::kernarg_settle(lease, 0);
-        return fail(err);
-    }
-
-    bc250hsa_dispatch dispatch;
-    std::memset(&dispatch, 0, sizeof(dispatch));
-    dispatch.struct_bytes = static_cast<uint32_t>(sizeof(dispatch));
-    dispatch.flags = bc250hip::state().dispatch_flags;
-    dispatch.kernel = kernel;
-    dispatch.kernarg_va = lease.va;
-    // The AQL dispatch packet of section 7.1 of bc250hsa.h, which a kernel that reads its own
-    // blockDim needs. It sits inside this same kernel argument slice, so it retires with the
-    // dispatch that reads it and the arena or the pool owns its lifetime.
-    if (packed.dispatch_packet_requested != 0 && !BC250_HIP_NO_DISPATCH_PACKET_BUILD) {
-        dispatch.dispatch_packet_va = lease.va + packed.dispatch_packet_offset;
-    }
-    dispatch.launch = launch;
-
-    uint64_t fence = 0;
-    auto& runtime = bc250hip::state();
-    if (runtime.journal_dispatch_id == UINT64_MAX) {
-        bc250hip::kernarg_settle(lease, 0);
-        return fail(hipErrorNotSupported);
-    }
-    // The record of State, reused: clear() keeps the capacity, so a launch makes no heap
-    // allocation for it after the first one. The lock stays held from here to the submission,
-    // and the backend copies the record before it returns (bc250hsa.h, the comment of
-    // bc250hsa_dispatch_submit_recorded), so no other launch writes it while it is in use.
-    std::vector<unsigned char>& record = runtime.launch_record;
-    err = bc250hip::prepare_dispatch_record(dispatch, lease.host, kernarg_bytes,
-                                            ++runtime.journal_dispatch_id, runtime.by_va, record);
-    if (err != hipSuccess) {
-        bc250hip::kernarg_settle(lease, 0);
-        return bc250hip::refuse("hipLaunchKernel/journal", kernel->name,
-                                "cannot preserve complete dispatch diagnostics", err);
-    }
-    status = bc250hsa_dispatch_submit_recorded(dev, &dispatch, record.data(),
-                                               static_cast<uint32_t>(record.size()), &fence);
-    if (status != BC250HSA_OK) {
-        bc250hip::kernarg_settle(lease, 0);
-        return bc250hip::refuse_status("hipLaunchKernel/dispatch_submit", kernel->name, status);
-    }
-    bc250hip::kernarg_settle(lease, fence);
-    target->last_fence = fence;
-    return hipSuccess;
+    return bc250hip::launch_kernel(guard, "hipLaunchKernel", bc250hip::KernelRef{function, nullptr},
+                                   grid, block, sharedMemBytes, stream, args, nullptr, 0);
 }
 
 // The dynamic group memory ceiling of one kernel. On a CUDA part a kernel may not ask for more
