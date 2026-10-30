@@ -1,0 +1,24 @@
+{
+  "schema": "bc250.llama-hip-patches/1",
+  "upstream": "https://github.com/ggml-org/llama.cpp",
+  "base": "b86d2f07542b29ab099aed34fd6b6d1b2fd4b81c",
+  "comment": [
+    "The complete set of llama.cpp source changes of the HIP route, in the order they apply on the base.",
+    "build-llama-patched.ps1 checks every marker and applies the missing patches in this order with -ApplyPatches.",
+    "test-llama-build-options.ps1 checks that every patch file of this directory is in the list, and, given an",
+    "upstream checkout, that the whole list applies on the base in this order. The marker of each entry is a string",
+    "that the patch adds to the file and that the base does not hold, so the marker, not the patch file, is the",
+    "evidence that a change is in. The llama-rdna1-* entries are ports of the MIT llama.cpp patches of",
+    "https://github.com/akandr/bc250-rocm (patches/llamacpp); each has its own .md with the source and the rebase notes."
+  ],
+  "patches": [
+    { "patch": "llama-no-device-printf.patch", "file": "ggml/src/ggml-cuda/common.cuh",
+      "marker": "#ifndef BC250_HIP_NO_DEVICE_PRINTF", "what": "no device printf in the HIP kernels" },
+    { "patch": "llama-gfx1013-rdna1.patch", "file": "ggml/src/ggml-cuda/vendors/hip.h",
+      "marker": "defined(__gfx1013__)", "what": "gfx1013 in the device-side RDNA1 list" },
+    { "patch": "llama-no-asm-dp4a.patch", "file": "ggml/src/ggml-cuda/common.cuh",
+      "marker": "!defined(BC250_HIP_NO_ASM_DP4A)", "what": "the RDNA1 dp4a assembly behind a macro" },
+    { "patch": "llama-bc250-allocation-cap.patch", "file": "ggml/src/ggml-cuda/ggml-cuda.cu",
+      "marker": "BC250_HIP_MAX_ALLOC_BYTES", "what": "the measured per-allocation limit" }
+  ]
+}

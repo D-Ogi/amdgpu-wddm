@@ -26,25 +26,22 @@ if (-not $PatchDir) {
     $PatchDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 }
 
-# The complete set of source changes this HIP route needs, each with the marker that says it is in.
-# A source copy that is missing one of them builds and loads, and is wrong: without the RDNA1 entry
-# the device compiles mul_mat_vec_q_moe with a smaller __launch_bounds__ than the block the host
-# launches (256 threads into a kernel built for 128), which is the expert path of every MoE model.
-# This set used to hold two of the four, and the other two lived only in a reviewed source snapshot
-# and in the shipped asset's provenance, so a rebuild driven from this directory produced that wrong
-# binary and nothing said so. The marker, not the patch file, is the evidence that a change is in.
-$patchSet = @(
-    @{ Patch = 'llama-no-device-printf.patch'; File = 'ggml/src/ggml-cuda/common.cuh';
-       Marker = '#ifndef BC250_HIP_NO_DEVICE_PRINTF'; What = 'no device printf in the HIP kernels' }
-    @{ Patch = 'llama-gfx1013-rdna1.patch'; File = 'ggml/src/ggml-cuda/vendors/hip.h';
-       Marker = 'defined(__gfx1013__)'; What = 'gfx1013 in the device-side RDNA1 list' }
-    @{ Patch = 'llama-no-asm-dp4a.patch'; File = 'ggml/src/ggml-cuda/common.cuh';
-       Marker = '!defined(BC250_HIP_NO_ASM_DP4A)'; What = 'the RDNA1 dp4a assembly behind a macro' }
-    # The allocation cap is the one opt-in change: -Bc250AllocationCap turns it on in the compiler
-    # flags, so the source carries it in every build and the define decides.
-    @{ Patch = 'llama-bc250-allocation-cap.patch'; File = 'ggml/src/ggml-cuda/ggml-cuda.cu';
-       Marker = 'BC250_HIP_MAX_ALLOC_BYTES'; What = 'the measured per-allocation limit' }
-)
+# The complete set of source changes this HIP route needs, each with the marker that says it is in,
+# in the order they apply: llama-patches.json next to this script. A source copy that is missing one
+# of them builds and loads, and is wrong or slow: without the RDNA1 entry the device compiles
+# mul_mat_vec_q_moe with a smaller __launch_bounds__ than the block the host launches (256 threads
+# into a kernel built for 128), which is the expert path of every MoE model. This set once held two
+# of the four changes of its first day, and the other two lived only in a reviewed source snapshot,
+# so a rebuild driven from this directory produced that wrong binary and nothing said so. The marker,
+# not the patch file, is the evidence that a change is in. The allocation cap is the one opt-in
+# change: -Bc250AllocationCap turns it on in the compiler flags, so the source carries it in every
+# build and the define decides. Every other change, the RDNA1 kernel ports included, is on.
+$patchList = Join-Path $PatchDir 'llama-patches.json'
+if (-not (Test-Path -LiteralPath $patchList)) { throw "missing patch list $patchList" }
+$patchSet = @((Get-Content -LiteralPath $patchList -Raw | ConvertFrom-Json).patches | ForEach-Object {
+    @{ Patch = [string]$_.patch; File = [string]$_.file; Marker = [string]$_.marker; What = [string]$_.what }
+})
+if (-not $patchSet.Count) { throw "the patch list $patchList names no patch" }
 function Test-PatchMarker($item) {
     $path = Join-Path $Source $item.File
     if (-not (Test-Path -LiteralPath $path)) { throw "the source copy has no $($item.File)" }
