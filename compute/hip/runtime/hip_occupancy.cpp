@@ -82,9 +82,9 @@ int occupancy_blocks_per_cu(const OccupancyInput& in) {
     uint32_t blocks = waves_per_simd / per_simd_per_block;
 
     if (in.group_bytes > 0u) {
-        const uint32_t by_lds = in.lds_bytes_per_cu / in.group_bytes;
+        const uint64_t by_lds = in.lds_bytes_per_cu / in.group_bytes;
         if (by_lds < blocks) {
-            blocks = by_lds;
+            blocks = static_cast<uint32_t>(by_lds);
         }
     }
     if (waves_per_block > 1u && blocks > kBarriersPerCu) {
