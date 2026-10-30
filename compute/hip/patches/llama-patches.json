@@ -25,6 +25,8 @@
     { "patch": "llama-rdna1-pkf16-gemm.patch", "file": "ggml/src/ggml-cuda/ggml-cuda.cu",
       "marker": "#include \"ggml-cuda/mmf16-rdna1.cuh\"", "what": "RDNA1 prefill through a packed-fp16 tile GEMM" },
     { "patch": "llama-rdna1-pkf16-tile.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
-      "marker": "#define MMF16_BN  64", "what": "the packed-fp16 GEMM with a 64-column tile" }
+      "marker": "#define MMF16_BN  64", "what": "the packed-fp16 GEMM with a 64-column tile" },
+    { "patch": "llama-rdna1-pkf16-q8_0.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
+      "marker": "GGML_RDNA1_PKF16_Q8=0 puts it back on MMQ", "what": "q8_0 on the packed-fp16 GEMM" }
   ]
 }
