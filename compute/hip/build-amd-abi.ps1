@@ -15,6 +15,8 @@
 #   2. The exports of every DLL built equal amdhip64_7.def, and every name of the import census
 #      (-Census, imp-hip.tsv) is exported.
 #   3. amd-headers.json records the SHA-256 of every AMD header that amd_abi.cpp included.
+#   4. test_amd_face_props: the mock DLL says that the host cannot read device memory through a
+#      device pointer (isLargeBar and the managed and pageable memory properties are 0).
 #
 # Outputs under -Out: mock\amdhip64_7.dll (the runtime over tests\host\hipmock_backend.c with the
 # production loader, for a machine with no BC-250) and amdhip64_7.dll (the runtime over layer 1),
@@ -163,6 +165,15 @@ $mockC = @('hipmock_backend.obj', 'co_loader.obj', 'co_metadata.obj', 'co_msgpac
     ForEach-Object { Join-Path $mockObj $_ }
 $null = Invoke-Cl ($warn + @('/LD', '/std:c++17', '/EHsc', "/Fo$mockObj\", "/Fe$mockDll") + $includes + $runtimeSources +
     $mockC + @($faceObject, '/link', "/DEF:$def") + $libpaths) 'amdhip64_7.dll (mock)'
+# The properties of the face, read from the mock DLL through AMD's header. The object goes to a
+# directory of its own: step 1 links every object of obj-abi-test.
+$propsObj = Join-Path $Out 'obj-props-test'
+New-Item -ItemType Directory -Force $propsObj | Out-Null
+$propsExe = Join-Path $Out 'test_amd_face_props.exe'
+$null = Invoke-Cl ($warn + $amdDefines + @('/std:c++17', '/EHsc', "/Fo$propsObj\", "/Fe$propsExe") + $amdIncludes +
+    @((Join-Path $hip 'tests\host\test_amd_face_props.cpp'), '/link') + $libpaths) 'test_amd_face_props'
+& $propsExe $mockDll
+if ($LASTEXITCODE -ne 0) { throw "test_amd_face_props failed ($LASTEXITCODE)" }
 
 # ---------------------------------------------------------------------------------------------
 # 4. The product DLL over layer 1. Without -Bc250hsaLib the layer-1 sources are compiled here,

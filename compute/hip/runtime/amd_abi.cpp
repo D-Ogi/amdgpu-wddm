@@ -149,7 +149,11 @@ hipError_t fill_props(hipDeviceProp_tR0600* prop) {
     prop->memoryPoolsSupported = 0;
     prop->clockInstructionRate = 0;    // not measured on this part
     fill_arch(&prop->arch);
-    prop->isLargeBar = info.visible_vram_bytes != 0 && info.visible_vram_bytes == info.vram_bytes;
+    // 1 tells a library that the host can read device memory through a device pointer. torch
+    // then reads a one-element tensor that way after a stream synchronize
+    // (_local_scalar_dense_cuda), but a hipMalloc pointer of this runtime is a GPU address
+    // only: with 1 here every .item() was an access violation (test_amd_face_props).
+    prop->isLargeBar = 0;
     prop->asicRevision = 0;
     return hipSuccess;
 }
