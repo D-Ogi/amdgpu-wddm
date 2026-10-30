@@ -27,6 +27,7 @@ section 4.9), and two of ours that are not HIP (`bc250hipGetCounters` and
 | `hip_stream.cpp` | software streams over one hardware queue |
 | `hip_event.cpp` | events over the stream fence values |
 | `hip_device.cpp` | the process state, the lazy device, the device properties |
+| `hip_occupancy.cpp` | the occupancy model: wave slots, the VGPR file, local memory and barriers |
 | `hip_error.cpp` | the per-thread error state and the status translation |
 | `hip_perf.cpp` | the two counter calls, which are ours and not HIP |
 | `dllmain.cpp` | the entry point, which does nothing on purpose |

@@ -160,7 +160,7 @@ function Invoke-Cl([string[]]$Arguments, [string]$What) {
 }
 
 $runtimeSources = @('hip_device.cpp', 'hip_error.cpp', 'hip_event.cpp', 'hip_launch.cpp', 'hip_journal.cpp',
-    'hip_log.cpp', 'hip_memory.cpp', 'hip_module.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
+    'hip_log.cpp', 'hip_memory.cpp', 'hip_module.cpp', 'hip_occupancy.cpp', 'hip_perf.cpp', 'hip_stream.cpp') |
     ForEach-Object { Join-Path $hip "runtime\$_" }
 $dllSource = Join-Path $hip 'runtime\dllmain.cpp'
 $mockSource = Join-Path $hip 'tests\host\hipmock_backend.c'
@@ -205,6 +205,13 @@ if (-not $SkipTests) {
         $includes + @('/link') + $libpaths) 'test_hip_journal'
     & $journalExe
     if ($LASTEXITCODE -ne 0) { throw 'HIP journal packing gate failed' }
+    # The occupancy model of hipOccupancyMaxActiveBlocksPerMultiprocessor, which is pure.
+    $occupancyExe = Join-Path $Out 'test_hip_occupancy.exe'
+    Invoke-Cl ($warn + @('/MT', '/std:c++17', '/EHsc', "/Fo$journalObjDir\", "/Fe$occupancyExe",
+        (Join-Path $hip 'tests\host\test_hip_occupancy.cpp'), (Join-Path $objDir 'hip_occupancy.obj')) +
+        $includes + @('/link') + $libpaths) 'test_hip_occupancy'
+    & $occupancyExe
+    if ($LASTEXITCODE -ne 0) { throw 'HIP occupancy model gate failed' }
     $testExe = Join-Path $Out 'test_hip_mock.exe'
     $testObjDir = Join-Path $Out 'obj-test'
     New-Item -ItemType Directory -Force $testObjDir | Out-Null

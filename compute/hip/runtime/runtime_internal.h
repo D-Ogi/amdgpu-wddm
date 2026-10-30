@@ -412,6 +412,20 @@ hipError_t prepare_dispatch_record(const bc250hsa_dispatch& dispatch,
                                   const std::map<uint64_t, Allocation>& allocations,
                                   std::vector<unsigned char>& output);
 
+// The occupancy model of hipOccupancyMaxActiveBlocksPerMultiprocessor (hip_occupancy.cpp). It
+// is pure, so a host test checks it with no device. One "multiprocessor" is one compute unit of
+// two SIMDs, which is what hipGetDeviceProperties counts in multiProcessorCount.
+struct OccupancyInput {
+    uint32_t block_threads = 0;     // the blockSize argument
+    uint32_t wave_size = 0;         // 32 on this part
+    uint32_t waves_per_cu = 0;      // bc250hsa_props.waves_per_cu, both SIMDs
+    uint32_t vgprs = 0;             // VGPRs of one wave, occupancy_kernel_vgprs
+    uint64_t group_bytes = 0;       // the static group segment plus the dynamic request
+    uint64_t lds_bytes_per_cu = 0;  // the local memory of one compute unit
+};
+uint32_t occupancy_kernel_vgprs(const bc250hsa_kernel& kernel);
+int      occupancy_blocks_per_cu(const OccupancyInput& in);
+
 // A monotonic host clock in milliseconds, for hipEventElapsedTime.
 double host_now_ms();
 
