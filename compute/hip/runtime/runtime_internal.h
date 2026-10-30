@@ -216,6 +216,9 @@ struct State {
     KernargArena                            kernarg_arena;
     bc250hsa_mem                            kernarg_arena_mem{};
     bool                                    kernarg_arena_enabled = true;
+    // The vector register limit of the occupancy model (hip_occupancy.cpp). BC250_HIP_OCCUPANCY_VGPR=0
+    // (lab flavour only) leaves it out, which gives the model before 2026-10-30.
+    bool                                    occupancy_registers = true;
     // The dispatch journal record of the launch in progress (hip_launch.cpp), kept for its capacity.
     std::vector<unsigned char>              launch_record;
     std::vector<ihipEvent_t*>               pending_events; // recorded, value not retired yet

@@ -99,6 +99,7 @@ been given.
 | `BC250_HIP_GPU_COPY_MIN` | bytes, digits only, up to 4294967295. 0 puts every copy on the GPU route. Any other text keeps the default and says so | 4096, below which the host processor is cheaper |
 | `BC250_HIP_GPU_FILL` | `0`, `1` | `0`, `hipMemset` of a device allocation stays a CPU write |
 | `BC250_HIP_KERNARG_ARENA` | `0`, `1` | `1`, the arguments of consecutive launches lie side by side in one arena |
+| `BC250_HIP_OCCUPANCY_VGPR` | `0`, `1` | `1`, the occupancy query counts the vector registers of the kernel |
 
 Only a lab build reads these variables (`build-runtime.ps1 -Lab`, BD-167). The runtime of the release package reads
 none of them and always runs with the defaults of the last column.

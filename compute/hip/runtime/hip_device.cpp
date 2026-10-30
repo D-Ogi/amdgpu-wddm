@@ -177,15 +177,22 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
     }
 }
 
-// The kernel argument arena of hip_kernarg_arena.cpp. It is on by default; BC250_HIP_KERNARG_ARENA=0
-// turns it off, and every launch then takes the pool of one buffer per launch, which is the
-// control arm of the arena's lab measurement.
-void apply_kernarg_policy() {
-    // BD-167: a measurement arm of a lab build. A release runtime keeps the arena on.
+// Two switches of the launch path, each on by default and each the control arm of its own lab
+// measurement:
+//
+//   BC250_HIP_KERNARG_ARENA=0   every launch takes the pool of one buffer per launch instead of
+//                               a slice of the arena of hip_kernarg_arena.cpp
+//   BC250_HIP_OCCUPANCY_VGPR=0  hipOccupancyMaxActiveBlocksPerMultiprocessor leaves the vector
+//                               registers out, which is the model before 2026-10-30
+void apply_launch_policy() {
+    // BD-167: measurement arms of a lab build. A release runtime keeps both on.
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     char text[32];
     if (read_text("BC250_HIP_KERNARG_ARENA", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
         state().kernarg_arena_enabled = false;
+    }
+    if (read_text("BC250_HIP_OCCUPANCY_VGPR", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
+        state().occupancy_registers = false;
     }
 #endif
 }
@@ -258,7 +265,7 @@ hipError_t device(bc250hsa_device** out) {
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
             apply_batch_policy(s.dev);
             apply_gpu_copy_policy(s.dev);
-            apply_kernarg_policy();
+            apply_launch_policy();
         }
     }
     if (s.dev == nullptr) {
@@ -625,7 +632,7 @@ hipError_t hipOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, const vo
     in.waves_per_cu = prop.maxThreadsPerMultiProcessor > 0
                           ? static_cast<uint32_t>(prop.maxThreadsPerMultiProcessor / prop.warpSize)
                           : 0u;
-    in.vgprs = entry.kernel != nullptr
+    in.vgprs = entry.kernel != nullptr && s.occupancy_registers
                    ? bc250hip::occupancy_kernel_vgprs(*entry.kernel)
                    : 0u;
     in.group_bytes = group_bytes;
