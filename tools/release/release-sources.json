@@ -102,11 +102,11 @@
     "d3d11_icd": "Current tester.34 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 7def507b03541117ce0f48482f3f4022263ad763; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 7def507b03541117ce0f48482f3f4022263ad763. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_umd": "Current tester.34 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 088a15881c6115549956743b8d9bfda1a1f15e10; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 088a15881c6115549956743b8d9bfda1a1f15e10; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "vulkan_icd": "Current tester.34 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm de66c413f971331bef60046309444d8e60425f6e; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm de66c413f971331bef60046309444d8e60425f6e; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "control": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033; release payload/control/bc250control.dll: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033; lab payload/control/bc250control.dll: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "control": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm e551740978f11be78d858b000bc63492cded775e; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm e551740978f11be78d858b000bc63492cded775e; release payload/control/bc250control.dll: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033; lab payload/control/bc250control.dll: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.34 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm a9b5bd924f8fe9747c53ddc89139941c33426e1e; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm a9b5bd924f8fe9747c53ddc89139941c33426e1e; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 86ca97b2eedaf4554a6c8db11b598ce58d04e643; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 7def507b03541117ce0f48482f3f4022263ad763; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 7def507b03541117ce0f48482f3f4022263ad763; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm a9b5bd924f8fe9747c53ddc89139941c33426e1e; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm a9b5bd924f8fe9747c53ddc89139941c33426e1e; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 47cf677139bb3f9b1e6e199d5a85dfa33a373076; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 47cf677139bb3f9b1e6e199d5a85dfa33a373076; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 7def507b03541117ce0f48482f3f4022263ad763; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 7def507b03541117ce0f48482f3f4022263ad763; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 9d8168c994752cd5c6fda8ae485022849c751e7d; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 9d8168c994752cd5c6fda8ae485022849c751e7d; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.34 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm c281df214cde2c008a8a6e26827b494a76d22e29. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "firmware": "linux-firmware 2b8daaf611fbade74f26a5b58ec1defe6a02f5e0, downloaded by the installer",
-    "control_app": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm 86c19b9a6e634a0d149734c008bc3d03e3575033. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "control_app": "Current tester.34 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm e551740978f11be78d858b000bc63492cded775e; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm e551740978f11be78d858b000bc63492cded775e. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_router": "Current tester.34 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm 62271f6009f5de2003f3f4947a821a17f7cf21f3. File rows retain exact recipes, hashes, dependencies and validation limits."
   },
   "public_commits": {
@@ -2179,11 +2179,11 @@
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/t34/release/set/artifacts/release/control-rel/amdgpu_wddm_control.exe",
-      "sha256": "2FE3E536B45C0A95D2112CBFC599CC5A1F072C1F54CFA26A58960443B830134B",
+      "source": "scratch/t34/release/set/artifacts/release/control-exe-rel/amdgpu_wddm_control.exe",
+      "sha256": "0AA27EB13B5A3739AC57BA7F65F3B4E2CFD5981123EF3F8995ED0EC098AF2A15",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
+        "commit": "e551740978f11be78d858b000bc63492cded775e",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2200,18 +2200,18 @@
         ],
         "output": "amdgpu_wddm_control.exe"
       },
-      "size": 2677248,
-      "authenticode_sha256": "8CA148A551598DA4CE7FFD2A9BFD4CEDC06B1501E44973D8E481D5F203F6A7C9",
+      "size": 2676224,
+      "authenticode_sha256": "12E8755FC7E1F2F8465CDFD0C16ED9E1285EA8211B9D0B0F57752C9CF92C26DB",
       "flavour": "release"
     },
     {
       "component": "control",
       "path": "payload/control/amdgpu_wddm_control.exe",
-      "source": "scratch/t34/release/set/artifacts/lab/control-lab/amdgpu_wddm_control.exe",
-      "sha256": "4EA28D06C733F010FCE074AFE0B9E72C0D28253DCC6C302BF98FC78F3F0F61A8",
+      "source": "scratch/t34/release/set/artifacts/lab/control-exe-lab/amdgpu_wddm_control.exe",
+      "sha256": "ACCBD4EE49C788EFC2A78D03BD77847AFB9F93CD1FBCA520F8F6E239789FE003",
       "built_from": {
         "repo": "amdgpu-wddm",
-        "commit": "86c19b9a6e634a0d149734c008bc3d03e3575033",
+        "commit": "e551740978f11be78d858b000bc63492cded775e",
         "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
         "args": [
           "-Compiler",
@@ -2228,8 +2228,8 @@
         ],
         "output": "amdgpu_wddm_control.exe"
       },
-      "size": 2677248,
-      "authenticode_sha256": "61AA4742DCB7CD1DB557BAF811FFD2CCBCFC3274483ADBFFFFF606CB9C820DA2",
+      "size": 2676736,
+      "authenticode_sha256": "B34402DEFFDA098F261533DCE71DE14E13CB0488E6F7F86D9ED51C9B8CAFB541",
       "flavour": "lab"
     },
     {
