@@ -14,12 +14,12 @@ accepted state. Points 1, 3 to 5 stand.
   runs a compute shader, all inside the display-only miniport and driven through escapes (ADR 0007).
 - A Vulkan driver cannot talk to a display-only miniport: no allocations, no contexts, no submission. M8 needs
   the VidMm and VidSch half, which means `DxgkInitialize` instead of `DxgkInitializeDisplayOnlyDriver`.
-- One PCI function has one function driver (`docs/research/m7-full-wddm-miniport.md` section 2.6). The display
-  path and the render path live in one binary or not at all.
-- In the scheduler and paging DDIs a failure return is a bugcheck (same document, section 1.2(d)). The
-  project's habit of returning an honest failure code does not carry over to them.
-- What Windows does with a started full adapter that has no Direct3D user-mode driver is documented nowhere
-  (section 2.3). It has to be measured, on a machine that can be recovered.
+- One PCI function has one function driver. The display path and the render path live in one binary or not
+  at all.
+- In the scheduler and paging DDIs a failure return is a bugcheck. The project's habit of returning an honest
+  failure code does not carry over to them.
+- What Windows does with a started full adapter that has no Direct3D user-mode driver is documented nowhere.
+  It has to be measured, on a machine that can be recovered.
 - Linux has no working GPU reset for this part (facts M53): `amdgpu_gpu_recover` performs no reset and hangs
   the machine. There is nothing to transcribe for `DxgkDdiResetFromTimeout`.
 
@@ -38,7 +38,7 @@ accepted state. Points 1, 3 to 5 stand.
    `SubmitCommand`, `SubmitCommandVirtual` return `STATUS_SUCCESS` on every path; `BuildPagingBuffer` returns
    one of its three legal codes and consumes nothing for an operation it does not know. What went wrong inside
    them goes to the guard log and to an escape, not into the return value.
-6. **Four stages, each an experiment with evidence and an exit criterion** (research document section 5):
+6. **Four stages, each an experiment with evidence and an exit criterion**:
    A - the adapter starts and the desktop survives, no submission, run with and without a stub user-mode
    driver; B - segments, GPU VA and `BuildPagingBuffer` onto the PTE format M4 validated, driven by a D3DKMT
    tool and witnessed through `bc250rd`; C - one context, one submission through `SubmitCommandVirtual`, one

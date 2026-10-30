@@ -5,10 +5,9 @@ One user-mode tool that drives the full WDDM miniport through raw `D3DKMT*` call
 create one allocation, give it **the GPU virtual address we asked for**, make it resident, lock it, write a
 pattern, unlock, print a machine-readable line, and tear everything down in reverse.
 
-It is the "small host-side tool calling D3DKMT directly" of `docs/research/m7-full-wddm-miniport.md`
-section 5.2. With `--submit` it goes on into stage C (section 5.3): a virtual-addressing context, a monitored
-fence, a second allocation holding PM4 NOPs, one `SubmitCommand` and a bounded wait for the fence. Stage B
-behaves exactly as before when `--submit` is off.
+It is a small host-side tool that calls D3DKMT directly. With `--submit` it goes on into stage C of ADR 0008:
+a virtual-addressing context, a monitored fence, a second allocation holding PM4 NOPs, one `SubmitCommand` and
+a bounded wait for the fence. Stage B behaves exactly as before when `--submit` is off.
 
 The witness stays independent (ADR 0007 point 5): `bc250rd` walks the GPU page tables and reads the
 physical pages, and the `RESULT` line is what tells it where to look.

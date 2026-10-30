@@ -118,7 +118,8 @@ load it by absolute path with `LoadLibraryExW` and `GetProcAddress(dll, "vk_icdG
 (`driver/umd/dxvk/engine-modules.cpp`, `driver/umd/d3d12/adapter-caps.cpp`), and it has no manifest and no
 registry entry. `--icd` loads it the same way, with the same search flags, so the gate tests the file the
 shells load. The second reason is elevation: the Vulkan loader ignores `VK_DRIVER_FILES` and
-`VK_ICD_FILENAMES` in an elevated process (facts in `docs/research/m7-full-wddm-miniport.md`), and every SSH
+`VK_ICD_FILENAMES` in an elevated process (Vulkan-Loader `docs/LoaderInterfaceArchitecture.md`, "Elevated
+Privilege Caveats"), and every SSH
 session on unit A is elevated, so `--manifest` cannot steer such a session.
 
 The client prints every loaded module that exports `vk_icdGetInstanceProcAddr`, with the SHA-256 of its file.

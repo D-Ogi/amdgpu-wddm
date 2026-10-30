@@ -2,7 +2,7 @@
 //
 // A full WDDM miniport is only half a graphics stack. dxgkrnl starts the adapter, but the moment anything wants to
 // render, the Direct3D runtime loads the DLL the adapter's UserModeDriverName names and calls its OpenAdapter
-// entry point. Stage A's question (docs/research/m7-full-wddm-miniport.md section 2.3) is what the runtime and the
+// entry point. Stage A's question (docs/adr/0008-full-wddm-behind-a-gate-in-stages.md) is what the runtime and the
 // desktop do when that step fails, and there are two ways for it to fail:
 //
 //   no DLL at all     - UserModeDriverName is absent, so the runtime cannot even load a driver;

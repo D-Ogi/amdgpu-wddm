@@ -85,7 +85,7 @@
 12	docs/prior-art-vs-hardware.md
 18	docs/prior-art.md
 18	docs/research/2026-09-27-windowed-present-under-dwm.md
-10	docs/research/README.md
+8	docs/research/README.md
 14	docs/research/bios-analysis-followup.md
 11	docs/research/build-quality-gates.md
 6	docs/research/driver-review-2026-09-24.md
@@ -101,7 +101,6 @@
 113	docs/research/h264-encoder-literature-rate-control.md
 19	docs/research/m13-present-baseline.md
 37	docs/research/m6-compute-dispatch.md
-138	docs/research/m7-full-wddm-miniport.md
 153	docs/research/m9-acceptance-history-through-m447.md
 65	docs/research/m9-acceptance-status.md
 364	docs/research/m9-dma-contract-audit.md
@@ -118,7 +117,7 @@
 9	driver/README.md
 45	driver/amdgpu-import/PROVENANCE.md
 8	driver/amdgpu-import/README.md
-22	driver/contract/README-winsys.md
+21	driver/contract/README-winsys.md
 29	driver/contract/README.md
 3	driver/icd/README-rt-node-address.md
 9	driver/icd/README.md

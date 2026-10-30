@@ -133,8 +133,8 @@ struct bc250_umd_alloc_private {
                                          * NOT the carrier for the map path. WDDM already has a
                                          * better one: D3DDDI_MAPGPUVIRTUALADDRESS.DriverProtection
                                          * is a 64-bit opaque value passed straight to
-                                         * DxgkDdiUpdatePageTable for exactly that range's PTEs
-                                         * (m7-full-wddm-miniport.md section 3.2). These flags
+                                         * DxgkDdiUpdatePageTable for exactly that range's PTEs.
+                                         * These flags
                                          * vary per mapping, not per allocation -
                                          * radv_amdgpu_bo.c:213 passes RADEON_FLAG_GL2_BYPASS per
                                          * BO into a VA_OP_REPLACE - so a per-allocation field
@@ -253,7 +253,7 @@ struct bc250_umd_context_private {
  * winsys. README-winsys.md "Open questions" has what that costs.
  *
  * The IB array itself is the easy part: it is drm_amdgpu_cs_chunk_ib relocated into private
- * data, which is also what Collabora's draft did (m7-full-wddm-miniport.md section 4.3).
+ * data, which is also what Collabora's draft did.
  * ------------------------------------------------------------------------------------------- */
 
 /* bc250_umd_submit_private::flags */
@@ -384,7 +384,7 @@ BC250_SUBMIT_CTASSERT((BC250_UMD_C_STABLE_PSTATE & BC250_UMD_C_RESERVE_VMID) == 
  *
  * 1024 is our own ceiling, not the real one. The binding limit is whatever the KMD asks for in
  * DXGK_CONTEXTINFO at context creation: D3DKMTSubmitCommand fails outright if the private data
- * exceeds it (m7-full-wddm-miniport.md section 3.5). When the KMD side exists, this assert should
+ * exceeds it. When the KMD side exists, this assert should
  * be restated against that constant so the two cannot drift apart. */
 BC250_SUBMIT_CTASSERT(BC250_UMD_SUBMIT_SIZE_V1 <= 1024);
 

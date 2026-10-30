@@ -18,7 +18,6 @@ ASD-STE100 pass that the rest of the documentation gets.
 | File | For | State |
 |---|---|---|
 | `m6-compute-dispatch.md` | The compute dispatch that closes M6: libdrm's gfx10 memset shader and its 18 PM4 packets | Input to the shim's dispatch emitter; M6 closed |
-| `m7-full-wddm-miniport.md` | M7: from the display-only miniport to a full WDDM miniport that a Vulkan ICD can submit to; staged plan that keeps the failsafe | Input to ADR 0008; M7 built in its stages |
 | `m9-acceptance-status.md` | M9: requirement index for the DMA contract audit and the startup plan, reviewed through M471 | Current index; M9 open |
 | `m9-acceptance-history-through-m447.md` | Earlier snapshot of the same index, reviewed through M447 | Historical, superseded by `m9-acceptance-status.md` |
 | `m9-dma-contract-audit.md` | M9: WDDM paging builder, physical/virtual submission, private UMD payload, completion and the CPU Present path, checked against the local WDK 26100 contract, with each candidate's results | Working audit; historical entries do not prove current acceptance |

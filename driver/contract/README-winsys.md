@@ -43,10 +43,9 @@ Narrowing this hard is what makes the surface tractable:
 
 ## The call set, from RADV's own source
 
-`docs/research/m7-full-wddm-miniport.md` section 3.5 maps D3DKMT calls to DDIs. This table starts
-one layer higher - at the call sites in `<BC250_ROOT>\ref\mesa\src\amd\vulkan\winsys\amdgpu` - so
+This table starts at the call sites in `<BC250_ROOT>\ref\mesa\src\amd\vulkan\winsys\amdgpu`, so
 that a port has a checklist of things RADV actually invokes rather than a list of things WDDM
-offers. The DDI column defers to section 3.5 rather than repeating it.
+offers.
 
 ### Device and adapter
 
@@ -267,27 +266,25 @@ Three constraints on `bc250_umd_submit_private` that come from the WDDM side, no
    to name it, is the open part - and it is the one question here that could still add a field to
    `bc250_umd_submit_private`.
 
-## What was verified against the existing tables
+## What the RADV side adds
 
-Sections 3.2, 3.5 and 4.3 of `m7-full-wddm-miniport.md` hold up. Nothing in them was contradicted
-by the RADV side. Five things to carry back:
+Five things to carry back:
 
-- The sparse path in section 4.3 is confirmed from RADV's side: `bo.c:173` and `:237` use
-  `AMDGPU_VM_PAGE_PRT` with `VA_OP_MAP` and `VA_OP_REPLACE`, exactly the pairing that document
-  predicted maps onto `MapGpuVirtualAddress(hAllocation == 0, Protection.Zero)` and
-  `UpdateGpuVirtualAddress`.
+- The sparse path is confirmed from RADV's side: `bo.c:173` and `:237` use
+  `AMDGPU_VM_PAGE_PRT` with `VA_OP_MAP` and `VA_OP_REPLACE`, the pairing that maps onto
+  `MapGpuVirtualAddress(hAllocation == 0, Protection.Zero)` and `UpdateGpuVirtualAddress`.
 - `ac_drm_bo_va_op_raw2`'s out-fence (`bo.c:65-76`) is a closer analogue of the WDDM paging fence
-  than section 3.5's row for `MapGpuVirtualAddress` suggests: RADV already submits the VA
+  than a plain `MapGpuVirtualAddress` call suggests: RADV already submits the VA
   operation and then waits on a timeline point, which is the shape a paging queue produces.
-- The row for `ReserveGpuVirtualAddress` is marked ASSUMPTION ("no PTE writes, so no paging
+- `ReserveGpuVirtualAddress` was an ASSUMPTION ("no PTE writes, so no paging
   buffer"). RADV's use of it is sparse-only, so the assumption is only load-bearing for sparse
   resources - which a first compute workload does not use. Worth re-marking as lower risk.
-- **`DriverProtection` deserves promoting from a remark to a design element.** Section 3.2 found
-  it; nothing downstream uses it yet. It is the only mechanism that gets AMD's VM page flags to
+- **`DriverProtection` deserves promoting from a remark to a design element.** Nothing downstream
+  uses it yet. It is the only mechanism that gets AMD's VM page flags to
   our page-table code per range, and the RADV side confirms those flags vary per mapping
   (`bo.c:213` passes `RADEON_FLAG_GL2_BYPASS` per BO), so a per-allocation field would not have
   been sufficient anyway.
-- **Open question O4 can be narrowed.** Section 3.2 poses it as "will VidMm honour
+- **Open question O4 can be narrowed.** It was posed as "will VidMm honour
   `BaseAddress` for every allocation". The RADV side shows the failure mode is not relocation but
   allocation failure at a fixed heap base, which makes it a question about VidMm's own
   reservations rather than about pass-through fidelity, and answerable without any AMD hardware.
