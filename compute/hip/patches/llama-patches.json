@@ -23,6 +23,8 @@
     { "patch": "llama-rdna1-mmvq.patch", "file": "ggml/src/ggml-cuda/mmvq.cu",
       "marker": "MMVQ_PARAMETERS_RDNA1", "what": "RDNA1 matrix-vector table, v_sad_u8 sums and the float-activation matvec" },
     { "patch": "llama-rdna1-pkf16-gemm.patch", "file": "ggml/src/ggml-cuda/ggml-cuda.cu",
-      "marker": "#include \"ggml-cuda/mmf16-rdna1.cuh\"", "what": "RDNA1 prefill through a packed-fp16 tile GEMM" }
+      "marker": "#include \"ggml-cuda/mmf16-rdna1.cuh\"", "what": "RDNA1 prefill through a packed-fp16 tile GEMM" },
+    { "patch": "llama-rdna1-pkf16-tile.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
+      "marker": "#define MMF16_BN  64", "what": "the packed-fp16 GEMM with a 64-column tile" }
   ]
 }
