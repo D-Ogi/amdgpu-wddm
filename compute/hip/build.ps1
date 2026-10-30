@@ -178,6 +178,9 @@ Write-Host "  $pinned fixture hashes of tests\data match the PROVENANCE notes"
 $kernelSource = Join-Path $dataDir 'm16_kernels.hip'
 $codeObject = Join-Path $dataDir 'm16_kernels.gfx1013.co'
 $fatBinary = Join-Path $dataDir 'm16_kernels.fatbin'
+# The same kernels for gfx1010, the target of the TheRock wheels: the loader takes this object only
+# under the gfx1010 target alias, so it is the positive and the negative control of that alias.
+$aliasObject = Join-Path $dataDir 'm16_kernels.gfx1010.co'
 if ($Rebuild) {
     $clangExe = Join-Path $Clang 'clang.exe'
     if (-not (Test-Path $clangExe)) { throw "no portable AMDGPU clang at $Clang (-Rebuild needs it)" }
@@ -187,7 +190,7 @@ if ($Rebuild) {
     # therefore differs in .dynstr and in the two hash tables, which is measured, not
     # guessed (PROVENANCE.txt states it).
     $before = @{}
-    foreach ($f in @($codeObject, $fatBinary)) {
+    foreach ($f in @($codeObject, $fatBinary, $aliasObject)) {
         if (Test-Path $f) { $before[$f] = (Get-FileHash -Algorithm SHA256 $f).Hash }
     }
     # The leaf names and this working directory, exactly as PROVENANCE.txt states them:
@@ -201,10 +204,13 @@ if ($Rebuild) {
         & $clangExe -x hip --offload-arch=gfx1013 --offload-device-only `
             -nogpuinc -nogpulib -O2 -std=c++17 -o 'm16_kernels.fatbin' 'm16_kernels.hip'
         if ($LASTEXITCODE -ne 0) { throw "clang failed for the fat binary ($LASTEXITCODE)" }
+        & $clangExe -x hip --offload-arch=gfx1010 --offload-device-only --no-gpu-bundle-output `
+            -nogpuinc -nogpulib -O2 -std=c++17 -o 'm16_kernels.gfx1010.co' 'm16_kernels.hip'
+        if ($LASTEXITCODE -ne 0) { throw "clang failed for the gfx1010 code object ($LASTEXITCODE)" }
     } finally {
         Pop-Location
     }
-    foreach ($f in @($codeObject, $fatBinary)) {
+    foreach ($f in @($codeObject, $fatBinary, $aliasObject)) {
         $fresh = (Get-FileHash -Algorithm SHA256 $f).Hash
         $name = Split-Path -Leaf $f
         if (-not $before.ContainsKey($f)) {
@@ -217,7 +223,7 @@ if ($Rebuild) {
         }
     }
 }
-foreach ($f in @($codeObject, $fatBinary)) {
+foreach ($f in @($codeObject, $fatBinary, $aliasObject)) {
     if (-not (Test-Path $f)) { throw "$f is missing; run with -Rebuild and the portable clang present" }
 }
 
@@ -332,6 +338,19 @@ if (-not $SkipTests) {
     }
     & "$Out\hipprobe.exe" --selftest $dataDir
     if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL hipprobe --selftest ($LASTEXITCODE)"; $failures++ }
+    # The gfx1010 object without the alias is the negative control: the loader refuses it, and
+    # hipprobe says so with exit 2. With the alias the same object is the positive control.
+    $refused = @(& "$Out\hipprobe.exe" --selftest --co $aliasObject 2>&1 | ForEach-Object { "$_" })
+    $refusedExit = $LASTEXITCODE
+    if ($refusedExit -ne 2 -or -not ($refused -match 'the code object does not load')) {
+        $refused | ForEach-Object { Write-Host "    $_" }
+        Write-Host "  FAIL hipprobe --selftest of the gfx1010 object without the alias: exit $refusedExit, not a refusal"
+        $failures++
+    }
+    & "$Out\hipprobe.exe" --selftest --co $aliasObject --target-alias gfx1010
+    if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL hipprobe --selftest --target-alias gfx1010 ($LASTEXITCODE)"; $failures++ }
+    & "$Out\hipprobe.exe" --selftest --target-alias gfx1011 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 1) { Write-Host "  FAIL hipprobe --target-alias gfx1011 is not a usage error ($LASTEXITCODE)"; $failures++ }
     & "$Out\hipprobe.exe" --help | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
 
     # ------------------------------------------------------------------------------------------

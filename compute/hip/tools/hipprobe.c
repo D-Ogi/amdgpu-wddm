@@ -2,9 +2,9 @@
  * through our own kernel driver, with the result checked on the processor.
  *
  * Section 6 of docs/design/m16-hip-route-b.md. It loads a gfx1013 code object (a plain
- * object or a clang offload bundle), runs three kernels, checks every result on the
- * processor and prints one JSON line per kernel. It exits non-zero on any mismatch, on
- * a timeout and on a lost device.
+ * object or a clang offload bundle), or a gfx1010 one under --target-alias gfx1010, runs
+ * three kernels, checks every result on the processor and prints one JSON line per
+ * kernel. It exits non-zero on any mismatch, on a timeout and on a lost device.
  *
  * Every wait is bounded. The defaults are 1000 ms per slice and 10000 ms in all, so
  * that the whole trial stays well inside the three-minute bound of a lab trial, while
@@ -47,6 +47,7 @@ typedef struct options {
     uint32_t    block[3];
     uint32_t    wait_slice_ms;
     uint32_t    wait_total_ms;
+    uint32_t    target_alias;   /* BC250HSA_TARGET_ALIAS_* flags, 0 for none */
     int         selftest;
     int         info;
     int         verbose;
@@ -936,6 +937,8 @@ static void usage(void)
     printf("  --wait-slice <ms>     one wait slice (default %u)\n", DEFAULT_WAIT_SLICE);
     printf("  --wait-total <ms>     the whole bound of one wait (default %u)\n",
            DEFAULT_WAIT_TOTAL);
+    printf("  --target-alias gfx1010  also load a gfx1010 code object (bc250hsa.h, the"
+           " target alias)\n");
     printf("  --verbose             send the library log to the error stream\n");
     printf("\n");
     printf("It prints one JSON line per kernel. Exit codes: 0 ok, 1 usage, 2 host failure,"
@@ -998,6 +1001,18 @@ int main(int argc, char** argv)
             if (!parse_triple(argv[++i], opt.block)) { usage(); return EXIT_USAGE; }
             continue;
         }
+        /* The alias that the AMD ABI face of the runtime sets for the TheRock libraries. It
+         * is a switch here, so that one object runs as the negative control without it and
+         * as the positive control with it. */
+        if (strcmp(a, "--target-alias") == 0 && i + 1 < argc) {
+            const char* target = argv[++i];
+            if (strcmp(target, "gfx1010") != 0) {
+                fprintf(stderr, "hipprobe: --target-alias knows gfx1010 only, not %s\n", target);
+                return EXIT_USAGE;
+            }
+            opt.target_alias = BC250HSA_TARGET_ALIAS_GFX1010;
+            continue;
+        }
         if (a[0] == '-') {
             fprintf(stderr, "hipprobe: unknown option %s\n", a);
             usage();
@@ -1023,6 +1038,9 @@ int main(int argc, char** argv)
     } else {
         bc250hsa_set_log(log_sink, NULL, BC250HSA_LOG_WARN);
     }
+    /* Before the first load, as bc250hsa.h asks, and on every path, so that the alias is
+     * what the command line says and never what an earlier user of the library left. */
+    bc250hsa_target_alias_set(opt.target_alias);
 
     if (opt.selftest) {
         return run_selftest(&opt);

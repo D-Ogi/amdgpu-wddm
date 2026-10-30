@@ -3,7 +3,7 @@ PROVENANCE of compute/hip/tests/data
 
 These files are test fixtures of layer 1 of docs/design/m16-hip-route-b.md. They are
 committed so that the host gate runs on a machine with no AMDGPU compiler and with no
-BC-250 adapter. `pwsh compute/hip/build.ps1 -Rebuild` builds the two binary files again
+BC-250 adapter. `pwsh compute/hip/build.ps1 -Rebuild` builds the three binary files again
 and compares the SHA-256; it reports a difference and keeps the new file.
 
 Every size and SHA-256 below is a gate. `build.ps1` compares each one with the file on every
@@ -31,10 +31,13 @@ Commands
   clang -x hip --offload-arch=gfx1013 --offload-device-only \
       -nogpuinc -nogpulib -O2 -std=c++17 -o m16_kernels.fatbin m16_kernels.hip
 
+  clang -x hip --offload-arch=gfx1010 --offload-device-only --no-gpu-bundle-output \
+      -nogpuinc -nogpulib -O2 -std=c++17 -o m16_kernels.gfx1010.co m16_kernels.hip
+
 -nogpuinc and -nogpulib keep the ROCm headers and the ROCm device library out: the
 kernels use clang builtins only, so layer 1 needs nothing of ROCm to build its fixtures.
 
-The two commands run with the working directory set to this directory, and the output
+The commands run with the working directory set to this directory, and the output
 path is the committed file itself. That matters: clang names the module identifier symbol
 __hip_cuid_<hash>, and the hash follows the output path. The same source built into
 another directory gives a code object of the same size whose .dynstr and whose two hash
@@ -51,12 +54,19 @@ Files
 -----
 
   m16_kernels.hip            2917 bytes  sha256 f25f03ddc68e791c2e8e62028b2ac1dc5e2dadbe45e9aa7464034554aadae6ce
-    The source of the three kernels. It is the only input of the two binary files.
+    The source of the three kernels. It is the only input of the three binary files.
 
   m16_kernels.gfx1013.co     7128 bytes  sha256 a275344d28ea93b867e7541dd2de64a882a14403a113eea8198f1839c1047183
     The linked gfx1013 code object. ELF64, OS/ABI AMDGPU HSA, ABI version 4 (code
     object v6), e_flags 0x142 (gfx1013, xnack any), four PT_LOAD segments, no
     relocation. tests/host/test_loader.c, test_kernarg.c and test_descriptor.c read it.
+
+  m16_kernels.gfx1010.co     7128 bytes  sha256 4930a40c2bb6b8df48084db5c0aaf2225ff91eb6fad08e2cd4b5dd6c58ab1c36
+    The same three kernels, linked for gfx1010: e_flags 0x133 (gfx1010, xnack any), ABI
+    version 4 (code object v6), no relocation. gfx1010 is the target of the TheRock wheels
+    that the AMD ABI face of the runtime loads. The loader takes this object only under the
+    gfx1010 target alias of bc250hsa.h, which hipprobe --target-alias gfx1010 sets, so the
+    object is the positive control of the alias and, without the alias, its negative control.
 
   m16_kernels.fatbin        11224 bytes  sha256 a78ab53efdcf44a871de9b4ef3dd9622f82a99ebe8ef3bb48c48eebf1f15c219
     The clang offload bundle of the same object. It holds the three measured traps that
