@@ -109,7 +109,7 @@ Write-Step 'Scheduled task, RunOnce entry, shortcuts'
 # Every task of ours, not only the one this release registers: a task that an older release named differently would
 # otherwise stay and run a script that is gone.
 $tasks = @(Get-OurScheduledTasks)
-Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -join ', ' } else { "none on this computer (this release registers '$($script:TaskName)' and '$($script:WindowTaskName)')" })" {
+Invoke-Change "unregister our scheduled task(s): $(if ($tasks.Count) { $tasks -join ', ' } else { "none on this computer (this release registers '$($script:TaskName)', '$($script:WindowTaskName)' and '$($script:StartupTaskName)')" })" {
     # Safe Mode runs no Task Scheduler service: then the task stays, and running uninstall.cmd again later removes it.
     foreach ($name in $tasks) {
         try {

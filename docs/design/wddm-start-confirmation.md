@@ -58,6 +58,37 @@ read never meets freed storage. Host test: driver/kmd/test/start_health_test.c
 with two negative controls (run_start_health.ps1 -NoQuiet,
 -QuietIgnoresOwedFlip).
 
+A recovered reset in the logon task's window (BD-269). A TDR that the driver
+recovers keeps the generation and moves the epoch, and readiness counts again
+from 0. The task's bound is 120 s. A reset at +80 s needs readiness until
++140 s, so before BD-269 such a start stayed unconfirmed although it had
+recovered, and two such starts made the guard refuse the next one. The task now
+moves its bound when the epoch moves inside one generation: to the time of the
+move plus 60 s of readiness plus 30 s. It does this twice at most, and never
+past 300 s. A start that resets more often stays unconfirmed. The task's time
+limit is 6 minutes, which holds that bound. Rules: start-confirm-core.ps1
+Get-StartConfirmStep. Host test: tools/release/test-start-confirm.ps1. The
+rules before this change fail its BD-269 cases.
+
+A start that nobody signs in to (BD-271). A logon trigger does not fire while
+the sign-in screen waits. On a PC without automatic sign-in, two restarts by
+Windows Update or by a remote command left two starts unconfirmed, and the
+guard refused the third start (unit A, tester.34, 2026-10-30). The
+confirmation needs no session. A third task, "amdgpu-wddm startup confirm",
+runs the same script at system startup, as Local System and headless, with
+-AtStartup. That run marks its log lines "startup:" and takes no DWM baseline,
+because no logon exists yet. It is a separate task and not a second trigger of
+the logon task: the scheduler starts one instance of a task at a time
+(IgnoreNew), so a logon during the startup run would get no logon
+confirmation and no DWM baseline (BD-060). Two runs that wait for the same
+start are safe. The run that reads the start as confirmed first ends the
+wait, and the other run exits 0 ("confirmed by another client"). The installer
+does not start the startup task at install time, because the logon
+confirmation that it starts then confirms the start of that boot. Rules:
+common.ps1 Get-LogonTaskPlan and Test-LogonTaskPlan. Host tests:
+tools/release/test-session-checks.ps1 (eight negative controls) and
+tools/release/test-start-confirm.ps1.
+
 Close health admission before stop, adapter power-down and TDR handling; D0
 alone must not reopen it while full resume is unsupported. Visibility/mode
 changes invalidate the monitor's observation interval. Readiness must include

@@ -294,12 +294,18 @@ the taskbar. Up to tester.31 the driver also wanted a new picture in the last 15
 a countdown ("Nagi start check") was shown for two minutes after each logon to make the desktop draw. That window is
 gone.
 
-Two scheduled tasks do this work, and both run at the logon of any user, so an account without administrator rights
-confirms a start as well:
+Three scheduled tasks do this work. Two of them run at the logon of any user, so an account without administrator
+rights confirms a start as well. The third one runs when Windows starts, so a start that nobody signs in to is also
+confirmed:
 
 - "amdgpu-wddm start confirm" runs as the Local System account (`S-1-5-18`), with the highest run level and no
   window of its own. It reads the driver's start health and confirms the start. The driver accepts a confirmation
   only from an administrator, which is why this task does not run as the user who logs on.
+- "amdgpu-wddm startup confirm" runs the same confirmation when Windows starts, before anybody signs in, also as the
+  Local System account. Without it, a PC that waits at the sign-in screen (no automatic sign-in) and that Windows
+  Update restarts twice falls back to the basic display driver at the third start. When you sign in during this
+  run, the two confirmations wait for the same start, and the one that comes second only reports that the start is
+  already confirmed. Its lines in the log start with `startup:`.
 - "amdgpu-wddm start window" runs as the user who logs on, with that user's own rights (the Users group,
   `S-1-5-32-545`, limited run level). It keeps its old name and only starts the control application's sign-in notice
   (the next section): it never opens the driver and changes no setting. The task starts Nagi Control App with
@@ -353,7 +359,7 @@ longer have to run the release installer again for this.
 | Router policy and profiles | `HKLM\SOFTWARE\amdgpu-wddm` |
 | GPU firmware | Eight binaries beside the KMD image in Driver Store. `LICENSE.amdgpu` is in the installed `licenses` folder. The installer downloads or retrieves pinned copies before staging. The repair set retains them for offline repair. |
 | Shortcuts of Nagi Control App | Start menu and desktop, for all users: "Nagi Control App", "Nagi Control App (recovery)" in the Start menu and "Nagi Control App" on the desktop. Both places are written by default. The setup window has a box for each place. On the command line `-NoStartMenuShortcut` and `-NoDesktopShortcut` leave one out. `-StartMenuShortcut` and `-DesktopShortcut` ask for a place an earlier run left out. The box you clear holds over the restarts of the installation. `uninstall.cmd` removes all three |
-| Start confirmation | two scheduled tasks, both at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on and starts the control application's sign-in notice |
+| Start confirmation | three scheduled tasks. Two run at the logon of any user. "amdgpu-wddm start confirm" runs as the Local System account. "amdgpu-wddm start window" runs as the user who logs on and starts the control application's sign-in notice. "amdgpu-wddm startup confirm" runs the same confirmation as the Local System account when Windows starts, before any logon |
 | Settings of the person who signs in | `HKCU\Software\amdgpu-wddm\Control` of that account (language, the switches of the control application). The application itself writes this key when you change a setting. The installer does not. No administrator rights, nothing for other accounts. `uninstall.cmd` removes the key of the account that runs it, and leaves the keys of other accounts |
 | Shortcuts of an earlier release | earlier releases named the shortcuts "amdgpu-wddm Control". An install over such a release and `uninstall.cmd` remove those old shortcuts when they point at the control application. A file of that name that points elsewhere stays |
 | Nagi wallpaper | for each person who signs in after the installation is checked, Nagi Control App sets the Nagi wallpaper once (position Fill). It saves the previous background of that person first. The setup window has a box for it, on by default. `install.cmd -NoWallpaper` leaves it out. In Nagi Control App, Settings, "Nagi wallpaper" sets it again or restores the previous background. A slideshow or Windows Spotlight comes back as its last picture only. `uninstall.cmd` changes nobody's background and keeps the picture in `%LOCALAPPDATA%\amdgpu-wddm\wallpaper` |

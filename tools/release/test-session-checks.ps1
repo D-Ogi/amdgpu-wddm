@@ -331,7 +331,9 @@ if ($plan) {
     $c = @($plan | Where-Object { $_.role -eq 'confirm' })[0]
     $w = @($plan | Where-Object { $_.role -eq 'window' })[0]
     Check (($c.principal.id -eq 'S-1-5-18') -and ($c.principal.logon_type -eq 'ServiceAccount') -and ($c.principal.run_level -eq 'Highest')) "the confirmation runs as Local System with the highest run level: $($c.principal.id), $($c.principal.logon_type), $($c.principal.run_level)"
-    Check ((@($plan | Where-Object { $_.trigger.kind -eq 'at-logon' -and -not $_.trigger.user }).Count) -eq $plan.Count) 'both tasks trigger at the logon of any user (no account on the trigger)'
+    Check (((@($plan | Where-Object { $_.role -ne 'startup' -and $_.trigger.kind -eq 'at-logon' -and -not $_.trigger.user }).Count) -eq 2) -and ((@($plan | Where-Object { $_.role -eq 'startup' -and $_.trigger.kind -eq 'at-startup' -and -not $_.trigger.user }).Count) -eq 1)) 'the two logon tasks trigger at the logon of any user (no account on the trigger), the startup confirmation at system startup (BD-271)'
+    $u = @($plan | Where-Object { $_.role -eq 'startup' })[0]
+    Check ($u -and ($u.principal.id -eq 'S-1-5-18') -and ($u.principal.run_level -eq 'Highest') -and ($u.arguments -eq ($c.arguments + ' -AtStartup'))) "the startup confirmation runs the logon confirmation's command as Local System with -AtStartup: $($u.arguments)"
     Check (($w.principal.id -eq 'S-1-5-32-545') -and ($w.principal.run_level -eq 'Limited')) "the window runs with the logged-on user's own rights: $($w.principal.id), $($w.principal.run_level)"
     Check (($c.arguments -match '(?i)\s-NoWindow(\s|$)') -and ($c.arguments -like "*`"$confirmScript`"*")) "the confirmation runs $($c.execute) headless over the installed script: $($c.arguments)"
     # M899: the window task runs the control application, a windows program, which starts the script with no console
@@ -351,7 +353,7 @@ if ($plan) {
         $readings = @((Get-PeSubsystem (Join-Path $env:SystemRoot 'explorer.exe')), (Get-PeSubsystem (Join-Path $sys 'cmd.exe')), (Get-PeSubsystem $txt), (Get-PeSubsystem (Join-Path $sys 'no-such-file.exe')))
     } finally { Remove-Item -LiteralPath $txt -Force -ErrorAction SilentlyContinue }
     Check (($readings[0] -eq 2) -and ($readings[1] -eq 3) -and ($null -eq $readings[2]) -and ($null -eq $readings[3])) "Get-PeSubsystem: explorer.exe $($readings[0]), cmd.exe $($readings[1]), a text file '$($readings[2])', no file '$($readings[3])' (expected 2, 3, none, none)"
-    Check ((@($plan | ForEach-Object { [string]$_.name } | Sort-Object -Unique).Count -eq 2) -and ($plan[0].name -eq $script:TaskName) -and ($plan[1].name -eq $script:WindowTaskName)) "two tasks, both named after the release: '$($plan[0].name)', '$($plan[1].name)'"
+    Check ((@($plan | ForEach-Object { [string]$_.name } | Sort-Object -Unique).Count -eq 3) -and ($plan[0].name -eq $script:TaskName) -and ($plan[1].name -eq $script:WindowTaskName) -and ($plan[2].name -eq $script:StartupTaskName)) "three tasks, all named after the release: '$($plan[0].name)', '$($plan[1].name)', '$($plan[2].name)'"
     # The negative controls: each one is the plan with one rule broken, and every one of them must be reported.
     function Copy-Plan($Source) {
         $out = @()
@@ -378,6 +380,15 @@ if ($plan) {
         @{ name = 'the host not asked for the window'; break = { param($p) $p[1].arguments = '-Seconds 120' }; says = '--start-window' }
         @{ name = 'the host of another install'; break = { param($p) $p[1].execute = 'D:\Other\amdgpu-wddm\control\amdgpu_wddm_control.exe' }; says = 'different installs' }
         @{ name = 'a console program as the host'; break = { param($p) $p[1].execute = (Join-Path $env:SystemRoot 'System32\cmd.exe'); $p[1].script = (Join-Path $env:SystemRoot 'tools\start-window.ps1') }; says = 'PE subsystem 3' }
+        # BD-271: the startup confirmation.
+        @{ name = 'no startup confirmation (the defect)'; break = { param($p) $p[2].role = 'other' }; says = '0 startup confirmation tasks' }
+        @{ name = 'the startup confirmation at logon'; break = { param($p) $p[2].trigger.kind = 'at-logon' }; says = 'not at-startup' }
+        @{ name = 'the logon confirmation at startup'; break = { param($p) $p[0].trigger.kind = 'at-startup' }; says = 'not at-logon' }
+        @{ name = 'the startup confirmation as the users group'; break = { param($p) $p[2].principal = [ordered]@{ kind = 'group'; id = 'S-1-5-32-545'; logon_type = 'Group'; run_level = 'Limited' } }; says = 'no other account runs before a logon' }
+        @{ name = 'the startup confirmation without -AtStartup'; break = { param($p) $p[2].arguments = $p[0].arguments }; says = 'with -AtStartup' }
+        @{ name = 'the logon confirmation with -AtStartup'; break = { param($p) $p[0].arguments = $p[0].arguments + ' -AtStartup' }; says = 'wrong run' }
+        @{ name = 'the startup confirmation with a shorter limit'; break = { param($p) $p[2].minutes = 3 }; says = 'same bound' }
+        @{ name = 'the startup confirmation named as the logon one'; break = { param($p) $p[2].name = $p[0].name }; says = 'same name' }
     )
     foreach ($ctl in $controls) {
         $broken = Copy-Plan $plan
@@ -402,9 +413,11 @@ Check (($principals.Count -ge 1) -and (@($principals | Where-Object { $_.Value -
 # rules the controls above exercise are not a property of the test alone.
 Check ($installSrc -match '(?s)Test-LogonTaskPlan[^\r\n]*\r?\n[^\r\n]*throw') 'install.ps1 runs the rules over the plan it registers and stops the install on a plan that breaks them'
 $planCall = [regex]::Match($installSrc, '(?s)Get-LogonTaskPlan.{0,2600}?Register-ScheduledTask[^\r\n]*')
-Check ($planCall.Success -and ($planCall.Value -match '\$logonTask\.trigger\.kind') -and ($planCall.Value -match '\$logonTask\.trigger\.user')) "install.ps1 reads the plan's trigger: a plan that is not at-logon, or that binds the trigger to one account, is refused and not registered as this one"
+Check ($planCall.Success -and ($planCall.Value -match '\$logonTask\.trigger\.kind') -and ($planCall.Value -match '\$logonTask\.trigger\.user')) "install.ps1 reads the plan's trigger: a plan that is not at-logon or at-startup, or that binds the trigger to one account, is refused and not registered as one of these"
 $triggers = @([regex]::Matches($installSrc, '(?m)^(?!\s*#)[^\r\n]*New-ScheduledTaskTrigger[^\r\n]*'))
-Check (($triggers.Count -eq 1) -and ($triggers[0].Value -match '(?i)-AtLogOn') -and ($triggers[0].Value -notmatch '(?i)-User')) "install.ps1 registers one trigger, at any logon and bound to no account: $(if ($triggers.Count) { ($triggers | ForEach-Object { $_.Value.Trim() }) -join ' | ' } else { 'no call at all' })"
+$logonTriggers = @($triggers | Where-Object { $_.Value -match '(?i)-AtLogOn' -and $_.Value -notmatch '(?i)-User' })
+$startupTriggers = @($triggers | Where-Object { $_.Value -match '(?i)-AtStartup' -and $_.Value -match "\[string\]\`$logonTask\.trigger\.kind -eq 'at-startup'" })
+Check (($triggers.Count -eq 2) -and ($logonTriggers.Count -eq 1) -and ($startupTriggers.Count -eq 1)) "install.ps1 registers two triggers, at any logon (bound to no account) and, for a plan that asks for it, at system startup (BD-271): $(if ($triggers.Count) { ($triggers | ForEach-Object { $_.Value.Trim() }) -join ' | ' } else { 'no call at all' })"
 
 # BD-080: the two scripts behind those tasks. The confirmation decides headless (one poll function, reached from one
 # place), and the script of the user's session is the unprivileged half: it must not call the driver at all, because

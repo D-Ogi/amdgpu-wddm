@@ -711,7 +711,8 @@ function Invoke-Verify {
     # driver version and LastStage through bc250kmd_cli, the KMD start health through bc250control.dll, the DPM
     # registry state. The task itself runs at the same logon and may still be waiting for its 60 s.
     # Verify starts at the same logon as the start-confirm task, which needs about a minute: wait for this boot's run
-    # of the task to end (at most 120 s), so that the confirmation and DPM lines below are final.
+    # of the task to end, so that the confirmation and DPM lines below are final. The task needs about a minute; a recovered
+    # GPU reset moves its bound (BD-269), so the wait ends at the latest bound of start-confirm-core.ps1 plus 15 s.
     #
     # Not on a device that did not start: the task confirms a start, it has nothing to confirm here, and the wait
     # would spend its whole bound before saying so (GitHub #38: 110 s of a 2 min 43 s verification). Its last result
@@ -729,8 +730,8 @@ function Invoke-Verify {
             $ranThisBoot = $ti -and $ti.LastRunTime -and ($ti.LastRunTime -ge $boot)
             if (($ranThisBoot -and -not $running) -or $script:DryRunMode) { break }
             if (Test-DeadlinePassed) { Write-DeadlineNotice 'verify:start-confirm-wait'; break }
-            if ($waited.Elapsed.TotalSeconds -ge 120) { break }
-            if (-not $announced) { Write-Info 'waiting for the start-confirm task of this logon to finish (at most 120 s)...'; $announced = $true }
+            if ($waited.Elapsed.TotalSeconds -ge $script:StartConfirmMaxSeconds + 15) { break }
+            if (-not $announced) { Write-Info "waiting for the start-confirm task of this logon to finish (at most $($script:StartConfirmMaxSeconds + 15) s; about a minute without a GPU reset)..."; $announced = $true }
             Start-Sleep -Seconds 2
         }
         if ($null -ne $noWaitWhy) { $ti = Get-ScheduledTaskInfo -TaskName $script:TaskName -ErrorAction SilentlyContinue }
@@ -2150,7 +2151,8 @@ Invoke-Change "$($script:SoftwareKey)\Release: RepairSetup = $repairSetup (when 
 
 # The logon tasks: after every logon the confirmation confirms the boot's driver start, so the boot-loop guard does
 # not fall back to Basic Display at the third start (see INSTALL.md, "The small blue window after logon"). BD-080:
-# two tasks, because the confirmation needs an administrator's token and the window needs the user's session. The
+# two tasks, because the confirmation needs an administrator's token and the window needs the user's session. BD-271:
+# a third task runs the same confirmation at system startup, for a start that nobody signs in to. The
 # plan and the reasons are in common.ps1 (Get-LogonTaskPlan). The installer decides nothing here: it holds the plan
 # against the plan's own rules (Test-LogonTaskPlan) and then registers exactly what the plan says.
 $sc = Join-Path $InstallRoot 'tools\start-confirm.ps1'
@@ -2172,8 +2174,9 @@ $logonRegistered = @()
 foreach ($logonTask in $logonPlan) {
     # The trigger comes from the plan too, so "at the logon of any user" - the half of BD-080 that the principal
     # does not cover - cannot differ between the plan and what is registered. New-ScheduledTaskTrigger -AtLogOn
-    # without -User is that trigger; any other plan is refused here rather than silently registered as this one.
-    if ([string]$logonTask.trigger.kind -ne 'at-logon') { throw "scheduled task '$($logonTask.name)': the plan asks for the trigger kind '$($logonTask.trigger.kind)', and the installer registers only 'at-logon'" }
+    # without -User is that trigger, and -AtStartup the trigger of the startup confirmation (BD-271); any other plan
+    # is refused here rather than silently registered as one of these.
+    if (@('at-logon', 'at-startup') -notcontains [string]$logonTask.trigger.kind) { throw "scheduled task '$($logonTask.name)': the plan asks for the trigger kind '$($logonTask.trigger.kind)', and the installer registers only 'at-logon' and 'at-startup'" }
     if ($logonTask.trigger.user) { throw "scheduled task '$($logonTask.name)': the plan binds the trigger to the logon of '$($logonTask.trigger.user)'; every logon has to run it (BD-080)" }
     # BD-193: phase 2 runs after the logon that started the tasks of phase 1. A registration that matches the plan
     # stays, so the confirmation of this logon runs to its end.
@@ -2185,7 +2188,8 @@ foreach ($logonTask in $logonPlan) {
         $old = Get-ScheduledTask -TaskName $logonTask.name -ErrorAction SilentlyContinue
         if ($old) { Unregister-ScheduledTask -TaskName $logonTask.name -Confirm:$false }
         $action = New-ScheduledTaskAction -Execute $logonTask.execute -Argument $logonTask.arguments
-        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        if ([string]$logonTask.trigger.kind -eq 'at-startup') { $trigger = New-ScheduledTaskTrigger -AtStartup }
+        else { $trigger = New-ScheduledTaskTrigger -AtLogOn }
         if ($logonTask.principal.kind -eq 'user') { $principal = New-ScheduledTaskPrincipal -UserId $logonTask.principal.id -LogonType $logonTask.principal.logon_type -RunLevel $logonTask.principal.run_level }
         else { $principal = New-ScheduledTaskPrincipal -GroupId $logonTask.principal.id -RunLevel $logonTask.principal.run_level }
         $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes $logonTask.minutes) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -2197,9 +2201,10 @@ foreach ($logonTask in $logonPlan) {
 # registers both tasks only now, in phase 2 after the restart, so the start of this boot would stay unconfirmed until
 # the next restart. Each such task runs once now. The window task goes first, because the confirmation needs the
 # presentation that its window keeps up. A task that does not start costs only this confirmation: the next logon
-# runs it.
+# runs it. The startup confirmation (BD-271) does not run now: this start has a logon, and the logon confirmation
+# that runs now confirms it.
 if ($logonRegistered.Count -and @(Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -gt 0 }).Count) {
-    foreach ($logonTask in @($logonRegistered | Sort-Object { [string]$_.principal.kind -ne 'group' })) {
+    foreach ($logonTask in @($logonRegistered | Where-Object { [string]$_.role -ne 'startup' } | Sort-Object { [string]$_.principal.kind -ne 'group' })) {
         Invoke-Change "scheduled task '$($logonTask.name)': run it once now, for the logon that it missed" {
             try { Start-ScheduledTask -TaskName $logonTask.name -ErrorAction Stop }
             catch { Write-Info "scheduled task '$($logonTask.name)': did not start now ($($_.Exception.Message)); it runs at the next logon" }
