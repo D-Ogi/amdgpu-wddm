@@ -1695,7 +1695,12 @@ work and not runtime work.
 Two rules of this table that a reader can read wrongly. First, the value a stream owes is not always
 its own last submission: the legacy null stream owes the last submission of the device, because HIP
 says that it synchronises with every other stream, and a stream that carries an event wait and
-nothing else owes that event. Second, an event's host timestamp belongs to the moment its value
+nothing else owes that event. A blocking stream, made without `hipStreamNonBlocking`, also owes the
+last submission of the legacy null stream and the event wait that the null stream carries, because
+HIP starts an operation on such a stream after the null-stream work before it. The one hardware
+queue keeps that order on the GPU. An event record, a copy and a wait are operations of the host,
+so the value covers that work too (DEFECTS BD-280). A stream made with `hipStreamNonBlocking` owes
+only its own work. Second, an event's host timestamp belongs to the moment its value
 retired. A timestamp taken when a program asks about the event would make every measurement of two
 retired events microseconds apart, whatever the kernels did.
 

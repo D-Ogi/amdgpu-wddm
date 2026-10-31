@@ -48,6 +48,25 @@ uint64_t stream_target_value(bc250hsa_device* dev, const ihipStream_t* stream) {
         // would answer at once while the recorded work still runs.
         value = stream->pending_wait;
     }
+    if (!is_null_stream(stream) &&
+        (stream->flags & static_cast<unsigned>(hipStreamNonBlocking)) == 0) {
+        // A blocking stream comes after the work of the legacy null stream, the event waits of
+        // that stream among it (HIP's legacy default stream rule, DEFECTS BD-280). The GPU keeps
+        // that order without help, because one hardware queue runs every submission in turn.
+        // The host does not: an event recorded on this stream, a copy on it or a wait for it
+        // must not end before the null-stream work that came first, and that work can be later
+        // than the last launch of this stream. In one case this is stricter than HIP: a wait
+        // for this stream whose own work all came before that null-stream work waits for it as
+        // well. That costs a wait and never a wrong result, and only a blocking stream pays it.
+        // Every stream of ggml-cuda is made with hipStreamNonBlocking.
+        const ihipStream_t& legacy = state().null_stream;
+        if (legacy.last_fence > value) {
+            value = legacy.last_fence;
+        }
+        if (legacy.pending_wait > value) {
+            value = legacy.pending_wait;
+        }
+    }
     return value;
 }
 

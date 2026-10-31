@@ -134,6 +134,20 @@ uint32_t records_of(unsigned kind) {
     return seen;
 }
 
+// The values of the records of one kind, in the order of the record: the fence value of a
+// dispatch, the value a wait waited for.
+std::vector<uint64_t> values_of(unsigned kind) {
+    std::vector<uint64_t> out;
+    const uint32_t count = bc250hsa_mock_record_count();
+    for (uint32_t i = 0; i < count; ++i) {
+        const bc250hsa_mock_record* record = bc250hsa_mock_record_at(i);
+        if (record != nullptr && static_cast<unsigned>(record->kind) == kind) {
+            out.push_back(record->value);
+        }
+    }
+    return out;
+}
+
 std::vector<Seen> collect_dispatches() {
     std::vector<Seen> out;
     const uint32_t count = bc250hsa_mock_record_count();
@@ -634,6 +648,92 @@ int main(int argc, char** argv) {
         } else {
             check_u64(pages, kBatchMax, "the pool: one page per launch");
         }
+    }
+
+    // -------------------------------------------------------------------------------------
+    std::printf("test_hip_batch: 7. a blocking stream owes the work of the null stream (BD-280)\n");
+    // HIP's legacy default stream rule: an operation on a stream made without
+    // hipStreamNonBlocking starts after the work that the legacy null stream had before it. The
+    // GPU keeps that order without help, because one queue runs everything in turn. The host
+    // must keep it for what the host does: an event record and a copy. The sequence of the
+    // defect: launch L on the blocking stream, launch K on the null stream, then record an
+    // event on the blocking stream (or copy on it). The event, and the copy, must cover K.
+    // A record between L and K submits the open batch, so that L and K have values of their
+    // own with batching on as well. A stream made with hipStreamNonBlocking is the control:
+    // its event and its copy cover L and not K. ggml makes only such streams, and a stricter
+    // rule there would cost it waits.
+    {
+        hipStream_t blocking = nullptr;
+        hipStream_t non_blocking = nullptr;
+        hipStream_t probe_stream = nullptr;
+        hipEvent_t  split = nullptr;
+        hipEvent_t  mark = nullptr;
+        check(hipStreamCreate(&blocking) == hipSuccess, "hipStreamCreate of the blocking stream");
+        check(hipStreamCreateWithFlags(&non_blocking, hipStreamNonBlocking) == hipSuccess,
+              "hipStreamCreateWithFlags of the non-blocking stream");
+        // The stream that asks the question. It is non-blocking itself, so that the value it
+        // waits for is the event's value and nothing of its own.
+        check(hipStreamCreateWithFlags(&probe_stream, hipStreamNonBlocking) == hipSuccess,
+              "hipStreamCreateWithFlags of the probe stream");
+        check(hipEventCreateWithFlags(&split, hipEventDisableTiming) == hipSuccess,
+              "hipEventCreateWithFlags split");
+        check(hipEventCreateWithFlags(&mark, hipEventDisableTiming) == hipSuccess,
+              "hipEventCreateWithFlags mark");
+        float probe[16];
+        std::memset(probe, 0, sizeof(probe));
+        const bc250hsa_batch_policy policies[2] = { off, on };
+        const char* const names[2] = { "batching off", "batching on" };
+
+        for (int p = 0; p < 2; ++p) {
+            bc250hsa_batch_policy set = policies[p];
+            set.struct_bytes = static_cast<uint32_t>(sizeof(set));
+            check(bc250hsa_batch_policy_set(dev, &set) == BC250HSA_OK, "the policy of the arm");
+            for (int blocks = 1; blocks >= 0; --blocks) {
+                hipStream_t own = blocks != 0 ? blocking : non_blocking;
+                for (int copy = 0; copy < 2; ++copy) {
+                    bc250hsa_mock_reset();
+                    bool ok = hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u),
+                                              args, 0, own) == hipSuccess;
+                    ok = ok && hipEventRecord(split, own) == hipSuccess;
+                    ok = ok && hipLaunchKernel(&g_stub_vadd, dim3(16u, 1u, 1u), dim3(256u, 1u, 1u),
+                                               args, 0, nullptr) == hipSuccess;
+                    if (copy == 0) {
+                        ok = ok && hipEventRecord(mark, own) == hipSuccess;
+                        ok = ok && hipStreamWaitEvent(probe_stream, mark, 0) == hipSuccess;
+                        ok = ok && hipStreamSynchronize(probe_stream) == hipSuccess;
+                    } else {
+                        ok = ok && hipMemcpyAsync(probe, device_c, sizeof(probe),
+                                                  hipMemcpyDeviceToHost, own) == hipSuccess;
+                    }
+                    check(ok, "every call of the sequence answered hipSuccess");
+                    const std::vector<uint64_t> dispatches = values_of(BC250HSA_MOCK_DISPATCH);
+                    const std::vector<uint64_t> waits = values_of(BC250HSA_MOCK_WAIT);
+                    check_u64(dispatches.size(), 2u, "the sequence made two dispatches");
+                    if (dispatches.size() != 2u || waits.empty()) {
+                        check(false, "the sequence has the record that the check reads");
+                        continue;
+                    }
+                    const uint64_t l_value = dispatches[0];
+                    const uint64_t k_value = dispatches[1];
+                    check(k_value > l_value, "L and K have values of their own");
+                    // The event wait of the probe stream, or the wait before the copy, is the
+                    // first wait of the sequence. The host-processor copy of 64 bytes adds none.
+                    const uint64_t want = blocks != 0 ? k_value : l_value;
+                    std::printf("test_hip_batch:    %-13s %-12s %-5s L %llu K %llu waited %llu\n",
+                                names[p], blocks != 0 ? "blocking" : "non-blocking",
+                                copy == 0 ? "event" : "copy", (unsigned long long)l_value,
+                                (unsigned long long)k_value, (unsigned long long)waits[0]);
+                    check_u64(waits[0], want,
+                              blocks != 0 ? "the blocking stream waits for the null-stream work"
+                                          : "the non-blocking stream waits for its own work only");
+                }
+            }
+        }
+        check(hipEventDestroy(mark) == hipSuccess, "hipEventDestroy mark");
+        check(hipEventDestroy(split) == hipSuccess, "hipEventDestroy split");
+        check(hipStreamDestroy(probe_stream) == hipSuccess, "hipStreamDestroy probe");
+        check(hipStreamDestroy(non_blocking) == hipSuccess, "hipStreamDestroy non-blocking");
+        check(hipStreamDestroy(blocking) == hipSuccess, "hipStreamDestroy blocking");
     }
 
     // Back to the default, so that the teardown below is the ordinary path.
