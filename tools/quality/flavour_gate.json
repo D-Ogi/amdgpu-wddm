@@ -290,18 +290,25 @@
   },
   {
    "name": "MESA_DISK_CACHE_READ_ONLY_FOZ_DBS",
-   "where": "mesa-wddm src/util/fossilize_db.c",
+   "where": "mesa-wddm src/util/fossilize_db.c (foz_prepare; the single-file disk cache of BD-216 compiles this file into the RADV builds)",
    "does": "loads read-only Fossilize databases of compiled shader code from the paths it lists",
    "lab": {
-    "none": "the Fossilize cache is not compiled in the Windows builds, so no lab DLL holds the name; the guard keeps it out if a recipe ever turns it on"
+    "every": [
+     "d3d11/amdgpu_wddm_radv.dll",
+     "d3d12/amdgpu_wddm_radv.dll",
+     "wow64/d3d11/amdgpu_wddm_radv.dll",
+     "wow64/d3d12/amdgpu_wddm_radv.dll",
+     "vulkan_radeon.dll"
+    ],
+    "note": "desktop/amdgpu_wddm_radv.dll (hosted line, an older Mesa commit) does not hold MESA_DISK_CACHE_READ_ONLY_FOZ_DBS in either flavour: that build has no single-file disk cache of BD-216 and does not compile fossilize_db.c. That is by build line, not by flavour"
    }
   },
   {
    "name": "MESA_DISK_CACHE_READ_ONLY_FOZ_DBS_DYNAMIC_LIST",
-   "where": "mesa-wddm src/util/fossilize_db.c",
+   "where": "mesa-wddm src/util/fossilize_db.c (foz_prepare, only with FOZ_DB_UTIL_DYNAMIC_LIST)",
    "does": "reads a file that lists further read-only Fossilize databases and loads them while the process runs",
    "lab": {
-    "none": "the Fossilize cache is not compiled in the Windows builds, so no lab DLL holds the name; the guard keeps it out if a recipe ever turns it on"
+    "none": "the list updater needs inotify (FOZ_DB_UTIL_DYNAMIC_LIST), which the Windows builds do not have, so no lab DLL holds the name; the guard keeps it out if a recipe ever turns it on"
    }
   },
   {
@@ -1428,6 +1435,26 @@
    "name": "BC250_HIP_WAIT_SPIN_US",
    "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_wait_spin_policy)",
    "does": "measurement: how long a wait reads the fence mapping before the operating system's wait, 0 for no spin",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_KERNARG_ARENA",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_launch_policy)",
+   "does": "measurement arm: 0 gives every launch a kernel argument buffer of the pool in place of a slice of the arena",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_HIP_OCCUPANCY_VGPR",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_launch_policy)",
+   "does": "measurement arm: 0 leaves the vector registers out of the occupancy query, the model before 2026-10-30",
    "lab": {
     "every": [
      "amdhip64.dll"
