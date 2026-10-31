@@ -401,7 +401,9 @@ Check (($pos[0] -gt 0) -and ($pos[0] -lt $pos[1])) 'install.ps1 rejects Reboot b
 Check ($r.text -match 'would: DiInstallDriverW INSTALL_AS_SET payload\\kmd \(the GPU changes to it at the next restart\)') 'the walk-through shows the driver set for the next restart'
 Check (($src -match "'observed' \{ Add-Warning 'DWM restarted in this session'") -and ($src -match 'Get-DwmReplacementFinding \(Find-DwmBaseline \(Read-DwmBaseline\) \$epoch\)') -and ($src -notmatch 'LogonUtc -DwmStartUtc|StartTime|CreationDate -gt')) 'verify reports a DWM replacement only when observed against the logon baseline, unknown history otherwise'
 $sc0 = [IO.File]::ReadAllText((Join-Path $Package 'installer\start-confirm.ps1'))
-Check (($sc0 -match 'if \(-not \$Probe\) \{\s+try \{\s+\. \(Join-Path \$here ''dwm-session\.ps1''\)') -and ($sc0 -match 'Save-DwmBaseline \$epoch')) 'the start-confirm task records the DWM baseline at each logon (not in -Probe)'
+# BD-271: the startup run (-AtStartup) has no logon, so it records no baseline and logs why.
+Check (($sc0 -match 'if \(-not \$Probe -and -not \$AtStartup\) \{\s+try \{\s+\. \(Join-Path \$here ''dwm-session\.ps1''\)') -and ($sc0 -match 'Save-DwmBaseline \$epoch')) 'the start-confirm task records the DWM baseline at each logon (not in -Probe, not in the startup run)'
+Check ($sc0 -match 'if \(\$AtStartup -and -not \$Probe\) \{ Write-StartConfirmLog ''DWM baseline: not taken at system startup') 'the startup run of the start-confirm task logs that it takes no DWM baseline'
 Check ((Test-Path -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps1')) -and ((Get-FileHash -LiteralPath (Join-Path $Package 'payload\tools\dwm-session.ps1')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $Package 'installer\dwm-session.ps1')).Hash)) 'dwm-session.ps1 ships next to the installed start-confirm task'
 Check ($r.text -match 'DWM of session \d+ before the driver package: ') 'the walk-through records the DWM before the driver package'
 # BD-069: the installer tells the driver's own safety closure from a setting of the tester, and only a repair reopens
