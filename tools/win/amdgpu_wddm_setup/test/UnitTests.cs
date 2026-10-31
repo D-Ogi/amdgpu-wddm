@@ -690,6 +690,75 @@ static partial class UnitTests
     // own end-to-end run is --smoke-payload, driven by tools/release/test-setup-exe.ps1 with a packed exe and with
     // a damaged one; these cases hold the parts a test can hold without a package: the file list, the paths it is
     // allowed to name, and the permission list of the folder the package is unpacked into.
+    // BD-160: the release signs the single file after make-setup-exe.ps1 writes it, so an Authenticode certificate
+    // table follows the trailer. A minimal PE32+ header of 1024 bytes stands in for the program image: the reader
+    // only reads data directory 4 of it. The test signing itself, with signtool, is in tools/release/test-setup-exe.ps1.
+    static byte[] FakeSingleFile(int padding)
+    {
+        var program = new byte[1024];
+        program[0] = 0x4D; program[1] = 0x5A;
+        BitConverter.GetBytes(0x80).CopyTo(program, 0x3C);
+        BitConverter.GetBytes(0x00004550u).CopyTo(program, 0x80);
+        BitConverter.GetBytes((ushort)0x20B).CopyTo(program, 0x98);
+        BitConverter.GetBytes(16u).CopyTo(program, 0x98 + 108);
+        var payload = new byte[64];
+        var list = new byte[40];
+        var trailer = new byte[Payload.TrailerSize];
+        Payload.Magic.CopyTo(trailer, 0);
+        BitConverter.GetBytes(Payload.Format).CopyTo(trailer, 16);
+        BitConverter.GetBytes((long)program.Length).CopyTo(trailer, 24);
+        BitConverter.GetBytes((long)payload.Length).CopyTo(trailer, 32);
+        BitConverter.GetBytes((long)(program.Length + payload.Length)).CopyTo(trailer, 40);
+        BitConverter.GetBytes((long)list.Length).CopyTo(trailer, 48);
+        var all = new List<byte>();
+        all.AddRange(program); all.AddRange(payload); all.AddRange(list); all.AddRange(new byte[padding]); all.AddRange(trailer);
+        return all.ToArray();
+    }
+
+    static byte[] SignFake(byte[] unsigned, int tableOffset, int tableSize, int filler)
+    {
+        var all = new List<byte>(unsigned);
+        while (all.Count < tableOffset) all.Add(0);
+        for (int i = 0; i < tableSize; i++) all.Add(0xC5);
+        for (int i = 0; i < filler; i++) all.Add(0x11);
+        var b = all.ToArray();
+        int entry = 0x98 + 112 + 4 * 8;
+        BitConverter.GetBytes((uint)tableOffset).CopyTo(b, entry);
+        BitConverter.GetBytes((uint)tableSize).CopyTo(b, entry + 4);
+        return b;
+    }
+
+    static Payload.Head HeadOf(byte[] bytes) { using (var m = new MemoryStream(bytes, false)) return Payload.ReadHead(m); }
+    static long DataEndOf(byte[] bytes) { using (var m = new MemoryStream(bytes, false)) return Payload.DataEnd(m); }
+
+    static void SignedSingleFile()
+    {
+        var plain = FakeSingleFile(0);
+        var head = HeadOf(plain);
+        Check(head != null, "signed single file: the unsigned layout still reads its trailer at the end of the file");
+        if (head != null) Equal(1024L, head.PayloadOffset, "signed single file: the unsigned payload offset");
+        Equal((long)plain.Length, DataEndOf(plain), "signed single file: an unsigned file ends its data at its end");
+        // The file signed as signtool signs it: a certificate table at the end, named by the security directory.
+        var signed = SignFake(plain, plain.Length, 1976, 0);
+        head = HeadOf(signed);
+        Check(head != null, "signed single file: the trailer is read in front of the certificate table");
+        if (head != null)
+        {
+            Equal(1024L, head.PayloadOffset, "signed single file: the payload offset of the signed file");
+            Equal(1024L + 64, head.ListOffset, "signed single file: the list offset of the signed file");
+        }
+        Equal((long)plain.Length, DataEndOf(signed), "signed single file: the data ends where the certificate table begins");
+        // A table that is not the end of the file: not a layout the release writes, so no package.
+        var trailing = SignFake(plain, plain.Length, 1976, 8);
+        Check(HeadOf(trailing) == null, "signed single file: bytes after the certificate table mean no package");
+        Equal(-1L, DataEndOf(trailing), "signed single file: a table in the middle is refused");
+        // Padding between the trailer and the table: the trailer is then not directly in front of the table.
+        Check(HeadOf(SignFake(plain, plain.Length + 8, 1976, 0)) == null, "signed single file: a trailer that is not directly in front of the table is not read");
+        // The tester.35 layout: the window's own certificate table in the middle of the single file.
+        Check(HeadOf(SignFake(plain, 512, 64, 0).Take(512 + 64).Concat(plain.Skip(512 + 64)).ToArray()) == null,
+            "signed single file: a window signature in the middle of the file means no package");
+    }
+
     static void SingleFile()
     {
         Equal(120, Payload.TrailerSize, "single file: the trailer is 120 bytes");
@@ -705,6 +774,7 @@ static partial class UnitTests
         File.WriteAllBytes(tiny, new byte[8]);
         Check(Payload.ReadHead(tiny) == null, "single file: a file shorter than a trailer carries no package");
         Check(Payload.ReadHead(Path.Combine(tmp, "absent.bin")) == null, "single file: a file that is not there carries no package");
+        SignedSingleFile();
         // The file list.
         string version;
         var list = Payload.ParseList("version\t1.2.3\nfile\t" + new string('A', 64) + "\t7\tsetup.exe\n"

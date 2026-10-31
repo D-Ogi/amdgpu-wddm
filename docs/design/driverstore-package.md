@@ -77,7 +77,37 @@ The PDB must match the SYS CodeView GUID and age.
 The builder expands the CAB and verifies every file and catalog member.
 The CAB includes the pinned firmware required by the INF.
 The public installer ZIP retains the separate firmware download path.
-The licensor signs the CAB with EV before Partner Center submission.
+Partner Center accepts the CAB only with the EV signature of the account.
+
+Two signatures apply, one for each kind of file.
+With Secure Boot on, Windows 10 1607 and later loads a kernel driver only under a Microsoft root.
+A root that a user installs does not count.
+The driver package therefore needs Microsoft attestation, and an EV signature cannot replace it.
+The EV certificate signs the user-mode files outside the driver package.
+These are the control application, the tools, the setup window and the single-file setup.
+It also signs the submission CAB.
+Azure Trusted Signing also signs user-mode files only.
+The source is the Microsoft Driver Signing Policy page, updated on 2025-07-18.
+
+`user-mode-signing.ps1` selects the signer of the user-mode files.
+By default it is the test certificate.
+`-UserModeSignerThumbprint` and `-TimestampUrl` select a certificate of `CurrentUser\My` or `LocalMachine\My`.
+That certificate must have its private key and the code-signing EKU, and it must be valid at build time.
+Each signature gets an RFC 3161 time stamp and is read back at once.
+Windows must trust it, and the signer and the time stamp must match.
+A lab package refuses this route.
+With this route, the build also signs the submission CAB.
+The files of the driver package keep the test signature until Partner Center signs them.
+The manifest records the signer in `user_mode_signing`.
+
+The release signs the single-file setup as a whole, after `make-setup-exe.ps1` writes it.
+A certificate table is valid only at the end of a file.
+Up to tester.35, the single file carried the certificate table of `setup.exe` in its middle.
+Windows therefore read the downloaded file as not signed.
+The program image in the single file is now `setup.exe` without its signature.
+The trailer ends on 8 bytes, so signtool adds no padding in front of the table.
+`Payload.cs` reads the trailer directly in front of the certificate table.
+`make-setup-exe.ps1 -CheckSigned` proves that the signed file is the checked file plus one certificate table.
 
 The default mock-attestation step signs each driver PE and regenerates the catalog.
 It verifies unchanged image identities before updating the manifest's whole-file hashes.
@@ -128,4 +158,5 @@ The package uses WDK `10.0.26100.0`.
 - [WDDM 2.1 package requirements](https://learn.microsoft.com/windows-hardware/drivers/display/wddm-2-1-features)
 - [Run from DriverStore](https://learn.microsoft.com/windows-hardware/drivers/develop/run-from-driver-store)
 - [Attestation submission](https://learn.microsoft.com/windows-hardware/drivers/dashboard/code-signing-attestation)
+- [Driver Signing Policy](https://learn.microsoft.com/windows-hardware/drivers/install/kernel-mode-code-signing-policy--windows-vista-and-later-)
 

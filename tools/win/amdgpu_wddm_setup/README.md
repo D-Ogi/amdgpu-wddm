@@ -48,7 +48,8 @@ Preflight refusals that protect the machine are unchanged - they are the engine'
 
 A release ships the package as a zip and as one file, `amdgpu-wddm-setup-<version>.exe`: this window with the whole
 package appended after the end of its program image (`src/Payload.cs`, written by
-`tools/release/make-setup-exe.ps1`). With no `files\` folder beside it, the window unpacks that package to
+`tools/release/make-setup-exe.ps1`). The release signs that file as a whole, so the reader looks for the trailer
+directly in front of the certificate table when the file has one (BD-160). With no `files\` folder beside it, the window unpacks that package to
 `%ProgramData%\amdgpu-wddm\setup\<version>\` - a folder with its own permission list (administrators and SYSTEM
 full control, Users read and run, no inheritance from `%ProgramData%`) - refuses a payload, a file list or a file
 whose SHA-256 does not match and a path that would leave the folder, and installs from there, including the

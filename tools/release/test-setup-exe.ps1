@@ -26,12 +26,24 @@
 # of the published archive of the same package, and a zip one file short of the payload is refused.
 #
 # Exit 0 = every case behaved. A failure prints FAIL and what was expected.
+# Signed (BD-160): the release signs the single file after it is packed. A certificate made in memory for this run
+# (written as a PFX under -Out and deleted at the end; no certificate store is opened) signs a copy with signtool,
+# and the reader, -CheckSigned and the pinned digest check must accept it. A payload byte changed after signing,
+# and -CheckSigned on an unsigned file, must be refused. A setup.exe that is signed itself is packed without its
+# own certificate table, and the result reads and signs like the others. -SignTool defaults to the SDK of the
+# workspace (BC250_ROOT).
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Setup,
-    [Parameter(Mandatory)][string]$Out
+    [Parameter(Mandatory)][string]$Out,
+    [string]$SignTool
 )
 $ErrorActionPreference = 'Stop'
+if (-not $SignTool) {
+    $workspace = if ($env:BC250_ROOT) { $env:BC250_ROOT } else { Split-Path (Split-Path (Split-Path $PSScriptRoot)) }
+    $SignTool = Join-Path $workspace 'toolchain\nuget\microsoft.windows.sdk.cpp\c\bin\10.0.26100.0\x64\signtool.exe'
+}
+if (-not (Test-Path -LiteralPath $SignTool -PathType Leaf)) { throw "no signtool at $SignTool (pass -SignTool or set BC250_ROOT)" }
 
 $setupExe = (Resolve-Path -LiteralPath $Setup).Path
 $root = (New-Item -ItemType Directory -Force $Out).FullName
@@ -65,7 +77,7 @@ $packed = Join-Path $root 'amdgpu-wddm-setup-test.exe'
 $log = & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $top -Out $packed -Check 2>&1 | ForEach-Object { [string]$_ }
 $log | ForEach-Object { Write-Host "  $_" }
 # make-setup-exe.ps1 stops on any error, so reaching this line at all is the packer finishing.
-Check (@($log | Where-Object { $_ -match 'program \d+ \+ package \d+ \+ list \d+ \+ trailer 120' }).Count -eq 1) `
+Check (@($log | Where-Object { $_ -match 'program \d+ \+ package \d+ \+ list \d+ \+ padding [0-7] \+ trailer 120' }).Count -eq 1) `
     'the packer states the size of each section'
 Check (Test-Path -LiteralPath $packed -PathType Leaf) 'the single-file installer was written'
 Check (@($log | Where-Object { $_ -match 'byte for byte' }).Count -eq 1) 'the packer states that the payload holds the files of the release'
@@ -259,6 +271,119 @@ try {
 } catch { $refused = $true }
 Check $refused 'a zip that does not hold every file of the payload is refused'
 
+# 6. Signed (BD-160). A code-signing certificate of this run only, signtool as the release runs it, and the pinned
+#    digest check of driver-signature.ps1 with this certificate as its root.
+. (Join-Path $PSScriptRoot 'headless.ps1')
+. (Join-Path $PSScriptRoot 'driver-signature.ps1')
+$pfx = Join-Path $root 'single-file-test.pfx'
+$cer = Join-Path $root 'single-file-test.cer'
+$pfxPass = [Guid]::NewGuid().ToString('N')
+$key = [Security.Cryptography.RSA]::Create(2048)
+try {
+    $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=amdgpu-wddm single-file signing test',
+        $key, [Security.Cryptography.HashAlgorithmName]::SHA256, [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+    $eku = New-Object Security.Cryptography.OidCollection
+    [void]$eku.Add((New-Object Security.Cryptography.Oid '1.3.6.1.5.5.7.3.3'))
+    $request.CertificateExtensions.Add((New-Object Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension $eku, $false))
+    $testCert = $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddMinutes(-5), [DateTimeOffset]::UtcNow.AddHours(2))
+    [IO.File]::WriteAllBytes($pfx, $testCert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Pfx, $pfxPass))
+    [IO.File]::WriteAllBytes($cer, $testCert.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+} finally { $key.Dispose() }
+# signtool directly, not Invoke-Headless: this test runs in Windows PowerShell 5.1 as well (the window's build.ps1),
+# and signtool is a console program that asks nothing. driver-signature.ps1 uses Invoke-Headless only from 7.x.
+function Invoke-TestSign([string]$Path) {
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $text = (& $SignTool sign /fd SHA256 /f $pfx /p $pfxPass $Path 2>&1 | ForEach-Object { [string]$_ }) -join ' / ' }
+    finally { $ErrorActionPreference = $prev }
+    if ($LASTEXITCODE -ne 0) { throw "signtool sign $Path failed: $($text -replace [regex]::Escape($pfxPass), '<redacted>')" }
+}
+function Test-PinnedSignature([string]$Path) {
+    try { Test-DriverFileSignature -Path $Path -SignTool $SignTool -ExpectedRoot pinned-test -TestCertificate $cer; $true }
+    catch { Write-Host "  pinned check of ${Path}: $($_.Exception.Message)"; $false }
+}
+function Invoke-CheckSigned([string]$PackageTop, [string]$Exe) {
+    try {
+        $l = & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $PackageTop -Out $Exe -CheckSigned 2>&1 | ForEach-Object { [string]$_ }
+        [pscustomobject]@{ ok = $true; text = ($l -join ' / ') }
+    } catch { [pscustomobject]@{ ok = $false; text = $_.Exception.Message } }
+}
+try {
+    Check ((Get-AuthenticodeSignature -LiteralPath $packed).Status -eq 'NotSigned') 'the packed single file is not signed before the release signs it'
+    $signedExe = Join-Path $root 'signed.exe'
+    Copy-Item -LiteralPath $packed -Destination $signedExe -Force
+    Invoke-TestSign $signedExe
+    $sig = Get-AuthenticodeSignature -LiteralPath $signedExe
+    Check ($sig.SignerCertificate -and $sig.SignerCertificate.Thumbprint -eq $testCert.Thumbprint) `
+        "Windows reads the signer of the signed single file (status $($sig.Status))"
+    Check ($sig.Status -notin 'NotSigned', 'HashMismatch', 'NotSupportedFileFormat') "the signed single file is not read as unsigned or damaged (status $($sig.Status))"
+    Check (Test-PinnedSignature $signedExe) 'the signed single file passes the pinned digest check'
+    $cs = Invoke-CheckSigned $top $signedExe
+    Check ($cs.ok -and $cs.text -match 'signed single file: the bytes of the single file, then a certificate table') `
+        "-CheckSigned accepts the signed single file ($($cs.text))"
+    $r = Invoke-Smoke $signedExe 'signed'
+    Check ($r.code -eq 0 -and $r.report -match 'payload ok' -and $r.report -match "files $($packageFiles.Count)") `
+        "the signed single file reads its own payload (exit $($r.code): $($r.text))"
+    $cs = Invoke-CheckSigned $top $packed
+    Check (-not $cs.ok) "-CheckSigned refuses a single file that is not signed ($($cs.text))"
+    # One payload byte changed after signing: the reader refuses the payload, and the signature no longer verifies.
+    $tampered = Join-Path $root 'signed-tampered.exe'
+    $b = [IO.File]::ReadAllBytes($signedExe)
+    $b[$payloadOffset + 64] = $b[$payloadOffset + 64] -bxor 0xFF
+    [IO.File]::WriteAllBytes($tampered, $b)
+    $r = Invoke-Smoke $tampered 'signed-tampered'
+    Check ($r.code -eq 4) "a payload byte changed after signing is refused (exit $($r.code): $($r.text))"
+    Check (-not (Test-PinnedSignature $tampered)) 'a payload byte changed after signing fails the signature'
+    $cs = Invoke-CheckSigned $top $tampered
+    Check (-not $cs.ok) "-CheckSigned refuses the changed signed file ($($cs.text))"
+    # A setup.exe that carries a signature of its own (the release signs the window before it packs it).
+    $signedTop = Join-Path $root 'package-signed-window'
+    Remove-Item -LiteralPath $signedTop -Recurse -Force -ErrorAction SilentlyContinue
+    Copy-Item -LiteralPath $top -Destination $signedTop -Recurse
+    Invoke-TestSign (Join-Path $signedTop 'setup.exe')
+    $fromSigned = Join-Path $root 'from-signed-window.exe'
+    # A file of growing length, until the file list does not end on 8 bytes: the padding in front of the trailer is
+    # then not empty, and the signed file shows that signtool adds no padding of its own after it.
+    $pad = 0
+    for ($n = 1; $n -le 16 -and $pad -eq 0; $n++) {
+        [IO.File]::WriteAllText((Join-Path $signedTop 'files\align.txt'), ('a' * $n))
+        $log = & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $signedTop -Out $fromSigned -Check 2>&1 | ForEach-Object { [string]$_ }
+        $m = [regex]::Match(($log -join "`n"), 'padding ([0-7]) \+ trailer')
+        if ($m.Success) { $pad = [int]$m.Groups[1].Value }
+    }
+    Check ($pad -gt 0) "the file list of the signed-window case is padded ($pad bytes)"
+    Check (@($log | Where-Object { $_ -match 'the signature of setup\.exe \(\d+ bytes\) is not part of the program image' }).Count -eq 1) `
+        "the packer takes the window's own signature off the program image ($($log -join ' / '))"
+    $fb = [IO.File]::ReadAllBytes($fromSigned)
+    $po = [BitConverter]::ToInt64($fb, $fb.Length - $trailerSize + 24)
+    $pe = [BitConverter]::ToInt32($plainBytes, 0x3C)
+    $sum = $pe + 24 + 64
+    $frontOk = $po -ge $plainBytes.Length -and $po -lt $plainBytes.Length + 8
+    if ($frontOk) {
+        $front = New-Object byte[] $plainBytes.Length
+        [Array]::Copy($fb, 0, $front, 0, $front.Length)
+        [Array]::Copy($plainBytes, $sum, $front, $sum, 4)
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try { $frontOk = [BitConverter]::ToString($sha.ComputeHash($front)) -eq [BitConverter]::ToString($sha.ComputeHash($plainBytes)) }
+        finally { $sha.Dispose() }
+        for ($i = $plainBytes.Length; $frontOk -and $i -lt $po; $i++) { if ($fb[$i] -ne 0) { $frontOk = $false } }
+    }
+    Check $frontOk 'the program image is the unsigned window, apart from its checksum and the zero padding signtool added'
+    Check ((Get-AuthenticodeSignature -LiteralPath $fromSigned).Status -eq 'NotSigned') 'a single file packed around a signed window is not signed until the release signs it'
+    $r = Invoke-Smoke $fromSigned 'from-signed-window'
+    Check ($r.code -eq 0 -and $r.report -match 'payload ok') "the single file of a signed window reads its payload (exit $($r.code): $($r.text))"
+    Invoke-TestSign $fromSigned
+    Check (Test-PinnedSignature $fromSigned) 'the single file of a signed window, signed, passes the pinned digest check'
+    $cs = Invoke-CheckSigned $signedTop $fromSigned
+    Check $cs.ok "-CheckSigned accepts the single file of a signed window ($($cs.text))"
+    $r = Invoke-Smoke $fromSigned 'from-signed-window-signed'
+    Check ($r.code -eq 0 -and $r.report -match 'payload ok') "the signed single file of a signed window reads its payload (exit $($r.code): $($r.text))"
+} finally {
+    $pfxPass = $null
+    Remove-Item -LiteralPath $pfx, $cer -Force -ErrorAction SilentlyContinue
+    if ($testCert) { $testCert.Dispose() }
+}
+
 # 7. The plain window, with nothing appended: no package, which is what the setup.exe of an unpacked release is.
 $r = Invoke-Smoke $setupExe 'plain'
 Check ($r.code -eq 3) "the window without a payload says so (exit $($r.code): $($r.text))"
@@ -268,4 +393,4 @@ if ($failed) { Write-Host "$passed checks passed, $failed FAILED" -ForegroundCol
 # The summary goes to the output stream, not to the host: tools\win\amdgpu_wddm_setup\build.ps1 runs this test as
 # its last gate and reads this exact line.
 "single-file installer: $passed checks passed, 0 failed"
-"  the payload was read, checked and unpacked, 9 damaged, doctored or empty exes were refused, and the payload was compared with the zip of the same package"
+"  the payload was read, checked and unpacked, 9 damaged, doctored or empty exes were refused, the payload was compared with the zip of the same package, and signed single files were read, checked and refused when changed"
