@@ -1,7 +1,9 @@
 # Logon start-confirm of a tester PC: the scheduled task "amdgpu-wddm start confirm" (install.ps1 registers it from
 # the plan of common.ps1: at the logon of any user, as Local System, highest run level, -NoWindow) runs this once per
 # logon. The release variant of the lab's start-confirm.ps1; the decision rules are the lab's, unchanged, in
-# start-confirm-core.ps1.
+# start-confirm-core.ps1. BD-271: the task "amdgpu-wddm startup confirm" runs it once more at system startup with
+# -AtStartup, for a start that nobody signs in to; that run marks its log lines "startup:" and takes no DWM baseline,
+# because no logon exists yet. Both runs may wait for the same start, and the second one to see it confirmed exits 0.
 #
 # Why it exists: every driver start counts against the KMD's boot-loop guard (guard.c GuardCheckAndCountStart,
 # BC250_MAX_UNCONFIRMED_STARTS 2): at the third start nobody confirmed, the driver refuses to start and Windows uses
@@ -34,7 +36,7 @@
 # DWM baseline of the logon (dwm-session.ps1) and, at its end, the running-release witness of this boot when the loaded
 # KMD is the installed release's (release-witness.ps1, read by the control application). -Probe prints one reading of
 # everything and exits (read-only; verify uses it).
-param([int]$Seconds = 120, [switch]$Probe, [switch]$NoWindow, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60)
+param([int]$Seconds = 120, [switch]$Probe, [switch]$NoWindow, [string]$ExpectedVersion = '', [int]$FallbackHoldSeconds = 60, [switch]$AtStartup)
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 # The driver version the fallback expects: manifest.json kmd_abi of the installed release (the install root is the
@@ -71,6 +73,7 @@ if (-not $Probe) {
 }
 function Write-StartConfirmLog([string]$Text) {
     $inv = [Globalization.CultureInfo]::InvariantCulture
+    if ($AtStartup) { $Text = "startup: $Text" }
     $line = [string]::Format($inv, '{0} +{1,6:F1}s {2}', [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ', $inv), $clock.Elapsed.TotalSeconds, $Text)
     if ($Probe) { $line; return }
     try { [IO.File]::AppendAllText($log, $line + "`r`n") } catch { }
@@ -79,8 +82,10 @@ if ($script:witnessLoadError) {
     Write-StartConfirmLog "release-witness.ps1 did not load: $($script:witnessLoadError); this boot's start time reads as unknown and no witness is written"
 }
 # BD-060: the DWM instance of this logon's session, recorded once per logon as the baseline that verify and the control
-# application compare against (dwm-session.ps1). Never fails the task; -Probe writes nothing.
-if (-not $Probe) {
+# application compare against (dwm-session.ps1). Never fails the task; -Probe writes nothing. The startup run has no
+# logon to record (BD-271): the logon confirmation records it when someone signs in.
+if ($AtStartup -and -not $Probe) { Write-StartConfirmLog 'DWM baseline: not taken at system startup; the logon confirmation records it' }
+if (-not $Probe -and -not $AtStartup) {
     try {
         . (Join-Path $here 'dwm-session.ps1')
         $epoch = Get-DwmEpoch
@@ -272,7 +277,8 @@ function Invoke-Tick {
 
 # The run of the Local System task: no window, no form, no assembly to load. The sign-in notice of this logon is
 # start-window.ps1's, in the user's own session; this loop keeps the time bound of the task.
-Write-StartConfirmLog "window: none; the task $windowTaskName of this logon starts the sign-in notice only, and the exit line below reports what that task did"
+if ($AtStartup) { Write-StartConfirmLog 'window: none; this run is at system startup, before any logon (BD-271)' }
+else { Write-StartConfirmLog "window: none; the task $windowTaskName of this logon starts the sign-in notice only, and the exit line below reports what that task did" }
 while ($true) {
     $step = Invoke-Tick
     if ($step) { $script:exitCode = [int]$step.code; $script:lastReason = $step.reason; break }

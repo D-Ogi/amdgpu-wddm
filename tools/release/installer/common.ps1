@@ -33,6 +33,7 @@ $script:RunOnceKey       = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunO
 $script:RunOnceName      = 'amdgpu-wddm-installer'
 $script:TaskName         = 'amdgpu-wddm start confirm'
 $script:WindowTaskName   = 'amdgpu-wddm start window'          # BD-080: the part that needs a session, not rights
+$script:StartupTaskName  = 'amdgpu-wddm startup confirm'       # BD-271: the confirmation of a start that nobody signs in to
 $script:FirmwareInstallDir      = 'C:\BC250\firmware'                 # legacy repair sets only; new KMD uses Driver Store
 $script:StateDir         = Join-Path $env:ProgramData 'amdgpu-wddm\installer'
 $script:StatePath        = Join-Path $script:StateDir 'state.json'
@@ -2864,7 +2865,7 @@ function Get-OurVulkanIcdValues {
     }
     return $r
 }
-# Our scheduled tasks. The installer registers the two of Get-LogonTaskPlan below; the sweep takes any task of ours,
+# Our scheduled tasks. The installer registers the three of Get-LogonTaskPlan below; the sweep takes any task of ours,
 # so a task that an older release named differently goes with it.
 function Get-OurScheduledTasks {
     try { return @(Get-ScheduledTask -ErrorAction Stop | Where-Object { $_.TaskName -like "$($script:ReleaseName)*" } | ForEach-Object { $_.TaskName }) } catch { return @() }
@@ -2909,6 +2910,17 @@ function Get-OurScheduledTasks {
 # install's start-window.ps1 (tools\ next to its own control\ folder) with CREATE_NO_WINDOW, so no console window
 # exists, and returns the script's exit code (StartWindowHost.cs). Only an install without the control application
 # (-NoControlApp) keeps powershell.exe for the window, and the plan says so in 'console'.
+#
+# BD-271: the third task. A logon trigger never fires for a start that nobody signs in to: a PC without automatic
+# sign-in that Windows Update or a remote restart starts twice while the sign-in screen waits counted two unconfirmed
+# starts, and the third start refused the driver (lab, tester.34, 2026-10-30). The confirmation needs no session, so
+# the same script runs once more at system startup, as Local System and headless like the logon confirmation, with
+# -AtStartup so that its log lines say which run wrote them. It is a task of its own, not a second trigger of the
+# logon confirmation: the scheduler gives a task one instance at a time (IgnoreNew), so a logon in the first minutes
+# after a start would find the startup run still waiting and would not run the logon confirmation, which records
+# the DWM baseline of the logon (BD-060). Two runs that wait for the same start are safe: the one that sees the
+# start confirmed first exits 0 ("confirmed by another client"), and the guard reset of the fallback is the same
+# operation twice.
 function Get-LogonTaskPlan {
     param([Parameter(Mandatory)][string]$ConfirmScript, [Parameter(Mandatory)][string]$WindowScript, [string]$WindowHost, [int]$Seconds = 120)
     $host51 = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File'
@@ -2946,6 +2958,16 @@ function Get-LogonTaskPlan {
             trigger   = [ordered]@{ kind = 'at-logon'; user = $null }
             minutes   = 3
             what      = "at the logon of any user, with that user's own rights (Users, S-1-5-32-545): $windowWhat"
+        },
+        [ordered]@{
+            role      = 'startup'
+            name      = $script:StartupTaskName
+            execute   = 'powershell.exe'
+            arguments = "$host51 `"$ConfirmScript`" -NoWindow -AtStartup"
+            principal = [ordered]@{ kind = 'user'; id = 'S-1-5-18'; logon_type = 'ServiceAccount'; run_level = 'Highest' }
+            trigger   = [ordered]@{ kind = 'at-startup'; user = $null }
+            minutes   = 6
+            what      = "at system startup, before any logon, as Local System (S-1-5-18), headless: $ConfirmScript (BD-271)"
         }
     )
 }
@@ -2980,7 +3002,8 @@ function Test-LogonTaskRegistered {
         if ($actions.Count -ne 1 -or $triggers.Count -ne 1 -or -not $p) { return $false }
         if ([string]$actions[0].Execute -ne [string]$Task.execute -or [string]$actions[0].Arguments -ne [string]$Task.arguments) { return $false }
         $t = $triggers[0]
-        if ([string]$t.CimClass.CimClassName -ne 'MSFT_TaskLogonTrigger' -or $t.UserId -or -not $t.Enabled) { return $false }
+        $class = @{ 'at-logon' = 'MSFT_TaskLogonTrigger'; 'at-startup' = 'MSFT_TaskBootTrigger' }[[string]$Task.trigger.kind]
+        if (-not $class -or [string]$t.CimClass.CimClassName -ne $class -or $t.UserId -or -not $t.Enabled) { return $false }
         if ([string]$p.RunLevel -ne [string]$Task.principal.run_level) { return $false }
         $account = $(if ([string]$Task.principal.kind -eq 'user') { [string]$p.UserId } else { [string]$p.GroupId })
         if (-not $account) { return $false }
@@ -3002,7 +3025,8 @@ function Test-LogonTaskPlan {
     foreach ($t in $tasks) {
         $n = [string]$t.name
         if ($n -notlike "$($script:ReleaseName)*") { [void]$bad.Add("task '$n' is not named after the release: the uninstaller's sweep (Get-OurScheduledTasks) would leave it on the computer") }
-        if ([string]$t.trigger.kind -ne 'at-logon') { [void]$bad.Add("task '$n' triggers on '$($t.trigger.kind)', not at logon") }
+        $kind = $(if ([string]$t.role -eq 'startup') { 'at-startup' } else { 'at-logon' })
+        if ([string]$t.trigger.kind -ne $kind) { [void]$bad.Add("task '$n' ($($t.role)) triggers on '$($t.trigger.kind)', not $kind") }
         if ($t.trigger.user) { [void]$bad.Add("task '$n' triggers at the logon of '$($t.trigger.user)' only; every logon has to run it") }
         if ([string]$t.principal.id -eq 'S-1-5-32-544') { [void]$bad.Add("task '$n' is registered for the Administrators group (S-1-5-32-544): it never runs at the logon of a standard user (BD-080)") }
         if ([int]$t.minutes -le 0) { [void]$bad.Add("task '$n' has no execution time limit") }
@@ -3017,12 +3041,25 @@ function Test-LogonTaskPlan {
     if ([string]$c.arguments -notmatch '(?i)(^|\s)-NoWindow(\s|$)') { [void]$bad.Add('the confirmation does not run headless (-NoWindow): its account has no desktop in the logon session') }
     if ([string]$c.arguments -match '(?i)(^|\s)-Probe(\s|$)') { [void]$bad.Add('the confirmation runs read-only (-Probe): it would confirm no start') }
     if ([string]$c.arguments -match '(?i)(^|\s)-FallbackHoldSeconds(\s|$)') { [void]$bad.Add('the confirmation changes the hold of the boot-loop fallback on its command line; the bound belongs to start-confirm.ps1') }
+    if ([string]$c.arguments -match '(?i)(^|\s)-AtStartup(\s|$)') { [void]$bad.Add('the logon confirmation says -AtStartup: its log lines would name the wrong run') }
+    # BD-271: the confirmation of a start that nobody signs in to. The same script with the same account and rights,
+    # at system startup; its own task, so that it never holds off the logon confirmation (the comment of the plan).
+    $startup = @($tasks | Where-Object { $_.role -eq 'startup' })
+    if ($startup.Count -ne 1) { [void]$bad.Add("the plan has $($startup.Count) startup confirmation tasks, not one: a start that nobody signs in to stays unconfirmed, and the third such start refuses the driver (BD-271)") }
+    else {
+        $u = $startup[0]
+        if (([string]$u.execute -ne [string]$c.execute) -or ([string]$u.arguments -ne ([string]$c.arguments + ' -AtStartup'))) { [void]$bad.Add("the startup confirmation does not run the logon confirmation's command with -AtStartup: '$($u.execute) $($u.arguments)'") }
+        if (([string]$u.principal.kind -ne 'user') -or ([string]$u.principal.id -ne 'S-1-5-18') -or ([string]$u.principal.logon_type -ne 'ServiceAccount') -or ([string]$u.principal.run_level -ne 'Highest')) { [void]$bad.Add("the startup confirmation runs as $($u.principal.kind) $($u.principal.id) $($u.principal.logon_type) $($u.principal.run_level), not as Local System (S-1-5-18, ServiceAccount, Highest): no other account runs before a logon with the rights that CONFIRM needs") }
+        if ([int]$u.minutes -ne [int]$c.minutes) { [void]$bad.Add("the startup confirmation has a time limit of $($u.minutes) minutes, the logon confirmation $($c.minutes): both hold the same bound of start-confirm.ps1") }
+        if ([string]$u.name -eq [string]$c.name) { [void]$bad.Add('the startup confirmation and the logon confirmation carry the same name') }
+    }
     $window = @($tasks | Where-Object { $_.role -eq 'window' })
     if ($window.Count -ne 1) { [void]$bad.Add("the plan has $($window.Count) window tasks, not one"); return @($bad) }
     $w = $window[0]
     if (([string]$w.principal.kind -ne 'group') -or ([string]$w.principal.id -ne 'S-1-5-32-545')) { [void]$bad.Add("the window is registered for $($w.principal.kind) $($w.principal.id), not for the Users group (S-1-5-32-545) that every interactive account belongs to") }
     if ([string]$w.principal.run_level -ne 'Limited') { [void]$bad.Add("the window asks for run level '$($w.principal.run_level)': it needs no rights, and a standard user has none to give it") }
     if ([string]$w.name -eq [string]$c.name) { [void]$bad.Add('both tasks carry the same name') }
+    if ($startup.Count -eq 1 -and [string]$w.name -eq [string]$startup[0].name) { [void]$bad.Add('the window and the startup confirmation carry the same name') }
     # The window's host (M899): a windows program that starts the window's own script with no console window. A
     # console program is allowed only when the plan states why (an install without the control application).
     $we = [string]$w.execute

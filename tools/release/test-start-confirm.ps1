@@ -114,13 +114,16 @@ $run = Invoke-Run 120 { param($t) if ($t -lt 50) { New-Reading 1000 -Epoch 5 -Fl
 Check ($run.code -eq 0 -and $run.at -eq 50) 'exit 0 at the first confirmed reading'
 
 'constants'
-# The confirm task's time limit in the installer's plan (common.ps1 Get-LogonTaskPlan) must hold the latest bound,
-# the hard-bound margin of start-confirm.ps1 (10 s) and the script's start (a few seconds).
+# The time limit of each task that runs the confirmation in the installer's plan (common.ps1 Get-LogonTaskPlan: the
+# logon confirmation and, since BD-271, the startup confirmation) must hold the latest bound, the hard-bound margin of
+# start-confirm.ps1 (10 s) and the script's start (a few seconds).
 $plan = [IO.File]::ReadAllText((Join-Path (Split-Path $Core) 'common.ps1'))
-$m = [regex]::Match($plan, "role\s*=\s*'confirm'(?:(?!role\s*=).)*?minutes\s*=\s*(\d+)", 'Singleline')
-$minutes = $(if ($m.Success) { [int]$m.Groups[1].Value } else { 0 })
-"    confirm task time limit in common.ps1: $minutes min"
-Check ($m.Success -and $script:StartConfirmMaxSeconds + 30 -le $minutes * 60) 'the latest bound plus 30 s fits the confirm task time limit'
+foreach ($role in @('confirm', 'startup')) {
+    $m = [regex]::Match($plan, "role\s*=\s*'$role'(?:(?!role\s*=).)*?minutes\s*=\s*(\d+)", 'Singleline')
+    $minutes = $(if ($m.Success) { [int]$m.Groups[1].Value } else { 0 })
+    "    $role task time limit in common.ps1: $minutes min"
+    Check ($m.Success -and $script:StartConfirmMaxSeconds + 30 -le $minutes * 60) "the latest bound plus 30 s fits the $role task time limit"
+}
 
 if ($fail) { "FAIL: $fail check(s)"; exit 1 }
 'PASS: all checks'
