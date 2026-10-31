@@ -26,4 +26,20 @@ Invoke-Bc250SdkCompiler -Exe 'clang-cl.exe' -Arguments @('/c','file.cpp') -Arch 
 if('--target=i686-pc-windows-msvc' -notin $script:captured -or '/link' -in $script:captured) {
     throw 'Compile-only x86 invocation changed'
 }
+# BD-266: the MSVC half of the SDK boundary control must write its object into -Out, not into the current
+# directory, which the parallel rows of a release set share. The cl.exe stand-in records its arguments and stops
+# the control before any program runs.
+function Invoke-Bc250UmdCompiler { $global:LASTEXITCODE = 0 }
+function cl.exe { $script:clArgs = @($args); throw 'BD266-STOP' }
+$sdkOut = Join-Path $PSScriptRoot 'bd266-never-created'
+$script:clArgs = @()
+try { Test-Bc250ClangSdk -CompilerExe 'clang-cl.exe' -Flags @('/IP:\project\include') -Out $sdkOut }
+catch { if ($_.Exception.Message -ne 'BD266-STOP') { throw } }
+if (-not $script:clArgs.Count) { throw 'BD-266 control: the MSVC boundary build was not reached' }
+$expectedFo = '/Fo' + (Join-Path $sdkOut 'umd-compiler-sdk-test.obj')
+if ($expectedFo -notin $script:clArgs) {
+    throw "BD-266: the MSVC boundary build has no $expectedFo; its object goes into the current directory"
+}
+if (@($script:clArgs | Where-Object { $_ -like '/Fo*' }).Count -ne 1) { throw 'BD-266: more than one /Fo' }
 'PASS: standalone SDK compiler boundaries, SDK includes, architectures and exit propagation'
+'PASS: the SDK boundary control writes its MSVC object into -Out (BD-266)'
