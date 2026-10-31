@@ -6,8 +6,8 @@
 # with `--bc250-board-memory-action <8192|12288|restore> <token>`. The token is a SHA-256 over the board state
 # that the card showed, and the elevated process refuses it when the state has changed since. An SSH session of
 # the lab is elevated, so this script calls that verb directly, with a token that the application's own code
-# computes: the script loads amdgpu_wddm_control.exe as an assembly and calls Kmd.BoardMemoryQuery and
-# UmaSetting.ConfirmationToken. The click on the card and the confirmation dialog are the parts this does not
+# computes: the script loads amdgpu_wddm_control.exe as an assembly and calls Kmd.RefreshBoardCapabilities,
+# Kmd.BoardMemoryQuery and UmaSetting.ConfirmationToken. The click on the card and the confirmation dialog are the parts this does not
 # cover. Their result is the same command line.
 #
 #   read      the state that the card shows: the active size, the size of the next start, the backup
@@ -51,6 +51,14 @@ $asm = [Reflection.Assembly]::LoadFrom($exe)
 $kmdType = $asm.GetType('AmdgpuWddmControl.Kmd', $true)
 $umaType = $asm.GetType('AmdgpuWddmControl.UmaSetting', $true)
 function Call($type, [string]$name, [object[]]$arguments) { $type.GetMethod($name).Invoke($null, $arguments) }
+# The board capability gate (BoardCapabilities.Current) starts empty. The application fills it before each board
+# request (UmaActions.Run, WindowReading.Read). Without the same step here, each reply parses as a capability
+# mismatch.
+$caps = Call $kmdType 'RefreshBoardCapabilities' @()
+if (-not $caps.Value) {
+    "board capabilities: no answer, status 0x$('{0:X8}' -f $caps.Status) $($caps.Error)"
+    exit 2
+}
 
 function Read-State([string]$When) {
     $r = Call $kmdType 'BoardMemoryQuery' @()
