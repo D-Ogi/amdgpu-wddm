@@ -54,6 +54,12 @@
 #    Before the first step, it names in one message every output of an earlier round that a step would refuse
 #    (setup, package, submission CAB, package worktrees; PackageRound.psm1). -SetAside <name> moves them into
 #    <Out>\rounds\<name>\ instead, with the SHA-256 of each file before and after in set-aside.json (BD-272).
+# 6. A notes-only repack, when the notes change after the packages are built and gated:
+#      pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <Out> [-Flavours release,lab]
+#    For each flavour, repack-notes.ps1 makes <Out>\package-notes\<flavour> from <Out>\package\<flavour> with the
+#    committed notes of this tree: every file but the notes and manifest.json byte for byte, manifest.json changed in
+#    the notes values only, the zip and the single exe made again. Then the flavour gate and the installer dry run on
+#    the new package. <Out>\repack-report.json holds the new zip and exe hashes (BD-265).
 #    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
 #    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
 #    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
@@ -111,8 +117,11 @@ param(
     [Parameter(ParameterSetName = 'Job', Mandatory)][string]$Job,
     # The packages of a built and registered release set (see "5. Packages" above).
     [Parameter(ParameterSetName = 'Package', Mandatory)][switch]$Package,
-    [Parameter(ParameterSetName = 'Package', Mandatory)][string]$From,
-    [Parameter(ParameterSetName = 'Package')][string[]]$Flavours = @('release', 'lab'),
+    [Parameter(ParameterSetName = 'Package', Mandatory)][Parameter(ParameterSetName = 'Repack', Mandatory)][string]$From,
+    [Parameter(ParameterSetName = 'Package')][Parameter(ParameterSetName = 'Repack')][string[]]$Flavours = @('release', 'lab'),
+    # A notes-only repack of the packages of -From (BD-265, repack-notes.ps1): the notes of this tree's
+    # docs\testing\release-notes, every other file byte for byte, then the flavour gate and the installer dry run.
+    [Parameter(ParameterSetName = 'Repack', Mandatory)][switch]$RepackNotes,
     # The user-mode driver tree that the release gates of build-release.ps1 read (BC250_UMD_SOURCE, BC250_UMD_BUILD).
     [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdSource,
     [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdBuild,
@@ -331,6 +340,51 @@ if ($PSCmdlet.ParameterSetName -eq 'Job') {
     $script:jobExit = 1
     Invoke-SetJob $Job | Out-Host
     exit $script:jobExit
+}
+
+if ($PSCmdlet.ParameterSetName -eq 'Repack') {
+    # 6. A notes-only repack (BD-265). The notes must be committed: the repack takes them from this tree, and a
+    # published package names a commit for each of its texts.
+    $From = [IO.Path]::GetFullPath($From)
+    $python = (Get-Command python -CommandType Application | Select-Object -First 1).Source
+    $rr = [ordered]@{ tool = 'build-release-set'; step = 'repack-notes'; started_utc = Get-Utc; from = $From; flavours = @() }
+    $rrFile = Join-Path $From 'repack-report.json'
+    function Stop-Repack([string]$Why) {
+        $rr.status = 'failed'; $rr.error = $Why; $rr.finished_utc = Get-Utc
+        Write-Json $rrFile $rr
+        "build-release-set -RepackNotes: $Why"
+        exit 1
+    }
+    $notesDir = Join-Path $repo 'docs\testing\release-notes'
+    if (@(& git -C $repo status --porcelain -- docs/testing/release-notes).Count) { Stop-Repack "the notes in $notesDir are not committed" }
+    $rr.notes_commit = (& git -C $repo rev-parse HEAD).Trim()
+    foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+        $logs = Join-Path $From "logs\repack-$flavour"
+        New-Item -ItemType Directory -Force $logs | Out-Null
+        $newDir = Join-Path $From "package-notes\$flavour"
+        "$(Get-Utc) repack $flavour (log $logs\repack.log)"
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'repack-notes.ps1') -Package (Join-Path $From "package\$flavour") -Out $newDir -NotesDir $notesDir *> (Join-Path $logs 'repack.log')
+        if ($LASTEXITCODE -ne 0) {
+            @(Get-Content -LiteralPath (Join-Path $logs 'repack.log') -Tail 15) | ForEach-Object { "    $_" }
+            Stop-Repack "repack-notes.ps1 $flavour exit $LASTEXITCODE (log $logs\repack.log)"
+        }
+        $one = Get-Content -LiteralPath (Join-Path $newDir 'repack-report.json') -Raw | ConvertFrom-Json -AsHashtable
+        $top = Join-Path $newDir ([IO.Path]::GetFileNameWithoutExtension($one.zip.file))
+        # The checks of a package build on the new package: the flavour gate bound to its manifest (as build-release.ps1
+        # runs it last) and the host dry run of the installer (as -Package runs it).
+        & $python -I (Join-Path $repo 'tools\quality\flavour_gate.py') --flavour $flavour --package $top `
+            --negative-control 'wow64/d3d12/amdgpu_wddm_vkd3d.dll' --out (Join-Path $logs 'flavour-gate') `
+            --manifest (Join-Path $top 'files\manifest.json') *> (Join-Path $logs 'flavour-gate.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Repack "the flavour gate of the repacked $flavour package fails (log $logs\flavour-gate.log)" }
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'test-dryrun.ps1') -Package $top *> (Join-Path $logs 'dryrun.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Repack "the dry run of the repacked $flavour package fails (log $logs\dryrun.log)" }
+        $rr.flavours += [ordered]@{ flavour = $flavour; zip = $one.zip; exe = $one.exe; unchanged_files = $one.unchanged_files; notes = $one.notes }
+        "$(Get-Utc) $flavour zip $($one.zip.new), exe $($one.exe.new), $($one.unchanged_files) files unchanged"
+    }
+    $rr.status = 'ok'; $rr.finished_utc = Get-Utc
+    Write-Json $rrFile $rr
+    "build-release-set -RepackNotes: ok (report $rrFile)"
+    exit 0
 }
 
 if ($PSCmdlet.ParameterSetName -eq 'Package') {

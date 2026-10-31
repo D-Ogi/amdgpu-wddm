@@ -410,6 +410,25 @@ pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release
 pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -Download   (after the upload)
 ```
 
+The package ships `files\RELEASE-NOTES.md` and its translations. The setup window displays them, and
+`manifest.json` gives the SHA-256 and size of each. When the notes change after the gates ran on the package, a rebuild is not the
+fix: it changes the KMD bytes and the gates must run again. `-RepackNotes -From <dir>` makes a notes-only repack
+of each flavour in `<dir>\package-notes\<flavour>` with `repack-notes.ps1` (BD-265):
+
+1. The old package must agree with its `manifest.json` and with its zip, file for file.
+2. The repack takes the committed notes of `docs\testing\release-notes` by the rules of `build-release.ps1`. The set
+   of notes files must stay the same.
+3. `manifest.json` changes only in the sha256 and size of each notes entry. Every other file stays byte for byte.
+4. The tool makes the zip and the single exe again, with `make-setup-exe.ps1 -Check -ReleaseZip`.
+5. Then the flavour gate and the installer dry run run on the new package.
+
+`<dir>\repack-report.json` gives the new zip and exe hashes. The driver hashes do not change, but a lab install of
+the new zip is still part of the release gates.
+
+```
+pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <dir> [-Flavours release,lab]
+```
+
 `-UmdSource` and `-UmdBuild` name the user-mode driver tree and its build database that the release gates of
 `build-release.ps1` read (`umd-contract`, `umd-analysis`, `surface-control`). `-LedgerDebtReason` passes a recorded
 reason for unlanded ledger work to `build-release.ps1 -AllowLedgerDebt`.
