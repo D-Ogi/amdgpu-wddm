@@ -31,6 +31,20 @@ if (-not $PatchDir) {
     $PatchDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 }
 
+# The first lines of the output name this script, its SHA-256 and its arguments, and the configure line
+# below lists every CMake option, so that the log of a build tells how its binaries were made.
+# pack-llama-asset.ps1 copies the hash and the options line into PROVENANCE.txt of the release asset.
+# The options line holds no path: the paths are on the inputs line.
+$self = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
+"builder $((Get-FileHash -LiteralPath $self -Algorithm SHA256).Hash) $self"
+$builderOptions = @("-Jobs $Jobs")
+if ($Bc250AllocationCap) { $builderOptions += '-Bc250AllocationCap', "-Bc250AllocationCapBytes $Bc250AllocationCapBytes" }
+foreach ($name in 'ValidationTools', 'AssetTools', 'NoLto', 'ApplyPatches') {
+    if ((Get-Variable -Name $name -ValueOnly).IsPresent) { $builderOptions += "-$name" }
+}
+"builder options: $($builderOptions -join ' ')"
+"builder inputs: -Source $Source -Build $Build -RocmRoot $RocmRoot -OriginalCache $OriginalCache -CMake $CMake -PatchDir $PatchDir -Git $Git"
+
 # The complete set of source changes this HIP route needs, each with the marker that says it is in,
 # in the order they apply: llama-patches.json next to this script. A source copy that is missing one
 # of them builds and loads, and is wrong or slow: without the RDNA1 entry the device compiles
@@ -122,6 +136,8 @@ if ($Bc250AllocationCap) {
 $previousRocm = $env:ROCM_PATH
 try {
     $env:ROCM_PATH = $RocmRoot
+    "cmake configure: -S $Source -B $Build -G Ninja " + (($options | ForEach-Object { if ($_ -match ' ') { "`"$_`"" } else { $_ } }) -join ' ')
+    "cmake build targets: $($targets -join ' ')"
     & $CMake -S $Source -B $Build -G Ninja @options
     if ($LASTEXITCODE) { throw "CMake configure failed: $LASTEXITCODE" }
     $configuredCache = Get-Content (Join-Path $Build 'CMakeCache.txt')
