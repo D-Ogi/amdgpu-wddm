@@ -41,7 +41,8 @@
     X(hipErrorLaunchTimeOut) X(hipErrorNotReady) X(hipErrorInvalidHandle) \
     X(hipErrorNotSupported) X(hipErrorPeerAccessAlreadyEnabled) \
     X(hipErrorPeerAccessNotEnabled) X(hipErrorHostMemoryAlreadyRegistered) \
-    X(hipErrorHostMemoryNotRegistered) X(hipErrorUnknown) \
+    X(hipErrorHostMemoryNotRegistered) X(hipErrorInvalidSymbol) X(hipErrorInvalidContext) \
+    X(hipErrorFileNotFound) X(hipErrorIllegalState) X(hipErrorNotFound) X(hipErrorUnknown) \
     X(hipMemcpyHostToHost) X(hipMemcpyHostToDevice) X(hipMemcpyDeviceToHost) \
     X(hipMemcpyDeviceToDevice) X(hipMemcpyDefault) \
     X(hipStreamDefault) X(hipStreamNonBlocking) X(hipEventDefault) X(hipEventDisableTiming) \

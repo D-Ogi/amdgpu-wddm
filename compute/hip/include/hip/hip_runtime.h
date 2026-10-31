@@ -104,6 +104,14 @@ typedef enum hipError_t {
   hipErrorPeerAccessNotEnabled = 705,
   hipErrorHostMemoryAlreadyRegistered = 712,
   hipErrorHostMemoryNotRegistered = 713,
+  // The codes below are returned only by entry points of amdhip64_7.dll (the AMD ABI face,
+  // runtime/amd_abi.cpp and hip_amd_face.cpp). They are here so that hipGetErrorName and
+  // hipGetErrorString can name them; the numbers are AMD's (hip_runtime_api.h of HIP 7.18).
+  hipErrorInvalidSymbol = 13,
+  hipErrorInvalidContext = 201,
+  hipErrorFileNotFound = 301,
+  hipErrorIllegalState = 401,
+  hipErrorNotFound = 500,
   hipErrorUnknown = 999
 } hipError_t;
 

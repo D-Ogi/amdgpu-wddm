@@ -16,7 +16,9 @@
 #      (-Census, imp-hip.tsv) is exported.
 #   3. amd-headers.json records the SHA-256 of every AMD header that amd_abi.cpp included.
 #   4. test_amd_face_props: the mock DLL says that the host cannot read device memory through a
-#      device pointer (isLargeBar and the managed and pageable memory properties are 0).
+#      device pointer (isLargeBar and the managed and pageable memory properties are 0);
+#      test_amd_face_errors: hipModuleLoad of a missing file is hipErrorFileNotFound, and every
+#      code that the face returns has AMD's name.
 #
 # Outputs under -Out: mock\amdhip64_7.dll (the runtime over tests\host\hipmock_backend.c with the
 # production loader, for a machine with no BC-250) and amdhip64_7.dll (the runtime over layer 1),
@@ -174,6 +176,15 @@ $null = Invoke-Cl ($warn + $amdDefines + @('/std:c++17', '/EHsc', "/Fo$propsObj\
     @((Join-Path $hip 'tests\host\test_amd_face_props.cpp'), '/link') + $libpaths) 'test_amd_face_props'
 & $propsExe $mockDll
 if ($LASTEXITCODE -ne 0) { throw "test_amd_face_props failed ($LASTEXITCODE)" }
+# The error codes of the face and their names (hipModuleLoad of a missing file is
+# hipErrorFileNotFound), read from the mock DLL through AMD's header.
+$errorsObj = Join-Path $Out 'obj-errors-test'
+New-Item -ItemType Directory -Force $errorsObj | Out-Null
+$errorsExe = Join-Path $Out 'test_amd_face_errors.exe'
+$null = Invoke-Cl ($warn + $amdDefines + @('/std:c++17', '/EHsc', "/Fo$errorsObj\", "/Fe$errorsExe") + $amdIncludes +
+    @((Join-Path $hip 'tests\host\test_amd_face_errors.cpp'), '/link') + $libpaths) 'test_amd_face_errors'
+& $errorsExe $mockDll
+if ($LASTEXITCODE -ne 0) { throw "test_amd_face_errors failed ($LASTEXITCODE)" }
 
 # ---------------------------------------------------------------------------------------------
 # 4. The product DLL over layer 1. Without -Bc250hsaLib the layer-1 sources are compiled here,

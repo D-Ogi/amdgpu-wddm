@@ -88,6 +88,15 @@ const char* hipGetErrorName(hipError_t error) {
     case hipErrorNotReady:               return "hipErrorNotReady";
     case hipErrorInvalidHandle:          return "hipErrorInvalidHandle";
     case hipErrorNotSupported:           return "hipErrorNotSupported";
+    case hipErrorPeerAccessAlreadyEnabled:    return "hipErrorPeerAccessAlreadyEnabled";
+    case hipErrorPeerAccessNotEnabled:        return "hipErrorPeerAccessNotEnabled";
+    case hipErrorHostMemoryAlreadyRegistered: return "hipErrorHostMemoryAlreadyRegistered";
+    case hipErrorHostMemoryNotRegistered:     return "hipErrorHostMemoryNotRegistered";
+    case hipErrorInvalidSymbol:          return "hipErrorInvalidSymbol";
+    case hipErrorInvalidContext:         return "hipErrorInvalidContext";
+    case hipErrorFileNotFound:           return "hipErrorFileNotFound";
+    case hipErrorIllegalState:           return "hipErrorIllegalState";
+    case hipErrorNotFound:               return "hipErrorNotFound";
     case hipErrorUnknown:                return "hipErrorUnknown";
     default:                             break;
     }
@@ -113,6 +122,15 @@ const char* hipGetErrorString(hipError_t error) {
     case hipErrorNotReady:               return "not ready";
     case hipErrorInvalidHandle:          return "invalid handle";
     case hipErrorNotSupported:           return "this build does not support the operation";
+    case hipErrorPeerAccessAlreadyEnabled:    return "peer access is already enabled";
+    case hipErrorPeerAccessNotEnabled:        return "peer access is not enabled";
+    case hipErrorHostMemoryAlreadyRegistered: return "the host memory is already registered";
+    case hipErrorHostMemoryNotRegistered:     return "the host memory is not registered";
+    case hipErrorInvalidSymbol:          return "invalid device symbol";
+    case hipErrorInvalidContext:         return "invalid device context";
+    case hipErrorFileNotFound:           return "the file is not found";
+    case hipErrorIllegalState:           return "the resource is not in a state for the operation";
+    case hipErrorNotFound:               return "not found";
     case hipErrorUnknown:                return "unknown error";
     default:                             break;
     }
