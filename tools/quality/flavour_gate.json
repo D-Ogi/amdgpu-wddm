@@ -83,6 +83,30 @@
  },
  "forbidden": [
   {
+   "name": "EnableRlcReloadReset",
+   "where": "driver/kmd/gfx.c (GfxPreparePspReload)",
+   "does": "opt-in RLC reload reset experiment at startup (BD-199)",
+   "lab": {"every": ["bc250kmd.sys"]}
+  },
+  {
+   "name": "EnableSdmaIbControl",
+   "where": "driver/kmd/gfx.c (SdmaIbStartupControl)",
+   "does": "opt-in SDMA IB startup control experiment (BD-199)",
+   "lab": {"every": ["bc250kmd.sys"]}
+  },
+  {
+   "name": "EnableSdmaVaControl",
+   "where": "driver/kmd/gfx.c (SdmaIbStartupControl, SdmaVaStartupControl)",
+   "does": "opt-in SDMA VA startup control experiment (BD-199)",
+   "lab": {"every": ["bc250kmd.sys"]}
+  },
+  {
+   "name": "EnableSdmaPteControl",
+   "where": "driver/kmd/gfx.c (SdmaVaStartupControl)",
+   "does": "opt-in SDMA PTE startup control experiment (BD-199)",
+   "lab": {"every": ["bc250kmd.sys"]}
+  },
+  {
    "name": "BC250_ADL_TEST_HOOKS",
    "where": "driver/umd/adl/adl-main.cpp; tools/build/build-umd-adl.ps1",
    "does": "compiles ADL snapshot injection and test diagnostics; separate fixture DLLs only",

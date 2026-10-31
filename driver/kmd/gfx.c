@@ -516,6 +516,7 @@ void GfxTraceRlcState(_In_ const BC250_DEVICE* Device, _In_ const char* Phase)
 // it is not a generic escape or an admission/retirement predicate.
 NTSTATUS GfxPreparePspReload(_Inout_ BC250_DEVICE* Device)
 {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     BC250_GFX* gfx;
     struct amdgpu_device* adev = NULL;
     BOOLEAN enabled = FALSE;
@@ -548,6 +549,10 @@ NTSTATUS GfxPreparePspReload(_Inout_ BC250_DEVICE* Device)
     ExReleasePushLockExclusive(&Device->GfxPagingLock);
     KeLeaveCriticalRegion();
     return status;
+#else
+    UNREFERENCED_PARAMETER(Device);
+    return STATUS_SUCCESS;
+#endif
 }
 
 // A stage that stopped between nv_grbm_select(me, pipe, queue) and nv_grbm_select(0, 0, 0, 0) leaves GRBM_GFX_CNTL selecting
@@ -888,10 +893,13 @@ void GfxEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_GFX* Data)
 // Opt-in hardware control before WDDM publication, never alongside OS submissions.
 // Keep the external full-WDDM escape allow-list observational. A failure takes
 // the ordinary startup unwind, which owns all resources until engine retirement.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 static NTSTATUS SdmaVaStartupControl(BC250_DEVICE* Device);
+#endif
 
 static NTSTATUS SdmaIbStartupControl(BC250_DEVICE* Device)
 {
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
     BC250_ESCAPE_SDMACOPY control;
     ULONG trial;
     if (GuardReadSetting(L"EnableSdmaIbControl",0)==0 &&
@@ -924,6 +932,10 @@ static NTSTATUS SdmaIbStartupControl(BC250_DEVICE* Device)
         return status;
     }
     return STATUS_SUCCESS;
+#else
+    UNREFERENCED_PARAMETER(Device);
+    return STATUS_SUCCESS;
+#endif
 }
 
 // PASSIVE_LEVEL. Caller owns nonpaged report storage through this synchronous
@@ -2812,6 +2824,7 @@ void SdmaCopyEscape(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_SDMACOPY*
 // Pre-publication positive control: change BOTH PTE mappings on the GPU after
 // building the native copy, then execute the unchanged IB in VMID2. Backing
 // belongs to this startup owner through the real fence, including timeout.
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
 static NTSTATUS SdmaPteStartupControl(BC250_DEVICE* Device,BC250_GFX* gfx,
     struct amdgpu_device* adev,struct amdgpu_ring* ring,u64* tables,u64 rootPhys)
 {
@@ -3011,6 +3024,7 @@ Done:
     ExReleaseFastMutex(&Device->GartLock);
     return status;
 }
+#endif /* AMDGPU_WDDM_LAB_FLAVOUR (SdmaPteStartupControl, SdmaVaStartupControl) */
 
 
 // ---- ADR 0008 stage D: node 1, the paging node on SDMA0 (docs/design/paging-node.md) ---------------------------
