@@ -33,13 +33,22 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     HRESULT negotiated=requested_feature_level(args.Flags,requested,args.Interface);
     if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) ||
         level>advertised.maximum) return E_INVALIDARG;
-    if (kept_device_limit_reached() || short_lost_device_limit_reached(GetTickCount64())) {
+    const ULONGLONG now=GetTickCount64();
+    const bool keptBound=kept_device_limit_reached();
+    if (keptBound || short_lost_device_limit_reached(now)) {
         // BD-253 and BD-258: the second and third bounds (ddi-lifecycle.h). One line for each refusal, in both
-        // flavours, bounded.
+        // flavours, bounded. It names the bound, how long the refusal lasts (the kept-device bound lasts for the life
+        // of the process) and the last loss that a device of this process latched, which started the count.
+        const DeviceLossRecord loss=last_device_loss();
         static std::atomic_uint notes{16};
-        device_life_note(notes,"BC250 BD-253: CreateDevice refused: kept-devices=%u limit=%u short-lost-devices=%u "
-            "limit=%u hr=%08X runtime=%p\n",retained_device_count(),kKeptDeviceLimit,short_lost_device_count(),
-            kShortLostDeviceLimit,unsigned(kKeptDeviceStatus),reinterpret_cast<void *>(args.hRTDevice.handle));
+        device_life_note(notes,"BC250 BD-253: CreateDevice refused: bound=%s refused-for-ms=%llu kept-devices=%u "
+            "limit=%u short-lost-devices=%u limit=%u hr=%08X runtime=%p; last loss: reason=%s site=%s op=%u "
+            "hr=%08X age-ms=%llu losses=%u\n",keptBound ? "kept-devices" : "short-lost-devices",
+            keptBound ? ~0ull : (unsigned long long)short_lost_refusal_left_ms(now),retained_device_count(),
+            kKeptDeviceLimit,short_lost_device_count(),kShortLostDeviceLimit,unsigned(kKeptDeviceStatus),
+            reinterpret_cast<void *>(args.hRTDevice.handle),loss.losses ? loss.reason : "none",
+            loss.losses ? loss.site : "-",loss.op,unsigned(loss.hr),
+            loss.losses && now>=loss.at_ms ? (unsigned long long)(now-loss.at_ms) : 0ull,loss.losses);
         return kKeptDeviceStatus;
     }
     DeviceOwner *owner=new(std::nothrow) DeviceOwner;

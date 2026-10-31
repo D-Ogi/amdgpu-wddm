@@ -45,6 +45,10 @@ unsigned short_lost_device_count() noexcept { return g_short_lost_devices.load()
 bool short_lost_device_limit_reached(ULONGLONG now_ms) noexcept {
     return short_lost_device_count()>=kShortLostDeviceLimit && now_ms<g_short_lost_refused_until.load();
 }
+ULONGLONG short_lost_refusal_left_ms(ULONGLONG now_ms) noexcept {
+    const ULONGLONG until=g_short_lost_refused_until.load();
+    return short_lost_device_limit_reached(now_ms) ? until-now_ms : 0;
+}
 HRESULT retire_device_handle(DdiDeviceHandle &handle) noexcept {
     auto *owner=handle.owner;
     if (!owner) return S_OK;

@@ -85,7 +85,12 @@ int main() {
     {
         HostBridge b{}; b.device=&owner.runtime();
         UINT64 present=3, progress=4;
-        check(!settle_device_work(b,0));
+        // BD-198: a device that queued no GPU work needs no proof of the kernel and no wait. The line comes once.
+        check(device_queued_no_work(b) && settle_device_work(b,2000) && b.drain_tried && !kernel_ended_device_work(b));
+        check(settle_device_work(b,0));
+        // One counted call, whatever its status, and the kernel's proof is needed again.
+        b.drain_tried=false; b.gpu_work_calls=1;
+        check(!device_queued_no_work(b) && !settle_device_work(b,0));
         b.present_cpu=&present; b.present_sync=9; b.present_value=3;
         check(!settle_device_work(b,0));
         b.progress[2]={3,7,4,&progress};
@@ -105,7 +110,7 @@ int main() {
     // and the device is freed. The proof stays valid for the steps after close-session, which forgets the fences.
     {
         UINT64 fence=4;
-        owner.runtime().present_context=&context; lost_destroy=true;
+        owner.runtime().present_context=&context; lost_destroy=true; owner.bridge().gpu_work_calls=1;
         owner.bridge().device_lost=true; owner.bridge().drain_tried=true; owner.bridge().progress[0]={1,7,5,&fence};
         const unsigned before=destroys;
         check(owner.close()==D3DDDIERR_DEVICEREMOVED && destroys==before+1 && owner.runtime().present_context==&context);
@@ -125,7 +130,7 @@ int main() {
         // proof too.
         UINT64 presentFence=2;
         lost_destroy=false; sync_status=D3DDDIERR_DEVICEREMOVED;
-        owner.bridge().device_lost=true; owner.bridge().drain_tried=true;
+        owner.bridge().device_lost=true; owner.bridge().drain_tried=true; owner.bridge().gpu_work_calls=1;
         owner.bridge().present_sync=9; owner.bridge().present_cpu=&presentFence; owner.bridge().present_value=2;
         check(owner.close()==D3DDDIERR_DEVICEREMOVED && sync_destroys==1 && owner.bridge().present_sync==9);
         check(!std::strcmp(owner.step(),"close-present-sync"));
@@ -136,7 +141,8 @@ int main() {
         UINT64 pagingFence=0, progressFence=4;
         sync_status=S_OK; paging_status=D3DDDIERR_DEVICEREMOVED;
         owner.surface_queue()={11,12,&pagingFence};
-        owner.bridge().device_lost=true; owner.bridge().drain_tried=true; owner.bridge().progress[0]={1,7,5,&progressFence};
+        owner.bridge().device_lost=true; owner.bridge().drain_tried=true; owner.bridge().gpu_work_calls=1;
+        owner.bridge().progress[0]={1,7,5,&progressFence};
         check(owner.close()==D3DDDIERR_DEVICEREMOVED && paging_destroys==1 && owner.has_live_objects());
         check(!std::strcmp(owner.step(),"close-paging-queue"));
         progressFence=UINT64_MAX; paging_status=E_FAIL;
@@ -150,6 +156,23 @@ int main() {
         check(owner.close()==E_FAIL && owner.has_live_objects());
         fail_destroy=false;
         check(owner.close()==S_OK && !owner.has_live_objects());
+    }
+    // BD-198: a device lost before its first submission reached the kernel (Windows Terminal, the XAML of explorer) has
+    // no progress record and no present fence, so the kernel's proof never comes. With no GPU work queued, close frees it
+    // at once: no 2 s wait, no kept device. One counted call keeps the old rule.
+    {
+        owner.runtime().present_context=&context; lost_destroy=true;
+        owner.bridge().device_lost=true;
+        const unsigned before=destroys;
+        const ULONGLONG start=GetTickCount64();
+        check(owner.close()==S_OK && GetTickCount64()-start<500 && destroys==before+1);
+        check(!owner.runtime().present_context && !owner.has_live_objects() && !std::strcmp(owner.step(),"none"));
+        owner.runtime().present_context=&context;
+        owner.bridge().device_lost=true; owner.bridge().drain_tried=true; owner.bridge().gpu_work_calls=1;
+        check(owner.close()==D3DDDIERR_DEVICEREMOVED && destroys==before+2 && owner.has_live_objects());
+        check(!std::strcmp(owner.step(),"close-present-context"));
+        lost_destroy=false;
+        check(owner.close()==S_OK && destroys==before+3 && !owner.has_live_objects());
     }
     std::cout << "PASS DDI device owner: runtime arguments, initialization rollback, failed cleanup retention/retry, "
         "close on a lost device\n";

@@ -46,4 +46,6 @@ inline constexpr ULONGLONG kShortLostRefusalMs=60000;
 void note_retired_device(bool lost,ULONGLONG lifetime_ms,ULONGLONG now_ms) noexcept;
 unsigned short_lost_device_count() noexcept;
 bool short_lost_device_limit_reached(ULONGLONG now_ms) noexcept;
+// The time left of the current refusal period of the third bound, 0 when that bound does not refuse at now_ms.
+ULONGLONG short_lost_refusal_left_ms(ULONGLONG now_ms) noexcept;
 }

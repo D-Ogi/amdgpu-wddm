@@ -2,6 +2,7 @@
 #include "runtime-bridge.h"
 #include "ddi-error-policy.h"
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <thread>
 using namespace bc250::umd;
@@ -68,6 +69,22 @@ static HRESULT APIENTRY free_range(HANDLE device, CONST D3DDDICB_FREEGPUVIRTUALA
 static HRESULT APIENTRY evict_range(HANDLE device, D3DDDICB_EVICT *) {
     require(device==&identity); ++evicted; return S_OK;
 }
+// BD-198: monitored fences of the ICD. The second fence of each pair reads the lost value already at its creation,
+// as a fence whose storage another writer changed would.
+static volatile UINT64 fence_storage[4];
+static unsigned sync_created, sync_destroyed;
+static HRESULT APIENTRY create_sync(HANDLE device, D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 *a) {
+    require(device==&identity && a->Info.Type==D3DDDI_MONITORED_FENCE && sync_created<4);
+    const unsigned i=sync_created++;
+    fence_storage[i]=(i&1) ? UINT64_MAX : a->Info.MonitoredFence.InitialFenceValue;
+    a->hSyncObject=70+i;
+    a->Info.MonitoredFence.FenceValueCPUVirtualAddress=const_cast<UINT64 *>(&fence_storage[i]);
+    a->Info.MonitoredFence.FenceValueGPUVirtualAddress=0x10000+8*i;
+    return S_OK;
+}
+static HRESULT APIENTRY destroy_sync(HANDLE device, CONST D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT *a) {
+    require(device==&identity && a->hSyncObject>=70 && a->hSyncObject<74); ++sync_destroyed; return S_OK;
+}
 void test_present_bridge();
 void test_runtime_present();
 int main() {
@@ -88,6 +105,8 @@ int main() {
     device.KTCallbacks.pfnMapGpuVirtualAddressCb=map_range;
     device.KTCallbacks.pfnFreeGpuVirtualAddressCb=free_range;
     device.KTCallbacks.pfnEvictCb=evict_range;
+    device.KTCallbacks.pfnCreateSynchronizationObject2Cb=create_sync;
+    device.KTCallbacks.pfnDestroySynchronizationObjectCb=destroy_sync;
     HostBridge bridge{}; bridge.device=&device;
     require(host_dispatch(&bridge, BC250_HOST_CHECK_STATUS, nullptr)<0);
     const auto host=host_descriptor(bridge, 123);
@@ -178,6 +197,34 @@ int main() {
     require(deallocated==1 && !freed_ranges && !evicted);
     command.BroadcastContext[0]=2;
     require(host_dispatch(&bridge, BC250_HOST_SubmitCommand, &command)<0 && submitted==3);
+    // BD-198: the GPU work count: the three submissions and the one sparse update that reached the runtime. The fence
+    // signals and the calls that the bridge refused itself do not count.
+    require(bridge.gpu_work_calls==4 && !device_queued_no_work(bridge));
+    // BD-198: each monitored fence of the ICD gets a record with its value right after the creation; a destroy removes
+    // the record. A fence that reads the lost value at its creation is recorded as such.
+    {
+        D3DKMT_CREATESYNCHRONIZATIONOBJECT2 fence{};
+        fence.Info.Type=D3DDDI_MONITORED_FENCE; fence.Info.MonitoredFence.EngineAffinity=1;
+        require(host_dispatch(&bridge, BC250_HOST_CreateSynchronizationObject2, &fence)==0 && fence.hSyncObject==70);
+        auto stale=fence; stale.hSyncObject=0;
+        stale.Info.MonitoredFence.FenceValueCPUVirtualAddress=nullptr; stale.Info.MonitoredFence.FenceValueGPUVirtualAddress=0;
+        require(host_dispatch(&bridge, BC250_HOST_CreateSynchronizationObject2, &stale)==0 && stale.hSyncObject==71);
+        unsigned records=0; const HostFence *first=nullptr, *second=nullptr;
+        for (const auto &f:bridge.fences) {
+            if (!f.handle) continue;
+            ++records; if (f.handle==70) first=&f; if (f.handle==71) second=&f;
+        }
+        require(records==2 && first && second && first->at_create==0 && first->cpu==&fence_storage[0]);
+        require(second->at_create==UINT64_MAX && second->initial==0 && !bridge.fences_unrecorded);
+        D3DKMT_DESTROYSYNCHRONIZATIONOBJECT gone{}; gone.hSyncObject=71;
+        require(host_dispatch(&bridge, BC250_HOST_DestroySynchronizationObject, &gone)==0 && sync_destroyed==1);
+        records=0; for (const auto &f:bridge.fences) records+=f.handle!=0;
+        require(records==1);
+        gone.hSyncObject=70;
+        require(host_dispatch(&bridge, BC250_HOST_DestroySynchronizationObject, &gone)==0 && sync_destroyed==2);
+        records=0; for (const auto &f:bridge.fences) records+=f.handle!=0;
+        require(records==0);
+    }
     D3DKMT_DESTROYCONTEXT destroy{}; destroy.hContext=create.hContext;
     require(host_dispatch(&bridge, BC250_HOST_DestroyContext, &destroy)==0 && destroyed==1);
     require(host_dispatch(&bridge, BC250_HOST_DestroyContext, &destroy)<0 && destroyed==1);
@@ -221,6 +268,28 @@ int main() {
         if (form==1) report.sType=0;
         require(host_dispatch(&reporting, BC250_HOST_REPORT_LOST, form==2 ? nullptr : &report)<0);
         require(reporting.device_lost && reporting.submission_failed);
+        // BD-258: the process keeps the last loss for the line of a CreateDevice refusal, with copies of its texts.
+        const DeviceLossRecord loss=last_device_loss();
+        require(loss.losses>=2 && loss.op==BC250_HOST_REPORT_LOST && loss.hr==S_OK && loss.at_ms);
+        require(!std::strcmp(loss.reason,"the ICD reports a loss"));
+        require(!std::strcmp(loss.site,form==0 ? "progress fence before submit" : "-"));
+    }
+    // BD-198: a loss at a recorded fence. The loss line reads the record of the site fence and every recorded fence of
+    // the device; the record stays until the ICD destroys the fence.
+    {
+        RuntimeDevice losing; losing.hDevice=&identity;
+        losing.KTCallbacks.pfnCreateSynchronizationObject2Cb=create_sync;
+        HostBridge reporting{}; reporting.device=&losing;
+        RuntimeDomain::Scope reportingScope(losing.domain);
+        ddi_entry_class=DdiErrorClass::nothing;
+        D3DKMT_CREATESYNCHRONIZATIONOBJECT2 fence{};
+        fence.Info.Type=D3DDDI_MONITORED_FENCE; fence.Info.MonitoredFence.EngineAffinity=1;
+        require(host_dispatch(&reporting, BC250_HOST_CreateSynchronizationObject2, &fence)==0 && fence.hSyncObject==72);
+        fence_storage[2]=UINT64_MAX;
+        bc250_host_lost_report report{BC250_HOST_LOST_REPORT_STYPE,sizeof(report),"progress fence before submit",72,0,
+            UINT64_MAX};
+        require(host_dispatch(&reporting, BC250_HOST_REPORT_LOST, &report)<0 && reporting.device_lost);
+        require(reporting.fences[0].handle==72 && reporting.fences[0].at_create==0 && device_queued_no_work(reporting));
     }
     {
         RuntimeDevice losing; losing.hDevice=&identity;

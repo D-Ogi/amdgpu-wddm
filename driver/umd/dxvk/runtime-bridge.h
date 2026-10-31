@@ -30,6 +30,16 @@ struct RuntimeDevice {
     bool legacy_host_identity = false;
     void *host_identity() { return legacy_host_identity ? hDevice : static_cast<void *>(this); }
 };
+// BD-198: a monitored fence that the bridge created for the hosted ICD, with the value its CPU address gave right
+// after the creation. The loss line names the fence of the read that saw the lost-device value with these fields, and
+// counts the recorded fences that read that value at the loss. The record goes when the ICD destroys the fence.
+struct HostFence {
+   D3DKMT_HANDLE handle;
+   const volatile UINT64 *cpu;
+   UINT64 initial, at_create;
+   ULONGLONG created_ms;
+};
+inline constexpr unsigned kHostFenceRecords=32;
 // Zero initialize; lifetime and cleanup belong to the UMD device. Context tokens
 // are bridge-local, not kernel handles. No DXVK worker may enter a runtime scope.
 struct HostBridge {
@@ -48,6 +58,15 @@ struct HostBridge {
    // BD-253: settle_device_work did its one bounded wait for this device. The answer itself is not kept: each call
    // reads the fences again.
    bool drain_tried;
+   // BD-198: the calls of this device that queued GPU work which reads or writes the device's memory: SubmitCommand
+   // and UpdateGpuVirtualAddress of the hosted ICD, and the present callback. Each call counts before it reaches the
+   // runtime, whatever its status, so a refused call also counts. Fence signals and fence waits do not count: they
+   // touch only the fence storage of the kernel. The kernel's own paging work (MakeResident) does not count either:
+   // VidMm defers the destruction of an allocation until its paging work is done (allocation-usage-tracking.md).
+   unsigned gpu_work_calls;
+   HostFence fences[kHostFenceRecords];
+   // Monitored fences that got no record because every record was in use.
+   unsigned fences_unrecorded;
 };
 // Latch a loss whose status the caller already carries: the entry that got it reports it through its
 // own error class, so the bridge must not report it a second time.
@@ -62,13 +81,31 @@ inline bool kernel_ended_device_work(const HostBridge &bridge) {
       if (p.cpu_address && *(const volatile UINT64 *)p.cpu_address==UINT64_MAX) return true;
    return false;
 }
+// BD-198: TRUE when this device never queued GPU work that uses its memory (HostBridge::gpu_work_calls). Then no work
+// of the device can run, so a lost device can free its memory at once. Windows Terminal and the XAML of explorer lose a
+// device at its first submission, before the submission reaches the kernel: the ICD reads the lost-device value in
+// the progress fence and stops (radv_wddm2_cs.c, "progress fence before submit"). Such a device has no published
+// progress record, so kernel_ended_device_work cannot give its proof, and before this check each such device cost a
+// 2 s wait in DestroyDevice and stayed kept for the life of the process.
+inline bool device_queued_no_work(const HostBridge &bridge) { return bridge.gpu_work_calls==0; }
+// BD-258: the last loss that a bridge of this process latched, for the line of a CreateDevice refusal. The texts are
+// copies: the site text belongs to the ICD module, which a closed device unloads.
+struct DeviceLossRecord {
+   char reason[64];
+   char site[48];
+   unsigned op;
+   HRESULT hr;
+   ULONGLONG at_ms;
+   unsigned losses;
+};
+DeviceLossRecord last_device_loss() noexcept;
 // The statuses that report a lost device.
 inline bool device_lost_status(HRESULT hr) {
    return hr==D3DDDIERR_DEVICEREMOVED || hr==DXGI_ERROR_DEVICE_REMOVED || hr==DXGI_ERROR_DEVICE_RESET ||
           hr==DXGI_ERROR_DEVICE_HUNG || hr==DXGI_ERROR_DRIVER_INTERNAL_ERROR;
 }
-// BD-253: TRUE when no work of a lost device runs any more, so that its close can free what the work used. The only
-// proof is kernel_ended_device_work. The values of the host records (bc250_host_progress, present_value) are not a
+// BD-253: TRUE when no work of a lost device runs any more, so that its close can free what the work used. There are
+// two proofs: kernel_ended_device_work, and device_queued_no_work (BD-198), which needs no wait. The values of the host records (bc250_host_progress, present_value) are not a
 // proof: the ICD publishes a progress value only after its submission and its signal succeeded
 // (radv_wddm2_progress_signalled), so a record can stay at k-1 while an accepted submission k still runs (an accepted
 // IB whose signal or publish failed). Each call reads the fences again, so a later kernel error is seen and an earlier
