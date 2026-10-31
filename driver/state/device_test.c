@@ -74,16 +74,33 @@ static NTSTATUS PsCreateSystemThread(PHANDLE out,ACCESS_MASK access,OBJECT_ATTRI
     if(!NT_SUCCESS(thread_status))return thread_status;
     pending_worker=start;pending_context=context;thread_live=TRUE;*out=(HANDLE)2;return STATUS_SUCCESS;
 }
-static void PsTerminateSystemThread(NTSTATUS status)
-{CHECK(system_worker && status==STATUS_SUCCESS);++termination_calls;}
-static NTSTATUS ZwWaitForSingleObject(HANDLE thread,BOOLEAN alertable,PLARGE_INTEGER timeout)
+typedef struct { LONG signalled; } KEVENT;
+typedef enum { NotificationEvent,SynchronizationEvent } EVENT_TYPE;
+typedef enum { Executive } KWAIT_REASON;
+typedef enum { KernelMode,UserMode } KPROCESSOR_MODE;
+#define IO_NO_INCREMENT 0
+static KEVENT *fixture_event;
+static unsigned event_inits,event_sets;
+static void KeInitializeEvent(KEVENT *event,EVENT_TYPE type,BOOLEAN state)
+{++event_inits;CHECK(type==NotificationEvent && !state && !thread_live);event->signalled=0;fixture_event=event;}
+static LONG KeSetEvent(KEVENT *event,LONG increment,BOOLEAN wait)
 {
-    ++wait_calls;CHECK(thread==(HANDLE)2 && thread_live && !alertable && !timeout);
-    // This model always completes the worker before returning, even when the
-    // wait status is injected. It tests status propagation and handle cleanup,
-    // not the stack lifetime of a worker still running after a failed OS wait.
-    CHECK(pending_worker!=NULL);system_worker=TRUE;pending_worker(pending_context);system_worker=FALSE;
-    pending_worker=NULL;pending_context=NULL;return wait_status;
+    ++event_sets;CHECK(system_worker && event==fixture_event && !event->signalled);
+    CHECK(increment==IO_NO_INCREMENT && !wait && activation_calls==1);event->signalled=1;return 0;
+}
+static void PsTerminateSystemThread(NTSTATUS status)
+{
+    // The event is the worker's last use of the caller's context: after it, the caller may return.
+    CHECK(system_worker && status==STATUS_SUCCESS && fixture_event && fixture_event->signalled);++termination_calls;
+}
+static NTSTATUS KeWaitForSingleObject(PVOID object,KWAIT_REASON reason,KPROCESSOR_MODE mode,BOOLEAN alertable,
+    PLARGE_INTEGER timeout)
+{
+    // A kernel-mode, non-alertable wait with no timeout on an event returns only when the event is set,
+    // so the caller has no failure path that leaves while the worker still uses the context (BD-186).
+    ++wait_calls;CHECK(object==fixture_event && reason==Executive && mode==KernelMode && !alertable && !timeout);
+    CHECK(thread_live && pending_worker!=NULL);system_worker=TRUE;pending_worker(pending_context);system_worker=FALSE;
+    pending_worker=NULL;pending_context=NULL;CHECK(fixture_event->signalled);return STATUS_SUCCESS;
 }
 static NTSTATUS ZwClose(HANDLE thread)
 {++close_calls;CHECK(thread==(HANDLE)2 && thread_live && !pending_worker);thread_live=FALSE;return STATUS_SUCCESS;}
@@ -109,6 +126,7 @@ static void Reset(const char *name)
 {
     CHECK(!thread_live && !pending_worker && !pending_context && !system_worker);test_case=name;
     receipt_calls=property_calls=thread_calls=wait_calls=close_calls=activation_calls=termination_calls=0;
+    event_inits=event_sets=0;fixture_event=NULL;
     guard_calls=budget_calls=boundary_calls=order=activation_order=budget_order=0;
     irql=0;owned=TRUE;receipt_status=property_status=thread_status=wait_status=activation_status=budget_status=0;
     memset(property_text,0,sizeof(property_text));wcscpy_s(property_text,513,FixtureId);
@@ -162,8 +180,9 @@ int main(void)
     CHECK(thread_calls==1 && wait_calls==1 && close_calls==1 && activation_calls==1 && termination_calls==1);
     Reset("thread creation failure");thread_status=STATUS_INSUFFICIENT_RESOURCES;
     CHECK(DriverStateActivateDevice((PDEVICE_OBJECT)1)==thread_status);CHECK(thread_calls==1 && !wait_calls && !close_calls && !activation_calls);
-    Reset("wait failure after completed worker propagated");wait_status=STATUS_UNSUCCESSFUL;
-    CHECK(DriverStateActivateDevice((PDEVICE_OBJECT)1)==wait_status);CHECK(wait_calls==1 && close_calls==1 && !thread_live);
+    Reset("worker signals the event before it ends");
+    CHECK(DriverStateActivateDevice((PDEVICE_OBJECT)1)==0);
+    CHECK(event_inits==1 && event_sets==1 && wait_calls==1 && termination_calls==1 && close_calls==1 && !thread_live);
 
     memset(&device,0,sizeof(device));device.PhysicalDeviceObject=(PDEVICE_OBJECT)1;
     Reset("foreign owner before activation");owned=FALSE;CHECK(Start(&device)==STATUS_DEVICE_BUSY);
