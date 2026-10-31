@@ -1,0 +1,14 @@
+04:38:57 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62250 ready=1
+04:39:00 exit 0 in 3 s
+04:39:00 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64625 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 189.52 A� 0.45 |
+== gap-spin0 [BC250_HIP_WAIT_SPIN_US=0] llama=a1g runtime=idl2 05:38:50 Tctl 62.8 C (raw 6FDB0FEF)
+node 0 gaps 421 idle_us 6051753 avg_us 14374.7 | <16:1 16:16 32:113 64:61 128:180 512:34 2k:1 4k:0 8k+:15
+node 1 gaps 1304 idle_us 59312025 avg_us 45484.7 | <16:98 16:563 32:508 64:82 128:28 512:8 2k:2 4k:6 8k+:9
+04:39:08 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+04:39:11 exit 0 in 3 s
+04:39:11 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65750 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.49 A� 0.52 |
+== gap-spin20000 [BC250_HIP_WAIT_SPIN_US=20000] llama=a1g runtime=idl2 05:39:03 Tctl 64.4 C (raw 717B0FEF)
+node 0 gaps 417 idle_us 6070218 avg_us 14556.9 | <16:104 16:49 32:41 64:1 128:196 512:13 2k:1 4k:0 8k+:12
+node 1 gaps 1304 idle_us 10850719 avg_us 8321.1 | <16:96 16:476 32:609 64:73 128:25 512:8 2k:1 4k:5 8k+:11

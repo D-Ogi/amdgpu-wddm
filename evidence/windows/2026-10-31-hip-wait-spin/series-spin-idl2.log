@@ -1,0 +1,70 @@
+#### spin-tg 8B 04:20:13Z llama=e57 runtime=idl2 args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:20:40 Tctl 61.5 C (raw 6E9B0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62500 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000] 05:20:51 Tctl 62.5 C (raw 6F9B0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63125 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:21:02 Tctl 63.0 C (raw 701B0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=1000] 05:21:11 Tctl 63.6 C (raw 70BB0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:21:19 Tctl 63.6 C (raw 70BB0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+#### spin-tg 1.5B 04:21:02Z llama=e57 runtime=idl2 args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:21:28 Tctl 63.9 C (raw 70FB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 188.87 A� 0.37 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65625 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000] 05:21:38 Tctl 65.5 C (raw 729B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.03 A� 0.26 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66500 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:21:48 Tctl 66.5 C (raw 739B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.49 A� 0.15 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67000 ready=1
+== [BC250_HIP_WAIT_SPIN_US=1000] 05:21:57 Tctl 66.9 C (raw 73FB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 190.02 A� 0.42 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67250 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:22:06 Tctl 67.1 C (raw 743B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 188.89 A� 0.06 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67375 ready=1
+#### done 04:21:50Z
+#### spin-pp 8B 04:21:50Z llama=e57 runtime=idl2 args=[-p 512 -n 0 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:22:16 Tctl 67.2 C (raw 745B0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000] 05:22:30 Tctl 65.8 C (raw 72DB0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65250 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:22:41 Tctl 65.1 C (raw 723B0FEF)
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+llama_model_load_from_file_impl: failed to load model
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64875 ready=1
+#### spin-pp 1.5B 04:22:24Z llama=e57 runtime=idl2 args=[-p 512 -n 0 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:22:50 Tctl 64.8 C (raw 71DB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2150.06 A� 1.59 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67500 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000] 05:23:03 Tctl 67.4 C (raw 747B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2148.55 A� 2.91 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=68750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:23:12 Tctl 68.6 C (raw 75BB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2151.48 A� 3.61 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=69125 ready=1
+#### done 04:22:58Z

@@ -1,0 +1,23 @@
+#### ppl-lp1-socc 8B 01:13:20 Tctl 60.4 C (raw 6D7B0FEF)
+00:13:26 arm ppl-lp1-socc llama=bload runtime=socc tool=ppl env=[X=0] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 6782CFD2 amdhip64 CB3842F7
+00:13:26 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=60000 ready=1
+00:13:57 exit  in 31 s
+00:13:57 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=60625 ready=1
+0.20.632.169 E P:/BC-250/scratch/t35/hip-llama/src-bload/ggml/src/ggml-cuda/ggml-cuda.cu:110: ROCm error
+ggml_cuda_compute_forward: MUL_MAT failed
+#### ppl-lp1-socc 1.5B 01:13:57 Tctl 60.6 C (raw 6DBB0FEF)
+00:14:03 arm ppl-lp1-socc llama=bload runtime=socc tool=ppl env=[X=0] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 6782CFD2 amdhip64 CB3842F7
+00:14:03 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=60750 ready=1
+00:14:13 exit  in 10 s
+00:14:13 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=72875 ready=1
+0.04.441.851 I perplexity: 1.28 seconds per pass - ETA 0.08.827.271 I Final estimate: PPL = 12.4067 +/- 0.52907
+#### ppl-lp1-socc 35B 01:14:14 Tctl 72.8 C (raw 79DB0FEF)
+00:14:17 arm ppl-lp1-socc llama=bload runtime=socc tool=ppl env=[X=0] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 6782CFD2 amdhip64 CB3842F7
+00:14:18 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=71125 ready=1
+00:15:02 exit  in 44 s
+00:15:02 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=76625 ready=1
+0.00.930.322 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.29.246.990 I perplexity: 5.01 seconds per pass - ETA 0.42.120.334 I Final estimate: PPL = 7.8359 +/- 0.31237

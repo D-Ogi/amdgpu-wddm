@@ -1,0 +1,28 @@
+#### spin8b-tg 8B 04:29:21Z llama=ovl runtime=idl2 args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:29:47 Tctl 61.4 C (raw 6E7B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.18 A� 0.02 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67500 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000] 05:30:18 Tctl 67.4 C (raw 747B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.29 A� 0.02 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67875 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:30:51 Tctl 67.6 C (raw 74BB0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.63 A� 0.03 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=50000] 05:31:21 Tctl 67.6 C (raw 74BB0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.58 A� 0.08 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67625 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:31:51 Tctl 67.5 C (raw 749B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.17 A� 0.02 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66875 ready=1
+#### done 04:31:56Z
+#### spin8b-pp 8B 04:31:56Z llama=ovl runtime=idl2 args=[-p 512 -n 0 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:32:22 Tctl 66.8 C (raw 73DB0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 513.85 A� 0.33 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=73500 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:32:56 Tctl 73.0 C (raw 7A1B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 513.58 A� 1.26 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=75125 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:33:27 Tctl 74.8 C (raw 7BDB0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 513.87 A� 0.28 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=74750 ready=1
+#### done 04:33:29Z

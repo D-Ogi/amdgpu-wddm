@@ -45,7 +45,7 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 9u   /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 10u  /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
                                          * that ENABLE_SGPR_DISPATCH_PTR needs;
                                          * 1.3 adds fixed-private scratch PM4 environments;
@@ -69,7 +69,8 @@ extern "C" {
                                          * cpu_copy_fallback_ticks;
                                          * 1.9 adds bc250hsa_memory_budget_read and
                                          * the target alias of section 6,
-                                         * bc250hsa_target_alias_set */
+                                         * bc250hsa_target_alias_set;
+                                         * 1.10 adds bc250hsa_wait_spin_set (section 9) */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -921,6 +922,12 @@ bc250hsa_status bc250hsa_dispatch_submit_recorded(bc250hsa_device* dev,
  * Nothing a program can observe stays behind an open batch: every read of the device
  * goes through one of the flush points above.
  *
+ * MEASURED, unit A, 2026-10-31 04:08Z (evidence/windows/2026-10-31-hip-wait-spin): a ramp
+ * that sent the first buffer after an idle GPU with one dispatch and each later one with
+ * four times more, up to max_dispatches, made llama-bench tg64 of qwen2.5-1.5B Q4_K_M
+ * slower, 186.77 against 190.22 and 189.73 tokens a second without it. It is not in the
+ * library.
+ *
  * A submission that fails with an open batch loses work this library already promised.
  * It therefore marks the device lost, where the next call reports it, instead of
  * returning an error to a caller that did not make that dispatch.
@@ -1052,6 +1059,18 @@ bc250hsa_status bc250hsa_wait(bc250hsa_device* dev, uint64_t value,
  * caller that never uses section 5.1 never needs it. */
 bc250hsa_status bc250hsa_wait_policy_set(bc250hsa_device* dev, uint32_t slice_ms,
                                          uint32_t total_ms);
+
+/* The spin of a wait. A wait whose value the fence mapping does not hold yet reads the
+ * mapping again for up to spin_us microseconds before it asks the operating system to wake
+ * it. The operating system wakes a waiter one fence interrupt, one DPC and one thread
+ * switch after the GPU wrote the value, and the GPU has nothing to do until the waiter
+ * submits again. The spin covers bc250hsa_wait and the waits this library performs for
+ * itself. A wait the spin answers is not one of waits_fast: its time goes to
+ * waits_other_ticks. 0, the default of a
+ * device, turns it off; layer 2 sets the process's number at device open (rule 6). The
+ * spin never extends a wait: it ends at spin_us, and the sliced wait above takes over with
+ * its own bound. */
+bc250hsa_status bc250hsa_wait_spin_set(bc250hsa_device* dev, uint32_t spin_us);
 
 /* ---------------------------------------------------------------------------------
  * 10. Diagnosis

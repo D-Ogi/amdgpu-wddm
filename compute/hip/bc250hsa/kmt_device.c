@@ -289,6 +289,8 @@ bc250hsa_status bc250hsa_open(const bc250hsa_open_params* params, struct bc250hs
     dev->batch.enabled = 0u;
     dev->batch.max_dispatches = BC250HSA_BATCH_DISPATCHES_DEFAULT;
     dev->batch.max_hold_us = BC250HSA_BATCH_HOLD_US_DEFAULT;
+    /* The spin of a wait is off for the same reason: a caller turns it on. */
+    dev->wait_spin_us = 0u;
     /* The local memory limit of this part, which bc250hsa_props_read also reports. One
      * read at open in place of one property structure per dispatch. */
     dev->lds_bytes_per_workgroup = BC250HSA_LDS_BYTES_PER_WORKGROUP;

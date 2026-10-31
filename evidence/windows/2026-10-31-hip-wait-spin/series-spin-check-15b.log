@@ -1,0 +1,7 @@
+#### ppl-spin-idr3 1.5B 05:54:49 Tctl 64.1 C (raw 713B0FEF)
+04:54:53 arm ppl-spin-idr3 llama=a1g runtime=idr3 tool=ppl env=[X=0] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 1607928B amdhip64 C470CE90
+04:54:54 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+04:55:03 exit 0 in 9 s
+04:55:03 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=75875 ready=1
+0.04.121.165 I perplexity: 1.13 seconds per pass - ETA 0.08.431.775 I Final estimate: PPL = 12.4067 +/- 0.52907

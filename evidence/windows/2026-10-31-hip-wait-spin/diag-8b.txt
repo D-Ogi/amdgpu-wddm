@@ -1,0 +1,44 @@
+Qwen3-8B Q8_0 load check, unit A, 2026-10-31 04:24-04:25Z (lab clock UTC), 8 GiB carve-out.
+Command of every arm: lab-arm.ps1 -Tool bench -Model C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf
+-ToolArgs '-p 0 -n 16 -fa 1 -ngl 99 -r 1' -EnvSet 'BC250_HIP_WAIT_SPIN_US=0'.
+The lines below are the console output of each arm as the dev PC printed it: for the first arm a part of
+its last 30 lines, for the other arms the lines that match hashes|exit|tg16|cudaMalloc|failed to
+allocate|VRAM|allocating.
+
+== llama e57, runtime idl2
+hashes: ggml-hip E57D3DBA amdhip64 8A77FC84
+04:24:09 exit 1 in 2 s
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 7657 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 7657 MiB
+ggml_backend_cuda_buffer_type_alloc_buffer: allocating 3621.58 MiB on device 0: cudaMalloc failed: unknown error
+ggml_backend_buft_alloc_buffer_n_default: failed to allocate ROCm0 buffer of size 3797501952
+llama_model_load: error loading model: unable to allocate ROCm0 buffer
+
+== llama e57, runtime t35l
+hashes: ggml-hip E57D3DBA amdhip64 E129FBD7
+04:24:24 exit 1 in 2 s
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 7657 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 7657 MiB
+ggml_backend_cuda_buffer_type_alloc_buffer: allocating 3621.58 MiB on device 0: cudaMalloc failed: unknown error
+ggml_backend_buft_alloc_buffer_n_default: failed to allocate ROCm0 buffer of size 3797501952
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+
+== llama e57, runtime sovl (the stream overlap branch)
+hashes: ggml-hip E57D3DBA amdhip64 1208E712
+04:24:29 exit 1 in 3 s
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 7657 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 7657 MiB
+ggml_backend_cuda_buffer_type_alloc_buffer: allocating 3621.58 MiB on device 0: cudaMalloc failed: unknown error
+ggml_backend_buft_alloc_buffer_n_default: failed to allocate ROCm0 buffer of size 3797501952
+llama_bench: error: failed to load model 'C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf'
+
+== llama ovl, runtime sovl
+hashes: ggml-hip 017CB770 amdhip64 1208E712
+04:25:19 exit 0 in 29 s
+| qwen3 8B Q8_0                  |   8.11 GiB |     8.19 B | ROCm       |  99 |   1 |            tg16 |         39.24 A? 0.00 |
+ggml_cuda_init: found 1 ROCm devices (Total VRAM: 7657 MiB):
+  Device 0: AMD BC-250, gfx1013 (0x1013), VMM: no, Wave Size: 32, VRAM: 7657 MiB
+
+The two llama builds differ in the allocation cap of their CMake cache:
+e57: CMAKE_CXX_FLAGS:STRING= -DBC250_HIP_NO_DEVICE_PRINTF=1 -DBC250_HIP_MAX_ALLOC_BYTES=0xfffc0000ULL
+ovl: CMAKE_CXX_FLAGS:STRING= -DBC250_HIP_NO_DEVICE_PRINTF=1 -DBC250_HIP_MAX_ALLOC_BYTES=0x40000000ULL

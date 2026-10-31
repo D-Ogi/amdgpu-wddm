@@ -60,6 +60,18 @@ static uint64_t ticks_us(uint64_t ticks)
            ((ticks % (uint64_t)frequency.QuadPart) * 1000000u) / (uint64_t)frequency.QuadPart;
 }
 
+/* Microseconds in ticks of bc250hsa_ticks, for the bound of the spin of a wait. 0 when the
+ * counter has no frequency, which makes the spin one read long. */
+static uint64_t us_ticks(uint64_t us)
+{
+    LARGE_INTEGER frequency;
+    if (!QueryPerformanceFrequency(&frequency) || frequency.QuadPart <= 0) {
+        return 0u;
+    }
+    return (us / 1000000u) * (uint64_t)frequency.QuadPart +
+           ((us % 1000000u) * (uint64_t)frequency.QuadPart) / 1000000u;
+}
+
 int bc250hsa_device_executing(struct bc250hsa_device* dev)
 {
     D3DKMT_GETDEVICESTATE state;
@@ -330,6 +342,32 @@ static bc250hsa_status wait_counted(struct bc250hsa_device* dev, uint64_t value,
         return BC250HSA_OK;
     }
 
+    /* Step 2: the spin of bc250hsa_wait_spin_set. The operating system ends a wait one fence
+     * interrupt, one DPC and one thread switch after the GPU wrote the value, and the GPU
+     * has nothing to do until this thread submits again. So the mapping is read again, with
+     * a pause between two reads, for up to wait_spin_us and never longer than the bound of
+     * this wait. A spin that runs out changes nothing: step 3 waits as it always did. */
+    if (dev->wait_spin_us != 0u) {
+        const uint64_t bound_us = (uint64_t)total_ms * 1000u;
+        const uint64_t spin_ticks =
+            us_ticks(dev->wait_spin_us < bound_us ? (uint64_t)dev->wait_spin_us : bound_us);
+        const uint64_t spin_start = bc250hsa_ticks();
+
+        do {
+            YieldProcessor();
+            observed = bc250hsa_fence_read(dev);
+            if (observed == UINT64_MAX) {
+                bc250hsa_sentinel_lost(dev, "the fence mapping reads UINT64_MAX during the spin",
+                                       value);
+                return BC250HSA_EDEVICELOST;
+            }
+            if (observed >= value) {
+                return BC250HSA_OK;
+            }
+        } while (bc250hsa_ticks() - spin_start < spin_ticks);
+    }
+
+    /* Step 3: the operating system's wait, in slices. */
     event = CreateEventW(NULL, FALSE, FALSE, NULL);
     if (event == NULL) {
         return BC250HSA_EOS;
@@ -1220,6 +1258,17 @@ bc250hsa_status bc250hsa_wait_policy_set(struct bc250hsa_device* dev, uint32_t s
     bc250hsa_device_lock(dev);
     dev->wait_slice_ms = slice_ms;
     dev->wait_total_ms = total_ms;
+    LeaveCriticalSection(&dev->lock);
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_wait_spin_set(struct bc250hsa_device* dev, uint32_t spin_us)
+{
+    if (dev == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    bc250hsa_device_lock(dev);
+    dev->wait_spin_us = spin_us;
     LeaveCriticalSection(&dev->lock);
     return BC250HSA_OK;
 }

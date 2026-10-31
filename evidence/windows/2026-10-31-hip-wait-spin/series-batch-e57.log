@@ -1,0 +1,17 @@
+#### batch-e57 1.5B 03:50:29Z llama=e57 runtime=t35l args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_STATS=1] 04:50:55 Tctl 62.0 C (raw 6F1B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 190.18 A� 0.46 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65750 ready=1
+== [BC250_HIP_STATS=1;BC250_HIP_BATCH_MAX=64] 04:51:12 Tctl 65.6 C (raw 72BB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 189.16 A� 0.46 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66375 ready=1
+== [BC250_HIP_STATS=1;BC250_HIP_BATCH_MAX=16] 04:51:22 Tctl 66.4 C (raw 737B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 187.40 A� 0.71 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66750 ready=1
+== [BC250_HIP_STATS=1;BC250_HIP_BATCH_MAX=128] 04:51:33 Tctl 66.6 C (raw 73BB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 188.85 A� 0.50 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67000 ready=1
+== [BC250_HIP_STATS=1] 04:51:44 Tctl 66.9 C (raw 73FB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 189.39 A� 0.53 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67250 ready=1
+#### done 03:51:27Z
