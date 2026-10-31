@@ -32,6 +32,7 @@ runtime of bc250-win `6fe9f6ab` (`amdhip64.dll` 15083FE5), allocation cap 1 GiB.
 | groups of eight | 119 | 156.4 |
 | four 16-byte loads for each thread | 138 | 155.3 |
 | groups of four, this patch | 125 | 235.3 |
+| groups of four and `llama-rdna1-pkf16-lds-barrier.patch` | 125 | 252.1 |
 
 A second run of the serial loader, in the same session as the run with groups of four, gave 211.8
 tokens per second. With groups of eight and with 16-byte loads, the compiler put the A tile loads
