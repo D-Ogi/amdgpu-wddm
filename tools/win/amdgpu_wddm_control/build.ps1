@@ -84,6 +84,7 @@ $cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
 $fx = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
 $sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
+$Out = (New-Item -ItemType Directory -Force $Out).FullName   # absolute: the native builds below name paths relative to it
 $obj = Join-Path $Out 'obj'
 New-Item -ItemType Directory -Force $Out, $obj | Out-Null
 
@@ -160,13 +161,13 @@ function ConvertTo-ControlFlags([string[]]$Flags) {
     $own = @($Flags | Where-Object { -not ($_ -like '/I*' -and $sdkIncludes -contains $_.Substring(2)) })
     # The debug information of an object records the compile directory, which is the directory the build is started
     # from. A fixed name keeps it out of the bytes.
-    return @(ConvertTo-Bc250ClangFlags $own 'x64' @($repo)) + @('/clang:-ffile-compilation-dir=.', '/clang:-fuse-ld=lld')
+    return @(ConvertTo-Bc250ClangFlags $own 'x64' @($repo)) + @((Get-Bc250ReproducibleFlags 'clang-cl').Compile) + @('/clang:-fuse-ld=lld')
 }
 # clang-cl links with lld-link of the same LLVM, named above. lld-link makes the relative source paths of the C
 # runtime objects absolute in the PDB, against the current directory unless /pdbsourcepath names a base. The PDB GUID
 # of a /Brepro link is a hash of the PDB, so without a fixed base the bytes depend on the directory the build is
 # started from.
-$clangLink = @(if ($Compiler -eq 'clang-cl') { '/pdbsourcepath:X:\bc250-build' })
+$clangLink = @((Get-Bc250ReproducibleFlags $Compiler).Link)
 if ($Compiler -eq 'clang-cl') {
     # The SDK boundary control of the shells. Its MSVC caller takes the WDK as /external:I, as the shells give it.
     $wdk = Join-Path $Kits "microsoft.windows.wdk.x64\c\Include\$KitVersion"
@@ -183,25 +184,34 @@ $stateFlags = ConvertTo-ControlFlags (@('/O2','/MT','/Brepro','/Z7',"/I$($msvc.F
 # build-objects.ps1 runs the compiler itself: clang-cl reads CL and _CL_ as Invoke-Bc250UmdCompiler says.
 $previousCl = $env:CL, $env:_CL_
 if ($Compiler -eq 'clang-cl') { $env:CL = $null; $env:_CL_ = $null }
-try { $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cc -Out "$obj\state" -Flags $stateFlags -Exports }
+try { $stateObjects = & (Join-Path $repo 'tools\state\build-objects.ps1') -Compiler $cc -Out "$obj\state" -Flags $stateFlags -Exports -RelativeObjects }
 finally { $env:CL, $env:_CL_ = $previousCl }
 $flavourDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' }) + $releaseDefine
 $dllFlags = ConvertTo-ControlFlags ($flavourDefine + @('/nologo', '/W4', '/WX', '/O2', '/MT', '/LD', '/Brepro', '/Z7', '/DBC250_CONTROL_DLL', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared"))
 # clang-cl takes an object file name only for one input, and the state objects are inputs too, so it gets a directory.
+# BD-268: both native files are compiled and linked in -Out with paths relative to it (objects, image, import library
+# and the state objects). The PDB records each object by the path that the compiler and lld-link were given (S_OBJNAME,
+# the module names and the linker command line), and /pdbsourcepath makes a relative one absolute against a fixed base.
+# With absolute paths the PDB, and so the PDB GUID and the PE timestamp of a /Brepro link, changed with the output
+# directory: two release-set runs gave two images of one commit.
 function Get-ObjectSwitch([string]$Name) {
-    if ($Compiler -ne 'clang-cl') { return "/Fo$obj\$Name.obj" }
     New-Item -ItemType Directory -Force "$obj\$Name" | Out-Null
-    return "/Fo$obj\$Name\"
+    if ($Compiler -ne 'clang-cl') { return "/Foobj\$Name\$Name.obj" }
+    return "/Foobj\$Name\"
 }
-Invoke-Bc250UmdCompiler $cc @dllFlags @((Get-ObjectSwitch 'bc250control'), "/Fe$Out\bc250control.dll",
-    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG') @clangLink @(
-    '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%', "/IMPLIB:$obj\bc250control.lib",
+$stateRelative = @($stateObjects | ForEach-Object { [IO.Path]::GetRelativePath($Out, $_) })
+Push-Location -LiteralPath $Out
+try {
+Invoke-Bc250UmdCompiler $cc @dllFlags @((Get-ObjectSwitch 'bc250control'), '/Febc250control.dll',
+    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateRelative @('/link', '/Brepro', '/DEBUG') @clangLink @(
+    '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%', '/IMPLIB:obj\bc250control.lib',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$|Creating library|bc250control.lib') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "bc250control.dll build failed ($LASTEXITCODE)" }
+} finally { Pop-Location }
 Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction SilentlyContinue
 
 # The raw diagnostic verbs of the CLI against a fake adapter, in the flavour of this build (BD-167, test-verbs.ps1):
@@ -215,13 +225,16 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 $cliFlags = ConvertTo-ControlFlags ($flavourDefine + @('/nologo', '/W4', '/WX', '/O2', '/MT', '/Brepro', '/Z7', '/D_CRT_SECURE_NO_WARNINGS',
     "/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
     "/I$sdk\Include\$KitVersion\shared"))
-Invoke-Bc250UmdCompiler $cc @cliFlags @((Get-ObjectSwitch 'bc250kmd_cli'), "/Fe$Out\bc250kmd_cli.exe",
-    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateObjects @('/link', '/Brepro', '/DEBUG') @clangLink @(
+Push-Location -LiteralPath $Out
+try {
+Invoke-Bc250UmdCompiler $cc @cliFlags @((Get-ObjectSwitch 'bc250kmd_cli'), '/Febc250kmd_cli.exe',
+    (Join-Path $repo 'tools\win\bc250kmd_cli\bc250kmd_cli.c')) @stateRelative @('/link', '/Brepro', '/DEBUG') @clangLink @(
     '/OPT:REF', '/OPT:ICF', '/PDBALTPATH:%_PDB%',
     "/LIBPATH:$(Join-Path $msvc.FullName 'lib\x64')", "/LIBPATH:$sdkLib\ucrt\x64", "/LIBPATH:$sdkLib\um\x64",
     'gdi32.lib', 'setupapi.lib', 'advapi32.lib','onecore.lib','uuid.lib') |
     ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { Write-Host "  $_" } }
 if ($LASTEXITCODE -ne 0) { throw "bc250kmd_cli.exe build failed ($LASTEXITCODE)" }
+} finally { Pop-Location }
 $usage = & "$Out\bc250kmd_cli.exe" 2>&1 | ForEach-Object { [string]$_ }
 if ($LASTEXITCODE -ne 2 -or -not ($usage -match '^usage: bc250kmd_cli ')) { throw "bc250kmd_cli.exe without arguments: exit $LASTEXITCODE, no usage" }
 Write-Host "  bc250kmd_cli.exe usage: $(@($usage).Count) lines"

@@ -194,6 +194,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # as release-sources.json and the gitlinks of those commits in the workspace checkouts, and no branch.
  Check 'third-party-doc' { & python -B "$repo\tools\release\third_party_doc.py" --repo $repo --workspace $Workspace; if($LASTEXITCODE -eq 0){ $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\third-party-doc").FullName; & python -B -m unittest discover -s "$repo\tools\release" -p 'test_third_party_doc.py' } }
  Check 'sdk-compiler-arguments' { & pwsh -NoProfile -File "$repo\tools\build\test-sdk-compiler.ps1" }
+# One image from two trees and two output directories with the reproducible flags of umd-compiler.ps1 (BD-268).
+Check 'pdb-repro' { & pwsh -NoProfile -File "$repo\tools\build\test-pdb-repro.ps1" -Out (New-Item -ItemType Directory -Force "$Out\pdb-repro").FullName }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
  # BD-167: the source lookup of the flavour byte check (tools/release/flavour_bytes.py) on a throwaway repository. A
  # commit or a checkout that Git cannot read is an error, never the absence of a lab string.
