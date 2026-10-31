@@ -50,16 +50,18 @@ Invoke-Tool (Join-Path $bin 'cl.exe') (@('/nologo', '/TC', '/W4', '/WX', '/Od', 
     @($source, (Join-Path $here 'paging_private_test.c')) +
     @("/link", "/LIBPATH:$sdklib\ucrt\x64", "/LIBPATH:$sdklib\um\x64", "/LIBPATH:$($msvc.FullName)\lib\x64"))
 
-Write-Host 'run'
-& "$Out\paging_private_test.exe"
-$code = $LASTEXITCODE
-
 Write-Host 'compile-check (kernel flags, same source, no link)'
 $kernFlags = @('/nologo', '/c', '/TC', '/kernel', '/GS-', '/W4', '/WX', '/O2', '/Zi', '/Zp8', '/GF', '/Gy',
     '/D_AMD64_', '/DAMD64', '/D_WIN64', '/DWINNT=1', '/DNTDDI_VERSION=0x0A00000C', '/D_WIN32_WINNT=0x0A00', '/DNDEBUG',
     "/I$wdk\Include\$KitVersion\km", "/I$wdk\Include\$KitVersion\km\crt", "/I$kmd", "/Fo$obj\kernel-", "/Fd$obj\clkernel.pdb")
 Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + @($source))
 
+# The native test runs last: a failed step after it would end the run with 1 too, and a negative control must fail by
+# the test itself (host_native.ps1, BD-237).
+Write-Host 'run'
+. "$here\host_native.ps1"
+Invoke-NativeStep "$Out\paging_private_test.exe"
+$code = $LASTEXITCODE
 Write-Host ''
 Write-Host "paging_private_test.exe exit code $code"
 exit $code

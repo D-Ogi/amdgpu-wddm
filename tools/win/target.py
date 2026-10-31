@@ -19,6 +19,7 @@ documents its shape and the lab's values. Importing this module never touches th
     python target.py forget                    drop the cached address (the next call probes again)
     python target.py run '<powershell>'         one inline command (watch the quoting, prefer a script file)
     python target.py ps <file.ps1> [args...]   copy a script over and run it with -File
+                                               (run and ps exit with the remote exit code, see PASS_EXIT)
     python target.py push <local...> [--to C:\\BC250\\dir]
     python target.py pull <remote> <local>
 
@@ -116,6 +117,26 @@ def script_arg(arg):
     """One argument of `run_script`, double-quoted when it holds a space or a PowerShell metacharacter."""
     text = str(arg)
     return f'"{text}"' if SHELL_SPECIAL & set(text) else text
+
+
+# The same shell decides the exit code of the ssh session. `powershell -c "<command>"` ends with 1 when its last
+# native command fails, whatever code that command gave (BD-267: a remote exit 3 and a remote exit 9 both arrived
+# here as 1 on 2026-10-29). A command line that is one native call ends with PASS_EXIT, which gives that call's
+# code to the session. An inline command runs in a nested powershell.exe; INLINE_STATUS ends it with 0 when its
+# last statement succeeded, with the last native exit code when that statement failed and set one, and with 1 for
+# a failed cmdlet, as before.
+PASS_EXIT = "; exit $LASTEXITCODE"
+INLINE_STATUS = ("\n$bc250Ok = $?; $bc250Code = $LASTEXITCODE\n"
+                 "if ($bc250Ok) { exit 0 } elseif ($bc250Code) { exit $bc250Code } else { exit 1 }\n")
+
+
+def encoded_command(powershell):
+    """The remote command line for one inline PowerShell command: encoded, so that no shell on the way can
+    reinterpret it, and with its exit code kept (see PASS_EXIT). The status lines start on a new line, so a
+    command that ends with a comment does not hide them."""
+    import base64
+    encoded = base64.b64encode((powershell + INLINE_STATUS).encode("utf-16-le")).decode()
+    return "powershell -NoProfile -EncodedCommand " + encoded + PASS_EXIT
 
 
 class Target:
@@ -237,9 +258,11 @@ class Target:
 
     def run(self, powershell, timeout=120):
         """One PowerShell command, encoded so that no shell on the way can reinterpret it. Returns stdout."""
-        import base64
-        encoded = base64.b64encode(powershell.encode("utf-16-le")).decode()
-        return self.ssh("powershell -NoProfile -EncodedCommand " + encoded, timeout=timeout).stdout
+        return self.run_status(powershell, timeout=timeout).stdout
+
+    def run_status(self, powershell, timeout=120):
+        """As `run`, but returns the CompletedProcess, whose returncode is the remote exit code."""
+        return self.ssh(encoded_command(powershell), timeout=timeout)
 
     def run_script(self, local_path, args=(), timeout=600, remote_dir=None):
         """Copy a .ps1 over and run it with -File. Returns the CompletedProcess, so the caller sees stderr
@@ -248,8 +271,8 @@ class Target:
         self.push([local_path], remote_dir)
         remote = remote_dir.rstrip("\\") + "\\" + os.path.basename(local_path)
         quoted = " ".join(script_arg(a) for a in args)
-        return self.ssh(f'powershell -NoProfile -ExecutionPolicy Bypass -File "{remote}" {quoted}'.rstrip(),
-                        timeout=timeout)
+        command = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{remote}" {quoted}'.rstrip()
+        return self.ssh(command + PASS_EXIT, timeout=timeout)
 
     def push(self, local_paths, remote_dir=None, timeout=300):
         """Copy files to the target. There is no scp on it, so a tar built here is piped into its tar."""
@@ -471,7 +494,7 @@ def main(argv):
         elif cmd == "forget":
             target.forget()
         elif cmd == "run":
-            done = target.ssh(args[0] if args else sys.exit("run needs a command"))
+            done = target.run_status(args[0] if args else sys.exit("run needs a command"))
             sys.stdout.write(done.stdout)
             sys.stderr.write(done.stderr)
             sys.exit(done.returncode)

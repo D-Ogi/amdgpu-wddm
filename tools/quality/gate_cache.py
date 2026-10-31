@@ -162,6 +162,38 @@ def run_process(command, cwd, env, log, timeout):
                 job.close()
 
 
+def control_failure(code, log, step=None):
+    """Why a negative control (a Fails job) did not fail as intended, or None when it did (BD-237).
+
+    The runner marks its test with 'test-start: <name>' and 'test-end: <name> exit <code>' lines
+    (driver/kmd/test/host_native.ps1). The control fails as intended only when the runner exits with 1, the
+    last 'test-end:' line says exit 1, and a FAIL line comes after the matching 'test-start:'. So a FAIL line
+    of a source check before the test, a crash after a FAIL line, and a test that did not end are not passes.
+    The failing step is a native program ('<name>.exe') unless the job names another step (Step in quick.ps1,
+    for a control whose intended failure is a source check of the runner).
+    """
+    if code != 1:
+        return f'exit code {code}: a negative control must end with 1, the exit code of a failed check'
+    lines = log.decode('utf-8', 'replace').splitlines()
+    ends = [i for i, line in enumerate(lines) if line.startswith('test-end: ')]
+    if not ends:
+        return 'no test-end line: the test of this control did not run or did not end'
+    end = ends[-1]
+    name, _, value = lines[end][len('test-end: '):].strip().rpartition(' exit ')
+    if value != '1':
+        return f'the last test step ended with "{lines[end].strip()}", exit 1 expected'
+    if step and name != step:
+        return f'the step "{name}" failed, the control must fail in the step "{step}"'
+    if not step and not name.lower().endswith('.exe'):
+        return f'the step "{name}" failed, the control must fail in its native test program'
+    starts = [i for i in range(end) if lines[i].strip() == 'test-start: ' + name]
+    if not starts:
+        return f'no "test-start: {name}" line before its test-end line'
+    if not any('FAIL' in line for line in lines[starts[-1] + 1:end]):
+        return f'no FAIL line inside the test step {name}: the control failed for another reason'
+    return None
+
+
 def cache_key(job, declaration, input_hash, tool_hash, env_hash, context):
     return digest(encoded({'schema': SCHEMA, 'job': job, 'declaration': declaration,
                            'inputs': input_hash, 'toolchain': tool_hash, 'environment': env_hash,
@@ -346,11 +378,14 @@ def execute(plan, manifest, plan_path, no_cache=False, jobs=None):
         timeout = declaration.get('timeout', manifest['timeout'])
         code, timed_out = run_process(command, scratch, env, out / (name + '.log'), timeout)
         log = (out / (name + '.log')).read_bytes()
-        passed = not timed_out and (code == 0 if not spec.get('fails') else code not in (None, 0) and b'FAIL' in log)
+        why = control_failure(code, log, spec.get('step')) if spec.get('fails') and not timed_out else None
+        passed = not timed_out and (code == 0 if not spec.get('fails') else why is None)
         row.update(status='PASS' if passed else 'FAIL', exit_code=code, timeout=timed_out,
                    seconds=time.monotonic() - watch)
         if timed_out:
             row['error'] = f'Check exceeded {timeout}s; process tree stopped'
+        elif why:
+            row['error'] = 'negative control: ' + why
         print(f'{name} {row["status"]} {row["seconds"]:.2f}s', flush=True)
         return row
 

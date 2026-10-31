@@ -101,5 +101,5 @@ $libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 $cl=Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
 & $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\driver\kmd\test" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\timing_test.exe" "$Out\test.c" "$repo\driver\kmd\dcn_scale.c" "$repo\driver\shim\bc250_scaler_buffer.c" "$repo\driver\shim\bc250_scaler_filter.c" "$repo\driver\kmd\display_io.c" "$repo\driver\kmd\edid.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'host build failed'}
-& "$Out\timing_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\timing_test.exe"

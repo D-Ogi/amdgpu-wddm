@@ -163,6 +163,78 @@ class CacheTests(unittest.TestCase):
         self.plan['jobs'] = [{'name': 'sample', 'runner': 'check.ps1', 'arguments': []}]
         self.assertEqual(self.run_gate(real=True)['status'], 'PASS')
 
+    def test_negative_control_must_fail_inside_its_test(self):
+        # BD-237: the oracle of a Fails job.
+        good = b'build ok\ntest-start: t.exe\ncheck 1 ok\nFAIL check 2\ntest-end: t.exe exit 1\n'
+        self.assertIsNone(gate.control_failure(1, good))
+        crash = b'test-start: t.exe\nFAIL check 2\ntest-end: t.exe exit -1073741819\n'
+        self.assertIn('exit code -1073741819', gate.control_failure(-1073741819, crash))
+        self.assertIn('exit code 3221225477', gate.control_failure(3221225477, b'FAIL check 2\n'))
+        self.assertIn('exit 1 expected', gate.control_failure(1, crash + b'later step failed\n'))
+        source = b'FAIL source check: the anchor moved\n'
+        self.assertIn('no test-end line', gate.control_failure(1, source))
+        early = b'FAIL source check\ntest-start: t.exe\nall checks ok\ntest-end: t.exe exit 1\n'
+        self.assertIn('no FAIL line inside', gate.control_failure(1, early))
+        later = good + b'test-start: u.exe\nok\ntest-end: u.exe exit 0\n'
+        self.assertIn('exit 1 expected', gate.control_failure(1, later))
+        self.assertIn('no "test-start: t.exe"', gate.control_failure(1, b'FAIL\ntest-end: t.exe exit 1\n'))
+        spaced = b'test-start: mailbox write sequence\nFAIL: changed\ntest-end: mailbox write sequence exit 1\n'
+        self.assertIsNone(gate.control_failure(1, spaced, 'mailbox write sequence'))
+        self.assertIn('native test program', gate.control_failure(1, spaced))
+        # A source check of the runner fails in a control whose intended failure is the native test, and the other way.
+        checks = b'test-start: source checks\nFAIL source check: x\ntest-end: source checks exit 1\n'
+        self.assertIn('native test program', gate.control_failure(1, checks))
+        self.assertIsNone(gate.control_failure(1, checks, 'source checks'))
+        self.assertIn('must fail in the step "source checks"', gate.control_failure(1, good, 'source checks'))
+        self.assertIn('exit code 0', gate.control_failure(0, good))
+
+    @unittest.skipUnless(os.name == 'nt' and shutil.which('pwsh'), 'Windows worker')
+    def test_negative_control_through_host_native(self):
+        # The runner helpers of host_native.ps1 with a native program (python) under a real gate run.
+        native = Path(__file__).resolve().parents[2] / 'driver/kmd/test/host_native.ps1'
+        def control(program):
+            self.script.write_text(
+                'param([string]$Out)\n$ErrorActionPreference="Stop"\n'
+                f'. "{native}"\n'
+                f'Exit-NativeTest "{sys.executable}" @("-c", "{program}")\n', encoding='utf-8')
+            self.plan['jobs'] = [{'name': 'sample', 'runner': 'check.ps1', 'arguments': [], 'fails': True}]
+            return self.run_gate(real=True)['checks'][0]
+        row = control("print('FAIL check 2'); raise SystemExit(1)")
+        self.assertEqual(row['status'], 'PASS', row)
+        log = (self.out / 'sample.log').read_text()
+        self.assertIn('test-start: python.exe', log)
+        self.assertIn('test-end: python.exe exit 1', log)
+        row = control("import ctypes; print('FAIL check 2', flush=True); ctypes.windll.kernel32.ExitProcess(0xC0000005)")
+        self.assertEqual(row['status'], 'FAIL', row)
+        self.assertIn('negative control', row['error'])
+        row = control("print('no failure'); raise SystemExit(1)")
+        self.assertEqual(row['status'], 'FAIL', row)
+        self.assertIn('no FAIL line inside', row['error'])
+        # A source check that fails before the test.
+        self.script.write_text('param([string]$Out)\nWrite-Output "FAIL source check"\nthrow "anchor moved"\n',
+                               encoding='utf-8')
+        row = self.run_gate(real=True)['checks'][0]
+        self.assertEqual(row['status'], 'FAIL', row)
+        self.assertIn('no test-end line', row['error'])
+
+    def test_every_negative_control_runner_marks_its_test(self):
+        # Each runner of a Fails entry in quick.ps1 marks its test (host_native.ps1), so that the oracle above can
+        # tell the intended failure from a crash or a source check.
+        import re
+        repo = Path(__file__).resolve().parents[2]
+        quick = (repo / 'tools/quality/quick.ps1').read_text(encoding='utf-8')
+        runners = sorted({m.group(1) for m in re.finditer(r"s='([^']+)'[^\r\n]*Fails=\$true", quick)})
+        self.assertGreater(len(runners), 20)
+        unmarked = []
+        for runner in runners:
+            text = (repo / runner.replace('\\', '/')).read_text(encoding='utf-8')
+            marked = ('Exit-NativeTest' in text or 'Invoke-NativeStep' in text) and 'host_native.ps1' in text
+            marked = marked or ("'test-start: " in text and "exit 1'" in text)
+            bare = re.search(r'(?m)^\s*&\s*"\$Out\\[^"]+\.exe"[^\r\n]*\r?\n\s*exit \$LASTEXITCODE', text)
+            if not marked or bare:
+                unmarked.append(runner)
+        self.assertEqual(unmarked, [])
+
     @unittest.skipUnless(os.name == 'nt', 'Windows job object')
     def test_timeout_stops_process_tree(self):
         marker = self.base / 'survivor.txt'

@@ -46,10 +46,15 @@ foreach($variant in $variants) {
 }
 $a=@(Get-Content "$Out\baseline.log" | Where-Object {$_ -match '^WRITE '})
 $b=@(Get-Content "$Out\candidate.log" | Where-Object {$_ -match '^WRITE '})
+# The two comparisons are the tests of this runner: their test-start and test-end lines mark them for the negative
+# control in tools\quality\quick.ps1 (host_native.ps1, BD-237).
+Write-Output 'test-start: mailbox write sequence'
 if($a.Count -eq 0 -or (Compare-Object $a $b -SyncWindow 0)){
     Write-Output 'FAIL: mailbox write sequence changed'
-    throw 'Mailbox write sequence changed'
+    Write-Output 'test-end: mailbox write sequence exit 1'
+    exit 1
 }
+Write-Output 'test-end: mailbox write sequence exit 0'
 @{baseline=$Baseline;writes=$a.Count;identical=$true;scope='start, prepare floor, raise 1500/900, idle 500/820, restore 1000/820, stop';baselineSource=(Get-FileHash "$PSScriptRoot\board_sequence_baseline.txt").Hash;candidateSource=(Get-FileHash "$repo\driver\kmd\smu.c").Hash;fixture=(Get-FileHash "$Out\sequence.c").Hash} | ConvertTo-Json | Set-Content "$Out\comparison.json"
 Write-Output "PASS: $($a.Count) identical native mailbox writes"
 
@@ -99,9 +104,12 @@ foreach($variant in $variants) {
 }
 $baselineBytes=[Text.Encoding]::UTF8.GetBytes(([IO.File]::ReadAllText("$Out\baseline-snapshot.txt")).Replace("`r`n","`n"))
 $candidateBytes=[Text.Encoding]::UTF8.GetBytes(([IO.File]::ReadAllText("$Out\candidate-snapshot.txt")).Replace("`r`n","`n"))
+Write-Output 'test-start: compiled policy values'
 if([Convert]::ToBase64String($baselineBytes) -cne [Convert]::ToBase64String($candidateBytes)){
     Write-Output 'FAIL: compiled policy values or tables changed'
-    throw 'Compiled policy values or tables changed'
+    Write-Output 'test-end: compiled policy values exit 1'
+    exit 1
 }
+Write-Output 'test-end: compiled policy values exit 0'
 Write-Output "PASS: 113 compiled constants and complete GPU/fan table values are byte-identical"
 Get-FileHash "$Out\snapshot.c","$Out\baseline-snapshot.txt","$Out\candidate-snapshot.txt" | Select-Object Path,Hash | ConvertTo-Json | Set-Content "$Out\policy-pins.json"

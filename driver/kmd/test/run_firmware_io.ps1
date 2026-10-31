@@ -19,5 +19,5 @@ $env:INCLUDE = "$($msvc.FullName)\include;$sdk\Include\$KitVersion\ucrt"
 $env:LIB = "$($msvc.FullName)\lib\x64;$lib\ucrt\x64;$lib\um\x64"
 & "$bin\cl.exe" /nologo /TC /W4 /WX /Od /D_CRT_SECURE_NO_WARNINGS "/I$Out" "/Fo$Out\firmware_io.obj" "/Fe$Out\firmware_io.exe" "$PSScriptRoot\firmware_io_test.c"
 if ($LASTEXITCODE) { throw 'firmware I/O compile failed' }
-& "$Out\firmware_io.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\firmware_io.exe"

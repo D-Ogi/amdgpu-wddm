@@ -32,6 +32,9 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 # The host model proves the decisions, but it cannot compile wddm.c. So wddm.c itself must still read the budget
 # from the registry, stamp the deadline at the head, re-arm under the lock, log the measured numbers and ask for
 # the aborted-fence answer. Every check below is a line whose removal would leave this suite green.
+# The test-start and test-end lines mark the source checks as a test step: a negative control that must fail here
+# names this step in tools\quality\quick.ps1 (Step), and gate_cache.py accepts only that failure (BD-237).
+Write-Output 'test-start: source checks'
 $wddm=Get-Content "$repo\driver\kmd\wddm.c" -Raw
 function Body([string]$text,[string]$start){
     $at=$text.IndexOf($start)
@@ -44,7 +47,7 @@ function Ordered([string]$body,[string]$what,[string[]]$steps){
     $pos=0
     foreach($s in $steps){
         $i=$body.IndexOf($s,$pos)
-        if($i -lt 0){Write-Output "FAIL source check: $what lacks '$s' after the step before it (wddm.c)";exit 1}
+        if($i -lt 0){Write-Output "FAIL source check: $what lacks '$s' after the step before it (wddm.c)";Write-Output 'test-end: source checks exit 1';exit 1}
         $pos=$i+$s.Length
     }
 }
@@ -60,11 +63,11 @@ if($RearmOutsideLock){
     $dpc=$moved.Remove($iRel,$rel.Length).Insert($iRel,$set)
 }
 # 7.1 reaches the registry, and the flat constant is gone from the whole driver.
-if($wddm -notmatch 'GuardReadSetting\(L"SubmitWatchdogMs", 0\)'){Write-Output 'FAIL source check: wddm.c does not read the SubmitWatchdogMs setting (BD-114 7.1)';exit 1}
+if($wddm -notmatch 'GuardReadSetting\(L"SubmitWatchdogMs", 0\)'){Write-Output 'FAIL source check: wddm.c does not read the SubmitWatchdogMs setting (BD-114 7.1)';Write-Output 'test-end: source checks exit 1';exit 1}
 if($wddm -match 'GuardReadGraphicsSetting'){throw 'KMD must not read the OS TDR setting'}
 $flat=Get-ChildItem "$repo\driver\kmd\*" -Recurse -File | Where-Object { $_.Extension -in '.c','.h' } |
     Select-String -SimpleMatch 'BC250_WDDM_SUBMIT_TIMEOUT_MS'
-if($flat){Write-Output "FAIL source check: BC250_WDDM_SUBMIT_TIMEOUT_MS is back in $($flat[0].Path) (BD-114 7.1)";exit 1}
+if($flat){Write-Output "FAIL source check: BC250_WDDM_SUBMIT_TIMEOUT_MS is back in $($flat[0].Path) (BD-114 7.1)";Write-Output 'test-end: source checks exit 1';exit 1}
 # 7.3: the stamp, the window and the first look all happen when the job becomes the head.
 Ordered (Body $wddm 'static void WddmGfxHeadLocked(') 'WddmGfxHeadLocked' @(
     'Bc250SubmitWatchdogIdle(&Wddm->SubmitWatchdog);',
@@ -89,7 +92,7 @@ Ordered $dpc 'the submit watchdog DPC' @(
     'KeSetTimer(&wddm->SubmitTimer, due, &wddm->SubmitDpc);',
     'KeReleaseSpinLock(&wddm->Lock, irql);')
 # 7.7: the timeout line carries the measured numbers.
-if($wddm -notmatch 'timeout measured: head %lu ms, queued %lu ms, stale %lu ms, budget %lu ms'){Write-Output 'FAIL source check: the timeout line does not report the measured times (BD-114 7.7)';exit 1}
+if($wddm -notmatch 'timeout measured: head %lu ms, queued %lu ms, stale %lu ms, budget %lu ms'){Write-Output 'FAIL source check: the timeout line does not report the measured times (BD-114 7.7)';Write-Output 'test-end: source checks exit 1';exit 1}
 # 7.4: ResetEngine asks for the aborted-fence answer and reopens the ring, and both submit DDIs record the fence
 # range's upper bound. Only the virtual one did in the first draft, and the non-virtual one would have left the
 # guard refusing a report the contract asks for.
@@ -107,7 +110,7 @@ Ordered (Body $wddm 'static NTSTATUS Bc250WddmResetEngine(') 'Bc250WddmResetEngi
     'GfxRetireSignal(device);')
 foreach($reopen in @('GfxReopenAfterAbort','GfxComputeReopenAfterAbort')){
     if((Get-Content "$repo\driver\kmd\gfx.c" -Raw) -match ('(?s)BOOLEAN '+$reopen+'\([^{]*\{(?:(?!\n\}).){0,3000}?GfxRetireSignal')){
-        Write-Output "FAIL source check: $reopen wakes the waiters itself, before wddm.c reopens the node (BD-114 7.4)";exit 1
+        Write-Output "FAIL source check: $reopen wakes the waiters itself, before wddm.c reopens the node (BD-114 7.4)";Write-Output 'test-end: source checks exit 1';exit 1
     }
 }
 foreach($ddi in @('static NTSTATUS Bc250WddmSubmitCommand(','static NTSTATUS Bc250WddmSubmitCommandVirtual(')){
@@ -119,6 +122,7 @@ Ordered (Body $wddm 'static BOOLEAN WddmBeginSubmissionLocked(') 'WddmBeginSubmi
     'WddmNoteSubmittedLocked(Wddm, Node, Fence);',
     'if (Wddm->Recovery[Node].ResetActive) return FALSE;',
     'Wddm->ActiveSubmissions[Node]++;')
+Write-Output 'test-end: source checks exit 0'
 
 # ---- the copies the host test compiles --------------------------------------------------------------------------
 $watchdog=Get-Content "$repo\driver\kmd\submit_watchdog.h" -Raw
@@ -193,5 +197,5 @@ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-O
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /wd4201 /wd4127 /O2 /MT "/I$Out" "/I$repo\driver\kmd" "/I$repo\driver\shim\include" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\submit_watchdog_test.exe" "$Out\submit_watchdog_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'submit watchdog host build failed'}
-& "$Out\submit_watchdog_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\submit_watchdog_test.exe"

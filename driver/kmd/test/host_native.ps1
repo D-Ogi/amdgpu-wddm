@@ -17,6 +17,29 @@ public static class Bc250HostErrorMode {
 '@
 }
 
+# The native test step of a host runner (BD-237). The lines 'test-start: <program>' and 'test-end: <program> exit
+# <code>' mark the test that a negative control (Fails in tools\quality\quick.ps1) must fail. gate_cache.py accepts
+# such a control only when the last 'test-end:' line of its log says exit 1, a FAIL line comes after the matching
+# 'test-start:', and the runner exits with 1. So a FAIL line of a source check before the step, a crash after a FAIL
+# line (an exit code other than 0 or 1), and a step that does not end never pass a control. The output of the program
+# goes to the output of the runner; $LASTEXITCODE is the program's exit code after the call. The program starts
+# without the Windows Error Reporting and critical-error dialogs.
+function Invoke-NativeStep([string]$Exe, [string[]]$Arguments = @()) {
+    $leaf = Split-Path -Leaf $Exe
+    Write-Host "test-start: $leaf"
+    $before = [Bc250HostErrorMode]::SetErrorMode(0x8003)
+    try { & $Exe @Arguments | Out-Host; $code = $LASTEXITCODE }
+    finally { [void][Bc250HostErrorMode]::SetErrorMode($before) }
+    Write-Host "test-end: $leaf exit $code"
+    $global:LASTEXITCODE = $code
+}
+
+# The last step of a runner: the native test, and its exit code as the runner's exit code.
+function Exit-NativeTest([string]$Exe, [string[]]$Arguments = @()) {
+    Invoke-NativeStep $Exe $Arguments
+    exit $LASTEXITCODE
+}
+
 function Invoke-HostTest([string]$Exe, [string]$Log, [string]$Summary, [int]$TimeoutSeconds = 60,
                          [string[]]$Arguments = @()) {
     # SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX, for this process and its children.

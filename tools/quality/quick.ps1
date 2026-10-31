@@ -100,6 +100,9 @@ try {
  # old deadline would have failed suites at random on any branch. 1200 s is 11x the cost alone and 3.5x the worst
  # suite run, which covers both the contention and the growth.
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
+ # target.py: argument quoting, the boot wait and the remote exit code of run and ps (BD-267). The exit tests run
+ # the command lines through the local Windows PowerShell 5.1 in place of the lab's sshd shell; no network.
+ Check 'target-tool' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\target-tool").FullName; & python -B -m unittest discover -s "$repo\tools\win" -p 'test_target*.py' }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
  # Settings apply/restore runs against a fake system. Never change this PC's services, tasks or registry.
@@ -176,6 +179,14 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # The release set build (tools/release/build-release-set.ps1) on stub recipes in temporary repositories: -MaxParallel and the
  # disk budget hold, -Plan builds nothing, an unpushed commit, an AI trailer and an implicit compiler are refused, and a
  # failed build fails the release set and keeps its log. Its end-to-end runs start pwsh processes, hence 600 s.
+ # The removal of shared and stale build trees of BuildTree.psm1 (BD-264), on a fixture repository in $Out.
+ Check 'shared-build-tree' { & pwsh -NoProfile -File "$repo\tools\release\test-shared-build-tree.ps1" -FixtureRoot (New-Item -ItemType Directory -Force "$Out\shared-build-tree").FullName }
+ # The outputs of an earlier package round, all named before the first step, and -SetAside (BD-272).
+ Check 'package-round' { & pwsh -NoProfile -File "$repo\tools\release\test-package-round.ps1" -Out (New-Item -ItemType Directory -Force "$Out\package-round").FullName }
+ # The notes-only repack of a gated package (BD-265): every file but the notes and manifest.json byte for byte.
+ Check 'repack-notes' { & pwsh -NoProfile -File "$repo\tools\release\test-repack-notes.ps1" -Out (New-Item -ItemType Directory -Force "$Out\repack-notes").FullName }
+ # The release gates read the commit that the package names: a dirty tree, or one that changes during a run, stops build-release.ps1 (BD-263).
+ Check 'tree-state' { & pwsh -NoProfile -File "$repo\tools\release\test-tree-state.ps1" -Out (New-Item -ItemType Directory -Force "$Out\tree-state").FullName }
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-source-versions' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-source-versions").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_source_versions.py' }
@@ -183,6 +194,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # as release-sources.json and the gitlinks of those commits in the workspace checkouts, and no branch.
  Check 'third-party-doc' { & python -B "$repo\tools\release\third_party_doc.py" --repo $repo --workspace $Workspace; if($LASTEXITCODE -eq 0){ $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\third-party-doc").FullName; & python -B -m unittest discover -s "$repo\tools\release" -p 'test_third_party_doc.py' } }
  Check 'sdk-compiler-arguments' { & pwsh -NoProfile -File "$repo\tools\build\test-sdk-compiler.ps1" }
+# One image from two trees and two output directories with the reproducible flags of umd-compiler.ps1 (BD-268).
+Check 'pdb-repro' { & pwsh -NoProfile -File "$repo\tools\build\test-pdb-repro.ps1" -Out (New-Item -ItemType Directory -Force "$Out\pdb-repro").FullName }
  Check 'release-flavour' { & python -m unittest discover -s "$repo\tools\release" -p 'test_release_flavour.py' }
  # BD-167: the source lookup of the flavour byte check (tools/release/flavour_bytes.py) on a throwaway repository. A
  # commit or a checkout that Git cannot read is an error, never the absence of a lab string.
@@ -542,7 +555,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
      & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" --clang-baseline "$PSScriptRoot\clang-umd-baseline.json" }
  # Host suites (DEFECTS BD-053): the rest of driver\*\test, each building its fixture from this tree into its own
  # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
- # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
+ # control: it must fail by a check, not by a build error, or the control proves nothing. The runner marks its test
+ # with test-start and test-end lines (driver\kmd\test\host_native.ps1), and gate_cache.py accepts a control only when
+ # the last test step ends with exit 1, has a FAIL line, and is the native test program or the Step that the entry
+ # names. A source check that fails first, or a crash after a FAIL line, is a FAIL of the gate (BD-237).
  $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
  if($env:BC250_LINK_TEST_ROM) {
   Check 'link-active-off' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-active-off" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM }
@@ -695,7 +711,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
   @{n='log-rate-no-gap';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-NoGapReset');Fails=$true}
-  @{n='log-rate-fan-block';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-FanBlockGrow');Fails=$true}
+  @{n='log-rate-fan-block';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-FanBlockGrow');Fails=$true;Step='source checks'}
   @{n='dpm-log-cadence';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace)}
   @{n='dpm-log-cadence-no-idle';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-NoIdleCadence');Fails=$true}
   @{n='dpm-log-cadence-60s';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-IdleSixtySeconds');Fails=$true}
@@ -705,14 +721,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hang-recovery-shared-fence';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-SharedLastCompleted');Fails=$true}
   @{n='hang-recovery-gart-backend';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-GartBackend');Fails=$true}
   @{n='hang-recovery-count-refused';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-CountRefusedKills');Fails=$true}
-  @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true}
+  @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true;Step='source checks'}
   @{n='adapter-reset';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace)}
   @{n='adapter-reset-last-sample-only';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-LastSampleOnly');Fails=$true}
   @{n='adapter-reset-no-sdma-idle';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-IgnoreSdmaIdle');Fails=$true}
   @{n='adapter-reset-partial-begin';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-PartialBegin');Fails=$true}
   @{n='adapter-reset-complete-window';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CompleteNonEmptyWindow');Fails=$true}
-  @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true}
-  @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true}
+  @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true;Step='source checks'}
+  @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true;Step='source checks'}
   @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
   @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
   @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
@@ -747,7 +763,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='submit-watchdog-report-with-pending';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ReportWithPendingCompletion');Fails=$true}
   @{n='submit-watchdog-no-fence-range';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoFenceRange');Fails=$true}
   @{n='submit-watchdog-log-the-constant';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-LogTheConstant');Fails=$true}
-  @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true}
+  @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true;Step='source checks'}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
   @{n='vmid-pool-ignore-compute-ring';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreComputeRing');Fails=$true}
   # The gfx-pipeline controls check their own pinned CHECK failure counts (run_gfx_pipeline.ps1) and exit 0 when the
@@ -782,7 +798,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits)}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
-  @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
+  @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true;Step='compiled policy values'}
   @{n='smu-native-board-admission';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','board-admission');Fails=$true}
   # The clock escape's two gates (BD-062): the token in front of the write, and the published reading the open
   # READ rests on. Each mutation removes one of them, and the suite must fail by a check; a mutation that nobody
@@ -816,7 +832,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   "$($runners.Count) runners, all gated, all self-located"
  }
  foreach($suite in $suites) {
-  $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails}
+  $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails;step=$suite.Step}
  }
  $variables=@{}
  foreach($name in @('repo','Workspace','Out','Kits','Profile','icd','radvBuild','umdSource','umdBuild','routerHosted','firmware')) {

@@ -96,7 +96,8 @@ Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DEBUG', '/MACHINE:X64', 
 Write-Host 'run'
 $argv = @()
 if ($Verbose250) { $argv += '-v' }
-& "$Out\gfx_vm_flush.exe" @argv
+. "$here\..\..\kmd\test\host_native.ps1"
+Invoke-NativeStep "$Out\gfx_vm_flush.exe" $argv
 $code = $LASTEXITCODE
 Write-Host ''
 Write-Host "gfx_vm_flush.exe exit code $code"

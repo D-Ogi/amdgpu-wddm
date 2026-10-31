@@ -23,7 +23,9 @@ def main():
     manifest = verify_attempt(attempt, ops)
     remote = REMOTE_BASE + '\\' + name
     cmd = (f'powershell -NoProfile -ExecutionPolicy Bypass -File {remote}\\{TRANSITION}\\dispatch.ps1 -Mode {mode}'
-           f' -Directory {remote} -ManifestSha256 {manifest}')
+           f' -Directory {remote} -ManifestSha256 {manifest}'
+           # The sshd shell ends with 1 for any failed native call; this passes dispatch.ps1's own code (BD-267).
+           '; exit $LASTEXITCODE')
     t = target()
     if mode == 'Start':
         print(heartbeat(t, 200))

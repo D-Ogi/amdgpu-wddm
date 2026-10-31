@@ -36,6 +36,19 @@ function ConvertTo-Bc250ClangFlags([string[]]$Flags,[string]$Arch,[string[]]$Roo
     return $result
 }
 
+# BD-268: what a clang-cl build adds so that its PDB does not depend on the directories of the build. Under /Brepro the
+# PDB GUID and the PE timestamp are a hash of the PDB, so a path of the build in the PDB gives another image for every
+# output directory or tree. The caller compiles and links in its output directory with paths relative to it (objects
+# with /Fo, the image, the import library, a .def file): without /Fo, clang-cl writes each object to a temporary file
+# with a random name, and the PDB names it. Compile: the compile directory is recorded as "." and the cc1 command line,
+# which names the tree and the output directory, is not recorded. Link: lld-link makes a relative path absolute against
+# a fixed base instead of the current directory. test-pdb-repro.ps1 is the host test.
+function Get-Bc250ReproducibleFlags([string]$Compiler) {
+    if ($Compiler -ne 'clang-cl') { return [pscustomobject]@{ Compile = @(); Link = @() } }
+    return [pscustomobject]@{ Compile = @('/clang:-ffile-compilation-dir=.', '/clang:-gno-codeview-command-line')
+                              Link = @('/pdbsourcepath:X:\bc250-build') }
+}
+
 # Host test builds (tools/build/test-umd-*.ps1): the cl flags of a test plus the header roots that it reads as
 # system headers. clang-cl gets the shell conversion and /imsvc for each root; cl gets /external:I and /external:W0.
 function Get-Bc250HostTestFlags([string]$Compiler,[string[]]$Flags,[string[]]$Headers,[string]$Arch,[string[]]$Roots) {

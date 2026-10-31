@@ -76,5 +76,54 @@ $refused = $false
 try { Remove-SharedBuildTree $null fixture HEAD $repo $work } catch { $refused = $true }
 if (-not $refused -or -not (Test-Path $repo)) { throw 'Outside path not preserved' }
 $passed++
+# BD-264: a tree that -Keep left, with an initialised submodule. A plain `git worktree remove` refuses it.
+$g = @('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'protocol.file.allow=always')
+$subRepo = Join-Path $base 'subrepo'
+git init -q $subRepo
+git -C $subRepo @g commit -q --allow-empty -m sub
+git -C $repo @g submodule add -q $subRepo sub 2>&1 | Out-Null
+git -C $repo @g commit -q -m 'a submodule'
+if ($LASTEXITCODE) { throw 'submodule fixture failed' }
+Add-Tree
+git -C $tree @g submodule update --init -q 2>&1 | Out-Null
+if (-not (Test-Path (Join-Path $tree 'sub\.git'))) { throw 'submodule not initialised in the fixture tree' }
+Remove-Target
+if (Test-Path $tree) { throw 'Kept tree with a submodule not removed' }
+Add-Tree; $passed++
+# A dirty submodule of a kept tree still refuses the removal.
+git -C $tree @g submodule update --init -q 2>&1 | Out-Null
+Set-Content -LiteralPath (Join-Path $tree 'sub\new.txt') -Value 'uncommitted'
+$refused = $false
+try { Remove-Target } catch { $refused = $true }
+if (-not $refused -or -not (Test-Path (Join-Path $tree 'sub\new.txt'))) { throw 'Dirty submodule not preserved' }
+$passed++
+Remove-Item -LiteralPath (Join-Path $tree 'sub\new.txt')
+Remove-Target
+# A folder delete that stopped part way: the tree is registered and its .git file is gone.
+Add-Tree
+Remove-Item -LiteralPath (Join-Path $tree '.git') -Force
+Remove-Target
+if (Test-Path $tree) { throw 'Partly deleted tree not removed' }
+Add-Tree; $passed++
+Remove-Target
+# Remove-StaleWorktrees: only missing trees under its own Work folder, never a locked one or another lane's.
+$other = Join-Path $base 'other-lane\_same'
+$row = Join-Path $work 'row\s'
+$locked = Join-Path $work 'row\locked'
+foreach ($p in $other, $row, $locked) {
+    git -C $repo worktree add --detach $p HEAD 2>&1 | Out-Null
+    if ($LASTEXITCODE) { throw "add $p failed" }
+}
+git -C $repo worktree lock $locked
+foreach ($p in $other, $row, $locked) { Remove-Item -LiteralPath $p -Recurse -Force }
+$gone = @(Remove-StaleWorktrees $null $repo $work)
+if ($gone.Count -ne 1 -or $gone[0] -ne [IO.Path]::GetFullPath($row)) { throw "Stale sweep removed: $($gone -join ', ')" }
+$listed = (@(git -C $repo worktree list --porcelain) -join "`n") -replace '\\', '/'
+foreach ($p in $other, $locked) {
+    if (-not $listed.Contains(([IO.Path]::GetFullPath($p) -replace '\\', '/'))) { throw "Registration of $p not preserved" }
+}
+git -C $repo worktree add --detach $row HEAD 2>&1 | Out-Null
+if ($LASTEXITCODE) { throw 'Path of a swept registration not reusable' }
+$passed++
 [ordered]@{status='PASS'; cases=$passed; fixture=$base} | ConvertTo-Json
 

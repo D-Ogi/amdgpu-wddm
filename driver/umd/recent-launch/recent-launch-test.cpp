@@ -108,6 +108,16 @@ double ms_since(std::chrono::steady_clock::time_point t0) {
     return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();
 }
 
+// The reference of the call-site budget: what note_outer_device itself pays for its thread (CreateThread of the same
+// stack reservation, the priority, ResumeThread and CloseHandle), with a thread that does nothing.
+DWORD WINAPI control_worker(void*) { return 0; }
+double control_call() {
+    const auto t0=std::chrono::steady_clock::now();
+    const HANDLE thread=CreateThread(nullptr,64*1024,control_worker,nullptr,CREATE_SUSPENDED|STACK_SIZE_PARAM_IS_A_RESERVATION,nullptr);
+    if(thread){SetThreadPriority(thread,THREAD_PRIORITY_BELOW_NORMAL);ResumeThread(thread);CloseHandle(thread);}
+    return ms_since(t0);
+}
+
 void test_format() {
     std::vector<rl::Entry> in{{0x01DC2A0B12345678ull,4242,3,3,L"C:\\Games\\\u30b2\u30fc\u30e0\\game.exe"},
         {0x01DC2A0B00000001ull,7,1,1,L"\\\\server\\share\\\U0001F3AE\\play.exe"}},out;
@@ -686,12 +696,14 @@ void test_note_and_timing() {
     bool budgets_met=false;
     for(int attempt=1;attempt<=kTimingAttempts && !budgets_met;++attempt){
         // Call-site cost: the once flag plus CreateThread, what the creating thread pays.
-        std::vector<double> calls;
+        // Each call is paired with a control call of the same thread work in the same moment (BD-263).
+        std::vector<double> calls,controls;
         for(int i=0;i<100;++i){
             rl::noted=false;
             t0=std::chrono::steady_clock::now();
             rl::note_outer_device(rl::ApiD3D12);
             calls.push_back(ms_since(t0));
+            controls.push_back(control_call());
             Sleep(5);
         }
         Sleep(300);
@@ -732,19 +744,30 @@ void test_note_and_timing() {
         // values of 205-783 ms in two release-set rows, with an unchanged helper. Measured on the development PC
         // the same day: idle, file operations p95 11.7-16.4 ms and whole helper p95 13.8-17.0 ms; under CPU and
         // disk load, file operations p95 25-359 ms and whole helper p95 at most 1.9 times that. An idle host still
-        // holds the helper to 25 ms, so a helper that does more than its file operations fails there. The
-        // call-site budget stays absolute: it held under the same load (p99 0.08-0.47 ms).
+        // holds the helper to 25 ms, so a helper that does more than its file operations fails there.
         constexpr double kFileFactor=3.0,kIdleFilesP95=15.0;
         const double whole_p95=pct(whole,0.95),files_p95=pct(files,0.95);
         const double whole_budget=25.0+kFileFactor*std::max(0.0,files_p95-kIdleFilesP95);
-        std::printf("timing (attempt %d of %d): call site p50 %.3f p99 %.3f max %.3f ms; whole helper p50 %.3f p95 %.3f "
+        // The call-site budget: 2 ms, plus kCallFactor times what the control call of this attempt takes above its
+        // p99 on an idle host (kIdleControlP99). The call site is the thread start, and on a loaded host the
+        // scheduler delays the thread start of the helper and of the control together: tester.32 round 6 failed
+        // the absolute 2 ms with two other builds on the PC (BD-263). Measured on the development PC, idle: call
+        // site p99 0.08 ms. An idle host still holds the call site to 2 ms, so a call site that does file or
+        // registry work before its thread fails there.
+        constexpr double kCallFactor=2.0,kIdleControlP99=0.5;
+        const double call_p99=pct(calls,0.99),control_p99=pct(controls,0.99);
+        const double call_budget=2.0+kCallFactor*std::max(0.0,control_p99-kIdleControlP99);
+        std::printf("timing (attempt %d of %d): call site p50 %.3f p99 %.3f max %.3f ms (control thread start p50 %.3f "
+            "p99 %.3f ms, call-site budget %.2f ms); whole helper p50 %.3f p95 %.3f "
             "p99 %.3f max %.3f ms (gather p50 %.3f ms, write+rename p50 %.3f ms, file operations p50 %.3f p95 %.3f "
             "ms, whole-helper budget %.1f ms)\n",attempt,kTimingAttempts,
-            pct(calls,0.5),pct(calls,0.99),pct(calls,1.0),pct(whole,0.5),whole_p95,pct(whole,0.99),pct(whole,1.0),
+            pct(calls,0.5),call_p99,pct(calls,1.0),pct(controls,0.5),control_p99,call_budget,
+            pct(whole,0.5),whole_p95,pct(whole,0.99),pct(whole,1.0),
             pct(gathers,0.5),pct(writes,0.5),pct(files,0.5),files_p95,whole_budget);
-        budgets_met=pct(calls,0.99)<2.0 && whole_p95<whole_budget;
+        budgets_met=call_p99<call_budget && whole_p95<whole_budget;
     }
-    // call site p99 < 2 ms, and whole helper p95 < 25 ms + 3 x (file operations p95 - 15 ms, if positive), in one attempt
+    // call site p99 < 2 ms + 2 x (control p99 - 0.5 ms, if positive), and whole helper p95 < 25 ms + 3 x (file
+    // operations p95 - 15 ms, if positive), in one attempt
     CHECK(budgets_met);
 }
 

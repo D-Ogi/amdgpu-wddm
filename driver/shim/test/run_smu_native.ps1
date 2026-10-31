@@ -42,5 +42,5 @@ if ($Mutation -eq 'clock-read-snapshot') {
 [IO.File]::WriteAllText("$Out\smu-native.inc",$native,[Text.UTF8Encoding]::new($false))
 & $cl /nologo /TC /W4 /WX /wd4505 /O2 /MT @inc "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\smu_test.exe" "$repo\driver\shim\bc250_smu.c" "$repo\driver\shim\bc250_clock.c" "$repo\driver\shim\bc250_cpu.c" "$repo\driver\shim\bc250_smu_metrics.c" $Fixture /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}
-& "$Out\smu_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\..\..\kmd\test\host_native.ps1"
+Exit-NativeTest "$Out\smu_test.exe"

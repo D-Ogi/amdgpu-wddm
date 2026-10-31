@@ -102,7 +102,8 @@ Invoke-Tool (Join-Path $bin 'link.exe') (@('/nologo', '/DEBUG', '/MACHINE:X64', 
 Write-Host 'run'
 $argv = @()
 if ($Verbose250) { $argv += '-v' }
-& "$Out\sdma_copy_packets.exe" @argv
+. "$here\..\..\kmd\test\host_native.ps1"
+Invoke-NativeStep "$Out\sdma_copy_packets.exe" $argv
 $code = $LASTEXITCODE
 Write-Host ''
 Write-Host "sdma_copy_packets.exe exit code $code"

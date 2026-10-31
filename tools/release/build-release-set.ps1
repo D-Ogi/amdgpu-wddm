@@ -50,7 +50,16 @@
 #    <Out>\register-receipt.json). The capability words of a record are not measured again. Commit and push the file.
 # 5. Packages, a second run on the registered set:
 #      pwsh -File tools\release\build-release-set.ps1 -Package -From <Out> -UmdSource <dir> -UmdBuild <dir>
-#           [-Flavours release,lab] [-LedgerDebtReason <text>] [-Parallel]
+#           [-Flavours release,lab] [-LedgerDebtReason <text>] [-Parallel] [-SetAside <round name>]
+#    Before the first step, it names in one message every output of an earlier round that a step would refuse
+#    (setup, package, submission CAB, package worktrees; PackageRound.psm1). -SetAside <name> moves them into
+#    <Out>\rounds\<name>\ instead, with the SHA-256 of each file before and after in set-aside.json (BD-272).
+# 6. A notes-only repack, when the notes change after the packages are built and gated:
+#      pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <Out> [-Flavours release,lab]
+#    For each flavour, repack-notes.ps1 makes <Out>\package-notes\<flavour> from <Out>\package\<flavour> with the
+#    committed notes of this tree: every file but the notes and manifest.json byte for byte, manifest.json changed in
+#    the notes values only, the zip and the single exe made again. Then the flavour gate and the installer dry run on
+#    the new package. <Out>\repack-report.json holds the new zip and exe hashes (BD-265).
 #    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
 #    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
 #    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
@@ -64,7 +73,13 @@
 #
 # -Plan prints the gates, the builds with their expanded command lines, outputs, tests and disk budget, and builds
 # nothing. -Only rebuilds the rows it names (ids or wildcards); a row it does not name keeps the artifact of the last
-# run in -Out, when that run built it from the same manifest row, and the rows cover both.
+# run in -Out, when that run built it from the same manifest row, and the rows cover both. A row whose manifest entry
+# differs only in its recipe commit keeps its artifact when the recipe's directory is the same at both commits (git
+# diff); its rows keep the commit that built it. A run that ends before a build starts (a failed gate, a build that
+# did not start) keeps the earlier builds of every row in release-report.json, so the next run still finds them.
+# -KeepFrom <earlier -Out> imports the ok builds of that directory for the rows that -Only does not name and -Out has
+# no build of: the same rule, a SHA-256 check of every file at the source, a copy into <Out>\artifacts and the same
+# check on the copy, before any build starts (BD-244).
 # Exit 0 when every gate passes and every build ends well (with -Compare: and every output that claims a deterministic
 # build matches); 1 otherwise.
 [CmdletBinding(DefaultParameterSetName = 'Set')]
@@ -91,6 +106,9 @@ param(
     [Parameter(ParameterSetName = 'Set')][int]$BuildTimeout = 7200,
     [Parameter(ParameterSetName = 'Set')][switch]$KeepGoing,
     [Parameter(ParameterSetName = 'Set')][switch]$Keep,
+    # With -Only: an earlier -Out (another round) whose ok builds may stand for the rows that -Only does not name, when
+    # -Out has no build of them. They are copied into -Out after a SHA-256 check (see "-KeepFrom" below).
+    [Parameter(ParameterSetName = 'Set')][string]$KeepFrom,
     [Parameter(ParameterSetName = 'Set')][string]$Compare,
     [Parameter(ParameterSetName = 'Set')][string]$MergeInto,
     # After the rows: write them into this tree's tools\release\release-sources.json and rebind the D3D11 records.
@@ -99,8 +117,11 @@ param(
     [Parameter(ParameterSetName = 'Job', Mandatory)][string]$Job,
     # The packages of a built and registered release set (see "5. Packages" above).
     [Parameter(ParameterSetName = 'Package', Mandatory)][switch]$Package,
-    [Parameter(ParameterSetName = 'Package', Mandatory)][string]$From,
-    [Parameter(ParameterSetName = 'Package')][string[]]$Flavours = @('release', 'lab'),
+    [Parameter(ParameterSetName = 'Package', Mandatory)][Parameter(ParameterSetName = 'Repack', Mandatory)][string]$From,
+    [Parameter(ParameterSetName = 'Package')][Parameter(ParameterSetName = 'Repack')][string[]]$Flavours = @('release', 'lab'),
+    # A notes-only repack of the packages of -From (BD-265, repack-notes.ps1): the notes of this tree's
+    # docs\testing\release-notes, every other file byte for byte, then the flavour gate and the installer dry run.
+    [Parameter(ParameterSetName = 'Repack', Mandatory)][switch]$RepackNotes,
     # The user-mode driver tree that the release gates of build-release.ps1 read (BC250_UMD_SOURCE, BC250_UMD_BUILD).
     [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdSource,
     [Parameter(ParameterSetName = 'Package', Mandatory)][string]$UmdBuild,
@@ -110,6 +131,9 @@ param(
     [Parameter(ParameterSetName = 'Package')][string]$PackageGuard,
     # Build the flavours at the same time, each in its own process and worktree (see "5. Packages" above).
     [Parameter(ParameterSetName = 'Package')][switch]$Parallel,
+    # Move the outputs of an earlier package round in -From into <From>\rounds\<name>\ (SHA-256 checked) instead of
+    # refusing them (BD-272, PackageRound.psm1).
+    [Parameter(ParameterSetName = 'Package')][string]$SetAside,
     # The package report; <From>\package-report.json by default. A -Parallel run gives each flavour its own. Not named
     # -Report: PowerShell variable names ignore case, and the release set path uses a $report table.
     [Parameter(ParameterSetName = 'Package')][string]$FlavourReport
@@ -318,6 +342,51 @@ if ($PSCmdlet.ParameterSetName -eq 'Job') {
     exit $script:jobExit
 }
 
+if ($PSCmdlet.ParameterSetName -eq 'Repack') {
+    # 6. A notes-only repack (BD-265). The notes must be committed: the repack takes them from this tree, and a
+    # published package names a commit for each of its texts.
+    $From = [IO.Path]::GetFullPath($From)
+    $python = (Get-Command python -CommandType Application | Select-Object -First 1).Source
+    $rr = [ordered]@{ tool = 'build-release-set'; step = 'repack-notes'; started_utc = Get-Utc; from = $From; flavours = @() }
+    $rrFile = Join-Path $From 'repack-report.json'
+    function Stop-Repack([string]$Why) {
+        $rr.status = 'failed'; $rr.error = $Why; $rr.finished_utc = Get-Utc
+        Write-Json $rrFile $rr
+        "build-release-set -RepackNotes: $Why"
+        exit 1
+    }
+    $notesDir = Join-Path $repo 'docs\testing\release-notes'
+    if (@(& git -C $repo status --porcelain -- docs/testing/release-notes).Count) { Stop-Repack "the notes in $notesDir are not committed" }
+    $rr.notes_commit = (& git -C $repo rev-parse HEAD).Trim()
+    foreach ($flavour in @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ })) {
+        $logs = Join-Path $From "logs\repack-$flavour"
+        New-Item -ItemType Directory -Force $logs | Out-Null
+        $newDir = Join-Path $From "package-notes\$flavour"
+        "$(Get-Utc) repack $flavour (log $logs\repack.log)"
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'repack-notes.ps1') -Package (Join-Path $From "package\$flavour") -Out $newDir -NotesDir $notesDir *> (Join-Path $logs 'repack.log')
+        if ($LASTEXITCODE -ne 0) {
+            @(Get-Content -LiteralPath (Join-Path $logs 'repack.log') -Tail 15) | ForEach-Object { "    $_" }
+            Stop-Repack "repack-notes.ps1 $flavour exit $LASTEXITCODE (log $logs\repack.log)"
+        }
+        $one = Get-Content -LiteralPath (Join-Path $newDir 'repack-report.json') -Raw | ConvertFrom-Json -AsHashtable
+        $top = Join-Path $newDir ([IO.Path]::GetFileNameWithoutExtension($one.zip.file))
+        # The checks of a package build on the new package: the flavour gate bound to its manifest (as build-release.ps1
+        # runs it last) and the host dry run of the installer (as -Package runs it).
+        & $python -I (Join-Path $repo 'tools\quality\flavour_gate.py') --flavour $flavour --package $top `
+            --negative-control 'wow64/d3d12/amdgpu_wddm_vkd3d.dll' --out (Join-Path $logs 'flavour-gate') `
+            --manifest (Join-Path $top 'files\manifest.json') *> (Join-Path $logs 'flavour-gate.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Repack "the flavour gate of the repacked $flavour package fails (log $logs\flavour-gate.log)" }
+        & $shell -NoProfile -File (Join-Path $PSScriptRoot 'test-dryrun.ps1') -Package $top *> (Join-Path $logs 'dryrun.log')
+        if ($LASTEXITCODE -ne 0) { Stop-Repack "the dry run of the repacked $flavour package fails (log $logs\dryrun.log)" }
+        $rr.flavours += [ordered]@{ flavour = $flavour; zip = $one.zip; exe = $one.exe; unchanged_files = $one.unchanged_files; notes = $one.notes }
+        "$(Get-Utc) $flavour zip $($one.zip.new), exe $($one.exe.new), $($one.unchanged_files) files unchanged"
+    }
+    $rr.status = 'ok'; $rr.finished_utc = Get-Utc
+    Write-Json $rrFile $rr
+    "build-release-set -RepackNotes: ok (report $rrFile)"
+    exit 0
+}
+
 if ($PSCmdlet.ParameterSetName -eq 'Package') {
     # 5. Packages. The input is the -Out of a release set run (-From) whose rows are registered: this tree's
     # tools\release\release-sources.json holds every row of <From>\release-sources.rows.json with the same source and
@@ -346,6 +415,17 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     if ($setReport.status -ne 'ok') { Stop-Package "the release set in $From did not end well (status $($setReport.status))" }
     $setVersion = $setReport.version
     $pr.version = $setVersion
+    # Every output of an earlier round that a step of this round refuses, in one message before the first step
+    # (BD-272: tester.34 r7 stopped three times, each time minutes in, at the next output).
+    Import-Module (Join-Path $PSScriptRoot 'PackageRound.psm1') -Force
+    $earlierOutputs = @(Get-PackageRoundOutputs $From @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) $setVersion -Parallel:$Parallel)
+    if ($earlierOutputs.Count) {
+        if (-not $SetAside) { Stop-Package (Format-PackageRoundOutputs $earlierOutputs) }
+        try { $setAsideRecord = Move-PackageRoundOutputs $From $earlierOutputs $SetAside }
+        catch { Stop-Package "-SetAside ${SetAside}: $($_.Exception.Message)" }
+        "$(Get-Utc) package: $($setAsideRecord.outputs.Count) output(s) of an earlier round moved to $($setAsideRecord.round) (set-aside.json)"
+        $pr.set_aside = $setAsideRecord.round
+    }
     $rowsDoc = Read-Json (Join-Path $From 'release-sources.rows.json')
     $registered = Read-Json (Join-Path $PSScriptRoot 'release-sources.json')
     $missing = @()
@@ -397,6 +477,8 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         # flavour and writes its own report; the byte check of both runs here after every child ends.
         function Format-Arg([string]$A) { '"' + ($A -replace '"', '\"') + '"' }
         $children = @()
+        # A package worktree of an earlier run whose folder was deleted stays registered (BD-264).
+        foreach ($p in @(Remove-StaleWorktrees $null $repo $From)) { "$(Get-Utc) removed the registration of $p (its folder is gone)" }
         try {
             foreach ($flavour in $serial) {
                 $wt = Join-Path $From "package-wt-$flavour"
@@ -547,6 +629,10 @@ $planArgs = @($buildReleaseSet, 'plan', '--manifest', $Manifest, '--root', $Root
 if ($Sources) { $planArgs += @('--sources', [IO.Path]::GetFullPath($Sources)) }
 if ($Only.Count) { $planArgs += @('--only', ($Only -join ',')) }
 if ($Version) { $planArgs += @('--version', $Version) }
+if ($KeepFrom) {
+    if (-not $Only.Count) { "build-release-set: -KeepFrom needs -Only (without it every row is built)"; exit 1 }
+    $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom))
+}
 & $python @planArgs
 if ($LASTEXITCODE -ne 0) { "build-release-set: the manifest does not plan (see above)"; exit 1 }
 $planData = Read-Json $planFile
@@ -642,7 +728,29 @@ function Get-PayloadMap($Build, $Results) {
     return $m
 }
 "build-release-set: $($planData.builds.Count) builds$(if ($planData.kept.Count) { ", $($planData.kept.Count) kept from the last run" }), -MaxParallel $MaxParallel, $($planData.jobs_per_slot) jobs per slot ($($planData.logical_processors) logical processors), work $Work"
-foreach ($k in $planData.kept) { "  kept $($k.id): $(@($k.outputs | ForEach-Object { "$($_.sha256.Substring(0, 8)) $($_.path)" }) -join ', ')" }
+foreach ($k in $planData.kept) { "  kept $($k.id): $(@($k.outputs | ForEach-Object { "$($_.sha256.Substring(0, 8)) $($_.path)" }) -join ', ')$(if ($k.imported_from) { " (imported from $($k.imported_from.artifact))" })" }
+# The builds of the report: the kept rows, then the result of each planned row. A planned row that did not start keeps
+# its earlier ok build (planData.carried): this run did not touch its artifact, and the next run in -Out must still
+# find it (BD-244). A kept row that was to be imported and was not (a run that ended before the import) is left out,
+# because its files are not in -Out.
+function Copy-Entry($Entry) { $e = [ordered]@{}; foreach ($key in $Entry.Keys) { $e[$key] = $Entry[$key] }; return $e }
+function Get-ReportBuilds([hashtable]$Results, [switch]$NotImported) {
+    $carried = @{}
+    foreach ($c in @($planData.carried)) { if ($c) { $carried[$c.id] = $c } }
+    $list = @(foreach ($k in $planData.kept) {
+        if ($NotImported -and $k.imported_from) { continue }
+        $e = Copy-Entry $k; $e.kept = $true; $e
+    })
+    $list += @(foreach ($b in $planData.builds) {
+        $r = if ($Results) { $Results[$b.id] } else { $null }
+        if ((-not $r -or $r.status -in 'not-started', 'skipped') -and $carried.ContainsKey($b.id)) {
+            $e = Copy-Entry $carried[$b.id]; $e.carried = $true
+            $e.carried_reason = "this run did not build the row$(if ($r) { " ($($r.status): $($r.error))" })"
+            $e
+        } else { $r ?? [ordered]@{ id = $b.id; status = 'not-started'; definition = $b } }
+    })
+    return $list
+}
 $index = 0
 foreach ($b in $planData.builds) {
     $index++
@@ -668,9 +776,21 @@ if ($Plan) {
 }
 if (-not $gatesPass) {
     $report.status = 'gates-failed'; $report.finished_utc = Get-Utc
+    $report.builds = @(Get-ReportBuilds $null -NotImported)
     Write-Json $reportFile $report
     "build-release-set: a gate fails, so nothing is built (report $reportFile)"
     exit 1
+}
+if (@($planData.kept | Where-Object { $_.imported_from }).Count) {
+    & $python $buildReleaseSet import --plan $planFile
+    if ($LASTEXITCODE -ne 0) {
+        $report.status = 'import-failed'; $report.finished_utc = Get-Utc
+        $report.builds = @(Get-ReportBuilds $null -NotImported)
+        Write-Json $reportFile $report
+        "build-release-set: the import of the -KeepFrom builds fails, so nothing is built (report $reportFile)"
+        exit 1
+    }
+    "$(Get-Utc) imported $(@($planData.kept | Where-Object { $_.imported_from }).Count) kept builds from $($planData.keep_from)"
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -709,6 +829,22 @@ function Update-Measure {
 }
 
 try {
+    # Registrations of trees under -Work whose folder is gone (a -Keep run whose Work folder was deleted, a killed
+    # job): git worktree add refuses their paths. Only those of this -Work go, never those of another lane (BD-264).
+    $treeRepos = @(foreach ($b in $planData.builds) {
+        , @($b.repo, $b.commit); , @($planData.recipe_repository, $b.recipe_commit)
+        foreach ($i in @(if ($b.inputs) { $b.inputs.Values })) { if ($i.repo -and $i.commit) { , @($i.repo, $i.commit) } }
+    })
+    $seen = @{}; $checkouts = @{}
+    foreach ($pair in $treeRepos) {
+        $key = "$($pair[0])@$($pair[1])"
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        $checkouts[(Get-Checkout $ctx $pair[0] $pair[1])] = $true
+    }
+    foreach ($c in $checkouts.Keys) {
+        foreach ($p in @(Remove-StaleWorktrees $ctx $c $Work)) { "$(Get-Utc) removed the registration of $p in $c (its folder is gone)" }
+    }
     # The shared trees, once, before the builds that read them.
     foreach ($s in $planData.shared_trees) {
         Remove-SharedBuildTree $ctx $s.repo $s.commit $s.path $Work
@@ -816,8 +952,7 @@ try {
 
 # ---------------------------------------------------------------------------------------------------------------
 # The report and the rows.
-$report.builds = @(foreach ($k in $planData.kept) { $e = [ordered]@{}; foreach ($key in $k.Keys) { $e[$key] = $k[$key] }; $e.kept = $true; $e })
-$report.builds += @(foreach ($b in $planData.builds) { $results[$b.id] ?? [ordered]@{ id = $b.id; status = 'not-started'; definition = $b } })
+$report.builds = @(Get-ReportBuilds $results)
 $report.finished_utc = Get-Utc
 $report.seconds = [int]([DateTime]::UtcNow - $started).TotalSeconds
 $report.status = if ($failedAny) { 'failed' } else { 'ok' }

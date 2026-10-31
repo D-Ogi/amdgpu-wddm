@@ -781,6 +781,128 @@ class ReleaseSetRuns(unittest.TestCase):
         a = next(f for f in rows_doc["files"] if f["path"] == "payload/a.bin")
         self.assertEqual(a.get("pair_skew"), rows[0]["outputs"][0]["pair_skew"])
 
+    def test_a_deleted_work_folder_leaves_no_registration_that_stops_the_next_run(self):
+        # BD-264: -Keep leaves <Work>\_<hash> registered; after the Work folder went as a folder, the next run
+        # stopped at its start. A killed job leaves the registration of its row tree the same way.
+        rows = [self.ws.row("a", sleep=0), self.ws.row("b", sleep=0, tree="worktree")]
+        manifest = self.ws.manifest(rows)
+        code, out = self.ws.run(manifest, "-Keep")
+        self.assertEqual(code, 0, out)
+        self.assertGreater(len(git(self.ws.repo, "worktree", "list").splitlines()), 1, "-Keep keeps the shared tree")
+        shutil.rmtree(self.ws.work)
+        git(self.ws.repo, "worktree", "add", "--detach", str(self.ws.work / "b" / "s"), "HEAD")
+        other = self.ws.base / "other-lane" / "b" / "s"
+        git(self.ws.repo, "worktree", "add", "--detach", str(other), "HEAD")
+        shutil.rmtree(self.ws.work)
+        shutil.rmtree(other)
+        code, out = self.ws.run(manifest)
+        self.assertEqual(code, 0, out)
+        self.assertIn("removed the registration of " + str(self.ws.work / "b" / "s"), out)
+        listed = git(self.ws.repo, "worktree", "list", "--porcelain").replace("\\", "/")
+        self.assertIn(str(other).replace("\\", "/"), listed, "another lane's registration stays")
+        git(self.ws.repo, "worktree", "prune")
+        self.assertTreesGone()
+
+    def builds(self):
+        return {b["id"]: (b["status"], bool(b.get("kept")), bool(b.get("carried"))) for b in self.ws.report()["builds"]}
+
+    def test_a_gate_failed_run_keeps_the_earlier_builds(self):
+        # BD-244: a run that stopped at the size gate wrote a report with no builds, and the next -Only run in the
+        # same -Out had to build every row again.
+        rows = [self.ws.row("a", sleep=0), self.ws.row("b", sleep=0, extra=["-Payload", "{payload:payload/a.bin}"]),
+                self.ws.row("c", sleep=0)]
+        manifest = self.ws.manifest(rows)
+        code, out = self.ws.run(manifest)
+        self.assertEqual(code, 0, out)
+        self.ws.set_disk(counted=int(500 * GB), warn=int(490 * GB), free=1000 * GB, free_warn=0)
+        code, out = self.ws.run(manifest, "-Only", "b", "-GuardMaxAge", "0")
+        self.assertEqual(code, 1, out)
+        self.assertIn("gate size: FAIL", out)
+        self.assertEqual(self.ws.report()["status"], "gates-failed")
+        self.assertEqual(self.builds(), {"a": ("ok", True, False), "c": ("ok", True, False),
+                                         "b": ("ok", False, True)}, out)
+        # The next plan of the same manifest keeps the same rows, and a run with another -Only still finds b.
+        self.ws.set_disk(counted=0, warn=1000 * GB, free=1000 * GB, free_warn=0)
+        plan, errors = self.ws.plan(manifest, only=["b"])
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(k["id"] for k in plan["kept"]), ["a", "c"])
+        code, out = self.ws.run(manifest, "-Only", "c", "-GuardMaxAge", "0")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.builds(), {"a": ("ok", True, False), "b": ("ok", True, False),
+                                         "c": ("ok", False, False)}, out)
+        rows_doc = json.loads((self.ws.out / "release-sources.rows.json").read_text(encoding="utf-8"))
+        self.assertEqual(sorted(f["path"] for f in rows_doc["files"]), ["payload/a.bin", "payload/b.bin", "payload/c.bin"])
+        self.assertTreesGone()
+
+    def test_keep_from_imports_the_builds_of_an_earlier_round(self):
+        # BD-244, second shape: a row built in an earlier round directory was unknown to the next round.
+        rows = [self.ws.row("a", sleep=0), self.ws.row("b", sleep=0, extra=["-Payload", "{payload:payload/a.bin}"])]
+        manifest = self.ws.manifest(rows)
+        code, out = self.ws.run(manifest)
+        self.assertEqual(code, 0, out)
+        round1 = self.ws.root / "round1"
+        self.ws.out.rename(round1)
+        code, out = self.ws.run(manifest, "-Only", "b")
+        self.assertEqual(code, 1, out)
+        self.assertIn("needs the outputs of row a", out)
+        code, out = self.ws.run(manifest, "-Only", "b", "-KeepFrom", str(round1))
+        self.assertEqual(code, 0, out)
+        self.assertIn("imported from", out)
+        report = self.ws.report()
+        a = next(b for b in report["builds"] if b["id"] == "a")
+        self.assertTrue(a["kept"])
+        self.assertEqual(a["imported_from"]["out"], str(round1))
+        copied = Path(a["outputs"][0]["artifact"])
+        self.assertTrue(copied.is_relative_to(self.ws.out / "artifacts"), copied)
+        self.assertEqual(build_release_set.sha256_file(copied), a["outputs"][0]["sha256"])
+        rows_doc = json.loads((self.ws.out / "release-sources.rows.json").read_text(encoding="utf-8"))
+        files = {f["path"]: f for f in rows_doc["files"]}
+        self.assertEqual(files["payload/a.bin"]["source"], copied.relative_to(self.ws.root).as_posix())
+        self.assertIn(files["payload/a.bin"]["sha256"], (self.ws.root / files["payload/b.bin"]["source"]).read_text())
+        # A changed file at the source is refused before any build.
+        shutil.rmtree(self.ws.out)
+        (round1 / "artifacts" / "release" / "a" / "a.bin").write_text("not the build", encoding="utf-8")
+        shutil.rmtree(self.ws.events)
+        code, out = self.ws.run(manifest, "-Only", "b", "-KeepFrom", str(round1))
+        self.assertEqual(code, 1, out)
+        self.assertIn("is gone or changed", out)
+        self.assertFalse(self.ws.events.exists(), out)
+        code, out = self.ws.run(manifest, "-KeepFrom", str(round1))
+        self.assertEqual(code, 1, out)
+        self.assertIn("-KeepFrom needs -Only", out)
+        self.assertTreesGone()
+
+    def test_a_moved_recipe_commit_keeps_the_build_when_the_recipe_is_the_same(self):
+        # BD-244: the recipe commit of the manifest moved; a hand edit set the old one per row after an empty
+        # git diff. The tool now makes that check itself and keeps the commit that built the row in its rows.
+        (self.ws.repo / "sub").mkdir()
+        (self.ws.repo / "sub" / "stub.ps1").write_bytes(STUB)
+        c1 = self.ws.commit("a recipe in a directory of its own", name="sub/README.txt")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "origin")
+
+        def rows(recipe_commit):
+            return [self.ws.row("a", sleep=0, recipe="sub/stub.ps1", recipe_commit=recipe_commit),
+                    self.ws.row("b", sleep=0, extra=["-Payload", "{payload:payload/a.bin}"])]
+        code, out = self.ws.run(self.ws.manifest(rows(c1), recipe_commit=c1))
+        self.assertEqual(code, 0, out)
+        c2 = self.ws.commit("a change outside the recipe directory")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "origin")
+        code, out = self.ws.run(self.ws.manifest(rows(c2), recipe_commit=c2), "-Only", "b")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"recipe commit {c2[:8]} in the manifest, {c1[:8]} built it", out)
+        rows_doc = json.loads((self.ws.out / "release-sources.rows.json").read_text(encoding="utf-8"))
+        a = next(f for f in rows_doc["files"] if f["path"] == "payload/a.bin")
+        self.assertEqual(a["built_from"]["recipe_commit"], c1)
+        c3 = self.ws.commit("# a change of the recipe\n", name="sub/stub.ps1")
+        git(self.ws.repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+        git(self.ws.repo, "fetch", "-q", "origin")
+        code, out = self.ws.run(self.ws.manifest(rows(c3), recipe_commit=c3), "-Only", "b")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"sub differ between the recipe commits {c1[:8]} and {c3[:8]}", out)
+        self.assertTreesGone()
+
 
 if __name__ == "__main__":
     unittest.main()

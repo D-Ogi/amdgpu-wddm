@@ -65,6 +65,11 @@ python tools/win/target.py pull C:\BC250\mon\log\2026-09-21.log $env:BC250_ROOT\
 Inline PowerShell through Git Bash gets mangled (`$_`, quotes, backslashes): put anything with punctuation in
 a `.ps1` file and use `ps`. There is no scp on the target, so `push` and `pull` pipe a tar through ssh.
 
+`ps` exits with the exit code of the script, and `run` with the exit code of its command: 0 when the last
+statement succeeds, else the last native exit code (1 for a failed cmdlet). The lab's sshd shell ends with 1 for
+every failed native call, so both command lines end with `; exit $LASTEXITCODE` (BD-267). A tool that calls
+`Target.ssh` with its own `powershell -File` line adds the same end.
+
 ### Configuration
 
 The addresses and key paths are **not** in this repository. They come from a JSON file outside it, by default

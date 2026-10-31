@@ -81,6 +81,12 @@ pwsh -File tools\release\build-release.ps1 -SetupApp <setup build folder> [-Rebu
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
+The gates of `build-release.ps1` read this repository as it is on disk, and the package names its commit. So the
+script refuses a tree with uncommitted or untracked files, and it stops when the tree changes before the quality
+suite or while the suite runs (`TreeState.psm1`, BD-263). A lab candidate (`-NoProvenance`) can start from a dirty
+tree, but that tree must not change either. `<Out>\quality-tree.json` records the commit and the uncommitted entries
+that the gates read.
+
 `-Package` of `test-dryrun.ps1`, `test-offline.ps1` and `test-engine-events.ps1` takes the folder the zip unpacks
 to, as above, or the package root `files\` under it: each script takes the one that holds `manifest.json`. Their
 scratch folder lands beside the unpacked release, never inside it.
@@ -339,6 +345,10 @@ into its image), or one shared work tree of the commit (`tree: shared`). A share
 build ends. When a build ends, its outputs and the PDB of each image go to `<Out>\artifacts\<flavour>\<row id>`,
 its tree is removed, and its logs stay in `<Out>\logs\<row id>`. A failed build fails the release set. Then no new build
 starts, unless `-KeepGoing` is given. A build that reads the outputs of a failed build never starts.
+`-Keep` keeps the trees, and they stay registered as git work trees. Before its first tree, a run removes each
+registration under its own `-Work` whose folder is gone. It does not remove a locked registration or the registration
+of another folder, so the trees of other lanes stay. A kept shared tree is removed when it is clean, also with its
+submodules (BD-264).
 
 The `tests` of a row are its host tests. They run on the output of the build before its tree is removed. The numbers
 of their summary lines go into the report.
@@ -359,7 +369,14 @@ pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-t
 
 `-Plan` prints the gates and each build with its command line, and builds nothing. `-Only` builds only the rows that
 it names (ids or wildcards). The other rows keep the artifacts of the last run in `-Out`, if the manifest row did not
-change. `-Compare` compares the rows with a `release-sources.json`. Each output of a row that claims a deterministic
+change. A row that changed only in its recipe commit keeps its artifact when the directory of its recipe is the same
+at the two commits (`git diff`). The plan prints the two commits, and the rows give the commit that
+built the artifact. A run that stops before a build starts writes a report that keeps the earlier builds: the kept
+rows, and the earlier build of each row that it did not build (`carried`). Thus a failed gate does not make the next
+run build every row again (BD-244). `-KeepFrom <dir>` takes the builds of another `-Out`, for example an earlier
+round, for the rows that `-Only` does not name and that `-Out` has no build of. The same rules apply. The tool checks
+the SHA-256 of each file at the source, copies the files into `<Out>\artifacts` and checks the copies before the
+first build. `-Compare` compares the rows with a `release-sources.json`. Each output of a row that claims a deterministic
 build must have the same bytes, or the same image without its signature. `-Out` must be under `BC250_ROOT`, because
 a row names its source relative to that root.
 
@@ -378,6 +395,11 @@ checks the fourth:
    window and copies the router inputs of the quality gates. Then it runs `build-release.ps1` with
    `-BuildRecords <Out>\artifacts`. The release flavour also writes the submission CAB. The packages go to
    `<Out>\package\<flavour>`, and their hashes go to `<Out>\package-report.json`.
+   Each step refuses an output of an earlier round in `<Out>`. Before the first step, the tool names all of these
+   outputs in one message: the setup window, the package and the submission CAB of each flavour, and with
+   `-Parallel` the worktree of each flavour. `-SetAside <name>` moves them into `<Out>\rounds\<name>`. The tool
+   records the SHA-256 of each file before and after the move in `set-aside.json` (BD-272). It does not move a
+   worktree: remove it with `git worktree remove`.
    Then the host dry run of the installer (`test-dryrun.ps1`) runs on each package, and `flavour_bytes.py` checks
    the Mesa DLLs of both packages (BD-167): no lab-only string in a release DLL, and in each lab DLL every lab-only
    string that its Mesa tree holds.
@@ -395,6 +417,25 @@ git commit --only -- tools/release/release-sources.json   (then push)
 pwsh -File tools\release\build-release-set.ps1 -Package -From <dir> -UmdSource <Mesa tree> -UmdBuild <its build>
 pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -LocalDir <component zips>
 pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -Download   (after the upload)
+```
+
+The package ships `files\RELEASE-NOTES.md` and its translations. The setup window displays them, and
+`manifest.json` gives the SHA-256 and size of each. When the notes change after the gates ran on the package, a rebuild is not the
+fix: it changes the KMD bytes and the gates must run again. `-RepackNotes -From <dir>` makes a notes-only repack
+of each flavour in `<dir>\package-notes\<flavour>` with `repack-notes.ps1` (BD-265):
+
+1. The old package must agree with its `manifest.json` and with its zip, file for file.
+2. The repack takes the committed notes of `docs\testing\release-notes` by the rules of `build-release.ps1`. The set
+   of notes files must stay the same.
+3. `manifest.json` changes only in the sha256 and size of each notes entry. Every other file stays byte for byte.
+4. The tool makes the zip and the single exe again, with `make-setup-exe.ps1 -Check -ReleaseZip`.
+5. Then the flavour gate and the installer dry run run on the new package.
+
+`<dir>\repack-report.json` gives the new zip and exe hashes. The driver hashes do not change, but a lab install of
+the new zip is still part of the release gates.
+
+```
+pwsh -File tools\release\build-release-set.ps1 -RepackNotes -From <dir> [-Flavours release,lab]
 ```
 
 `-UmdSource` and `-UmdBuild` name the user-mode driver tree and its build database that the release gates of
