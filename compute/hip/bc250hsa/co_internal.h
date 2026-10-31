@@ -36,6 +36,8 @@
 #define BC250HSA_EF_AMDGPU_MACH 0x0FF
 #define BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX1013 0x042
 #define BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX10_1_GENERIC 0x052
+/* gfx1010, which the loader takes only under BC250HSA_TARGET_ALIAS_GFX1010 (bc250hsa.h). */
+#define BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX1010 0x033
 
 /* e_ident[EI_ABIVERSION]: 3 is code object version 5, 4 is version 6. */
 #define BC250HSA_ELFABIVERSION_AMDGPU_HSA_V5 3
@@ -50,8 +52,13 @@
 #define BC250HSA_SHT_DYNSYM  11u
 #define BC250HSA_SHT_STRTAB  3u
 
-/* The one relocation type a linked gfx1013 code object needs: B + A. */
+/* The relocation types of a linked code object (AMDGPUUsage.rst "Relocation Records"):
+ * RELATIVE64 is B + A, and ABS64 is S + A, where S is a symbol of the object itself.
+ * MEASURED: the Tensile code objects of rocBLAS 10.3.0a20261030 (gfx1010) carry one ABS64
+ * record each, against the local variable _ZL27hip_f8_bias_mode_bit_device. */
+#define BC250HSA_R_AMDGPU_ABS64      3u
 #define BC250HSA_R_AMDGPU_RELATIVE64 13u
+#define BC250HSA_SHN_UNDEF           0u
 
 /* NT_AMDGPU_METADATA, AMDGPUUsage.rst "Code Object Metadata". */
 #define BC250HSA_NT_AMDGPU_METADATA 32u

@@ -77,13 +77,30 @@ struct Var {
     bool        resolved = false;
 };
 
+struct ModuleFunction;
+
+// Where the code object of a module comes from.
+//   kFatBinary  a clang offload bundle behind a HIPF wrapper, read at registration
+//   kKpack      a HIPK wrapper of a ROCm multi-architecture build: the wrapper names msgpack
+//               metadata, and the code object lives in a .kpack archive beside the binary,
+//               read through rocm_kpack.dll on the first launch (hip_kpack.cpp)
+//   kProgram    an image that hipModuleLoadData received, loaded at once
+enum class ModuleKind { kFatBinary, kKpack, kProgram };
+
 // One registered fat binary. The bundle is read at registration, because a wrong target must be
 // reported early, and the code object is loaded on the first launch, so a process that starts
 // no kernel pays nothing (design section 4.2).
 struct Module {
+    ModuleKind        kind = ModuleKind::kFatBinary;
     const void*       wrapper = nullptr;   // the .hipFatBinSegment wrapper that clang passes
     const void*       image = nullptr;     // the code object inside the bundle, not copied
     size_t            image_bytes = 0;
+    // kKpack only: the metadata the wrapper names, and the code object index that the kpack
+    // tool wrote into the wrapper's fourth field.
+    const void*       hipk_metadata = nullptr;
+    uint32_t          co_index = 0;
+    // kProgram only: the functions hipModuleGetFunction handed out. They die with the module.
+    std::vector<ModuleFunction*> program_functions;
     bc250hsa_module*  loaded = nullptr;
     bc250hsa_status   bundle_status = BC250HSA_OK;
     bc250hsa_status   load_status = BC250HSA_OK;
@@ -107,6 +124,42 @@ struct Function {
     // kept and reported, so that a program which sets a value above the hardware limit learns
     // it at the call that sets it and not at the launch.
     int                     dynamic_group_max = -1;
+};
+
+// One kernel of a module that hipModuleLoadData loaded, as hipModuleGetFunction returns it. The
+// handle is the address of this record, and the record lives in State::module_functions until
+// hipModuleUnload, so a launch can test a handle before it reads one.
+#define BC250_HIP_FUNCTION_MAGIC 0x46554E43u /* 'FUNC' */
+struct ModuleFunction {
+    uint32_t                magic = BC250_HIP_FUNCTION_MAGIC;
+    Module*                 module = nullptr;
+    std::string             name;
+    const bc250hsa_kernel*  kernel = nullptr;
+    int                     dynamic_group_max = -1;
+};
+
+// The kernel of a launch: a host stub of __hipRegisterFunction, or a hipFunction_t of
+// hipModuleGetFunction. Exactly one of the two is set.
+struct KernelRef {
+    const void* host_stub = nullptr;
+    const void* module_function = nullptr;
+};
+
+// The counters of the AMD ABI face (amdhip64_7.dll): how the device code of the ROCm user
+// libraries reached this runtime and what it refused. bc250amdGetFaceCounters reads them.
+struct FaceCounters {
+    uint64_t kpack_modules = 0;          // HIPK wrappers registered
+    uint64_t kpack_loads = 0;            // code objects rocm_kpack.dll returned
+    uint64_t kpack_refusals = 0;         // code objects it did not return
+    uint64_t kpack_library_missing = 0;  // loads refused because rocm_kpack.dll is not there
+    uint64_t bundle_alias_picks = 0;     // HIPF bundles that held gfx1010 code only
+    uint64_t alias_loads = 0;            // code objects with e_flags mach gfx1010 that loaded
+    uint64_t compressed_refusals = 0;    // compressed offload bundles (CCOB)
+    uint64_t program_loads = 0;          // hipModuleLoadData and its two siblings, loaded
+    uint64_t program_refusals = 0;
+    uint64_t module_launches = 0;        // hipModuleLaunchKernel and hipExtModuleLaunchKernel
+    uint64_t packed_launches = 0;        // launches whose arguments came in one packed buffer
+    int32_t  last_kpack_error = 0;       // the kpack_error_t of the last refusal
 };
 
 // pins and busy_fence are the lifetime of a GPU copy or fill that names this allocation and
@@ -207,6 +260,9 @@ struct State {
     std::vector<Module*>                    modules;
     std::unordered_map<const void*, Module*> module_by_wrapper;
     std::unordered_map<const void*, Function> functions;   // keyed by the host stub address
+    // The hipFunction_t handles that exist now, keyed by the handle (the record's address).
+    std::unordered_map<const void*, ModuleFunction*> module_functions;
+    FaceCounters                            face;
     std::map<uint64_t, Allocation>          by_va;         // ordered, for a range lookup
     std::unordered_map<const void*, uint64_t> va_by_host;
     std::vector<KernargBuffer>              kernargs;
@@ -473,6 +529,45 @@ void       kernarg_settle(KernargLease& lease, uint64_t fence);
 
 // Loads the code object of a module, once. The caller holds the lock.
 bc250hsa_status module_ensure_loaded(Module* module);
+
+// Is this the AMD ABI face, amdhip64_7.dll? BC250_HIP_AMD_ABI=1 builds it from the same sources
+// (build-amd-abi.ps1). Only that build takes gfx1010 code objects and HIPK wrappers, because only
+// the ROCm user libraries bring them.
+#if defined(BC250_HIP_AMD_ABI) && BC250_HIP_AMD_ABI
+#define BC250_HIP_AMD_ABI_BUILD 1
+#else
+#define BC250_HIP_AMD_ABI_BUILD 0
+#endif
+
+// Loads one code object for this module (hip_module.cpp): applies the target alias of the AMD
+// face, counts a gfx1010 object, and calls the loader. The caller holds the lock.
+bc250hsa_status module_load_image(Module* module, const void* image, size_t bytes);
+
+// AMD's hipErrorNoBinaryForGpu, which our hipError_t does not name: a code object exists and none
+// of it is for this device. The AMD face returns it where AMD's runtime does.
+constexpr hipError_t kErrorNoBinaryForGpu = static_cast<hipError_t>(209);
+
+// hipModuleLoadData of the AMD face (hip_module.cpp): an ELF code object, a clang offload
+// bundle or a HIPF wrapper, loaded at once into a kProgram module that s.modules holds. bytes 0
+// means that the size comes from the image's own headers. The caller holds the lock.
+hipError_t program_module_load(const void* image, size_t bytes, Module** out);
+
+// The code object of a HIPK module, out of its .kpack archive (hip_kpack.cpp). On success *image
+// is a buffer that kpack_release_image frees. The caller holds the lock.
+bc250hsa_status kpack_fetch(Module* module, void** image, size_t* bytes);
+void            kpack_release_image(void* image);
+
+// The kernel behind a KernelRef, with the code object loaded on first use (hip_launch.cpp).
+hipError_t resolve_kernel_ref(const KernelRef& ref, const bc250hsa_kernel** out);
+
+// The launch path of hipLaunchKernel, for every entry point that starts a kernel. `args` is one
+// pointer per explicit argument, or null when `packed` holds the explicit arguments already laid
+// out at their metadata offsets (the HIP_LAUNCH_PARAM_BUFFER_POINTER form of `extra`). The caller
+// holds the lock through `guard`.
+hipError_t launch_kernel(Guard& guard, const char* call, const KernelRef& ref,
+                         const uint32_t grid[3], const uint32_t block[3], size_t shared_bytes,
+                         hipStream_t stream, void** args, const void* packed,
+                         size_t packed_bytes);
 
 // Caller holds state lock; output owns every byte through recorded submit.
 hipError_t prepare_dispatch_record(const bc250hsa_dispatch& dispatch,

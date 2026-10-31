@@ -412,12 +412,39 @@ static void check_relocations(void)
         mod = NULL;
     }
 
-    /* Any other relocation type is refused. R_AMDGPU_ABS64 is 3 and R_AMDGPU_REL64
-     * is 4; neither may be applied as B + A. */
+    /* R_AMDGPU_ABS64 is S + A against a symbol that the object defines, through the
+     * symbol table that the relocation section links to. Here S is "g", the start of
+     * the load segment, so the result is the loaded address plus A. */
     build_synthetic(b, 1u);
-    set_rela(b, 0u, SYN_PATCH_VA, 0u, 3u, 0x40);
+    put32(b, 64u + 2u * 56u + 256u + 40u, 2u);   /* .rela sh_link: .dynsym */
+    set_rela(b, 0u, SYN_PATCH_VA, 1u, BC250HSA_R_AMDGPU_ABS64, 0x8);
+    CHECK_STATUS(bc250hsa_module_load_alloc(&alloc, b, SYN_BYTES, &mod), BC250HSA_OK);
+    if (mod != NULL) {
+        uint64_t patched = 0;
+        CHECK_STATUS(bc250hsa_module_range(mod, &va, &bytes), BC250HSA_OK);
+        memcpy(&patched, (const uint8_t*)((uintptr_t)va) + (SYN_PATCH_VA - SYN_LOAD_VA), 8);
+        CHECK_U64(patched, va + 0x8u);
+        bc250hsa_module_unload(mod);
+        mod = NULL;
+    }
+    /* ABS64 against an undefined symbol has no object to take it from. */
+    build_synthetic(b, 1u);
+    put32(b, 64u + 2u * 56u + 256u + 40u, 2u);
+    put16(b, SYN_SYM_OFF + 24u + 6u, 0u);        /* "g" becomes SHN_UNDEF */
+    set_rela(b, 0u, SYN_PATCH_VA, 1u, BC250HSA_R_AMDGPU_ABS64, 0x8);
     CHECK_STATUS(bc250hsa_module_load_alloc(&alloc, b, SYN_BYTES, &mod), BC250HSA_EBADRELOC);
     CHECK(mod == NULL);
+    /* ABS64 that names no symbol, and ABS64 when the section links to no symbol table. */
+    build_synthetic(b, 1u);
+    set_rela(b, 0u, SYN_PATCH_VA, 0u, BC250HSA_R_AMDGPU_ABS64, 0x40);
+    CHECK_STATUS(bc250hsa_module_load_alloc(&alloc, b, SYN_BYTES, &mod), BC250HSA_EBADRELOC);
+    CHECK(mod == NULL);
+    build_synthetic(b, 1u);
+    set_rela(b, 0u, SYN_PATCH_VA, 1u, BC250HSA_R_AMDGPU_ABS64, 0x40);
+    CHECK_STATUS(bc250hsa_module_load_alloc(&alloc, b, SYN_BYTES, &mod), BC250HSA_EBADRELOC);
+    CHECK(mod == NULL);
+
+    /* Any other relocation type is refused, never applied as B + A. */
     build_synthetic(b, 1u);
     set_rela(b, 0u, SYN_PATCH_VA, 0u, BC250HSA_R_AMDGPU_RELATIVE64 + 1u, 0x40);
     CHECK_STATUS(bc250hsa_module_load_alloc(&alloc, b, SYN_BYTES, &mod), BC250HSA_EBADRELOC);

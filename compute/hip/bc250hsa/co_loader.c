@@ -17,6 +17,26 @@
 #include "internal.h"
 
 /* --------------------------------------------------------------------------
+ * The target alias
+ *
+ * A process-wide setting, because the loader has no device handle in the host test and
+ * the choice belongs to the runtime that loads the objects, not to one module. It is
+ * written once, before the first load, and read on every load.
+ * ------------------------------------------------------------------------ */
+
+static volatile long g_target_alias = 0;
+
+void bc250hsa_target_alias_set(uint32_t flags)
+{
+    g_target_alias = (long)(flags & BC250HSA_TARGET_ALIAS_GFX1010);
+}
+
+uint32_t bc250hsa_target_alias_get(void)
+{
+    return (uint32_t)g_target_alias;
+}
+
+/* --------------------------------------------------------------------------
  * The offload bundle
  * ------------------------------------------------------------------------ */
 
@@ -236,6 +256,11 @@ static bc250hsa_status check_header(const elf_view* v)
         return BC250HSA_EBADABIVERSION;
     }
     mach = eh->e_flags & BC250HSA_EF_AMDGPU_MACH;
+    if (mach == BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX1010 &&
+        (bc250hsa_target_alias_get() & BC250HSA_TARGET_ALIAS_GFX1010) != 0u) {
+        bc250hsa_log(BC250HSA_LOG_INFO, "code object for gfx1010 loads on gfx1013 under the alias");
+        return BC250HSA_OK;
+    }
     if (mach != BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX1013 &&
         mach != BC250HSA_EF_AMDGPU_MACH_AMDGCN_GFX10_1_GENERIC) {
         bc250hsa_log(BC250HSA_LOG_ERROR, "code object e_flags mach 0x%03x is not gfx1013", mach);
@@ -397,6 +422,25 @@ static int lookup_dynsym(const struct bc250hsa_module* mod, const char* name,
     return 0;
 }
 
+/* Symbol `index` of the symbol table that the relocation section `rela` links to. */
+static int rela_symbol(const elf_view* v, const bc250hsa_elf64_shdr* rela, uint32_t index,
+                       bc250hsa_elf64_sym* out)
+{
+    const bc250hsa_elf64_shdr* tab;
+
+    if (index == 0u || rela->sh_link >= v->eh->e_shnum) {
+        return 0;
+    }
+    tab = shdr_at(v, rela->sh_link);
+    if (tab == NULL || tab->sh_type != BC250HSA_SHT_DYNSYM ||
+        tab->sh_entsize != sizeof(bc250hsa_elf64_sym) || !in_file(v, tab->sh_offset, tab->sh_size) ||
+        (uint64_t)index >= tab->sh_size / sizeof(bc250hsa_elf64_sym)) {
+        return 0;
+    }
+    memcpy(out, v->bytes + tab->sh_offset + (uint64_t)index * sizeof(*out), sizeof(*out));
+    return 1;
+}
+
 static bc250hsa_status apply_relocations(const elf_view* v, struct bc250hsa_module* mod,
                                         uint64_t bias)
 {
@@ -420,19 +464,41 @@ static bc250hsa_status apply_relocations(const elf_view* v, struct bc250hsa_modu
             bc250hsa_elf64_rela rel;
             uint64_t            value;
             uint64_t            where;
+            uint32_t            type;
+            uint32_t            sym_index;
 
             memcpy(&rel, v->bytes + sh->sh_offset + i * sizeof(rel), sizeof(rel));
-            if (BC250HSA_ELF64_R_TYPE(rel.r_info) != BC250HSA_R_AMDGPU_RELATIVE64) {
-                bc250hsa_log(BC250HSA_LOG_ERROR, "relocation type %u is not R_AMDGPU_RELATIVE64",
-                             BC250HSA_ELF64_R_TYPE(rel.r_info));
-                return BC250HSA_EBADRELOC;
-            }
-            /* A record that names a symbol is an unresolved external from a
-             * -fgpu-rdc build with no device link step. */
-            if (BC250HSA_ELF64_R_SYM(rel.r_info) != 0u) {
+            type = BC250HSA_ELF64_R_TYPE(rel.r_info);
+            sym_index = BC250HSA_ELF64_R_SYM(rel.r_info);
+            if (type == BC250HSA_R_AMDGPU_RELATIVE64) {
+                /* A RELATIVE64 record that names a symbol is an unresolved external
+                 * from a -fgpu-rdc build with no device link step. */
+                if (sym_index != 0u) {
+                    bc250hsa_log(BC250HSA_LOG_ERROR,
+                                 "relocation names symbol %u: the object is not device linked",
+                                 sym_index);
+                    return BC250HSA_EBADRELOC;
+                }
+                value = bias + (uint64_t)rel.r_addend;   /* B + A */
+            } else if (type == BC250HSA_R_AMDGPU_ABS64) {
+                bc250hsa_elf64_sym sym;
+                /* S + A. Only a symbol that the object defines itself: there is no
+                 * other object to take an undefined one from. */
+                if (!rela_symbol(v, sh, sym_index, &sym) || sym.st_shndx == BC250HSA_SHN_UNDEF) {
+                    bc250hsa_log(BC250HSA_LOG_ERROR,
+                                 "R_AMDGPU_ABS64 names symbol %u, which the object does not define",
+                                 sym_index);
+                    return BC250HSA_EBADRELOC;
+                }
+                if (sym.st_value < mod->lowest_vaddr ||
+                    sym.st_value - mod->lowest_vaddr > mod->image.bytes) {
+                    return BC250HSA_EBADRELOC;
+                }
+                value = bias + sym.st_value + (uint64_t)rel.r_addend;
+            } else {
                 bc250hsa_log(BC250HSA_LOG_ERROR,
-                             "relocation names symbol %u: the object is not device linked",
-                             BC250HSA_ELF64_R_SYM(rel.r_info));
+                             "relocation type %u is not R_AMDGPU_RELATIVE64 or R_AMDGPU_ABS64",
+                             type);
                 return BC250HSA_EBADRELOC;
             }
             if (rel.r_offset < mod->lowest_vaddr) {
@@ -442,7 +508,6 @@ static bc250hsa_status apply_relocations(const elf_view* v, struct bc250hsa_modu
             if (where + 8u > mod->image.bytes) {
                 return BC250HSA_EBADRELOC;
             }
-            value = bias + (uint64_t)rel.r_addend;   /* B + A */
             memcpy(host + where, &value, 8);
         }
     }

@@ -198,6 +198,29 @@ static void log_budget(struct bc250hsa_device* dev, D3DKMT_MEMORY_SEGMENT_GROUP 
                  (unsigned long long)query.AvailableForReservation);
 }
 
+bc250hsa_status bc250hsa_memory_budget_read(struct bc250hsa_device* dev,
+                                            bc250hsa_memory_budget* out)
+{
+    D3DKMT_QUERYVIDEOMEMORYINFO query;
+
+    if (dev == NULL || out == NULL || out->struct_bytes != (uint32_t)sizeof(*out)) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    out->struct_bytes = (uint32_t)sizeof(*out);
+    if (query_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, &query)) {
+        out->valid |= BC250HSA_BUDGET_LOCAL;
+        out->local_budget = query.Budget;
+        out->local_used = query.CurrentUsage;
+    }
+    if (query_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, &query)) {
+        out->valid |= BC250HSA_BUDGET_NON_LOCAL;
+        out->non_local_budget = query.Budget;
+        out->non_local_used = query.CurrentUsage;
+    }
+    return out->valid != 0u ? BC250HSA_OK : BC250HSA_EUNSUPPORTED;
+}
+
 /* Whether `bytes` more of device-local memory stay inside this process's local budget. The
  * check comes before the residency: a MakeResident past the budget can return success and
  * fail later on the paging queue, and VidMm then puts the whole device in error with
