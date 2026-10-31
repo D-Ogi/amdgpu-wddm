@@ -18,13 +18,23 @@
 # that the one file and the zip of a release are proven to hold the same files. The release recipe (build-release.ps1) always runs it, so a package whose single exe does not
 # hold the files of its zip cannot be published.
 #
-# Nothing here signs anything: the appended sections would break an Authenticode signature of the exe, and the
-# release signs the driver package and its catalog, not setup.exe (tools\release\README.md).
+# Signatures (BD-160). An Authenticode signature is valid only as the last thing in a file: its certificate table
+# is named by the security directory of the PE header, and every other byte is hashed. Up to tester.35 the program
+# image here was the signed setup.exe, so its certificate table stood in the middle of the single file, and Windows
+# read the single file as not signed. This tool therefore takes the signature of setup.exe off the program image
+# (the setup.exe inside the payload keeps its own), and pads the file list so that the file ends on 8 bytes, the
+# alignment of a certificate table. build-release.ps1 then signs the whole single file. The trailer then stands
+# directly in front of the certificate table, where Payload.cs and -Check look for it.
+#
+# -CheckSigned checks a single file that was signed after this tool wrote it, and writes nothing: the file must be
+# the bytes this tool writes for the same release, except for the security directory entry and the checksum of the
+# PE header, followed by exactly the certificate table that entry names. Then the checks of -Check run on it.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$PackageTop,
     [Parameter(Mandatory)][string]$Out,
     [switch]$Check,
+    [switch]$CheckSigned,
     [string]$ReleaseZip
 )
 $ErrorActionPreference = 'Stop'
@@ -33,6 +43,26 @@ $magic = [Text.Encoding]::ASCII.GetBytes('AMDGPU-WDDM-PKG1')   # 16 bytes
 $format = 1
 $trailerSize = 120
 $utf8 = New-Object Text.UTF8Encoding $false
+
+if ($CheckSigned) { $Check = $true }
+
+# The security directory entry of a PE image (data directory 4), from the first bytes of the file. Returns $null for
+# bytes that are not a PE image. entry and checksum are the file offsets of the 8-byte entry and of the 4-byte
+# CheckSum field; offset and size are the values of the entry (a file offset, not an RVA).
+function Get-PeSecurityEntry([byte[]]$Bytes) {
+    if ($Bytes.Length -lt 0x40 -or $Bytes[0] -ne 0x4D -or $Bytes[1] -ne 0x5A) { return $null }
+    $pe = [BitConverter]::ToInt32($Bytes, 0x3C)
+    if ($pe -lt 0x40 -or $pe + 24 + 2 -gt $Bytes.Length) { return $null }
+    if ([BitConverter]::ToUInt32($Bytes, $pe) -ne 0x00004550) { return $null }
+    $opt = $pe + 24
+    $magicOpt = [BitConverter]::ToUInt16($Bytes, $opt)
+    if ($magicOpt -eq 0x20B) { $dirs = $opt + 112 } elseif ($magicOpt -eq 0x10B) { $dirs = $opt + 96 } else { return $null }
+    $count = [BitConverter]::ToUInt32($Bytes, $dirs - 4)
+    $entry = $dirs + 4 * 8
+    if ($count -lt 5 -or $entry + 8 -gt $Bytes.Length) { return $null }
+    [pscustomobject]@{ entry = $entry; checksum = $opt + 64
+        offset = [int64][BitConverter]::ToUInt32($Bytes, $entry); size = [int64][BitConverter]::ToUInt32($Bytes, $entry + 4) }
+}
 
 function Get-Sha256Hex([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant() }
 function Get-BytesSha256Hex([byte[]]$Bytes) {
@@ -88,9 +118,27 @@ $listBytes = $utf8.GetBytes((($lines -join "`n") + "`n"))
 
 # 3. setup.exe, the two sections and the trailer, in one file.
 $setupBytes = [IO.File]::ReadAllBytes($setup)
+$stubSecurity = Get-PeSecurityEntry $setupBytes
+if (-not $stubSecurity) { throw "$setup is not a PE image" }
+if ($stubSecurity.size -ne 0) {
+    # A signed setup.exe: its certificate table must be its last bytes, and it comes off together with the entry
+    # that names it. The program image is then the unsigned window, as the linker wrote it plus the zero padding
+    # that signtool put in front of the table.
+    if ($stubSecurity.offset + $stubSecurity.size -ne $setupBytes.Length) {
+        throw "the signature of $setup is not at the end of the file (offset $($stubSecurity.offset), size $($stubSecurity.size), file $($setupBytes.Length))"
+    }
+    $unsigned = New-Object byte[] $stubSecurity.offset
+    [Array]::Copy($setupBytes, 0, $unsigned, 0, $unsigned.Length)
+    [Array]::Clear($unsigned, [int]$stubSecurity.entry, 8)
+    "  the signature of setup.exe ($($stubSecurity.size) bytes) is not part of the program image of the single file"
+    $setupBytes = $unsigned
+}
 $payloadBytes = [IO.File]::ReadAllBytes($zipPath)
 $payloadOffset = [int64]$setupBytes.Length
 $listOffset = $payloadOffset + $payloadBytes.Length
+# Zero bytes after the file list, so that the trailer ends on 8 bytes: signtool puts a certificate table on that
+# boundary, and with no padding of its own the trailer stays directly in front of the table.
+$padBytes = New-Object byte[] ((8 - (($listOffset + $listBytes.Length) % 8)) % 8)
 $trailer = New-Object byte[] $trailerSize
 [Array]::Copy($magic, 0, $trailer, 0, $magic.Length)
 [Array]::Copy([BitConverter]::GetBytes([int32]$format), 0, $trailer, 16, 4)
@@ -104,24 +152,87 @@ function Copy-HexInto([byte[]]$Target, [int]$At, [string]$Hex) {
 }
 Copy-HexInto $trailer 56 (Get-BytesSha256Hex $payloadBytes)
 Copy-HexInto $trailer 88 (Get-BytesSha256Hex $listBytes)
-$outStream = [IO.File]::Open($Out, [IO.FileMode]::Create, [IO.FileAccess]::Write)
-try {
-    $outStream.Write($setupBytes, 0, $setupBytes.Length)
-    $outStream.Write($payloadBytes, 0, $payloadBytes.Length)
-    $outStream.Write($listBytes, 0, $listBytes.Length)
-    $outStream.Write($trailer, 0, $trailer.Length)
-} finally { $outStream.Dispose() }
+$unsignedLength = [int64]$setupBytes.Length + $payloadBytes.Length + $listBytes.Length + $padBytes.Length + $trailer.Length
+if (-not $CheckSigned) {
+    $outStream = [IO.File]::Open($Out, [IO.FileMode]::Create, [IO.FileAccess]::Write)
+    try {
+        $outStream.Write($setupBytes, 0, $setupBytes.Length)
+        $outStream.Write($payloadBytes, 0, $payloadBytes.Length)
+        $outStream.Write($listBytes, 0, $listBytes.Length)
+        $outStream.Write($padBytes, 0, $padBytes.Length)
+        $outStream.Write($trailer, 0, $trailer.Length)
+    } finally { $outStream.Dispose() }
+} else {
+    # The signed file against the bytes this tool writes. signtool changes two fields of the PE header (the
+    # security directory entry and the checksum) and appends the certificate table; nothing else may differ.
+    if (-not (Test-Path -LiteralPath $Out -PathType Leaf)) { throw "-CheckSigned: no $Out" }
+    $signedStream = [IO.File]::Open($Out, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        $headLength = [int][Math]::Min([int64]4096, $signedStream.Length)
+        $head = New-Object byte[] $headLength
+        if ($signedStream.Read($head, 0, $headLength) -ne $headLength) { throw '-CheckSigned: the header could not be read' }
+        $signed = Get-PeSecurityEntry $head
+        if (-not $signed -or $signed.size -eq 0) { throw "-CheckSigned: $Out carries no signature" }
+        if ($signed.entry -ne $stubSecurity.entry) { throw '-CheckSigned: the security directory entry is not where the program image has it' }
+        if ($signed.offset -ne $unsignedLength) { throw "-CheckSigned: the certificate table starts at $($signed.offset), the single file ends at $unsignedLength" }
+        if ($signed.offset + $signed.size -ne $signedStream.Length) { throw '-CheckSigned: the certificate table is not the end of the file' }
+        if ($signed.checksum + 4 -gt $setupBytes.Length -or $signed.entry + 8 -gt $setupBytes.Length) { throw '-CheckSigned: the program image is shorter than its PE header' }
+        # Two SHA-256 digests, streamed: the parts this tool writes, and the signed file up to its certificate
+        # table with the two changed header fields put back to the values of the program image.
+        $want = [Security.Cryptography.SHA256]::Create()
+        $have = [Security.Cryptography.SHA256]::Create()
+        try {
+            foreach ($part in @($setupBytes, $payloadBytes, $listBytes, $padBytes, $trailer)) {
+                if ($part.Length) { [void]$want.TransformBlock($part, 0, $part.Length, $null, 0) }
+            }
+            [void]$want.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+            $signedStream.Seek(0, [IO.SeekOrigin]::Begin) | Out-Null
+            $buffer = New-Object byte[] 1048576
+            $left = $unsignedLength
+            $first = $true
+            while ($left -gt 0) {
+                $got = $signedStream.Read($buffer, 0, [int][Math]::Min([int64]$buffer.Length, $left))
+                if ($got -le 0) { throw '-CheckSigned: the signed file ends early' }
+                if ($first) {
+                    if ($got -lt $signed.checksum + 4 -or $got -lt $signed.entry + 8) { throw '-CheckSigned: a short first read' }
+                    [Array]::Copy($setupBytes, [int]$signed.entry, $buffer, [int]$signed.entry, 8)
+                    [Array]::Copy($setupBytes, [int]$signed.checksum, $buffer, [int]$signed.checksum, 4)
+                    $first = $false
+                }
+                [void]$have.TransformBlock($buffer, 0, $got, $null, 0)
+                $left -= $got
+            }
+            [void]$have.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+            if ([BitConverter]::ToString($want.Hash) -ne [BitConverter]::ToString($have.Hash)) {
+                throw '-CheckSigned: in front of its certificate table, the signed file is not the single file of this release'
+            }
+        } finally { $want.Dispose(); $have.Dispose() }
+    } finally { $signedStream.Dispose() }
+    '  signed single file: the bytes of the single file, then a certificate table of {0} bytes' -f $signed.size
+}
 Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 $outHash = Get-Sha256Hex $Out
-'  {0}: {1} bytes (program {2} + package {3} + list {4} + trailer {5}), SHA256 {6}' -f
-    (Split-Path $Out -Leaf), (Get-Item -LiteralPath $Out).Length, $setupBytes.Length, $payloadBytes.Length, $listBytes.Length, $trailerSize, $outHash
+'  {0}: {1} bytes (program {2} + package {3} + list {4} + padding {5} + trailer {6}), SHA256 {7}' -f
+    (Split-Path $Out -Leaf), (Get-Item -LiteralPath $Out).Length, $setupBytes.Length, $payloadBytes.Length, $listBytes.Length, $padBytes.Length, $trailerSize, $outHash
 
 # 4. The gate: read the exe back as Payload.cs does, and compare every file with the one on the disk.
 if ($Check) {
     $stream = [IO.File]::Open($Out, [IO.FileMode]::Open, [IO.FileAccess]::Read)
     try {
+        # The trailer ends where the file ends, or where a certificate table at the end of the file begins.
+        $headLength = [int][Math]::Min([int64]4096, $stream.Length)
+        $head = New-Object byte[] $headLength
+        if ($stream.Read($head, 0, $headLength) -ne $headLength) { throw 'the header could not be read back' }
+        $security = Get-PeSecurityEntry $head
+        $limit = $stream.Length
+        if ($security -and $security.size -ne 0) {
+            if ($security.offset + $security.size -ne $stream.Length) { throw 'the certificate table is not the end of the file' }
+            $limit = $security.offset
+        }
+        if ([bool]$CheckSigned -ne ($limit -ne $stream.Length)) { throw "the single file is $(if ($limit -ne $stream.Length) { 'signed' } else { 'not signed' }), which this check did not expect" }
+        if ($limit -ne $unsignedLength) { throw "the trailer ends at $limit, the single file at $unsignedLength" }
         $t = New-Object byte[] $trailerSize
-        $stream.Seek(-$trailerSize, [IO.SeekOrigin]::End) | Out-Null
+        $stream.Seek($limit - $trailerSize, [IO.SeekOrigin]::Begin) | Out-Null
         if ($stream.Read($t, 0, $trailerSize) -ne $trailerSize) { throw 'the trailer could not be read back' }
         for ($i = 0; $i -lt $magic.Length; $i++) { if ($t[$i] -ne $magic[$i]) { throw 'the trailer has no magic' } }
         if ([BitConverter]::ToInt32($t, 16) -ne $format) { throw 'the trailer names another format' }

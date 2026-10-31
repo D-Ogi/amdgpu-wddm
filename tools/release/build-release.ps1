@@ -47,6 +47,8 @@ param(
     [string]$KmdPdb,                             # matching symbols for submission, never installed as driver files
     [bool]$MockAttestation = $true,               # embed our signature on every driver PE until Partner Center signs it
     [ValidateSet('pinned-test','system')][string]$ExpectedSigningRoot = 'pinned-test',
+    [string]$UserModeSignerThumbprint,           # BD-160: a code-signing certificate of the Windows store (the EV certificate) for the files outside the driver package, the single-file setup and the submission CAB; absent: the test certificate
+    [string]$TimestampUrl,                       # required with -UserModeSignerThumbprint: the RFC 3161 time stamp server of that certificate's issuer
     [string]$SetupApp,                           # required: the built setup window (build.ps1 output), copied to the top folder as setup.exe
     [switch]$AllowLedgerDebt,                    # build although finished work for a release component is unlanded
     [string]$LedgerDebtReason,                   # required with -AllowLedgerDebt: recorded in the build log and manifest
@@ -128,6 +130,14 @@ $signtool = Join-Path $sdk "bin\$KitVersion\x64\signtool.exe"
 $inf2cat = Join-Path $wdk "bin\$KitVersion\x86\Inf2Cat.exe"
 $infverif = Join-Path $wdk "tools\$KitVersion\x64\InfVerif.exe"
 foreach ($t in $signtool, $inf2cat, $infverif) { if (-not (Test-Path -LiteralPath $t)) { throw "missing tool $t" } }
+# BD-160: the signer of the files outside the driver package (user-mode-signing.ps1). A publisher certificate that
+# cannot sign (absent, no private key, not for code signing, expired, no time stamp server, a lab flavour) stops the
+# build here, before anything is built.
+. (Join-Path $PSScriptRoot 'user-mode-signing.ps1')
+$userSigner = Get-UserModeSigner -Thumbprint $UserModeSignerThumbprint -TimestampUrl $TimestampUrl -Flavour $Flavour `
+    -TestThumbprint (New-Object Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList $cer).Thumbprint
+'user-mode signer: {0} {1}{2}' -f $userSigner.mode, $userSigner.thumbprint,
+    $(if ($userSigner.mode -eq 'store') { " ($($userSigner.subject), $($userSigner.store)\My, time stamp $($userSigner.timestamp_url))" } else { ' (the test certificate)' })
 # Every full commit id release-sources.json names, in a field and inside a text, is an object of a checkout of its
 # repository (provenance.py commits). This runs for a lab candidate as well, which is the point: -NoProvenance takes
 # the whole provenance gate off, and train b34 then carried a commit that no object of this repository is
@@ -549,6 +559,12 @@ function Invoke-Sign([string]$Path) {
     $r = Invoke-Headless -File $signtool -Arguments @('sign', '/fd', 'SHA256', '/f', $pfx, '/p', $pass, $Path) -TimeoutSeconds 120
     if ($r.code -ne 0) { throw "signtool sign $Path failed: $($r.text -replace [regex]::Escape($pass), '<redacted>')" }
 }
+# A file outside the driver package: the user-mode signer, and its signature read back at once.
+function Invoke-UserModeSign([string]$Path) {
+    $r = Invoke-Headless -File $signtool -Arguments (Get-SignToolSignArguments -Signer $userSigner -Path $Path -Pfx $pfx -Password $pass) -TimeoutSeconds 300
+    if ($r.code -ne 0) { throw "signtool sign $Path ($($userSigner.mode)) failed: $($r.text -replace [regex]::Escape($pass), '<redacted>')" }
+    Test-UserModeSignature -Signer $userSigner -Path $Path
+}
 Invoke-Sign (Join-Path $kmd 'bc250kmd.sys')
 # BD-150: Windows names a driver package by its INF, so two packages with different bc250kmd.sys files must never share
 # one INF: pnputil answers "Already exists in the system" for the second and keeps the first one's KMD. One comment line
@@ -602,6 +618,12 @@ if ($SubmissionCab) {
     . (Join-Path $PSScriptRoot 'submission-cab.ps1')
     New-DriverSubmissionCab -DriverDirectory $kmd -Destination $SubmissionCab -KmdPdb $KmdPdb `
         -PdbReader (Join-Path $Root 'toolchain\llvm-23.1.2-win64\bin\llvm-pdbutil.exe')
+    # BD-160: Partner Center takes a submission CAB only with the EV signature of the account. The store route signs
+    # it here; the test route leaves it unsigned, because a test signature there is refused anyway.
+    if ($userSigner.mode -eq 'store') {
+        Invoke-UserModeSign $SubmissionCab
+        '  submission CAB signed by {0}, time stamp {1}' -f $userSigner.thumbprint, $userSigner.timestamp_url
+    } else { '  submission CAB left unsigned: -UserModeSignerThumbprint with the EV certificate signs it' }
 }
 if ($MockAttestation) {
     . (Join-Path $PSScriptRoot 'mock-attestation.ps1')
@@ -623,15 +645,18 @@ if ($MockAttestation) {
 # signature of whoever made it. The stamp is already written at this point, so each signature covers the bytes
 # that ship; release-sources.json records these files by their Authenticode digest, which a signature does not
 # change, exactly as the kernel driver's entry does.
-$toSign = @(Get-ChildItem -LiteralPath $pkgRoot -Recurse -File |
-    Where-Object { $_.Extension -in '.dll', '.exe', '.sys' } |
-    Where-Object { -not (Get-AuthenticodeSignature -LiteralPath $_.FullName).SignerCertificate })
-foreach ($f in $toSign) { Invoke-Sign $f.FullName }
-'  signed {0} more PE file(s): {1}' -f $toSign.Count, (($toSign | ForEach-Object { $_.Name }) -join ', ')
+# BD-160: a file of the driver package that is still unsigned takes the test certificate, as the package does until
+# Partner Center signs it; every other file takes the user-mode signer, which is the publisher certificate when
+# -UserModeSignerThumbprint names one.
+$toSign = Split-UnsignedPeFiles -PackageRoot $pkgRoot -DriverDirectory $kmd
+foreach ($f in $toSign.driver) { Invoke-Sign $f }
+foreach ($f in $toSign.user) { Invoke-UserModeSign $f }
+'  signed {0} more PE file(s) of the driver package with the test certificate: {1}' -f $toSign.driver.Count, (($toSign.driver | ForEach-Object { Split-Path $_ -Leaf }) -join ', ')
+'  signed {0} PE file(s) outside the driver package ({1}): {2}' -f $toSign.user.Count, $userSigner.mode, (($toSign.user | ForEach-Object { Split-Path $_ -Leaf }) -join ', ')
 # The setup window was hashed when it was copied in, which is before its signature: manifest.json records what
 # ships, and the installer verifies the package against it.
 $setupHash = (Get-FileHash -LiteralPath $setupPkg -Algorithm SHA256).Hash
-$pass = $null
+# The password stays until the single-file setup at the end is signed with the same route.
 foreach ($f in 'bc250kmd.sys', 'bc250kmd.cat') {
     $s = Get-AuthenticodeSignature -LiteralPath (Join-Path $kmd $f)
     if (-not $s.SignerCertificate -or $s.SignerCertificate.Thumbprint -ne $release.Thumbprint) { throw "$f is not signed by the release certificate $($release.Thumbprint)" }
@@ -957,6 +982,10 @@ $manifest = [ordered]@{
     provenance_gate = $script:provenanceGate
     provenance_gate_reason = $script:provenanceGateReason
     release_certificate = $release.Thumbprint
+    # BD-160: the signer of the files outside the driver package and of the single-file setup: 'test' (the release
+    # certificate above) or 'store' (a publisher certificate of the Windows store, with a time stamp).
+    user_mode_signing = [ordered]@{ mode = $userSigner.mode; certificate_thumbprint = $userSigner.thumbprint
+        timestamp_url = $userSigner.timestamp_url; subject = $userSigner.subject }
     # The setup window: the one file of the zip that is not under the package root, because the unpacked release puts
     # it in the top folder. "file" is a name, not a path: the unpacked release keeps it beside
     # files\, a kept repair set and a prepared folder keep their copy in the package root (common.ps1,
@@ -999,4 +1028,15 @@ $setupSuffix = if ($Flavour -eq 'lab') { '-lab' } else { '' }
 $setupOne = Join-Path $Out "amdgpu-wddm-setup-$Version$setupSuffix.exe"
 & (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -Check -ReleaseZip $zip | ForEach-Object { "  $_" }
 if (-not (Test-Path -LiteralPath $setupOne -PathType Leaf)) { throw "make-setup-exe.ps1 wrote no $setupOne" }
+# BD-160: the single file is signed as a whole, after it is written: up to tester.35 it carried the window's signature
+# in its middle, and Windows read it as not signed. -CheckSigned then proves that the signed file is the checked file
+# plus its certificate table, and the payload checks run again on the signed bytes.
+Invoke-UserModeSign $setupOne
+& (Join-Path $PSScriptRoot 'make-setup-exe.ps1') -PackageTop $pkgRoot -Out $setupOne -CheckSigned -ReleaseZip $zip | ForEach-Object { "  $_" }
+if ($userSigner.mode -eq 'test') {
+    . (Join-Path $PSScriptRoot 'driver-signature.ps1')
+    Test-DriverFileSignature -Path $setupOne -SignTool $signtool -ExpectedRoot $ExpectedSigningRoot -TestCertificate $cer
+}
+'  single exe signed ({0} {1})' -f $userSigner.mode, $userSigner.thumbprint
+$pass = $null
 'single exe {0} SHA256 {1}' -f $setupOne, (Get-FileHash -LiteralPath $setupOne).Hash

@@ -4,7 +4,8 @@
 // section, then a list of every file with its SHA-256, then a 120-byte trailer that says where the two sections are
 // and what they hash to. The sections come after the end of the program image, so Windows loads the exe exactly as
 // it loads the plain one and the appended bytes are never executed. tools\release\make-setup-exe.ps1 writes it, and
-// the release recipe proves that the files inside it are the files of the zip, byte for byte.
+// the release recipe proves that the files inside it are the files of the zip, byte for byte. The release signs the
+// whole single file after that, so an Authenticode certificate table can follow the trailer (DataEnd).
 //
 // What happens when it is started:
 //   1. a setup.exe that has its files\ folder beside it (the unpacked zip, a prepared folder, a repair set) carries
@@ -95,15 +96,49 @@ namespace AmdgpuWddmSetup
         // Whether this exe carries a package. Only the trailer is read, so the answer costs nothing.
         public static bool Present() { return ReadHead(OwnFile) != null; }
 
+        // Where the data of a file ends: the start of an Authenticode certificate table that is the last part of the
+        // file, or the end of the file when it carries no signature. -1 for a signature that is not at the end: a
+        // file in that layout is not one make-setup-exe.ps1 writes. The release signs the single file after it is
+        // written (BD-160), so the trailer stands directly in front of the certificate table; the PE header names
+        // that table (data directory 4, a file offset).
+        public static long DataEnd(Stream f)
+        {
+            long length = f.Length;
+            var h = new byte[(int)Math.Min(4096L, length)];
+            f.Seek(0, SeekOrigin.Begin);
+            if (Read(f, h, h.Length) != h.Length) return length;
+            if (h.Length < 0x40 || h[0] != 0x4D || h[1] != 0x5A) return length;
+            int pe = BitConverter.ToInt32(h, 0x3C);
+            if (pe < 0x40 || pe > h.Length - 26 || BitConverter.ToUInt32(h, pe) != 0x00004550u) return length;
+            int opt = pe + 24;
+            ushort magic = BitConverter.ToUInt16(h, opt);
+            int dirs = magic == 0x20B ? opt + 112 : magic == 0x10B ? opt + 96 : -1;
+            if (dirs < 0 || dirs + 5 * 8 > h.Length || BitConverter.ToUInt32(h, dirs - 4) < 5) return length;
+            long offset = BitConverter.ToUInt32(h, dirs + 4 * 8);
+            long size = BitConverter.ToUInt32(h, dirs + 4 * 8 + 4);
+            if (size == 0) return length;
+            return offset + size == length ? offset : -1;
+        }
+
         // The trailer of a file, or null when it has none (a plain setup.exe, or a file too short to hold one).
         public static Head ReadHead(string file)
         {
             try
             {
-                using (var f = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var f = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read)) return ReadHead(f);
+            }
+            catch (Exception) { return null; }
+        }
+
+        // The same for an open stream (the unit tests give it a memory stream).
+        public static Head ReadHead(Stream f)
+        {
+            try
+            {
                 {
-                    if (f.Length < TrailerSize + 2) return null;
-                    f.Seek(-TrailerSize, SeekOrigin.End);
+                    long dataEnd = DataEnd(f);
+                    if (dataEnd < TrailerSize + 2) return null;
+                    f.Seek(dataEnd - TrailerSize, SeekOrigin.Begin);
                     var t = new byte[TrailerSize];
                     if (Read(f, t, t.Length) != t.Length) return null;
                     for (int i = 0; i < Magic.Length; i++) if (t[i] != Magic[i]) return null;
@@ -117,7 +152,7 @@ namespace AmdgpuWddmSetup
                         PayloadSha256 = Hex(t, 56, 32),
                         ListSha256 = Hex(t, 88, 32),
                     };
-                    long end = f.Length - TrailerSize;
+                    long end = dataEnd - TrailerSize;
                     // Every bound is checked before a single byte is read: a trailer is data in a file, and a file
                     // can be damaged or doctored.
                     if (h.PayloadLength <= 0 || h.ListLength <= 0) return null;

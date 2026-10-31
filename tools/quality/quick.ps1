@@ -265,6 +265,19 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # two logon tasks (who confirms a driver start, and at whose logon). It writes files under Out and registers no
  # task. Until now it ran only inside test-dryrun.ps1, which needs a built package.
  Check 'session-checks' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-session-checks.ps1" -WorkRoot "$Out\session-checks" }
+ # The engine units of the installer sources, among them BD-259 (the Vulkan loader decision, the loader step and the
+ # verify verdict) and BD-192 (the Smart App Control state from CI\Policy with stand-in readers, and the preflight
+ # lines). Until now they ran only inside test-dryrun.ps1, which needs a built package. -WorkRoot keeps the files
+ # under Out: without it the test writes beside tools\release. Nothing in the registry, no driver, no restart.
+ Check 'installer-engine-units' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-engine-units.ps1" -WorkRoot "$Out\installer-engine-units" }
+ # BD-191: the legacy top-level copies under Parameters (the plan over driver/state/catalog.json and the raw selectors
+ # of guard.c, the archive on a scratch key under HKCU that it removes again, the start-screen answer through a
+ # memory-only state client, and the order of the steps in install.ps1).
+ Check 'installer-legacy-parameters' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-legacy-parameters.ps1" -WorkRoot "$Out\installer-legacy-parameters" }
+ # BD-160: the signer of the files outside the driver package (the test certificate, or a publisher certificate of the
+ # store with a time stamp), the signtool arguments, the read-back of a signature, which files take which signer, and
+ # where build-release.ps1 signs the submission CAB and the single-file setup. No store is opened, nothing is signed.
+ Check 'release-user-mode-signing' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-user-mode-signing.ps1" -WorkRoot "$Out\release-user-mode-signing" }
  # Fact M898: a WinForms Label with a Dock and AutoSize off goes through 100x23 at each change of its text, which is
  # how the start window of rc4 flashed. The control application holds the rule at run time (--smoke-labels in its
  # build); this reads the installer's and the tools' PowerShell and the other C# windows. Its controls run in

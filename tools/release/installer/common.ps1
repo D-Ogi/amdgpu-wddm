@@ -1576,9 +1576,14 @@ function Set-WallpaperRecord([bool]$Selected, [string]$Version) {
 }
 
 # The picture on the start screen (on by default in the installer, like the wallpaper). This one
-# is a driver setting, not a per-person one: the kernel driver draws it, and Parameters\BootLogo holds the answer.
-# An absent value is the release default, which is on, so the two answers are "remove the value" and "write 0". A
-# removed value also means that no later install writes the default over the person's choice.
+# is a driver setting, not a per-person one: the kernel driver draws it. The driver reads BootLogo through the shared
+# driver state (guard.c GuardReadSetting, catalog setting BootLogo), so the answer is the user override of that
+# setting. An absent override is the release default, which is on, so the two answers are "clear the override" and
+# "set 0". A cleared override also means that no later install writes the default over the person's choice.
+# BD-191: up to tester.35 this step wrote Parameters\BootLogo, a top-level value that no driver of the shared state
+# reads, so -NoBootLogo had no effect. $Legacy is that value: a 0 there, with no override and no stated answer, is
+# the earlier answer of the person, and the plan carries it into the state once. The legacy cleanup below then moves
+# the top-level value to the archive.
 #
 # $Stated is what this run states: $true the picture is wanted, $false it is not, $null nobody stated an answer.
 # Nothing stated keeps whatever the installed driver has, which is how a reinstall or an upgrade keeps an earlier
@@ -1586,10 +1591,13 @@ function Set-WallpaperRecord([bool]$Selected, [string]$Version) {
 # Pure: reads nothing, writes nothing.
 #   keep   nobody stated an answer, so the value stays as it is
 #   none   the value is already the stated answer
-#   remove the value goes, which turns the picture on
+#   remove the override goes, which turns the picture on
 #   write  BootLogo = 0, which turns it off
-function Get-BootLogoPlan($Stated, $Current) {
+function Get-BootLogoPlan($Stated, $Current, $Legacy = $null) {
     $off = ($null -ne $Current) -and ([int]$Current -eq 0)
+    if (($null -eq $Stated) -and ($null -eq $Current) -and ($null -ne $Legacy) -and ([int]$Legacy -eq 0)) {
+        return [ordered]@{ action = 'write'; selected = $false; value = 0; carried = $true }
+    }
     if ($null -eq $Stated) { return [ordered]@{ action = 'keep'; selected = (-not $off); value = $Current } }
     if ([bool]$Stated) {
         if ($null -eq $Current) { return [ordered]@{ action = 'none'; selected = $true; value = $null } }
@@ -1600,16 +1608,41 @@ function Get-BootLogoPlan($Stated, $Current) {
 }
 # The answer the window's box opens on, for the engine's decision event: the stated answer, or the one the installed
 # driver carries. Pure.
-function Get-BootLogoChoice($Stated, $Current) {
-    return [bool](Get-BootLogoPlan -Stated $Stated -Current $Current).selected
+function Get-BootLogoChoice($Stated, $Current, $Legacy = $null) {
+    return [bool](Get-BootLogoPlan -Stated $Stated -Current $Current -Legacy $Legacy).selected
 }
-# Applies the plan. A failure is one line and never fails the install: the picture is an extra.
-function Set-BootLogoChoice($Stated) {
-    $current = (Read-RegistryValues $script:ParametersKey)['BootLogo']
-    $plan = Get-BootLogoPlan -Stated $Stated -Current $current
+# The two readings of the start-screen answer: current, the user override of the shared-state setting BootLogo
+# ($null = no override), and legacy, the top-level Parameters\BootLogo of an earlier install ($null = absent). error
+# says why the shared state could not be read ($null = it was read). A dry run reads no shared state. -Cli, -Runner and
+# -ReadLegacy are for the tests.
+function Read-BootLogoReadings {
+    param([string]$Cli, [scriptblock]$Runner, [scriptblock]$ReadLegacy = { (Read-RegistryValues $script:ParametersKey)['BootLogo'] })
+    $legacy = $null
+    try { $legacy = & $ReadLegacy } catch { }
+    if ($script:DryRunMode -and -not $Runner) { return [ordered]@{ current = $null; legacy = $legacy; error = 'a dry run reads no driver state' } }
+    try {
+        $o = Read-DriverStateValues -Cli $Cli -Override -Runner $Runner
+        return [ordered]@{ current = $(if ($o.ContainsKey('BootLogo')) { $o['BootLogo'] } else { $null }); legacy = $legacy; error = $null }
+    } catch { return [ordered]@{ current = $null; legacy = $legacy; error = [string]$_.Exception.Message } }
+}
+# Applies the plan through the state client, after the driver package is bound (phase 2). A failure is one line and
+# never fails the install: the picture is an extra. A shared state that cannot be read changes nothing.
+function Set-BootLogoChoice {
+    param($Stated, [string]$Cli, [scriptblock]$Runner, [scriptblock]$ReadLegacy = { (Read-RegistryValues $script:ParametersKey)['BootLogo'] })
+    $r = Read-BootLogoReadings -Cli $Cli -Runner $Runner -ReadLegacy $ReadLegacy
+    if ($r.error -and -not $script:DryRunMode) {
+        Write-Info 'start screen: the choice is not changed, because the driver state could not be read'
+        Write-Log "   start-screen choice not read: $($r.error)"
+        return [ordered]@{ action = 'unread'; selected = $null; value = $null }
+    }
+    $current = $r.current
+    $plan = Get-BootLogoPlan -Stated $Stated -Current $current -Legacy $r.legacy
     $words = switch ($plan.action) {
-        'remove' { 'Nagi on the start screen, by the release default (the value goes)' }
-        'write'  { 'no picture on the start screen (-NoBootLogo)' }
+        'remove' { 'Nagi on the start screen, by the release default (the override goes)' }
+        'write'  {
+            if ($plan.carried) { 'no picture on the start screen, the answer of an earlier install (its Parameters value goes into the driver state)' }
+            else { 'no picture on the start screen (-NoBootLogo)' }
+        }
         'keep'   {
             if ($null -eq $current) { 'Nagi on the start screen, by the release default' }
             else { "the answer of the installed driver stays: $(if ($plan.selected) { 'Nagi on the start screen' } else { 'no picture' })" }
@@ -1621,14 +1654,123 @@ function Set-BootLogoChoice($Stated) {
     }
     Write-Info "start screen: $words"
     if ($plan.action -notin @('remove', 'write')) { return $plan }
-    Invoke-Change "$($script:ParametersKey)`: $(if ($plan.action -eq 'remove') { 'BootLogo removed' } else { 'BootLogo = 0' })" {
+    Invoke-Change "driver state: $(if ($plan.action -eq 'remove') { 'BootLogo override cleared' } else { 'BootLogo = 0' })" {
         try {
-            Initialize-RegistryKey $script:ParametersKey
-            if ($plan.action -eq 'remove') { Remove-ItemProperty -LiteralPath $script:ParametersKey -Name BootLogo -Force -ErrorAction Stop }
-            else { New-ItemProperty -LiteralPath $script:ParametersKey -Name BootLogo -Value 0 -PropertyType DWord -Force | Out-Null }
+            if ($plan.action -eq 'remove') { Clear-DriverStateValue -Name BootLogo -Cli $Cli -Runner $Runner }
+            else { Write-DriverStateValue -Name BootLogo -Value 0 -Cli $Cli -Runner $Runner }
         } catch { Write-Log "   start-screen choice not written: $($_.Exception.Message)" }
     } | Out-Null
     return $plan
+}
+
+# ---- the legacy top-level copies under Parameters (BD-191) ------------------------------------------------------
+# Up to tester.30 the driver kept its settings and records as top-level values and subkeys of
+# Services\bc250kmd\Parameters. Since tester.31 the shared driver state holds them (docs/design/driver-state.md), and
+# the upgrade captures the old copies into it. The copies stayed behind: 57 values plus StartRecord and HangRecovery
+# on the lab's 22631 after the tester.30 -> tester.31 upgrade, and they were read as the current start.
+# The KMD reads Parameters for two things only: DefaultsV2 (the INF's defaults, state_kernel.c) and a few raw
+# selectors outside the catalog (guard.c: EnableHardwarePointer, the Lab* and PagingRing* values). So a top-level copy
+# is legacy exactly when the state catalog owns its name: a value whose name is a catalog entry at the root path, or a
+# subkey whose name is the first part of a catalog path (StartRecord, StopRecord, HangRecovery, ...). DefaultsV2 and
+# every name outside the catalog stay. The installed catalog comes from the state client's snapshot, which lists
+# every entry of the catalog of the installed package, so a name of another release's catalog is never guessed.
+#
+# Pure. $Snapshot: the reply of 'state snapshot' (items with path and name). Returns the two name sets.
+function Get-StateCatalogParameterNames($Snapshot, [string]$DefaultsChild = 'DefaultsV2') {
+    $values = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $subkeys = New-Object 'Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    foreach ($item in @($Snapshot.items)) {
+        $path = [string]$item.path
+        if ($path -eq '') { if ($item.name) { [void]$values.Add([string]$item.name) } }
+        else { [void]$subkeys.Add(($path -split '[\\/]')[0]) }
+    }
+    [void]$subkeys.Remove($DefaultsChild)
+    return [pscustomobject]@{ values = $values; subkeys = $subkeys }
+}
+# Pure: which top-level values and subkeys of Parameters are legacy copies. $Names: Get-StateCatalogParameterNames.
+function Get-LegacyParametersPlan {
+    param([AllowEmptyCollection()][string[]]$ValueNames = @(), [AllowEmptyCollection()][string[]]$SubKeyNames = @(),
+          [Parameter(Mandatory)]$Names, [string]$DefaultsChild = 'DefaultsV2')
+    $rv = @(); $kv = @(); $rs = @(); $ks = @()
+    foreach ($n in @($ValueNames)) { if ($n -ne '' -and $Names.values.Contains($n)) { $rv += $n } else { $kv += $n } }
+    foreach ($n in @($SubKeyNames)) { if ($n -ne $DefaultsChild -and $Names.subkeys.Contains($n)) { $rs += $n } else { $ks += $n } }
+    return [pscustomobject]@{ remove_values = $rv; remove_subkeys = $rs; kept_values = $kv; kept_subkeys = $ks }
+}
+# One registry value as archive data: its kind and its data, exact. Binary and unknown kinds as base64, a QWORD as a
+# decimal string (JSON numbers lose bits above 2^53), environment names not expanded.
+function ConvertTo-LegacyArchiveValue([Microsoft.Win32.RegistryKey]$Key, [string]$Name) {
+    $kind = $Key.GetValueKind($Name)
+    $data = $Key.GetValue($Name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    $out = switch ($kind) {
+        'DWord' { [uint32]([int64]$data -band 0xFFFFFFFFL) }
+        'QWord' { [BitConverter]::ToUInt64([BitConverter]::GetBytes([int64]$data), 0).ToString() }
+        'String' { [string]$data }
+        'ExpandString' { [string]$data }
+        'MultiString' { ,@($data) }
+        default { if ($data -is [byte[]]) { [Convert]::ToBase64String($data) } else { [Convert]::ToBase64String([byte[]]@()) } }
+    }
+    return [ordered]@{ name = $Name; kind = [string]$kind; data = $out }
+}
+function ConvertTo-LegacyArchiveTree([Microsoft.Win32.RegistryKey]$Key, [string]$Name, [int]$Depth = 0) {
+    if ($Depth -gt 8) { throw "the subkey $Name is nested deeper than 8 levels" }
+    $tree = [ordered]@{ name = $Name; values = @(); subkeys = @() }
+    foreach ($v in @($Key.GetValueNames())) { $tree.values += ,(ConvertTo-LegacyArchiveValue $Key $v) }
+    foreach ($s in @($Key.GetSubKeyNames())) {
+        $child = $Key.OpenSubKey($s)
+        try { $tree.subkeys += ,(ConvertTo-LegacyArchiveTree $child $s ($Depth + 1)) } finally { $child.Dispose() }
+    }
+    return $tree
+}
+# Moves the legacy copies into one archive file, then deletes them. The archive is written to a temporary name,
+# read back and compared before the rename, and nothing is deleted unless it is in place. A copy that cannot be
+# deleted stays and is named. Returns { outcome, path, values, subkeys, kept_values, kept_subkeys, problems }:
+#   absent    no Parameters key
+#   none      no legacy copy
+#   archived  the archive is written and the copies are deleted (problems names any that stayed)
+# -Root and -SubKey are for the tests (a scratch key under HKCU); -Snapshot is the reply of 'state snapshot'.
+function Invoke-LegacyParametersArchive {
+    param([Parameter(Mandatory)]$Snapshot, [Parameter(Mandatory)][string]$ArchiveDirectory,
+          [Microsoft.Win32.RegistryKey]$Root = [Microsoft.Win32.Registry]::LocalMachine,
+          [string]$SubKey = 'SYSTEM\CurrentControlSet\Services\bc250kmd\Parameters', [string]$PackageVersion = '',
+          [string]$DefaultsChild = 'DefaultsV2')
+    $result = [ordered]@{ outcome = 'absent'; path = $null; values = @(); subkeys = @(); kept_values = @(); kept_subkeys = @(); problems = @() }
+    $key = $Root.OpenSubKey($SubKey, $true)
+    if (-not $key) { return $result }
+    try {
+        $names = Get-StateCatalogParameterNames -Snapshot $Snapshot -DefaultsChild $DefaultsChild
+        if (-not $names.values.Count) { throw 'the state snapshot lists no setting at the root path' }
+        $plan = Get-LegacyParametersPlan -ValueNames @($key.GetValueNames()) -SubKeyNames @($key.GetSubKeyNames()) -Names $names -DefaultsChild $DefaultsChild
+        $result.kept_values = @($plan.kept_values); $result.kept_subkeys = @($plan.kept_subkeys)
+        if (-not ($plan.remove_values.Count + $plan.remove_subkeys.Count)) { $result.outcome = 'none'; return $result }
+        $archive = [ordered]@{
+            schema = 1; written_utc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ'); key = "$($Root.Name)\$SubKey"
+            package_version = $PackageVersion
+            rule = 'top-level values and subkeys of Parameters whose names the state catalog of the installed package owns'
+            values = @(foreach ($n in $plan.remove_values) { ConvertTo-LegacyArchiveValue $key $n })
+            subkeys = @(foreach ($n in $plan.remove_subkeys) { $c = $key.OpenSubKey($n); try { ConvertTo-LegacyArchiveTree $c $n } finally { $c.Dispose() } })
+        }
+        $text = $archive | ConvertTo-Json -Depth 24
+        [void][IO.Directory]::CreateDirectory($ArchiveDirectory)
+        $path = Join-Path $ArchiveDirectory ('legacy-parameters-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '.json')
+        $temp = "$path.tmp"
+        try {
+            [IO.File]::WriteAllText($temp, $text, (New-Object Text.UTF8Encoding $false))
+            $back = [IO.File]::ReadAllText($temp) | ConvertFrom-Json
+            if ((@($back.values).Count -ne $plan.remove_values.Count) -or (@($back.subkeys).Count -ne $plan.remove_subkeys.Count)) {
+                throw "the archive read back holds $(@($back.values).Count) values and $(@($back.subkeys).Count) subkeys, not $($plan.remove_values.Count) and $($plan.remove_subkeys.Count)"
+            }
+            [IO.File]::Move($temp, $path)
+        } catch { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue; throw }
+        $result.path = $path
+        foreach ($n in $plan.remove_values) {
+            try { $key.DeleteValue($n, $false); $result.values += $n } catch { $result.problems += "value ${n}: $($_.Exception.Message)" }
+        }
+        foreach ($n in $plan.remove_subkeys) {
+            try { $key.DeleteSubKeyTree($n, $false); $result.subkeys += $n } catch { $result.problems += "subkey ${n}: $($_.Exception.Message)" }
+        }
+        $result.outcome = 'archived'
+        return $result
+    } finally { $key.Dispose() }
 }
 
 # ---- the Microsoft Visual C++ runtime our programs need ---------------------------------------------------------
