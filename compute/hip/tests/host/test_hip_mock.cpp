@@ -583,6 +583,34 @@ int main(int argc, char** argv) {
     check_u64(live_after_second, live_after_first, "the live allocation count after run 2");
     check_u64(bytes_after_second, bytes_after_first, "the live bytes after run 2");
 
+    // The occupancy query, through the entry point: the answer is the one the model of
+    // hip_occupancy.cpp gives for the register count of the fixture's vadd, and the one with
+    // no registers when BC250_HIP_OCCUPANCY_VGPR=0. The model itself is test_hip_occupancy.
+    {
+        int blocks = -1;
+        check(hipOccupancyMaxActiveBlocksPerMultiprocessor(&blocks, &g_stub_vadd, 256, 0) ==
+                  hipSuccess,
+              "hipOccupancyMaxActiveBlocksPerMultiprocessor vadd");
+        bc250hip::OccupancyInput in;
+        in.block_threads = 256u;
+        in.wave_size = 32u;
+        in.waves_per_cu = 32u;
+        in.vgprs = bc250hip::state().occupancy_registers
+                       ? bc250hip::occupancy_kernel_vgprs(*probe_vadd)
+                       : 0u;
+        in.group_bytes = probe_vadd->group_segment_bytes;
+        in.lds_bytes_per_cu = 65536u;
+        std::printf("  vadd: %u VGPRs, %d blocks of 256 a compute unit\n",
+                    bc250hip::occupancy_kernel_vgprs(*probe_vadd), blocks);
+        check_u64(static_cast<uint64_t>(blocks),
+                  static_cast<uint64_t>(bc250hip::occupancy_blocks_per_cu(in)),
+                  "the occupancy entry point gives the model's answer");
+        check(hipOccupancyMaxActiveBlocksPerMultiprocessor(&blocks, &g_stub_vadd, 2048, 0) ==
+                      hipSuccess &&
+                  blocks == 0,
+              "a block above the thread limit fits 0 times");
+    }
+
     // ---------------------------------------------------------------------------------------
     std::printf("test_hip_mock: 6. memory, with an explicit kind and with hipMemcpyDefault\n");
     {

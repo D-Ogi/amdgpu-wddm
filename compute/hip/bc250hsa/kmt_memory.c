@@ -167,8 +167,65 @@ static bc250hsa_status map_host(struct bc250hsa_device* dev, bc250hsa_alloc_reco
     return BC250HSA_OK;
 }
 
-bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint64_t alignment,
-                               uint32_t flags, bc250hsa_mem* out)
+/* This process's budget and use of one segment group, for the log of a placement. The
+ * carve-out is one part of the GPU memory: the rest is system memory that the GPU reaches
+ * through the non-local group (fact M827: on an 8 GiB carve-out the LOCAL budget is
+ * 7.2 GiB and the NON_LOCAL budget 3.5 GiB). */
+static int query_budget(struct bc250hsa_device* dev, D3DKMT_MEMORY_SEGMENT_GROUP group,
+                        D3DKMT_QUERYVIDEOMEMORYINFO* query)
+{
+    memset(query, 0, sizeof(*query));
+    query->hProcess = NULL;
+    query->hAdapter = dev->adapter;
+    query->MemorySegmentGroup = group;
+    query->PhysicalAdapterIndex = 0;
+    return NT_SUCCESS(D3DKMTQueryVideoMemoryInfo(query));
+}
+
+static void log_budget(struct bc250hsa_device* dev, D3DKMT_MEMORY_SEGMENT_GROUP group,
+                       const char* name)
+{
+    D3DKMT_QUERYVIDEOMEMORYINFO query;
+
+    if (!query_budget(dev, group, &query)) {
+        return;
+    }
+    bc250hsa_log(BC250HSA_LOG_INFO,
+                 "%s segment group: budget %llu, used %llu, reserved %llu, available for "
+                 "reservation %llu bytes",
+                 name, (unsigned long long)query.Budget, (unsigned long long)query.CurrentUsage,
+                 (unsigned long long)query.CurrentReservation,
+                 (unsigned long long)query.AvailableForReservation);
+}
+
+/* Whether `bytes` more of device-local memory stay inside this process's local budget. The
+ * check comes before the residency: a MakeResident past the budget can return success and
+ * fail later on the paging queue, and VidMm then puts the whole device in error with
+ * execution state 5 (D3DKMT_DEVICEEXECUTION_ERROR_OUTOFMEMORY), as unit A did for Qwen3-8B
+ * Q8_0 on an 8 GiB carve-out. A query that fails answers yes, and the residency decides. */
+static int local_budget_allows(struct bc250hsa_device* dev, uint64_t bytes)
+{
+    D3DKMT_QUERYVIDEOMEMORYINFO query;
+
+    if (!query_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, &query)) {
+        return 1;
+    }
+    return query.CurrentUsage <= query.Budget && bytes <= query.Budget - query.CurrentUsage;
+}
+
+/* CreateAllocation2, MapGpuVirtualAddress and MakeResident of one allocation on one heap,
+ * and the paging fence wait. On a failure the record holds what was made, and the caller
+ * destroys it.
+ *
+ * MakeResident does not set MustSucceed. With MustSucceed, a request that VidMm cannot
+ * satisfy puts the device in error (d3dukmdt.h, D3DDDI_MAKERESIDENT_FLAGS), and the flag
+ * is only valid together with CantTrimFurther. One hipMalloc past the carve-out then took
+ * the device down before the first launch: Qwen3-8B Q8_0 (8071 MiB) on unit A, fence
+ * value UINT64_MAX at the first kernel argument lease. Without the flag a refusal is a
+ * status that the caller can answer with the other heap. */
+static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_alloc_record* record,
+                                       uint64_t phys_bytes, uint64_t phys_alignment,
+                                       uint32_t flags, uint32_t heap, uint32_t gem_flags)
 {
     struct bc250hsa_alloc_blob         blob;
     struct bc250hsa_create_alloc_pdata pdata;
@@ -176,12 +233,93 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
     D3DKMT_CREATEALLOCATION            create;
     D3DDDI_MAPGPUVIRTUALADDRESS        map;
     D3DDDI_MAKERESIDENT                resident;
-    bc250hsa_alloc_record*             record;
-    bc250hsa_status                    result;
     NTSTATUS                           status;
     uint64_t                           paging_fence = 0;
+
+    memset(&blob, 0, sizeof(blob));
+    blob.magic = BC250HSA_ALLOC_MAGIC;
+    blob.version = BC250HSA_ALLOC_VERSION;
+    blob.size = (uint32_t)sizeof(blob);
+    blob.alloc_size = phys_bytes;
+    blob.phys_alignment = phys_alignment;
+    blob.preferred_heap = heap;
+    blob.va_size = phys_bytes;
+    blob.gem_flags = gem_flags;
+
+    memset(&pdata, 0, sizeof(pdata));
+    pdata.adapter_id = 0;
+    pdata.flags = 0x80u;
+    pdata.pdata_size = (uint32_t)sizeof(blob);
+    pdata.checksum = bc250hsa_pdata_checksum((const uint32_t*)&pdata,
+                                             (uint32_t)(sizeof(pdata) / 4u));
+
+    memset(&info, 0, sizeof(info));
+    info.pPrivateDriverData = &blob;
+    info.PrivateDriverDataSize = (UINT)sizeof(blob);
+    info.VidPnSourceId = 0xFFFFFFFFu;
+    info.Priority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
+
+    memset(&create, 0, sizeof(create));
+    create.hDevice = dev->device;
+    create.pPrivateDriverData = &pdata;
+    create.PrivateDriverDataSize = (UINT)sizeof(pdata);
+    create.NumAllocations = 1;
+    create.pAllocationInfo2 = &info;
+    create.Flags.CreateResource = 1;
+    create.Flags.NonSecure = 1;
+
+    status = D3DKMTCreateAllocation2(&create);
+    if (!NT_SUCCESS(status)) {
+        return bc250hsa_os_status("CreateAllocation2", status);
+    }
+    record->handle = info.hAllocation;
+    record->bytes = phys_bytes;
+    record->flags = flags;
+
+    memset(&map, 0, sizeof(map));
+    map.hPagingQueue = dev->paging_queue;
+    map.BaseAddress = 0;
+    map.MinimumAddress = dev->va_window_start;
+    map.MaximumAddress = dev->va_window_end;
+    map.hAllocation = record->handle;
+    map.SizeInPages = phys_bytes / 4096u;
+    map.Protection.Write = 1;
+    /* The shader image is fetched as instructions. Our page table writer does honour
+     * DXGK_PTE.NoExecute (driver/shim/bc250_pte.c clears AMDGPU_PTE_EXECUTABLE for
+     * it), and RADV maps its shader buffers with Write alone and executes them on
+     * this driver, so dxgkrnl does not derive NoExecute from this field today. The
+     * bit states the intent at no cost, for the day it does. */
+    if ((flags & BC250HSA_MEM_EXEC) != 0u) {
+        map.Protection.Execute = 1;
+    }
+    status = D3DKMTMapGpuVirtualAddress(&map);
+    if (!NT_SUCCESS(status)) {
+        return bc250hsa_os_status("MapGpuVirtualAddress", status);
+    }
+    record->va = map.VirtualAddress;
+    require_paging_fence(&paging_fence, map.PagingFenceValue);
+
+    memset(&resident, 0, sizeof(resident));
+    resident.hPagingQueue = dev->paging_queue;
+    resident.NumAllocations = 1;
+    resident.AllocationList = &record->handle;
+    status = D3DKMTMakeResident(&resident);
+    if (!NT_SUCCESS(status)) {
+        return bc250hsa_os_status("MakeResident", status);
+    }
+    require_paging_fence(&paging_fence, resident.PagingFenceValue);
+
+    return bc250hsa_wait_paging_fence(dev, paging_fence);
+}
+
+bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint64_t alignment,
+                               uint32_t flags, bc250hsa_mem* out)
+{
+    bc250hsa_alloc_record*             record;
+    bc250hsa_status                    result;
     uint64_t                           phys_alignment;
     uint64_t                           phys_bytes;
+    uint32_t                           gem_flags = 0u;
 
     if (dev == NULL || out == NULL || bytes == 0u) {
         return BC250HSA_EINVAL;
@@ -216,92 +354,42 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
         return BC250HSA_ENOMEM;
     }
 
-    memset(&blob, 0, sizeof(blob));
-    blob.magic = BC250HSA_ALLOC_MAGIC;
-    blob.version = BC250HSA_ALLOC_VERSION;
-    blob.size = (uint32_t)sizeof(blob);
-    blob.alloc_size = phys_bytes;
-    blob.phys_alignment = phys_alignment;
-    blob.preferred_heap = is_device_local(flags) ? BC250HSA_HEAP_VRAM : BC250HSA_HEAP_GTT;
-    blob.va_size = phys_bytes;
     if (wants_host_mapping(flags) || (flags & BC250HSA_MEM_MAPPABLE) != 0u) {
-        blob.gem_flags |= BC250HSA_GEM_CPU_ACCESS_REQUIRED;
+        gem_flags |= BC250HSA_GEM_CPU_ACCESS_REQUIRED;
     } else {
-        blob.gem_flags |= BC250HSA_GEM_NO_CPU_ACCESS;
+        gem_flags |= BC250HSA_GEM_NO_CPU_ACCESS;
     }
     if ((flags & BC250HSA_MEM_HOST_WC) != 0u) {
-        blob.gem_flags |= BC250HSA_GEM_CPU_GTT_USWC;
+        gem_flags |= BC250HSA_GEM_CPU_GTT_USWC;
     }
 
-    memset(&pdata, 0, sizeof(pdata));
-    pdata.adapter_id = 0;
-    pdata.flags = 0x80u;
-    pdata.pdata_size = (uint32_t)sizeof(blob);
-    pdata.checksum = bc250hsa_pdata_checksum((const uint32_t*)&pdata,
-                                             (uint32_t)(sizeof(pdata) / 4u));
-
-    memset(&info, 0, sizeof(info));
-    info.pPrivateDriverData = &blob;
-    info.PrivateDriverDataSize = (UINT)sizeof(blob);
-    info.VidPnSourceId = 0xFFFFFFFFu;
-    info.Priority = D3DDDI_ALLOCATIONPRIORITY_NORMAL;
-
-    memset(&create, 0, sizeof(create));
-    create.hDevice = dev->device;
-    create.pPrivateDriverData = &pdata;
-    create.PrivateDriverDataSize = (UINT)sizeof(pdata);
-    create.NumAllocations = 1;
-    create.pAllocationInfo2 = &info;
-    create.Flags.CreateResource = 1;
-    create.Flags.NonSecure = 1;
-
-    status = D3DKMTCreateAllocation2(&create);
-    if (!NT_SUCCESS(status)) {
-        result = bc250hsa_os_status("CreateAllocation2", status);
-        free(record);
-        return result;
+    if (!is_device_local(flags)) {
+        result = create_resident(dev, record, phys_bytes, phys_alignment, flags,
+                                 BC250HSA_HEAP_GTT, gem_flags);
+    } else {
+        /* Device-local memory goes to the carve-out while the local budget holds it, and
+         * to system memory after that, as VidMm does for D3D12 resources past the local
+         * budget. A residency that VidMm refuses at once inside the budget also takes the
+         * second heap. The system memory copy is write combined: device-local memory has
+         * no cached host view either, so the contract of the allocation stays the same. */
+        result = BC250HSA_ENOMEM;
+        if (local_budget_allows(dev, phys_bytes)) {
+            result = create_resident(dev, record, phys_bytes, phys_alignment, flags,
+                                     BC250HSA_HEAP_VRAM, gem_flags);
+        }
+        if (result != BC250HSA_OK) {
+            destroy_allocation(dev, record);
+            memset(record, 0, sizeof(*record));
+            bc250hsa_log(BC250HSA_LOG_INFO,
+                         "device-local allocation of %llu bytes is placed in system memory: the "
+                         "carve-out does not hold it (%s)",
+                         (unsigned long long)phys_bytes, bc250hsa_status_string(result));
+            log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, "local");
+            log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, "non-local");
+            result = create_resident(dev, record, phys_bytes, phys_alignment, flags,
+                                     BC250HSA_HEAP_GTT, gem_flags | BC250HSA_GEM_CPU_GTT_USWC);
+        }
     }
-    record->handle = info.hAllocation;
-    record->bytes = phys_bytes;
-    record->flags = flags;
-
-    memset(&map, 0, sizeof(map));
-    map.hPagingQueue = dev->paging_queue;
-    map.BaseAddress = 0;
-    map.MinimumAddress = dev->va_window_start;
-    map.MaximumAddress = dev->va_window_end;
-    map.hAllocation = record->handle;
-    map.SizeInPages = phys_bytes / 4096u;
-    map.Protection.Write = 1;
-    /* The shader image is fetched as instructions. Our page table writer does honour
-     * DXGK_PTE.NoExecute (driver/shim/bc250_pte.c clears AMDGPU_PTE_EXECUTABLE for
-     * it), and RADV maps its shader buffers with Write alone and executes them on
-     * this driver, so dxgkrnl does not derive NoExecute from this field today. The
-     * bit states the intent at no cost, for the day it does. */
-    if ((flags & BC250HSA_MEM_EXEC) != 0u) {
-        map.Protection.Execute = 1;
-    }
-    status = D3DKMTMapGpuVirtualAddress(&map);
-    if (!NT_SUCCESS(status)) {
-        result = bc250hsa_os_status("MapGpuVirtualAddress", status);
-        goto failed;
-    }
-    record->va = map.VirtualAddress;
-    require_paging_fence(&paging_fence, map.PagingFenceValue);
-
-    memset(&resident, 0, sizeof(resident));
-    resident.hPagingQueue = dev->paging_queue;
-    resident.NumAllocations = 1;
-    resident.AllocationList = &record->handle;
-    resident.Flags.MustSucceed = 1;
-    status = D3DKMTMakeResident(&resident);
-    if (!NT_SUCCESS(status)) {
-        result = bc250hsa_os_status("MakeResident", status);
-        goto failed;
-    }
-    require_paging_fence(&paging_fence, resident.PagingFenceValue);
-
-    result = bc250hsa_wait_paging_fence(dev, paging_fence);
     if (result != BC250HSA_OK) {
         goto failed;
     }

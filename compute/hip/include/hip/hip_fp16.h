@@ -384,8 +384,11 @@ BC250_HALF_HD __half2 __hneg2(const __half2 a) { return __half2(-a.__v); }
 BC250_HALF_HD __half2 __habs2(const __half2 a) {
   return __half2(__habs(a.x), __habs(a.y));
 }
+// One vector FMA, so the device compiler emits v_pk_fma_f16. Two scalar __hfma calls were not
+// always packed again: the 128x32 PKF16 tiles got 1024 v_fma_f16/v_fmac_f16 per BK step in place
+// of 512 v_pk_fma_f16. ROCm lowers __hfma2 to a vector FMA too (__ocml_fma_2f16).
 BC250_HALF_HD __half2 __hfma2(const __half2 a, const __half2 b, const __half2 c) {
-  return __half2(__hfma(a.x, b.x, c.x), __hfma(a.y, b.y, c.y));
+  return __half2(__builtin_elementwise_fma(a.__v, b.__v, c.__v));
 }
 BC250_HALF_HD __half2 __hmax2(const __half2 a, const __half2 b) {
   return __half2(__hmax(a.x, b.x), __hmax(a.y, b.y));

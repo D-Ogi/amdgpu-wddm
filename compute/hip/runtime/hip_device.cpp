@@ -177,6 +177,26 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
     }
 }
 
+// Two switches of the launch path, each on by default and each the control arm of its own lab
+// measurement:
+//
+//   BC250_HIP_KERNARG_ARENA=0   every launch takes the pool of one buffer per launch instead of
+//                               a slice of the arena of hip_kernarg_arena.cpp
+//   BC250_HIP_OCCUPANCY_VGPR=0  hipOccupancyMaxActiveBlocksPerMultiprocessor leaves the vector
+//                               registers out, which is the model before 2026-10-30
+void apply_launch_policy() {
+    // BD-167: measurement arms of a lab build. A release runtime keeps both on.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    char text[32];
+    if (read_text("BC250_HIP_KERNARG_ARENA", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
+        state().kernarg_arena_enabled = false;
+    }
+    if (read_text("BC250_HIP_OCCUPANCY_VGPR", text, sizeof(text)) && std::strcmp(text, "0") == 0) {
+        state().occupancy_registers = false;
+    }
+#endif
+}
+
 }  // namespace
 
 // strtoul alone is not enough here: it skips leading spaces, takes a sign, and turns "-1" into
@@ -245,6 +265,7 @@ hipError_t device(bc250hsa_device** out) {
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
             apply_batch_policy(s.dev);
             apply_gpu_copy_policy(s.dev);
+            apply_launch_policy();
         }
     }
     if (s.dev == nullptr) {
@@ -294,6 +315,7 @@ void memory_info(size_t* free_bytes, size_t* total_bytes) {
     for (const bc250hip::KernargBuffer& buffer : s.kernargs) {
         used += buffer.mem.bytes;
     }
+    used += s.kernarg_arena_mem.bytes;
     if (total_bytes != nullptr) {
         *total_bytes = static_cast<size_t>(total);
     }
@@ -557,18 +579,13 @@ hipError_t hipDeviceSynchronize(void) {
 // It answers from this part's properties and the kernel's own descriptor, which is where
 // hipGetDeviceProperties already looks.
 //
-// What is modelled, and what is not. Two limits are real and measured: the local memory a
-// workgroup needs (the kernel's static group segment plus the dynamic request) against the local
-// memory of a compute unit, and the number of waves a workgroup needs against the waves a
-// compute unit holds, both from bc250hsa_props. The register file is NOT modelled: this build
-// has no figure for the vector register file of a SIMD of this part, and a number invented here
-// would be a guess inside an API that a backend uses to size its own parallelism. The answer is
-// therefore an upper bound: a kernel that is register-bound gets a number that is too large.
-// llama.cpp's flash attention path is the caller (ggml/src/ggml-cuda/fattn-common.cuh:1137), and
-// it uses the number to choose how many blocks work on one head in parallel.
-//
-// TODO (docs/linux-session-wishlist.md): read the VGPR file size of gfx1013 under Linux, from
-// amdgpu's own occupancy calculation, and add the register limit here.
+// What is modelled: the wave slots of the two SIMDs of a compute unit, the vector register file
+// of a SIMD (1024 VGPRs in wave32, allocated in granules of 8), the local memory of a compute
+// unit and the barrier limit of a multi-wave workgroup. hip_occupancy.cpp states the source of
+// each number. Until 2026-10-30 the register file was not modelled, and a register-bound kernel
+// got a number that was too large. llama.cpp's flash attention path is the caller
+// (ggml/src/ggml-cuda/fattn-common.cuh:1137), and it uses the number to choose how many blocks
+// work on one head in parallel.
 hipError_t hipOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, const void* func,
                                                         int blockSize, size_t dynamicSMemSize) {
     if (numBlocks == nullptr || func == nullptr || blockSize <= 0) {
@@ -591,9 +608,17 @@ hipError_t hipOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, const vo
         return fail(hipErrorInvalidDeviceFunction);
     }
 
+    // The register count is in the kernel descriptor, so the code object loads here when no
+    // launch has loaded it yet: llama.cpp asks before its first launch of a kernel. A code object
+    // that does not load leaves the register limit out, and the launch reports the load error.
+    bc250hip::Function& entry = found->second;
+    if (entry.kernel == nullptr && entry.module != nullptr &&
+        bc250hip::module_ensure_loaded(entry.module) == BC250HSA_OK) {
+        entry.kernel = bc250hsa_module_kernel_by_name(entry.module->loaded, entry.device_name.c_str());
+    }
     size_t group_bytes = dynamicSMemSize;
-    if (found->second.kernel != nullptr) {
-        group_bytes += static_cast<size_t>(found->second.kernel->group_segment_bytes);
+    if (entry.kernel != nullptr) {
+        group_bytes += static_cast<size_t>(entry.kernel->group_segment_bytes);
     }
     if (group_bytes > prop.sharedMemPerBlock || blockSize > prop.maxThreadsPerBlock) {
         // The kernel does not fit at all. CUDA and HIP both answer 0 here instead of an error.
@@ -601,23 +626,19 @@ hipError_t hipOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, const vo
         return hipSuccess;
     }
 
-    const int waves_per_block = (blockSize + prop.warpSize - 1) / prop.warpSize;
-    const int waves_per_cu = prop.maxThreadsPerMultiProcessor > 0
-                                 ? prop.maxThreadsPerMultiProcessor / prop.warpSize
-                                 : waves_per_block;
-    int blocks = waves_per_block > 0 ? waves_per_cu / waves_per_block : 1;
-
-    if (group_bytes > 0 && prop.maxSharedMemoryPerMultiProcessor > 0) {
-        const int by_lds =
-            static_cast<int>(prop.maxSharedMemoryPerMultiProcessor / group_bytes);
-        if (by_lds < blocks) {
-            blocks = by_lds;
-        }
-    }
-    if (blocks < 1) {
-        blocks = 1;  // it fits, so at least one workgroup runs
-    }
-    *numBlocks = blocks;
+    bc250hip::OccupancyInput in;
+    in.block_threads = static_cast<uint32_t>(blockSize);
+    in.wave_size = static_cast<uint32_t>(prop.warpSize);
+    in.waves_per_cu = prop.maxThreadsPerMultiProcessor > 0
+                          ? static_cast<uint32_t>(prop.maxThreadsPerMultiProcessor / prop.warpSize)
+                          : 0u;
+    in.vgprs = entry.kernel != nullptr && s.occupancy_registers
+                   ? bc250hip::occupancy_kernel_vgprs(*entry.kernel)
+                   : 0u;
+    in.group_bytes = group_bytes;
+    in.lds_bytes_per_cu = prop.maxSharedMemoryPerMultiProcessor;
+    in.wgp_mode = entry.kernel != nullptr && bc250hip::occupancy_kernel_wgp_mode(*entry.kernel);
+    *numBlocks = bc250hip::occupancy_blocks_per_cu(in);
     return hipSuccess;
 }
 
