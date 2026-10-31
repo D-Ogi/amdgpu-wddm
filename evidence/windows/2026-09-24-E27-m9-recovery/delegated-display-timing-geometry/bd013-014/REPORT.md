@@ -10,7 +10,7 @@ BD-014: DcnVsyncEnable uses DxgkCbSynchronizeExecution (message0) for register R
 
 BD-016: TRIAGED, no write added. Existing scope is inherited OTG0 only, where selector0 agrees with Linux optc1_lock(inst=0), factsM87 and firmware analysis. A future own-mode/ODM/multiple-OTG path must program the selector explicitly; this is not closed globally.
 
-BD-019: TRIAGED, no blind disable. M86 records HUBP1..3 in blank and assigned inactive VTG1..3, OTG1 disabled; firmware leaves clocks running. The GOP report explicitly says leave these until own modeset. Linux disable_plane/init_hw is a complete resource/modeset transition, not a reason to disable arbitrary inherited pipes. Power and future own-mode cleanup remain open, not a current demonstrated scanout fault.
+BD-019: TRIAGED, no blind disable. M86 records HUBP1..3 in blank and assigned inactive VTG1..3, OTG1 disabled; firmware leaves clocks running. They stay as inherited until our own modeset. Linux disable_plane/init_hw is a complete resource/modeset transition, not a reason to disable arbitrary inherited pipes. Power and future own-mode cleanup remain open, not a current demonstrated scanout fault.
 
 Tests:
 - visibility-arm.log:109 checks0, actual synchronized enable/ISR, WddmVSyncArm, WddmSourceVisibility, DCN blank helper and source-visibility DDI. Repeated hide/show preserves pixels, unrelated fields and vsync; fake IRQ lock checks surround MMIO and armed publication.
@@ -22,7 +22,7 @@ References (local):
 - ddi-display/dispmprt.md:2815 onward: graphics synchronization callback is <=DISPATCH_LEVEL, locks against InterruptRoutine, message number0 for this single-message adapter (M38).
 - ddi-display/d3dkmddi.md:13013 onward: visibility DDI controls scanning and reports status; :35739 explicitly retains vsync with visibilityFALSE.
 - linux-src @7d0a66e4bb9081d75c82ec4957c50034cb0ea449, AMD display MIT: optc/dcn201/dcn201_optc.c dcn201_tg_funcs:set_blank -> optc1_set_blank; optc/dcn10/dcn10_optc.c:390-477 blank/double-buffer, :673 lock selector.
-- factsM86/M87 and linked immutable E21 dumps/trace; firmware/bios/analysis/gop-dcn/GOP-DCN.md around355-389 for inherited inactive pipes and D4 scope.
+- factsM86/M87 and linked immutable E21 dumps/trace.
 - Timing peer added exact generated names/read permissions/write permissions for mmOTG0_OTG_BLANK_CONTROL and mmOTG0_OTG_DOUBLE_BUFFER_CONTROL. Other timing additions are read-only. Public75-register escape remains unchanged; no literal MMIO offset was introduced.
 
 Suggested comments/statuses: BD013 FIXED (full-WDDM source only, legacy fallback explicit); BD014 FIXED (source, hardware acceptance pending); BD016/019 TRIAGED as future own-modeset/ownership work. No shared backlog changed here.

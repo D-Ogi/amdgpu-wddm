@@ -182,5 +182,5 @@ code path sends them. They are named in the header and refused by the allowlist.
 - The full design, the facts with their provenance, and the lab plan: `scratch/tuner/DESIGN.md`,
   `scratch/tuner/facts-stack.md`, `scratch/tuner/facts-smu-cpu.md` (local, outside the repository).
 - Community findings, facts only, no code copied: `bc250-collective/bc250_smu_oc` (MIT),
-  `bc250-collective/amd_smu_reverse_engineering` (no licence, read only), `rw-r-r-0644/bc250-core-unlock`
-  (MIT), `cachenetics/project-ariel` (GPL-2.0-only), `MTSistemi/SkillFishOS` (GPL-3.0-only).
+  `rw-r-r-0644/bc250-core-unlock` (MIT), `cachenetics/project-ariel` (GPL-2.0-only), `MTSistemi/SkillFishOS`
+  (GPL-3.0-only).

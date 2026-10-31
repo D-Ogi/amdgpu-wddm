@@ -2,14 +2,13 @@
 
 2026-09-24. Static review and host controls; no new hardware capture or deployment.
 
-BD-020's alleged 128 KiB GOP overlap is rejected. The underlying static formula
-uses 0x20 KiB, or 32 KiB; the PSP pages are outside that extent. Offline parsing
+BD-020's alleged 128 KiB GOP overlap is rejected. The length behind the report
+is 0x20 KiB, or 32 KiB; the PSP pages are outside that extent. Offline parsing
 of existing own-unit debugfs and VFCT VBIOS artifacts finds zero reservation
 fields. Linux allocates its fallback scratch in system memory and reserves no
-firmware VRAM from this zero table. Main checked the formula, Linux routines and
+firmware VRAM from this zero table. Main checked the length, Linux routines and
 current PSP layout. This does not assert absence of every firmware consumer.
-[Review and bounded parser results](bd020/REVIEW.md). Proprietary images and
-decompiled code remain outside this repository.
+[Bounded parser](bd020/read-usage.py) and [its results](bd020/usage.json).
 
 BD-021 adds aggregate PTE counters by level, segment and requested coherence,
 including encoded snoop mismatches. Counts describe encoding attempts, not unique

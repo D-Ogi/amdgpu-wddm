@@ -707,10 +707,9 @@ and `docs/getting-started/introduction.md` (`elektricm.github.io/amd-bc250-docs/
 about this part: S7's README states the VCN block "was permanently unprovisioned and eFused off at the
 factory", while a search summary of this documentation site asserted that "As of Mesa 25.1 and kernel
 6.11, the VCN block is enabled and provides full hardware H.264/H.265 decode and encode, plus VP9
-decode". A third repository, `m2jgh8tg7r-bot/bc250-vcn-linux-research`, describes itself as
-"Reverse-engineering and Linux enablement research for AMD BC-250 / Cyan Skillfish VCN 2.0.3, including
-NBIO doorbell, power, firmware, and ring bring-up", which is consistent with the block being present
-but not brought up rather than absent.
+decode". A third repository, `m2jgh8tg7r-bot/bc250-vcn-linux-research`, describes Linux bring-up work on
+the VCN 2.0.3 block of the BC-250 (NBIO doorbell, power, firmware and ring), which is consistent with the
+block being present but not brought up rather than absent.
 
 **How it applies to us.** It does not change this sweep's recommendations, but it is a loose end worth
 one bounded check against `bc250-win\docs\facts.md` and a Windows-side enumeration, because a working

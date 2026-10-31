@@ -12,7 +12,6 @@ follow, see [`../hardware.md`](../hardware.md) ("Limits for our experiments") an
 PROVENANCE: facts below come from community repositories. We cite their findings. We copy no code and
 no text from them, and no AMD or ASRock firmware image goes near our tree.
 `cachenetics/project-ariel` at `97b8692`, GPL-2.0-only.
-`bc250-collective/amd_smu_reverse_engineering` at `3f47768`, no LICENSE file, all rights reserved, read only.
 `bc250-collective/bc250_smu_oc` at `327014d`, MIT.
 `MTSistemi/bc250-vaapi` at `4c667c5`, GPL-3.0-only.
 `rw-r-r-0644/bc250-core-unlock` at `569785a`, MIT.
