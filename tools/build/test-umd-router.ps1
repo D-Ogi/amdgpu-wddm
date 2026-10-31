@@ -48,6 +48,10 @@
 # tester.31rc4 hosted UMD (lab behaviour) and with a copy of it whose variable names were changed to names nobody
 # sets (release behaviour); the harness before this change fails those four scenarios over that copy.
 #
+# BD-274 adds front-no-key: dwm.exe with no DesktopRouter key at all, the state of the first start after an install.
+# The front must be on. 102 scenarios, 0 failed on 2026-10-30 with the tester.34 release set; the router before
+# the fix fails front-no-key and nothing else.
+#
 #   pwsh tools\build\test-umd-router.ps1 -HostedUmd <bc250d3d_zink.dll> -CpuUmd <bc250d3d.dll> -AppPackage <dir>
 #        [-Build <build-umd-router.ps1 output>] [-OutputDir <dir>]
 param(

@@ -2487,11 +2487,18 @@ static void Child(const std::string &s)
     // (fake-umd.cpp) are a full D3D10.0 driver here: five adapter entries, 101 device entries and 7 DXGI
     // entries, and they record what the front forwarded.
     else if (s.rfind("front-", 0) == 0) {
-        RouterBase(true); Switches(true, true);
-        SetSz(RouterKey, L"RouteLogDirectory", Layout + L"\\routelogs");
+        // BD-274: front-no-key runs as dwm.exe with no DesktopRouter key at all, as at the first start after an
+        // install. The front must be on as with an absent value. Without the key there is no log directory, so
+        // the scenario checks the adapter table only.
+        const bool noKey = s == "front-no-key";
+        Switches(true, true);
+        if (!noKey) {
+            RouterBase(true);
+            SetSz(RouterKey, L"RouteLogDirectory", Layout + L"\\routelogs");
+        }
         if (s == "front-wrong-type") SetSz(RouterKey, L"DirectFlipFront", L"1");
         else if (s == "front-zero") SetDw(RouterKey, L"DirectFlipFront", 0);
-        else if (s != "front-absent") SetDw(RouterKey, L"DirectFlipFront", 1);
+        else if (s != "front-absent" && !noKey) SetDw(RouterKey, L"DirectFlipFront", 1);
         if (s == "front-cpu-route") SetDw(RouterKey, L"DwmForceCpu", 1);
         if (s == "front-wddm13") SetDw(RouterKey, L"FrontWddm13", 1);
         else if (s == "front-wddm13-zero") SetDw(RouterKey, L"FrontWddm13", 0);
@@ -2526,11 +2533,13 @@ static void Child(const std::string &s)
                                  : s == "front-zero" ? "front=off"
                                  : entry10 || s == "front-cpu-route" ? "front=unavailable"
                                                                      : "front=on";
-        CHECK(Has(log, wantColumn), "route log has no %s: %s", wantColumn, log.c_str());
-        // Every other field of the desktop line is where router 5BBEB783 put it, so the kit's parser still
-        // reads it: the front column is appended, never inserted.
-        CHECK(Has(log, "switch_source=settings blit=1 interop=1 front="), "the front column is not last: %s",
-              log.c_str());
+        if (!noKey) {
+            CHECK(Has(log, wantColumn), "route log has no %s: %s", wantColumn, log.c_str());
+            // Every other field of the desktop line is where router 5BBEB783 put it, so the kit's parser still
+            // reads it: the front column is appended, never inserted.
+            CHECK(Has(log, "switch_source=settings blit=1 interop=1 front="), "the front column is not last: %s",
+                  log.c_str());
+        }
         if (s == "front-cpu-route") {
             CHECK(o.hr == S_OK && o.tag == CpuTag102, "hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
             CHECK(!Loaded(hostedDll), "the hosted UMD was loaded although the kill switch is set");
@@ -2593,6 +2602,7 @@ static void Child(const std::string &s)
                              : versions[i] != D3DWDDM1_3_DDI_SUPPORTED,
                       "WDDM 1.3 is at entry %u of %u, but FrontWddm13 is %s", i, n, wddm13 ? "1" : "not 1");
             // The adapter open names the level it decided, once, in the front log.
+            if (noKey) return;
             const std::string installLog = ReadAll(Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
                                                    std::to_wstring(GetCurrentProcessId()) + L".log");
             const char *wantLevel = s == "front-wddm13" ? "wddm13=on level=wddm1_3"
@@ -3340,7 +3350,7 @@ static int RunAll(const std::wstring &out)
         {"front-absent", nullptr, {}}, {"front-zero", nullptr, {}}, {"front-wrong-type", nullptr, {}},
         {"front-on", nullptr, {}}, {"front-d3d10-entry", nullptr, {}}, {"front-cpu-route", nullptr, {}},
         {"front-d3d10-interface", nullptr, {}}, {"front-stack", nullptr, {}}, {"front-answer", nullptr, {}},
-        {"front-log", nullptr, {}},
+        {"front-log", nullptr, {}}, {"front-no-key", "dwm\\dwm.exe", {}},
         // BD-223: the WDDM 1.3 interface of the front. One pure suite and one scenario per state of FrontWddm13
         // that changes the interface; Absent is front-on.
         {"front-tables13", nullptr, {}}, {"front-wddm13", nullptr, {}}, {"front-wddm13-zero", nullptr, {}},

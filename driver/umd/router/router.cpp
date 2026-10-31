@@ -220,6 +220,10 @@ static void ReadConfig(Config *c)
 {
     ZeroMemory(c, sizeof(*c));
     c->require_switches = 1;
+    // An absent key has the defaults of absent values (BD-274). The installer writes the key in its second phase,
+    // after DWM has loaded the router, so the first start after an install has no key.
+    c->front = Front::Requested;
+    c->wddm13 = bc250front::FrontWddm13::Follow;
     HKEY key = nullptr;
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, RouterKey, 0, KEY_QUERY_VALUE | RegistryView, &key) == ERROR_SUCCESS) {
 #ifdef BC250_ROUTER_TEST_LOADER_OVERRIDES
