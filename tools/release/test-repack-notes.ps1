@@ -26,6 +26,14 @@ function New-Package([string]$Dir) {
     $files = Join-Path $top 'files'
     $rng = [Random]::new(265)
     $bytes = [byte[]]::new(70000); $rng.NextBytes($bytes)
+    # make-setup-exe.ps1 reads the PE security directory of the stub (BD-160): a PE32+ header with an empty
+    # certificate table, so the stub counts as an unsigned program image.
+    [Array]::Clear($bytes, 0, 0x200)
+    $bytes[0] = 0x4D; $bytes[1] = 0x5A
+    [BitConverter]::GetBytes([int32]0x80).CopyTo($bytes, 0x3C)
+    [BitConverter]::GetBytes([uint32]0x00004550).CopyTo($bytes, 0x80)
+    [BitConverter]::GetBytes([uint16]0x20B).CopyTo($bytes, 0x98)
+    [BitConverter]::GetBytes([uint32]16).CopyTo($bytes, 0x98 + 108)
     Write-Bytes (Join-Path $top 'setup.exe') $bytes
     $bytes = [byte[]]::new(5000); $rng.NextBytes($bytes)
     Write-Bytes (Join-Path $files 'payload\desktop\a.dll') $bytes
