@@ -389,6 +389,7 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'board-memory-write' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_memory_write.ps1" -Root $Workspace -Out "$Out\board-memory-write" }
  Check 'board-provider' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Workspace -Out "$Out\board-provider" }
  Check 'board-provider-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Workspace -Out "$Out\board-provider-admission-control" -Mutation admission }
+ Check 'hwinfo' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_hwinfo.ps1" -Root $Workspace -Out "$Out\hwinfo" }
  Check 'adapter-owner' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner" }
  Check 'adapter-owner-admission-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-admission-control" -Mutation admission }
  Check 'adapter-owner-cleanup-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_adapter_owner.ps1" -Root $Workspace -Out "$Out\adapter-owner-cleanup-control" -Mutation cleanup }

@@ -361,6 +361,7 @@ static void GuardStage(ULONG stage)
 }
 static void GuardLogKeepEpisode(PCWSTR label) { (void)label; }
 static BOOLEAN WddmFullTableSelected(void) { return TRUE; }
+static void WddmGateConsume(void) {}
 static NTSTATUS guardStatus;
 static NTSTATUS GuardCheckAndCountStart(BOOLEAN durableNeeded) { (void)durableNeeded; return guardStatus; }
 static void StartHealthBegin(BC250_DEVICE* d, BOOLEAN f) { (void)d; (void)f; }
@@ -466,6 +467,7 @@ static NTSTATUS DcnBeginStartVisibility(BC250_DEVICE* d, BOOLEAN* touched)
 static void HwmonStart(BC250_DEVICE* d) { (void)d; }
 static NTSTATUS SmuOwnerStart(ULONG* s, void* mmio) { (void)s; (void)mmio; return smuStatus; }
 static void VramStart(BC250_DEVICE* d) { (void)d; }
+static void HardwareInfoWrite(BC250_DEVICE* d) { (void)d; }
 static void GartStart(BC250_DEVICE* d) { (void)d; }
 static void PspStart(BC250_DEVICE* d) { (void)d; }
 static void GpuMemStart(BC250_DEVICE* d) { (void)d; }

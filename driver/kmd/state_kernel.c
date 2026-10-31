@@ -19,6 +19,7 @@ static BOOLEAN FactoryPrepared;
 static PVOID Candidate;
 static ULONG CandidateBytes,EntryFullWddm;
 static char ProductVersion[32];
+ULONG DriverStateEntryFullWddm(void){return EntryFullWddm;}
 
 // The OS shared-service root does not grant ordinary clients KEY_READ. Its
 // public StateV2 children do, but clients must first open this root through

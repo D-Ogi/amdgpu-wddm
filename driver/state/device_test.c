@@ -33,6 +33,7 @@ enum { StageStartEnter=1,StageStartFailed,StageRefusedByGuard,StageStartGuardPas
 
 static unsigned checks,failures,receipt_calls,property_calls,thread_calls,wait_calls,close_calls;
 static unsigned activation_calls,termination_calls,guard_calls,budget_calls,boundary_calls,order,activation_order,budget_order;
+static unsigned gate_calls;
 static const char *test_case;
 static UCHAR irql;
 static BOOL owned,system_worker,thread_live;
@@ -117,6 +118,8 @@ static void GuardStartStep(PCWSTR step){CHECK(step!=NULL);++guard_calls;}
 static void GuardRecordStartFailed(NTSTATUS status){CHECK(!NT_SUCCESS(status));++guard_calls;}
 static void GuardRecordStartRefused(NTSTATUS status){CHECK(!NT_SUCCESS(status));++guard_calls;}
 static BOOLEAN WddmFullTableSelected(void){return TRUE;}
+// BD-185: the EnableFullWddm one-shot is consumed only after a committed activation.
+static void WddmGateConsume(void){++gate_calls;}
 static NTSTATUS GuardCheckAndCountStart(BOOLEAN full)
 {CHECK(full);++budget_calls;budget_order=++order;return budget_status;}
 static NTSTATUS HardwareBoundary(void){++boundary_calls;return STATUS_SUCCESS;}
@@ -127,7 +130,7 @@ static void Reset(const char *name)
     CHECK(!thread_live && !pending_worker && !pending_context && !system_worker);test_case=name;
     receipt_calls=property_calls=thread_calls=wait_calls=close_calls=activation_calls=termination_calls=0;
     event_inits=event_sets=0;fixture_event=NULL;
-    guard_calls=budget_calls=boundary_calls=order=activation_order=budget_order=0;
+    guard_calls=budget_calls=boundary_calls=order=activation_order=budget_order=gate_calls=0;
     irql=0;owned=TRUE;receipt_status=property_status=thread_status=wait_status=activation_status=budget_status=0;
     memset(property_text,0,sizeof(property_text));wcscpy_s(property_text,513,FixtureId);
     property_bytes=sizeof(FixtureId);property_type=DEVPROP_TYPE_STRING;
@@ -191,10 +194,11 @@ int main(void)
     CHECK(!receipt_calls && !guard_calls && !budget_calls && !boundary_calls);NoActivation();
     Reset("Start activation before guard");activation_status=STATUS_REGISTRY_IO_FAILED;
     CHECK(Start(&device)==STATUS_REGISTRY_IO_FAILED);CHECK(activation_calls==1 && !guard_calls && !budget_calls && !boundary_calls);
+    CHECK(!gate_calls);
     Reset("Start revalidates PDO");property_text[4]=L'X';CHECK(Start(&device)==STATUS_DEVICE_CONFIGURATION_ERROR);
-    CHECK(!guard_calls && !budget_calls && !boundary_calls);NoActivation();
+    CHECK(!guard_calls && !budget_calls && !boundary_calls && !gate_calls);NoActivation();
     Reset("Start success ordering");CHECK(Start(&device)==0);
-    CHECK(activation_calls==1 && budget_calls==1 && boundary_calls==1 && activation_order<budget_order);
+    CHECK(activation_calls==1 && budget_calls==1 && boundary_calls==1 && activation_order<budget_order && gate_calls==1);
     Reset("start budget refusal");budget_status=STATUS_ACCESS_DENIED;CHECK(Start(&device)==budget_status);
     CHECK(activation_calls==1 && budget_calls==1 && !boundary_calls && activation_order<budget_order);
     Reset("prior hardware stop unconfirmed");device.GpuStopUnconfirmed=TRUE;CHECK(Start(&device)==STATUS_DEVICE_HARDWARE_ERROR);

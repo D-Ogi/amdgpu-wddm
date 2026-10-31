@@ -89,6 +89,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
     // A failed commit must leave hardware untouched and the handoff retryable.
     status=DriverStateActivateDevice(device->PhysicalDeviceObject);
     if(!NT_SUCCESS(status))return status;
+    WddmGateConsume();
     BoardMemoryIdentityClear(device);
     GuardStage(StageStartEnter);
     // One kept log file for this whole start, however many checkpoints it writes (guard.c GuardLogKeep). Does
@@ -209,6 +210,7 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         }
     }
     VramStart(device);      // same rule
+    HardwareInfoWrite(device);
     status=ConnectorBufferPrepare(device);
     GuardLog("connector: handoff reservation status %08lX",(ULONG)status);
     // The hardware pointer's two surfaces, after the handoff buffer and before WddmStart lays out the segments. Never

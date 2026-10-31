@@ -53,6 +53,7 @@ static NTSTATUS WriteDword(HANDLE key,PCWSTR name,ULONG value)
 {(void)key;writes++;if(!NT_SUCCESS(writeStatus))return writeStatus;if(!wcscmp(name,L"EnableFullWddm"))settingGate=value;else cached=value;return STATUS_SUCCESS;}
 static NTSTATUS ZwFlushKey(HANDLE key){(void)key;flushes++;if(NT_SUCCESS(flushStatus))durable=cached;return flushStatus;}
 static void ZwClose(HANDLE key){(void)key;closes++;}
+static ULONG DriverStateEntryFullWddm(void){return settingGate;}
 /* The state adapter has its own raw-type/default tests. Here its durable path
  * uses the same failing registry model as the boot-budget record writer. */
 static NTSTATUS DriverStateNumber(PCWSTR child,PCWSTR name,BOOLEAN effective,ULONG* value)
@@ -140,12 +141,11 @@ int main(void)
     CHECK(Start()==STATUS_DEVICE_CONFIGURATION_ERROR&&admissions==0&&writes==0);
     /* BD-122: the guard's refusal is recorded as the guard's, after the attempt record of this start. */
     CHECK(recordAttempts==1&&recordRefusals==1&&recordFailures==0&&recordStep!=NULL&&!wcscmp(recordStep,L"BootLoopGuard"));
-    Reset();settingGate=1;writeStatus=STATUS_ACCESS_DENIED;
-    CHECK(!WddmGateOpen()&&settingGate==1&&flushes==0);
-    Reset();settingGate=1;flushStatus=STATUS_REGISTRY_IO_FAILED;
-    CHECK(!WddmGateOpen()&&settingGate==0&&flushes==1); // no admission from cached closure
-    Reset();settingGate=1;CHECK(WddmGateOpen()&&settingGate==0&&flushes==1);
-    before=opens;CHECK(WddmFullTableSelected()&&opens==before); // no second consumption
+    /* BD-185: WddmGateOpen reads the cached entry value without consuming.
+       A hand-set 1 opens the gate and is consumed at Start, not at DriverEntry. */
+    Reset();settingGate=1;CHECK(WddmGateOpen()&&settingGate==1&&writes==0&&flushes==0);
+    before=opens;CHECK(WddmFullTableSelected()&&opens==before);
+    CHECK(Start()==STATUS_SUCCESS&&settingGate==0&&admissions==1);
     Reset();openStatus=STATUS_ACCESS_DENIED;CHECK(Start()==STATUS_SUCCESS&&admissions==1);
     Reset();readStatus=STATUS_OBJECT_TYPE_MISMATCH;CHECK(Start()==STATUS_SUCCESS&&admissions==1);
     Reset();writeStatus=STATUS_ACCESS_DENIED;CHECK(Start()==STATUS_SUCCESS&&admissions==1);

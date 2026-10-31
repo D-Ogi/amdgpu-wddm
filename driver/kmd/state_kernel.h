@@ -20,6 +20,7 @@ NTSTATUS DriverStateReceipt(AMDGPU_TRANSFER_HEADER *receipt);
 NTSTATUS DriverStateValidateDevice(PDEVICE_OBJECT device);
 // StartDevice only, before persistent diagnostics, admission and hardware I/O.
 NTSTATUS DriverStateActivateDevice(PDEVICE_OBJECT device);
+ULONG DriverStateEntryFullWddm(void);
 // SYSTEM worker only, after the caller resolves the actual PDO identity.
 NTSTATUS DriverStateActivate(const unsigned char deviceHash[32]);
 NTSTATUS DriverStateConsumeBoardSeed(BOOLEAN *first);

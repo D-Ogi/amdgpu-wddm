@@ -8,6 +8,7 @@
 // ResetFromTimeout currently fails because hardware quiescence is not proven.
 // See docs/research/m9-dma-contract-audit.md for remaining contract gaps.
 #include "bc250kmd.h"
+#include "state_kernel.h"
 #include "vmid_pool.h"
 #include "startup.h"
 #include "bc250_gfx.h"
@@ -1044,13 +1045,20 @@ static BOOLEAN WddmStopping(_In_ BC250_WDDM* Wddm)
 
 BOOLEAN WddmGateOpen(void)
 {
-    // 1 opens the gate for this driver load only (the value is 0 on disk again before the table is handed over);
-    // 2 keeps it open across loads and boots, for the day the full table has earned that.
-    ULONG gate = GuardConsumeSetting(L"EnableFullWddm", 0);
+    // BD-185: DriverEntry runs before the state is Ready, so the one-shot consume (which writes 0 back for
+    // value 1) fails here. Read the cached value that DriverStateInit captured, and defer the consume to
+    // StartDevice where the state is Ready (WddmGateConsume, called after DriverStateActivateDevice).
+    ULONG gate = DriverStateEntryFullWddm();
 
     g_FullWddm = (gate == 1 || gate == 2);
-    GuardLog("gate: EnableFullWddm %u%s", gate, gate == 1 ? " (one shot: closed again on disk)" : "");
+    GuardLog("gate: EnableFullWddm %u%s", gate, gate == 1 ? " (one shot: consumed at start)" : "");
     return g_FullWddm;
+}
+
+void WddmGateConsume(void)
+{
+    if (g_FullWddm)
+        (void)GuardConsumeSetting(L"EnableFullWddm", 0);
 }
 
 // The table selected at DriverEntry is immutable for this driver load. PnP

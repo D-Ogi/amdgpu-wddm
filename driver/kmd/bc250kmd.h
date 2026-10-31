@@ -580,6 +580,7 @@ typedef struct BC250_BOARD_MEMORY_PROVIDER {
     void (*Probe)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
 } BC250_BOARD_MEMORY_PROVIDER;
 const BC250_BOARD_MEMORY_PROVIDER* BoardMemoryProvider(BC250_DEVICE* Device);
+void HardwareInfoWrite(BC250_DEVICE* Device);
 void BoardMemoryIdentityClear(BC250_DEVICE* Device);
 void BoardMemoryIdentityCapture(BC250_DEVICE* Device);
 void BoardMemoryInitialize(BC250_DEVICE* Device);
@@ -1469,6 +1470,7 @@ NTSTATUS DisplayMeasureRefresh(_In_ const BC250_DEVICE* Device, ULONG HTotal, UL
 // wddm.c (M7 stage A, ADR 0008). Everything here is inert while the EnableFullWddm gate is closed.
 BOOLEAN WddmFullTableSelected(void);            // pure getter, never consumes a gate
 BOOLEAN WddmGateOpen(void);                     // EnableFullWddm, read once in DriverEntry
+void WddmGateConsume(void);                     // BD-185: one-shot closure, after state activation
 void WddmBuildTable(_Out_ DRIVER_INITIALIZATION_DATA* Data);
 NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device);   // required resources fail before paging DDIs begin
 void WddmSourceVisibility(_Inout_ BC250_DEVICE* Device, BOOLEAN Visible);   // display.c's SetVidPnSourceVisibility
