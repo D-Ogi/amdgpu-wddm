@@ -64,7 +64,13 @@
 #
 # -Plan prints the gates, the builds with their expanded command lines, outputs, tests and disk budget, and builds
 # nothing. -Only rebuilds the rows it names (ids or wildcards); a row it does not name keeps the artifact of the last
-# run in -Out, when that run built it from the same manifest row, and the rows cover both.
+# run in -Out, when that run built it from the same manifest row, and the rows cover both. A row whose manifest entry
+# differs only in its recipe commit keeps its artifact when the recipe's directory is the same at both commits (git
+# diff); its rows keep the commit that built it. A run that ends before a build starts (a failed gate, a build that
+# did not start) keeps the earlier builds of every row in release-report.json, so the next run still finds them.
+# -KeepFrom <earlier -Out> imports the ok builds of that directory for the rows that -Only does not name and -Out has
+# no build of: the same rule, a SHA-256 check of every file at the source, a copy into <Out>\artifacts and the same
+# check on the copy, before any build starts (BD-244).
 # Exit 0 when every gate passes and every build ends well (with -Compare: and every output that claims a deterministic
 # build matches); 1 otherwise.
 [CmdletBinding(DefaultParameterSetName = 'Set')]
@@ -91,6 +97,9 @@ param(
     [Parameter(ParameterSetName = 'Set')][int]$BuildTimeout = 7200,
     [Parameter(ParameterSetName = 'Set')][switch]$KeepGoing,
     [Parameter(ParameterSetName = 'Set')][switch]$Keep,
+    # With -Only: an earlier -Out (another round) whose ok builds may stand for the rows that -Only does not name, when
+    # -Out has no build of them. They are copied into -Out after a SHA-256 check (see "-KeepFrom" below).
+    [Parameter(ParameterSetName = 'Set')][string]$KeepFrom,
     [Parameter(ParameterSetName = 'Set')][string]$Compare,
     [Parameter(ParameterSetName = 'Set')][string]$MergeInto,
     # After the rows: write them into this tree's tools\release\release-sources.json and rebind the D3D11 records.
@@ -547,6 +556,10 @@ $planArgs = @($buildReleaseSet, 'plan', '--manifest', $Manifest, '--root', $Root
 if ($Sources) { $planArgs += @('--sources', [IO.Path]::GetFullPath($Sources)) }
 if ($Only.Count) { $planArgs += @('--only', ($Only -join ',')) }
 if ($Version) { $planArgs += @('--version', $Version) }
+if ($KeepFrom) {
+    if (-not $Only.Count) { "build-release-set: -KeepFrom needs -Only (without it every row is built)"; exit 1 }
+    $planArgs += @('--keep-from', [IO.Path]::GetFullPath($KeepFrom))
+}
 & $python @planArgs
 if ($LASTEXITCODE -ne 0) { "build-release-set: the manifest does not plan (see above)"; exit 1 }
 $planData = Read-Json $planFile
@@ -642,7 +655,29 @@ function Get-PayloadMap($Build, $Results) {
     return $m
 }
 "build-release-set: $($planData.builds.Count) builds$(if ($planData.kept.Count) { ", $($planData.kept.Count) kept from the last run" }), -MaxParallel $MaxParallel, $($planData.jobs_per_slot) jobs per slot ($($planData.logical_processors) logical processors), work $Work"
-foreach ($k in $planData.kept) { "  kept $($k.id): $(@($k.outputs | ForEach-Object { "$($_.sha256.Substring(0, 8)) $($_.path)" }) -join ', ')" }
+foreach ($k in $planData.kept) { "  kept $($k.id): $(@($k.outputs | ForEach-Object { "$($_.sha256.Substring(0, 8)) $($_.path)" }) -join ', ')$(if ($k.imported_from) { " (imported from $($k.imported_from.artifact))" })" }
+# The builds of the report: the kept rows, then the result of each planned row. A planned row that did not start keeps
+# its earlier ok build (planData.carried): this run did not touch its artifact, and the next run in -Out must still
+# find it (BD-244). A kept row that was to be imported and was not (a run that ended before the import) is left out,
+# because its files are not in -Out.
+function Copy-Entry($Entry) { $e = [ordered]@{}; foreach ($key in $Entry.Keys) { $e[$key] = $Entry[$key] }; return $e }
+function Get-ReportBuilds([hashtable]$Results, [switch]$NotImported) {
+    $carried = @{}
+    foreach ($c in @($planData.carried)) { if ($c) { $carried[$c.id] = $c } }
+    $list = @(foreach ($k in $planData.kept) {
+        if ($NotImported -and $k.imported_from) { continue }
+        $e = Copy-Entry $k; $e.kept = $true; $e
+    })
+    $list += @(foreach ($b in $planData.builds) {
+        $r = if ($Results) { $Results[$b.id] } else { $null }
+        if ((-not $r -or $r.status -in 'not-started', 'skipped') -and $carried.ContainsKey($b.id)) {
+            $e = Copy-Entry $carried[$b.id]; $e.carried = $true
+            $e.carried_reason = "this run did not build the row$(if ($r) { " ($($r.status): $($r.error))" })"
+            $e
+        } else { $r ?? [ordered]@{ id = $b.id; status = 'not-started'; definition = $b } }
+    })
+    return $list
+}
 $index = 0
 foreach ($b in $planData.builds) {
     $index++
@@ -668,9 +703,21 @@ if ($Plan) {
 }
 if (-not $gatesPass) {
     $report.status = 'gates-failed'; $report.finished_utc = Get-Utc
+    $report.builds = @(Get-ReportBuilds $null -NotImported)
     Write-Json $reportFile $report
     "build-release-set: a gate fails, so nothing is built (report $reportFile)"
     exit 1
+}
+if (@($planData.kept | Where-Object { $_.imported_from }).Count) {
+    & $python $buildReleaseSet import --plan $planFile
+    if ($LASTEXITCODE -ne 0) {
+        $report.status = 'import-failed'; $report.finished_utc = Get-Utc
+        $report.builds = @(Get-ReportBuilds $null -NotImported)
+        Write-Json $reportFile $report
+        "build-release-set: the import of the -KeepFrom builds fails, so nothing is built (report $reportFile)"
+        exit 1
+    }
+    "$(Get-Utc) imported $(@($planData.kept | Where-Object { $_.imported_from }).Count) kept builds from $($planData.keep_from)"
 }
 
 # ---------------------------------------------------------------------------------------------------------------
@@ -816,8 +863,7 @@ try {
 
 # ---------------------------------------------------------------------------------------------------------------
 # The report and the rows.
-$report.builds = @(foreach ($k in $planData.kept) { $e = [ordered]@{}; foreach ($key in $k.Keys) { $e[$key] = $k[$key] }; $e.kept = $true; $e })
-$report.builds += @(foreach ($b in $planData.builds) { $results[$b.id] ?? [ordered]@{ id = $b.id; status = 'not-started'; definition = $b } })
+$report.builds = @(Get-ReportBuilds $results)
 $report.finished_utc = Get-Utc
 $report.seconds = [int]([DateTime]::UtcNow - $started).TotalSeconds
 $report.status = if ($failedAny) { 'failed' } else { 'ok' }

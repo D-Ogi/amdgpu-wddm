@@ -273,8 +273,84 @@ def previous_builds(out):
     return {b["id"]: b for b in report.get("builds", []) if b.get("status") == "ok" and b.get("outputs")}
 
 
+def recipe_checkout(root, table, name):
+    """The first checkout of repository `name` that exists under root, or None."""
+    for c in (table.get(name) or {}).get("checkouts") or []:
+        path = Path(root) / c
+        if path.exists():
+            return path
+    return None
+
+
+def recipe_paths(recipe):
+    """The paths of the recipe repository that a recipe change is read from: the recipe's own directory (the whole
+    tree for a recipe at its root)."""
+    parent = Path(recipe).parent.as_posix()
+    return [parent if parent not in ("", ".") else "."]
+
+
+def recipe_difference(checkout, old, new, recipe):
+    """None when the recipe paths are the same at the two commits, else the reason they are not the same."""
+    if checkout is None:
+        return "no checkout of the recipe repository"
+    paths = recipe_paths(recipe)
+    done = subprocess.run(["git", "-C", str(checkout), "diff", "--quiet", old, new, "--", *paths],
+                          capture_output=True, text=True)
+    if done.returncode == 0:
+        return None
+    if done.returncode == 1:
+        return f"{', '.join(paths)} differ between the recipe commits {old[:8]} and {new[:8]}"
+    return f"git diff {old[:8]} {new[:8]} failed: {done.stderr.strip()}"
+
+
+def rebase_entry(entry, src, dst):
+    """A copy of a report entry whose artifact paths under `src` name the same files under `dst`."""
+    entry = copy.deepcopy(entry)
+    src = Path(src)
+
+    def move(path):
+        return str(Path(dst) / Path(path).relative_to(src))
+    for o in entry.get("outputs") or []:
+        o["artifact"] = move(o["artifact"])
+        for k in ("pdb", "unsigned"):
+            if isinstance(o.get(k), dict) and o[k].get("artifact"):
+                o[k]["artifact"] = move(o[k]["artifact"])
+    return entry
+
+
+def entry_artifacts(entry):
+    """(path, sha256) of every file that a report entry names."""
+    files = []
+    for o in entry.get("outputs") or []:
+        files.append((o["artifact"], o["sha256"]))
+        for k in ("pdb", "unsigned"):
+            if isinstance(o.get(k), dict) and o[k].get("artifact"):
+                files.append((o[k]["artifact"], o[k]["sha256"]))
+    return files
+
+
+def import_kept(plan):
+    """Copies the artifact folder of each kept build that the plan imports from another -Out (--keep-from) into
+    this run's artifact folder, then checks every copied file against the SHA-256 that the earlier report gives it.
+    Returns the errors."""
+    errors = []
+    for k in plan["kept"]:
+        imp = k.get("imported_from")
+        if not imp:
+            continue
+        src, dst = Path(imp["artifact"]), Path(k["definition"]["artifact"])
+        if dst.exists():
+            shutil.rmtree(dst)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src, dst)
+        for path, digest in entry_artifacts(k):
+            if not Path(path).is_file() or sha256_file(path) != digest:
+                errors.append(f"row {k['id']}: the copy {path} from {src} does not have SHA-256 {digest}")
+    return errors
+
+
 def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None, version=None, max_parallel=3,
-              jobs=0, logical=None):
+              jobs=0, logical=None, keep_from=None):
     manifest = load_json(manifest_path)
     errors = check_manifest(manifest)
     if errors:
@@ -367,35 +443,88 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         r["version"] = version if any("{version}" in a for a in r["args"]) else None
         return r
 
-    earlier = previous_builds(out) if patterns else {}
-    kept = []
-    for rid in order:
-        if rid in selected or rid not in earlier:
-            continue
-        entry = earlier[rid]
-        if build_key(entry.get("definition") or {}) != build_key(define(rid)):
-            # The row changed since that run: its artifact is not the build the manifest describes now.
-            if any(rid in deps[s] for s in selected):
-                errors.append(f"row {rid}: the manifest row changed since the earlier run in {out}; add it to --only")
-            continue
-        for o in entry["outputs"]:
-            f = Path(o["artifact"])
-            if not f.is_file() or sha256_file(f) != o["sha256"]:
-                errors.append(f"row {rid}: the artifact {f} of the earlier run is gone or changed; rebuild the row")
+    own = previous_builds(out)
+    earlier = own if patterns else {}
+    # --keep-from: the ok builds of another output directory (an earlier round), imported only by name, after a hash
+    # check, and only where this directory has no build of the row that stands for it (BD-244).
+    foreign = previous_builds(keep_from) if keep_from and patterns else {}
+    if foreign:
+        # A round directory is often copied or moved after its run: its report names the -Out of that run.
+        was = load_json(Path(keep_from) / REPORT).get("out")
+        if was and Path(was).resolve() != Path(keep_from).resolve():
+            for rid, entry in list(foreign.items()):
+                try:
+                    foreign[rid] = rebase_entry(entry, was, Path(keep_from).resolve())
+                except ValueError:
+                    pass                                         # a path outside that -Out stays as it is
+    recipe_tree = recipe_checkout(root, table, recipe_repo)
+
+    def stands_for(entry, rid):
+        """(definition, None) when the earlier build is the build of the row now, else (None, reason). A build whose
+        row differs only in the recipe commit stands for it when the recipe paths are the same at both commits; its
+        definition keeps the commit that built it, so that the rows name that commit."""
+        old, new = entry.get("definition") or {}, define(rid)
+        definition = None
+        if build_key(old) == build_key(new):
+            definition = new
+        elif old.get("recipe_commit") and build_key(dict(old, recipe_commit=new["recipe_commit"])) == build_key(new):
+            why = recipe_difference(recipe_tree, old["recipe_commit"], new["recipe_commit"], new["recipe"])
+            if why:
+                return None, f"the recipe commit moved and {why}"
+            definition = dict(new, recipe_commit=old["recipe_commit"])
+            definition["recipe_equivalent"] = {"manifest": new["recipe_commit"], "built": old["recipe_commit"],
+                                               "paths": recipe_paths(new["recipe"])}
+        else:
+            return None, "the manifest row changed"
         # The same bytes under today's row: its OUTPUT_NOTES reach the rows from the manifest as it is now. The jobs
         # stay those of the earlier run, so that the row gives the command line that made the artifact.
-        definition = define(rid)
-        if (entry.get("definition") or {}).get("jobs"):
-            definition["jobs"] = entry["definition"]["jobs"]
-        kept.append(dict(entry, definition=definition))
+        if old.get("jobs"):
+            definition["jobs"] = old["jobs"]
+        return definition, None
+
+    kept, refused = [], {}
+    for rid in order:
+        if rid in selected or (rid not in earlier and rid not in foreign):
+            continue
+        definition, why, source = None, None, None
+        if rid in earlier:
+            definition, why = stands_for(earlier[rid], rid)
+            source = out
+        if definition is None and rid in foreign:
+            definition, foreign_why = stands_for(foreign[rid], rid)
+            why = why or foreign_why
+            source = keep_from
+        if definition is None:
+            # The row changed since that run: its artifact is not the build the manifest describes now.
+            refused[rid] = why
+            if any(rid in deps[s] for s in selected):
+                errors.append(f"row {rid}: {why} since the earlier run in {source}; add it to --only")
+            continue
+        entry = earlier[rid] if source == out else foreign[rid]
+        for path, digest in entry_artifacts(entry):
+            f = Path(path)
+            if not f.is_file() or sha256_file(f) != digest:
+                errors.append(f"row {rid}: the artifact {f} of the earlier run is gone or changed; rebuild the row")
+        definition["artifact"] = str(out / "artifacts" / definition["flavour"] / rid)
+        # A kept build is a build of this run's report: not carried, and not to be imported again.
+        entry = {k: v for k, v in entry.items() if k not in ("carried", "carried_reason")}
+        if source == out:
+            if entry.get("imported_from"):
+                entry["imported_earlier"] = entry.pop("imported_from")
+            kept.append(dict(entry, definition=definition))
+            continue
+        src = Path(entry["outputs"][0]["artifact"]).parent
+        moved = rebase_entry(entry, src, definition["artifact"])
+        moved["imported_from"] = {"out": str(Path(keep_from).resolve()), "artifact": str(src)}
+        kept.append(dict(moved, definition=definition))
     kept_ids = {k["id"] for k in kept}
     for rid in sorted(selected):
         for d in deps[rid]:
-            if d not in selected and d not in kept_ids and d in earlier:
+            if d not in selected and d not in kept_ids and d in refused:
                 continue                                         # reported above
             if d not in selected and d not in kept_ids:
                 errors.append(f"row {rid} needs the outputs of row {d}, which this run does not build and no earlier "
-                              f"run in {out} built: add {d} to --only")
+                              f"run in {out}{' or ' + str(keep_from) if keep_from else ''} built: add {d} to --only")
     if errors:
         return None, errors
 
@@ -426,6 +555,10 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
     if errors:
         return None, errors
     recipes = sorted({(recipe_repo, b["recipe_commit"], b["recipe"]) for b in builds})
+    # The earlier ok builds of the rows that this run builds again. Their artifacts stay until the build of the row
+    # starts, so a run that ends before that (a failed gate, a build that did not start) reports them as they were,
+    # and the next run in this directory still finds them (BD-244).
+    carried = [own[b["id"]] for b in builds if b["id"] in own]
     plan = {
         "tool": "build-release-set", "schema": 1, "manifest": str(Path(manifest_path).resolve()),
         "manifest_sha256": sha256_file(manifest_path), "release": manifest["release"], "version": version,
@@ -433,7 +566,8 @@ def make_plan(manifest_path, root, repo, out, work, sources_path=None, only=None
         "sources": str(Path(sources_path).resolve()) if sources_path else None,
         "recipe_repository": recipe_repo, "recipe_commit": manifest["recipe_commit"], "repositories": table,
         "max_parallel": max_parallel, "logical_processors": logical, "jobs_per_slot": jobs_per_slot,
-        "only": patterns, "builds": builds, "kept": kept, "shared_trees": list(shared.values()),
+        "only": patterns, "builds": builds, "kept": kept, "carried": carried,
+        "keep_from": str(Path(keep_from).resolve()) if keep_from else None, "shared_trees": list(shared.values()),
         "recipes": [{"repo": a, "commit": b, "recipe": c} for a, b, c in recipes],
         "rows_in_manifest": [r["id"] for r in rows],
     }
@@ -1078,7 +1212,10 @@ def main():
     p.add_argument("--max-parallel", type=int, default=3)
     p.add_argument("--jobs", type=int, default=0)
     p.add_argument("--logical", type=int)
+    p.add_argument("--keep-from")
     p.add_argument("--write", required=True)
+    imp = sub.add_parser("import")
+    imp.add_argument("--plan", required=True)
     g = sub.add_parser("gates")
     g.add_argument("--plan", required=True)
     g.add_argument("--recipe-params", required=True)
@@ -1121,15 +1258,28 @@ def main():
     if args.command == "plan":
         only = [x.strip() for x in args.only.split(",") if x.strip()]
         plan, errors = make_plan(args.manifest, args.root, args.repo, args.out, args.work, args.sources, only,
-                                 args.version, args.max_parallel, args.jobs, args.logical)
+                                 args.version, args.max_parallel, args.jobs, args.logical, args.keep_from)
         for e in errors:
             print(f"FAIL {e}")
         if errors:
             return 1
         write_json(args.write, plan)
-        print(f"plan: {len(plan['builds'])} builds, {len(plan['kept'])} kept from an earlier run, "
+        imported = sum(1 for k in plan["kept"] if k.get("imported_from"))
+        source = plan["keep_from"]
+        print(f"plan: {len(plan['builds'])} builds, {len(plan['kept'])} kept from an earlier run"
+              f"{f' ({imported} imported from {source})' if imported else ''}, "
               f"{len(plan['shared_trees'])} shared trees, {plan['jobs_per_slot']} jobs per slot")
+        for k in plan["kept"]:
+            eq = k["definition"].get("recipe_equivalent")
+            if eq:
+                print(f"  {k['id']}: recipe commit {eq['manifest'][:8]} in the manifest, {eq['built'][:8]} built it; "
+                      f"{', '.join(eq['paths'])} are the same at both")
         return 0
+    if args.command == "import":
+        errors = import_kept(load_json(args.plan))
+        for e in errors:
+            print(f"FAIL {e}")
+        return 1 if errors else 0
     if args.command == "gates":
         result = run_gates(load_json(args.plan), load_json(args.recipe_params), args.allow_unpushed)
         write_json(args.write, result)
@@ -1152,7 +1302,9 @@ def main():
         return 1 if errors else 0
     if args.command == "rows":
         plan, report = load_json(args.plan), load_json(args.report)
-        results = {b["id"]: b for b in report.get("builds", []) if b.get("status") == "ok"}
+        # A carried build (an earlier build of a row that this run did not build) gives no rows: the run that built
+        # it gave them.
+        results = {b["id"]: b for b in report.get("builds", []) if b.get("status") == "ok" and not b.get("carried")}
         rows, details, notes = make_rows(plan, results)
         doc = {"tool": "build-release-set", "release": plan["release"], "version": plan["version"], "files": rows,
                "artifacts": details, "notes": notes}

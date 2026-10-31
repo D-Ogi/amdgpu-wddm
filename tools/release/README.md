@@ -356,7 +356,14 @@ pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-t
 
 `-Plan` prints the gates and each build with its command line, and builds nothing. `-Only` builds only the rows that
 it names (ids or wildcards). The other rows keep the artifacts of the last run in `-Out`, if the manifest row did not
-change. `-Compare` compares the rows with a `release-sources.json`. Each output of a row that claims a deterministic
+change. A row that changed only in its recipe commit keeps its artifact when the directory of its recipe is the same
+at the two commits (`git diff`). The plan prints the two commits, and the rows give the commit that
+built the artifact. A run that stops before a build starts writes a report that keeps the earlier builds: the kept
+rows, and the earlier build of each row that it did not build (`carried`). Thus a failed gate does not make the next
+run build every row again (BD-244). `-KeepFrom <dir>` takes the builds of another `-Out`, for example an earlier
+round, for the rows that `-Only` does not name and that `-Out` has no build of. The same rules apply. The tool checks
+the SHA-256 of each file at the source, copies the files into `<Out>\artifacts` and checks the copies before the
+first build. `-Compare` compares the rows with a `release-sources.json`. Each output of a row that claims a deterministic
 build must have the same bytes, or the same image without its signature. `-Out` must be under `BC250_ROOT`, because
 a row names its source relative to that root.
 
