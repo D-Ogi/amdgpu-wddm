@@ -108,6 +108,31 @@ namespace AmdgpuWddmControl
             return Distinct(raw);
         }
 
+        // The native mode of the monitor on one display device (\\.\DISPLAY1), from its EDID (ScaledStart.NativeSize),
+        // or null when it cannot be read. The monitor's interface (EnumDisplayDevices with EDD_GET_DEVICE_INTERFACE_NAME)
+        // gives its device instance (DEVPKEY_Device_InstanceId), and the hardware key of that instance (CM_Open_DevNode_Key,
+        // CM_REGISTRY_HARDWARE) holds the EDID value that Windows read from the monitor. Every user may read it.
+        public static Size? EdidNativeSize(string device)
+        {
+            try
+            {
+                var dd = new DISPLAY_DEVICE { cb = Marshal.SizeOf(typeof(DISPLAY_DEVICE)) };
+                if (!EnumDisplayDevices(device, 0, ref dd, EddGetDeviceInterfaceName) || string.IsNullOrEmpty(dd.DeviceID)) return null;
+                var key = new DevPropKey { fmtid = new Guid(0x78c34fc8, 0x104a, 0x4aca, 0x9e, 0xa4, 0x52, 0x4d, 0x52, 0x99, 0x6e, 0x57), pid = 256 };
+                uint type, size = 512;
+                var buffer = new byte[size];
+                if (CM_Get_Device_Interface_Property(dd.DeviceID, ref key, out type, buffer, ref size, 0) != CrSuccess || size < 2) return null;
+                string instance = System.Text.Encoding.Unicode.GetString(buffer, 0, (int)size).TrimEnd('\0');
+                uint node;
+                if (CM_Locate_DevNode(out node, instance, 0) != CrSuccess) return null;
+                IntPtr hkey;
+                if (CM_Open_DevNode_Key(node, KeyRead, 0, RegDispositionOpenExisting, out hkey, CmRegistryHardware) != CrSuccess) return null;
+                using (var k = Microsoft.Win32.RegistryKey.FromHandle(new Microsoft.Win32.SafeHandles.SafeRegistryHandle(hkey, true)))
+                    return ScaledStart.NativeSize(k.GetValue("EDID") as byte[]);
+            }
+            catch (Exception) { return null; }
+        }
+
         internal static bool TryCurrent(string device, out DEVMODE dm)
         {
             dm = new DEVMODE { dmSize = (short)Marshal.SizeOf(typeof(DEVMODE)) };
@@ -160,6 +185,34 @@ namespace AmdgpuWddmControl
 
         const int EnumCurrentSettings = -1;
         const int DmInterlaced = 0x2;
+        // WinUser.h, cfgmgr32.h and winnt.h of SDK 10.0.26100.
+        const uint EddGetDeviceInterfaceName = 0x1, CrSuccess = 0, RegDispositionOpenExisting = 1, CmRegistryHardware = 0, KeyRead = 0x20019;
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        struct DISPLAY_DEVICE
+        {
+            public int cb;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+            public int StateFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct DevPropKey { public Guid fmtid; public uint pid; }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "EnumDisplayDevicesW")]
+        static extern bool EnumDisplayDevices(string device, uint devNum, ref DISPLAY_DEVICE displayDevice, uint flags);
+
+        [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode, EntryPoint = "CM_Get_Device_Interface_PropertyW")]
+        static extern uint CM_Get_Device_Interface_Property(string deviceInterface, ref DevPropKey key, out uint type, byte[] buffer, ref uint size, uint flags);
+
+        [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode, EntryPoint = "CM_Locate_DevNodeW")]
+        static extern uint CM_Locate_DevNode(out uint devInst, string deviceId, uint flags);
+
+        [DllImport("cfgmgr32.dll")]
+        static extern uint CM_Open_DevNode_Key(uint devNode, uint samDesired, uint hardwareProfile, uint disposition, out IntPtr key, uint flags);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);

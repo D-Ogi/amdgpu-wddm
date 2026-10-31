@@ -135,6 +135,16 @@ change (`CDS_UPDATEREGISTRY`, `SDC_SAVE_TO_DATABASE`). Revert, closing the quest
 the display configuration from before the change. These are per-user settings: no elevation, no backup and no Recovery
 action. `src/DisplayModes.cs` is the only file that changes a display setting (G-SRC).
 
+A scaled start of the screen (BD-196) gives a monitor one mode only. The firmware starts the screen in a small mode, for
+example 800 x 600, and the monitor stretches it to the full panel. The driver keeps the mode it got from the firmware,
+and Windows lists only that mode. The Display page shows a warning and the `full-resolution-start` action (Recovery,
+below) when one of two signals is true. The first signal: Windows lists exactly one resolution for the monitor, that
+resolution is the current one, and it is smaller than the native mode in the monitor's EDID. The native mode is the
+first detailed timing descriptor of the EDID base block. The EDID comes from the `EDID` value of the monitor's device
+key, which every user can read. The second signal: the `graphicsresolution` element of the BCD `{globalsettings}` object
+is set. Only an elevated process can read the BCD store, so the window uses the first signal and the elevated helper
+reads the store and plans again. `src/ScaledStart.cs` holds the rule, the plan and the bcdedit logic.
+
 ## Ray tracing benchmark
 
 The Performance page carries a card that measures how fast the card traces light. It measures a
@@ -286,11 +296,20 @@ observed in this session while the GPU route is selected.
 | `graphics-defaults --gfx <settings>` | the graphics settings for all games under `Graphics` and `Vulkan` (as `--gfx` above) | next game start | not a list of settings in the contract, the settings cannot be read, or stored already |
 | `game-log-on --minutes N` | `GameLogUntil` of `HKLM\SOFTWARE\amdgpu-wddm\Diagnostics` (REG_QWORD, the UTC FILETIME at which recording stops), and the folder `%ProgramData%\amdgpu-wddm\logs\games` with its access list, pruned to 512 MiB | next game start | N is not 1-60, or the value cannot be read |
 | `game-log-off` | delete `GameLogUntil` | next game start | nothing is recording, or the value cannot be read |
+| `full-resolution-start` | `bcdedit /set {globalsettings} highestmode on`, and `bcdedit /deletevalue {globalsettings} graphicsresolution` when that element is set. The backup keeps the old values (`on`, `off`, absent, or the resolution), so `undo` sets them again with bcdedit. No other BCD object or element changes. The action is not board-specific and is shown wherever the driver is installed (`src/ScaledStart.cs`) | next restart (offered) | the store cannot be read, a boolean word of bcdedit is not known, or the stored resolution is not `<width>x<height>`. `highestmode` is on already and no `graphicsresolution` is set |
 | `restart-compositor --accept-bd060` | nothing; stops the active session's DWM, Windows starts a new one (operator escape, not in the window, not undoable) | at once | `--accept-bd060` is missing |
 
 The only values any action or undo may write are those in the table (`Recovery.Allowed`): never the temperature
 limits, firmware paths, other KMD service values, BIOS or firmware settings, or test signing. The reset takes no
-value from this app: without `"defaults"` in the manifest it is refused.
+value from this app: without `"defaults"` in the manifest it is refused. The two BCD elements of
+`full-resolution-start` are the only values outside the registry. The BCD store is a file that Windows reads at its
+start. It is not a firmware variable, and the action changes no boot entry.
+
+bcdedit prints a boolean in the language of Windows. Before it reads `highestmode`, the helper learns the two words of
+this Windows from a store file of its own in the temporary folder. It sets the element on and then off on one entry of
+that store and reads what bcdedit prints. Then it deletes the store file. When the calibration fails, the helper uses the
+English words. A word that matches neither is "unknown", and the plan is refused, because an undo must be able to put
+back the old value.
 
 The elevated helper plans again from its own reading, saves the old values to
 `%ProgramData%\amdgpu-wddm\control\backup-<utc>.json` (the directory is writable by administrators and SYSTEM only,

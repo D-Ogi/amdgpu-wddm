@@ -60,6 +60,10 @@ namespace AmdgpuWddmControl
                 // (OcUnlock.PlanWrites); the tuning page stores them through the driver.
                 case OcUnlock.CpuMaxName: return w.Delete ? null : "plan.line.cpu-clock";
                 case OcUnlock.CpuUvName: return w.Delete ? null : "plan.line.cpu-uv";
+                // The full-resolution start (ScaledStart.cs): both boot settings share the sentence of the change, and
+                // an undo of them shares the sentence of the way back.
+                case ScaledStart.HighestMode:
+                case ScaledStart.GraphicsResolution: return ScaledStart.Owns(w.Path) ? ScaledStart.LineId(w) : null;
                 default: return null;
             }
         }
@@ -145,6 +149,7 @@ namespace AmdgpuWddmControl
             new Regex(@"0x[0-9A-Fa-f]+"),
             new Regex(@"\b(BC250_\w+|bc250kmd\w*|bc250control|Dpm[A-Z]\w*|Cu(Mode|Disable)\w*|Enable(Gpu|Cdd|ComputeQueue|GdiHwAccel|HardwarePointer)\w*|InteropClosedReason|DwmForceCpu|Cpu(Tune|Lab|MaxMHz|UvSteps|TempC|Trial\w*|Pending|Confirmed|LastReason)|CoreMask\w*|Tdr[A-Z]\w*|OcTier\w*)\b"),
             new Regex(@"\b(FrameRateLimit|MaxFrameLatency|PerformanceOverlay|RenderOnCpu|FsrUpgrade|ReportAmdDriverVersion|WsiRoute|MemoryOverflow|shader-model-\d+-off|dxgi-composition)\b"),
+            new Regex(@"(?i)\b(bcdedit|BCD|highestmode|graphicsresolution|globalsettings|EDID|GOP)\b"),
             new Regex(@"\b[0-9a-f]{12,}\b"),
         };
 

@@ -1325,6 +1325,17 @@ search.graphics.hw-pointer|mt-safe|a49c1648|하드웨어 마우스 포인터
 search.graphics.hw-pointer.terms|mt-safe|bb0a33b4|마우스|포인터|커서|하드웨어 커서|깜박임|화살표|mouse|cursor
 help.setting.hw-pointer|mt|458914a7|그래픽 칩의 디스플레이 엔진이 화면 위에 마우스 포인터를 그리므로 Windows가 모든 프레임에 포인터를 그릴 필요가 없습니다. 처음부터 켜져 있습니다. 포인터가 깜박이거나 튀거나 색이 잘못되면 끄십시오. 새 설정은 Windows를 다시 시작한 후에 적용됩니다.
 
+# ---- the full resolution after a scaled start of the screen (ScaledStart.cs, BD-196) ----
+display.full-res.small|mt|bde46d0f|Windows가 이 모니터에 {0}만 제공하지만 모니터는 {1}을(를) 표시할 수 있습니다. 컴퓨터가 모니터를 작은 모드로 시작했습니다.
+display.full-res.fixed|mt|6c46c02f|Windows 시작 설정이 화면에 작은 모드를 지정합니다.
+display.full-res.help|mt|fd2af2ef|아래 버튼을 누르면 Windows가 모니터를 가장 높은 모드로 시작합니다. Windows를 다시 시작한 후 전체 해상도가 제공됩니다.
+display.full-res.button|mt|3819939b|전체 해상도 사용
+plan.title.full-resolution-start|mt|5bbbb857|화면의 전체 해상도 사용
+plan.line.full-resolution-start|mt|49a3cdbf|Windows가 화면을 가장 높은 모드로 시작하므로 다시 시작한 후 전체 해상도가 제공됩니다.
+plan.line.full-resolution-start-undo|mt|671892eb|Windows가 변경 전의 설정으로 화면을 시작합니다.
+plan.full-res.refuse.unreadable|mt|3dd425b8|Windows 시작 설정을 읽을 수 없으므로 변경하지 않습니다.
+plan.full-res.refuse.already|mt|4299d1d9|이 시작 설정은 이미 되어 있습니다. 사용하려면 Windows를 다시 시작하세요.
+
 # ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
 oc.title|mt|681c1eb4|쿨러에 맞춘 더 높은 클럭
 oc.now|mt|fe18013d|현재

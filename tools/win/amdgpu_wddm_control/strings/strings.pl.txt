@@ -1327,6 +1327,17 @@ search.graphics.hw-pointer|mt-safe|a49c1648|Sprzętowy wskaźnik myszy
 search.graphics.hw-pointer.terms|mt-safe|bb0a33b4|mysz|wskaźnik|kursor|kursor sprzętowy|migotanie|strzałka|mouse|cursor
 help.setting.hw-pointer|mt|458914a7|Pozwala silnikowi wyświetlania układu graficznego rysować wskaźnik myszy nad obrazem, więc Windows nie musi rysować go w każdej klatce. Jest włączony od początku. Wyłącz go, jeśli wskaźnik migocze, skacze albo ma złe kolory; nowe ustawienie działa po ponownym uruchomieniu Windows.
 
+# ---- the full resolution after a scaled start of the screen (ScaledStart.cs, BD-196) ----
+display.full-res.small|mt|bde46d0f|Windows oferuje dla tego monitora tylko {0}, a monitor może pokazać {1}. Komputer uruchomił monitor w małym trybie.
+display.full-res.fixed|mt|6c46c02f|Ustawienia uruchamiania Windows wybierają mały tryb ekranu.
+display.full-res.help|mt|fd2af2ef|Po kliknięciu przycisku poniżej Windows uruchamia monitor w jego najwyższym trybie. Pełna rozdzielczość będzie dostępna po ponownym uruchomieniu Windows.
+display.full-res.button|mt|3819939b|Użyj pełnej rozdzielczości
+plan.title.full-resolution-start|mt|5bbbb857|Użyj pełnej rozdzielczości ekranu
+plan.line.full-resolution-start|mt|49a3cdbf|Windows uruchamia ekran w jego najwyższym trybie, więc po ponownym uruchomieniu będzie dostępna pełna rozdzielczość.
+plan.line.full-resolution-start-undo|mt|671892eb|Windows uruchamia ekran z ustawieniami sprzed zmiany.
+plan.full-res.refuse.unreadable|mt|3dd425b8|Nie można odczytać ustawień uruchamiania Windows, więc nie zostaną zmienione.
+plan.full-res.refuse.already|mt|4299d1d9|To ustawienie uruchamiania jest już wybrane. Uruchom ponownie Windows, aby go użyć.
+
 # ---- the overclock unlock by cooling type (OcUnlock.cs, MainForm.Oc.cs) ----
 oc.title|mt|681c1eb4|Wyższe taktowania dla Twojego chłodzenia
 oc.now|mt|fe18013d|Teraz
