@@ -7,11 +7,13 @@
 typedef struct STATE_ACTIVATE {
     unsigned char hash[32];
     NTSTATUS status;
+    KEVENT done;
 } STATE_ACTIVATE;
 static void ActivateWorker(PVOID context)
 {
     STATE_ACTIVATE *work=(STATE_ACTIVATE*)context;
     work->status=DriverStateActivate(work->hash);
+    KeSetEvent(&work->done,IO_NO_INCREMENT,FALSE);
     PsTerminateSystemThread(STATUS_SUCCESS);
 }
 static NTSTATUS ResolveDeviceIdentity(PDEVICE_OBJECT device,unsigned char hash[32])
@@ -46,12 +48,14 @@ NTSTATUS DriverStateActivateDevice(PDEVICE_OBJECT device)
 {
     STATE_ACTIVATE work;NTSTATUS status;OBJECT_ATTRIBUTES attributes;HANDLE thread=NULL;
     RtlZeroMemory(&work,sizeof(work));
+    KeInitializeEvent(&work.done,NotificationEvent,FALSE);
     // Recheck the PDO at StartDevice. Only this SYSTEM worker may publish the
     // prepared generation, before diagnostics, start admission or hardware I/O.
     status=ResolveDeviceIdentity(device,work.hash);if(!NT_SUCCESS(status))return status;
     InitializeObjectAttributes(&attributes,NULL,OBJ_KERNEL_HANDLE,NULL,NULL);
     status=PsCreateSystemThread(&thread,SYNCHRONIZE,&attributes,NULL,NULL,ActivateWorker,&work);
     if(!NT_SUCCESS(status))return status;
-    status=ZwWaitForSingleObject(thread,FALSE,NULL);ZwClose(thread);
-    return NT_SUCCESS(status)?work.status:status;
+    KeWaitForSingleObject(&work.done,Executive,KernelMode,FALSE,NULL);
+    ZwClose(thread);
+    return work.status;
 }
