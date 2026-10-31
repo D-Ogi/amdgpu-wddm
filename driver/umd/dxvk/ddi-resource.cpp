@@ -291,6 +291,38 @@ HRESULT unsupported_request(HRESULT hr) {
     const HRESULT status=ddi_device_status(hr);
     return (status==E_OUTOFMEMORY || status==D3DDDIERR_DEVICEREMOVED) ? status : DXGI_DDI_ERR_UNSUPPORTED;
 }
+// BD-168: one line for each OpenResource that this shell refuses, in both flavours, at most 16 for each process. Every
+// refusal reaches the runtime as E_OUTOFMEMORY (unopenable_resource), the status that a real allocation failure also
+// has, so only this line tells them apart: the step (decode, adopt, wait), the status of that step, the status that
+// the runtime gets, and the allocation the open named with its LB7A description (magic and version, size, pitch,
+// D3DDDIFORMAT, bytes) and the GDI1 type when the blob has the trailer.
+void open_refused_note(const D3D10DDIARG_OPENRESOURCE &args,HANDLE runtime,const char *step,HRESULT hr) noexcept {
+    static std::atomic_uint notes{16};
+    const D3DDDI_OPENALLOCATIONINFO2 none{};
+    const auto &info=args.NumAllocations && args.pOpenAllocationInfo2 ? args.pOpenAllocationInfo2[0] : none;
+    unsigned long w[10]{};
+    if (info.pPrivateDriverData)
+        std::memcpy(w,info.pPrivateDriverData,std::min<size_t>(info.PrivateDriverDataSize,sizeof(w)));
+    device_life_note(notes,"BC250 BD-168: OpenResource refused: step=%s hr=%08X reported=%08X runtime=%p allocations=%u "
+        "allocation=%u km-resource=%u private=%u allocation-private=%u lb7a=%08lX/%lu %lux%lu pitch=%lu d3dddi=%lu "
+        "bytes=%llu gdi=%08lX/%lu thread=%lu\n",step,unsigned(hr),unsigned(unopenable_resource(hr)),runtime,
+        args.NumAllocations,unsigned(info.hAllocation),unsigned(args.hKMResource.handle),args.PrivateDriverDataSize,
+        info.PrivateDriverDataSize,w[0],w[1],w[2],w[3],w[4],w[5],(unsigned long long)w[7]<<32|w[6],w[8],w[9],
+        (unsigned long)GetCurrentThreadId());
+}
+// BD-168: one line for each runtime surface (a swap-chain buffer, a shared or displayable texture) whose creation
+// failed after its descriptor was admitted, in both flavours, at most 16 for each process: the step, the status, the
+// surface that was asked for, and the allocation when the kernel had made one.
+void surface_failed_note(const char *step,HRESULT hr,const RuntimeSurfaceRequest &request,
+    const RuntimeSurface *surface,HANDLE runtime) noexcept {
+    static std::atomic_uint notes{16};
+    device_life_note(notes,"BC250 BD-168: runtime surface not created: step=%s hr=%08X runtime=%p primary=%u shared=%u "
+        "displayable=%u scanout=%u d3dddi=%u %ux%u pitch=%u bytes=%llu allocation=%u thread=%lu\n",step,unsigned(hr),
+        runtime,unsigned(request.primary),unsigned(request.shared),unsigned(request.displayable),unsigned(request.scanout),
+        unsigned(request.surface.Format),unsigned(request.surface.Width),unsigned(request.surface.Height),
+        unsigned(request.surface.Pitch),(unsigned long long)request.surface.Size,
+        surface ? unsigned(surface->allocation.allocation) : 0u,(unsigned long)GetCurrentThreadId());
+}
 SIZE_T APIENTRY size(D3D10DDI_HDEVICE,const D3D11DDIARG_CREATERESOURCE *) { return sizeof(DdiResource); }
 void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
     D3D10DDI_HRESOURCE handle,D3D10DDI_HRTRESOURCE runtimeHandle) {
@@ -323,9 +355,11 @@ void APIENTRY create(D3D10DDI_HDEVICE h,const D3D11DDIARG_CREATERESOURCE *desc,
                 report_ddi_error(owner,unsupported_request(hr),DdiErrorClass::unsupported); return;
             }
             RuntimeSurface *surface=nullptr;
+            const char *failedStep="begin";
             hr=owner.begin_surface(request,texture,surface);
-            if (SUCCEEDED(hr)) hr=owner.wait_surface(*surface);
+            if (SUCCEEDED(hr)) { failedStep="wait"; hr=owner.wait_surface(*surface); }
             if (hr!=S_OK) {
+                surface_failed_note(failedStep,hr,request,surface,owner.runtime().hDevice);
                 if (surface) owner.release_surface_handle(*surface);
                 report_ddi_error(owner,FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED,DdiErrorClass::unsupported); return;
             }
@@ -387,9 +421,9 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
         BC250_WDDM_ALLOCATION_PRIVATE metadata{}; D3D11_TEXTURE2D_DESC1 desc{};
         HRESULT hr=decode_open_resource(*args,metadata,desc);
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
-        // BD-253, lab flavour: each OpenResource of this device, at most 32 lines per process for opens with a
-        // resource record and 16 for opens without one (window redirection surfaces; Chromium's texture pool used
-        // all 32 lines in arm 5 before the main window's surfaces were opened): the step it reached, its status,
+        // BD-253, lab flavour: each OpenResource of this device that succeeds, at most 32 lines per process for opens
+        // with a resource record and 16 for opens without one (window redirection surfaces; Chromium's texture pool
+        // used all 32 lines in arm 5 before the main window's surfaces were opened): its status,
         // and what the opener asked for (Qt opens Chromium's shared texture here). The allocation blob is named by
         // its size and its first two words (the LB7A magic and version), and by the GDI1 type when it has the
         // trailer. The allocation handle is the one the Present lines name.
@@ -407,19 +441,22 @@ void APIENTRY open(D3D10DDI_HDEVICE h,const D3D10DDIARG_OPENRESOURCE *args,
                 unsigned(args->hKMResource.handle),unsigned(desc.Format),desc.Width,desc.Height,desc.BindFlags,
                 desc.MiscFlags,unsigned(info.hAllocation),(unsigned long)GetCurrentThreadId());
         };
-        if (FAILED(hr)) opened("decode",hr);
 #endif
-        if (FAILED(hr)) { report_ddi_error(owner,unopenable_resource(hr),DdiErrorClass::out_of_memory); return; }
+        // BD-168: a refused open has its own line in both flavours (open_refused_note); the lab line above is for the
+        // opens that succeed.
+        if (FAILED(hr)) {
+            open_refused_note(*args,owner.runtime().hDevice,"decode",hr);
+            report_ddi_error(owner,unopenable_resource(hr),DdiErrorClass::out_of_memory); return;
+        }
         RuntimeSurfaceAllocation allocation{reinterpret_cast<HANDLE>(runtimeHandle.handle),args->pOpenAllocationInfo2[0].hAllocation,args->hKMResource.handle};
         RuntimeSurface *surface=nullptr;
         hr=owner.adopt_surface(allocation,metadata,desc,surface);
-#ifdef AMDGPU_WDDM_LAB_FLAVOUR
-        if (FAILED(hr)) opened("adopt",hr);
-#endif
+        if (FAILED(hr)) open_refused_note(*args,owner.runtime().hDevice,"adopt",hr);
         if (SUCCEEDED(hr)) {
             hr=owner.wait_surface(*surface);
+            if (hr!=S_OK) open_refused_note(*args,owner.runtime().hDevice,"wait",FAILED(hr) ? hr : D3DDDIERR_DEVICEREMOVED);
 #ifdef AMDGPU_WDDM_LAB_FLAVOUR
-            opened(hr==S_OK ? "done" : "wait",hr);
+            else opened("done",hr);
 #endif
         }
         if (hr!=S_OK) {
