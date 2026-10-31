@@ -78,6 +78,12 @@ pwsh -File tools\release\build-release.ps1 -SetupApp <setup build folder> [-Rebu
 pwsh -File tools\release\test-dryrun.ps1 -Package <BC250_ROOT>\scratch\release\out\amdgpu-wddm-tester-<version>
 ```
 
+The gates of `build-release.ps1` read this repository as it is on disk, and the package names its commit. So the
+script refuses a tree with uncommitted or untracked files, and it stops when the tree changes before the quality
+suite or while the suite runs (`TreeState.psm1`, BD-263). A lab candidate (`-NoProvenance`) can start from a dirty
+tree, but that tree must not change either. `<Out>\quality-tree.json` records the commit and the uncommitted entries
+that the gates read.
+
 `-Package` of `test-dryrun.ps1`, `test-offline.ps1` and `test-engine-events.ps1` takes the folder the zip unpacks
 to, as above, or the package root `files\` under it: each script takes the one that holds `manifest.json`. Their
 scratch folder lands beside the unpacked release, never inside it.

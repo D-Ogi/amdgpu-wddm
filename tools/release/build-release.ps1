@@ -97,6 +97,14 @@ $zip = "$pkgRoot.zip"
 $pythonExe = (Get-Command python -ErrorAction SilentlyContinue).Source
 if (-not $pythonExe) { throw 'python is not on PATH: the flavour selection, the commit check and the ledger gate cannot run' }
 [void][IO.Directory]::CreateDirectory($Out)
+# The gates below read this repository as it is on disk, and the package names its commit (BD-263). So the tree must
+# be clean, and it must not change before the last gate has read it. A lab candidate (-NoProvenance) is built from a
+# work tree on purpose: its dirty entries go into the record, and its tree must still stay the same.
+Import-Module (Join-Path $PSScriptRoot 'TreeState.psm1') -Force
+$treeScratch = Join-Path $Out 'tree-state'
+$treeAtStart = Get-TreeState $repo $treeScratch
+Assert-TreeClean $treeAtStart $(if ($NoProvenance) { $NoProvenanceReason })
+"recipe tree: $($treeAtStart.head)$(if (-not $treeAtStart.clean) { ", $($treeAtStart.entries.Count) uncommitted entries (lab candidate)" } else { ', clean' })"
 $manifestPath = Join-Path $PSScriptRoot 'release-sources.json'
 $sourcesPath = Join-Path $Out ("selected-sources-$Flavour.json")
 $selection = Invoke-Headless -File $pythonExe -Arguments @((Join-Path $PSScriptRoot 'release_flavour.py'),
@@ -716,8 +724,15 @@ if ($r.code -ne 0) { throw 'the kernel driver of this repository does not compil
 # supply a PASS here; the receipt identifies every executed check and its deadline.
 $qualityCmd = Join-Path $repo 'tools\quality\quick.cmd'
 $qualityOut = Join-Path $Out 'quality-full'
+$null = Assert-TreeUnchanged $treeAtStart $treeScratch 'before the quality suite'
 & $qualityCmd $Root $qualityOut $repo 'Full' (Join-Path $Root 'toolchain\nuget')
-if ($LASTEXITCODE -ne 0) { throw 'Full uncached release quality gates failed' }
+$qualityExit = $LASTEXITCODE
+# An edit made while the suite ran is named first: a FAIL then may be the edit's, not the commit's.
+$treeAfterGates = Assert-TreeUnchanged $treeAtStart $treeScratch 'during the quality suite'
+[IO.File]::WriteAllText((Join-Path $Out 'quality-tree.json'), (([ordered]@{ repo = $repo; commit = $treeAtStart.head
+    clean = $treeAtStart.clean; uncommitted_entries = @($treeAtStart.entries); uncommitted_sha256 = $treeAtStart.digest
+    checked_utc = @($treeAtStart.utc, $treeAfterGates.utc) }) | ConvertTo-Json -Depth 4))
+if ($qualityExit -ne 0) { throw 'Full uncached release quality gates failed' }
 # A gate whose input is not in this repository records a SKIP with its reason instead of dying on a missing file
 # (quick.ps1, CheckIf), and the suite still ends with 0. That is right for a bare working copy and wrong here: the
 # gates below read the user-mode driver's Mesa tree, its build database and the MSVC compiler, all of which a
