@@ -372,6 +372,17 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
         phys_bytes = bc250hsa_align_up_u64(phys_bytes, 4096u);
     }
 
+    /* BD-117: VidMm refuses CreateAllocation2 for a single allocation whose rounded
+     * size exceeds 0xFFFF0000 bytes. The gate is in the OS, not our kernel driver.
+     * The caller splits the request into smaller buffers (the llama.cpp consumer
+     * workaround uses a 1 GiB cap). */
+    if (phys_bytes > 0xFFFF0000ULL) {
+        bc250hsa_log(BC250HSA_LOG_WARN,
+                     "allocation of %llu bytes exceeds the Windows per-allocation"
+                     " limit of 0xFFFF0000 bytes and will be refused by VidMm",
+                     (unsigned long long)phys_bytes);
+    }
+
     record = (bc250hsa_alloc_record*)calloc(1, sizeof(*record));
     if (record == NULL) {
         return BC250HSA_ENOMEM;
