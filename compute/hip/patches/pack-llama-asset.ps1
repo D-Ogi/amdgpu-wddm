@@ -509,6 +509,9 @@ try {
     $p.Add("  compute/hip/patches/build-llama-patched.ps1 $builderOptions")
     $p.Add("  (SHA-256 $builderHash)")
     $p.Add("  compute/hip/patches/pack-llama-asset.ps1 made this folder (SHA-256 $((Get-FileHash -LiteralPath $self -Algorithm SHA256).Hash)).")
+    # The compressor of the .NET that runs this script gives the bytes of the zip, so the line names it.
+    $runtimeText = try { [Runtime.InteropServices.RuntimeInformation]::FrameworkDescription.Trim() } catch { ".NET $([Environment]::Version)" }
+    $p.Add("  It ran in PowerShell $($PSVersionTable.PSVersion) on $runtimeText. The same inputs give the same zip there.")
     $p.Add("Compiler: $compilerText. The C++ compiler also compiles the HIP sources (-x hip).")
     $p.Add("It uses the headers and libraries of MSVC 19.$vcNeeded, so the programs need the Visual C++ runtime 14.$vcNeeded or newer.")
     $p.Add("ggml-cuda.cu flags: $hipFlags")

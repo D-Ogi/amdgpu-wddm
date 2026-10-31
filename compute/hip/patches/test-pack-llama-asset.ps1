@@ -314,7 +314,8 @@ $provenance = Get-EntryText 'PROVENANCE.txt'
 foreach ($want in "upstream revision $base.", ' 1. patches/fx-one.patch: the first fixture change (src/a.c). By Fixture Author, from https://example.com/fixture.',
     " 2. patches/fx-two.patch: the second fixture change (src/b.c). By D-Ogi.`r`n", "commit $patchCommit", "build-llama-patched.ps1 $defaultOptions",
     "(SHA-256 $builderHash)", "ggml-hip.dll SHA-256 $($manifest.files.'ggml-hip.dll').", '--rocm-path=<rocm-root>',
-    'Compiler: Clang 22.1.8 with GNU-like command-line for C and C++.', 'the programs need the Visual C++ runtime 14.44 or newer.') {
+    'Compiler: Clang 22.1.8 with GNU-like command-line for C and C++.', 'the programs need the Visual C++ runtime 14.44 or newer.',
+    "It ran in PowerShell $($PSVersionTable.PSVersion) on ") {
     if (-not $provenance.Contains($want)) { throw "PROVENANCE.txt does not hold: $want" }
 }
 if ((Get-EntryText 'licenses/LICENSE-miniaudio') -ne "This software is available as a choice of the following licenses. Choose`r`nwhichever you prefer.`r`n") { throw 'LICENSE-miniaudio is not the comment block of miniaudio.h' }
