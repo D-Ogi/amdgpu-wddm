@@ -1220,6 +1220,90 @@
     },
     {
       "path": "",
+      "name": "DpmThermalHighZoneMHz",
+      "kind": "setting",
+      "type": "dword",
+      "min": 1000,
+      "max": 2300,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1800,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmThermalHighZoneMc",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 86000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 80000,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmThermalRate",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 10000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 1500,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c"
+      ]
+    },
+    {
+      "path": "",
+      "name": "DpmThermalRateFromMc",
+      "kind": "setting",
+      "type": "dword",
+      "min": 70000,
+      "max": 86000,
+      "allowed": [],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 80000,
+      "legacy_absent": null,
+      "group": "dpm",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/dpm.c"
+      ]
+    },
+    {
+      "path": "",
       "name": "DpmThermalZone",
       "kind": "setting",
       "type": "dword",

@@ -708,6 +708,23 @@ from 0.7.184.1 on. Release moved with it to keep the 5 C hysteresis; the 90 C fl
 Witcher 3 session 219 at native 1080p: the telemetry lines peaked at 84.8 C Tctl, and the governor, which samples
 every tick, went thermal-soft twice and capped the clock at 1800 MHz.
 
+### The rate rule and the high-clock zone (BD-281)
+
+A load burst from 2000 MHz can go past the soft zone and the hot cap. In the RotTR scene change of BD-281, Tctl went
+from 81.5 C to 89.25 C in seven seconds, and the peak was 90.9 C. The hot cap takes one level each 500 ms, and that is
+too slow from 2000 MHz. Two rules are added for this case, and the 87 C, 89 C and 90 C rules do not change. The rate
+rule fits the slope of the readings of the last 40 ticks (about 1 s). When the slope stays at 1.5 C/s or more for
+500 ms, and Tctl is 80 C or more, the rule takes three levels off the cap at once. The rule starts from the lower of
+the cap and the clock, and it does not go below the lab floor. It can do one step each second while the rise
+continues. The high-clock zone acts only while the cap is above 1800 MHz. From a lead reading of 80 C, it lowers the
+cap by one level at once, and then by one level each 1500 ms, down to 1800 MHz. The cap and the clock go above
+1800 MHz again only when the lead reading is less than 79 C. Both rules act only while the GPU has work, and
+`DpmThermalZone` 0 turns them off with the soft zone. The settings are `DpmThermalRate`, `DpmThermalRateFromMc`,
+`DpmThermalHighZoneMc` and `DpmThermalHighZoneMHz`, and 0 turns a rule off. On the burst plant of `dpm_test.c`, the
+tester.35 rules stop the lab runner in 15 of 54 cases and the new rules stop it in none. The highest peak goes from
+90.1 C to 87.7 C. The cost is 1800 MHz instead of 2000 MHz in a scene at 80 C or more. The plant is a model, so the
+lab must confirm the result.
+
 ### The compute threshold set (BD-127)
 
 The three load thresholds have a second set, the compute set, in force while the GPU has at least one open compute
@@ -904,6 +921,10 @@ keeps its busy gate for the same message.
 | `DpmIdleBusyPermille` | the mean busy share the entry's hold window still admits. Absent = 2, at most 100. The fast exit has its own threshold, `BC250_DPM_IDLE_EXIT_PERMILLE` (500 permille in one tick), which no setting changes |
 | `DpmIdleLeavePermille` | the slow exit (0.7.216.6). The idle point is left when its trailing window's work reaches this share. Absent = 150 (`BC250_DPM_IDLE_LEAVE_PERMILLE`), range 10 to 400. It must be above `DpmIdleBusyPermille`, else the idle state is off for the start |
 | `DpmThermalZone` | the soft thermal zone (0.7.213): absent or any other value runs it, 0 runs the 0.7.212 thermal rules for the whole start (the hot cap at 87 C alone, no soft release, the warm zone at 87 C). A runtime `dpm tune reset` turns the zone back on |
+| `DpmThermalRate` | the rate rule (BD-281), in mC/s. Absent = 1500 (`BC250_DPM_RATE_MC_PER_S`), 0 turns the rule off, else 500 to 10000. A value that the governor refuses keeps the rule on with the default |
+| `DpmThermalRateFromMc` | the lowest raw reading at which the rate rule acts. Absent = 80000, range 70000 to 86000 |
+| `DpmThermalHighZoneMc` | the high-clock zone (BD-281): the lead reading from which it lowers a cap above `DpmThermalHighZoneMHz`. Absent = 80000, 0 turns the zone off, else 70000 to 86000. A value that the governor refuses keeps the zone on with the default |
+| `DpmThermalHighZoneMHz` | the clock above which the high-clock zone acts. Absent = 1800, a 100 MHz grid clock from 1000 to 2300. With `DpmMaxMHz` 1800 or less the zone never acts |
 | `DpmComputeProfile` | the compute threshold set (BD-127). Absent or any other value runs it, which is the default. 0 leaves the graphics thresholds in force at every tick. This switch always takes effect. A refused threshold value beside it does not hold the set on. The set is selected only while a compute context is open |
 | `DpmComputeUpPermille` | the compute set's raise threshold. Absent = 400 (`BC250_DPM_COMPUTE_UP_PERMILLE`) |
 | `DpmComputeTargetPermille` | the share a compute raise aims at. Absent = 300 (`BC250_DPM_COMPUTE_TARGET_PERMILLE`) |

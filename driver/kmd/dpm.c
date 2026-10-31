@@ -45,6 +45,16 @@
 //                   release, the warm zone back at 87 C). It is one switch for a whole start, for bisecting a
 //                   regression against the rules the lab measured before it; the zone's own numbers are tunable at
 //                   run time through RUN_DPM_TUNE ABI 3, and a RESET there turns the zone back on.
+//   DpmThermalRate  the rate rule (BD-281), in mC/s: from DpmThermalRateFromMc up, a rise at this rate or faster for
+//                   500 ms takes three levels off the thermal cap at once. Absent = BC250_DPM_RATE_MC_PER_S (1500),
+//                   0 turns the rule off, 500..10000 otherwise.
+//   DpmThermalRateFromMc  the lowest raw reading at which the rate rule acts. Absent = 80000, 70000..86000.
+//   DpmThermalHighZoneMc  the high-clock zone (BD-281): while the cap is above DpmThermalHighZoneMHz, the cap steps
+//                   down from this lead reading, and goes above that clock again only 1 C under it. Absent = 80000,
+//                   0 turns the zone off, 70000..86000 otherwise.
+//   DpmThermalHighZoneMHz  the clock above which the high-clock zone acts. Absent = 1800, a grid clock from 1000 up.
+//                   Both BD-281 rules need the soft zone: DpmThermalZone 0 turns them off too. A refused value keeps
+//                   its rule on with the default, because these are safety rules.
 //   DpmComputeProfile  the compute threshold set (BD-127): absent or 1 runs it, which is the default, and 0 leaves the
 //                   graphics thresholds in force at every tick. While the GPU has at least one open compute context
 //                   (a BC2C blob with BC250_UMD_C_COMPUTE, counted in wddm.c) the governor's three load thresholds
@@ -99,6 +109,11 @@
 #define DPM_SETTING_IDLE_BUSY L"DpmIdleBusyPermille"
 #define DPM_SETTING_IDLE_LEAVE L"DpmIdleLeavePermille"
 #define DPM_SETTING_ZONE L"DpmThermalZone"
+// BD-281: the rate rule and the high-clock zone.
+#define DPM_SETTING_RATE L"DpmThermalRate"
+#define DPM_SETTING_RATE_FROM L"DpmThermalRateFromMc"
+#define DPM_SETTING_HIGH L"DpmThermalHighZoneMc"
+#define DPM_SETTING_HIGH_MHZ L"DpmThermalHighZoneMHz"
 #define DPM_SETTING_JOINT L"DpmJointGovernor"
 // The compute threshold set (BD-127): one switch and the three thresholds.
 #define DPM_SETTING_COMPUTE L"DpmComputeProfile"
@@ -488,6 +503,8 @@ typedef struct _DPM_TICK {
     // telemetry block, which loses nothing.
     BOOLEAN ComputeSet, ComputeLogged;
     BC250_LOG_RATE ComputeRate;
+    // BD-281: the counters the last telemetry block printed, so the block prints its burst line only after a change.
+    ULONG BurstRateSteps, BurstHighSteps, BurstHighHolds;
 } DPM_TICK;
 
 static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK* T, BOOLEAN Running)
@@ -1027,7 +1044,17 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         in.curve_serial = curveSerial;     // BD-228: the recall counts only under the curve it was confirmed with
         S->Gov.stable = InterlockedCompareExchange(&S->Stable, 0, 0) != 0;
         DpmTakeTune(S);
-        target = bc250_dpm_step(&S->Gov, &in);
+        {
+            // BD-281: one line per rate step, the event a lab arm reads in the guard log. At most one a second, and
+            // only while the die rises at 1.5 C/s or more above 80 C, so it cannot crowd the ring.
+            ULONG rateSteps = S->Gov.rate_steps;
+            target = bc250_dpm_step(&S->Gov, &in);
+            if (S->Gov.rate_steps != rateSteps)
+                GuardLog("dpm: rate step %lu: %ld mC rising %d mC/s, cap %lu -> %lu MHz, clock %lu MHz",
+                         (ULONG)S->Gov.rate_steps, T->TemperatureMc, S->Gov.rate_last_mc_per_s,
+                         bc250_dpm_level_mhz(S->Gov.rate_cap_from), bc250_dpm_level_mhz(S->Gov.thermal_cap),
+                         bc250_dpm_level_mhz(S->Gov.level));
+        }
         // One line per change of the set, and one at the first governing tick: a line per tick would be 40 a
         // second. A client that opens and closes a context per operation makes the CHANGE itself that fast, so
         // the line goes through log_rate.h like the paging submit's: the first eight of a start in full, then at
@@ -1171,6 +1198,17 @@ static void DpmTick(BC250_DEVICE* Device, BC250_DPM_STATE* S, DPM_TICK* T)
         DpmLogComputeLine("telemetry", &snap);
         DpmLogRecallLine("telemetry", &snap);
         DpmLogJointLine("telemetry", &snap);
+        // BD-281: the rate rule's and the high-clock zone's counters, only in a block after a change. This thread owns
+        // S->Gov (DpmTick runs under TickLock), so the counters are read without the snapshot.
+        if (S->Gov.rate_steps != T->BurstRateSteps || S->Gov.high_steps != T->BurstHighSteps ||
+            S->Gov.high_holds != T->BurstHighHolds) {
+            T->BurstRateSteps = S->Gov.rate_steps;
+            T->BurstHighSteps = S->Gov.high_steps;
+            T->BurstHighHolds = S->Gov.high_holds;
+            GuardLog("dpm: telemetry burst: rate steps %lu levels %lu, high-zone steps %lu holds %lu, rate %d mC/s",
+                     T->BurstRateSteps, (ULONG)S->Gov.rate_levels, T->BurstHighSteps, T->BurstHighHolds,
+                     S->Gov.rate_last_mc_per_s);
+        }
         HwmonLogLine(Device, "telemetry");
         SmuMetricsLogLine(Device, "telemetry");
         FanLogLine(Device, "telemetry");
@@ -1351,6 +1389,43 @@ static void DpmConfigureZone(BC250_DPM_STATE* S, BOOLEAN Dpm)
              bc250_dpm_warm_mc(&S->Gov.tune), Dpm ? "" : " (this start does not govern the clock)");
 }
 
+// BD-281: the rate rule and the high-clock zone, four values read once per start and handed to the policy. Absent values
+// are the defaults of bc250_board_envelope.h, which turn both rules on. 0 in DpmThermalRate or DpmThermalHighZoneMc turns
+// that rule off. A refused value keeps its rule on with the default and the log says so: these are safety rules, and a
+// typo must not remove one. Both rules need the soft zone, so a start with DpmThermalZone 0 runs neither of them. A start
+// that does not govern never reaches bc250_dpm_step, so the rules could not act there either.
+// PASSIVE_LEVEL, under Lock, before the governor thread exists, after DpmConfigureZone.
+static void DpmConfigureBurst(BC250_DPM_STATE* S, BOOLEAN Dpm)
+{
+    unsigned int rate = 0, from = 0, high = 0, mhz = 0;
+    BOOLEAN ratePresent, fromPresent, highPresent, mhzPresent;
+    enum bc250_dpm_burst_error error;
+    const char* state;
+
+    ratePresent = QueryPresent(DPM_SETTING_RATE, &rate);
+    fromPresent = QueryPresent(DPM_SETTING_RATE_FROM, &from);
+    highPresent = QueryPresent(DPM_SETTING_HIGH, &high);
+    mhzPresent = QueryPresent(DPM_SETTING_HIGH_MHZ, &mhz);
+    if (!ratePresent) rate = BC250_DPM_RATE_MC_PER_S;
+    if (!fromPresent) from = BC250_DPM_RATE_FROM_MC;
+    if (!highPresent) high = BC250_DPM_HIGH_ZONE_MC;
+    if (!mhzPresent) mhz = BC250_DPM_HIGH_ZONE_MHZ;
+    error = bc250_dpm_burst_config(&S->Gov, rate, from, high, mhz);   // the thread does not exist yet: no lock for Gov
+    state = !Dpm ? "off: the start does not govern" : (!S->Gov.tune.zone_delta_mc ? "off: DpmThermalZone 0" : "on");
+    GuardLog("dpm: rate rule: DpmThermalRate %lu%s, DpmThermalRateFromMc %lu%s", (ULONG)rate,
+             ratePresent ? "" : " (absent)", (ULONG)from, fromPresent ? "" : " (absent)");
+    GuardLog("dpm: rate rule: %lu mC/s from %lu mC for %lu ms, %lu levels a step, one per %lu ms, error %d",
+             (ULONG)S->Gov.rate_mc_per_s, (ULONG)S->Gov.rate_from_mc, (ULONG)BC250_DPM_RATE_CONFIRM_MS,
+             (ULONG)BC250_DPM_RATE_LEVELS, (ULONG)BC250_DPM_RATE_STEP_MS, (int)error);
+    GuardLog("dpm: high-clock zone: DpmThermalHighZoneMc %lu%s, DpmThermalHighZoneMHz %lu%s", (ULONG)high,
+             highPresent ? "" : " (absent)", (ULONG)mhz, mhzPresent ? "" : " (absent)");
+    GuardLog("dpm: high-clock zone: from %lu mC while the cap is above %lu MHz, up again under %lu mC",
+             (ULONG)S->Gov.high_mc, bc250_dpm_level_mhz(S->Gov.high_level),
+             S->Gov.high_mc ? (ULONG)(S->Gov.high_mc - BC250_DPM_HIGH_ZONE_HYST_MC) : 0ul);
+    GuardLog("dpm: rate rule %s, high-clock zone %s", S->Gov.rate_mc_per_s ? state : "off by setting",
+             S->Gov.high_mc ? state : "off by setting");
+}
+
 // This start's V/F curve, with the same two-mark guard as DPM itself (docs/design/tuner.md, ADR 0020). A curve
 // is on disk only after a KEEP, so what is read here once ran a whole trial window on this machine; the guard
 // covers what a trial cannot see, which is a curve that is stable for 25 s and not stable for an hour, or one
@@ -1527,6 +1602,7 @@ void DpmStart(BC250_DEVICE* Device)
     }
     bc250_dpm_init(&s->Gov, d->max_level);
     DpmConfigureZone(s, d->mode == BC250_DPM_MODE_DPM);
+    DpmConfigureBurst(s, d->mode == BC250_DPM_MODE_DPM);     // BD-281, after the zone: it reads the zone's switch
     DpmConfigureCompute(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureIdle(s, d->mode == BC250_DPM_MODE_DPM);
     DpmConfigureCurve(s, d->mode == BC250_DPM_MODE_DPM);
