@@ -618,8 +618,8 @@ namespace AmdgpuWddmControl
         public string ScrollKeeping()
         {
             var w = new StringBuilder();
-            ShowPage("performance", null, false);
             CreateTree();
+            ShowPage("performance", null, false);
 
             int at = -_content.AutoScrollPosition.Y;
             if (at != 0) w.AppendLine("the page is not built at its top: " + at + " px");
@@ -680,8 +680,8 @@ namespace AmdgpuWddmControl
         public string RunStateLayout()
         {
             var w = new StringBuilder();
-            ShowPage("performance", null, false);
             CreateTree();
+            ShowPage("performance", null, false);
             Control card;
             if (!_anchors.TryGetValue("perf.benchmark", out card)) { w.AppendLine("the performance page has no benchmark card"); return w.ToString(); }
 
