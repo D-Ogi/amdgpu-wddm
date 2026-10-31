@@ -386,6 +386,11 @@ checks the fourth:
    window and copies the router inputs of the quality gates. Then it runs `build-release.ps1` with
    `-BuildRecords <Out>\artifacts`. The release flavour also writes the submission CAB. The packages go to
    `<Out>\package\<flavour>`, and their hashes go to `<Out>\package-report.json`.
+   Each step refuses an output of an earlier round in `<Out>`. Before the first step, the tool names all of these
+   outputs in one message: the setup window, the package and the submission CAB of each flavour, and with
+   `-Parallel` the worktree of each flavour. `-SetAside <name>` moves them into `<Out>\rounds\<name>`. The tool
+   records the SHA-256 of each file before and after the move in `set-aside.json` (BD-272). It does not move a
+   worktree: remove it with `git worktree remove`.
    Then the host dry run of the installer (`test-dryrun.ps1`) runs on each package, and `flavour_bytes.py` checks
    the Mesa DLLs of both packages (BD-167): no lab-only string in a release DLL, and in each lab DLL every lab-only
    string that its Mesa tree holds.

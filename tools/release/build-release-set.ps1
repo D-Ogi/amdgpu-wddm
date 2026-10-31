@@ -50,7 +50,10 @@
 #    <Out>\register-receipt.json). The capability words of a record are not measured again. Commit and push the file.
 # 5. Packages, a second run on the registered set:
 #      pwsh -File tools\release\build-release-set.ps1 -Package -From <Out> -UmdSource <dir> -UmdBuild <dir>
-#           [-Flavours release,lab] [-LedgerDebtReason <text>] [-Parallel]
+#           [-Flavours release,lab] [-LedgerDebtReason <text>] [-Parallel] [-SetAside <round name>]
+#    Before the first step, it names in one message every output of an earlier round that a step would refuse
+#    (setup, package, submission CAB, package worktrees; PackageRound.psm1). -SetAside <name> moves them into
+#    <Out>\rounds\<name>\ instead, with the SHA-256 of each file before and after in set-aside.json (BD-272).
 #    The tree must be clean and pushed, and its release-sources.json must hold every row of <Out> unchanged. For each
 #    flavour it builds the setup window, sets the router inputs of the quality gates and runs build-release.ps1 with
 #    -BuildRecords <Out>\artifacts (the release flavour also writes the submission CAB). <Out>\package\<flavour> holds
@@ -119,6 +122,9 @@ param(
     [Parameter(ParameterSetName = 'Package')][string]$PackageGuard,
     # Build the flavours at the same time, each in its own process and worktree (see "5. Packages" above).
     [Parameter(ParameterSetName = 'Package')][switch]$Parallel,
+    # Move the outputs of an earlier package round in -From into <From>\rounds\<name>\ (SHA-256 checked) instead of
+    # refusing them (BD-272, PackageRound.psm1).
+    [Parameter(ParameterSetName = 'Package')][string]$SetAside,
     # The package report; <From>\package-report.json by default. A -Parallel run gives each flavour its own. Not named
     # -Report: PowerShell variable names ignore case, and the release set path uses a $report table.
     [Parameter(ParameterSetName = 'Package')][string]$FlavourReport
@@ -355,6 +361,17 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
     if ($setReport.status -ne 'ok') { Stop-Package "the release set in $From did not end well (status $($setReport.status))" }
     $setVersion = $setReport.version
     $pr.version = $setVersion
+    # Every output of an earlier round that a step of this round refuses, in one message before the first step
+    # (BD-272: tester.34 r7 stopped three times, each time minutes in, at the next output).
+    Import-Module (Join-Path $PSScriptRoot 'PackageRound.psm1') -Force
+    $earlierOutputs = @(Get-PackageRoundOutputs $From @($Flavours | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) $setVersion -Parallel:$Parallel)
+    if ($earlierOutputs.Count) {
+        if (-not $SetAside) { Stop-Package (Format-PackageRoundOutputs $earlierOutputs) }
+        try { $setAsideRecord = Move-PackageRoundOutputs $From $earlierOutputs $SetAside }
+        catch { Stop-Package "-SetAside ${SetAside}: $($_.Exception.Message)" }
+        "$(Get-Utc) package: $($setAsideRecord.outputs.Count) output(s) of an earlier round moved to $($setAsideRecord.round) (set-aside.json)"
+        $pr.set_aside = $setAsideRecord.round
+    }
     $rowsDoc = Read-Json (Join-Path $From 'release-sources.rows.json')
     $registered = Read-Json (Join-Path $PSScriptRoot 'release-sources.json')
     $missing = @()

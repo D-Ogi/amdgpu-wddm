@@ -181,6 +181,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # failed build fails the release set and keeps its log. Its end-to-end runs start pwsh processes, hence 600 s.
  # The removal of shared and stale build trees of BuildTree.psm1 (BD-264), on a fixture repository in $Out.
  Check 'shared-build-tree' { & pwsh -NoProfile -File "$repo\tools\release\test-shared-build-tree.ps1" -FixtureRoot (New-Item -ItemType Directory -Force "$Out\shared-build-tree").FullName }
+ # The outputs of an earlier package round, all named before the first step, and -SetAside (BD-272).
+ Check 'package-round' { & pwsh -NoProfile -File "$repo\tools\release\test-package-round.ps1" -Out (New-Item -ItemType Directory -Force "$Out\package-round").FullName }
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-source-versions' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-source-versions").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_source_versions.py' }
