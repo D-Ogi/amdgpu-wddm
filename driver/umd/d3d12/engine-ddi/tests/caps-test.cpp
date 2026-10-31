@@ -1466,6 +1466,19 @@ void test_ladder_caps(const BC250_VKD3D_DEVICE_CREATE_INFO& info) {
               "ladder cap %u: version and exact-size checks preserve memory; first version answers", UINT(row.type));
     }
     {
+        // Application-specific driver state: the shell gives the CORE 0113 slots (driver/umd/d3d12/app-state-ddi.h).
+        for (const UINT version : {113u, 119u}) {
+            D3D12DDI_FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113 data{FALSE};
+            D3D12DDIARG_GETCAPS r{D3D12DDI_APPLICATION_SPECIFIC_DRIVER_STATE_113, nullptr, &data, sizeof(data)};
+            check(engine_ddi::build_caps(caps, version, &r) == S_OK && data.Supported == TRUE,
+                  "application-specific driver state is supported at DDI %u", version);
+        }
+        D3D12DDI_FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113 data{FALSE};
+        D3D12DDIARG_GETCAPS r{D3D12DDI_APPLICATION_SPECIFIC_DRIVER_STATE_113, nullptr, &data, sizeof(data)};
+        check(engine_ddi::build_caps(caps, 112, &r) == E_INVALIDARG && data.Supported == FALSE,
+              "application-specific driver state is refused before DDI 113");
+    }
+    {
         struct Guarded { UINT32 before, tier, after; } data{0xeeeeeeee, 0xeeeeeeee, 0xeeeeeeee};
         D3D12DDIARG_GETCAPS r{static_cast<D3D12DDICAPS_TYPE>(1110), nullptr, &data.tier, sizeof(data.tier)};
         check(engine_ddi::build_caps(caps, 119, &r) == S_OK && !data.tier

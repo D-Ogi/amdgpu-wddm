@@ -26,6 +26,11 @@ struct ModernCoreEntries {
     PFND3D12DDI_CREATE_ROOT_SIGNATURE_0100 root_create{};
     HRESULT (APIENTRY* pipeline_create)(D3D12DDI_HDEVICE, const D3D12DDIARG_CREATE_PIPELINE_STATE_0075*,
         D3D12DDI_HPIPELINESTATE, D3D12DDI_HRTPIPELINESTATE, UINT){};
+    // CORE 0113 application-specific driver state. The shell owns this state (app-state.h), so the shell sets
+    // these three. A table without them gets the stubs of Bridge (no state, NOT_SPECIFIED).
+    PFND3D12DDI_GET_APPLICATION_SPECIFIC_DRIVER_STATE_BLOB_SIZE_0113 blob_size{};
+    PFND3D12DDI_GET_APPLICATION_SPECIFIC_DRIVER_STATE_0113 blob{};
+    PFND3D12DDI_GET_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS_0113 blob_status{};
     bool operator==(const ModernCoreEntries&) const = default;
 };
 namespace modern_core {
@@ -262,10 +267,12 @@ template<class Core> struct Bridge {
         D3D12DDI_BARRIER_ACCESS, UINT* count, GUID*) {
         if (count) *count = 0; else report(h, E_INVALIDARG);
     }
-    static UINT APIENTRY blob_size(D3D12DDI_HDEVICE) { return 0; }
-    static HRESULT APIENTRY blob(D3D12DDI_HDEVICE, void*, UINT) { return E_NOTIMPL; }
-    static D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS APIENTRY blob_status(D3D12DDI_HDEVICE) {
-        return D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_NOT_SPECIFIED;
+    static UINT APIENTRY blob_size(D3D12DDI_HDEVICE h) { return modern.blob_size ? modern.blob_size(h) : 0; }
+    static HRESULT APIENTRY blob(D3D12DDI_HDEVICE h, void* data, UINT size) {
+        return modern.blob ? modern.blob(h, data, size) : E_NOTIMPL;
+    }
+    static D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_STATUS APIENTRY blob_status(D3D12DDI_HDEVICE h) {
+        return modern.blob_status ? modern.blob_status(h) : D3D12DDI_APPLICATION_SPECIFIC_DRIVER_BLOB_NOT_SPECIFIED;
     }
 };
 

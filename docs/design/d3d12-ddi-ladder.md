@@ -143,7 +143,7 @@ The existing SM6.8 options reply retains its cross-version behavior.
 | 1091 | SHADER_MODEL_6_8_OPTIONS_0110, H13830 | Existing OPTIONS21 mapping for gradient/bias sampling and extended command information. Require reported SM6.8. |
 | 1092 | GUID_TEXTURE_LAYOUT_GUID_SUPPORT_DATA_0111, H13898 | GuidSupported FALSE. Preserve the resource pointer and access mask. |
 | 1093 | NATIVE_FENCE_SUPPORT_DATA_0112, H14100 | NativeGpuFenceSupported FALSE. |
-| 1094 | FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113, H14351 | Supported FALSE. |
+| 1094 | FEATURE_DATA_APPLICATION_SPECIFIC_DRIVER_STATE_113, H14351 | Supported TRUE. The shell gives the three CORE 0113 slots. See app-specific-driver-state.md. |
 | 1095 | OPTIONS_DATA_0118, H14995 | ShaderExecutionReorderingActuallyReorders FALSE. The current engine caps contract has no SER answer. |
 
 ExecuteIndirect tier 1.1 uses the existing incrementing-constant translation in `commands.cpp`.

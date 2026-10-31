@@ -245,6 +245,11 @@ try {
     & ".\$($test[0]).exe"
     if($LASTEXITCODE){throw "Modern DDI adapter test failed: $($test[0])"}
    }
+   # Application-specific driver state (CORE 0113): blob, identifier and the CreateDevice read (app-state-ddi.h).
+   & $compilerExe @dllFlags /Fe:app-state-test.exe "$repo\driver\umd\d3d12\app-state-test.cpp"
+   if($LASTEXITCODE){throw 'Application-specific driver state test build failed'}
+   & .\app-state-test.exe
+   if($LASTEXITCODE){throw 'Application-specific driver state tests failed'}
   }
   & cl.exe @flags "/external:I$MesaSource\src\util" "/external:I$VulkanInclude" "/external:I$EngineInclude" /Fe:adapter-caps-probe.exe "$repo\driver\umd\d3d12\adapter-caps-probe.cpp" /link dxgi.lib
   if($LASTEXITCODE){throw 'Adapter caps probe build failed'}

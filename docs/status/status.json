@@ -2840,7 +2840,7 @@
       {
        "name": "pfnCalcPrivateDeviceSize",
        "function": "device_size",
-       "source": "driver/umd/d3d12/adapter.cpp:107",
+       "source": "driver/umd/d3d12/adapter.cpp:108",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -2852,7 +2852,7 @@
       {
        "name": "pfnCreateDevice",
        "function": "create_device",
-       "source": "driver/umd/d3d12/adapter.cpp:113",
+       "source": "driver/umd/d3d12/adapter.cpp:114",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2864,7 +2864,7 @@
       {
        "name": "pfnCloseAdapter",
        "function": "close_adapter",
-       "source": "driver/umd/d3d12/adapter.cpp:153",
+       "source": "driver/umd/d3d12/adapter.cpp:173",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2876,7 +2876,7 @@
       {
        "name": "pfnGetSupportedVersions",
        "function": "versions",
-       "source": "driver/umd/d3d12/adapter.cpp:159",
+       "source": "driver/umd/d3d12/adapter.cpp:179",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2888,7 +2888,7 @@
       {
        "name": "pfnGetCaps",
        "function": "caps",
-       "source": "driver/umd/d3d12/adapter.cpp:171",
+       "source": "driver/umd/d3d12/adapter.cpp:191",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -2900,7 +2900,7 @@
       {
        "name": "pfnGetOptionalDDITables",
        "function": "optional_tables",
-       "source": "driver/umd/d3d12/adapter.cpp:231",
+       "source": "driver/umd/d3d12/adapter.cpp:251",
        "done": false,
        "reason": "only logs, counts, reads or writes zeros",
        "applicability": {
@@ -2912,7 +2912,7 @@
       {
        "name": "pfnFillDDITable",
        "function": "fill_table",
-       "source": "driver/umd/d3d12/adapter.cpp:235",
+       "source": "driver/umd/d3d12/adapter.cpp:255",
        "done": true,
        "reason": "forwards to fill_native_tables: does work",
        "partial": true,
@@ -2925,7 +2925,7 @@
       {
        "name": "pfnDestroyDevice",
        "function": "destroy_device",
-       "source": "driver/umd/d3d12/adapter.cpp:241",
+       "source": "driver/umd/d3d12/adapter.cpp:261",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4277,7 +4277,7 @@
       {
        "name": "pfnCreateHeapAndResource",
        "function": "create_heap_and_resource",
-       "source": "driver/umd/d3d12/native-tables.cpp:222",
+       "source": "driver/umd/d3d12/native-tables.cpp:223",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4289,7 +4289,7 @@
       {
        "name": "pfnDestroyHeapAndResource",
        "function": "destroy_heap_and_resource",
-       "source": "driver/umd/d3d12/native-tables.cpp:254",
+       "source": "driver/umd/d3d12/native-tables.cpp:255",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4337,7 +4337,7 @@
       {
        "name": "pfnOpenHeapAndResource",
        "function": "open_heap_and_resource",
-       "source": "driver/umd/d3d12/native-tables.cpp:244",
+       "source": "driver/umd/d3d12/native-tables.cpp:245",
        "done": true,
        "reason": "does work",
        "applicability": {
@@ -4530,7 +4530,7 @@
       {
        "name": "pfnGetPresentPrivateDriverDataSize",
        "function": "present_private_size",
-       "source": "driver/umd/d3d12/native-tables.cpp:198",
+       "source": "driver/umd/d3d12/native-tables.cpp:199",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -4867,8 +4867,8 @@
       },
       {
        "name": "pfnCheckDriverMatchingIdentifier",
-       "function": "unrecognized_identifier",
-       "source": "driver/umd/d3d12/engine-ddi/context.cpp:707",
+       "function": "check_driver_matching_identifier",
+       "source": "driver/umd/d3d12/app-state-ddi.h:51",
        "done": true,
        "reason": "returns the answer",
        "applicability": {
@@ -5610,7 +5610,7 @@
       {
        "name": "pfnPresent",
        "function": "present",
-       "source": "driver/umd/d3d12/native-tables.cpp:403",
+       "source": "driver/umd/d3d12/native-tables.cpp:404",
        "done": true,
        "reason": "does work",
        "applicability": {
