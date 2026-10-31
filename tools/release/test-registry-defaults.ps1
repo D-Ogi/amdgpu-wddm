@@ -2,10 +2,14 @@
 # only what the previous installer wrote, a tester's value stays, the command line and installer-owned values are
 # written. Windows PowerShell 5.1, like the installer:
 #   powershell -NoProfile -File tools\release\test-registry-defaults.ps1 [-Installer <package>\installer]
-# The write and read-back run against a scratch key, HKCU:\Software\amdgpu-wddm-installer-test, removed at the end.
+# The write and read-back run against a scratch key, HKCU:\Software\amdgpu-wddm-installer-test-<8 hex digits of
+# this run>, removed at the end.
 # Nothing under HKLM is read or written.
 param([string]$Installer = (Join-Path $PSScriptRoot 'installer'))
 $ErrorActionPreference = 'Stop'
+# The scratch key has a suffix of its own, so two dry runs at the same time (the two flavours of a package run)
+# never write, read back or remove each other's key.
+$scratchKey = 'HKCU:\Software\amdgpu-wddm-installer-test-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 . (Join-Path $Installer 'common.ps1')
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
@@ -164,7 +168,7 @@ Check (($d.decision -eq 'kept') -and ($d.value -eq 30) -and -not $d.write) "a la
 Check (@($plan).Count -eq 1) "the plan for Windows' graphics key names one value only: $(@($plan | ForEach-Object { $_.name }) -join ', ')"
 Check ($script:GraphicsDriversKey -eq 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers') "the key is Windows' GraphicsDrivers key: $($script:GraphicsDriversKey)"
 
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+$key = $scratchKey
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 try {
     $k = "$key\Closure"
@@ -277,7 +281,7 @@ if ($ship -eq 0) {
 }
 
 'write and read back (HKCU scratch key)'
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+$key = $scratchKey
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 try {
     $sub = "$key\AppRouter"
@@ -318,7 +322,7 @@ if ((Test-Path -LiteralPath $inf) -and @($infNames).Count -eq 0) {
     $infNames = $legacyInfNames; $infSource = 'the 0.7.199.1 INF list (the package INF writes only Parameters\DefaultsV2)'
 }
 Check ((@($infNames) -contains 'EnableFullWddm') -and (@($infNames) -contains 'EnableMmioWrite')) "$(@($infNames).Count) INF Parameters names from $infSource"
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+$key = $scratchKey
 function Invoke-InfReset([string]$K) { foreach ($n in $infNames) { New-ItemProperty -LiteralPath $K -Name $n -Value 0 -PropertyType DWord -Force | Out-Null } }
 function Get-Snapshot([string]$K) { $all = Read-RegistryValues $K; $h = @{}; foreach ($n in @($infNames) + @(ConvertTo-PairList $table.defaults.parameters | ForEach-Object { $_.Name })) { if ($all.ContainsKey($n)) { $h[$n] = $all[$n] } }; return $h }
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
@@ -395,7 +399,7 @@ Check (-not (Test-Path -LiteralPath $key)) 'scratch key removed'
 # (UnconfirmedStarts, EnableHangBugcheck) and because a package older than this one may still be installed over.
 # tools\quality\inf_gates.py is the gate that holds the INF to the table; here it is the plan's turn: with the key
 # unchanged between the judgement and the write, nothing is written at all.
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+$key = $scratchKey
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 try {
     $k = "$key\Noclobber"
@@ -449,7 +453,7 @@ $r = @(Get-GpuAudioMsiRestorePlan -Recorded $recordedZero -Readings @(New-AudioR
 Check ($r[0].decision -eq 'kept') 'a second uninstall finds the old value back and changes nothing'
 
 'write, read back and remove (HKCU scratch key)'
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test'
+$key = $scratchKey
 $saveEnum = $script:AudioEnumRoot
 try {
     $script:AudioEnumRoot = "$key\Enum"

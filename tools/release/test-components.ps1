@@ -1,7 +1,7 @@
 # Host test of the optional components of the release (installer\components.ps1), under Windows PowerShell 5.1 like
 # the installer itself (called by test-dryrun.ps1).
 #   powershell -File tools\release\test-components.ps1 -Installer <package>\installer [-Source <repo>\tools\release\components.json] -WorkRoot <dir>
-# Writes only under -WorkRoot and HKCU:\Software\amdgpu-wddm-installer-test-components. Nothing under HKLM, nothing in
+# Writes only under -WorkRoot and HKCU:\Software\amdgpu-wddm-installer-test-components-<8 hex>. Nothing under HKLM, nothing in
 # the real Start menu, no machine PATH, no network: $script:NetworkBlocked is on for every download case.
 # Cases: the release's own components.json validates; a broken manifest is refused, one message per fault; a component
 # without a SHA-256 pin is refused and nothing is downloaded; the switch combinations (-Components, -NoComponents,
@@ -23,7 +23,9 @@ function Matched($Lines, [string]$Pattern) { return (@(@($Lines) -match $Pattern
 function Copy-Json($O) { return ($O | ConvertTo-Json -Depth 10 | ConvertFrom-Json) }
 
 [void][IO.Directory]::CreateDirectory($WorkRoot)
-$scratchKey = 'Software\amdgpu-wddm-installer-test-components'
+# The scratch key has a suffix of its own, so two dry runs at the same time (the two flavours of a package run)
+# never write, read back or remove each other's key.
+$scratchKey = 'Software\amdgpu-wddm-installer-test-components-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $script:ScheduleOldCopies = $false
 $script:DryRunMode = $false
 $script:NetworkBlocked = $true

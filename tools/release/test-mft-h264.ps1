@@ -2,7 +2,7 @@
 # keys of driver/umd/mft-h264/INSTALL.md route A, and the decision that the release switch drives. Windows PowerShell
 # 5.1, like the installer:
 #   powershell -NoProfile -File tools\release\test-mft-h264.ps1 [-Installer <package>\installer] [-Dll <mft dll>]
-# Every write goes to a scratch key, HKCU:\Software\amdgpu-wddm-installer-test\Classes, removed at the end. The real
+# Every write goes to a scratch key, HKCU:\Software\amdgpu-wddm-installer-test-<8 hex>\Classes, removed at the end. The real
 # HKLM:\SOFTWARE\Classes is only read, and the test fails if its MFT keys change while it runs.
 # Without the DLL (an installer folder with no package next to it) the registry cases run against a made-up value set
 # and the cases that read the shipped DLL are skipped.
@@ -19,7 +19,9 @@ function Get-Hex($Bytes) { if ($null -eq $Bytes) { return '' } return [BitConver
 $realBefore = @(Get-MftRegistrationKeysPresent -ClassesKey 'HKLM:\SOFTWARE\Classes')
 "real HKLM:\SOFTWARE\Classes: $(@($realBefore).Count) of our keys present (read only)"
 
-$root = 'HKCU:\Software\amdgpu-wddm-installer-test'
+# The scratch key has a suffix of its own, so two dry runs at the same time (the two flavours of a package run)
+# never write, read back or remove each other's key.
+$root = 'HKCU:\Software\amdgpu-wddm-installer-test-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $classes = "$root\Classes"
 $keys = Get-MftKeys $classes
 Check ($classes -like 'HKCU:*') "the test writes under $classes, never under HKLM"

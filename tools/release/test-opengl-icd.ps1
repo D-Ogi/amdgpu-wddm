@@ -13,7 +13,7 @@
 # are checked too.
 # The x86 half is tested either way: this release registers x64 alone (common.ps1 holds the lab measurement behind
 # that), and a release that adds "x86" to the list changes nothing else, so the cases of both lists run here.
-# The registration cases run against a scratch key, HKCU:\Software\amdgpu-wddm-installer-test-gl, removed at the end,
+# The registration cases run against a scratch key, HKCU:\Software\amdgpu-wddm-installer-test-gl-<8 hex>, removed at the end,
 # and files under the user's temporary folder, removed at the end. Nothing under HKLM and no other file is written.
 param([Parameter(Mandatory)][string]$Installer, [string]$Package)
 $ErrorActionPreference = 'Stop'
@@ -99,7 +99,9 @@ Check (@($script:OpenGlDrvExports).Count -eq 19) "19 Drv entry points in the con
 Check (@('DrvCopyContext', 'DrvDescribeLayerPlane', 'DrvPresentBuffers', 'DrvRealizeLayerPalette', 'DrvSwapLayerBuffers', 'DrvGetLayerPaletteEntries', 'DrvSetLayerPaletteEntries' | Where-Object { $script:OpenGlDrvExports -notcontains $_ }).Count -eq 0) 'the contract holds the seven entry points beyond the twelve a context needs, which every shipping ICD exports'
 Check ($script:OpenGlDrvExports -notcontains 'DrvSwapMultipleBuffers') 'DrvSwapMultipleBuffers is not required: Windows names it, and the shipping NVIDIA ICD does not export it either'
 $work = Join-Path $env:TEMP ('amdgpu-wddm-gl-test-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test-gl'
+# The scratch key has a suffix of its own, so two dry runs at the same time (the two flavours of a package run)
+# never write, read back or remove each other's key.
+$key = 'HKCU:\Software\amdgpu-wddm-installer-test-gl-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 try {
     [void][IO.Directory]::CreateDirectory((Join-Path $work 'opengl'))

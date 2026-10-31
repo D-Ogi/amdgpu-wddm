@@ -8,7 +8,7 @@
 # Vulkan manifest names its library relative to itself; verify's Test-WowRegistration and Test-UmdRegistration (common.ps1) pass a
 # complete registration, with the D3D9 slot '<>' in both views after a registry round trip, and name each
 # missing or wrong part, the stub layout and the empty-slot layout of the earlier releases included. The registration cases run against a scratch key,
-# HKCU:\Software\amdgpu-wddm-installer-test-wow, removed at the end, and files under -WorkRoot. Nothing under HKLM and
+# HKCU:\Software\amdgpu-wddm-installer-test-wow-<8 hex>, removed at the end, and files under -WorkRoot. Nothing under HKLM and
 # nothing outside -WorkRoot is written.
 param([Parameter(Mandatory)][string]$Package, [Parameter(Mandatory)][string]$WorkRoot)
 $ErrorActionPreference = 'Stop'
@@ -137,7 +137,9 @@ if ($glWow) {
 }
 
 'verify: Test-WowRegistration against a scratch key and folder'
-$key = 'HKCU:\Software\amdgpu-wddm-installer-test-wow'
+# The scratch key has a suffix of its own, so two dry runs at the same time (the two flavours of a package run)
+# never write, read back or remove each other's key.
+$key = 'HKCU:\Software\amdgpu-wddm-installer-test-wow-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $root = Join-Path $WorkRoot ('wow64-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
 if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
 try {

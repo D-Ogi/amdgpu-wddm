@@ -28,7 +28,9 @@ function Get-DiagnosticsWindowsLines {$script:HostReadAttempts++;throw 'host Win
 $fail = 0
 function Check([bool]$Ok, [string]$Text) { if ($Ok) { "  PASS $Text" } else { "  FAIL $Text"; $script:fail++ } }
 
-$scratch = 'Software\amdgpu-wddm-diagnostics-test'
+# The scratch key has a suffix of its own, so two dry runs at the same time (the two flavours of a package run)
+# never write, read back or remove each other's key.
+$scratch = 'Software\amdgpu-wddm-diagnostics-test-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
 $parameters = "$scratch\Parameters"
 $root = New-RecordFixtureKey
 $root.DeleteSubKeyTree($scratch, $false)
