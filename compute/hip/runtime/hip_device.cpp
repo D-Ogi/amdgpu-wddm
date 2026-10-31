@@ -177,6 +177,46 @@ void apply_gpu_copy_policy(bc250hsa_device* dev) {
     }
 }
 
+// The spin of every wait of the device (bc250hsa_wait_spin_set, bc250hsa.h section 9). A wait that
+// the fence mapping does not answer at once reads it again for up to this long before it waits in
+// the operating system, whose wake-up comes one fence interrupt, one DPC and one thread switch
+// after the GPU wrote the value. A decode step of llama.cpp submits the next token only after that
+// wait returns, so the GPU stands idle for the whole wake-up.
+//
+//   BC250_HIP_WAIT_SPIN_US=<us>   the bound in microseconds, 0 for no spin (a lab build only)
+//
+// MEASURED, unit A, 2026-10-31, 40 CU at 1500 MHz (evidence/windows/2026-10-31-hip-wait-spin): a spin
+// of 20000 us took llama-bench tg64 of qwen2.5-1.5B Q4_K_M from 188.87 to 198.49 tokens a second and of
+// Qwen3-8B Q8_0 from 39.18 to 39.63, the best of the bounds measured. 4000 us gave 198.03 and 39.29:
+// the bound must cover the work of a token, which takes about 25 ms on the 8B model. pp512 did not
+// change. In 193 tokens of the 1.5B model the compute ring had 174 idle gaps of 32 to 128 us and 34 of
+// 0.5 to 2 ms with no spin, and 42 and 13 with it. The gap of 128 to 512 us that comes about once a
+// token stays; the spin does not reach it.
+constexpr uint32_t kWaitSpinUsDefault = 20000u;
+
+void apply_wait_spin_policy(bc250hsa_device* dev) {
+    uint32_t spin_us = kWaitSpinUsDefault;
+    // BD-167: a measurement arm of a lab build. A release runtime keeps the default.
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    char text[32];
+    if (read_text("BC250_HIP_WAIT_SPIN_US", text, sizeof(text))) {
+        uint32_t value = 0;
+        if (parse_copy_min(text, &value)) {
+            spin_us = value;
+        } else {
+            std::fprintf(stderr, "amdhip64: BC250_HIP_WAIT_SPIN_US is not a number of microseconds;"
+                                 " the default %u stands\n",
+                         spin_us);
+        }
+    }
+#endif
+    const bc250hsa_status status = bc250hsa_wait_spin_set(dev, spin_us);
+    if (status != BC250HSA_OK) {
+        std::fprintf(stderr, "amdhip64: the backend refused the wait spin (%s); no wait spins\n",
+                     bc250hsa_status_string(status));
+    }
+}
+
 // Two switches of the launch path, each on by default and each the control arm of its own lab
 // measurement:
 //
@@ -265,6 +305,7 @@ hipError_t device(bc250hsa_device** out) {
             s.props_valid = bc250hsa_props_read(s.dev, &s.props) == BC250HSA_OK;
             apply_batch_policy(s.dev);
             apply_gpu_copy_policy(s.dev);
+            apply_wait_spin_policy(s.dev);
             apply_launch_policy();
         }
     }

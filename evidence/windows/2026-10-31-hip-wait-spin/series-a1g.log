@@ -1,0 +1,30 @@
+#### a1g-tg 8B 04:34:41Z llama=a1g runtime=idl2 args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:35:07 Tctl 61.4 C (raw 6E7B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.20 A� 0.01 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67000 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:35:46 Tctl 66.9 C (raw 73FB0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.66 A� 0.03 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:36:17 Tctl 67.5 C (raw 749B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.22 A� 0.03 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67375 ready=1
+#### a1g-tg 1.5B 04:36:19Z llama=a1g runtime=idl2 args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=0] 05:36:45 Tctl 67.2 C (raw 745B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 188.94 A� 0.59 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66250 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:37:00 Tctl 66.1 C (raw 733B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.06 A� 0.16 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66375 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:37:09 Tctl 66.2 C (raw 735B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 189.43 A� 0.43 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66250 ready=1
+#### done 04:36:53Z
+#### a1g-pp 8B 04:36:53Z llama=a1g runtime=idl2 args=[-p 512 -n 0 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:37:19 Tctl 66.1 C (raw 733B0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 513.55 A� 0.34 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=74000 ready=1
+#### a1g-pp 1.5B 04:37:25Z llama=a1g runtime=idl2 args=[-p 512 -n 0 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:37:51 Tctl 73.8 C (raw 7ADB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2152.34 A� 1.39 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=71125 ready=1
+#### done 04:37:38Z

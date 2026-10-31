@@ -1,0 +1,22 @@
+#### ppl-lp2-socc 8B 01:08:05 Tctl 62.0 C (raw 6F1B0FEF)
+00:08:10 arm ppl-lp2-socc llama=bload runtime=socc tool=ppl env=[X=0] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 6782CFD2 amdhip64 CB3842F7
+00:08:11 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62125 ready=1
+00:09:06 exit  in 55 s
+00:09:06 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=71500 ready=1
+0.26.036.147 I perplexity: 8.83 seconds per pass - ETA 0.53.107.023 I Final estimate: PPL = 11.4426 +/- 0.55798
+#### ppl-lp2-socc 1.5B 01:09:06 Tctl 71.4 C (raw 787B0FEF)
+00:09:12 arm ppl-lp2-socc llama=bload runtime=socc tool=ppl env=[X=0] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 6782CFD2 amdhip64 CB3842F7
+00:09:12 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=70125 ready=1
+00:09:23 exit  in 10 s
+00:09:23 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=76375 ready=1
+0.04.616.023 I perplexity: 1.41 seconds per pass - ETA 0.09.503.762 I Final estimate: PPL = 12.4067 +/- 0.52907
+#### ppl-lp2-socc 35B 01:09:23 Tctl 76.1 C (raw 7D3B0FEF)
+00:09:28 arm ppl-lp2-socc llama=bload runtime=socc tool=ppl env=[X=0] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 6782CFD2 amdhip64 CB3842F7
+00:09:29 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=74125 ready=1
+00:10:11 exit  in 42 s
+00:10:11 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=79000 ready=1
+0.00.948.419 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.27.623.831 I perplexity: 3.99 seconds per pass - ETA 0.40.553.648 I Final estimate: PPL = 7.8359 +/- 0.31237

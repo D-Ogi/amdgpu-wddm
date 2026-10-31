@@ -1425,6 +1425,16 @@
    }
   },
   {
+   "name": "BC250_HIP_WAIT_SPIN_US",
+   "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_wait_spin_policy)",
+   "does": "measurement: how long a wait reads the fence mapping before the operating system's wait, 0 for no spin",
+   "lab": {
+    "every": [
+     "amdhip64.dll"
+    ]
+   }
+  },
+  {
    "name": "BC250_HIP_BARRIER",
    "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
    "does": "measurement arm: full takes the full barrier in place of the light one",

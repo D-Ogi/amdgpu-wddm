@@ -1,0 +1,26 @@
+#### ramp-spin 1.5B 04:08:08Z llama=e57 runtime=idl args=[-p 0 -n 64 -fa 1 -ngl 99 -r 3]
+== [BC250_HIP_BATCH_RAMP=0;BC250_HIP_WAIT_SPIN_US=0] 05:08:34 Tctl 61.8 C (raw 6EDB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 190.22 A� 0.82 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65125 ready=1
+== [BC250_HIP_WAIT_SPIN_US=0] 05:08:47 Tctl 65.0 C (raw 721B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 186.77 A� 0.45 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65875 ready=1
+== [BC250_HIP_BATCH_RAMP=0;BC250_HIP_WAIT_SPIN_US=4000] 05:08:58 Tctl 65.9 C (raw 72FB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.35 A� 0.12 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66750 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000] 05:09:07 Tctl 66.6 C (raw 73BB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 197.45 A� 0.29 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66875 ready=1
+== [BC250_HIP_WAIT_SPIN_US=20000] 05:09:20 Tctl 66.9 C (raw 73FB0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 197.66 A� 0.38 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67250 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000;BC250_HIP_BATCH_MAX=64] 05:09:30 Tctl 67.1 C (raw 743B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 197.72 A� 0.31 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67500 ready=1
+== [BC250_HIP_WAIT_SPIN_US=4000;BC250_HIP_BATCH_MAX=128] 05:09:39 Tctl 67.4 C (raw 747B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 197.54 A� 0.44 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67500 ready=1
+== [BC250_HIP_BATCH_RAMP=0;BC250_HIP_WAIT_SPIN_US=0] 05:09:51 Tctl 67.4 C (raw 747B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 189.73 A� 0.50 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=67375 ready=1
+#### done 04:09:36Z

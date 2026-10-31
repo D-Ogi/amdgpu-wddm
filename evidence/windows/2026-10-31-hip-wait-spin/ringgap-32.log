@@ -1,0 +1,7 @@
+03:53:43 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62000 ready=1
+03:53:45 exit 0 in 3 s
+03:53:45 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64875 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 190.27 A� 0.47 |
+== gap32 [BC250_HIP_STATS=1] llama=e57 runtime=t35l 04:53:37 Tctl 61.8 C (raw 6EDB0FEF)
+node 0 gaps 417 idle_us 6069000 avg_us 14554 | <16:1 16:39 32:91 64:64 128:185 512:23 2k:2 4k:0 8k+:12
+node 1 gaps 1304 idle_us 114935566 avg_us 88140.8 | <16:99 16:551 32:542 64:63 128:24 512:8 2k:2 4k:5 8k+:10

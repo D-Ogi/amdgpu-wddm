@@ -1,0 +1,6 @@
+amdhip64 [7164:12632] info log on, level 2 (info), interface 1.10
+amdhip64 [7164:12632] info bc250hsa: fence check: device open: monitored fence handle 0x40000180 type 5 flags 0x0, cpu va 000002320E1D0040, gpu va 0x10040, value 0; context 0x40000140
+amdhip64 [7164:12632] info bc250hsa: device-local allocation of 3797680128 bytes is placed in system memory: the carve-out does not hold it (out of memory)
+amdhip64 [7164:12632] info bc250hsa: local segment group: budget 7482638336, used 4244897792, reserved 0, available for reservation 3875536896 bytes
+amdhip64 [7164:12632] info bc250hsa: non-local segment group: budget 3733582234, used 528384, reserved 0, available for reservation 1970501734 bytes
+amdhip64 [7164:12632] error bc250hsa: MakeResident failed 0xc0000017

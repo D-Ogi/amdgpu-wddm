@@ -200,6 +200,9 @@ struct bc250hsa_device {
      * process's own numbers here (bc250hsa.h rule 6). */
     uint32_t     wait_slice_ms;
     uint32_t     wait_total_ms;
+    /* bc250hsa_wait_spin_set: how long a wait reads the fence mapping before it asks the
+     * operating system, in microseconds, 0 for no spin. It covers every wait of the device. */
+    uint32_t     wait_spin_us;
 
     /* The fence checks: the traced submissions whose wait has not been reported yet, how
      * many ordinary submissions and copies are still to be traced, and 1 while the

@@ -1073,6 +1073,15 @@ bc250hsa_status bc250hsa_wait_policy_set(bc250hsa_device* dev, uint32_t slice_ms
     return BC250HSA_OK;
 }
 
+/* The mock's waits end at once, so a spin has nothing to shorten. */
+bc250hsa_status bc250hsa_wait_spin_set(bc250hsa_device* dev, uint32_t spin_us) {
+    (void)spin_us;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC) {
+        return BC250HSA_EINVAL;
+    }
+    return BC250HSA_OK;
+}
+
 bc250hsa_status bc250hsa_gpu_copy_ready(bc250hsa_device* dev, uint32_t* ready) {
     if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || ready == NULL) {
         return BC250HSA_EINVAL;
