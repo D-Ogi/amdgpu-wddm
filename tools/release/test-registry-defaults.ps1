@@ -30,12 +30,17 @@ $plan = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $
 Check (@($plan | Where-Object { $_.decision -ne 'set' }).Count -eq 0) "all $(@($plan).Count) parameters 'set'"
 Check (((Get-Decision $plan 'DpmMaxMHz').value -eq 2000) -and (Get-Decision $plan 'DpmMaxMHz').write) 'DPM ceiling 2000 written; base clock remains 1000'
 
-'ceiling migration: old 1500 becomes 2000, other choices stay'
+'ceiling migration: a 1500 of the old default becomes 2000, a chosen 1500 and other choices stay'
 Check ($legacy.parameters.DpmMaxMHz -eq 1500) 'legacy_applied retains the historical 1500 default'
-foreach ($previous in @($legacy.parameters, [pscustomobject]@{ DpmMaxMHz = 2000 }, $null)) {
+foreach ($previous in @($legacy.parameters, [pscustomobject]@{ DpmMaxMHz = 1500 }, $null)) {
     $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous $previous -Current @{ DpmMaxMHz = 1500 }
-    Check (((Get-Decision $p 'DpmMaxMHz').decision -eq 'update') -and (Get-Decision $p 'DpmMaxMHz').value -eq 2000) 'stored 1500 migrates regardless of the previous defaults record'
+    Check (((Get-Decision $p 'DpmMaxMHz').decision -eq 'update') -and (Get-Decision $p 'DpmMaxMHz').value -eq 2000) 'a stored 1500 migrates when the previous installer wrote 1500 or left no record'
 }
+# BD-279: the installers from tester.27 on record 2000, so a 1500 under that record is the tester's own value.
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous ([pscustomobject]@{ DpmMaxMHz = 2000 }) -Current @{ DpmMaxMHz = 1500 }
+Check (((Get-Decision $p 'DpmMaxMHz').decision -eq 'kept') -and (Get-Decision $p 'DpmMaxMHz').value -eq 1500) 'a 1500 under a record of 2000 is a choice of the tester and stays'
+$p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous ([pscustomobject]@{ DpmMaxMHz = 2000 }) -Current @{ DpmMaxMHz = 2000 }
+Check ((Get-Decision $p 'DpmMaxMHz').decision -eq 'same') 'a 2000 under a record of 2000 is the default: same'
 foreach ($kept in @(1000, 1200, 1700)) {
     $p = Get-RegistryDefaultPlan -Defaults $table.defaults.parameters -Previous ([pscustomobject]@{ DpmMaxMHz = $kept }) -Current @{ DpmMaxMHz = $kept } -After @{}
     Check (((Get-Decision $p 'DpmMaxMHz').value -eq $kept) -and (Get-Decision $p 'DpmMaxMHz').decision -eq 'kept' -and (Get-Decision $p 'DpmMaxMHz').write) 'a different stored ceiling survives even when pnputil resets the key'

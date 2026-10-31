@@ -658,9 +658,13 @@ function Get-RegistryDefaultPlan {
         # Before 'update' and 'kept': a value a person asked for and the key still holds is theirs, whatever the
         # previous installer happened to write (Get-UserChoice above).
         elseif ($null -ne (Get-UserChoice $d.Name $Current)) { $decision = 'chosen'; $value = $cur }
-        # Move the old release ceiling, including a manual 1500 choice. Other ceilings stay.
+        # The release ceiling went from 1500 to 2000 in tester.27 (9e313fe9). A 1500 goes with it when the previous
+        # installer wrote 1500 (the defaults of tester.26 and older) or left no record, so a manual 1500 of those
+        # releases moves too. Under a record of 2000 a 1500 is a person's choice and stays (BD-279: before this, every
+        # update moved it). Other ceilings stay.
         elseif ($d.Name -eq 'DpmMaxMHz') {
-            if (Test-RegistryValueSame $cur 1500) { $decision = 'update'; $value = $d.Value }
+            $prevCeiling = $null; if ($prev.ContainsKey($d.Name)) { $prevCeiling = $prev[$d.Name] }
+            if ((Test-RegistryValueSame $cur 1500) -and (($null -eq $prevCeiling) -or (Test-RegistryValueSame $prevCeiling 1500))) { $decision = 'update'; $value = $d.Value }
             else { $decision = 'kept'; $value = $cur }
         }
         elseif ($prev.ContainsKey($d.Name) -and (Test-RegistryValueSame $cur $prev[$d.Name])) { $decision = 'update'; $value = $d.Value }
