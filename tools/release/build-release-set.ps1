@@ -446,6 +446,12 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         # The setup window carries the package version in its resource (BD-166); an output of an earlier run is refused.
         $setup = Join-Path $From "setup\$flavour"
         if (Test-Path -LiteralPath $setup) { Stop-Package "setup output exists: $setup (remove it for a new package)" }
+        # submission-cab.ps1 refuses an existing CAB only at the end of the package build (tester.35 r4 lost 25 minutes
+        # to the CAB of r3), so it is refused here with the other outputs of an earlier run.
+        if ($flavour -eq 'release') {
+            $cabOut = Join-Path $From "submission\amdgpu-wddm-$setVersion.cab"
+            if (Test-Path -LiteralPath $cabOut) { Stop-Package "submission CAB exists: $cabOut (remove it for a new package)" }
+        }
         Test-Guard "the setup window ($flavour)"
         "$(Get-Utc) setup window $flavour"
         & $shell -NoProfile -File (Join-Path $repo 'tools\win\amdgpu_wddm_setup\build.ps1') -Out $setup -Version $setVersion -Flavour $flavour *> (Join-Path $logs 'setup.log')
