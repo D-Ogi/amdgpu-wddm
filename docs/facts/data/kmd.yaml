@@ -2172,3 +2172,12 @@ facts:
     status_text: "MEASURED (unit A, one run, tester.33 lab kernel driver DAD8D7A4)"
     detail: "Trial 5 of docs/testing/gdi-hw-accel-lab.md with tools/win/gdi-cpuwrite. The allocations are asked for through the private data of our driver, because no user-mode process can create a standard GDI staging surface. The baseline is partly in the processor cache, which is the comparison a small GDI rectangle needs"
     evidence: "[GDI trials 3, 4 and 5](../evidence/windows/2026-10-26-gdi-c15-r6/RESULT.md)"
+  - id: M934
+    status: MEASURED
+    date: "2026-10-30"
+    claim: "With `LargePages` 1 (2 MiB VRAM pages on the aligned layout) in place of `LargePages` 2 (the same layout with 4 KB mappings), llama.cpp on the HIP route of unit A runs Qwen3-8B Q8_0 pp512 at 572.12 in place of 252.37 tokens a second (2.27x) and tg64 at 39.52 in place of 36.15. qwen2.5-1.5B Q4_K_M gives 2145.88 and 189.72 in place of 1865.51 and 182.92, and Qwen3.6-35B-A3B UD-IQ2_M 662.29 and 73.14 in place of 652.79 and 69.13"
+    status_text: "MEASURED (unit A, one llama-bench arm with -r 2 for each value and model, one restart between the values)"
+    detail: "The tester.34 release installed (kernel driver 40.7.216.106), 40 CU, 1500 MHz, a 12 GiB carve-out, `llama-bench -p 512 -n 64 -fa 1 -ngl 99 -r 2`. The driver reads `LargePages` when it starts. With 2 it puts the VRAM segment base on a 1 GiB boundary and each VRAM allocation of 2 MiB or more on a 2 MiB segment offset, as with 1, so the pair separates the page size from the layout (driver/kmd/wddm.c). The llama build and the HIP runtime came from the lab folders `bload` and `slab`, and the series printed no file hashes. The perplexity of the 1.5B model on the wikitext-2 prefix is 12.4067 with both values (the reference runs of M931). The 8B model gives 11.4426 with 2 there and with 1 in M933. One 8B perplexity run with 1 stopped at MakeResident (BD-277)"
+    evidence: "[HIP llama.cpp parity, section LP](../evidence/windows/2026-10-31-hip-llama-parity/README.md)"
+    edges:
+      - {"type": "uses", "to": "M808"}

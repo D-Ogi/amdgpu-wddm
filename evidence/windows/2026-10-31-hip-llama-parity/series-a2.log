@@ -1,0 +1,134 @@
+#### a2 start 10:00:01Z llama=installed runtime=installed
+rt-inst35 amdhip64.dll 8E7D9FD1
+rt-inst35 bc250hipblas.dll 0C236049
+rt-inst35 vadd.exe B5160D87
+governor: running serial 1
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=53500 ready=1
+CuMode -> {"abi":1,"command":"get","path":"","name":"CuMode","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":2,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":40},"error":0}
+DpmMaxMHz -> {"abi":1,"command":"get","path":"","name":"DpmMaxMHz","kind":"setting","type":4,"max_bytes":4,"access":0,"private_read":0,"group":3,"result":{"status":"ok","os_error":0,"error":0,"source":"override","type":4,"bytes":4,"value":1500},"error":0}
+Tctl 53.8
+#### a2 bench 1.5B pp512 run 1 10:00:12Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:00:38 arm a2-1.5B-pp512-1 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:00:38 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=54875 ready=1
+10:00:52 exit 0 in 14 s
+10:00:52 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=59375 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2157.75 A� 8.02 |
+Tctl 59.4
+#### a2 bench 1.5B pp512 run 2 10:00:31Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:00:56 arm a2-1.5B-pp512-2 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:00:57 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=59000 ready=1
+10:01:00 exit 0 in 4 s
+10:01:00 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=61500 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2159.37 A� 12.35 |
+Tctl 61.4
+#### a2 bench 1.5B tg64 run 1 10:00:39Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:01:04 arm a2-1.5B-tg64-1 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:01:05 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=60875 ready=1
+10:01:08 exit 0 in 4 s
+10:01:08 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=61500 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 197.92 A� 0.44 |
+Tctl 61.5
+#### a2 bench 1.5B tg64 run 2 10:00:49Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:01:14 arm a2-1.5B-tg64-2 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:01:15 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=60750 ready=1
+10:01:18 exit 0 in 4 s
+10:01:18 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=61750 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 197.02 A� 0.82 |
+Tctl 61.8
+#### a2 bench 8B pp512 run 1 10:00:59Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:01:24 arm a2-8B-pp512-1 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:01:24 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=61125 ready=1
+10:01:45 exit 0 in 21 s
+10:01:45 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=72000 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 578.09 A� 1.16 |
+Tctl 65.6
+#### a2 bench 8B pp512 run 2 10:01:47Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:02:12 arm a2-8B-pp512-2 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:02:13 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64500 ready=1
+10:02:33 exit 0 in 20 s
+10:02:33 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=73125 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 577.88 A� 1.78 |
+Tctl 66.2
+#### a2 bench 8B tg64 run 1 10:02:32Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:02:58 arm a2-8B-tg64-1 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:02:58 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65375 ready=1
+10:03:19 exit 0 in 21 s
+10:03:19 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65875 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.97 A� 0.02 |
+Tctl 65.8
+#### a2 bench 8B tg64 run 2 10:02:58Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:03:24 arm a2-8B-tg64-2 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:03:24 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65000 ready=1
+10:03:45 exit 0 in 21 s
+10:03:45 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66375 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.78 A� 0.27 |
+Tctl 66.2
+#### a2 bench 35B pp512 run 1 10:03:27Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:03:53 arm a2-35B-pp512-1 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:03:53 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64875 ready=1
+10:04:19 exit 0 in 26 s
+10:04:19 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=69125 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | pp512 | 662.50 A� 0.86 |
+Tctl 64.2
+#### a2 bench 35B pp512 run 2 10:04:18Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:04:43 arm a2-35B-pp512-2 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:04:44 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+10:05:09 exit 0 in 26 s
+10:05:09 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=68625 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | pp512 | 662.84 A� 0.60 |
+Tctl 63.8
+#### a2 bench 35B tg64 run 1 10:05:10Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:05:36 arm a2-35B-tg64-1 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:05:36 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63000 ready=1
+10:06:01 exit 0 in 25 s
+10:06:01 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64500 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | tg64 | 74.52 A� 0.05 |
+Tctl 64.4
+#### a2 bench 35B tg64 run 2 10:05:39Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:06:05 arm a2-35B-tg64-2 llama=installed runtime=installed tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:06:05 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+10:06:30 exit 0 in 25 s
+10:06:30 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64750 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | tg64 | 74.48 A� 0.17 |
+Tctl 64.6
+#### a2 ppl 8B 10:06:08Z
+10:06:34 arm a2-ppl-8B llama=a1g runtime=inst35 tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:06:34 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64000 ready=1
+10:07:09 exit 0 in 35 s
+10:07:09 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=82375 ready=1
+0.20.678.376 I perplexity: 3.86 seconds per pass - ETA 0.32.836.932 I Final estimate: PPL = 11.4426 +/- 0.55798
+Tctl 66.8
+#### a2 chat 8B 10:07:30Z
+runtime search: C:\Program Files\amdgpu-wddm\tools\hip\amdhip64.dll
+10:07:55 arm a2-chat llama=installed runtime=installed tool=chat env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf --jinja -cnv -st -f C:\BC250\tmp\t35hip\chat\chat-in\chat-paris.txt -n 256 -ngl 99 -fa on --temp 0]
+hashes: ggml-hip 1607928B amdhip64 8E7D9FD1
+10:07:56 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65875 ready=1
+10:08:23 exit 0 in 28 s
+10:08:23 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+Paris [end of text]
+#### a2 done 10:08:00Z

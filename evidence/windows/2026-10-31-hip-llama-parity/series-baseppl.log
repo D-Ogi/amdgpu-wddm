@@ -1,0 +1,27 @@
+#### baseppl start 06:01:36Z llama=base runtime=set35r
+Tctl 60
+#### baseppl ppl 1.5B 06:01:39Z
+06:02:03 arm baseppl-ppl-1.5B llama=base runtime=set35r tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 4D878441 amdhip64 98630A90
+06:02:03 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=60250 ready=1
+06:02:26 exit 0 in 23 s
+06:02:26 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=71750 ready=1
+0.05.690.027 I perplexity: 2.61 seconds per pass - ETA 0.14.091.372 I Final estimate: PPL = 12.4996 +/- 0.53397
+Tctl 66.1
+#### baseppl ppl 8B 06:02:29Z
+06:02:53 arm baseppl-ppl-8B llama=base runtime=set35r tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 4D878441 amdhip64 98630A90
+06:02:53 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65250 ready=1
+06:03:43 exit 0 in 50 s
+06:03:43 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=81875 ready=1
+0.24.371.594 I perplexity: 7.76 seconds per pass - ETA 0.48.238.164 I Final estimate: PPL = 11.4414 +/- 0.55821
+Tctl 67.6
+#### baseppl ppl 35B 06:04:06Z
+06:04:29 arm baseppl-ppl-35B llama=base runtime=set35r tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 4D878441 amdhip64 98630A90
+06:04:29 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66875 ready=1
+06:05:24 exit 0 in 55 s
+06:05:24 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=79625 ready=1
+0.00.933.085 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.30.472.838 I perplexity: 7.42 seconds per pass - ETA 0.53.535.951 I Final estimate: PPL = 7.8603 +/- 0.31348
+#### baseppl done 06:05:03Z

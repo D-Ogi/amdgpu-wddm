@@ -1,0 +1,16 @@
+#### LargePages1 8B 21:12:40Z
+== [X=0] 22:13:02 Tctl 61.8 C (raw 6EDB0FEF)
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 572.12 A� 6.98 |
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.52 A� 0.07 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=71625 ready=1
+#### LargePages1 1.5B 21:13:29Z
+== [X=0] 22:13:51 Tctl 71.4 C (raw 787B0FEF)
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2145.88 A� 2.08 |
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 189.72 A� 0.00 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=69625 ready=1
+#### LargePages1 35B 21:13:42Z
+== [X=0] 22:14:05 Tctl 69.5 C (raw 769B0FEF)
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | pp512 | 662.29 A� 1.80 |
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | tg64 | 73.14 A� 0.23 |
+clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=69250 ready=1
+#### done 21:14:17Z

@@ -659,3 +659,13 @@ facts:
     evidence: "[The spin of a HIP wait, section 4](../evidence/windows/2026-10-31-hip-wait-spin/README.md), [8B load diagnosis](../evidence/windows/2026-10-31-hip-wait-spin/diag-8b.txt)"
     edges:
       - {"type": "uses", "to": "M869"}
+  - id: M933
+    status: MEASURED
+    date: "2026-10-31"
+    claim: "On unit A with the tester.35 release installed (40 CU, 1500 MHz, a 12 GiB carve-out, LargePages 1), the installed llama.cpp HIP component runs `llama-bench -fa 1 -ngl 99` pp512 at 2157.75 and 2159.37 and tg64 at 197.92 and 197.02 tokens a second for qwen2.5-1.5B Q4_K_M, 578.09 and 577.88, 39.97 and 39.78 for Qwen3-8B Q8_0, and 662.50 and 662.84, 74.52 and 74.48 for Qwen3.6-35B-A3B UD-IQ2_M. Each rate is above the published Linux ROCm figure of bc250-rocm for the same row (pp512 1798.6, 409.4 and 588.8, tg64 196.7, 38.5 and 71.2). The perplexity of the patched build is that of a build with only the gfx1013 build patches within the +/- of each value, and `test-backend-ops` passes 4894 of 4894 tests"
+    status_text: "MEASURED (unit A, two invocations of each row with -r 3, the bc250-rocm figures from their board)"
+    detail: "ggml-hip.dll 1607928B (llama.cpp b86d2f07 with the 16 patches of compute/hip/patches/llama-patches.json) and the installed amdhip64.dll 8E7D9FD1, which is the release runtime 98630A90 with the embedded test signature. pp512 and tg64 ran in separate invocations, as in their campaign script. Their `-mmp 0` is not a switch of this llama-bench. The same files before the package, with the tester.34 kernel driver, gave pp512 2149.91 and 2139.33 and tg64 198.29 and 198.54 (1.5B), 578.02 and 577.25, 39.97 and 39.94 (8B), and 662.65 and 663.37, 74.44 and 74.52 (35B). Perplexity on the wikitext-2 prefix (16 chunks of 512) with the tester.34 kernel driver: 12.4067, 11.4426 and 7.8359, against 12.4996, 11.4414 and 7.8603 for the base build, with +/- 0.53, 0.56 and 0.31. The installed tester.35 gives 11.4426 for the 8B model. The bc250-rocm figures are the median of 18 samples on their board under Fedora 44 and ROCm 7.1.1 at a 1500 MHz cap (https://github.com/akandr/bc250-rocm, commit 9a2abb17): a target, not a comparison on the same board. Their build with `GGML_CUDA_GRAPH_OPT=1` gives tg64 213.1 for the 1.5B model, above this route. Power and the default DPM ceiling of 2000 MHz were not measured"
+    evidence: "[HIP llama.cpp parity](../evidence/windows/2026-10-31-hip-llama-parity/README.md)"
+    edges:
+      - {"type": "uses", "to": "M931"}
+      - {"type": "uses", "to": "M934"}

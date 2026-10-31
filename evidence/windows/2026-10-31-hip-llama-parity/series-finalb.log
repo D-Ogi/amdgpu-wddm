@@ -1,0 +1,98 @@
+#### finalb start 05:53:07Z llama=a1g runtime=set35r
+Tctl 61.6
+#### finalb bench 1.5B pp512 rep 1 05:53:11Z
+05:53:39 arm finalb-1.5B-pp512-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:53:40 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62000 ready=1
+05:53:44 exit 0 in 4 s
+05:53:44 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66500 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2149.91 A� 3.12 |
+Tctl 66.4
+#### finalb bench 1.5B pp512 rep 2 05:53:20Z
+05:53:48 arm finalb-1.5B-pp512-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:53:49 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66000 ready=1
+05:53:52 exit 0 in 3 s
+05:53:52 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=68750 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | pp512 | 2139.33 A� 6.58 |
+Tctl 64.9
+#### finalb bench 1.5B tg64 rep 1 05:53:50Z
+05:54:18 arm finalb-1.5B-tg64-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:54:19 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64375 ready=1
+05:54:22 exit 0 in 3 s
+05:54:22 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65875 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.29 A� 0.29 |
+Tctl 65.9
+#### finalb bench 1.5B tg64 rep 2 05:54:01Z
+05:54:29 arm finalb-1.5B-tg64-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:54:30 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64750 ready=1
+05:54:33 exit 0 in 3 s
+05:54:33 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66125 ready=1
+| qwen2 1.5B Q4_K - Medium | 1.04 GiB | 1.78 B | ROCm | 99 | 1 | tg64 | 198.54 A� 0.16 |
+Tctl 66
+#### finalb bench 8B pp512 rep 1 05:54:11Z
+05:54:39 arm finalb-8B-pp512-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:54:39 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65125 ready=1
+05:55:00 exit 0 in 21 s
+05:55:00 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=76625 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 578.02 A� 1.12 |
+Tctl 64.5
+#### finalb bench 8B pp512 rep 2 05:55:19Z
+05:55:47 arm finalb-8B-pp512-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:55:47 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+05:56:08 exit 0 in 21 s
+05:56:08 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=76000 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | pp512 | 577.25 A� 0.25 |
+Tctl 64.1
+#### finalb bench 8B tg64 rep 1 05:56:25Z
+05:56:53 arm finalb-8B-tg64-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:56:54 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+05:57:16 exit 0 in 22 s
+05:57:16 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=68125 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.97 A� 0.05 |
+Tctl 68
+#### finalb bench 8B tg64 rep 2 05:56:54Z
+05:57:22 arm finalb-8B-tg64-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:57:22 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66875 ready=1
+05:57:44 exit 0 in 22 s
+05:57:44 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=68500 ready=1
+| qwen3 8B Q8_0 | 8.11 GiB | 8.19 B | ROCm | 99 | 1 | tg64 | 39.94 A� 0.06 |
+Tctl 64.6
+#### finalb bench 35B pp512 rep 1 05:57:43Z
+05:58:11 arm finalb-35B-pp512-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:58:11 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64000 ready=1
+05:58:37 exit 0 in 26 s
+05:58:37 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=70625 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | pp512 | 662.65 A� 0.50 |
+Tctl 65.4
+#### finalb bench 35B pp512 rep 2 05:58:34Z
+05:59:02 arm finalb-35B-pp512-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:59:03 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64750 ready=1
+05:59:29 exit 0 in 26 s
+05:59:29 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=70500 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | pp512 | 663.37 A� 2.63 |
+Tctl 65.1
+#### finalb bench 35B tg64 rep 1 05:59:28Z
+05:59:56 arm finalb-35B-tg64-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:59:56 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64250 ready=1
+06:00:22 exit 0 in 25 s
+06:00:22 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65875 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | tg64 | 74.44 A� 0.09 |
+Tctl 65.8
+#### finalb bench 35B tg64 rep 2 05:59:58Z
+06:00:26 arm finalb-35B-tg64-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+06:00:26 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65125 ready=1
+06:00:52 exit 0 in 25 s
+06:00:52 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66125 ready=1
+| qwen35moe 35B.A3B IQ2_M - 2.7 bpw | 10.72 GiB | 34.66 B | ROCm | 99 | 1 | tg64 | 74.52 A� 0.12 |
+#### finalb done 06:00:26Z

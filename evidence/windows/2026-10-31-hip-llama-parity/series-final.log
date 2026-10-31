@@ -1,0 +1,580 @@
+#### final start 05:38:14Z llama=a1g runtime=set35r
+Tctl 61.8
+#### final bench 1.5B pp512 rep 1 05:38:20Z
+05:38:48 arm final-1.5B-pp512-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -mmp 0 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:38:48 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62375 ready=1
+05:39:05 exit 1 in 17 s
+05:39:05 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62250 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 62.2
+#### final bench 1.5B pp512 rep 2 05:38:44Z
+05:39:12 arm final-1.5B-pp512-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -mmp 0 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:12 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62375 ready=1
+05:39:13 exit 1 in 1 s
+05:39:13 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62500 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 62.5
+#### final bench 1.5B tg64 rep 1 05:38:49Z
+05:39:17 arm final-1.5B-tg64-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -mmp 0 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:18 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62500 ready=1
+05:39:18 exit 1 in 1 s
+05:39:18 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62875 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 62.8
+#### final bench 1.5B tg64 rep 2 05:38:56Z
+05:39:24 arm final-1.5B-tg64-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -fa 1 -mmp 0 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:25 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=62875 ready=1
+05:39:25 exit 1 in 1 s
+05:39:25 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63125 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.1
+#### final bench 8B pp512 rep 1 05:39:03Z
+05:39:31 arm final-8B-pp512-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -mmp 0 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:32 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63000 ready=1
+05:39:32 exit 1 in 1 s
+05:39:32 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63125 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.1
+#### final bench 8B pp512 rep 2 05:39:09Z
+05:39:37 arm final-8B-pp512-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -mmp 0 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:37 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63250 ready=1
+05:39:38 exit 1 in 1 s
+05:39:38 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63500 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.4
+#### final bench 8B tg64 rep 1 05:39:14Z
+05:39:42 arm final-8B-tg64-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -mmp 0 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:42 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63500 ready=1
+05:39:43 exit 1 in 1 s
+05:39:43 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.6
+#### final bench 8B tg64 rep 2 05:39:21Z
+05:39:49 arm final-8B-tg64-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -fa 1 -mmp 0 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:49 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+05:39:50 exit 1 in 1 s
+05:39:50 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63750 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.8
+#### final bench 35B pp512 rep 1 05:39:26Z
+05:39:54 arm final-35B-pp512-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -mmp 0 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:39:55 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63750 ready=1
+05:39:55 exit 1 in 1 s
+05:39:55 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.8
+#### final bench 35B pp512 rep 2 05:39:33Z
+05:40:01 arm final-35B-pp512-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -mmp 0 -ngl 99 -p 512 -n 0 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:40:02 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+05:40:02 exit 1 in 1 s
+05:40:02 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63750 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.8
+#### final bench 35B tg64 rep 1 05:39:42Z
+05:40:10 arm final-35B-tg64-1 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -mmp 0 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:40:11 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63375 ready=1
+05:40:11 exit 1 in 1 s
+05:40:11 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.6
+#### final bench 35B tg64 rep 2 05:39:47Z
+05:40:15 arm final-35B-tg64-2 llama=a1g runtime=set35r tool=bench env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -fa 1 -mmp 0 -ngl 99 -p 0 -n 64 -r 3]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:40:16 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+05:40:16 exit 1 in 1 s
+05:40:16 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63875 ready=1
+-hff, --hf-file <file> Hugging Face model file. If specified, it will override the quant in --hf-repo
+-hft, --hf-token <token> Hugging Face access token
+-p, --n-prompt <n> (default: 512)
+-n, --n-gen <n> (default: 128)
+-pg <pp,tg> (default: )
+-d, --n-depth <n> (default: 0)
+-b, --batch-size <n> (default: 2048)
+-ub, --ubatch-size <n> (default: 512)
+-ctk, --cache-type-k <t> (default: f16)
+-ctv, --cache-type-v <t> (default: f16)
+-t, --threads <n> (default: 6)
+-C, --cpu-mask <hex,hex> (default: 0x0)
+--cpu-strict <0|1> (default: 0)
+--poll <0...100> (default: 50)
+-ngl, --n-gpu-layers <n> (default: -1)
+-ncmoe, --n-cpu-moe <n> (default: 0)
+-sm, --split-mode <none|layer|row|tensor> (default: layer)
+-mg, --main-gpu <i> (default: 0)
+-nkvo, --no-kv-offload <0|1> (default: 0)
+-fa, --flash-attn <on|off|auto> (default: auto)
+-dev, --device <dev0/dev1/...> (default: auto)
+-lm, --load-mode <auto|none|mmap|mlock|mmap+mlock|dio> (default: auto)
+-lzm, --lazy-mode <on|auto|off> (default: auto)
+-embd, --embeddings <0|1> (default: 0)
+-ts, --tensor-split <ts0/ts1/..> (default: 0)
+-nopo, --no-op-offload <0|1> (default: 0)
+--no-host <0|1> (default: 0)
+--repack <0|1> (default: 1)
+error: invalid parameter for argument: -mmp
+Tctl 63.8
+#### final ppl 1.5B 05:39:56Z
+05:40:24 arm final-ppl-1.5B llama=a1g runtime=set35r tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\qwen2.5-1.5b-instruct-q4_k_m.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:40:24 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=63625 ready=1
+05:40:34 exit 0 in 10 s
+05:40:34 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=76500 ready=1
+0.04.350.523 I perplexity: 1.27 seconds per pass - ETA 0.08.711.743 I Final estimate: PPL = 12.4067 +/- 0.52907
+Tctl 65.2
+#### final ppl 8B 05:40:52Z
+05:41:20 arm final-ppl-8B llama=a1g runtime=set35r tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:41:20 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65000 ready=1
+05:41:54 exit 0 in 34 s
+05:41:54 after clock backend=kmd-smu abi=1 MHz=1300 VID=107 temperature_mc=84000 ready=1
+0.20.796.469 I perplexity: 3.87 seconds per pass - ETA 0.33.123.465 I Final estimate: PPL = 11.4426 +/- 0.55798
+Tctl 67.8
+#### final ppl 35B 05:42:16Z
+05:42:44 arm final-ppl-35B llama=a1g runtime=set35r tool=ppl env=[T35_NOENV=1] args=[-m C:\BC250\strata\models\Qwen3.6-35B-A3B-UD-IQ2_M.gguf -f C:\BC250\tmp\bd117-fa-r3\wikitext2-test-prefix.txt -c 512 --chunks 16 -fa on -ngl 99]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:42:44 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66500 ready=1
+05:43:25 exit 0 in 41 s
+05:43:25 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=79375 ready=1
+0.00.919.774 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.26.979.339 I perplexity: 3.95 seconds per pass - ETA 0.39.706.720 I Final estimate: PPL = 7.8359 +/- 0.31237
+#### final ops 05:42:59Z
+#### final-ops mmid Tctl 65.9
+05:44:18 arm final-ops-mmid llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o MUL_MAT_ID -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:44:19 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65250 ready=1
+05:45:57 exit 0 in 98 s
+05:45:57 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=73500 ready=1
+ops.out 2026-10-31T06:45:57 lines 957: OK 0 FAIL 0 not-supported 14
+Testing 2 devices
+Backend 1/2: ROCm0
+  931/931 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops mmq8 Tctl 67.6
+05:46:21 arm final-ops-mmq8 llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o MUL_MAT -p type_a=q8_0 -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:46:21 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66500 ready=1
+05:46:24 exit 0 in 2 s
+05:46:24 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66625 ready=1
+ops.out 2026-10-31T06:46:24 lines 158: OK 0 FAIL 0 not-supported 33
+Testing 2 devices
+Backend 1/2: ROCm0
+  113/113 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops mmq4k Tctl 66.1
+05:46:32 arm final-ops-mmq4k llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o MUL_MAT -p type_a=q4_K -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:46:32 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65375 ready=1
+05:46:40 exit 0 in 8 s
+05:46:40 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=73625 ready=1
+ops.out 2026-10-31T06:46:40 lines 165: OK 0 FAIL 0 not-supported 33
+Testing 2 devices
+Backend 1/2: ROCm0
+  120/120 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops mmiq2 Tctl 67.6
+05:47:03 arm final-ops-mmiq2 llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o MUL_MAT -p type_a=iq2_ -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:47:04 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66375 ready=1
+05:47:31 exit 0 in 28 s
+05:47:31 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=74500 ready=1
+ops.out 2026-10-31T06:47:31 lines 224: OK 0 FAIL 0 not-supported 33
+Testing 2 devices
+Backend 1/2: ROCm0
+  179/179 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops mmf16 Tctl 67.8
+05:47:58 arm final-ops-mmf16 llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o MUL_MAT -p type_a=f16 -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:47:59 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65625 ready=1
+05:48:07 exit 0 in 8 s
+05:48:07 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65375 ready=1
+ops.out 2026-10-31T06:48:07 lines 373: OK 0 FAIL 0 not-supported 0
+Testing 2 devices
+Backend 1/2: ROCm0
+  361/361 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops fa128 Tctl 64.9
+05:48:13 arm final-ops-fa128 llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o FLASH_ATTN_EXT -p hsk=128, -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:48:13 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64500 ready=1
+05:48:33 exit 0 in 19 s
+05:48:33 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=76500 ready=1
+ops.out 2026-10-31T06:48:33 lines 573: OK 0 FAIL 0 not-supported 6
+Testing 2 devices
+Backend 1/2: ROCm0
+  555/555 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops fa256 Tctl 65.2
+05:49:10 arm final-ops-fa256 llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o FLASH_ATTN_EXT -p hsk=256, -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:49:10 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65000 ready=1
+05:49:31 exit 0 in 21 s
+05:49:31 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=81125 ready=1
+ops.out 2026-10-31T06:49:31 lines 161: OK 0 FAIL 0 not-supported 0
+Testing 2 devices
+Backend 1/2: ROCm0
+  149/149 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+#### final-ops misc Tctl 66.4
+05:50:12 arm final-ops-misc llama=a1g runtime=set35r tool=ops env=[T35_NOENV=1] args=[-o RMS_NORM,L2_NORM,ROPE,SOFT_MAX,GET_ROWS,SET_ROWS,CPY,CONT,ADD,MUL,SCALE,SWIGLU,SILU,SIGMOID,SOFTPLUS,ARGSORT,SUM_ROWS,TOP_K,SSM_CONV,GATED_DELTA_NET -b ROCm0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:50:13 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=65000 ready=1
+05:52:04 exit 0 in 111 s
+05:52:04 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=66000 ready=1
+ops.out 2026-10-31T06:52:03 lines 3511: OK 0 FAIL 0 not-supported 1013
+Testing 2 devices
+Backend 1/2: ROCm0
+  2486/2486 tests passed
+  Backend ROCm0: [1;32mOK[0m
+Backend 2/2: CPU
+  Skipping
+2/2 backends passed
+Tctl 65.6
+#### final chat 8B 05:51:44Z
+05:52:12 arm final-chat llama=a1g runtime=set35r tool=chat env=[T35_NOENV=1] args=[-m C:\BC250\llmvram\models\Qwen3-8B-Q8_0.gguf --jinja -cnv -st -f C:\BC250\tmp\t35hip\chat\chat-in\chat-paris.txt -n 256 -ngl 99 -fa on --temp 0]
+hashes: ggml-hip 1607928B amdhip64 98630A90
+05:52:13 before clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64875 ready=1
+05:52:33 exit 0 in 20 s
+05:52:33 after clock backend=kmd-smu abi=1 MHz=1500 VID=100 temperature_mc=64000 ready=1
+Paris [end of text]
+#### final done 05:52:07Z
