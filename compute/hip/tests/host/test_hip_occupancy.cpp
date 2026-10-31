@@ -4,7 +4,8 @@
 // names: 16 wave slots a SIMD (half of the 32 that layer 1 reports a compute unit), two SIMDs a
 // compute unit, 1024 VGPRs a SIMD in wave32 in granules of 8, and 16 barriers a compute unit.
 // The control is the model without registers (vgprs 0), which must give what the earlier model
-// of hip_device.cpp gave.
+// of hip_device.cpp gave. In WGP mode the model gives the CU-mode answer unless that is 0; then a
+// workgroup that fits the four SIMDs of a WGP gives 1.
 #include "runtime_internal.h"
 
 #include <cstdio>
@@ -22,7 +23,7 @@ static unsigned checks, failures;
         }                                                                                   \
     } while (0)
 
-static int blocks(uint32_t threads, uint32_t vgprs, uint64_t group_bytes = 0u) {
+static int blocks(uint32_t threads, uint32_t vgprs, uint64_t group_bytes = 0u, bool wgp = false) {
     bc250hip::OccupancyInput in;
     in.block_threads = threads;
     in.wave_size = 32u;
@@ -30,6 +31,7 @@ static int blocks(uint32_t threads, uint32_t vgprs, uint64_t group_bytes = 0u) {
     in.vgprs = vgprs;
     in.group_bytes = group_bytes;
     in.lds_bytes_per_cu = 65536u;
+    in.wgp_mode = wgp;
     return bc250hip::occupancy_blocks_per_cu(in);
 }
 
@@ -48,6 +50,20 @@ int main() {
     CHECK_INT(blocks(64u, 24u, 20000u), 3);    // 65536 / 20000 = 3
     CHECK_INT(blocks(64u, 24u, 65537u), 0);    // more local memory than a compute unit has
 
+    // WGP mode: a CU-mode answer that is not 0 stays as it is.
+    CHECK_INT(blocks(256u, 128u, 0u, true), 2);
+    CHECK_INT(blocks(256u, 130u, 0u, true), 1);
+    CHECK_INT(blocks(32u, 8u, 0u, true), 16);
+    CHECK_INT(blocks(64u, 24u, 20000u, true), 3);
+    // The defect of 2026-10-31: flash_attn_tile<256,256,...>, 512 threads, 184 VGPRs, 17920 bytes.
+    // CU mode: 16 waves need 8 a SIMD, 1024 / 184 = 5 hold: 0. WGP mode: 4 a SIMD, 5 / 4 = 1.
+    CHECK_INT(blocks(512u, 184u, 17920u), 0);
+    CHECK_INT(blocks(512u, 184u, 17920u, true), 1);
+    CHECK_INT(blocks(512u, 256u, 17920u, true), 1);   // 4 waves a SIMD of 256 VGPRs: exactly 1024
+    CHECK_INT(blocks(1024u, 128u, 0u, true), 1);      // 8 a SIMD of 128 VGPRs (CU mode: 0, above)
+    CHECK_INT(blocks(1024u, 136u, 0u, true), 0);      // 8 a SIMD, 1024 / 136 = 7: not even a WGP
+    CHECK_INT(blocks(64u, 24u, 65537u, true), 0);     // one workgroup still addresses 64 KiB at most
+
     // The register count of a kernel: the metadata first, the descriptor when the metadata is 0.
     bc250hsa_kernel kernel{};
     kernel.vgpr_count = 40u;
@@ -55,6 +71,12 @@ int main() {
     CHECK_INT(bc250hip::occupancy_kernel_vgprs(kernel), 40);
     kernel.vgpr_count = 0u;
     CHECK_INT(bc250hip::occupancy_kernel_vgprs(kernel), 48);   // (5 + 1) * 8
+    // WGP_MODE is bit 29 of COMPUTE_PGM_RSRC1: 0xe0af0016 is the descriptor of the kernel above.
+    CHECK_INT(bc250hip::occupancy_kernel_wgp_mode(kernel), 0);
+    kernel.compute_pgm_rsrc1 = 0xe0af0016u;
+    CHECK_INT(bc250hip::occupancy_kernel_wgp_mode(kernel), 1);
+    kernel.compute_pgm_rsrc1 = 0xc0af0016u;
+    CHECK_INT(bc250hip::occupancy_kernel_wgp_mode(kernel), 0);
 
     std::printf("test_hip_occupancy: %u checks, %u failures\n", checks, failures);
     return failures == 0u ? 0 : 1;

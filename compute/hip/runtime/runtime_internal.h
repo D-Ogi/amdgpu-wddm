@@ -491,8 +491,10 @@ struct OccupancyInput {
     uint32_t vgprs = 0;             // VGPRs of one wave, occupancy_kernel_vgprs
     uint64_t group_bytes = 0;       // the static group segment plus the dynamic request
     uint64_t lds_bytes_per_cu = 0;  // the local memory of one compute unit
+    bool wgp_mode = false;          // occupancy_kernel_wgp_mode: a workgroup may use both CUs of a WGP
 };
 uint32_t occupancy_kernel_vgprs(const bc250hsa_kernel& kernel);
+bool     occupancy_kernel_wgp_mode(const bc250hsa_kernel& kernel);
 int      occupancy_blocks_per_cu(const OccupancyInput& in);
 
 // A monotonic host clock in milliseconds, for hipEventElapsedTime.

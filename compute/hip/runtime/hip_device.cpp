@@ -637,6 +637,7 @@ hipError_t hipOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, const vo
                    : 0u;
     in.group_bytes = group_bytes;
     in.lds_bytes_per_cu = prop.maxSharedMemoryPerMultiProcessor;
+    in.wgp_mode = entry.kernel != nullptr && bc250hip::occupancy_kernel_wgp_mode(*entry.kernel);
     *numBlocks = bc250hip::occupancy_blocks_per_cu(in);
     return hipSuccess;
 }

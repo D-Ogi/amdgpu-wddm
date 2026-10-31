@@ -27,6 +27,22 @@
 //
 // SGPRs do not limit a GFX10 wave: every wave gets its full SGPR file (getSGPRAllocGranule
 // returns the whole addressable count for major 10 and later, line 1259).
+//
+// WGP mode. The device compiler builds every kernel for WGP mode unless -mcumode is given, and
+// COMPUTE_PGM_RSRC1.WGP_MODE (bit 29, AMDGPUUsage.rst, GFX10-GFX12) then lets the waves of one
+// workgroup use both compute units of a workgroup processor: four SIMDs (getEUsPerCU, line
+// 1213), twice the local memory for all workgroups together (getLocalMemorySize, line 1178; one
+// workgroup still addresses 64 KiB at most, getAddressableLocalMemorySize) and 32 barriers
+// (getMaxWorkGroupsPerCU, line 1230). The CU-mode count above stays the answer whenever it is
+// not 0, so no answer of the model that the measurements used changes. When it is 0, a WGP-mode
+// kernel can still run if its workgroup fits the WGP: a 512-thread flash attention workgroup
+// with 184 VGPRs needs 8 waves a SIMD on two SIMDs (1472 registers, too many) but 4 a SIMD on
+// four (736). The model said 0 for such a kernel, and llama.cpp stopped at
+// GGML_ASSERT(max_blocks_per_sm > 0) (ggml/src/ggml-cuda/fattn-common.cuh:1138, the 35B
+// perplexity run of 2026-10-31). Such a workgroup needs more than half of the four SIMDs, so a
+// WGP holds one of it at most, and the answer for that case is 1: multiProcessorCount counts
+// compute units, and 0 means "the kernel cannot run". This is the one answer that can be too
+// large (by 2); the caller uses it only to choose how many blocks share the work of one head.
 
 #include "runtime_internal.h"
 
@@ -35,36 +51,21 @@ namespace bc250hip {
 namespace {
 
 constexpr uint32_t kSimdsPerCu = 2;          // getEUsPerCU, GFX10 CU mode
+constexpr uint32_t kCusPerWgp = 2;           // getEUsPerCU, GFX10 WGP mode: four SIMDs
 constexpr uint32_t kVgprsPerSimdWave32 = 1024;
 constexpr uint32_t kVgprGranuleWave32 = 8;
 constexpr uint32_t kBarriersPerCu = 16;      // getMaxWorkGroupsPerCU, CU mode
+constexpr uint32_t kBarriersPerWgp = 32;     // getMaxWorkGroupsPerCU, WGP mode
+constexpr uint32_t kRsrc1WgpMode = 1u << 29; // COMPUTE_PGM_RSRC1.WGP_MODE
 
 uint32_t ceil_div(uint32_t a, uint32_t b) { return (a + b - 1u) / b; }
 
-}  // namespace
-
-// The VGPRs one wave of the kernel allocates. The metadata .vgpr_count is what the compiler
-// states; a kernel whose metadata does not state it falls back to the granulated count of
-// COMPUTE_PGM_RSRC1 bits 5:0, which is (granules - 1) in units of 8 for wave32
-// (AMDGPUUsage.rst, compute_pgm_rsrc1 GRANULATED_WORKITEM_VGPR_COUNT, and
-// getVGPREncodingGranule of the same AMDGPUBaseInfo.cpp, 8 in wave32).
-uint32_t occupancy_kernel_vgprs(const bc250hsa_kernel& kernel) {
-    if (kernel.vgpr_count != 0u) {
-        return kernel.vgpr_count;
-    }
-    return ((kernel.compute_pgm_rsrc1 & 0x3Fu) + 1u) * kVgprGranuleWave32;
-}
-
-int occupancy_blocks_per_cu(const OccupancyInput& in) {
-    if (in.block_threads == 0u || in.wave_size == 0u || in.waves_per_cu < kSimdsPerCu) {
-        return 0;
-    }
-    if (in.group_bytes > in.lds_bytes_per_cu) {
-        return 0;
-    }
+// The workgroups that one block of `cus` compute units holds (1: a CU, 2: a WGP).
+uint32_t blocks_per_unit(const OccupancyInput& in, uint32_t cus) {
+    const uint32_t simds = kSimdsPerCu * cus;
     const uint32_t waves_per_block = ceil_div(in.block_threads, in.wave_size);
     const uint32_t slots_per_simd = in.waves_per_cu / kSimdsPerCu;
-    const uint32_t per_simd_per_block = ceil_div(waves_per_block, kSimdsPerCu);
+    const uint32_t per_simd_per_block = ceil_div(waves_per_block, simds);
     if (per_simd_per_block > slots_per_simd) {
         return 0;
     }
@@ -82,15 +83,51 @@ int occupancy_blocks_per_cu(const OccupancyInput& in) {
     uint32_t blocks = waves_per_simd / per_simd_per_block;
 
     if (in.group_bytes > 0u) {
-        const uint64_t by_lds = in.lds_bytes_per_cu / in.group_bytes;
+        const uint64_t by_lds = in.lds_bytes_per_cu * cus / in.group_bytes;
         if (by_lds < blocks) {
             blocks = static_cast<uint32_t>(by_lds);
         }
     }
-    if (waves_per_block > 1u && blocks > kBarriersPerCu) {
-        blocks = kBarriersPerCu;
+    const uint32_t barriers = cus == 1u ? kBarriersPerCu : kBarriersPerWgp;
+    if (waves_per_block > 1u && blocks > barriers) {
+        blocks = barriers;
     }
-    return static_cast<int>(blocks);
+    return blocks;
+}
+
+}  // namespace
+
+// The VGPRs one wave of the kernel allocates. The metadata .vgpr_count is what the compiler
+// states; a kernel whose metadata does not state it falls back to the granulated count of
+// COMPUTE_PGM_RSRC1 bits 5:0, which is (granules - 1) in units of 8 for wave32
+// (AMDGPUUsage.rst, compute_pgm_rsrc1 GRANULATED_WORKITEM_VGPR_COUNT, and
+// getVGPREncodingGranule of the same AMDGPUBaseInfo.cpp, 8 in wave32).
+uint32_t occupancy_kernel_vgprs(const bc250hsa_kernel& kernel) {
+    if (kernel.vgpr_count != 0u) {
+        return kernel.vgpr_count;
+    }
+    return ((kernel.compute_pgm_rsrc1 & 0x3Fu) + 1u) * kVgprGranuleWave32;
+}
+
+// Whether the kernel runs its workgroups in WGP mode: the bit that the dispatch passes to the CP
+// unchanged (pm4_dispatch.c copies COMPUTE_PGM_RSRC1 from the descriptor).
+bool occupancy_kernel_wgp_mode(const bc250hsa_kernel& kernel) {
+    return (kernel.compute_pgm_rsrc1 & kRsrc1WgpMode) != 0u;
+}
+
+int occupancy_blocks_per_cu(const OccupancyInput& in) {
+    if (in.block_threads == 0u || in.wave_size == 0u || in.waves_per_cu < kSimdsPerCu) {
+        return 0;
+    }
+    // One workgroup addresses the local memory of one compute unit at most, in either mode.
+    if (in.group_bytes > in.lds_bytes_per_cu) {
+        return 0;
+    }
+    const uint32_t per_cu = blocks_per_unit(in, 1u);
+    if (per_cu != 0u || !in.wgp_mode) {
+        return static_cast<int>(per_cu);
+    }
+    return blocks_per_unit(in, kCusPerWgp) != 0u ? 1 : 0;
 }
 
 }  // namespace bc250hip
