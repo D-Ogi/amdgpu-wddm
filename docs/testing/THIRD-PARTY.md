@@ -13,21 +13,21 @@ and NOTICE in the package root).
 
 | File (`payload\`) | Source |
 |---|---|
-| `adl\atiadlxx.dll`, `wow64\adl\atiadlxy.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/adl`), public ADL subset. Both DriverStore members retain their unique ADL load names |
-| `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3`; the .sys also contains the Linux amdgpu code in the next table |
-| `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/d3d12`), against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9`, the commit of `d3d12\amdgpu_wddm_radv.dll` |
-| `desktop\bc250d3d_router.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/router`) |
-| `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/dxvk`). The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
-| `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/router`), x86 build |
-| `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/dxvk`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit. The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
-| `wow64\d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/d3d12`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit, against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9`. The x86 ICD below has the same commit |
-| `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
-| `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`driver/umd/mft-h264`) |
-| `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`tools/win/d3d12caps`) |
-| `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `7c868060a736ac9d0b7029a46ffe6e54df4202f3`, the state installer at `7c868060a736ac9d0b7029a46ffe6e54df4202f3` |
-| `tools\d3d11bench.exe` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`tools/win/d3d11bench`) |
-| `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
-| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `7c868060a736ac9d0b7029a46ffe6e54df4202f3` (`tools/win/amdgpu_wddm_control`) |
+| `adl\atiadlxx.dll`, `wow64\adl\atiadlxy.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/adl`), public ADL subset. Both DriverStore members retain their unique ADL load names |
+| `kmd\bc250kmd.sys`, `kmd\bc250kmd.inf` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3`; the .sys also contains the Linux amdgpu code in the next table |
+| `d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/d3d12`), against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9`, the commit of `d3d12\amdgpu_wddm_radv.dll` |
+| `desktop\bc250d3d_router.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/router`) |
+| `d3d11\amdgpu_wddm_d3d11.dll`, `d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/dxvk`). The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
+| `wow64\desktop\bc250d3d_router.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/router`), x86 build |
+| `wow64\d3d11\amdgpu_wddm_d3d11.dll`, `wow64\d3d11\amdgpu_wddm_d3d11.config` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/dxvk`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit. The config is the record from `tools/build/write-umd-config.py` at `97b0f39ebc04f8c23c1b2110b9ee0d15034713f6` |
+| `wow64\d3d12\amdgpu_wddm_d3d12.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/d3d12`), x86 build with the `-Arch x86` recipe and the `.def` export of the same commit, against the `src/util` host contract of Mesa `68fc203599c1ce0b7143fee6e41f9a552b2dacf9`. The x86 ICD below has the same commit |
+| `tools\bc250kmd_cli.exe`, `control\bc250control.dll`, `tools\bc250control.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (the CLI and the control DLL from one build of `tools/win/bc250kmd_cli`) |
+| `mft\amdgpu_wddm_mft_h264.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`driver/umd/mft-h264`) |
+| `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`tools/win/d3d12caps`) |
+| `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `aac4b053cef681addc4a67c2913d0cff7706a6a3`, the state installer at `aac4b053cef681addc4a67c2913d0cff7706a6a3` |
+| `tools\d3d11bench.exe` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`tools/win/d3d11bench`) |
+| `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
+| `control\amdgpu_wddm_control.exe` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`tools/win/amdgpu_wddm_control`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `tools\release-witness.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 
 ## Third-party code in the package
