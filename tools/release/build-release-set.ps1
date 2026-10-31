@@ -406,6 +406,8 @@ if ($PSCmdlet.ParameterSetName -eq 'Package') {
         # flavour and writes its own report; the byte check of both runs here after every child ends.
         function Format-Arg([string]$A) { '"' + ($A -replace '"', '\"') + '"' }
         $children = @()
+        # A package worktree of an earlier run whose folder was deleted stays registered (BD-264).
+        foreach ($p in @(Remove-StaleWorktrees $null $repo $From)) { "$(Get-Utc) removed the registration of $p (its folder is gone)" }
         try {
             foreach ($flavour in $serial) {
                 $wt = Join-Path $From "package-wt-$flavour"
@@ -756,6 +758,22 @@ function Update-Measure {
 }
 
 try {
+    # Registrations of trees under -Work whose folder is gone (a -Keep run whose Work folder was deleted, a killed
+    # job): git worktree add refuses their paths. Only those of this -Work go, never those of another lane (BD-264).
+    $treeRepos = @(foreach ($b in $planData.builds) {
+        , @($b.repo, $b.commit); , @($planData.recipe_repository, $b.recipe_commit)
+        foreach ($i in @(if ($b.inputs) { $b.inputs.Values })) { if ($i.repo -and $i.commit) { , @($i.repo, $i.commit) } }
+    })
+    $seen = @{}; $checkouts = @{}
+    foreach ($pair in $treeRepos) {
+        $key = "$($pair[0])@$($pair[1])"
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        $checkouts[(Get-Checkout $ctx $pair[0] $pair[1])] = $true
+    }
+    foreach ($c in $checkouts.Keys) {
+        foreach ($p in @(Remove-StaleWorktrees $ctx $c $Work)) { "$(Get-Utc) removed the registration of $p in $c (its folder is gone)" }
+    }
     # The shared trees, once, before the builds that read them.
     foreach ($s in $planData.shared_trees) {
         Remove-SharedBuildTree $ctx $s.repo $s.commit $s.path $Work

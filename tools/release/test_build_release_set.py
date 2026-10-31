@@ -781,6 +781,28 @@ class ReleaseSetRuns(unittest.TestCase):
         a = next(f for f in rows_doc["files"] if f["path"] == "payload/a.bin")
         self.assertEqual(a.get("pair_skew"), rows[0]["outputs"][0]["pair_skew"])
 
+    def test_a_deleted_work_folder_leaves_no_registration_that_stops_the_next_run(self):
+        # BD-264: -Keep leaves <Work>\_<hash> registered; after the Work folder went as a folder, the next run
+        # stopped at its start. A killed job leaves the registration of its row tree the same way.
+        rows = [self.ws.row("a", sleep=0), self.ws.row("b", sleep=0, tree="worktree")]
+        manifest = self.ws.manifest(rows)
+        code, out = self.ws.run(manifest, "-Keep")
+        self.assertEqual(code, 0, out)
+        self.assertGreater(len(git(self.ws.repo, "worktree", "list").splitlines()), 1, "-Keep keeps the shared tree")
+        shutil.rmtree(self.ws.work)
+        git(self.ws.repo, "worktree", "add", "--detach", str(self.ws.work / "b" / "s"), "HEAD")
+        other = self.ws.base / "other-lane" / "b" / "s"
+        git(self.ws.repo, "worktree", "add", "--detach", str(other), "HEAD")
+        shutil.rmtree(self.ws.work)
+        shutil.rmtree(other)
+        code, out = self.ws.run(manifest)
+        self.assertEqual(code, 0, out)
+        self.assertIn("removed the registration of " + str(self.ws.work / "b" / "s"), out)
+        listed = git(self.ws.repo, "worktree", "list", "--porcelain").replace("\\", "/")
+        self.assertIn(str(other).replace("\\", "/"), listed, "another lane's registration stays")
+        git(self.ws.repo, "worktree", "prune")
+        self.assertTreesGone()
+
     def builds(self):
         return {b["id"]: (b["status"], bool(b.get("kept")), bool(b.get("carried"))) for b in self.ws.report()["builds"]}
 

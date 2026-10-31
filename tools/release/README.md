@@ -336,6 +336,10 @@ into its image), or one shared work tree of the commit (`tree: shared`). A share
 build ends. When a build ends, its outputs and the PDB of each image go to `<Out>\artifacts\<flavour>\<row id>`,
 its tree is removed, and its logs stay in `<Out>\logs\<row id>`. A failed build fails the release set. Then no new build
 starts, unless `-KeepGoing` is given. A build that reads the outputs of a failed build never starts.
+`-Keep` keeps the trees, and they stay registered as git work trees. Before its first tree, a run removes each
+registration under its own `-Work` whose folder is gone. It does not remove a locked registration or the registration
+of another folder, so the trees of other lanes stay. A kept shared tree is removed when it is clean, also with its
+submodules (BD-264).
 
 The `tests` of a row are its host tests. They run on the output of the build before its tree is removed. The numbers
 of their summary lines go into the report.

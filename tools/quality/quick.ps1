@@ -179,6 +179,8 @@ Check 'kmd-contract' { & python "$repo\tools\quality\prototype_gate.py" --compil
  # The release set build (tools/release/build-release-set.ps1) on stub recipes in temporary repositories: -MaxParallel and the
  # disk budget hold, -Plan builds nothing, an unpushed commit, an AI trailer and an implicit compiler are refused, and a
  # failed build fails the release set and keeps its log. Its end-to-end runs start pwsh processes, hence 600 s.
+ # The removal of shared and stale build trees of BuildTree.psm1 (BD-264), on a fixture repository in $Out.
+ Check 'shared-build-tree' { & pwsh -NoProfile -File "$repo\tools\release\test-shared-build-tree.ps1" -FixtureRoot (New-Item -ItemType Directory -Force "$Out\shared-build-tree").FullName }
  Check 'release-build-set' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\release-build-set").FullName; & python -m unittest discover -s "$repo\tools\release" -p 'test_build_release_set.py' }
  Check 'release-driver-package' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-driver-package").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_driver_package.py' }
  Check 'release-source-versions' { $env:TEMP=(New-Item -ItemType Directory -Force "$Out\release-source-versions").FullName; $env:TMP=$env:TEMP; & python -m unittest discover -s "$repo\tools\release" -p 'test_source_versions.py' }

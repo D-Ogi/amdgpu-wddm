@@ -202,6 +202,47 @@ function Remove-Trees($Context) {
     $Context.Trees.Clear()
 }
 
+# The administration directory of the work tree $Tree in the checkout $Checkout (<common dir>\worktrees\<name>, whose
+# gitdir file names <Tree>\.git), or $null.
+function Get-WorktreeAdmin([string]$Checkout, [string]$Tree) {
+    $common = (& git -C $Checkout rev-parse --git-common-dir).Trim()
+    if ($LASTEXITCODE) { throw "git rev-parse --git-common-dir in $Checkout failed" }
+    if (-not [IO.Path]::IsPathRooted($common)) { $common = Join-Path $Checkout $common }
+    $admin = Join-Path $common 'worktrees'
+    if (-not (Test-Path -LiteralPath $admin)) { return $null }
+    $want = [IO.Path]::GetFullPath($Tree).TrimEnd('\', '/')
+    foreach ($d in Get-ChildItem -LiteralPath $admin -Directory -Force) {
+        $gitdir = Join-Path $d.FullName 'gitdir'
+        if (-not (Test-Path -LiteralPath $gitdir)) { continue }
+        $path = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath((Get-Content -LiteralPath $gitdir -Raw).Trim()))
+        if ($path.TrimEnd('\', '/').Equals($want, [StringComparison]::OrdinalIgnoreCase)) { return $d.FullName }
+    }
+    return $null
+}
+
+# Removes the registrations of $Checkout whose work tree is under $WorkRoot and no longer exists: the trees of an
+# earlier run whose folder was deleted as a folder (BD-264). git worktree add refuses such a path ("missing but
+# already registered"), and a blind `git worktree prune` would also remove the registrations of other lanes, which
+# use the same names in their own Work folders. A locked registration stays. Returns the paths it removed.
+function Remove-StaleWorktrees($Context, [string]$Checkout, [string]$WorkRoot) {
+    $rootPath = [IO.Path]::GetFullPath($WorkRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $removed = [Collections.Generic.List[string]]::new()
+    Invoke-Locked $Context {
+        $listing = @(& git -C $Checkout worktree list --porcelain)
+        if ($LASTEXITCODE) { throw "Cannot enumerate registered worktrees of $Checkout" }
+        foreach ($line in $listing) {
+            if (-not $line.StartsWith('worktree ')) { continue }
+            $p = [IO.Path]::GetFullPath($line.Substring(9)).TrimEnd('\', '/')
+            if (-not $p.StartsWith($rootPath, [StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $p)) { continue }
+            $admin = Get-WorktreeAdmin $Checkout $p
+            if (-not $admin -or (Test-Path -LiteralPath (Join-Path $admin 'locked'))) { continue }
+            Remove-Item -LiteralPath $admin -Recurse -Force
+            $removed.Add($p)
+        }
+    } | Out-Null
+    return $removed.ToArray()
+}
+
 function Remove-SharedBuildTree($Context, [string]$Name, [string]$Commit, [string]$Dest, [string]$WorkRoot) {
     $rootPath = [IO.Path]::GetFullPath($WorkRoot).TrimEnd('\', '/')
     $destPath = [IO.Path]::GetFullPath($Dest).TrimEnd('\', '/')
@@ -239,17 +280,32 @@ function Remove-SharedBuildTree($Context, [string]$Name, [string]$Commit, [strin
             if (Test-Path -LiteralPath $destPath) { throw "Unregistered directory at shared tree destination: $destPath" }
             return
         }
-        if (Test-Path -LiteralPath $destPath) {
-            $dirty = @(& git -C $destPath status --porcelain --untracked-files=all)
+        $admin = Get-WorktreeAdmin $checkout $destPath
+        # git 2.27 lists no lock in --porcelain; the lock file of the registration is the record.
+        if ($admin -and (Test-Path -LiteralPath (Join-Path $admin 'locked'))) { throw "Shared worktree is locked: $destPath" }
+        if ((Test-Path -LiteralPath $destPath) -and (Test-Path -LiteralPath (Join-Path $destPath '.git'))) {
+            $dirty = @(& git -C $destPath status --porcelain --untracked-files=all --ignore-submodules=none)
             if ($LASTEXITCODE -or $dirty.Count) { throw "Shared tree has changes or cannot be inspected: $destPath" }
-            & git -C $checkout worktree remove -- $destPath 2>&1 | Out-Null
+            # --force: the status above found the tree and its submodules clean, and git refuses a tree with
+            # initialised submodules without it ("working trees containing submodules cannot be moved or removed"),
+            # which a tree kept by -Keep has (BD-264).
+            & git -C $checkout worktree remove --force -- $destPath 2>&1 | Out-Null
+        } elseif (Test-Path -LiteralPath $destPath) {
+            # A registered tree without its .git file: a folder delete that stopped part way (deep Mesa paths). git
+            # cannot validate it, so its registration goes first and then the rest of the folder, which this
+            # checkout's registration proves to be its own tree under the Work folder.
+            if ($admin) { Remove-Item -LiteralPath $admin -Recurse -Force }
+            Remove-Item -LiteralPath $destPath -Recurse -Force
+            $global:LASTEXITCODE = 0
         } else {
             # Delete only this stale registration, never prune unrelated worktrees.
             & git -C $checkout worktree remove --force -- $destPath 2>&1 | Out-Null
+            if ($LASTEXITCODE -and $admin) { Remove-Item -LiteralPath $admin -Recurse -Force; $global:LASTEXITCODE = 0 }
         }
         if ($LASTEXITCODE) { throw "Could not remove shared worktree: $destPath" }
     }
 }
 
 Export-ModuleMember -Function New-BuildContext, Invoke-Locked, Get-Checkout, New-Tree, Initialize-Submodules,
-    Export-Input, Resolve-Inputs, Resolve-ToolPath, Expand-Arg, Get-Digest, Remove-Trees, Remove-SharedBuildTree
+    Export-Input, Resolve-Inputs, Resolve-ToolPath, Expand-Arg, Get-Digest, Remove-Trees, Remove-SharedBuildTree,
+    Get-WorktreeAdmin, Remove-StaleWorktrees
