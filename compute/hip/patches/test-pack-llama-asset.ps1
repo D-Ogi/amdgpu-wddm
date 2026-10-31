@@ -188,15 +188,19 @@ function Get-Imports {
     return $i
 }
 $rocm = 'X:/fixture/rocm-root'
-# A build directory: the cache, the compiler file of CMake, the compile rule of ggml-cuda.cu and the images. $change
-# edits the import table, and $msvc is the MSVC version that the C++ compiler simulates.
+# A build directory: the cache, the C and C++ compiler files of CMake, the compile rule of ggml-cuda.cu and the
+# images. $change edits the import table, and $msvc is the MSVC version that the compilers simulate.
 function New-Build([string]$name, [string]$source, [scriptblock]$change, [string]$msvc = '19.44') {
     $dir = Join-Path $Out $name
     $imports = Get-Imports
     if ($change) { & $change $imports }
     foreach ($k in $imports.Keys) { Write-FixturePe (Join-Path $dir "bin\$k") $imports[$k] }
     $src = $source.Replace('\', '/')
-    Write-Text (Join-Path $dir 'CMakeFiles\3.25.2\CMakeCXXCompiler.cmake') "set(CMAKE_CXX_COMPILER_ID `"Clang`")`nset(CMAKE_CXX_SIMULATE_ID `"MSVC`")`nset(CMAKE_CXX_SIMULATE_VERSION `"$msvc`")`n"
+    foreach ($lang in 'C', 'CXX') {
+        Write-Text (Join-Path $dir "CMakeFiles\3.25.2\CMake$($lang)Compiler.cmake") ("set(CMAKE_$($lang)_COMPILER_ID `"Clang`")`n" +
+            "set(CMAKE_$($lang)_COMPILER_VERSION `"22.1.8`")`nset(CMAKE_$($lang)_SIMULATE_ID `"MSVC`")`n" +
+            "set(CMAKE_$($lang)_COMPILER_FRONTEND_VARIANT `"GNU`")`nset(CMAKE_$($lang)_SIMULATE_VERSION `"$msvc`")`n")
+    }
     Write-Text (Join-Path $dir 'CMakeCache.txt') @"
 CMAKE_CACHE_MAJOR_VERSION:INTERNAL=3
 CMAKE_CACHE_MINOR_VERSION:INTERNAL=25
@@ -220,15 +224,19 @@ build ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/ggml-cuda.cu.obj: C
     return $dir
 }
 $defaultOptions = '-Jobs 4 -Bc250AllocationCap -Bc250AllocationCapBytes 4294705152 -AssetTools -ApplyPatches'
-# A build log with the builder lines, the compiler lines and the hash line of ggml-hip.dll.
-function New-Log([string]$name, [string]$build, [string]$builder = $builderHash, [string]$options = $defaultOptions, [switch]$NoHipHash) {
+# A build log with the builder lines, the compiler lines and the hash line of ggml-hip.dll. -NoCompilerLines gives the
+# log of a configure over an existing build cache, which does not identify the compilers again.
+function New-Log([string]$name, [string]$build, [string]$builder = $builderHash, [string]$options = $defaultOptions, [switch]$NoHipHash,
+    [switch]$NoCompilerLines) {
     $path = Join-Path $Out "$name.log"
     $hip = Get-Hash (Join-Path $build 'bin\ggml-hip.dll')
     $lines = @("builder $builder $patchDir\build-llama-patched.ps1", "builder options: $options",
-        'cmake configure: -S fixture -B fixture -G Ninja -DGGML_HIP:BOOL=ON',
-        '-- The C compiler identification is Clang 22.1.8 with GNU-like command-line',
-        '-- The CXX compiler identification is Clang 22.1.8 with GNU-like command-line',
-        '[1/1] Linking CXX shared library bin\ggml-hip.dll')
+        'cmake configure: -S fixture -B fixture -G Ninja -DGGML_HIP:BOOL=ON')
+    if (-not $NoCompilerLines) {
+        $lines += '-- The C compiler identification is Clang 22.1.8 with GNU-like command-line',
+            '-- The CXX compiler identification is Clang 22.1.8 with GNU-like command-line'
+    }
+    $lines += '[1/1] Linking CXX shared library bin\ggml-hip.dll'
     if (-not $NoHipHash) { $lines += "SHA256          $hip       $build\bin\ggml-hip.dll" }
     Write-Text $path (($lines -join "`n") + "`n")
     return $path
@@ -354,6 +362,15 @@ if ((Get-Hash $zipPath) -ne $zipHash) { throw 'a refused pack changed the zip th
 $forced = Invoke-Pack 'force' @{ OutDir = $r.out; Force = $true }
 if ($forced.refused -or (Get-Hash $zipPath) -ne $zipHash) { throw "-Force did not give the same zip again: $($forced.message)" }
 $results += @{ name = 'force'; passed = $true; refused = $false; message = 'the same zip again over the old one' }
+# The log of a configure over an existing build cache has no compiler identification. The packer then reads the
+# compiler files of CMake and names the same compiler as the first configure.
+$reuse = Invoke-Pack 'cache-reuse' @{ BuildLog = (New-Log 'reuse' $build -NoCompilerLines) }
+if ($reuse.refused) { throw "the log of a configure over an existing cache was refused: $($reuse.message)" }
+$reuseZip = Read-Zip (Join-Path $reuse.out "$name.zip")
+if (-not $utf8.GetString($reuseZip["$name/PROVENANCE.txt"].bytes).Contains('Compiler: Clang 22.1.8 with GNU-like command-line for C and C++.')) {
+    throw 'the compiler files of CMake did not give the compiler line of the first configure'
+}
+$results += @{ name = 'cache-reuse'; passed = $true; refused = $false; message = 'the compiler from the compiler files of CMake' }
 
 # ---- refusals --------------------------------------------------------------------------------------------------------
 $b = New-Build 'build-runtime' $source $null
@@ -368,6 +385,9 @@ $b = New-Build 'build-hipblas' $source { param($i) $i['ggml-hip.dll'] += 'hipbla
 Assert-Refused 'foreign-runtime-import' @{ Build = $b; BuildLog = (New-Log 'hipblas' $b) } 'ggml-hip\.dll imports hipblas\.dll'
 $b = New-Build 'build-msvc' $source $null '19.50'
 Assert-Refused 'vc-runtime-newer' @{ Build = $b; BuildLog = (New-Log 'msvc' $b) } 'needs the Visual C\+\+ runtime 14\.50 or newer, and the installer of the commit accepts 14\.44'
+$b = New-Build 'build-no-c-compiler' $source $null
+Remove-Item -LiteralPath (Join-Path $b 'CMakeFiles\3.25.2\CMakeCCompiler.cmake')
+Assert-Refused 'no-compiler' @{ Build = $b; BuildLog = (New-Log 'nocompiler' $b -NoCompilerLines) } 'does not name the C and the C\+\+ compiler, and the build directory has no CMake compiler files for them'
 Assert-Refused 'builder-mismatch' @{ BuildLog = (New-Log 'builder' $build ('0' * 64)) } 'names the builder 0{64}'
 Assert-Refused 'not-this-log' @{ BuildLog = (New-Log 'nohash' $build -NoHipHash) } 'is not the log of this build'
 Assert-Refused 'no-asset-tools' @{ BuildLog = (New-Log 'noasset' $build $builderHash '-Jobs 4 -Bc250AllocationCap -Bc250AllocationCapBytes 4294705152') } 'without -AssetTools'

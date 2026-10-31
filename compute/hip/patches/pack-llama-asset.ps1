@@ -229,7 +229,29 @@ $compilers = [ordered]@{}
 foreach ($line in @($logLines -match '^-- The (C|CXX) compiler identification is ')) {
     if ($line -match '^-- The (C|CXX) compiler identification is (.+)$') { $compilers[$(if ($Matches[1] -eq 'C') { 'C' } else { 'C++' })] = $Matches[2].Trim() }
 }
-if ($compilers.Count -ne 2) { Fail 'the build log does not name the C and the C++ compiler' }
+# A configure over an existing build cache does not identify the compilers again, so its log has no such line. The
+# identity is then the one that CMake wrote into the compiler files of the build directory at the first configure, in
+# the text that CMake prints for it ("Clang 22.1.8 with GNU-like command-line").
+if ($compilers.Count -eq 0) {
+    $cacheVersion = @([IO.File]::ReadAllLines((Join-Path $Build 'CMakeCache.txt')) |
+        Where-Object { $_ -match '^CMAKE_CACHE_(MAJOR|MINOR|PATCH)_VERSION:INTERNAL=\d+$' } |
+        ForEach-Object { ($_ -split '=', 2)[1] })
+    if ($cacheVersion.Count -eq 3) {
+        foreach ($lang in @(@('C', 'C'), @('CXX', 'C++'))) {
+            $file = Join-Path $Build "CMakeFiles\$($cacheVersion -join '.')\CMake$($lang[0])Compiler.cmake"
+            if (-not (Test-Path -LiteralPath $file)) { continue }
+            $set = @{}
+            foreach ($line in [IO.File]::ReadAllLines($file)) {
+                if ($line -match "^set\(CMAKE_$($lang[0])_(COMPILER_ID|COMPILER_VERSION|SIMULATE_ID|COMPILER_FRONTEND_VARIANT) `"([^`"]*)`"\)$") { $set[$Matches[1]] = $Matches[2] }
+            }
+            if (-not $set['COMPILER_ID']) { continue }
+            $text = $set['COMPILER_ID'] + $(if ($set['COMPILER_VERSION']) { ' ' + $set['COMPILER_VERSION'] } else { '' })
+            if ($set['COMPILER_ID'] -eq 'Clang' -and $set['COMPILER_FRONTEND_VARIANT'] -eq 'GNU' -and $set['SIMULATE_ID'] -eq 'MSVC') { $text += ' with GNU-like command-line' }
+            $compilers[$lang[1]] = $text
+        }
+    }
+}
+if ($compilers.Count -ne 2) { Fail 'the build log does not name the C and the C++ compiler, and the build directory has no CMake compiler files for them' }
 $compilerText = if (@($compilers.Values | Select-Object -Unique).Count -eq 1) { "$(@($compilers.Values)[0]) for C and C++" }
     else { (@($compilers.Keys | ForEach-Object { "$($compilers[$_]) for $_" })) -join ', ' }
 
