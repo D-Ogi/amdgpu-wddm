@@ -30,7 +30,50 @@
 #include "runtime-bridge.h"
 #include "ddi-error-policy.h"
 #include "diagnostics.h"
+#include <cstdio>
+#include <mutex>
 namespace bc250::umd {
+namespace {
+std::mutex g_loss_mutex;
+DeviceLossRecord g_last_loss{};
+void Bc250RecordLoss(const char *reason, const char *site, unsigned op, HRESULT hr) noexcept
+{
+   std::lock_guard<std::mutex> lock(g_loss_mutex);
+   snprintf(g_last_loss.reason,sizeof(g_last_loss.reason),"%s",reason ? reason : "-");
+   snprintf(g_last_loss.site,sizeof(g_last_loss.site),"%s",site ? site : "-");
+   g_last_loss.op=op; g_last_loss.hr=hr; g_last_loss.at_ms=GetTickCount64(); ++g_last_loss.losses;
+}
+}
+DeviceLossRecord last_device_loss() noexcept
+{
+   std::lock_guard<std::mutex> lock(g_loss_mutex);
+   return g_last_loss;
+}
+static HostFence *Bc250FindFence(HostBridge *s, D3DKMT_HANDLE handle)
+{
+   if (!handle) return nullptr;
+   for (auto &f:s->fences) if (f.handle==handle) return &f;
+   return nullptr;
+}
+// BD-198: a monitored fence of the ICD gets a record when it is created. A fence that does not read its initial value
+// right after its creation gets one line, in both flavours: then the kernel gave the ICD a fence whose storage another
+// writer had already changed.
+static void Bc250RecordFence(HostBridge *s, D3DKMT_HANDLE handle, const D3DDDI_SYNCHRONIZATIONOBJECTINFO2 &info)
+{
+   if (info.Type!=D3DDDI_MONITORED_FENCE || !handle || !info.MonitoredFence.FenceValueCPUVirtualAddress) return;
+   const auto *cpu=static_cast<const volatile UINT64 *>(info.MonitoredFence.FenceValueCPUVirtualAddress);
+   HostFence *slot=Bc250FindFence(s,handle);
+   if (!slot) for (auto &f:s->fences) if (!f.handle) { slot=&f; break; }
+   if (!slot) { ++s->fences_unrecorded; return; }
+   *slot={handle,cpu,info.MonitoredFence.InitialFenceValue,*cpu,GetTickCount64()};
+   if (slot->at_create!=slot->initial) {
+      static std::atomic_uint notes{16};
+      device_life_note(notes,"BC250 BD-198: monitored fence %u reads %llu right after its creation with %llu: "
+         "runtime=%p identity=%p thread=%lu\n",unsigned(handle),(unsigned long long)slot->at_create,
+         (unsigned long long)slot->initial,s->device ? s->device->hDevice : nullptr,
+         s->device ? s->device->host_identity() : nullptr,(unsigned long)GetCurrentThreadId());
+   }
+}
 // BD-253: one line when a bridge first latches a loss, in both flavours (an ordinary error report, at most 16
 // lines per process): the reason, the host operation and its status where one caused it, the device and the
 // thread. The engine's own line ("Command submission failed: VK_ERROR_DEVICE_LOST") does not name the cause.
@@ -41,6 +84,12 @@ static const char *Bc250FenceState(const volatile UINT64 *cpu)
 {
    return !cpu ? "none" : *cpu==UINT64_MAX ? "lost" : "live";
 }
+// BD-198: the line also names the fence of the site from the bridge's records (its value right after its creation, its
+// value now, its age) and counts the recorded fences of the device that read the lost value. At a loss before the
+// first submission the progress records are still empty, so only these records tell the three cases apart: every
+// fence of the device reads the lost value (the kernel ended the device), only the fence of the site reads it (one
+// writer changed one fence), or the fence read it already at its creation. The GPU work count says whether the device
+// ever queued work (device_queued_no_work).
 static void Bc250HostLossNote(HostBridge *s, const char *reason, unsigned op, HRESULT hr,
    const bc250_host_lost_report *report=nullptr)
 {
@@ -49,13 +98,26 @@ static void Bc250HostLossNote(HostBridge *s, const char *reason, unsigned op, HR
       if (!p.cpu_address) continue;
       ++known; if (*(const volatile UINT64 *)p.cpu_address==UINT64_MAX) ++lost;
    }
+   unsigned recorded=0, recorded_lost=0;
+   for (const auto &f:s->fences) {
+      if (!f.handle) continue;
+      ++recorded; if (*f.cpu==UINT64_MAX) ++recorded_lost;
+   }
+   const HostFence *site=report ? Bc250FindFence(s,report->handle) : nullptr;
+   const ULONGLONG now=GetTickCount64();
    static std::atomic_uint notes{16};
    device_life_note(notes,"BC250 BD-253: host loss latched: reason=%s op=%u hr=%08X site=%s handle=%u runtime=%p "
-      "identity=%p thread=%lu; fences at the loss: progress lost %u of %u, present %s, paging %s\n",reason,op,
+      "identity=%p thread=%lu; fences at the loss: progress lost %u of %u, present %s, paging %s; site fence: "
+      "recorded=%u at-create=%llu now=%llu age-ms=%llu; device fences lost %u of %u (unrecorded %u); "
+      "gpu-work-calls=%u\n",reason,op,
       unsigned(hr),report && report->site ? report->site : "-",report ? report->handle : 0u,
       s->device ? s->device->hDevice : nullptr,s->device ? s->device->host_identity() : nullptr,
       (unsigned long)GetCurrentThreadId(),lost,known,Bc250FenceState(s->present_cpu),
-      Bc250FenceState(s->device ? s->device->pagingFence : nullptr));
+      Bc250FenceState(s->device ? s->device->pagingFence : nullptr),unsigned(site!=nullptr),
+      site ? (unsigned long long)site->at_create : 0ull,site ? (unsigned long long)*site->cpu : 0ull,
+      site && now>=site->created_ms ? (unsigned long long)(now-site->created_ms) : 0ull,recorded_lost,recorded,
+      s->fences_unrecorded,s->gpu_work_calls);
+   Bc250RecordLoss(reason,report ? report->site : nullptr,op,hr);
 }
 // The device is gone. This is the one report that happens outside a DDI entry's own code: the loss is
 // detected inside the engine's submission path, under whichever entry is running. That entry's page
@@ -213,13 +275,18 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
       D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 b = {};
       b.Info=a->Info;
       HRESULT hr=HOST_CALL(CreateSynchronizationObject2, &b);
-      a->Info=b.Info; a->hSyncObject=b.hSyncObject; return hr;
+      a->Info=b.Info; a->hSyncObject=b.hSyncObject;
+      if (SUCCEEDED(hr)) Bc250RecordFence(s,b.hSyncObject,b.Info);
+      return hr;
    }
    case BC250_HOST_DestroySynchronizationObject: {
       D3DDDICB_DESTROYSYNCHRONIZATIONOBJECT b = {};
       b.hSyncObject=((D3DKMT_DESTROYSYNCHRONIZATIONOBJECT *)argument)->hSyncObject;
       HRESULT hr=HOST_CALL(DestroySynchronizationObject, &b);
-      if (SUCCEEDED(hr)) for (auto &p:s->progress) if (p.sync==b.hSyncObject) p={};
+      if (SUCCEEDED(hr)) {
+         for (auto &p:s->progress) if (p.sync==b.hSyncObject) p={};
+         if (HostFence *f=Bc250FindFence(s,b.hSyncObject)) *f={};
+      }
       return hr;
    }
    case BC250_HOST_WaitForSynchronizationObjectFromCpu: {
@@ -279,6 +346,7 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
       b.hContext=Bc250HostContext(s,a->hContext); if (!b.hContext) return E_INVALIDARG;
       b.hFenceObject=a->hFenceObject; b.NumOperations=a->NumOperations; b.Operations=a->Operations;
       b.FenceValue=a->FenceValue;
+      ++s->gpu_work_calls;
       return HOST_CALL(UpdateGpuVirtualAddress, &b);
    }
    case BC250_HOST_SubmitCommand: {
@@ -305,6 +373,7 @@ static HRESULT Bc250HostOperation(HostBridge *s, uint32_t op, void *argument)
       }
       b.NumPrimaries=a->NumPrimaries;
       for (UINT i=0;i<a->NumPrimaries;++i) b.WrittenPrimaries[i]=a->WrittenPrimaries[i];
+      ++s->gpu_work_calls;
       return HOST_CALL(SubmitCommand, &b);
    }
    default: return E_NOTIMPL;
@@ -416,6 +485,17 @@ HRESULT signal_present(HostBridge &bridge)
 bool settle_device_work(HostBridge &bridge, DWORD timeout_ms)
 {
    if (kernel_ended_device_work(bridge)) return true;
+   if (device_queued_no_work(bridge)) {
+      // BD-198: one line for each such device, in both flavours, in place of the wait line.
+      if (!bridge.drain_tried) {
+         bridge.drain_tried=true;
+         static std::atomic_uint none{16};
+         device_life_note(none,"BC250 BD-198: lost device queued no GPU work: no wait, its memory is free at once: "
+            "runtime=%p identity=%p\n",bridge.device ? bridge.device->hDevice : nullptr,
+            bridge.device ? bridge.device->host_identity() : nullptr);
+      }
+      return true;
+   }
    if (!timeout_ms || bridge.drain_tried) return false;
    bridge.drain_tried=true;
    const ULONGLONG start=GetTickCount64();
@@ -490,6 +570,7 @@ HRESULT present_runtime(HostBridge &bridge, D3DKMT_HANDLE source,
       present.SyncIntervalOverrideValid=TRUE;
       present.SyncIntervalOverride=sync.interval;
    }
+   ++bridge.gpu_work_calls;
    const HRESULT result=device->DXGICallbacks->pfnPresentCb(device->hDevice,&present);
    if (callback) *callback=result;
    if (Bc250DeviceLostResult(result)) return Bc250HostLost(&bridge,"Present: present callback",~0u,result);

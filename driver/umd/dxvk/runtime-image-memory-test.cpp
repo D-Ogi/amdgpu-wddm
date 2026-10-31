@@ -194,7 +194,8 @@ int main() {
     info.format=VK_FORMAT_R8G8B8A8_UNORM; info.extent.height=16; badPitch=false;
     TextureImportDispatch textureDispatch{&identity,describe_texture,wrap_texture,wait_texture,release_texture};
     D3D11_TEXTURE2D_DESC1 textureDesc{}; textureDesc.Width=64; textureDesc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
-    HostBridge bridge{}; bridge.device=&runtime;
+    // A device that queued GPU work: the closes below need the kernel's proof (BD-198, device_queued_no_work).
+    HostBridge bridge{}; bridge.device=&runtime; bridge.gpu_work_calls=1;
     RuntimeTexture texture{};
     auto makeTexture=[&]() { return create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,texture); };
     textureWrap=E_OUTOFMEMORY;
@@ -232,6 +233,17 @@ int main() {
     textureWait=DXGI_ERROR_DEVICE_REMOVED;
     check(close_runtime_texture(bridge,device,imageDispatch,textureDispatch,lost)==S_OK && !lost.texture &&
           !lost.image.image && releases==4);
+    // BD-198: a lost device that queued no GPU work needs no proof of the kernel: its texture closes at once.
+    {
+        RuntimeTexture unused{};
+        bridge.progress[2]={}; bridge.gpu_work_calls=0;
+        check(create_runtime_texture(runtime,device,imageDispatch,textureDispatch,properties,textureDesc,imported,256,unused)==S_OK);
+        const unsigned releasedBefore=releases;
+        check(!kernel_ended_device_work(bridge) &&
+              close_runtime_texture(bridge,device,imageDispatch,textureDispatch,unused)==S_OK && !unused.texture &&
+              releases==releasedBefore+1);
+        bridge.gpu_work_calls=1; bridge.drain_tried=false;
+    }
     UINT64 presentValue=UINT64_MAX; bridge.progress[2]={}; bridge.present_cpu=&presentValue;
     check(kernel_ended_device_work(bridge));
     bridge.present_cpu=nullptr; bridge.device_lost=false; textureWait=S_OK;

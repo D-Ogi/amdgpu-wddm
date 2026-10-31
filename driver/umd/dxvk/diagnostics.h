@@ -37,7 +37,8 @@ inline void device_life_note(std::atomic_uint &budget,const char *format,...) no
     unsigned count=budget.load(std::memory_order_relaxed);
     while(count && !budget.compare_exchange_weak(count,count-1,std::memory_order_relaxed)){}
     if(!count)return;
-    char text[320];
+    // 640: the longest line, the loss line with its fence records (BD-198), is about 420 characters.
+    char text[640];
     va_list args;
     va_start(args,format);
     std::vsnprintf(text,sizeof(text),format,args);
