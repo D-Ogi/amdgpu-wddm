@@ -272,24 +272,49 @@ static hipError_t same_kernel_after_wait(const KernelRef& ref, const bc250hsa_ke
 // The explicit arguments of a packed buffer as the pointer array that bc250hsa_kernarg_pack
 // takes: one pointer per explicit argument, into the buffer at the argument's own metadata
 // offset. The packer then copies each one exactly as it copies the arguments of hipLaunchKernel,
-// so the hidden arguments of a packed launch are written by the same code. A buffer that ends
-// before an argument ends is refused: the kernel would read bytes the caller never wrote.
+// so the hidden arguments of a packed launch are written by the same code.
+//
+// An argument that ends after the end of the buffer gets the value zero, all of its bytes, also
+// when the buffer holds the first part of it. This is what AMD's runtime does
+// (KernelParameters::captureHIPArgs of ROCm clr, rocclr/platform/kernel.cpp: an argument with
+// offset + size > kernArgsSize takes a zeroed local), and the ROCm libraries depend on it:
+// rocBLAS gives its fp16 Tensile kernel Cijk_Ailk_Bjlk_HHS_BH_MT64x1x64_..._WGM1 a buffer of
+// 96 bytes, and the metadata declares 21 explicit arguments that end at 100 (kit3 of the PyTorch
+// route, the VAE decode of ComfyUI). Before this, the launch was refused with
+// hipErrorInvalidValue. `zeros` holds the zero bytes; it must live until the packer has run.
+// A kernel with explicit arguments and a buffer of 0 bytes is still refused, as AMD's runtime
+// refuses it (ihipLaunchKernelCommand: the kernel expects arguments and gets none).
 static hipError_t packed_arg_pointers(const bc250hsa_kernel* kernel, const void* packed,
                                       size_t packed_bytes, std::vector<void*>& out,
+                                      std::vector<unsigned char>& zeros, uint32_t* zeroed,
                                       std::string* why) {
     out.clear();
     out.reserve(kernel->explicit_arg_count);
+    *zeroed = 0;
+    uint32_t widest = 0;
+    for (uint32_t i = 0; i < kernel->arg_count; ++i) {
+        const bc250hsa_arg& arg = kernel->args[i];
+        if (arg.size == 0u || arg.kind > BC250HSA_ARG_QUEUE) {
+            continue;
+        }
+        if (static_cast<uint64_t>(arg.offset) + arg.size > packed_bytes && arg.size > widest) {
+            widest = arg.size;
+        }
+    }
+    if (widest != 0u && packed_bytes == 0u) {
+        *why = "the packed argument buffer has 0 bytes, and the kernel has explicit arguments";
+        return hipErrorInvalidValue;
+    }
+    zeros.assign(widest, 0u);
     for (uint32_t i = 0; i < kernel->arg_count; ++i) {
         const bc250hsa_arg& arg = kernel->args[i];
         if (arg.size == 0u || arg.kind > BC250HSA_ARG_QUEUE) {
             continue;   // the packer skips the same entries (kernarg.c)
         }
         if (static_cast<uint64_t>(arg.offset) + arg.size > packed_bytes) {
-            *why = "the packed argument buffer ends before an argument ends: " +
-                   std::to_string(packed_bytes) + " bytes, argument " + std::to_string(i) +
-                   " ends at " + std::to_string(static_cast<uint64_t>(arg.offset) + arg.size) +
-                   " of " + std::to_string(kernel->arg_count) + " arguments";
-            return hipErrorInvalidValue;
+            out.push_back(zeros.data());
+            ++*zeroed;
+            continue;
         }
         out.push_back(const_cast<unsigned char*>(static_cast<const unsigned char*>(packed)) +
                       arg.offset);
@@ -333,11 +358,20 @@ hipError_t launch_kernel(Guard& guard, const char* call, const KernelRef& ref,
     // A null args with no packed buffer goes to the packer as before, which decides whether the
     // kernel can do without arguments.
     std::vector<void*> packed_args;
+    std::vector<unsigned char> packed_zeros;
     if (args == nullptr && packed != nullptr) {
         std::string why;
-        err = packed_arg_pointers(kernel, packed, packed_bytes, packed_args, &why);
+        uint32_t zeroed = 0;
+        err = packed_arg_pointers(kernel, packed, packed_bytes, packed_args, packed_zeros, &zeroed,
+                                  &why);
         if (err != hipSuccess) {
             return refuse(call, kernel->name, why.c_str(), err);
+        }
+        if (zeroed != 0u) {
+            log_line(BC250HSA_LOG_TRACE,
+                     "%s of kernel '%s': the packed buffer has %llu bytes; %u arguments after its "
+                     "end are zero",
+                     call, kernel->name, static_cast<unsigned long long>(packed_bytes), zeroed);
         }
         args = packed_args.data();
     }

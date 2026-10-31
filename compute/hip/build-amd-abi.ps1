@@ -18,7 +18,9 @@
 #   4. test_amd_face_props: the mock DLL says that the host cannot read device memory through a
 #      device pointer (isLargeBar and the managed and pageable memory properties are 0);
 #      test_amd_face_errors: hipModuleLoad of a missing file is hipErrorFileNotFound, and every
-#      code that the face returns has AMD's name.
+#      code that the face returns has AMD's name;
+#      test_amd_face_packed: an argument after the end of a packed buffer of hipModuleLaunchKernel
+#      is 0, as in AMD's runtime.
 #
 # Outputs under -Out: mock\amdhip64_7.dll (the runtime over tests\host\hipmock_backend.c with the
 # production loader, for a machine with no BC-250) and amdhip64_7.dll (the runtime over layer 1),
@@ -185,6 +187,15 @@ $null = Invoke-Cl ($warn + $amdDefines + @('/std:c++17', '/EHsc', "/Fo$errorsObj
     @((Join-Path $hip 'tests\host\test_amd_face_errors.cpp'), '/link') + $libpaths) 'test_amd_face_errors'
 & $errorsExe $mockDll
 if ($LASTEXITCODE -ne 0) { throw "test_amd_face_errors failed ($LASTEXITCODE)" }
+# A packed argument buffer of hipModuleLaunchKernel that ends before an argument ends gives that
+# argument 0, as AMD's runtime does (rocBLAS depends on it), read from the mock's dispatch record.
+$packedObj = Join-Path $Out 'obj-packed-test'
+New-Item -ItemType Directory -Force $packedObj | Out-Null
+$packedExe = Join-Path $Out 'test_amd_face_packed.exe'
+$null = Invoke-Cl ($warn + $amdDefines + @('/std:c++17', '/EHsc', "/Fo$packedObj\", "/Fe$packedExe") + $amdIncludes +
+    @((Join-Path $hip 'tests\host\test_amd_face_packed.cpp'), '/link') + $libpaths) 'test_amd_face_packed'
+& $packedExe $mockDll (Join-Path $hip 'tests\data\m16_kernels.gfx1010.co')
+if ($LASTEXITCODE -ne 0) { throw "test_amd_face_packed failed ($LASTEXITCODE)" }
 
 # ---------------------------------------------------------------------------------------------
 # 4. The product DLL over layer 1. Without -Bc250hsaLib the layer-1 sources are compiled here,
