@@ -47,7 +47,7 @@
 66	docs/design/d3d11-ddi-engine.md
 25	docs/design/d3d12-ddi-engine.md
 2	docs/design/dp-audio.md
-73	docs/design/dpm.md
+72	docs/design/dpm.md
 12	docs/design/fan.md
 11	docs/design/gfx-submit-root-serialization.md
 16	docs/design/gpu-dwm-interop-switches.md

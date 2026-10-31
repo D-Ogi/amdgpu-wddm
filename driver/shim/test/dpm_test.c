@@ -709,6 +709,39 @@ static void test_session(void)
 	for (i = 1; i < BC250_DPM_SESSION_CLEAR_MS / 25u; i++)
 		CHECK(bc250_dpm_session_step(&s, (i & 1u) ? L(-1) : BC250_DPM_THERMAL_FLOOR_LEVEL, 25) == BC250_DPM_SESSION_NONE);
 	CHECK(bc250_dpm_session_step(&s, L(-1), 25) == BC250_DPM_SESSION_CLEAR);
+	/* BD-275: a stop or the start of a system power transition ends the start clean only when it is not above the
+	 * floor; with nothing marked there is nothing to delete. */
+	memset(&s, 0, sizeof(s));
+	CHECK(!bc250_dpm_session_ends_clean(&s, L(0)));
+	s.marked = 1;
+	CHECK(bc250_dpm_session_ends_clean(&s, L(0)));
+	CHECK(bc250_dpm_session_ends_clean(&s, L(-1)));
+	CHECK(bc250_dpm_session_ends_clean(&s, BC250_DPM_THERMAL_FLOOR_LEVEL));
+	CHECK(bc250_dpm_session_ends_clean(&s, BC250_DPM_IDLE_LEVEL));
+	CHECK(!bc250_dpm_session_ends_clean(&s, L(1)));
+	CHECK(!bc250_dpm_session_ends_clean(&s, BC250_DPM_TOP_LEVEL));
+	/* While the system goes down the governor holds the floor; under the floor nothing moves. */
+	CHECK(bc250_dpm_system_down_target(L(5), 1) == L(0));
+	CHECK(bc250_dpm_system_down_target(BC250_DPM_TOP_LEVEL, 1) == L(0));
+	CHECK(bc250_dpm_system_down_target(L(0), 1) == L(0));
+	CHECK(bc250_dpm_system_down_target(L(-1), 1) == L(-1));
+	CHECK(bc250_dpm_system_down_target(BC250_DPM_IDLE_LEVEL, 1) == BC250_DPM_IDLE_LEVEL);
+	for (i = 0; i <= BC250_DPM_TOP_LEVEL; i++) CHECK(bc250_dpm_system_down_target(i, 0) == i);
+	/* The restart of BD-275: an administrator floor of 1500 MHz holds the governor above the lab floor, so the 10 s
+	 * clear never comes. At the start of the transition the floor goes in and the start ends clean; the held governor
+	 * then asks for 1500 MHz at every tick of the way down and must never mark again. */
+	memset(&s, 0, sizeof(s));
+	CHECK(bc250_dpm_session_step(&s, L(5), 25) == BC250_DPM_SESSION_SET);
+	s.marked = 1;
+	for (i = 0; i < 1000; i++) CHECK(bc250_dpm_session_step(&s, L(5), 25) == BC250_DPM_SESSION_NONE);
+	CHECK(!bc250_dpm_session_ends_clean(&s, L(5)));      /* not at the floor yet: the marker must stay */
+	CHECK(bc250_dpm_session_ends_clean(&s, L(0)));       /* the floor apply went through */
+	s.marked = 0; s.floor_ms = 0;                         /* the caller deleted it */
+	for (i = 0; i < 1000; i++)
+		CHECK(bc250_dpm_session_step(&s, bc250_dpm_system_down_target(L(5), 1), 25) == BC250_DPM_SESSION_NONE);
+	CHECK(!s.marked);
+	/* Back in S0 the hold ends, and the first raise marks before it reaches the hardware, as in any start. */
+	CHECK(bc250_dpm_session_step(&s, bc250_dpm_system_down_target(L(5), 0), 25) == BC250_DPM_SESSION_SET);
 }
 
 /* ---- runtime tuning (0.7.185) ------------------------------------------------------------------- */

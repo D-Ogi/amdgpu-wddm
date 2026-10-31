@@ -544,7 +544,7 @@ struct _BC250_ESCAPE_DPM_CURVE;
 void DpmInitialize(BC250_DEVICE* Device);
 void DpmStart(BC250_DEVICE* Device);
 void DpmStop(BC250_DEVICE* Device);
-void DpmPause(BC250_DEVICE* Device);
+void DpmPause(BC250_DEVICE* Device, POWER_ACTION Action);
 void DpmResume(BC250_DEVICE* Device);
 void DpmSetStable(BC250_DEVICE* Device, BOOLEAN Enabled);
 // BD-127: one more, or one fewer, live compute context of this adapter (a BC2C blob with
