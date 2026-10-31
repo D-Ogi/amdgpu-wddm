@@ -275,7 +275,8 @@ static hipError_t same_kernel_after_wait(const KernelRef& ref, const bc250hsa_ke
 // so the hidden arguments of a packed launch are written by the same code. A buffer that ends
 // before an argument ends is refused: the kernel would read bytes the caller never wrote.
 static hipError_t packed_arg_pointers(const bc250hsa_kernel* kernel, const void* packed,
-                                      size_t packed_bytes, std::vector<void*>& out) {
+                                      size_t packed_bytes, std::vector<void*>& out,
+                                      std::string* why) {
     out.clear();
     out.reserve(kernel->explicit_arg_count);
     for (uint32_t i = 0; i < kernel->arg_count; ++i) {
@@ -284,6 +285,10 @@ static hipError_t packed_arg_pointers(const bc250hsa_kernel* kernel, const void*
             continue;   // the packer skips the same entries (kernarg.c)
         }
         if (static_cast<uint64_t>(arg.offset) + arg.size > packed_bytes) {
+            *why = "the packed argument buffer ends before an argument ends: " +
+                   std::to_string(packed_bytes) + " bytes, argument " + std::to_string(i) +
+                   " ends at " + std::to_string(static_cast<uint64_t>(arg.offset) + arg.size) +
+                   " of " + std::to_string(kernel->arg_count) + " arguments";
             return hipErrorInvalidValue;
         }
         out.push_back(const_cast<unsigned char*>(static_cast<const unsigned char*>(packed)) +
@@ -329,10 +334,10 @@ hipError_t launch_kernel(Guard& guard, const char* call, const KernelRef& ref,
     // kernel can do without arguments.
     std::vector<void*> packed_args;
     if (args == nullptr && packed != nullptr) {
-        err = packed_arg_pointers(kernel, packed, packed_bytes, packed_args);
+        std::string why;
+        err = packed_arg_pointers(kernel, packed, packed_bytes, packed_args, &why);
         if (err != hipSuccess) {
-            return refuse(call, kernel->name,
-                          "the packed argument buffer ends before an argument ends", err);
+            return refuse(call, kernel->name, why.c_str(), err);
         }
         args = packed_args.data();
     }
