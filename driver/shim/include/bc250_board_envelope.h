@@ -121,6 +121,24 @@ static inline int bc250_board_supported(unsigned int provider_id)
 #define BC250_DPM_ZONE_LEAD_MAX_MC	2000	/* and the lead itself never exceeds this */
 #define BC250_DPM_ZONE_WORK_PERMILLE	50u
 #define BC250_DPM_ZONE_QUIET_MS		BC250_DPM_IDLE_HOLD_MS
+/* BD-281: the rate rule and the high-clock zone (bc250_dpm.h has the reasons). The four values with "absent" are state
+ * catalog settings that the KMD reads once per start (driver/kmd/dpm.c); the others are fixed. */
+#define BC250_DPM_RATE_MC_PER_S		1500u	/* DpmThermalRate absent: the rate threshold in mC/s; 0: no rate rule */
+#define BC250_DPM_RATE_FROM_MC		80000u	/* DpmThermalRateFromMc absent: the rule acts from this raw reading */
+#define BC250_DPM_RATE_TICKS		40u	/* the rate is fitted over the readings of the last 40 ticks: about 1 s */
+#define BC250_DPM_RATE_MAX_SPAN_MS	2000u	/* a wider or older ring gives no rate */
+#define BC250_DPM_RATE_CONFIRM_MS	500u	/* the rate must stay at the threshold this long before a step */
+#define BC250_DPM_RATE_LEVELS		3u	/* one rate step takes this many levels off the cap */
+#define BC250_DPM_RATE_STEP_MS		1000u	/* at most one rate step per this */
+#define BC250_DPM_RATE_MIN_MC_PER_S	500u
+#define BC250_DPM_RATE_MAX_MC_PER_S	10000u
+#define BC250_DPM_RATE_MIN_FROM_MC	70000u
+#define BC250_DPM_RATE_MAX_FROM_MC	86000u
+#define BC250_DPM_HIGH_ZONE_MC		80000u	/* DpmThermalHighZoneMc absent: the threshold; 0: no high-clock zone */
+#define BC250_DPM_HIGH_ZONE_MHZ		1800u	/* DpmThermalHighZoneMHz absent: the zone acts while the cap is above this */
+#define BC250_DPM_HIGH_ZONE_HYST_MC	1000u	/* the cap goes above HIGH_ZONE_MHZ again only under the threshold minus this */
+#define BC250_DPM_HIGH_ZONE_MIN_MC	70000u
+#define BC250_DPM_HIGH_ZONE_MAX_MC	86000u
 #define BC250_DPM_IDLE_MHZ		500u	/* absent DpmIdleMHz: the idle point, 0 for no idle state */
 #define BC250_DPM_IDLE_HOLD_MS		3000u
 #define BC250_DPM_IDLE_BUSY_PERMILLE	2u	/* the window's mean busy share must stay under this */

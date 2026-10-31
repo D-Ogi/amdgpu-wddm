@@ -1770,6 +1770,7 @@ struct zone_result {
 #define ZONE_RULES_OLD		0	/* 0.7.212: the hot cap at 87 C alone */
 #define ZONE_RULES_ZONE		1	/* 0.7.213 as shipped: the zone with its lead */
 #define ZONE_RULES_NO_LEAD	2	/* the same thresholds with the lead off: a plain 86 C threshold */
+#define ZONE_RULES_BD281	3	/* the release default with the BD-281 rules on (test_burst_regression) */
 
 static struct zone_result zone_plant(int rules, int start_mc, int at_ceiling, double dist, unsigned int seconds)
 {
@@ -1783,6 +1784,9 @@ static struct zone_result zone_plant(int rules, int start_mc, int at_ceiling, do
 	memset(&r, 0, sizeof(r));
 	if (rules == ZONE_RULES_OLD) init_old(&g, ceiling);
 	else bc250_dpm_init(&g, ceiling);
+	if (rules == ZONE_RULES_BD281)
+		CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+					     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
 	if (rules == ZONE_RULES_NO_LEAD) {
 		struct bc250_dpm_tune t = g.tune;
 		t.zone_lead_ms = 0;
@@ -2597,6 +2601,9 @@ static struct ramp_result plant367_ex(int ramp, int start_mc, unsigned int stall
 	r.first_hot_ms = ~0u;
 	if (zone) bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
 	else init_old(&g, BC250_DPM_TOP_LEVEL);	/* session 367 is the ramp against the 0.7.212 thermal rules */
+	if (zone == 2)				/* BD-281: the rate rule and the high-clock zone on, as the KMD starts */
+		CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+					     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
 	last = g.level;
 	r.back_ms = ~0u;
 	for (i = 0; i < ticks; i++) {
@@ -3877,6 +3884,444 @@ static void test_compute(void)
 	}
 }
 
+/* ---- BD-281: the rate rule and the high-clock zone ---------------------------------------------- */
+
+/* The release default as the KMD starts it: bc250_dpm_init, then the four catalog defaults. */
+static void burst_init(struct bc250_dpm_governor *g, unsigned int max_level)
+{
+	bc250_dpm_init(g, max_level);
+	CHECK(bc250_dpm_burst_config(g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+				     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
+}
+
+static void test_burst_config(void)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int l1800 = (unsigned int)bc250_dpm_level_of(1800);
+
+	/* bc250_dpm_init leaves both rules off, so every case before BD-281 runs the rules it was written for. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	CHECK(g.rate_mc_per_s == 0u && g.high_mc == 0u && g.rate_steps == 0u && g.high_steps == 0u);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 80000u, 80000u, 1800u) == BC250_DPM_BURST_OK);
+	CHECK(g.rate_mc_per_s == 1500u && g.rate_from_mc == 80000u && g.high_mc == 80000u && g.high_level == l1800);
+	/* 0 turns a rule off and is not an error. */
+	CHECK(bc250_dpm_burst_config(&g, 0u, 80000u, 0u, 1800u) == BC250_DPM_BURST_OK);
+	CHECK(g.rate_mc_per_s == 0u && g.high_mc == 0u);
+	/* A refused value gives that rule its default and keeps it on: only an explicit 0 removes a safety rule. */
+	CHECK(bc250_dpm_burst_config(&g, 100u, 80000u, 80000u, 1800u) == BC250_DPM_BURST_RATE);
+	CHECK(g.rate_mc_per_s == BC250_DPM_RATE_MC_PER_S);
+	CHECK(bc250_dpm_burst_config(&g, 20000u, 80000u, 80000u, 1800u) == BC250_DPM_BURST_RATE);
+	CHECK(g.rate_mc_per_s == BC250_DPM_RATE_MC_PER_S);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 60000u, 80000u, 1800u) == BC250_DPM_BURST_FROM);
+	CHECK(g.rate_from_mc == BC250_DPM_RATE_FROM_MC);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 87000u, 80000u, 1800u) == BC250_DPM_BURST_FROM);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 80000u, 90000u, 1800u) == BC250_DPM_BURST_HIGH);
+	CHECK(g.high_mc == BC250_DPM_HIGH_ZONE_MC);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 80000u, 60000u, 1800u) == BC250_DPM_BURST_HIGH);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 80000u, 80000u, 1850u) == BC250_DPM_BURST_HIGH_MHZ);
+	CHECK(g.high_level == l1800);
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 80000u, 80000u, 900u) == BC250_DPM_BURST_HIGH_MHZ);
+	CHECK(g.high_level == l1800);
+	/* The first refusal is the one reported; every refused value still gets its default. */
+	CHECK(bc250_dpm_burst_config(&g, 1u, 1u, 1u, 1u) == BC250_DPM_BURST_RATE);
+	CHECK(g.rate_mc_per_s == BC250_DPM_RATE_MC_PER_S && g.rate_from_mc == BC250_DPM_RATE_FROM_MC &&
+	      g.high_mc == BC250_DPM_HIGH_ZONE_MC && g.high_level == l1800);
+	/* An overclock clock is a valid level; the zone then acts only above it. */
+	CHECK(bc250_dpm_burst_config(&g, 1500u, 80000u, 80000u, 2200u) == BC250_DPM_BURST_OK);
+	CHECK(g.high_level == (unsigned int)bc250_dpm_level_of(2200));
+}
+
+/* A uniform noise of +-amp mC from a fixed seed, the shape plant367_ex uses. */
+static int burst_noise(unsigned int *seed, int amp)
+{
+	*seed = *seed * 1103515245u + 12345u;
+	return (int)((*seed >> 16) % (unsigned int)(2 * amp + 1)) - amp;
+}
+
+/* The fit itself: a straight rise reads its own slope, a flat noisy die and a single jump of one reading stay under
+ * the threshold, and a sensor gap makes the rate unavailable instead of stale. */
+static void test_burst_rate_fit(void)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, seed = 281u;
+	int ok, rate, worst = 0;
+
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	rate = bc250_dpm_rate_mc_per_s(&g, &ok);
+	CHECK(!ok && rate == 0);
+	for (i = 0; i < 200u; i++) run_mc(&g, 0, 70000 + (int)(i * 50u), 25);	/* 2.0 C/s */
+	rate = bc250_dpm_rate_mc_per_s(&g, &ok);
+	CHECK(ok && rate >= 1950 && rate <= 2050);
+	/* Ten minutes at 85 C with +-0.5 C on every reading. */
+	bc250_dpm_init(&g, BC250_DPM_TOP_LEVEL);
+	for (i = 0; i < 24000u; i++) {
+		run_mc(&g, 0, 85000 + burst_noise(&seed, 500), 25);
+		rate = bc250_dpm_rate_mc_per_s(&g, &ok);
+		if (ok && rate > worst) worst = rate;
+	}
+	printf("burst281 rate fit: flat 85 C +-0.5 C, highest rate %d mC/s in 10 min\n", worst);
+	CHECK(worst > 0 && worst < (int)BC250_DPM_RATE_MC_PER_S);
+	/* One reading jumps by 1 C and stays there. No fit over 1 s tells it from a rise: it reads about 1.5 C/s while the
+	 * jump is near the middle of the window. The confirmation time is what keeps it from a rate step: at the 1.5 C/s
+	 * threshold it passes for a tick or two, not for 250 ms. */
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) ==
+	      BC250_DPM_BURST_OK);
+	worst = 0;
+	for (i = 0; i < 400u; i++) {
+		run_busy_mc(&g, 950, i < 200u ? 84000 : 85000, 25);
+		rate = bc250_dpm_rate_mc_per_s(&g, &ok);
+		if (ok && rate > worst) worst = rate;
+	}
+	printf("burst281 rate fit: a 1 C jump of one reading, highest rate %d mC/s, %u rate steps\n", worst, g.rate_steps);
+	CHECK(worst >= 1300 && worst <= 1600 && g.rate_steps == 0u);
+	/* Three seconds without a reading: the newest slots are too old for the window. */
+	for (i = 0; i < 120u; i++) {
+		struct bc250_dpm_input in = tick(0, 85, 25);
+		in.temperature_valid = 0;
+		(void)bc250_dpm_step(&g, &in);
+	}
+	rate = bc250_dpm_rate_mc_per_s(&g, &ok);
+	CHECK(!ok && rate == 0);
+}
+
+/* The rate rule on its own (the high-clock zone off): a rise of 3 C/s from 84 C at 2000 MHz. */
+static void test_burst_rate(void)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int top = BC250_DPM_TOP_LEVEL;
+	unsigned int i, first_ms = ~0u, second_ms = ~0u;
+
+	bc250_dpm_init(&g, top);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) ==
+	      BC250_DPM_BURST_OK);
+	g.level = top;
+	for (i = 0; i < 240u; i++) run_busy_mc(&g, 950, 84000, 25);
+	CHECK(g.thermal_cap == top && g.level == top && g.rate_steps == 0u);
+	for (i = 1; i <= 100u; i++) {		/* 2.5 s: 84.0 -> 91.5 C would be the die with no rule */
+		unsigned int steps = g.rate_steps;
+		run_busy_mc(&g, 950, 84000 + (int)(i * 75u), 25);
+		if (g.rate_steps > steps) {
+			if (steps == 0u) {
+				first_ms = i * 25u;
+				/* Three levels from the running clock at once, and the backstop's own timer untouched. */
+				CHECK(g.thermal_cap == top - BC250_DPM_RATE_LEVELS && g.rate_cap_from == top);
+				CHECK(g.cap_ms >= g.tune.hot_step_ms);
+				CHECK(g.throttle == BC250_DPM_THROTTLE_THERMAL_ZONE);
+			} else if (steps == 1u) second_ms = i * 25u;
+		}
+		if (84000 + (int)(i * 75u) >= BC250_DPM_CRITICAL_MC) break;
+	}
+	printf("burst281 rate rule: 3 C/s from 84 C at 2000 MHz, first step at %u ms, second at %u ms, cap %u MHz\n",
+	       first_ms, second_ms, bc250_dpm_level_mhz(g.thermal_cap));
+	CHECK(first_ms <= 1000u);
+	CHECK(second_ms != ~0u && second_ms - first_ms >= BC250_DPM_RATE_STEP_MS && second_ms - first_ms <= 1100u);
+
+	/* The rule never takes the cap under the lab floor: from 1200 MHz one step goes to 1000 MHz and stops there. The
+	 * rise ends at 84 C, under the soft zone's lead, so only the rate rule moves the cap. */
+	bc250_dpm_init(&g, L(2));
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) ==
+	      BC250_DPM_BURST_OK);
+	g.level = L(2);
+	for (i = 0; i < 240u; i++) run_busy_mc(&g, 950, 79000, 25);
+	for (i = 1; i <= 100u; i++) {
+		run_busy_mc(&g, 950, 79000 + (int)(i * 50u), 25);	/* 2 C/s to 84 C */
+		CHECK(g.thermal_cap >= L(0));
+	}
+	CHECK(g.rate_steps >= 1u && g.thermal_cap == L(0) && g.rate_levels == 2u);
+
+	/* Under 80 C nothing: a rise of 3 C/s from 70 C to 79.9 C. */
+	bc250_dpm_init(&g, top);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) ==
+	      BC250_DPM_BURST_OK);
+	g.level = top;
+	for (i = 0; i < 240u; i++) run_busy_mc(&g, 950, 70000, 25);
+	for (i = 1; i <= 132u; i++) run_busy_mc(&g, 950, 70000 + (int)(i * 75u), 25);
+	CHECK(g.rate_steps == 0u && g.thermal_cap == top);
+
+	/* An idle GPU: the same rise, no work on any engine. The zone's work gate holds the rate rule as well. */
+	bc250_dpm_init(&g, top);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) ==
+	      BC250_DPM_BURST_OK);
+	for (i = 0; i < 240u; i++) run_mc(&g, 0, 80000, 25);
+	for (i = 1; i <= 60u; i++) run_mc(&g, 0, 80000 + (int)(i * 75u), 25);
+	CHECK(g.rate_steps == 0u);
+
+	/* The soft zone off (DpmThermalZone 0) is the 0.7.212 rule set of a bisect: no rate rule either. */
+	init_old(&g, top);
+	CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+				     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
+	g.level = top;
+	for (i = 0; i < 240u; i++) run_busy_mc(&g, 950, 84000, 25);
+	for (i = 1; i <= 30u; i++) run_busy_mc(&g, 950, 84000 + (int)(i * 75u), 25);
+	CHECK(g.rate_steps == 0u && g.high_steps == 0u);
+}
+
+/* The high-clock zone on its own (the rate rule off). */
+static void test_burst_high_zone(void)
+{
+	struct bc250_dpm_governor g;
+	const unsigned int top = BC250_DPM_TOP_LEVEL, high = (unsigned int)bc250_dpm_level_of(1800);
+	unsigned int i, released_ms = ~0u;
+
+	bc250_dpm_init(&g, top);
+	CHECK(bc250_dpm_burst_config(&g, 0u, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC, BC250_DPM_HIGH_ZONE_MHZ) ==
+	      BC250_DPM_BURST_OK);
+	g.level = top;
+	/* 79.5 C, in the band and under the threshold: the cap at the ceiling holds, the clock holds. */
+	for (i = 0; i < 240u; i++) run_busy_mc(&g, 950, 79500, 25);
+	CHECK(g.thermal_cap == top && g.level == top && g.high_steps == 0u);
+	/* 80.5 C: one level at once, the next one after zone_step_ms, and none under 1800 MHz. */
+	run_busy_mc(&g, 950, 80500, 25);
+	CHECK(g.thermal_cap == top - 1u && g.high_steps == 1u && g.throttle == BC250_DPM_THROTTLE_THERMAL_ZONE);
+	for (i = 1; i < g.tune.zone_step_ms / 25u; i++) run_busy_mc(&g, 950, 80500, 25);
+	CHECK(g.thermal_cap == top - 1u);
+	run_busy_mc(&g, 950, 80500, 25);
+	CHECK(g.thermal_cap == high && g.high_steps == 2u);
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 80500, 25);
+	CHECK(g.thermal_cap == high && g.level <= high && g.high_steps == 2u && g.zone_steps == 0u);
+	/* Back to 79.5 C with a load that asks for more: the band holds the cap and refuses the raise above 1800 MHz. */
+	for (i = 0; i < 800u; i++) run_busy_mc(&g, 1000, 79500, 25);
+	CHECK(g.thermal_cap == high && g.level == high && g.high_holds > 0u);
+	/* 78.5 C, under the band: the hot cap's release (under 82 C) gives a level a second back. */
+	for (i = 1; i <= 120u; i++) {
+		run_busy_mc(&g, 1000, 78500, 25);
+		if (g.thermal_cap == top && released_ms == ~0u) released_ms = i * 25u;
+	}
+	CHECK(released_ms != ~0u && released_ms <= 2u * BC250_DPM_RELEASE_STEP_MS + 25u);
+
+	/* Under 1800 MHz the zone does nothing: a cap the hot rule left at 1500 MHz stays at the rules of 0.7.216. */
+	bc250_dpm_init(&g, top);
+	CHECK(bc250_dpm_burst_config(&g, 0u, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC, BC250_DPM_HIGH_ZONE_MHZ) ==
+	      BC250_DPM_BURST_OK);
+	g.thermal_cap = L(5);
+	g.level = L(5);
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 84500, 25);
+	CHECK(g.thermal_cap == L(5) && g.high_steps == 0u && g.high_holds == 0u);
+
+	/* A ceiling of 1800 MHz (DpmMaxMHz): the zone never acts. */
+	bc250_dpm_init(&g, high);
+	CHECK(bc250_dpm_burst_config(&g, 0u, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC, BC250_DPM_HIGH_ZONE_MHZ) ==
+	      BC250_DPM_BURST_OK);
+	g.level = high;
+	for (i = 0; i < 400u; i++) run_busy_mc(&g, 950, 81500, 25);
+	CHECK(g.thermal_cap == high && g.high_steps == 0u);
+
+	/* An idle GPU at 81 C: no step (the zone's work gate). */
+	burst_init(&g, top);
+	for (i = 0; i < 400u; i++) run_mc(&g, 0, 81000, 25);
+	CHECK(g.thermal_cap == top && g.high_steps == 0u);
+}
+
+/* BD-281 on a plant. Two nodes, as plant367_ex: a fast hot spot (3 s, 22 C of the full-power rise) over a sink (60 s,
+ * 40 C, ambient 45 C), power in units of 2000 MHz at 1000 mV with the whole die busy, sensor noise +-0.4 C. The
+ * constants are chosen to give the shape of the BD-281 runs, not fitted to them: a scene at 2000 MHz that settles at
+ * 82.2 C (w 0.60 of full power), then a scene load of 10 s at w 1.0, which starts at 2.9 C/s. The lab saw some 3 C/s
+ * and a peak of 89.25-90.9 C. GPU bound at 95 % in both phases. The lab runner's rule is read on every tick: 89 C at
+ * once, or 87 C held 10 s. */
+struct burst_result {
+	unsigned int peak_mc, hold87_ms, scene_mhz, burst_low_mhz, rate_steps, high_steps, zone_steps, hot_entries;
+	unsigned int after_mhz;		/* the clock 60 s after the burst */
+	int stop;
+};
+
+#define BURST_RULES_SHIPPED	0	/* tester.35: bc250_dpm_init, the soft zone on, no BD-281 rule */
+#define BURST_RULES_BD281	1	/* the release default of this change */
+#define BURST_RULES_RATE	2	/* the rate rule alone */
+#define BURST_RULES_HIGH	3	/* the high-clock zone alone */
+
+static struct burst_result burst_plant(int rules, double w_scene, double w_burst, unsigned int ramp_ms,
+				       unsigned int hold_ms)
+{
+	const unsigned int scene_s = 30u;
+	struct bc250_dpm_governor g;
+	struct burst_result r;
+	const unsigned int top = BC250_DPM_TOP_LEVEL;
+	const unsigned int t_burst = scene_s * 1000u, t_end = t_burst + 70000u;
+	double p0 = w_scene, sink = 45.0 + 40.0 * p0, die = sink + 22.0 * p0;
+	unsigned int t, hot_run = 0, seed = 281u, scene_sum = 0, scene_n = 0;
+
+	memset(&r, 0, sizeof(r));
+	r.burst_low_mhz = ~0u;
+	bc250_dpm_init(&g, top);
+	if (rules == BURST_RULES_BD281)
+		CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+					     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
+	else if (rules == BURST_RULES_RATE)
+		CHECK(bc250_dpm_burst_config(&g, BC250_DPM_RATE_MC_PER_S, BC250_DPM_RATE_FROM_MC, 0u, 1800u) ==
+		      BC250_DPM_BURST_OK);
+	else if (rules == BURST_RULES_HIGH)
+		CHECK(bc250_dpm_burst_config(&g, 0u, BC250_DPM_RATE_FROM_MC, BC250_DPM_HIGH_ZONE_MC,
+					     BC250_DPM_HIGH_ZONE_MHZ) == BC250_DPM_BURST_OK);
+	g.level = top;			/* the scene already runs at 2000 MHz, as in both BD-281 runs */
+	for (t = 0; t < t_end; t += 25u) {
+		unsigned int mhz = bc250_dpm_level_mhz(g.level), level;
+		double v = bc250_dpm_level_mv(g.level) / 1000.0;
+		double w = w_scene;
+		if (t >= t_burst && t < t_burst + ramp_ms) w = w_scene + (w_burst - w_scene) * (t - t_burst) / ramp_ms;
+		else if (t >= t_burst + ramp_ms && t < t_burst + ramp_ms + hold_ms) w = w_burst;
+		double p = mhz / 2000.0 * v * v * w;
+		struct bc250_dpm_input in = tick(950, 0, 25);
+		sink += (45.0 + 40.0 * p - sink) * 0.025 / 60.0;
+		die += (sink + 22.0 * p - die) * 0.025 / 3.0;
+		in.temperature_mc = (int)(die * 1000.0) + burst_noise(&seed, 400);
+		in.ring_busy = 1;
+		level = bc250_dpm_step(&g, &in);
+		CHECK(level <= g.max_level && level <= g.thermal_cap && g.thermal_cap >= cap_bottom(&g));
+		commit_ok(&g, level);
+		if (t < t_burst && t + 5000u >= t_burst) { scene_sum += bc250_dpm_level_mhz(g.level); scene_n++; }
+		if (t >= t_burst && t < t_burst + 10000u && bc250_dpm_level_mhz(g.level) < r.burst_low_mhz)
+			r.burst_low_mhz = bc250_dpm_level_mhz(g.level);
+		if (t >= t_burst && in.temperature_mc > (int)r.peak_mc) r.peak_mc = (unsigned int)in.temperature_mc;
+		if (in.temperature_mc >= 87000) {
+			hot_run += 25u;
+			if (hot_run > r.hold87_ms) r.hold87_ms = hot_run;
+		} else hot_run = 0;
+		if (in.temperature_mc >= 89000 || hot_run >= 10000u) r.stop = 1;
+	}
+	r.scene_mhz = scene_n ? scene_sum / scene_n : 0u;
+	r.after_mhz = bc250_dpm_level_mhz(g.level);
+	r.rate_steps = g.rate_steps;
+	r.high_steps = g.high_steps;
+	r.zone_steps = g.zone_steps;
+	r.hot_entries = g.thermal_events;
+	return r;
+}
+
+static void burst_print(const char *name, const struct burst_result *r)
+{
+	printf("burst281 %-16s peak %u mC, longest >= 87 C %u ms, runner %-4s scene %u MHz, lowest in the burst %u MHz, "
+	       "60 s after %u MHz, %u rate %u high %u zone steps, %u hot entries\n", name, r->peak_mc, r->hold87_ms,
+	       r->stop ? "STOP" : "ok", r->scene_mhz, r->burst_low_mhz, r->after_mhz, r->rate_steps, r->high_steps,
+	       r->zone_steps, r->hot_entries);
+}
+
+static void test_burst281(void)
+{
+	/* The case that has the shape of the two BD-281 runs: 82.2 C at 2000 MHz, then the scene load ramps to w 1.30 in
+	 * 3 s and holds 4 s. The rise accelerates from about 1 C/s to 2 C/s, as in the runs (81.5 -> 85.9 C in 5 s, then
+	 * 85.9 -> 89.25 C in 2.7 s), and the shipped rules peak near 90 C. */
+	struct burst_result shipped = burst_plant(BURST_RULES_SHIPPED, 0.60, 1.30, 3000u, 4000u);
+	struct burst_result now = burst_plant(BURST_RULES_BD281, 0.60, 1.30, 3000u, 4000u);
+	struct burst_result rate = burst_plant(BURST_RULES_RATE, 0.60, 1.30, 3000u, 4000u);
+	struct burst_result high = burst_plant(BURST_RULES_HIGH, 0.60, 1.30, 3000u, 4000u);
+	burst_print("tester.35:", &shipped);
+	burst_print("BD-281:", &now);
+	burst_print("rate rule only:", &rate);
+	burst_print("high zone only:", &high);
+	/* The defect on the plant: from 2000 MHz the shipped rules let the burst pass 89 C. */
+	CHECK(shipped.stop && shipped.peak_mc >= 89000u && shipped.scene_mhz == 2000u);
+	/* The fix: no runner stop, no reading at 87 C, and the peak some 4 C lower. */
+	CHECK(!now.stop && now.peak_mc < 87000u && now.hold87_ms == 0u && now.peak_mc + 3000u <= shipped.peak_mc);
+	CHECK(now.rate_steps > 0u && now.high_steps > 0u);
+	/* Each rule alone does part of it. The rate rule alone keeps the 2000 MHz scene and still keeps the runner clear. */
+	CHECK(!rate.stop && rate.peak_mc < shipped.peak_mc && rate.rate_steps > 0u && rate.scene_mhz == 2000u);
+	CHECK(high.peak_mc < shipped.peak_mc && high.high_steps > 0u && high.scene_mhz == 1800u);
+	/* What it costs: the scene at 1800 MHz instead of 2000 before the burst, because the high-clock zone holds 82.2 C. */
+	CHECK(now.scene_mhz == 1800u);
+
+	/* A sweep around those numbers: scene loads 0.55-0.65 (2000 MHz at 79.9-84.4 C), bursts of w 0.9-1.4 that come at
+	 * once or ramp over 3 or 6 s. The fix must stop the runner in no case, and its peak must never be more than 0.3 C
+	 * above the peak of the shipped rules. */
+	{
+		unsigned int i, j, k, n = 0, stops_old = 0, stops_new = 0, worse = 0, worst_new = 0, worst_old = 0;
+		for (i = 0; i <= 2u; i++)
+			for (j = 0; j <= 5u; j++)
+				for (k = 0; k <= 2u; k++) {
+					struct burst_result a = burst_plant(BURST_RULES_SHIPPED, 0.55 + 0.05 * i, 0.9 + 0.1 * j,
+									  k * 3000u, 4000u);
+					struct burst_result b = burst_plant(BURST_RULES_BD281, 0.55 + 0.05 * i, 0.9 + 0.1 * j,
+									  k * 3000u, 4000u);
+					n++;
+					if (a.stop) stops_old++;
+					if (b.stop) stops_new++;
+					if (b.peak_mc > a.peak_mc + 300u) worse++;
+					if (a.peak_mc > worst_old) worst_old = a.peak_mc;
+					if (b.peak_mc > worst_new) worst_new = b.peak_mc;
+				}
+		printf("burst281 sweep: %u cases, runner stops %u with the tester.35 rules and %u with BD-281, %u cases worse, "
+		       "highest peak %u mC against %u mC\n", n, stops_old, stops_new, worse, worst_new, worst_old);
+		CHECK(n == 54u && stops_old > 0u && stops_new == 0u && worse == 0u && worst_new < 88000u);
+	}
+}
+/* The recorded sessions of the soft zone (dpm_test_traces.h), replayed open loop at 2000 MHz with both BD-281 rules on:
+ * a 1 s sample held for 40 ticks is a step each second, which is the worst case for the rate fit. A recorded session
+ * of a slow rise must give no rate step. */
+static void burst_replay(const char *name, const short *deci, unsigned int n, int held, unsigned int *rate_steps,
+			 int *top_rate)
+{
+	struct bc250_dpm_governor g;
+	unsigned int i, j;
+
+	*top_rate = 0;
+	burst_init(&g, BC250_DPM_TOP_LEVEL);
+	g.level = BC250_DPM_TOP_LEVEL;
+	for (i = 0; i < n; i++) {
+		for (j = 0; j < 40u; j++) {
+			struct bc250_dpm_input in = tick(950, 0, 25);
+			int ok, rate, next = i + 1u < n ? deci[i + 1u] : deci[i];
+			/* held: each sample for the whole second, a step at each sample. Else a straight line between two
+			 * samples, which is how the die moves when the 1 s sample itself carries no noise. */
+			in.temperature_mc = held ? deci[i] * 100 : deci[i] * 100 + (next - deci[i]) * 100 * (int)j / 40;
+			in.ring_busy = 1;
+			(void)bc250_dpm_step(&g, &in);
+			commit_ok(&g, BC250_DPM_TOP_LEVEL);
+			rate = bc250_dpm_rate_mc_per_s(&g, &ok);
+			if (ok && in.temperature_mc >= (int)BC250_DPM_RATE_FROM_MC && rate > *top_rate) *top_rate = rate;
+		}
+	}
+	*rate_steps = g.rate_steps;
+	printf("burst281 replay %-10s %-6s %4u samples, %u rate steps, highest rate from 80 C %d mC/s, %u high zone steps\n",
+	       name, held ? "held" : "linear", n, g.rate_steps, *top_rate, g.high_steps);
+}
+
+static void test_burst_traces(void)
+{
+	struct { const char *name; const short *deci; unsigned int n; } t[] = {
+		{ "436", zone_trace_436, (unsigned int)(sizeof(zone_trace_436) / sizeof(zone_trace_436[0])) },
+		{ "430 flat", zone_flat_430, (unsigned int)(sizeof(zone_flat_430) / sizeof(zone_flat_430[0])) },
+		{ "418 flat", zone_flat_418, (unsigned int)(sizeof(zone_flat_418) / sizeof(zone_flat_418[0])) },
+		{ "412 flat", zone_flat_412, (unsigned int)(sizeof(zone_flat_412) / sizeof(zone_flat_412[0])) },
+	};
+	unsigned int i, steps, held_steps = 0, seconds = 0;
+	int top;
+	for (i = 0; i < sizeof(t) / sizeof(t[0]); i++) {
+		burst_replay(t[i].name, t[i].deci, t[i].n, 0, &steps, &top);
+		CHECK(steps == 0u);
+		burst_replay(t[i].name, t[i].deci, t[i].n, 1, &steps, &top);
+		held_steps += steps;
+		seconds += t[i].n;
+	}
+	printf("burst281 replay held: %u rate steps in %u s of recorded play\n", held_steps, seconds);
+	CHECK(held_steps * 300u <= seconds);
+}
+/* The plants of the earlier thermal changes with the BD-281 rules on. Session 436 runs at a 1500 MHz ceiling, so the
+ * high-clock zone never acts there and its rise is far under the rate threshold: every arm must give the same result as
+ * the release default without the two rules. Session 367 runs to 2000 MHz: its bounds (the hot spot under 87 C, no
+ * runner stop) must hold, and the cost is the clock above 1800 MHz while the die is at 80 C or more. */
+static void test_burst_regression(void)
+{
+	struct zone_result a = zone_plant(ZONE_RULES_ZONE, 80200, 1, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result b = zone_plant(ZONE_RULES_BD281, 80200, 1, ZONE_PLANT_DIST_436, 180u);
+	struct zone_result c = zone_plant(ZONE_RULES_ZONE, 70000, 0, ZONE_PLANT_DIST, 180u);
+	struct zone_result d = zone_plant(ZONE_RULES_BD281, 70000, 0, ZONE_PLANT_DIST, 180u);
+	struct ramp_result e = plant367_ex(1, 75700, 0, 1, 1), f = plant367_ex(1, 75700, 0, 1, 2);
+	int start;
+
+	zone_print("436, BD-281", &b);
+	zone_print("median, BD-281", &d);
+	ramp_print("zone:", &e);
+	ramp_print("BD-281:", &f);
+	CHECK(a.peak_mc == b.peak_mc && a.mean_mhz == b.mean_mhz && a.stop == b.stop && a.changes == b.changes);
+	CHECK(c.peak_mc == d.peak_mc && c.mean_mhz == d.mean_mhz && c.stop == d.stop && c.changes == d.changes);
+	CHECK(f.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && f.stops == 0u && f.die_peak_mc <= e.die_peak_mc + 300u);
+	for (start = 50000; start <= 83000; start += 1000) {
+		struct ramp_result g = plant367_ex(1, start, 0, 1, 1), h = plant367_ex(1, start, 0, 1, 2);
+		CHECK(h.die_peak_mc < (unsigned int)BC250_DPM_HOT_MC && h.stops == 0u && h.die_peak_mc <= g.die_peak_mc + 300u);
+	}
+}
+
 int main(void)
 {
 	test_table();
@@ -3919,6 +4364,13 @@ int main(void)
 	test_plant367();
 	test_subfloor();
 	test_compute();
+	test_burst_config();
+	test_burst_rate_fit();
+	test_burst_rate();
+	test_burst_high_zone();
+	test_burst281();
+	test_burst_traces();
+	test_burst_regression();
 	printf("dpm policy: %d checks, %d failures\n", checks, failures);
 	return failures ? 1 : 0;
 }

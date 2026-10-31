@@ -315,6 +315,11 @@ void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level)
 	 * the clock DpmResyncLevel read from an idle SMU it took the cap straight to the thermal floor, which is the
 	 * symptom of the safety review's finding 2 by another path (0.7.213 safety review, second round). */
 	g->zone_quiet_ms = BC250_DPM_CAP_MS_MAX;
+	/* BD-281: both rules off until bc250_dpm_burst_config (the memset above), and no step yet, so the first one of
+	 * each is not held. high_level is a valid level even while the zone is off. */
+	g->rate_ms = BC250_DPM_CAP_MS_MAX;
+	g->high_ms = BC250_DPM_CAP_MS_MAX;
+	g->high_level = BC250_DPM_TOP_LEVEL;
 	g->subfloor_ok = 1;			/* until the hardware refuses a point under the lab floor */
 	/* The idle state is off until a caller configures it (bc250_dpm_idle_config), so a governor built here
 	 * and stepped behaves exactly as 0.7.205. The values below are only what the state would run with. */
@@ -770,6 +775,109 @@ static int zone_may_act(const struct bc250_dpm_governor *g)
 	return !g->idle && g->zone_quiet_ms < BC250_DPM_ZONE_QUIET_MS;
 }
 
+/* ---- the rate rule and the high-clock zone (BD-281) ---------------------------------------------- */
+
+/* One valid reading per tick into the rate ring, after zone_slope_sample has moved zone_now_ms. A clamped tick empties
+ * the ring (the ages in it are wrong); a tick with no reading only skips its entry, and the span check of the fit then
+ * refuses a ring with a gap. */
+static void rate_sample(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
+{
+	if (in->dt_ms > BC250_DPM_MAX_DT_MS) {
+		g->rate_count = 0;
+		g->rate_head = 0;
+		return;
+	}
+	if (!in->temperature_valid) return;
+	g->rate_mc[g->rate_head] = in->temperature_mc;
+	g->rate_at_ms[g->rate_head] = g->zone_now_ms;
+	g->rate_head = (g->rate_head + 1u) % BC250_DPM_RATE_TICKS;
+	if (g->rate_count < BC250_DPM_RATE_TICKS) g->rate_count++;
+}
+
+/* The least-squares slope of the rate ring, in mC/s: the readings of the last BC250_DPM_RATE_TICKS ticks, about 1 s.
+ * The fit of zone_lead_mc over a shorter window and over every tick, with no deadband and no cap: the rate rule
+ * compares the slope itself with its threshold. Every tick and not one reading per 250 ms slot, so that 40 readings
+ * and not 4 carry the noise: with +-0.5 C of white noise the slope varies by some 0.16 C/s. A step of one reading
+ * cannot be told from a rise by any fit over 1 s: a step of h in the middle of the window reads 1.5 h per second, which
+ * is why the rule also waits BC250_DPM_RATE_CONFIRM_MS. The ring must be full and fresh: a span or an age past
+ * BC250_DPM_RATE_MAX_SPAN_MS says that readings were skipped or are old, and the rate is then unavailable. Bounds of the
+ * arithmetic: x is at most RATE_MAX_SPAN_MS (2000), |y| at most 2.6e5 mC (see zone_lead_mc), so with n = 40,
+ * |num| <= 2 n^2 x |y| is 1.7e12 and num x 1000 is 1.7e15, far inside a signed 64-bit integer. */
+int bc250_dpm_rate_mc_per_s(const struct bc250_dpm_governor *g, int *available)
+{
+	long long sx = 0, sy = 0, sxy = 0, sxx = 0, num, den;
+	unsigned int i, base, span, newest, oldest;
+	const unsigned int n = BC250_DPM_RATE_TICKS;
+
+	*available = 0;
+	if (g->rate_count < n) return 0;
+	oldest = g->rate_head;			/* a full ring: the next entry to write is the oldest */
+	newest = (g->rate_head + n - 1u) % n;
+	base = g->rate_at_ms[oldest];
+	span = g->rate_at_ms[newest] - base;
+	if (!span || span > BC250_DPM_RATE_MAX_SPAN_MS) return 0;
+	if (g->zone_now_ms - base > BC250_DPM_RATE_MAX_SPAN_MS) return 0;
+	for (i = 0; i < n; i++) {
+		long long x = (long long)(unsigned int)(g->rate_at_ms[i] - base);
+		long long y = (long long)g->rate_mc[i];
+		sx += x;
+		sy += y;
+		sxy += x * y;
+		sxx += x * x;
+	}
+	den = (long long)n * sxx - sx * sx;
+	if (den <= 0) return 0;
+	num = (long long)n * sxy - sx * sy;
+	*available = 1;
+	return (int)(num * 1000ll / den);
+}
+
+enum bc250_dpm_burst_error bc250_dpm_burst_config(struct bc250_dpm_governor *g, unsigned int rate_mc_per_s,
+						  unsigned int rate_from_mc, unsigned int high_mc, unsigned int high_mhz)
+{
+	enum bc250_dpm_burst_error e = BC250_DPM_BURST_OK;
+	int high_level = bc250_dpm_level_of(high_mhz);
+
+	/* Each refused value falls back to its default and the rule stays on: a typo must not remove a safety rule. */
+	if (rate_mc_per_s != 0u &&
+	    (rate_mc_per_s < BC250_DPM_RATE_MIN_MC_PER_S || rate_mc_per_s > BC250_DPM_RATE_MAX_MC_PER_S)) {
+		rate_mc_per_s = BC250_DPM_RATE_MC_PER_S;
+		e = BC250_DPM_BURST_RATE;
+	}
+	if (rate_from_mc < BC250_DPM_RATE_MIN_FROM_MC || rate_from_mc > BC250_DPM_RATE_MAX_FROM_MC) {
+		rate_from_mc = BC250_DPM_RATE_FROM_MC;
+		if (e == BC250_DPM_BURST_OK) e = BC250_DPM_BURST_FROM;
+	}
+	if (high_mc != 0u && (high_mc < BC250_DPM_HIGH_ZONE_MIN_MC || high_mc > BC250_DPM_HIGH_ZONE_MAX_MC)) {
+		high_mc = BC250_DPM_HIGH_ZONE_MC;
+		if (e == BC250_DPM_BURST_OK) e = BC250_DPM_BURST_HIGH;
+	}
+	if (high_level < (int)BC250_DPM_FLOOR_LEVEL) {
+		high_level = bc250_dpm_level_of(BC250_DPM_HIGH_ZONE_MHZ);
+		if (e == BC250_DPM_BURST_OK) e = BC250_DPM_BURST_HIGH_MHZ;
+	}
+	g->rate_mc_per_s = rate_mc_per_s;
+	g->rate_from_mc = rate_from_mc;
+	g->high_mc = high_mc;
+	g->high_level = (unsigned int)high_level;
+	return e;
+}
+
+/* Both rules need the soft zone: zone_delta_mc 0 is the 0.7.212 rule set of a bisect (bc250_dpm_tune_zone_off). */
+static int rate_on(const struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t)
+{
+	return g->rate_mc_per_s != 0u && t->zone_delta_mc != 0u;
+}
+static int high_on(const struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t)
+{
+	return g->high_mc != 0u && t->zone_delta_mc != 0u;
+}
+/* From this lead reading up, nothing takes the cap or the clock above high_level. */
+static int high_band(const struct bc250_dpm_governor *g, const struct bc250_dpm_tune *t, int teff)
+{
+	return high_on(g, t) && teff >= (int)g->high_mc - (int)BC250_DPM_HIGH_ZONE_HYST_MC;
+}
+
 unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm_input *in)
 {
 	unsigned int dt = in->dt_ms > BC250_DPM_MAX_DT_MS ? BC250_DPM_MAX_DT_MS : in->dt_ms;
@@ -778,6 +886,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	unsigned int want = cur, limit, target;
 	unsigned int thermal = BC250_DPM_THROTTLE_NONE;
 	int left = 0, idle_exit = 0;	/* the idle state ended in this tick / this tick returns from under the floor */
+	int high_zone = 0;		/* BD-281: the high-clock zone acted in this tick */
 	const struct bc250_dpm_tune *t = &g->tune;
 	/* The compute threshold set of this tick (BD-127): the tune in force with the three load thresholds
 	 * replaced, selected below. Every initializer in this block that reads t reads a field the set leaves
@@ -813,6 +922,7 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	g->zone_lead_ok = lead_ok;
 	if (t->zone_delta_mc && t->zone_lead_ms && !lead_ok) g->zone_lead_gaps++;
 	zone_slope_sample(g, in, dt);
+	rate_sample(g, in);		/* BD-281 */
 	g->avg_permille = (g->avg_permille * 3u + busy + 2u) / 4u;
 	/* How long the GPU has had nothing to do, for the zone's own gate (zone_may_act). The three signals are the ones
 	 * the idle state reads, and the share has to beat a single desktop frame of a 25 ms tick.
@@ -837,6 +947,8 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 	 * thermal_cap. */
 	g->cap_ms = g->cap_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->cap_ms + dt;
 	g->raise_ms = g->raise_ms > BC250_DPM_CAP_MS_MAX - dt ? BC250_DPM_CAP_MS_MAX : g->raise_ms + dt;
+	g->rate_ms = add_ms(g->rate_ms, dt);	/* BD-281 */
+	g->high_ms = add_ms(g->high_ms, dt);
 	/* BD-228, the recall. Only bc250_dpm_recall_confirm sets a level; here the governor ages it and ends it. Each of
 	 * these ends it: another curve serial (the voltage the level ran with is not the one a return would get), a
 	 * running level above the confirmed one (the caller wrote g->level without a transaction, as a readback or the
@@ -982,6 +1094,24 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 			g->zone = 0;
 			g->zone_ms = 0;
 		} else if (t->zone_delta_mc && teff >= bc250_dpm_zone_mc(t)) g->zone_idle_holds++;
+		/* BD-281, the high-clock zone: under the soft zone's threshold, but with the cap above high_level. It steps the
+		 * cap toward high_level on its own timer, the first step at once, and holds the release rules while the lead
+		 * reading is in its band. Under high_level, and under the band, the rules below run as before. */
+		if (high_on(g, t) && g->thermal_cap > g->high_level && teff >= (int)g->high_mc && zone_may_act(g)) {
+			if (g->high_ms >= t->zone_step_ms) {
+				g->high_ms = 0;
+				g->thermal_cap--;
+				g->high_steps++;
+			}
+			g->release_ms = 0;
+			g->soft_ms = 0;
+			high_zone = 1;
+		} else if (g->thermal_cap >= g->high_level && g->thermal_cap < g->max_level && high_band(g, t, teff)) {
+			/* The band: a release would take the cap above high_level, so it waits. */
+			g->release_ms = 0;
+			g->soft_ms = 0;
+			g->high_holds++;
+		} else
 		/* The release rules read the lead temperature too (0.7.213): a cap that rises while the die is already climbing
 		 * towards the zone is the one thing the search found no threshold can repair afterwards. */
 		if (teff < BC250_DPM_RELEASE_MC && g->thermal_cap < g->max_level) {
@@ -1011,7 +1141,41 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 		}
 		/* Between the release threshold in force and HOT the cap holds; it still names what holds the clock. */
 		if (g->thermal_cap < g->max_level) thermal = BC250_DPM_THROTTLE_THERMAL_SOFT;
+		if (high_zone) thermal = BC250_DPM_THROTTLE_THERMAL_ZONE;
 	}
+	/* BD-281, the rate rule: after the branches above, so it acts at any reading from rate_from_mc up to the critical
+	 * rule, which has already put the cap at its bottom. It measures the raw readings, because a fast rise is in the
+	 * readings themselves; the lead extrapolates a slow one. It lowers the cap from the lower of the cap and the running
+	 * clock (never from under the thermal floor, as the hot rule), RATE_LEVELS at once, and not under the lab floor:
+	 * under it the 87 C backstop decides on the real reading. cap_ms stays as it is (finding 7 of the soft zone), and
+	 * the release timers start again, so no release follows a rate step in the same second. */
+	g->rate_last_mc_per_s = 0;
+	if (rate_on(g, t) && in->temperature_valid && in->temperature_mc < BC250_DPM_CRITICAL_MC &&
+	    in->temperature_mc >= (int)g->rate_from_mc && zone_may_act(g)) {
+		int rate_ok = 0;
+		int rate = bc250_dpm_rate_mc_per_s(g, &rate_ok);
+		g->rate_last_mc_per_s = rate_ok ? rate : 0;
+		/* The rate has to hold for CONFIRM_MS without a break: a jump of one reading passes the threshold only while it
+		 * sits near the middle of the window. */
+		if (rate_ok && rate >= (int)g->rate_mc_per_s) g->rate_over_ms = add_ms(g->rate_over_ms, dt);
+		else g->rate_over_ms = 0;
+		if (g->rate_over_ms >= BC250_DPM_RATE_CONFIRM_MS && g->rate_ms >= BC250_DPM_RATE_STEP_MS) {
+			unsigned int base = cur > thermal_floor(g) ? cur : thermal_floor(g);
+			unsigned int from = g->thermal_cap < base ? g->thermal_cap : base;
+			if (from > BC250_DPM_FLOOR_LEVEL) {
+				unsigned int to = from > BC250_DPM_FLOOR_LEVEL + BC250_DPM_RATE_LEVELS ?
+						  from - BC250_DPM_RATE_LEVELS : BC250_DPM_FLOOR_LEVEL;
+				g->rate_cap_from = g->thermal_cap;
+				g->rate_levels += g->thermal_cap - to;
+				g->thermal_cap = to;
+				g->rate_steps++;
+				g->rate_ms = 0;
+				g->release_ms = 0;
+				g->soft_ms = 0;
+				thermal = BC250_DPM_THROTTLE_THERMAL_ZONE;
+			}
+		}
+	} else g->rate_over_ms = 0;
 
 	/* The load. */
 	if (busy >= t->up_permille) {
@@ -1107,6 +1271,14 @@ unsigned int bc250_dpm_step(struct bc250_dpm_governor *g, const struct bc250_dpm
 			target = cur;
 			g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
 			g->warm_holds++;
+		}
+		/* BD-281: in the high-clock zone's band the clock does not rise above high_level, as the cap does not. A cap at
+		 * the ceiling with the die at 79.5 C would otherwise let the load raise to 2000 MHz for the zone to take back at
+		 * 80 C. A raise up to high_level, and every lowering, stay as they are. */
+		if (target > cur && target > g->high_level && high_band(g, t, teff)) {
+			target = cur > g->high_level ? cur : g->high_level;
+			g->throttle = BC250_DPM_THROTTLE_THERMAL_WARM;
+			g->high_holds++;
 		}
 		/* The thermal ramp (RAMP_KNEE_MC up to WARM_MC, 0.7.203): a raise goes one level at most, and only a ramp interval
 		 * after the last raise. Like the warm zone it bounds every raise (load, runtime floor, the clock following a released

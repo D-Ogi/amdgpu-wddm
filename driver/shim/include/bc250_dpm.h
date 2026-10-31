@@ -20,7 +20,8 @@
  *                             clock into a fixed-lab next start
  * The idle state (0.7.207) is part of bc250_dpm_step(); bc250_dpm_idle_config() turns it on. So is the soft thermal
  * zone (0.7.213, BD-087): the cap starts stepping down at 86 C instead of 87 C, judged on the reading plus its own
- * slope extrapolated 15 s, and the 87 C hot cap stays behind it as the backstop on the raw reading.
+ * slope extrapolated 15 s, and the 87 C hot cap stays behind it as the backstop on the raw reading. BD-281 adds two
+ * rules for a load burst at a high clock, configured by bc250_dpm_burst_config(): a rate rule and a high-clock zone.
  * The operating points themselves are bc250_clock.h's table; a level is an index into it.
  */
 #ifndef BC250_DPM_H
@@ -533,6 +534,26 @@ struct bc250_dpm_governor {
 	unsigned int	slope_count;		/* slots written, up to BC250_DPM_ZONE_SLOPE_SLOTS */
 	unsigned int	slope_push_ms;		/* since the last slot was written */
 	unsigned int	zone_now_ms;		/* the governor's millisecond clock, wrapping */
+	/* BD-281: the rate rule and the high-clock zone. bc250_dpm_burst_config sets the first four; bc250_dpm_init leaves
+	 * both rules off, so a caller that does not configure them keeps the 0.7.216 thermal rules exactly. */
+	unsigned int	rate_mc_per_s;		/* the rate threshold, 0: no rate rule */
+	unsigned int	rate_from_mc;		/* the lowest raw reading at which the rate rule acts */
+	unsigned int	high_mc;		/* the high-clock zone's threshold, 0: no high-clock zone */
+	unsigned int	high_level;		/* the zone acts while the cap is above this level */
+	unsigned int	rate_ms;		/* since the last rate step, saturating */
+	unsigned int	high_ms;		/* since the last high-clock zone step, saturating */
+	unsigned int	rate_steps;		/* rate steps of this start */
+	unsigned int	rate_levels;		/* cap levels that the rate steps removed */
+	unsigned int	high_steps;		/* high-clock zone steps of this start */
+	unsigned int	high_holds;		/* steps in which the high-clock zone held a cap release or a clock raise */
+	int		rate_last_mc_per_s;	/* the rate of the last step, 0 when the ring could not give one */
+	unsigned int	rate_cap_from;		/* the cap before the last rate step (the KMD log line) */
+	unsigned int	rate_over_ms;		/* the rate has been at or above the threshold this long, saturating */
+	/* The rate ring: one valid reading per tick, the zone ring's clock (zone_now_ms) as its time. A tick whose dt_ms had
+	 * to be clamped empties it, for the reason of zone_slope_sample. 320 bytes. */
+	int		rate_mc[BC250_DPM_RATE_TICKS];
+	unsigned int	rate_at_ms[BC250_DPM_RATE_TICKS];
+	unsigned int	rate_head, rate_count;
 };
 
 void bc250_dpm_init(struct bc250_dpm_governor *g, unsigned int max_level);
@@ -608,6 +629,57 @@ unsigned int bc250_dpm_idle_mhz(const struct bc250_dpm_governor *g);
 /* The caller took the hardware off the idle point outside a governing tick (a stop, a power transition). It
  * counts as an exit, and the next entry needs a whole quiet window again. The setting itself stays. */
 void bc250_dpm_idle_leave(struct bc250_dpm_governor *g);
+
+/* ---- the rate rule and the high-clock zone (BD-281) -------------------------------------------- */
+
+/* Two thermal rules for a load burst at a high clock. They add to the rules above and change none of them: the 87 C hot
+ * cap, the 90 C critical rule, the soft zone at 86 C, the soft release and the warm zone keep their thresholds and
+ * their timing.
+ *
+ * Why. In the RotTR scene change of BD-281 (tester.35, DpmMaxMHz 2000, 24 CU, the fan at 100 % from 80 C) the die rose
+ * from 2000 MHz at 1 to 2 C a second: run 1 81.5 C -> 85.9 -> 89.25 C in seven seconds, 90.9 C at the peak; run 2
+ * 83.9 C -> 86.8 C at 1800 MHz -> 89.75 C 1.5 s later. The hot cap that starts at 87 C takes one level per 500 ms, and
+ * the soft zone at 86 C one level per 1500 ms. From 2000 MHz that is too slow. The same scene from 1600 MHz peaked at
+ * 87.3 C. So the height of the spike depends on the clock at the start of the burst.
+ *
+ * The rate rule. From BC250_DPM_RATE_FROM_MC (80 C, raw reading) up, while the GPU has work (zone_may_act), the
+ * governor fits the slope of the readings of the last BC250_DPM_RATE_TICKS ticks (about 1 s, a ring of its own). When
+ * the slope stays at or above rate_mc_per_s (1.5 C/s) for BC250_DPM_RATE_CONFIRM_MS (500 ms), the cap goes down by
+ * BC250_DPM_RATE_LEVELS levels at once, from the lower of the cap and the running clock, but not below the lab floor.
+ * Another rate step can follow after BC250_DPM_RATE_STEP_MS while the rise continues. A fit over every tick and not one
+ * reading per 250 ms slot is for latency and noise: the 1.75 s fit of eight slots reacted about 1 s after the start of
+ * a 3 C/s rise, and 40 readings average white noise to some 0.16 C/s. No fit over 1 s tells a jump of one reading from
+ * a rise (a 1 C jump reads 1.5 C/s for an instant), so the confirmation time filters it: on the recorded sessions, with
+ * each 1 s sample held as a step, the rule took 1 step in 1041 s at 500 ms and 3 at 250 ms (dpm_test.c,
+ * test_burst_traces), and on the BD-281 plant the two give the same peak. The rule does not touch cap_ms, for the
+ * reason of finding 7 of the soft zone: the first step of the 87 C backstop must not wait for a rule above it.
+ *
+ * The high-clock zone. While the cap is above high_level (1800 MHz) and the lead reading (the soft zone's teff) is at
+ * or above high_mc (80 C), the cap goes down one level at once and then one level per zone_step_ms, to high_level and
+ * not below it. Under high_level the soft zone at 86 C and the other rules are unchanged. The cap goes above high_level
+ * again only when the lead reading is under high_mc - BC250_DPM_HIGH_ZONE_HYST_MC (79 C); from that reading up, a raise
+ * of the clock above high_level is also refused, so the clock's up side and the cap's up side agree.
+ *
+ * Both rules are off with the soft zone off (zone_delta_mc 0, DpmThermalZone 0), so the 0.7.212 rules of a bisect stay
+ * exact. A throttle that one of the two rules causes reads BC250_DPM_THROTTLE_THERMAL_ZONE; the enum and the escape ABI
+ * do not change. */
+enum bc250_dpm_burst_error {
+	BC250_DPM_BURST_OK = 0,
+	BC250_DPM_BURST_RATE = 1,	/* rate_mc_per_s not 0 or MIN..MAX_MC_PER_S: the rate rule runs with its defaults */
+	BC250_DPM_BURST_FROM = 2,	/* rate_from_mc outside MIN..MAX_FROM_MC: the rate rule runs with its defaults */
+	BC250_DPM_BURST_HIGH = 3,	/* high_mc not 0 or MIN..MAX_MC: the high-clock zone runs with its defaults */
+	BC250_DPM_BURST_HIGH_MHZ = 4,	/* high_mhz not a grid clock from the lab floor up: the zone runs with its defaults */
+	BC250_DPM_BURST_ERROR_COUNT
+};
+/* The start's settings, after bc250_dpm_init. 0 for rate_mc_per_s or high_mc turns that rule off. A refused value
+ * does not turn a rule off: that rule runs with the defaults of bc250_board_envelope.h, and the return value names the
+ * first refusal. These are safety rules, so only an explicit 0 removes one. Not a run-time operation: the KMD calls it
+ * once per start, before the governor thread exists. */
+enum bc250_dpm_burst_error bc250_dpm_burst_config(struct bc250_dpm_governor *g, unsigned int rate_mc_per_s,
+						  unsigned int rate_from_mc, unsigned int high_mc, unsigned int high_mhz);
+/* The fitted rate in mC/s of the rate ring (the last BC250_DPM_RATE_TICKS readings), for the host test and the log;
+ * *available is 0 when the ring cannot give one (not full, a span or an age past BC250_DPM_RATE_MAX_SPAN_MS). */
+int bc250_dpm_rate_mc_per_s(const struct bc250_dpm_governor *g, int *available);
 
 /* ---- the operator's V/F curve and its trial (0.7.210) ---------------------------------------- */
 
