@@ -37,7 +37,7 @@ class ScriptArg(unittest.TestCase):
         t.ssh = lambda command, timeout=None: sent.append(command)
         t.run_script("lab/d3d12-putback.ps1", ["-Step", "putback", "-Expect", EXPECT])
         self.assertEqual(sent, ['powershell -NoProfile -ExecutionPolicy Bypass -File '
-                                f'"C:\\BC250\\tmp\\d3d12-putback.ps1" -Step putback -Expect "{EXPECT}"'])
+                                f'"C:\\BC250\\tmp\\d3d12-putback.ps1" -Step putback -Expect "{EXPECT}"; exit $LASTEXITCODE'])
 
 
 if __name__ == "__main__":

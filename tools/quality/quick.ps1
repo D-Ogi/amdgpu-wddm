@@ -100,6 +100,9 @@ try {
  # old deadline would have failed suites at random on any branch. 1200 s is 11x the cost alone and 3.5x the worst
  # suite run, which covers both the contention and the growth.
  Check 'ledger' { & python -m unittest discover -s "$repo\tools\win\ledger" }
+ # target.py: argument quoting, the boot wait and the remote exit code of run and ps (BD-267). The exit tests run
+ # the command lines through the local Windows PowerShell 5.1 in place of the lab's sshd shell; no network.
+ Check 'target-tool' { $env:BC250_TEST_TMP=(New-Item -ItemType Directory -Force "$Out\target-tool").FullName; & python -B -m unittest discover -s "$repo\tools\win" -p 'test_target*.py' }
  # Windows PowerShell 5.1 for the app-route test, because that is the shell its ops scripts run in on the lab.
  Check 'app-route-lib' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\win\app-route\ops\tests\test-approute-lib.ps1" -Out "$Out\app-route-lib" }
  # Settings apply/restore runs against a fake system. Never change this PC's services, tasks or registry.
