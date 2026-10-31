@@ -9,7 +9,9 @@
     "upstream checkout, that the whole list applies on the base in this order. The marker of each entry is a string",
     "that the patch adds to the file and that the base does not hold, so the marker, not the patch file, is the",
     "evidence that a change is in. The llama-rdna1-* entries are ports of the MIT llama.cpp patches of",
-    "https://github.com/akandr/bc250-rocm (patches/llamacpp); each has its own .md with the source and the rebase notes."
+    "https://github.com/akandr/bc250-rocm (patches/llamacpp); each has its own .md with the source and the rebase notes.",
+    "llama-rdna1-pkf16-bload and llama-rdna1-pkf16-lds-barrier are our own changes to the ported packed-fp16 GEMM,",
+    "not ports. Their .md files hold the measurements."
   ],
   "patches": [
     { "patch": "llama-no-device-printf.patch", "file": "ggml/src/ggml-cuda/common.cuh",
@@ -32,6 +34,10 @@
       "marker": "ggml_cuda_mmf16_rdna1_id_supported", "what": "the mixture-of-experts path of the packed-fp16 GEMM" },
     { "patch": "llama-rdna1-pkf16-batch128.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
       "marker": "GGML_RDNA1_PKF16_MINCOLS", "what": "the packed-fp16 GEMM from 128-token batches" },
+    { "patch": "llama-rdna1-pkf16-bload.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
+      "marker": "void mmf16_load_b(", "what": "the B tile loads of the packed-fp16 GEMM in groups of four" },
+    { "patch": "llama-rdna1-pkf16-lds-barrier.patch", "file": "ggml/src/ggml-cuda/mmf16-rdna1.cu",
+      "marker": "void mmf16_sync_lds()", "what": "barriers of the packed-fp16 GEMM that order LDS only" },
     { "patch": "llama-rdna1-fattn-tile.patch", "file": "ggml/src/ggml-cuda/fattn-tile.cuh",
       "marker": "ggml_cuda_fattn_tile_get_config_amd_rdna1", "what": "RDNA1 flash-attention tile rows without spill" },
     { "patch": "llama-rdna1-concat-transposed.patch", "file": "ggml/src/ggml-cuda/concat.cu",

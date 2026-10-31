@@ -1,0 +1,114 @@
+From: D-Ogi <6542335+D-Ogi@users.noreply.github.com>
+Date: Fri, 30 Oct 2026 20:44:23 +0100
+Subject: [PATCH] ggml-cuda: PKF16 B tile loads go out in groups of four
+
+The B loader of mmf16_rdna1_gemm waited for each of its 16 global loads
+before it sent the next one. It now sends four loads, then converts and
+stores them, and does not unroll the group loop, so the kernel stays at
+125 VGPRs. On the BC-250 (40 CU, 1500 MHz) Qwen3-8B Q8_0 pp512 goes from
+211.8 to 235.3 t/s.
+---
+ ggml/src/ggml-cuda/mmf16-rdna1.cu | 65 ++++++++++++++++++++-----------
+ 1 file changed, 43 insertions(+), 22 deletions(-)
+
+diff --git a/ggml/src/ggml-cuda/mmf16-rdna1.cu b/ggml/src/ggml-cuda/mmf16-rdna1.cu
+index bdd127f6..1db2bc50 100644
+--- a/ggml/src/ggml-cuda/mmf16-rdna1.cu
++++ b/ggml/src/ggml-cuda/mmf16-rdna1.cu
+@@ -166,10 +166,46 @@ static __device__ __forceinline__ void mmf16_load_a(
+     }
+ }
+ 
+-// The tile is a template parameter because the shipped 128x128 leaves only four column tiles at a
+-// 512-token batch, which is the batch the benchmarks use; see logs/rdna1-pkf16-tile-2026-09-20.
+-// mmf16_load_a puts one thread on each row of the A tile, so the block must have exactly BM threads,
+-// which constrains BN / TN == TM.
++// Stage columns [col0, col0+BN) of the f32 activations, elements [k0, k0+BK), into Bs[k][n] as f16.
++// The trip count is a constant, so the loads of one group below are in flight together. The earlier
++// form started the loop at tid; LLVM 22 did not unroll it, and each of its 16 iterations waited for
++// its own global load (vmcnt(0)) before the next was sent. A column past cend loads the last valid
++// column and stores zero, so no lane branches around a load.
++template <int BM, int BN, bool mmid>
++static __device__ __forceinline__ void mmf16_load_b(
++        const float * __restrict__ B, half (&Bs)[MMF16_BK][BN + 8], const int col0, const int cend,
++        const int k0, const int sb, const int32_t * __restrict__ ids_src1, const int tid) {
++    static_assert((BN * MMF16_BK) % BM == 0, "the B tile must split evenly over the block");
++    constexpr int iters = BN * MMF16_BK / BM;
++    // Groups of G loads: the loads of one group go out together, then the group is converted and
++    // stored. The group loop is not unrolled, so the scheduler cannot hoist the next group above the
++    // stores. A full unroll hoisted all 16 loads (195 VGPRs, 5 waves a SIMD, slower than the serial
++    // form), a cap of 8 waves on top of it spilled 86 VGPRs, and "#pragma unroll 4" on the single loop
++    // still waited for each load before the next one.
++    static_assert(BM % MMF16_BK == 0, "a thread keeps one k for all its loads");
++    constexpr int G = iters % 4 == 0 ? 4 : 1;
++    constexpr int nstep = BM / MMF16_BK;                        // n advances by this from one load to the next
++    const int k = tid % MMF16_BK;
++    const int n0 = tid / MMF16_BK;
++    const float * __restrict__ Bk = B + k0 + k;
++#pragma unroll 1
++    for (int r0 = 0; r0 < iters; r0 += G) {
++        float v[G];
++#pragma unroll
++        for (int j = 0; j < G; ++j) {
++            const int n = n0 + (r0 + j) * nstep;
++            const int c = col0 + n < cend ? col0 + n : cend - 1;    // col0 < cend inside the column loop
++            const int src = mmid ? ids_src1[c] : c;
++            v[j] = Bk[(size_t) src * sb];
++        }
++#pragma unroll
++        for (int j = 0; j < G; ++j) {
++            const int n = n0 + (r0 + j) * nstep;
++            Bs[k][n] = col0 + n < cend ? __float2half(v[j]) : __float2half(0.0f);
++        }
++    }
++}
++
+ // The tile is a template parameter because the shipped 128x128 leaves only four column tiles at a
+ // 512-token batch, which is the batch the benchmarks use; see logs/rdna1-pkf16-tile-2026-09-20.
+ // mmf16_load_a puts one thread on each row of the A tile, so the block must have exactly BM threads,
+@@ -206,9 +242,6 @@ static __global__ void __launch_bounds__(BM) mmf16_rdna1_gemm(
+     const int cend = mmid ? expert_bounds[blockIdx.z + 1] : N;
+ 
+     for (int col0 = cbeg + blockIdx.y * BN; col0 < cend; col0 += gridDim.y * BN) {
+-        // the activation column a compact slot reads from, or the slot itself off the expert path
+-        auto bcol = [&](const int c) { return mmid ? ids_src1[c] : c; };
+-
+         half2 acc[TN][TM / 2];
+         float accf[TN][TM];
+ #pragma unroll
+@@ -222,32 +255,20 @@ static __global__ void __launch_bounds__(BM) mmf16_rdna1_gemm(
+         int stage = 0;
+         if (dbuf) {                                     // prime the first tile
+             mmf16_load_a<type, BM>(A, As[0], row0, 0, M, row_size, tid);
+-#pragma unroll
+-            for (int idx = tid; idx < BN * MMF16_BK; idx += BM) {
+-                const int n = idx / MMF16_BK, k = idx % MMF16_BK;
+-                Bs[0][k][n] = col0 + n < cend ? __float2half(B[(size_t) bcol(col0 + n) * sb + k]) : __float2half(0.0f);
+-            }
++            mmf16_load_b<BM, BN, mmid>(B, Bs[0], col0, cend, 0, sb, ids_src1, tid);
+         }
+         for (int k0 = 0; k0 < K; k0 += MMF16_BK, ++stage) {
+             const int cur = dbuf ? (stage & 1) : 0;
+             const int nxt = dbuf ? (cur ^ 1)   : 0;
+             if (!dbuf) {
+                 mmf16_load_a<type, BM>(A, As[0], row0, k0, M, row_size, tid);
+-#pragma unroll
+-                for (int idx = tid; idx < BN * MMF16_BK; idx += BM) {
+-                    const int n = idx / MMF16_BK, k = idx % MMF16_BK;
+-                    Bs[0][k][n] = col0 + n < cend ? __float2half(B[(size_t) bcol(col0 + n) * sb + (k0 + k)]) : __float2half(0.0f);
+-                }
++                mmf16_load_b<BM, BN, mmid>(B, Bs[0], col0, cend, k0, sb, ids_src1, tid);
+             }
+             __syncthreads();
+ 
+             if (dbuf && k0 + MMF16_BK < K) {            // fetch the next tile over this stage's arithmetic
+                 mmf16_load_a<type, BM>(A, As[nxt], row0, k0 + MMF16_BK, M, row_size, tid);
+-#pragma unroll
+-                for (int idx = tid; idx < BN * MMF16_BK; idx += BM) {
+-                    const int n = idx / MMF16_BK, k = idx % MMF16_BK;
+-                    Bs[nxt][k][n] = col0 + n < cend ? __float2half(B[(size_t) bcol(col0 + n) * sb + (k0 + MMF16_BK + k)]) : __float2half(0.0f);
+-                }
++                mmf16_load_b<BM, BN, mmid>(B, Bs[nxt], col0, cend, k0 + MMF16_BK, sb, ids_src1, tid);
+             }
+ 
+ #pragma unroll

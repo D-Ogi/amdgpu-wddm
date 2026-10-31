@@ -107,8 +107,8 @@ foreach($case in $cases){
     $cache=Join-Path $build 'original.txt'
     @('GGML_CUDA_FA:BOOL=OFF','GGML_CUDA_FA_QUANTS:STRING=q4_0','GGML_CUDA_FA_ALL_QUANTS:BOOL=OFF','GGML_HIP:BOOL=ON','GGML_NATIVE:BOOL=OFF','LLAMA_BUILD_COMMON:BOOL=OFF','LLAMA_BUILD_TESTS:BOOL=OFF','LLAMA_BUILD_TOOLS:BOOL=OFF','CMAKE_CXX_FLAGS:STRING=-O2 -DKEEP=123','CMAKE_CXX_FLAGS_RELEASE:STRING=-O3','CMAKE_C_FLAGS:STRING=-DKEEP_C=7','CMAKE_CXX_COMPILER:FILEPATH=X:/compiler.exe',$case.extra)|Set-Content $cache
     $old=$env:ROCM_PATH;$env:ROCM_PATH='host-test-prior'
-    $refused=$false;$message=''
-    try {& $Builder -Source $source -Build $build -RocmRoot 'fixture-rocm' -OriginalCache $cache -CMake $shim -Bc250AllocationCap:$case.cap -ValidationTools:$case.validation -AssetTools:$case.asset -NoLto:$case.nolto | Out-Null}
+    $refused=$false;$message='';$log=@()
+    try {$log=@(& $Builder -Source $source -Build $build -RocmRoot 'fixture-rocm' -OriginalCache $cache -CMake $shim -Bc250AllocationCap:$case.cap -ValidationTools:$case.validation -AssetTools:$case.asset -NoLto:$case.nolto)}
     catch {$refused=$true;$message=$_.Exception.Message}
     if($env:ROCM_PATH -ne 'host-test-prior'){throw "environment restoration: $($case.name)"}
     $env:ROCM_PATH=$old
@@ -122,6 +122,9 @@ foreach($case in $cases){
         $flags=@($final|Where-Object{$_ -match '^CMAKE_CXX_FLAGS:'})[0]
         if($flags -notmatch '-O2 -DKEEP=123 -DBC250_HIP_NO_DEVICE_PRINTF=1'){throw 'lost unrelated CXX flags'}
         if(($flags -match 'BC250_HIP_MAX_ALLOC_BYTES') -ne $case.cap){throw 'cap opt-in changed'}
+        # The default cap is 1 GiB: at the runtime limit of 0xfffc0000 an 8 GiB carve-out cannot place the buffers of
+        # an 8 GiB model (build-llama-patched.ps1, -Bc250AllocationCapBytes).
+        if($case.cap -and $flags -notmatch '-DBC250_HIP_MAX_ALLOC_BYTES=0x40000000ULL'){throw "the default cap is not 1 GiB: $flags"}
         $targets=Get-Content (Join-Path $build 'build-args.json') -Raw|ConvertFrom-Json
         if($targets -notcontains 'ggml-hip'){throw 'missing HIP target'}
         if($case.validation){
@@ -136,6 +139,17 @@ foreach($case in $cases){
         $named=@($targets[$first..$last])
         if(@($named|Select-Object -Unique).Count -ne $named.Count){throw 'a target is named twice'}
         if(($final -contains 'GGML_LTO:BOOL=ON') -eq $case.nolto){throw 'LTO default changed'}
+        # The log lines that pack-llama-asset.ps1 reads: the builder with its SHA-256 first, the options
+        # line without a path, and the configure line with every CMake option.
+        $lines=@($log|ForEach-Object{[string]$_})
+        if($lines[0] -notmatch '^builder ([0-9A-F]{64}) ' -or $Matches[1] -ne (Get-FileHash $Builder -Algorithm SHA256).Hash){throw "the first log line does not name the builder and its SHA-256: $($lines[0])"}
+        $opt=@($lines|Where-Object{$_ -like 'builder options: *'})
+        if($opt.Count -ne 1){throw 'no single builder options line'}
+        if($opt[0].Contains($build) -or $opt[0].Contains($source)){throw 'the options line holds a path'}
+        foreach($s in @(@{n='-AssetTools';on=$case.asset},@{n='-ValidationTools';on=$case.validation},@{n='-NoLto';on=$case.nolto},@{n='-Bc250AllocationCap';on=$case.cap})){
+            if((" $($opt[0]) " -match " $([regex]::Escape($s.n)) ") -ne $s.on){throw "options line and $($s.n) disagree: $($opt[0])"}
+        }
+        if(!@($lines|Where-Object{$_ -like 'cmake configure: *' -and $_.Contains('-DGGML_CUDA_FA:BOOL=ON')}).Count){throw 'no configure line with the CMake options'}
     }
     $results+=@{name=$case.name;passed=$true;refused=$refused;message=$message}
 }

@@ -9,11 +9,15 @@ param(
     [Parameter(Mandatory=$true)][string]$CMake,
     [ValidateRange(1,4)][int]$Jobs = 4,
     [switch]$Bc250AllocationCap,
-    # The cap in bytes. The default is the measured per-allocation limit of the runtime. A smaller cap makes llama.cpp
-    # split the model into more buffers, and each buffer then fits whichever segment group still has room: the
-    # runtime places device memory in the carve-out while the local budget holds it and in system memory after that.
+    # The cap in bytes, 1 GiB by default. The per-allocation limit of the runtime, 0xfffc0000, is the upper bound. A
+    # smaller cap makes llama.cpp split the model into more buffers, and each buffer then fits whichever segment group
+    # still has room: the runtime places device memory in the carve-out while the local budget holds it and in system
+    # memory after that. MEASURED, unit A, 2026-10-31, 8 GiB carve-out: with the cap at the limit, Qwen3-8B Q8_0 does
+    # not load with -ngl 99, because its second buffer of 3797680128 bytes fits neither the rest of the carve-out nor the
+    # system memory budget of 3733582234 bytes (MakeResident 0xc0000017). With 1 GiB buffers the same model loads and
+    # runs. Every lab measurement of this route used 1 GiB.
     # Decimal on purpose: PowerShell reads the hex literal 0xfffc0000 as the Int32 -262144, which no UInt64 takes.
-    [UInt64]$Bc250AllocationCapBytes = 4294705152,
+    [ValidateRange(1, 4294705152)][UInt64]$Bc250AllocationCapBytes = 1073741824,
     [switch]$ValidationTools,
     [switch]$AssetTools,
     [switch]$NoLto,
@@ -30,6 +34,20 @@ $ErrorActionPreference = 'Stop'
 if (-not $PatchDir) {
     $PatchDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 }
+
+# The first lines of the output name this script, its SHA-256 and its arguments, and the configure line
+# below lists every CMake option, so that the log of a build tells how its binaries were made.
+# pack-llama-asset.ps1 copies the hash and the options line into PROVENANCE.txt of the release asset.
+# The options line holds no path: the paths are on the inputs line.
+$self = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
+"builder $((Get-FileHash -LiteralPath $self -Algorithm SHA256).Hash) $self"
+$builderOptions = @("-Jobs $Jobs")
+if ($Bc250AllocationCap) { $builderOptions += '-Bc250AllocationCap', "-Bc250AllocationCapBytes $Bc250AllocationCapBytes" }
+foreach ($name in 'ValidationTools', 'AssetTools', 'NoLto', 'ApplyPatches') {
+    if ((Get-Variable -Name $name -ValueOnly).IsPresent) { $builderOptions += "-$name" }
+}
+"builder options: $($builderOptions -join ' ')"
+"builder inputs: -Source $Source -Build $Build -RocmRoot $RocmRoot -OriginalCache $OriginalCache -CMake $CMake -PatchDir $PatchDir -Git $Git"
 
 # The complete set of source changes this HIP route needs, each with the marker that says it is in,
 # in the order they apply: llama-patches.json next to this script. A source copy that is missing one
@@ -122,6 +140,8 @@ if ($Bc250AllocationCap) {
 $previousRocm = $env:ROCM_PATH
 try {
     $env:ROCM_PATH = $RocmRoot
+    "cmake configure: -S $Source -B $Build -G Ninja " + (($options | ForEach-Object { if ($_ -match ' ') { "`"$_`"" } else { $_ } }) -join ' ')
+    "cmake build targets: $($targets -join ' ')"
     & $CMake -S $Source -B $Build -G Ninja @options
     if ($LASTEXITCODE) { throw "CMake configure failed: $LASTEXITCODE" }
     $configuredCache = Get-Content (Join-Path $Build 'CMakeCache.txt')
