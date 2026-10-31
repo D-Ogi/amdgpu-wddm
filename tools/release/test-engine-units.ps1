@@ -1306,7 +1306,7 @@ Check ($bad -and $bad -match '-NoBootLogo and -BootLogo cannot be used together'
 Check (($installText -match '\[switch\]\$BootLogo\b') -and ($installText -match '\[switch\]\$NoBootLogo\b')) 'install.ps1 takes -BootLogo and -NoBootLogo'
 Check (-not ($script:InstallSwitches -contains 'BootLogo')) '-BootLogo is not saved itself: it only clears the saved -NoBootLogo'
 Check ($installText -match 'Set-BootLogoChoice -Stated \$bootLogoStated') 'the install applies the start-screen answer'
-Check ($installText -match 'boot_logo = \(Get-BootLogoChoice -Stated \$bootLogoStated') 'the decision event reports the start-screen answer to the setup window'
+Check ($installText -match '(?s)boot_logo = \$\(\$blr = Read-BootLogoReadings [^\r\n]*\r?\n\s+Get-BootLogoChoice -Stated \$bootLogoStated -Current \$blr\.current -Legacy \$blr\.legacy\)') 'the decision event reports the start-screen answer to the setup window (BD-191: the state override, else the earlier top-level value)'
 # The driver reads an absent BootLogo as on, so the installer must never list it among the values it writes by
 # default: a default of 1 would be written over a 0 the person chose, and a default of 0 would turn the picture off.
 Check (-not ([IO.File]::ReadAllText((Join-Path $Installer 'registry-defaults.json'))).Contains('BootLogo')) 'BootLogo is not in registry-defaults.json: its default is the absent value'

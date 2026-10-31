@@ -596,9 +596,11 @@ function Invoke-VerifyDiagnostics {
         if (-not $decision.collect) { return }
         if ($script:DryRunMode) { Write-Log '   diagnostics: a dry run collects nothing'; return }
         $path = Join-Path $script:StateDir ('diagnostics-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ') + '.txt')
+        # BD-191: no -ParametersSubKey. The start and stop records come from the shared driver state, as verify and
+        # start-confirm read them; the top-level Parameters copies are a release older than tester.31 and read as
+        # this start when they are left after an upgrade.
         $r = Write-StartFailureDiagnostics -Path $path -Decision $decision -DeviceState $DeviceState -BootUtc $BootUtc -BootId $BootId `
             -BootIdSource $BootIdSource `
-            -ParametersSubKey "SYSTEM\CurrentControlSet\Services\$($script:ServiceName)\Parameters" `
             -HardwareId $script:HardwareIdPrefix -Context $Context
         Write-Log "   diagnostics: written $($r.written), $($r.bytes) bytes in $($r.seconds) s, sections: $(@($r.sections) -join ' | ')"
         foreach ($p in @($r.problems)) { Write-Log "   diagnostics problem: $p" }
@@ -1139,7 +1141,9 @@ Write-EngineEvent 'decision' ([ordered]@{ action = $action.action; message = $ac
     wallpaper = (-not [bool]$NoWallpaper)
     # The start-screen picture the box opens on: the stated answer, or the one the installed driver carries, so an
     # upgrade shows the person their own earlier choice and keeps it when they leave the box alone.
-    boot_logo = (Get-BootLogoChoice -Stated $bootLogoStated -Current (Read-RegistryValues $script:ParametersKey)['BootLogo']) })
+    # BD-191: the override of the shared state, else the top-level value an earlier install wrote.
+    boot_logo = $($blr = Read-BootLogoReadings -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe')
+        Get-BootLogoChoice -Stated $bootLogoStated -Current $blr.current -Legacy $blr.legacy) })
 Write-SystemTuningPlan -Selected ([bool]$ApplySystemTuning) -Manifest $script:Manifest
 if ($action.action -in @('install', 'upgrade', 'repair', 'resume')) {
     $impact = Get-InstallSettingsImpact
@@ -1803,11 +1807,30 @@ Invoke-Change 'apply release setting policy through the validated shared-state r
 }
 
 # The picture on the start screen. Not in registry-defaults.json: its default is the absent
-# value, so the installer removes the value for on and writes 0 for off, and a run that states no answer leaves the
+# override, so the installer clears the override for on and sets 0 for off, and a run that states no answer leaves the
 # installed driver's answer alone (common.ps1). The driver reads it when it starts, so the choice shows at the next
 # start of Windows. A driver setting, not a per-person one: it is applied whether or not the control application is
-# part of this package.
-[void](Set-BootLogoChoice -Stated $bootLogoStated)
+# part of this package. Through the state client, as the settings step above (BD-191).
+[void](Set-BootLogoChoice -Stated $bootLogoStated -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe'))
+
+# BD-191: the legacy top-level copies under Parameters go to an archive file in the installer's state folder, after
+# the state transaction of this install is acknowledged and after the start-screen step above has carried its old
+# answer over. Not on a legacy rollback, whose target driver reads those copies. A failure is a warning: a copy that
+# stays is read by no driver of the shared state, only by a person or a tool that looks at the raw key.
+if ((-not $legacyRollback) -and (-not $script:DryRunMode) -and $state.driver_state -and $state.driver_state.phase -eq 'acknowledged') {
+    try {
+        $legacySnapshot = Read-DriverStateSnapshot -Cli (Join-Path $InstallRoot 'tools\bc250kmd_cli.exe')
+        $legacyArchive = Invoke-Change "move the legacy top-level copies under $($script:ParametersKey) to an archive in $($script:StateDir)" {
+            Invoke-LegacyParametersArchive -Snapshot $legacySnapshot -ArchiveDirectory $script:StateDir -PackageVersion $script:Manifest.version
+        }
+        switch ($legacyArchive.outcome) {
+            'archived' { Write-Info "legacy Parameters copies: $(@($legacyArchive.values).Count) value(s) and $(@($legacyArchive.subkeys).Count) subkey(s) moved to $($legacyArchive.path)" }
+            'none' { Write-Info 'legacy Parameters copies: none' }
+            default { Write-Info "legacy Parameters copies: $($legacyArchive.outcome)" }
+        }
+        foreach ($p in @($legacyArchive.problems)) { Write-Warn2 "legacy Parameters copy not removed: $p" }
+    } catch { Write-Warn2 "the legacy Parameters copies stay where they are: $($_.Exception.Message)" }
+} elseif ($script:DryRunMode) { Write-Info 'legacy Parameters copies: a dry run reads no driver state and moves nothing' }
 
 # DisplayPort audio, the interrupt of the GPU's HD Audio function (BD-092, common.ps1). That function keeps the inbox
 # HDAudBus driver, and the inbox INF leaves it on a line interrupt, where the stream interrupts of this board never
