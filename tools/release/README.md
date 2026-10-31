@@ -362,7 +362,8 @@ a row names its source relative to that root.
 
 ### From the release set to the packages
 
-A tester release has three steps, and the same tool does each of them:
+A tester release has four steps. `build-release-set.ps1` does the first three, and `check-release-assets.ps1`
+checks the fourth:
 
 1. Build and register. `-Register` writes the rows into `tools\release\release-sources.json` of the tree that runs
    the tool. A D3D11 deployment record (`amdgpu_wddm_d3d11.config`) holds the SHA-256 of its engine and its ICD. When
@@ -377,11 +378,20 @@ A tester release has three steps, and the same tool does each of them:
    Then the host dry run of the installer (`test-dryrun.ps1`) runs on each package, and `flavour_bytes.py` checks
    the Mesa DLLs of both packages (BD-167): no lab-only string in a release DLL, and in each lab DLL every lab-only
    string that its Mesa tree holds.
+4. Publish. The installer downloads each optional component from the release itself
+   (`releases/download/v<release>/<asset name>`), so every pinned component zip must be an asset of the release.
+   `check-release-assets.ps1` reads the `installer\components.json` of the package. Before the upload, `-LocalDir`
+   checks that each pinned zip is in that folder with its pinned size and SHA-256. After the upload, the script
+   without `-LocalDir` checks that each address answers 200 with the pinned size, and `-Download` also checks the
+   SHA-256 of each downloaded zip. tester.31 to tester.34 pinned a llama.cpp zip that they did not carry, and each
+   download of it got HTTP 404 (BD-278).
 
 ```
 pwsh -File tools\release\build-release-set.ps1 -Manifest tools\release\release-tester.32.json -Out <dir> -Register
 git commit --only -- tools/release/release-sources.json   (then push)
 pwsh -File tools\release\build-release-set.ps1 -Package -From <dir> -UmdSource <Mesa tree> -UmdBuild <its build>
+pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -LocalDir <component zips>
+pwsh -File tools\release\check-release-assets.ps1 -Package <dir>\package\release\<name> -Download   (after the upload)
 ```
 
 `-UmdSource` and `-UmdBuild` name the user-mode driver tree and its build database that the release gates of

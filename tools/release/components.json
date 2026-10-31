@@ -15,31 +15,36 @@
     "file states as well. Upload that file under this name: the name carries the Ollama version, not the release.",
     "That zip was packed again the same day, after the client wrapper bc250-ollama.cmd and the stop of the model",
     "runner went into the component, so size and sha256 are the ones of the 67-entry zip, not of the first one.",
-    "The llama pin was read from the published asset on 2026-10-11 (download, Get-FileHash, and the zip's own",
-    "entry list). That asset of tester.27 is uploaded again to tester.28 under the tester.28 name, with the same",
-    "bytes, so its size and sha256 do not change. The folder in the zip keeps its tester.27 name. The model pins were measured in this workspace: scratch\\llm-vram\\results-2026-10-10-newmodels\\",
+    "The llama pin is the zip that compute/hip/patches/pack-llama-asset.ps1 made for this release. Its PROVENANCE.txt",
+    "and manifest.json name the commit and the build. The release is in its name and its README, so each release packs",
+    "it again and writes the new name, size and sha256 here. The url template takes the zip from the release itself:",
+    "upload it as an asset of every release that carries this pin. tester.31 to tester.34 pinned the tester.28 zip and",
+    "did not carry it, so their llama download got HTTP 404 (BD-278). tools/release/check-release-assets.ps1 checks",
+    "the pins against the folder of the assets before the upload and against the release after it.",
+    "The model pins were measured in this workspace: scratch\\llm-vram\\results-2026-10-10-newmodels\\",
     "model-hashes.txt and scratch\\strata\\models\\SHA256SUMS.txt. The sizes match the Hugging Face HEAD",
     "responses of 2026-10-11. The Ollama tags answer HTTP 200 in the registry, checked the same day.",
     "tester.32 does not offer Ollama. Its asset bc250-ollama-0.40.3-bc250.27.zip (SHA256 B5D337FC) carries its own HIP",
     "runtime (amdhip64 E754A950), not the release runtime of this package, with diagnostic names that the release",
     "flavour forbids, and its consumer was built without the gfx1013 patch. The pin is empty, so the installer refuses",
-    "the component and downloads nothing. Ollama comes back with a rebuilt asset that passes check-hip-payload.py."
+    "the component and downloads nothing. Ollama comes back with a rebuilt asset that carries no runtime of its own",
+    "and loads the release runtime of the package, as the llama asset does."
   ],
   "components": [
     {
       "id": "llama",
       "title": "llama.cpp for this board",
-      "summary": "Runs GGUF language models on the GPU. llama-server gives you a chat page in your browser; llama-cli and llama-bench run from a command prompt.",
+      "summary": "Runs GGUF language models on the GPU. llama-server gives an OpenAI-compatible HTTP API, and llama-cli and llama-bench run from a command prompt.",
       "question": "Install llama.cpp for this board?",
-      "version": "b86d2f07 with our gfx1013 patches",
+      "version": "b86d2f07 with 16 gfx1013 and RDNA1 patches",
       "default": true,
       "install_dir": "tools\\llama",
       "licence": "MIT",
       "licence_url": "https://github.com/ggml-org/llama.cpp/blob/master/LICENSE",
       "asset": {
-        "name": "llama.cpp-hip-gfx1013-b86d2f07-tester.28.zip",
-        "size": 20142294,
-        "sha256": "196403CE20AD3C90A0B93113A486A67862A22DE93990D68368DCC2545AE601FF",
+        "name": "llama.cpp-hip-gfx1013-b86d2f07-0.7.216.107-tester.35.zip",
+        "size": 20324152,
+        "sha256": "8D3A288DA701D63608C63AB0B9C7510D3AD4F58AA4B6924F70CDBBD23AA2BE63",
         "url_templates": [
           "https://github.com/D-Ogi/amdgpu-wddm/releases/download/v{release}/{name}"
         ]
