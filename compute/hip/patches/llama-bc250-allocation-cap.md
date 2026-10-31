@@ -2,13 +2,15 @@
 
 PROVENANCE: llama.cpp, MIT, upstream base b86d2f07542b29ab099aed34fd6b6d1b2fd4b81c with the existing HIP consumer patches.
 
-Apply llama-bc250-allocation-cap.patch to the reviewed consumer source copy. Run build-llama-patched.ps1 with -Bc250AllocationCap to enable the measured cap of 0xfffc0000 bytes. This switch is specific to this Windows HIP route. CUDA builds reject the define, and ordinary builds without it retain SIZE_MAX behavior.
+Apply llama-bc250-allocation-cap.patch to the reviewed consumer source copy. Run build-llama-patched.ps1 with -Bc250AllocationCap to enable the cap. Its default is 1 GiB, and -Bc250AllocationCapBytes sets another value up to the runtime limit of 0xfffc0000 bytes. This switch is specific to this Windows HIP route. CUDA builds reject the define, and ordinary builds without it retain SIZE_MAX behavior.
 
 The existing tensor-list planner splits model buffers at tensor boundaries. The callback supplies its cap. The allocation guard rejects an oversized request before device selection or allocation because a single tensor and graph planner fallback can exceed the planning hint. Individual tensors are not split. Quantized padding and alignment count toward the cap. Multi-device split buffers and internal pool allocations are not covered by this ordinary-buffer interface change.
 
 Run test-llama-allocation-cap.ps1 -Source <patched-source> -Out <host-output> for compiled offline controls against the actual planner, callback and allocation function. The tests make no GPU call and allocate no multi-GiB host buffers. Both opt-in and ordinary behavior must pass. The guard-deleted mutant must compile and fail CHECK assertions. This gate tests planning and early refusal, not OS allocation or model inference.
 
-The cap is the largest 256 KiB-aligned value below 4 GiB. It preserves placement and allocation flags. Other resource pressure can still cause allocation failure below it.
+The runtime limit is the largest 256 KiB-aligned value below 4 GiB. The cap preserves placement and allocation flags. Other resource pressure can still cause allocation failure below it.
+
+The default is 1 GiB and not the runtime limit. A buffer that does not fit the rest of the carve-out goes to system memory, and the system memory budget is smaller than the limit. Measured on unit A on 2026-10-31 with an 8 GiB carve-out: with the cap at 0xfffc0000, Qwen3-8B Q8_0 does not load with `-ngl 99`. Its second buffer of 3797680128 bytes fits neither the rest of the carve-out nor the system memory budget of 3733582234 bytes, and MakeResident returns 0xc0000017. With 1 GiB buffers the same model loads and runs. Every lab measurement of this route used 1 GiB.
 
 Unit A completes Gemma 12B with backend FB0E315E. See the [measured record](../../../evidence/m16/hip-allocation-cap-2026-10-11/README.md). That measured backend disables GPU Flash Attention. Use `-fa off` or automatic selection with that artifact. Forcing `-fa on` can retain unsupported operations and add CPU fallback. The benchmark's requested FA column does not certify GPU execution.
 

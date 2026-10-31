@@ -122,6 +122,9 @@ foreach($case in $cases){
         $flags=@($final|Where-Object{$_ -match '^CMAKE_CXX_FLAGS:'})[0]
         if($flags -notmatch '-O2 -DKEEP=123 -DBC250_HIP_NO_DEVICE_PRINTF=1'){throw 'lost unrelated CXX flags'}
         if(($flags -match 'BC250_HIP_MAX_ALLOC_BYTES') -ne $case.cap){throw 'cap opt-in changed'}
+        # The default cap is 1 GiB: at the runtime limit of 0xfffc0000 an 8 GiB carve-out cannot place the buffers of
+        # an 8 GiB model (build-llama-patched.ps1, -Bc250AllocationCapBytes).
+        if($case.cap -and $flags -notmatch '-DBC250_HIP_MAX_ALLOC_BYTES=0x40000000ULL'){throw "the default cap is not 1 GiB: $flags"}
         $targets=Get-Content (Join-Path $build 'build-args.json') -Raw|ConvertFrom-Json
         if($targets -notcontains 'ggml-hip'){throw 'missing HIP target'}
         if($case.validation){
