@@ -83,5 +83,5 @@ Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + $incKern + @("/Fo$objKern\",
 Invoke-Tool (Join-Path $bin 'cl.exe') ($kernFlags + $importWarn + $incKern + @("/Fo$objKern\", "/Fd$objKern\cl.pdb") + $importSources)
 
 Write-Host 'run metadata/query host controls'
-& "$Out\firmware_metadata_test.exe" $Firmware
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\firmware_metadata_test.exe" @($Firmware)

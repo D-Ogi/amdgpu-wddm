@@ -13,5 +13,5 @@ $env:TEMP="$Root\scratch\tmp"; $env:TMP=$env:TEMP
 if($LASTEXITCODE -ne 0){throw 'Source extraction failed'}
 & $cl /nologo /TC /W4 /WX /O2 /MT "/I$repo\driver\kmd" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\power_coordinator_test.exe" "$Out\power_coordinator_actual.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'Host build failed'}
-& "$Out\power_coordinator_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\power_coordinator_test.exe"

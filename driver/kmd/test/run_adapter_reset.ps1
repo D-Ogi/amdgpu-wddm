@@ -40,6 +40,9 @@ if($CompleteNonEmptyWindow){
 #     table, whose offsets it checks against the read list, uses the same order).
 #  2. WddmAdapterReset computes the witnesses, refuses on a busy mask, and only then opens the window and returns
 #     TRUE. A success return before the witnesses would be a success without proof.
+# The test-start and test-end lines mark the source checks as a test step: a negative control that must fail here
+# names this step in tools\quality\quick.ps1 (Step), and gate_cache.py accepts only that failure (BD-237).
+Write-Output 'test-start: source checks'
 $wddm=Get-Content "$repo\driver\kmd\wddm.c" -Raw
 $order=@('BC250_REG_GC_GRBM_STATUS,','BC250_REG_GC_CP_STAT,','BC250_REG_GC_CP_CPC_STATUS,','BC250_REG_GC_SDMA0_STATUS_REG,','BC250_REG_GC_SDMA0_GFX_RB_RPTR,','BC250_REG_GC_SDMA0_GFX_RB_RPTR_HI,','BC250_REG_GC_SDMA0_GFX_RB_WPTR,','BC250_REG_GC_SDMA0_GFX_RB_WPTR_HI,')
 if($ReorderWitnessTable){
@@ -48,13 +51,13 @@ if($ReorderWitnessTable){
     $wddm=$wddm.Replace($live,'    BC250_REG_GC_CP_STAT, BC250_REG_GC_GRBM_STATUS, BC250_REG_GC_CP_CPC_STATUS,')
 }
 $at=$wddm.IndexOf('static const ULONG g_AdapterWitnessRegisters[BC250_ADAPTER_SAMPLE_REGISTERS] = {')
-if($at -lt 0){Write-Output 'FAIL source check: g_AdapterWitnessRegisters is not in wddm.c';exit 1}
+if($at -lt 0){Write-Output 'FAIL source check: g_AdapterWitnessRegisters is not in wddm.c';Write-Output 'test-end: source checks exit 1';exit 1}
 $end=$wddm.IndexOf('};',$at)
 $table=$wddm.Substring($at,$end-$at)
 $pos=0
 foreach($o in $order){
     $i=$table.IndexOf($o,$pos)
-    if($i -lt 0){Write-Output "FAIL source check: g_AdapterWitnessRegisters lacks '$o' after the entry before it (wddm.c)";exit 1}
+    if($i -lt 0){Write-Output "FAIL source check: g_AdapterWitnessRegisters lacks '$o' after the entry before it (wddm.c)";Write-Output 'test-end: source checks exit 1';exit 1}
     $pos=$i+$o.Length
 }
 if($CommitBeforeWitness){
@@ -64,19 +67,19 @@ if($CommitBeforeWitness){
     $wddm=$wddm.Replace('    GfxRingsRetired(Device, &rings, &sdmaRingInUse);',$live + "`n" + '    GfxRingsRetired(Device, &rings, &sdmaRingInUse);')
 }
 $at=$wddm.IndexOf('static BOOLEAN WddmAdapterReset(')
-if($at -lt 0){Write-Output 'FAIL source check: WddmAdapterReset is not in wddm.c';exit 1}
+if($at -lt 0){Write-Output 'FAIL source check: WddmAdapterReset is not in wddm.c';Write-Output 'test-end: source checks exit 1';exit 1}
 $end=$wddm.IndexOf("`n}",$at)
 $body=$wddm.Substring($at,$end-$at)
 $steps=@('Bc250AdapterResetBeginAll(','GfxRingsRetired(Device, &rings, &sdmaRingInUse);','busy = Bc250AdapterBusyReasons(','if (busy != 0) {','InterlockedExchange(&Wddm->AdapterResetWindow, 1);','return TRUE;')
 $pos=0
 foreach($s in $steps){
     $i=$body.IndexOf($s,$pos)
-    if($i -lt 0){Write-Output "FAIL source check: WddmAdapterReset lacks '$s' after the step before it (wddm.c)";exit 1}
+    if($i -lt 0){Write-Output "FAIL source check: WddmAdapterReset lacks '$s' after the step before it (wddm.c)";Write-Output 'test-end: source checks exit 1';exit 1}
     $pos=$i+$s.Length
 }
 $first=$body.IndexOf('return TRUE;')
-if($first -ne $body.LastIndexOf('return TRUE;')){Write-Output 'FAIL source check: WddmAdapterReset has more than one success return (wddm.c)';exit 1}
-
+if($first -ne $body.LastIndexOf('return TRUE;')){Write-Output 'FAIL source check: WddmAdapterReset has more than one success return (wddm.c)';Write-Output 'test-end: source checks exit 1';exit 1}
+Write-Output 'test-end: source checks exit 0'
 Copy-Item "$PSScriptRoot\adapter_reset_test.c" (Join-Path $Out 'adapter_reset_test.c') -Force
 $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
 $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
@@ -84,5 +87,5 @@ $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Pa
 # MSVC like run_hang_recovery.ps1: the header is kernel code, built by the KMD's own compiler.
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /wd4201 /wd4127 /O2 /MT "/I$Out" "/I$repo\driver\kmd" "/I$repo\driver\shim\include" "/I$repo\third_party\linux-amdgpu" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\adapter_reset_test.exe" "$Out\adapter_reset_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'adapter reset host build failed'}
-& "$Out\adapter_reset_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\adapter_reset_test.exe"

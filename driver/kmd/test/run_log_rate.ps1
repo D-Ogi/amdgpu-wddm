@@ -8,6 +8,9 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 # every time; the load feed-forward's pair joins them only in a start that boosted, behind its own early return.
 # A fifth line that comes every 5 s shortens what the ring's 768 rotating lines hold of a session, so it fails
 # this gate. -FanBlockGrow is the control: it adds such a line to a COPY, never to the tree.
+# The test-start and test-end lines mark the source checks as a test step: a negative control that must fail here
+# names this step in tools\quality\quick.ps1 (Step), and gate_cache.py accepts only that failure (BD-237).
+Write-Output 'test-start: source checks'
 $fan=Get-Content "$repo\driver\kmd\fan.c" -Raw
 $quiet='if (!snap.Ctl.boost && snap.Ctl.boosts == 0) return;'
 if($FanBlockGrow){
@@ -22,8 +25,10 @@ $always=[regex]::Matches($halves[0],'GuardLog\(').Count
 $boost=[regex]::Matches($halves[1],'GuardLog\(').Count
 if($always -ne 4 -or $boost -ne 2){
     Write-Host "FAIL fan telemetry block: $always lines every 5 s and $boost after a boost, 4 and 2 expected (BD-097)"
-    throw "the fan telemetry block grew to $always + $boost lines"
+    Write-Output 'test-end: source checks exit 1'
+    exit 1
 }
+Write-Output 'test-end: source checks exit 0'
 Write-Host "fan telemetry block: $always lines every 5 s, $boost more only after a boost (BD-097)"
 # The header under test is copied next to the build, so that the negative control changes the copy and never the
 # tree (/I$Out comes first, so the copy wins). -NoGapReset is that control: a rate limit that does not notice a
@@ -42,5 +47,5 @@ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-O
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /wd4127 /O2 /MT "/I$Out" "/I$repo\driver\kmd" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\log_rate_test.exe" "$PSScriptRoot\log_rate_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'log rate host build failed'}
-& "$Out\log_rate_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\log_rate_test.exe"

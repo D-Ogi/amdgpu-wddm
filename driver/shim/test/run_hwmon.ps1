@@ -184,8 +184,9 @@ Invoke-Tool (Join-Path $bin 'link.exe') ($link +
 
 Write-Host 'run'
 $code = 0
+. "$here\..\..\kmd\test\host_native.ps1"
 foreach ($test in 'hwmon_test', 'hwmon_native_test', 'fan_test', 'fan_native_test') {
-    & "$Out\$test.exe"
+    Invoke-NativeStep "$Out\$test.exe"
     if ($LASTEXITCODE -ne 0) { $code = $LASTEXITCODE; break }
 }
 Write-Host "hardware monitor host tests exit code $code"

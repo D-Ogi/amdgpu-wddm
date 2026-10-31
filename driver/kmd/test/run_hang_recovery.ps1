@@ -27,8 +27,11 @@ if($NoBackendSwitch){
 # gfx.c. So gfx.c's GfxSoftRecover must hold GartLock, install and begin the gfx sequence before the kill loop and
 # put the previous backend back after it - the shape of GfxSubmitIb, and what 0.7.216.16 lacked. The body is
 # GfxSoftRecoverRing, which GfxSoftRecover (node 0) and GfxComputeSoftRecover (node 2) both call.
+# The test-start and test-end lines mark the source checks as a test step: a negative control that must fail here
+# names this step in tools\quality\quick.ps1 (Step), and gate_cache.py accepts only that failure (BD-237).
+Write-Output 'test-start: source checks'
 foreach($w in @('GfxSoftRecoverRing(Device, Vmid, FALSE,','GfxSoftRecoverRing(Device, Vmid, TRUE,')){
-    if(!$gfx.Contains($w)){Write-Output "FAIL source check: no '$w' in gfx.c";exit 1}
+    if(!$gfx.Contains($w)){Write-Output "FAIL source check: no '$w' in gfx.c";Write-Output 'test-end: source checks exit 1';exit 1}
 }
 $at=$gfx.IndexOf('static ULONG GfxSoftRecoverRing(')
 if($at -lt 0){throw 'source check: GfxSoftRecoverRing is not in gfx.c'}
@@ -38,9 +41,10 @@ $steps=@('ExAcquireFastMutex(&Device->GartLock);','adev->backend = &gfx->Sequenc
 $pos=0
 foreach($s in $steps){
     $i=$body.IndexOf($s,$pos)
-    if($i -lt 0){Write-Output "FAIL source check: GfxSoftRecoverRing lacks '$s' after the step before it (gfx.c)";exit 1}
+    if($i -lt 0){Write-Output "FAIL source check: GfxSoftRecoverRing lacks '$s' after the step before it (gfx.c)";Write-Output 'test-end: source checks exit 1';exit 1}
     $pos=$i+$s.Length
 }
+Write-Output 'test-end: source checks exit 0'
 $header=Get-Content "$repo\driver\kmd\hang_recovery.h" -Raw
 if($IgnoreFenceGuard){
     $live='    return (int)(aborted - lastCompleted) >= 0 && (int)(lastSubmitted - aborted) >= 0;'
@@ -75,5 +79,5 @@ $msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-O
 $sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
 & "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /wd4201 /wd4127 /O2 /MT "/I$Out" "/I$repo\driver\kmd" "/I$repo\driver\shim\include" "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/Fo$Out\" "/Fe$Out\hang_recovery_test.exe" "$Out\hang_recovery_test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
 if($LASTEXITCODE -ne 0){throw 'hang recovery host build failed'}
-& "$Out\hang_recovery_test.exe"
-exit $LASTEXITCODE
+. "$PSScriptRoot\host_native.ps1"
+Exit-NativeTest "$Out\hang_recovery_test.exe"

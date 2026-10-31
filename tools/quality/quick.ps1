@@ -540,7 +540,10 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
      & python "$PSScriptRoot\msvc_analysis.py" --database "$umdBuild\compile_commands.json" --match '/Device.cpp$' --out "$Out\analysis-umd" --clang-baseline "$PSScriptRoot\clang-umd-baseline.json" }
  # Host suites (DEFECTS BD-053): the rest of driver\*\test, each building its fixture from this tree into its own
  # -Out. They do not share outputs, so they run side by side. A suite marked Fails is the runner's own negative
- # control: it must fail by a check (a FAIL line in its log), not by a build error, or the control proves nothing.
+ # control: it must fail by a check, not by a build error, or the control proves nothing. The runner marks its test
+ # with test-start and test-end lines (driver\kmd\test\host_native.ps1), and gate_cache.py accepts a control only when
+ # the last test step ends with exit 1, has a FAIL line, and is the native test program or the Step that the entry
+ # names. A source check that fails first, or a crash after a FAIL line, is a FAIL of the gate (BD-237).
  $firmware="$Workspace\ref\linux-firmware__WARN-AMD-blobs-never-commit\amdgpu"
  if($env:BC250_LINK_TEST_ROM) {
   Check 'link-active-off' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_link_active_off.ps1" -Root $Workspace -Out "$Out\link-active-off" -Kits $Kits -Rom $env:BC250_LINK_TEST_ROM }
@@ -693,7 +696,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='keep-prune-ignore-order';s='driver\kmd\test\run_keep_prune.ps1';a=@('-Root',$Workspace,'-IgnoreOrder');Fails=$true}
   @{n='log-rate';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace)}
   @{n='log-rate-no-gap';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-NoGapReset');Fails=$true}
-  @{n='log-rate-fan-block';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-FanBlockGrow');Fails=$true}
+  @{n='log-rate-fan-block';s='driver\kmd\test\run_log_rate.ps1';a=@('-Root',$Workspace,'-FanBlockGrow');Fails=$true;Step='source checks'}
   @{n='dpm-log-cadence';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace)}
   @{n='dpm-log-cadence-no-idle';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-NoIdleCadence');Fails=$true}
   @{n='dpm-log-cadence-60s';s='driver\kmd\test\run_dpm_log_cadence.ps1';a=@('-Root',$Workspace,'-IdleSixtySeconds');Fails=$true}
@@ -703,14 +706,14 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='hang-recovery-shared-fence';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-SharedLastCompleted');Fails=$true}
   @{n='hang-recovery-gart-backend';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-GartBackend');Fails=$true}
   @{n='hang-recovery-count-refused';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-CountRefusedKills');Fails=$true}
-  @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true}
+  @{n='hang-recovery-no-backend-switch';s='driver\kmd\test\run_hang_recovery.ps1';a=@('-Root',$Workspace,'-NoBackendSwitch');Fails=$true;Step='source checks'}
   @{n='adapter-reset';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace)}
   @{n='adapter-reset-last-sample-only';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-LastSampleOnly');Fails=$true}
   @{n='adapter-reset-no-sdma-idle';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-IgnoreSdmaIdle');Fails=$true}
   @{n='adapter-reset-partial-begin';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-PartialBegin');Fails=$true}
   @{n='adapter-reset-complete-window';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CompleteNonEmptyWindow');Fails=$true}
-  @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true}
-  @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true}
+  @{n='adapter-reset-witness-order';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-ReorderWitnessTable');Fails=$true;Step='source checks'}
+  @{n='adapter-reset-commit-first';s='driver\kmd\test\run_adapter_reset.ps1';a=@('-Root',$Workspace,'-CommitBeforeWitness');Fails=$true;Step='source checks'}
   @{n='submit-watchdog-CountUnchangedAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountUnchangedAsActivity');Fails=$true}
   @{n='submit-watchdog-CountPrimeAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountPrimeAsActivity');Fails=$true}
   @{n='submit-watchdog-CountGapAsActivity';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-CountGapAsActivity');Fails=$true}
@@ -745,7 +748,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='submit-watchdog-report-with-pending';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-ReportWithPendingCompletion');Fails=$true}
   @{n='submit-watchdog-no-fence-range';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-NoFenceRange');Fails=$true}
   @{n='submit-watchdog-log-the-constant';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-LogTheConstant');Fails=$true}
-  @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true}
+  @{n='submit-watchdog-rearm-outside-lock';s='driver\kmd\test\run_submit_watchdog.ps1';a=@('-Root',$Workspace,'-RearmOutsideLock');Fails=$true;Step='source checks'}
   @{n='vmid-pool-ignore-retirement';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreRetirement');Fails=$true}
   @{n='vmid-pool-ignore-compute-ring';s='driver\kmd\test\run_vmid_pool.ps1';a=@('-Root',$Workspace,'-IgnoreComputeRing');Fails=$true}
   # The gfx-pipeline controls check their own pinned CHECK failure counts (run_gfx_pipeline.ps1) and exit 0 when the
@@ -780,7 +783,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   @{n='sdma-faults';s='driver\shim\test\run_sdma_faults.ps1';a=@('-Kits',$Kits)}
   @{n='smu-mailbox';s='driver\shim\test\run_smu.ps1';a=@('-Root',$Workspace)}
   @{n='board-sequence';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace)}
-  @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true}
+  @{n='board-sequence-changed-point';s='driver\shim\test\run_board_sequence.ps1';a=@('-Root',$Workspace,'-Mutation','gpu-point');Fails=$true;Step='compiled policy values'}
   @{n='smu-native-board-admission';s='driver\shim\test\run_smu_native.ps1';a=@('-Root',$Workspace,'-Mutation','board-admission');Fails=$true}
   # The clock escape's two gates (BD-062): the token in front of the write, and the published reading the open
   # READ rests on. Each mutation removes one of them, and the suite must fail by a check; a mutation that nobody
@@ -814,7 +817,7 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
   "$($runners.Count) runners, all gated, all self-located"
  }
  foreach($suite in $suites) {
-  $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails}
+  $gateJobs+=@{name=$suite.n;runner=$suite.s;arguments=@($suite.a);fails=[bool]$suite.Fails;step=$suite.Step}
  }
  $variables=@{}
  foreach($name in @('repo','Workspace','Out','Kits','Profile','icd','radvBuild','umdSource','umdBuild','routerHosted','firmware')) {
