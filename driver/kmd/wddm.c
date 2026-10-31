@@ -4084,9 +4084,14 @@ NTSTATUS WddmStart(_Inout_ BC250_DEVICE* Device)
     // Large pages for VRAM, as amdgpu maps it: a directory entry with PDE_PTE and the fragment of its range, 2 MiB at
     // level 1 (fact M808) and 1 GiB at level 2. Read before the first WddmMemoryLayout of this start, because the
     // layout, the GpuMmu caps and the translation of a LargePage entry must agree for the whole start.
-    //   0 (absent): the layout and the 4 KB mappings of earlier drivers. Off by default: no 1 GiB entry has been
-    //               read back on unit A, and the layout below costs the VRAM under the first 1 GiB boundary.
-    //   1: large pages, on the layout of 2.
+    //   0 (absent): the layout and the 4 KB mappings of earlier drivers. The code default, for a start without the
+    //               package's DefaultsV2 (driver/state/catalog.json).
+    //   1: large pages, on the layout of 2. The package default since tester.35 (catalog factory 1): on unit A it
+    //      took Qwen3-8B Q8_0 pp512 from 252 to 572 tokens/s with the same perplexity and test-backend-ops results,
+    //      and the layout costs only the VRAM under the first 1 GiB boundary. VidMm put 2 MiB pages at level 1
+    //      (63222 entries, none refused) and no 1 GiB page at level 2: the documented use of a large page is a
+    //      leaf table replaced by one entry (d3dkmddi.h DXGK_ALLOCATIONINFOFLAGS DisableLargePageMapping), so the
+    //      level 2 encoding below is kept for the contract but has no read-back on unit A.
     //   2: the layout of 1 (segment base on 1 GiB, 2 MiB placement) with 4 KB mappings. The control that tells
     //      the effect of the page size from the effect of the layout.
     {

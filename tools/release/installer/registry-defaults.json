@@ -45,6 +45,7 @@
       "HangRecoveryMode": 1,
       "HwmonBasePort": 0,
       "KeepLog": 0,
+      "LargePages": 1,
       "NotifyDpcInReport": 1
     },
     "desktop_router": {
