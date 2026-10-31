@@ -389,6 +389,17 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
     if (!is_device_local(flags)) {
         result = create_resident(dev, record, phys_bytes, phys_alignment, flags,
                                  BC250HSA_HEAP_GTT, gem_flags);
+        if (result != BC250HSA_OK) {
+            /* System memory has no second heap, so the caller gets the failure. The two
+             * budgets tell whether the non-local group was full (BD-277: a code object of
+             * an 8B model run did not load at a 12 GiB carve-out). */
+            bc250hsa_log(BC250HSA_LOG_INFO,
+                         "system memory allocation of %llu bytes (flags 0x%x) failed (%s)",
+                         (unsigned long long)phys_bytes, (unsigned)flags,
+                         bc250hsa_status_string(result));
+            log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, "local");
+            log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, "non-local");
+        }
     } else {
         /* Device-local memory goes to the carve-out while the local budget holds it, and
          * to system memory after that, as VidMm does for D3D12 resources past the local
