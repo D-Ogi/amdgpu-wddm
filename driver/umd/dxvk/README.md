@@ -383,7 +383,13 @@ What the new entries do:
   process may start as soon as the token is free.
 - `OfferResources1` performs the offer and drops the offer flags, so no allocation of this shell is
   decommitted. `ReclaimResources1` answers OK or DISCARDED per resource from the WDDM 2.0 reclaim
-  callback. NOT_COMMITTED cannot arise, because no offer allows a decommit.
+  callbacks. NOT_COMMITTED cannot arise, because no offer allows a decommit.
+- `ReclaimResources` and `ReclaimResources1` reclaim with `pfnReclaimAllocations2Cb` on the device's
+  surface paging queue and wait for its paging fence before they return (BD-283). The synchronous
+  `pfnReclaimAllocationsCb` is the path for a device without that queue, and the second try when
+  Reclaim2 refuses with a status other than removal. Every success returns S_OK: d3d11.dll removes the
+  device for any other status of these entries, success codes included (Reason 6). Each reclaim that
+  leaves the plain path writes one `BC250 BD-283` line with both callback answers and the fence.
 - `Present1` and `PresentMultiplaneOverlay1` behave as their DXGI 1.4 forms: one surface goes to the
   DXGI 1.2 Present, the rotation hint is a hint and is not taken, and an overlay present is refused.
 - The four shader-cache entries are unreachable. The adapter answers `D3DWDDM2_2DDICAPS_SHADERCACHE`

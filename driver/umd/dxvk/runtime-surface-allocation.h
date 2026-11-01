@@ -39,5 +39,9 @@ HRESULT map_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,D3DKMT_HA
 // Paging completion only; import additionally requires mapping.resident=true.
 HRESULT surface_paging_status(const SurfacePagingQueue &,const SurfaceGpuMapping &);
 HRESULT wait_surface_paging(RuntimeDevice &,const SurfacePagingQueue &,const SurfaceGpuMapping &,DWORD timeoutMs=10000);
+// A paging fence of this queue that is not a mapping's: S_OK done, S_FALSE pending, removal when the queue reads
+// the lost value. The wait is bounded like wait_surface_paging (BD-283: the fence of ReclaimAllocations2Cb).
+HRESULT paging_fence_status(const SurfacePagingQueue &,UINT64 fence);
+HRESULT wait_paging_fence(RuntimeDevice &,const SurfacePagingQueue &,UINT64 fence,DWORD timeoutMs=10000);
 // Only after engine/Present use and paging have retired. E_PENDING preserves VA.
 HRESULT unmap_runtime_surface(RuntimeDevice &,const SurfacePagingQueue &,SurfaceGpuMapping &);}

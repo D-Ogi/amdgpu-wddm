@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-dxgi-resources.h"
+#include "runtime-surface-allocation.h"
+#include <algorithm>
 #include <atomic>
 #include <climits>
 #include <cstdint>
@@ -86,6 +88,66 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
         });
     });
 }
+// BD-283: one line for each reclaim that did not take the plain path, the answers of both callbacks and the fence in
+// it, 16 for each process. The line is written for a recovered reclaim too (Reclaim2 refused, the synchronous
+// callback took it), which ddi_status_note leaves out because the entry returns S_OK.
+HRESULT reclaim_note(const char *name,HRESULT result,UINT count,HRESULT second,UINT64 fence,HRESULT wait,
+                     HRESULT first) {
+    static std::atomic_uint left{16};
+    unsigned n=left.load(std::memory_order_relaxed);
+    while (n && !left.compare_exchange_weak(n,n-1,std::memory_order_relaxed)) {}
+    if (!n) return result;
+    char text[256];
+    std::snprintf(text,sizeof(text),"BC250 BD-283: %s returns %08X: allocations=%u reclaim2=%08X fence=%llu "
+        "wait=%08X sync=%08X\n",name,unsigned(result),count,unsigned(second),static_cast<unsigned long long>(fence),
+        unsigned(wait),unsigned(first));
+    OutputDebugStringA(text);
+    amdgpu_wddm_log::print("%s",text);
+    return result;
+}
+// BD-283: the reclaim of the runtime surfaces in a batch, by allocation handle (BIND_PRESENT resources must be
+// reclaimed that way). The surfaces are mapped and made resident on the device's surface paging queue, so the
+// WDDM 2.0 callback ReclaimAllocations2Cb pages them in on that queue, and the entry waits for its paging fence
+// before it returns: "the allocation is guaranteed to be resident and usable on the GPU when the fence is signaled"
+// (display/offer-and-reclaim-changes.md), and the engine's later submissions do not wait on that queue. In
+// 20261101T230251Z the synchronous ReclaimAllocationsCb returned E_FAIL, a status its reference page does not
+// name, for the first reclaim of a ShellExperienceHost shown again after it was hidden, and d3d11.dll removed the
+// device for it (Reason 6). The synchronous callback stays as the path for a device without a surface queue or
+// without Reclaim2, and as the second try when Reclaim2 refuses with anything but removal. Every success is S_OK:
+// d3d11.dll removes the device for any other status of this entry, success codes included.
+// Unused answers read 1 (S_FALSE) in the line: "not called".
+HRESULT reclaim_allocations(DeviceOwner &owner,const char *name,std::vector<D3DKMT_HANDLE> &handles,
+                            std::vector<BOOL> &discarded) {
+    auto &runtime=owner.runtime();
+    const SurfacePagingQueue &queue=owner.surface_queue();
+    const UINT count=UINT(handles.size());
+    HRESULT second=S_FALSE,wait=S_FALSE,first=S_FALSE; UINT64 fence=0;
+    const bool queued=queue.queue && runtime.KTCallbacks.pfnReclaimAllocations2Cb;
+    if (queued) {
+        D3DDDICB_RECLAIMALLOCATIONS2 request{};
+        request.PagingQueue=queue.queue; request.NumAllocations=count;
+        request.HandleList=handles.data(); request.pDiscarded=discarded.data();
+        second=runtime.KTCallbacks.pfnReclaimAllocations2Cb(runtime.hDevice,&request);
+        fence=request.PagingFenceValue;
+        // E_PENDING is not on the page; it is read as MakeResidentCb defines it: accepted, wait for the fence.
+        if (SUCCEEDED(second) || second==E_PENDING) {
+            wait=wait_paging_fence(runtime,queue,fence);
+            if (wait==S_OK) return S_OK;
+            return reclaim_note(name,ddi_device_status(wait),count,second,fence,wait,first);
+        }
+        if (second==D3DDDIERR_DEVICEREMOVED) return reclaim_note(name,second,count,second,fence,wait,first);
+        std::fill(discarded.begin(),discarded.end(),FALSE);
+    }
+    if (!runtime.KTCallbacks.pfnReclaimAllocationsCb)
+        return queued ? reclaim_note(name,second,count,second,fence,wait,first) : E_NOTIMPL;
+    D3DDDICB_RECLAIMALLOCATIONS request{};
+    request.HandleList=handles.data(); request.NumAllocations=count; request.pDiscarded=discarded.data();
+    first=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+    // The synchronous callback leaves the allocations resident when it returns.
+    const HRESULT result=SUCCEEDED(first) ? S_OK : first;
+    if (result==S_OK && !queued) return S_OK;
+    return reclaim_note(name,result,count,second,fence,wait,first);
+}
 HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
     if (!args) { dxgi_entry_note("ReclaimResources",E_INVALIDARG); return E_INVALIDARG; }
     return entry("ReclaimResources",args->hDevice,[&](DeviceOwner &owner) {
@@ -94,16 +156,8 @@ HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
         if (FAILED(hr)) return hr;
         std::vector<BOOL> discarded(handles.size(),FALSE);
         if (!handles.empty()) {
-            auto &runtime=owner.runtime();
-            if (!runtime.KTCallbacks.pfnReclaimAllocationsCb) return E_NOTIMPL;
-            D3DDDICB_RECLAIMALLOCATIONS request{};
-            // BIND_PRESENT resources must be reclaimed by allocation handle.
-            request.HandleList=handles.data(); request.NumAllocations=UINT(handles.size());
-            request.pDiscarded=discarded.data();
-            hr=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+            hr=reclaim_allocations(owner,"ReclaimResources",handles,discarded);
             if (FAILED(hr)) return hr;
-            // This synchronous callback returns resident allocations. Reclaim2 would
-            // require retaining and waiting its paging fence before further GPU use.
         }
         if (args->pDiscarded)
             for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=slot[i]==UINT_MAX ? FALSE : discarded[slot[i]];
@@ -112,9 +166,9 @@ HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
 }
 // DXGI 1.6.1 (BD-099). OfferResources1 adds D3DDDI_OFFER_FLAGS, whose one flag is AllowDecommit: the
 // kernel may then give the pages back and the resource comes back without its contents, which Reclaim
-// reports as D3DDDI_RECLAIM_RESULT_NOT_COMMITTED. The shell does not take that offer. It reclaims with the
-// synchronous WDDM 2.0 callback, which has no paging fence of its own to wait for and no "not committed"
-// answer, so a decommitted allocation would have no result it could report. The offer itself, which is the
+// reports as D3DDDI_RECLAIM_RESULT_NOT_COMMITTED. The shell does not take that offer. Both reclaim callbacks
+// it uses (ReclaimAllocations2Cb and the synchronous ReclaimAllocationsCb, see reclaim_allocations) answer
+// with a discarded flag only, so a decommitted allocation would have no result it could report. The offer itself, which is the
 // work of the entry, goes to the kernel as before: the priority stays, and the allocation stays committed.
 // A flag the shell does not take is not a reason to refuse the offer: DXGI turns a failed Offer into
 // DXGI_ERROR_DRIVER_INTERNAL_ERROR and removes the device (see the batch helper above). The flags are
@@ -126,8 +180,8 @@ HRESULT APIENTRY offer_resources1(DXGI_DDI_ARG_OFFERRESOURCES1 *args) {
     older.Resources=args->Resources; older.Priority=args->Priority;
     return offer(&older);
 }
-// ReclaimResources1 answers with a result per resource. The kernel callback is the WDDM 2.0 one, which
-// answers with a discarded flag per allocation: a reclaimed resource is OK, a discarded one DISCARDED.
+// ReclaimResources1 answers with a result per resource. The kernel callbacks (reclaim_allocations) answer
+// with a discarded flag per allocation: a reclaimed resource is OK, a discarded one DISCARDED.
 // NOT_COMMITTED cannot arise, because no offer of this shell allows a decommit (offer_resources1). An
 // engine-private resource is a hint only, as in the batch helper above, so it reports OK.
 HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
@@ -138,13 +192,7 @@ HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
         if (FAILED(hr)) return hr;
         std::vector<BOOL> discarded(handles.size(),FALSE);
         if (!handles.empty()) {
-            auto &runtime=owner.runtime();
-            if (!runtime.KTCallbacks.pfnReclaimAllocationsCb) return E_NOTIMPL;
-            D3DDDICB_RECLAIMALLOCATIONS request{};
-            // BIND_PRESENT resources must be reclaimed by allocation handle.
-            request.HandleList=handles.data(); request.NumAllocations=UINT(handles.size());
-            request.pDiscarded=discarded.data();
-            hr=runtime.KTCallbacks.pfnReclaimAllocationsCb(runtime.hDevice,&request);
+            hr=reclaim_allocations(owner,"ReclaimResources1",handles,discarded);
             if (FAILED(hr)) return hr;
         }
         if (args->pResults)
