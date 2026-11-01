@@ -98,6 +98,41 @@ fail. `install.ps1` therefore registers "Lab emergency channel" and removes the 
 A known wart: the comment at the top of `listener.ps1` still names the old task. The file is byte-identical to
 the one installed on the unit, and it stays that way until the next deployment of the listener.
 
+## The sshd watch
+
+The channel heals a stall only when something on this PC asks for it. Until now that was `scripts/sshd-heal.sh` in
+a game-session script, about three minutes into the stall. A stall outside a session stayed until a person
+noticed it. `sshd-watch.ps1` watches on the unit itself, from the scheduled task **"Lab sshd watch"** (SYSTEM, at
+startup, started again after a failure):
+
+- Once a minute it connects to 127.0.0.1:22 and reads the banner. A connection that completes and gives no byte
+  in 10 s is the stall signature. A refusal, a close, a connect timeout or a wrong first line is logged, and the
+  watch does not act on it.
+- After two stall readings in a row, 20 s apart, it runs `scripts/sshd-stall-forensics.ps1` (at most 150 s) and
+  then restarts sshd with the command of `restart-sshd`. The service must be Running. At least 600 s must have
+  passed since the last heal, and the limit is 3 heals in an hour.
+- It is one process and starts no child process between two probes, because a process-spawn loop is one half of
+  the stall. Each probe is a connection without authentication. The sshd penalty counts it (1 s each, no block
+  below 15 s) and the OpenSSH log records it, so do not probe faster.
+
+The watch is the one resident part of this kit. The listener's rule that nothing runs between requests stays as
+it is: the watch is a separate task and a separate process, and it opens no port.
+
+Its files are in `C:\BC250\emergency\sshd-watch`: `watch.log` (a line for each change of the result, an hourly
+count and each action), `state.json` (the last probe), `forensics-<utc>.txt`, and `stop`, which ends the watch.
+Read them with `lab-emerg.py get` or `tail`.
+
+```
+python tools\win\target.py push tools\win\lab-emerg\sshd-watch.ps1 tools\win\lab-emerg\scripts\sshd-stall-forensics.ps1 --to C:\BC250\tmp
+python tools\win\target.py ps tools\win\lab-emerg\install-sshd-watch.ps1
+python tools\win\target.py ps tools\win\lab-emerg\install-sshd-watch.ps1 -Uninstall
+python -m unittest discover -s tools\win\lab-emerg -p "test_*.py"     the host test, quick.ps1 check lab-emerg-watch
+```
+
+The host test runs the watch under the local Windows PowerShell 5.1 against a stand-in sshd on 127.0.0.1. Its
+heals are log-only and its forensics script is a stub, so it restarts no service. The watch is not an operator
+tool for an outage, so the operator copy below does not need it.
+
 ## scripts/
 
 Helpers that the channel carries to the unit with `ps`. They are evidence tools from the sshd stall
