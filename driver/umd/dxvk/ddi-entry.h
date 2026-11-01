@@ -18,13 +18,18 @@ inline HRESULT ddi_map_status(HRESULT hr,bool doNotWait) {
 // identifiable without smuggling an illegal status past the runtime. ddi_class_status is the last
 // guard: a status the page does not allow becomes the page's own general failure, and an entry whose
 // page allows no status at all reports nothing.
+// The "M14 DDI error" lines a process may still write. A namespace variable, so the host test can see that an
+// ordinary answer (ddi_report_is_failure) writes no line.
+inline std::atomic_uint ddi_error_line_budget{32};
 inline void report_ddi_error(DeviceOwner &owner,HRESULT status,
     DdiErrorClass policy=DdiErrorClass::removed_only,
     const std::source_location where=std::source_location::current()) {
     const HRESULT reported=ddi_class_status(policy,status);
-    static std::atomic_uint remaining{32};
-    unsigned count=remaining.load(std::memory_order_relaxed);
-    while(count && !remaining.compare_exchange_weak(count,count-1,std::memory_order_relaxed)){}
+    unsigned count=0;
+    if (ddi_report_is_failure(policy,reported)) {
+        count=ddi_error_line_budget.load(std::memory_order_relaxed);
+        while(count && !ddi_error_line_budget.compare_exchange_weak(count,count-1,std::memory_order_relaxed)){}
+    }
     if(count) {
         char message[768];
         std::snprintf(message,sizeof(message),

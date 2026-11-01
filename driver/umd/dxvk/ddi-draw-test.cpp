@@ -208,6 +208,30 @@ int main() {
             ddi_class_status(DdiErrorClass::still_drawing,DXGI_ERROR_WAS_STILL_DRAWING)!=D3DDDIERR_DEVICEREMOVED ||
             ddi_class_status(DdiErrorClass::still_drawing,ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true))!=
                 DXGI_DDI_ERR_WASSTILLDRAWING) fail(__LINE__);
+        // BD-283: WASSTILLDRAWING of a still-drawing entry (Map with DONOTWAIT, GetData) is an answer, not a failure;
+        // the same status in any other class, and every other status of that class, stays a failure.
+        if (ddi_report_is_failure(DdiErrorClass::still_drawing,DXGI_DDI_ERR_WASSTILLDRAWING) ||
+            !ddi_report_is_failure(DdiErrorClass::still_drawing,D3DDDIERR_DEVICEREMOVED) ||
+            !ddi_report_is_failure(DdiErrorClass::removed_only,DXGI_DDI_ERR_WASSTILLDRAWING) ||
+            !ddi_report_is_failure(DdiErrorClass::nothing,S_OK) ||
+            ddi_report_is_failure(DdiErrorClass::still_drawing,ddi_class_status(DdiErrorClass::still_drawing,
+                ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true))) ||
+            ddi_report_is_failure(DdiErrorClass::still_drawing,ddi_class_status(DdiErrorClass::still_drawing,
+                query_ddi_status(S_FALSE)))) fail(__LINE__);
+        // And through report_ddi_error itself: the runtime receives exactly DXGI_DDI_ERR_WASSTILLDRAWING (0x887B0001)
+        // once, and no "M14 DDI error" line is written (the line budget does not move). A device removal of the same
+        // class still writes its line and reaches the runtime as removal.
+        RuntimeDomain::Scope scope(owner.runtime().domain);
+        const unsigned errorsBefore=errors,budgetBefore=ddi_error_line_budget.load();
+        allowedError=DXGI_DDI_ERR_WASSTILLDRAWING;
+        report_ddi_error(owner,ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true),DdiErrorClass::still_drawing);
+        report_ddi_error(owner,query_ddi_status(S_FALSE),DdiErrorClass::still_drawing);
+        if (static_cast<HRESULT>(0x887B0001)!=DXGI_DDI_ERR_WASSTILLDRAWING || errors!=errorsBefore+2 ||
+            ddi_error_line_budget.load()!=budgetBefore) fail(__LINE__);
+        allowedError=D3DDDIERR_DEVICEREMOVED;
+        report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing);
+        if (errors!=errorsBefore+3 || ddi_error_line_budget.load()!=budgetBefore-1) fail(__LINE__);
+        errors=errorsBefore;   // the entry tests below count from here
     }
     if (!format_allows_not_supported(DXGI_FORMAT_Y410) || !format_allows_not_supported(DXGI_FORMAT_AYUV) ||
         format_allows_not_supported(DXGI_FORMAT_R1_UNORM) || format_allows_not_supported(DXGI_FORMAT_R8G8B8A8_UNORM) ||

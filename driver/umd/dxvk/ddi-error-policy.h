@@ -109,6 +109,16 @@ constexpr HRESULT ddi_class_status(DdiErrorClass policy,HRESULT raw) {
     if (ddi_status_allowed(policy,mapped)) return mapped;
     return ddi_class_internal_failure(policy);
 }
+// BD-283: whether a reported status is a failure, or an ordinary answer that the entry's page names. A Map with
+// D3D10_DDI_MAP_FLAG_DONOTWAIT on a resource the GPU still uses, and a GetData of a query that has not finished,
+// answer DXGI_DDI_ERR_WASSTILLDRAWING through pfnSetErrorCb: the runtime gives it to the caller, which tries again,
+// and the device stays alive. That answer is no error: it writes no "M14 DDI error" line and uses none of their
+// budget (the run of 20261101T213734Z had four such lines from a ShellExperienceHost map, all of them this answer).
+// Every other report stays a failure, the S_OK of a class that may report nothing too: its entry failed and says
+// nothing to the runtime, so the line is the only record of it.
+constexpr bool ddi_report_is_failure(DdiErrorClass policy,HRESULT reported) {
+    return !(policy==DdiErrorClass::still_drawing && reported==DXGI_DDI_ERR_WASSTILLDRAWING);
+}
 // The class of the DDI entry this thread is inside. enter_context sets it and restores it, so the one
 // report that happens outside an entry's own code can still obey the entry's page: the host bridge
 // detects a lost device deep in the submission path and reports it from there. A thread that is in no
