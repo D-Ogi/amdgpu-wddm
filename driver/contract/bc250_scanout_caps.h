@@ -63,8 +63,10 @@
 // (bc250_scanout_mpo_geometry). The kernel driver's check is the authority for every plane configuration:
 // the user-mode caps below are advisory, and a configuration the kernel driver refuses is composed by DWM.
 #define BC250_SCANOUT_CAPS_MPO 0x8u
-// The kernel driver also scans out an overlay plane on a second pipe (MaxOverlayPlanes 2). No kernel driver
-// sets it yet; until one does, the user-mode MaxPlanes is 1.
+// The kernel driver reports two planes for the source (DXGK_DRIVERCAPS MaxOverlayPlanes 2), so the user-mode
+// MaxPlanes is 2 as well (bc250_scanout_mpo_planes). Without it both counts are 1. The lab kernel driver sets it
+// with LabScaledPlane bit 2 as a lab question: its check still refuses a second plane, and DWM composes such a
+// set. A release kernel driver sets it only when an overlay plane on a second pipe scans out (MPO step S3).
 #define BC250_SCANOUT_CAPS_MPO_PLANE1 0x10u
 
 // The plane limits that the user-mode multiplane-overlay caps report and that the shells apply to a scan-out
@@ -136,4 +138,15 @@ static __inline int bc250_scanout_mpo_geometry(const struct bc250_scanout_caps* 
     if (!bc250_scanout_mpo_side(width, caps->post_width) || !bc250_scanout_mpo_side(height, caps->post_height))
         return 0;
     return width <= caps->post_width || width <= BC250_MPO_MAX_SHRINK_WIDTH;
+}
+
+// BD-223: the planes of the source, one count for both halves of the contract. The kernel driver reports it as
+// DXGK_DRIVERCAPS MaxOverlayPlanes, and the compositor's front as MaxPlanes and the group's NumPlanes. 0 without
+// BC250_SCANOUT_CAPS_MPO (no multiplane overlay), 2 with BC250_SCANOUT_CAPS_MPO_PLANE1, else 1 (plane 0 alone).
+// The lab arms of 2026-10-29 had 2 in the kernel and 1 in the front: the two counts disagreed, and dxgkrnl made
+// no check call.
+static __inline unsigned int bc250_scanout_mpo_planes(unsigned int flags)
+{
+    if (!(flags & BC250_SCANOUT_CAPS_MPO)) return 0u;
+    return (flags & BC250_SCANOUT_CAPS_MPO_PLANE1) ? 2u : 1u;
 }

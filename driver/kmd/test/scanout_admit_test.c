@@ -396,6 +396,12 @@ int main(void)
         CHECK(!bc250_scanout_mpo_geometry(&flip, 1920u, 1080u));   // no MPO bit
         CHECK(!bc250_scanout_mpo_geometry(&lone, 1920u, 1080u));   // MPO without DIRECT_FLIP is no trailer
         CHECK(!bc250_scanout_mpo_geometry(NULL, 1920u, 1080u));
+        // The plane count of both halves (DXGK_DRIVERCAPS MaxOverlayPlanes and the front's MaxPlanes): 0 without
+        // MPO, 1 for plane 0 alone, 2 with the pipe 1 plane. MPO_PLANE1 alone is no multiplane overlay.
+        CHECK(bc250_scanout_mpo_planes(0u) == 0u && bc250_scanout_mpo_planes(BC250_SCANOUT_CAPS_DIRECT_FLIP) == 0u);
+        CHECK(bc250_scanout_mpo_planes(BC250_SCANOUT_CAPS_MPO_PLANE1 | BC250_SCANOUT_CAPS_DIRECT_FLIP) == 0u);
+        CHECK(bc250_scanout_mpo_planes(mpo.flags) == 1u);
+        CHECK(bc250_scanout_mpo_planes(mpo.flags | BC250_SCANOUT_CAPS_MPO_PLANE1) == 2u);
         // The shells' rule: the new geometry turns the geometry clause only, and every other clause stays.
         CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
               BC250_SCANOUT_PRIMARY_ADMITTED);

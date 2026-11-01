@@ -981,27 +981,60 @@ static void FrontTableTests13()
     void **slots11 = (void **)&front11;
     const size_t relocateAt = offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnRelocateDeviceFuncs) / sizeof(void *);
     const size_t msaaAt = offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnCheckMultisampleQualityLevels) / sizeof(void *);
+    const size_t formatAt = offsetof(D3DWDDM1_3DDI_DEVICEFUNCS, pfnCheckFormatSupport) / sizeof(void *);
     unsigned nulls = 0, copies = 0, own = 0, differ = 0;
     for (unsigned i = 0; i < kDeviceEntries13; ++i) {
         const void *v = table[i];
         if (!v) { ++nulls; printf("  WDDM 1.3 device entry %u is null\n", i); }
         else if (isCopy(v)) ++copies;
         else ++own;
-        if (i < kDeviceEntries && i != relocateAt && i != msaaAt && v != slots11[i]) {
+        if (i < kDeviceEntries && i != relocateAt && i != msaaAt && i != formatAt && v != slots11[i]) {
             ++differ;
             printf("  WDDM 1.3 device entry %u is not the D3D11_1 fill's entry\n", i);
         }
     }
     CHECK(nulls == 0, "%u of the %u WDDM 1.3 device entries are null", nulls, (unsigned)kDeviceEntries13);
     CHECK(differ == 0, "%u head entries of the WDDM 1.3 table differ from the D3D11_1 fill", differ);
-    // 74 field copies: the 75 of D3D11_1 less pfnCheckMultisampleQualityLevels, whose Flags argument needs a
-    // body. 90 own bodies: the 80 of D3D11_1, that one, and the nine appended entries.
+    // 73 field copies: the 75 of D3D11_1 less pfnCheckMultisampleQualityLevels, whose Flags argument needs a
+    // body, and pfnCheckFormatSupport, which adds the overlay format bit (BD-223 gate 2). 91 own bodies: the 80 of
+    // D3D11_1, those two, and the nine appended entries.
     printf("  front WDDM 1.3 device table: %u entries, %u field copies, %u own bodies\n",
            (unsigned)kDeviceEntries13, copies, own);
-    CHECK(copies == 74 && own == 90, "the WDDM 1.3 table splits %u field copies and %u own bodies, expected 74 and 90",
+    CHECK(copies == 73 && own == 91, "the WDDM 1.3 table splits %u field copies and %u own bodies, expected 73 and 91",
           copies, own);
     CHECK(front13->pfnCheckMultisampleQualityLevels && !isCopy((void *)front13->pfnCheckMultisampleQualityLevels),
           "pfnCheckMultisampleQualityLevels at WDDM 1.3 is the hosted entry, which takes no Flags argument");
+    CHECK(front13->pfnCheckFormatSupport && !isCopy((void *)front13->pfnCheckFormatSupport) &&
+              isCopy((void *)front11.pfnCheckFormatSupport),
+          "pfnCheckFormatSupport: the WDDM 1.3 table must have the front's body and the D3D11_1 table the hosted entry");
+    // The rule of that body, over the trailer: the bit only with MPO and DIRECT_FLIP, and only for a row the plane
+    // scans out under the same flags (RGB10A2 only with SOURCE_MODE_10BIT, BD-224).
+    {
+        bc250_scanout_caps c = {};
+        c.magic = BC250_SCANOUT_CAPS_MAGIC;
+        c.version = BC250_SCANOUT_CAPS_VERSION;
+        c.size = BC250_SCANOUT_CAPS_BYTES;
+        c.post_width = 1920;
+        c.post_height = 1200;
+        const UINT bit = D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY;
+        c.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        CHECK(FrontOverlayFormatSupport(c, DXGI_FORMAT_B8G8R8A8_UNORM) == 0, "the overlay bit without MPO");
+        c.flags |= BC250_SCANOUT_CAPS_MPO;
+        CHECK(FrontOverlayFormatSupport(c, DXGI_FORMAT_B8G8R8A8_UNORM) == bit &&
+                  FrontOverlayFormatSupport(c, DXGI_FORMAT_R8G8B8A8_UNORM) == bit,
+              "the 8-bit plane formats have no overlay bit");
+        CHECK(FrontOverlayFormatSupport(c, DXGI_FORMAT_R10G10B10A2_UNORM) == 0,
+              "RGB10A2 has the overlay bit under an 8-bit source mode");
+        CHECK(FrontOverlayFormatSupport(c, DXGI_FORMAT_R16G16B16A16_FLOAT) == 0 &&
+                  FrontOverlayFormatSupport(c, DXGI_FORMAT_R32_FLOAT) == 0 &&
+                  FrontOverlayFormatSupport(c, DXGI_FORMAT_UNKNOWN) == 0,
+              "a format the plane does not scan out has the overlay bit");
+        c.flags |= BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT;
+        CHECK(FrontOverlayFormatSupport(c, DXGI_FORMAT_R10G10B10A2_UNORM) == bit,
+              "RGB10A2 has no overlay bit under a 10-bit source mode");
+        c.flags = BC250_SCANOUT_CAPS_MPO;
+        CHECK(FrontOverlayFormatSupport(c, DXGI_FORMAT_B8G8R8A8_UNORM) == 0, "the overlay bit without DIRECT_FLIP");
+    }
     CHECK((void *)front13->pfnRelocateDeviceFuncs != (void *)front11.pfnRelocateDeviceFuncs,
           "pfnRelocateDeviceFuncs at WDDM 1.3 is the D3D11_1 body, which fills only the shorter table");
     struct Named { const void *p; const char *name; };
@@ -2116,9 +2149,82 @@ static void FrontWddm13Checks(const Opened &o, bool admitted, const char *(*reco
           group.MaxStretchFactor, group.MaxShrinkFactor, group.OverlayCaps, group.StereoCaps);
     groupCaps.GroupIndex = 1;
     CHECK(dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == E_INVALIDARG, "group 1 of one group was not refused");
+    groupCaps.GroupIndex = 0;
     ScanoutFlags = BC250_SCANOUT_CAPS_MPO;
     CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == DXGI_ERROR_UNSUPPORTED,
           "the MPO bit without DIRECT_FLIP admitted a plane");
+    // The front's count is the kernel driver's (DXGK_DRIVERCAPS MaxOverlayPlanes = bc250_scanout_mpo_planes of the
+    // same trailer bits, WddmMpoFlags in wddm.c): the arms of 2026-10-29 had 2 there and 1 here.
+    for (unsigned flags : {BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO,
+                           BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_MPO_PLANE1}) {
+        ScanoutFlags = flags;
+        CHECK(dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps) == S_OK &&
+                  overlayCaps.MultiplaneOverlayCaps.MaxPlanes == bc250_scanout_mpo_planes(flags) &&
+                  dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps) == S_OK &&
+                  groupCaps.MultiplaneOverlayGroupCaps.NumPlanes == bc250_scanout_mpo_planes(flags),
+              "flags %02x: the front reports %u and %u planes, the kernel driver %u", flags,
+              overlayCaps.MultiplaneOverlayCaps.MaxPlanes, groupCaps.MultiplaneOverlayGroupCaps.NumPlanes,
+              bc250_scanout_mpo_planes(flags));
+    }
+    // Each caps answer is one line in the front log: DWM asks again at each composition rebuild, and only a change
+    // of the answer writes a line.
+    {
+        const std::wstring logPath = Layout + L"\\routelogs\\front-" + ExeBase() + L"-" +
+                                     std::to_wstring(GetCurrentProcessId()) + L".log";
+        auto answers = [&](const char *entry) {
+            const std::string log = ReadAll(logPath);
+            const std::string key = std::string("dxgi caps answer ") + entry + " ";
+            size_t n = 0;
+            for (size_t at = log.find(key); at != std::string::npos; at = log.find(key, at + 1)) ++n;
+            return n;
+        };
+        const size_t capsBefore = answers("pfnGetMultiplaneOverlayCaps");
+        const size_t groupBefore = answers("pfnGetMultiplaneOverlayGroupCaps");
+        for (int i = 0; i < 100; ++i) {
+            dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps);
+            dxgi.pfnGetMultiplaneOverlayGroupCaps(&groupCaps);
+        }
+        CHECK(answers("pfnGetMultiplaneOverlayCaps") == capsBefore &&
+                  answers("pfnGetMultiplaneOverlayGroupCaps") == groupBefore,
+              "100 equal answers wrote %Iu and %Iu lines", answers("pfnGetMultiplaneOverlayCaps") - capsBefore,
+              answers("pfnGetMultiplaneOverlayGroupCaps") - groupBefore);
+        ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO;
+        for (int i = 0; i < 20; ++i) dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps);
+        CHECK(answers("pfnGetMultiplaneOverlayCaps") == capsBefore + 1, "a changed trailer wrote %Iu lines, expected 1",
+              answers("pfnGetMultiplaneOverlayCaps") - capsBefore);
+        ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP;
+        for (int i = 0; i < 20; ++i) dxgi.pfnGetMultiplaneOverlayCaps(&overlayCaps);
+        CHECK(answers("pfnGetMultiplaneOverlayCaps") == capsBefore + 2, "a refusal wrote %Iu lines in all, expected 2",
+              answers("pfnGetMultiplaneOverlayCaps") - capsBefore);
+        const std::string log = ReadAll(logPath);
+        CHECK(Has(log, "dxgi caps answer pfnGetMultiplaneOverlayCaps hr=00000000 planes=2 trailer=0x00000019") &&
+                  Has(log, "dxgi caps answer pfnGetMultiplaneOverlayCaps hr=00000000 planes=1 trailer=0x00000009") &&
+                  Has(log, "dxgi caps answer pfnGetMultiplaneOverlayGroupCaps hr=80070057 planes=0"),
+              "the caps answers are not in the front log: %s", log.c_str());
+    }
+    // Gate 2: the format support of the compositor's device. The hosted answer (7 from the double) gets the overlay
+    // bit for a plane format while the trailer has MPO, and is the hosted answer unchanged otherwise.
+    {
+        const UINT bit = D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY;
+        UINT fmt = 0;
+        ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS | BC250_SCANOUT_CAPS_MPO;
+        recordReset();
+        dev.pfnCheckFormatSupport(hDevice, DXGI_FORMAT_B8G8R8A8_UNORM, &fmt);
+        CHECK(fmt == (7u | bit) && strstr(record(), "check-format format=87") != nullptr,
+              "BGRA8 under MPO answered %08x: %s", fmt, record());
+        dev.pfnCheckFormatSupport(hDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, &fmt);
+        CHECK(fmt == 7u, "FP16, which the plane does not scan out, answered %08x", fmt);
+        dev.pfnCheckFormatSupport(hDevice, DXGI_FORMAT_R10G10B10A2_UNORM, &fmt);
+        CHECK(fmt == 7u, "RGB10A2 under an 8-bit source mode answered %08x", fmt);
+        dev.pfnCheckFormatSupport(hDevice, DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM, &fmt);
+        CHECK(fmt == (UINT)D3D10_DDI_FORMAT_SUPPORT_NOT_SUPPORTED, "a NOT_SUPPORTED answer became %08x", fmt);
+        ScanoutFlags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS;
+        dev.pfnCheckFormatSupport(hDevice, DXGI_FORMAT_B8G8R8A8_UNORM, &fmt);
+        CHECK(fmt == 7u, "BGRA8 without MPO answered %08x", fmt);
+        const std::string log = frontLog();
+        CHECK(Has(log, "check_format_support adds MULTIPLANE_OVERLAY fmt=87"),
+              "the first overlay format bit is not in the front log: %s", log.c_str());
+    }
     ScanoutFlags = savedFlags;
     // The present reaches the hosted driver's own overlay present with the runtime's argument, and only it:
     // no pfnPresent first, which would be a second present to dxgkrnl.

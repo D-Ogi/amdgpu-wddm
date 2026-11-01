@@ -54,7 +54,7 @@ change the catalog. The start log has a line for the read: `lab: scaled plane se
 | --- | --- |
 | 0 | The MPO caps and the Check answer. Without this bit, Check says "not supported" and the caps stay as before |
 | 1 | The VSync goes to the OS as the MPO type |
-| 2 | `MaxOverlayPlanes` 2 in place of 1. A lab question only: Check still refuses a second plane |
+| 2 | `MaxOverlayPlanes` 2 in place of 1, and `MPO_PLANE1` in the caps trailer, so that the front of the compositor also reports 2. A lab question only: Check still refuses a second plane |
 
 The start log has `wddm: scaled plane 0x<value> (LabScaledPlane 0x<value>, handshake <0|1>)`.
 
