@@ -83,6 +83,9 @@ $libs="$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
 $candidateTree=$repo
 if($Mutation -eq 'gpu-point') {
     $candidateTree="$Out\mutated-policy"
+    # A tree from an earlier run must go first. Copy-Item of a directory onto an existing directory puts the copy
+    # inside it (include\include), so the old top-level headers stayed and the mutated arm compiled against them.
+    if(Test-Path -LiteralPath $candidateTree){Remove-Item -LiteralPath $candidateTree -Recurse -Force}
     New-Item -ItemType Directory -Force "$candidateTree\driver\shim" | Out-Null
     Copy-Item "$repo\driver\shim\include" "$candidateTree\driver\shim\include" -Recurse -Force
     Copy-Item "$repo\driver\shim\generated" "$candidateTree\driver\shim\generated" -Recurse -Force
