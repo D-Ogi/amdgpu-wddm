@@ -730,6 +730,81 @@ void reparse_tests() {
     clear_sink_env();
 }
 
+// BD-283: a module whose first print came before the switch was on joins the file that another module of this
+// process opens later, at most one look a second, and says in its first line why it had no file. A LateJoin of the
+// case's own and a clock given by the case, so nothing of the memoized sink is touched.
+void late_join_tests() {
+    clear_sink_env();
+    set_switch_absent();
+    const detail::Sink off=detail::open_sink();
+    CHECK(off.file==nullptr);
+    CHECK(off.why!=nullptr && !std::strcmp(off.why,"the switch was off"));
+    CHECK(off.decided>0);
+    set_switch_seconds(-60);
+    const detail::Sink over=detail::open_sink();
+    CHECK(over.file==nullptr && over.why && !std::strcmp(over.why,"the recording time was over"));
+
+    // No marker yet: no sink, and the next look waits a second, whatever the callers do in between.
+    detail::LateJoin j;
+    const unsigned long long t=detail::now_filetime();
+    CHECK(detail::late_join(off,j,t)==nullptr);
+    CHECK(j.next.load()==t+detail::kLateJoinPeriod);
+    CHECK(detail::late_join(off,j,t+detail::kLateJoinPeriod-1)==nullptr);
+    CHECK(j.next.load()==t+detail::kLateJoinPeriod);
+
+    // A marker of another process (inherited) is not this process's recording: no join, and the looks go on.
+    const std::string shared=games_folder()+"\\late.log";
+    DeleteFileA(shared.c_str());
+    FILE* const first=detail::open_append(shared.c_str());
+    CHECK(first!=nullptr);
+    if(first){std::fprintf(first,"the ICD's line\n");std::fclose(first);}
+    const unsigned long long until=detail::now_filetime()+300*kSecond;
+    char other[48]{},mine[48]{};
+    CHECK(detail::marker_value(other,sizeof(other),GetCurrentProcessId()+1,until));
+    CHECK(detail::marker_value(mine,sizeof(mine),GetCurrentProcessId(),until));
+    set_env(amdgpu_wddm_log::game_log::kVariable,("file:"+shared).c_str());
+    set_env(amdgpu_wddm_log::game_log::kMarkerVariable,other);
+    CHECK(detail::late_join(off,j,t+detail::kLateJoinPeriod)==nullptr);
+    CHECK(j.next.load()==t+2*detail::kLateJoinPeriod);
+
+    // The marker of this process: the module joins that file under the marker's bounds, with one line that names
+    // the first decision, and every later call gives the same sink with no further look.
+    set_env(amdgpu_wddm_log::game_log::kMarkerVariable,mine);
+    const size_t before=files_in(games_folder()).size();
+    const detail::Sink* s=detail::late_join(off,j,t+2*detail::kLateJoinPeriod);
+    CHECK(s!=nullptr && s==&j.joined);
+    CHECK(j.next.load()==detail::kNoMoreLooks);
+    CHECK(files_in(games_folder()).size()==before);             // no file of its own
+    if(s){
+        CHECK(s->file!=nullptr && s->until==until && s->cap==amdgpu_wddm_log::game_log::kFileCapBytes);
+        CHECK(detail::late_join(off,j,t)==s);                   // once joined, the clock no longer matters
+        std::fprintf(s->file,"the late module's line\n");
+        std::fflush(s->file);
+        const std::string text=read_file(shared);
+        CHECK(has(text,"the ICD's line"));
+        CHECK(has(text,"joins this file late; its first print, at "));
+        CHECK(has(text,"found no recording: the switch was off (error 0)"));
+        CHECK(has(text,"the late module's line"));
+        std::fclose(s->file);
+    }
+
+    // A sink that no later look may change: a file of its own, or a decision without a reason.
+    const detail::Sink plain{stderr,0,0};
+    detail::LateJoin unused;
+    CHECK(detail::late_join(plain,unused,t)==&plain);
+    const detail::Sink final_off{nullptr,0,0};
+    CHECK(detail::late_join(final_off,unused,t)==nullptr);
+    CHECK(unused.next.load()==0 && unused.file.load()==nullptr);
+
+    // The marker of this process with a file that cannot be joined: one look, no sink, and no more looks.
+    detail::LateJoin refused;
+    set_env(amdgpu_wddm_log::game_log::kVariable,nullptr);
+    CHECK(detail::late_join(off,refused,t)==nullptr);
+    CHECK(refused.next.load()==detail::kNoMoreLooks);
+    CHECK(detail::late_join(off,refused,t+10*detail::kLateJoinPeriod)==nullptr);
+    clear_sink_env();
+}
+
 // The one case through the memoized sink of this process: print opens the switch's file, writes the line and
 // counts it, and flush reaches the file. It runs last, because the sink is read once.
 void print_tests() {
@@ -808,6 +883,7 @@ int main() {
         inherited_marker_tests();
         joined_marker_tests();
         reparse_tests();
+        late_join_tests();
         print_tests();
         failure_chain_tests();
         RegOverridePredefKey(HKEY_LOCAL_MACHINE,nullptr);
