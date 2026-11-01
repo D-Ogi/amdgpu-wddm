@@ -1,0 +1,63 @@
+A      0 ENV role=parent pid=37096 exe=capshare.exe os=10.0.26200 session=1 cell=wgc size=256x256 format=B8G8R8A8_UNORM bound_s=60 relaunched=0
+A      0 ENV cmdline="P:\BC-250\scratch\build\capture-share\capshare.exe" --cell wgc --interactive-ok --bound 60 --peer-exe P:\BC-250\scratch\build\capture-share\capshare-peer.exe --out P:\BC-250\scratch\t36\f6-installer\bd084\devpc\wgc.txt --json P:\BC-250\scratch\t36\f6-installer\bd084\devpc\wgc.json
+A      0 STAGE adapter
+A     16 ADAPTER index=0 luid=0:000267c7 vendor=0x10de device=0x2684 flags=0x0 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=24142 desc="NVIDIA GeForce RTX 4090"
+A     16 ADAPTER index=1 luid=0:000285d1 vendor=0x1414 device=0x008c flags=0x2 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=0 desc="Microsoft Basic Render Driver"
+A     16 ADAPTER chosen index=0
+A     16 STAGE device
+A    172 DEVICE api=11 fl=12_1 (consumer)
+A    172 MODULE when=device C:\WINDOWS\SYSTEM32\dxgi.dll
+A    172 MODULE when=device C:\WINDOWS\SYSTEM32\d3d11.dll
+A    172 MODULE when=device C:\WINDOWS\SYSTEM32\d3d12.dll
+A    172 MODULE when=device C:\WINDOWS\SYSTEM32\dwmapi.dll
+A    172 MODULE when=device C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvldumdx.dll
+A    172 MODULE when=device C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvwgf2umx.dll
+A    172 MODULES when=device total=56 graphics=6 route=nvidia umds=nvldumdx.dll+nvwgf2umx.dll
+A    172 STAGE spawn-producer
+A    172 PEER started pid=75864 exe=P:\BC-250\scratch\build\capture-share\capshare-peer.exe
+A    172 STAGE producer-device
+B    188 ENV role=peer pid=75864 exe=capshare-peer.exe os=10.0.26200 session=1 cell=wgc size=256x256 format=B8G8R8A8_UNORM bound_s=30 relaunched=0
+B    188 ENV cmdline="P:\BC-250\scratch\build\capture-share\capshare-peer.exe" --role peer --cell wgc --size 256x256 --format bgra8 --sync cpu --handle nt --delay-copies 128 --delay-size 2048 --gate-ms 300 --tolerance 0 --producer d3d12 --interactive-ok --t0 367304390 --deadline 367362390 --out "P:\BC-250\scratch\t36\f6-installer\bd084\devpc\wgc.txt" --luid 0:267c7 --ipc 538,544
+B    188 STAGE adapter
+B    203 ADAPTER index=0 luid=0:000267c7 vendor=0x10de device=0x2684 flags=0x0 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=24142 desc="NVIDIA GeForce RTX 4090"
+B    203 ADAPTER index=1 luid=0:000285d1 vendor=0x1414 device=0x008c flags=0x2 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=0 desc="Microsoft Basic Render Driver"
+B    203 ADAPTER chosen by luid 0:000267c7
+B    203 STAGE window
+B    203 STAGE producer-device
+B    453 PRODUCER d3d12 swap chain 256x256 format=B8G8R8A8_UNORM flip-discard buffers=2
+B    453 STAGE first-frame
+B    453 MODULE when=producer C:\WINDOWS\SYSTEM32\dxgi.dll
+B    453 MODULE when=producer C:\WINDOWS\SYSTEM32\d3d11.dll
+B    453 MODULE when=producer C:\WINDOWS\SYSTEM32\dwmapi.dll
+B    453 MODULE when=producer C:\WINDOWS\SYSTEM32\d3d12.dll
+B    453 MODULE when=producer C:\WINDOWS\SYSTEM32\D3D12Core.dll
+B    453 MODULE when=producer C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvldumdx.dll
+B    453 MODULE when=producer C:\WINDOWS\System32\DriverStore\FileRepository\nv_dispi.inf_amd64_e980fd2c7c4fce8e\nvwgf2umx.dll
+B    453 MODULE when=producer C:\WINDOWS\SYSTEM32\dcomp.dll
+B    453 MODULES when=producer total=63 graphics=8 route=nvidia umds=nvldumdx.dll+nvwgf2umx.dll
+B    453 -> HELLO route=nvidia fl=12_2 umds=nvldumdx.dll+nvwgf2umx.dll
+B    453 STAGE placement
+A    453 STAGE producer-window
+B    922 -> READY hwnd=21ab18ca x=48 y=48 w=256 h=256 occluders=0 by=- cursor=1129,551
+B    922 STAGE presenting-a
+A    922 STAGE wgc-init
+A   1000 WGC item 256x256
+A   1000 STAGE wgc-frame-pool
+A   1016 STAGE wgc-start
+A   1016 STAGE wgc-frames-a
+A   1031 WGC first frame content=256x256
+A   1031 TEXTURE11 wgc-frame 256x256 format=B8G8R8A8_UNORM mips=1 array=1 samples=1 usage=0 bind=0x28 cpu=0x0 misc=0x802
+A   1031 CHECK side=A what=A pass=1 at=-1,-1 got=rgba:00000000 want=rgba:00000000 diff=0 total=65536 maxd=0 content=- note=-
+A   1031 -> SWITCH
+A   1031 STAGE producer-switch-to-b
+B   1031 STAGE presenting-b
+B   1031 -> SWITCHED frames=1
+A   1031 STAGE wgc-frames-b
+A   1063 CHECK side=A what=B pass=1 at=-1,-1 got=rgba:00000000 want=rgba:00000000 diff=0 total=65536 maxd=0 content=- note=-
+A   1063 STAGE end-peer
+A   1063 -> DONE
+B   1063 PRODUCER end after 1 frames (DONE)
+B   1094 EXIT code=0
+A   1125 PEER exit=0x00000000
+A   1125 VERDICT cell=wgc result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:nvidia,B:nvidia fl=A:12_1,B:12_2 checks=A:A=pass,A:B=pass elapsed_ms=1125 decided_ms=1063 note=- window=48,48,256x256 producer=d3d12 frames=2 mismatched_frames=0 a_at_ms=1031 b_at_ms=1063 peer_exit=0x00000000
+A   1125 EXIT code=0

@@ -806,3 +806,12 @@ facts:
     evidence: "[INT8 dot lowering, lab](../evidence/windows/2026-10-29-int8-dot-lowering/RESULT.md)"
     edges:
       - {"type": "uses", "to": "M928"}
+  - id: M935
+    status: MEASURED
+    date: "2026-10-31"
+    claim: "DXGI Desktop Duplication reads a window that a D3D12 flip swap chain of our driver presents under GPU desktop composition on unit A, and the Windows.Graphics.Capture window item refuses that window. Unit A, 22631, the tester.35 release (kernel driver 40.7.216.107), 24 CU, `tools/win/capture-share` FA186A67 in the logged-on session: the `dda` cell passes (consumer D3D11 on the gpu11 route and producer D3D12, both at FL 12_1, 5 frames, image A and image B found exactly, `dda_system_memory=0`, no access lost, no wait timeout), and the `wgc` cell stops at `IGraphicsCaptureItemInterop::CreateForWindow` with 0x80070057 before any frame, for a 256x256 `WS_POPUP` window with `WS_EX_TOPMOST | WS_EX_NOACTIVATE` that is up with 0 occluders. The same client bytes and window style pass `wgc` on a development PC with 26200 and another vendor's driver"
+    status_text: "MEASURED (unit A, one run of each cell; development PC positive control for wgc)"
+    detail: "The `wgc` runs differ in the OS build and in the driver, so these runs do not separate the cause of the refusal: the window rule of WGC on 22631, or the capture path of the compositor on our route. The client options `--producer-window app` (an activated taskbar window) and `--wgc-item monitor` (the monitor item, read at the window's place) split the cell in one session with no restart. Criterion M15.13 still needs a `wgc` pass on unit A"
+    evidence: "[Capture cells on the GPU desktop route](../evidence/windows/2026-10-31-bd084-capture-cells/README.md)"
+    edges:
+      - {"type": "uses", "to": "M802"}

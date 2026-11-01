@@ -1,0 +1,175 @@
+A     16 ENV role=parent pid=12024 exe=capshare.exe os=10.0.22631 session=1 cell=dda size=256x256 format=B8G8R8A8_UNORM bound_s=100 relaunched=1
+A     16 ENV cmdline="C:\BC250\tmp\capshare\capshare.exe" --cell dda --interactive-ok --bound 100 --format bgra8 --peer-exe C:\BC250\tmp\capshare\capshare-peer.exe --out C:\BC250\tmp\capshare\dda-20261031T214627Z.txt --json C:\BC250\tmp\capshare\dda-20261031T214627Z.json --stderr C:\BC250\tmp\capshare\dda-20261031T214627Z-err.txt --dbwin dwm.exe  --relaunched --t0 15526187
+A     16 DBWIN listening names=1
+A     16 STAGE adapter
+A     16 ADAPTER index=0 luid=0:000084e1 vendor=0x1002 device=0x13fe flags=0x0 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=7904 desc="BC-250 GPU (amdgpu-wddm)"
+A     16 ADAPTER index=1 luid=0:000095aa vendor=0x1414 device=0x008c flags=0x2 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=0 desc="Microsoft Basic Render Driver"
+A     16 ADAPTER chosen index=0
+A     16 STAGE device
+A    141 DEVICE api=11 fl=12_1 (consumer)
+A    141 MODULE when=device C:\Windows\SYSTEM32\dxgi.dll
+A    141 MODULE when=device C:\Windows\SYSTEM32\dwmapi.dll
+A    141 MODULE when=device C:\Windows\SYSTEM32\d3d11.dll
+A    141 MODULE when=device C:\Windows\SYSTEM32\d3d12.dll
+A    141 MODULE when=device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\desktop\bc250d3d_router.dll
+A    141 MODULE when=device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d11\amdgpu_wddm_d3d11.dll
+A    141 MODULE when=device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d11\amdgpu_wddm_dxvk.dll
+A    141 MODULE when=device C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d11\amdgpu_wddm_radv_d3d11.dll
+A    141 MODULE when=device C:\Windows\system32\DComp.DLL
+A    141 MODULES when=device total=48 graphics=9 route=gpu11 umds=bc250d3d_router.dll+amdgpu_wddm_d3d11.dll+amdgpu_wddm_dxvk.dll+amdgpu_wddm_radv_d3d11.dll
+A    141 ODS M14: instance policy sparse=1 source=0 status=C0000034 result=00000000 
+A    141 ODS bc250d3d_router pid=12024 exe=capshare.exe entry=OpenAdapter10_2 route=gpu reason=app-default fallback=0 gpu_hr=00000000 hr=00000000 module=C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d11\amdgpu_wddm_d3d11.dll app_mode=gpu-default mode_source=registry gpu_source=router-directory cpu_source=router-directory render_on_cpu=unset 
+A    141 ODS M14 DDI versions: 11_1 + WDDM2_0 (OS WDDM ceiling; wddm22-ddi-off=0) 
+A    141 ODS M14: GetCaps type 151 not answered 
+A    141 ODS M14: CalcPrivateDeviceSize Interface=000B0020 Version=00090000 Flags=00000040 
+A    141 ODS M14: CreateDevice Interface=000B0020 Version=00090000 Flags=00000040 
+A    141 ODS amdgpu-wddm settings: api=d3d11 app=capshare.exe FrameRateLimit=unset VSync=unset Anisotropy=unset MaxFrameLatency=unset PerformanceOverlay=unset RenderOnCpu=unset FsrUpgrade=unset 
+A    141 ODS M14 engine warning: D3D11DeviceFeatures: Some formats not supported for resource sharing 
+A    141 ODS BC250 BD-253: CreateDevice runtime=00000252779C96D8 identity=00000252779F6648 handle-of-kept-device=0 kept-devices=0 short-lost-devices=0 
+A    141 ODS amdgpu-wddm recent-launch api=2 outcome=recorded us=2268 
+A    141 STAGE spawn-producer
+A    188 PEER started pid=13444 exe=C:\BC250\tmp\capshare\capshare-peer.exe
+A    188 STAGE producer-device
+B    203 ENV role=peer pid=13444 exe=capshare-peer.exe os=10.0.22631 session=1 cell=dda size=256x256 format=B8G8R8A8_UNORM bound_s=30 relaunched=0
+B    203 ENV cmdline="C:\BC250\tmp\capshare\capshare-peer.exe" --role peer --cell dda --size 256x256 --format bgra8 --sync cpu --handle nt --delay-copies 128 --delay-size 2048 --gate-ms 300 --tolerance 0 --producer d3d12 --interactive-ok --t0 15526187 --deadline 15624187 --out "C:\BC250\tmp\capshare\dda-20261031T214627Z.txt" --luid 0:84e1 --ipc 274,3d4
+B    203 STAGE adapter
+B    203 ADAPTER index=0 luid=0:000084e1 vendor=0x1002 device=0x13fe flags=0x0 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=7904 desc="BC-250 GPU (amdgpu-wddm)"
+B    203 ADAPTER index=1 luid=0:000095aa vendor=0x1414 device=0x008c flags=0x2 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=0 desc="Microsoft Basic Render Driver"
+B    203 ADAPTER chosen by luid 0:000084e1
+B    203 STAGE window
+B    219 STAGE producer-device
+B    375 PRODUCER d3d12 swap chain 256x256 format=B8G8R8A8_UNORM flip-discard buffers=2
+B    375 ODS amdgpu-wddm settings: api=d3d12 app=capshare-peer.exe FrameRateLimit=unset VSync=unset Anisotropy=unset MaxFrameLatency=unset PerformanceOverlay=unset RenderOnCpu=unset FsrUpgrade=unset 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 1: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 2: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 3: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 4: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 5: engine 00000000, Support1 0x1010f0, Support2 0; answer 0 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 6: engine 00000000, Support1 0x9013fb, Support2 0; answer 0x4501 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 7: engine 00000000, Support1 0x9011fb, Support2 0; answer 0x500 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 8: engine 00000000, Support1 0x9011fb, Support2 0; answer 0x500 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 9: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 10: engine 00000000, Support1 0x2fcd3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 11: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 12: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 13: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 14: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 15: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 16: engine 00000000, Support1 0x2f4d3fb, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 17: engine 00000000, Support1 0x2f051fb, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 18: engine 00000000, Support1 0x2f051fb, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 19: engine 00000000, Support1 0x1010b0, Support2 0; answer 0 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 20: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 21: engine 00000000, Support1 0x4d017b0, Support2 0; answer 0x4011 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 22: engine 00000000, Support1 0xd011b0, Support2 0; answer 0x10 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 23: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 24: engine 00000000, Support1 0x3fcd3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 25: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 89: engine 80004005, Support1 0, Support2 0; answer 0x80000000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 27: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 28: engine 00000000, Support1 0x3fcd3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 29: engine 00000000, Support1 0x1fcd3f1, Support2 0x200; answer 0x1401f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 30: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 31: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 32: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 33: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 34: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 35: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 36: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 37: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 38: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 39: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 40: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 41: engine 00000000, Support1 0x6f4d7fb, Support2 0x2ff; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 42: engine 00000000, Support1 0x2f051ff, Support2 0x3ff; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 43: engine 00000000, Support1 0x2f051fb, Support2 0x2ff; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 44: engine 00000000, Support1 0x1010b0, Support2 0; answer 0 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 45: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 46: engine 00000000, Support1 0x4d017b0, Support2 0; answer 0x4011 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 47: engine 00000000, Support1 0xd011b0, Support2 0; answer 0x10 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 48: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 49: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 50: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 51: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 52: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu-wddm recent-launch api=1 outcome=recorded us=1396 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 53: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 54: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 55: engine 00000000, Support1 0x3110b0, Support2 0; answer 0x8 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 56: engine 00000000, Support1 0x6f4d7f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 57: engine 00000000, Support1 0x2f051f7, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 58: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 59: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 60: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 61: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 62: engine 00000000, Support1 0x2f051f3, Support2 0x3c0; answer 0x3271a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 63: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x3471f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 64: engine 00000000, Support1 0x2f051f3, Support2 0x2c0; answer 0x3071a 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 70: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 71: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 72: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 73: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 74: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 75: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 76: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 77: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 78: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 79: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 80: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 81: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 82: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 83: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 84: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 90: engine 00000000, Support1 0x1010f0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 87: engine 00000000, Support1 0x3fcd3f3, Support2 0x2c0; answer 0x1451f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 91: engine 00000000, Support1 0x1fcd3f1, Support2 0x200; answer 0x1401f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 92: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 88: engine 00000000, Support1 0x2f4d3f3, Support2 0x2c0; answer 0x1451f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 93: engine 00000000, Support1 0xf4d3f1, Support2 0x200; answer 0x1401f 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 94: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 95: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 96: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 97: engine 00000000, Support1 0x1010e0, Support2 0x200; answer 0x10000 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 98: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS amdgpu_wddm_d3d12 engine-ddi: CheckFormatSupport: format 99: engine 00000000, Support1 0x9013e0, Support2 0x200; answer 0x14001 
+B    375 ODS M15.14 scanout source-geometry switch=default chain=256x256 pitch=1024 format=87 caps=00000003 source=1920x1200 forcecpu=0 desktop=gpu desktop_pid=1928 modes=not-offered 
+B    375 STAGE first-frame
+B    391 MODULE when=producer C:\Windows\SYSTEM32\dxgi.dll
+B    391 MODULE when=producer C:\Windows\SYSTEM32\d3d11.dll
+B    391 MODULE when=producer C:\Windows\SYSTEM32\d3d12.dll
+B    391 MODULE when=producer C:\Windows\SYSTEM32\dwmapi.dll
+B    391 MODULE when=producer C:\Windows\SYSTEM32\D3D12Core.dll
+B    391 MODULE when=producer C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d12\amdgpu_wddm_d3d12.dll
+B    391 MODULE when=producer C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d12\amdgpu_wddm_vkd3d.dll
+B    391 MODULE when=producer C:\Windows\System32\DriverStore\FileRepository\bc250kmd.inf_amd64_08837bf8316aa034\d3d12\amdgpu_wddm_radv_d3d12.dll
+B    391 MODULE when=producer C:\Windows\system32\DComp.DLL
+B    391 MODULES when=producer total=45 graphics=9 route=d3d12 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv_d3d12.dll
+B    391 -> HELLO route=d3d12 fl=12_1 umds=amdgpu_wddm_d3d12.dll+amdgpu_wddm_vkd3d.dll+amdgpu_wddm_radv_d3d12.dll
+B    391 STAGE placement
+A    391 STAGE producer-window
+B    859 -> READY hwnd=607c4 x=48 y=48 w=256 h=256 occluders=0 by=- cursor=1133,855
+B    859 STAGE presenting-a
+A    859 STAGE find-output
+A    859 OUTPUT index=0 attached=1 desktop=0,0,1920,1200 rotation=1
+A    859 OUTPUT chosen bits_per_color=8 color_space=0 max_luminance=270
+A    859 STAGE duplicate-output
+A    875 DUPLICATION mode=1920x1200 format=B8G8R8A8_UNORM rotation=1 desktop_image_in_system_memory=0
+A    875 STAGE dda-frames-a
+A    875 TEXTURE11 dda-frame 1920x1200 format=B8G8R8A8_UNORM mips=1 array=1 samples=1 usage=0 bind=0x28 cpu=0x0 misc=0x2900
+A    875 DDA first frame accumulated=0 last_present=0 pointer_visible=1
+A    875 FRAME 1 mismatch what=A pass=0 at=0,0 got=rgba:00000000 want=rgba:eb33c3ff diff=65536 total=65536 maxd=255 content=zero note=-
+A    922 CHECK side=A what=A pass=1 at=-1,-1 got=rgba:00000000 want=rgba:00000000 diff=0 total=65536 maxd=0 content=- note=-
+A    922 -> SWITCH
+A    922 STAGE producer-switch-to-b
+B    922 STAGE presenting-b
+B    922 -> SWITCHED frames=1
+A    922 STAGE dda-frames-b
+A    938 CHECK side=A what=B pass=1 at=-1,-1 got=rgba:00000000 want=rgba:00000000 diff=0 total=65536 maxd=0 content=- note=-
+A    938 STAGE end-peer
+A    938 -> DONE
+B    938 PRODUCER end after 1 frames (DONE)
+B    984 EXIT code=0
+A    984 PEER exit=0x00000000
+A   1016 DBWIN summary recorded=0 sources=- others_counted=104
+A   1016 VERDICT cell=dda result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:d3d12 fl=A:12_1,B:12_1 checks=A:A=pass,A:B=pass elapsed_ms=1016 decided_ms=938 note=- window=48,48,256x256 producer=d3d12 dda_system_memory=0 dda_wait_timeouts=0 dda_access_lost=0 frames=5 mismatched_frames=3 a_at_ms=922 b_at_ms=938 peer_exit=0x00000000 dbwin_recorded=0
+A   1016 EXIT code=0
