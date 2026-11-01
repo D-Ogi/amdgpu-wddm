@@ -76,8 +76,8 @@ struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
                 RuntimeDomain::Scope scope(storage->owner->runtime().domain);
                 report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
             }
-        }else if constexpr(std::is_same_v<R,HRESULT>)return E_NOTIMPL;
-        else return 0;
+        }else if constexpr(std::is_same_v<R,HRESULT>)return ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement"));
+        else { ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement answers 0")); return 0; }
     }
 };
 constexpr char kSetHardwareProtection[]="SetHardwareProtection";
@@ -263,11 +263,19 @@ const DXGI1_2_DDI_BASE_FUNCTIONS &dxgi_base() { static const auto table=make_dxg
 HRESULT APIENTRY present1(DXGI_DDI_ARG_PRESENT1 *a) {
     // BD-170: a Present may fail only with device removal (present-contract.h); any other status removes the
     // device too, as a driver error.
-    if (!a || !a->hDevice) return D3DDDIERR_DEVICEREMOVED;
+    if (!a || !a->hDevice)
+        return ddi_status_note("Present1",D3DDDIERR_DEVICEREMOVED,DdiInputs("args=%u hDevice=%u",unsigned(a!=nullptr),0u));
     // Composition may batch several resources. DXGI_DDI_ARG_PRESENT1 requires one callback using only
     // the last source handle. The common Present submits all pending engine work and waits for every
     // published rendering context before that callback; do not present each resource separately.
-    if (!a->SurfacesToPresent || !a->phSurfacesToPresent) return D3DDDIERR_DEVICEREMOVED;
+    // BD-283: the reference page says SurfacesToPresent "Must not be zero" and that phSurfacesToPresent "is always a
+    // valid handle for a resource to display" (DXGI_DDI_ARG_PRESENT1, dxgiddi.h, WDK 10.0.26100). An empty or missing
+    // array is therefore not a request this entry can serve, and it stays a device removal. The line records it, so a
+    // runtime that does send one is seen on the lab and not guessed at.
+    if (!a->SurfacesToPresent || !a->phSurfacesToPresent)
+        return ddi_status_note("Present1",D3DDDIERR_DEVICEREMOVED,DdiInputs("SurfacesToPresent=%u array=%u dst=%u "
+            "flags=%08X interval=%u dirty-rects=%u",a->SurfacesToPresent,unsigned(a->phSurfacesToPresent!=nullptr),
+            unsigned(a->hDstResource!=0),unsigned(a->Flags.Value),unsigned(a->FlipInterval),a->DirtyRects));
     const auto &last=a->phSurfacesToPresent[a->SurfacesToPresent-1];
     DXGI_DDI_ARG_PRESENT p{};
     p.hDevice=a->hDevice; p.hSurfaceToPresent=last.hSurface;
@@ -277,12 +285,14 @@ HRESULT APIENTRY present1(DXGI_DDI_ARG_PRESENT1 *a) {
     return dxgi_base().pfnPresent(&p);
 }
 HRESULT APIENTRY present_duration(DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT *a) {
-    if (!a || !a->hDevice) return E_INVALIDARG;
+    if (!a || !a->hDevice)
+        return ddi_status_note("CheckPresentDurationSupport",E_INVALIDARG,DdiInputs("args=%u hDevice=0",unsigned(a!=nullptr)));
     // No custom present durations: both neighbours are zero.
     a->ClosestSmallerDuration=0; a->ClosestLargerDuration=0; return S_OK;
 }
 HRESULT APIENTRY trim_residency(DXGI_DDI_ARG_TRIMRESIDENCYSET *a) {
-    if (!a || !a->hDevice) return E_INVALIDARG;
+    if (!a || !a->hDevice)
+        return ddi_status_note("TrimResidencySet",E_INVALIDARG,DdiInputs("args=%u hDevice=0",unsigned(a!=nullptr)));
     // Residency belongs to the hosted ICD's allocations and the KMD; the shell keeps no residency set
     // of its own to trim. The request is satisfied by doing nothing.
     return S_OK;
@@ -290,14 +300,17 @@ HRESULT APIENTRY trim_residency(DXGI_DDI_ARG_TRIMRESIDENCYSET *a) {
 // BD-198: the overlay queries answer "none" with S_OK, as unsupported_overlay_caps does (ddi-dxgi-table.h): d3d11
 // removes the device for any other status (GetMultiplaneOverlayGroupCaps, CheckMultiPlaneOverlayColorSpaceSupport).
 HRESULT APIENTRY unsupported_group_caps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS *a) {
-    if (!a) return E_INVALIDARG;
+    if (!a) return ddi_status_note("GetMultiplaneOverlayGroupCaps",E_INVALIDARG,DdiInputs("args=0"));
     a->MultiplaneOverlayGroupCaps=DXGI_DDI_MULTIPLANE_OVERLAY_GROUP_CAPS{}; return S_OK;
 }
 HRESULT APIENTRY unsupported_color_space(DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYCOLORSPACESUPPORT *a) {
-    if (!a) return E_INVALIDARG;
+    if (!a) return ddi_status_note("CheckMultiplaneOverlayColorSpaceSupport",E_INVALIDARG,DdiInputs("args=0"));
     a->Supported=FALSE; return S_OK;
 }
-HRESULT APIENTRY unsupported_overlay_present1(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY1 *) { return DXGI_ERROR_UNSUPPORTED; }
+HRESULT APIENTRY unsupported_overlay_present1(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY1 *a) {
+    return ddi_status_note("PresentMultiplaneOverlay1",DXGI_ERROR_UNSUPPORTED,DdiInputs("args=%u planes=%u",
+        unsigned(a!=nullptr),a ? unsigned(a->PresentPlaneCount) : 0u));
+}
 }
 // The plane slice is the only field the WDDM 2.0 arguments add, and it belongs to Tex2D alone. Every
 // other member is the D3D11.1 member, field for field.

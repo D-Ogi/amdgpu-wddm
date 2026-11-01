@@ -34,6 +34,9 @@
 //   no marker and AMDGPU_WDDM_LOG set: in the lab flavour the process asked for the lines itself, and nothing
 //     bounds them; in the release flavour the switch decides, as with the variable unset.
 // A marker that cannot be read, or one longer than the buffer, counts as absent.
+// A module whose first reading of the switch found no recording looks again at most once a second: it joins the file
+// of a marker of this process that another module set later, or, without such a marker, opens a file of its own when
+// the switch is on now (BD-283, detail::late_join).
 //
 // Three bounds hold a switch somebody forgets: every print checks the instant (one read of the shared user-data
 // page), the file stops at kFileCapBytes with one last line saying so, and the file is created once per process,
@@ -79,6 +82,12 @@ struct Sink {
     FILE* file;
     unsigned long long until;       // the UTC FILETIME after which nothing is written; 0: no time bound
     unsigned long long cap;         // bytes this file may hold; 0: no size bound
+    // A sink without a file that the timed switch decided (BD-283): why it found no recording, the UTC FILETIME of
+    // that decision and the Windows error of a file that could not be made. Null: no later look may change the
+    // decision (a file, an explicit AMDGPU_WDDM_LOG, or a marker of this process that was already the answer).
+    const char* why=nullptr;
+    unsigned long long decided=0;
+    unsigned long error=0;
 };
 
 // What a print must do. Pure, so the host test drives every case without a clock.
@@ -312,12 +321,21 @@ inline void this_module_path(char* out,size_t size) noexcept {
 
 // The timed switch: the instant, the folder, one new file, the first line, and AMDGPU_WDDM_LOG for the engines
 // this process loads later.
+// A sink without a file, with the reason, for a later look (late_join below).
+inline Sink no_recording(const char* why,unsigned long error=0) noexcept {
+    Sink s{nullptr,0,0};
+    s.why=why;
+    s.decided=now_filetime();
+    s.error=error;
+    return s;
+}
+
 inline Sink open_game_log() noexcept {
     const unsigned long long until=game_log_until();
-    if(!until)return {nullptr,0,0};
-    if(now_filetime()>=until)return {nullptr,0,0};
+    if(!until)return no_recording("the switch was off");
+    if(now_filetime()>=until)return no_recording("the recording time was over");
     char folder[MAX_PATH]{};
-    if(!game_log_folder(folder,sizeof(folder)))return {nullptr,0,0};
+    if(!game_log_folder(folder,sizeof(folder)))return no_recording("no ProgramData folder");
     char image[MAX_PATH]{};
     const DWORD n=GetModuleFileNameA(nullptr,image,sizeof(image));
     char name[96]{};
@@ -327,13 +345,15 @@ inline Sink open_game_log() noexcept {
     const unsigned long pid=GetCurrentProcessId();
     char path[MAX_PATH]{};
     FILE* out=nullptr;
+    unsigned long error=0;
     for(unsigned attempt=0;attempt<8&&!out;++attempt){
         char file[128]{};
-        if(!log_file_name(file,sizeof(file),name,pid,utc,attempt))return {nullptr,0,0};
-        if(_snprintf_s(path,sizeof(path),_TRUNCATE,"%s\\%s",folder,file)<=0)return {nullptr,0,0};
+        if(!log_file_name(file,sizeof(file),name,pid,utc,attempt))return no_recording("no file name");
+        if(_snprintf_s(path,sizeof(path),_TRUNCATE,"%s\\%s",folder,file)<=0)return no_recording("no file name");
         out=open_new(path);
+        if(!out)error=GetLastError();
     }
-    if(!out)return {nullptr,0,0};
+    if(!out)return no_recording("no file could be made",error);
     // The other modules of this process read the switch themselves; point them at the file this sink just made,
     // and mark it with this process and this instant, so that they take the same bounds and a process the game
     // starts later does not take the file at all.
@@ -415,15 +435,113 @@ inline std::atomic<int>& closed() noexcept {
     static std::atomic<int> flag{0};
     return flag;
 }
+
+// BD-283: the late join. The sink is decided at the first print of this module, once per process. A process that
+// reaches this module before the switch is on (a shell host that Windows starts ahead of time and keeps for hours)
+// then keeps no file for its whole life, while a module that decides later, RADV's ICD at the first device, opens
+// the file and records alone; the lines of this module, the DDI statuses among them, are lost. So a sink that the
+// switch decided without a file looks again, at most once a second: when another module has marked this process
+// since then, this module joins that file, as open_sink does; without such a marker and with the switch on now, it
+// opens a file of its own (late_join below). Its first line there says why the first decision found no recording.
+inline constexpr unsigned long long kLateJoinPeriod=10000000ull;   // one second in FILETIME units
+inline constexpr unsigned long long kNoMoreLooks=~0ull;
+
+struct LateJoin {
+    std::atomic<FILE*> file{nullptr};           // published after joined is written, and then never changed
+    Sink joined{nullptr,0,0};
+    std::atomic<unsigned long long> next{0};    // the FILETIME of the next look; kNoMoreLooks: none
+};
+
+inline LateJoin& late() noexcept {
+    static LateJoin j;
+    return j;
+}
+
+inline void filetime_text(char* out,size_t size,unsigned long long t) noexcept {
+    FILETIME f{static_cast<DWORD>(t),static_cast<DWORD>(t>>32)};
+    SYSTEMTIME u{};
+    if(!FileTimeToSystemTime(&f,&u)){_snprintf_s(out,size,_TRUNCATE,"%s","(no time)");return;}
+    _snprintf_s(out,size,_TRUNCATE,"%04u-%02u-%02uT%02u:%02u:%02u.%03uZ",u.wYear,u.wMonth,u.wDay,u.wHour,u.wMinute,
+        u.wSecond,u.wMilliseconds);
+}
+
+// The late file of this module: its first line names the first decision, then the sink is published.
+inline const Sink* publish_late(const Sink& decided,LateJoin& j,const Sink& late,const char* how) noexcept {
+    char module[MAX_PATH]{};
+    this_module_path(module,sizeof(module));
+    char when[40]{};
+    filetime_text(when,sizeof(when),decided.decided);
+    char first[640]{};
+    const int length=_snprintf_s(first,sizeof(first),_TRUNCATE,
+        "amdgpu-wddm game log: module %s %s; its first print, at %s, found no recording: %s (error %lu)\n",
+        module[0]?module:"(unknown)",how,when,decided.why,decided.error);
+    write_text(late.file,first,length);
+    j.joined=late;
+    j.file.store(late.file,std::memory_order_release);
+    return &j.joined;
+}
+
+// The sink to write to now: decided's own file, else the file of a late join, else null. Pure apart from the
+// environment, the switch and the file itself, so the host test drives it with a LateJoin of its own and any clock.
+// A look finds one of three things:
+//   a marker of this process: join that file, as open_sink does, and look no more, whatever the join gives.
+//   no marker of this process, and the switch on now: open a file of this process, as open_sink would now, and
+//     mark it for the other modules (BD-283 r7: in 20261101T225230Z the shell of a host started at 22:14 found the
+//     switch off, the switch came on at 22:52:30, and the host's first Win+N at 22:52:32 removed a device 49 ms
+//     later; RADV's ICD opened the file only at its next device, so the shell's site line had no file to go to).
+//     A file that cannot be made ends the looks; a switch that is still off or over leaves them on.
+//   no marker of this process, the switch off: nothing, and the next look in a second.
+// Two modules of one process that look at the same instant could each make a file; the looks are a second apart
+// and each module looks only until its first file, so the worst case is two files of one process.
+inline const Sink* late_join(const Sink& decided,LateJoin& j,unsigned long long now) noexcept {
+    if(decided.file)return &decided;
+    if(j.file.load(std::memory_order_acquire))return &j.joined;
+    if(!decided.why)return nullptr;
+    unsigned long long next=j.next.load(std::memory_order_relaxed);
+    if(now<next)return nullptr;
+    // One thread looks; the others go on without a sink until the next second.
+    if(!j.next.compare_exchange_strong(next,now+kLateJoinPeriod,std::memory_order_relaxed))return nullptr;
+    char mark[48]{};
+    const DWORD m=GetEnvironmentVariableA(game_log::kMarkerVariable,mark,sizeof(mark));
+    unsigned long pid=0;
+    unsigned long long until=0;
+    if(!m||m>=sizeof(mark)||!parse_marker(mark,&pid,&until)||pid!=GetCurrentProcessId()){
+        const Sink own=open_game_log();
+        if(!own.file){
+            if(own.why&&!std::strcmp(own.why,"no file could be made"))j.next.store(kNoMoreLooks,std::memory_order_relaxed);
+            return nullptr;
+        }
+        j.next.store(kNoMoreLooks,std::memory_order_relaxed);
+        return publish_late(decided,j,own,"opens this file late");
+    }
+    j.next.store(kNoMoreLooks,std::memory_order_relaxed);
+    char value[MAX_PATH+8]{};
+    const DWORD n=GetEnvironmentVariableA(game_log::kVariable,value,sizeof(value));
+    if(!n||n>=sizeof(value))return nullptr;
+    const Sink joined=join_game_log(value,until);
+    if(!joined.file)return nullptr;
+    return publish_late(decided,j,joined,"joins this file late");
+}
+
+inline const Sink* active() noexcept {
+    const Sink& s=sink();
+    if(s.file)return &s;
+    if(!s.why)return nullptr;
+    return late_join(s,late(),now_filetime());
+}
 } // namespace detail
 
 // The sink, or null when nothing is logged. A bounded sink may already have stopped; print decides that.
-inline FILE* stream() noexcept {return detail::sink().file;}
+inline FILE* stream() noexcept {
+    const detail::Sink* s=detail::active();
+    return s?s->file:nullptr;
+}
 inline bool enabled() noexcept {return stream()!=nullptr;}
 
 inline void print(_Printf_format_string_ const char* format,...) noexcept {
-    const detail::Sink& s=detail::sink();
-    if(!s.file)return;
+    const detail::Sink* const active=detail::active();
+    if(!active)return;
+    const detail::Sink& s=*active;
     if(!s.until&&!s.cap){                       // the process asked for these lines: no bound, no clock read
         va_list args;
         va_start(args,format);

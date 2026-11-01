@@ -113,6 +113,24 @@ HRESULT APIENTRY runtime_reclaim(HANDLE h,const D3DDDICB_RECLAIMALLOCATIONS *p) 
     for(UINT i=0;i<3;++i) { if(p->HandleList[i]!=61+i) fail(__LINE__); p->pDiscarded[i]=(i==1); }
     ++reclaimCalls; return residencyChangeResult;
 }
+// BD-283: ReclaimAllocations2Cb on the surface paging queue (71, fence object 72) and the CPU wait for its fence.
+// The wait fake signals the paging fence to pagingSignal and sets the event; zero leaves the fence where it is.
+unsigned reclaim2Calls=0,pagingWaitCalls=0; HRESULT reclaim2Result=S_OK,pagingWaitResult=S_OK;
+UINT64 reclaim2Fence=0,pagingSignal=0; volatile UINT64 pagingCompleted=0;
+HRESULT APIENTRY runtime_reclaim2(HANDLE h,D3DDDICB_RECLAIMALLOCATIONS2 *p) {
+    if(h!=&createIdentity || !expected->runtime().domain.entered() || p->PagingQueue!=71 || p->pResources ||
+       p->NumAllocations!=3 || !p->HandleList || !p->pDiscarded) fail(__LINE__);
+    for(UINT i=0;i<3;++i) { if(p->HandleList[i]!=61+i) fail(__LINE__); p->pDiscarded[i]=(i==2); }
+    p->PagingFenceValue=reclaim2Fence; ++reclaim2Calls; return reclaim2Result;
+}
+HRESULT APIENTRY runtime_paging_wait(HANDLE h,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU *p) {
+    if(h!=&createIdentity || !expected->runtime().domain.entered() || p->ObjectCount!=1 || !p->ObjectHandleArray ||
+       p->ObjectHandleArray[0]!=72 || !p->FenceValueArray || p->FenceValueArray[0]!=reclaim2Fence || !p->hAsyncEvent)
+        fail(__LINE__);
+    ++pagingWaitCalls;
+    if (SUCCEEDED(pagingWaitResult) && pagingSignal) { pagingCompleted=pagingSignal; SetEvent(p->hAsyncEvent); }
+    return pagingWaitResult;
+}
 unsigned displayModeCalls=0; HRESULT displayModeResult=S_OK;
 HRESULT APIENTRY runtime_display_mode(HANDLE h,D3DDDICB_SETDISPLAYMODE *p) {
     if (h!=&createIdentity || !expected->runtime().domain.entered() ||
@@ -208,6 +226,30 @@ int main() {
             ddi_class_status(DdiErrorClass::still_drawing,DXGI_ERROR_WAS_STILL_DRAWING)!=D3DDDIERR_DEVICEREMOVED ||
             ddi_class_status(DdiErrorClass::still_drawing,ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true))!=
                 DXGI_DDI_ERR_WASSTILLDRAWING) fail(__LINE__);
+        // BD-283: WASSTILLDRAWING of a still-drawing entry (Map with DONOTWAIT, GetData) is an answer, not a failure;
+        // the same status in any other class, and every other status of that class, stays a failure.
+        if (ddi_report_is_failure(DdiErrorClass::still_drawing,DXGI_DDI_ERR_WASSTILLDRAWING) ||
+            !ddi_report_is_failure(DdiErrorClass::still_drawing,D3DDDIERR_DEVICEREMOVED) ||
+            !ddi_report_is_failure(DdiErrorClass::removed_only,DXGI_DDI_ERR_WASSTILLDRAWING) ||
+            !ddi_report_is_failure(DdiErrorClass::nothing,S_OK) ||
+            ddi_report_is_failure(DdiErrorClass::still_drawing,ddi_class_status(DdiErrorClass::still_drawing,
+                ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true))) ||
+            ddi_report_is_failure(DdiErrorClass::still_drawing,ddi_class_status(DdiErrorClass::still_drawing,
+                query_ddi_status(S_FALSE)))) fail(__LINE__);
+        // And through report_ddi_error itself: the runtime receives exactly DXGI_DDI_ERR_WASSTILLDRAWING (0x887B0001)
+        // once, and no "M14 DDI error" line is written (the line budget does not move). A device removal of the same
+        // class still writes its line and reaches the runtime as removal.
+        RuntimeDomain::Scope scope(owner.runtime().domain);
+        const unsigned errorsBefore=errors,budgetBefore=ddi_error_line_budget.load();
+        allowedError=DXGI_DDI_ERR_WASSTILLDRAWING;
+        report_ddi_error(owner,ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true),DdiErrorClass::still_drawing);
+        report_ddi_error(owner,query_ddi_status(S_FALSE),DdiErrorClass::still_drawing);
+        if (static_cast<HRESULT>(0x887B0001)!=DXGI_DDI_ERR_WASSTILLDRAWING || errors!=errorsBefore+2 ||
+            ddi_error_line_budget.load()!=budgetBefore) fail(__LINE__);
+        allowedError=D3DDDIERR_DEVICEREMOVED;
+        report_ddi_error(owner,D3DDDIERR_DEVICEREMOVED,DdiErrorClass::still_drawing);
+        if (errors!=errorsBefore+3 || ddi_error_line_budget.load()!=budgetBefore-1) fail(__LINE__);
+        errors=errorsBefore;   // the entry tests below count from here
     }
     if (!format_allows_not_supported(DXGI_FORMAT_Y410) || !format_allows_not_supported(DXGI_FORMAT_AYUV) ||
         format_allows_not_supported(DXGI_FORMAT_R1_UNORM) || format_allows_not_supported(DXGI_FORMAT_R8G8B8A8_UNORM) ||
@@ -1346,6 +1388,76 @@ int main() {
             privateStatus!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || owner.runtime().domain.entered()) fail(__LINE__);
         mixedReclaim.Resources=1; kept[0]=9;
         if (resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 || kept[0]) fail(__LINE__);
+    }
+    // BD-283, trim -> reuse: a hidden ShellExperienceHost offers its surfaces, and the first Reclaim when it is shown
+    // again got E_FAIL from the synchronous ReclaimAllocationsCb; d3d11.dll removed the device for it, Reason 6
+    // (20261101T230251Z). With the surface paging queue the shell reclaims with ReclaimAllocations2Cb on that queue
+    // and waits for its paging fence. The synchronous callback is the second try. Every success is S_OK.
+    {
+        SurfacePagingQueue &queue=owner.surface_queue(); const SurfacePagingQueue saved=queue;
+        queue.queue=71; queue.sync=72; queue.cpu=&pagingCompleted; pagingCompleted=5;
+        const D3DKMT_HANDLE handles[]={61,62,63};
+        auto trim=[&]() {
+            RuntimeDomain::Scope scope(owner.runtime().domain);
+            // The offer fake shares its answer with the synchronous reclaim fake; the offer always succeeds here.
+            const unsigned offers=offerCalls; const HRESULT later=residencyChangeResult; residencyChangeResult=S_OK;
+            if (offer_after_submit(owner.runtime(),handles,3,D3DDDI_OFFER_PRIORITY_NORMAL,[](){return S_OK;})!=S_OK ||
+                offerCalls!=offers+1) fail(__LINE__);
+            residencyChangeResult=later;
+        };
+        BOOL back[3]={9,9,9}; reclaimArgs.pDiscarded=back; reclaimArgs.Resources=3; reclaimArgs.pResources=sharedHandles;
+        unsigned syncCalls=reclaimCalls;
+        // The lab sequence on the old path: no Reclaim2, the synchronous callback refuses, the entry fails.
+        trim(); residencyChangeResult=E_FAIL;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=E_FAIL || reclaimCalls!=++syncCalls || reclaim2Calls)
+            fail(__LINE__);
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=runtime_reclaim2;
+        owner.runtime().KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=runtime_paging_wait;
+        // The same sequence on the paging queue: the fence is already complete, so no wait and no synchronous call.
+        trim(); reclaim2Fence=5;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaim2Calls!=1 || pagingWaitCalls ||
+            reclaimCalls!=syncCalls || back[0] || back[1] || !back[2]) fail(__LINE__);
+        // A paging fence ahead of the queue: the entry waits for it. E_PENDING is accepted as MakeResidentCb defines it.
+        for (HRESULT accepted:{S_OK,E_PENDING}) {
+            trim(); reclaim2Result=accepted; reclaim2Fence=pagingCompleted+4; pagingSignal=reclaim2Fence;
+            const unsigned waits=pagingWaitCalls;
+            if (resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || pagingWaitCalls!=waits+1 ||
+                pagingCompleted!=reclaim2Fence || reclaimCalls!=syncCalls) fail(__LINE__);
+        }
+        // A refused wait is the entry's status: the allocations are not known to be resident.
+        trim(); reclaim2Result=S_OK; reclaim2Fence=pagingCompleted+1; pagingWaitResult=E_OUTOFMEMORY;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=E_OUTOFMEMORY || reclaimCalls!=syncCalls) fail(__LINE__);
+        pagingWaitResult=S_OK; pagingSignal=0;
+        // Reclaim2 refuses: the synchronous callback takes the batch, and its discarded flags are the answer.
+        trim(); reclaim2Result=E_FAIL; residencyChangeResult=S_OK; for (auto &value:back) value=9;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=S_OK || reclaimCalls!=++syncCalls ||
+            back[0] || !back[1] || back[2]) fail(__LINE__);
+        // Both refuse: the status of the synchronous callback.
+        residencyChangeResult=E_FAIL;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=E_FAIL || reclaimCalls!=++syncCalls) fail(__LINE__);
+        // Removal from Reclaim2 is final: no second try.
+        reclaim2Result=D3DDDIERR_DEVICEREMOVED; residencyChangeResult=S_OK;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=D3DDDIERR_DEVICEREMOVED || reclaimCalls!=syncCalls)
+            fail(__LINE__);
+        // A lost paging queue reads UINT64_MAX: removal, without a wait.
+        reclaim2Result=S_OK; reclaim2Fence=7; pagingCompleted=UINT64_MAX; const unsigned waits=pagingWaitCalls;
+        if (resourceTable.pfnReclaimResources(&reclaimArgs)!=D3DDDIERR_DEVICEREMOVED || pagingWaitCalls!=waits)
+            fail(__LINE__);
+        // ReclaimResources1 takes the same path and reports the discarded allocation per resource.
+        pagingCompleted=9; reclaim2Fence=9;
+        DXGI1_6_1_DDI_BASE_FUNCTIONS table161{}; install_dxgi1_6_1_resource_ddi(table161);
+        D3DDDI_RECLAIM_RESULT results[3]={D3DDDI_RECLAIM_RESULT_NOT_COMMITTED,D3DDDI_RECLAIM_RESULT_NOT_COMMITTED,
+                                          D3DDDI_RECLAIM_RESULT_NOT_COMMITTED};
+        DXGI_DDI_ARG_RECLAIMRESOURCES1 reclaim1{}; reclaim1.hDevice=reclaimArgs.hDevice;
+        reclaim1.pResources=sharedHandles; reclaim1.Resources=3; reclaim1.pResults=results;
+        const unsigned seconds=reclaim2Calls;
+        trim();
+        if (!table161.pfnReclaimResources1 || table161.pfnReclaimResources1(&reclaim1)!=S_OK || reclaim2Calls!=seconds+1 ||
+            results[0]!=D3DDDI_RECLAIM_RESULT_OK || results[1]!=D3DDDI_RECLAIM_RESULT_OK ||
+            results[2]!=D3DDDI_RECLAIM_RESULT_DISCARDED || owner.runtime().domain.entered()) fail(__LINE__);
+        owner.runtime().KTCallbacks.pfnReclaimAllocations2Cb=nullptr;
+        owner.runtime().KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb=nullptr;
+        queue=saved; residencyChangeResult=S_OK; reclaim2Result=S_OK;
     }
     DXGI_DDI_ARG_SETDISPLAYMODE modeArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],0};
     if (!resourceTable.pfnSetDisplayMode || resourceTable.pfnSetDisplayMode(nullptr)!=E_INVALIDARG ||

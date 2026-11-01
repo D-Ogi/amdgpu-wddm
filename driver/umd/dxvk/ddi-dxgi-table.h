@@ -3,6 +3,7 @@
 #include "ddi-present.h"
 #include "ddi-blt.h"
 #include "ddi-dxgi-resources.h"
+#include "ddi-status-note.h"
 namespace bc250::umd {
 inline constexpr bool dxgi_table_layout_supported(UINT interfaceVersion,UINT buildVersion) {
     return IS_DXGI1_2_BASE_FUNCTIONS(interfaceVersion,buildVersion) &&
@@ -16,23 +17,28 @@ inline constexpr bool dxgi_table_layout_supported(UINT interfaceVersion,UINT bui
 // on every device. The overlay queries run only when the KMD reports multiplane-overlay support (lab flavour with
 // LabScaledPlane bit 0); this KMD reports one plane, the primary.
 inline HRESULT APIENTRY unsupported_gamma(DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS *args) {
-    if (!args || !args->hDevice || !args->pGammaCapabilities) return E_INVALIDARG;
+    if (!args || !args->hDevice || !args->pGammaCapabilities)
+        return ddi_status_note("GetGammaCaps",E_INVALIDARG,DdiInputs("args=%u hDevice=%u capabilities=%u",unsigned(args!=nullptr),
+            unsigned(args && args->hDevice),unsigned(args && args->pGammaCapabilities)));
     // The KMD does not implement a gamma-ramp DDI: no scale and offset, no control point. This is also the
     // answer the runtime itself gives after a failed call, but then without the removal.
     *args->pGammaCapabilities=DXGI_GAMMA_CONTROL_CAPABILITIES{};
     return S_OK;
 }
 inline HRESULT APIENTRY unsupported_overlay_caps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) return ddi_status_note("GetMultiplaneOverlayCaps",E_INVALIDARG,DdiInputs("args=0"));
     args->MultiplaneOverlayCaps.MaxPlanes=1; args->MultiplaneOverlayCaps.NumCapabilityGroups=0;
     return S_OK;
 }
 inline HRESULT APIENTRY unsupported_overlay_check(DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYSUPPORT *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) return ddi_status_note("CheckMultiplaneOverlaySupport",E_INVALIDARG,DdiInputs("args=0"));
     args->Supported=FALSE; return S_OK;
 }
 // A present of overlay planes is not a query: with one plane reported, the runtime has no plane set to present.
-inline HRESULT APIENTRY unsupported_overlay_present(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *) { return DXGI_ERROR_UNSUPPORTED; }
+inline HRESULT APIENTRY unsupported_overlay_present(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *args) {
+    return ddi_status_note("PresentMultiplaneOverlay",DXGI_ERROR_UNSUPPORTED,DdiInputs("args=%u planes=%u",
+        unsigned(args!=nullptr),args ? unsigned(args->PresentPlaneCount) : 0u));
+}
 inline DXGI1_2_DDI_BASE_FUNCTIONS make_dxgi_device_table() {
     DXGI1_2_DDI_BASE_FUNCTIONS table{};
     install_present_ddi(table);

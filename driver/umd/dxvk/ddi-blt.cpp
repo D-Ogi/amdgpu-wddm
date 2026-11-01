@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-blt.h"
 #include "present-probe.h"
+#include "ddi-status-note.h"
 #include <climits>
+#include <cstdio>
 namespace bc250::umd {
 HRESULT prepare_blt(const DXGI_DDI_ARG_BLT &a,BC250_DXVK_BLT &out) {
     auto *source=reinterpret_cast<DdiResource *>(a.hSrcResource);
@@ -64,7 +66,7 @@ void blt_note(DeviceOwner &owner,const char *kind,const DXGI_DDI_ARG_BLT &a,HRES
     amdgpu_wddm_log::print("%s",text);
 }
 #endif
-HRESULT APIENTRY blt1(DXGI_DDI_ARG_BLT1 *args) {
+HRESULT blt1_work(DXGI_DDI_ARG_BLT1 *args) {
     if (!args) return E_INVALIDARG;
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
     if (!storage || !storage->owner) return E_INVALIDARG;
@@ -94,7 +96,7 @@ HRESULT APIENTRY blt1(DXGI_DDI_ARG_BLT1 *args) {
 #endif
     return ddi_device_status(hr);
 }
-HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
+HRESULT blt_work(DXGI_DDI_ARG_BLT *args) {
     if (!args) return E_INVALIDARG;
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
     if (!storage || !storage->owner) return E_INVALIDARG;
@@ -114,6 +116,35 @@ HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
         return ddi_device_status(hr);
     } catch (const std::bad_alloc &) { return E_OUTOFMEMORY; }
     catch (...) { return E_FAIL; }
+}
+// BD-283: d3d11.dll removes the device for every status of a DXGI Blt but S_OK, so each one gets a line with the
+// arguments that decided it. E_INVALIDARG is an argument check of prepare_blt; E_FAIL is a device without an engine;
+// any other status is the engine's own.
+DdiInputs blt_inputs(const char *kind,const DXGI_DDI_ARG_BLT &a,const RECT *source) {
+    auto *s=reinterpret_cast<DdiResource *>(a.hSrcResource);
+    auto *d=reinterpret_cast<DdiResource *>(a.hDstResource);
+    char from[48]="-";
+    if (source) std::snprintf(from,sizeof(from),"%ld,%ld-%ld,%ld",source->left,source->top,source->right,source->bottom);
+    return DdiInputs("%s flags=%08X rotate=%d src=%u/%u dst=%u/%u sub=%u/%u rect=%u,%u-%u,%u source-rect=%s",kind,
+        unsigned(a.Flags.Value),int(a.Rotate),unsigned(s!=nullptr),unsigned(s && s->object),unsigned(d!=nullptr),
+        unsigned(d && d->object),a.SrcSubresource,a.DstSubresource,a.DstLeft,a.DstTop,a.DstRight,a.DstBottom,from);
+}
+HRESULT APIENTRY blt(DXGI_DDI_ARG_BLT *args) {
+    const HRESULT status=blt_work(args);
+    if (status==S_OK) return status;
+    return ddi_status_note("Blt",status,args ? blt_inputs("Blt",*args,nullptr) : DdiInputs("args=0"));
+}
+HRESULT APIENTRY blt1(DXGI_DDI_ARG_BLT1 *args) {
+    const HRESULT status=blt1_work(args);
+    if (status==S_OK) return status;
+    if (!args) return ddi_status_note("Blt1",status,DdiInputs("args=0"));
+    DXGI_DDI_ARG_BLT base{};
+    base.hSrcResource=args->hSrcResource; base.hDstResource=args->hDstResource;
+    base.SrcSubresource=args->SrcSubresource; base.DstSubresource=args->DstSubresource;
+    base.DstLeft=args->DstLeft; base.DstTop=args->DstTop; base.DstRight=args->DstRight; base.DstBottom=args->DstBottom;
+    base.Flags=args->Flags; base.Rotate=args->Rotate;
+    const RECT source{LONG(args->SrcLeft),LONG(args->SrcTop),LONG(args->SrcRight),LONG(args->SrcBottom)};
+    return ddi_status_note("Blt1",status,blt_inputs("Blt1",base,&source));
 }
 }
 void install_blt_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &t) { t.pfnBlt=blt; t.pfnBlt1=blt1; }

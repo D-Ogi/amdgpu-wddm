@@ -93,11 +93,15 @@ HRESULT destroy_surface_paging_queue(RuntimeDevice &device,SurfacePagingQueue &q
     HRESULT hr=device.KTCallbacks.pfnDestroyPagingQueueCb(device.hDevice,&request);
     if (SUCCEEDED(hr)) queue={}; return hr;
 }
-HRESULT surface_paging_status(const SurfacePagingQueue &queue,const SurfaceGpuMapping &mapping) {
-    if (!queue.queue || !queue.cpu || !mapping.address) return E_INVALIDARG;
+HRESULT paging_fence_status(const SurfacePagingQueue &queue,UINT64 fence) {
+    if (!queue.queue || !queue.cpu) return E_INVALIDARG;
     const UINT64 completed=*queue.cpu;
     if (completed==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
-    return completed>=mapping.fence ? S_OK : S_FALSE;
+    return completed>=fence ? S_OK : S_FALSE;
+}
+HRESULT surface_paging_status(const SurfacePagingQueue &queue,const SurfaceGpuMapping &mapping) {
+    if (!mapping.address) return E_INVALIDARG;
+    return paging_fence_status(queue,mapping.fence);
 }
 HRESULT map_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queue,D3DKMT_HANDLE allocation,UINT64 bytes,SurfaceGpuMapping &out) {
     if (out.address || out.bytes || out.fence || out.resident) return E_UNEXPECTED;
@@ -123,27 +127,31 @@ HRESULT map_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queu
     out.resident=true;
     return surface_paging_status(queue,out); // S_FALSE means accepted, pending.
 }
-HRESULT wait_surface_paging(RuntimeDevice &device,const SurfacePagingQueue &queue,const SurfaceGpuMapping &mapping,DWORD timeoutMs) {
+HRESULT wait_paging_fence(RuntimeDevice &device,const SurfacePagingQueue &queue,UINT64 fence,DWORD timeoutMs) {
     if (!device.domain.entered() || timeoutMs>10000) return E_INVALIDARG;
-    HRESULT hr=surface_paging_status(queue,mapping);
+    HRESULT hr=paging_fence_status(queue,fence);
     if (hr!=S_FALSE) return hr;
     if (!queue.sync || !device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb) return E_NOTIMPL;
     HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
     if (!event) return HRESULT_FROM_WIN32(GetLastError());
     D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMCPU wait{};
-    wait.ObjectCount=1; wait.ObjectHandleArray=&queue.sync; wait.FenceValueArray=&mapping.fence; wait.hAsyncEvent=event;
+    wait.ObjectCount=1; wait.ObjectHandleArray=&queue.sync; wait.FenceValueArray=&fence; wait.hAsyncEvent=event;
     hr=device.KTCallbacks.pfnWaitForSynchronizationObjectFromCpuCb(device.hDevice,&wait);
     if (SUCCEEDED(hr)) {
         DWORD result=WaitForSingleObject(event,timeoutMs);
         if (result==WAIT_OBJECT_0 || result==WAIT_TIMEOUT) {
             // Completion can race the timeout. Conversely an event alone does
             // not establish completion. Recheck the monitored fence itself.
-            hr=surface_paging_status(queue,mapping);
-            if (hr==S_FALSE) { MemoryBarrier(); hr=surface_paging_status(queue,mapping); }
+            hr=paging_fence_status(queue,fence);
+            if (hr==S_FALSE) { MemoryBarrier(); hr=paging_fence_status(queue,fence); }
             if (hr==S_FALSE) hr=D3DDDIERR_DEVICEREMOVED;
         } else hr=HRESULT_FROM_WIN32(GetLastError());
     }
     CloseHandle(event); return hr;
+}
+HRESULT wait_surface_paging(RuntimeDevice &device,const SurfacePagingQueue &queue,const SurfaceGpuMapping &mapping,DWORD timeoutMs) {
+    if (!mapping.address) return E_INVALIDARG;
+    return wait_paging_fence(device,queue,mapping.fence,timeoutMs);
 }
 HRESULT unmap_runtime_surface(RuntimeDevice &device,const SurfacePagingQueue &queue,SurfaceGpuMapping &mapping) {
     if (!device.domain.entered()) return E_INVALIDARG;
