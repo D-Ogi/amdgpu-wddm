@@ -48,6 +48,7 @@ typedef struct _BC250_GPUMEM_ENTRY {
     BOOLEAN Retired;                // GTT only: freed by the sequence, unbound if it was bound, waiting for GpuMemRelease
     const VOID* Owner;              // the sequence that allocated it: "quiet" is a statement about that owner's hardware only
     PVOID Cpu;
+    BC250_DMA_PAGES Dma;           // retained device view; backing lifetime follows Owner
     ULONGLONG Mc;
     ULONGLONG GartOffset;
     ULONG Size;                     // page multiple
@@ -352,17 +353,16 @@ int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev)
 {
     BC250_SEQUENCE* sequence;
     BC250_GPUMEM* mem=MemOf(adev,&sequence);
-    ULONGLONG physical[BC250_GPUMEM_MAX];
     ULONG i,page;
     int result;
     if (!mem || !mem->Table || sequence->Plan || !NT_SUCCESS(sequence->Fault)) return -5;
     if (adev->gmc.gart_size<BC250_GPUMEM_GTT_LIMIT ||
         BC250_GPUMEM_GTT_LIMIT/PAGE_SIZE>BC250_GPUMEM_TABLE_LENGTH/sizeof(ULONGLONG)) return -22;
-    // Same retained contiguous nonpaged allocations and identity-DMA contract
-    // as bc250_shim_mem_alloc. Bc250DmaAddress marks the IOMMU boundary (BD-029).
+    // Validate every retained device page before changing the table. GartLock
+    // and halted consumers keep the view and backing immutable for both passes.
+    // Do not reconstruct device addresses from the retained CPU pointer.
     for (i=0;i<BC250_GPUMEM_MAX;i++) {
         const BC250_GPUMEM_ENTRY* entry=&mem->Entries[i];
-        physical[i]=0;
         if (!entry->Used || !entry->Gtt || !entry->Bound ||
             entry->Retired || entry->TranslationsRetired) continue;
         if (!entry->Cpu || !entry->Size || (entry->Size&(PAGE_SIZE-1)) ||
@@ -370,7 +370,11 @@ int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev)
             (entry->GartOffset&(PAGE_SIZE-1)) || entry->GartOffset>BC250_GPUMEM_GTT_LIMIT ||
             entry->Size>BC250_GPUMEM_GTT_LIMIT-entry->GartOffset ||
             entry->Mc!=adev->gmc.gart_start+entry->GartOffset) return -22;
-        physical[i]=Bc250DmaAddress(entry->Cpu);
+        if (entry->Dma.Count != entry->Size/PAGE_SIZE) return -22;
+        for (page=0;page<entry->Dma.Count;page++) {
+            BC250_DMA_ADDR address;
+            if (!Bc250DmaPage(&entry->Dma,page,&address)) return -22;
+        }
     }
     mem->TlbDirty=TRUE;
     result=bc250_gart_unbind(adev,0,(unsigned)(BC250_GPUMEM_GTT_LIMIT/PAGE_SIZE),mem->Table);
@@ -380,7 +384,8 @@ int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev)
         if (!entry->Used || !entry->Gtt || !entry->Bound ||
             entry->Retired || entry->TranslationsRetired) continue;
         for (page=0;page<entry->Size/PAGE_SIZE;page++) {
-            ULONGLONG dma=physical[i]+(ULONGLONG)page*PAGE_SIZE;
+            BC250_DMA_ADDR dma;
+            if (!Bc250DmaPage(&entry->Dma,page,&dma)) return -22;
             result=bc250_gart_bind(adev,entry->GartOffset+(ULONGLONG)page*PAGE_SIZE,1,&dma,mem->Table);
             if (result) return result;
         }
@@ -454,8 +459,7 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
     else if (domain == BC250_MEM_GTT)
     {
         ULONGLONG at = (mem->GttNext + align - 1) & ~((ULONGLONG)align - 1);
-        PHYSICAL_ADDRESS low, high, boundary;
-        BC250_DMA_ADDR dmaBase;
+        PHYSICAL_ADDRESS low, high, boundary, physical;
         ULONGLONG dma[16];
         ULONG page, pages = rounded / PAGE_SIZE, chunk;
         int failed = 0;
@@ -472,12 +476,17 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
         boundary.QuadPart = 0;
         entry->Cpu = MmAllocateContiguousNodeMemory(rounded, low, high, boundary, PAGE_READWRITE, MM_ANY_NODE_OK);
         if (entry->Cpu == NULL) return -12;
-        dmaBase = Bc250DmaAddress(entry->Cpu);
+        entry->Dma.Pages = NULL;
+        entry->Dma.Base = Bc250LegacyDmaAddress(entry->Cpu);
+        entry->Dma.Count = pages;
         // A PLAN gets memory to build its rings and MQDs in, but the GART table is live hardware state: not written.
         for (page = 0; page < pages && !sequence->Plan; page += chunk)
         {
             chunk = min(pages - page, RTL_NUMBER_OF(dma));
-            for (i = 0; i < chunk; i++) dma[i] = dmaBase + (ULONGLONG)(page + i) * PAGE_SIZE;
+            for (i = 0; i < chunk; i++) {
+                if (!Bc250DmaPage(&entry->Dma, page + i, &dma[i])) { failed = -22; break; }
+            }
+            if (failed) break;
             if (bc250_gart_bind(adev, at + (ULONGLONG)page * PAGE_SIZE, chunk, dma, mem->Table) != 0)
             {
                 failed = -22;

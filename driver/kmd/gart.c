@@ -484,7 +484,7 @@ NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
         return STATUS_SUCCESS;
     }
     RtlZeroMemory(gart->DummyPage, PAGE_SIZE);
-    gart->DummyPhysical.QuadPart = (LONGLONG)Bc250DmaAddress(gart->DummyPage);
+    gart->DummyPhysical.QuadPart = (LONGLONG)Bc250LegacyDmaAddress(gart->DummyPage);
     Device->Gart = gart;
     GuardLog("gart: ready, dummy page at 0x%llX", gart->DummyPhysical.QuadPart);
     return STATUS_SUCCESS;
