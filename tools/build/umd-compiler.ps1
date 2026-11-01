@@ -60,6 +60,49 @@ function Get-Bc250HostTestFlags([string]$Compiler,[string[]]$Flags,[string[]]$He
     return @($Flags)
 }
 
+# Select the CRT/tool installation independently of the user-mode compiler. An explicit -VsInstall wins over
+# BC250_VS_INSTALL; otherwise Find-VsInstall requires the x86/x64 C++ component in vswhere. Invalid explicit paths
+# fail instead of selecting another installation. Use that installation's default VC toolset, not a lexical sort.
+function Resolve-Bc250Toolchain([string]$VsInstall='', [string]$Arch='x64') {
+    . "$PSScriptRoot\common.ps1"
+    if (-not $VsInstall) { $VsInstall = $env:BC250_VS_INSTALL }
+    $vs = Find-VsInstall $VsInstall
+    $versionFile = Join-Path $vs 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+    $version = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid VC toolset version in $versionFile" }
+    $msvc = Join-Path $vs "VC\Tools\MSVC\$version"
+    $cl = Join-Path $msvc "bin\Hostx64\$Arch\cl.exe"
+    foreach ($required in @($cl, "$msvc\bin\Hostx64\$Arch\link.exe", "$msvc\include\vcruntime.h", "$msvc\lib\$Arch\libcmt.lib")) {
+        if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "Required VC toolchain file is missing: $required" }
+    }
+    Write-Host "Visual Studio tools: $vs (VC $version, $Arch)"
+    return [pscustomobject]@{ VsInstall=$vs; Msvc=$msvc; Cl=$cl }
+}
+
+# Native tools and their host tests over the SDK NuGet packages under -Kits and the selected Visual Studio CRT.
+# INCLUDE, LIB and PATH name only those, so neither clang-cl nor cl adds the headers or libraries of an
+# installed SDK, and lld-link and link find the import libraries through LIB. Returns the Visual Studio tools folder
+# and its cl.exe for -Arch. The caller puts the three variables back when it runs inside another build's process.
+function Set-Bc250ToolEnvironment([string]$Kits,[string]$Arch='x64',[string]$KitVersion='10.0.26100.0',[string]$VsInstall='') {
+    $tool=Resolve-Bc250Toolchain $VsInstall $Arch
+    $msvc=$tool.Msvc
+    $sdk=Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
+    $sdkLib=Join-Path $Kits "microsoft.windows.sdk.cpp.$Arch\c"
+    $env:INCLUDE=@("$msvc\include","$sdk\Include\$KitVersion\ucrt","$sdk\Include\$KitVersion\um","$sdk\Include\$KitVersion\shared") -join ';'
+    $env:LIB=@("$msvc\lib\$Arch","$sdkLib\ucrt\$Arch","$sdkLib\um\$Arch") -join ';'
+    $env:PATH="$msvc\bin\Hostx64\$Arch;$env:PATH"
+    return $tool
+}
+
+# The compile switches of a native tool in the form of the selected compiler, after Set-Bc250ToolEnvironment.
+# clang-cl: the shell conversion (x86-64-v3, the INCLUDE roots as system headers, /FC and /d1trimfile removed in favour
+# of -ffile-prefix-map over -Roots), the BD-268 compile switches and lld-link. cl: the switches as given; it reads
+# INCLUDE itself.
+function Get-Bc250ToolFlags([string]$Compiler,[string[]]$Flags,[string]$Arch,[string[]]$Roots) {
+    if($Compiler -ne 'clang-cl'){return @($Flags)}
+    return @(ConvertTo-Bc250ClangFlags $Flags $Arch $Roots)+@((Get-Bc250ReproducibleFlags 'clang-cl').Compile)+@('/clang:-fuse-ld=lld')
+}
+
 function Invoke-Bc250UmdCompiler {
     # _CL_ is appended after /link by clang-cl and reaches the linker as input
     # files. Pass the Clang policy explicitly; leave MSVC's own controls intact.

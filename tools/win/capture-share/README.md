@@ -91,7 +91,11 @@ pwsh tools\win\capture-share\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget
 ```
 
 The build takes headers and import libraries from the SDK NuGet packages under `-Kits`, with the C++/WinRT
-projection that the `wgc` cell needs. The compiler comes from the installed Visual Studio. `/W4 /WX`, x64, `/MT`.
+projection that the `wgc` cell needs. The compiler is clang-cl of LLVM 23.1.4 with lld-link
+(`tools\build\umd-compiler.ps1`): x86-64-v3, C++20, `/W4 /WX`, x64, `/MT`, `/Brepro`. Two output folders give the
+same bytes. The C runtime comes from Visual Studio. `-VsInstall` selects that installation, followed by
+`BC250_VS_INSTALL` when the parameter is absent. Without either, discovery requires the x86/x64 C++ tools.
+`-Compiler msvc` builds with its cl and link and needs `-MsvcReason`.
 `-Out` defaults to `<workspace>\scratch\build\capture-share`. Temporary files of the compiler stay under
 `<workspace>\scratch\tmp`. The build copies `capshare.exe` to `capshare-peer.exe` and writes `SHA256SUMS.txt`.
 
