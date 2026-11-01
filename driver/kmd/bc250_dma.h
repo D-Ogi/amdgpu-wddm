@@ -1,7 +1,8 @@
-// BD-029 step 1: separate a private allocation's CPU view from its device
+// BD-029: separate a private allocation's CPU view from its device
 // page addresses. See docs/design/iommu-dma-remapping.md (M448).
-// Graphics remapping needs Dxgkrnl memory objects and ADLs, not a generic
-// IoGetDmaAdapter/MapTransfer substitution. This is not remapping support.
+// ADL consumption gives the OS path a typed device-address layer.
+// Full remapping support still needs caps, domain lifetime and
+// nonidentity acceptance (steps after this source-only preparation).
 #ifndef BC250_DMA_H
 #define BC250_DMA_H
 
@@ -39,6 +40,44 @@ static __inline int Bc250DmaPage(const BC250_DMA_PAGES* View, unsigned Index,
     }
     if (value & (PAGE_SIZE - 1)) return 0;
     *Address = value;
+    return 1;
+}
+
+// Read one device-page address from a DXGK_ADL at the given page offset.
+// The ADL is OS-owned and immutable for the duration of the BuildPagingBuffer
+// call. Contiguous ADLs give a base page number; non-contiguous give a per-
+// page array. Both are page frame numbers that need shifting to byte addresses.
+// Returns 0 on out-of-range or overflow.
+static __inline int Bc250DmaAdlPage(const void* Adl, unsigned AdlOffset,
+                                    unsigned PageIndex, BC250_DMA_ADDR* Address)
+{
+    // DXGK_ADL layout (d3dkmddi.h WDDM 2.9+):
+    //   UINT32 PageCount;
+    //   DXGK_ADL_FLAGS Flags; // .Contiguous bit 0
+    //   union { DXGK_PAGE_NUMBER BasePageNumber; const DXGK_PAGE_NUMBER* Pages; }
+    // DXGK_PAGE_NUMBER is UINT_PTR.
+    typedef unsigned __int64 PFN;
+    const unsigned char* raw = (const unsigned char*)Adl;
+    unsigned pageCount;
+    unsigned contiguous;
+    unsigned absIndex;
+    PFN pfn;
+    if (!Adl || !Address) return 0;
+    pageCount = *(const unsigned*)raw;
+    contiguous = *(const unsigned*)(raw + 4) & 1u;
+    absIndex = AdlOffset + PageIndex;
+    if (absIndex < AdlOffset || absIndex >= pageCount) return 0;
+    if (contiguous) {
+        PFN base = *(const PFN*)(raw + 8);
+        if (base > ~(PFN)0 - absIndex) return 0;
+        pfn = base + absIndex;
+    } else {
+        const PFN* pages = *(const PFN* const*)(raw + 8);
+        if (!pages) return 0;
+        pfn = pages[absIndex];
+    }
+    if (pfn > (~(BC250_DMA_ADDR)0 / PAGE_SIZE)) return 0;
+    *Address = (BC250_DMA_ADDR)pfn * PAGE_SIZE;
     return 1;
 }
 

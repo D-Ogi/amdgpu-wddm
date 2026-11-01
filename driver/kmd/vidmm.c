@@ -17,6 +17,7 @@
 // leaf) were answered by PLAN's log before the first write (E18 run 001, see VidMmStart): raw Flags and PageAddress of the first calls of every
 // level, and the first entry of every segment id that shows up. Co nagle, to po diable (haste is the devil's work).
 #include "bc250kmd.h"
+#include "bc250_dma.h"
 #include "bc250_pte.h"
 #include "paging_pt_shadow.h"
 #include "paging_aperture_state.h"
@@ -258,6 +259,16 @@ NTSTATUS VidMmCommitPagingAperture(const DXGKARG_BUILDPAGINGBUFFER* Build, ULONG
             if (pfn>(MAXULONGLONG>>PAGE_SHIFT)) return status;
             pages[i]=pfn<<PAGE_SHIFT;
         }
+#if (DXGKDDI_INTERFACE_VERSION >= DXGKDDI_INTERFACE_VERSION_WDDM2_9)
+    } else if (Build->Operation==DXGK_OPERATION_MAP_APERTURE_SEGMENT2) {
+        first=Build->MapApertureSegment2.OffsetInPages;
+        total=Build->MapApertureSegment2.NumberOfPages;
+        for (i=0;i<count;i++) {
+            if (!Bc250DmaAdlPage(&Build->MapApertureSegment2.Adl,
+                    Build->MapApertureSegment2.AdlOffset, Start+i, &pages[i]))
+                return status;
+        }
+#endif
     } else return status;
     if (Next>total) return status;
     KeEnterCriticalRegion();ExAcquirePushLockExclusive(&g_VidMm.CpuUpdateLock);
