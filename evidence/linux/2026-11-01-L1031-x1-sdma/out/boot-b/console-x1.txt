@@ -1,0 +1,64 @@
+# X1, Boot B, 2026-11-01 00:18Z: ladder on SDMA0 and the fence counters of the masked runs
+# Console output kept by the session tool log of the development PC, copied unchanged except for the
+# redactions in REDACTED.txt and the removal of the blank lines that the log put after each line.
+# Each block starts with its source line and the UTC time at which the development PC received it.
+
+### source line 3420, received 2026-11-01T00:18:16.233Z
+00:18:15Z
+Sun Nov  1 01:18:43 UTC 2026
+{"device_id": "0x13fe", "dma_rings": 3, "ib_start_align": 256, "ib_size_align": 4, "ring": 0}
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 4096 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 16384 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 16388 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 20480 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 65536 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 262144 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 1048576 copied=yes guard=intact
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 4194304 copied=yes guard=intact
+X1 PASS ring 0
+[  781.347467] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[  781.381026] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[  781.381035] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[  781.381038] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+
+### source line 3428, received 2026-11-01T00:18:33.917Z
+mask before 3
+== sdma0 before
+--- ring 10 (sdma0) ---
+Last signaled fence          0x0000002a
+Last emitted                 0x0000002a
+== sdma1 before
+--- ring 11 (sdma1) ---
+Last signaled fence          0x00000027
+Last emitted                 0x00000027
+== mask 1
+RESULT size 4096 copied=yes guard=intact RESULT size 16384 copied=yes guard=intact RESULT size 16388 copied=yes guard=intact RESULT size 20480 copied=yes guard=intact RESULT size 65536 copied=yes guard=intact RESULT size 262144 copied=yes guard=intact RESULT size 1048576 copied=yes guard=intact RESULT size 4194304 copied=yes guard=intact X1 PASS ring 0 
+--- ring 10 (sdma0) ---
+Last signaled fence          0x00000041
+Last emitted                 0x00000041
+--
+--- ring 11 (sdma1) ---
+Last signaled fence          0x00000027
+Last emitted                 0x00000027
+== mask 2
+RESULT size 4096 copied=yes guard=intact RESULT size 16384 copied=yes guard=intact RESULT size 16388 copied=yes guard=intact RESULT size 20480 copied=yes guard=intact RESULT size 65536 copied=yes guard=intact RESULT size 262144 copied=yes guard=intact RESULT size 1048576 copied=yes guard=intact RESULT size 4194304 copied=yes guard=intact X1 PASS ring 0 
+--- ring 10 (sdma0) ---
+Last signaled fence          0x00000041
+Last emitted                 0x00000041
+--
+--- ring 11 (sdma1) ---
+Last signaled fence          0x0000003e
+Last emitted                 0x0000003e
+mask restored 3
+[  811.551615] [drm] scheduler sdma0 is not ready, skipping
+[  811.556698] [drm] scheduler sdma0 is not ready, skipping
+[  811.556872] [drm] scheduler sdma0 is not ready, skipping
+

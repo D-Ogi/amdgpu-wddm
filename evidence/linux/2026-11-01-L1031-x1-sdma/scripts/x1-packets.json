@@ -1,0 +1,17 @@
+{
+ "op_copy": 1,
+ "subop_linear": 0,
+ "op_nop": 0,
+ "op_shift": 0,
+ "subop_shift": 8,
+ "count_mask": 4194303,
+ "dw": {
+  "count": 1,
+  "param": 2,
+  "src_lo": 3,
+  "src_hi": 4,
+  "dst_lo": 5,
+  "dst_hi": 6
+ },
+ "cite": "navi10_sdma_pkt_open.h SDMA_PKT_COPY_LINEAR; count = bytes - 1 as sdma_v5_0_emit_copy_buffer"
+}

@@ -1,0 +1,56 @@
+{"device_id": "0x13fe", "dma_rings": 1, "ib_start_align": 256, "ib_size_align": 4, "ring": 0}
+CTX  alloc                  -> ctx_id 1
+BO   ib         4096 bytes  -> handle 1    mmap offset 0x0001008cb000 va 0x0000000000200000 flags 0xe
+BO   src     6291456 bytes  -> handle 2    mmap offset 0x0001008cc000 va 0x0000000000400000 flags 0x6
+BO   dst     6291456 bytes  -> handle 3    mmap offset 0x000100ecc000 va 0x0000000000a00000 flags 0x6
+== size 4096 words 00000001 00000fff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.527364 ---
+CS   accepted               -> seq_no 1
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 4096 copied=yes guard=intact
+== size 16384 words 00000001 00003fff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.530589 ---
+CS   accepted               -> seq_no 2
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 16384 copied=yes guard=intact
+== size 16388 words 00000001 00004003 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.533716 ---
+CS   accepted               -> seq_no 3
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 16388 copied=yes guard=intact
+== size 20480 words 00000001 00004fff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.536851 ---
+CS   accepted               -> seq_no 4
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 20480 copied=yes guard=intact
+== size 65536 words 00000001 0000ffff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.540028 ---
+CS   accepted               -> seq_no 5
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 65536 copied=yes guard=intact
+== size 262144 words 00000001 0003ffff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.543238 ---
+CS   accepted               -> seq_no 6
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 262144 copied=yes guard=intact
+== size 1048576 words 00000001 000fffff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.546560 ---
+CS   accepted               -> seq_no 7
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 1048576 copied=yes guard=intact
+== size 4194304 words 00000001 003fffff 00000000 00400000 00000000 00a00000 00000000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 811.551061 ---
+CS   accepted               -> seq_no 8
+--- wait returned after 0.000 s, status 0 (completed) ---
+RESULT size 4194304 copied=yes guard=intact
+X1 PASS ring 0
+CTX  free                   -> ok
+exit 0

@@ -1,0 +1,9 @@
+CTX  alloc                  -> ctx_id 1
+BO   sdma-poll    4096 bytes  -> handle 1    mmap offset 0x0001008cb000 va 0x0000000000010000 flags 0xe
+{"stage": "submit", "ip": 2, "ring": 1, "release_ms": 0, "ib_dwords": 11}
+CS   ip_type 2 ring 1 ib_bytes 44 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 728.142311 ---
+CS   accepted               -> seq_no 1
+--- wait returned after 0.000 s, status 0 (completed) ---
+{"stage": "result", "busy": 0, "marker": 1373246004, "expected": 1373246004, "executed": true}
+CTX  free                   -> ok
