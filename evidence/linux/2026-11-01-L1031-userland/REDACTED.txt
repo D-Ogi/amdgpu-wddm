@@ -1,0 +1,9 @@
+Redactions in this directory, counts only. The campaign originals stay outside the repository.
+Kinds: mac = network MAC address; usb-serial = USB device serial number (root hub serials are PCI
+addresses and stay); lab-ipv4 = lab network address; uuid = UUID; edid-blob-lines = hex lines of an
+EDID blob; monitor-name = monitor name decoded from the EDID; lab-host-name = Windows host name;
+dev-pc-path = development PC path with its user name;
+camera-file-line = name of a camera frame file (the frames stay outside the repository).
+
+out/boot-a/l33-vulkaninfo-full.txt: monitor-name 3, uuid 6
+out/boot-a/l33-vulkaninfo-summary.txt: uuid 2

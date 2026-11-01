@@ -1,0 +1,42 @@
+# L38 audio 2026-11-01T01:29:09Z
+01:00.1 Audio device [0403]: Advanced Micro Devices, Inc. [AMD/ATI] Device [1002:13ff]
+Generic
+card0
+cards
+devices
+hwdep
+modules
+oss
+pcm
+seq
+timers
+version
+ 0 [Generic        ]: HDA-Intel - HD-Audio Generic
+                      HD-Audio Generic at 0xfe880000 irq 51
+00-03: HDMI 0 : HDMI 0 : playback 1
+00-07: HDMI 1 : HDMI 1 : playback 1
+== /proc/asound/card0/eld#0.0
+monitor_present		1
+eld_valid		1
+codec_pin_nid		0x3
+codec_dev_id		0x0
+codec_cvt_nid		0x0
+connection_type		DisplayPort
+eld_version		[0x2] CEA-861D or below
+edid_version		[0x3] CEA-861-B, C or D
+support_hdcp		0
+support_ai		0
+audio_sync_delay	0
+speakers		[0x1] FL/FR
+== /proc/asound/card0/eld#0.1
+monitor_present		0
+eld_valid		0
+codec_pin_nid		0x5
+codec_dev_id		0x0
+codec_cvt_nid		0x0
+[   14.997227] snd_hda_intel 0000:01:00.1: enabling device (0000 -> 0002)
+[   15.023326] input: HD-Audio Generic HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:08.1/0000:01:00.1/sound/card0/input13
+[   15.023485] input: HD-Audio Generic HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:08.1/0000:01:00.1/sound/card0/input14
+[  498.745312] snd_hda_intel 0000:01:00.1: bound 0000:01:00.0 (ops amdgpu_dm_audio_component_bind_ops [amdgpu])
+[  498.994757] Modules linked in: amdgpu(+) drm_buddy amdxcp drm_panel_backlight_quirks gpu_sched drm_ttm_helper ttm drm_exec i2c_algo_bit drm_suballoc_helper drm_display_helper cec crc16 k10temp af_packet apple_mfi_fastcharge serio_raw pcspkr efi_pstore realtek r8169 mdio_devres libphy snd_hda_codec_atihdmi mdio_bus snd_hda_codec_hdmi i2c_piix4 i2c_smbus sp5100_tco snd_hda_intel snd_hda_codec snd_hda_core snd_intel_dspcfg snd_intel_sdw_acpi snd_hwdep snd_pcm snd_timer snd soundcore joydev input_leds mousedev intel_rapl_msr intel_rapl_common evdev button efivarfs uas hid_apple hid_generic nls_utf8 nls_cp437 vfat fat usbhid hid video wmi ahci libahci libata ohci_pci ohci_hcd xhci_pci xhci_hcd ehci_pci ehci_hcd nvme nvme_core hwmon usb_storage usbcore usb_common sd_mod scsi_mod scsi_common squashfs loop [last unloaded: k10temp]
+[  499.002624] Modules linked in: amdgpu(+) drm_buddy amdxcp drm_panel_backlight_quirks gpu_sched drm_ttm_helper ttm drm_exec i2c_algo_bit drm_suballoc_helper drm_display_helper cec crc16 k10temp af_packet apple_mfi_fastcharge serio_raw pcspkr efi_pstore realtek r8169 mdio_devres libphy snd_hda_codec_atihdmi mdio_bus snd_hda_codec_hdmi i2c_piix4 i2c_smbus sp5100_tco snd_hda_intel snd_hda_codec snd_hda_core snd_intel_dspcfg snd_intel_sdw_acpi snd_hwdep snd_pcm snd_timer snd soundcore joydev input_leds mousedev intel_rapl_msr intel_rapl_common evdev button efivarfs uas hid_apple hid_generic nls_utf8 nls_cp437 vfat fat usbhid hid video wmi ahci libahci libata ohci_pci ohci_hcd xhci_pci xhci_hcd ehci_pci ehci_hcd nvme nvme_core hwmon usb_storage usbcore usb_common sd_mod scsi_mod scsi_common squashfs loop [last unloaded: k10temp]

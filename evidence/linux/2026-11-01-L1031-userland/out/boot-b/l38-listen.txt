@@ -1,0 +1,36 @@
+capture start 2026-11-01T00:29:37Z secs 18.0 rc 0 
+window utc 00:29:37.8 t+  0.0s rms  -68.3 dBFS  1000 Hz over neighbours  -22.4 dB  -
+window utc 00:29:38.3 t+  0.5s rms -109.2 dBFS  1000 Hz over neighbours    5.2 dB  -
+window utc 00:29:38.8 t+  1.0s rms -108.1 dBFS  1000 Hz over neighbours   -6.9 dB  -
+window utc 00:29:39.3 t+  1.5s rms -108.9 dBFS  1000 Hz over neighbours    0.6 dB  -
+window utc 00:29:39.8 t+  2.0s rms -108.6 dBFS  1000 Hz over neighbours    1.6 dB  -
+window utc 00:29:40.3 t+  2.5s rms -108.4 dBFS  1000 Hz over neighbours   -0.2 dB  -
+window utc 00:29:40.8 t+  3.0s rms -108.5 dBFS  1000 Hz over neighbours   -2.4 dB  -
+window utc 00:29:41.3 t+  3.5s rms -108.3 dBFS  1000 Hz over neighbours    0.5 dB  -
+window utc 00:29:41.8 t+  4.0s rms -108.4 dBFS  1000 Hz over neighbours    1.5 dB  -
+window utc 00:29:42.3 t+  4.5s rms -108.5 dBFS  1000 Hz over neighbours    0.4 dB  -
+window utc 00:29:42.8 t+  5.0s rms -108.7 dBFS  1000 Hz over neighbours   -1.1 dB  -
+window utc 00:29:43.3 t+  5.5s rms -108.3 dBFS  1000 Hz over neighbours    0.4 dB  -
+window utc 00:29:43.8 t+  6.0s rms  -87.9 dBFS  1000 Hz over neighbours  -22.0 dB  -
+window utc 00:29:44.3 t+  6.5s rms  -96.0 dBFS  1000 Hz over neighbours  -14.2 dB  -
+window utc 00:29:44.8 t+  7.0s rms -108.0 dBFS  1000 Hz over neighbours   -0.5 dB  -
+window utc 00:29:45.3 t+  7.5s rms -108.4 dBFS  1000 Hz over neighbours   -4.2 dB  -
+window utc 00:29:45.8 t+  8.0s rms -108.5 dBFS  1000 Hz over neighbours    0.0 dB  -
+window utc 00:29:46.3 t+  8.5s rms -108.5 dBFS  1000 Hz over neighbours   -1.9 dB  -
+window utc 00:29:46.8 t+  9.0s rms -108.7 dBFS  1000 Hz over neighbours    0.6 dB  -
+window utc 00:29:47.3 t+  9.5s rms -108.7 dBFS  1000 Hz over neighbours    1.7 dB  -
+window utc 00:29:47.8 t+ 10.0s rms -108.4 dBFS  1000 Hz over neighbours    0.5 dB  -
+window utc 00:29:48.3 t+ 10.5s rms -108.4 dBFS  1000 Hz over neighbours   -0.7 dB  -
+window utc 00:29:48.8 t+ 11.0s rms -108.7 dBFS  1000 Hz over neighbours    0.1 dB  -
+window utc 00:29:49.3 t+ 11.5s rms -108.3 dBFS  1000 Hz over neighbours   -0.5 dB  -
+window utc 00:29:49.8 t+ 12.0s rms -108.5 dBFS  1000 Hz over neighbours   -0.4 dB  -
+window utc 00:29:50.3 t+ 12.5s rms -108.3 dBFS  1000 Hz over neighbours    1.1 dB  -
+window utc 00:29:50.8 t+ 13.0s rms -108.5 dBFS  1000 Hz over neighbours    1.7 dB  -
+window utc 00:29:51.3 t+ 13.5s rms -108.4 dBFS  1000 Hz over neighbours   -0.1 dB  -
+window utc 00:29:51.8 t+ 14.0s rms -108.5 dBFS  1000 Hz over neighbours   -0.0 dB  -
+window utc 00:29:52.3 t+ 14.5s rms -108.5 dBFS  1000 Hz over neighbours    0.4 dB  -
+window utc 00:29:52.8 t+ 15.0s rms -108.6 dBFS  1000 Hz over neighbours   -0.2 dB  -
+window utc 00:29:53.3 t+ 15.5s rms -108.7 dBFS  1000 Hz over neighbours   -0.1 dB  -
+window utc 00:29:53.8 t+ 16.0s rms -108.2 dBFS  1000 Hz over neighbours    3.8 dB  -
+window utc 00:29:54.3 t+ 16.5s rms -108.3 dBFS  1000 Hz over neighbours   -0.2 dB  -
+LISTEN-VERDICT NOT HEARD: 0 of 34 half-second windows carry 1000 Hz at least 20 dB over 0.7x and 1.3x (a 10 s tone fills about 20)

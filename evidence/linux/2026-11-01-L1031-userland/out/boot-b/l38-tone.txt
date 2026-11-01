@@ -1,0 +1,37 @@
+# L38 tone utc=2026-11-01T01:30:48Z
+# before /sys/kernel/debug/dri/0000:01:00.0/amdgpu_regs table=l38-dto.regs
+mmDCCG_AUDIO_DTO_SOURCE                                  0x005AC 0x00100010
+mmDCCG_AUDIO_DTO0_PHASE                                  0x005B0 0x00000000
+mmDCCG_AUDIO_DTO0_MODULE                                 0x005B4 0x00000001
+mmDCCG_AUDIO_DTO1_PHASE                                  0x005B8 0x0003A980
+mmDCCG_AUDIO_DTO1_MODULE                                 0x005BC 0x005B6184
+mmAZALIA_AUDIO_DTO                                       0x0E20C 0x00640018
+mmAZALIA_AUDIO_DTO_CONTROL                               0x0E210 0x00000000
+mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES        0x0E334 0xC0000009
+# during /sys/kernel/debug/dri/0000:01:00.0/amdgpu_regs table=l38-dto.regs
+mmDCCG_AUDIO_DTO_SOURCE                                  0x005AC 0x00100010
+mmDCCG_AUDIO_DTO0_PHASE                                  0x005B0 0x00000000
+mmDCCG_AUDIO_DTO0_MODULE                                 0x005B4 0x00000001
+mmDCCG_AUDIO_DTO1_PHASE                                  0x005B8 0x0003A980
+mmDCCG_AUDIO_DTO1_MODULE                                 0x005BC 0x005B6184
+mmAZALIA_AUDIO_DTO                                       0x0E20C 0x00640018
+mmAZALIA_AUDIO_DTO_CONTROL                               0x0E210 0x00000000
+mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES        0x0E334 0xC0000009
+cat: can't open '/proc/asound/card0/pcm3p/sub0/hw_params': No such file or directory
+cat: can't open '/proc/asound/card0/pcm3p/sub0/status': No such file or directory
+# after /sys/kernel/debug/dri/0000:01:00.0/amdgpu_regs table=l38-dto.regs
+mmDCCG_AUDIO_DTO_SOURCE                                  0x005AC 0x00100010
+mmDCCG_AUDIO_DTO0_PHASE                                  0x005B0 0x00000000
+mmDCCG_AUDIO_DTO0_MODULE                                 0x005B4 0x00000001
+mmDCCG_AUDIO_DTO1_PHASE                                  0x005B8 0x0003A980
+mmDCCG_AUDIO_DTO1_MODULE                                 0x005BC 0x005B6184
+mmAZALIA_AUDIO_DTO                                       0x0E20C 0x00640018
+mmAZALIA_AUDIO_DTO_CONTROL                               0x0E210 0x00000000
+mmAZALIA_F0_CODEC_FUNCTION_PARAMETER_POWER_STATES        0x0E334 0xC0000009
+was set period_size = 384000
+was set buffer_size = 768000
+ 0 - Front Left
+ 1 - Front Right
+Time per period = 9.995834
+speaker-test exit 0
+# end utc=2026-11-01T01:30:58Z
