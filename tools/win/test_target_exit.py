@@ -50,6 +50,18 @@ class CommandLines(unittest.TestCase):
         self.assertEqual(sent, ['powershell -NoProfile -ExecutionPolicy Bypass -File "C:\\BC250\\tmp\\x.ps1" '
                                 '-Mode "a;b"; exit $LASTEXITCODE'])
 
+    def test_run_staged_is_one_connection_without_a_push(self):
+        # BD-108: a script that a session staged once runs with one ssh connection; run_script makes three.
+        t = target.Target.__new__(target.Target)
+        t.cfg = {"tmp_dir": "C:\\BC250\\tmp"}
+        sent, pushed = [], []
+        t.push = lambda paths, remote_dir=None, timeout=300: pushed.append(paths)
+        t.ssh = lambda command, timeout=None: sent.append(command)
+        t.run_staged("C:\\BC250\\tmp\\input\\input-exec.ps1", ["-Session", "game-x", "-ActionsB64", "dGFwOjFD"])
+        self.assertEqual(pushed, [])
+        self.assertEqual(sent, ['powershell -NoProfile -ExecutionPolicy Bypass -File "C:\\BC250\\tmp\\input\\input-exec.ps1" '
+                                '-Session game-x -ActionsB64 dGFwOjFD; exit $LASTEXITCODE'])
+
     def test_inline_status_starts_on_its_own_line(self):
         import base64
         line = target.encoded_command("Get-Date # a comment")

@@ -44,10 +44,13 @@ these rules against the script.
 | `session.py` | The host side of a session outside the Witcher 3 route: `facts` prints the profile as the kit reads it, `dry` stages an attempt and runs `game-runtime.ps1 -DryRun -Offline` under Windows PowerShell 5.1 |
 | `profile-check.py` | Checks every profile with the trial kit's own loader and prints what a session would use. Offline: no lab, no Steam data, no game file |
 | `make-unity-profiles.py` | Writes the profiles of the small Unity games (the player selects the API with `-force-d3d11` or `-force-d3d12`) |
-| `input/inp.py` | The host side of the interactive channel: one ssh call per command, an optional screenshot through `bc250mon/mon.py` at 0.33 scale |
+| `input/inp.py` | The host side of the interactive channel. A command goes through the held channel when one serves the session, else through one ssh connection to the `input-exec.ps1` that `start` staged. An optional screenshot comes through `bc250mon/mon.py` at 0.33 scale |
 | `input/input-server.ps1` | The lab side: a bounded input server in the interactive session. It polls a command file every 100 ms and runs the actions with `SendInput` |
 | `input/start-input.ps1` | Registers and starts the server as the one-shot task "Lab game input", and `-Stop` ends it |
 | `input/input-exec.ps1` | Writes the next command for the server and waits for its answer |
+| `input/channel.py` | The held channel (BD-108): one ssh session for a whole game session, so a command does not open a new connection. `serve` holds the session until its bound (at most 1230 s) or `stop`. `call()` gives None when no broker serves the session, and the caller then takes its own path. Each request writes its four time stamps to `stamps.tsv` |
+| `input/channel-host.ps1` | The lab side of the held channel. It reads one request per line, runs a script staged next to it in the same process, and writes the output between two marker lines. It ends at its bound, on `QUIT` or when the connection closes |
+| `test_channel.py` | Host tests of the held channel. The far end is the local Windows PowerShell 5.1 running `channel-host.ps1` |
 | `smoke/*.ps1` | Small lab helpers around a session: the boot state, one click or key tap, the game witness, the evidence of the start, the modules, the stacks and their symbols, the thread rates, the windows, the shader cache, the crash dump and the game settings |
 | `test_lab_runner.py` | The host tests: the profiles, the two session rules and the screenshot directory. The `lab-runner` check of `tools/quality/quick.ps1` runs them |
 
@@ -59,7 +62,9 @@ python tools/win/lab-runner/profile-check.py rottr the-ascent    two of them
 python tools/win/lab-runner/session.py facts rottr               the shell facts a session script takes
 python tools/win/lab-runner/session.py dry 123 rottr --out <dir> stage an attempt and dry-run the runtime
 python tools/win/lab-runner/input/inp.py start game-rottr 1200   start the input server (at most 1200 s)
+python tools/win/lab-runner/input/inp.py attach game-rottr 1200  hold one ssh session (run_in_background, game running)
 python tools/win/lab-runner/input/inp.py game-rottr "clickat:0.64:0.89;wait:800;tap:1C" --shot
+python tools/win/lab-runner/input/inp.py detach game-rottr       end the held session
 python tools/win/lab-runner/input/inp.py stop game-rottr         quit the server and remove the task
 python -m unittest discover -s tools/win/lab-runner               the host tests
 ```

@@ -1,4 +1,5 @@
-# LAB (elevated SSH, one call per command from inp.py): writes the next cmd-NNN.txt for the input server of a game
+# LAB (elevated SSH, one call per command from inp.py: through the held channel of channel-host.ps1 when one serves
+# the session, else one ssh connection to this staged copy, BD-108): writes the next cmd-NNN.txt for the input server of a game
 # session and waits for its done-NNN.txt (100 ms poll on both sides). -Peek reports the queue and the server log tail.
 param([Parameter(Mandatory)][string]$Session, [string]$ActionsB64 = '', [int]$TimeoutSec = 20, [switch]$Peek)
 $ErrorActionPreference = 'Stop'

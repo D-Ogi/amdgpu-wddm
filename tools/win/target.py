@@ -270,6 +270,11 @@ class Target:
         remote_dir = remote_dir or self.cfg["tmp_dir"]
         self.push([local_path], remote_dir)
         remote = remote_dir.rstrip("\\") + "\\" + os.path.basename(local_path)
+        return self.run_staged(remote, args, timeout=timeout)
+
+    def run_staged(self, remote, args=(), timeout=600):
+        """Run a script that is already on the target, with -File: one ssh connection, where `run_script` makes
+        three (the directory, the push and the run). For a script that a session staged once (BD-108)."""
         quoted = " ".join(script_arg(a) for a in args)
         command = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{remote}" {quoted}'.rstrip()
         return self.ssh(command + PASS_EXIT, timeout=timeout)
