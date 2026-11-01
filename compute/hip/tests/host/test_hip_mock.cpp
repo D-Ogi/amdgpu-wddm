@@ -1908,6 +1908,17 @@ int main(int argc, char** argv) {
         bc250hsa_mock_reset();
         bc250hsa_counters_reset();
         check(bc250hsa_mock_set_host_arena(1u << 20) == 1, "BD-123 setup: the mock arena");
+        // A deterministic backend refusal, without exhausting the host. The
+        // following successful allocations and byte comparisons also prove that
+        // this error does not poison the device or consume the arena.
+        void* refused = nullptr;
+        const uint32_t allocations_before_oom = bc250hsa_mock_live_allocations();
+        check(hipMalloc(&refused, 2u << 20) == hipErrorOutOfMemory,
+              "hipMalloc: backend ENOMEM becomes typed HIP out-of-memory");
+        check(refused == nullptr && bc250hsa_mock_live_allocations() == allocations_before_oom,
+              "hipMalloc: refused allocation creates no live resource");
+        check(hipGetLastError() == hipErrorOutOfMemory && hipGetLastError() == hipSuccess,
+              "hipMalloc: typed out-of-memory is reported and cleared once");
         unsigned char* view_a = nullptr;   // hipHostMalloc
         unsigned char* view_b = nullptr;   // hipHostMalloc, its view right after view_a
         unsigned char* device = nullptr;   // hipMalloc

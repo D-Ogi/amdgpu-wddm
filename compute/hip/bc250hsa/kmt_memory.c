@@ -246,6 +246,23 @@ static int local_budget_allows(struct bc250hsa_device* dev, uint64_t bytes)
  * the device down before the first launch: Qwen3-8B Q8_0 (8071 MiB) on unit A, fence
  * value UINT64_MAX at the first kernel argument lease. Without the flag a refusal is a
  * status that the caller can answer with the other heap. */
+/* Allocation/residency refusals must reach HIP as out-of-memory, rather than EOS
+ * (hipErrorUnknown). Preserve the original NTSTATUS for diagnosis. Do not classify
+ * invalid parameters, access failures or device faults as memory pressure. */
+static bc250hsa_status allocation_status(const char* what, NTSTATUS status)
+{
+    bc250hsa_status result = bc250hsa_os_status(what, status);
+    switch (status) {
+    case STATUS_NO_MEMORY:
+    case STATUS_INSUFFICIENT_RESOURCES:
+    case STATUS_COMMITMENT_LIMIT:
+    case STATUS_GRAPHICS_NO_VIDEO_MEMORY:
+        return BC250HSA_ENOMEM;
+    default:
+        return result;
+    }
+}
+
 static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_alloc_record* record,
                                        uint64_t phys_bytes, uint64_t phys_alignment,
                                        uint32_t flags, uint32_t heap, uint32_t gem_flags)
@@ -293,7 +310,7 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
 
     status = D3DKMTCreateAllocation2(&create);
     if (!NT_SUCCESS(status)) {
-        return bc250hsa_os_status("CreateAllocation2", status);
+        return allocation_status("CreateAllocation2", status);
     }
     record->handle = info.hAllocation;
     record->bytes = phys_bytes;
@@ -317,7 +334,7 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
     }
     status = D3DKMTMapGpuVirtualAddress(&map);
     if (!NT_SUCCESS(status)) {
-        return bc250hsa_os_status("MapGpuVirtualAddress", status);
+        return allocation_status("MapGpuVirtualAddress", status);
     }
     record->va = map.VirtualAddress;
     require_paging_fence(&paging_fence, map.PagingFenceValue);
@@ -328,7 +345,7 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
     resident.AllocationList = &record->handle;
     status = D3DKMTMakeResident(&resident);
     if (!NT_SUCCESS(status)) {
-        return bc250hsa_os_status("MakeResident", status);
+        return allocation_status("MakeResident", status);
     }
     require_paging_fence(&paging_fence, resident.PagingFenceValue);
 

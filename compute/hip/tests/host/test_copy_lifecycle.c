@@ -139,6 +139,9 @@ static int      g_hold;             /* 1: a submission waits for the test, or fo
 static uint32_t g_delay_ms;         /* the pump retires a submission this long after it */
 static int      g_submit_fail;
 static int      g_alloc_fail;
+static int      g_memory_failure_stage;
+static NTSTATUS g_memory_failure_status;
+static NTSTATUS g_memory_fallback_status;
 static int      g_corrupt_host;     /* a copy into GTT memory leaves the stale bytes */
 static uint32_t g_register_fail_at; /* the n-th fence wait registration fails, 0 never */
 static uint32_t g_event_fail_at;    /* the n-th CreateEventW fails, 0 never */
@@ -307,6 +310,11 @@ NTSTATUS APIENTRY FakeCreateAllocation2(D3DKMT_CREATEALLOCATION* create)
     const struct bc250hsa_alloc_blob* blob =
         (const struct bc250hsa_alloc_blob*)create->pAllocationInfo2[0].pPrivateDriverData;
     uint32_t i;
+    if (g_memory_failure_stage == 1) {
+        NTSTATUS refusal = blob->preferred_heap == BC250HSA_HEAP_VRAM ?
+                           g_memory_failure_status : g_memory_fallback_status;
+        if (!NT_SUCCESS(refusal)) { return refusal; }
+    }
     if (g_alloc_fail) { return STATUS_NO_MEMORY; }
     for (i = 0; i < MAX_ALLOCS; i++) {
         if (!g_allocs[i].live) { break; }
@@ -328,6 +336,11 @@ NTSTATUS APIENTRY FakeCreateAllocation2(D3DKMT_CREATEALLOCATION* create)
 NTSTATUS APIENTRY FakeMapGpuVirtualAddress(D3DDDI_MAPGPUVIRTUALADDRESS* map)
 {
     fake_alloc* a = alloc_by_handle(map->hAllocation);
+    if (g_memory_failure_stage == 2 && a != NULL) {
+        NTSTATUS refusal = a->heap == BC250HSA_HEAP_VRAM ?
+                           g_memory_failure_status : g_memory_fallback_status;
+        if (!NT_SUCCESS(refusal)) { return refusal; }
+    }
     CHECK(a != NULL);
     if (a == NULL) { return STATUS_INVALID_PARAMETER; }
     a->va = g_next_va;
@@ -341,6 +354,11 @@ NTSTATUS APIENTRY FakeMapGpuVirtualAddress(D3DDDI_MAPGPUVIRTUALADDRESS* map)
 NTSTATUS APIENTRY FakeMakeResident(D3DDDI_MAKERESIDENT* resident)
 {
     fake_alloc* a = alloc_by_handle(resident->AllocationList[0]);
+    if (g_memory_failure_stage == 3 && a != NULL) {
+        NTSTATUS refusal = a->heap == BC250HSA_HEAP_VRAM ?
+                           g_memory_failure_status : g_memory_fallback_status;
+        if (!NT_SUCCESS(refusal)) { return refusal; }
+    }
     resident->PagingFenceValue = 0u;
     if (resident->Flags.MustSucceed) { ++g_must_succeed; }
     if (a != NULL && a->heap == BC250HSA_HEAP_VRAM) {
@@ -668,6 +686,8 @@ static void dev_init(struct bc250hsa_device* d)
     g_pending_count = 0u;
     g_fence_mem = 0u; g_retired = 0u; g_submitted = 0u; g_removed = 0;
     g_hold = 0; g_delay_ms = 0u; g_submit_fail = 0; g_alloc_fail = 0; g_corrupt_host = 0;
+    g_memory_failure_stage = 0; g_memory_failure_status = STATUS_SUCCESS;
+    g_memory_fallback_status = STATUS_SUCCESS;
     g_register_fail_at = 0u; g_event_fail_at = 0u;
     g_context_fail = 0; g_error_next = 0; g_device_error = 0; g_error_pending = 0;
     g_local_budget = 0u; g_local_usage = 0u; g_vram_resident_fail = 0;
@@ -973,7 +993,8 @@ static void case_control_inconclusive(int kind)
     if (kind == 2) { g_event_fail_at = g_event_calls + 1u; }
     if (kind == 3) { g_alloc_fail = 1; }
     status = bc250hsa_gpu_copy_ready(&d, &ready);
-    CHECK(status == ((kind == 0) ? BC250HSA_ETIMEOUT : BC250HSA_EOS) && ready == 0u);
+    CHECK(status == ((kind == 0) ? BC250HSA_ETIMEOUT :
+                     (kind == 3) ? BC250HSA_ENOMEM : BC250HSA_EOS) && ready == 0u);
     CHECK(d.gpu_copy_control == BC250HSA_CONTROL_UNTRIED && !d.device_lost);
     CHECK(counters(&c1) && c1.gpu_copy_control_failed == c0.gpu_copy_control_failed);
     if (kind != 3) {
@@ -1740,6 +1761,67 @@ static void case_copy_lock(void)
 #endif
 #endif
 
+static void case_allocation_errors(void)
+{
+    static const NTSTATUS statuses[] = {
+        STATUS_NO_MEMORY, STATUS_INSUFFICIENT_RESOURCES, STATUS_COMMITMENT_LIMIT,
+        STATUS_GRAPHICS_NO_VIDEO_MEMORY, STATUS_INVALID_PARAMETER, STATUS_ACCESS_DENIED,
+        STATUS_GRAPHICS_GPU_EXCEPTION_ON_DEVICE
+    };
+    unsigned i, j;
+    int stage;
+    printf("copy lifecycle: typed allocation refusals, cleanup and recovery\n");
+    for (stage = 1; stage <= 3; ++stage) {
+        for (i = 0; i < sizeof(statuses) / sizeof(statuses[0]); ++i) {
+            struct bc250hsa_device d;
+            bc250hsa_mem mem;
+            uint32_t creates, destroys, free_vas;
+            dev_init(&d);
+            creates = g_creates; destroys = g_destroys; free_vas = g_free_vas;
+            g_memory_failure_stage = stage;
+            g_memory_failure_status = statuses[i];
+            g_memory_fallback_status = statuses[i];
+            memset(&mem, 0xa5, sizeof(mem));
+            /* MAPPABLE is hipMalloc's actual flag: both VRAM and fallback GTT
+             * refuse, so both partial allocations must be released. */
+            CHECK(bc250hsa_alloc(&d, 4096u, 0u, BC250HSA_MEM_MAPPABLE, &mem) ==
+                  (i < 4u ? BC250HSA_ENOMEM : BC250HSA_EOS));
+            CHECK(bc250hsa_last_os_status() == (int32_t)statuses[i]);
+            CHECK(mem.opaque == NULL && mem.va == 0u && mem.bytes == 0u);
+            CHECK(d.allocations == NULL && !d.device_lost);
+            CHECK(g_creates - creates == (stage > 1 ? 2u : 0u));
+            CHECK(g_destroys - destroys == g_creates - creates);
+            CHECK(g_free_vas - free_vas == (stage > 2 ? 2u : 0u));
+            for (j = 0; j < MAX_ALLOCS; ++j) { CHECK(!g_allocs[j].live); }
+            g_memory_failure_stage = 0;
+            CHECK(bc250hsa_alloc(&d, 4096u, 0u, BC250HSA_MEM_MAPPABLE, &mem) == BC250HSA_OK);
+            CHECK(bc250hsa_free(&d, &mem) == BC250HSA_OK);
+            dev_finish(&d, 0);
+        }
+        for (i = 0; i < 2u; ++i) {
+            struct bc250hsa_device d;
+            bc250hsa_mem mem;
+            dev_init(&d);
+            g_memory_failure_stage = stage;
+            g_memory_failure_status = STATUS_NO_MEMORY;
+            g_memory_fallback_status = i == 0u ? STATUS_SUCCESS : STATUS_ACCESS_DENIED;
+            CHECK(bc250hsa_alloc(&d, 4096u, 0u, BC250HSA_MEM_MAPPABLE, &mem) ==
+                  (i == 0u ? BC250HSA_OK : BC250HSA_EOS));
+            if (i == 0u) {
+                fake_alloc* a = alloc_by_handle(((bc250hsa_alloc_record*)mem.opaque)->handle);
+                CHECK(a != NULL && a->heap == BC250HSA_HEAP_GTT);
+                CHECK(bc250hsa_free(&d, &mem) == BC250HSA_OK);
+            } else {
+                CHECK(bc250hsa_last_os_status() == (int32_t)STATUS_ACCESS_DENIED);
+                CHECK(mem.opaque == NULL && mem.va == 0u);
+            }
+            CHECK(d.allocations == NULL && !d.device_lost);
+            for (j = 0; j < MAX_ALLOCS; ++j) { CHECK(!g_allocs[j].live); }
+            dev_finish(&d, 0);
+        }
+    }
+}
+
 int main(void)
 {
     int kind;
@@ -1747,6 +1829,7 @@ int main(void)
     bc250hsa_set_log(print_log, NULL, BC250HSA_LOG_INFO);
     g_next_handle = 0x100u;
     launch_init();
+    case_allocation_errors();
     case_lab_shape(0);
     case_lab_shape(1);
     case_two_contexts_one_fence();
