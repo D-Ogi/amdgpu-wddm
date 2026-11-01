@@ -507,6 +507,10 @@ uint32_t pso_detach_summary() noexcept;
 //                      amdgpu_wddm_radv-deferred-<pid>-shell.log in %TEMP%: frame times, calls and sampled times per
 //                      timed entry and thread, the direct entry's misses, the replay workers' busy, spin, yield and
 //                      sleep times.
+//   BC250_REPLAY_SPIN_US, BC250_REPLAY_YIELD_US   the replay workers' spin (0 to 1000, default 20) and yield (0 to
+//                      10000, default 100) windows in microseconds, before a worker that has caught up sleeps (BD-225);
+//                      the "replay policy: on" line gives the values and where they came from. They do not turn the
+//                      entry path experiment on.
 // The direct entry is the graphics table's slot for the value-only recording calls (draws, input assembler,
 // viewports and scissors, blend factor and stencil reference, graphics root arguments): with deferred replay on, it
 // writes the slot's own ring entry from the table entry itself, without the shell's entry thunk; anything else, and

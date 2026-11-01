@@ -772,16 +772,19 @@ HRESULT set_replay_policy(DeviceContext* c, const ReplayPolicy* policy) noexcept
     rp->policy = *policy;
     rp->serial = g_serial.fetch_add(1) + 1;
     rp->qpf = static_cast<uint64_t>(frequency.QuadPart);
-    rp->spin_ticks = rp->qpf * kSpinMicroseconds / 1000000;
-    rp->yield_ticks = rp->qpf * kYieldMicroseconds / 1000000;
+    // A lab build may set other windows for a measurement (BC250_REPLAY_SPIN_US, BC250_REPLAY_YIELD_US; BD-225).
+    uint32_t spin_us = kSpinMicroseconds, yield_us = kYieldMicroseconds;
+    const char* windows = entry_replay_windows(&spin_us, &yield_us);
+    rp->spin_ticks = rp->qpf * spin_us / 1000000;
+    rp->yield_ticks = rp->qpf * yield_us / 1000000;
     rp->wake_bytes = uint64_t{kWakeKilobytes} << 10;
     rp->qpc0 = qpc();
     rp->tsc0 = __rdtsc();
     c->replay = rp;
-    replay_log(rp, "replay policy: on, up to %u rings of %u KiB, worker spin %u us, yield %u us, wake at %u KiB pending, "
-               "workers at their owner's level and lifted above a waiting drain, long waits from %u ms, summaries every "
-               "%u s (qpc %llu, qpf %llu)", policy->rings, policy->ring_bytes >> 10, kSpinMicroseconds,
-               kYieldMicroseconds, kWakeKilobytes, kLongWaitMilliseconds, kSummarySeconds,
+    replay_log(rp, "replay policy: on, up to %u rings of %u KiB, worker spin %u us, yield %u us (%s), wake at %u KiB "
+               "pending, workers at their owner's level and lifted above a waiting drain, long waits from %u ms, "
+               "summaries every %u s (qpc %llu, qpf %llu)", policy->rings, policy->ring_bytes >> 10, spin_us,
+               yield_us, windows, kWakeKilobytes, kLongWaitMilliseconds, kSummarySeconds,
                static_cast<unsigned long long>(rp->qpc0), static_cast<unsigned long long>(rp->qpf));
     return S_OK;
 }

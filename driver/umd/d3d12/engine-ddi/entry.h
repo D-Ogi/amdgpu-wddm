@@ -100,6 +100,10 @@ inline EntryGlobals g_entry;
 
 // Reads the knobs once per process (thread-safe); every entry point that can come first calls it.
 void entry_knobs() noexcept;
+// The replay workers' windows (set_replay_policy): spin_us and yield_us come in with the defaults, and a lab build
+// replaces each one that BC250_REPLAY_SPIN_US or BC250_REPLAY_YIELD_US sets. Returns where the values came from:
+// "default", "environment" or "file". A release build changes neither and returns "default".
+const char* entry_replay_windows(uint32_t* spin_us, uint32_t* yield_us) noexcept;
 // The calling thread's block, made and registered on first use (null only if it could not be allocated).
 EntryThread* entry_thread_slow() noexcept;
 inline thread_local EntryThread* t_entry = nullptr;
