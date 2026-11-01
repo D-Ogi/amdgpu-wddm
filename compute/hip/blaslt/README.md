@@ -62,22 +62,29 @@ the error stream at AMD's first refusal per transpose pair and at each refused o
 The front is a component of our ROCm stack. It installs with our HIP runtime in the same way as the AMD ABI face
 (`amdhip64_7.dll`, `build-amd-abi.ps1`), through one step: **`attach-rocm-venv.ps1`**.
 
-1. `make-rocm-payload.ps1` writes the payload: our `amdhip64_7.dll`, our `libhipblaslt.dll`,
-   `attach-rocm-venv.ps1`, and `payload.json`. `payload.json` names the TheRock build and four SHA-256 values:
-   our two DLLs, and the two AMD DLLs that they replace and were tested against.
-2. The release package carries the payload as `payload\tools\hip\rocm`. The installer copies `payload\tools\hip`
+1. `build-rocm-payload.ps1` is the release recipe (rows `extra-rocm-release` and `extra-rocm-lab`). It builds the
+   face and the front against the files of one TheRock build (an input directory with `therock.json`), then
+   `make-rocm-payload.ps1` writes the payload: our `amdhip64_7.dll`, our `libhipblaslt.dll`,
+   `attach-rocm-venv.ps1`, and `payload.json`. Our two DLLs get the version resource of the release in the
+   payload directory, and the host test of the front runs again on the stamped copy.
+2. `payload.json` (schema 2) names the TheRock build and the SHA-256 of the two AMD DLLs that ours replace and were
+   tested against. Those two values are fixed. Our two DLLs are only recorded as built (`build_sha256`): the release
+   signs every PE file after the build, so the installed bytes differ. The attach step takes the two files beside it
+   as ours.
+3. The release package carries the payload as `payload\tools\hip\rocm`. The installer copies `payload\tools\hip`
    to `<install root>\tools\hip`, so the payload arrives with the HIP runtime. `tools\hip\rocm` is not on PATH,
-   so no process outside an attached venv loads these two DLLs. The rows in `tools/release/release-sources.json`
-   are still to be added.
-3. A user runs `<install root>\tools\hip\rocm\attach-rocm-venv.ps1 -Venv <venv>` once per venv, because each
+   so no process outside an attached venv loads these two DLLs.
+4. A user runs `<install root>\tools\hip\rocm\attach-rocm-venv.ps1 -Venv <venv>` once per venv, because each
    venv has its own copy of TheRock's DLLs:
    - `_rocm_sdk_core\bin\amdhip64_7.dll` becomes ours, and AMD's DLL is kept as `amdhip64_7.dll.orig`. It is
      never loaded (D015).
    - `_rocm_sdk_libraries\bin\libhipblaslt.dll` becomes the front, and AMD's DLL is kept as
      `libhipblaslt_amd.dll` in the same directory. AMD's kpack device code still resolves from that directory.
-   - `<venv>\bc250-rocm-attach.json` records the four hashes.
-4. `-Check` reports the state and changes nothing. `-Detach` puts both AMD DLLs back. `-PlanOnly` reports what the
-   step would do.
+   - `<venv>\bc250-rocm-attach.json` records the hashes of our two DLLs and of AMD's two DLLs.
+   - `%ProgramData%\amdgpu-wddm\rocm-venvs\<key>.json` lists the venv for the uninstaller. The key is the first 16
+     bytes of the SHA-256 of the lower-case venv path. If the step cannot write the entry, it attaches and warns.
+5. `-Check` reports the state and whether the venv is listed, and changes nothing. `-Detach` puts both AMD DLLs back
+   and removes the record and the entry. `-PlanOnly` reports what the step would do.
 
 The step refuses a venv whose AMD DLL is not the one that `payload.json` names, for example another TheRock nightly.
 The export table of the front is the table of one AMD build. A refusal changes no file. A file in use (a running
@@ -87,12 +94,26 @@ Python of the venv) stops the step before its first change. pip knows only the n
 |---|---|---|
 | `pip install --force-reinstall` of the same wheel | `reinstalled` (AMD's DLL live, AMD's kept copy beside it) | Attach again |
 | A wheel of another TheRock build | `other` | Install the build of `payload.json`, then attach |
+| An update of our driver | `earlier` (the DLLs of the release before, by the record in the venv) | Attach again |
+
+`-Detach` of an `earlier` venv uses the record in the venv, so the payload of the new release can detach it.
+
+**The uninstaller** runs `attach-rocm-venv.ps1 -Detach` for each listed venv (`tools/release/installer/rocm-venvs.ps1`)
+while the step is still in the install root. A venv that is gone is skipped with a log line, and its entry is
+removed. A venv in use keeps our DLLs and its entry, a warning names it with the pip command that puts AMD's DLLs
+back, and the next uninstall run tries again. A dry run runs the step with `-PlanOnly`.
+
+Users can write the entries, and the uninstaller runs as an administrator. So an entry is only data:
+- The venv must be a folder on a local drive letter. A network path is refused before any access, because an
+  administrator's access to it would log on to the server that it names.
+- The step refuses a junction or a link on the path of each file that it changes (from the drive root down), and a
+  file link. It holds every directory of that path open, with no sharing that lets another process remove it, while it changes files, so no part
+  of the path can be replaced during the step.
 
 Not done yet:
-- The installer rows.
 - A way to attach from the control app.
-- A list of attached venvs for the uninstaller. Today, after an uninstall, an attached venv keeps our face and
-  cannot open the device. `-Detach` before the uninstall prevents that.
+- An attach again of each listed venv when a new release installs. Until then, a venv keeps the DLLs of the
+  release before (state `earlier`) until the user attaches it again.
 
 ## Tests
 
@@ -106,7 +127,11 @@ Not done yet:
   - Attributes set back to their defaults, the guard against calls from inside rocBLAS, the counters, and
     `BC250_BLASLT_FRONT=0`.
 - `tests/host/test-attach-rocm-venv.ps1`: the attach step on a stand-in venv, in Windows PowerShell 5.1 and
-  PowerShell 7. It covers each state, each refusal, and a DLL in use.
+  PowerShell 7. It covers each state, each refusal, a DLL in use, the list entries, an update to a new payload,
+  a junction, and a network path.
+- `tools/release/test-rocm-venvs.ps1`: the detach of the uninstaller over stand-in venvs listed by the real attach
+  step: a venv that is gone, a venv in use, an entry that names no local folder, a dry run, and a venv attached by
+  the release before.
 - On the development PC over the mock device (`scratch/t36/f11-rocm/kit3-testlog` t33 to t36), with AMD's DLL and
   rocBLAS of the wheel: torch serves 16 of 16 `torch._int_mm` cases through the front, and 16 of 16 fail without
   it. rocBLAS's I8II code objects load under the gfx1010 alias. The mock runs no kernel code, so the numbers come

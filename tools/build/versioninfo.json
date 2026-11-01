@@ -25,6 +25,8 @@
     "amdhip64.dll": "amdgpu-wddm HIP runtime (experimental)",
     "bc250hipblas.dll": "amdgpu-wddm hipBLAS subset (experimental)",
     "vadd.exe": "amdgpu-wddm HIP self-check (experimental)",
+    "amdhip64_7.dll": "amdgpu-wddm HIP runtime for TheRock ROCm (experimental)",
+    "libhipblaslt.dll": "amdgpu-wddm hipBLASLt front for TheRock ROCm (experimental)",
     "amdgpu-state-installer.exe": "amdgpu-wddm driver state installer"
   },
   "built": {
@@ -47,6 +49,8 @@
     "amdhip64.dll": "compute/hip/build-runtime.ps1 stamps the shipped runtime through tools/build/version-stamp.ps1; the mock builds of the same name stay as they were linked",
     "vadd.exe": "compute/hip/build-rebuilt-controls.ps1 stamps it through tools/build/version-stamp.ps1, with the samples beside it left alone",
     "bc250hipblas.dll": "compute/hip/build-rebuilt-controls.ps1 stamps it through tools/build/version-stamp.ps1, with the samples beside it left alone",
+    "amdhip64_7.dll": "compute/hip/make-rocm-payload.ps1 -Version, called by compute/hip/build-rocm-payload.ps1, stamps the copy in the payload directory through tools/build/version-stamp.ps1 before payload.json records its hash",
+    "libhipblaslt.dll": "compute/hip/make-rocm-payload.ps1 -Version, called by compute/hip/build-rocm-payload.ps1, stamps the copy in the payload directory through tools/build/version-stamp.ps1 before payload.json records its hash",
     "bc250control.dll": "tools/win/amdgpu_wddm_control/build.ps1 stamps it through tools/build/version-stamp.ps1 as its last step, after the gates that load the image it linked",
     "bc250kmd_cli.exe": "tools/win/amdgpu_wddm_control/build.ps1 stamps it through tools/build/version-stamp.ps1 as its last step, beside bc250control.dll",
     "amdgpu-state-installer.exe": "driver/state/installer-build.ps1 stamps it through tools/build/version-stamp.ps1, the step after the link of the worker",
