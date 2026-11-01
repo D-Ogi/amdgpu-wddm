@@ -257,6 +257,8 @@ Check 'pdb-repro' { & pwsh -NoProfile -File "$repo\tools\build\test-pdb-repro.ps
  Check 'driver-state-cli-x86' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-x86" -Arch x86 }
 # BD-083: the OpenCL probe builds and gives its verdicts without an OpenCL driver (tools\win\clprobe\README.md).
 Check 'clprobe' { & pwsh -NoProfile -File "$repo\tools\win\clprobe\test-host.ps1" -Kits "$Kits" -Out "$Out\clprobe" }
+# BD-167 fix 9: the register-escape probe builds reproducibly and its verdict rules hold (tools\win\bd167probe\README.md).
+Check 'bd167probe' { & pwsh -NoProfile -File "$repo\tools\win\bd167probe\test-host.ps1" -Kits "$Kits" -Out "$Out\bd167probe" }
  # The lab flavour of the CLI (BD-167: the raw diagnostic verbs) compiles too; test-flavour.ps1 checks both builds.
  Check 'driver-state-cli-lab-x64' { & pwsh -NoProfile -File "$repo\tools\win\bc250kmd_cli\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cli-lab-x64" -Arch x64 -Lab }
  Check 'driver-state-cumode-x64' { & pwsh -NoProfile -File "$repo\tools\win\cumode\build.ps1" -Kits "$Kits" -Out "$Out\driver-state-cumode-x64" -Arch x64 }
