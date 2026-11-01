@@ -62,7 +62,7 @@ until `PeerExit` timed out, and `elapsed_ms` carried three extra seconds. BD-075
 | `ipc` | two processes | The harness alone. It creates the peer process, the pipe and a duplicated event handle. It creates no device. |
 | `capdry` | one process | The capture oracle alone, with no capture. It builds a synthetic desktop texture and copies the window image into it. The region compare must find the image, report a 3,2 displacement as `shift=-3,-2` and name a stale image. Both 8-bit channel orders. |
 | `dda` | two processes | Desktop Duplication. The producer shows image A in a borderless window. The D3D11 consumer acquires frames and compares the window rectangle. Then the producer switches to image B and the consumer must see B. A window appears, so this cell needs `--interactive-ok`. |
-| `wgc` | two processes | The same oracle through Windows.Graphics.Capture, with `GraphicsCaptureItem` from the window handle and a free-threaded frame pool. This cell also needs `--interactive-ok`. |
+| `wgc` | two processes | The same oracle through Windows.Graphics.Capture, with `GraphicsCaptureItem` from the window handle and a free-threaded frame pool. This cell also needs `--interactive-ok`. `--wgc-item monitor` makes the item from the monitor that holds the window and reads the window's place in the monitor frame. `--producer-window app` makes the producer an activated taskbar window in place of a `WS_EX_NOACTIVATE` one. |
 
 ### How a cell can tell a real wait from luck
 
@@ -101,14 +101,14 @@ projection that the `wgc` cell needs. The compiler comes from the installed Visu
 pwsh -NoProfile -File tools\win\capture-share\host-validate.ps1
 ```
 
-The script runs the 34 headless checks and compares each verdict with the expected one. It runs the self-test, the
+The script runs the 35 headless checks and compares each verdict with the expected one. It runs the self-test, the
 harness cell, both controls, the oracle check, every keyed-mutex, shared-texture and fence cell, the two sRGB
 cells, four negative controls with `--inject skip-wait`, and the interlock check that `dda` and `wgc` refuse to
 start without `--interactive-ok`. It opens no window. It writes `<Out>\<stamp>\summary.txt` with one line for
 each run.
 
-A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01, and all 34 on
-2026-10-06. That result proves the client and the oracles. It says nothing about unit A.
+A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01, all 34 on
+2026-10-06, and all 35 on 2026-11-01. That result proves the client and the oracles. It says nothing about unit A.
 
 ## Run it on the lab
 
@@ -179,3 +179,16 @@ the kit expects, in `evidence/windows/2026-10-06-BD075-shared-resources-lab/`. R
 run on any route, and they need `--interactive-ok` in the lab's interactive session. The shared rows ran on the
 candidate D3D12 shell of `bd075/d3d12-shared-real`, so they need one confirmation pass on the installed release.
 The kit still prints no release name, CU count or composition route in its summary.
+
+On 2026-10-31 the capture cells ran on unit A (BD-084, 22631, the GPU desktop route): `dda` passed, and `wgc`
+stopped at `CreateForWindow` with `E_INVALIDARG`. The same bytes passed `wgc` on a development PC with 26200 and
+another driver. Three `wgc` runs in one session separate the two causes, with no restart:
+
+| Run | Options | What a pass shows |
+|---|---|---|
+| 1 | (none) | The window item works. This repeats the failed run. |
+| 2 | `--producer-window app` | A failure of run 1 with a pass here is the window rule of the OS build, not the driver. |
+| 3 | `--wgc-item monitor` | The compositor's capture path works on this route, with no window rule. |
+
+If runs 1 and 2 fail and run 3 passes, the window item of this OS build refuses our window. If run 3 also fails,
+the capture path of the route is the cause.

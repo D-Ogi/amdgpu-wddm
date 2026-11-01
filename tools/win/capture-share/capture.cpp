@@ -284,8 +284,17 @@ static void RunDda(ID3D11Device *dev, ID3D11DeviceContext *ctx, IDXGIAdapter1 *a
     FinishPhases(st);
 }
 
+bool MonitorLocalRect(const RECT &win, const RECT &monitor, RECT &local)
+{
+    if (win.left < monitor.left || win.top < monitor.top || win.right > monitor.right || win.bottom > monitor.bottom ||
+        win.right <= win.left || win.bottom <= win.top)
+        return false;
+    local = {win.left - monitor.left, win.top - monitor.top, win.right - monitor.left, win.bottom - monitor.top};
+    return true;
+}
+
 // ------------------------------------------------------------------------------------------------ Windows.Graphics.Capture
-static void RunWgc(ID3D11Device *dev, ID3D11DeviceContext *ctx, HWND hwnd, int w, int h)
+static void RunWgc(ID3D11Device *dev, ID3D11DeviceContext *ctx, HWND hwnd, const RECT &win)
 {
     namespace wgc = winrt::Windows::Graphics::Capture;
     namespace wgd = winrt::Windows::Graphics::DirectX;
@@ -298,12 +307,41 @@ static void RunWgc(ID3D11Device *dev, ID3D11DeviceContext *ctx, HWND hwnd, int w
             VerdictFail('A', Stage(), call, E_NOTIMPL, "capture-not-supported");
             return;
         }
-        call = "IGraphicsCaptureItemInterop::CreateForWindow";
         auto interop = winrt::get_activation_factory<wgc::GraphicsCaptureItem, IGraphicsCaptureItemInterop>();
         wgc::GraphicsCaptureItem item{nullptr};
-        winrt::check_hresult(interop->CreateForWindow(hwnd, winrt::guid_of<wgc::GraphicsCaptureItem>(), winrt::put_abi(item)));
+        // The region of the frame that holds the producer: all of a window item, the window's place in a monitor item.
+        RECT rect = {0, 0, win.right - win.left, win.bottom - win.top};
+        VerdictNote("wgc_item", g_opt.wgcMonitor ? "monitor" : "window");
+        if (g_opt.wgcMonitor) {
+            call = "MonitorFromRect";
+            const HMONITOR mon = MonitorFromRect(&win, MONITOR_DEFAULTTONULL);
+            MONITORINFO mi = {sizeof(mi)};
+            if (!mon || !GetMonitorInfoW(mon, &mi)) {
+                VerdictFail('A', Stage(), call, HRESULT_FROM_WIN32(ERROR_NOT_FOUND), "no-monitor-holds-the-window");
+                return;
+            }
+            Log("WGC monitor desktop=%ld,%ld,%ld,%ld primary=%u", mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right,
+                mi.rcMonitor.bottom, (mi.dwFlags & MONITORINFOF_PRIMARY) ? 1u : 0u);
+            if (!MonitorLocalRect(win, mi.rcMonitor, rect)) {
+                VerdictFail('A', Stage(), call, E_INVALIDARG, "the-window-is-not-inside-one-monitor");
+                return;
+            }
+            call = "IGraphicsCaptureItemInterop::CreateForMonitor";
+            winrt::check_hresult(
+                interop->CreateForMonitor(mon, winrt::guid_of<wgc::GraphicsCaptureItem>(), winrt::put_abi(item)));
+        } else {
+            call = "IGraphicsCaptureItemInterop::CreateForWindow";
+            winrt::check_hresult(
+                interop->CreateForWindow(hwnd, winrt::guid_of<wgc::GraphicsCaptureItem>(), winrt::put_abi(item)));
+        }
         const auto size = item.Size();
-        Log("WGC item %dx%d", size.Width, size.Height);
+        Log("WGC item %dx%d region=%ld,%ld,%ld,%ld", size.Width, size.Height, rect.left, rect.top, rect.right, rect.bottom);
+        if (rect.right > size.Width || rect.bottom > size.Height) {
+            // A monitor item in physical pixels against window coordinates of another DPI scale: the region would
+            // read the wrong place, so this is a failure of the cell, not a capture result.
+            VerdictFail('A', Stage(), call, E_INVALIDARG, "the-region-is-outside-the-item");
+            return;
+        }
         call = "CreateDirect3D11DeviceFromDXGIDevice";
         ComPtr<IDXGIDevice> dxgi;
         winrt::check_hresult(dev->QueryInterface(IID_PPV_ARGS(&dxgi)));
@@ -333,7 +371,6 @@ static void RunWgc(ID3D11Device *dev, ID3D11DeviceContext *ctx, HWND hwnd, int w
         SetStage("wgc-start");
         call = "GraphicsCaptureSession::StartCapture";
         session.StartCapture();
-        const RECT rect = {0, 0, w, h};
         PhaseState st;
         SetStage("wgc-frames-a");
         while (Remaining(WaitDeadline()) && !st.doneB) {
@@ -408,9 +445,10 @@ int RunCaptureParent(const CellInfo &cell)
                       atol(Field(m, "y").c_str()) + atol(Field(m, "h").c_str())};
     VerdictNote("window", Field(m, "x") + "," + Field(m, "y") + "," + Field(m, "w") + "x" + Field(m, "h"));
     VerdictNote("producer", g_opt.producerGdi ? "gdi" : "d3d12");
+    VerdictNote("producer_window", g_opt.producerApp ? "app" : "noactivate");
     if (Field(m, "occluders") != "0") VerdictNote("occluders", Field(m, "occluders") + ":" + Field(m, "by"));
     if (cell.kind == Kind::Dda) RunDda(dev.Get(), ctx.Get(), adapter.Get(), win);
-    else RunWgc(dev.Get(), ctx.Get(), hwnd, win.right - win.left, win.bottom - win.top);
+    else RunWgc(dev.Get(), ctx.Get(), hwnd, win);
     // the runtime removes the consumer's device when its UMD refuses to open the capture surface with a critical error
     VerdictRemoved('A', dev->GetDeviceRemovedReason());
     return 0;
@@ -671,9 +709,11 @@ int RunProducerPeer(const CellInfo &cell)
     RegisterClassExW(&wc);
     const std::vector<POINT> spots = Candidates(w, h);
     // No WS_EX_TOOLWINDOW: capture pickers skip tool windows and WGC's window item may refuse one; WS_EX_NOACTIVATE
-    // already keeps the window off the taskbar.
-    HWND hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_NOACTIVATE, wc.lpszClassName, L"capshare producer", WS_POPUP,
-                                spots[0].x, spots[0].y, w, h, nullptr, nullptr, wc.hInstance, nullptr);
+    // already keeps the window off the taskbar. --producer-window app: an activated taskbar window, the kind of window
+    // every capture picker lists, for the WGC window rule of an OS build (BD-084).
+    const DWORD exStyle = WS_EX_TOPMOST | (g_opt.producerApp ? WS_EX_APPWINDOW : WS_EX_NOACTIVATE);
+    HWND hwnd = CreateWindowExW(exStyle, wc.lpszClassName, L"capshare producer", WS_POPUP, spots[0].x, spots[0].y, w, h,
+                                nullptr, nullptr, wc.hInstance, nullptr);
     if (!hwnd) return PeerFailText("window", "CreateWindowExW", HRESULT_FROM_WIN32(GetLastError()));
     const DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DONOTROUND;
     DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
@@ -689,8 +729,14 @@ int RunProducerPeer(const CellInfo &cell)
         if (!p12.Init(adapter.Get(), hwnd)) return PeerFailText(Stage(), p12.call, p12.hr);
         fl = p12.fl;
     }
-    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    if (g_opt.producerApp) {
+        ShowWindow(hwnd, SW_SHOW);
+        SetForegroundWindow(hwnd);
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    } else {
+        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
     auto render = [&]() -> bool {
         if (g_gdi) {
             InvalidateRect(hwnd, nullptr, FALSE);

@@ -50,6 +50,10 @@ struct Options {
     bool creatorFinish = false;
     unsigned delayCopies = 128, delaySize = 2048, gateMs = 300;
     bool producerGdi = false;
+    // BD-084: the WGC window item failed on 22631 with E_INVALIDARG and passed on 26200. These two switches split
+    // that cell in one session: an activated taskbar window in place of the WS_EX_NOACTIVATE one (the window rule),
+    // and a monitor item read at the window's place (the compositor's capture path, no window rule).
+    bool producerApp = false, wgcMonitor = false;
     int x = INT_MIN, y = INT_MIN, tolerance = 0;
     bool interactiveOk = false;
     std::vector<std::string> dbwin;
@@ -107,6 +111,9 @@ struct Check {
     std::string content = "-", note = "-";
 };
 Check CompareImage(const char *what, const Image &img, Pattern p, bool opaque, bool rgbOnly, int tolerance);
+// The window rectangle (virtual desktop pixels) in the frame of a monitor item whose desktop rectangle is `monitor`.
+// False when the window is not inside the monitor: the frame would not hold the whole window.
+bool MonitorLocalRect(const RECT &win, const RECT &monitor, RECT &local);
 bool FindShift(const Image &big, int bx, int by, int w, int h, Pattern p, int margin, int tolerance, int &dx, int &dy);
 std::string RgbaText(uint32_t v);
 std::string CheckText(const Check &c);

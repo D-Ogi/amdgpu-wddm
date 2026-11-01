@@ -56,6 +56,13 @@ static const char *Usage =
     "  --inject skip-wait     negative control (f-cells, s-cells with --sync fence): the opener leaves out its first\n"
     "                         GPU wait, so the run must end in mismatch with gate=violated\n"
     "  --producer d3d12|gdi   capture cells: how the producer draws (default d3d12)\n"
+    "  --producer-window noactivate|app\n"
+    "                         capture cells: the producer window is WS_EX_NOACTIVATE (default), or an activated\n"
+    "                         WS_EX_APPWINDOW window (on the taskbar), for the WGC window rule of an OS build\n"
+    "  --wgc-item window|monitor\n"
+    "                         wgc: capture the producer window (default) or the monitor that holds it, read at the\n"
+    "                         window's place; a monitor pass with a window failure separates the window rule from\n"
+    "                         the compositor's capture path\n"
     "  --x <px> --y <px>      producer position (default: a corner away from the cursor)\n"
     "  --tolerance <n>        capture cells: allowed per-channel delta (default 0)\n"
     "  --interactive-ok       required by dda and wgc: they show a window and read the screen\n"
@@ -158,6 +165,14 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             if (!wcscmp(v, L"d3d12")) g_opt.producerGdi = false;
             else if (!wcscmp(v, L"gdi")) g_opt.producerGdi = true;
             else return error = "--producer must be d3d12 or gdi", false;
+        } else if (a == L"--producer-window") {
+            if (!wcscmp(v, L"noactivate")) g_opt.producerApp = false;
+            else if (!wcscmp(v, L"app")) g_opt.producerApp = true;
+            else return error = "--producer-window must be noactivate or app", false;
+        } else if (a == L"--wgc-item") {
+            if (!wcscmp(v, L"window")) g_opt.wgcMonitor = false;
+            else if (!wcscmp(v, L"monitor")) g_opt.wgcMonitor = true;
+            else return error = "--wgc-item must be window or monitor", false;
         } else if (a == L"--x") {
             g_opt.x = _wtoi(v);
         } else if (a == L"--y") {

@@ -770,6 +770,19 @@ int RunSelfTest()
     const bool found = FindShift(big, 21, 10, 40, 30, Pattern::A, 8, 0, dx, dy);
     record("shift", found && dx == -1 && dy == 0, std::to_string(dx) + "," + std::to_string(dy));
 
+    // The wgc monitor item reads the window's place in the monitor frame (BD-084). Its first window run is on the lab,
+    // so the arithmetic is checked here: a second monitor left of the primary one has negative coordinates.
+    RECT local = {};
+    const RECT primary = {0, 0, 1920, 1080}, left = {-2560, -200, 0, 1240};
+    const bool inPrimary = MonitorLocalRect({48, 48, 304, 304}, primary, local) && local.left == 48 && local.top == 48 &&
+                           local.right == 304 && local.bottom == 304;
+    const bool inLeft = MonitorLocalRect({-2000, 100, -1744, 356}, left, local) && local.left == 560 &&
+                        local.top == 300 && local.right == 816 && local.bottom == 556;
+    const bool across = !MonitorLocalRect({-100, 48, 156, 304}, primary, local) &&
+                        !MonitorLocalRect({1800, 48, 2056, 304}, primary, local) &&
+                        !MonitorLocalRect({48, 48, 48, 304}, primary, local);
+    record("monitor-region", inPrimary && inLeft && across);
+
     const std::string msg = "HANDLES res=1a fence=0";
     const std::string fail = "FAIL kind=fail stage=open-shared call=c hr=0x80070057 note=f1=2 removed=0x887A0020";
     record("fields", Field(msg, "res") == "1a" && Field(msg, "fence") == "0" && Field(msg, "x").empty() &&

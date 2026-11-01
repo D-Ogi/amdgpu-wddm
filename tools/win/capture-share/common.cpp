@@ -861,6 +861,7 @@ static std::wstring PeerArgs()
     a += L" --delay-copies " + std::to_wstring(g_opt.delayCopies) + L" --delay-size " + std::to_wstring(g_opt.delaySize);
     a += L" --gate-ms " + std::to_wstring(g_opt.gateMs) + L" --tolerance " + std::to_wstring(g_opt.tolerance);
     a += g_opt.producerGdi ? L" --producer gdi" : L" --producer d3d12";
+    a += g_opt.producerApp ? L" --producer-window app" : L" --producer-window noactivate";
     if (g_opt.x != INT_MIN) a += L" --x " + std::to_wstring(g_opt.x) + L" --y " + std::to_wstring(g_opt.y);
     if (g_opt.simultaneous) a += L" --simultaneous";
     if (g_opt.skipWait) a += L" --inject skip-wait";
