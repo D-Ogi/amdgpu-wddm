@@ -944,11 +944,12 @@ int main() {
        !dxgiTable.pfnOfferResources || !dxgiTable.pfnReclaimResources || !dxgiTable.pfnGetGammaCaps ||
        !dxgiTable.pfnGetMultiplaneOverlayCaps || dxgiTable.pfnGetMultiplaneOverlayFilterRange ||
        !dxgiTable.pfnCheckMultiplaneOverlaySupport || !dxgiTable.pfnPresentMultiplaneOverlay) fail(__LINE__);
+    // BD-198: no gamma ramp is "no control point" with S_OK; d3d11 removes the device for any other status.
     DXGI_GAMMA_CONTROL_CAPABILITIES gamma{}; std::memset(&gamma,0xA5,sizeof(gamma));
-    const auto oldGamma=gamma;
+    const DXGI_GAMMA_CONTROL_CAPABILITIES noGamma{};
     DXGI_DDI_ARG_GET_GAMMA_CONTROL_CAPS gammaArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),&gamma};
-    if(dxgiTable.pfnGetGammaCaps(&gammaArgs)!=DXGI_ERROR_UNSUPPORTED ||
-       std::memcmp(&gamma,&oldGamma,sizeof(gamma)) || dxgiTable.pfnGetGammaCaps(nullptr)!=E_INVALIDARG) fail(__LINE__);
+    if(dxgiTable.pfnGetGammaCaps(&gammaArgs)!=S_OK ||
+       std::memcmp(&gamma,&noGamma,sizeof(gamma)) || dxgiTable.pfnGetGammaCaps(nullptr)!=E_INVALIDARG) fail(__LINE__);
     D3D11_1DDI_DEVICEFUNCS relocated{};
     table.pfnRelocateDeviceFuncs(h,&relocated);
     if (relocated.pfnClearView!=table.pfnClearView || relocated.pfnDraw!=table.pfnDraw ||
@@ -1366,24 +1367,38 @@ int main() {
     DXGI_DDI_ARG_SETRESOURCEPRIORITY priorityArgs{reinterpret_cast<DXGI_DDI_HDEVICE>(&storage),sharedHandles[0],7};
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 || owner.runtime().domain.entered()) fail(__LINE__);
     DXGI_DDI_ARG_QUERYRESOURCERESIDENCY residencyArgs{priorityArgs.hDevice,sharedHandles,statuses,3};
-    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_NOT_RESIDENT || residencyCalls!=1 ||
+    // BD-198: the residency is in the statuses and the entry returns S_OK, whatever the residency; d3d11 removes the
+    // device for any nonzero return (S_NOT_RESIDENT and S_RESIDENT_IN_SHARED_MEMORY included).
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK || residencyCalls!=1 ||
         statuses[0]!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || statuses[1]!=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY ||
         statuses[2]!=DXGI_DDI_RESIDENCY_EVICTED_TO_DISK || owner.runtime().domain.entered()) fail(__LINE__);
-    for (int mode=1;mode<=2;++mode) {
-        residencyMode=mode;
-        for (auto &value:statuses) value=static_cast<DXGI_DDI_RESIDENCY>(99);
-        if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_FAIL) fail(__LINE__);
-        for (auto value:statuses) if (static_cast<int>(value)!=99) fail(__LINE__);
-    }
+    // A failed callback is still a failure, and the statuses stay as they were.
+    residencyMode=1;
+    for (auto &value:statuses) value=static_cast<DXGI_DDI_RESIDENCY>(99);
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_FAIL) fail(__LINE__);
+    for (auto value:statuses) if (static_cast<int>(value)!=99) fail(__LINE__);
+    // A status the callback does not define claims no GPU-local residency, and the query still succeeds.
+    residencyMode=2;
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK ||
+        statuses[0]!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || statuses[1]!=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY ||
+        statuses[2]!=DXGI_DDI_RESIDENCY_EVICTED_TO_DISK) fail(__LINE__);
     residencyMode=3;
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK) fail(__LINE__);
     residencyMode=4;
-    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_RESIDENT_IN_SHARED_MEMORY) fail(__LINE__);
+    if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=S_OK ||
+        statuses[1]!=DXGI_DDI_RESIDENCY_RESIDENT_IN_SHARED_MEMORY) fail(__LINE__);
     tracked[1].owner=&foreignRuntime;
     if (resourceTable.pfnQueryResourceResidency(&residencyArgs)!=E_INVALIDARG || residencyCalls!=5) fail(__LINE__);
     sharedResources[0].runtime_surface=nullptr; // Engine-private: SetResourcePriority is a hint, no callback.
     if (resourceTable.pfnSetResourcePriority(&priorityArgs)!=S_OK || priorityCalls!=1 ||
         resourceTable.pfnResolveSharedResource(nullptr)!=E_INVALIDARG) fail(__LINE__);
+    // BD-198: an engine-private resource passes the allocation check of a resolve and goes to the engine wait (it
+    // returned E_NOTIMPL before, which the runtime turns into a device removal). This harness has no engine, so the
+    // entry stops at E_FAIL; a resource of no object is still refused.
+    DXGI_DDI_ARG_RESOLVESHAREDRESOURCE resolveArgs{priorityArgs.hDevice,sharedHandles[0]};
+    if (resourceTable.pfnResolveSharedResource(&resolveArgs)!=E_FAIL) fail(__LINE__);
+    DdiResource noObject{}; resolveArgs.hResource=reinterpret_cast<DXGI_DDI_HRESOURCE>(&noObject);
+    if (resourceTable.pfnResolveSharedResource(&resolveArgs)!=E_INVALIDARG) fail(__LINE__);
     UINT64 adapterLuid=77;
     if(query_adapter_identity(nullptr,adapter_query,adapterLuid)!=E_INVALIDARG ||
         query_adapter_identity(&createIdentity,nullptr,adapterLuid)!=E_INVALIDARG || adapterLuid!=77) fail(__LINE__);

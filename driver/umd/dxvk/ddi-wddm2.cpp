@@ -285,8 +285,16 @@ HRESULT APIENTRY trim_residency(DXGI_DDI_ARG_TRIMRESIDENCYSET *a) {
     // of its own to trim. The request is satisfied by doing nothing.
     return S_OK;
 }
-HRESULT APIENTRY unsupported_group_caps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS *) { return DXGI_ERROR_UNSUPPORTED; }
-HRESULT APIENTRY unsupported_color_space(DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYCOLORSPACESUPPORT *) { return DXGI_ERROR_UNSUPPORTED; }
+// BD-198: the overlay queries answer "none" with S_OK, as unsupported_overlay_caps does (ddi-dxgi-table.h): d3d11
+// removes the device for any other status (GetMultiplaneOverlayGroupCaps, CheckMultiPlaneOverlayColorSpaceSupport).
+HRESULT APIENTRY unsupported_group_caps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS *a) {
+    if (!a) return E_INVALIDARG;
+    a->MultiplaneOverlayGroupCaps=DXGI_DDI_MULTIPLANE_OVERLAY_GROUP_CAPS{}; return S_OK;
+}
+HRESULT APIENTRY unsupported_color_space(DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYCOLORSPACESUPPORT *a) {
+    if (!a) return E_INVALIDARG;
+    a->Supported=FALSE; return S_OK;
+}
 HRESULT APIENTRY unsupported_overlay_present1(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY1 *) { return DXGI_ERROR_UNSUPPORTED; }
 }
 // The plane slice is the only field the WDDM 2.0 arguments add, and it belongs to Tex2D alone. Every

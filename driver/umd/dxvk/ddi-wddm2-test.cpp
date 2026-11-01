@@ -414,11 +414,26 @@ void dxgi_table() {
     const auto b=make_dxgi_device_table();
     CHECK(!std::memcmp(&t,&b,offsetof(DXGI1_2_DDI_BASE_FUNCTIONS,pfnGetMultiplaneOverlayCaps)));
     CHECK(t.pfnPresent1 && t.pfnCheckPresentDurationSupport && t.pfnTrimResidencySet && !t.pfnReserved1 && !t.pfnReserved2);
-    CHECK(t.pfnGetMultiplaneOverlayCaps(nullptr)==DXGI_ERROR_UNSUPPORTED &&
-          t.pfnGetMultiplaneOverlayGroupCaps(nullptr)==DXGI_ERROR_UNSUPPORTED &&
+    // BD-198: the overlay queries answer "one plane, no group, not supported" with S_OK; d3d11 removes the device
+    // for any other status. The two overlay presents stay refused: with one plane there is no plane set to present.
+    CHECK(t.pfnGetMultiplaneOverlayCaps(nullptr)==E_INVALIDARG &&
+          t.pfnGetMultiplaneOverlayGroupCaps(nullptr)==E_INVALIDARG &&
           t.pfnPresentMultiplaneOverlay(nullptr)==DXGI_ERROR_UNSUPPORTED &&
-          t.pfnCheckMultiplaneOverlayColorSpaceSupport(nullptr)==DXGI_ERROR_UNSUPPORTED &&
+          t.pfnCheckMultiplaneOverlayColorSpaceSupport(nullptr)==E_INVALIDARG &&
           t.pfnPresentMultiplaneOverlay1(nullptr)==DXGI_ERROR_UNSUPPORTED);
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS overlayCaps{};
+    overlayCaps.MultiplaneOverlayCaps.MaxPlanes=7; overlayCaps.MultiplaneOverlayCaps.NumCapabilityGroups=7;
+    CHECK(t.pfnGetMultiplaneOverlayCaps(&overlayCaps)==S_OK && overlayCaps.MultiplaneOverlayCaps.MaxPlanes==1 &&
+          !overlayCaps.MultiplaneOverlayCaps.NumCapabilityGroups);
+    DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS groupCaps{};
+    groupCaps.MultiplaneOverlayGroupCaps.NumPlanes=7; groupCaps.MultiplaneOverlayGroupCaps.OverlayCaps=7;
+    CHECK(t.pfnGetMultiplaneOverlayGroupCaps(&groupCaps)==S_OK && !groupCaps.MultiplaneOverlayGroupCaps.NumPlanes &&
+          !groupCaps.MultiplaneOverlayGroupCaps.OverlayCaps);
+    DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYCOLORSPACESUPPORT colorSpace{}; colorSpace.Supported=TRUE;
+    CHECK(t.pfnCheckMultiplaneOverlayColorSpaceSupport(&colorSpace)==S_OK && !colorSpace.Supported);
+    DXGI_DDI_ARG_CHECKMULTIPLANEOVERLAYSUPPORT planeCheck{}; planeCheck.Supported=TRUE;
+    CHECK(b.pfnCheckMultiplaneOverlaySupport(nullptr)==E_INVALIDARG &&
+          b.pfnCheckMultiplaneOverlaySupport(&planeCheck)==S_OK && !planeCheck.Supported);
     int device=0;
     DXGI_DDI_ARG_PRESENTSURFACE surfaces[2]{};
     DXGI_DDI_ARG_PRESENT1 present{}; present.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&device);
