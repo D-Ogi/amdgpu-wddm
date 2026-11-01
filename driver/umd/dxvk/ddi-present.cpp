@@ -103,23 +103,32 @@ HRESULT write_present_shadow(DeviceOwner &owner,const DdiResource &source,UINT s
     out=&slot; return S_OK;
 }
 // What one Present did, for present_ddi_status and the BD-170 lines.
-struct PresentOutcome { HRESULT callback=S_OK; PresentSyncOverride sync{}; char step=0; };
+// BD-283: `refusal` names the check of present_work that refused the Present before any work, for the removal line.
+struct PresentOutcome { HRESULT callback=S_OK; PresentSyncOverride sync{}; char step=0; const char *refusal="-"; };
 HRESULT present_work(DXGI_DDI_ARG_PRESENT *args,PresentOutcome &outcome) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { outcome.refusal="no-arguments"; return E_INVALIDARG; }
     auto *storage=reinterpret_cast<DdiDeviceHandle *>(args->hDevice);
-    if (!storage || !storage->owner) return E_INVALIDARG;
+    if (!storage || !storage->owner) { outcome.refusal="no-device"; return E_INVALIDARG; }
     auto &owner=*storage->owner;
     RuntimeDomain::Scope scope(owner.runtime().domain);
     try {
-        if (!owner.engine()) return E_FAIL;
+        if (!owner.engine()) { outcome.refusal="no-engine"; return E_FAIL; }
         auto *source=reinterpret_cast<DdiResource *>(args->hSurfaceToPresent);
         auto *destination=reinterpret_cast<DdiResource *>(args->hDstResource);
         // Only an importer may establish the allocation/subresource identity.
         // Ordinary engine-owned resources cannot be presented via this callback.
         if (!source || !source->object || !source->present_allocation ||
-            source->present_subresource!=args->SrcSubResourceIndex) return E_INVALIDARG;
+            source->present_subresource!=args->SrcSubResourceIndex) {
+            outcome.refusal=!source ? "no-source" : !source->object ? "source-without-object" :
+                !source->present_allocation ? "source-not-a-runtime-surface" : "source-subresource";
+            return E_INVALIDARG;
+        }
         if (destination && (!destination->object || !destination->present_allocation ||
-            destination->present_subresource!=args->DstSubResourceIndex)) return E_INVALIDARG;
+            destination->present_subresource!=args->DstSubResourceIndex)) {
+            outcome.refusal=!destination->object ? "destination-without-object" :
+                !destination->present_allocation ? "destination-not-a-runtime-surface" : "destination-subresource";
+            return E_INVALIDARG;
+        }
         Submission submission{&owner,source->object,args->SrcSubResourceIndex};
         D3DKMT_HANDLE presented=source->present_allocation;
         PresentShadowSlot *shadow=nullptr;
@@ -230,12 +239,12 @@ HRESULT APIENTRY present(DXGI_DDI_ARG_PRESENT *args) {
     if (!note) note=(failed && present_note_budget(failures)) || (args && args->Flags.Flip && present_note_budget(flips));
 #endif
     if (note) {
-        char text[256];
+        char text[320];
         std::snprintf(text,sizeof(text),"BC250 BD-170: Present flags=%08X interval=%u dst=%u override=%u/%u step=%c "
-            "callback=%08X result=%08X returns %08X%s\n",args ? unsigned(args->Flags.Value) : 0u,
+            "refusal=%s callback=%08X result=%08X returns %08X%s\n",args ? unsigned(args->Flags.Value) : 0u,
             args ? unsigned(args->FlipInterval) : 0u,unsigned(args && args->hDstResource),
             unsigned(outcome.sync.valid),unsigned(outcome.sync.interval),outcome.step ? outcome.step : '-',
-            unsigned(outcome.callback),unsigned(result),unsigned(status),
+            outcome.refusal,unsigned(outcome.callback),unsigned(result),unsigned(status),
             present_callback_refused(result,outcome.callback) ? " (callback refused: the runtime maps the status)" : "");
         present_note(text);
     }

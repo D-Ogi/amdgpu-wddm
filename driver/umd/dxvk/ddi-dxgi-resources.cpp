@@ -67,7 +67,7 @@ HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,
     return S_OK;
 }
 HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("OfferResources",E_INVALIDARG); return E_INVALIDARG; }
     return entry("OfferResources",args->hDevice,[&](DeviceOwner &owner) {
         if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_AUTO)
             return E_INVALIDARG;
@@ -87,7 +87,7 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
     });
 }
 HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("ReclaimResources",E_INVALIDARG); return E_INVALIDARG; }
     return entry("ReclaimResources",args->hDevice,[&](DeviceOwner &owner) {
         std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
         HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
@@ -120,7 +120,7 @@ HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
 // DXGI_ERROR_DRIVER_INTERNAL_ERROR and removes the device (see the batch helper above). The flags are
 // dropped, which keeps every offered allocation committed.
 HRESULT APIENTRY offer_resources1(DXGI_DDI_ARG_OFFERRESOURCES1 *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("OfferResources1",E_INVALIDARG); return E_INVALIDARG; }
     DXGI_DDI_ARG_OFFERRESOURCES older{};
     older.hDevice=args->hDevice; older.pResources=args->pResources;
     older.Resources=args->Resources; older.Priority=args->Priority;
@@ -131,7 +131,7 @@ HRESULT APIENTRY offer_resources1(DXGI_DDI_ARG_OFFERRESOURCES1 *args) {
 // NOT_COMMITTED cannot arise, because no offer of this shell allows a decommit (offer_resources1). An
 // engine-private resource is a hint only, as in the batch helper above, so it reports OK.
 HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("ReclaimResources1",E_INVALIDARG); return E_INVALIDARG; }
     return entry("ReclaimResources1",args->hDevice,[&](DeviceOwner &owner) {
         std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
         HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
@@ -155,7 +155,7 @@ HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
     });
 }
 HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("SetDisplayMode",E_INVALIDARG); return E_INVALIDARG; }
     return entry("SetDisplayMode",args->hDevice,[&](DeviceOwner &owner) {
         D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,args->hResource,handle);
         if (FAILED(hr)) return hr;
@@ -172,7 +172,7 @@ HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {
     });
 }
 HRESULT APIENTRY priority(DXGI_DDI_ARG_SETRESOURCEPRIORITY *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("SetResourcePriority",E_INVALIDARG); return E_INVALIDARG; }
     return entry("SetResourcePriority",args->hDevice,[&](DeviceOwner &owner) {
         D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,args->hResource,handle);
         if (hr==E_NOTIMPL) return S_OK; // Engine-private: a hint only (see allocation_batch).
@@ -191,7 +191,7 @@ HRESULT APIENTRY priority(DXGI_DDI_ARG_SETRESOURCEPRIORITY *args) {
 // claims no GPU-local residency: the query is a hint (an approximation, says the page), not a reason to remove a
 // device.
 HRESULT APIENTRY residency(DXGI_DDI_ARG_QUERYRESOURCERESIDENCY *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("QueryResourceResidency",E_INVALIDARG); return E_INVALIDARG; }
     return entry("QueryResourceResidency",args->hDevice,[&](DeviceOwner &owner) {
         if (!args->Resources) return S_OK;
         if (args->Resources>UINT32_MAX || !args->pResources || !args->pStatus) return E_INVALIDARG;
@@ -233,7 +233,7 @@ HRESULT APIENTRY residency(DXGI_DDI_ARG_QUERYRESOURCERESIDENCY *args) {
 // runtime surface can be on a Present, so only a runtime surface waits for the Presents. A positive status of the
 // engine wait is S_OK here: the runtime treats every nonzero return as a driver error.
 HRESULT APIENTRY resolve(DXGI_DDI_ARG_RESOLVESHAREDRESOURCE *args) {
-    if (!args) return E_INVALIDARG;
+    if (!args) { dxgi_entry_note("ResolveSharedResource",E_INVALIDARG); return E_INVALIDARG; }
     return entry("ResolveSharedResource",args->hDevice,[&](DeviceOwner &owner) {
         D3DKMT_HANDLE handle=0; HRESULT hr=allocation(owner,args->hResource,handle);
         if (FAILED(hr) && hr!=E_NOTIMPL) return hr;

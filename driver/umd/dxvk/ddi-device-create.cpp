@@ -7,6 +7,7 @@
 #include "ddi-wddm22.h"
 #include "ddi-experiment.h"
 #include "ddi-lifecycle.h"
+#include "ddi-status-note.h"
 #include <cstring>
 namespace bc250::umd {
 HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
@@ -21,18 +22,25 @@ HRESULT create_render_device(const D3D10DDIARG_CREATEDEVICE &args,UINT64 luid,
     const bool wddm2_2=wddm2_2_ddi(args.Interface,args.Version);
     // The unions alias: p11_1DeviceFuncs/pWDDM2_0DeviceFuncs/pWDDM2_2DeviceFuncs, and
     // pDXGIDDIBaseFunctions3/5/6_1.
+    // BD-283: each argument refusal writes a line; the failures after initialization have their own below.
     if ((args.Interface!=D3D11_1_DDI_INTERFACE_VERSION && !wddm2_0 && !wddm2_2) || !args.hDrvDevice.pDrvPrivate ||
         !args.p11_1DeviceFuncs || !args.DXGIBaseDDI.pDXGIDDIBaseFunctions3)
-        return E_INVALIDARG;
-    if ((wddm2_0 || wddm2_2) && advertised.maximum<D3D_FEATURE_LEVEL_12_0) return E_INVALIDARG;
+        return ddi_status_note("CreateDevice",E_INVALIDARG,DdiInputs("interface=%08X version=%08X storage=%u funcs=%u dxgi=%u",
+            unsigned(args.Interface),unsigned(args.Version),unsigned(args.hDrvDevice.pDrvPrivate!=nullptr),
+            unsigned(args.p11_1DeviceFuncs!=nullptr),unsigned(args.DXGIBaseDDI.pDXGIDDIBaseFunctions3!=nullptr)));
+    if ((wddm2_0 || wddm2_2) && advertised.maximum<D3D_FEATURE_LEVEL_12_0)
+        return ddi_status_note("CreateDevice",E_INVALIDARG,DdiInputs("interface=%08X advertised-maximum=%04X",
+            unsigned(args.Interface),unsigned(advertised.maximum)));
     auto *storage=static_cast<DdiDeviceHandle *>(args.hDrvDevice.pDrvPrivate);
     // Runtime private memory need not be initialized. No owner is published
     // until initialization succeeds; failure must leave no dangling handle.
     storage->owner=nullptr;
     D3D_FEATURE_LEVEL requested{};
     HRESULT negotiated=requested_feature_level(args.Flags,requested,args.Interface);
-    if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) ||
-        level>advertised.maximum) return E_INVALIDARG;
+    if (FAILED(negotiated) || requested!=level || !valid_adapter_caps(advertised) || level>advertised.maximum)
+        return ddi_status_note("CreateDevice",E_INVALIDARG,DdiInputs("negotiated=%08X requested=%04X level=%04X "
+            "caps-valid=%u advertised-maximum=%04X flags=%08X",unsigned(negotiated),unsigned(requested),unsigned(level),
+            unsigned(valid_adapter_caps(advertised)),unsigned(advertised.maximum),unsigned(args.Flags)));
     const ULONGLONG now=GetTickCount64();
     const bool keptBound=kept_device_limit_reached();
     if (keptBound || short_lost_device_limit_reached(now)) {

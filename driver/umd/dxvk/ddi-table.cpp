@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-table.h"
+#include "ddi-status-note.h"
 #include "ddi-clear-view.h"
 #include "ddi-query.h"
 #include "ddi-lifecycle.h"
@@ -60,8 +61,8 @@ struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
                 RuntimeDomain::Scope scope(storage->owner->runtime().domain);
                 report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
             }
-        }else if constexpr(std::is_same_v<R,HRESULT>)return E_NOTIMPL;
-        else return 0;
+        }else if constexpr(std::is_same_v<R,HRESULT>)return ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement"));
+        else { ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement answers 0")); return 0; }
     }
 };
 void APIENTRY deferred_sizes(D3D10DDI_HDEVICE,UINT *count,D3D11DDI_HANDLESIZE *) {

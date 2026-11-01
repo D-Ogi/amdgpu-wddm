@@ -46,8 +46,8 @@ struct Unexpected<R (APIENTRY *)(D3D10DDI_HDEVICE,Args...),Name> {
                 RuntimeDomain::Scope scope(storage->owner->runtime().domain);
                 report_ddi_error(*storage->owner,D3DDDIERR_DEVICEREMOVED);
             }
-        }else if constexpr(std::is_same_v<R,HRESULT>)return E_NOTIMPL;
-        else return 0;
+        }else if constexpr(std::is_same_v<R,HRESULT>)return ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement"));
+        else { ddi_status_note(Name,E_NOTIMPL,DdiInputs("an entry this shell does not implement answers 0")); return 0; }
     }
 };
 // The shader-cache session entries. The adapter answers D3DWDDM2_2DDICAPS_SHADERCACHE with
@@ -121,12 +121,20 @@ const DXGI1_4_DDI_BASE_FUNCTIONS &dxgi1_4_base() { static const auto table=make_
 // the host test reads every field it carries.
 HRESULT APIENTRY present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENT *a) {
     // BD-170: a Present may fail only with device removal (present-contract.h).
-    if (!a || !a->hDevice) return D3DDDIERR_DEVICEREMOVED;
+    if (!a || !a->hDevice)
+        return ddi_status_note("Present1 (DXGI 1.6.1)",D3DDDIERR_DEVICEREMOVED,DdiInputs("args=%u hDevice=0",unsigned(a!=nullptr)));
     DXGI_DDI_ARG_PRESENT p{};
-    if (!present_arguments_1_6_1(*a,p)) return D3DDDIERR_DEVICEREMOVED;
+    // BD-283: an empty or missing array is not a request the page allows (see present1 in ddi-wddm2.cpp).
+    if (!present_arguments_1_6_1(*a,p))
+        return ddi_status_note("Present1 (DXGI 1.6.1)",D3DDDIERR_DEVICEREMOVED,DdiInputs("SurfacesToPresent=%u array=%u "
+            "dst=%u flags=%08X interval=%u rotation=%d dirty-rects=%u",a->SurfacesToPresent,
+            unsigned(a->phSurfacesToPresent!=nullptr),unsigned(a->hDstResource!=0),unsigned(a->Flags.Value),
+            unsigned(a->FlipInterval),int(a->RotationHint),a->DirtyRects));
     return dxgi1_4_base().pfnPresent(&p);
 }
-HRESULT APIENTRY overlay_present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENTMULTIPLANEOVERLAY *) { return DXGI_ERROR_UNSUPPORTED; }
+HRESULT APIENTRY overlay_present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENTMULTIPLANEOVERLAY *a) {
+    return ddi_status_note("PresentMultiplaneOverlay (DXGI 1.6.1)",DXGI_ERROR_UNSUPPORTED,DdiInputs("args=%u",unsigned(a!=nullptr)));
+}
 }
 D3DWDDM2_2DDI_DEVICEFUNCS make_wddm2_2_device_table() {
     D3DWDDM2_2DDI_DEVICEFUNCS t{};
