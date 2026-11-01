@@ -2108,6 +2108,10 @@ int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
     _dup2(_fileno(stdout), _fileno(stderr));        // engine-ddi's log lines, in order with the results
     SetEnvironmentVariableA("AMDGPU_WDDM_LOG", "stderr"); // the sink is off by default (stdio-log.h)
+    // Read by a lab build only, once per process (entry_knobs): before the first call that can read the knobs. Close
+    // to the defaults (20 and 100 us), so the timing of the other checks stays as it was.
+    SetEnvironmentVariableA("BC250_REPLAY_SPIN_US", "19");
+    SetEnvironmentVariableA("BC250_REPLAY_YIELD_US", "99");
     // A drain that never ends would hang the build: give up after two minutes.
     std::thread([] {
         Sleep(120000);
@@ -2196,6 +2200,26 @@ int main() {
               "policy: off (enabled 0 ignores the other fields), and off again");
         check(f.on() && f.context.replay && f.off() && !f.context.replay && !f.shell.started,
               "policy: on again and off; no ring and no thread without a recording call");
+    }
+    // BD-225: the workers' windows. A lab build takes them from BC250_REPLAY_SPIN_US and BC250_REPLAY_YIELD_US (set at
+    // the start of main); a release build reads neither and keeps 20 and 100 us.
+    {
+        Fixture f;
+        const bool on = f.on(8, 4u << 20, true);
+        LARGE_INTEGER frequency{};
+        QueryPerformanceFrequency(&frequency);
+        const uint64_t qpf = static_cast<uint64_t>(frequency.QuadPart);
+#ifdef AMDGPU_WDDM_LAB_FLAVOUR
+        const uint64_t spin = 19, yield = 99;
+        const char* text = "worker spin 19 us, yield 99 us (environment)";
+#else
+        const uint64_t spin = 20, yield = 100;
+        const char* text = "worker spin 20 us, yield 100 us (default)";
+#endif
+        check(on && f.replay()->spin_ticks == qpf * spin / 1000000 && f.replay()->yield_ticks == qpf * yield / 1000000 &&
+                  !f.line("replay policy: on", {text}).empty(),
+              "policy: the workers' spin and yield windows (lab: the knobs, release: the defaults) set and named on the "
+              "policy line");
     }
 
     // 2. Exactness: the same calls and arguments with the policy off and on.

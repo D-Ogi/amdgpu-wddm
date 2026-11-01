@@ -897,6 +897,26 @@
    }
   },
   {
+   "name": "BC250_REPLAY_SPIN_US",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "the spin window of the replay workers, for a measurement (BD-225)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_REPLAY_YIELD_US",
+   "where": "bc250-win driver/umd/d3d12/engine-ddi/entry.cpp (load_knobs)",
+   "does": "the yield window of the replay workers, for a measurement (BD-225)",
+   "lab": {
+    "every": [
+     "amdgpu_wddm_d3d12.dll"
+    ]
+   }
+  },
+  {
    "name": "AMDGPU_WDDM_CONTROL_STATE",
    "where": "bc250-win tools/win/amdgpu_wddm_control/src/RecoveryActions.cs, Benchmark.cs",
    "does": "moves the DWM records and the benchmark directory of the application to that directory (a build gate)",

@@ -29,6 +29,7 @@ constexpr uint32_t kSkippedPerPhase = 2;        // intervals left out after an a
 constexpr uint64_t kFlushMilliseconds = 5000;
 constexpr size_t kRowBytes = 16384;             // one row at most
 constexpr size_t kBufferBytes = 128 * 1024;
+constexpr uint32_t kUnset = UINT32_MAX;         // a replay window knob that is not set (or not valid)
 
 const char* const kClassNames[kEntryClasses] = {
 #define ENGINE_DDI_ENTRY_NAME(name) #name,
@@ -48,6 +49,10 @@ struct Knobs {
     uint64_t qpf = 1;
     double tsc_per_qpc = 0;
     const char* source = "none";
+    // The replay workers' windows (entry_replay_windows); kUnset: the value set_replay_policy passes stays.
+    uint32_t replay_spin_us = kUnset;
+    uint32_t replay_yield_us = kUnset;
+    const char* replay_source = "default";
 };
 Knobs g_knobs;
 INIT_ONCE g_once = INIT_ONCE_STATIC_INIT;
@@ -136,6 +141,13 @@ BOOL CALLBACK load_knobs(PINIT_ONCE, PVOID, PVOID*) {
     g_knobs.phase_ms = knob_number(file, "BC250_ENTRY_PHASE_MS", 2000, 100, 600000, &from_file);
     g_knobs.pad_us = knob_number(file, "BC250_ENTRY_PAD_US", 300, 0, 100000, &from_file);
     g_knobs.poll_us = knob_number(file, "BC250_ENTRY_POLL_US", 1, 1, 1000, &from_file);
+    // BD-225: the replay workers' spin and yield windows, so that one lab build measures several. A value out of
+    // range counts as not set. They do not turn the entry path experiment on.
+    bool replay_file = false;
+    g_knobs.replay_spin_us = knob_number(file, "BC250_REPLAY_SPIN_US", kUnset, 0, 1000, &replay_file);
+    g_knobs.replay_yield_us = knob_number(file, "BC250_REPLAY_YIELD_US", kUnset, 0, 10000, &replay_file);
+    if (g_knobs.replay_spin_us != kUnset || g_knobs.replay_yield_us != kUnset)
+        g_knobs.replay_source = replay_file ? "file" : "environment";
     std::free(file);
 #endif
     if (!g_knobs.arms && g_knobs.stats) {       // statistics alone: the default path (arm b) throughout
@@ -379,6 +391,13 @@ void entry_knobs() noexcept { InitOnceExecuteOnce(&g_once, load_knobs, nullptr, 
 bool entry_stats_on() noexcept {
     entry_knobs();
     return g_knobs.stats;
+}
+
+const char* entry_replay_windows(uint32_t* spin_us, uint32_t* yield_us) noexcept {
+    entry_knobs();
+    if (g_knobs.replay_spin_us != kUnset) *spin_us = g_knobs.replay_spin_us;
+    if (g_knobs.replay_yield_us != kUnset) *yield_us = g_knobs.replay_yield_us;
+    return g_knobs.replay_source;
 }
 
 EntryThread* entry_thread_slow() noexcept {
