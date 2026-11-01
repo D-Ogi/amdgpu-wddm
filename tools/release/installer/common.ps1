@@ -589,8 +589,8 @@ function Get-DriverClosure([string]$Name, $Current, $Default) {
 # both, and tester.30's application never wrote a mask.
 #   CuMode   CuModeChosen holds the encoded request a person asked for (mode | disable << 8, so 24, 40, or
 #       40 | mask << 8). The control application's CU setter writes it on every run (src/CuMode.cs, step S1c), and
-#       so does install.cmd -CuMode. "Reset to defaults" removes it, which hands the number of cores back to the
-#       installed release. The driver neither reads nor writes it.
+#       so does install.cmd -CuMode. "Reset to defaults" writes the release's stock request (BD-270: the state
+#       catalog refuses a delete). The driver neither reads nor writes it.
 # The record alone decides nothing: it has to match the two values next to it exactly, as they are before the
 # install. A record that does not (a driver fallback moved CuMode, or somebody edited the key) is stale and is
 # ignored, and a driver closure keeps its precedence over the record, because the driver's act is the later one.
