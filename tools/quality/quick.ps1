@@ -549,6 +549,8 @@ Check 'amd-identity' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_amd_id
  CheckIf 'allocation-identity' $clExe { & python "$repo\tools\quality\allocation_identity.py" --out "$Out\allocation-identity" }
  CheckIf 'object-index' $clExe { & python "$repo\tools\quality\object_index.py" --out "$Out\object-index" }
  CheckIf 'hang-witness' $clExe { & python "$repo\tools\quality\hang_witness.py" --out "$Out\hang-witness" }
+ CheckIf 'adl-page' $clExe { & python "$repo\tools\quality\adl_page.py" --out "$Out\adl-page" }
+ CheckIf 'table-budget' $clExe { & python "$repo\tools\quality\table_budget.py" --out "$Out\table-budget" }
  Check 'ddi-error-policy' { & python "$repo\tools\quality\ddi_error_policy.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-error-policy-mutants' { & python "$repo\tools\quality\ddi_error_policy_mutants.py" --sources "$repo\driver\umd\dxvk" --reference "$Workspace\ref\ddi-display\d3d10umddi.md" }
  Check 'ddi-table-versions' { & python "$repo\tools\quality\ddi_table_versions.py" --sources "$repo\driver\umd\dxvk" --kits "$Kits" }
