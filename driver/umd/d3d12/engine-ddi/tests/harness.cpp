@@ -700,6 +700,7 @@ int wmain(int argc, wchar_t** argv) {
     test_shared_open(env);
     test_raytracing(env);
     test_raytracing_pipeline(env);
+    test_raytracing_deferred_collection(env);
     test_mandatory_states(env);
     test_mandatory_formats(env);
     test_no_output_samples(env);

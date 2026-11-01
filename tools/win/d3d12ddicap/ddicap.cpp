@@ -11,7 +11,7 @@
 //
 // Usage: d3d12ddicap.exe [--hardware[=<adapter substring>]] [--idle-seconds=<n>] [case...]
 //   cases: ue426 ue426-additions ue426-basic ue426-add-miss ue426-add-chs ue426-ahs-link ue426-add client-collection
-//   all (default all)
+//   vkd3d-deferred; all (default all: every case but vkd3d-deferred)
 //   --hardware: no WARP hook; the cases run on the first hardware adapter (or the first whose description holds the
 //   substring) through its own driver, and print the API results and the device removed reason only. This is the
 //   lab client of The Ascent's trial 465 (README.md).
@@ -32,6 +32,8 @@
 #include "ue426-rgs.h"
 #include "ue426-ms.h"
 #include "ue426-hit.h"
+#include "deferred-raygen.h"
+#include "deferred-bindings.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -631,6 +633,77 @@ HRESULT client_collection_case(ID3D12Device5* device, const Signatures& sig) {
     return api_create(device, "RAYTRACING_PIPELINE client from collection", D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,
                       p, pipeline);
 }
+
+// A local root signature: kind 0 one root UAV (u0 space0), kind 1 one descriptor table of the UAVs u1-u4.
+HRESULT local_signature(ID3D12Device* device, int kind, ComPtr<ID3D12RootSignature>& out) {
+    D3D12_DESCRIPTOR_RANGE range{D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 4, 1, 0, 0};
+    D3D12_ROOT_PARAMETER parameter{};
+    if (kind == 0) {
+        parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    } else {
+        parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        parameter.DescriptorTable = {1, &range};
+    }
+    const D3D12_ROOT_SIGNATURE_DESC desc{1, &parameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
+    ComPtr<ID3DBlob> blob, errors;
+    HRESULT hr = D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &errors);
+    if (FAILED(hr)) return hr;
+    return device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&out));
+}
+
+// vkd3d-deferred: the first COLLECTION of the vkd3d-proton test test_raytracing_deferred_compilation (BD-231), then
+// its link. The collection: a library whose ray generation shader "main" writes u0, which no root signature of the
+// collection binds; the shader configuration {4, 4}; the pipeline configuration (depth 1); a state object
+// configuration with ALLOW_LOCAL_DEPENDENCIES_ON_EXTERNAL_DEFINITIONS; a second library that exports Entry3 only; a
+// local root signature (a table of u1-u4) associated with Entry3. No global root signature. Expected (the test, from
+// native drivers): the collection is created and has no identifier for main. The link: the collection and a local
+// root signature with a root UAV at u0, with no association (a default for every export). Expected: identifiers for
+// main and Entry3.
+HRESULT vkd3d_deferred_case(ID3D12Device5* device) {
+    ComPtr<ID3D12RootSignature> rs, rs_alt;
+    HRESULT hr = local_signature(device, 0, rs);
+    if (SUCCEEDED(hr)) hr = local_signature(device, 1, rs_alt);
+    if (FAILED(hr)) {
+        printf("api vkd3d-deferred: local root signatures hr %08lx\n", static_cast<unsigned long>(hr));
+        return hr;
+    }
+    D3D12_EXPORT_DESC entry3{L"Entry3", nullptr, D3D12_EXPORT_FLAG_NONE};
+    const D3D12_DXIL_LIBRARY_DESC raygen{{g_deferred_raygen, sizeof(g_deferred_raygen)}, 0, nullptr};
+    const D3D12_DXIL_LIBRARY_DESC bindings{{g_deferred_bindings, sizeof(g_deferred_bindings)}, 1, &entry3};
+    const D3D12_RAYTRACING_SHADER_CONFIG shader_config{4, 4};
+    const D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config{1};
+    const D3D12_STATE_OBJECT_CONFIG config{D3D12_STATE_OBJECT_FLAG_ALLOW_LOCAL_DEPENDENCIES_ON_EXTERNAL_DEFINITIONS};
+    const D3D12_LOCAL_ROOT_SIGNATURE local_alt{rs_alt.Get()};
+    std::vector<D3D12_STATE_SUBOBJECT> s{
+        {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &raygen},
+        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &shader_config},
+        {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipeline_config},
+        {D3D12_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG, &config},
+        {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &bindings},
+        {D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local_alt},
+        {D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION, nullptr}};
+    LPCWSTR entry3_name = L"Entry3";
+    const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION association{&s[5], 1, &entry3_name};
+    s[6].pDesc = &association;
+    ComPtr<ID3D12StateObject> collection, pipeline;
+    hr = api_create(device, "COLLECTION vkd3d-deferred", D3D12_STATE_OBJECT_TYPE_COLLECTION, s, collection);
+    if (FAILED(hr)) return hr;
+    int missing = identifiers(collection.Get(), "collection", {}, {L"main"});
+    // The test leaves Entry3's identifier in the collection open (a todo): printed, not counted.
+    ComPtr<ID3D12StateObjectProperties> properties;
+    if (SUCCEEDED(collection.As(&properties)))
+        printf("api collection GetShaderIdentifier Entry3: %s (either answer)\n",
+               properties->GetShaderIdentifier(L"Entry3") ? "found" : "null");
+    const D3D12_EXISTING_COLLECTION_DESC existing{collection.Get(), 0, nullptr};
+    const D3D12_LOCAL_ROOT_SIGNATURE local{rs.Get()};
+    const std::vector<D3D12_STATE_SUBOBJECT> p{{D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &existing},
+                                               {D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE, &local}};
+    hr = api_create(device, "RAYTRACING_PIPELINE vkd3d-deferred link", D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE, p,
+                    pipeline);
+    if (FAILED(hr)) return hr;
+    missing += identifiers(pipeline.Get(), "link", {L"main", L"Entry3"});
+    return missing ? E_FAIL : S_OK;
+}
 } // namespace
 
 // The first hardware adapter, or the first whose description holds want; null when there is none.
@@ -717,6 +790,7 @@ int main(int argc, char** argv) {
         else if (c == "ue426-add-miss") hr = ue426_add_case(device.Get(), sig, idle_ms, UeAdd::Miss);
         else if (c == "ue426-ahs-link") hr = ue426_ahs_link_case(device.Get(), sig, idle_ms);
         else if (c == "client-collection") hr = client_collection_case(device.Get(), sig);
+        else if (c == "vkd3d-deferred") hr = vkd3d_deferred_case(device.Get());
         else {
             printf("unknown case\n");
             hr = E_INVALIDARG;

@@ -236,6 +236,7 @@ void test_shared_create(Env& env);
 void test_shared_open(Env& env);
 void test_raytracing(Env& env);
 void test_raytracing_pipeline(Env& env);
+void test_raytracing_deferred_collection(Env& env);
 void test_mandatory_states(Env& env);
 void test_mandatory_formats(Env& env);
 void test_no_output_samples(Env& env);
