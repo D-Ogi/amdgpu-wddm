@@ -15,7 +15,19 @@ function Run-Child([string]$Exe, [string]$Arguments, [string]$InputText, [bool]$
     $psi.FileName = $Exe; $psi.Arguments = $Arguments
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-    $p = [Diagnostics.Process]::Start($psi)
+    # Windows PowerShell 5.1 (.NET Framework) writes the child's stdin with Console.InputEncoding and flushes it at
+    # the start, so under code page 65001 the child reads EF BB BF before any answer: " YES" fails as an answer, and
+    # a stray pause in the launcher takes those bytes as a key and does not time out. Use the same code page without
+    # the preamble for the start, then put the console encoding back.
+    $saved = $null
+    try {
+        if ([Console]::InputEncoding.CodePage -eq 65001 -and [Console]::InputEncoding.GetPreamble().Length) {
+            $saved = [Console]::InputEncoding
+            [Console]::InputEncoding = New-Object Text.UTF8Encoding($false)
+        }
+    } catch { $saved = $null }
+    try { $p = [Diagnostics.Process]::Start($psi) }
+    finally { if ($saved) { try { [Console]::InputEncoding = $saved } catch { } } }
     try {
         $out = $p.StandardOutput.ReadToEndAsync(); $err = $p.StandardError.ReadToEndAsync()
         if ($InputText) { $p.StandardInput.Write($InputText); $p.StandardInput.Flush() }
