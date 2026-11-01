@@ -27,6 +27,7 @@
 #include "paging_private.h"
 #include "paging_ddi_status.h"   // BD-235: the statuses that BuildPagingBuffer may give to the OS
 #include "paging_drain.h"
+#include "table_budget.h"        // BD-028 stage B: the 64 MiB cap on the table segment
 #include "object_index.h"
 #include "ring_gap.h"            // C48/C49: the node's own idle-gap accounting, the same object the ETW analysis used
 #include "notify_pairing.h"      // C50: which pass pairs a completion report with DxgkCbNotifyDpc
@@ -4789,10 +4790,11 @@ static BOOLEAN WddmMemoryLayout(_In_ const BC250_DEVICE* Device, _Out_ ULONGLONG
     }
     if (framebufferEnd>=limit) return FALSE;
     available=(limit-framebufferEnd)&~65535ull;
-    // Capacity policy: reserve 1/32 of usable VRAM, rounded down to64KiB,
-    // at least4MiB for the pinned1GiB paging hierarchy plus application tables.
-    // This is a driver budget choice, not a hardware limit or performance claim.
+    // Capacity policy: reserve 1/32 of usable VRAM, capped at 64 MiB (BD-028),
+    // rounded down to 64 KiB, at least 4 MiB for the pinned 1 GiB paging
+    // hierarchy plus application tables.
     tableBytes=(available/32u)&~65535ull;
+    if (tableBytes>BC250_TABLE_BUDGET_CAP) tableBytes=BC250_TABLE_BUDGET_CAP;
     if (tableBytes<4ull*1024*1024) tableBytes=4ull*1024*1024;
     if (tableBytes>=available || available-tableBytes<65536ull) return FALSE;
     *Offset=framebufferEnd;*Length=available-tableBytes;
