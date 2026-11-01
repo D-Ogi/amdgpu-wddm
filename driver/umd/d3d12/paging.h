@@ -32,6 +32,12 @@ public:
 // (trial 153: a GPU job wrote such a range 2 ms after its map fence, bugcheck 0x116).
 // make_resident() takes this domain's own residency reference on the same paging
 // queue, so the mapping's one fence covers the commit, the fill and the entries.
+// BD-052: that reference is an ordering device, not a lifetime hold. release_residency() gives it back
+// without unmapping, and the owner gives it back inside the creation DDI that took it, because the runtime
+// owns the residency of an application's heap and the driver "must no longer create allocations ... as
+// resident during creation" (DirectX-Specs ResourceHeaps.md @ 5a4139b, Residency DDIs, line 1011).
+// order_context() orders what an internal context submits behind the paging work this driver has queued on
+// its own paging queue; it is an ordering of this driver's paging operations and not a residency guarantee.
 // A mapping whose request names an alignment the runtime does not satisfy by itself lives inside a GPU virtual
 // address reservation this domain takes and frees with it (BD-101, map and unmap_after_gpu_retirement).
 class PagingDomain final {
@@ -50,6 +56,42 @@ class PagingDomain final {
     std::atomic<unsigned> mappings_{};
     std::atomic<unsigned> evict_failures_{},evicts_skipped_{};
     std::atomic<unsigned> reservations_{},reservation_failures_{};
+    // BD-052. queued_: the largest value this domain has ever asked of its own monitored fence, over every
+    // mapping (the map and the residency operations). It only grows, so a context that waits for it waits
+    // for every paging operation this driver has queued, whichever mapping queued it. residency_releases_:
+    // Evict callbacks made by release_residency alone (not by the unmap). ordered_waits_: GPU waits
+    // order_context inserted, which is the cost of the guarantee a lab run can read.
+    std::atomic<UINT64> queued_{};
+    std::atomic<unsigned> residency_releases_{},ordered_waits_{};
+    void note_queued(UINT64 value) noexcept {
+        UINT64 seen=queued_.load(std::memory_order_relaxed);
+        while(value>seen && !queued_.compare_exchange_weak(seen,value,std::memory_order_relaxed)){}
+    }
+    // A creation hand-back retains the increment on failure and reports it, so
+    // that the caller fails creation and cleans up. Ordinary teardown is still
+    // best effort: allocation destruction clears an increment a refused Evict
+    // leaves in VidMm. borrowed: an allocation the runtime may already have
+    // destroyed gets no callback on its potentially recycled handle (BD-075).
+    HRESULT evict_residency(GpuMapping& mapping,bool borrowed,bool retain_on_failure=false) noexcept {
+        if(borrowed) ++evicts_skipped_;
+        else {
+            HRESULT evicted=E_UNEXPECTED;
+            if(evict_){
+                D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
+                evicted=evict_(device_,&evict);
+            }
+            if(evicted!=S_OK){
+                ++evict_failures_;
+                // PFND3DDDI_EVICTCB returns S_OK on success, an HRESULT error
+                // otherwise. A creation cannot publish the heap while its own
+                // residency increment remains. Keep it owned for failed-create
+                // cleanup; the ordinary teardown below remains best effort.
+                if(retain_on_failure)return FAILED(evicted)?evicted:E_UNEXPECTED;
+            }
+        }
+        mapping.resident_=false;
+        return S_OK;
+    }
     // Clears a mapping this domain no longer holds anything for. Only the two paths that gave its address
     // back call it, so a mapping is either complete or empty and never half of either.
     static void forget(GpuMapping& mapping) noexcept {
@@ -80,6 +122,10 @@ public:
     // the runtime refused (a leak of GPU virtual address space, nothing else).
     unsigned reservations() const noexcept {return reservations_.load();}
     unsigned reservation_failures() const noexcept {return reservation_failures_.load();}
+    // BD-052: the counters of the residency hand-back and of the ordering waits (see queued_).
+    unsigned residency_releases() const noexcept {return residency_releases_.load();}
+    unsigned ordered_waits() const noexcept {return ordered_waits_.load();}
+    UINT64 queued_fence() const noexcept {return queued_.load();}
     PagingDomain(D3D12DDI_HRTDEVICE device,const D3DDDI_DEVICECALLBACKS& cb) noexcept
         : device_(device.handle),create_(cb.pfnCreatePagingQueueCb),destroy_(cb.pfnDestroyPagingQueueCb),
           map_(cb.pfnMapGpuVirtualAddressCb),free_(cb.pfnFreeGpuVirtualAddressCb),
@@ -166,6 +212,7 @@ public:
             forget(out);
             return E_UNEXPECTED;
         }
+        if(out.valid_)note_queued(out.fence_);
         ++mappings_;
         return out.valid_?S_OK:E_UNEXPECTED;
     }
@@ -179,7 +226,8 @@ public:
         *address=mapping.address_;return S_OK;
     }
     // One residency reference of this domain, queued behind the mapping on the same paging
-    // queue; released by unmap_after_gpu_retirement. Its pending value joins the mapping's
+    // queue; released by release_residency, or by unmap_after_gpu_retirement when a failed
+    // import never reached that call. Its pending value joins the mapping's
     // fence (a monitored fence value only grows, so the largest covers both operations).
     // CantTrimFurther: D3D12's default residency policy succeeds regardless of the current budget
     // (D3D12_RESIDENCY_FLAG_NONE), and this flag is the WDDM form of that: over the current budget
@@ -200,8 +248,67 @@ public:
         if(hr==E_PENDING){
             if(!args.PagingFenceValue || args.PagingFenceValue==UINT64_MAX) return E_UNEXPECTED;
             if(args.PagingFenceValue>mapping.fence_) mapping.fence_=args.PagingFenceValue;
+            note_queued(mapping.fence_);
         }
         return S_OK;
+    }
+    // Whether this domain holds the residency reference of that mapping now (BD-052, the heap imports read
+    // it before they take one: make_resident refuses a second reference on one mapping).
+    bool holds_residency(const GpuMapping& mapping) const noexcept {
+        return mapping.owner_==this && mapping.resident_;
+    }
+    // BD-052: gives this domain's residency reference back on its own, without unmapping. The caller proves
+    // that every GPU use which the reference was taken for has retired, exactly as the unmap's caller does;
+    // the mapping, its address and its fence are untouched, so the address stays usable and the record stays
+    // releasable afterwards. A refused callback leaves the reference owned and
+    // returns the error; the caller must not publish a successful import.
+    //   The import takes this reference only for the window inside its creation DDI where the mapping is not
+    // committed yet, and gives it back before that DDI returns (heap-import.cpp,
+    // release_import_residency). Holding it for the life of the heap made the application's Evict a no-op
+    // and kept a heap the application asked to be created non-resident resident anyway (BD-052;
+    // DirectX-Specs ResourceHeaps.md @ 5a4139b, "the driver must no longer create allocations ... as
+    // resident during creation", line 1011).
+    //   borrowed: as in unmap_after_gpu_retirement, an allocation the runtime owns and may already have
+    // destroyed gets no Evict callback at all; destroying an allocation drops its residency (BD-075).
+    HRESULT release_residency(GpuMapping& mapping,bool borrowed=false) noexcept {
+        if(mapping.owner_!=this) return E_INVALIDARG;
+        if(!mapping.resident_) return S_FALSE;
+        const HRESULT hr=evict_residency(mapping,borrowed,true);
+        if(hr!=S_OK)return hr;
+        ++residency_releases_;
+        return S_OK;
+    }
+    // BD-052, for the engine's and the ICD's internal contexts, which the runtime never sees and therefore
+    // never makes wait for a paging operation of ours (trial 153: a GPU job wrote a mapped range 2 ms after
+    // its map fence and bugchecked 0x116).
+    //   Orders everything the given context submits after this call behind every operation this domain has
+    // queued on its own paging queue: one GPU wait on the domain's monitored fence for queued_.
+    //   What it is not: a statement that anything is resident. It covers the paging operations of this
+    // driver, which is all the driver has an object for - D3D12DDIARG_MAKERESIDENT_0001 gives a value and an
+    // opaque D3D12DDI_HRTPAGINGQUEUE, and "the driver must not attempt to use these values"
+    // (ResourceHeaps.md @ 5a4139b, line 1017), so the runtime's residency fence cannot be named here at all.
+    // The residency of an application's heap after its creation DDI is the runtime's (heap-import.h).
+    //   S_FALSE: nothing to wait for, which is the steady state (the paging queue has caught up, and an
+    // import waits for its own map on the CPU before its VA leaves the module, so it normally is). No wait is
+    // inserted then, so the cost on a submission path is one atomic read and one comparison.
+    HRESULT order_context(HANDLE context) noexcept {
+        if(!context) return E_INVALIDARG;
+        if(!queue_ || !sync_ || !completed_) return E_UNEXPECTED;
+        UINT64 wanted=queued_.load();
+        if(!wanted) return S_FALSE;
+        UINT64 value=*completed_;MemoryBarrier();
+        if(value==UINT64_MAX) return D3DDDIERR_DEVICEREMOVED;
+        if(value>=wanted) return S_FALSE;
+        if(!wait_gpu_) return E_UNEXPECTED;
+        D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU args{};
+        args.hContext=context;args.ObjectCount=1;args.ObjectHandleArray=&sync_;
+        args.MonitoredFenceValueArray=&wanted;
+        HRESULT hr=wait_gpu_(device_,&args);
+        if(hr!=S_OK) return FAILED(hr)?hr:E_UNEXPECTED;
+        ++ordered_waits_;
+        // Loss may become visible while the runtime processes the wait request.
+        value=*completed_;MemoryBarrier();
+        return value==UINT64_MAX?D3DDDIERR_DEVICEREMOVED:S_OK;
     }
     // Blocks this thread, with no time limit, until the mapping and any residency it took have
     // completed, then answers like ready() (UINT64_MAX there is the removed-device value D3D12
@@ -257,18 +364,9 @@ public:
         if(!mapping.owner_) return S_OK;
         UINT64 address=0;HRESULT hr=ready(mapping,&address);if(FAILED(hr)) return hr;
         if(!free_) return E_UNEXPECTED;
-        if(mapping.resident_){
-            if(borrowed) ++evicts_skipped_;
-            else {
-                HRESULT evicted=E_UNEXPECTED;
-                if(evict_){
-                    D3DDDICB_EVICT evict{};evict.NumAllocations=1;evict.AllocationList=&mapping.allocation_;
-                    evicted=evict_(device_,&evict);
-                }
-                if(FAILED(evicted)) ++evict_failures_;
-            }
-            mapping.resident_=false;
-        }
+        // BD-052: the same Evict this path always made, now in the one place the heap imports also use
+        // (release_residency). residency_releases_ counts the hand-backs alone, so it is not raised here.
+        if(mapping.resident_) evict_residency(mapping,borrowed);
         D3DDDICB_FREEGPUVIRTUALADDRESS args{};
         if(mapping.reservation_){
             // BD-101: one free of the reservation releases the mapping inside it as well (d3dkmthk.md,

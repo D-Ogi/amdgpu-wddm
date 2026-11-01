@@ -232,13 +232,49 @@ and no dedicated-allocation structure. Memory types are checked against buffer
 requirements and the requested CPU access policy. Borrowed `Lock2`/`Unlock2`
 operations route back to the heap owner for upload and readback mappings.
 
-Heap creation does not call `MakeResident`. `native-residency-ddi.cpp` resolves
-engine objects to runtime allocation handles, removes aliases within the request
-and sends one complete list through the native runtime residency callbacks.
-`E_PENDING` preserves the runtime paging fence and sets `WaitMask`; that fence
+The residency of an imported heap belongs to the runtime. `native-residency-ddi.cpp`
+resolves engine objects to runtime allocation handles, removes aliases within the
+request and sends one complete list through the native runtime residency callbacks.
+`E_PENDING` preserves the runtime paging fence and sets `WaitMask`. That fence
 is distinct from the importer's KT mapping fence. Empty validated allocation
 lists require no kernel operation. Unknown ownership or malformed callback
 results fail rather than manufacturing residency.
+
+The import takes the paging domain's own residency reference while it maps a new
+allocation, and gives it back before the creation DDI returns. It takes one
+because the mapping of an allocation that is not resident has no valid page table
+entries, and a GPU job on such an address bugchecks (trial 153). The CPU wait
+inside the import is what closes that window, because the map and the residency
+operation have both completed when it returns. The reference then goes back
+unconditionally, with no gate and no policy in the way: with the residency DDIs
+installed, the driver "must no longer create allocations associated with any d3d12
+driver handle creation DDIs as resident during creation" (DirectX-Specs
+`ResourceHeaps.md`, Residency DDIs). `D3D12DDI_HEAP_FLAGS` has no
+`CREATE_NOT_RESIDENT` bit, so the runtime expresses that flag by not calling
+`pfnMakeResident`, and leaving no reference behind is the only way to honour it.
+A reference the import kept for the heap's whole life made an application's
+`Evict` a no-op (BD-052). The same sentence of the specification asks for
+`DXGK_CONTEXTINFO_CAPS::DriverManagesResidency` on context creation, which the
+kernel driver sets for every user-mode context (`driver/kmd/wddm.c`). The switch
+`import-residency-hold-on` restores the old lifetime hold for a bisect.
+
+After the creation DDI the residency of the heap is the runtime's, and a
+`pfnMakeResident` makes exactly one residency operation: the mandated callback,
+with the runtime's own flags on the runtime's paging queue. The driver takes no
+reference of its own on top of it, because a second reference is one the
+application's `Evict` cannot drop.
+
+What the engine's and the ICD's internal contexts get for the driver's own paging
+work is an ordering. `PagingDomain::order_context` inserts one GPU wait on the
+paging queue's own monitored fence, for the largest value this driver has queued
+on it, and the hosted dispatch calls it for every internal
+`BC250_HOST_SubmitCommand` before the submission reaches the kernel. The wait is
+inserted only while the queue is behind, which an import that waits for its own
+map on the CPU normally is not. It orders this driver's paging operations and
+states nothing about residency: the runtime's residency fence cannot be used for
+that, because the DDI hands out a value and an opaque
+`D3D12DDI_HRTPAGINGQUEUE`, and "the driver must not attempt to use these values",
+so there is no synchronization object for it.
 
 After engine GPU-use retirement, release frees the Vulkan import, unmaps its VA
 and deallocates the runtime allocation in that order. Failed steps retain their

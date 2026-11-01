@@ -68,6 +68,8 @@ namespace AmdgpuWddmControl
                 "Turns off a stability fix. Use only when the developers ask for it."),
             new ProfileSwitch("import-quarantine-off", "Turn off the import quarantine (diagnostic)",
                 "Turns off a stability fix. Use only when the developers ask for it."),
+            new ProfileSwitch("import-residency-hold-on", "Keep imported memory resident (diagnostic)",
+                "Turns off a memory management fix. Use only when the developers ask for it."),
             new ProfileSwitch("shared-create-retry-off", "Turn off shared textures (diagnostic)",
                 "The driver refuses a texture that two programs share, as it did before this release. Use only when the developers ask for it."),
             new ProfileSwitch("fence-wait-accept-off", "Turn off the queue wait answer (diagnostic)",

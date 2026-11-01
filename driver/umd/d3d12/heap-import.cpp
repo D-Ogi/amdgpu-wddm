@@ -105,6 +105,7 @@ ImportReleasePolicy ImportReleasePolicy::from_switches() noexcept {
     if(ddi_experiment("import-quarantine-off")){
         policy.quarantine_depth=0;policy.quarantine_count_cap=0;policy.quarantine_age_ms=0;policy.quarantine_byte_cap=0;
     }
+    if(ddi_experiment("import-residency-hold-on"))policy.residency_hold=true;
     return policy;
 }
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
@@ -282,6 +283,61 @@ void RuntimeHeapImports::drain(bool all) noexcept {
     free_report_.held_count=held_count_;
     free_report_.held_bytes=held_bytes_;
 }
+// BD-052. The import gives the paging domain's residency reference back inside the creation DDI that took
+// it, before that DDI returns: with the residency DDI entry points installed the driver "must no longer
+// create allocations associated with any d3d12 driver handle creation DDIs as resident during creation"
+// (DirectX-Specs ResourceHeaps.md @ 5a4139b, Residency DDIs, line 1011), and D3D12DDI_HEAP_FLAGS carries no
+// CREATE_NOT_RESIDENT bit (WDK 10.0.26100 d3d12umddi.h lines 307-317), so leaving no reference of our own is
+// the only way either half of that is honoured. It is therefore unconditional: the device-wide progress gate
+// of the release quarantine is not applied to it, because that gate asks whether unrelated older work has
+// retired, which on a device with work in flight is never true and would hand the heap back to the runtime
+// resident - the defect itself.
+//   Called by the creating thread for its own record, after the Vulkan import and before the record is
+// published to the engine, outside lock_ and in the same place map() and make_resident() are called for the
+// same mapping. Nothing else can reach the record yet: the engine learns of it from the return value of this
+// DDI. So no runtime callback is made under lock_ and the leaf rule of heap-import.h still holds.
+//   What covers the window the reference was taken for (trial 153, a GPU job on a mapped but uncommitted
+// range) is the CPU wait inside allocate() itself: the map and the residency operation have both completed
+// before the VA leaves this module. After the DDI the residency of an application's heap is the runtime's,
+// which is what the residency DDIs are for, and a heap the runtime never makes resident is a heap the
+// application asked not to have committed.
+//   import-residency-hold-on (ddi-trace.h) keeps the pre-BD-052 lifetime hold, so a lab trial can bisect the
+// trial 153 class against this change with no DLL swap.
+HRESULT RuntimeHeapImports::release_import_residency(Record& record) noexcept {
+    if(policy_.residency_hold)return S_OK;
+    // This runs inside allocate/adopt, before the creation/open DDI returns. Even
+    // an adopted handle is live here, so return the increment this import took.
+    // The borrowed-handle exception belongs to teardown after runtime destruction
+    // (BD-075); applying it here would retain a residency increment until destroy.
+    const HRESULT hr=paging_.release_residency(record.mapping);
+    return hr==S_FALSE?S_OK:hr;
+}
+// BD-052: what the runtime has just done, counted for the trace and the lab arm. No residency operation of
+// this driver's own is made here. The one operation of a pfnMakeResident is the mandated callback, with the
+// runtime's flags on the runtime's paging queue (native-residency-ddi.cpp, RuntimeResidency::make_resident;
+// "the driver must forward the flags passed in to both MakeResident and Evict to the callback routines",
+// ResourceHeaps.md line 978). A second MakeResidentCb of ours would take a second VidMm residency reference
+// that the application's Evict cannot drop, which is BD-052 again, and would cost two kernel transitions per
+// allocation on the path a budget-managed game walks every frame.
+void RuntimeHeapImports::note_runtime_residency(const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
+    if(!active_.load() || !allocations || !count)return;
+    runtime_residencies_.fetch_add(1,std::memory_order_relaxed);
+}
+void RuntimeHeapImports::note_runtime_eviction(const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
+    if(!active_.load() || !allocations || !count)return;
+    runtime_evictions_.fetch_add(1,std::memory_order_relaxed);
+}
+// The shared hold of paging_life_lock_ is what makes the read of the queue's fence page safe against the
+// close that unmaps it (heap-import.h): clearing paging_open_ rejects new readers, but only the lock waits
+// for a submission that already passed that flag before the kernel unmaps the page.
+HRESULT RuntimeHeapImports::order_internal_submission(HANDLE context) noexcept {
+    if(!active_.load())return E_UNEXPECTED;
+    if(!paging_open_.load(std::memory_order_acquire))return S_FALSE;   // no mapping of ours exists yet
+    AcquireSRWLockShared(&paging_life_lock_);
+    const HRESULT hr=paging_open_.load(std::memory_order_relaxed)?paging_.order_context(context):S_FALSE;
+    ReleaseSRWLockShared(&paging_life_lock_);
+    return hr;
+}
 // The record is retired and not in a callback. The calling thread takes it for the release (free()
 // may have done so already, under the same hold that retired it); on failure it gives it back, on
 // success the caller erases it.
@@ -353,6 +409,9 @@ HRESULT RuntimeHeapImports::release_owned(Record& record,bool proved) noexcept {
         if(deferred==S_OK)free_report_.stage=FreeStage::Done;
         return deferred;
     }
+    // BD-052: a complete import holds no residency reference by now (release_import_residency gave it back
+    // inside the creation DDI), so the unmap's Evict is made only for an import whose creation failed after
+    // the residency operation and for the import-residency-hold-on bisect arm.
     HRESULT hr=paging_.unmap_after_gpu_retirement(record.mapping,record.adopted);
     if(hr!=S_OK)return hr;
     free_report_.stage=FreeStage::Deallocate;
@@ -699,9 +758,9 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         // Once, as before: a failed creation is not retried, and the calls after it fail at the map.
         // A thread that finds the creation under way waits for it here.
         HRESULT opened=S_OK;
-        AcquireSRWLockExclusive(&paging_open_lock_);
+        AcquireSRWLockExclusive(&paging_life_lock_);
         if(!paging_open_.load(std::memory_order_relaxed)){opened=paging_.open();paging_open_.store(true,std::memory_order_release);}
-        ReleaseSRWLockExclusive(&paging_open_lock_);
+        ReleaseSRWLockExclusive(&paging_life_lock_);
         if(opened!=S_OK)return opened;
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
@@ -724,6 +783,10 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
     // and makes only its queues' contexts wait for that. The engine also submits on contexts the
     // runtime never sees, so its VA must not leave here before the allocation is resident and its
     // page table entries are written: trial 153 faulted on exactly that window (REPORT-153).
+    // BD-052: this reference is taken for that window only, and the wait below is what closes the window
+    // (the map and the residency operation have completed when wait_ready returns). It is given back before
+    // this DDI returns (release_import_residency below), so the application's Evict is the only reference
+    // that is left to drop and a heap created non-resident does not stay resident.
     if(hr==S_OK){report_.stage=ImportStage::Resident;hr=paging_.make_resident(record->mapping);}
     UINT64 address=0;
     if(hr==S_OK){report_.stage=ImportStage::MapReady;hr=paging_.wait_ready(record->mapping,&address);}
@@ -753,10 +816,24 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
         hr=from_vk(allocate_(device_,&info,nullptr,&imported));
         if(hr==S_OK && !imported)hr=E_UNEXPECTED;
         if(hr==S_OK){
-            Exclusive held(lock_);
-            record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
-            record->retired=false;*out=record->imported;
-            report_.stage=ImportStage::Done;return S_OK;
+            // BD-052: the residency reference this import took goes back here, before the record is
+            // published and before this DDI returns. The engine's work inside this DDI is done (the import
+            // above is the last of it); the runtime owns the residency of the heap from now on, and a heap
+            // the application asked to be created non-resident gets no pfnMakeResident at all (CONTRACT:
+            // ResourceHeaps.md line 1011, and D3D12DDI_HEAP_FLAGS has no CREATE_NOT_RESIDENT bit).
+            // Unconditional: no gate and no policy may leave it resident here.
+            hr=release_import_residency(*record);
+            if(hr==S_OK){
+                Exclusive held(lock_);
+                record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
+                record->retired=false;*out=record->imported;
+                report_.stage=ImportStage::Done;return S_OK;
+            }
+            // The residency increment did not go back. Publish no heap and keep
+            // the original callback failure; cleanup owns the allocation until
+            // its destruction succeeds. The Vulkan import was not in the record.
+            report_.stage=ImportStage::Resident;report_.refusal="residency hand-back";
+            (void)release_import(*record,imported);
         }
     }
     // Failed construction transfers nothing to engine-ddi. Pending mapping and
@@ -766,7 +843,8 @@ HRESULT RuntimeHeapImports::allocate(const engine_ddi::MemoryRequest* request,en
 }
 // BD-075, the open half. No allocate callback runs here: the allocation exists, the runtime opened it for this
 // device and destroys it itself. Everything after the callback is the same work allocate() does, in the same
-// order and for the same reasons (trial 153: the VA must not leave before the allocation is resident).
+// order and for the same reasons (trial 153: the VA must not leave before the allocation is resident), and
+// with the same hand-back of the residency reference inside this DDI (BD-052).
 HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine_ddi::ImportedMemory* out) noexcept {
     if(out)*out={};
     report_={};report_.stage=ImportStage::Request;
@@ -790,9 +868,9 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
     report_.memory_type=type;report_.stage=ImportStage::PagingQueue;
     if(!paging_open_.load(std::memory_order_acquire)){
         HRESULT opened=S_OK;
-        AcquireSRWLockExclusive(&paging_open_lock_);
+        AcquireSRWLockExclusive(&paging_life_lock_);
         if(!paging_open_.load(std::memory_order_relaxed)){opened=paging_.open();paging_open_.store(true,std::memory_order_release);}
-        ReleaseSRWLockExclusive(&paging_open_lock_);
+        ReleaseSRWLockExclusive(&paging_life_lock_);
         if(opened!=S_OK)return opened;
     }
     auto record=new(std::nothrow) Record(runtime_,callbacks_);if(!record)return E_OUTOFMEMORY;
@@ -847,10 +925,21 @@ HRESULT RuntimeHeapImports::adopt(const engine_ddi::AdoptRequest* request,engine
         hr=from_vk(allocate_(device_,&info,nullptr,&imported));
         if(hr==S_OK && !imported)hr=E_UNEXPECTED;
         if(hr==S_OK){
-            Exclusive held(lock_);
-            record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
-            record->retired=false;*out=record->imported;
-            report_.stage=ImportStage::Done;return S_OK;
+            // BD-052, as in allocate(): the reference goes back before the record is published and before
+            // this DDI returns. The runtime has not yet returned this open handle
+            // to the application, so the Evict here names the live allocation.
+            hr=release_import_residency(*record);
+            if(hr==S_OK){
+                Exclusive held(lock_);
+                record->imported={sizeof(engine_ddi::ImportedMemory),type,imported,host.size,host.allocation,0,address,record};
+                record->retired=false;*out=record->imported;
+                report_.stage=ImportStage::Done;return S_OK;
+            }
+            // A failed open publishes no imported memory. The runtime owns the
+            // opened allocation's destruction; delayed cleanup must not Evict a
+            // borrowed handle after that destruction (BD-075).
+            report_.stage=ImportStage::Resident;report_.refusal="residency hand-back";
+            (void)release_import(*record,imported);
         }
     }
     if(release(*record)==S_OK)erase(record);
@@ -967,7 +1056,15 @@ HRESULT RuntimeHeapImports::close_after_engine_retirement() noexcept {
     bool remaining=false;
     {Exclusive held(lock_);remaining=records_!=nullptr;}
     if(remaining)return result==S_OK?E_PENDING:result;
-    HRESULT hr=paging_.close();if(hr==S_OK)paging_open_.store(false);return hr;
+    // BD-052: the destroy unmaps the queue's fence page, which order_internal_submission reads. The flag is
+    // cleared first, so no further submission enters, and the exclusive hold waits for the ones already
+    // inside; on a failure the queue is still there and the flag goes back.
+    paging_open_.store(false,std::memory_order_release);
+    AcquireSRWLockExclusive(&paging_life_lock_);
+    const HRESULT hr=paging_.close();
+    ReleaseSRWLockExclusive(&paging_life_lock_);
+    if(hr!=S_OK)paging_open_.store(true,std::memory_order_release);
+    return hr;
 }
 unsigned RuntimeHeapImports::discard_metadata() noexcept {
     active_.store(false);unsigned count=paging_open_.exchange(false)?1u:0u;

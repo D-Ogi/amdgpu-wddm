@@ -453,8 +453,37 @@ int main(){
   cpu_signal.Flags.EnqueueCpuEvent=1;
   assert(chost.dispatch(chost.userdata,BC250_HOST_SignalSynchronizationObjectFromCpu,&cpu_signal)<0 && cpu_signals==2);
  }
+ // 5. BD-052: every internal submission is ordered after the driver's own paging work before it reaches the
+ //    kernel. The hook receives the kernel context handle of each broadcast context, once per submission;
+ //    S_FALSE is "nothing was needed", and a failure fails the submission with no kernel submit at all.
+ {
+  static unsigned ordered=0;static HANDLE ordered_context=nullptr;static HRESULT order_status=S_FALSE;
+  native12::HostedDispatchHooks hooks{};
+  hooks.userdata=&ordered;
+  hooks.order=[](void* user,HANDLE context) noexcept {
+   assert(user==&ordered);++ordered;ordered_context=context;return order_status;
+  };
+  HostedDispatch ordering(domain,{device_handle},um,kt,hooks);
+  auto on=[&](uint32_t op,void* a){return HostedDispatch::dispatch(&ordering,op,a);};
+  D3DKMT_CREATECONTEXTVIRTUAL created{};bc250_host_queue_context queue{nullptr,&created};
+  assert(on(BC250_HOST_CREATE_QUEUE_CONTEXT,&queue)==0 && created.hContext);
+  const unsigned submits=submitted;
+  D3DKMT_SUBMITCOMMAND one{};one.BroadcastContextCount=1;one.BroadcastContext[0]=created.hContext;
+  assert(on(BC250_HOST_SubmitCommand,&one)==0 && submitted==submits+1 && ordered==1);
+  // The handle the hook sees is the kernel's, not the shell's token for it.
+  assert(ordered_context==context_handle && ordered_context!=reinterpret_cast<HANDLE>(UINT_PTR(created.hContext)));
+  order_status=E_FAIL;
+  assert(on(BC250_HOST_SubmitCommand,&one)<0 && submitted==submits+1 && ordered==2);
+  order_status=S_OK;
+  assert(on(BC250_HOST_SubmitCommand,&one)==0 && submitted==submits+2 && ordered==3);
+  D3DKMT_DESTROYCONTEXT gone{};gone.hContext=created.hContext;bc250_host_queue_context end{nullptr,&gone};
+  const unsigned destroyed=context_destroys;
+  assert(on(BC250_HOST_DESTROY_QUEUE_CONTEXT,&end)==0 && context_destroys==destroyed+1);
+  assert(ordering.discard_metadata()==0);
+ }
  std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, "
            "cleanup retries, destroy of a mapped allocation with its retry and the lost range of a refused one, scope, "
            "loss, a fence at UINT64_MAX that proves no retirement, address reuse inside a free and inside a destroy, "
-           "replay worker scope, imported-heap error propagation, CPU signal with AllowFenceRewind");
+           "replay worker scope, imported-heap error propagation, CPU signal with AllowFenceRewind, "
+           "BD-052 internal submissions ordered through the hook before the kernel submit");
 }

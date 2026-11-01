@@ -55,6 +55,15 @@ HRESULT native_residency_make(Device& device,D3D12DDIARG_MAKERESIDENT_0001* args
     if(hr==E_PENDING && result.state==ResidencyState::Pending){
         args->pPagingFenceValue[0]=result.paging_fence;args->WaitMask=1;
     }
+    // BD-052: the runtime now holds the residency of these allocations, and the callback above is the one
+    // residency operation this DDI makes - with the runtime's own flags on the runtime's paging queue, as
+    // "the driver must forward the flags passed in to both MakeResident and Evict to the callback routines"
+    // requires (DirectX-Specs ResourceHeaps.md @ 5a4139b, line 978). The driver takes no reference of its
+    // own on top: a second one would be a reference the application's Evict cannot drop, which is the defect
+    // this notice records the absence of. The notice is counted for the trace and the lab arm (heap-import.h,
+    // note_runtime_residency).
+    if(hr==S_OK || hr==E_PENDING)
+        engine_note_runtime_residency(device,allocations.data(),static_cast<unsigned>(allocations.size()));
     return hr;
 }
 HRESULT native_residency_evict(Device& device,const D3D12DDIARG_EVICT* args,
@@ -67,6 +76,10 @@ HRESULT native_residency_evict(Device& device,const D3D12DDIARG_EVICT* args,
     RuntimeResidency runtime(device.runtime,device.callbacks);
     hr=runtime.evict_after_gpu_retirement(allocations,args->Flags);
     if(SUCCEEDED(hr) && hr!=S_OK){device.remove();return E_UNEXPECTED;}
+    // BD-052: the application's Evict reached the kernel. The driver holds no reference of its own to drop
+    // by now; this is the retirement point that proves it (and the counter the lab arm reads).
+    if(hr==S_OK)
+        engine_note_runtime_eviction(device,allocations.data(),static_cast<unsigned>(allocations.size()));
     return hr;
 }
 HRESULT APIENTRY native_make_resident(D3D12DDI_HDEVICE handle,D3D12DDIARG_MAKERESIDENT_0001* args){

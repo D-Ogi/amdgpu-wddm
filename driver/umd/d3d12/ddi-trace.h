@@ -95,6 +95,10 @@ inline void ddi_chain_failure(const char* site,HRESULT code,unsigned operation=0
 //   import-progress-gate-off: a released import is not held for the device-wide progress of its release
 //     (heap-import.cpp, ImportReleasePolicy, F2).
 //   import-quarantine-off: no release delay, no caps (heap-import.cpp, F3).
+//   import-residency-hold-on: an imported heap keeps the driver's own residency reference for its whole life,
+//     the behaviour before BD-052 (heap-import.cpp, release_import_residency). The bisect arm of that fix: on
+//     it an application's Evict cannot page an imported heap out, which is the defect, so it is for a trial
+//     that has to tell the trial 153 class from this change and for nothing else.
 //   shader-model-68-off: the adapter reports shader model 6.7 at most, and no 1091 answer (adapter-caps.cpp,
 //     engine-ddi set_shader_model_ceiling, M840).
 //   shader-model-67-off: the adapter reports shader model 6.6 at most, the answer of earlier builds; it wins over

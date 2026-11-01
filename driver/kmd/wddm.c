@@ -5624,6 +5624,19 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // Unconditional (contract rule R37): the table has no DxgkDdiPatch and no patch-location list, so a context that
     // said "patch me" would meet a 0x113 later; nothing here can patch, whatever the flags say.
     pCreateContext->ContextInfo.Caps.NoPatchingRequired = 1;
+    // BD-052, the second half of the sentence the user-mode driver's residency obeys: with non-NULL
+    // pfnMakeResident/pfnEvict entry points "the driver must no longer create allocations associated with any
+    // d3d12 driver handle creation DDIs as resident during creation. Additionally, the driver must also set the
+    // DXGK_CONTEXTINFO_CAPS::DriverManagesResidency flag on context creation" (DirectX-Specs
+    // d3d/ResourceHeaps.md @ 5a4139b, "Residency DDIs", line 1011). Our D3D12 user-mode driver installs both
+    // entries (driver/umd/d3d12/native-residency-ddi.c*). This also applies to our other virtual UMD
+    // contexts: WDDM 2 residency-overview.md states that device residency lists govern every API and
+    // engine, and gpu-virtual-memory-in-wddm-2-0.md assigns virtual-mode residency to the UMD
+    // (MicrosoftDocs/windows-driver-docs @ 110f60ea). UmdBlobParseContext above admits only our virtual
+    // GFX/compute/SDMA contexts; RADV explicitly makes its native/hosted BOs resident, and the D3D11
+    // runtime-surface bridge does the same for its imports. This is not inferred from allocation-list
+    // size. The separate kernel GDI/VidMm path keeps the flag clear.
+    pCreateContext->ContextInfo.Caps.DriverManagesResidency = umd ? 1 : 0;
     // Matches DRIVERCAPS.MemoryManagementCaps.PagingNode above: node 1 once the gate names it the paging node,
     // node 0 (today's answer) otherwise.
     pCreateContext->ContextInfo.PagingCompanionNodeId = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;
