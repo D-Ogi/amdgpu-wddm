@@ -802,6 +802,70 @@ void late_join_tests() {
     CHECK(detail::late_join(off,refused,t)==nullptr);
     CHECK(refused.next.load()==detail::kNoMoreLooks);
     CHECK(detail::late_join(off,refused,t+10*detail::kLateJoinPeriod)==nullptr);
+
+    // BD-283 r7: no marker of this process and the switch on now: the look opens a file of this process, marks it
+    // for the other modules, says in its first line why the first decision had no file, and looks no more.
+    // An empty folder of its own: the cases above made files of this process in this second, and a file name has
+    // only eight tries per second (the first run of these cases found all eight taken, error 80).
+    clear_sink_env();
+    const std::string kept_data=program_data();
+    set_env("ProgramData",(root()+"\\programdata-late").c_str());
+    make_tree(games_folder());
+    for(const std::string& file:files_in(games_folder()))DeleteFileA((games_folder()+"\\"+file).c_str());
+    set_switch_seconds(600);
+    detail::LateJoin own;
+    const size_t before_own=files_in(games_folder()).size();
+    const detail::Sink* o=detail::late_join(off,own,t);
+    CHECK(o!=nullptr && o==&own.joined);
+    CHECK(own.next.load()==detail::kNoMoreLooks);
+    CHECK(files_in(games_folder()).size()==before_own+1);
+    char marked[48]{};
+    const DWORD mk=GetEnvironmentVariableA(amdgpu_wddm_log::game_log::kMarkerVariable,marked,sizeof(marked));
+    unsigned long marked_pid=0;
+    unsigned long long marked_until=0;
+    CHECK(mk && detail::parse_marker(marked,&marked_pid,&marked_until) && marked_pid==GetCurrentProcessId());
+    if(o){
+        CHECK(o->file!=nullptr && o->until==marked_until && o->cap==amdgpu_wddm_log::game_log::kFileCapBytes);
+        CHECK(detail::late_join(off,own,t+5*detail::kLateJoinPeriod)==o);
+        std::fprintf(o->file,"the late own line\n");
+        std::fflush(o->file);
+        char value[MAX_PATH+8]{};
+        const DWORD vn=GetEnvironmentVariableA(amdgpu_wddm_log::game_log::kVariable,value,sizeof(value));
+        CHECK(vn>5 && vn<sizeof(value) && !std::strncmp(value,"file:",5));
+        const std::string text=vn>5?read_file(value+5):std::string();
+        CHECK(has(text,"amdgpu-wddm game log: "));
+        CHECK(has(text,"opens this file late; its first print, at "));
+        CHECK(has(text,"found no recording: the switch was off (error 0)"));
+        CHECK(has(text,"the late own line"));
+        std::fclose(o->file);
+    }
+
+    // A marker of another process (inherited) and the switch on now: a file of this process, as open_sink would.
+    clear_sink_env();
+    set_env(amdgpu_wddm_log::game_log::kVariable,("file:"+shared).c_str());
+    set_env(amdgpu_wddm_log::game_log::kMarkerVariable,other);
+    detail::LateJoin inherited;
+    const size_t before_inherited=files_in(games_folder()).size();
+    const detail::Sink* inh=detail::late_join(off,inherited,t);
+    CHECK(inh!=nullptr && files_in(games_folder()).size()==before_inherited+1);
+    CHECK(!has(read_file(shared),"opens this file late"));      // the other process's file is left alone
+    if(inh)std::fclose(inh->file);
+
+    // The switch on, but no file can be made (the folder is missing): no sink, and the looks end.
+    clear_sink_env();
+    set_env("ProgramData",(root()+"\\no-such-tree").c_str());
+    detail::LateJoin unmade;
+    CHECK(detail::late_join(off,unmade,t)==nullptr);
+    CHECK(unmade.next.load()==detail::kNoMoreLooks);
+    CHECK(detail::late_join(off,unmade,t+10*detail::kLateJoinPeriod)==nullptr);
+
+    // The switch over: no sink, and the looks go on.
+    set_env("ProgramData",(root()+"\\programdata-late").c_str());
+    set_switch_seconds(-60);
+    detail::LateJoin over_now;
+    CHECK(detail::late_join(off,over_now,t)==nullptr);
+    CHECK(over_now.next.load()==t+detail::kLateJoinPeriod);
+    set_env("ProgramData",kept_data.c_str());
     clear_sink_env();
 }
 
