@@ -1,0 +1,9 @@
+# L28 control, Boot B, 2026-11-01 00:24Z: the D3 windows with no register write, two runs
+# Console output kept by the session tool log of the development PC, copied unchanged except for the
+# redactions in REDACTED.txt and the removal of the blank lines that the log put after each line.
+# Each block starts with its source line and the UTC time at which the development PC received it.
+
+### source line 3640, received 2026-11-01T00:24:50.338Z
+CONTROL after_enable_delta=0 during_modetest=11 total=31
+CONTROL after_enable_delta=0 during_modetest=10 total=29
+

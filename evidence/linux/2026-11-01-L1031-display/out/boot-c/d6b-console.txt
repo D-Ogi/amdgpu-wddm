@@ -1,0 +1,18 @@
+# d6-l48-timing utc=2026-11-01T01:52:51Z mono_ns=222776679332
+# setting up primary + overlay
+live pipe 0: opp0 320x200
+live pipe 3: opp0 1920x1200
+# watch: HUBPREQ0_DCSURF_FLIP_CONTROL,HUBPREQ3_DCSURF_FLIP_CONTROL,OTG0_OTG_MASTER_UPDATE_LOCK,MPCC0_MPCC_STATUS
+# phase: OTG0_OTG_STATUS_POSITION,OTG0_OTG_STATUS_FRAME_COUNT
+
+# starting sampler utc=2026-11-01T01:52:53Z mono_ns=224790880755
+# starting vsynced primary flips utc=2026-11-01T01:52:55Z mono_ns=226791550144
+flip: testing 1920x1200@XR24 overlay plane 45
+flip: failed to enable plane: Permission denied
+flip: select timed out or error (ret 0)
+flip: select timed out or error (ret 0)
+flip: select timed out or error (ret 0)
+
+# sampler: 731 change lines, 4 stat lines
+# killing overlay modetest utc=2026-11-01T01:53:25Z mono_ns=256797315422
+# d6 done utc=2026-11-01T01:53:25Z mono_ns=257075987568
