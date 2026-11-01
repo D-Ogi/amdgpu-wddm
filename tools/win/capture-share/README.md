@@ -94,7 +94,7 @@ default texture. Without that capability this cell returns `skip`, exit 5. It
 does not manufacture private KMT/runtime records or assume all shared formats work.
 
 The producer uploads one byte per A8 pixel using a 256-byte-aligned source pitch
-(768 bytes at width 704), obtains the legacy handle, and completes its GPU event
+(768 bytes at width 704), gets the legacy handle, and completes its GPU event
 before publishing it. The peer opens that resource, point-samples a shader into
 RGBA8, then copies that render target into a readback texture. The CPU oracle
 compares every pixel/channel against separately calculated expected values.
@@ -110,23 +110,23 @@ capshare.exe --cell a8sample --format a8 --size 704x640 --handle kmt --bound 60 
 
 Run the same cell with `--format bgra8` as the positive control and A8 at
 `--size 701x639` to cross row/height alignment boundaries. `--inject alpha-red`
-deliberately reads red instead of alpha; A8 must then produce `mismatch`, exit 1.
+deliberately reads red instead of alpha. A8 must then produce `mismatch`, exit 1.
 `--self-test` includes an explicitly CPU-only check of the pattern/oracle pair.
 The regular GPU cell is headless and does not change desktop settings.
 
 The normal watchdog has a 500 ms grace interval before a separate hard-stop
-thread terminates the process without logging, IPC, verdict locks or driver
-cleanup. Both peer launch and stderr relaunch require successful kill-on-close
+thread stops the process without logging, IPC, verdict locks or driver
+cleanup. Both the peer start and the stderr restart require successful kill-on-close
 job setup before resuming a child. `--cell ipc --inject watchdog-log-lock`
-holds the parent's log lock indefinitely and must exit 3 at the hard bound;
-the JSON verdict may be absent. The IPC-only `launcher-job-fail` (with `--stderr`)
+holds the parent's log lock indefinitely and must exit 3 at the hard bound.
+The JSON verdict may be absent. The IPC-only `launcher-job-fail` (with `--stderr`)
 and `peer-job-fail` injections call job assignment with an invalid handle and
 must exit 2 with the suspended child reaped. These are harness controls, not GPU
 fault tests. External supervision remains necessary for an OS/kernel hang.
 
 Use the per-image router to select the producer and peer routes. A Zink acceptance
-run needs a GPU producer and a confirmed Zink peer; a pass on another driver only
-validates the client. Logs include process creation FILETIME and loaded paths with
+run needs a GPU producer and a checked Zink peer. A pass on another driver only
+checks the client. Logs include process creation FILETIME and loaded paths with
 disk SHA256 for the executable and relevant UMD/runtime modules. These hashes are
 not hashes of loaded memory. Preserve the exact module/source manifest externally.
 
