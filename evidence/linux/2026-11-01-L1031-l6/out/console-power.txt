@@ -1,0 +1,34 @@
+# L6, 2026-10-31 23:36-23:48Z: smart plug telemetry and the two AC cycles
+# Console output kept by the session tool log of the development PC, copied unchanged except for the
+# redactions in REDACTED.txt and the removal of the blank lines that the log put after each line.
+# Each block starts with its source line and the UTC time at which the development PC received it.
+
+### source line 1986, received 2026-10-31T23:36:36.374Z
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+{"queried_utc": "2026-10-31T23:36:36.291357+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 805, "19": 1071, "20": 2414}, "current_a": 0.805, "power_w": 107.1, "voltage_v": 241.4, "scale_source": "TinyTuya SocketDevice convention; model calibration unverified", "measurement_age_seconds": null}
+
+### source line 2033, received 2026-10-31T23:41:22.655Z
+{"queried_utc": "2026-10-31T23:41:19.276119+00:00", "transport": "LAN", "relay_on": true, "raw_dps": {"18": 815, "19": 1075, "20": 2419}, "current_a": 0.815, "power_w": 107.5, "voltage_v": 241.9, "sca
+
+### source line 2048, received 2026-10-31T23:41:42.210Z
+23:41:29.161378800Z
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+23:41:42.163151300Z
+
+### source line 2088, received 2026-10-31T23:43:15.118Z
+23:42:44 111.0 W 0.842 A
+23:42:55 110.5 W 0.838 A
+23:43:06 110.5 W 0.839 A
+
+### source line 2152, received 2026-10-31T23:44:46.472Z
+23:44:23 107.8 W 0.802 A
+23:44:31 107.7 W 0.801 A
+23:44:40 107.8 W 0.802 A
+
+### source line 2181, received 2026-10-31T23:48:23.316Z
+23:48:10.207662600Z
+{"transport": "LAN", "relay_on": false, "readback_verified": true}
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+23:48:23.279266400Z
+

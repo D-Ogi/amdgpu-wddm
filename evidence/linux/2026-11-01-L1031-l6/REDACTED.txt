@@ -1,0 +1,12 @@
+Redactions in this directory, counts only. The campaign originals stay outside the repository.
+Kinds: mac = network MAC address; usb-serial = USB device serial number (root hub serials are PCI
+addresses and stay); lab-ipv4 = lab network address; uuid = UUID; edid-blob-lines = hex lines of an
+EDID blob; monitor-name = monitor name decoded from the EDID; lab-host-name = Windows host name;
+dev-pc-path = development PC path with its user name;
+camera-file-line = name of a camera frame file (the frames stay outside the repository).
+
+out/console-power.txt: camera-file-line 1
+out/dmesg-stream-s2idle-none-2.txt: lab-ipv4 1, mac 1, usb-serial 1
+out/dmesg-stream-s2idle-none.txt: lab-ipv4 1, mac 1, usb-serial 1
+out/probe-after-2.txt: lab-ipv4 1
+out/probe-after.txt: lab-ipv4 1

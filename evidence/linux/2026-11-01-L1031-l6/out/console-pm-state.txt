@@ -1,0 +1,36 @@
+# L6, 2026-10-31 23:34-23:43Z: /sys/power before attempt 1, then the start lines of the two attempts
+# Console output kept by the session tool log of the development PC, copied unchanged except for the
+# redactions in REDACTED.txt and the removal of the blank lines that the log put after each line.
+# Each block starts with its source line and the UTC time at which the development PC received it.
+
+### source line 1833, received 2026-10-31T23:34:30.507Z
+pm_freeze_timeout
+reserved_size
+resume
+resume_offset
+state
+suspend_stats
+sync_on_suspend
+wakeup_count
+[s2idle]
+cat: can't open '/sys/power/pm_test': No such file or directory
+[    0.016578] PM: hibernation: Registered nosave memory: [mem 0x00000000-0x00000fff]
+[    0.016580] PM: hibernation: Registered nosave memory: [mem 0x000a0000-0x000fffff]
+[    0.016581] PM: hibernation: Registered nosave memory: [mem 0x04000000-0x04000fff]
+[    0.016583] PM: hibernation: Registered nosave memory: [mem 0x09e02000-0x09ffffff]
+[    0.016584] PM: hibernation: Registered nosave memory: [mem 0x7cc20000-0x7cc20fff]
+[    0.016586] PM: hibernation: Registered nosave memory: [mem 0x7cd12000-0x7cd12fff]
+[    0.016588] PM: hibernation: Registered nosave memory: [mem 0x7dce4000-0x7e23ffff]
+[    0.016589] PM: hibernation: Registered nosave memory: [mem 0x7f000000-0xffffffff]
+[    0.227530] ACPI: PM: Registering ACPI NVS region [mem 0x04000000-0x04000fff] (4096 bytes)
+[    0.227530] ACPI: PM: Registering ACPI NVS region [mem 0x7de0a000-0x7defbfff] (991232 bytes)
+
+### source line 1902, received 2026-10-31T23:35:41.869Z
+23:35:41.559613400Z
+started 00:36:10
+
+### source line 2097, received 2026-10-31T23:43:24.003Z
+1406 l6/out/dmesg-stream-s2idle-none-2.txt
+23:43:23.691286300Z
+started 00:43:52
+
