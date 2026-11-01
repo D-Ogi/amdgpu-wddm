@@ -1,0 +1,970 @@
+== amdgpu_gpu_info
+cat: can't open '/sys/kernel/debug/dri/0000:01:00.0//amdgpu_gpu_info': No such file or directory
+
+== ip_discovery
+-- hw 0 inst 0
+  base_addr = 0x0001B800
+0x01440000
+0x01480000
+0x014C0000
+0x02411000
+  harvest = 0x0
+  hw_id = 0
+  major = 11
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 1
+-- hw 0 inst 1
+  base_addr = 0x0001BA00
+0x01500000
+0x01540000
+0x01580000
+0x02411400
+  harvest = 0x0
+  hw_id = 0
+  major = 11
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 1
+  revision = 1
+-- hw 1 inst 0
+  base_addr = 0x00016000
+0x00DC0000
+0x00E00000
+0x00E40000
+0x0243FC00
+  harvest = 0x0
+  hw_id = 1
+  major = 11
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 8
+-- hw 108 inst 0
+  base_addr = 0x00000000
+0x00000014
+0x00000D20
+0x00010400
+0x0241B000
+0x04040000
+  harvest = 0x0
+  hw_id = 108
+  major = 2
+  minor = 1
+  num_base_addresses = 6
+  num_instance = 0
+  revision = 1
+-- hw 11 inst 0
+  base_addr = 0x00001260
+0x0000A000
+0x02402C00
+  harvest = 0x0
+  hw_id = 11
+  major = 10
+  minor = 1
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 3
+-- hw 12 inst 0
+  base_addr = 0x00007800
+0x00007E00
+0x02403000
+  harvest = 0x0
+  hw_id = 12
+  major = 2
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 3
+-- hw 128 inst 0
+  base_addr = 0x00000EA0
+0x00500000
+0x02420000
+  harvest = 0x0
+  hw_id = 128
+  major = 2
+  minor = 1
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 0
+-- hw 14 inst 0
+  base_addr = 0x00480000
+0x02403800
+  harvest = 0x0
+  hw_id = 14
+  major = 4
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw 150 inst 0
+  base_addr = 0x00014000
+0x02425800
+  harvest = 0x0
+  hw_id = 150
+  major = 8
+  minor = 1
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 150 inst 1
+  base_addr = 0x00054000
+0x02425C00
+  harvest = 0x0
+  hw_id = 150
+  major = 8
+  minor = 1
+  num_base_addresses = 2
+  num_instance = 1
+  revision = 1
+-- hw 170 inst 0
+  base_addr = 0x0242A800
+0x05B00000
+  harvest = 0x0
+  hw_id = 170
+  major = 4
+  minor = 5
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw 170 inst 1
+  base_addr = 0x0242AC00
+0x05B80000
+  harvest = 0x0
+  hw_id = 170
+  major = 4
+  minor = 5
+  num_base_addresses = 2
+  num_instance = 1
+  revision = 0
+-- hw 24 inst 0
+  base_addr = 0x00010000
+0x02406000
+0x04EC0000
+  harvest = 0x0
+  hw_id = 24
+  major = 0
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 0
+-- hw 255 inst 0
+  base_addr = 0x00016000
+0x00DC0000
+0x00E00000
+0x00E40000
+0x0243FC00
+  harvest = 0x0
+  hw_id = 255
+  major = 11
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 8
+-- hw 271 inst 0
+  base_addr = 0x00000012
+0x000000C0
+0x000034C0
+0x00009000
+0x02403C00
+  harvest = 0x0
+  hw_id = 271
+  major = 2
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 3
+-- hw 272 inst 0
+  base_addr = 0x02404000
+  harvest = 0x0
+  hw_id = 272
+  major = 127
+  minor = 127
+  num_base_addresses = 1
+  num_instance = 0
+  revision = 63
+-- hw 274 inst 0
+  base_addr = 0x004C0000
+0x02404800
+  harvest = 0x0
+  hw_id = 274
+  major = 127
+  minor = 127
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 63
+-- hw 28 inst 0
+  base_addr = 0x00007DC0
+0x00900000
+0x02407000
+0x04FC0000
+0x055C0000
+  harvest = 0x0
+  hw_id = 28
+  major = 0
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 0
+-- hw 3 inst 0
+  base_addr = 0x00016600
+0x02400C00
+  harvest = 0x0
+  hw_id = 3
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 34 inst 0
+  base_addr = 0x0001A000
+0x02408800
+  harvest = 0x0
+  hw_id = 34
+  major = 2
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 3
+-- hw 35 inst 0
+  base_addr = 0x00000C00
+0x02408C00
+  harvest = 0x0
+  hw_id = 35
+  major = 2
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 3
+-- hw 36 inst 0
+  base_addr = 0x000001C0
+  harvest = 0x0
+  hw_id = 36
+  major = 3
+  minor = 0
+  num_base_addresses = 1
+  num_instance = 0
+  revision = 0
+-- hw 37 inst 0
+  base_addr = 0x00000580
+0x02409400
+  harvest = 0x0
+  hw_id = 37
+  major = 2
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw 4 inst 0
+  base_addr = 0x00016800
+0x00016A00
+0x00440000
+0x02401000
+  harvest = 0x0
+  hw_id = 4
+  major = 11
+  minor = 0
+  num_base_addresses = 4
+  num_instance = 0
+  revision = 8
+-- hw 40 inst 0
+  base_addr = 0x000010A0
+0x0240A000
+  harvest = 0x0
+  hw_id = 40
+  major = 5
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 41 inst 0
+  base_addr = 0x00000F20
+0x0240A400
+  harvest = 0x0
+  hw_id = 41
+  major = 5
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 42 inst 0
+  base_addr = 0x00001260
+0x0000A000
+0x02402C00
+  harvest = 0x0
+  hw_id = 42
+  major = 5
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 1
+-- hw 43 inst 0
+  base_addr = 0x00001260
+0x0000A000
+0x02402C00
+  harvest = 0x0
+  hw_id = 43
+  major = 5
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 1
+-- hw 45 inst 0
+  base_addr = 0x000001E0
+  harvest = 0x0
+  hw_id = 45
+  major = 3
+  minor = 0
+  num_base_addresses = 1
+  num_instance = 0
+  revision = 0
+-- hw 46 inst 0
+  base_addr = 0x00007000
+0x0240B800
+  harvest = 0x0
+  hw_id = 46
+  major = 3
+  minor = 5
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw 47 inst 0
+  base_addr = 0x00017E00
+0x0240BC00
+  harvest = 0x0
+  hw_id = 47
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 49 inst 0
+  base_addr = 0x000005A0
+0x00B80000
+0x0240C400
+  harvest = 0x0
+  hw_id = 49
+  major = 2
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 0
+-- hw 5 inst 0
+  base_addr = 0x00017400
+0x02401400
+  harvest = 0x0
+  hw_id = 5
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 6 inst 0
+  base_addr = 0x00016C00
+0x02401800
+  harvest = 0x0
+  hw_id = 6
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw 6 inst 1
+  base_addr = 0x00016E00
+0x02401C00
+  harvest = 0x0
+  hw_id = 6
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 1
+  revision = 1
+-- hw 6 inst 2
+  base_addr = 0x00017000
+0x02402000
+  harvest = 0x0
+  hw_id = 6
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 2
+  revision = 1
+-- hw 70 inst 0
+  base_addr = 0x02411800
+0x04440000
+  harvest = 0x0
+  hw_id = 70
+  major = 4
+  minor = 2
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw 80 inst 0
+  base_addr = 0x02414000
+0x04680000
+  harvest = 0x0
+  hw_id = 80
+  major = 3
+  minor = 6
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw ACP inst 0
+  base_addr = 0x00480000
+0x02403800
+  harvest = 0x0
+  hw_id = 14
+  major = 4
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw ATHUB inst 0
+  base_addr = 0x00000C00
+0x02408C00
+  harvest = 0x0
+  hw_id = 35
+  major = 2
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 3
+-- hw CLKA inst 0
+  base_addr = 0x00016C00
+0x02401800
+  harvest = 0x0
+  hw_id = 6
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw CLKA inst 1
+  base_addr = 0x00016E00
+0x02401C00
+  harvest = 0x0
+  hw_id = 6
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 1
+  revision = 1
+-- hw CLKA inst 2
+  base_addr = 0x00017000
+0x02402000
+  harvest = 0x0
+  hw_id = 6
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 2
+  revision = 1
+-- hw CLKB inst 0
+  base_addr = 0x00017E00
+0x0240BC00
+  harvest = 0x0
+  hw_id = 47
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw DAZ inst 0
+  base_addr = 0x004C0000
+0x02404800
+  harvest = 0x0
+  hw_id = 274
+  major = 127
+  minor = 127
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 63
+-- hw DBGU_IO inst 0
+  base_addr = 0x000001E0
+  harvest = 0x0
+  hw_id = 45
+  major = 3
+  minor = 0
+  num_base_addresses = 1
+  num_instance = 0
+  revision = 0
+-- hw DBGU_NBIO inst 0
+  base_addr = 0x000001C0
+  harvest = 0x0
+  hw_id = 36
+  major = 3
+  minor = 0
+  num_base_addresses = 1
+  num_instance = 0
+  revision = 0
+-- hw DF inst 0
+  base_addr = 0x00007000
+0x0240B800
+  harvest = 0x0
+  hw_id = 46
+  major = 3
+  minor = 5
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw DFX inst 0
+  base_addr = 0x00000580
+0x02409400
+  harvest = 0x0
+  hw_id = 37
+  major = 2
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw DFX_DAP inst 0
+  base_addr = 0x000005A0
+0x00B80000
+0x0240C400
+  harvest = 0x0
+  hw_id = 49
+  major = 2
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 0
+-- hw DIO inst 0
+  base_addr = 0x02404000
+  harvest = 0x0
+  hw_id = 272
+  major = 127
+  minor = 127
+  num_base_addresses = 1
+  num_instance = 0
+  revision = 63
+-- hw DMU inst 0
+  base_addr = 0x00000012
+0x000000C0
+0x000034C0
+0x00009000
+0x02403C00
+  harvest = 0x0
+  hw_id = 271
+  major = 2
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 3
+-- hw FUSE inst 0
+  base_addr = 0x00017400
+0x02401400
+  harvest = 0x0
+  hw_id = 5
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw GC inst 0
+  base_addr = 0x00001260
+0x0000A000
+0x02402C00
+  harvest = 0x0
+  hw_id = 11
+  major = 10
+  minor = 1
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 3
+-- hw HDP inst 0
+  base_addr = 0x00000F20
+0x0240A400
+  harvest = 0x0
+  hw_id = 41
+  major = 5
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw IOHC inst 0
+  base_addr = 0x00010000
+0x02406000
+0x04EC0000
+  harvest = 0x0
+  hw_id = 24
+  major = 0
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 0
+-- hw L2IMU inst 0
+  base_addr = 0x00007DC0
+0x00900000
+0x02407000
+0x04FC0000
+0x055C0000
+  harvest = 0x0
+  hw_id = 28
+  major = 0
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 0
+-- hw MMHUB inst 0
+  base_addr = 0x0001A000
+0x02408800
+  harvest = 0x0
+  hw_id = 34
+  major = 2
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 3
+-- hw MP0 inst 0
+  base_addr = 0x00016000
+0x00DC0000
+0x00E00000
+0x00E40000
+0x0243FC00
+  harvest = 0x0
+  hw_id = 255
+  major = 11
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 8
+-- hw MP1 inst 0
+  base_addr = 0x00016000
+0x00DC0000
+0x00E00000
+0x00E40000
+0x0243FC00
+  harvest = 0x0
+  hw_id = 1
+  major = 11
+  minor = 0
+  num_base_addresses = 5
+  num_instance = 0
+  revision = 8
+-- hw NBIF inst 0
+  base_addr = 0x00000000
+0x00000014
+0x00000D20
+0x00010400
+0x0241B000
+0x04040000
+  harvest = 0x0
+  hw_id = 108
+  major = 2
+  minor = 1
+  num_base_addresses = 6
+  num_instance = 0
+  revision = 1
+-- hw OSSSYS inst 0
+  base_addr = 0x000010A0
+0x0240A000
+  harvest = 0x0
+  hw_id = 40
+  major = 5
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw PCIE inst 0
+  base_addr = 0x02411800
+0x04440000
+  harvest = 0x0
+  hw_id = 70
+  major = 4
+  minor = 2
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw PCS inst 0
+  base_addr = 0x02414000
+0x04680000
+  harvest = 0x0
+  hw_id = 80
+  major = 3
+  minor = 6
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw SDMA0 inst 0
+  base_addr = 0x00001260
+0x0000A000
+0x02402C00
+  harvest = 0x0
+  hw_id = 42
+  major = 5
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 1
+-- hw SDMA1 inst 0
+  base_addr = 0x00001260
+0x0000A000
+0x02402C00
+  harvest = 0x0
+  hw_id = 43
+  major = 5
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 1
+-- hw SMUIO inst 0
+  base_addr = 0x00016800
+0x00016A00
+0x00440000
+0x02401000
+  harvest = 0x0
+  hw_id = 4
+  major = 11
+  minor = 0
+  num_base_addresses = 4
+  num_instance = 0
+  revision = 8
+-- hw SYSTEMHUB inst 0
+  base_addr = 0x00000EA0
+0x00500000
+0x02420000
+  harvest = 0x0
+  hw_id = 128
+  major = 2
+  minor = 1
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 0
+-- hw THM inst 0
+  base_addr = 0x00016600
+0x02400C00
+  harvest = 0x0
+  hw_id = 3
+  major = 11
+  minor = 0
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw UMC inst 0
+  base_addr = 0x00014000
+0x02425800
+  harvest = 0x0
+  hw_id = 150
+  major = 8
+  minor = 1
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 1
+-- hw UMC inst 1
+  base_addr = 0x00054000
+0x02425C00
+  harvest = 0x0
+  hw_id = 150
+  major = 8
+  minor = 1
+  num_base_addresses = 2
+  num_instance = 1
+  revision = 1
+-- hw USB inst 0
+  base_addr = 0x0242A800
+0x05B00000
+  harvest = 0x0
+  hw_id = 170
+  major = 4
+  minor = 5
+  num_base_addresses = 2
+  num_instance = 0
+  revision = 0
+-- hw USB inst 1
+  base_addr = 0x0242AC00
+0x05B80000
+  harvest = 0x0
+  hw_id = 170
+  major = 4
+  minor = 5
+  num_base_addresses = 2
+  num_instance = 1
+  revision = 0
+-- hw UVD inst 0
+  base_addr = 0x00007800
+0x00007E00
+0x02403000
+  harvest = 0x0
+  hw_id = 12
+  major = 2
+  minor = 0
+  num_base_addresses = 3
+  num_instance = 0
+  revision = 3
+
+== kfd topology
+-- /sys/class/kfd/kfd/topology/nodes/0/properties
+cpu_cores_count 12
+simd_count 0
+mem_banks_count 1
+caches_count 0
+io_links_count 1
+p2p_links_count 0
+cpu_core_id_base 0
+simd_id_base 0
+max_waves_per_simd 0
+lds_size_in_kb 0
+gds_size_in_kb 0
+num_gws 0
+wave_front_size 0
+array_count 0
+simd_arrays_per_engine 0
+cu_per_simd_array 0
+simd_per_cu 0
+max_slots_scratch_cu 0
+gfx_target_version 0
+vendor_id 0
+device_id 0
+location_id 0
+domain 0
+drm_render_minor 0
+hive_id 0
+num_sdma_engines 0
+num_sdma_xgmi_engines 0
+num_sdma_queues_per_engine 0
+num_cp_queues 0
+cwsr_size 0
+ctl_stack_size 0
+max_engine_clk_ccompute 0
+
+-- /sys/class/kfd/kfd/topology/nodes/1/properties
+cpu_cores_count 0
+simd_count 48
+mem_banks_count 1
+caches_count 53
+io_links_count 1
+p2p_links_count 0
+cpu_core_id_base 0
+simd_id_base 2147487744
+max_waves_per_simd 20
+lds_size_in_kb 64
+gds_size_in_kb 0
+num_gws 0
+wave_front_size 32
+array_count 4
+simd_arrays_per_engine 2
+cu_per_simd_array 10
+simd_per_cu 2
+max_slots_scratch_cu 32
+gfx_target_version 100103
+vendor_id 4098
+device_id 5118
+location_id 256
+domain 0
+drm_render_minor 128
+hive_id 0
+num_sdma_engines 2
+num_sdma_xgmi_engines 0
+num_sdma_queues_per_engine 8
+num_cp_queues 24
+cwsr_size 8368128
+ctl_stack_size 12288
+max_engine_clk_fcompute 2000
+local_mem_size 0
+fw_version 144
+capability 8626816
+capability2 0
+debug_prop 1495
+sdma_fw_version 52
+unique_id 0
+num_xcc 1
+max_engine_clk_ccompute 0
+
+
+== module parameters
+/sys/module/amdgpu/parameters/abmlevel:-1
+/sys/module/amdgpu/parameters/agp:-1
+/sys/module/amdgpu/parameters/aspm:-1
+/sys/module/amdgpu/parameters/async_gfx_ring:1
+/sys/module/amdgpu/parameters/audio:-1
+/sys/module/amdgpu/parameters/backlight:-1
+/sys/module/amdgpu/parameters/bad_page_threshold:-1
+/sys/module/amdgpu/parameters/bapm:-1
+/sys/module/amdgpu/parameters/cg_mask:18446744073709551615
+/sys/module/amdgpu/parameters/cik_support:0
+/sys/module/amdgpu/parameters/compute_multipipe:-1
+/sys/module/amdgpu/parameters/cwsr_enable:1
+/sys/module/amdgpu/parameters/damageclips:-1
+/sys/module/amdgpu/parameters/dc:-1
+/sys/module/amdgpu/parameters/dcdebugmask:0
+/sys/module/amdgpu/parameters/dcfeaturemask:2
+/sys/module/amdgpu/parameters/debug_evictions:N
+/sys/module/amdgpu/parameters/debug_mask:0
+/sys/module/amdgpu/parameters/deep_color:0
+/sys/module/amdgpu/parameters/disable_cu:(null)
+/sys/module/amdgpu/parameters/discovery:-1
+/sys/module/amdgpu/parameters/disp_priority:0
+/sys/module/amdgpu/parameters/dpm:-1
+/sys/module/amdgpu/parameters/emu_mode:0
+/sys/module/amdgpu/parameters/enforce_isolation:-1
+/sys/module/amdgpu/parameters/exp_hw_support:0
+/sys/module/amdgpu/parameters/force_asic_type:-1
+/sys/module/amdgpu/parameters/forcelongtraining:0
+/sys/module/amdgpu/parameters/freesync_video:0
+/sys/module/amdgpu/parameters/fw_load_type:-1
+/sys/module/amdgpu/parameters/gartsize:4294967295
+/sys/module/amdgpu/parameters/gpu_recovery:-1
+/sys/module/amdgpu/parameters/gttsize:-1
+/sys/module/amdgpu/parameters/halt_if_hws_hang:0
+/sys/module/amdgpu/parameters/hdmi_hpd_debounce_delay_ms:0
+/sys/module/amdgpu/parameters/hw_i2c:0
+/sys/module/amdgpu/parameters/hws_gws_support:N
+/sys/module/amdgpu/parameters/hws_max_conc_proc:-1
+/sys/module/amdgpu/parameters/ip_block_mask:4294967295
+/sys/module/amdgpu/parameters/lbpw:-1
+/sys/module/amdgpu/parameters/max_num_of_queues_per_device:4096
+/sys/module/amdgpu/parameters/mcbp:-1
+/sys/module/amdgpu/parameters/mes:0
+/sys/module/amdgpu/parameters/mes_kiq:0
+/sys/module/amdgpu/parameters/mes_log_enable:0
+/sys/module/amdgpu/parameters/modeset:-1
+/sys/module/amdgpu/parameters/moverate:-1
+/sys/module/amdgpu/parameters/msi:-1
+/sys/module/amdgpu/parameters/mtype_local:0
+/sys/module/amdgpu/parameters/no_queue_eviction_on_vm_fault:0
+/sys/module/amdgpu/parameters/no_system_mem_limit:N
+/sys/module/amdgpu/parameters/noretry:-1
+/sys/module/amdgpu/parameters/num_kcq:-1
+/sys/module/amdgpu/parameters/pcie_gen2:-1
+/sys/module/amdgpu/parameters/pcie_gen_cap:0
+/sys/module/amdgpu/parameters/pcie_lane_cap:0
+/sys/module/amdgpu/parameters/pg_mask:4294967295
+/sys/module/amdgpu/parameters/ppfeaturemask:0xfff7bfff
+/sys/module/amdgpu/parameters/queue_preemption_timeout_ms:9000
+/sys/module/amdgpu/parameters/ras_enable:-1
+/sys/module/amdgpu/parameters/ras_mask:4294967295
+/sys/module/amdgpu/parameters/rebar:-1
+/sys/module/amdgpu/parameters/reset_method:-1
+/sys/module/amdgpu/parameters/runpm:-1
+/sys/module/amdgpu/parameters/sched_hw_submission:2
+/sys/module/amdgpu/parameters/sched_jobs:32
+/sys/module/amdgpu/parameters/sched_policy:0
+/sys/module/amdgpu/parameters/sdma_phase_quantum:32
+/sys/module/amdgpu/parameters/seamless:-1
+/sys/module/amdgpu/parameters/send_sigterm:0
+/sys/module/amdgpu/parameters/sg_display:-1
+/sys/module/amdgpu/parameters/si_support:0
+/sys/module/amdgpu/parameters/smu_memory_pool_size:0
+/sys/module/amdgpu/parameters/smu_pptable_id:-1
+/sys/module/amdgpu/parameters/svm_default_granularity:9
+/sys/module/amdgpu/parameters/timeout_fatal_disable:N
+/sys/module/amdgpu/parameters/timeout_period:0
+/sys/module/amdgpu/parameters/tmz:-1
+/sys/module/amdgpu/parameters/umsch_mm:0
+/sys/module/amdgpu/parameters/umsch_mm_fwlog:0
+/sys/module/amdgpu/parameters/uni_mes:1
+/sys/module/amdgpu/parameters/use_xgmi_p2p:1
+/sys/module/amdgpu/parameters/user_partt_mode:4294967294
+/sys/module/amdgpu/parameters/user_queue:-1
+/sys/module/amdgpu/parameters/vcnfw_log:0
+/sys/module/amdgpu/parameters/virtual_display:(null)
+/sys/module/amdgpu/parameters/vis_vramlimit:0
+/sys/module/amdgpu/parameters/visualconfirm:0
+/sys/module/amdgpu/parameters/vm_block_size:-1
+/sys/module/amdgpu/parameters/vm_fault_stop:0
+/sys/module/amdgpu/parameters/vm_fragment_size:-1
+/sys/module/amdgpu/parameters/vm_size:-1
+/sys/module/amdgpu/parameters/vm_update_mode:-1
+/sys/module/amdgpu/parameters/vramlimit:-1
+/sys/module/amdgpu/parameters/wbrf:-1

@@ -1,0 +1,176 @@
+{
+ "snapshot": [
+  [
+   "gi",
+   "mmGRBM_GFX_INDEX",
+   198656
+  ],
+  [
+   "gcntl",
+   "mmGRBM_GFX_CNTL",
+   32904
+  ],
+  [
+   "spi",
+   "mmSPI_PG_ENABLE_STATIC_WGP_MASK",
+   37724
+  ],
+  [
+   "cc",
+   "mmCC_GC_SHADER_ARRAY_CONFIG",
+   35260
+  ],
+  [
+   "ucfg",
+   "mmGC_USER_SHADER_ARRAY_CONFIG",
+   35264
+  ],
+  [
+   "aon",
+   "mmRLC_PG_ALWAYS_ON_WGP_MASK",
+   241996
+  ],
+  [
+   "pgc",
+   "mmRLC_PG_CNTL",
+   241932
+  ],
+  [
+   "rlc",
+   "mmRLC_CNTL",
+   241664
+  ],
+  [
+   "rlcst",
+   "mmRLC_STAT",
+   241680
+  ],
+  [
+   "gpm",
+   "mmRLC_GPM_STAT",
+   244152
+  ],
+  [
+   "sched",
+   "mmRLC_CP_SCHEDULERS",
+   242344
+  ],
+  [
+   "me",
+   "mmCP_ME_CNTL",
+   34520
+  ],
+  [
+   "mec",
+   "mmCP_MEC_CNTL",
+   33332
+  ],
+  [
+   "cpstat",
+   "mmCP_STAT",
+   34432
+  ],
+  [
+   "cpc",
+   "mmCP_CPC_STATUS",
+   33296
+  ],
+  [
+   "hqd",
+   "mmCP_HQD_ACTIVE",
+   51244
+  ],
+  [
+   "f0",
+   "mmSDMA0_F32_CNTL",
+   18984
+  ],
+  [
+   "f1",
+   "mmSDMA1_F32_CNTL",
+   25128
+  ],
+  [
+   "psp64",
+   "mmMP0_SMN_C2PMSG_64",
+   360960
+  ]
+ ],
+ "triggers": {
+  "mmGRBM_GFX_INDEX": 49664,
+  "mmGRBM_GFX_CNTL": 8226,
+  "mmMP0_SMN_C2PMSG_64": 90240,
+  "mmMP0_SMN_C2PMSG_67": 90243,
+  "mmMP1_SMN_C2PMSG_66": 90754,
+  "mmRLC_CNTL": 60416,
+  "mmRLC_PG_CNTL": 60483,
+  "mmRLC_CP_SCHEDULERS": 60586,
+  "mmCP_ME_CNTL": 8630,
+  "mmCP_MEC_CNTL": 8333,
+  "mmCP_HQD_ACTIVE": 12811,
+  "mmSDMA0_F32_CNTL": 4746,
+  "mmSDMA1_F32_CNTL": 6282,
+  "mmSCRATCH_REG0": 49216
+ },
+ "psp": {
+  "status": 90240,
+  "wptr": 90243,
+  "ring_lo": 90245,
+  "ring_hi": 90246,
+  "ring_size": 90247,
+  "sos": 90257,
+  "bl": 90211
+ },
+ "smu": {
+  "msg": 90754,
+  "arg": 90770,
+  "resp": 90778
+ },
+ "smu_msg": {
+  "1": "PPSMC_MSG_TestMessage",
+  "2": "PPSMC_MSG_GetSmuVersion",
+  "3": "PPSMC_MSG_GetDriverIfVersion",
+  "4": "PPSMC_MSG_SetDriverTableDramAddrHigh",
+  "5": "PPSMC_MSG_SetDriverTableDramAddrLow",
+  "6": "PPSMC_MSG_TransferTableSmu2Dram",
+  "7": "PPSMC_MSG_TransferTableDram2Smu",
+  "10": "PPSMC_MSG_Rsvd1",
+  "11": "PPSMC_MSG_RequestCorePstate",
+  "12": "PPSMC_MSG_QueryCorePstate",
+  "13": "PPSMC_MSG_Rsvd2",
+  "14": "PPSMC_MSG_RequestGfxclk",
+  "15": "PPSMC_MSG_QueryGfxclk",
+  "17": "PPSMC_MSG_QueryVddcrSocClock",
+  "19": "PPSMC_MSG_QueryDfPstate",
+  "20": "PPSMC_MSG_Rsvd3",
+  "22": "PPSMC_MSG_ConfigureS3PwrOffRegisterAddressHigh",
+  "23": "PPSMC_MSG_ConfigureS3PwrOffRegisterAddressLow",
+  "24": "PPSMC_MSG_RequestActiveWgp",
+  "25": "PPSMC_MSG_SetMinDeepSleepGfxclkFreq",
+  "26": "PPSMC_MSG_SetMaxDeepSleepDfllGfxDiv",
+  "27": "PPSMC_MSG_StartTelemetryReporting",
+  "28": "PPSMC_MSG_StopTelemetryReporting",
+  "29": "PPSMC_MSG_ClearTelemetryMax",
+  "30": "PPSMC_MSG_QueryActiveWgp",
+  "44": "PPSMC_MSG_SetCoreEnableMask",
+  "46": "PPSMC_MSG_InitiateGcRsmuSoftReset",
+  "47": "PPSMC_MSG_GfxCacWeightOperation",
+  "48": "PPSMC_MSG_L3CacWeightOperation",
+  "49": "PPSMC_MSG_PackCoreCacWeight",
+  "52": "PPSMC_MSG_SetDriverTableVMID",
+  "53": "PPSMC_MSG_SetSoftMinCclk",
+  "54": "PPSMC_MSG_SetSoftMaxCclk",
+  "55": "PPSMC_MSG_GetGfxFrequency",
+  "56": "PPSMC_MSG_GetGfxVid",
+  "57": "PPSMC_MSG_ForceGfxFreq",
+  "58": "PPSMC_MSG_UnForceGfxFreq",
+  "59": "PPSMC_MSG_ForceGfxVid",
+  "60": "PPSMC_MSG_UnforceGfxVid",
+  "61": "PPSMC_MSG_GetEnabledSmuFeatures"
+ },
+ "rmmio": 2288,
+ "generated_from": {
+  "offsets": "P:\\BC-250\\scratch\\linux-1031\\init\\i0\\offsets.json",
+  "module_sha256": "5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4"
+ }
+}

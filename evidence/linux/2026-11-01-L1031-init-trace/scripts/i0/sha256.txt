@@ -1,0 +1,1 @@
+5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4  /root/init-i0/amdgpu.ko

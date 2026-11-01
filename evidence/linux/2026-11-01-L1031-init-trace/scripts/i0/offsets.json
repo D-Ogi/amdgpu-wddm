@@ -1,0 +1,121 @@
+{
+ "module_file": "amdgpu.ko",
+ "module_sha256": "5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4",
+ "elf_sha256": "5984c6732ca23863f7c1e9b6b8bc32beeedc7318c2f8715143fd6ed44a3b7ea4",
+ "checks": {
+  "amdgpu_ip_block.adev": "ok",
+  "psp_context.adev": "ok",
+  "amdgpu_ring.adev": "ok",
+  "smu_context.adev": "ok",
+  "amdgpu_ib.length_dw": "ok",
+  "amdgpu_ib.gpu_addr": "ok",
+  "amdgpu_ib.ptr": "ok",
+  "amdgpu_ib.flags": "ok",
+  "amdgpu_firmware_info.ucode_id": "ok",
+  "rmmio": "ok"
+ },
+ "evidence": [
+  "rreg/wreg bodies are in .part.0 (GCC partial inlining); analysed there"
+ ],
+ "symbols": {
+  "amdgpu_copy_buffer": "present",
+  "amdgpu_device_ip_block_add": "present",
+  "amdgpu_device_wreg": "present",
+  "amdgpu_gfx_enable_kcq": "present",
+  "amdgpu_ib_ring_tests": "present",
+  "amdgpu_ib_schedule": "present",
+  "amdgpu_mm_wdoorbell": "present",
+  "amdgpu_mm_wdoorbell64": "present",
+  "amdgpu_ring_test_helper": "present",
+  "dm_hw_init": "present",
+  "gfx10_kiq_map_queues": "present",
+  "gfx10_kiq_set_resources": "present",
+  "gfx_v10_0_hw_init": "present",
+  "gfx_v10_0_late_init": "present",
+  "gfx_v10_0_rlc_resume": "present",
+  "psp_cmd_submit_buf": "present",
+  "psp_hw_init": "present",
+  "sdma_v5_0_hw_init": "present",
+  "smu_cmn_send_smc_msg_with_param": "present",
+  "smu_hw_init": "present"
+ },
+ "btf": {
+  "amdgpu_ib": {
+   "length_dw": 8,
+   "gpu_addr": 16,
+   "ptr": 24,
+   "flags": 32
+  },
+  "amdgpu_ring": {
+   "adev": 0
+  },
+  "amdgpu_device": {
+   "rmmio_base": 2272,
+   "rmmio_size": 2280,
+   "rmmio": 2288
+  },
+  "amdgpu_ip_block": {
+   "adev": 16
+  },
+  "amdgpu_firmware_info": {
+   "ucode_id": 0,
+   "tmr_mc_addr_lo": 36,
+   "tmr_mc_addr_hi": 40
+  },
+  "psp_context": {
+   "adev": 0
+  },
+  "smu_context": {
+   "adev": 0
+  }
+ },
+ "disasm": {
+  "rreg_loads": [
+   [
+    "0x8f0",
+    "1bba:      \tmovl\t(%rdx), %ecx"
+   ]
+  ],
+  "wreg_stores": [
+   [
+    "0x8f0",
+    "1cca:      \tmovl\t%ebp, (%rdx)"
+   ]
+  ],
+  "rreg_cmps": [
+   [
+    "0x55e11",
+    "2b79:      \tcmpb\t$0x0, 0x55e11(%rdi)"
+   ],
+   [
+    "0x8e8",
+    "1b99:      \tcmpq\t0x8e8(%rdi), %rdx"
+   ]
+  ],
+  "wreg_cmps": [
+   [
+    "0x55e11",
+    "2e19:      \tcmpb\t$0x0, 0x55e11(%rdi)"
+   ],
+   [
+    "0x8e8",
+    "1cac:      \tcmpq\t0x8e8(%rdi), %rdx"
+   ]
+  ],
+  "rreg_adev_field_loads": [
+   "1bb3:      \taddq\t0x8f0(%rbx), %rdx",
+   "1bbe:      \tmovq\t0x938(%rdi), %rax",
+   "1be6:      \tmovq\t0x8(%rbx), %rax",
+   "1c33:      \tmovq\t0x57688(%rdi), %rax",
+   "1c62:      \tmovq\t0x57688(%rbx), %rax"
+  ],
+  "wreg_adev_field_loads": [
+   "1cc3:      \taddq\t0x8f0(%rbx), %rdx",
+   "1cd1:      \tmovq\t0x940(%rdi), %rax",
+   "1cf8:      \tmovq\t0x8(%rbx), %rax",
+   "1d42:      \tmovq\t0x57688(%rdi), %rax",
+   "1d71:      \tmovq\t0x57688(%rbx), %rax"
+  ]
+ },
+ "agreed_rmmio": 2288
+}

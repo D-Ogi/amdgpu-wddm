@@ -1,0 +1,1 @@
+cat: can't open '/sys/kernel/debug/dri/0000:01:00.0//amdgpu_gpu_info': No such file or directory
