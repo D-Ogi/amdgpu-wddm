@@ -1,0 +1,15 @@
+diff --git a/ggml/src/ggml-cuda/mmf16-rdna1.cu b/ggml/src/ggml-cuda/mmf16-rdna1.cu
+--- a/ggml/src/ggml-cuda/mmf16-rdna1.cu
++++ b/ggml/src/ggml-cuda/mmf16-rdna1.cu
+@@ -1,8 +1,8 @@
+ // GGML_RDNA1_PKF16_ID_BN picks among 16, 32 and 64.
+ static int id_bn() {
+     static const int v = [] {
+         const char * e = getenv("GGML_RDNA1_PKF16_ID_BN");
+-        const int n = e ? atoi(e) : 32;
+-        return (n == 16 || n == 32 || n == 64) ? n : 32;
++        const int n = e ? atoi(e) : 64;
++        return (n == 16 || n == 32 || n == 64) ? n : 64;
+     }();
+     return v;
+ }
