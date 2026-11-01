@@ -6,8 +6,8 @@
 using namespace bc250::umd;
 namespace {
 void check(bool value) { if (!value) std::abort(); }
-int identity, context, render, dxgi;
-UINT64 cpu=0;
+int identity, context, render, renderB, dxgi;
+UINT64 cpu=0,cpuB=0;
 std::string trace;
 HRESULT flush_result, wait_result, present_result, signal_result;
 BOOL seen_override_valid=FALSE; DXGI_DDI_FLIP_INTERVAL_TYPE seen_override=DXGI_DDI_FLIP_INTERVAL_IMMEDIATE;
@@ -15,6 +15,7 @@ HRESULT flush(void *p) {
     trace+='F';
     auto *b=static_cast<HostBridge *>(p);
     b->progress[0]={1,61,19,&cpu};
+    b->progress[1]={2,63,29,&cpuB};
     return flush_result;
 }
 HRESULT APIENTRY create(HANDLE h, D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 *p) {
@@ -22,8 +23,9 @@ HRESULT APIENTRY create(HANDLE h, D3DDDICB_CREATESYNCHRONIZATIONOBJECT2 *p) {
     p->Info.MonitoredFence.FenceValueCPUVirtualAddress=&cpu; return S_OK;
 }
 HRESULT APIENTRY wait(HANDLE h, const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU *p) {
-    check(h==&identity && p->hContext==&context && p->ObjectCount==1);
+    check(h==&identity && p->hContext==&context && p->ObjectCount==2);
     check(*p->ObjectHandleArray==61 && *p->MonitoredFenceValueArray==19);
+    check(p->ObjectHandleArray[1]==63 && p->MonitoredFenceValueArray[1]==29);
     trace+='W'; return wait_result;
 }
 HRESULT APIENTRY present(HANDLE h, DXGIDDICB_PRESENT *p) {
@@ -77,7 +79,7 @@ void test_runtime_present() {
         d.KTCallbacks.pfnCreateSynchronizationObject2Cb=create;
         d.KTCallbacks.pfnWaitForSynchronizationObjectFromGpuCb=wait;
         d.KTCallbacks.pfnSignalSynchronizationObjectFromGpu2Cb=signal;
-        HostBridge b{}; b.device=&d; b.contexts[0]=&render;
+        HostBridge b{}; b.device=&d; b.contexts[0]=&render; b.contexts[1]=&renderB; b.progress[0]={1,61,3,&cpu}; b.progress[1]={2,63,7,&cpuB};
         trace.clear(); flush_result=c.f; wait_result=c.w; present_result=c.p; signal_result=c.s;
         check(present_runtime(b,71,72,&dxgi,flush,&b)==E_INVALIDARG && trace.empty());
         RuntimeDomain::Scope scope(d.domain);
@@ -105,7 +107,7 @@ void test_runtime_present() {
     for (int phase=0;phase<3;++phase) {
         // Model runtime mutation while no thread is inside the UMD.
         callbacks.pfnPresentCb=phase==0 ? present : phase==1 ? alternate_present : nullptr;
-        HostBridge b{}; b.device=&d; b.contexts[0]=&render; trace.clear();
+        HostBridge b{}; b.device=&d; b.contexts[0]=&render; b.contexts[1]=&renderB; b.progress[0]={1,61,3,&cpu}; b.progress[1]={2,63,7,&cpuB}; trace.clear();
         RuntimeDomain::Scope scope(d.domain);
         HRESULT hr=present_runtime(b,71,72,&dxgi,flush,&b);
         check(hr==(phase==2 ? E_NOTIMPL : S_OK));
@@ -119,7 +121,7 @@ void test_runtime_present() {
     d.DXGICallbacks=&callbacks; callbacks.pfnPresentCb=present;
     const PresentSyncOverride overrides[]={{},{true,DXGI_DDI_FLIP_INTERVAL_IMMEDIATE},{true,DXGI_DDI_FLIP_INTERVAL_ONE}};
     for (const auto &o:overrides) {
-        HostBridge b{}; b.device=&d; b.contexts[0]=&render; trace.clear();
+        HostBridge b{}; b.device=&d; b.contexts[0]=&render; b.contexts[1]=&renderB; b.progress[0]={1,61,3,&cpu}; b.progress[1]={2,63,7,&cpuB}; trace.clear();
         seen_override_valid=2; seen_override=DXGI_DDI_FLIP_INTERVAL_FOUR;
         check(present_runtime(b,71,72,&dxgi,flush,&b,o)==S_OK && trace=="FCWPS");
         check(seen_override_valid==(o.valid ? TRUE : FALSE));

@@ -218,14 +218,14 @@ void dxgi_table() {
     int device=0;
     DXGI_DDI_ARG_PRESENTSURFACE surfaces[2]{};
     DXGI1_6_1_DDI_ARG_PRESENT present{}; present.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&device);
-    present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=2;
+    present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=0;
     present.RotationHint=DXGI_DDI_MODE_ROTATION_ROTATE90;
     CHECK(t.pfnPresent1(nullptr)==D3DDDIERR_DEVICEREMOVED && t.pfnPresent1(&present)==D3DDDIERR_DEVICEREMOVED);
     CHECK(t.pfnPresentMultiplaneOverlay1(nullptr)==DXGI_ERROR_UNSUPPORTED);
     // The one-surface conversion, field by field: every argument the DXGI 1.2 Present reads is the one the
-    // runtime gave, and the rotation hint is not one of them. Two surfaces and a missing array carry nothing.
+    // runtime gave, and the rotation hint is not one of them. Empty or missing arrays carry nothing.
     DXGI_DDI_ARG_PRESENT carried{};
-    CHECK(!present_arguments_1_6_1(present,carried)); // SurfacesToPresent is 2 here
+    CHECK(!present_arguments_1_6_1(present,carried)); // Empty batch.
     present.SurfacesToPresent=1;
     surfaces[0].hSurface=DXGI_DDI_HRESOURCE(0x30);
     surfaces[0].SubResourceIndex=4;
@@ -240,6 +240,11 @@ void dxgi_table() {
           carried.SrcSubResourceIndex==4 && carried.hDstResource==present.hDstResource &&
           carried.DstSubResourceIndex==7 && carried.pDXGIContext==static_cast<void *>(&device) &&
           carried.Flags.Value==present.Flags.Value && carried.FlipInterval==DXGI_DDI_FLIP_INTERVAL_TWO);
+    surfaces[1].hSurface=DXGI_DDI_HRESOURCE(0x50); surfaces[1].SubResourceIndex=9;
+    present.SurfacesToPresent=2; present.hDstResource=0;
+    CHECK(present_arguments_1_6_1(present,carried) && carried.hSurfaceToPresent==surfaces[1].hSurface &&
+          carried.SrcSubResourceIndex==9 && !carried.hDstResource && carried.pDXGIContext==present.pDXGIContext &&
+          carried.Flags.Value==present.Flags.Value && carried.FlipInterval==present.FlipInterval);
     present.phSurfacesToPresent=nullptr;
     CHECK(!present_arguments_1_6_1(present,carried));
     present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=2;

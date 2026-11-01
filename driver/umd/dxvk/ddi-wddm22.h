@@ -20,16 +20,17 @@ inline constexpr bool dxgi1_6_1_table_layout_supported(UINT interfaceVersion,UIN
 // Present1 and PresentMultiplaneOverlay1 on their 1_6_1 arguments, and ReclaimResources1 appended.
 DXGI1_6_1_DDI_BASE_FUNCTIONS make_dxgi1_6_1_device_table();
 // The arguments of the DXGI 1.6.1 Present as the arguments of the DXGI 1.2 Present, which is where this shell
-// presents (ddi-present.cpp). One surface only: several surfaces per Present belong to stereo and multi-plane
-// swap chains, which this driver does not create. The dirty rectangles and the rotation hint are hints and this
-// shell takes neither - it presents the buffer as the application wrote it and rotates nothing. A pure function,
-// so the host test can read every field it carries (ddi-wddm22-test.cpp). False where one Present cannot carry.
+// presents (ddi-present.cpp). A composition batch uses the last source for one callback after the common
+// Present submits all pending engine work and waits for every rendering context. Dirty rectangles and rotation
+// are hints; this shell presents the buffer as the application wrote it and rotates nothing. A pure function,
+// so the host test can read every field it carries (ddi-wddm22-test.cpp). False for an empty or missing array.
 inline bool present_arguments_1_6_1(const DXGI1_6_1_DDI_ARG_PRESENT &from,DXGI_DDI_ARG_PRESENT &to) {
-    if (from.SurfacesToPresent!=1 || !from.phSurfacesToPresent) return false;
+    if (!from.SurfacesToPresent || !from.phSurfacesToPresent) return false;
+    const auto &last=from.phSurfacesToPresent[from.SurfacesToPresent-1];
     to=DXGI_DDI_ARG_PRESENT{};
     to.hDevice=from.hDevice;
-    to.hSurfaceToPresent=from.phSurfacesToPresent[0].hSurface;
-    to.SrcSubResourceIndex=from.phSurfacesToPresent[0].SubResourceIndex;
+    to.hSurfaceToPresent=last.hSurface;
+    to.SrcSubResourceIndex=last.SubResourceIndex;
     to.hDstResource=from.hDstResource;
     to.DstSubResourceIndex=from.DstSubResourceIndex;
     to.pDXGIContext=from.pDXGIContext;

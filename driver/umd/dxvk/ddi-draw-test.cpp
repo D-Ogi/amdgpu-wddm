@@ -142,9 +142,11 @@ HRESULT APIENTRY runtime_residency(HANDLE h,const D3DDDICB_QUERYRESIDENCY *p) {
 }
 void test_wddm2_0_ddi();
 void test_wddm2_2_ddi();
+void test_present_batches();
 int main() {
     test_wddm2_0_ddi();
     test_wddm2_2_ddi();
+    test_present_batches();
     DeviceOwner owner; expected=&owner; owner.runtime().UMCallbacks.pfnSetErrorCb=error;
     DdiDeviceHandle storage{&owner}; D3D10DDI_HDEVICE h{}; h.pDrvPrivate=&storage;
     if (ddi_map_status(DXGI_ERROR_WAS_STILL_DRAWING,true)!=DXGI_DDI_ERR_WASSTILLDRAWING ||

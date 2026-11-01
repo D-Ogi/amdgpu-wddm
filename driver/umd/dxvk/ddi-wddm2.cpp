@@ -264,12 +264,14 @@ HRESULT APIENTRY present1(DXGI_DDI_ARG_PRESENT1 *a) {
     // BD-170: a Present may fail only with device removal (present-contract.h); any other status removes the
     // device too, as a driver error.
     if (!a || !a->hDevice) return D3DDDIERR_DEVICEREMOVED;
-    // One surface is the Present of DXGI 1.2 (dirty rectangles are hints). Several surfaces per Present
-    // belong to stereo and multi-plane swap chains, which this driver does not create.
-    if (a->SurfacesToPresent!=1 || !a->phSurfacesToPresent) return D3DDDIERR_DEVICEREMOVED;
+    // Composition may batch several resources. DXGI_DDI_ARG_PRESENT1 requires one callback using only
+    // the last source handle. The common Present submits all pending engine work and waits for every
+    // published rendering context before that callback; do not present each resource separately.
+    if (!a->SurfacesToPresent || !a->phSurfacesToPresent) return D3DDDIERR_DEVICEREMOVED;
+    const auto &last=a->phSurfacesToPresent[a->SurfacesToPresent-1];
     DXGI_DDI_ARG_PRESENT p{};
-    p.hDevice=a->hDevice; p.hSurfaceToPresent=a->phSurfacesToPresent[0].hSurface;
-    p.SrcSubResourceIndex=a->phSurfacesToPresent[0].SubResourceIndex;
+    p.hDevice=a->hDevice; p.hSurfaceToPresent=last.hSurface;
+    p.SrcSubResourceIndex=last.SubResourceIndex;
     p.hDstResource=a->hDstResource; p.DstSubResourceIndex=a->DstSubResourceIndex;
     p.pDXGIContext=a->pDXGIContext; p.Flags=a->Flags; p.FlipInterval=a->FlipInterval;
     return dxgi_base().pfnPresent(&p);

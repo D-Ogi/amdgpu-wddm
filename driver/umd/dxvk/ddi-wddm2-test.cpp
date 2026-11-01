@@ -437,7 +437,7 @@ void dxgi_table() {
     int device=0;
     DXGI_DDI_ARG_PRESENTSURFACE surfaces[2]{};
     DXGI_DDI_ARG_PRESENT1 present{}; present.hDevice=reinterpret_cast<DXGI_DDI_HDEVICE>(&device);
-    present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=2;
+    present.phSurfacesToPresent=surfaces; present.SurfacesToPresent=0;
     CHECK(t.pfnPresent1(nullptr)==D3DDDIERR_DEVICEREMOVED && t.pfnPresent1(&present)==D3DDDIERR_DEVICEREMOVED);
     DXGI_DDI_ARG_CHECKPRESENTDURATIONSUPPORT duration{}; duration.hDevice=present.hDevice;
     duration.ClosestSmallerDuration=5; duration.ClosestLargerDuration=6; duration.DesiredPresentDuration=100000;

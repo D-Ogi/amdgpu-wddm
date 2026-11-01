@@ -117,7 +117,7 @@ SAME_DXGI_OFFSET(pfnPresent1,pfnPresent1); SAME_DXGI_OFFSET(pfnTrimResidencySet,
 SAME_DXGI_OFFSET(pfnPresentMultiplaneOverlay1,pfnPresentMultiplaneOverlay1);
 #undef SAME_DXGI_OFFSET
 const DXGI1_4_DDI_BASE_FUNCTIONS &dxgi1_4_base() { static const auto table=make_dxgi1_4_device_table(); return table; }
-// One surface is the Present of DXGI 1.2. present_arguments_1_6_1 (ddi-wddm22.h) carries the arguments over and
+// One callback represents the entire batch. present_arguments_1_6_1 carries its last source and
 // the host test reads every field it carries.
 HRESULT APIENTRY present_1_6_1(DXGI1_6_1_DDI_ARG_PRESENT *a) {
     // BD-170: a Present may fail only with device removal (present-contract.h).
