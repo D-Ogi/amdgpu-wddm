@@ -43,12 +43,15 @@ The gates that can stop DWM before the Check, in the order of the next lab work 
    with `LabScaledPlane` bit 2, and both halves take the plane count from `bc250_scanout_mpo_planes` of the same
    trailer bits. Each caps entry writes one front log line per changed answer: `dxgi caps answer <entry> hr=<hr>
    planes=<n> trailer=<flags>`. Lab arm A1 in [The next lab arms](#the-next-lab-arms).
-2. The format support of the chain. The D3D12 engine never reports `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY`
-   (`format-list.py` excludes it with `DISPLAY`). The hosted D3D11 UMD of DWM never reports
+2. The format support of the chain. The static D3D12 format table excludes
+   `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` with `DISPLAY`. The hosted D3D11 UMD of DWM never reports
    `D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` (Mesa `d3d10umd` `Device.cpp`, `CheckFormatSupport`). Code (same
    branch, the DWM half): the WDDM 1.3 table of the front adds the bit to the hosted answer for each format that
    plane 0 scans out under the trailer (`FrontOverlayFormatSupport`), only while the trailer has `MPO`. The first
-   addition writes `check_format_support adds MULTIPLANE_OVERLAY fmt=<n>`. The D3D12 half is open (step R1).
+   addition writes `check_format_support adds MULTIPLANE_OVERLAY fmt=<n>`. The D3D12 shell now installs an engine
+   hook that queries the adapter for each format check. Both paths use `bc250_scanout_mpo_format`. They require
+   `DIRECT_FLIP`, `MPO` and an admitted plane-0 format. An absent or failed query clears the D3D12 bit, as does
+   the release trailer without `MPO`. The engine and shell host tests pass. The lab gate is still open (step R1).
 3. YUV in the group caps. The Microsoft minimum asks for one plane with YUV formats and both BT.601 and BT.709
    ([multiplane-overlay-hardware-requirements.md](https://learn.microsoft.com/windows-hardware/drivers/display/multiplane-overlay-hardware-requirements)).
    The group caps report RGB only. That is step S4.
@@ -279,8 +282,9 @@ A trial is at most three minutes, a game session at most 20 minutes.
 ## The next lab arms
 
 The arms use the kit pattern of the 2026-10-29 arms (`run-s2c.sh`: the KMD and router candidates swapped in, one
-restart per selector, the native and the 1280x720 `STRETCH` flip client for 45 s each, the KMD and front logs after
-each client). The candidates are the lab flavour of the KMD and of the x64 router at the same commit of
+restart per selector). Split each selector into two trials: the native client, then the 1280x720 `STRETCH` client.
+Each client runs for 45 s. Collect the KMD and front logs within the same trial. The candidates are the lab
+flavour of the KMD and of the x64 router at the same commit of
 `t36/f3-display`. The hosted zink UMD of tester.35 already exports `Bc250PresentMultiplaneOverlay`.
 
 | Arm | Selector | Read | Pass |
@@ -289,7 +293,9 @@ each client). The candidates are the lab flavour of the KMD and of the x64 route
 | A1-1 | 1 | `dxgi caps answer pfnGetMultiplaneOverlayCaps hr=00000000 planes=1`. The `check_format_support adds MULTIPLANE_OVERLAY` line. Any `wddm: MPO check` line | The front and the KMD both say 1 plane. One DWM per start |
 | A1-5 | 5 | The same lines with `planes=2` and trailer bit `0x10`. Any `wddm: MPO check` line and the check counters | The front and the KMD both say 2 planes. One DWM per start, no DWM event, no underflow |
 
-Each arm is at most about 185 s after its boot, and each client run is at most 45 s. A1 has a result in each case:
+Each trial has a 180 s deadline from its first command after boot. Stop the client by 120 s and use the remaining
+time for collection and cleanup. Do not use the old kit's combined 185 s arm. No restart is needed between the
+native and scaled trials of one selector. A1 has a result in each case:
 
 - A `wddm: MPO check` line in arm 1 or 5: the caps or the format bit was the gate. Record the plane set that DWM
   sends (the count, the source and destination of each plane, the layer order). Then run A2.
@@ -312,7 +318,7 @@ check calls. Use the kit with `--arms '5' --hold` (or the selector that A1 found
 
 | Step | What | When |
 | --- | --- | --- |
-| R1 | The D3D12 half of gate 2: the D3D12 engine reports `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` for the formats of plane 0 while the trailer has `MPO`. `format-list.py` now allows it only with `DISPLAY`, which the engine's DDI version does not have. This is a change of the D3D12 shell with its own host test | If A1 has no check call |
+| R1 | The D3D12 half of gate 2 is implemented. The production shell hook queries the current adapter trailer and the engine adds `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` only for admitted plane-0 formats. Engine replay and shell integration tests pass, including absent, invalid and failed queries and the release trailer without MPO. Build the shell with its matching engine library | Lab gate: if A1 has no check call |
 | R2 | The check of a covered plane: a set of two planes where the top plane is opaque and covers the whole output. Plane 0 scans out the top plane, and the flip reports the covered plane as done at each vsync | When the A1 log has such a set from DWM |
 | R3 | The record rule of a displayable surface: a D3D11 borderless or windowed flip-model chain with scan-out and no `PRIMARY` ([The scan-out surface](#the-scan-out-surface)) | Before a D3D11 game is an acceptance target |
 | R4 | Step S3, plane 1 on pipe 1 ([What S3 adds to the driver](#what-s3-adds-to-the-driver)) | After A2 |

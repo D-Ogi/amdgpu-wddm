@@ -274,6 +274,8 @@ public:
     // acceleration structure slots read opacity micromap inputs and the state object slot admits
     // ALLOW_OPACITY_MICROMAPS. False until set_raytracing_tier12_commands.
     bool omm = false;
+    // BD-223 R1: the shell's multiplane-overlay format rule (set_overlay_format_hook); null adds nothing.
+    OverlayFormatHook overlay_format = nullptr;
     // The engine device reports work graphs tier 1.0 (OPTIONS21; vkd3d-proton device.c,
     // d3d12_device_supports_workgraphs): the caps answer forwards it and the state object slot admits a work graph
     // (work-graphs.cpp). Set at the context's creation.

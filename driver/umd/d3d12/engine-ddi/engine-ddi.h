@@ -371,6 +371,17 @@ HRESULT set_release_policy(DeviceContext* context, const ReleasePolicy* policy) 
 // is used on another thread or by any DDI.
 HRESULT set_raytracing_tier12_commands(DeviceContext* context, bool on) noexcept;
 
+// BD-223 (docs/design/mpo.md, step R1): the multiplane-overlay bit of CheckFormatSupport. The engine's
+// FORMAT_SUPPORT does not decide it, and the format list does not allow it (format-list.py), because only the kernel
+// driver knows whether a plane scans the format out. The shell decides it: hook(shell, format) returns TRUE for a
+// format that plane 0 scans out while the kernel driver admits an overlay plane, and the answer then gets
+// D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY and no other bit. The hook is asked only for a format the engine answers
+// with some support bit, and never for an answer of NOT_SUPPORTED. A null hook (the default) adds nothing. The hook
+// runs on the thread of the CheckFormatSupport call, like the ShellHooks. E_INVALIDARG for a null context. Call it
+// like set_retire_policy: after create_device_context, before the context is used on another thread or by any DDI.
+using OverlayFormatHook = BOOL (APIENTRY*)(void* shell, DXGI_FORMAT format);
+HRESULT set_overlay_format_hook(DeviceContext* context, OverlayFormatHook hook) noexcept;
+
 // Deferred command-list replay. Off (enabled 0, the default) every recording slot calls the engine list on the
 // calling thread, as before this policy existed: no ring, no thread. On, a recording slot still validates,
 // translates and reports on the calling thread, then writes the engine call, with a copy of every array and

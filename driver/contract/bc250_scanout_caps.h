@@ -150,3 +150,17 @@ static __inline unsigned int bc250_scanout_mpo_planes(unsigned int flags)
     if (!(flags & BC250_SCANOUT_CAPS_MPO)) return 0u;
     return (flags & BC250_SCANOUT_CAPS_MPO_PLANE1) ? 2u : 1u;
 }
+
+// BD-223 (docs/design/mpo.md, gate 2): may a format of this row carry the multiplane-overlay format bit on this
+// start? The bit is D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY for the compositor's device and
+// D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY for a D3D12 device (both 0x8000). Only while the kernel driver answers
+// the overlay check (BC250_SCANOUT_CAPS_MPO, which it sets only with DIRECT_FLIP), and only for a row that plane 0
+// scans out under this trailer (bc250_scanout_format_admitted). The compositor's front and the D3D12 shell both
+// call it, so their format answers cannot disagree. A null caps or row is "no".
+static __inline int bc250_scanout_mpo_format(const struct bc250_scanout_caps* caps,
+    const AMDGPU_WDDM_SURFACE_FORMAT* row)
+{
+    if (!caps || !row) return 0;
+    if (!(caps->flags & BC250_SCANOUT_CAPS_MPO) || !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP)) return 0;
+    return bc250_scanout_format_admitted(row, caps->flags);
+}

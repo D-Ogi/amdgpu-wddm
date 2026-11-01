@@ -86,12 +86,12 @@ inline bool FrontOverlayAdmitted(const bc250_scanout_caps &caps)
 // BD-223 (docs/design/mpo.md, gate 2): the format bit the compositor's device adds for an overlay plane. The hosted
 // frontend never sets D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY (Mesa d3d10umd Device.cpp, CheckFormatSupport), so
 // without it no format of DWM's device is a format for a plane. The bit goes to a format that plane 0 can scan out
-// under this trailer (bc250_scanout_format_admitted), only while the kernel driver admits an overlay plane. A pure
-// function of the trailer, so that the host gate drives the production rule (CheckFormatSupport13).
+// under this trailer, only while the kernel driver admits an overlay plane: the shared rule
+// bc250_scanout_mpo_format, which the D3D12 shell calls too. A pure function of the trailer, so that the host gate
+// drives the production rule (CheckFormatSupport13).
 inline UINT FrontOverlayFormatSupport(const bc250_scanout_caps &caps, unsigned int format)
 {
-    if (!FrontOverlayAdmitted(caps)) return 0u;
-    return bc250_scanout_format_admitted(amdgpu_wddm_surface_format_by_dxgi(format), caps.flags)
+    return bc250_scanout_mpo_format(&caps, amdgpu_wddm_surface_format_by_dxgi(format))
                ? (UINT)D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY
                : 0u;
 }

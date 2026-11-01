@@ -40,6 +40,8 @@
 //      points; the program identifier and the memory requirements (CORE_0108) are the engine's; SetProgram and
 //      DispatchGraph in the four modes (COMMAND_LIST_3D_0108) reach the engine list the same with the policy off and
 //      on, with the CPU inputs copied at the call; the refusals.
+//  14. The multiplane-overlay bit of CheckFormatSupport (set_overlay_format_hook, BD-223 R1): only from the shell's
+//      rule, only that bit, only on an answer with support bits.
 #include "internal.h"
 #include "replay.h"
 #include <atomic>
@@ -847,6 +849,9 @@ public:
     HRESULT options5_hr = S_OK;
     D3D12_RAYTRACING_TIER options5_tier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
     std::atomic<uint32_t> options5_queries{0};
+    // FORMAT_SUPPORT: answered only with format_support set (section 14); every query counted.
+    bool format_support = false;
+    std::atomic<uint32_t> format_queries{0};
     // GetRaytracingAccelerationStructurePrebuildInfo: the inputs logged on prebuild_log's list, prebuild_answer given.
     FakeList* prebuild_log = nullptr;
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_answer{};
@@ -904,6 +909,23 @@ public:
         return none(out);
     }
     HRESULT STDMETHODCALLTYPE CheckFeatureSupport(D3D12_FEATURE feature, void* data, UINT size) override {
+        // FORMAT_SUPPORT (section 14): answered only with format_support set. The three scan-out formats are 2D
+        // textures that sample and render; R10G10B10_XR_BIAS_A2_UNORM is no 2D texture; every other format fails.
+        if (feature == D3D12_FEATURE_FORMAT_SUPPORT && format_support) {
+            ++format_queries;
+            if (!data || size != sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)) return E_INVALIDARG;
+            auto* s = static_cast<D3D12_FEATURE_DATA_FORMAT_SUPPORT*>(data);
+            s->Support1 = D3D12_FORMAT_SUPPORT1_NONE;
+            s->Support2 = D3D12_FORMAT_SUPPORT2_NONE;
+            switch (s->Format) {
+            case DXGI_FORMAT_B8G8R8A8_UNORM: case DXGI_FORMAT_R8G8B8A8_UNORM: case DXGI_FORMAT_R10G10B10A2_UNORM:
+                s->Support1 = D3D12_FORMAT_SUPPORT1_TEXTURE2D | D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE |
+                              D3D12_FORMAT_SUPPORT1_RENDER_TARGET;
+                return S_OK;
+            case DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM: return S_OK;
+            default: return E_FAIL;
+            }
+        }
         if (feature != D3D12_FEATURE_D3D12_OPTIONS5 || !options5) return odd(E_NOTIMPL);
         ++options5_queries;
         if (FAILED(options5_hr)) return options5_hr;
@@ -2103,6 +2125,22 @@ void omm_sequence(D3D12DDI_HCOMMANDLIST h, OmmSources& s) {
     });
 }
 } // namespace
+
+// Section 14: the shell's overlay format rule as a test double. It says TRUE for B8G8R8A8_UNORM and
+// R10G10B10A2_UNORM and FALSE for every other format, and records each call with the shell pointer it got.
+struct OverlayCalls {
+    std::atomic<uint32_t> calls{0};
+    std::atomic<uint32_t> wrong_shell{0};
+    void* shell = nullptr;
+    DXGI_FORMAT last = DXGI_FORMAT_UNKNOWN;
+};
+OverlayCalls g_overlay;
+BOOL APIENTRY overlay_rule(void* shell, DXGI_FORMAT format) {
+    ++g_overlay.calls;
+    if (shell != g_overlay.shell) ++g_overlay.wrong_shell;
+    g_overlay.last = format;
+    return format == DXGI_FORMAT_B8G8R8A8_UNORM || format == DXGI_FORMAT_R10G10B10A2_UNORM;
+}
 
 int main() {
     setvbuf(stdout, nullptr, _IONBF, 0);
@@ -3667,6 +3705,43 @@ int main() {
               "is refused with tier 1.2 on (%d); every record destroyed", off_plain, off_omm, on_omm, on_unknown);
         check(!f.device.unexpected && !p.engine.unexpected && !ref.engine.unexpected && !p.engine.stale,
               "tier 1.2 on the device: no unexpected device or engine method");
+    }
+
+    // 14. BD-223 R1: the multiplane-overlay bit of CheckFormatSupport is the shell's (set_overlay_format_hook). Without
+    //     a hook no answer has it; with one, an answer that has support bits gets D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_
+    //     OVERLAY and nothing else where the hook says TRUE; a format the engine refuses (0) and the NOT_SUPPORTED
+    //     answer never reach the hook; clearing the hook takes the bit away again.
+    {
+        Fixture f;
+        f.device.format_support = true;
+        g_overlay.shell = &f.shell;
+        auto answer = [&](DXGI_FORMAT format) {
+            UINT bits = 0xCDCDCDCDu;
+            g_core.pfnCheckFormatSupport(f.hdevice, format, &bits);
+            return bits;
+        };
+        constexpr UINT kMpo = D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY;
+        const UINT bgra = answer(DXGI_FORMAT_B8G8R8A8_UNORM), rgba = answer(DXGI_FORMAT_R8G8B8A8_UNORM);
+        const UINT ten = answer(DXGI_FORMAT_R10G10B10A2_UNORM);
+        const bool plain = bgra && rgba && ten && !((bgra | rgba | ten) & kMpo) && !g_overlay.calls.load();
+        const bool refused = set_overlay_format_hook(nullptr, overlay_rule) == E_INVALIDARG && !f.context.overlay_format;
+        const bool set = set_overlay_format_hook(&f.context, overlay_rule) == S_OK &&
+                         f.context.overlay_format == overlay_rule;
+        const UINT bgra_mpo = answer(DXGI_FORMAT_B8G8R8A8_UNORM), rgba_mpo = answer(DXGI_FORMAT_R8G8B8A8_UNORM);
+        const UINT ten_mpo = answer(DXGI_FORMAT_R10G10B10A2_UNORM);
+        const uint32_t asked = g_overlay.calls.load();
+        const UINT none = answer(DXGI_FORMAT_R32_FLOAT), xr = answer(DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM);
+        const bool skipped = g_overlay.calls.load() == asked && none == 0 &&
+                             xr == D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
+        const bool cleared = set_overlay_format_hook(&f.context, nullptr) == S_OK && !f.context.overlay_format &&
+                             answer(DXGI_FORMAT_B8G8R8A8_UNORM) == bgra && g_overlay.calls.load() == asked;
+        check(plain && refused && set && bgra_mpo == (bgra | kMpo) && rgba_mpo == rgba && ten_mpo == (ten | kMpo) &&
+                  asked == 3 && skipped && cleared && !g_overlay.wrong_shell && !f.device.unexpected &&
+                  !f.shell.device_errors,
+              "overlay format hook: no bit without a hook (%#x %#x %#x), null context refused (%d), the bit and only "
+              "the bit where the rule says TRUE (%#x %#x %#x), the rule asked %u times with the shell, never for a "
+              "refused format (%#x) or NOT_SUPPORTED (%#x), cleared (%d)",
+              bgra, rgba, ten, refused, bgra_mpo, rgba_mpo, ten_mpo, asked, none, xr, cleared);
     }
 
 #if defined(D3D12DDI_BUILD_VERSION_0119)
