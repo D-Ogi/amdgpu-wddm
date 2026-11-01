@@ -312,6 +312,9 @@ Check 'ledger-call' { & pwsh -NoProfile -File "$repo\tools\release\test-ledger-c
  # store with a time stamp), the signtool arguments, the read-back of a signature, which files take which signer, and
  # where build-release.ps1 signs the submission CAB and the single-file setup. No store is opened, nothing is signed.
  Check 'release-user-mode-signing' { & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$repo\tools\release\test-user-mode-signing.ps1" -WorkRoot "$Out\release-user-mode-signing" }
+ # BD-163: the setup unit tests catch the cleanup and the permission list of the code before 0fdd8179 (two mutations
+ # of Payload.cs), in folders of their own. Nothing in %ProgramData% is touched.
+ Check 'setup-bd163-controls' { & pwsh -NoProfile -File "$repo\tools\win\amdgpu_wddm_setup\test-bd163-controls.ps1" -Out "$Out\setup-bd163-controls" }
  # Fact M898: a WinForms Label with a Dock and AutoSize off goes through 100x23 at each change of its text, which is
  # how the start window of rc4 flashed. The control application holds the rule at run time (--smoke-labels in its
  # build); this reads the installer's and the tools' PowerShell and the other C# windows. Its controls run in
