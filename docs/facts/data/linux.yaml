@@ -403,6 +403,67 @@ facts:
     edges:
       - {"type": "uses", "to": "M821"}
       - {"type": "supports", "to": "M820"}
+  - id: M942
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "amdgpu's init on unit A writes, in this order: `RLC_CNTL` = 0, `RLC_PG_CNTL` = 0 and `RLC_CNTL` = 1 in `rlc_resume`, `RLC_CP_SCHEDULERS` = `0x585048C8` right after `rlc_resume` returns, `CP_MEC_CNTL` = 0, and after the first ring test `CP_ME_CNTL` = 0. `RLC_CP_SCHEDULERS` later reads `0x5850C0C8` with no filtered host write before the change, and it reads that value after init"
+    status_text: "MEASURED (unit A, one traced init, kernel 6.18.52-0-lts)"
+    detail: "Write probe on `amdgpu_device_wreg` with a 14-register filter. The start state of `RLC_CP_SCHEDULERS` is `0x58504840`. The second-load comparison of wishlist L34 needs a module unload (L17), which did not run"
+    evidence: "[L1031 init trace](../evidence/linux/2026-11-01-L1031-init-trace/README.md)"
+    edges:
+      - {"type": "uses", "to": "M17"}
+  - id: M943
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "On amdgpu 6.18.52-0-lts an SDMA0 job that waits on a CPU flag times out after 10.1 s, and `amdgpu_job_timedout` resets only that queue: `sdma_v5_0_reset_queue` calls `amdgpu_sdma_reset_engine` for instance 0 (stop, soft reset and restore, each with return value 0, 1.226 ms in total), the kernel logs 'Ring sdma0 reset succeeded', `amdgpu_device_gpu_recover` and `nv_asic_reset` do not run, and new SDMA0 copies of 4096 bytes and 1 MiB pass after it"
+    status_text: "MEASURED (unit A, n = 1)"
+    detail: "SDMA scheduler mask `0x1`. The SDMA0 fence moved from `0xcf` to `0xdc` and SDMA1 stayed at `0x159`. The whole `amdgpu_job_timedout` call took 4.9 ms. This extends the SDMA1 result of E29 (M388) to SDMA0. No full GPU recovery ran, so M53 is unchanged"
+    evidence: "[L1031 hang lane](../evidence/linux/2026-11-01-L1031-hang-reset/README.md)"
+    edges:
+      - {"type": "uses", "to": "M53"}
+      - {"type": "supports", "to": "M388"}
+  - id: M944
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "On amdgpu 6.18.52-0-lts a timed-out GFX job is ended by `gfx_v10_0_reset_kgq` (return value 0, 0.275 ms and 0.283 ms in two runs), and a timed-out compute spin by `gfx_v10_0_reset_kcq` (return value 0, 0.179 ms and 0.172 ms in two runs). Each logs 'Ring ... reset succeeded' with no `amdgpu_device_gpu_recover`. After them a GFX NOP job signals at once, and the compute and SDMA controls pass"
+    status_text: "MEASURED (unit A, two runs each)"
+    detail: "GFX: `WAIT_REG_MEM` on a CPU flag, `ETIME` at 10.400 s and still busy at 10.495 s. Compute: an `s_branch` spin. `WAIT_CS` returned status 0 at 10.4 s and 10.2 s, which is the reset job, not a finished spin. The GFX control is a NOP job, not a rendered pattern in a new context"
+    evidence: "[L1031 hang lane](../evidence/linux/2026-11-01-L1031-hang-reset/README.md)"
+    edges:
+      - {"type": "uses", "to": "M53"}
+      - {"type": "uses", "to": "M388"}
+  - id: M945
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "On amdgpu 6.18.52-0-lts, with debugfs `amdgpu_compute_sched_mask` = `0x1` (only compute ring 0, which amdgpu gives high priority), a compute submission causes a kernel NULL pointer dereference in `drm_sched_job_arm+0x2b`, called from `amdgpu_cs_ioctl`. The client stays in state D in `drm_exec_lock_obj` (3 and 10 min later), and other clients keep working: the compute and SDMA controls pass after the mask is back at `0xff`"
+    status_text: "MEASURED (unit A, n = 1)"
+    detail: "The other compute schedulers log 'not ready, skipping' before the oops. This is a kernel defect in a debug path, not a GPU hang"
+    evidence: "[L1031 hang lane](../evidence/linux/2026-11-01-L1031-hang-reset/README.md)"
+  - id: M946
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "On amdgpu 6.18.52-0-lts, debugfs `amdgpu_evict_vram` moves a 16 MiB CPU-visible VRAM buffer object to GTT (return 0 after 0.004 s), and the validation of the next job that uses it moves it back to VRAM. TTM copies it in 2 MiB pieces through `amdgpu_copy_buffer` on `sdma0` (16 copies with 2 MiB and 20 copies with 4 KiB, all with return value 0), and the whole buffer reads back intact through the CPU"
+    status_text: "MEASURED (unit A, one round trip)"
+    detail: "Boot C of L1031, amdgpu loaded with `dcdebugmask=0x1`. `amdgpu_bo_move`: VRAM to GTT 1 x 16 MiB and 13 x 4 KiB, GTT to VRAM 1 x 16 MiB and 7 x 4 KiB. `amdgpu_sched_run_job`: 75 on `sdma0`, 19 on `sdma1`. The test's own copies ran on `sdma1`. One forced eviction, not a memory pressure test"
+    evidence: "[L1031 L26](../evidence/linux/2026-11-01-L1031-paging-l26/README.md)"
+  - id: M947
+    status: MEASURED
+    date: "2026-10-31"
+    claim: "On unit A under Linux 6.18.52-0-lts without amdgpu, two s2idle attempts with an RTC wake request of +20 s did not come back over SSH within 4.5 and 5 min and needed an AC cycle. The kernel reports `rtc_cmos ... no alarms`, and the wall power stayed at 107 W to 108 W, about 3 W below the idle reading"
+    status_text: "MEASURED (unit A, n = 2)"
+    detail: "Attempt 2 logged 'PM: suspend entry (s2idle)'. The stream of attempt 1 has no line after the script started. `/sys/power/pm_test` does not exist on this kernel. The data do not tell a missing wake from a hung resume, and no GPU result after a wake exists. The plug readings are not calibrated and their age is unknown"
+    evidence: "[L1031 L6](../evidence/linux/2026-11-01-L1031-l6/README.md)"
+    edges:
+      - {"type": "uses", "to": "M56"}
+  - id: M948
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "On Linux RADV (Mesa 26.1.6, Vulkan 1.4.354) on unit A at 1000 MHz SCLK, the E27 shader coherency probe with reused host-coherent buffers (memory type 3, heap 1) gives the hash of the CPU oracle in 16 of 16 rounds, and its stale-input control fails at round 1 as designed"
+    status_text: "MEASURED (unit A, one run and one control)"
+    detail: "Source hashes: SPIR-V `ca33985e`, probe `3601637b`, `vkcompute.c` `2a4d423b`. A manual performance level was refused, and the OD write set 1000 MHz. The last `pp_dpm_sclk` read has 1077 MHz as the current level, so the file does not show a return to the default clock"
+    evidence: "[L1031 userland](../evidence/linux/2026-11-01-L1031-userland/README.md)"
+    edges:
+      - {"type": "uses", "to": "M264"}
   - id: S4
     status: HYPOTHESIS
     date: "2026-09-21"

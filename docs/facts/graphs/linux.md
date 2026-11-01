@@ -16,6 +16,7 @@ flowchart LR
   M90["M90"]
   M91["M91"]
   M333["M333"]
+  M388["M388"]
   M509["M509<br/>icd"]
   M510["M510"]
   M789["M789<br/>hardware"]
@@ -23,6 +24,7 @@ flowchart LR
   M808["M808"]
   M820["M820"]
   M822["M822"]
+  M943["M943"]
   S3["S3<br/>hardware"]
   S4["S4"]
   R3["R3<br/>hardware"]
@@ -36,15 +38,19 @@ flowchart LR
   M808 ==>|supports| M85
   M808 ==>|supersedes| M91
   M822 ==>|supports| M820
+  M943 ==>|supports| M388
   classDef other stroke-dasharray:4 3
   class M35,M85,M509,M789,S3,R3 other
 ```
 
 ## References
 
+### Part 1
+
 ```mermaid
 flowchart LR
   M5["M5"]
+  M17["M17"]
   M18["M18<br/>hardware"]
   M24["M24"]
   M25["M25<br/>hardware"]
@@ -62,6 +68,7 @@ flowchart LR
   M53["M53"]
   M54["M54"]
   M55["M55"]
+  M56["M56"]
   M58["M58<br/>hardware"]
   M59["M59<br/>hardware"]
   M78["M78<br/>kmd"]
@@ -70,11 +77,9 @@ flowchart LR
   M113["M113<br/>kmd"]
   M114["M114<br/>kmd"]
   M139["M139<br/>icd"]
+  M264["M264<br/>icd"]
   M333["M333"]
-  M508["M508<br/>icd"]
-  M510["M510"]
-  M515["M515<br/>icd"]
-  M516["M516"]
+  M388["M388"]
   M787["M787<br/>hardware"]
   M788["M788<br/>display"]
   M801["M801<br/>d3d"]
@@ -97,6 +102,13 @@ flowchart LR
   M852["M852<br/>display"]
   M904["M904<br/>display"]
   M934["M934<br/>kmd"]
+  M936["M936<br/>hardware"]
+  M937["M937<br/>hardware"]
+  M942["M942"]
+  M943["M943"]
+  M944["M944"]
+  M947["M947"]
+  M948["M948"]
   M18 --> M5
   M35 --> M333
   M43 --> M40
@@ -110,6 +122,8 @@ flowchart LR
   M812 --> M5
   M813 --> M48
   M823 --> M822
+  M936 --> M17
+  M937 --> M17
   M78 --> M55
   M113 --> M40
   M114 --> M40
@@ -135,8 +149,6 @@ flowchart LR
   M55 --> M44
   M55 --> M53
   M55 --> M54
-  M510 --> M508
-  M516 --> M515
   M805 --> M47
   M808 --> M46
   M809 --> M91
@@ -148,7 +160,27 @@ flowchart LR
   M821 --> M819
   M821 --> M820
   M822 --> M821
+  M942 --> M17
+  M943 --> M53
+  M944 --> M53
+  M944 --> M388
+  M947 --> M56
+  M948 --> M264
   classDef other stroke-dasharray:4 3
-  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M508,M515,M787,M788,M801,M804,M807,M812,M813,M823,M824,M825,M851,M852,M904,M934 other
+  class M18,M25,M35,M38,M43,M44,M47,M58,M59,M78,M95,M113,M114,M139,M264,M787,M788,M801,M804,M807,M812,M813,M823,M824,M825,M851,M852,M904,M934,M936,M937 other
+```
+
+### Part 2
+
+```mermaid
+flowchart LR
+  M508["M508<br/>icd"]
+  M510["M510"]
+  M515["M515<br/>icd"]
+  M516["M516"]
+  M510 --> M508
+  M516 --> M515
+  classDef other stroke-dasharray:4 3
+  class M508,M515 other
 ```
 

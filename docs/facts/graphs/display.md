@@ -12,6 +12,7 @@ flowchart LR
   M83["M83"]
   M85["M85"]
   M86["M86"]
+  M89["M89"]
   M98["M98"]
   M99["M99"]
   M103["M103"]
@@ -20,10 +21,14 @@ flowchart LR
   M657["M657<br/>tooling"]
   M788["M788"]
   M808["M808<br/>linux"]
+  M949["M949"]
+  M951["M951"]
   M83 ==>|supersedes| M82
   M99 -.->|refutes| M98
   M106 -.->|refutes| M103
   M788 ==>|supports| M86
+  M949 ==>|supersedes| M86
+  M951 ==>|supports| M89
   M808 ==>|supports| M85
   M657 ==>|supersedes| M656
   classDef other stroke-dasharray:4 3
@@ -94,6 +99,7 @@ flowchart LR
   M903["M903"]
   M904["M904"]
   M909["M909"]
+  M953["M953"]
   M84 --> M73
   M84 --> M83
   M85 --> M31
@@ -154,6 +160,7 @@ flowchart LR
   M909 --> M65
   M909 --> M97
   M909 --> M844
+  M953 --> M87
   M413 --> M412
   M415 --> M412
   M810 --> M788

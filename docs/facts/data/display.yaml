@@ -61,8 +61,8 @@ facts:
   - id: M86
     status: MEASURED
     date: "2026-09-22"
-    claim: "Firmware lights HUBP0 on OTG0 only: `HUBP0_DCHUBP_CNTL` = `0x000F1002` (NO_OUTSTANDING_REQ, TTU_DISABLE, XRQ_NO_OUTSTANDING_REQ 0xF), HUBP1 = `0x000F101A`, HUBP2 = `0x000F102A`, HUBP3 = `0x000F103A` (IN_BLANK set, VTG_SEL 1/2/3, TTU_DISABLE); `OTG0_OTG_CONTROL` = `0x80011311` (OTG_MASTER_EN, DISABLE_POINT_CNTL 3, START_POINT_CNTL, CURRENT_MASTER_EN_STATE, AVSYNC_VSYNC_N_HSYNC_MODE), `OTG1_OTG_CONTROL` = `0x80000310` (not enabled); `OTG0_OTG_H_TOTAL` = `0x81F` (2080), `OTG0_OTG_V_TOTAL` = `0x4D2` (1235) = 1920x1200 CVT-RB at 59.95 Hz; `HUBP0_DCSURF_SURFACE_CONFIG` = 8 (pixel format 8 = ARGB8888), `DCSURF_ADDR_CONFIG` = 0 (firmware) vs `0x123C` (amdgpu), `DCSURF_TILING_CONFIG` = `0x80` both. amdgpu drives HUBP0 and HUBP3 together on OTG0, 960x1200 each (the DTN log's own ODM 2:1 split, the same layout E13 saw): after load HUBP0 CNTL = `0x000F0102` (VREADY_AT_OR_AFTER_VSYNC instead of TTU_DISABLE), HUBP3 CNTL = `0x000F0102`, HUBP1 = `0x000F101B`. Field names from `dcn_2_0_1_sh_mask.h`"
-    detail: "`evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt`, `dmupost.txt`"
+    claim: "Firmware lights HUBP0 on OTG0 only: `HUBP0_DCHUBP_CNTL` = `0x000F1002` (NO_OUTSTANDING_REQ, TTU_DISABLE, XRQ_NO_OUTSTANDING_REQ 0xF), HUBP1 = `0x000F101A`, HUBP2 = `0x000F102A`, HUBP3 = `0x000F103A` (IN_BLANK set, VTG_SEL 1/2/3, TTU_DISABLE); `OTG0_OTG_CONTROL` = `0x80011311` (OTG_MASTER_EN, DISABLE_POINT_CNTL 3, START_POINT_CNTL, CURRENT_MASTER_EN_STATE, AVSYNC_VSYNC_N_HSYNC_MODE), `OTG1_OTG_CONTROL` = `0x80000310` (not enabled); `OTG0_OTG_H_TOTAL` = `0x81F` (2080), `OTG0_OTG_V_TOTAL` = `0x4D2` (1235) = 1920x1200 CVT-RB at 59.95 Hz; `HUBP0_DCSURF_SURFACE_CONFIG` = 8 (pixel format 8 = ARGB8888), `DCSURF_ADDR_CONFIG` = 0 (firmware) vs `0x123C` (amdgpu), `DCSURF_TILING_CONFIG` = `0x80` both. amdgpu drives HUBP0 and HUBP3 together on OTG0, 960x1200 each (an MPC split, the same layout E13 saw): after load HUBP0 CNTL = `0x000F0102` (VREADY_AT_OR_AFTER_VSYNC instead of TTU_DISABLE), HUBP3 CNTL = `0x000F0102`, HUBP1 = `0x000F101B`. Field names from `dcn_2_0_1_sh_mask.h`"
+    detail: "`evidence/linux/2026-09-22-E21-linux-reference-4/dmupre.txt`, `dmupost.txt`. Corrected on 2026-11-01: this entry called the two-pipe layout an ODM 2:1 split. The DTN log of the same run (`dtn_log.txt`) has MPCC0 with bottom MPCC 3 and both MPCCs on OPP 0, and the L1031 reads of M949 give `ODM0_OPTC_DATA_SOURCE_SELECT` 0. So the two pipes blend in the MPC, and no ODM combine is used"
   - id: M87
     status: MEASURED
     date: "2026-09-22"
@@ -1062,3 +1062,58 @@ facts:
     evidence: "[Start confirmation without the start window](../evidence/windows/2026-10-22-start-confirm-quiet/README.md)"
     edges:
       - {"type": "uses", "to": "M898"}
+  - id: M949
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "With default settings amdgpu 6.18.52-0-lts drives the 1920x1200 primary plane of unit A on DCN pipes 0 and 3, each with a 960x1200 viewport: `MPCC0_MPCC_BOT_SEL` reads 3, `MPCC0_MPCC_OPP_ID` and `MPCC3_MPCC_OPP_ID` read 0 (an MPC split on OPP 0) and `ODM0_OPTC_DATA_SOURCE_SELECT` reads 0. With `dcdebugmask=0x1` one pipe drives it: HUBP0 at 1920x1200, `MPCC0_MPCC_BOT_SEL` `0xF`, and `OTG0_OTG_CONTROL` and `HUBP3_DCHUBP_CNTL` read the firmware values of M86"
+    status_text: "MEASURED (unit A, three boots)"
+    detail: "Reads through debugfs `amdgpu_regs` in Boot A, Boot B and Boot C of L1031. Before amdgpu the firmware lights HUBP0 alone, as in M86. M86 called the two-pipe layout an ODM 2:1 split. These reads and its own DTN log show an MPC split, so M86 is corrected"
+    evidence: "[L1031 display](../evidence/linux/2026-11-01-L1031-display/README.md), [visit](../evidence/linux/2026-11-01-L1031-visit/README.md)"
+    edges:
+      - {"type": "supersedes", "to": "M86", "scope": "partial"}
+  - id: M950
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "During three `modetest` mode sets (XR24, XB4H, XR24) in 10 s, `HUBP_UNDERFLOW_STATUS` of `HUBP0_DCHUBP_CNTL` and `HUBP3_DCHUBP_CNTL` stays 0 in all 809279 samples with two pipes and in all 795293 samples with one pipe"
+    status_text: "MEASURED (unit A, one run per pipe layout)"
+    detail: "Sampled through debugfs `amdgpu_regs`. The mode sets are visible as blank rows of HUBP0 and a restart of the OTG0 frame count. These valid format changes are positive controls, not the deliberately bad flip of wishlist L22. The flip markers of the script are not in the files"
+    evidence: "[L1031 display](../evidence/linux/2026-11-01-L1031-display/README.md)"
+  - id: M951
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "`HUBPREQ0_DCSURF_SURFACE_INUSE` and `HUBPREQ0_DCSURF_SURFACE_INUSE_HIGH` read 0 in 100000 of 100000 samples at 10 kHz through debugfs `amdgpu_regs` while `modetest -v` flips the primary plane, in each of two boots. In the same samples `HUBPREQ0_DCSURF_SURFACE_EARLIEST_INUSE` takes the new `PRIMARY_SURFACE_ADDRESS` in 479 of 586 and 480 of 489 address changes"
+    status_text: "MEASURED (unit A, two boots)"
+    detail: "`EARLIEST_INUSE` takes the new address after the next frame start. When the address changes again before that, it skips the address. These reads do not explain why `SURFACE_INUSE` reads 0"
+    evidence: "[L1031 display](../evidence/linux/2026-11-01-L1031-display/README.md)"
+    edges:
+      - {"type": "supports", "to": "M89"}
+  - id: M952
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "Setting `SURFACE_FLIP_INT_MASK` in `HUBPREQ0_DCSURF_SURFACE_FLIP_INTERRUPT` and `OTG_VERTICAL_INTERRUPT0_INT_ENABLE` in `OTG0_OTG_VERTICAL_INTERRUPT0_CONTROL` under amdgpu adds no amdgpu MSI-X interrupt rate that the interrupt count shows over a 5 s `modetest`: 28 interrupts in total, against 29 and 31 in two control runs with no register write"
+    status_text: "MEASURED (unit A, one run, two controls); scoped"
+    detail: "The run with the enables counted 2 interrupts in the short window right after the enable (controls: 0), and their source is not known. Both registers were restored after the run. This does not show that these sources cannot fire with another interrupt routing"
+    evidence: "[L1031 display](../evidence/linux/2026-11-01-L1031-display/README.md)"
+  - id: M953
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "During overlay page flips under amdgpu, 5 kHz samples of `HUBPREQ0_DCSURF_FLIP_CONTROL` and `OTG0_OTG_MASTER_UPDATE_LOCK` hold three states: `SURFACE_FLIP_PENDING` with the OTG lock 0, both clear with the lock 0, and `HUBPREQ_MASTER_UPDATE_LOCK_STATUS` with the OTG lock `0x101`. The change lines in these states are 271, 145 and 145 in Boot B and 469, 243 and 11 in Boot C"
+    status_text: "MEASURED (unit A, two boots)"
+    detail: "The sampler output was cut at 64 KiB, so the files hold the first 2 s and 4 s of 15 s. The second `modetest` of the step (flips of the primary plane) failed with 'Permission denied'. Not tested: a flip across VUPDATE, triple buffering, attribute changes at the same address"
+    evidence: "[L1031 display](../evidence/linux/2026-11-01-L1031-display/README.md)"
+    edges:
+      - {"type": "uses", "to": "M87"}
+  - id: M954
+    status: MEASURED
+    date: "2026-11-01"
+    claim: "Under amdgpu an AR24 320x200 overlay over the 1920x1200 primary plane uses four DCN pipes: pipes 0 and 2 at 160x200 for the overlay, pipes 1 and 3 at 960x1200 for the primary plane, MPCC tree 0, 2, 3, 1. `SURFACE_PIXEL_FORMAT` reads 8 and `CNVC_CFG0_FORMAT_CONTROL` to `CNVC_CFG3_FORMAT_CONTROL` read `0x02000101` (`ALPHA_EN` 1)"
+    status_text: "MEASURED (unit A, n = 1)"
+    detail: "`modetest -s 64@58:1920x1200 -P 49@58:320x200+100+100@AR24`. No pixel output was checked. The alpha blend result, the CSC banks and the YUV formats were not tested"
+    evidence: "[L1031 display](../evidence/linux/2026-11-01-L1031-display/README.md)"
+  - id: M955
+    status: MEASURED
+    date: "2026-10-31"
+    claim: "For the primary plane in XR24, XB30 and XB4H, HUBP0 `SURFACE_PIXEL_FORMAT` reads `0x8`, `0xA` and `0x18`, and `CNVC_SURFACE_PIXEL_FORMAT` reads `0x8`, `0xA` and `0x19`. The XBGR formats swap `CROSSBAR_SRC_CB_B` and `CROSSBAR_SRC_CR_R` (2 and 3 to 3 and 2) in `HUBPRET0_HUBPRET_CONTROL`, and XB4H also changes the request timing (`REFCYC_PER_REQ_DELIVERY` `0x9BD8` to `0x506F`, `VREADY_OFFSET` `0x18B` to `0x16E`)"
+    status_text: "MEASURED (unit A, one boot, pipe 0 only)"
+    detail: "998 DCN registers of pipes 0 and 1 under fbcon and after each mode set. Pipe 1 was blank, and the split partner pipe 3 was not read. `MPCC0_MPCC_CONTROL`, `CNVC_CFG0_FORMAT_CONTROL` and `MPCC_OGAM0_MPCC_OGAM_MODE` (0) do not change with the format"
+    evidence: "[L1031 visit](../evidence/linux/2026-11-01-L1031-visit/README.md)"
