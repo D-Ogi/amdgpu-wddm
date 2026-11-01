@@ -20,7 +20,8 @@
 #      test_amd_face_errors: hipModuleLoad of a missing file is hipErrorFileNotFound, and every
 #      code that the face returns has AMD's name;
 #      test_amd_face_packed: an argument after the end of a packed buffer of hipModuleLaunchKernel
-#      is 0, as in AMD's runtime.
+#      is 0, as in AMD's runtime. Concurrent copies of the error and packed tests must also
+#      pass with the same TEMP, without leaving temporary files behind.
 #
 # Outputs under -Out: mock\amdhip64_7.dll (the runtime over tests\host\hipmock_backend.c with the
 # production loader, for a machine with no BC-250) and amdhip64_7.dll (the runtime over layer 1),
@@ -67,8 +68,8 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
 . (Join-Path $repo 'tools\build\umd-compiler.ps1')
 $cl = Resolve-Bc250UmdCompiler -Root $Root -Compiler $Compiler -MsvcReason $MsvcReason -Out $Out -Arch 'x64' -MsvcPath $msvcCl
-# Compiler temporaries stay off drive C: of the development PC.
-$env:TEMP = Join-Path $Root 'scratch\tmp'; $env:TMP = $env:TEMP
+# Compiler temporaries stay off drive C: and inside this build's output, not another release row.
+$env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $def = Join-Path $hip 'runtime\amdhip64_7.def'
@@ -196,6 +197,9 @@ $null = Invoke-Cl ($warn + $amdDefines + @('/std:c++17', '/EHsc', "/Fo$packedObj
     @((Join-Path $hip 'tests\host\test_amd_face_packed.cpp'), '/link') + $libpaths) 'test_amd_face_packed'
 & $packedExe $mockDll (Join-Path $hip 'tests\data\m16_kernels.gfx1010.co')
 if ($LASTEXITCODE -ne 0) { throw "test_amd_face_packed failed ($LASTEXITCODE)" }
+& pwsh -NoProfile -File (Join-Path $hip 'tests\host\test-amd-face-parallel.ps1') -BinDir $Out `
+    -Mock $mockDll -CodeObject (Join-Path $hip 'tests\data\m16_kernels.gfx1010.co') -Work (Join-Path $Out 'parallel-test')
+if ($LASTEXITCODE -ne 0) { throw "test-amd-face-parallel failed ($LASTEXITCODE)" }
 
 # ---------------------------------------------------------------------------------------------
 # 4. The product DLL over layer 1. Without -Bc250hsaLib the layer-1 sources are compiled here,

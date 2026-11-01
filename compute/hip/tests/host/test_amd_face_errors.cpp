@@ -24,6 +24,7 @@
 #include <string>
 
 #include <hip/hip_runtime_api.h>
+#include "amd_face_test_temp.h"
 
 using ModuleLoad = hipError_t (*)(hipModule_t*, const char*);
 using GetLastError_ = hipError_t (*)();
@@ -39,13 +40,6 @@ void expect(bool ok, const char* what, const std::string& detail) {
         std::printf("FAIL: %s: %s\n", what, detail.c_str());
         ++g_failed;
     }
-}
-
-std::string temp_path(const char* leaf) {
-    char dir[MAX_PATH] = {};
-    const DWORD n = GetTempPathA(MAX_PATH, dir);
-    std::string out = (n > 0 && n < MAX_PATH) ? std::string(dir) : std::string(".\\");
-    return out + leaf;
 }
 
 }  // namespace
@@ -72,8 +66,13 @@ int wmain(int argc, wchar_t** argv) {
         return 1;
     }
 
+    const AmdFaceTestTemp temp;
+    if (!temp.valid()) {
+        std::printf("FAIL: cannot reserve a private temporary directory\n");
+        return 1;
+    }
     // 1. A missing file. The name has the form of hipBLASLt's first try on unit A.
-    const std::string missing = temp_path("bc250-no-such-dir-7f3a\\Kernels.so-000-gfx1010.hsaco");
+    const std::string missing = temp.file("Kernels.so-000-gfx1010.hsaco");
     (void)last_error();
     hipModule_t module = reinterpret_cast<hipModule_t>(static_cast<uintptr_t>(0x1234));
     const hipError_t miss = module_load(&module, missing.c_str());
@@ -85,7 +84,7 @@ int wmain(int argc, wchar_t** argv) {
            "returned " + std::to_string(static_cast<int>(sticky)));
 
     // 2. A file that is there and is no code object.
-    const std::string tiny = temp_path("bc250-face-errors-tiny.hsaco");
+    const std::string tiny = temp.file("tiny.hsaco");
     if (std::FILE* f = std::fopen(tiny.c_str(), "wb")) {
         std::fwrite("ELF", 1, 3, f);
         std::fclose(f);

@@ -35,6 +35,7 @@
 #include <vector>
 
 #include <hip/hip_runtime_api.h>
+#include "amd_face_test_temp.h"
 
 using ModuleLoadData = hipError_t (*)(hipModule_t*, const void*);
 using ModuleGetFunction = hipError_t (*)(hipFunction_t*, hipModule_t, const char*);
@@ -54,13 +55,6 @@ void expect(bool ok, const char* what, const std::string& detail) {
         std::printf("FAIL: %s: %s\n", what, detail.c_str());
         ++g_failed;
     }
-}
-
-std::string temp_path(const char* leaf) {
-    char dir[MAX_PATH] = {};
-    const DWORD n = GetTempPathA(MAX_PATH, dir);
-    std::string out = (n > 0 && n < MAX_PATH) ? std::string(dir) : std::string(".\\");
-    return out + leaf;
 }
 
 std::vector<unsigned char> read_all(const wchar_t* path) {
@@ -219,8 +213,12 @@ int wmain(int argc, wchar_t** argv) {
         return 2;
     }
     // The child inherits the variable; the C runtime of the DLL copies the environment at its start.
-    const std::string record = temp_path("bc250-face-packed-record.txt");
-    std::remove(record.c_str());
+    const AmdFaceTestTemp temp;
+    if (!temp.valid()) {
+        std::printf("FAIL: cannot reserve a private temporary directory\n");
+        return 1;
+    }
+    const std::string record = temp.file("packed-record.txt");
     SetEnvironmentVariableA("BC250_HIP_MOCK_RECORD", record.c_str());
     wchar_t self[MAX_PATH] = {};
     GetModuleFileNameW(nullptr, self, MAX_PATH);

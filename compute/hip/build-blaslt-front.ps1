@@ -58,8 +58,8 @@ New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path $Out).Path
 . (Join-Path $repo 'tools\build\umd-compiler.ps1')
 $cl = Resolve-Bc250UmdCompiler -Root $Root -Compiler $Compiler -MsvcReason $MsvcReason -Out $Out -Arch 'x64' -MsvcPath $msvcCl
-# Compiler temporaries stay off drive C: of the development PC.
-$env:TEMP = Join-Path $Root 'scratch\tmp'; $env:TMP = $env:TEMP
+# Compiler temporaries stay off drive C: and inside this build's output, not another release row.
+$env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
 New-Item -ItemType Directory -Force $env:TEMP | Out-Null
 
 $msvcIncludes = @("/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt",
