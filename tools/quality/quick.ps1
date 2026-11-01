@@ -2,6 +2,16 @@ param([Parameter(Mandatory)][string]$Workspace,[Parameter(Mandatory)][string]$Ou
       [switch]$NoCache,[int]$Jobs=[Environment]::ProcessorCount,[switch]$PlanOnly)
 $ErrorActionPreference='Stop'
 $repo=if($RepoRoot){$RepoRoot}else{Join-Path $Workspace 'bc250-win'}
+# The inputs that no parameter gives: refuse at once, with one line, when the two user-mode tree variables are
+# missing, and import the developer environment when it is missing (quality-env.ps1).
+. (Join-Path $repo 'tools\quality\quality-env.ps1')
+$refusal=Get-QualityInputRefusal (Get-QualityInputValues)
+if($refusal){
+ Write-Host "quick.ps1 refused: $refusal"
+ New-Item -ItemType Directory -Force $Out | Out-Null
+ @{status='REFUSED';error=$refusal} | ConvertTo-Json | Set-Content (Join-Path $Out 'result.json')
+ exit 2
+}
 if (!$Kits) { $Kits = Join-Path $Workspace 'toolchain\nuget' }
 # Both profiles mix -Kits and older -Root-only suites. Resolve one header tree
 # before running either kind, and retain the selected context in the receipt.
@@ -17,12 +27,15 @@ $radvBuild=if($env:BC250_RADV_BUILD){$env:BC250_RADV_BUILD}else{Join-Path $Works
 # row, configured with that row's arguments; build-release-set.ps1 -Package sets both from -UmdSource and -UmdBuild).
 # There is no default. Each default so far named the tree of one train (scratch\m13-native-zink-src, then
 # scratch\train\b34-build), and a cleanup removed part of it: the three gates then failed on a missing file that
-# named no input. Without the variables, or with a tree that lacks a file that the gates read, those gates fail and
-# give that reason (CheckUmd).
+# named no input. Without the variables the run is refused before its first gate (above). With a tree that lacks a
+# file that the gates read, those gates fail and give that reason (CheckUmd).
 $umdSource=$env:BC250_UMD_SOURCE
 $umdBuild=$env:BC250_UMD_BUILD
 # Three host gates compile a fixture with cl.exe out of the environment. In a shell that is not a developer shell
-# there is no cl.exe, and they died on a FileNotFoundError that named no input. This is the input they need.
+# there is no cl.exe, and they died on a FileNotFoundError that named no input. The run therefore imports the x64
+# developer environment itself when it is not there, and keeps TEMP on the workspace drive.
+Write-Host (Initialize-QualityDevEnvironment -Repo $repo -TempDir (Join-Path $Out 'vsenv'))
+Write-Host (Set-QualityTemp -Workspace $Workspace)
 $clExe=if($c=Get-Command cl.exe -ErrorAction SilentlyContinue){$c.Source}else{'cl.exe (the MSVC compiler is not in this environment)'}
 $clock=[Diagnostics.Stopwatch]::StartNew()
 New-Item -ItemType Directory -Force $Out | Out-Null
@@ -126,6 +139,8 @@ try {
  # suites at the same time, and then all four runs of this gate stopped at 300 s. 900 s is 3.6x the worst serial run.
  Check 'quality-controls' { $env:BC250_TEST_OUT=(New-Item -ItemType Directory -Force "$Out\quality-controls").FullName; & python -m unittest discover -s "$repo\tools\quality" }
  Check 'gate-cache-controls' { & python -B -m unittest discover -s "$repo\tools\quality" -p 'test_gate_cache.py' }
+ # The run's own inputs: refused without the user-mode tree variables, the developer environment imported (quality-env.ps1).
+ Check 'quality-env' { & pwsh -NoProfile -File "$repo\tools\quality\test-quality-env.ps1" -Out (New-Item -ItemType Directory -Force "$Out\quality-env").FullName }
  Check 'wininstall-locale' { & powershell -NoProfile -ExecutionPolicy Bypass -File "$repo\tools\wininstall\test-locale.ps1" -Out "$Out\wininstall-locale" }
  Check 'kd-dump-triage' { & pwsh -NoProfile -File "$repo\tools\win\kd\analyze-kernel-dump.ps1" -SelfTest }
  Check 'smartplug' { & python "$repo\tools\win\smartplug\selftest.py" }

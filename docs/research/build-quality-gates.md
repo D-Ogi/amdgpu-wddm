@@ -83,9 +83,12 @@ Build recipes in tools/build and the separate Mesa repository are maintained ind
 accepts BC250_RADV_SOURCE, BC250_RADV_BUILD, BC250_UMD_SOURCE and BC250_UMD_BUILD;
 source/build pairs must correspond and builds emit compile_commands.json. Use
 those overrides when migrating from the current scratch-tree defaults. The two
-UMD variables have no default: without them, or with a tree that lacks a file
-that a gate reads, umd-contract, surface-control and umd-analysis fail and name
-the missing input.
+UMD variables have no default: without them, or with a variable that names no
+directory, quick.ps1 refuses the run before its first gate and prints one line
+that names the variable. With a tree that lacks a file that a gate reads,
+umd-contract, surface-control and umd-analysis fail and name the missing input.
+A run without the x64 Visual Studio developer environment imports it itself
+(tools/quality/quality-env.ps1).
 
 Header tools can assist edits: [clangd include management](https://clangd.llvm.org/guides/include-cleaner).
 The build must still reject undeclared calls: [MSVC C4013](https://learn.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warning-level-3-c4013).
