@@ -5392,6 +5392,9 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
             // BD-197: and only while the flip path programs them, which is the rule of DcnPlaneFormatsOpen.
             if (DcnPlaneFormatsOpen(device)) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+            // BD-223 step R3: this parser admits the scan-out record of a displayable surface
+            // (surface_resource_private.h). A version answer, so both flavours say it, and only with DIRECT_FLIP.
+            if (scanout.flags & BC250_SCANOUT_CAPS_DIRECT_FLIP) scanout.flags |= BC250_SCANOUT_CAPS_DISPLAYABLE;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             // BD-223 (docs/design/mpo.md): the user-mode half of the MPO contract follows DRIVERCAPS
             // SupportMultiPlaneOverlay (WddmDriverCaps), with the same plane count: MPO_PLANE1 goes with

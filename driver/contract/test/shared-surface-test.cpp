@@ -327,6 +327,61 @@ int main() {
         check(Bc250SharedSurfaceDecodeAdmitted(resource, sizeof(resource), kAllocation, sizeof(kAllocation), &admit,
                                                &out) == BC250_SHARED_SURFACE_MALFORMED,
               "decode admitted: an access bit of no meaning is refused by every policy");
+        // BD-223 step R3: the scan-out record of a displayable surface with no primary descriptor. The D3D11 opener
+        // (whose mask is the whole access mask) takes it; an opener whose mask lacks the bit refuses it by the
+        // access name, and DISPLAYABLE without SCANOUT is a record the kernel driver refuses, so the policy name.
+        const unsigned long shown = BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE;
+        std::memcpy(resource, kResource, sizeof(resource));
+        resource[12] = static_cast<unsigned char>(shown);
+        check(Bc250SharedSurfaceDecodeAdmitted(resource, sizeof(resource), kAllocation, sizeof(kAllocation), &admit,
+                                               &out) == BC250_SHARED_SURFACE_OK &&
+                  out.Access == shown,
+              "decode admitted: SCANOUT | DISPLAYABLE, for the D3D11 opener's mask");
+        const char* why = 0;
+        admit.AccessMask = BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT |
+                           BC250_SURFACE_RESOURCE_CPU_READ;
+        check(Bc250SharedSurfaceDecodeDetail(resource, sizeof(resource), kAllocation, sizeof(kAllocation), &admit,
+                                             &out, &why) == BC250_SHARED_SURFACE_MALFORMED &&
+                  is(why, BC250_SHARED_SURFACE_WHY_ACCESS),
+              "decode admitted: a mask without DISPLAYABLE refuses it as \"record access\"");
+        check(is(why_with(12, shown), BC250_SHARED_SURFACE_WHY_ACCESS),
+              "why: the strict form refuses SCANOUT | DISPLAYABLE as \"record access\"");
+        check(is(why_with(12, BC250_SURFACE_RESOURCE_DISPLAYABLE), BC250_SHARED_SURFACE_WHY_POLICY),
+              "why: DISPLAYABLE with no SCANOUT is \"record policy\"");
+        check(is(why_with(12, shown | BC250_SURFACE_RESOURCE_PRIMARY), BC250_SHARED_SURFACE_WHY_POLICY),
+              "why: DISPLAYABLE next to PRIMARY is \"record policy\"");
+        admit.AccessMask = BC250_SURFACE_RESOURCE_ACCESS_MASK;
+    }
+
+    // The encoder writes the displayable scan-out record, and the D3D11 opener's form reads it back unchanged.
+    {
+        BC250_SHARED_SURFACE s, back;
+        BC250_WDDM_ALLOCATION_PRIVATE allocation;
+        BC250_SURFACE_RESOURCE_PRIVATE resource;
+        BC250_SHARED_SURFACE_ADMIT admit;
+        admit.RequireShared = 1;
+        admit.AccessMask = BC250_SURFACE_RESOURCE_ACCESS_MASK;
+        std::memset(&s, 0, sizeof(s));
+        s.Width = 1920;
+        s.Height = 1080;
+        s.Pitch = 7680;
+        s.DxgiFormat = 87;                                      // DXGI_FORMAT_B8G8R8A8_UNORM
+        s.D3dDdiFormat = 21;                                    // D3DDDIFMT_A8R8G8B8
+        s.BindFlags = BC250_SHARED_BIND_RENDER_TARGET;
+        s.BytesPerPixel = 4;
+        s.Size = 7680ull * 1080;
+        s.Shared = 1;
+        s.Access = BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE;
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_OK &&
+                  resource.Access == s.Access,
+              "encode: SCANOUT | DISPLAYABLE is a record the kernel driver admits");
+        check(Bc250SharedSurfaceDecodeAdmitted(&resource, sizeof(resource), &allocation, sizeof(allocation), &admit,
+                                               &back) == BC250_SHARED_SURFACE_OK &&
+                  back.Access == s.Access && back.Width == 1920 && back.Height == 1080,
+              "encode: the D3D11 opener reads the displayable record back");
+        s.Access = BC250_SURFACE_RESOURCE_DISPLAYABLE;
+        check(Bc250SharedSurfaceEncode(&s, &allocation, &resource) == BC250_SHARED_SURFACE_MALFORMED,
+              "encode: DISPLAYABLE alone is refused, because the kernel driver refuses it");
     }
 
     // Every composed row, encoded and decoded: the pitch and size rules are the same at 1, 4 and 8 bytes a pixel.

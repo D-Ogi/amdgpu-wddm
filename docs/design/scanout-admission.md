@@ -36,7 +36,8 @@ ask, one per allocation path:
   reader (`driver/kmd/umd_blob.c`) refuses the flag below version 3, outside the VRAM heap, with any of
   the four words zero, or with rows that do not fit in the allocation the same blob asked for.
 - **E26R access bit `SCANOUT`** (`driver/kmd/surface_resource_private.h`): for an LB7A type-0 surface,
-  which describes itself. The bit implies `PRIMARY` and excludes `CPU_READ`. The reader refuses a record
+  which describes itself. The bit implies `PRIMARY` or, from BD-223 step R3, `DISPLAYABLE` (a displayable
+  surface with no primary descriptor, [mpo.md](mpo.md)), and excludes `CPU_READ`. The reader refuses a record
   that breaks either rule outright. The bit also moves the allocation out of the shared aperture into the local
   segment, because the aperture is the one placement a scanned-out surface can never have.
 

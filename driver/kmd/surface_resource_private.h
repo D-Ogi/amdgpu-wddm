@@ -27,12 +27,22 @@ static __inline int Bc250SurfaceGpuOnlyRecordInit(BC250_SURFACE_GPU_ONLY_RECORD*
 }
 // Access intent bits. PRIMARY and CPU_READ are v2's; SCANOUT is M15.14's and means the resource's
 // allocations are meant to reach SetVidPnSourceAddress, so they belong in the local segment the
-// DirectFlip descriptor names rather than in the shared aperture. It implies PRIMARY and excludes
-// CPU_READ: a scanned-out surface has no cached CPU reader.
+// DirectFlip descriptor names rather than in the shared aperture. It implies PRIMARY or DISPLAYABLE and
+// excludes CPU_READ: a scanned-out surface has no cached CPU reader.
 #define BC250_SURFACE_RESOURCE_PRIMARY 0x1ul
 #define BC250_SURFACE_RESOURCE_CPU_READ 0x2ul
 #define BC250_SURFACE_RESOURCE_SCANOUT 0x4ul
-#define BC250_SURFACE_RESOURCE_ACCESS_MASK 0x7ul
+// BD-223 step R3 (docs/design/mpo.md, "The scan-out surface"): the buffer of a flip-model chain that the runtime
+// created as a displayable surface (D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE) with no primary descriptor,
+// so with no video present source. A D3D11 windowed or borderless chain is such a surface. DISPLAYABLE takes the
+// place of PRIMARY next to SCANOUT: the allocation gets the scan-out placement, and it can reach a plane only
+// through the multiplane-overlay present, because a DirectFlip pair needs two managed primaries of one video
+// present source (ref/ddi-display/d3d10umddi.md, PFND3D11_1DDI_CHECKDIRECTFLIPSUPPORT). The bit is valid only in a
+// v3 record and only with SCANOUT, never with PRIMARY or CPU_READ. 0x8 is not used here: it is the v4 group's
+// NO_CPU_ACCESS. A kernel driver before this bit refuses such a record, so a shell writes it only while the scan-out
+// caps trailer carries BC250_SCANOUT_CAPS_DISPLAYABLE (driver/contract/bc250_scanout_caps.h).
+#define BC250_SURFACE_RESOURCE_DISPLAYABLE 0x10ul
+#define BC250_SURFACE_RESOURCE_ACCESS_MASK 0x17ul
 // The only video present source display.c offers and the only one SetVidPnSourceAddress accepts
 // (wddm.c). Every flip-eligible primary names it. A mode list is the change that must come first if
 // this ever stops being 0, and the DirectFlip rule refuses anything else until then
@@ -66,11 +76,17 @@ static __inline int Bc250SurfaceResourcePolicy(const void* Data, unsigned int By
     if (!((words[1]==2 && Bytes==4*sizeof(unsigned long)) ||
         (words[1]==BC250_SURFACE_RESOURCE_TEXTURE_VERSION && Bytes==sizeof(BC250_SURFACE_RESOURCE_PRIVATE)))) return 0;
     if (words[3]&~BC250_SURFACE_RESOURCE_ACCESS_MASK) return 0;
-    // SCANOUT is a scan-out primary and nothing else: without PRIMARY it is a resource claiming the
-    // display pipeline for a surface the runtime never made a primary, and with CPU_READ it is asking
-    // for a cached CPU mapping of a plane the display core reads.
+    // DISPLAYABLE (R3) is a v3 bit, and it means only "a scan-out surface with no video present source": with
+    // PRIMARY it would say both, and without SCANOUT it asks for nothing.
+    if ((words[3]&BC250_SURFACE_RESOURCE_DISPLAYABLE) &&
+        (words[1]!=BC250_SURFACE_RESOURCE_TEXTURE_VERSION || (words[3]&BC250_SURFACE_RESOURCE_SCANOUT)==0 ||
+         (words[3]&BC250_SURFACE_RESOURCE_PRIMARY))) return 0;
+    // SCANOUT is a scan-out primary or a scan-out displayable surface and nothing else: with neither it is a
+    // resource claiming the display pipeline for a surface the runtime never made displayable, and with CPU_READ
+    // it is asking for a cached CPU mapping of a plane the display core reads.
     if ((words[3]&BC250_SURFACE_RESOURCE_SCANOUT) &&
-        ((words[3]&BC250_SURFACE_RESOURCE_PRIMARY)==0 || (words[3]&BC250_SURFACE_RESOURCE_CPU_READ))) return 0;
+        ((words[3]&(BC250_SURFACE_RESOURCE_PRIMARY|BC250_SURFACE_RESOURCE_DISPLAYABLE))==0 ||
+         (words[3]&BC250_SURFACE_RESOURCE_CPU_READ))) return 0;
     *SharedCpu=(int)words[2];
     *CachedCpu=*SharedCpu && (words[3]&BC250_SURFACE_RESOURCE_CPU_READ)!=0 &&
         (words[3]&BC250_SURFACE_RESOURCE_PRIMARY)==0;

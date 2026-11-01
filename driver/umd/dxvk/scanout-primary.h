@@ -17,10 +17,14 @@
 //                view), sets it: "1" or 1 asks, any other value is off (ScanoutPrimary=0 is the rollback).
 //                The environment wins over the machine value.
 //   NotPrimary   the swap-chain buffer came without a primary descriptor (a DISPLAYABLE surface of a
-//                windowed flip-model chain, M746). The record's PRIMARY bit and the video present source
-//                come from that descriptor, and both the kernel driver's SCANOUT policy and the front's
-//                rule demand PRIMARY, so such a buffer cannot ask for scan-out. The line names the case so
-//                that a trial can say which shape a game uses.
+//                windowed flip-model chain, M746), and the trailer does not open such a surface
+//                (bc250_scanout_displayable_open: DIRECT_FLIP, DISPLAYABLE and MPO). The record's PRIMARY bit
+//                and the video present source come from that descriptor, so the buffer has neither. BD-223 step
+//                R3: while the trailer opens it, the buffer goes through the shared rule below with the
+//                committed mode as its only offered geometry, and an admitted one gets SCANOUT with
+//                BC250_SURFACE_RESOURCE_DISPLAYABLE in place of PRIMARY. It can then reach a plane only through
+//                the multiplane-overlay present; the front's DirectFlip rule still demands two primaries. The
+//                line names the case so that a trial can say which shape a game uses.
 //   VidPnSource  the descriptor names a video present source other than the one this adapter has
 //                (BC250_SCANOUT_VIDPN_SOURCE).
 //   then the shared rule: ForceCpu, DesktopRoute (the compositor's record, driver/contract/bc250_desktop_route.h,
@@ -147,21 +151,42 @@ struct ScanoutPrimaryDecision {
     bool desktop_read=false;      // whether the decision read the compositor's record
     unsigned desktop_status=BC250_DESKTOP_ROUTE_READ_ABSENT;
     bc250_desktop_route desktop{};
+    // BD-223 step R3: the rule ran for a displayable surface with no primary descriptor (the trailer opened it). An
+    // admitted one gets SCANOUT | DISPLAYABLE and not PRIMARY (scanout_primary_record_access below).
+    bool displayable=false;
 };
+// The E26R access bits that an admitted decision adds to the record. 0 for every other answer, so the caller ORs
+// it into the record unconditionally. A primary keeps the PRIMARY bit the caller already wrote; a displayable
+// surface has no PRIMARY bit, and the caller writes none.
+inline unsigned long scanout_primary_record_access(const ScanoutPrimaryDecision &decision) noexcept {
+    if (!decision.admitted) return 0ul;
+    return decision.displayable ? (BC250_SURFACE_RESOURCE_SCANOUT|BC250_SURFACE_RESOURCE_DISPLAYABLE) :
+                                  BC250_SURFACE_RESOURCE_SCANOUT;
+}
 // primary is whether the runtime gave a primary descriptor, vidpn_source the descriptor's source, dxgi the
 // chain's DXGI format, width, height and pitch the LB7A description this shell writes, and mode_width and
-// mode_height the descriptor's ModeDesc (0 without a descriptor). The switch is asked before the adapter
-// query, so a start with the request off makes no query at all.
+// mode_height the descriptor's ModeDesc (0 without a descriptor), and displayable whether the runtime marked the
+// buffer D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE. The switch is asked before the adapter query, so a start
+// with the request off makes no query at all. A buffer that is neither a primary nor displayable makes none either.
 inline ScanoutPrimaryDecision scanout_primary_decide(const ScanoutSource *source,bool primary,UINT vidpn_source,
     unsigned dxgi,unsigned width,unsigned height,unsigned pitch,unsigned mode_width=0,
-    unsigned mode_height=0) noexcept {
+    unsigned mode_height=0,bool displayable=false) noexcept {
     ScanoutPrimaryDecision out{};
     if (!source) return out;
     out.switch_state=source->switch_state;
     if (!scanout_primary_requested(source->switch_state)) return out;
-    if (!primary) { out.reason=ScanoutPrimaryReason::NotPrimary; return out; }
-    if (vidpn_source!=BC250_SCANOUT_VIDPN_SOURCE) { out.reason=ScanoutPrimaryReason::VidPnSource; return out; }
-    out.caps=query_scanout_caps(source->adapter,source->query);
+    if (!primary) {
+        out.reason=ScanoutPrimaryReason::NotPrimary;
+        if (!displayable) return out;
+        // BD-223 step R3. No descriptor, so no ModeDesc and no video present source to check: the committed mode,
+        // or with MPO a geometry plane 0 can scale to it, is the only admitted geometry (offered_mode 0 below).
+        out.caps=query_scanout_caps(source->adapter,source->query);
+        if (!bc250_scanout_displayable_open(&out.caps)) return out;
+        out.displayable=true;
+        mode_width=mode_height=0;
+    } else if (vidpn_source!=BC250_SCANOUT_VIDPN_SOURCE) {
+        out.reason=ScanoutPrimaryReason::VidPnSource; return out;
+    } else out.caps=query_scanout_caps(source->adapter,source->query);
     out.desktop_read=source->desktop_route!=nullptr;
     if (out.desktop_read) out.desktop_status=source->desktop_route(&out.desktop);
     // C71: D3DKMT_SETDISPLAYMODE takes the new mode's primary as input, so the runtime creates that primary

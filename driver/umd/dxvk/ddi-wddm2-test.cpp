@@ -580,8 +580,11 @@ void scanout_primary() {
     primary.VidPnSourceId=0;
     auto window=desc; window.pPrimaryDesc=nullptr;
     window.MiscFlags=D3D10_DDI_RESOURCE_MISC_SHARED|D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE;
+    // BD-223 step R3: a displayable buffer reads the trailer (one query), and a trailer without DISPLAYABLE and MPO
+    // keeps it composed with the record it always had.
     CHECK(convert_runtime_resource(window,&runtimeResource,request,texture,&on)==S_OK && !request.scanout &&
-          !request.primary && request.displayable && !request.texture.Access && adapterQueries==queries);
+          !request.primary && request.displayable && !request.texture.Access && adapterQueries==queries+1);
+    CHECK(scanout_primary_decide(&on,false,0,87,1920,1200,7680,0,0,true).reason==R::NotPrimary);
     // The shared rule, one clause at a time, against the trailer of the create.
     ScanoutSource cpu=on; cpu.force_cpu=1;
     CHECK(composed(&cpu) && scanout_primary_decide(&cpu,true,0,87,1920,1200,7680).reason==R::ForceCpu);
@@ -673,7 +676,7 @@ void scanout_primary() {
     // conversion, at the scan-out pitch. The kernel driver's plane check decides each flip of it. The limits
     // are the shared rule's (bc250_scanout_mpo_geometry); the 1280x720 chain asks although the kernel
     // driver's present stage refuses its pitch at the plane check. A windowed buffer without a primary
-    // descriptor still cannot ask, because the kernel driver's SCANOUT policy demands PRIMARY.
+    // descriptor cannot ask on this trailer: it asks only when the trailer also has DISPLAYABLE (step R3 below).
     trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_MPO;
     mip.TexelHeight=1080;
     CHECK(convert(&on)==S_OK && request.scanout && request.primary && request.surface.Height==1080 &&
@@ -704,6 +707,60 @@ void scanout_primary() {
     CHECK(scanout_primary_decide(&on,true,1,87,1920,1080,7680).reason==R::VidPnSource);
     CHECK(convert_runtime_resource(window,&runtimeResource,request,texture,&on)==S_OK && !request.scanout &&
           !request.primary && request.displayable && !request.texture.Access);
+    // BD-223 step R3: with DISPLAYABLE next to DIRECT_FLIP and MPO the window buffer asks too. Its record says
+    // SCANOUT | DISPLAYABLE and no PRIMARY, the compositor's side reads it as scannable, and the opener takes it.
+    // The front's DirectFlip rule still refuses it (no primary): the overlay present is its only route.
+    {
+        const unsigned open=BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_MPO|BC250_SCANOUT_CAPS_DISPLAYABLE;
+        const unsigned long shown=BC250_SURFACE_RESOURCE_SCANOUT|BC250_SURFACE_RESOURCE_DISPLAYABLE;
+        trailerFlags=open;
+        unsigned before=adapterQueries;
+        CHECK(convert_runtime_resource(window,&runtimeResource,request,texture,&on)==S_OK && request.scanout &&
+              !request.primary && request.displayable && request.vidpn_source==0 && request.surface.Height==1080 &&
+              request.surface.Pitch==bc250_scanout_primary_pitch(1920,4) && request.texture.Access==shown &&
+              adapterQueries==before+1);
+        CHECK(WddmGdiRecordScannable(&request.texture,sizeof(request.texture)));
+        CHECK(decode_open_resource(openArgs,decodedSurface,decodedDesc)==S_OK && decodedDesc.Width==1920 &&
+              decodedDesc.Height==1080 && decodedSurface.Pitch==7680);
+        // A primary that the runtime also marked displayable stays a primary: PRIMARY | SCANOUT, no DISPLAYABLE.
+        auto both=desc; both.MiscFlags|=D3DWDDM2_0DDI_RESOURCE_MISC_DISPLAYABLE_SURFACE;
+        CHECK(convert_runtime_resource(both,&runtimeResource,request,texture,&on)==S_OK && request.scanout &&
+              request.primary && request.displayable &&
+              request.texture.Access==(BC250_SURFACE_RESOURCE_PRIMARY|BC250_SURFACE_RESOURCE_SCANOUT));
+        const auto shownAs=[&](const ScanoutSource *source,unsigned dxgi,unsigned width,unsigned height,unsigned pitch,
+                               unsigned modeWidth=0,unsigned modeHeight=0) {
+            return scanout_primary_decide(source,false,0,dxgi,width,height,pitch,modeWidth,modeHeight,true);
+        };
+        const ScanoutPrimaryDecision admitted=shownAs(&on,87,1920,1200,7680);
+        CHECK(admitted.reason==R::Admitted && admitted.admitted && admitted.displayable &&
+              scanout_primary_record_access(admitted)==shown);
+        CHECK(shownAs(&on,87,1280,720,5120).reason==R::Admitted);
+        CHECK(shownAs(&on,87,119,75,512).reason==R::SourceGeometry);
+        CHECK(shownAs(&on,87,1280,720,5376).reason==R::Pitch);
+        CHECK(shownAs(&on,UINT(DXGI_FORMAT_R16G16B16A16_FLOAT),1280,720,10240).reason==R::Format);
+        // No descriptor, so no offered mode: a mode the caller passes is not used. 4000x1200 is wider than both
+        // the mode and BC250_MPO_MAX_SHRINK_WIDTH; a primary naming that mode would pass the geometry clause.
+        CHECK(shownAs(&on,87,4000,1200,bc250_scanout_primary_pitch(4000,4),4000,1200).reason==R::SourceGeometry);
+        CHECK(scanout_primary_decide(&on,true,0,87,4000,1200,bc250_scanout_primary_pitch(4000,4),4000,1200).reason==
+              R::Admitted);
+        CHECK(shownAs(&cpu,87,1920,1200,7680).reason==R::ForceCpu);
+        CHECK(shownAs(&unread,87,1920,1200,7680).reason==R::DesktopRoute);
+        CHECK(scanout_primary_record_access(shownAs(&cpu,87,1920,1200,7680))==0ul);
+        // The off switch and a buffer that is neither a primary nor displayable make no query.
+        before=adapterQueries;
+        CHECK(shownAs(&off,87,1920,1200,7680).reason==R::Off && adapterQueries==before);
+        CHECK(scanout_primary_decide(&on,false,0,87,1920,1200,7680).reason==R::NotPrimary && adapterQueries==before);
+        // Each of the three trailer bits is needed: without one the buffer keeps its composed record.
+        for (unsigned missing:{unsigned(BC250_SCANOUT_CAPS_DIRECT_FLIP),unsigned(BC250_SCANOUT_CAPS_MPO),
+                               unsigned(BC250_SCANOUT_CAPS_DISPLAYABLE)}) {
+            trailerFlags=open&~missing;
+            CHECK(convert_runtime_resource(window,&runtimeResource,request,texture,&on)==S_OK && !request.scanout &&
+                  request.displayable && !request.texture.Access);
+            const ScanoutPrimaryDecision closed=shownAs(&on,87,1920,1200,7680);
+            CHECK(closed.reason==R::NotPrimary && !closed.displayable && !scanout_primary_record_access(closed));
+        }
+        trailerFlags=BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_MPO;
+    }
     // The MPO flag alone is no trailer, and without it the same chain stays composed.
     trailerFlags=BC250_SCANOUT_CAPS_MPO;
     CHECK(composed(&on) && scanout_primary_decide(&on,true,0,87,1920,1080,7680).reason==R::CapsClosed);

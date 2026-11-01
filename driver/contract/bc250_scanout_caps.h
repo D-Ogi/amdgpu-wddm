@@ -68,6 +68,12 @@
 // with LabScaledPlane bit 2 as a lab question: its check still refuses a second plane, and DWM composes such a
 // set. A release kernel driver sets it only when an overlay plane on a second pipe scans out (MPO step S3).
 #define BC250_SCANOUT_CAPS_MPO_PLANE1 0x10u
+// BD-223 step R3: the kernel driver admits the E26R scan-out record of a displayable surface, SCANOUT with
+// BC250_SURFACE_RESOURCE_DISPLAYABLE in place of PRIMARY (driver/kmd/surface_resource_private.h), and places such
+// an allocation as a scan-out surface. It is the version answer of the record parser, so both flavours set it,
+// and only with DIRECT_FLIP. A kernel driver without it refuses the record and with it the whole create, so a
+// shell writes the record only while the bit is set (bc250_scanout_displayable_open).
+#define BC250_SCANOUT_CAPS_DISPLAYABLE 0x20u
 
 // The plane limits that the user-mode multiplane-overlay caps report and that the shells apply to a scan-out
 // primary smaller than the source mode. They are the kernel driver's stage limits (driver/kmd/dcn_plane.h):
@@ -163,4 +169,18 @@ static __inline int bc250_scanout_mpo_format(const struct bc250_scanout_caps* ca
     if (!caps || !row) return 0;
     if (!(caps->flags & BC250_SCANOUT_CAPS_MPO) || !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP)) return 0;
     return bc250_scanout_format_admitted(row, caps->flags);
+}
+
+// BD-223 step R3: may a shell ask for the scan-out placement of a displayable surface with no primary descriptor?
+// Three bits, all from this trailer: DIRECT_FLIP (this start flips a client surface at all), DISPLAYABLE (the
+// kernel driver's parser admits the record) and MPO (the kernel driver answers the multiplane-overlay check). MPO
+// is needed because the overlay present is the only route of such a surface to a plane: a DirectFlip pair needs
+// two managed primaries of one video present source, and a displayable surface has none. Without MPO the request
+// would cost the surface its aperture placement and its CPU mapping, and no flip would follow. The geometry,
+// format and pitch clauses stay the shared rule's (bc250_scanout_primary_rule). A null or foreign caps is "no".
+static __inline int bc250_scanout_displayable_open(const struct bc250_scanout_caps* caps)
+{
+    const unsigned int need = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_DISPLAYABLE | BC250_SCANOUT_CAPS_MPO;
+    if (!caps || caps->magic != BC250_SCANOUT_CAPS_MAGIC || caps->version != BC250_SCANOUT_CAPS_VERSION) return 0;
+    return (caps->flags & need) == need;
 }

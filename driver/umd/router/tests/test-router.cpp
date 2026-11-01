@@ -1314,6 +1314,14 @@ static void FrontRuleTests()
         a = client;
         a.primary = false;
         run(caps, &a, &compositor, FlipRefusal::primary, "a client that is not a primary");
+        // BD-223 step R3: a displayable buffer's scan-out record (SCANOUT | DISPLAYABLE, no PRIMARY) under a trailer
+        // that opens it. DirectFlip still needs two primaries: the overlay present is its only route.
+        a.record = FlipRecord(true, BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE);
+        {
+            bc250_scanout_caps open = caps;
+            open.flags |= BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_DISPLAYABLE;
+            run(open, &a, &compositor, FlipRefusal::primary, "a displayable client with no primary descriptor");
+        }
         a = client;
         a.vidpn_source = 1;
         run(caps, &a, &compositor, FlipRefusal::vidpn_source, "a client on another video present source");
@@ -1597,12 +1605,32 @@ static void FrontRecordTests()
     CHECK(DecodeRecord(&v3, sizeof(v3), &out), "a 64-byte v3 record was refused");
     CHECK(!memcmp(&out, &v3, sizeof(out)), "a v3 record was not copied through unchanged");
     CHECK(WddmGdiRecordScannable(&out, sizeof(out)), "a v3 SCANOUT record is not scannable");
+    // BD-223 step R3: the record of a displayable surface with no primary descriptor, SCANOUT | DISPLAYABLE. The
+    // front decodes it and finds it scannable, and the opened resource is not a primary (front-device.cpp reads
+    // the PRIMARY bit), so the DirectFlip rule refuses it by "primary" (FrontRuleTests).
+    BC250_SURFACE_RESOURCE_PRIVATE shown = FlipRecord(true, BC250_SURFACE_RESOURCE_SCANOUT |
+                                                                BC250_SURFACE_RESOURCE_DISPLAYABLE);
+    shown.Width = 1920;
+    shown.Height = 1080;
+    shown.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    CHECK(DecodeRecord(&shown, sizeof(shown), &out), "a v3 SCANOUT | DISPLAYABLE record was refused");
+    CHECK(!memcmp(&out, &shown, sizeof(out)) && !(out.Access & BC250_SURFACE_RESOURCE_PRIMARY),
+          "a displayable record was not copied through unchanged");
+    CHECK(WddmGdiRecordScannable(&out, sizeof(out)), "a v3 SCANOUT | DISPLAYABLE record is not scannable");
     // The refusals. Each one leaves a zeroed record, which both derivations refuse.
     struct Bad { const void *data; unsigned int bytes; const char *what; };
     unsigned long noMagic[3] = {0x12345678ul, 3ul, 0ul};
     unsigned long badAccess[4] = {BC250_SURFACE_RESOURCE_MAGIC, 2ul, 1ul, 0x40ul};
     unsigned long scanoutNoPrimary[4] = {BC250_SURFACE_RESOURCE_MAGIC, 2ul, 1ul, BC250_SURFACE_RESOURCE_SCANOUT};
+    unsigned long shownV2[4] = {BC250_SURFACE_RESOURCE_MAGIC, 2ul, 1ul,
+                                BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE};
+    BC250_SURFACE_RESOURCE_PRIVATE shownAlone = FlipRecord(true, BC250_SURFACE_RESOURCE_DISPLAYABLE);
+    BC250_SURFACE_RESOURCE_PRIVATE shownPrimary = FlipRecord(true, BC250_SURFACE_RESOURCE_PRIMARY |
+        BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE);
     const Bad bad[] = {
+        {shownV2, sizeof(shownV2), "a v2 record with DISPLAYABLE"},
+        {&shownAlone, sizeof(shownAlone), "DISPLAYABLE without SCANOUT"},
+        {&shownPrimary, sizeof(shownPrimary), "DISPLAYABLE next to PRIMARY"},
         {nullptr, 0, "a null blob"},
         {v1, 4, "four bytes"},
         {v1, 8, "eight bytes"},

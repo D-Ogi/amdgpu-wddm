@@ -552,6 +552,43 @@ static void RecordDerivation(void)
     CHECK(!WddmGdiRecordScannable(w, v2));
     CHECK(!Bc250SurfaceResourceIntent(w, v2, &version, &access) && !version && !access);
 
+    // (d2) BD-223 step R3: a displayable surface with no primary descriptor (a windowed flip-model chain)
+    // asks with SCANOUT | DISPLAYABLE in place of PRIMARY. It gets the same placement as a scan-out primary,
+    // the compositor's side reads it as scannable. A kernel driver before R3 refuses the bit as outside its
+    // access mask, which is why a shell writes it only when the trailer advertises BC250_SCANOUT_CAPS_DISPLAYABLE.
+    bytes = Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+                   BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE, v3);
+    CHECK(WddmGdiRecordPolicy(w, bytes, &p));
+    CHECK(!p.Aperture && !p.CpuVisible && !p.Cached && p.AccessedPhysically);
+    CHECK(WddmGdiScannable(&p) && WddmGdiRecordScannable(w, bytes));
+    CHECK(WddmGdiPolicyBits(&p) == (8ul | 16ul));
+    CHECK(Bc250SurfaceResourceScanout(w, bytes));
+    CHECK(Bc250SurfaceResourceIntent(w, bytes, &version, &access) &&
+          version == BC250_SURFACE_RESOURCE_TEXTURE_VERSION &&
+          access == (BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE));
+    CHECK(OldRecordPolicy(w, bytes, &old) && !memcmp(&p, &old, sizeof(p)));
+    {
+        typedef char access_mask[BC250_SURFACE_RESOURCE_ACCESS_MASK == 0x17ul ? 1 : -1];
+        (void)sizeof(access_mask);
+    }
+    // DISPLAYABLE says why a surface without PRIMARY may ask, so it is valid only next to SCANOUT, never next
+    // to PRIMARY or CPU_READ, and only in v3.
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+        BC250_SURFACE_RESOURCE_DISPLAYABLE, v3), &p));                       // no SCANOUT
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+        BC250_SURFACE_RESOURCE_PRIMARY | BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE,
+        v3), &p));                                                          // a primary is not displayable
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+        BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE | BC250_SURFACE_RESOURCE_CPU_READ,
+        v3), &p));                                                          // a cached reader of a plane
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 2, 1,
+        BC250_SURFACE_RESOURCE_SCANOUT | BC250_SURFACE_RESOURCE_DISPLAYABLE, v2), &p));   // v2
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, 2, 1, BC250_SURFACE_RESOURCE_DISPLAYABLE, v2), &p));
+    CHECK(!WddmGdiRecordPolicy(w, Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+        BC250_SURFACE_RESOURCE_SCANOUT | 0x20ul, v3), &p));                  // outside the access mask
+    CHECK(!WddmGdiRecordScannable(w, Record(w, BC250_SURFACE_RESOURCE_TEXTURE_VERSION, 1,
+        BC250_SURFACE_RESOURCE_DISPLAYABLE, v3)));
+
     // (e) The shapes the parser must refuse, each for its own reason. A refused record means the DDI
     // fails before any allocation object exists; a placement is never derived from one.
     CHECK(!WddmGdiRecordPolicy(w, Record(w, 1, 1, 0, v2), &p));              // v1 at 16 bytes

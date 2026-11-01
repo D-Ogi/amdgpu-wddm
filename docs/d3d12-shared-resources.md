@@ -328,7 +328,7 @@ are a contract: the lab kit matches them, so they are not renamed silently.
 | `record magic`, `record version` | the E26R magic, or a version that is not 3 in a 64-byte record |
 | `record policy` | the kernel driver's own parser (`Bc250SurfaceResourcePolicy`) refuses the access bits, so nobody placed this memory the way the record claims |
 | `record shared` | the record shares nothing (`Shared != 1`), which the strict D3D12 policy needs |
-| `record access` | an access intent the opener does not admit: `PRIMARY`, `CPU_READ` or `SCANOUT` under the strict policy, whose mask is 0 |
+| `record access` | an access intent the opener does not admit: `PRIMARY`, `CPU_READ`, `SCANOUT` or `DISPLAYABLE` under the strict policy, whose mask is 0 |
 | `record geometry` | the width or height is not the allocation's |
 | `record extent` | a zero edge, or one over `BC250_SHARED_MAX_EDGE` |
 | `record subresources` | more than one mip, slice or sample, or a sample quality |

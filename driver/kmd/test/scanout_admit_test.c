@@ -425,6 +425,30 @@ int main(void)
         CHECK(bc250_scanout_mpo_planes(BC250_SCANOUT_CAPS_MPO_PLANE1 | BC250_SCANOUT_CAPS_DIRECT_FLIP) == 0u);
         CHECK(bc250_scanout_mpo_planes(mpo.flags) == 1u);
         CHECK(bc250_scanout_mpo_planes(mpo.flags | BC250_SCANOUT_CAPS_MPO_PLANE1) == 2u);
+        // BD-223 step R3: a displayable surface asks only with DIRECT_FLIP, DISPLAYABLE and MPO together. The other
+        // bits do not matter, and a trailer of another magic or version is no trailer.
+        {
+            unsigned int bits;
+            struct bc250_scanout_caps shown = mpo;
+            typedef char displayable_bit[(BC250_SCANOUT_CAPS_DISPLAYABLE == 0x20u &&
+                !(BC250_SCANOUT_CAPS_DISPLAYABLE & (BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
+                    BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT | BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_MPO_PLANE1)))
+                ? 1 : -1];
+            (void)sizeof(displayable_bit);
+            for (bits = 0u; bits < 0x40u; ++bits) {
+                const unsigned int need = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO |
+                                          BC250_SCANOUT_CAPS_DISPLAYABLE;
+                shown.flags = bits;
+                CHECK(bc250_scanout_displayable_open(&shown) == ((bits & need) == need));
+            }
+            shown.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_DISPLAYABLE;
+            CHECK(bc250_scanout_displayable_open(&shown));
+            shown.magic ^= 1u;
+            CHECK(!bc250_scanout_displayable_open(&shown));
+            shown.magic ^= 1u; shown.version += 1u;
+            CHECK(!bc250_scanout_displayable_open(&shown));
+            CHECK(!bc250_scanout_displayable_open(NULL));
+        }
         // The shells' rule: the new geometry turns the geometry clause only, and every other clause stays.
         CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
               BC250_SCANOUT_PRIMARY_ADMITTED);
