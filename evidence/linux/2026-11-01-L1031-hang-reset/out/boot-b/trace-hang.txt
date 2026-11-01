@@ -1,0 +1,46 @@
+# stream start 2026-11-01T00:34:39.009341Z cmd=dd if=/sys/kernel/tracing/instances/bchang/trace_pipe bs=4096 2>/dev/null
+00:35:01.924424            <...>-5922    [002] .....  1799.723658: job_timedout: (amdgpu_job_timedout+0x4/0x290 [amdgpu])
+00:35:01.934209    kworker/u48:1-5922    [002] .....  1799.727250: sdma_reset_q: (sdma_v5_0_reset_queue+0x4/0x90 [amdgpu]) vmid=1
+00:35:01.934268    kworker/u48:1-5922    [002] .....  1799.727264: helper_begin: (amdgpu_ring_reset_helper_begin+0x4/0x40 [amdgpu])
+00:35:01.934280    kworker/u48:1-5922    [002] .....  1799.727339: sdma_reset_eng: (amdgpu_sdma_reset_engine+0x4/0x200 [amdgpu]) instance=0 caller=1
+00:35:01.934294    kworker/u48:1-5922    [002] .....  1799.727342: sdma_stop_q: (sdma_v5_0_stop_queue+0x4/0x210 [amdgpu])
+00:35:01.934466    kworker/u48:1-5922    [002] .....  1799.727460: sdma_stop_q_ret: (amdgpu_sdma_reset_engine+0x7a/0x200 [amdgpu] <- sdma_v5_0_stop_queue) rc=0
+00:35:01.934492    kworker/u48:1-5922    [002] .....  1799.727463: sdma_soft_eng: (sdma_v5_0_soft_reset_engine+0x4/0x210 [amdgpu]) instance=0
+00:35:01.934502    kworker/u48:1-5922    [002] .....  1799.727561: sdma_soft_eng_ret: (amdgpu_sdma_reset_engine+0xa7/0x200 [amdgpu] <- sdma_v5_0_soft_reset_engine) rc=0
+00:35:01.934509    kworker/u48:1-5922    [002] .....  1799.727564: sdma_restore_q: (sdma_v5_0_restore_queue+0x4/0x90 [amdgpu])
+00:35:01.934517    kworker/u48:1-5922    [002] .....  1799.728167: sdma_restore_q_ret: (amdgpu_sdma_reset_engine+0xd9/0x200 [amdgpu] <- sdma_v5_0_restore_queue) rc=0
+00:35:01.934523    kworker/u48:1-5922    [002] .....  1799.728169: sdma_reset_eng_ret: (sdma_v5_0_reset_queue+0x52/0x90 [amdgpu] <- amdgpu_sdma_reset_engine) rc=0
+00:35:01.934530    kworker/u48:1-5922    [002] .....  1799.728461: helper_end: (amdgpu_ring_reset_helper_end+0x4/0x100 [amdgpu])
+00:35:01.934537    kworker/u48:1-5922    [002] .....  1799.728474: helper_end_ret: ([unknown/kretprobe'd] <- amdgpu_ring_reset_helper_end) rc=0
+00:35:01.934544    kworker/u48:1-5922    [002] .....  1799.728476: sdma_reset_q_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- sdma_v5_0_reset_queue) rc=0
+00:35:01.934551    kworker/u48:1-5922    [002] .....  1799.728514: job_timedout_ret: (drm_sched_job_timedout+0x81/0x170 [gpu_sched] <- amdgpu_job_timedout) rc=1
+00:43:07.287518            <...>-6404    [004] .....  2285.099639: job_timedout: (amdgpu_job_timedout+0x4/0x290 [amdgpu])
+00:43:07.310159    kworker/u48:1-6404    [005] .....  2285.112018: kcq: (gfx_v10_0_reset_kcq+0x4/0x2e0 [amdgpu]) vmid=6
+00:43:07.310220    kworker/u48:1-6404    [005] .....  2285.112029: helper_begin: (amdgpu_ring_reset_helper_begin+0x4/0x40 [amdgpu])
+00:43:07.310234    kworker/u48:1-6404    [005] .....  2285.112163: helper_end: (amdgpu_ring_reset_helper_end+0x4/0x100 [amdgpu])
+00:43:07.310244    kworker/u48:1-6404    [005] .....  2285.112196: helper_end_ret: ([unknown/kretprobe'd] <- amdgpu_ring_reset_helper_end) rc=0
+00:43:07.310254    kworker/u48:1-6404    [005] .....  2285.112197: kcq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kcq) rc=0
+00:43:07.310266    kworker/u48:1-6404    [005] .....  2285.114442: job_timedout_ret: (drm_sched_job_timedout+0x81/0x170 [gpu_sched] <- amdgpu_job_timedout) rc=1
+00:43:31.854183    kworker/u48:1-6404    [005] .....  2309.675636: job_timedout: (amdgpu_job_timedout+0x4/0x290 [amdgpu])
+00:43:31.868001    kworker/u48:1-6404    [004] .....  2309.688227: kcq: (gfx_v10_0_reset_kcq+0x4/0x2e0 [amdgpu]) vmid=1
+00:43:31.868064    kworker/u48:1-6404    [004] .....  2309.688234: helper_begin: (amdgpu_ring_reset_helper_begin+0x4/0x40 [amdgpu])
+00:43:31.868078    kworker/u48:1-6404    [004] .....  2309.688365: helper_end: (amdgpu_ring_reset_helper_end+0x4/0x100 [amdgpu])
+00:43:31.868091    kworker/u48:1-6404    [004] .....  2309.688398: helper_end_ret: ([unknown/kretprobe'd] <- amdgpu_ring_reset_helper_end) rc=0
+00:43:31.868102    kworker/u48:1-6404    [004] .....  2309.688399: kcq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kcq) rc=0
+00:43:31.868818    kworker/u48:1-6404    [004] .....  2309.690655: job_timedout_ret: (drm_sched_job_timedout+0x81/0x170 [gpu_sched] <- amdgpu_job_timedout) rc=1
+00:44:08.716605    kworker/u48:2-5449    [004] .....  2346.539636: job_timedout: (amdgpu_job_timedout+0x4/0x290 [amdgpu])
+00:44:08.729099    kworker/u48:2-5449    [005] .....  2346.551125: kgq: (gfx_v10_0_reset_kgq+0x4/0x3f0 [amdgpu]) vmid=5
+00:44:08.729150    kworker/u48:2-5449    [005] .....  2346.551133: helper_begin: (amdgpu_ring_reset_helper_begin+0x4/0x40 [amdgpu])
+00:44:08.729160    kworker/u48:2-5449    [005] .....  2346.551352: helper_end: (amdgpu_ring_reset_helper_end+0x4/0x100 [amdgpu])
+00:44:08.729168    kworker/u48:2-5449    [005] .....  2346.551399: helper_end_ret: ([unknown/kretprobe'd] <- amdgpu_ring_reset_helper_end) rc=0
+00:44:08.729175    kworker/u48:2-5449    [005] .....  2346.551400: kgq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kgq) rc=0
+00:44:08.730044    kworker/u48:2-5449    [005] .....  2346.553482: job_timedout_ret: (drm_sched_job_timedout+0x81/0x170 [gpu_sched] <- amdgpu_job_timedout) rc=1
+00:44:30.731612    kworker/u48:2-5449    [002] .....  2368.555640: job_timedout: (amdgpu_job_timedout+0x4/0x290 [amdgpu])
+00:44:30.743819    kworker/u48:2-5449    [003] .....  2368.566384: kgq: (gfx_v10_0_reset_kgq+0x4/0x3f0 [amdgpu]) vmid=1
+00:44:30.743873    kworker/u48:2-5449    [003] .....  2368.566395: helper_begin: (amdgpu_ring_reset_helper_begin+0x4/0x40 [amdgpu])
+00:44:30.743882    kworker/u48:2-5449    [003] .....  2368.566619: helper_end: (amdgpu_ring_reset_helper_end+0x4/0x100 [amdgpu])
+00:44:30.743890    kworker/u48:2-5449    [003] .....  2368.566665: helper_end_ret: ([unknown/kretprobe'd] <- amdgpu_ring_reset_helper_end) rc=0
+00:44:30.743897    kworker/u48:2-5449    [003] .....  2368.566667: kgq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kgq) rc=0
+00:44:30.744950    kworker/u48:2-5449    [003] .....  2368.569269: job_timedout_ret: (drm_sched_job_timedout+0x81/0x170 [gpu_sched] <- amdgpu_job_timedout) rc=1
+00:48:18.132611 Connection to <lab address> closed by remote host.
+# stream end 2026-11-01T00:48:18.134452Z rc=255

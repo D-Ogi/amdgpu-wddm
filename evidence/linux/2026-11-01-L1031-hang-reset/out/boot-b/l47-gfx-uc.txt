@@ -1,0 +1,14 @@
+CTX  alloc                  -> ctx_id 1
+[  0.000] BO ib 4096 bytes va 0x0000000000200000 flags 0x8e (MTYPE_UC)
+[  0.000] submit gfx-wait ip AMDGPU_HW_IP_GFX words 8 release_ms 500 wait_s 10
+[  0.000] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 0 ring 0 ib_bytes 32 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 2475.139280 ---
+CS   accepted               -> seq_no 1
+[  0.501] CPU_RELEASE at 500 ms--- wait returned after 0.500 s, status 0 (completed) ---
+
+[  0.501] WAIT_CS status 0
+[  0.501] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CTX  free                   -> ok
+[  0.502] H_RESULT gfx-wait rc 0
+native exit 0

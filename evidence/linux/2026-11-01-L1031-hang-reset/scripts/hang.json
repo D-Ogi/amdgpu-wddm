@@ -1,0 +1,59 @@
+{
+ "generated_by": "scratch/linux-1031/hang/gen-hang-tables.py",
+ "pm4": {
+  "wait_header": 3221568512,
+  "wait_ctrl": 20,
+  "wait_ref": 0,
+  "wait_mask": 4294967295,
+  "wait_interval": 4,
+  "write_header": 3221436160,
+  "write_ctrl": 1049856,
+  "pad": 4294905856,
+  "pad_cite": "shader_test_util.c:620-621"
+ },
+ "sdma": {
+  "poll_header": 3221225480,
+  "poll_interval_retry": 268369924,
+  "write_header": 2,
+  "nop": 0
+ },
+ "spin_shader": {
+  "words": [
+   3213033471,
+   3212902400
+  ],
+  "cite": "llvm-mc 22.1.8 -mcpu=gfx1013: 'loop: s_branch loop; s_endpgm', llvm-objdump"
+ },
+ "sq_cmd": {
+  "kill_base": 147,
+  "vmid_shift": 28,
+  "vmid_mask": 4026531840,
+  "cite": "gc_10_1_0_sh_mask.h SQ_CMD fields, navi10_enum.h SQ_IND_CMD_CMD_KILL/MODE_BROADCAST; the value of bc250_gfx_soft_recover_vmid and the former gfx_v10_0_ring_soft_recovery"
+ },
+ "regs": {
+  "SQ_CMD": 36332,
+  "CP_VMID_RESET": 49868,
+  "CP_HQD_ACTIVE": 51244,
+  "CP_HQD_PQ_RPTR": 51276,
+  "CP_HQD_PQ_WPTR_LO": 51452,
+  "CP_HQD_DEQUEUE_REQUEST": 51332,
+  "CP_GFX_HQD_ACTIVE": 50048,
+  "CP_GFX_HQD_RPTR": 50080,
+  "CP_GFX_HQD_WPTR": 50116,
+  "GRBM_STATUS": 32784,
+  "GRBM_STATUS2": 32776,
+  "CP_STAT": 34432,
+  "CP_ME_CNTL": 34520,
+  "CP_MEC_CNTL": 33332,
+  "SDMA0_STATUS_REG": 18964,
+  "SDMA0_GFX_RB_RPTR": 19340,
+  "SDMA0_GFX_RB_WPTR": 19348,
+  "SDMA0_F32_CNTL": 18984,
+  "SDMA0_GFX_RB_CNTL": 19328,
+  "SDMA1_STATUS_REG": 25108,
+  "SDMA1_GFX_RB_RPTR": 25484,
+  "SDMA1_GFX_RB_WPTR": 25492,
+  "GCVM_L2_PROTECTION_FAULT_STATUS": 41264,
+  "GCVM_L2_PROTECTION_FAULT_CNTL": 41248
+ }
+}

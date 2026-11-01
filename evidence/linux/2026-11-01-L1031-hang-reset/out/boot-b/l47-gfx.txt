@@ -1,0 +1,13 @@
+CTX  alloc                  -> ctx_id 1
+BO   ib         4096 bytes  -> handle 1    mmap offset 0x0001008ce000 va 0x0000000000200000 flags 0xe
+[  0.000] submit gfx-wait ip AMDGPU_HW_IP_GFX words 8 release_ms 14000 wait_s 30
+[  0.001] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 0 ring 0 ib_bytes 32 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 2336.139647 ---
+CS   accepted               -> seq_no 1
+[ 10.400] WAIT_CS error WAIT_CS: errno 62 (Device timeout)
+[ 10.400] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+note: the fence never signalled, so nothing is being unmapped or closed here.
+note: amdgpu's compute job timeout (10 s by default) will fire next and start GPU recovery.
+[ 10.400] H_RESULT gfx-wait rc 2
+native exit 2

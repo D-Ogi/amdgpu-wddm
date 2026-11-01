@@ -1,0 +1,23 @@
+p:bchang/job_timedout amdgpu:amdgpu_job_timedout
+r:bchang/job_timedout_ret amdgpu:amdgpu_job_timedout rc=$retval:s32
+p:bchang/sdma_reset_q amdgpu:sdma_v5_0_reset_queue vmid=$arg2:u32
+r:bchang/sdma_reset_q_ret amdgpu:sdma_v5_0_reset_queue rc=$retval:s32
+p:bchang/sdma_reset_eng amdgpu:amdgpu_sdma_reset_engine instance=$arg2:u32 caller=$arg3:u32
+r:bchang/sdma_reset_eng_ret amdgpu:amdgpu_sdma_reset_engine rc=$retval:s32
+p:bchang/sdma_stop_q amdgpu:sdma_v5_0_stop_queue
+r:bchang/sdma_stop_q_ret amdgpu:sdma_v5_0_stop_queue rc=$retval:s32
+p:bchang/sdma_soft_eng amdgpu:sdma_v5_0_soft_reset_engine instance=$arg2:u32
+r:bchang/sdma_soft_eng_ret amdgpu:sdma_v5_0_soft_reset_engine rc=$retval:s32
+p:bchang/sdma_restore_q amdgpu:sdma_v5_0_restore_queue
+r:bchang/sdma_restore_q_ret amdgpu:sdma_v5_0_restore_queue rc=$retval:s32
+p:bchang/kgq amdgpu:gfx_v10_0_reset_kgq vmid=$arg2:u32
+r:bchang/kgq_ret amdgpu:gfx_v10_0_reset_kgq rc=$retval:s32
+p:bchang/kcq amdgpu:gfx_v10_0_reset_kcq vmid=$arg2:u32
+r:bchang/kcq_ret amdgpu:gfx_v10_0_reset_kcq rc=$retval:s32
+p:bchang/helper_begin amdgpu:amdgpu_ring_reset_helper_begin
+p:bchang/helper_end amdgpu:amdgpu_ring_reset_helper_end
+r:bchang/helper_end_ret amdgpu:amdgpu_ring_reset_helper_end rc=$retval:s32
+p:bchang/gpu_recover amdgpu:amdgpu_device_gpu_recover
+r:bchang/gpu_recover_ret amdgpu:amdgpu_device_gpu_recover rc=$retval:s32
+p:bchang/nv_reset amdgpu:nv_asic_reset
+r:bchang/nv_reset_ret amdgpu:nv_asic_reset rc=$retval:s32

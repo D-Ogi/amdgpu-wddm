@@ -1,0 +1,355 @@
+# Hang lane, Boot B, 2026-11-01 00:34-00:48Z: console output of the wrappers in scripts/wrappers/
+# Console output kept by the session tool log of the development PC, copied unchanged except for the
+# redactions in REDACTED.txt and the removal of the blank lines that the log put after each line.
+# Each block starts with its source line and the UTC time at which the development PC received it.
+
+### source line 4106, received 2026-11-01T00:35:02.419Z
+{"transport": "LAN", "relay_on": true, "readback_verified": true}
+00:34:37.616014 4,1264,1375435576,-;amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+00:34:37.616020  SUBSYSTEM=pci
+00:34:37.616026  DEVICE=+pci:0000:01:00.0
+00:34:51
+sdma mask 1
+--- ring 10 (sdma0) ---
+Last signaled fence          0x000000cf
+Last emitted                 0x000000cf
+--- ring 11 (sdma1) ---
+Last signaled fence          0x00000159
+Last emitted                 0x00000159
+[  0.000] submit sdma-poll ip AMDGPU_HW_IP_DMA words 11 release_ms 14000 wait_s 30
+[  0.001] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 2 ring 0 ib_bytes 44 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 1789.601669 ---
+CS   accepted               -> seq_no 1
+[ 10.115] WAIT_CS error WAIT_CS: errno 62 (Device timeout)
+[ 10.115] marker 0x00000000 expected 0x51DA1234 written=no
+[ 10.115] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+note: the fence never signalled, so nothing is being unmapped or closed here.
+note: amdgpu's compute job timeout (10 s by default) will fire next and start GPU recovery.
+[ 10.115] H_RESULT sdma-poll rc 2
+native exit 2
+--- ring 10 (sdma0) ---
+Last signaled fence          0x000000dc
+Last emitted                 0x000000dc
+--- ring 11 (sdma1) ---
+Last signaled fence          0x00000159
+Last emitted                 0x00000159
+== post-reset control on SDMA0
+RESULT size 4096 copied=yes guard=intact
+RESULT size 1048576 copied=yes guard=intact
+X1 PASS ring 0 route gtt2gtt
+sdma mask 3
+RESULT PASS: the whole destination holds the fill pattern
+[ 1361.957090] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[ 1375.433532] amdgpu 0000:01:00.0: amdgpu: Failed to set performance level 2
+[ 1375.435565] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[ 1375.435572] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[ 1375.435576] amdgpu 0000:01:00.0: amdgpu: Unsupported clock type
+[ 1799.711522] amdgpu 0000:01:00.0: amdgpu: Dumping IP State
+[ 1799.715067] amdgpu 0000:01:00.0: amdgpu: Dumping IP State Completed
+[ 1799.715074] amdgpu 0000:01:00.0: amdgpu: ring sdma0 timeout, signaled seq=217, emitted seq=218
+[ 1799.715084] amdgpu 0000:01:00.0: amdgpu:  Process python3 pid 6332 thread python3 pid 6332
+[ 1799.715092] amdgpu 0000:01:00.0: amdgpu: Starting sdma0 ring reset
+[ 1799.716327] amdgpu 0000:01:00.0: amdgpu: Ring sdma0 reset succeeded
+[ 1799.716335] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:35:02
+
+### source line 4256, received 2026-11-01T00:41:13.801Z
+Sun Nov  1 01:41:41 UTC 2026
+ 01:41:41 up 36 min,  0 users,  load average: 0.98, 0.53, 0.28
+1
+ 6364 DW   python3          [python3]
+== 6364 D
+[<0>] drm_exec_lock_obj+0x41/0x220 [drm_exec]
+[<0>] drm_exec_prepare_obj+0x1f/0x60 [drm_exec]
+[<0>] amdgpu_gem_object_close+0x7b/0x1f0 [amdgpu]
+[<0>] drm_gem_object_release_handle+0x38/0xe0
+[<0>] idr_for_each+0x6d/0xf0
+[<0>] drm_gem_release+0x20/0x30
+[<0>] drm_file_free+0x213/0x2b0
+[<0>] drm_release+0x5c/0x100
+[<0>] amdgpu_drm_release+0x5d/0xb0 [amdgpu]
+[<0>] __fput+0xe6/0x2b0
+[<0>] task_work_run+0x5d/0x90
+[<0>] do_exit+0x2c4/0xab0
+[<0>] make_task_dead+0x8d/0x90
+[<0>] rewind_stack_and_make_dead+0x16/0x20
+rc 0
+00:41:13Z
+
+### source line 4301, received 2026-11-01T00:42:18.964Z
+compute mask ff
+--- ring 1 (comp_1.0.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x00000007
+Last emitted                 0x00000007
+--- ring 3 (comp_1.2.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 4 (comp_1.3.0) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 5 (comp_1.0.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 6 (comp_1.1.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 7 (comp_1.2.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 8 (comp_1.3.1) ---
+Last signaled fence          0x00000001
+Last emitted                 0x00000001
+--- ring 9 (kiq_0.2.1.0) ---
+i5 exit 0
+RESULT PASS: the whole destination holds the fill pattern
+RESULT size 4096 copied=yes guard=intact
+X1 PASS ring 0 route gtt2gtt
+ 6364 DW   python3
+00:42:18Z
+
+### source line 4345, received 2026-11-01T00:43:07.736Z
+tar: Files/Git/root/hang: not found in archive
+00:42:56Z
+compute mask ff
+[  0.002] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  0.002] submit spin shader ['bf82ffff', 'bf810000'] kill_at 3.0 wait_s 30
+CS   ip_type 1 ring 0 ib_bytes 288 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 2274.663313 ---
+CS   accepted               -> seq_no 1
+[  3.002] REGS spinning GRBM_STATUS=0xA0403028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+Exception in thread Thread-1 (kill):
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/usr/lib/python3.14/threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/hang/h-jobs.py", line 165, in kill
+    vmid, early = ring_ib_vmid("comp_1.0.0", ctx["cmd_va"])
+                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/hang/h-jobs.py", line 58, in ring_ib_vmid
+    raw = open(f"{DBG}/amdgpu_ring_{ring_name}", "rb").read()
+OSError: [Errno 22] Invalid argument
+--- wait returned after 10.436 s, status 0 (completed) ---
+[ 10.438] WAIT_CS status 0
+[ 10.438] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[ 10.439] H_RESULT spin rc 0
+native exit 0
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x0000000b
+Last emitted                 0x0000000b
+== post control
+RESULT PASS: the whole destination holds the fill pattern
+[ 1990.004772] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 1990.005449] CR2: 0000000000000000 CR3: 000000010a4d5000 CR4: 0000000000350ef0
+[ 1990.006126] note: python3[6364] exited with irqs disabled
+[ 2285.087503] amdgpu 0000:01:00.0: amdgpu: Dumping IP State
+[ 2285.093014] amdgpu 0000:01:00.0: amdgpu: Dumping IP State Completed
+[ 2285.095172] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.0 timeout, signaled seq=10, emitted seq=11
+[ 2285.097026] amdgpu 0000:01:00.0: amdgpu:  Process python3 pid 6419 thread python3 pid 6419
+[ 2285.098547] amdgpu 0000:01:00.0: amdgpu: Starting comp_1.1.0 ring reset
+[ 2285.100048] amdgpu 0000:01:00.0: amdgpu: Ring comp_1.1.0 reset succeeded
+[ 2285.101188] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:43:07Z
+
+### source line 4365, received 2026-11-01T00:43:32.128Z
+00:43:21Z
+[  0.002] submit spin shader ['bf82ffff', 'bf810000'] kill_at 3.0 wait_s 30
+CS   ip_type 1 ring 0 ib_bytes 288 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 2299.508536 ---
+CS   accepted               -> seq_no 1
+[  3.003] REGS spinning GRBM_STATUS=0xA0403028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  3.003] busy compute rings (name, signaled, emitted) [('comp_1.1.0', 14, 15)]
+Exception in thread Thread-1 (kill):
+Traceback (most recent call last):
+  File "/usr/lib/python3.14/threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/usr/lib/python3.14/threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/hang/h-jobs.py", line 182, in kill
+    vmid, early = ring_ib_vmid(ring_name, ctx["cmd_va"])
+                  ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/hang/h-jobs.py", line 69, in ring_ib_vmid
+    raw = open(f"{DBG}/amdgpu_ring_{ring_name}", "rb").read()
+OSError: [Errno 22] Invalid argument
+--- wait returned after 10.167 s, status 0 (completed) ---
+[ 10.169] WAIT_CS status 0
+[ 10.169] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[ 10.170] H_RESULT spin rc 0
+native exit 0
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x0000000f
+Last emitted                 0x0000000f
+== post control
+RESULT PASS: the whole destination holds the fill pattern
+[ 2285.098547] amdgpu 0000:01:00.0: amdgpu: Starting comp_1.1.0 ring reset
+[ 2285.100048] amdgpu 0000:01:00.0: amdgpu: Ring comp_1.1.0 reset succeeded
+[ 2285.101188] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+[ 2309.663506] amdgpu 0000:01:00.0: amdgpu: Dumping IP State
+[ 2309.670054] amdgpu 0000:01:00.0: amdgpu: Dumping IP State Completed
+[ 2309.671946] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.0 timeout, signaled seq=14, emitted seq=15
+[ 2309.673538] amdgpu 0000:01:00.0: amdgpu:  Process python3 pid 6445 thread python3 pid 6445
+[ 2309.674923] amdgpu 0000:01:00.0: amdgpu: Starting comp_1.1.0 ring reset
+[ 2309.676251] amdgpu 0000:01:00.0: amdgpu: Ring comp_1.1.0 reset succeeded
+[ 2309.677338] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:43:32Z
+
+### source line 4379, received 2026-11-01T00:43:46.823Z
+-rwxr-xr-x    1 root     root          9421 Jan  1  1970 h-jobs.py
+00:43:43Z
+[  0.002] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  0.002] submit spin shader ['bf82ffff', 'bf810000'] kill_at 3.0 wait_s 30
+CS   ip_type 1 ring 0 ib_bytes 288 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 2321.226753 ---
+CS   accepted               -> seq_no 1
+[  3.002] REGS spinning GRBM_STATUS=0xA0403028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  3.003] busy compute rings (name, signaled, emitted) [('comp_1.1.0', 18, 19)]
+[  3.004] ring comp_1.1.0 rptr/wptr/swptr (768, 768, 768) job vmid 3
+[  3.004] KILL wrote SQ_CMD 0x30000093 (vmid 3)--- wait returned after 3.002 s, status 0 (completed) ---
+[  3.004] WAIT_CS status 0
+[  3.204] REGS after-kill GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  3.205] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  3.205] H_RESULT spin rc 0
+native exit 0
+--- ring 2 (comp_1.1.0) ---
+Last signaled fence          0x00000013
+Last emitted                 0x00000013
+== post control
+RESULT PASS: the whole destination holds the fill pattern
+[ 2285.098547] amdgpu 0000:01:00.0: amdgpu: Starting comp_1.1.0 ring reset
+[ 2285.100048] amdgpu 0000:01:00.0: amdgpu: Ring comp_1.1.0 reset succeeded
+[ 2285.101188] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+[ 2309.663506] amdgpu 0000:01:00.0: amdgpu: Dumping IP State
+[ 2309.670054] amdgpu 0000:01:00.0: amdgpu: Dumping IP State Completed
+[ 2309.671946] amdgpu 0000:01:00.0: amdgpu: ring comp_1.1.0 timeout, signaled seq=14, emitted seq=15
+[ 2309.673538] amdgpu 0000:01:00.0: amdgpu:  Process python3 pid 6445 thread python3 pid 6445
+[ 2309.674923] amdgpu 0000:01:00.0: amdgpu: Starting comp_1.1.0 ring reset
+[ 2309.676251] amdgpu 0000:01:00.0: amdgpu: Ring comp_1.1.0 reset succeeded
+[ 2309.677338] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:43:46Z
+
+### source line 4390, received 2026-11-01T00:44:09.083Z
+00:43:58Z
+--- ring 0 (gfx_0.0.0) ---
+Last signaled fence          0x00000015
+Last emitted                 0x00000015
+[  0.000] submit gfx-wait ip AMDGPU_HW_IP_GFX words 8 release_ms 14000 wait_s 30
+[  0.001] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 0 ring 0 ib_bytes 32 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 2336.139647 ---
+CS   accepted               -> seq_no 1
+[ 10.400] WAIT_CS error WAIT_CS: errno 62 (Device timeout)
+[ 10.400] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+note: the fence never signalled, so nothing is being unmapped or closed here.
+note: amdgpu's compute job timeout (10 s by default) will fire next and start GPU recovery.
+[ 10.400] H_RESULT gfx-wait rc 2
+native exit 2
+--- ring 0 (gfx_0.0.0) ---
+Last signaled fence          0x00000017
+Last emitted                 0x00000017
+== post controls
+RESULT PASS: the whole destination holds the fill pattern
+X1 PASS ring 0 route gtt2gtt
+[ 2309.676251] amdgpu 0000:01:00.0: amdgpu: Ring comp_1.1.0 reset succeeded
+[ 2309.677338] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+[ 2346.527500] amdgpu 0000:01:00.0: amdgpu: Dumping IP State
+[ 2346.532995] amdgpu 0000:01:00.0: amdgpu: Dumping IP State Completed
+[ 2346.534926] amdgpu 0000:01:00.0: amdgpu: ring gfx_0.0.0 timeout, signaled seq=22, emitted seq=23
+[ 2346.536520] amdgpu 0000:01:00.0: amdgpu:  Process python3 pid 6491 thread python3 pid 6491
+[ 2346.537816] amdgpu 0000:01:00.0: amdgpu: Starting gfx_0.0.0 ring reset
+[ 2346.539252] amdgpu 0000:01:00.0: amdgpu: Ring gfx_0.0.0 reset succeeded
+[ 2346.540325] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:44:09Z
+
+### source line 4406, received 2026-11-01T00:44:30.874Z
+[  0.000] submit gfx-wait ip AMDGPU_HW_IP_GFX words 8 release_ms 500 wait_s 10
+[  0.000] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 0 ring 0 ib_bytes 32 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 2358.047622 ---
+CS   accepted               -> seq_no 1
+[  0.501] CPU_RELEASE at 500 ms
+--- wait returned after 10.495 s, status 1 (STILL BUSY) ---
+[ 10.496] WAIT_CS status 1
+[ 10.496] REGS after GRBM_STATUS=0xA0003028 CP_STAT=0x88038200 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+note: the fence never signalled, so nothing is being unmapped or closed here.
+note: amdgpu's compute job timeout (10 s by default) will fire next and start GPU recovery.
+[ 10.496] H_RESULT gfx-wait rc 3
+native exit 3
+[ 2368.552757] amdgpu 0000:01:00.0: amdgpu: Starting gfx_0.0.0 ring reset
+[ 2368.554518] amdgpu 0000:01:00.0: amdgpu: Ring gfx_0.0.0 reset succeeded
+[ 2368.555937] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+0
+ 6364 DW   python3
+===
+00:43:07.310159    kworker/u48:1-6404    [005] .....  2285.112018: kcq: (gfx_v10_0_reset_kcq+0x4/0x2e0 [amdgpu]) vmid=6
+00:43:07.310254    kworker/u48:1-6404    [005] .....  2285.112197: kcq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kcq) rc=0
+00:43:31.868001    kworker/u48:1-6404    [004] .....  2309.688227: kcq: (gfx_v10_0_reset_kcq+0x4/0x2e0 [amdgpu]) vmid=1
+00:43:31.868102    kworker/u48:1-6404    [004] .....  2309.688399: kcq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kcq) rc=0
+00:44:08.729099    kworker/u48:2-5449    [005] .....  2346.551125: kgq: (gfx_v10_0_reset_kgq+0x4/0x3f0 [amdgpu]) vmid=5
+00:44:08.729175    kworker/u48:2-5449    [005] .....  2346.551400: kgq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kgq) rc=0
+00:44:30.743819    kworker/u48:2-5449    [003] .....  2368.566384: kgq: (gfx_v10_0_reset_kgq+0x4/0x3f0 [amdgpu]) vmid=1
+00:44:30.743897    kworker/u48:2-5449    [003] .....  2368.566667: kgq_ret: (amdgpu_job_timedout.cold+0x1c6/0x2fa [amdgpu] <- gfx_v10_0_reset_kgq) rc=0
+
+### source line 4437, received 2026-11-01T00:45:15.667Z
+-rwxr-xr-x    1 root     root          9605 Jan  1  1970 h-jobs.py
+[  0.000] submit gfx-nop ip AMDGPU_HW_IP_GFX words 8 release_ms 100 wait_s 10
+[  0.001] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 0 ring 0 ib_bytes 32 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 2413.304561 ---
+CS   accepted               -> seq_no 1
+--- wait returned after 0.000 s, status 0 (completed) ---
+[  0.001] WAIT_CS status 0
+[  0.001] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  0.001] H_RESULT gfx-nop rc 0
+native exit 0
+Last signaled fence          0x0000001b
+Last emitted                 0x0000001b
+[ 2368.552757] amdgpu 0000:01:00.0: amdgpu: Starting gfx_0.0.0 ring reset
+[ 2368.554518] amdgpu 0000:01:00.0: amdgpu: Ring gfx_0.0.0 reset succeeded
+[ 2368.555937] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:45:15Z
+
+### source line 4499, received 2026-11-01T00:46:18.288Z
+-rwxr-xr-x    1 root     root         11145 Jan  1  1970 h-jobs.py
+00:46:16Z
+[  0.000] submit gfx-wait ip AMDGPU_HW_IP_GFX words 8 release_ms 500 wait_s 10
+[  0.000] REGS before GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+CS   ip_type 0 ring 0 ib_bytes 32 chunks 2 bo_handles 1 ib_flags 0x0
+--- submit at monotonic 2475.139280 ---
+CS   accepted               -> seq_no 1
+[  0.501] CPU_RELEASE at 500 ms--- wait returned after 0.500 s, status 0 (completed) ---
+[  0.501] WAIT_CS status 0
+[  0.501] REGS after GRBM_STATUS=0x00003028 CP_STAT=0x00000000 CP_HQD_ACTIVE=0x00000000 SDMA0_STATUS_REG=0x46DEED57 SDMA1_STATUS_REG=0x46DEED57 GCVM_L2_PROTECTION_FAULT_STATUS=0x00000000
+[  0.502] H_RESULT gfx-wait rc 0
+native exit 0
+Last signaled fence          0x0000001d
+Last emitted                 0x0000001d
+[ 2368.552757] amdgpu 0000:01:00.0: amdgpu: Starting gfx_0.0.0 ring reset
+[ 2368.554518] amdgpu 0000:01:00.0: amdgpu: Ring gfx_0.0.0 reset succeeded
+[ 2368.555937] amdgpu 0000:01:00.0: [drm] device wedged, but recovered through reset
+00:46:18Z
+
+### source line 4604, received 2026-11-01T00:48:02.807Z
+Sun Nov  1 01:48:30 UTC 2026
+/dev/sda1 on /media/usb type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=utf8,shortname=mixed,errors=remount-ro)
+1:set timeout=5
+2:set default=4
+bootx64.efi
+4:menuentry "BC-250 diagnostics: full (raw probe, then load amdgpu)" {
+9:menuentry "BC-250 diagnostics: raw probe only (amdgpu is never loaded)" {
+14:menuentry "BC-250 diagnostics: strictly read-only raw probe (no MMIO writes, no amdgpu)" {
+19:menuentry "Alpine Linux shell only (no diagnostics)" {
+24:menuentry "BC-250 reference: network only, no GPU probe" {
+29:menuentry "HOST SSD O: automatic read-only speed test" {
+    2 SW   kthreadd
+ 6319 S    dd
+ 6323 S    dd
+ 6364 DW   python3
+
