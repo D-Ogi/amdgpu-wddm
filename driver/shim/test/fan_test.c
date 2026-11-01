@@ -1061,8 +1061,49 @@ static void missing_power(void)
 	CHECK(clean_writes(&ec));
 }
 
+/* BD-143, a witness for the field report "100 % fan with a short screen refresh every couple of minutes" (tester.29,
+ * guard 41 C, GPU idle at 500 MHz). It is not a test of a fix: it records what the policy of rule 10 does with a
+ * short burst that heats the chip and not the GPU, for example a desktop restart or a background task on the CPU.
+ * The guard rises from 41 C by a peak of 3 to 8 C in two steps and falls back in three. The GPU stays idle and the
+ * socket under 85 W. The rise window is 3 s, so the step at which the spike starts (its phase) decides what a
+ * window sees: each spike runs at the three phases of the window. */
+static void field_spike(void)
+{
+#if HAVE_BOOST
+	struct ec_mock ec;
+	struct bc250_hwmon_io io;
+	struct bc250_fan_ctl ctl;
+	unsigned int peak, phase, i;
+
+	for (peak = 3u; peak <= 8u; peak++) {
+		unsigned int full[3] = { 0, 0, 0 };
+
+		for (phase = 0; phase < 3u; phase++) {
+			const int top = 41000 + (int)peak * 1000;
+			const int shape[5] = { 41000 + (top - 41000) / 2, top, top - (top - 41000) / 3,
+					       41000 + (top - 41000) / 3, 41000 };
+
+			start(&ec, &io, &ctl);
+			for (i = 0; i < 70u; i++) {
+				const unsigned int at = i - (3u + phase);
+				const int mc = i >= 3u + phase && at < 5u ? shape[at] : 41000;
+
+				CHECK(load_tick(&io, &ec, &ctl, mc, 30, 500, 50000) == 0);
+				if (ctl.applied_pct == 100u)
+					full[phase]++;
+			}
+			/* The spike is over long before the end of the trace: no boost, and the duty is off full speed. */
+			CHECK(!ctl.boost && ctl.applied_pct < 100u);
+		}
+		printf("BD-143 spike of %u C at an idle GPU: full speed for %u / %u / %u s at the three phases\n", peak,
+		       full[0], full[1], full[2]);
+	}
+#endif
+}
+
 int main(void)
 {
+	field_spike();
 	missing_power();
 	curves();
 	requests();
