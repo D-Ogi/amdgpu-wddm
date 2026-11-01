@@ -552,6 +552,14 @@ static void DpmPublish(BC250_DEVICE* Device, BC250_DPM_STATE* S, const DPM_TICK*
     snap.ZoneLeadOk = g->zone_lead_ok ? TRUE : FALSE;
     snap.ZoneLeadGaps = g->zone_lead_gaps;
     snap.ZoneIdleHolds = g->zone_idle_holds;
+    snap.RateMcPerS = g->rate_mc_per_s;
+    snap.RateFromMc = g->rate_from_mc;
+    snap.HighMc = g->high_mc;
+    snap.HighMHz = g->high_mc ? bc250_dpm_level_mhz(g->high_level) : 0;
+    snap.RateSteps = g->rate_steps;
+    snap.RateLevels = g->rate_levels;
+    snap.HighSteps = g->high_steps;
+    snap.HighHolds = g->high_holds;
     // The idle point only while this start governs the clock: a fixed-lab start never configures the state, and
     // a start that gave up after SMU failures no longer steps the governor, so neither may name a point that
     // nothing would apply (0.7.207, review). The flag below follows the same rule.
@@ -1416,6 +1424,7 @@ static void DpmConfigureBurst(BC250_DPM_STATE* S, BOOLEAN Dpm)
     if (!mhzPresent) mhz = BC250_DPM_HIGH_ZONE_MHZ;
     error = bc250_dpm_burst_config(&S->Gov, rate, from, high, mhz);   // the thread does not exist yet: no lock for Gov
     state = !Dpm ? "off: the start does not govern" : (!S->Gov.tune.zone_delta_mc ? "off: DpmThermalZone 0" : "on");
+    S->BurstState = state;
     GuardLog("dpm: rate rule: DpmThermalRate %lu%s, DpmThermalRateFromMc %lu%s", (ULONG)rate,
              ratePresent ? "" : " (absent)", (ULONG)from, fromPresent ? "" : " (absent)");
     GuardLog("dpm: rate rule: %lu mC/s from %lu mC for %lu ms, %lu levels a step, one per %lu ms, error %d",
@@ -1658,6 +1667,7 @@ void DpmStart(BC250_DEVICE* Device)
     if (!Device->FullWddm) {
         d->reason = BC250_DPM_REASON_NOT_RUN;
         bc250_dpm_init(&s->Gov, BC250_DPM_FLOOR_LEVEL);
+        s->BurstState = "off: the start does not govern";
         DpmInstallCurve(s, NULL);       // the table's own line: nothing here applies a level
         DpmPublish(Device, s, NULL, FALSE);
         DpmUnlock(s);
@@ -1765,6 +1775,7 @@ StateRefused:
     s->Confirmed = FALSE;
     s->JointOn = FALSE;
     bc250_dpm_init(&s->Gov, BC250_DPM_FLOOR_LEVEL);
+    s->BurstState = "off: the start does not govern";
     DpmInstallCurve(s, NULL);
     DpmPublish(Device, s, NULL, FALSE);
     GuardLog("dpm: state read refused, fixed floor and no governor worker");
@@ -1980,13 +1991,23 @@ void DpmLogSummary(BC250_DEVICE* Device)
     BC250_DPM_SNAP snap;
     struct bc250_dpm_tune tune;
     ULONG serial;
+    const char* burst;
     KIRQL irql;
     KeAcquireSpinLock(&s->SnapLock, &irql);
     snap = s->Snap;
     tune = s->Tune;
     serial = s->TuneSerial;
+    burst = s->BurstState ? s->BurstState : "not configured";
     KeReleaseSpinLock(&s->SnapLock, irql);
     DpmLogLine("summary", &snap);
+    // BD-281: the rules of this start and what they did. The start lines say it once, in the part of the ring that a
+    // long start overwrites (f3k-r2); the summary block is kept apart from the ring, so a reader always finds these.
+    GuardLog("dpm: summary rules: rate rule %s, high-clock zone %s", snap.RateMcPerS ? burst : "off by setting",
+             snap.HighMc ? burst : "off by setting");
+    GuardLog("dpm: summary rules: rate %lu mC/s from %lu mC, high-clock zone from %lu mC above %lu MHz", snap.RateMcPerS,
+             snap.RateFromMc, snap.HighMc, snap.HighMHz);
+    GuardLog("dpm: summary rules: rate steps %lu levels %lu, high-zone steps %lu holds %lu", snap.RateSteps,
+             snap.RateLevels, snap.HighSteps, snap.HighHolds);
     DpmLogIdleLine("summary", &snap);
     DpmLogComputeLine("summary", &snap);
     DpmLogRecallLine("summary", &snap);
