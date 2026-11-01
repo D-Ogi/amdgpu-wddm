@@ -80,6 +80,11 @@ renders below the panel mode in a borderless window, which only a scaled overlay
 (docs/design/scaled-flip.md). Each side must be 64 or more and at most the output's own. Another value keeps the
 output's size. The "Flip chain" trace line gives the size that the run used. `flip-test.cpp` checks the parser.
 
+`AMDGPU_WDDM_D3D12_FLIP_PERIOD_MS=<ms>` (`scanout-trial.ps1 -PeriodMs`) holds each Present until that time passed
+since the one before it, 0 to 2000 ms. The client renders and checks the frame first. Then it waits, and it keeps
+its window messages flowing. 200 gives 5 presents a second, the rate of BD-224's title screen, on a direct flip.
+The "Flip plan" line gives the period that the run used.
+
 It then presents the frames with `Present(1, 0)`, each cleared to its own colour: every channel is
 0.0 or 1.0, so the clear has no rounding tie and each frame's `B8G8R8A8` word is exact, and the eight
 combinations cycle, so a frame still showing the previous one, or a buffer presented twice, differs in at

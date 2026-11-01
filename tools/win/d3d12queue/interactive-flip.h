@@ -4,7 +4,8 @@
 // or an exclusive-fullscreen chain with -FlipFullscreen - and a flip-model swap chain of -FlipBuffers buffers at
 // the output's own size in B8G8R8A8_UNORM (or the format AMDGPU_WDDM_D3D12_FLIP_FORMAT names, see
 // flip_format_from; a smaller chain that DXGI stretches to the window if AMDGPU_WDDM_D3D12_FLIP_CHAIN names one,
-// see flip_chain_from), and presents -FlipFrames frames, each cleared to its own exact colour. After every frame it compares a probe of the back buffer it is about to present, and at the first and
+// see flip_chain_from), and presents -FlipFrames frames, each cleared to its own exact colour, at most one every
+// AMDGPU_WDDM_D3D12_FLIP_PERIOD_MS (flip_period_from). After every frame it compares a probe of the back buffer it is about to present, and at the first and
 // the last frame every texel of it. It then reports DXGI's present statistics.
 //
 // This is the M15.14 client: the case in which a buffer the application owns may be scanned out instead of
@@ -40,6 +41,13 @@ inline UINT flip_count_from(const char* variable,UINT fallback,UINT low,UINT hig
         if(value>high)return fallback;
     }
     return value>=low?value:fallback;
+}
+
+// BD-224: the shortest time from one Present to the next, in milliseconds, from AMDGPU_WDDM_D3D12_FLIP_PERIOD_MS.
+// 0 (the default) presents each frame as soon as it is ready. 200 gives at most 5 presents a second, the rate of
+// the title screen of BD-224, on a direct flip. A value above 2000 or text that is not a number leaves 0.
+inline UINT flip_period_from(const char* variable){
+    return flip_count_from(variable,0u,0u,2000u);
 }
 
 // M15.14 (kernel driver 0.7.216.20): the swap chain's format, as its DXGI number, so one binary drives the
@@ -125,11 +133,12 @@ inline HRESULT flip(Session& s){
     const UINT buffers=flip_count_from("AMDGPU_WDDM_D3D12_FLIP_BUFFERS",INTERACTIVE_FLIP_BUFFERS,2,INTERACTIVE_FLIP_MAX_BUFFERS);
     const UINT frames=flip_count_from("AMDGPU_WDDM_D3D12_FLIP_FRAMES",INTERACTIVE_FLIP_FRAMES,1,20000);
     const FlipFormat chosen=flip_format_from("AMDGPU_WDDM_D3D12_FLIP_FORMAT");
+    const UINT period_ms=flip_period_from("AMDGPU_WDDM_D3D12_FLIP_PERIOD_MS");
     const DXGI_FORMAT format=chosen.format;const UINT bpp=chosen.bytes;
     ID3D12Device* device=s.device.Get();
     HRESULT hr=S_OK;
-    {char label[128]{};sprintf_s(label,"Flip plan: %u buffers, %u frames, present interval 1, format %s (%d)",
-        buffers,frames,chosen.name,static_cast<int>(format));s.event("after",label);}
+    {char label[160]{};sprintf_s(label,"Flip plan: %u buffers, %u frames, present interval 1, format %s (%d), period %u ms",
+        buffers,frames,chosen.name,static_cast<int>(format),period_ms);s.event("after",label);}
 
     // The output's desktop rectangle is the only size at which a scan-out candidate can match the POST mode, so
     // the window always covers it and the chain has that size unless AMDGPU_WDDM_D3D12_FLIP_CHAIN names a smaller
@@ -266,6 +275,20 @@ inline HRESULT flip(Session& s){
     HRESULT first_failure=S_OK;
     UINT indices_seen=0;  // bit per back-buffer index the chain handed out
     const ULONGLONG render_start=GetTickCount64();
+    ULONGLONG last_present=0;
+    // BD-224: hold the next Present until period_ms passed since the last one. The window keeps its messages
+    // flowing, so the shell does not mark it as hung, and the abort flag and the deadline still end the run.
+    const auto pace=[&]()->HRESULT{
+        if(!period_ms || !last_present)return S_OK;
+        const ULONGLONG due=last_present+period_ms;
+        for(ULONGLONG now=GetTickCount64();now<due;now=GetTickCount64()){
+            if(s.abort_requested())return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            if(now+2000>=s.deadline)return S_OK;
+            MSG message{};while(PeekMessageW(&message,window,0,0,PM_REMOVE)){TranslateMessage(&message);DispatchMessageW(&message);}
+            Sleep(static_cast<DWORD>((std::min)(due-now,ULONGLONG{10})));
+        }
+        return S_OK;
+    };
     const auto frame=[&](UINT index)->HRESULT{
         const UINT current=chain->GetCurrentBackBufferIndex();
         if(current>=buffers)return E_UNEXPECTED;
@@ -324,8 +347,11 @@ inline HRESULT flip(Session& s){
                 s.event("after",label);
             }
         }
+        result=pace();
+        if(FAILED(result)){s.event("after","Present pacing",result);return result;}
         s.pending=true;
         result=chain->Present(1,0);
+        last_present=GetTickCount64();
         if(result==S_OK)++presented;
         else{
             ++refused;
