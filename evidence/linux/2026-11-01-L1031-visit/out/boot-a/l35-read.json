@@ -1,0 +1,30 @@
+{
+ "utc": "2026-11-01T00:58:15Z",
+ "window": "0xFF000000+0x1000000",
+ "read1": {
+  "seconds": 4.6,
+  "sha256": "a6a5e6fb51975457a8590c66461859000b42a9fa311c2f4999f0d0d81e7e93eb"
+ },
+ "read2": {
+  "seconds": 4.6,
+  "sha256": "a6a5e6fb51975457a8590c66461859000b42a9fa311c2f4999f0d0d81e7e93eb"
+ },
+ "identical": true,
+ "differing_4k_pages": 0,
+ "first_differing_page": null,
+ "all_ff_4k_pages": 3214,
+ "halves_equal_8MiB_alias": false,
+ "quarters_equal_4MiB_alias": false,
+ "efs_signature_55AA55AA": {
+  "0xFA0000": false,
+  "0xF20000": false,
+  "0xE20000": false,
+  "0xC20000": false,
+  "0x820000": true,
+  "0x020000": false
+ },
+ "fvh_signatures": 7,
+ "reset_vector_first_byte": "0x90",
+ "lpc_unchanged_during_reads": true,
+ "lpc_unchanged_since_probe": true
+}

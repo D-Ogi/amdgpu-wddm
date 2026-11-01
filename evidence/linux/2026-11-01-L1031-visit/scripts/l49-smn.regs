@@ -1,0 +1,49 @@
+# L49: SMN byte addresses of the PCIe core that owns the APU-to-FCH link (read only).
+# Source: ref/linux-src v6.18 drivers/gpu/drm/amd/include/asic_reg/nbio/nbio_7_2_0_offset.h (APU NBIO):
+#   addressBlock nbio_pcie0_bifplr0_cfgdecp  base 0x11100000  (root port 0, config-space copy)
+#   addressBlock nbio_pcie0_bifp0_pciedir_p  base 0x11140000  (port 0 LC registers, regBIFP0_* = 0x4100xx)
+#   addressBlock nbio_pcie0_pciedir          base 0x11180000  (core)
+# byte = base + (reg dword - block dword base) * 4. The same port-0 LC addresses are hard-coded in
+# amdgpu nbio_v2_3.c (smnPCIE_LC_CNTL 0x11140280, _CNTL3 0x111402d4, _CNTL6 0x111402ec, _CNTL7 0x111402f0,
+# _LINK_WIDTH_CNTL 0x11140288) and smu_v11_0.c (smnPCIE_LC_SPEED_CNTL 0x11140290).
+# Port 0 = PCI device 1 function 1: the only DXIO engine of the BIOS (lanes 0-3, SB link, M923,
+# firmware/bios/analysis/dxio-lanes). No status register with a clear-on-read side effect is listed;
+# the RW1C error-status registers are left out on purpose.
+BIFPLR0_VENDOR_DEVICE_ID            0x11100000
+BIFPLR0_STATUS_COMMAND              0x11100004
+BIFPLR0_CLASS_REVISION              0x11100008
+BIFPLR0_PCIE_CAP                    0x11100058
+BIFPLR0_LINK_CAP                    0x11100064
+BIFPLR0_LINK_STATUS_CNTL            0x11100068
+BIFPLR0_LINK_CAP2                   0x11100084
+BIFPLR0_LINK_STATUS2_CNTL2          0x11100088
+BIFP0_PCIEP_PORT_CNTL               0x11140040
+BIFP0_PCIE_P_PORT_LANE_STATUS       0x11140140
+BIFP0_PCIE_LC_CNTL                  0x11140280
+BIFP0_PCIE_LC_TRAINING_CNTL         0x11140284
+BIFP0_PCIE_LC_LINK_WIDTH_CNTL       0x11140288
+BIFP0_PCIE_LC_N_FTS_CNTL            0x1114028C
+BIFP0_PCIE_LC_SPEED_CNTL            0x11140290
+BIFP0_PCIE_LC_STATE0                0x11140294
+BIFP0_PCIE_LC_STATE1                0x11140298
+BIFP0_PCIE_LC_STATE2                0x1114029C
+BIFP0_PCIE_LC_STATE3                0x111402A0
+BIFP0_PCIE_LC_STATE4                0x111402A4
+BIFP0_PCIE_LC_STATE5                0x111402A8
+BIFP0_PCIE_LINK_MANAGEMENT_CNTL2    0x111402AC
+BIFP0_PCIE_LC_CNTL2                 0x111402C4
+BIFP0_PCIE_LC_BW_CHANGE_CNTL        0x111402C8
+BIFP0_PCIE_LC_LANE_CNTL             0x111402D0
+BIFP0_PCIE_LC_CNTL3                 0x111402D4
+BIFP0_PCIE_LC_CNTL4                 0x111402D8
+BIFP0_PCIE_LC_CNTL6                 0x111402EC
+BIFP0_PCIE_LC_CNTL7                 0x111402F0
+BIFP0_PCIE_LINK_MANAGEMENT_STATUS   0x111402F4
+BIFP0_PCIE_LC_PORT_ORDER            0x11140320
+PCIE0_PCIE_CNTL2                    0x11180070
+# Control: port 1 of the same core. Expected: no link (no second engine in the DXIO table).
+BIFPLR1_VENDOR_DEVICE_ID            0x11101000
+BIFPLR1_LINK_STATUS_CNTL            0x11101068
+BIFP1_PCIE_LC_LINK_WIDTH_CNTL       0x11141288
+BIFP1_PCIE_LC_SPEED_CNTL            0x11141290
+BIFP1_PCIE_LC_STATE0                0x11141294

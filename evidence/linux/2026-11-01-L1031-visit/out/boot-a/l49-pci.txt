@@ -1,0 +1,18 @@
+		LnkCap:	Port #0, Speed 5GT/s, Width x2, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 5GT/s, Width x2
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+		LnkCap:	Port #1, Speed 5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 2.5GT/s, Width x1
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+		LnkCap:	Port #0, Speed 16GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 16GT/s, Width x16
+		LnkCap2: Supported Link Speeds: 2.5-16GT/s, Crosslink- Retimer+ 2Retimers+ DRS-
+		LnkCtl2: Target Link Speed: 16GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete+ EqualizationPhase1+
+		LnkCtl3: LnkEquIntrruptEn- PerformEqu-
+		PASIDCap: Exec+ Priv+, Max PASID Width: 10

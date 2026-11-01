@@ -1,0 +1,7 @@
+[   73.631126] amdgpu 0000:01:00.0: amdgpu: register mmio size: 524288
+[   73.658655] amdgpu 0000:01:00.0: amdgpu: vm size is 262144 GB, 4 levels, block size is 9-bit, fragment size is 9-bit
+[   73.658663] amdgpu 0000:01:00.0: amdgpu: VRAM: 8192M 0x000000F400000000 - 0x000000F5FFFFFFFF (8192M used)
+[   73.658666] amdgpu 0000:01:00.0: amdgpu: GART: 512M 0x0000000000000000 - 0x000000001FFFFFFF
+[   73.658679] [drm] Detected VRAM RAM=8192M, BAR=8192M
+[   73.658999] amdgpu 0000:01:00.0: amdgpu: amdgpu: 8192M of VRAM memory ready
+[   73.659026] [drm] GART: num cpu pages 131072, num gpu pages 131072

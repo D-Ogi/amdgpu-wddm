@@ -1,0 +1,2 @@
+OK: 302.8 MiB in 81 packages
+/usr/bin/modetest

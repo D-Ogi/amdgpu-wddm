@@ -1,0 +1,50 @@
+# L7: firmware (GOP) framebuffer and memory-controller state before amdgpu, and GART context 0 after it.
+# Offsets: tools/regcalc/regcalc.py with third_party/linux-amdgpu dcn_2_0_1_offset.h (--ip DMU),
+# gc_10_1_0_offset.h (--ip GC), mmhub_2_0_0_offset.h (--ip MMHUB); DCN rows copied from
+# scratch/linux-1031/dcn-pipe01.regs (same tool). Pipe 0 only: the GOP drives one pipe; pipe 1 may be gated.
+# No indexed data port, no *_DATA register.
+HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS        0x0EB28
+HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH   0x0EB2C
+HUBPREQ0_DCSURF_SURFACE_PITCH                  0x0EB1C
+HUBPREQ0_DCSURF_SURFACE_CONTROL                0x0EB68
+HUBPREQ0_DCSURF_FLIP_CONTROL                   0x0EB6C
+HUBP0_DCSURF_SURFACE_CONFIG                    0x0EA94
+HUBP0_DCSURF_TILING_CONFIG                     0x0EA9C
+HUBP0_DCSURF_PRI_VIEWPORT_START                0x0EAA4
+HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION            0x0EAA8
+HUBP0_DCHUBP_CNTL                              0x0EACC
+HUBPRET0_HUBPRET_CONTROL                       0x0ECA8
+CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT            0x1063C
+MPCC0_MPCC_CONTROL                             0x11CD0
+OTG0_OTG_CONTROL                               0x14004
+OTG0_OTG_H_TOTAL                               0x13FA8
+OTG0_OTG_V_TOTAL                               0x13FBC
+OTG0_OTG_H_BLANK_START_END                     0x13FAC
+OTG0_OTG_V_BLANK_START_END                     0x13FD8
+GCMC_VM_FB_LOCATION_BASE                       0x0A600
+GCMC_VM_FB_LOCATION_TOP                        0x0A604
+GCMC_VM_FB_OFFSET                              0x0A5AC
+GCMC_VM_AGP_BASE                               0x0A610
+GCMC_VM_AGP_BOT                                0x0A60C
+GCMC_VM_AGP_TOP                                0x0A608
+GCMC_VM_SYSTEM_APERTURE_LOW_ADDR               0x0A614
+GCMC_VM_SYSTEM_APERTURE_HIGH_ADDR              0x0A618
+MMMC_VM_FB_LOCATION_BASE                       0x6A1B0
+MMMC_VM_FB_LOCATION_TOP                        0x6A1B4
+MMMC_VM_FB_OFFSET                              0x6A15C
+GCVM_CONTEXT0_CNTL                             0x0A200
+GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32        0x0A3AC
+GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32        0x0A3B0
+GCVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32       0x0A42C
+GCVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32       0x0A430
+GCVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32         0x0A4AC
+GCVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32         0x0A4B0
+GCVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32     0x0A13C
+GCVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32     0x0A140
+MMVM_CONTEXT0_CNTL                             0x69B00
+MMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32        0x69CAC
+MMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32        0x69CB0
+MMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32       0x69D2C
+MMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32       0x69D30
+MMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32         0x69DAC
+MMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32         0x69DB0

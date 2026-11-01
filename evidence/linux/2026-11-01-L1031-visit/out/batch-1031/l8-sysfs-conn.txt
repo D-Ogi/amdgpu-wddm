@@ -1,0 +1,7 @@
+== card1-DP-1 status=connected enabled=enabled dpms=On
+1920x1200
+1920x1080
+1920x1080
+1920x1080
+1920x1080
+== card1-DP-2 status=disconnected enabled=disabled dpms=Off

@@ -1,0 +1,36 @@
+== /sys/class/hwmon/hwmon0 nvme
+name nvme
+temp1_alarm 0
+temp1_crit 87850
+temp1_input 32850
+temp1_label Composite
+temp1_max 83850
+temp1_min -40150
+temp2_input 50850
+temp2_label Sensor 1
+temp2_max 65261850
+temp2_min -273150
+temp3_input 32850
+temp3_label Sensor 2
+temp3_max 65261850
+temp3_min -273150
+uevent 
+== /sys/class/hwmon/hwmon1 k10temp
+name k10temp
+temp1_input 62875
+temp1_label Tctl
+uevent 
+== /sys/class/hwmon/hwmon2 amdgpu
+freq1_input 1500000000
+freq1_label sclk
+in0_input 899
+in0_label vddgfx
+in1_input 1193
+in1_label vddnb
+name amdgpu
+power1_average 60216000
+power1_input 62204000
+power1_label PPT
+temp1_input 58000
+temp1_label edge
+uevent 

@@ -1,0 +1,6 @@
+mem_info_vram_total 8589934592
+mem_info_vis_vram_total 8589934592
+mem_info_gtt_total 4020457472
+mem_info_vram_used 14614528
+mem_info_gtt_used 13185024
+mem_info_vram_vendor cat: can't open '/sys/bus/pci/devices/0000:01:00.0/mem_info_vram_vendor': No such file or directory

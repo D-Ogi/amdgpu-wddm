@@ -1,0 +1,8 @@
+opened device `AMD GPU` on driver `amdgpu` (version 3.64.0 at 0)
+Encoders:
+id	crtc	type	possible crtcs	possible clones	
+63	58	TMDS	0x00000003	0x00000001
+73	0	TMDS	0x00000003	0x00000002
+79	0	DPMST	0x00000003	0x00000004
+80	0	DPMST	0x00000003	0x00000008
+

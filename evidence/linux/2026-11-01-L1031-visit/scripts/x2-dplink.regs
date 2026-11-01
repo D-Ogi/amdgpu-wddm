@@ -1,0 +1,21 @@
+# X2: DP link training policy registers (read only).
+# Offsets: regcalc --ip DMU --reg-header dcn_2_0_1_offset.h. Pipe 0 only (the active DP output).
+# No indexed data port, no side-effect register.
+DP0_DP_LINK_CNTL                         0x15720
+DP0_DP_LINK_FRAMING_CNTL                 0x1574C
+DP0_DP_CONFIG                            0x1572C
+DP0_DP_MSA_MISC                          0x15738
+DP0_DP_MSA_COLORIMETRY                   0x15728
+DP0_DP_DPHY_CNTL                         0x1575C
+DP0_DP_DPHY_8B10B_CNTL                   0x15770
+DP0_DP_DPHY_TRAINING_PATTERN_SEL         0x15760
+DP0_DP_DPHY_FAST_TRAINING                0x15790
+DP0_DP_DPHY_FAST_TRAINING_STATUS         0x15794
+DP0_DP_DPHY_HBR2_PATTERN_CONTROL        0x15814
+DP0_DP_DPHY_SCRAM_CNTL                   0x15778
+DP0_DP_HBR2_EYE_PATTERN                  0x15750
+DP0_DP_MSA_TIMING_PARAM1                 0x15830
+DP0_DP_MSA_TIMING_PARAM2                 0x15834
+DP0_DP_MSA_TIMING_PARAM3                 0x15838
+DP0_DP_MSA_TIMING_PARAM4                 0x1583C
+DP0_DP_DB_CNTL                           0x15864

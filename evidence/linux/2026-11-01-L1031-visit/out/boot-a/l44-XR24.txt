@@ -1,0 +1,19 @@
+# read /sys/kernel/debug/dri/0000:01:00.0/amdgpu_regs utc=2026-11-01T00:59:28Z mono_ns=614891526845
+Display lane, lab side: named DCN 2.0.1 registers on unit A (Alpine, python3 standard library only).
+
+Tables next to this file, generated on the development PC by gen-tables.py with tools/regcalc:
+  *.regs      '<NAME> 0x<byte offset>'   (dcn_2_0_1_offset.h, clk_11_0_1_offset.h)
+  fields.txt  '<REG> <FIELD> 0x<mask>'   (dcn_2_0_1_sh_mask.h)
+No offset or mask is typed by hand in any lab script of this lane: registers and fields go by name.
+
+Dbg   amdgpu's debugfs register file (amdgpu_regs): pread/pwrite of 4 bytes at the byte offset. A Dbg opened
+      for writing accepts writes only to the registers named in its allow list, and logs every write with the
+      value it replaced.
+Bar5  sysfs resource5 before amdgpu is loaded: single 32-bit reads (the read path of
+      tools/diagusb/payload/bc250/diag.py Bar, mapped the same way). Refused while a driver is bound to 01:00.0.
+
+CLI (debugfs, amdgpu loaded):
+  dcnregs.py dump <label> <table> [table...]   every register of the tables, one line each
+  dcnregs.py get <NAME> [NAME...]              value and decoded fields
+  dcnregs.py pipes                             which HUBP/MPCC/OTG instances carry a plane (L30 check)
+

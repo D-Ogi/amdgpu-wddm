@@ -1,0 +1,164 @@
+[dtn begin]
+HUBBUB WM:      data_urgent  pte_meta_urgent         sr_enter          sr_exit  dram_clk_change
+WM_Set[0]:            6.160            4.000            0.000            0.000          281.160
+WM_Set[1]:            5.760            4.000            0.000            0.000          280.760
+WM_Set[2]:            4.680            4.000            0.000            0.000          279.680
+WM_Set[3]:            5.760            4.000            0.000            0.000          280.760
+
+HUBP:  format  addr_hi  width  height  rot  mir  sw_mode  dcc_en  blank_en  clock_en  ttu_dis  underflow   min_ttu_vblank       qos_low_wm      qos_high_wm
+[ 0]:      8h       4h    960    1200   0h   0h       0h       0         0         1        0         0h          258.640            0.000           54.020
+[ 2]:      8h       0h   1920    1200   0h   0h       0h       0         0         1        1         0h            0.000            0.000            0.000
+[ 3]:      8h       4h    960    1200   0h   0h       0h       0         0         1        0         0h          258.640            0.000           54.020
+
+=======HUBP FL======
+inst 	        0h
+Enabled  	        0h
+Done  	        0h
+adr_mode  	        0h
+width  	        0h
+mpc_width  	        0h
+tmz 	        0h
+xbar_sel_R 	        0h
+xbar_sel_G 	        0h
+xbar_sel_B 	        0h
+adr_hi  	        0h
+adr_low 	        0h
+REFCYC 	        0h
+Bias 	        0h
+Scale 	        0h
+Mode 	        0h
+Format 	        0h
+prefetch 	        bh
+inst 	        2h
+Enabled  	        0h
+Done  	        0h
+adr_mode  	        0h
+width  	        0h
+mpc_width  	        0h
+tmz 	        0h
+xbar_sel_R 	        0h
+xbar_sel_G 	        0h
+xbar_sel_B 	        0h
+adr_hi  	        0h
+adr_low 	        0h
+REFCYC 	        0h
+Bias 	        0h
+Scale 	        0h
+Mode 	        0h
+Format 	        0h
+prefetch 	       28h
+inst 	        3h
+Enabled  	        0h
+Done  	        0h
+adr_mode  	        0h
+width  	        0h
+mpc_width  	        0h
+tmz 	        0h
+xbar_sel_R 	        0h
+xbar_sel_G 	        0h
+xbar_sel_B 	        0h
+adr_hi  	        0h
+adr_low 	        0h
+REFCYC 	        0h
+Bias 	        0h
+Scale 	        0h
+Mode 	        0h
+Format 	        0h
+prefetch 	        bh
+
+=========RQ========
+HUBP:  drq_exp_m  prq_exp_m  mrq_exp_m  crq_exp_m  plane1_ba  L:chunk_s  min_chu_s  meta_ch_s  min_m_c_s  dpte_gr_s  mpte_gr_s  swath_hei  pte_row_h  C:chunk_s  min_chu_s  meta_ch_s  min_m_c_s  dpte_gr_s  mpte_gr_s  swath_hei  pte_row_h
+[ 0]:         2h         1h         1h         1h         0h         3h         3h         1h         3h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h
+[ 2]:         1h         1h         1h         1h         0h         3h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h
+[ 3]:         2h         1h         1h         1h         0h         3h         3h         1h         3h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h
+========DLG========
+HUBP:  rc_hbe     dlg_vbe    min_d_y_n  rc_per_ht  rc_x_a_s   dst_y_a_s  dst_y_pf   dst_y_vvb  dst_y_rvb  dst_y_vfl  dst_y_rfl  rf_pix_fq  vratio_pf  vrat_pf_c  rc_pg_vbl  rc_pg_vbc  rc_mc_vbl  rc_mc_vbc  rc_pg_fll  rc_pg_flc  rc_mc_fll  rc_mc_flc  pr_nom_l   pr_nom_c   rc_pg_nl   rc_pg_nc   mr_nom_l   mr_nom_c   rc_mc_nl   rc_mc_nc   rc_ld_pl   rc_ld_pc   rc_ld_l    rc_ld_c    cha_cur0   ofst_cur1  cha_cur1   vr_af_vc0  ddrq_limt  x_rt_dlay  x_rp_dlay  x_rr_sfl  rc_td_grp
+[ 0]:        24h        20h      1340h     2a353h       198h         0h         bh         1h         3h         0h         0h     298efh     92492h     80000h       1fah         0h       1fah       1fah         0h         0h         0h         0h         0h         0h         0h         0h        20h        20h      151ah         0h       14bh         0h       26fh         0h         0h         0h         0h         0h         0h         0h         0h         0h 0h
+[ 2]:         0h         0h         0h         0h         0h         0h        28h         1h         3h         0h         0h         0h     80000h     80000h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h         0h 0h
+[ 3]:        24h        20h      1340h     2a353h       198h         0h         bh         1h         3h         0h         0h     298efh     92492h     80000h       1fah         0h       1fah       1fah         0h         0h         0h         0h         0h         0h         0h         0h        20h        20h      151ah         0h       14bh         0h       26fh         0h         0h         0h         0h         0h         0h         0h         0h         0h 0h
+========TTU========
+HUBP:  qos_ll_wm  qos_lh_wm  mn_ttu_vb  qos_l_flp  rc_rd_p_l  rc_rd_l    rc_rd_p_c  rc_rd_c    rc_rd_c0   rc_rd_pc0  rc_rd_c1   rc_rd_pc1  qos_lf_l   qos_rds_l  qos_lf_c   qos_rds_c  qos_lf_c0  qos_rds_c0 qos_lf_c1  qos_rds_c1
+[ 0]:         0h       a8dh      3284h         eh      4db0h      9bd8h         0h         0h         0h         0h         0h         0h         8h         0h         8h         0h         0h         0h         0h         0h
+[ 2]:         0h         0h         0h         eh         0h         0h         0h         0h         0h         0h         0h         0h         8h         0h         0h         0h         0h         0h         0h         0h
+[ 3]:         0h       a8dh      3284h         eh      4db0h      9bd8h         0h         0h         0h         0h         0h         0h         8h         0h         8h         0h         0h         0h         0h         0h
+
+DPP:    IGAM format    IGAM mode    DGAM mode    RGAM mode  GAMUT adjust  C11        C12        C13        C14        C21        C22        C23        C24        C31        C32        C33        C34        
+[ 0]:            0h  BypassFixed       Bypass       Bypass        Bypass  0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000
+[ 3]:            0h  BypassFixed       Bypass       Bypass        Bypass  0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000 0000000000
+
+DPP Color Caps: input_lut_shared:0  icsc:1  dgam_ram:1  dgam_rom: srgb:1,bt2020:1,gamma2_2:0,pq:0,hlg:0  post_csc:0  gamcor:0  dgam_rom_for_yuv:1  3d_lut:1  blnd_lut:1  oscs:0
+
+MPCC:  OPP  DPP  MPCCBOT  MODE  ALPHA_MODE  PREMULT  OVERLAP_ONLY  IDLE
+[ 0]:   0h   0h       3h     3           2        0             0     0
+[ 3]:   0h   3h       fh     2           2        0             0     0
+
+MPC Color Caps: gamut_remap:0, 3dlut:0, ogam_ram:1, ocsc:1
+
+===== MPC RMCM 3DLUT =====
+MPCC 	        0h
+SIZE 	        0h
+MODE 	        0h
+MODE_CUR 	        0h
+RD_SEL 	        0h
+30BIT_EN 	        0h
+WR_EN_MASK 	        0h
+RAM_SEL 	        0h
+OUT_NORM_FACTOR 	        0h
+FL_SEL 	        0h
+OUT_OFFSET 	        0h
+OUT_SCALE 	        0h
+FL_DONE 	        0h
+SOFT_UNDERFLOW 	        0h
+HARD_UNDERFLOW 	        0h
+MEM_PWR_ST 	        0h
+FORCE 	        0h
+DIS 	        0h
+MODE 	        0h
+MPCC 	        3h
+SIZE 	        0h
+MODE 	        0h
+MODE_CUR 	        0h
+RD_SEL 	        0h
+30BIT_EN 	        0h
+WR_EN_MASK 	        0h
+RAM_SEL 	        0h
+OUT_NORM_FACTOR 	        0h
+FL_SEL 	        0h
+OUT_OFFSET 	        0h
+OUT_SCALE 	        0h
+FL_DONE 	        0h
+SOFT_UNDERFLOW 	        0h
+HARD_UNDERFLOW 	        0h
+MEM_PWR_ST 	        0h
+FORCE 	        0h
+DIS 	        0h
+MODE 	        0h
+
+===== MPC RMCM Shaper =====
+MPCC:  CNTL  LUT_MODE  MODE_CUR  WR_EN_MASK  WR_SEL  OFFSET  SCALE  START_B	START_SEG_B	END_B	END_BASE_B	MEM_PWR_ST	FORCE	DIS	MODE
+[ 0]:     0h     0h       0h     0     0     0     0     0    0h     0h       0h     0     0     0     0
+[ 3]:     0h     0h       0h     0     0     0     0     0    0h     0h       0h     0     0     0     0
+OTG:  v_bs  v_be  v_ss  v_se  vpol  vmax  vmin  vmax_sel  vmin_sel  h_bs  h_be  h_ss  h_se  hpol  htot  vtot  underflow blank_en
+[0]:  1232    32     0     6     1  1234  1234         1         1  2032   112     0    32     0  2079  1234          0        0
+
+DSC: CLOCK_EN  SLICE_WIDTH  Bytes_pp
+
+S_ENC: DSC_MODE  SEC_GSP7_LINE_NUM  VBID6_LINE_REFERENCE  VBID6_LINE_NUM  SEC_GSP7_ENABLE  SEC_STREAM_ENABLE
+[0  ]: 0         0                  0                     0               0                0                
+
+[1  ]: 0         0                  0                     0               0                0                
+
+
+L_ENC: DPHY_FEC_EN  DPHY_FEC_READY_SHADOW  DPHY_FEC_ACTIVE_STATUS  DP_LINK_TRAINING_COMPLETE
+[0  ]: 0            0                      0                      1                        
+
+[1  ]: 0            0                      0                      0                        
+
+
+
+CALCULATED Clocks: dcfclk_khz:1000000  dcfclk_deep_sleep_khz:9625  dispclk_khz:156006
+dppclk_khz:77231  max_supported_dppclk_khz:300000  fclk_khz:200000  socclk_khz:1254000
+
+MPC_CRC_RESULT_GB:0 MPC_CRC_RESULT_C:0 MPC_CRC_RESULT_AR:0
+DPP_TOP0_DPP_CRC_VAL_B_A:0 DPP_TOP0_DPP_CRC_VAL_R_G:0
+[dtn end]

@@ -1,0 +1,124 @@
+# X2 utc=2026-11-01T01:25:57Z uptime=1227.11 kernel=6.18.52-0-lts
+== DP0 link and DPHY registers
+# x2 /sys/kernel/debug/dri/0000:01:00.0/amdgpu_regs table=/root/ul/x2-dplink.regs
+DP0_DP_LINK_CNTL                                         0x15720 0x00000110
+DP0_DP_LINK_FRAMING_CNTL                                 0x1574C 0x10002000
+DP0_DP_CONFIG                                            0x1572C 0x00000003
+DP0_DP_MSA_MISC                                          0x15738 0x00000000
+DP0_DP_MSA_COLORIMETRY                                   0x15728 0x20000000
+DP0_DP_DPHY_CNTL                                         0x1575C 0x00000000
+DP0_DP_DPHY_8B10B_CNTL                                   0x15770 0x00000000
+DP0_DP_DPHY_TRAINING_PATTERN_SEL                         0x15760 0x00000001
+DP0_DP_DPHY_FAST_TRAINING                                0x15790 0x20020000
+DP0_DP_DPHY_FAST_TRAINING_STATUS                         0x15794 0x00000000
+DP0_DP_DPHY_HBR2_PATTERN_CONTROL                         0x15814 0x00000000
+DP0_DP_DPHY_SCRAM_CNTL                                   0x15778 0x0101FF10
+DP0_DP_HBR2_EYE_PATTERN                                  0x15750 0x00000000
+DP0_DP_MSA_TIMING_PARAM1                                 0x15830 0x082004D3
+DP0_DP_MSA_TIMING_PARAM2                                 0x15834 0x00700020
+DP0_DP_MSA_TIMING_PARAM3                                 0x15838 0x00208006
+DP0_DP_MSA_TIMING_PARAM4                                 0x1583C 0x078004B0
+DP0_DP_DB_CNTL                                           0x15864 0x00000010
+== DRM connectors: link_status, max_bpc
+--- /sys/class/drm/card1-DP-1
+  status: connected
+  dpms: On
+--- /sys/class/drm/card1-DP-2
+  status: disconnected
+  dpms: Off
+== modetest -c (connectors only, DP entries)
+64	63	connected	DP-1           	520x320		30	63
+  modes:
+	index name refresh (Hz) hdisp hss hse htot vdisp vss vse vtot
+  #0 1920x1200 59.95 1920 1968 2000 2080 1200 1203 1209 1235 154000 flags: phsync, nvsync; type: preferred, driver
+  #1 1920x1080 60.00 1920 2008 2052 2200 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: driver
+  #2 1920x1080 59.94 1920 2008 2052 2200 1080 1084 1089 1125 148352 flags: phsync, pvsync; type: driver
+  #3 1920x1080 50.00 1920 1936 1980 2640 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: driver
+  #4 1920x1080 50.00 1920 2448 2492 2640 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: driver
+  #5 1600x1200 60.00 1600 1664 1856 2160 1200 1201 1204 1250 162000 flags: phsync, pvsync; type: driver
+  #6 1680x1050 59.95 1680 1784 1960 2240 1050 1053 1059 1089 146250 flags: nhsync, pvsync; type: driver
+  #7 1280x1024 75.02 1280 1296 1440 1688 1024 1025 1028 1066 135000 flags: phsync, pvsync; type: driver
+  #8 1280x1024 72.05 1280 1368 1504 1728 1024 1025 1028 1067 132840 flags: nhsync, pvsync; type: 
+  #9 1280x1024 60.02 1280 1328 1440 1688 1024 1025 1028 1066 108000 flags: phsync, pvsync; type: driver
+  #10 1440x900 74.98 1440 1536 1688 1936 900 903 909 942 136750 flags: nhsync, pvsync; type: driver
+  #11 1440x900 59.89 1440 1520 1672 1904 900 903 909 934 106500 flags: nhsync, pvsync; type: driver
+  #12 1280x720 60.00 1280 1390 1430 1650 720 725 730 750 74250 flags: phsync, pvsync; type: driver
+  #13 1280x720 59.94 1280 1390 1430 1650 720 725 730 750 74176 flags: phsync, pvsync; type: driver
+  #14 1280x720 50.00 1280 1720 1760 1980 720 725 730 750 74250 flags: phsync, pvsync; type: driver
+  #15 1024x768 75.03 1024 1040 1136 1312 768 769 772 800 78750 flags: phsync, pvsync; type: driver
+  #16 1024x768 70.07 1024 1048 1184 1328 768 771 777 806 75000 flags: nhsync, nvsync; type: driver
+  #17 1024x768 60.00 1024 1048 1184 1344 768 771 777 806 65000 flags: nhsync, nvsync; type: driver
+  #18 800x600 75.00 800 816 896 1056 600 601 604 625 49500 flags: phsync, pvsync; type: driver
+  #19 800x600 72.19 800 856 976 1040 600 637 643 666 50000 flags: phsync, pvsync; type: driver
+  #20 800x600 60.32 800 840 968 1056 600 601 605 628 40000 flags: phsync, pvsync; type: driver
+  #21 720x576 50.00 720 732 796 864 576 581 586 625 27000 flags: nhsync, nvsync; type: driver
+  #22 720x480 60.00 720 736 798 858 480 489 495 525 27027 flags: nhsync, nvsync; type: driver
+  #23 720x480 59.94 720 736 798 858 480 489 495 525 27000 flags: nhsync, nvsync; type: driver
+  #24 640x480 75.00 640 656 720 840 480 481 484 500 31500 flags: nhsync, nvsync; type: driver
+  #25 640x480 72.81 640 664 704 832 480 489 492 520 31500 flags: nhsync, nvsync; type: driver
+  #26 640x480 66.03 640 664 728 816 480 481 484 499 26885 flags: nhsync, pvsync; type: 
+  #27 640x480 60.00 640 656 752 800 480 490 492 525 25200 flags: nhsync, nvsync; type: driver
+  #28 640x480 59.94 640 656 752 800 480 490 492 525 25175 flags: nhsync, nvsync; type: driver
+  #29 720x400 70.08 720 738 846 900 400 412 414 449 28320 flags: nhsync, pvsync; type: driver
+  props:
+	1 EDID:
+		flags: immutable blob
+		blobs:
+
+		value:
+			<EDID blob removed: 16 lines of 16 bytes>
+	2 DPMS:
+		flags: enum
+		enums: On=0 Standby=1 Suspend=2 Off=3
+		value: 0
+	5 link-status:
+		flags: enum
+		enums: Good=0 Bad=1
+		value: 0
+	6 non-desktop:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	4 TILE:
+		flags: immutable blob
+		blobs:
+
+		value:
+	35 scaling mode:
+		flags: enum
+		enums: None=0 Full=1 Center=2 Full aspect=3
+		value: 0
+	65 Broadcast RGB:
+		flags: enum
+		enums: Automatic=0 Full=1 Limited 16:235=2
+		value: 0
+== DTN log: link encoder lines
+DSC: CLOCK_EN  SLICE_WIDTH  Bytes_pp
+S_ENC: DSC_MODE  SEC_GSP7_LINE_NUM  VBID6_LINE_REFERENCE  VBID6_LINE_NUM  SEC_GSP7_ENABLE  SEC_STREAM_ENABLE
+L_ENC: DPHY_FEC_EN  DPHY_FEC_READY_SHADOW  DPHY_FEC_ACTIVE_STATUS  DP_LINK_TRAINING_COMPLETE
+== dmesg: link training
+[    0.000000] x86 CPU feature dependency check failure: CPU0 has '13*32+ 3' enabled but 'pcid' disabled. Kernel might be fine, but no guarantees.
+[    0.068647] RETBleed: Mitigation: untrained return thunk
+[    0.255464] pci 0000:03:00.0: 8.000 Gb/s available PCIe bandwidth, limited by 5.0 GT/s PCIe x2 link at 0000:00:15.0 (capable of 31.504 Gb/s with 8.0 GT/s PCIe x4 link)
+[    1.198814] ata1: SATA link down (SStatus 0 SControl 300)
+[  498.997268]  amdgpu_dm_hpd_init+0x4d/0x120 [amdgpu]
+[  499.003501]  amdgpu_dm_hpd_init+0x4d/0x120 [amdgpu]
+[  499.006366] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=3 on init
+[  499.006398] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=4 on init
+[  499.006428] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=5 on init
+[  499.006458] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=6 on init
+[  499.006546] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=9 on init
+[  499.006576] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=10 on init
+[  499.006607] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=11 on init
+[  499.006637] amdgpu 0000:01:00.0: amdgpu: [drm] *ERROR* Failed to clear hpd(rx) source=12 on init
+[  500.239554] [drm] Failed to add display topology, DTM TA is not initialized.
+[  920.289556] [drm] Failed to add display topology, DTM TA is not initialized.
+[  923.582550] [drm] Failed to add display topology, DTM TA is not initialized.
+[  926.870521] [drm] Failed to add display topology, DTM TA is not initialized.
+[  936.546463] [drm] Failed to add display topology, DTM TA is not initialized.
+[  941.644561] [drm] Failed to add display topology, DTM TA is not initialized.
+[  994.559571] [drm] Failed to add display topology, DTM TA is not initialized.
+[ 1099.901542] [drm] Failed to add display topology, DTM TA is not initialized.
+[ 1152.116542] [drm] Failed to add display topology, DTM TA is not initialized.
+[ 1177.374547] [drm] Failed to add display topology, DTM TA is not initialized.
+# end utc=01:25:57

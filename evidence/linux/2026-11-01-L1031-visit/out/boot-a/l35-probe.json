@@ -1,0 +1,50 @@
+{
+ "utc": "2026-11-01T00:58:06Z",
+ "cmdline_flags": [],
+ "iomem": [
+  "fee00000-ffffffff : PCI Bus 0000:00",
+  "  ff000000-ffffffff : pnp 00:03",
+  "100000000-26fffffff : System RAM",
+  "  131000000-131ffd067 : Kernel code",
+  "  132000000-132b07fff : Kernel rodata",
+  "  132c00000-132e0d5bf : Kernel data",
+  "  133649000-1339fffff : Kernel bss",
+  "270000000-46fffffff : Reserved"
+ ],
+ "lpc": {
+  "id": "1022:780e",
+  "bytes": 256,
+  "sha256": "7f61f1098aefd2b524c9bfb46ee1234efb7192b4528b43a8f9471e813c655a46",
+  "dwords": {
+   "0x08": "0x06010011",
+   "0x44": "0x2003C040",
+   "0x48": "0x0120FF07",
+   "0x4C": "0x00000000",
+   "0x50": "0x00000000",
+   "0x54": "0x00000000",
+   "0x58": "0x00000000",
+   "0x5C": "0x00000000",
+   "0x60": "0x00000000",
+   "0x64": "0x0A001640",
+   "0x68": "0x000F0000",
+   "0x6C": "0xFFFFFF00",
+   "0xA0": "0xFEC10002",
+   "0xB8": "0x4DE90000",
+   "0xBC": "0x00000000"
+  }
+ },
+ "config": [
+  "CONFIG_NET_DEVMEM=y",
+  "CONFIG_DEVMEM=y",
+  "CONFIG_ARCH_HAS_DEVMEM_IS_ALLOWED=y",
+  "CONFIG_STRICT_DEVMEM=y",
+  "CONFIG_IO_STRICT_DEVMEM=y"
+ ],
+ "test_page": {
+  "allowed": true,
+  "bytes": 4096,
+  "sha256": "c973bdc92a10be59b3b41e91773eb74a7f6db453f828f337a4350e8b3aa69b2e",
+  "all_ff": false,
+  "reset_vector_first_byte": "0x90"
+ }
+}

@@ -1,0 +1,20 @@
+# L49 gpu utc=2026-11-01T00:55:51Z uptime=397.41 kernel=6.18.52-0-lts
+== 00:15.0 before
+		LnkCap:	Port #0, Speed 5GT/s, Width x2, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkSta:	Speed 5GT/s, Width x2
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+== 00:15.1 before
+		LnkCap:	Port #1, Speed 5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkSta:	Speed 2.5GT/s, Width x1
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+no amdgpu_regs_pcie: amdgpu not loaded or debugfs not mounted
+# smnread exit 1
+== 00:15.0 after
+		LnkCap:	Port #0, Speed 5GT/s, Width x2, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkSta:	Speed 5GT/s, Width x2
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+== 00:15.1 after
+		LnkCap:	Port #1, Speed 5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkSta:	Speed 2.5GT/s, Width x1
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+# end utc=00:55:51

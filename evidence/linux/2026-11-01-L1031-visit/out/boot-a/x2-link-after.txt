@@ -1,0 +1,1 @@
+cat: can't open '/sys/kernel/debug/dri/0000:01:00.0//../DP-1/link_settings': No such file or directory

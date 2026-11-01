@@ -1,0 +1,13 @@
+00:05:02 start (Linux clock; RTC holds local time)
+00:05:03 apk exit 0
+00:05:03 L49 done
+00:05:13 amdgpu: modprobe exit 0
+00:05:13 L7 done
+00:05:13 L8 done
+00:05:13 L47 done
+00:05:14 L10 done
+connector 64
+00:05:23 L44 XR24: modetest exit 0
+00:05:33 L44 XB30: modetest exit 0
+00:05:43 L44 XB4H: modetest exit 0
+00:05:44 end

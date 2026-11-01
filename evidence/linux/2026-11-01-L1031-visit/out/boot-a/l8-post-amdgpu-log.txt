@@ -1,0 +1,1 @@
+REFUSED a driver is bound to 01:00.0 (amdgpu): BAR5 reads are refused, use Dbg

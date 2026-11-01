@@ -1,0 +1,1 @@
+Linux bc250diag 6.18.52-0-lts #1-Alpine SMP PREEMPT_DYNAMIC 2026-09-15 05:37:48 x86_64 Linux

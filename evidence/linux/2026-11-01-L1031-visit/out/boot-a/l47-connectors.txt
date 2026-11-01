@@ -1,0 +1,183 @@
+opened device `AMD GPU` on driver `amdgpu` (version 3.64.0 at 0)
+Connectors:
+id	encoder	status		name		size (mm)	modes	encoders
+64	63	connected	DP-1           	520x320		30	63
+  modes:
+	index name refresh (Hz) hdisp hss hse htot vdisp vss vse vtot
+  #0 1920x1200 59.95 1920 1968 2000 2080 1200 1203 1209 1235 154000 flags: phsync, nvsync; type: preferred, driver
+  #1 1920x1080 60.00 1920 2008 2052 2200 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: driver
+  #2 1920x1080 59.94 1920 2008 2052 2200 1080 1084 1089 1125 148352 flags: phsync, pvsync; type: driver
+  #3 1920x1080 50.00 1920 1936 1980 2640 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: driver
+  #4 1920x1080 50.00 1920 2448 2492 2640 1080 1084 1089 1125 148500 flags: phsync, pvsync; type: driver
+  #5 1600x1200 60.00 1600 1664 1856 2160 1200 1201 1204 1250 162000 flags: phsync, pvsync; type: driver
+  #6 1680x1050 59.95 1680 1784 1960 2240 1050 1053 1059 1089 146250 flags: nhsync, pvsync; type: driver
+  #7 1280x1024 75.02 1280 1296 1440 1688 1024 1025 1028 1066 135000 flags: phsync, pvsync; type: driver
+  #8 1280x1024 72.05 1280 1368 1504 1728 1024 1025 1028 1067 132840 flags: nhsync, pvsync; type: 
+  #9 1280x1024 60.02 1280 1328 1440 1688 1024 1025 1028 1066 108000 flags: phsync, pvsync; type: driver
+  #10 1440x900 74.98 1440 1536 1688 1936 900 903 909 942 136750 flags: nhsync, pvsync; type: driver
+  #11 1440x900 59.89 1440 1520 1672 1904 900 903 909 934 106500 flags: nhsync, pvsync; type: driver
+  #12 1280x720 60.00 1280 1390 1430 1650 720 725 730 750 74250 flags: phsync, pvsync; type: driver
+  #13 1280x720 59.94 1280 1390 1430 1650 720 725 730 750 74176 flags: phsync, pvsync; type: driver
+  #14 1280x720 50.00 1280 1720 1760 1980 720 725 730 750 74250 flags: phsync, pvsync; type: driver
+  #15 1024x768 75.03 1024 1040 1136 1312 768 769 772 800 78750 flags: phsync, pvsync; type: driver
+  #16 1024x768 70.07 1024 1048 1184 1328 768 771 777 806 75000 flags: nhsync, nvsync; type: driver
+  #17 1024x768 60.00 1024 1048 1184 1344 768 771 777 806 65000 flags: nhsync, nvsync; type: driver
+  #18 800x600 75.00 800 816 896 1056 600 601 604 625 49500 flags: phsync, pvsync; type: driver
+  #19 800x600 72.19 800 856 976 1040 600 637 643 666 50000 flags: phsync, pvsync; type: driver
+  #20 800x600 60.32 800 840 968 1056 600 601 605 628 40000 flags: phsync, pvsync; type: driver
+  #21 720x576 50.00 720 732 796 864 576 581 586 625 27000 flags: nhsync, nvsync; type: driver
+  #22 720x480 60.00 720 736 798 858 480 489 495 525 27027 flags: nhsync, nvsync; type: driver
+  #23 720x480 59.94 720 736 798 858 480 489 495 525 27000 flags: nhsync, nvsync; type: driver
+  #24 640x480 75.00 640 656 720 840 480 481 484 500 31500 flags: nhsync, nvsync; type: driver
+  #25 640x480 72.81 640 664 704 832 480 489 492 520 31500 flags: nhsync, nvsync; type: driver
+  #26 640x480 66.03 640 664 728 816 480 481 484 499 26885 flags: nhsync, pvsync; type: 
+  #27 640x480 60.00 640 656 752 800 480 490 492 525 25200 flags: nhsync, nvsync; type: driver
+  #28 640x480 59.94 640 656 752 800 480 490 492 525 25175 flags: nhsync, nvsync; type: driver
+  #29 720x400 70.08 720 738 846 900 400 412 414 449 28320 flags: nhsync, pvsync; type: driver
+  props:
+	1 EDID:
+		flags: immutable blob
+		blobs:
+
+		value:
+			<EDID blob removed: 16 lines of 16 bytes>
+	2 DPMS:
+		flags: enum
+		enums: On=0 Standby=1 Suspend=2 Off=3
+		value: 0
+	5 link-status:
+		flags: enum
+		enums: Good=0 Bad=1
+		value: 0
+	6 non-desktop:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	4 TILE:
+		flags: immutable blob
+		blobs:
+
+		value:
+	35 scaling mode:
+		flags: enum
+		enums: None=0 Full=1 Center=2 Full aspect=3
+		value: 0
+	65 Broadcast RGB:
+		flags: enum
+		enums: Automatic=0 Full=1 Limited 16:235=2
+		value: 0
+	36 underscan:
+		flags: enum
+		enums: off=0 on=1 auto=2
+		value: 0
+	37 underscan hborder:
+		flags: range
+		values: 0 128
+		value: 0
+	38 underscan vborder:
+		flags: range
+		values: 0 128
+		value: 0
+	66 max bpc:
+		flags: range
+		values: 8 16
+		value: 16
+	67 Colorspace:
+		flags: enum
+		enums: Default=0 BT709_YCC=2 opRGB=7 BT2020_RGB=9 BT2020_YCC=10
+		value: 0
+	7 HDR_OUTPUT_METADATA:
+		flags: blob
+		blobs:
+
+		value:
+	68 vrr_capable:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	69 Content Protection:
+		flags: enum
+		enums: Undesired=0 Desired=1 Enabled=2
+		value: 0
+	70 HDCP Content Type:
+		flags: enum
+		enums: HDCP Type0=0 HDCP Type1=1
+		value: 0
+	71 subconnector:
+		flags: immutable enum
+		enums: Unknown=0 VGA=1 DVI-D=3 HDMI=11 DP=10 Wireless=18 Native=15
+		value: 15
+74	0	disconnected	DP-2           	0x0		0	73
+  props:
+	1 EDID:
+		flags: immutable blob
+		blobs:
+
+		value:
+	2 DPMS:
+		flags: enum
+		enums: On=0 Standby=1 Suspend=2 Off=3
+		value: 3
+	5 link-status:
+		flags: enum
+		enums: Good=0 Bad=1
+		value: 0
+	6 non-desktop:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	4 TILE:
+		flags: immutable blob
+		blobs:
+
+		value:
+	35 scaling mode:
+		flags: enum
+		enums: None=0 Full=1 Center=2 Full aspect=3
+		value: 0
+	75 Broadcast RGB:
+		flags: enum
+		enums: Automatic=0 Full=1 Limited 16:235=2
+		value: 0
+	36 underscan:
+		flags: enum
+		enums: off=0 on=1 auto=2
+		value: 0
+	37 underscan hborder:
+		flags: range
+		values: 0 128
+		value: 0
+	38 underscan vborder:
+		flags: range
+		values: 0 128
+		value: 0
+	76 max bpc:
+		flags: range
+		values: 8 16
+		value: 16
+	77 Colorspace:
+		flags: enum
+		enums: Default=0 BT709_YCC=2 opRGB=7 BT2020_RGB=9 BT2020_YCC=10
+		value: 0
+	7 HDR_OUTPUT_METADATA:
+		flags: blob
+		blobs:
+
+		value:
+	78 vrr_capable:
+		flags: immutable range
+		values: 0 1
+		value: 0
+	69 Content Protection:
+		flags: enum
+		enums: Undesired=0 Desired=1 Enabled=2
+		value: 0
+	70 HDCP Content Type:
+		flags: enum
+		enums: HDCP Type0=0 HDCP Type1=1
+		value: 0
+	71 subconnector:
+		flags: immutable enum
+		enums: Unknown=0 VGA=1 DVI-D=3 HDMI=11 DP=10 Wireless=18 Native=15
+		value: 0
+

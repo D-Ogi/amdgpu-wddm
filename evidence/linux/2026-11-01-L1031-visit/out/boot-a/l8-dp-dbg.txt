@@ -1,0 +1,24 @@
+=== /sys/kernel/debug/dri/0000:01:00.0/DP-1/ ===
+link_settings=Current:  4  0x6  0  Verified:  4  0xa  16  Reported:  4  0xa  16  Preferred:  0  0x0  0
+max_bpc=16
+output_bpc=Maximum: 8
+=== /sys/kernel/debug/dri/0000:01:00.0/DP-2/ ===
+link_settings=Current:  0  0x0  0  Verified:  0  0x0  0  Reported:  0  0x0  0  Preferred:  0  0x0  0
+max_bpc=16
+output_bpc=
+=== /sys/kernel/debug/dri/1/DP-1/ ===
+link_settings=Current:  4  0x6  0  Verified:  4  0xa  16  Reported:  4  0xa  16  Preferred:  0  0x0  0
+max_bpc=16
+output_bpc=Maximum: 8
+=== /sys/kernel/debug/dri/1/DP-2/ ===
+link_settings=Current:  0  0x0  0  Verified:  0  0x0  0  Reported:  0  0x0  0  Preferred:  0  0x0  0
+max_bpc=16
+output_bpc=
+=== /sys/kernel/debug/dri/128/DP-1/ ===
+link_settings=Current:  4  0x6  0  Verified:  4  0xa  16  Reported:  4  0xa  16  Preferred:  0  0x0  0
+max_bpc=16
+output_bpc=Maximum: 8
+=== /sys/kernel/debug/dri/128/DP-2/ ===
+link_settings=Current:  0  0x0  0  Verified:  0  0x0  0  Reported:  0  0x0  0  Preferred:  0  0x0  0
+max_bpc=16
+output_bpc=

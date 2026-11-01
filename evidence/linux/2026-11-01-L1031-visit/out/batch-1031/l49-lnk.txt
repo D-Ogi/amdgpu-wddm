@@ -1,0 +1,14 @@
+== 00:15.0
+00:15.0 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Hudson PCI to PCI bridge (PCIE port 0) [1022:43a0]
+		LnkCap:	Port #0, Speed 5GT/s, Width x2, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 5GT/s, Width x2
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-
+== 00:15.1
+00:15.1 PCI bridge [0604]: Advanced Micro Devices, Inc. [AMD] Hudson PCI to PCI bridge (PCIE port 1) [1022:43a1]
+		LnkCap:	Port #1, Speed 5GT/s, Width x1, ASPM L0s L1, Exit Latency L0s <64ns, L1 <1us
+		LnkCtl:	ASPM Disabled; RCB 64 bytes, LnkDisable- CommClk+
+		LnkSta:	Speed 2.5GT/s, Width x1
+		LnkCtl2: Target Link Speed: 5GT/s, EnterCompliance- SpeedDis-
+		LnkSta2: Current De-emphasis Level: -3.5dB, EqualizationComplete- EqualizationPhase1-

@@ -1,0 +1,119 @@
+# L7 pre utc=2026-11-01T00:55:51Z uptime=397.49
+== BAR table of 01:00.0 (start end flags; BAR0 = VRAM aperture, BAR5 = registers)
+0x00000000c0000000 0x00000000cfffffff 0x000000000014220c
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x00000000d0000000 0x00000000d01fffff 0x000000000014220c
+0x0000000000000000 0x0000000000000000 0x0000000000000000
+0x000000000000e000 0x000000000000e0ff 0x0000000000040101
+0x00000000fe800000 0x00000000fe87ffff 0x0000000000040200
+== driver: none
+== /proc/iomem: the GPU, BOOTFB / simple-framebuffer and the carve-out neighbourhood
+1:00000000-00000fff : Reserved
+2:00001000-0009ffff : System RAM
+3:000a0000-000fffff : Reserved
+6:00100000-03ffffff : System RAM
+8:04001000-09e01fff : System RAM
+9:09e02000-09ffffff : Reserved
+10:0a000000-7cc1ffff : System RAM
+11:7cc20000-7cc20fff : Reserved
+12:7cc21000-7cd11fff : System RAM
+13:7cd12000-7cd12fff : Reserved
+14:7cd13000-7dce3fff : System RAM
+15:7dce4000-7ddf9fff : Reserved
+18:7defc000-7e23ffff : Reserved
+19:7e240000-7effffff : System RAM
+20:7f000000-7fffffff : Reserved
+23:    c0000000-cfffffff : 0000:01:00.0
+24:      c0000000-c08c9fff : BOOTFB
+26:    d0000000-d01fffff : 0000:01:00.0
+30:    fe700000-fe7fffff : 0000:01:00.2
+31:    fe800000-fe87ffff : 0000:01:00.0
+32:    fe880000-fe883fff : 0000:01:00.1
+34:    fe884000-fe885fff : 0000:01:00.2
+58:fec10000-fec10fff : Reserved
+63:fed80000-fed8ffff : Reserved
+69:100000000-26fffffff : System RAM
+74:270000000-46fffffff : Reserved
+== framebuffer devices
+/sys/class/graphics/fb0 name=simpledrmdrmfb virtual_size=1920,1200 stride=7680 bpp=32
+/sys/class/graphics/fbcon name= virtual_size= stride= bpp=
+platform: simple-framebuffer.0
+== dmesg: firmware framebuffer, aperture handover, GART, TMR, VRAM
+[    0.016240] Booting paravirtualized kernel on bare hardware
+[    0.068525] Spectre V1 : Mitigation: usercopy/swapgs barriers and __user pointer sanitization
+[    0.068531] Spectre V2 : Enabling Speculation Barrier for firmware calls
+[    0.068539] Spectre V2 : mitigation: Enabling conditional Indirect Branch Prediction Barrier
+[    0.251247] pci 0000:00:10.0: BAR 0 [mem 0xfeb00000-0xfeb01fff 64bit]
+[    0.251517] pci 0000:00:11.0: BAR 0 [io  0xf040-0xf047]
+[    0.251524] pci 0000:00:11.0: BAR 1 [io  0xf030-0xf033]
+[    0.251530] pci 0000:00:11.0: BAR 2 [io  0xf020-0xf027]
+[    0.251537] pci 0000:00:11.0: BAR 3 [io  0xf010-0xf013]
+[    0.251544] pci 0000:00:11.0: BAR 4 [io  0xf000-0xf00f]
+[    0.251551] pci 0000:00:11.0: BAR 5 [mem 0xfeb07000-0xfeb077ff]
+[    0.251714] pci 0000:00:12.0: BAR 0 [mem 0xfeb06000-0xfeb06fff]
+[    0.251872] pci 0000:00:12.2: BAR 0 [mem 0xfeb05000-0xfeb050ff]
+[    0.252071] pci 0000:00:13.0: BAR 0 [mem 0xfeb04000-0xfeb04fff]
+[    0.252228] pci 0000:00:13.2: BAR 0 [mem 0xfeb03000-0xfeb030ff]
+[    0.252864] pci 0000:00:14.5: BAR 0 [mem 0xfeb02000-0xfeb02fff]
+[    0.254176] pci 0000:01:00.0: BAR 0 [mem 0xc0000000-0xcfffffff 64bit pref]
+[    0.254184] pci 0000:01:00.0: BAR 2 [mem 0xd0000000-0xd01fffff 64bit pref]
+[    0.254192] pci 0000:01:00.0: BAR 4 [io  0xe000-0xe0ff]
+[    0.254198] pci 0000:01:00.0: BAR 5 [mem 0xfe800000-0xfe87ffff]
+[    0.254456] pci 0000:01:00.1: BAR 0 [mem 0xfe880000-0xfe883fff]
+[    0.254648] pci 0000:01:00.2: BAR 2 [mem 0xfe700000-0xfe7fffff]
+[    0.254656] pci 0000:01:00.2: BAR 5 [mem 0xfe884000-0xfe885fff]
+[    0.255100] pci 0000:03:00.0: BAR 0 [mem 0xfea00000-0xfea03fff 64bit]
+[    0.255487] pci 0000:04:00.0: BAR 0 [io  0xd000-0xd0ff]
+[    0.255497] pci 0000:04:00.0: BAR 2 [mem 0xfe904000-0xfe904fff 64bit]
+[    0.255506] pci 0000:04:00.0: BAR 4 [mem 0xfe900000-0xfe903fff 64bit]
+[    0.576678] [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+[    0.585667] simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+[    1.082650] ata1: SATA max UDMA/133 abar m2048@0xfeb07000 port 0xfeb07100 irq 49 lpm-pol 4
+== registers through BAR5 (PROT_READ, no driver bound)
+# gop BAR5 phys 0xfe800000 size 0x80000 PROT_READ table=/root/ul/l7-fwfb.regs
+HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS          0x0EB28 0x70000000
+HUBPREQ0_DCSURF_PRIMARY_SURFACE_ADDRESS_HIGH     0x0EB2C 0x00000002
+HUBPREQ0_DCSURF_SURFACE_PITCH                    0x0EB1C 0x0000077F
+HUBPREQ0_DCSURF_SURFACE_CONTROL                  0x0EB68 0x00000000
+HUBPREQ0_DCSURF_FLIP_CONTROL                     0x0EB6C 0x00000000
+HUBP0_DCSURF_SURFACE_CONFIG                      0x0EA94 0x00000008
+HUBP0_DCSURF_TILING_CONFIG                       0x0EA9C 0x00000080
+HUBP0_DCSURF_PRI_VIEWPORT_START                  0x0EAA4 0x00000000
+HUBP0_DCSURF_PRI_VIEWPORT_DIMENSION              0x0EAA8 0x04B00780
+HUBP0_DCHUBP_CNTL                                0x0EACC 0x000F1002
+HUBPRET0_HUBPRET_CONTROL                         0x0ECA8 0x00E40000
+CNVC_CFG0_CNVC_SURFACE_PIXEL_FORMAT              0x1063C 0x00000008
+MPCC0_MPCC_CONTROL                               0x11CD0 0xFFFF0461
+OTG0_OTG_CONTROL                                 0x14004 0x80011311
+OTG0_OTG_H_TOTAL                                 0x13FA8 0x0000081F
+OTG0_OTG_V_TOTAL                                 0x13FBC 0x000004D2
+OTG0_OTG_H_BLANK_START_END                       0x13FAC 0x007007F0
+OTG0_OTG_V_BLANK_START_END                       0x13FD8 0x002004D0
+GCMC_VM_FB_LOCATION_BASE                         0x0A600 0x0000F400
+GCMC_VM_FB_LOCATION_TOP                          0x0A604 0x0000F5FF
+GCMC_VM_FB_OFFSET                                0x0A5AC 0x00000270
+GCMC_VM_AGP_BASE                                 0x0A610 0x00000000
+GCMC_VM_AGP_BOT                                  0x0A60C 0x00000000
+GCMC_VM_AGP_TOP                                  0x0A608 0x00000000
+GCMC_VM_SYSTEM_APERTURE_LOW_ADDR                 0x0A614 0x003D0000
+GCMC_VM_SYSTEM_APERTURE_HIGH_ADDR                0x0A618 0x003D8000
+MMMC_VM_FB_LOCATION_BASE                         0x6A1B0 0x0000F400
+MMMC_VM_FB_LOCATION_TOP                          0x6A1B4 0x0000F5FF
+MMMC_VM_FB_OFFSET                                0x6A15C 0x00000270
+GCVM_CONTEXT0_CNTL                               0x0A200 0x007FFE80
+GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32          0x0A3AC 0x00000000
+GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32          0x0A3B0 0x00000000
+GCVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32         0x0A42C 0x00000000
+GCVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32         0x0A430 0x00000000
+GCVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32           0x0A4AC 0x00000000
+GCVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32           0x0A4B0 0x00000000
+GCVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_LO32       0x0A13C 0x00000000
+GCVM_L2_PROTECTION_FAULT_DEFAULT_ADDR_HI32       0x0A140 0x00000000
+MMVM_CONTEXT0_CNTL                               0x69B00 0x007FFE80
+MMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32          0x69CAC 0x00000000
+MMVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32          0x69CB0 0x00000000
+MMVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32         0x69D2C 0x00000000
+MMVM_CONTEXT0_PAGE_TABLE_START_ADDR_HI32         0x69D30 0x00000000
+MMVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32           0x69DAC 0x00000000
+MMVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32           0x69DB0 0x00000000
+# end utc=00:55:51
