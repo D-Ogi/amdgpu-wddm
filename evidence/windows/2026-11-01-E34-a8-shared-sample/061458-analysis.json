@@ -1,0 +1,81 @@
+{
+  "tag": "20261101T061458Z",
+  "client": {
+    "tool": "capshare",
+    "cell": "a8sample",
+    "result": "mismatch",
+    "side": "B",
+    "stage": "sample0",
+    "call": "-",
+    "hr": "-",
+    "at": "1,0",
+    "got": "rgba:00ff0000",
+    "want": "rgba:01fe0001",
+    "diff": 375466,
+    "total": 450560,
+    "max_delta": 255,
+    "content": "-",
+    "gate": "-",
+    "route_a": "gpu11",
+    "route_b": "zink11",
+    "fl_a": "11_1",
+    "fl_b": "10_0",
+    "checks": [
+      "B:sample0=mismatch"
+    ],
+    "elapsed_ms": 532,
+    "decided_ms": 516,
+    "note": "-",
+    "peer_exit": "0x00000000",
+    "exit_code": 1,
+    "verdict": "VERDICT cell=a8sample result=mismatch side=B stage=sample0 call=- hr=- at=1,0 got=rgba:00ff0000 want=rgba:01fe0001 diff=375466/450560 max_delta=255 content=- gate=- route=A:gpu11,B:zink11 fl=A:11_1,B:10_0 checks=B:sample0=mismatch elapsed_ms=532 decided_ms=516 note=- peer_exit=0x00000000"
+  },
+  "assessment": {
+    "acceptance": true,
+    "positive": false,
+    "issues": [],
+    "verdict": "mismatch",
+    "case": "alpha-red",
+    "arm": "B",
+    "identity_kind": "in-process module path plus on-disk SHA256, not memory hash",
+    "import_map": "not measured by this DEFAULT shared texture client"
+  },
+  "controller": {
+    "restoration_required": true,
+    "result": 0,
+    "elapsed_ms": 12927
+  },
+  "worker": {
+    "complete": true,
+    "exit": 1,
+    "error": null,
+    "utc": "2026-11-01T06:15:42.3266811Z"
+  },
+  "restores": [
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:15:49.0906340Z"
+    },
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:15:51.4583393Z"
+    },
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:15:55.1593852Z"
+    }
+  ],
+  "guard_samples": 12,
+  "guard_all_safe": true,
+  "guard_max_c": 71.6,
+  "guard_max_age": 1.9,
+  "readbacks": [
+    "ALPHA readback-pitch=2816 checked=450560 differences=375466"
+  ],
+  "alpha_failures": [
+    "A    172 ALPHA ExtendedResourceSharing query=0x00000000 value=1"
+  ]
+}

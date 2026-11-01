@@ -1,0 +1,30 @@
+{
+  "tool": "capshare",
+  "cell": "a8sample",
+  "result": "mismatch",
+  "side": "B",
+  "stage": "sample0",
+  "call": "-",
+  "hr": "-",
+  "at": "1,0",
+  "got": "rgba:00ff0000",
+  "want": "rgba:01fe0001",
+  "diff": 375466,
+  "total": 450560,
+  "max_delta": 255,
+  "content": "-",
+  "gate": "-",
+  "route_a": "gpu11",
+  "route_b": "zink11",
+  "fl_a": "11_1",
+  "fl_b": "10_0",
+  "checks": [
+    "B:sample0=mismatch"
+  ],
+  "elapsed_ms": 532,
+  "decided_ms": 516,
+  "note": "-",
+  "peer_exit": "0x00000000",
+  "exit_code": 1,
+  "verdict": "VERDICT cell=a8sample result=mismatch side=B stage=sample0 call=- hr=- at=1,0 got=rgba:00ff0000 want=rgba:01fe0001 diff=375466/450560 max_delta=255 content=- gate=- route=A:gpu11,B:zink11 fl=A:11_1,B:10_0 checks=B:sample0=mismatch elapsed_ms=532 decided_ms=516 note=- peer_exit=0x00000000"
+}

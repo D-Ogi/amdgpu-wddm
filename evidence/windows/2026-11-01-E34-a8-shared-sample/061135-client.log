@@ -1,0 +1,104 @@
+A     16 ENV role=parent pid=5512 exe=parent-a8-20261101T061135Z.exe os=10.0.22631 session=1 cell=a8sample size=704x640 format=A8_UNORM bound_s=60 relaunched=1
+A     16 ENV cmdline="<trial-root>\20261101T061135Z\parent-a8-20261101T061135Z.exe" --cell a8sample --format a8 --size 704x640 --handle kmt --sync cpu --bound 60 --peer-exe "<trial-root>\20261101T061135Z\peer-a8-20261101T061135Z.exe" --out "<trial-root>\20261101T061135Z\client.log" --json "<trial-root>\20261101T061135Z\client.json" --stderr "<trial-root>\20261101T061135Z\client.stderr" --relaunched --t0 4117812
+A     16 STAGE alpha-adapter
+A     31 ADAPTER index=0 luid=0:00008631 vendor=0x1002 device=0x13fe flags=0x0 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=7904 desc="BC-250 GPU (amdgpu-wddm)"
+A     31 ADAPTER index=1 luid=0:0000929f vendor=0x1414 device=0x008c flags=0x2 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=0 desc="Microsoft Basic Render Driver"
+A     31 ADAPTER chosen index=0
+A     31 STAGE alpha-device
+A    156 ALPHA call=D3D11CreateDevice hr=0x00000000
+A    156 MODULE when=alpha-device <windows>\SYSTEM32\dxgi.dll
+A    156 MODULE when=alpha-device <windows>\SYSTEM32\d3d11.dll
+A    156 MODULE when=alpha-device <windows>\SYSTEM32\D3DCOMPILER_47.dll
+A    156 MODULE when=alpha-device <windows>\SYSTEM32\dwmapi.dll
+A    156 MODULE when=alpha-device <windows>\SYSTEM32\d3d12.dll
+A    156 MODULE when=alpha-device <driver-package>\desktop\bc250d3d_router.dll
+A    156 MODULE when=alpha-device <driver-package>\d3d11\amdgpu_wddm_d3d11.dll
+A    156 MODULE when=alpha-device <driver-package>\d3d11\amdgpu_wddm_dxvk.dll
+A    156 MODULE when=alpha-device <driver-package>\d3d11\amdgpu_wddm_radv_d3d11.dll
+A    156 MODULE when=alpha-device <windows>\system32\DComp.DLL
+A    156 MODULES when=alpha-device total=49 graphics=10 route=gpu11 umds=bc250d3d_router.dll+amdgpu_wddm_d3d11.dll+amdgpu_wddm_dxvk.dll+amdgpu_wddm_radv_d3d11.dll
+A    156 ALPHA identity pid=5512 creation_filetime=134379871371597822
+A    156 ALPHA loaded_path=<trial-root>\20261101T061135Z\parent-a8-20261101T061135Z.exe base=00007FF67C960000 size=3346432 disk_sha256=e77a46eb52ce8d29dbdbdfe1ced559218212b03bec9e2aa078f4c1503c480bf8 (not-memory-hash)
+A    156 ALPHA loaded_path=<windows>\SYSTEM32\dxgi.dll base=00007FFA1C270000 size=1011712 disk_sha256=ddc578a287120bac2bfccbaecbde5eb41e397b023853340204a3b4fad98bda3b (not-memory-hash)
+A    156 ALPHA loaded_path=<windows>\SYSTEM32\d3d11.dll base=00007FFA193A0000 size=2453504 disk_sha256=697be4db1e5e3106c61f63363d82cd2ff2a922bb2887a5fd6e23234620b7904a (not-memory-hash)
+A    172 ALPHA loaded_path=<windows>\SYSTEM32\D3DCOMPILER_47.dll base=00007FFA18E60000 size=4087808 disk_sha256=b0e7667cd5ea5c578ee1a73c7cd89521c200a854da2a4ad57c1877232fc8b6a7 (not-memory-hash)
+A    172 ALPHA loaded_path=<driver-package>\desktop\bc250d3d_router.dll base=00007FFA14820000 size=262144 disk_sha256=6224848d77ab5fe4a780d7121e841e322e0a3519d983e8204c52e4afbddf15e6 (not-memory-hash)
+A    172 ALPHA loaded_path=<driver-package>\d3d11\amdgpu_wddm_d3d11.dll base=00007FF9F61C0000 size=630784 disk_sha256=30ec474fcca15fa56a998f45c1f37695a9c04014509957cdebd862e38cb9cc77 (not-memory-hash)
+A    172 ALPHA loaded_path=<driver-package>\d3d11\amdgpu_wddm_dxvk.dll base=00007FF9F4390000 size=5693440 disk_sha256=25285e03769ccd958cac3e1a67d1b346d9b3d9e105333b08cf9f14eb601614fd (not-memory-hash)
+A    188 ALPHA loaded_path=<driver-package>\d3d11\amdgpu_wddm_radv_d3d11.dll base=00007FF9F3140000 size=19161088 disk_sha256=e2e251ea683a6831aa0077e70d5b4ca1de714b6a673c886c8f18972954c4aeca (not-memory-hash)
+A    188 ALPHA call=CheckFormatSupport hr=0x00000000
+A    188 ALPHA format=A8_UNORM support=02e6f3f0
+A    188 ALPHA ExtendedResourceSharing query=0x00000000 value=1
+A    234 PEER started pid=8 exe=<trial-root>\20261101T061135Z\peer-a8-20261101T061135Z.exe
+A    234 ODS M14: instance policy sparse=1 source=0 status=C0000034 result=00000000
+A    234 ODS bc250d3d_router pid=5512 exe=parent-a8-20261101T061135Z.exe entry=OpenAdapter10_2 route=gpu reason=app-default fallback=0 gpu_hr=00000000 hr=00000000 module=<driver-package>\d3d11\amdgpu_wddm_d3d11.dll app_mode=gpu-default mode_source=registry gpu_source=router-directory cpu_source=router-directory render_on_cpu=unset
+A    234 ODS M14 DDI versions: 11_1 + WDDM2_0 (OS WDDM ceiling; wddm22-ddi-off=0)
+A    234 ODS M14: GetCaps type 151 not answered
+A    234 ODS M14: CalcPrivateDeviceSize Interface=000B0020 Version=00090000 Flags=00000040
+A    234 ODS M14: CreateDevice Interface=000B0020 Version=00090000 Flags=00000040
+A    234 ODS amdgpu-wddm settings: api=d3d11 app=parent-a8-20261101T061135Z.exe FrameRateLimit=unset VSync=unset Anisotropy=unset MaxFrameLatency=unset PerformanceOverlay=unset RenderOnCpu=unset FsrUpgrade=unset
+A    234 ODS M14 engine warning: D3D11DeviceFeatures: Some formats not supported for resource sharing
+A    234 ODS BC250 BD-253: CreateDevice runtime=00000160E1F2DD68 identity=00000160E1F69FF8 handle-of-kept-device=0 kept-devices=0 short-lost-devices=0
+A    234 ODS amdgpu-wddm recent-launch api=2 outcome=recorded us=1547
+A    234 STAGE alpha-peer-device
+B    250 ENV role=peer pid=8 exe=peer-a8-20261101T061135Z.exe os=10.0.22631 session=1 cell=a8sample size=704x640 format=A8_UNORM bound_s=30 relaunched=0
+B    250 ENV cmdline="<trial-root>\20261101T061135Z\peer-a8-20261101T061135Z.exe" --role peer --cell a8sample --size 704x640 --format a8 --sync cpu --handle kmt --delay-copies 128 --delay-size 2048 --gate-ms 300 --tolerance 0 --producer d3d12 --t0 4117812 --deadline 4175812 --out "<trial-root>\20261101T061135Z\client.log" --luid 0:8631 --ipc 39c,3ac
+B    250 STAGE alpha-adapter
+B    266 ADAPTER index=0 luid=0:00008631 vendor=0x1002 device=0x13fe flags=0x0 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=7904 desc="BC-250 GPU (amdgpu-wddm)"
+B    266 ADAPTER index=1 luid=0:0000929f vendor=0x1414 device=0x008c flags=0x2 monitored_fences=1 non_monitored_fences=0 keyed_mutex_conformance=1 vram_mib=0 desc="Microsoft Basic Render Driver"
+B    266 ADAPTER chosen by luid 0:00008631
+B    266 STAGE alpha-device
+B    328 ALPHA call=D3D11CreateDevice hr=0x00000000
+B    328 MODULE when=alpha-device <windows>\SYSTEM32\dxgi.dll
+B    328 MODULE when=alpha-device <windows>\SYSTEM32\d3d11.dll
+B    328 MODULE when=alpha-device <windows>\SYSTEM32\d3d12.dll
+B    328 MODULE when=alpha-device <windows>\SYSTEM32\dwmapi.dll
+B    328 MODULE when=alpha-device <windows>\SYSTEM32\D3DCOMPILER_47.dll
+B    328 MODULE when=alpha-device <driver-package>\desktop\bc250d3d_router.dll
+B    328 MODULE when=alpha-device <driver-package>\desktop\bc250d3d_zink.dll
+B    328 MODULE when=alpha-device <driver-package>\desktop\amdgpu_wddm_radv.dll
+B    328 MODULE when=alpha-device <windows>\system32\DComp.DLL
+B    328 MODULES when=alpha-device total=40 graphics=9 route=zink11 umds=bc250d3d_router.dll+bc250d3d_zink.dll+amdgpu_wddm_radv.dll
+B    328 ALPHA identity pid=8 creation_filetime=134379871373865279
+B    328 ALPHA loaded_path=<trial-root>\20261101T061135Z\peer-a8-20261101T061135Z.exe base=00007FF66F0F0000 size=3346432 disk_sha256=e77a46eb52ce8d29dbdbdfe1ced559218212b03bec9e2aa078f4c1503c480bf8 (not-memory-hash)
+B    328 ALPHA loaded_path=<windows>\SYSTEM32\dxgi.dll base=00007FFA1C270000 size=1011712 disk_sha256=ddc578a287120bac2bfccbaecbde5eb41e397b023853340204a3b4fad98bda3b (not-memory-hash)
+B    328 ALPHA loaded_path=<windows>\SYSTEM32\d3d11.dll base=00007FFA193A0000 size=2453504 disk_sha256=697be4db1e5e3106c61f63363d82cd2ff2a922bb2887a5fd6e23234620b7904a (not-memory-hash)
+B    328 ALPHA loaded_path=<windows>\SYSTEM32\D3DCOMPILER_47.dll base=00007FFA18E60000 size=4087808 disk_sha256=b0e7667cd5ea5c578ee1a73c7cd89521c200a854da2a4ad57c1877232fc8b6a7 (not-memory-hash)
+B    328 ALPHA loaded_path=<driver-package>\desktop\bc250d3d_router.dll base=00007FFA14820000 size=262144 disk_sha256=6224848d77ab5fe4a780d7121e841e322e0a3519d983e8204c52e4afbddf15e6 (not-memory-hash)
+B    344 ALPHA loaded_path=<driver-package>\desktop\bc250d3d_zink.dll base=00007FFA139E0000 size=11988992 disk_sha256=9d3e6cc6b96f9744b434fbcc0c466d791beed401b2409dcbeb010e6ea0cf38ae (not-memory-hash)
+B    359 ALPHA loaded_path=<driver-package>\desktop\amdgpu_wddm_radv.dll base=00007FFA12870000 size=17489920 disk_sha256=0e39444649e4ccf15c570f9a6ca293f46452aeb0b6744045bd7bbc9f7dcdc7f0 (not-memory-hash)
+B    359 ALPHA call=CheckFormatSupport hr=0x00000000
+B    359 ALPHA format=A8_UNORM support=0006f3f0
+B    359 -> HELLO route=zink11 fl=10_0
+A    359 STAGE alpha-producer-create
+A    375 ALPHA call=CreateTexture2D(shared-producer) hr=0x00000000
+A    375 ALPHA call=CreateQuery(event) hr=0x00000000
+A    375 ALPHA call=GetData(event) hr=0x00000000
+A    375 ALPHA call=GetDeviceRemovedReason hr=0x00000000
+A    375 ALPHA call=QueryInterface(IDXGIResource) hr=0x00000000
+A    375 ALPHA call=GetSharedHandle hr=0x00000000
+A    375 ALPHA producer phase=0 size=704x640 upload-pitch=768 handle=0000000040001282
+A    375 -> SAMPLE res=40001282 phase=0
+A    375 STAGE alpha-peer-sample-close
+B    375 ODS bc250d3d_front installed adapter=000002829CBA4C80 interface=000b0011 version=00060000 caps_query=00000000 caps_flags=00000003 source=1920x1200 wddm13=follow level=d3d11_1 hosted_mpo=1
+B    375 ODS bc250d3d_router pid=8 exe=peer-a8-20261101T061135Z.exe entry=OpenAdapter10_2 route=hosted reason=hosted fallback=0 hosted_hr=00000000 hr=00000000 module=<driver-package>\desktop\bc250d3d_zink.dll cpu_source=router-directory hosted_source=router-directory force_cpu=0 require_switches=1 switch_source=latched blit=1 interop=1 front=on record=none
+B    375 ODS bc250d3d_front supported_versions hosted=3 total=4 added=000b000f00000000 wddm13=0000000000000000
+B    375 ODS bc250d3d_front installed adapter=000002829CBA47E0 interface=000b0011 version=00060000 caps_query=00000000 caps_flags=00000003 source=1920x1200 wddm13=follow level=d3d11_1 hosted_mpo=1
+B    375 ODS bc250d3d_router pid=8 exe=peer-a8-20261101T061135Z.exe entry=OpenAdapter10_2 route=hosted reason=hosted fallback=0 hosted_hr=00000000 hr=00000000 module=<driver-package>\desktop\bc250d3d_zink.dll cpu_source=router-directory hosted_source=router-directory force_cpu=0 require_switches=1 switch_source=latched blit=1 interop=1 front=on record=none
+B    375 ODS bc250d3d_front supported_versions hosted=3 total=4 added=000b000f00000000 wddm13=0000000000000000
+B    375 ODS bc250d3d_front create_device device=000002829CBB38A0 interface=000b000f version=0000000a flags=00000000 pipeline_level=0 hosted_size=9600 front_offset=9600 dxgi=1 dxgi_resolve=front retrieve_subobject=0 hosted_hr=00000000
+B    375 STAGE alpha-open-shared
+B    375 ALPHA call=OpenSharedResource(A8/BGRA) hr=0x887A0005
+B    375 PEER-FAIL stage=alpha-open-shared call=OpenSharedResource(A8/BGRA) hr=0x887A0005 note=- removed=0x887A0001
+B    375 ODS BC250 SetError 88760885
+B    375 ODS D3D11: Removing Device.
+B    375 ODS BC250 OpenResource allocation=40000940 704x640 format=28: CreateResource failed
+B    375 -> FAIL kind=fail stage=alpha-open-shared call=OpenSharedResource(A8/BGRA) hr=0x887A0005 note=- removed=0x887A0001
+A    375 FAIL side=B stage=alpha-open-shared call=OpenSharedResource(A8/BGRA) hr=0x887A0005 note=-
+B    391 ODS bc250d3d_front device=000002829CBB38A0 destroy direct_flip_calls=0 direct_flip_true=0 clear_view_calls=0 clear_view_rect_calls=0 refusals=0 recorded_resources=1
+B    391 EXIT code=2
+A    391 STAGE end-peer
+A    391 -> DONE
+A    391 PEER exit=0x00000002
+A    391 VERDICT cell=a8sample result=fail side=B stage=alpha-open-shared call=OpenSharedResource(A8/BGRA) hr=0x887A0005 at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:zink11 fl=A:11_1,B:10_0 checks=- elapsed_ms=391 decided_ms=375 note=- removed_B=0x887A0001 peer_exit=0x00000002
+A    391 EXIT code=2

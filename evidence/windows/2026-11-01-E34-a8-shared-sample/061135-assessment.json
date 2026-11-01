@@ -1,0 +1,16 @@
+{
+  "acceptance": false,
+  "positive": true,
+  "issues": [
+    "Missing/incorrect completed JSON verdict or exit",
+    "Missing/distinct phase checks or wrong negative control",
+    "Peer lifecycle did not exit cleanly",
+    "Readback count mismatch",
+    "Imported resource close acknowledgement sequence mismatch"
+  ],
+  "verdict": "fail",
+  "case": "a8",
+  "arm": "A",
+  "identity_kind": "in-process module path plus on-disk SHA256, not memory hash",
+  "import_map": "not measured by this DEFAULT shared texture client"
+}

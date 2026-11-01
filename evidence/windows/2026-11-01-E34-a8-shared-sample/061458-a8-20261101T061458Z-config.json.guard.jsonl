@@ -1,0 +1,5 @@
+{"temperatureC": 69.8, "read_ms": 39, "elapsed_ms": 238, "ageSeconds": 1.6, "stop": false, "utc": "2026-11-01T06:15:35.9151202Z", "safe": true}
+{"temperatureC": 70.6, "read_ms": 2, "elapsed_ms": 3324, "ageSeconds": 0.5, "stop": false, "utc": "2026-11-01T06:15:39.0051605Z", "safe": true}
+{"temperatureC": 70.9, "read_ms": 15, "elapsed_ms": 6417, "ageSeconds": 1.5, "stop": false, "utc": "2026-11-01T06:15:42.0969729Z", "safe": true}
+{"temperatureC": 71.5, "read_ms": 2, "elapsed_ms": 9493, "ageSeconds": 0.4, "stop": false, "utc": "2026-11-01T06:15:45.1741020Z", "safe": true}
+{"temperatureC": 71.6, "read_ms": 1, "elapsed_ms": 12567, "ageSeconds": 1.3, "stop": false, "utc": "2026-11-01T06:15:48.2465974Z", "safe": true}

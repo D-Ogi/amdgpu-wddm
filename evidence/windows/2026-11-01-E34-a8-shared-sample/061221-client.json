@@ -1,0 +1,33 @@
+{
+  "tool": "capshare",
+  "cell": "a8sample",
+  "result": "pass",
+  "side": "-",
+  "stage": "-",
+  "call": "-",
+  "hr": "-",
+  "at": "-",
+  "got": "-",
+  "want": "-",
+  "diff": 0,
+  "total": 0,
+  "max_delta": 0,
+  "content": "-",
+  "gate": "-",
+  "route_a": "gpu11",
+  "route_b": "zink11",
+  "fl_a": "11_1",
+  "fl_b": "10_0",
+  "checks": [
+    "B:sample0=pass",
+    "B:sample1=pass",
+    "B:sample2=pass"
+  ],
+  "elapsed_ms": 1515,
+  "decided_ms": 1484,
+  "note": "-",
+  "import_map": "not-measured-default-shared-textures-are-not-mappable",
+  "peer_exit": "0x00000000",
+  "exit_code": 0,
+  "verdict": "VERDICT cell=a8sample result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:zink11 fl=A:11_1,B:10_0 checks=B:sample0=pass,B:sample1=pass,B:sample2=pass elapsed_ms=1515 decided_ms=1484 note=- import_map=not-measured-default-shared-textures-are-not-mappable peer_exit=0x00000000"
+}

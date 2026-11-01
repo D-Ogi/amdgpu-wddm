@@ -1,0 +1,10 @@
+{
+  "acceptance": true,
+  "positive": false,
+  "issues": [],
+  "verdict": "mismatch",
+  "case": "alpha-red",
+  "arm": "B",
+  "identity_kind": "in-process module path plus on-disk SHA256, not memory hash",
+  "import_map": "not measured by this DEFAULT shared texture client"
+}

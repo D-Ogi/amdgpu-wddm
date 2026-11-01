@@ -1,0 +1,85 @@
+{
+  "tag": "20261101T061135Z",
+  "client": {
+    "tool": "capshare",
+    "cell": "a8sample",
+    "result": "fail",
+    "side": "B",
+    "stage": "alpha-open-shared",
+    "call": "OpenSharedResource(A8/BGRA)",
+    "hr": "0x887A0005",
+    "at": "-",
+    "got": "-",
+    "want": "-",
+    "diff": 0,
+    "total": 0,
+    "max_delta": 0,
+    "content": "-",
+    "gate": "-",
+    "route_a": "gpu11",
+    "route_b": "zink11",
+    "fl_a": "11_1",
+    "fl_b": "10_0",
+    "checks": [],
+    "elapsed_ms": 391,
+    "decided_ms": 375,
+    "note": "-",
+    "removed_B": "0x887A0001",
+    "peer_exit": "0x00000002",
+    "exit_code": 2,
+    "verdict": "VERDICT cell=a8sample result=fail side=B stage=alpha-open-shared call=OpenSharedResource(A8/BGRA) hr=0x887A0005 at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:zink11 fl=A:11_1,B:10_0 checks=- elapsed_ms=391 decided_ms=375 note=- removed_B=0x887A0001 peer_exit=0x00000002"
+  },
+  "assessment": {
+    "acceptance": false,
+    "positive": true,
+    "issues": [
+      "Missing/incorrect completed JSON verdict or exit",
+      "Missing/distinct phase checks or wrong negative control",
+      "Peer lifecycle did not exit cleanly",
+      "Readback count mismatch",
+      "Imported resource close acknowledgement sequence mismatch"
+    ],
+    "verdict": "fail",
+    "case": "a8",
+    "arm": "A",
+    "identity_kind": "in-process module path plus on-disk SHA256, not memory hash",
+    "import_map": "not measured by this DEFAULT shared texture client"
+  },
+  "controller": {
+    "restoration_required": true,
+    "result": 1,
+    "elapsed_ms": 7173
+  },
+  "worker": {
+    "complete": true,
+    "exit": 2,
+    "error": null,
+    "utc": "2026-11-01T06:12:17.0494160Z"
+  },
+  "restores": [
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:12:21.0341927Z"
+    },
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:12:23.3527117Z"
+    },
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:12:26.8089348Z"
+    }
+  ],
+  "guard_samples": 9,
+  "guard_all_safe": true,
+  "guard_max_c": 71,
+  "guard_max_age": 2,
+  "readbacks": [],
+  "alpha_failures": [
+    "A    188 ALPHA ExtendedResourceSharing query=0x00000000 value=1",
+    "B    375 ALPHA call=OpenSharedResource(A8/BGRA) hr=0x887A0005"
+  ]
+}

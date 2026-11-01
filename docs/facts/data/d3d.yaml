@@ -88,10 +88,11 @@ facts:
     evidence: "[Hosted screens](../evidence/windows/2026-09-26-E34-hosted-screen/RESULT.md)"
   - id: M541
     status: MEASURED
-    date: "2026-09-26"
-    claim: "Hosted Zink imports runtime-owned shared LB7A allocations through private identity/allocation/GPU-VA contract, without surface Lock2. Three64x64 exact-color readbacks pass including surviving second device, run018 exit0. Separate staging oracle remains. Windows modifier placeholders and private image-layout pNext corrected. Baselines restored, DWM1052 unchanged. Cross-device contents, native Present and G0 remain open."
-    status_text: "MEASURED (unit A)"
-    evidence: "[Hosted runtime surfaces](../evidence/windows/2026-09-26-E34-hosted-import/RESULT.md)"
+    date: "2026-11-01"
+    claim: "Hosted Zink imports runtime-owned shared allocations. On unit A, native gpu11 producer to zink11 peer A8 sampling passes on candidate 63fd611f/51C5E537: three exact 450560-pixel readbacks at 704x640 and three exact 447939-pixel readbacks at 701x639. Baseline 9D3E6CC6 fails A8 OpenSharedResource with 887A0005; both builds pass the BGRA control."
+    status_text: "MEASURED (unit A, bounded A/B with positive and negative controls)"
+    detail: "The wrong-channel A8 control detects 375466 differing pixels of 450560, max delta255. Client E77A46EB checks the admitted producer sharing contract and samples the import on the GPU before separate RGBA staging readback. Module association plus on-disk hashes identify artifacts, not loaded memory. All six arms report successful restoration; recorded guards peak at73.1 C. This does not validate CPU Map of imported DEFAULT textures, Settings/desktop image or input acceptance. Historical 2026-09-26 run018 passed three64x64 exact-color readbacks through the private LB7A import contract, including second-device survival, without surface Lock2."
+    evidence: "[A8 shared sample A/B](../evidence/windows/2026-11-01-E34-a8-shared-sample/RESULT.md), [Historical hosted runtime surfaces](../evidence/windows/2026-09-26-E34-hosted-import/RESULT.md)"
   - id: M542
     status: MEASURED
     date: "2026-09-26"

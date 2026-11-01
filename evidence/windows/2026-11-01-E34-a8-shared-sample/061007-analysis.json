@@ -1,0 +1,86 @@
+{
+  "tag": "20261101T061007Z",
+  "client": {
+    "tool": "capshare",
+    "cell": "a8sample",
+    "result": "pass",
+    "side": "-",
+    "stage": "-",
+    "call": "-",
+    "hr": "-",
+    "at": "-",
+    "got": "-",
+    "want": "-",
+    "diff": 0,
+    "total": 0,
+    "max_delta": 0,
+    "content": "-",
+    "gate": "-",
+    "route_a": "gpu11",
+    "route_b": "zink11",
+    "fl_a": "11_1",
+    "fl_b": "10_0",
+    "checks": [
+      "B:sample0=pass",
+      "B:sample1=pass",
+      "B:sample2=pass"
+    ],
+    "elapsed_ms": 687,
+    "decided_ms": 687,
+    "note": "-",
+    "import_map": "not-measured-default-shared-textures-are-not-mappable",
+    "peer_exit": "0x00000000",
+    "exit_code": 0,
+    "verdict": "VERDICT cell=a8sample result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:zink11 fl=A:11_1,B:10_0 checks=B:sample0=pass,B:sample1=pass,B:sample2=pass elapsed_ms=687 decided_ms=687 note=- import_map=not-measured-default-shared-textures-are-not-mappable peer_exit=0x00000000"
+  },
+  "assessment": {
+    "acceptance": true,
+    "positive": true,
+    "issues": [],
+    "verdict": "pass",
+    "case": "bgra8",
+    "arm": "A",
+    "identity_kind": "in-process module path plus on-disk SHA256, not memory hash",
+    "import_map": "not measured by this DEFAULT shared texture client"
+  },
+  "controller": {
+    "restoration_required": true,
+    "result": 0,
+    "elapsed_ms": 8482
+  },
+  "worker": {
+    "complete": true,
+    "exit": 0,
+    "error": null,
+    "utc": "2026-11-01T06:10:47.1648603Z"
+  },
+  "restores": [
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:10:52.3739339Z"
+    },
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:10:56.2960768Z"
+    },
+    {
+      "restored": true,
+      "errors": [],
+      "utc": "2026-11-01T06:10:59.7737867Z"
+    }
+  ],
+  "guard_samples": 9,
+  "guard_all_safe": true,
+  "guard_max_c": 70.5,
+  "guard_max_age": 1.7,
+  "readbacks": [
+    "ALPHA readback-pitch=2816 checked=450560 differences=0",
+    "ALPHA readback-pitch=2816 checked=450560 differences=0",
+    "ALPHA readback-pitch=2816 checked=450560 differences=0"
+  ],
+  "alpha_failures": [
+    "A    265 ALPHA ExtendedResourceSharing query=0x00000000 value=1"
+  ]
+}

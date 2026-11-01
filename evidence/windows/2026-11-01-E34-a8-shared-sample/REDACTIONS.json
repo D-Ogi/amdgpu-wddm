@@ -1,0 +1,516 @@
+{
+  "format": 1,
+  "policy": "Retain selected complete text records; replace absolute path roots and private identifiers. Omit binary payloads, runner scripts and registry journals from public evidence. Raw archives remain immutable outside the repository.",
+  "runs": [
+    {
+      "tag": "20261101T061007Z",
+      "archive": "a8-20261101T061007Z-raw.tar",
+      "archive_sha256": "42056bb1789e19d29ce4a440f17d31f35daff9855f8789e22c30301868fc9dde",
+      "collect_sha256": "be095835be4df54b232c45a2b933e5fa876a46bb50cc912a6988f391446b68a2",
+      "members": [
+        {
+          "raw_sha256": "f077b1a64b7b58d6ed3828e0717fbeb3141afa68baba758ac3008c58351cabd2",
+          "published": "061007-a8-20261101T061007Z-config.json.guard.jsonl",
+          "published_sha256": "1fe9fdfbe94d64ad063e1dae97eafe41fa013a8d717d2ac0fb02772f880caad9",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./a8-20261101T061007Z-config.json.guard.jsonl"
+        },
+        {
+          "raw_sha256": "34a723a41cd9809a7d8fe209c04e1acf2fd2ea7082ddd333e002b5454e7abeb0",
+          "published": "061007-assessment.json",
+          "published_sha256": "ec61e8894f9d1219f20e9db2e9b65709180bf9bf74fbe74b0904fc1b3c7d78e7",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/assessment.json"
+        },
+        {
+          "raw_sha256": "bab62db7f6ba6b0e79bdd587f3179ae23cc1415a3dcc69c73cf7b95ae2927529",
+          "published": "061007-client.json",
+          "published_sha256": "e672097db7be0196e00399ba12531aa3097ff4bb4e49c13323da1a5ad2c8058f",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/client.json"
+        },
+        {
+          "raw_sha256": "de260e150a1e4e197f43c95b6f54a207043fd850413419b2fe0dcf6b174fb00d",
+          "published": "061007-client.log",
+          "published_sha256": "3db6b7a58d62236c5cf865c30a45c888387f970ebb4596811c39b4e7d43968c5",
+          "transformation": "redact policy + UTF-8/LF; trailing horizontal whitespace removed",
+          "archive_member": "./20261101T061007Z/client.log"
+        },
+        {
+          "raw_sha256": "069c66c2dcf5af6c130b364646b0ce2590850e668550c91c027675c492718db5",
+          "published": "061007-controller.done.json",
+          "published_sha256": "c42c0fde3d291e15b7c9b3eaf64dfac345c16d3223ce38f02d8b13c6d5d1fddb",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/controller.done.json"
+        },
+        {
+          "raw_sha256": "9f635bf9039edba32dbc3b0d4df050b32d22be48bd47b9ff914c780e2c3eb59d",
+          "published": "061007-guard.jsonl",
+          "published_sha256": "68ce77c5d7607c5bf2a2e8142fcd730413a4d198d7598f5aaebecf946fa6915a",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/guard.jsonl"
+        },
+        {
+          "raw_sha256": "2006ab42238aa808f9c5c023442deb8b751da9efe88de6a382f2fe8f49318382",
+          "published": "061007-restore-20261101T0610523729106Z-6880.json",
+          "published_sha256": "f59fea83dc885c1860ca64fdf86702ca0a8906ebc3af20403a74f2ad9b819ddd",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/restore-20261101T0610523729106Z-6880.json"
+        },
+        {
+          "raw_sha256": "cc309ab1c6b749890996311fc4bf74f8fab80f5d9abaab0fe93b093b50657ca1",
+          "published": "061007-restore-20261101T0610562868747Z-3448.json",
+          "published_sha256": "7515734b2ff231c1ed9705e182d4308516b46fa15256a0946b973425610d4c99",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/restore-20261101T0610562868747Z-3448.json"
+        },
+        {
+          "raw_sha256": "c43bf0b7a0ec3da79c71e7fc260845aa6da0b2c78390bba141d6297d239a76fa",
+          "published": "061007-restore-20261101T0610597633425Z-288.json",
+          "published_sha256": "0adf72a9169fcb187429c1e2b76d42c0ab8ad109d19e388c616222dfe8a0c1a7",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/restore-20261101T0610597633425Z-288.json"
+        },
+        {
+          "raw_sha256": "545113a253b026df25e9620abfbff33d9a72a3325e4ddb0592621d0ca8805390",
+          "published": "061007-worker.done.json",
+          "published_sha256": "7d1808c4c4a576186f7179587b6546d2a41dc6aa7f43b418906c2048c2a870fa",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061007Z/worker.done.json"
+        }
+      ],
+      "derived_analysis": {
+        "raw_sha256": "eae3be1366c23a5b76e1c072125e027d0e070a3c301c52c7388574f0d5f232cc",
+        "published": "061007-analysis.json",
+        "published_sha256": "2650a752e5fa34a3034059234f2e3e55abba2391b8ec2f09252fe9f4788a69a4",
+        "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+        "source": "a8-20261101T061007Z-analysis.json"
+      }
+    },
+    {
+      "tag": "20261101T061135Z",
+      "archive": "a8-20261101T061135Z-raw.tar",
+      "archive_sha256": "cd2aa861be8222c53e896c8e042f508484bab91522aa27f08688dfb300aa1f04",
+      "collect_sha256": "fba9e447c9c386dcd39f31f3a69b33d0f2494eb229e300b635fd518c66d4ca2d",
+      "members": [
+        {
+          "raw_sha256": "d23f4930bd65789081a96812d598a58678c19092abcc4c65620c879d3bfc5347",
+          "published": "061135-a8-20261101T061135Z-config.json.guard.jsonl",
+          "published_sha256": "0306c09aa31986eb01002b38afe00e9bef4f77308cbae31bb39590d56b435791",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./a8-20261101T061135Z-config.json.guard.jsonl"
+        },
+        {
+          "raw_sha256": "84ff4b65ebb16cd1f68c057b48cfbad083d382efb3135fa668fd33574ee8ede0",
+          "published": "061135-assessment.json",
+          "published_sha256": "a3bf856eb07e99cb457cf09ebf38e7dd54bae463b261f48890384611ef5ea99d",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/assessment.json"
+        },
+        {
+          "raw_sha256": "87cb57847c426756fd680e9a4fcea0faf7556113adf007a1c03bb85cc64764c5",
+          "published": "061135-client.json",
+          "published_sha256": "87cb57847c426756fd680e9a4fcea0faf7556113adf007a1c03bb85cc64764c5",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/client.json"
+        },
+        {
+          "raw_sha256": "f4043364467f671ea3afe80ec50662c59e13831dfa9cc8962386fdefeff47452",
+          "published": "061135-client.log",
+          "published_sha256": "ee95989e977fbf1e51716671cf08a6722b310d177ac16d5c2b7fd7c7504eed1f",
+          "transformation": "redact policy + UTF-8/LF; trailing horizontal whitespace removed",
+          "archive_member": "./20261101T061135Z/client.log"
+        },
+        {
+          "raw_sha256": "35f2a83f2205411efabaca5876d3bf5d1ad022c729fbd0c82713ed82ee7e9e90",
+          "published": "061135-controller.done.json",
+          "published_sha256": "7db4ada16863b010b80b3415e2d1f31664cb4c24fb2f3584079db4133a2747a4",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/controller.done.json"
+        },
+        {
+          "raw_sha256": "d47727055038e57de0f21ea5ec0b81461d431954d971c5328d64b06a374c058c",
+          "published": "061135-guard.jsonl",
+          "published_sha256": "94492b706b653b1d43138a8747019f68473c9b3c24f3eabfd5712c616e05f7ab",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/guard.jsonl"
+        },
+        {
+          "raw_sha256": "b8494b66f1c08b6f07395ecc61cfb5c60aa2570b1a8a4e9ac65a92bc369aa715",
+          "published": "061135-restore-20261101T0612210331634Z-3680.json",
+          "published_sha256": "13ce82d69a77c052d59480aff0ea59e74ba1f58dc9d0227e4606bdf236eedb35",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/restore-20261101T0612210331634Z-3680.json"
+        },
+        {
+          "raw_sha256": "46744f9be3845a99953f17c0b547e6844d2774df9f618ed372237502d9284af3",
+          "published": "061135-restore-20261101T0612233423806Z-6996.json",
+          "published_sha256": "690649dd404572718403fd76064425c6c4591762d8e37bdb0f298243022c4406",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/restore-20261101T0612233423806Z-6996.json"
+        },
+        {
+          "raw_sha256": "05b96ea7fc62f4420660ffc55340dbae12e380188ab2ce6cc73d7239d3f3c97f",
+          "published": "061135-restore-20261101T0612267984888Z-7812.json",
+          "published_sha256": "f1b984edf38c9248ffd3f566181656a79edf742e9977ad641273310155ee8df7",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/restore-20261101T0612267984888Z-7812.json"
+        },
+        {
+          "raw_sha256": "525b4c0604e7252c6eb4d409e8f114f2e40635182f214ee4d6d95362c91acf69",
+          "published": "061135-worker.done.json",
+          "published_sha256": "f0afd121b4761739529dcf733513fba9d875eb27471ed26341a9f6e0212948f2",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061135Z/worker.done.json"
+        }
+      ],
+      "derived_analysis": {
+        "raw_sha256": "f060b4185b25a1adb2eccb6054c36ae8d23a79330fd95658e18edb512fc1e2d5",
+        "published": "061135-analysis.json",
+        "published_sha256": "b8562967b2d995f918e5cd3e4c4d262f3bc6a2da4355c679cc5f2b993f066046",
+        "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+        "source": "a8-20261101T061135Z-analysis.json"
+      }
+    },
+    {
+      "tag": "20261101T061221Z",
+      "archive": "a8-20261101T061221Z-raw.tar",
+      "archive_sha256": "6bdde8ac55d746386f69b493b0faa184b3a7cb1160dd8faad90f77fd2a6dcf0c",
+      "collect_sha256": "a7d47fab7cb80db61463e0b0b90707e27e75ae2788bfaf9f751348df2e861dbe",
+      "members": [
+        {
+          "raw_sha256": "b3fcd2b1786f428f9311c71468bfe5dfb89f37189d8d5881af3f53ab9b3a1c8f",
+          "published": "061221-a8-20261101T061221Z-config.json.guard.jsonl",
+          "published_sha256": "858153b8b7f6579483207815a2c6adae4fbb9a7477578f91fe0d46f314d699ab",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./a8-20261101T061221Z-config.json.guard.jsonl"
+        },
+        {
+          "raw_sha256": "27036e9451511facdcb64a3e2b14eeb1c50e8041d4c842e1c872f743f71a2cfb",
+          "published": "061221-assessment.json",
+          "published_sha256": "7421516e012e835385698d36983a7dc5374a969968c2a37ef80d37f50b131e41",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/assessment.json"
+        },
+        {
+          "raw_sha256": "81beb7d7a59fa2c7dc65a4ecdef7d83e8ecbac80891e5331e09a4eaaf3fddc03",
+          "published": "061221-client.json",
+          "published_sha256": "251ca0625fcace4417553cf27cc9fb787257479e03cbec2431f3733a7ede6f7b",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/client.json"
+        },
+        {
+          "raw_sha256": "00e124ce62e9e82d9914012de8018352d6a61e084d99acb116d5a60b7b0afd1d",
+          "published": "061221-client.log",
+          "published_sha256": "3c7c936cb69121b37e07d2fc9f4923ed9857d324a6049997742c1ee63726930f",
+          "transformation": "redact policy + UTF-8/LF; trailing horizontal whitespace removed",
+          "archive_member": "./20261101T061221Z/client.log"
+        },
+        {
+          "raw_sha256": "6964915d59a838272f047118c1c1ad1e4ddab7d525fc1e4b48537ec1a8b24d1c",
+          "published": "061221-controller.done.json",
+          "published_sha256": "c4c173c322c1d1293e4ab8561daf250e182fcf95ab13cae5179df0b17856d11e",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/controller.done.json"
+        },
+        {
+          "raw_sha256": "c3f53b0831eefc2216357c05212aea03d636ca15e69fa8a2bea1edeb9e8d44d5",
+          "published": "061221-guard.jsonl",
+          "published_sha256": "73a7fde787bb13b63beec95ce825f01641ec65f664167cbed6a8f2fea5a589f2",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/guard.jsonl"
+        },
+        {
+          "raw_sha256": "80bfa4607e6dae59498db05f8718a4449350ea9cf5a79ab0938ee141832e876d",
+          "published": "061221-restore-20261101T0613122787177Z-9256.json",
+          "published_sha256": "955818d3cabdc6d58ce4393e0ad8bd67a82e6922e8eae1e83adc9c58f69a4641",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/restore-20261101T0613122787177Z-9256.json"
+        },
+        {
+          "raw_sha256": "5d590a380eac38e0f1b32f22a87f34742f57d0dae66372e14124050bc45332f3",
+          "published": "061221-restore-20261101T0613146764482Z-2704.json",
+          "published_sha256": "598c02df7d39b56735b79818bb3f5046ba7dd53663cef890bd20721309e3ac60",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/restore-20261101T0613146764482Z-2704.json"
+        },
+        {
+          "raw_sha256": "4a1881542f4650c7dc22f43cca5f669970459658bfa31e39e658ad2db19e3dba",
+          "published": "061221-restore-20261101T0613184103338Z-3712.json",
+          "published_sha256": "e064727b5f53f84ace91afe97edc4627fd531e30eabd41fe2103a0a3f071eba5",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/restore-20261101T0613184103338Z-3712.json"
+        },
+        {
+          "raw_sha256": "486ce4d6aedc728b5a79c6995a7949ba8306b921bb8cbd6fbf23137ce1d2a2cc",
+          "published": "061221-worker.done.json",
+          "published_sha256": "ed06840147d3583c53496f83b056b351f2373a44a469f76ef7ca1979ab99ae83",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061221Z/worker.done.json"
+        }
+      ],
+      "derived_analysis": {
+        "raw_sha256": "433712c1be58c9e18d7891cff74ba43c8221926aa7f00dd0e675930e1d3007f8",
+        "published": "061221-analysis.json",
+        "published_sha256": "ef7eec337f9e157f01773c58bc1825e1f304425a6351fa17121fab4ced7104a7",
+        "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+        "source": "a8-20261101T061221Z-analysis.json"
+      }
+    },
+    {
+      "tag": "20261101T061313Z",
+      "archive": "a8-20261101T061313Z-raw.tar",
+      "archive_sha256": "8c5924bcca03d0b72f987b055cd40b3febecc4d4b7e8e44a625bce0e2fad8ae1",
+      "collect_sha256": "4503767976c6f16847cc50bc29f1a8fcdbafe23d08bf2824d6dfbddbb0ca22ec",
+      "members": [
+        {
+          "raw_sha256": "92639cd2edef4a45237c4e5e2b283a1bd8a86b8e8b03dd5e6e00fe77da6d13e7",
+          "published": "061313-a8-20261101T061313Z-config.json.guard.jsonl",
+          "published_sha256": "a55ba0970002aed2319fda1ff0382df40c78c60ff1166b50cd8bd1d0ca148ede",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./a8-20261101T061313Z-config.json.guard.jsonl"
+        },
+        {
+          "raw_sha256": "693054c58ad8a145a73c04548060a8938456bdcc080b9620a28e316bc084e2de",
+          "published": "061313-assessment.json",
+          "published_sha256": "3f07d2091a2b6ba8975066e119ce697bec5ab8fa5bd714e3e84b23da91cccd87",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/assessment.json"
+        },
+        {
+          "raw_sha256": "bab62db7f6ba6b0e79bdd587f3179ae23cc1415a3dcc69c73cf7b95ae2927529",
+          "published": "061313-client.json",
+          "published_sha256": "e672097db7be0196e00399ba12531aa3097ff4bb4e49c13323da1a5ad2c8058f",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/client.json"
+        },
+        {
+          "raw_sha256": "5ad0f14849806c966830437c9892416e25d1ee08560784ef9a279cba2a1680dc",
+          "published": "061313-client.log",
+          "published_sha256": "6e90957f0d3fc6d93be259e901f8f4df4951abf7036174cff55bb0eb8288e1fa",
+          "transformation": "redact policy + UTF-8/LF; trailing horizontal whitespace removed",
+          "archive_member": "./20261101T061313Z/client.log"
+        },
+        {
+          "raw_sha256": "7e1f4d7aa53c78811f5a380c7beae1ea78b5d853118c71f901164bdc3cf8d09a",
+          "published": "061313-controller.done.json",
+          "published_sha256": "4883ed46aecb282526dc28ba33460cc4cfd92c464492f543d99b9057c2802b5d",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/controller.done.json"
+        },
+        {
+          "raw_sha256": "1c1a55408bead2c526cc97f40ab9be50c782ec3d3fa16d1b593fbae11caa5b69",
+          "published": "061313-guard.jsonl",
+          "published_sha256": "de5be95c77342886b9d0cf6c29809d20f3db49fc80d3b17d300a8920b62c0760",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/guard.jsonl"
+        },
+        {
+          "raw_sha256": "96d1f10b04d8a7b544455937830cb5fa383cbcc36bc00f5b94f48c361136fc3b",
+          "published": "061313-restore-20261101T0614027443382Z-1516.json",
+          "published_sha256": "5eea1ba1384a0800360760c850ffef96c80207dbbb293ff19a91f0e0e49f8f4f",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/restore-20261101T0614027443382Z-1516.json"
+        },
+        {
+          "raw_sha256": "3655b577377ea7fac35bfb5ebe55bc5fc812f9cf6b3bbef1929f371e5188eee0",
+          "published": "061313-restore-20261101T0614051279589Z-4532.json",
+          "published_sha256": "c48d0a911bfe430d3da947231f4232703a0547cd2976ab542559b1b341ee55f9",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/restore-20261101T0614051279589Z-4532.json"
+        },
+        {
+          "raw_sha256": "fd86ecc35fba67b431a2bb07f9bf551c2c5cdae320a940e76903054e95ae571e",
+          "published": "061313-restore-20261101T0614089301286Z-5892.json",
+          "published_sha256": "73311eec4b22a67c33eeeded530065321f167fbf6ab2afbfab9f3b0419a53591",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/restore-20261101T0614089301286Z-5892.json"
+        },
+        {
+          "raw_sha256": "a30d228d8e0ad304c1018349f8e53b722cc1b36a936b348c47e5d1581614c948",
+          "published": "061313-worker.done.json",
+          "published_sha256": "966ecb46aa3ea4ae3d2065d52b2d3329e1513debf8210daa42e7f3b2b5b4dfa2",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061313Z/worker.done.json"
+        }
+      ],
+      "derived_analysis": {
+        "raw_sha256": "e43fc4562dd7e1db5b545c4a28e52486794c56a7150057e41075d301a9040786",
+        "published": "061313-analysis.json",
+        "published_sha256": "d860764a134c7dbbc3c41e5d7a1bf5ffe6803fea182949d3bd709c60b36fe0cb",
+        "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+        "source": "a8-20261101T061313Z-analysis.json"
+      }
+    },
+    {
+      "tag": "20261101T061411Z",
+      "archive": "a8-20261101T061411Z-raw.tar",
+      "archive_sha256": "fb734023c8161dc588417652a0e14067b3bc47813ef17872428936514030534a",
+      "collect_sha256": "5048cd536f21c05a6c9e89ad9f9e9f72f29ac8bffabb42e08a5a95a66129dbb9",
+      "members": [
+        {
+          "raw_sha256": "e218b7ef07cda87f7590ae23b44db61e2948b42e1c83e6a23571d661ede88833",
+          "published": "061411-a8-20261101T061411Z-config.json.guard.jsonl",
+          "published_sha256": "80abbbe4159f7b757087e4d3871bd99733132ab16bdefe577969fb7a43c3d62b",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./a8-20261101T061411Z-config.json.guard.jsonl"
+        },
+        {
+          "raw_sha256": "e1ee29cc7eb71b4c7548776fc179ceddd4987b1d9dcbee6b4fac69edcffc30e8",
+          "published": "061411-assessment.json",
+          "published_sha256": "6cd6c84a958a970e58b46492896d25953486445d43a1c1c6a11bd2d6df002bfd",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/assessment.json"
+        },
+        {
+          "raw_sha256": "e8d6992ee8fe7aa9846a68f346357ebaf31bd43e4bfaa3aae396b501422afb90",
+          "published": "061411-client.json",
+          "published_sha256": "08dd32f67eb9f61420007d461b450af2c70521644c90c7cf9016ec37c1c3d27c",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/client.json"
+        },
+        {
+          "raw_sha256": "623f96a57d5c5771062de37e5415374783623cba6119447d95e2a76b69ca8212",
+          "published": "061411-client.log",
+          "published_sha256": "67272e9525e02f8e24fd14f2d2a73b0966618198e03b3be0e3ee2447b59e311c",
+          "transformation": "redact policy + UTF-8/LF; trailing horizontal whitespace removed",
+          "archive_member": "./20261101T061411Z/client.log"
+        },
+        {
+          "raw_sha256": "7a9861bbdedd7ee20e09f9b5a3b5fc24220298e1ada44382b748f056febfdf73",
+          "published": "061411-controller.done.json",
+          "published_sha256": "59a77349424fabebf142e2d831c482bca6aa06cf3c94bcff9c5546d04d50f0cd",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/controller.done.json"
+        },
+        {
+          "raw_sha256": "35bbb1aa4ba520aa68cc8c83de316530d22d1585c38d90befd9fb7c140024b70",
+          "published": "061411-guard.jsonl",
+          "published_sha256": "d56c63d6882f30e8df2d8702609144477fceff6798364b71752fee03b8f1c1fb",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/guard.jsonl"
+        },
+        {
+          "raw_sha256": "fcdfe4f247b7733cb467fd828905299751be2aeca2ff0c95c2347b9b59a622e7",
+          "published": "061411-restore-20261101T0615004434752Z-4088.json",
+          "published_sha256": "df5e821db69d02aaadb682b7e29554e26a1661421ffc49d7c3a87338160ccafe",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/restore-20261101T0615004434752Z-4088.json"
+        },
+        {
+          "raw_sha256": "505e641979da664be5f4d4b02537582543899d8c119c4bb79b3c3dd2e495f612",
+          "published": "061411-restore-20261101T0615027915601Z-6648.json",
+          "published_sha256": "fc515b89c82a51f3065e09ee3aa18ecc911f370053a8b4d2f4fe1e7c81a603a5",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/restore-20261101T0615027915601Z-6648.json"
+        },
+        {
+          "raw_sha256": "0d5f4238202c25e821fbf3b4058c09c7750bf463f36f3655ce1f576bf0c673db",
+          "published": "061411-restore-20261101T0615065294062Z-6072.json",
+          "published_sha256": "3b23148dd5d94c4cb0a96140ede0ded8fb08c20fba8a3af3d72e7a9ec91e82b8",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/restore-20261101T0615065294062Z-6072.json"
+        },
+        {
+          "raw_sha256": "b955309a1957c4190742d3883215399144e0af14401aa36364f291187c89747f",
+          "published": "061411-worker.done.json",
+          "published_sha256": "14767a61c7c0c0e5cae0776c642f7b17bfa17600f29a54c1fc12078332cce25a",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061411Z/worker.done.json"
+        }
+      ],
+      "derived_analysis": {
+        "raw_sha256": "b2bb51f88cb0eb3eb360b280022d94a64944f2b2de5dc53a95a0e5b83f118e6f",
+        "published": "061411-analysis.json",
+        "published_sha256": "d5fbc8c47d3b68d8754348f1f327123627bc1b5fc9756ee02d3eb2a876083b71",
+        "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+        "source": "a8-20261101T061411Z-analysis.json"
+      }
+    },
+    {
+      "tag": "20261101T061458Z",
+      "archive": "a8-20261101T061458Z-raw.tar",
+      "archive_sha256": "6a1dff3083d2ea7ea1d2f716a33916aba4d2001e9b05ff23c7892cf56dd7fb66",
+      "collect_sha256": "fca42250fa09d5712fa348c4a69730fbf340b306971630e237e92bd26b2e94fd",
+      "members": [
+        {
+          "raw_sha256": "deb6ed0758d114a75f555f5a29e9083c98e3b173f93fdc1dda6e99903caa46af",
+          "published": "061458-a8-20261101T061458Z-config.json.guard.jsonl",
+          "published_sha256": "57156d673a7d2deedd804a990b213a29acb4d6cd27b474c2e0b4a7a126393178",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./a8-20261101T061458Z-config.json.guard.jsonl"
+        },
+        {
+          "raw_sha256": "218bab74796a180011c3e923b38a7320aff6c0f4ba1a8ca95e1b110b7e09f064",
+          "published": "061458-assessment.json",
+          "published_sha256": "60e4e53330234f901770fab9d95039b83ae48302b2dcb04d5a8ddbe5f01ed24f",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/assessment.json"
+        },
+        {
+          "raw_sha256": "b4dfbc1d0f132e1f7e7992ba2b0870ccc4dd505b28efd71b99440968090c0e9c",
+          "published": "061458-client.json",
+          "published_sha256": "f58255fec4685960e80feba50b02dd3a0584cbccda871c44029762f7121ce8a9",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/client.json"
+        },
+        {
+          "raw_sha256": "5a7033898fc21a5f4b2b51f2db5fb813ccd4c80c5111a497167ce0fbde7474b7",
+          "published": "061458-client.log",
+          "published_sha256": "7ded7483c270bdb879abececad77fd3967fc947bbd2717f91a4fc5c6d832f46c",
+          "transformation": "redact policy + UTF-8/LF; trailing horizontal whitespace removed",
+          "archive_member": "./20261101T061458Z/client.log"
+        },
+        {
+          "raw_sha256": "f0f1e9de686cbfbff0dc33fc6772e74e852ec518d7729f0d2d866f7dcb3cd7e1",
+          "published": "061458-controller.done.json",
+          "published_sha256": "5168977ada3fcac843457301a095f713bde8ac2ba3eab63501131e49d0bdca3d",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/controller.done.json"
+        },
+        {
+          "raw_sha256": "cb8a463dcee93e3284f689ba9495831fbf036e61c74c466640b614efcc8a594d",
+          "published": "061458-guard.jsonl",
+          "published_sha256": "49b3b82ff699798b744db8fbb0beadd3beb58e2ba9309963b211d12d408e4fc8",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/guard.jsonl"
+        },
+        {
+          "raw_sha256": "fab874820b6584fea98979cb358fb7321d5c62ef2d3f171b67f0d992ead44ef6",
+          "published": "061458-restore-20261101T0615490895995Z-7712.json",
+          "published_sha256": "2382cb1dc9e31c17df78a4babe1c9f9901e389ca39bfc2147a3d0e3ab84122c8",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/restore-20261101T0615490895995Z-7712.json"
+        },
+        {
+          "raw_sha256": "3e98e71f67c83f7d53267a61fdeeb45727d40c29533f050ff63c771dcac69392",
+          "published": "061458-restore-20261101T0615514490073Z-6124.json",
+          "published_sha256": "377d1c388f2c9198c2d05b790d6a0ed13ca74aa74b91f9eb7953bc39c418a626",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/restore-20261101T0615514490073Z-6124.json"
+        },
+        {
+          "raw_sha256": "3308735db6189530b09479db842fc54653e6580617d981e4b3cea3a55f67bbfa",
+          "published": "061458-restore-20261101T0615551500189Z-6680.json",
+          "published_sha256": "53843df2b6a483f455f2be02d0fea32cef7c1edb72a7a9449b209bf25a7dcf52",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/restore-20261101T0615551500189Z-6680.json"
+        },
+        {
+          "raw_sha256": "4ddcf80873528339ba9bfe7c0440b2fc3fbca27f64aa81dcb29e61464855000d",
+          "published": "061458-worker.done.json",
+          "published_sha256": "cfc492baeb7caa84ce5ffeeeda2768e73dd4d333703addfaff7d08ae796a2f8f",
+          "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+          "archive_member": "./20261101T061458Z/worker.done.json"
+        }
+      ],
+      "derived_analysis": {
+        "raw_sha256": "d7e0750c2a4448c47a611e906e0fc3d2a3374bf7cec7d93433b4f3a8cbe905bc",
+        "published": "061458-analysis.json",
+        "published_sha256": "1ad4d76028404dd16aef77e7f515f3a9129dd5f27b03d4199c2867a57c430e1b",
+        "transformation": "redact policy + UTF-8/LF; JSON whitespace normalized",
+        "source": "a8-20261101T061458Z-analysis.json"
+      }
+    }
+  ]
+}
