@@ -5,7 +5,10 @@
 #include <cassert>
 #include <cstdio>
 namespace {
-struct Fixture {native12::Device device;unsigned resolved{},makes{},evicts{},errors{};unsigned expected_resolved{};HRESULT status{S_OK};UINT64 fence{42};};
+struct Fixture {native12::Device device;unsigned resolved{},makes{},evicts{},errors{};unsigned expected_resolved{};HRESULT status{S_OK};UINT64 fence{42};
+ // BD-052: what the heap imports were told, and the allocation list of the last notice.
+ unsigned noted_resident{},noted_evicted{},noted_count{};D3DKMT_HANDLE noted[4]{};};
+Fixture* fixture=nullptr;
 HRESULT resolve(void* user,D3D12DDI_HANDLE_AND_TYPE object,D3DKMT_HANDLE* allocation) noexcept{
  auto f=static_cast<Fixture*>(user);++f->resolved;*allocation=0;
  switch(reinterpret_cast<UINT_PTR>(object.Handle)){
@@ -35,10 +38,18 @@ D3D12DDI_HANDLE_AND_TYPE object(UINT_PTR id){return {reinterpret_cast<void*>(id)
 }
 // Link-only substitutes: exercise the production typed wrapper with the same
 // controlled resolver; no engine objects or GPU driver are loaded by this test.
-namespace native12 {engine_ddi::DeviceContext* engine_context(Device& d) noexcept{return reinterpret_cast<engine_ddi::DeviceContext*>(d.runtime.handle);}}
+namespace native12 {engine_ddi::DeviceContext* engine_context(Device& d) noexcept{return reinterpret_cast<engine_ddi::DeviceContext*>(d.runtime.handle);}
+// BD-052: the seam the residency DDIs use to tell this device's heap imports what the runtime has just
+// done. Here it only records the notice and the handles it carried.
+void note(const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
+ fixture->noted_count=count;
+ for(unsigned i=0;i<count && i<4;++i)fixture->noted[i]=allocations[i];
+}
+void engine_note_runtime_residency(Device&,const D3DKMT_HANDLE* a,unsigned c) noexcept{++fixture->noted_resident;note(a,c);}
+void engine_note_runtime_eviction(Device&,const D3DKMT_HANDLE* a,unsigned c) noexcept{++fixture->noted_evicted;note(a,c);}}
 namespace engine_ddi {HRESULT object_allocation(DeviceContext* c,D3D12DDI_HANDLE_AND_TYPE o,D3DKMT_HANDLE* a) noexcept{return resolve(c,o,a);}}
 int main(){
- Fixture f;initialize(f);
+ Fixture f;initialize(f);fixture=&f;
  D3D12DDI_HANDLE_AND_TYPE objects[]={object(3),object(1),object(4),object(2),object(3)};
  D3D12DDI_HRTPAGINGQUEUE queue{reinterpret_cast<HANDLE>(UINT64_C(0x100009876))};UINT64 fence=99;
  D3D12DDIARG_MAKERESIDENT_0001 args{};args.NumAdapters=1;args.pRTPagingQueue=&queue;args.NumObjects=5;args.pObjects=objects;args.pPagingFenceValue=&fence;args.WaitMask=99;args.Flags.CantTrimFurther=1;
@@ -51,10 +62,17 @@ int main(){
  f.status=S_OK;f.expected_resolved+=5;
  D3D12DDIARG_EVICT ev{};ev.NumObjects=5;ev.pObjects=objects;ev.Flags.NotWrittenTo=1;
  assert(native12::native_residency_evict(f.device,&ev,resolve,&f)==S_OK && f.evicts==1);
+ // BD-052: every accepted residency operation of the runtime reaches the heap imports, with the resolved
+ // and deduplicated allocation list of that one callback. A pending MakeResident counts as accepted, an
+ // E_OUTOFMEMORY refusal does not, and the Evict is told only when the kernel took it.
+ assert(f.noted_resident==2 && f.noted_evicted==1 && f.noted_count==2 && f.noted[0]==7 && f.noted[1]==9);
  const auto makes=f.makes,evicts=f.evicts;
+ const auto noted_resident=f.noted_resident,noted_evicted=f.noted_evicted;
  args.NumObjects=0;args.pObjects=nullptr;fence=88;args.WaitMask=7;
  assert(native12::native_residency_make(f.device,&args,nullptr,nullptr)==S_OK && !fence && !args.WaitMask && f.makes==makes);
+ assert(f.noted_resident==noted_resident);              // an empty list is no residency operation at all
  ev.NumObjects=0;ev.pObjects=nullptr;assert(native12::native_residency_evict(f.device,&ev,nullptr,nullptr)==S_OK && f.evicts==evicts);
+ assert(f.noted_evicted==noted_evicted);
  auto internal=object(4);args.NumObjects=1;args.pObjects=&internal;
  assert(native12::native_residency_make(f.device,&args,resolve,&f)==S_OK && !fence && !args.WaitMask && f.makes==makes);
  D3D12DDI_HANDLE_AND_TYPE unknown[]={object(1),object(5),object(3)};args.NumObjects=3;args.pObjects=unknown;
@@ -69,5 +87,5 @@ int main(){
  f.expected_resolved=f.resolved+5;f.status=E_PENDING;f.fence=0;
  assert(table.pfnMakeResident({&f.device},&args)==E_UNEXPECTED && f.device.lost && f.errors==1 && !fence && !args.WaitMask);
  auto calls=f.makes;assert(table.pfnMakeResident({&f.device},&args)==D3DDDIERR_DEVICEREMOVED && f.makes==calls);
- puts("PASS native residency DDI: pre-resolve/deduplicate single callback, real paging token, pending fence/wait mask, empty/internal skips, unknown refusal, typed installer, malformed acceptance removal");
+ puts("PASS native residency DDI: pre-resolve/deduplicate single callback, real paging token, pending fence/wait mask, empty/internal skips, unknown refusal, typed installer, malformed acceptance removal, BD-052 residency and eviction notices to the heap imports");
 }

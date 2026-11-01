@@ -18,12 +18,18 @@ using HostedOperation = HRESULT (*)(void*,uint32_t,void*) noexcept;
 // One give_back per admitted borrow; the same handle may be borrowed more than once.
 using HostedBorrow = bool (*)(void*,D3DKMT_HANDLE) noexcept;
 using HostedReturn = void (*)(void*,D3DKMT_HANDLE) noexcept;
+// BD-052: orders one internal submission after the driver's own paging work, for a context the runtime
+// never sees and therefore never makes wait (trial 153). It receives the kernel context handle, is called
+// once per named context before the submission reaches the kernel, and answers S_FALSE when nothing was
+// needed. A failure fails the submission: the ICD must not submit work this driver could not order.
+using HostedOrder = HRESULT (*)(void*,HANDLE) noexcept;
 struct HostedDispatchHooks {
     void* userdata{};
     HostedOperation paging{};
     HostedOperation queue{};
     HostedBorrow borrow{};
     HostedReturn give_back{};
+    HostedOrder order{};
 };
 
 // Device-lifetime owner for internal ICD allocations. Callbacks arrive on every DDI thread of the

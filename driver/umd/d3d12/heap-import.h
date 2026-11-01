@@ -16,8 +16,9 @@ enum class ScanoutModeList : unsigned;          // scanout-mode.h
 // and is a leaf: no runtime callback, Vulkan call or paging operation runs under it. A record in a
 // callback is busy; a record being released belongs to the releasing thread, whose own re-entrant
 // Unlock2 (RADV's vkFreeMemory) is still admitted. The paging queue is created once, on first use,
-// under its own lock (the one lock held across a runtime callback: CreatePagingQueueCb, a kernel
-// call that does not enter this module). No callback or Vulkan destruction runs in the destructor.
+// under its own lock (paging_life_lock_, the one lock held across a runtime callback: the paging
+// queue's creation and destruction and the GPU wait of order_internal_submission, kernel calls that
+// do not enter this module). No callback or Vulkan destruction runs in the destructor.
 // Where the latest allocate() of the calling thread ended, for the diagnostic trace: the stage that
 // returned, not a cause.
 enum class ImportStage : uint32_t {
@@ -59,10 +60,14 @@ struct ImportReleasePolicy {
     uint32_t quarantine_age_ms{};
     uint64_t quarantine_byte_cap{};
     bool progress_gate{};
+    // BD-052, and not part of the release gate: an imported heap keeps the driver's own residency reference
+    // for its whole life, as it did before that fix. The bisect arm of the trial 153 class only
+    // (release_import_residency); on it an application's Evict cannot page an imported heap out.
+    bool residency_hold{};
     bool holds() const noexcept {return progress_gate || quarantine_depth;}
     static ImportReleasePolicy off() noexcept {return {};}
-    // The driver's defaults, with the two experiment switches of ddi-trace.h applied (both default on):
-    // import-progress-gate-off and import-quarantine-off.
+    // The driver's defaults, with the experiment switches of ddi-trace.h applied: import-progress-gate-off
+    // and import-quarantine-off (both default on), and import-residency-hold-on (default off).
     static ImportReleasePolicy from_switches() noexcept;
 };
 // A linear primary's release reached the shell outside the DDI of its runtime resource. No runtime
@@ -103,7 +108,14 @@ class RuntimeHeapImports final {
     PFN_vkDestroyBuffer destroy_buffer_{};
     PFN_vkGetBufferMemoryRequirements requirements_{};
     mutable SRWLOCK lock_=SRWLOCK_INIT;         // records_ and the records' flags, and the quarantine
-    SRWLOCK paging_open_lock_=SRWLOCK_INIT;     // the first allocate() opens the paging queue
+    // The paging queue's lifetime: the first allocate() or adopt() opens it, close_after_engine_retirement
+    // destroys it, and both take this lock exclusive. BD-052: order_internal_submission reads the queue's
+    // handles and its fence page, which pfnDestroyPagingQueueCb unmaps, so it takes the same lock shared.
+    // Without that, an internal submission concurrent with the device's close dereferenced a page the kernel
+    // had already unmapped; the hosted dispatch guards the same hazard with paging_busy_ around its own
+    // create and destroy. It is this module's one lock held across a runtime callback (the paging queue's
+    // creation, its destruction and the GPU wait), all of them kernel thunks that do not enter this module.
+    SRWLOCK paging_life_lock_=SRWLOCK_INIT;
     Record* records_{};
     // The quarantine (ImportReleasePolicy): records whose Vulkan import is gone and whose mapping and
     // runtime allocation are still held, oldest first. A quarantined record is out of records_, so no
@@ -131,6 +143,9 @@ class RuntimeHeapImports final {
     // own range and no allocation destroy frees it, so without the proof it is kept, not freed. Cumulative
     // and never decremented: it is a leak, and the count is the only record of it.
     std::atomic<uint64_t> leaked_reservations_{},leaked_reservation_bytes_{};
+    // BD-052: runtime residency operations this device saw, for the trace and the lab arm. The driver makes
+    // no residency operation of its own for them (note_runtime_residency).
+    std::atomic<uint64_t> runtime_residencies_{},runtime_evictions_{};
     std::atomic<bool> active_{true},paging_open_{};
     bool initialized_{};
     Record* find(D3DKMT_HANDLE) const noexcept;   // under lock_
@@ -156,6 +171,15 @@ class RuntimeHeapImports final {
     void deposit(Record*) noexcept;               // into the quarantine, under lock_
     void drain(bool all) noexcept;                // never under lock_
     void erase(Record*) noexcept;
+    // BD-052: gives the paging domain's residency reference of this import back, inside the creation DDI
+    // that took it, before that DDI returns. Called by the creating thread for its own record, outside
+    // lock_, exactly where map() and make_resident() are called for the same mapping, so no runtime
+    // callback is ever made under lock_ and the leaf rule above still holds. Unconditional: no gate, no
+    // progress source may leave a heap resident when the creation DDI returns, which is the whole
+    // requirement (DirectX-Specs ResourceHeaps.md, Residency DDIs, line 1011). The one exception is the
+    // bisect arm ImportReleasePolicy::residency_hold (switch import-residency-hold-on), which keeps the
+    // pre-BD-052 lifetime hold.
+    HRESULT release_import_residency(Record&) noexcept;
 public:
     RuntimeHeapImports(Device&,bc250::umd::RuntimeDomain&,VkPhysicalDevice,VkDevice,
                        VkInstance,PFN_vkGetInstanceProcAddr,void* host_identity,
@@ -200,6 +224,34 @@ public:
     uint64_t leaked_reservation_bytes() const noexcept {return leaked_reservation_bytes_.load();}
     // A retirement point of the quarantine outside allocate() and free(): releases what the policy admits.
     void retire_held() noexcept {drain(false);}
+    // BD-052, the residency of an imported heap. The runtime owns it: it calls pfnMakeResident and pfnEvict
+    // on this device (native-residency-ddi.cpp), and the driver "must no longer create allocations
+    // associated with any d3d12 driver handle creation DDIs as resident during creation"
+    // (DirectX-Specs ResourceHeaps.md @ 5a4139b, Residency DDIs, line 1011). D3D12DDI_HEAP_FLAGS has no
+    // CREATE_NOT_RESIDENT bit at all (WDK 10.0.26100 d3d12umddi.h, lines 307-317): the runtime expresses
+    // that flag by not calling pfnMakeResident, so the only way for the driver to honour it is to leave no
+    // residency reference of its own behind (release_import_residency).
+    //   The two notices below make no residency operation at all. The one residency operation of a
+    // pfnMakeResident is the mandated callback with the runtime's own flags and the runtime's paging queue
+    // (native-residency-ddi.cpp, RuntimeResidency::make_resident; "the driver must forward the flags passed
+    // in to both MakeResident and Evict to the callback routines", line 978). A second MakeResidentCb of
+    // this driver's own would take a second VidMm residency reference that the application's Evict cannot
+    // drop, which is the defect itself. They count what the runtime did, for the trace and the lab arm.
+    void note_runtime_residency(const D3DKMT_HANDLE* allocations,unsigned count) noexcept;
+    void note_runtime_eviction(const D3DKMT_HANDLE* allocations,unsigned count) noexcept;
+    // BD-052: orders everything this context submits after this call behind every paging operation this
+    // driver has queued (PagingDomain::order_context). Called for every internal submission the ICD makes
+    // through the shell, on contexts the runtime never sees and therefore never makes wait for a map or a
+    // residency operation of ours (trial 153). It is an ordering of this driver's own paging work and
+    // nothing else: it is not a residency guarantee, and the residency of an application's heap after its
+    // creation DDI is the runtime's (the notices above).
+    // S_FALSE: the paging queue had caught up and no wait was needed, which is the steady state.
+    HRESULT order_internal_submission(HANDLE context) noexcept;
+    // What the above have done, for the tests, the trace and the lab arm.
+    unsigned residency_releases() const noexcept {return paging_.residency_releases();}
+    unsigned residency_orders() const noexcept {return paging_.ordered_waits();}
+    uint64_t runtime_residencies() const noexcept {return runtime_residencies_.load();}
+    uint64_t runtime_evictions() const noexcept {return runtime_evictions_.load();}
     HRESULT allocate(const engine_ddi::MemoryRequest*,engine_ddi::ImportedMemory*) noexcept;
     // BD-075: the open half. The allocation already exists, so this call makes no allocate callback: it maps
     // the handle the runtime opened, makes it resident, waits for the address, checks the alignment and imports

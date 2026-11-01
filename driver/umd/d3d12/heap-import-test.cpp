@@ -13,6 +13,7 @@
 #include <utility>
 #include <string>
 #include <tuple>
+#include <thread>
 #include <utility>
 using namespace native12;
 // A fake handle: a pointer type gets the address, an integer handle (a non-dispatchable Vulkan handle is
@@ -24,6 +25,7 @@ static UINT64 gpu_address=UINT64_C(0x100000000);
 static D3DKMT_HANDLE next_allocation=50;
 static bool pending=false,fail_free=false,fail_import=false,unlock_on_free=false,fail_deallocate=false;
 static bool resident_pending=false,fail_wait=false,fail_evict=false;
+static bool lock_on_import=false;
 static bool fail_lock=false,fail_unlock=false;  // BD-045: the kernel refuses Lock2 or Unlock2
 static HRESULT resident_result=S_OK;
 static unsigned surfaces=0;
@@ -233,6 +235,19 @@ static HRESULT APIENTRY wait_cpu_cb(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATI
  if(fail_wait)return E_FAIL;
  completed=a->FenceValueArray[0];return S_OK;
 }
+// BD-052: the GPU wait an internal submission is ordered with (order_internal_submission). The sync object
+// is the paging queue's own (10), and the value is the largest this driver has queued on it.
+static HANDLE order_context=reinterpret_cast<HANDLE>(UINT_PTR(0x10000052u));
+static unsigned order_waits=0;
+static UINT64 order_value=0;
+static HRESULT order_result=S_OK;
+static HANDLE order_entered=nullptr,order_resume=nullptr;
+static HRESULT APIENTRY order_wait_cb(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a){
+ assert(d==handle<void*>(1) && a->ObjectCount==1 && a->ObjectHandleArray[0]==10 && a->hContext==order_context);
+ ++order_waits;order_value=a->MonitoredFenceValueArray[0];
+ if(order_entered){SetEvent(order_entered);assert(WaitForSingleObject(order_resume,5000)==WAIT_OBJECT_0);}
+ return order_result;
+}
 static HRESULT APIENTRY lock_actual(HANDLE,D3DDDICB_LOCK2* a){events+='L';if(fail_lock)return E_FAIL;a->pData=mapped;return S_OK;}
 static HRESULT APIENTRY unlock_cb(HANDLE,const D3DDDICB_UNLOCK2*){events+='N';return fail_unlock?E_FAIL:S_OK;}
 static void VKAPI_CALL memory_properties(VkPhysicalDevice d,VkPhysicalDeviceMemoryProperties* out){
@@ -257,6 +272,10 @@ static VkResult VKAPI_CALL memory_allocate(VkDevice d,const VkMemoryAllocateInfo
  // Only a CPU-visible heap asks the ICD to map it; type 0 is the GPU-only policy.
  assert(host->flags==(info->memoryTypeIndex?BC250_HOST_IMPORT_CPU_MAP:0u));
  events+='I';if(fail_import)return VK_ERROR_OUT_OF_DEVICE_MEMORY;
+ if(lock_on_import){
+  D3DKMT_LOCK2 lock{};lock.hAllocation=host->allocation;
+  if(FAILED(imports->dispatch(BC250_HOST_Lock2,&lock)))return VK_ERROR_MEMORY_MAP_FAILED;
+ }
  *out=handle<VkDeviceMemory>(0x1000+next_allocation);return VK_SUCCESS;
 }
 static void VKAPI_CALL memory_free(VkDevice,VkDeviceMemory,const VkAllocationCallbacks*){
@@ -279,6 +298,7 @@ int main(){
  k.pfnFreeGpuVirtualAddressCb=unmap_cb;k.pfnReserveGpuVirtualAddressCb=reserve_cb;
  k.pfnMakeResidentCb=make_cb;k.pfnLock2Cb=lock_actual;k.pfnUnlock2Cb=unlock_cb;
  k.pfnEvictCb=evict_cb;k.pfnWaitForSynchronizationObjectFromCpuCb=wait_cpu_cb;
+ k.pfnWaitForSynchronizationObjectFromGpuCb=order_wait_cb;   // BD-052
  bc250::umd::RuntimeDomain domain;
  // The whole suite below runs with the release gate off (ImportReleasePolicy::off(), the two experiment
  // switches import-progress-gate-off and import-quarantine-off): every event string here is adapter106's,
@@ -292,10 +312,10 @@ int main(){
  engine_ddi::ImportedMemory memory{};
  for(expected_type=0;expected_type<3;++expected_type){
  heap.CPUPageProperty=expected_type==0?D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE:expected_type==1?D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
- events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.allocation==next_allocation && memory.memory_type_index==expected_type);
+ events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.allocation==next_allocation && memory.memory_type_index==expected_type);
  assert(owner.owns_allocation(memory.allocation) && owner.close_after_engine_retirement()==E_PENDING);
  if(expected_type){D3DKMT_LOCK2 lock{};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK && lock.pData==mapped);unlock_on_free=true;}
- assert(owner.free(&memory)==S_OK);assert(events==(expected_type?"AMZILVNEUD":"AMZIVEUD"));unlock_on_free=false;
+ assert(owner.free(&memory)==S_OK);assert(events==(expected_type?"AMZIELVNUD":"AMZIEVUD"));unlock_on_free=false;
  assert(!owner.owns_allocation(memory.allocation) && owner.free(&memory)==E_INVALIDARG);
  }
  // Both CPU-visible L0 policies accept the explicit coherent flag, including
@@ -305,8 +325,8 @@ int main(){
  heap.MemoryPool=D3D12DDI_MEMORY_POOL_L0;
  for(expected_type=1;expected_type<=2;++expected_type){
   heap.CPUPageProperty=expected_type==1?D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
-  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==expected_type);
-  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==expected_type);
+  assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
  }
 #if defined(D3D12DDI_BUILD_VERSION_0119)
  // From DDI 0115 a committed resource arrives with the IMPLICIT bit beside the heap's own flags: the lab saw
@@ -315,9 +335,9 @@ int main(){
  assert(unsigned(heap.Flags)==0xaeu);
  for(expected_type=1;expected_type<=2;++expected_type){
   heap.CPUPageProperty=expected_type==1?D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE:D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;
-  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==expected_type);
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==expected_type);
   assert(!owner.last_report().refusal);
-  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+  assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
  }
  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(heap.Flags)&~unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT));
 #endif
@@ -328,8 +348,8 @@ int main(){
  heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
  assert(owner.allocate(&req,&memory)==E_INVALIDARG && !memory.memory && events.empty() && next_allocation==before_allocation);
  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_BACK;expected_type=3;
- assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==3);
- assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");req.memory_type_bits=0;
+ assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==3);
+ assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");req.memory_type_bits=0;
  const auto coherent_flags=D3D12DDI_HEAP_FLAGS(D3D12DDI_HEAP_FLAG_BUFFERS|D3D12DDI_HEAP_FLAG_COHERENT_SYSTEMWIDE);
  heap.Flags=coherent_flags;
  // Every refusal taken before a probe names the check that took it in the report (BD-075: that name and the
@@ -364,13 +384,13 @@ int main(){
  for(const auto type:{D3D12DDI_RT_TEXTURE1D,D3D12DDI_RT_TEXTURE2D,D3D12DDI_RT_TEXTURE3D})
  for(const auto flags:{D3D12DDI_HEAP_FLAG_BUFFERS,D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES,D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES}){
   resource.ResourceType=type;
-  heap.Flags=flags;events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0);
-  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+  heap.Flags=flags;events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==0);
+  assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
 #if defined(D3D12DDI_BUILD_VERSION_0119)
   // The same committed texture with the IMPLICIT bit of DDI 0115 and later.
   heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(flags)|unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT));events.clear();
-  assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0);
-  assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+  assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==0);
+  assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
 #endif
  }
 #if defined(D3D12DDI_BUILD_VERSION_0119)
@@ -379,8 +399,8 @@ int main(){
  heap.Flags=D3D12DDI_HEAP_FLAGS(unsigned(D3D12DDI_HEAP_FLAG_0115_IMPLICIT)|unsigned(D3D12DDI_HEAP_FLAG_RT_DS_TEXTURES)|
      unsigned(D3D12DDI_HEAP_FLAG_BUFFERS)|unsigned(D3D12DDI_HEAP_FLAG_NON_RT_DS_TEXTURES));
  assert(unsigned(heap.Flags)==0xa6u);
- events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0);
- assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+ events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==0);
+ assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
 #endif
  resource.ResourceType=D3D12DDI_RT_TEXTURE2D;
  // System-wide coherence alone refuses an otherwise admitted texture.
@@ -401,12 +421,12 @@ int main(){
  req.memory_type_bits=2;assert(owner.allocate(&req,&memory)==E_INVALIDARG);req.memory_type_bits=0;
  gpu_address+=4096;events.clear();assert(owner.allocate(&req,&memory)==E_INVALIDARG && events=="AMZEUD" && !memory.memory);gpu_address-=4096;
  events.clear();fail_import=true;assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMZIEUD");fail_import=false;
- events.clear();assert(owner.allocate(&req,&memory)==S_OK);fail_free=true;assert(owner.free(&memory)==E_FAIL && events=="AMZIVEU");
- fail_free=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMZIVEUUDP");
+ events.clear();assert(owner.allocate(&req,&memory)==S_OK);fail_free=true;assert(owner.free(&memory)==E_FAIL && events=="AMZIEVU");
+ fail_free=false;assert(owner.close_after_engine_retirement()==S_OK && events=="AMZIEVUUDP");
  // The runtime refuses the release by handle list: the record and its allocation stay, and the later
  // cleanup asks again with the same flags, without a second Vulkan free or unmap.
  events.clear();assert(owner.allocate(&req,&memory)==S_OK);fail_deallocate=true;
- assert(owner.free(&memory)==E_FAIL && events=="AMZIVEUD" && owner.owns_allocation(memory.allocation));
+ assert(owner.free(&memory)==E_FAIL && events=="AMZIEVUD" && owner.owns_allocation(memory.allocation));
  assert(owner.last_free_report().stage==FreeStage::Deallocate && !owner.last_free_report().owner_expired);
  events.clear();assert(owner.close_after_engine_retirement()==E_FAIL && events=="D" && owner.owns_allocation(memory.allocation));
  // Owned for its cleanup, but retired: it is no backing for a new view.
@@ -416,32 +436,32 @@ int main(){
  // Backing lent to a runtime callback: its release waits for every return and changes nothing before.
  events.clear();assert(owner.allocate(&req,&memory)==S_OK && !owner.borrow_backing(memory.allocation+1));
  assert(owner.borrow_backing(memory.allocation) && owner.borrow_backing(memory.allocation));
- assert(owner.free(&memory)==E_PENDING && events=="AMZI");owner.return_backing(memory.allocation);
- assert(owner.free(&memory)==E_PENDING && events=="AMZI");owner.return_backing(memory.allocation);
+ assert(owner.free(&memory)==E_PENDING && events=="AMZIE");owner.return_backing(memory.allocation);
+ assert(owner.free(&memory)==E_PENDING && events=="AMZIE");owner.return_backing(memory.allocation);
  owner.return_backing(memory.allocation);assert(owner.borrow_backing(memory.allocation));owner.return_backing(memory.allocation);
- assert(owner.free(&memory)==S_OK && events=="AMZIVEUD" && !owner.borrow_backing(memory.allocation));
+ assert(owner.free(&memory)==S_OK && events=="AMZIEVUD" && !owner.borrow_backing(memory.allocation));
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  // BD-045: a lock the ICD left (its Unlock2 failed, then vkFreeMemory gave the BO up) belongs to the release.
  // The shell unlocks it after vkFreeMemory, before the unmap: V N E U D.
  {
   const auto saved_type=expected_type;const auto saved_page=heap.CPUPageProperty;
   expected_type=1;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
-  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI");
+  events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZIE");
   D3DKMT_LOCK2 lock{};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK);
-  assert(owner.free(&memory)==S_OK && events=="AMZILVNEUD" && owner.last_free_report().unlocked);
+  assert(owner.free(&memory)==S_OK && events=="AMZIELVNUD" && owner.last_free_report().unlocked);
   // The shell's own Unlock2 fails: the release stops there, the record keeps the lock and the allocation,
   // and close retries it, then releases the rest.
   events.clear();assert(owner.allocate(&req,&memory)==S_OK);
   lock={};lock.hAllocation=memory.allocation;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==S_OK);
-  fail_unlock=true;assert(owner.free(&memory)==E_FAIL && events=="AMZILVN" && owner.owns_allocation(memory.allocation) &&
+  fail_unlock=true;assert(owner.free(&memory)==E_FAIL && events=="AMZIELVN" && owner.owns_allocation(memory.allocation) &&
                           owner.last_free_report().stage==FreeStage::Unlock && !owner.last_free_report().unlocked);
   events.clear();assert(owner.close_after_engine_retirement()==E_FAIL && events=="N" && owner.owns_allocation(memory.allocation));
   fail_unlock=false;events.clear();
-  assert(owner.close_after_engine_retirement()==S_OK && events=="NEUDP" && !owner.owns_allocation(memory.allocation));
+  assert(owner.close_after_engine_retirement()==S_OK && events=="NUDP" && !owner.owns_allocation(memory.allocation));
   // A failed Lock2 leaves no lock: free unlocks nothing.
   events.clear();assert(owner.allocate(&req,&memory)==S_OK);
   lock={};lock.hAllocation=memory.allocation;fail_lock=true;assert(owner.dispatch(BC250_HOST_Lock2,&lock)==E_FAIL);fail_lock=false;
-  assert(owner.free(&memory)==S_OK && events=="AMZILVEUD" && !owner.last_free_report().unlocked);
+  assert(owner.free(&memory)==S_OK && events=="AMZIELVUD" && !owner.last_free_report().unlocked);
   events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
   expected_type=saved_type;heap.CPUPageProperty=saved_page;
  }
@@ -460,23 +480,23 @@ int main(){
   surface_format=D3DDDIFMT_A8R8G8B8;events.clear();
   // Created in one resource DDI, released in the one that destroys it: by the runtime resource.
   {OwnerScope create(&owner,0);
-   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.memory_type_index==0 && memory.byte_size==65536);}
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE" && memory.memory_type_index==0 && memory.byte_size==65536);}
   {OwnerScope destroy(&owner,memory.allocation);
-   assert(owner.free(&memory)==S_OK && events=="AMZIVEUR" && probes==old_probes && surfaces==old_surfaces+1);
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUR" && probes==old_probes && surfaces==old_surfaces+1);
    assert(!owner.last_free_report().owner_expired && owner.last_free_report().surface);}
   assert(!owner.owns_allocation(memory.allocation));
   // A page-aligned address is enough for it; raw memory above needed 64 KiB. Handed back inside
   // the DDI that created it, as after an import the engine refuses.
   gpu_address+=4096;target.Format=DXGI_FORMAT_R8G8B8A8_UNORM;surface_format=D3DDDIFMT_A8B8G8R8;events.clear();
   {OwnerScope create(&owner,0);
-   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.gpu_va==gpu_address);
-   gpu_address-=4096;memory_va_bias=4096;assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");memory_va_bias=0;}
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE" && memory.gpu_va==gpu_address);
+   gpu_address-=4096;memory_va_bias=4096;assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");memory_va_bias=0;}
   // A 10-bit swap chain is four bytes a pixel as well and composed the same way, whatever the monitor's
   // depth: the kernel gets its D3DDDIFORMAT, A2B10G10R10 (the DXGI name counts from the low bits).
   target.Format=DXGI_FORMAT_R10G10B10A2_UNORM;surface_format=D3DDDIFMT_A2B10G10R10;events.clear();
   {OwnerScope create(&owner,0);
-   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");
-   assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
   // Construction that fails after the allocation releases it in the same DDI, by the same form.
   {OwnerScope create(&owner,0);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;surface_format=D3DDDIFMT_A8R8G8B8;
    events.clear();fail_import=true;
@@ -496,8 +516,8 @@ int main(){
   target.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;refused(E_INVALIDARG);
   target.Width=128;surface_width=128;surface_format=D3DDDIFMT_A16B16G16R16F;events.clear();
   {OwnerScope create(&owner,0);
-   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.byte_size==65536);
-   assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+   assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE" && memory.byte_size==65536);
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
   target.Width=256;surface_width=256;surface_format=D3DDDIFMT_A8B8G8R8;
   target.Format=DXGI_FORMAT_R10G10B10A2_UINT;refused(E_NOTIMPL);target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;
   // A primary keeps the storage column: there is no D3DDDIFORMAT for an sRGB view, so a primary asked for in one
@@ -516,8 +536,8 @@ int main(){
    for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
     target.Format=f;surface_format=D3DDDIFMT_A8R8G8B8;driver_surface_request=true;
     const auto before=surfaces;events.clear();
-    assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI" && surfaces==before+1);
-    assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+    assert(owner.allocate(&own,&memory)==S_OK && events=="AMZIE" && surfaces==before+1);
+    assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
     assert(owner.last_free_report().driver_surface && owner.last_free_report().surface);
     driver_surface_request=false;
     refused(E_NOTIMPL);
@@ -597,13 +617,13 @@ int main(){
    const auto old_probes=probes,old_surfaces=surfaces,old_shared=shared_created;
    events.clear();
    {OwnerScope create(&owner,0);
-    assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI" && memory.byte_size==65536 &&
+    assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE" && memory.byte_size==65536 &&
            memory.memory_type_index==0);}
    assert(shared_created==old_shared+1 && probes==old_probes && surfaces==old_surfaces);
    // One image owns this memory, so nothing is placed beside it; the allocation is this driver's.
    assert(owner.owns_allocation(memory.allocation) && !owner.borrow_backing(memory.allocation));
    {OwnerScope destroy(&owner,memory.allocation);
-    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");
+    assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");
     assert(owner.last_free_report().surface && !owner.last_free_report().adopted &&
            !owner.last_free_report().owner_expired);}
   }
@@ -614,8 +634,8 @@ int main(){
                        {unsigned(D3D12DDI_RESOURCE_FLAG_0003_SIMULTANEOUS_ACCESS),0u},
                        {0u,0u}}){
    target.Flags=static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(pair.first);shared_bind=pair.second;
-   events.clear();{OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
-   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+   events.clear();{OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
+   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
   }
   target.Flags=static_cast<D3D12DDI_RESOURCE_FLAGS_0003>(unsigned(D3D12DDI_RESOURCE_FLAG_0003_RENDER_TARGET)|
       unsigned(D3D12DDI_RESOURCE_FLAG_0003_SHADER_RESOURCE));shared_bind=0x28;
@@ -653,9 +673,9 @@ int main(){
                       {DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,D3DDDIFMT_A8B8G8R8}}){
    target.Format=std::get<0>(row);shared_dxgi=std::get<1>(row);surface_format=std::get<2>(row);
    const auto before=shared_created;events.clear();
-   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
    assert(shared_created==before+1);
-   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");}
+   {OwnerScope destroy(&owner,memory.allocation);assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");}
   }
   target.Format=DXGI_FORMAT_B8G8R8A8_UNORM;shared_dxgi=DXGI_FORMAT_B8G8R8A8_UNORM;
   surface_format=D3DDDIFMT_A8R8G8B8;
@@ -680,9 +700,9 @@ int main(){
    engine_ddi::MemoryRequest own=s;own.rt_owner={};
    driver_surface_request=true;
    const auto before=shared_created;events.clear();
-   assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI" && shared_created==before+1);
+   assert(owner.allocate(&own,&memory)==S_OK && events=="AMZIE" && shared_created==before+1);
    assert(owner.owns_allocation(memory.allocation));
-   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
    {
     const auto& report=owner.last_free_report();
     assert(report.driver_surface && report.surface && !report.adopted && !report.owner_expired &&
@@ -693,14 +713,14 @@ int main(){
    // there as anywhere else. Before BD-133 the authority was given by the scope alone, so such a surface
    // could only ever be released on that one thread inside that one DDI, and never by a Present.
    events.clear();
-   {OwnerScope create(&owner,0);assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");}
-   assert(owner.free(&memory)==S_OK && events=="AMZIVEUD" && owner.last_free_report().driver_surface);
+   {OwnerScope create(&owner,0);assert(owner.allocate(&own,&memory)==S_OK && events=="AMZIE");}
+   assert(owner.free(&memory)==S_OK && events=="AMZIEVUD" && owner.last_free_report().driver_surface);
    // The negative control: the same surface request with a runtime resource is unchanged - released by that
    // resource, inside its own destroy, and never marked a driver surface.
    driver_surface_request=false;events.clear();
-   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZI");}
+   {OwnerScope create(&owner,0);assert(owner.allocate(&s,&memory)==S_OK && events=="AMZIE");}
    {OwnerScope destroy(&owner,memory.allocation);
-    assert(owner.free(&memory)==S_OK && events=="AMZIVEUR");
+    assert(owner.free(&memory)==S_OK && events=="AMZIEVUR");
     const auto& report=owner.last_free_report();
     assert(report.surface && !report.driver_surface && !report.adopted && !report.owner_expired);}
   }
@@ -716,12 +736,12 @@ int main(){
    for(const DXGI_FORMAT f:{DXGI_FORMAT_B8G8R8X8_UNORM,DXGI_FORMAT_B8G8R8X8_UNORM_SRGB}){
     target.Format=f;surface_format=D3DDDIFMT_A8R8G8B8;driver_surface_request=true;
     const auto before_own=own_shared_surfaces,before_wire=shared_created;events.clear();
-    assert(owner.allocate(&own,&memory)==S_OK && events=="AMZI");
+    assert(owner.allocate(&own,&memory)==S_OK && events=="AMZIE");
     assert(own_shared_surfaces==before_own+1 && shared_created==before_wire);
     assert(owner.owns_allocation(memory.allocation));
     D3DKMT_LOCK2 forbidden{};forbidden.hAllocation=memory.allocation;
-    assert(owner.dispatch(BC250_HOST_Lock2,&forbidden)==E_INVALIDARG && events=="AMZI");
-    assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");
+    assert(owner.dispatch(BC250_HOST_Lock2,&forbidden)==E_INVALIDARG && events=="AMZIE");
+    assert(owner.free(&memory)==S_OK && events=="AMZIEVUD");
     assert(owner.last_free_report().driver_surface && owner.last_free_report().surface &&
            owner.last_free_report().stage==FreeStage::Done);
     driver_surface_request=false;
@@ -744,9 +764,13 @@ int main(){
   {
    engine_ddi::ImportedMemory borrowed{};
    adopt.allocation=++next_allocation;                  // the handle pOpenAllocationInfo[0] carried
+   const unsigned adopted_makes=makes_resident,adopted_evicts=evictions;
    events.clear();
-   assert(owner.adopt(&adopt,&borrowed)==S_OK && events=="MZI" && borrowed.allocation==adopt.allocation &&
+   assert(owner.adopt(&adopt,&borrowed)==S_OK && events=="MZIE" && borrowed.allocation==adopt.allocation &&
           borrowed.byte_size==65536 && borrowed.memory_type_index==0 && borrowed.gpu_va==gpu_address);
+   // The open DDI still owns a live handle here. Its temporary residency increment
+   // must be returned now, before a later destroy can make that handle stale.
+   assert(makes_resident==adopted_makes+1 && evictions==adopted_evicts+1);
    // In the store like any other allocation, so the ICD's Lock2/Unlock2 reach this record and its own state
    // checks (owns_allocation). No view is ever placed beside the opened image.
    assert(owner.owns_allocation(borrowed.allocation) && !owner.borrow_backing(borrowed.allocation));
@@ -758,8 +782,9 @@ int main(){
     // The stub's vkAllocateMemory answers with a handle derived from the allocation, so the two imports share
     // their VkDeviceMemory value here; the cookie is the field that tells the two records apart, and it is the
     // field free() now looks at.
-    assert(owner.adopt(&adopt,&again)==S_OK && events=="MZI" && again.allocation==adopt.allocation &&
+    assert(owner.adopt(&adopt,&again)==S_OK && events=="MZIE" && again.allocation==adopt.allocation &&
            again.cookie && again.cookie!=borrowed.cookie);
+    assert(makes_resident==adopted_makes+2 && evictions==adopted_evicts+2);
     assert(owner.owns_allocation(again.allocation));
     // Each import is released on its own, and neither release touches the other's record.
     events.clear();assert(owner.free(&again)==S_OK && events=="VU");
@@ -780,12 +805,12 @@ int main(){
   {
    engine_ddi::MemoryRequest plain=req;plain.resource=&target;plain.flags=engine_ddi::kMemoryDedicated;
    engine_ddi::ImportedMemory created{},stolen{};
-   events.clear();assert(owner.allocate(&plain,&created)==S_OK && events=="AMZI");
+   events.clear();assert(owner.allocate(&plain,&created)==S_OK && events=="AMZIE");
    engine_ddi::AdoptRequest over=adopt;over.allocation=created.allocation;events.clear();
    assert(owner.adopt(&over,&stolen)==E_INVALIDARG && !stolen.memory && events.empty());
    assert(owner.last_report().refusal &&
           !std::strcmp(owner.last_report().refusal,"the allocation is one this driver created"));
-   events.clear();assert(owner.free(&created)==S_OK && events=="VEUD");
+   events.clear();assert(owner.free(&created)==S_OK && events=="VUD");
   }
   // Every malformed adopt request is refused before the paging queue is touched, by one name.
   {
@@ -822,7 +847,7 @@ int main(){
    assert(held.initialize()==S_OK && policy.holds());
    engine_ddi::AdoptRequest open=adopt;open.allocation=++next_allocation;
    engine_ddi::ImportedMemory borrowed{};
-   events.clear();assert(held.adopt(&open,&borrowed)==S_OK && events=="MZI");
+   events.clear();assert(held.adopt(&open,&borrowed)==S_OK && events=="MZIE");
    events.clear();assert(held.free(&borrowed)==S_OK && events=="VU" && !held.held_count() && !held.held_bytes());
    assert(held.last_free_report().adopted && held.last_free_report().stage==FreeStage::Done);
    assert(held.close_after_engine_retirement()==S_OK && held.discard_metadata()==0);
@@ -832,11 +857,11 @@ int main(){
  // Pending paging: the VA reaches the engine only after one CPU wait for the largest value, the
  // residency's (30) when it is pending, else the mapping's (20); never before (trial 153).
  pending=true;completed=10;events.clear();auto before_waits=waits;
- assert(owner.allocate(&req,&memory)==S_OK && memory.memory && events=="AMZWI" && waits==before_waits+1 && completed==20);
- assert(owner.free(&memory)==S_OK && events=="AMZWIVEUD");
+ assert(owner.allocate(&req,&memory)==S_OK && memory.memory && events=="AMZWIE" && waits==before_waits+1 && completed==20);
+ assert(owner.free(&memory)==S_OK && events=="AMZWIEVUD");
  resident_pending=true;completed=10;events.clear();
- assert(owner.allocate(&req,&memory)==S_OK && memory.memory && events=="AMZWI" && completed==30);
- assert(owner.free(&memory)==S_OK && events=="AMZWIVEUD");
+ assert(owner.allocate(&req,&memory)==S_OK && memory.memory && events=="AMZWIE" && completed==30);
+ assert(owner.free(&memory)==S_OK && events=="AMZWIEVUD");
  // A wait that fails hands nothing to the engine. The record keeps its reference and mapping until
  // both have completed; the later cleanup releases them in order.
  completed=10;fail_wait=true;events.clear();
@@ -847,19 +872,24 @@ int main(){
  completed=10;resident_result=E_OUTOFMEMORY;events.clear();
  assert(owner.allocate(&req,&memory)==E_OUTOFMEMORY && !memory.memory && events=="AMZWUD");
  resident_result=S_OK;pending=false;completed=20;
- // An eviction that fails does not hold the VA: the mapping and the allocation are released anyway
- // (deallocation drops residency), so an error that never clears cannot leak the record.
- events.clear();assert(owner.allocate(&req,&memory)==S_OK && events=="AMZI");fail_evict=true;
- assert(owner.free(&memory)==S_OK && events=="AMZIVEUD");fail_evict=false;
+ // BD-052: an eviction that fails holds nothing. The hand-back of the import's own residency reference is
+ // where the Evict callback is made now, so the failure happens there; the reference is dropped either way
+ // (deallocation drops residency in VidMm), and the later release still frees the VA and the allocation, so
+ // A refused hand-back fails creation, frees the Vulkan import and destroys the
+ // owned allocation. No successful heap may retain the driver's increment.
+ fail_evict=true;events.clear();
+ assert(owner.allocate(&req,&memory)==E_FAIL && !memory.memory && !memory.cookie && events=="AMZIEVEUD");
+ assert(owner.last_report().stage==ImportStage::Resident &&
+        !std::strcmp(owner.last_report().refusal,"residency hand-back"));
+ assert(!owner.owns_allocation(next_allocation));fail_evict=false;
  events.clear();assert(owner.close_after_engine_retirement()==S_OK && events=="P");
  assert(owner.discard_metadata()==0 && owner.allocate(&req,&memory)==E_UNEXPECTED && !owner.owns_allocation(next_allocation));
- // Every reference taken was released by an Evict callback except five: the refused reference, the failed
- // eviction, and the three borrowed allocations of the BD-075 section (two opens of one handle and the
- // quarantine instance's one), whose residency is dropped without a callback because the runtime destroys the
- // allocation itself and the handle may already be gone.
+ // Every accepted reference was returned except the failed eviction. makes_resident
+ // also counts one refused reference. All three borrowed imports return their own
+ // increments during open; their later teardown still makes no Evict callback.
  // Seven primaries: the five of the linear primary section and the two primary forms of BD-133's X8 copy surface
  // (88 and 93); the two shared forms of that surface are counted apart.
- assert(makes_resident==evictions+5);assert(surfaces==7);assert(own_shared_surfaces==2);
+ assert(makes_resident==evictions+2);assert(surfaces==7);assert(own_shared_surfaces==2);
  // The owner's authority ends with its DDI. Records that outlive it keep the allocation and never
  // reach the runtime again, in either form. A second owner, so that the first one's closure above
  // stays what it was.
@@ -879,7 +909,7 @@ int main(){
   // 1. The release callback fails inside the resource's DDI; the later cleanup makes no callback.
   events.clear();{OwnerScope create(&late,0);assert(late.allocate(&s,&first)==S_OK);}
   {OwnerScope destroy(&late,first.allocation);fail_deallocate=true;
-   assert(late.free(&first)==E_FAIL && events=="AMZIVEUR");fail_deallocate=false;}
+   assert(late.free(&first)==E_FAIL && events=="AMZIEVUR");fail_deallocate=false;}
   events.clear();assert(late.close_after_engine_retirement()==kOwnerExpired && events.empty());
   assert(late.last_free_report().owner_expired && late.owns_allocation(first.allocation));
   // 2. The work retires only after the resource's DDI has returned: the release comes from a later
@@ -889,12 +919,12 @@ int main(){
   {OwnerScope destroy(&late,second.allocation);}
   events.clear();
   {OwnerScope destroy(&late,third.allocation);
-   assert(late.free(&second)==kOwnerExpired && events=="VEU" && late.last_free_report().owner_expired);
-   assert(late.free(&third)==S_OK && events=="VEUVEUR");}
+   assert(late.free(&second)==kOwnerExpired && events=="VU" && late.last_free_report().owner_expired);
+   assert(late.free(&third)==S_OK && events=="VUVUR");}
   assert(late.owns_allocation(second.allocation) && !late.owns_allocation(third.allocation));
   // Outside any resource DDI the same holds.
   events.clear();{OwnerScope create(&late,0);assert(late.allocate(&s,&third)==S_OK);}
-  events.clear();assert(late.free(&third)==kOwnerExpired && events=="VEU");
+  events.clear();assert(late.free(&third)==kOwnerExpired && events=="VU");
   // 3. Construction fails and its release fails: the record stays, without an owner.
   events.clear();{OwnerScope create(&late,0);fail_import=true;fail_deallocate=true;
    assert(late.allocate(&s,&memory)==E_OUTOFMEMORY && events=="AMZIEUR");fail_import=false;fail_deallocate=false;}
@@ -910,13 +940,13 @@ int main(){
     ++outer_calls;
     assert(create_in_owner_scope(&late,[&]() noexcept {++inner_calls;return S_OK;})==E_UNEXPECTED);
     assert(destroy_in_owner_scope(&late,outer.allocation,[&]() noexcept {++inner_calls;})==E_UNEXPECTED);
-    assert(late.free(&outer)==S_OK && events=="VEUR");
+    assert(late.free(&outer)==S_OK && events=="VUR");
    })==S_OK && outer_calls==1 && !inner_calls && !late.owns_allocation(outer.allocation));
    events.clear();
    assert(create_in_owner_scope(&late,[&]() noexcept {
     ++outer_calls;
     assert(destroy_in_owner_scope(&late,0,[&]() noexcept {++inner_calls;})==E_UNEXPECTED);
-    assert(late.allocate(&s,&outer)==S_OK && late.free(&outer)==S_OK && events=="AMZIVEUR");
+    assert(late.allocate(&s,&outer)==S_OK && late.free(&outer)==S_OK && events=="AMZIEVUR");
     return S_OK;
    })==S_OK && outer_calls==2 && !inner_calls);
    // Without imports there is no scope to refuse: the engine call runs.
@@ -1054,8 +1084,8 @@ int main(){
     const unsigned before_scanout=scanout_surfaces,before_composed=surfaces,before_queries=trailer_queries;
     const unsigned before_reads=desktop_reads;
     engine_ddi::ImportedMemory surface{};events.clear();
-    {OwnerScope scope(&carried,0);assert(carried.allocate(&s,&surface)==S_OK && events=="AMZI");}
-    {OwnerScope scope(&carried,surface.allocation);assert(carried.free(&surface)==S_OK && events=="AMZIVEUR");}
+    {OwnerScope scope(&carried,0);assert(carried.allocate(&s,&surface)==S_OK && events=="AMZIE");}
+    {OwnerScope scope(&carried,surface.allocation);assert(carried.free(&surface)==S_OK && events=="AMZIEVUR");}
     assert(scanout_surfaces==before_scanout+(scanout?1u:0u) && surfaces==before_composed+(scanout?0u:1u));
     // One query and one read of the compositor's record per primary, and none at all when the off switch
     // is listed.
@@ -1113,6 +1143,9 @@ int main(){
  // The release gate (M15.8, fixes F2 and F3 of the trial 245 report). One owner per policy, because a
  // policy is fixed for the owner's life. The event letters are the callbacks: A allocate, M map, Z the
  // residency reference, I the Vulkan import, V the Vulkan free, E evict, U free the VA, D deallocate.
+ // BD-052: E follows I when the import hands its residency reference back, which is as soon as the device's
+ // progress at the import admits it; a policy with the progress gate on and the progress unretired keeps the
+ // reference until the release, and then E is the unmap's, before U.
  // A quarantined release stops after V and the rest follows when the policy admits it.
  {
   heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
@@ -1125,15 +1158,15 @@ int main(){
    assert(gate.initialize()==S_OK);
    events.clear();
    assert(gate.allocate(&req,&a)==S_OK && gate.allocate(&req,&b)==S_OK && gate.allocate(&req,&c)==S_OK &&
-          events=="AMZIAMZIAMZI");
+          events=="AMZIEAMZIEAMZIE");
    events.clear();assert(gate.free(&a)==S_OK && events=="V" && gate.held_count()==1 && gate.held_bytes()==65536);
    assert(gate.last_free_report().stage==FreeStage::Quarantined && gate.last_free_report().gpu_va==a.gpu_va &&
           gate.last_free_report().byte_size==65536 && !gate.last_free_report().released);
    events.clear();assert(gate.free(&b)==S_OK && events=="V" && gate.held_count()==2);
-   events.clear();assert(gate.free(&c)==S_OK && events=="VEUD" && gate.held_count()==2 &&
+   events.clear();assert(gate.free(&c)==S_OK && events=="VUD" && gate.held_count()==2 &&
                          gate.last_free_report().released==1);
    // The device's teardown drains the rest, and the paging queue closes after it ('P').
-   events.clear();assert(gate.close_after_engine_retirement()==S_OK && events=="EUDEUDP" && !gate.held_count() &&
+   events.clear();assert(gate.close_after_engine_retirement()==S_OK && events=="UDUDP" && !gate.held_count() &&
                          !gate.forced_releases());
    assert(gate.discard_metadata()==0);
   }
@@ -1144,8 +1177,8 @@ int main(){
    assert(caps.initialize()==S_OK);
    assert(caps.allocate(&req,&a)==S_OK && caps.allocate(&req,&b)==S_OK);
    events.clear();assert(caps.free(&a)==S_OK && events=="V" && caps.held_count()==1);
-   events.clear();assert(caps.free(&b)==S_OK && events=="VEUD" && caps.held_count()==1);
-   events.clear();assert(caps.close_after_engine_retirement()==S_OK && events=="EUDP");
+   events.clear();assert(caps.free(&b)==S_OK && events=="VUD" && caps.held_count()==1);
+   events.clear();assert(caps.close_after_engine_retirement()==S_OK && events=="UDP");
    assert(caps.discard_metadata()==0);
   }
   // 3. The byte cap, smaller than one import: every release is over it and leaves at once.
@@ -1154,7 +1187,7 @@ int main(){
    RuntimeHeapImports bytes(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,identity,policy);
    assert(bytes.initialize()==S_OK);
    assert(bytes.allocate(&req,&a)==S_OK);
-   events.clear();assert(bytes.free(&a)==S_OK && events=="VEUD" && !bytes.held_count());
+   events.clear();assert(bytes.free(&a)==S_OK && events=="VUD" && !bytes.held_count());
    events.clear();assert(bytes.close_after_engine_retirement()==S_OK && events=="P");
    assert(bytes.discard_metadata()==0);
   }
@@ -1166,7 +1199,7 @@ int main(){
    assert(aged.allocate(&req,&a)==S_OK && aged.allocate(&req,&b)==S_OK);
    events.clear();assert(aged.free(&a)==S_OK && events=="V" && aged.held_count()==1);
    Sleep(32);                                   // GetTickCount64's step is about 16 ms
-   events.clear();assert(aged.free(&b)==S_OK && events=="VEUD" && aged.held_count()==1);
+   events.clear();assert(aged.free(&b)==S_OK && events=="VUD" && aged.held_count()==1);
    assert(aged.close_after_engine_retirement()==S_OK && aged.discard_metadata()==0);
   }
   // 5. The progress gate: the device-wide progress of the release decides, and a linear primary is never
@@ -1181,7 +1214,7 @@ int main(){
    events.clear();assert(gated.free(&a)==S_OK && events=="V" && gated.held_count()==1 && snapshots==1);
    events.clear();gated.retire_held();assert(events.empty() && gated.held_count()==1);
    progress_retired_flag=true;
-   gated.retire_held();assert(events=="EUD" && !gated.held_count() && !gated.forced_releases());
+   gated.retire_held();assert(events=="UD" && !gated.held_count() && !gated.forced_releases());
    // The primary: allocated and released inside its resource's DDI, with the progress unretired.
    progress_retired_flag=false;
    constexpr uint32_t primary=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryPrimary|engine_ddi::kMemoryLinearSurface;
@@ -1192,15 +1225,20 @@ int main(){
    s.memory_type_bits=1;s.surface_row_pitch=1024;s.surface_layout_size=65536;surface_format=D3DDDIFMT_A8R8G8B8;
    engine_ddi::ImportedMemory surface{};
    events.clear();{OwnerScope create(&gated,0);assert(gated.allocate(&s,&surface)==S_OK);}
+   // BD-052: the Evict is inside allocate() even here, with the progress gate on and the device-wide
+   // progress unretired. That gate belongs to the release quarantine and never to the residency reference:
+   // before the fix of finding 1 this read "AMZIVEUR", which is a heap that left its creation DDI resident
+   // under the policy the driver ships.
    {OwnerScope destroy(&gated,surface.allocation);
-    assert(gated.free(&surface)==S_OK && events=="AMZIVEUR" && !gated.held_count());}
+    assert(gated.free(&surface)==S_OK && events=="AMZIEVUR" && !gated.held_count());}
    heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;
    // BD-201 R v2: an import whose progress never retires is still released at the device's teardown, and
    // counted, but THROUGH THE OS: no Evict (no 'E') and no FreeGpuVirtualAddress (no 'U'), because both take
    // effect at once, and the deallocate carries flags NONE ('O', not 'D'), which the video memory manager
    // defers behind the work queued before the request. Its mapping is an ordinary one, whose range the map
    // call allocated and the destroy frees, so nothing of it is kept: no reservation is counted.
-   assert(gated.allocate(&req,&b)==S_OK);
+   // BD-052: the creation has already returned the residency reference.
+   events.clear();assert(gated.allocate(&req,&b)==S_OK && events=="AMZIE");
    events.clear();assert(gated.free(&b)==S_OK && events=="V" && gated.held_count()==1);
    events.clear();assert(gated.close_after_engine_retirement()==S_OK && events=="OP" &&
                          gated.forced_releases()==1 && !gated.held_count());
@@ -1233,14 +1271,14 @@ int main(){
   msaa_alignment=m.alignment;
   engine_ddi::ImportedMemory big{};
   events.clear();reserves=0;
-  assert(msaa.allocate(&m,&big)==S_OK && events=="ASMZI" && reserves==1);
+  assert(msaa.allocate(&m,&big)==S_OK && events=="ASMZIE" && reserves==1);
   // One reservation of held + alignment, and the import's address is the first aligned one inside it.
   assert(reserved_span==held_bytes()+m.alignment && aligned_va>reserve_base);
   assert(big.gpu_va==aligned_va && !(big.gpu_va&(m.alignment-1)) && big.byte_size==held_bytes());
   assert(msaa.last_report().stage==ImportStage::Done && !msaa.last_report().refusal);
   assert(msaa.last_report().alignment==m.alignment && msaa.last_report().address==aligned_va);
   // The release frees the whole reservation (checked in unmap_cb) and deallocates.
-  events.clear();assert(msaa.free(&big)==S_OK && events=="VEUD");
+  events.clear();assert(msaa.free(&big)==S_OK && events=="VUD");
   // Negative control 1: the runtime refuses the reservation. The request fails with the runtime's own code,
   // no map is attempted, and the record is released.
   reserve_result=E_OUTOFMEMORY;events.clear();reserves=0;
@@ -1265,7 +1303,7 @@ int main(){
    assert(kept.initialize()==S_OK);
    engine_ddi::ImportedMemory inside{};
    events.clear();reserves=0;
-   assert(kept.allocate(&m,&inside)==S_OK && events=="ASMZI" && reserves==1);
+   assert(kept.allocate(&m,&inside)==S_OK && events=="ASMZIE" && reserves==1);
    progress_retired_flag=false;
    events.clear();assert(kept.free(&inside)==S_OK && events=="V" && kept.held_count()==1);
    events.clear();assert(kept.close_after_engine_retirement()==S_OK && events=="OP" &&
@@ -1290,6 +1328,197 @@ int main(){
   map_answer=0;memory_va_bias=0;
   assert(odd.close_after_engine_retirement()==S_OK && odd.discard_metadata()==0);
  }
+ // ---- BD-052: the residency of an imported heap belongs to the runtime ---------------------------------------
+ // The import takes the paging domain's residency reference for the window the mapping is not committed in
+ // (trial 153) and gives it back before the creation DDI returns. DirectX-Specs ResourceHeaps.md @ 5a4139b,
+ // Residency DDIs, line 1011: with these DDI entry points the driver "must no longer create allocations
+ // associated with any d3d12 driver handle creation DDIs as resident during creation".
+ {
+  heap.Flags=D3D12DDI_HEAP_FLAG_BUFFERS;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_NOT_AVAILABLE;
+  heap.MemoryPool=D3D12DDI_MEMORY_POOL_L1;expected_type=0;
+  pending=false;resident_pending=false;completed=20;
+  // The policy the driver ships (from_switches with no switch set: progress_gate on, quarantine depth 3),
+  // with a progress source bound and the device-wide progress unretired, which is the normal in-game state.
+  // The first version of this fix gated the hand-back on that progress and therefore left the heap resident
+  // in exactly this configuration, while its own test ran with ImportReleasePolicy::off(); the gate belongs
+  // to the release quarantine, and no gate may postpone this hand-back.
+  ImportReleasePolicy shipped{};shipped.quarantine_depth=3;shipped.quarantine_count_cap=64;
+  shipped.quarantine_age_ms=250;shipped.quarantine_byte_cap=64ull<<20;shipped.progress_gate=true;
+  RuntimeHeapImports own(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                         identity,shipped);
+  own.bind_progress({&own,progress_snapshot_cb,progress_retired_cb});
+  progress_retired_flag=false;
+  assert(own.initialize()==S_OK);
+  engine_ddi::ImportedMemory h{};
+  const auto made=makes_resident,evicted=evictions;
+  // (a) and (b), and the negative control of this whole fix: the Evict callback is made inside allocate(),
+  // so the heap is not resident when the creation DDI returns and nothing of ours is left for an application
+  // Evict to find. Before the fix the import held the reference for the heap's whole life: allocate() ended
+  // at 'I', evictions stayed where it was until the release, and a heap the application asked to create with
+  // D3D12_HEAP_FLAG_CREATE_NOT_RESIDENT was resident anyway. That flag never reaches the driver
+  // (D3D12DDI_HEAP_FLAGS, WDK 10.0.26100 d3d12umddi.h lines 307-317, has no such bit), so leaving no
+  // reference behind is the only way to honour it.
+  events.clear();assert(own.allocate(&req,&h)==S_OK && events=="AMZIE");
+  assert(makes_resident==made+1 && evictions==evicted+1 && own.residency_releases()==1);
+  // The runtime's own MakeResident on that heap is the runtime's residency operation and the only one. The
+  // driver makes no residency callback of its own for it: a second VidMm reference is one the application's
+  // Evict cannot drop, which is the defect, and it would cost two kernel transitions per allocation on the
+  // path a budget-managed game walks every frame. The notice is counted and nothing else.
+  D3DKMT_HANDLE ours[]={h.allocation};
+  own.note_runtime_residency(ours,1);
+  assert(makes_resident==made+1 && evictions==evicted+1 && own.residency_releases()==1);
+  assert(own.runtime_residencies()==1);
+  // An allocation that is not an import of this device changes nothing either way.
+  D3DKMT_HANDLE alien[]={h.allocation+1000};
+  own.note_runtime_residency(alien,1);
+  assert(makes_resident==made+1 && evictions==evicted+1 && own.runtime_residencies()==2);
+  own.note_runtime_eviction(ours,1);
+  assert(own.runtime_evictions()==1 && makes_resident==made+1 && evictions==evicted+1);
+  // An empty or absent list is not counted at all.
+  own.note_runtime_residency(nullptr,1);own.note_runtime_residency(ours,0);own.note_runtime_eviction(ours,0);
+  assert(own.runtime_residencies()==2 && own.runtime_evictions()==1);
+  // The release of the import makes no second eviction: the reference was given back inside the creation
+  // DDI. The quarantine holds the entry because the progress is unretired, and the drain unmaps it with no
+  // Evict of its own.
+  events.clear();assert(own.free(&h)==S_OK && events=="V" && own.held_count()==1);
+  progress_retired_flag=true;Sleep(270);        // past the quarantine's 250 ms age bound, so the depth
+  events.clear();own.retire_held();             // of 3 does not have to be reached for this one entry
+  assert(events=="UD" && evictions==evicted+1 && !own.held_count());
+  progress_retired_flag=false;
+  // (c) An internal submission is ordered after the paging work of this driver, on the paging queue's own
+  // monitored fence, because the fence of the runtime's paging queue has no synchronization object the
+  // driver may name (ResourceHeaps.md line 1017). A pending import leaves the largest value it queued;
+  // while the queue is behind, one GPU wait for that value is inserted on the submitting context. It is an
+  // ordering of this driver's paging work and says nothing about residency.
+  pending=true;resident_pending=true;completed=10;
+  engine_ddi::ImportedMemory late{};events.clear();
+  assert(own.allocate(&req,&late)==S_OK && events=="AMZWIE" && completed==30);
+  order_waits=0;order_value=0;
+  assert(own.order_internal_submission(order_context)==S_FALSE && !order_waits);   // caught up
+  completed=20;                                  // the paging queue is behind the largest queued value
+  assert(own.order_internal_submission(order_context)==S_OK && order_waits==1 && order_value==30);
+  assert(own.residency_orders()==1);
+  order_result=E_FAIL;
+  assert(own.order_internal_submission(order_context)==E_FAIL && order_waits==2 && own.residency_orders()==1);
+  order_result=S_OK;
+  assert(own.order_internal_submission(nullptr)==E_INVALIDARG && order_waits==2);
+  completed=30;progress_retired_flag=true;events.clear();
+  assert(own.free(&late)==S_OK && events=="V" && own.held_count()==1);
+  // The teardown drains the quarantine: the unmap and the deallocation, and no Evict anywhere, because the
+  // one residency reference of this import went back inside its creation DDI. completed stays at 30 until
+  // the unmap has run, because the unmap needs the mapping's own fence to have completed.
+  events.clear();const auto evicted_before_close=evictions;
+  assert(own.close_after_engine_retirement()==S_OK && events=="UDP" && evictions==evicted_before_close);
+  pending=false;resident_pending=false;completed=20;
+  // The paging queue is gone, so no internal submission may read its fence page any more: the flag is
+  // cleared before pfnDestroyPagingQueueCb runs and the shared hold of paging_life_lock_ waits for the
+  // readers already inside (order_internal_submission).
+  order_waits=0;
+  assert(own.order_internal_submission(order_context)==S_FALSE && !order_waits);
+  assert(own.discard_metadata()==0);
+  // Closing must reject new readers before waiting for an in-flight GPU wait.
+  // The observer uses an invalid context, so it cannot itself enter the wait callback.
+  // S_FALSE proves close has cleared admission; the blocked reader must still keep
+  // DestroyPagingQueue away from its mapped fence page at that point.
+  {
+   RuntimeHeapImports raced(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                            identity,ImportReleasePolicy::off());
+   assert(raced.initialize()==S_OK);pending=true;resident_pending=true;completed=10;
+   engine_ddi::ImportedMemory raced_heap{};assert(raced.allocate(&req,&raced_heap)==S_OK);
+   assert(raced.free(&raced_heap)==S_OK);completed=20;events.clear();
+   order_entered=CreateEventW(nullptr,TRUE,FALSE,nullptr);order_resume=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+   assert(order_entered && order_resume);
+   HRESULT ordered=E_FAIL;
+   std::thread reader([&]{ordered=raced.order_internal_submission(order_context);});
+   assert(WaitForSingleObject(order_entered,5000)==WAIT_OBJECT_0);
+   std::thread observer([&]{
+    const auto deadline=GetTickCount64()+4000;HRESULT admission=E_INVALIDARG;
+    while((admission=raced.order_internal_submission(nullptr))==E_INVALIDARG && GetTickCount64()<deadline)Sleep(0);
+    assert(admission==S_FALSE && events.empty());
+    SetEvent(order_resume);
+   });
+   assert(raced.close_after_engine_retirement()==S_OK);
+   observer.join();reader.join();assert(ordered==S_OK && events=="P");
+   CloseHandle(order_entered);CloseHandle(order_resume);order_entered=nullptr;order_resume=nullptr;
+   assert(raced.discard_metadata()==0);pending=false;resident_pending=false;
+  }
+  // The ICD can lock memory inside vkAllocateMemory. If hand-back and Unlock2
+  // both fail, free the Vulkan import exactly once and retain the locked record.
+  {
+   RuntimeHeapImports refused(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                              identity,ImportReleasePolicy::off());
+   assert(refused.initialize()==S_OK);
+   const auto saved_type=expected_type;const auto saved_page=heap.CPUPageProperty;
+   auto* saved_imports=imports;imports=&refused;
+   expected_type=1;heap.CPUPageProperty=D3D12DDI_CPU_PAGE_PROPERTY_WRITE_COMBINE;
+   engine_ddi::ImportedMemory failed{};
+   lock_on_import=true;fail_unlock=true;fail_evict=true;events.clear();
+   assert(refused.allocate(&req,&failed)==E_FAIL && !failed.memory && !failed.cookie && events=="AMZILEVNN");
+   assert(refused.owns_allocation(next_allocation) && !refused.residency_releases());
+   lock_on_import=false;events.clear();
+   assert(refused.close_after_engine_retirement()==E_FAIL && events=="N" && refused.owns_allocation(next_allocation));
+   fail_unlock=false;fail_evict=false;events.clear();
+   assert(refused.close_after_engine_retirement()==S_OK && events=="NEUDP");
+   assert(!refused.owns_allocation(next_allocation) && refused.discard_metadata()==0);
+   expected_type=saved_type;heap.CPUPageProperty=saved_page;imports=saved_imports;
+  }
+  // A failed hand-back never publishes a heap. If its deallocation also fails,
+  // the driver retains the owned record and retries that cleanup at close.
+  {
+   RuntimeHeapImports refused(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                              identity,ImportReleasePolicy::off());
+   assert(refused.initialize()==S_OK);
+   engine_ddi::ImportedMemory failed{};
+   fail_evict=true;fail_deallocate=true;events.clear();
+   assert(refused.allocate(&req,&failed)==E_FAIL && !failed.memory && !failed.cookie && events=="AMZIEVEUD");
+   assert(refused.owns_allocation(next_allocation) && !refused.residency_releases());
+   const auto refused_evictions=evictions;
+   fail_evict=false;fail_deallocate=false;events.clear();
+   assert(refused.close_after_engine_retirement()==S_OK && events=="DP" && evictions==refused_evictions);
+   assert(!refused.owns_allocation(next_allocation) && refused.discard_metadata()==0);
+  }
+  // A failed open also publishes nothing. Its runtime-owned handle can be gone
+  // before deferred cleanup, so a failed VA free must never cause a later Evict
+  // or deallocation callback on that borrowed handle (BD-075).
+  {
+   RuntimeHeapImports refused(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                              identity,ImportReleasePolicy::off());
+   assert(refused.initialize()==S_OK);
+   engine_ddi::AdoptRequest open{};open.size=sizeof(open);
+   open.flags=engine_ddi::kMemoryDedicated|engine_ddi::kMemoryShareable|engine_ddi::kMemoryLinearSurface;
+   open.rt_owner={handle<void*>(2)};open.allocation=++next_allocation;
+   open.byte_size=65536;open.alignment=128;open.memory_type_bits=1;
+   engine_ddi::ImportedMemory failed{};
+   fail_evict=true;fail_free=true;events.clear();
+   assert(refused.adopt(&open,&failed)==E_FAIL && !failed.memory && !failed.cookie && events=="MZIEVU");
+   assert(refused.owns_allocation(open.allocation) && !refused.residency_releases());
+   const auto refused_evictions=evictions;
+   fail_evict=false;fail_free=false;events.clear();
+   assert(refused.close_after_engine_retirement()==S_OK && events=="UP" && evictions==refused_evictions);
+   assert(!refused.owns_allocation(open.allocation) && refused.discard_metadata()==0);
+  }
+  // The bisect arm: with ImportReleasePolicy::residency_hold (switch import-residency-hold-on) the import
+  // keeps the reference for the heap's whole life, which is the pre-BD-052 behaviour and the defect. The
+  // Evict then comes from the unmap of the release, as it did before.
+  {
+   ImportReleasePolicy hold=ImportReleasePolicy::off();hold.residency_hold=true;
+   RuntimeHeapImports kept(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                           identity,hold);
+   assert(kept.initialize()==S_OK);
+   engine_ddi::ImportedMemory old{};
+   const auto before=evictions;
+   events.clear();assert(kept.allocate(&req,&old)==S_OK && events=="AMZI" && evictions==before);
+   assert(!kept.residency_releases());
+   events.clear();assert(kept.free(&old)==S_OK && events=="VEUD" && evictions==before+1);
+   assert(!kept.residency_releases());          // the unmap's Evict is not a hand-back
+   assert(kept.close_after_engine_retirement()==S_OK && kept.discard_metadata()==0);
+  }
+  // A device whose imports never opened a paging queue has no paging work to order against.
+  RuntimeHeapImports idle(device,domain,handle<VkPhysicalDevice>(3),handle<VkDevice>(4),handle<VkInstance>(5),gipa,
+                          identity,ImportReleasePolicy::off());
+  assert(idle.initialize()==S_OK && idle.order_internal_submission(order_context)==S_FALSE);
+  assert(idle.close_after_engine_retirement()==S_OK && idle.discard_metadata()==0);
+ }
  std::puts("PASS heap import: DEFAULT/UPLOAD/READBACK, coherent L0 policy and rejection, exact private import, borrowed map, a CPU lock the ICD left unlocked by the release (retried at close after a failure), ordered cleanup, own residency reference and one CPU wait before the VA leaves, evicted before unmap, linear primary as an LB7A surface under E26R (8-, 10-bit and FP16 storage, pitch by the table's bytes), "
   "released by its runtime resource inside that resource's DDI only, present-cached v2 CPU_READ record, present-noprimary ordinary allocation, "
   "release gate off reproducing adapter106 and on in all five shapes (depth, count cap, byte cap, age bound, device progress whose unproved teardown release goes through the OS: no evict, no VA free, deallocate flags 0, an ordinary mapping's range left to the destroy and a reservation kept and counted), "
@@ -1301,5 +1530,10 @@ int main(){
   "an address that does not satisfy the request refused by name at ImportStage::AddressAlignment), "
   "M15.14 scan-out primary from the trailer of the moment (one query per primary, a mode change both ways, "
   "the kernel driver's switch closed, a failed query and a format without a scan-out row all composed; a chain "
-  "made before the mode commit admitted only on a geometry the mode list offers)");
+  "made before the mode commit admitted only on a geometry the mode list offers), "
+  "BD-052 (under the policy the driver ships, with the device-wide progress unretired, the import gives its "
+  "residency reference back inside the creation DDI; the runtime's MakeResident and Evict make no residency "
+  "callback of ours at all and are only counted; the release makes no second eviction; an internal submission "
+  "is ordered on the paging queue's own fence only while that queue is behind and never after the queue is "
+  "closed; and the import-residency-hold-on bisect arm keeps the old lifetime hold)");
 }

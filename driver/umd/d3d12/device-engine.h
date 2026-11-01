@@ -4,6 +4,7 @@
 #ifdef AMDGPU_WDDM_D3D12_HOST_TEST
 #include <d3d12umddi.h>
 #endif
+#include <d3dkmthk.h>                           // D3DKMT_HANDLE, for the residency notices below
 #include "../dxvk/runtime-domain.h"
 #include "hosted-instance.h"
 #include <atomic>
@@ -19,6 +20,13 @@ void destroy_device_engine(Device&) noexcept;
 engine_ddi::DeviceContext* engine_context(Device&) noexcept;
 QueueEngineRegistry* engine_queues(Device&) noexcept;
 RuntimeHeapImports* engine_imports(Device&) noexcept;
+// BD-052: the residency DDIs tell this device's heap imports what the runtime has just done, which is
+// counted there as the evidence that an imported heap's residency belongs to the runtime alone
+// (heap-import.h, note_runtime_residency). Free functions, so that
+// native-residency-ddi.cpp needs no definition of RuntimeHeapImports: a device without an engine or without
+// imports does nothing.
+void engine_note_runtime_residency(Device&,const D3DKMT_HANDLE*,unsigned) noexcept;
+void engine_note_runtime_eviction(Device&,const D3DKMT_HANDLE*,unsigned) noexcept;
 // The per-application MaxFrameLatency gate of one Present (frame-latency.h). The gate and its proof of GPU
 // progress both live with the engine: the hosted dispatch sees every progress publication the ICD makes
 // (device-progress.h), and the ring of snapshots stays off the structure the runtime allocates per device.

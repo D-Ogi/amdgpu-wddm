@@ -164,6 +164,87 @@ static void alignment_cases(){
     assert(d.close()==S_OK);
 }
 
+// ---- BD-052: the residency hand-back and the ordering of an internal submission --------------------------
+// Own callbacks, so that these cases can name their own fence values without touching the expectations of
+// the mocks above (wait_gpu there pins the mapping's value 7).
+static UINT64 ordered_value;                    // the value the last GPU wait asked for
+static unsigned ordered_waits;
+static HRESULT ordered_result=S_OK;
+static HRESULT APIENTRY wait_gpu_b(HANDLE d,const D3DDDICB_WAITFORSYNCHRONIZATIONOBJECTFROMGPU* a){
+    assert(d==owner && a->hContext==expected_context && a->ObjectCount==1 && a->ObjectHandleArray[0]==6);
+    ++ordered_waits;ordered_value=a->MonitoredFenceValueArray[0];return ordered_result;
+}
+static void residency_handback_cases(){
+    D3DDDI_DEVICECALLBACKS cb{};
+    cb.pfnCreatePagingQueueCb=create;cb.pfnDestroyPagingQueueCb=destroy;cb.pfnMapGpuVirtualAddressCb=map;
+    cb.pfnFreeGpuVirtualAddressCb=free_va;cb.pfnMakeResidentCb=make_resident;cb.pfnEvictCb=evict;
+    cb.pfnWaitForSynchronizationObjectFromCpuCb=wait_cpu;cb.pfnWaitForSynchronizationObjectFromGpuCb=wait_gpu_b;
+    asynchronous=true;make_result=E_PENDING;make_fence=11;evict_result=S_OK;failFree=false;
+    native12::PagingDomain d({owner},cb);assert(d.open()==S_OK);
+    // The reference is given back on its own, with one Evict callback, and the mapping keeps its address:
+    // the heap imports hand it back inside the creation DDI, and release the VA much later.
+    native12::GpuMapping m;completed=0;UINT64 address=0;
+    assert(d.map(9,65536,m)==S_OK && d.make_resident(m)==S_OK && d.holds_residency(m));
+    const auto e0=evicts;
+    assert(d.release_residency(m)==S_OK && evicts==e0+1 && !d.holds_residency(m) && d.residency_releases()==1);
+    // Nothing is owed twice, and the unmap that follows makes no second eviction.
+    assert(d.release_residency(m)==S_FALSE && evicts==e0+1 && d.residency_releases()==1);
+    completed=11;assert(d.ready(m,&address)==S_OK && address==0x200010000ull);
+    const auto f0=frees;
+    assert(d.unmap_after_gpu_retirement(m)==S_OK && evicts==e0+1 && frees==f0+1);
+    // A borrowed allocation (BD-075) gets no Evict callback at all: the runtime may have destroyed it.
+    completed=0;assert(d.map(9,65536,m)==S_OK && d.make_resident(m)==S_OK);
+    const auto skipped=d.evicts_skipped();
+    assert(d.release_residency(m,true)==S_OK && evicts==e0+1 && d.evicts_skipped()==skipped+1);
+    // A creation cannot claim hand-back after a failed eviction. Keep the
+    // increment and report the error; a later successful hand-back drops it once.
+    completed=11;assert(d.unmap_after_gpu_retirement(m)==S_OK);
+    completed=0;assert(d.map(9,65536,m)==S_OK && d.make_resident(m)==S_OK);
+    evict_result=E_FAIL;const auto failures=d.evict_failures();
+    const auto released=d.residency_releases();
+    assert(d.release_residency(m)==E_FAIL && d.holds_residency(m) && d.evict_failures()==failures+1 &&
+           d.residency_releases()==released);
+    evict_result=S_FALSE;
+    assert(d.release_residency(m)==E_UNEXPECTED && d.holds_residency(m) &&
+           d.residency_releases()==released);
+    evict_result=S_OK;
+    assert(d.release_residency(m)==S_OK && !d.holds_residency(m) && d.residency_releases()==released+1);
+    completed=11;assert(d.unmap_after_gpu_retirement(m)==S_OK);
+    // A mapping of another domain, or none at all, is nobody's reference to give back.
+    native12::PagingDomain other({owner},cb);assert(other.open()==S_OK);
+    native12::GpuMapping foreign;assert(other.release_residency(foreign)==E_INVALIDARG);
+    completed=0;assert(d.map(9,65536,m)==S_OK);
+    assert(other.release_residency(m)==E_INVALIDARG && d.release_residency(m)==S_FALSE);
+    // The ordering of an internal submission: one GPU wait on this domain's own fence, for the largest
+    // value it has queued over every mapping (the map's 7, the residency's 11), and only while the queue
+    // is behind. This is what the engine's internal contexts get instead of the runtime's residency fence,
+    // which the driver has no synchronization object for (trial 153).
+    assert(d.queued_fence()==11);
+    ordered_waits=0;ordered_value=0;
+    assert(d.order_context(expected_context)==S_OK && ordered_waits==1 && ordered_value==11);
+    assert(d.ordered_waits()==1);
+    completed=11;                               // caught up: nothing to wait for and no callback
+    assert(d.order_context(expected_context)==S_FALSE && ordered_waits==1 && d.ordered_waits()==1);
+    completed=0;assert(d.order_context(nullptr)==E_INVALIDARG && ordered_waits==1);
+    ordered_result=E_FAIL;assert(d.order_context(expected_context)==E_FAIL && ordered_waits==2);
+    ordered_result=S_OK;
+    completed=UINT64_MAX;assert(d.order_context(expected_context)==D3DDDIERR_DEVICEREMOVED && ordered_waits==2);
+    completed=11;assert(d.unmap_after_gpu_retirement(m)==S_OK && d.close()==S_OK);
+    // A domain that has queued nothing has nothing to order against, and one without the callback refuses.
+    native12::PagingDomain empty({owner},cb);assert(empty.open()==S_OK);
+    assert(empty.queued_fence()==0 && empty.order_context(expected_context)==S_FALSE);
+    assert(empty.close()==S_OK);
+    D3DDDI_DEVICECALLBACKS bare=cb;bare.pfnWaitForSynchronizationObjectFromGpuCb=nullptr;
+    native12::PagingDomain blind({owner},bare);native12::GpuMapping bm;completed=0;
+    assert(blind.open()==S_OK && blind.map(9,65536,bm)==S_OK);
+    assert(blind.order_context(expected_context)==E_UNEXPECTED);
+    completed=7;assert(blind.unmap_after_gpu_retirement(bm)==S_OK && blind.close()==S_OK);
+    // An expired domain cannot order anything either.
+    native12::PagingDomain gone({owner},cb);native12::GpuMapping gm;completed=0;
+    assert(gone.open()==S_OK && gone.map(9,65536,gm)==S_OK);gone.invalidate_runtime();
+    assert(gone.order_context(expected_context)==E_UNEXPECTED);
+    assert(other.close()==S_OK);
+}
 int main(){
     D3DDDI_DEVICECALLBACKS cb{};cb.pfnCreatePagingQueueCb=create;cb.pfnDestroyPagingQueueCb=destroy;
     cb.pfnMapGpuVirtualAddressCb=map;cb.pfnFreeGpuVirtualAddressCb=free_va;
@@ -275,9 +356,13 @@ int main(){
     assert(nr.make_resident(held)==E_UNEXPECTED);completed=7;
     assert(nr.unmap_after_gpu_retirement(held)==S_OK && nr.close()==S_OK);
     alignment_cases();
+    residency_handback_cases();
     puts("paging ownership, context GPU waits, pending VA, loss and callback lifetime gates passed; "
          "own residency reference (CantTrimFurther) joins the fence, CPU wait for the largest value, evicted before "
          "the VA is freed, a failed eviction does not hold the VA; BD-101: 64 KiB maps as before, 4 MiB maps at an "
          "aligned offset inside a reservation of bytes+alignment and frees the whole reservation, and every refusal "
-         "of that route gives the reservation back");
+         "of that route gives the reservation back; BD-052: the residency reference is given back on its own "
+         "with one Evict (none for an expired borrowed allocation, retained when the hand-back fails), and an internal "
+         "submission is ordered on this domain's own fence for the largest value it has queued, only while the "
+         "paging queue is behind");
 }

@@ -165,6 +165,14 @@ class DeviceEngine final {
         auto& self=*static_cast<DeviceEngine*>(owner);
         if(self.imports_)self.imports_->return_backing(handle);
     }
+    // BD-052: orders an internal submission of the engine or the ICD after the imports' own paging work
+    // (heap-import.h, order_internal_submission). A device whose imports are gone has no paging work of its
+    // own to order against, so there is nothing to wait for.
+    static HRESULT order_submission(void* owner,HANDLE context) noexcept {
+        auto& self=*static_cast<DeviceEngine*>(owner);
+        if(!self.active_.load(std::memory_order_acquire) || !self.imports_)return S_FALSE;
+        return self.imports_->order_internal_submission(context);
+    }
     static HRESULT queue_dispatch(void* owner,uint32_t op,void* arg) noexcept {
         auto& self=*static_cast<DeviceEngine*>(owner);
         return self.active_.load(std::memory_order_acquire) && self.queue_bridge_?
@@ -305,7 +313,7 @@ public:
     DeviceEngine(Device& device,const AdapterEngineAccess& access) noexcept
       :device_(device),adapter_(*device.adapter),access_(access),
        dispatch_(domain_,device.runtime,device.callbacks,device.kernel_callbacks,
-                 {this,nullptr,queue_dispatch,borrow_backing,return_backing}),
+                 {this,nullptr,queue_dispatch,borrow_backing,return_backing,order_submission}),
        bootstrap_(access.driver_entry,device.adapter->contract.luid,this,this,dispatch,
                   device.adapter->instance_policy) {
         services_={sizeof(services_),this,bind,unbind};
@@ -562,6 +570,12 @@ void destroy_device_engine(Device& device) noexcept {
 engine_ddi::DeviceContext* engine_context(Device& device) noexcept {return device.engine?device.engine->context():nullptr;}
 QueueEngineRegistry* engine_queues(Device& device) noexcept {return device.engine?device.engine->queues():nullptr;}
 RuntimeHeapImports* engine_imports(Device& device) noexcept {return device.engine?device.engine->imports():nullptr;}
+void engine_note_runtime_residency(Device& device,const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
+    if(auto* imports=engine_imports(device))imports->note_runtime_residency(allocations,count);
+}
+void engine_note_runtime_eviction(Device& device,const D3DKMT_HANDLE* allocations,unsigned count) noexcept {
+    if(auto* imports=engine_imports(device))imports->note_runtime_eviction(allocations,count);
+}
 // latency 0 is the default of every release: one test, and this present leaves the shell exactly as it did in b23.
 void engine_frame_gate(Device& device,uint32_t latency) noexcept {
     if(!latency || !device.engine)return;

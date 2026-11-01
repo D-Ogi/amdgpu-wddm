@@ -445,7 +445,20 @@ HRESULT HostedDispatch::internal_queue(uint32_t op,void* argument) noexcept {
         bool shared=false;for(UINT i=0;i<a.BroadcastContextCount;++i)shared|=lend(*named[i]);
         held.release();note_shared(shared);
         b.NumPrimaries=a.NumPrimaries;for(UINT i=0;i<a.NumPrimaries;++i)b.WrittenPrimaries[i]=a.WrittenPrimaries[i];
-        HRESULT hr=KT_QUEUE(SubmitCommand,&b);
+        // BD-052: this is a submission on an internal context of the engine or the ICD, which the runtime
+        // never sees and never makes wait for a paging operation of this driver. Order it behind the
+        // driver's own paging work before it reaches the kernel; trial 153 is the fault this prevents (a GPU
+        // job wrote a mapped range 2 ms after its map fence). The hook is outside the lock, because it takes
+        // the heap imports' lock and may make a runtime callback, and nothing is submitted if it fails.
+        HRESULT hr=S_OK;
+        if(hooks_.order)
+            for(UINT i=0;i<a.BroadcastContextCount && SUCCEEDED(hr);++i)
+                hr=hooks_.order(hooks_.userdata,b.BroadcastContext[i]);
+        if(FAILED(hr)){
+            held.acquire();for(UINT i=0;i<a.BroadcastContextCount;++i)give(*named[i]);
+            return hr;
+        }
+        hr=KT_QUEUE(SubmitCommand,&b);
         held.acquire();for(UINT i=0;i<a.BroadcastContextCount;++i)give(*named[i]);
         return hr;
     }
