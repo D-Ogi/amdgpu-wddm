@@ -14,6 +14,12 @@
 #include <stdlib.h>
 
 #include "kmt_device.h"
+#include "allocation_plan.h"
+
+/* The largest child of an aggregate allocation (BD-117). A host test that includes this file
+ * lowers it to build small aggregates with real, disjoint host views; nothing else writes it,
+ * and no environment variable or parameter reaches it. */
+static uint64_t g_aggregate_child_cap = BC250HSA_ALLOCATION_CHILD_MAX;
 
 /* Every operation on a device paging queue gets a unique value of the queue's
  * monitored fence, and zero when it completed at once. A monitored fence value only
@@ -89,34 +95,163 @@ static void record_remove(struct bc250hsa_device* dev, bc250hsa_alloc_record* r)
     r->prev = NULL;
 }
 
-static void destroy_allocation(struct bc250hsa_device* dev, bc250hsa_alloc_record* r)
+static int is_aggregate(const bc250hsa_alloc_record* r)
 {
-    if (r->host != NULL) {
-        D3DKMT_UNLOCK2 unlock;
-        memset(&unlock, 0, sizeof(unlock));
-        unlock.hDevice = dev->device;
-        unlock.hAllocation = r->handle;
-        (void)D3DKMTUnlock2(&unlock);
-        r->host = NULL;
+    return r != NULL && r->kind == BC250HSA_RECORD_AGGREGATE;
+}
+
+static bc250hsa_status unlock_handle(struct bc250hsa_device* dev, D3DKMT_HANDLE handle)
+{
+    D3DKMT_UNLOCK2 unlock;
+    NTSTATUS       status;
+    memset(&unlock, 0, sizeof(unlock));
+    unlock.hDevice = dev->device;
+    unlock.hAllocation = handle;
+    status = D3DKMTUnlock2(&unlock);
+    return NT_SUCCESS(status) ? BC250HSA_OK : bc250hsa_os_status("Unlock2", status);
+}
+
+static bc250hsa_status free_va_range(struct bc250hsa_device* dev, uint64_t va, uint64_t bytes)
+{
+    D3DKMT_FREEGPUVIRTUALADDRESS free_va;
+    NTSTATUS                     status;
+    memset(&free_va, 0, sizeof(free_va));
+    free_va.hAdapter = dev->adapter;
+    free_va.BaseAddress = va;
+    free_va.Size = bytes;
+    status = D3DKMTFreeGpuVirtualAddress(&free_va);
+    return NT_SUCCESS(status) ? BC250HSA_OK : bc250hsa_os_status("FreeGpuVirtualAddress", status);
+}
+
+static bc250hsa_status destroy_handle(struct bc250hsa_device* dev, D3DKMT_HANDLE handle)
+{
+    D3DKMT_DESTROYALLOCATION2 destroy;
+    NTSTATUS                  status;
+    memset(&destroy, 0, sizeof(destroy));
+    destroy.hDevice = dev->device;
+    destroy.phAllocationList = &handle;
+    destroy.AllocationCount = 1;
+    status = D3DKMTDestroyAllocation2(&destroy);
+    return NT_SUCCESS(status) ? BC250HSA_OK : bc250hsa_os_status("DestroyAllocation2", status);
+}
+
+/* The host mappings of every child of an aggregate. A child whose unlock failed keeps its
+ * pointer, and the call stops there. */
+static bc250hsa_status aggregate_unlock(struct bc250hsa_device* dev, bc250hsa_alloc_record* r)
+{
+    uint32_t i;
+    r->cpu_access = 0u;
+    for (i = 0; i < r->child_count; ++i) {
+        bc250hsa_alloc_child* c = &r->children[i];
+        if (c->host != NULL) {
+            const bc250hsa_status status = unlock_handle(dev, c->handle);
+            if (status != BC250HSA_OK) {
+                return status;
+            }
+            c->host = NULL;
+        }
     }
-    if (r->va != 0u) {
-        D3DKMT_FREEGPUVIRTUALADDRESS free_va;
-        memset(&free_va, 0, sizeof(free_va));
-        free_va.hAdapter = dev->adapter;
-        free_va.BaseAddress = r->va;
-        free_va.Size = r->bytes;
-        (void)D3DKMTFreeGpuVirtualAddress(&free_va);
-        r->va = 0u;
+    return BC250HSA_OK;
+}
+
+static int inside_reservation(const bc250hsa_alloc_record* r, uint64_t va, uint64_t bytes)
+{
+    return r->reserve_base != 0u && va >= r->reserve_base &&
+           va - r->reserve_base <= r->reserve_bytes &&
+           bytes <= r->reserve_bytes - (va - r->reserve_base);
+}
+
+/* Releases what a record still owns, in the order of BD-117: the host mappings, the GPU
+ * addresses, then the allocations. An aggregate frees its whole reservation once, which
+ * takes the child mappings inside it as well; a child mapping that VidMm placed outside it
+ * is freed on its own first. Every step clears only what it released, and the first failure
+ * stops the call, so a later call continues from there and never frees an address or a
+ * handle twice. */
+static bc250hsa_status record_release(struct bc250hsa_device* dev, bc250hsa_alloc_record* r)
+{
+    bc250hsa_status status;
+    uint32_t        i;
+
+    if (!is_aggregate(r)) {
+        if (r->host != NULL) {
+            status = unlock_handle(dev, r->handle);
+            if (status != BC250HSA_OK) { return status; }
+            r->host = NULL;
+        }
+        if (r->va != 0u) {
+            status = free_va_range(dev, r->va, r->bytes);
+            if (status != BC250HSA_OK) { return status; }
+            r->va = 0u;
+        }
+        if (r->handle != 0u) {
+            status = destroy_handle(dev, r->handle);
+            if (status != BC250HSA_OK) { return status; }
+            r->handle = 0u;
+        }
+        return BC250HSA_OK;
     }
-    if (r->handle != 0u) {
-        D3DKMT_DESTROYALLOCATION2 destroy;
-        memset(&destroy, 0, sizeof(destroy));
-        destroy.hDevice = dev->device;
-        destroy.phAllocationList = &r->handle;
-        destroy.AllocationCount = 1;
-        (void)D3DKMTDestroyAllocation2(&destroy);
-        r->handle = 0u;
+
+    status = aggregate_unlock(dev, r);
+    if (status != BC250HSA_OK) {
+        return status;
     }
+    for (i = 0; i < r->child_count; ++i) {
+        bc250hsa_alloc_child* c = &r->children[i];
+        if (c->va != 0u && !inside_reservation(r, c->va, c->bytes)) {
+            status = free_va_range(dev, c->va, c->bytes);
+            if (status != BC250HSA_OK) { return status; }
+            c->va = 0u;
+        }
+    }
+    if (r->reserve_base != 0u) {
+        status = free_va_range(dev, r->reserve_base, r->reserve_bytes);
+        if (status != BC250HSA_OK) { return status; }
+        r->reserve_base = 0u;
+        r->reserve_bytes = 0u;
+    }
+    for (i = 0; i < r->child_count; ++i) {
+        r->children[i].va = 0u;
+    }
+    for (i = r->child_count; i-- > 0u;) {
+        bc250hsa_alloc_child* c = &r->children[i];
+        if (c->handle != 0u) {
+            status = destroy_handle(dev, c->handle);
+            if (status != BC250HSA_OK) { return status; }
+            c->handle = 0u;
+        }
+    }
+    r->va = 0u;
+    return BC250HSA_OK;
+}
+
+static void record_dispose(bc250hsa_alloc_record* r)
+{
+    free(r->children);
+    free(r);
+}
+
+/* A record that was never published, after a failure. What it still owns after the release
+ * stays on the device list, marked retiring, so that bc250hsa_close tries again; the caller
+ * keeps its own status and never sees this one. */
+static void record_abandon(struct bc250hsa_device* dev, bc250hsa_alloc_record* r, int release)
+{
+    /* The operating system status of the failure that the caller reports, not of a cleanup
+     * call after it. */
+    const int32_t primary = bc250hsa_last_os_status();
+    const int     released = release && record_release(dev, r) == BC250HSA_OK;
+    bc250hsa_set_os_status(primary);
+    if (released) {
+        record_dispose(r);
+        return;
+    }
+    bc250hsa_log(BC250HSA_LOG_WARN,
+                 "an allocation that failed keeps %s until the device closes",
+                 release ? "what its release could not free" : "its GPU addresses and handles,"
+                                                              " because a paging wait failed");
+    r->retiring = 1u;
+    bc250hsa_device_lock(dev);
+    record_insert(dev, r);
+    LeaveCriticalSection(&dev->lock);
 }
 
 void bc250hsa_free_all_allocations(struct bc250hsa_device* dev)
@@ -134,8 +269,13 @@ void bc250hsa_free_all_allocations(struct bc250hsa_device* dev)
     while (dev->allocations != NULL) {
         bc250hsa_alloc_record* r = dev->allocations;
         record_remove(dev, r);
-        destroy_allocation(dev, r);
-        free(r);
+        if (record_release(dev, r) != BC250HSA_OK) {
+            /* The device goes away next, and dxgkrnl takes back what the device still owns
+             * with it. The record cannot be kept for a later try. */
+            bc250hsa_log(BC250HSA_LOG_WARN, "close: an allocation release failed; the device"
+                                            " destruction takes back the rest");
+        }
+        record_dispose(r);
     }
 }
 
@@ -263,18 +403,16 @@ static bc250hsa_status allocation_status(const char* what, NTSTATUS status)
     }
 }
 
-static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_alloc_record* record,
-                                       uint64_t phys_bytes, uint64_t phys_alignment,
-                                       uint32_t flags, uint32_t heap, uint32_t gem_flags)
+/* CreateAllocation2 of one allocation on one heap. *handle is set when the call worked. */
+static bc250hsa_status create_backing(struct bc250hsa_device* dev, D3DKMT_HANDLE* handle,
+                                      uint64_t phys_bytes, uint64_t phys_alignment,
+                                      uint32_t heap, uint32_t gem_flags)
 {
     struct bc250hsa_alloc_blob         blob;
     struct bc250hsa_create_alloc_pdata pdata;
     D3DDDI_ALLOCATIONINFO2             info;
     D3DKMT_CREATEALLOCATION            create;
-    D3DDDI_MAPGPUVIRTUALADDRESS        map;
-    D3DDDI_MAKERESIDENT                resident;
     NTSTATUS                           status;
-    uint64_t                           paging_fence = 0;
 
     memset(&blob, 0, sizeof(blob));
     blob.magic = BC250HSA_ALLOC_MAGIC;
@@ -312,7 +450,24 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
     if (!NT_SUCCESS(status)) {
         return allocation_status("CreateAllocation2", status);
     }
-    record->handle = info.hAllocation;
+    *handle = info.hAllocation;
+    return BC250HSA_OK;
+}
+
+static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_alloc_record* record,
+                                       uint64_t phys_bytes, uint64_t phys_alignment,
+                                       uint32_t flags, uint32_t heap, uint32_t gem_flags)
+{
+    D3DDDI_MAPGPUVIRTUALADDRESS        map;
+    D3DDDI_MAKERESIDENT                resident;
+    NTSTATUS                           status;
+    bc250hsa_status                    result;
+    uint64_t                           paging_fence = 0;
+
+    result = create_backing(dev, &record->handle, phys_bytes, phys_alignment, heap, gem_flags);
+    if (result != BC250HSA_OK) {
+        return result;
+    }
     record->bytes = phys_bytes;
     record->flags = flags;
 
@@ -352,6 +507,255 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
     return bc250hsa_wait_paging_fence(dev, paging_fence);
 }
 
+/* --------------------------------------------------------------------------
+ * Aggregate allocations (BD-117)
+ *
+ * VidMm refuses one allocation above 0xFFFF0000 bytes with STATUS_INVALID_PARAMETER, whatever
+ * the budget. A device-local allocation above the child cap is therefore one GPU address
+ * reservation, filled from its aligned logical base by children of at most the cap, each one
+ * an ordinary allocation of the winsys blob mapped at exactly its offset. Kernels and the GPU
+ * copy see one contiguous range. The host processor sees one view per child and reaches them
+ * through the walkers below; there is no contiguous host view, and bc250hsa_map refuses one.
+ *
+ * Each child is made resident before its mapping, so that a residency refusal in the carve-out
+ * can be answered with system memory without touching the reservation. Residency does not
+ * depend on the address in WDDM 2 GPU virtual addressing, and the paging fence wait at the end
+ * covers both operations of every child.
+ * ------------------------------------------------------------------------ */
+
+/* CreateAllocation2 and MakeResident of one child on one heap. On a failure the child holds
+ * no handle, unless its destruction failed too, and then the handle stays for the release. */
+static bc250hsa_status child_backing(struct bc250hsa_device* dev, bc250hsa_alloc_child* c,
+                                     uint32_t heap, uint32_t gem_flags, uint64_t* fence)
+{
+    D3DDDI_MAKERESIDENT resident;
+    NTSTATUS            status;
+    bc250hsa_status     result;
+
+    result = create_backing(dev, &c->handle, c->bytes, BC250HSA_ALLOCATION_GRANULARITY, heap,
+                            gem_flags);
+    if (result != BC250HSA_OK) {
+        return result;
+    }
+    memset(&resident, 0, sizeof(resident));
+    resident.hPagingQueue = dev->paging_queue;
+    resident.NumAllocations = 1;
+    resident.AllocationList = &c->handle;
+    status = D3DKMTMakeResident(&resident);
+    if (!NT_SUCCESS(status)) {
+        result = allocation_status("MakeResident", status);
+        if (destroy_handle(dev, c->handle) == BC250HSA_OK) {
+            c->handle = 0u;
+        }
+        bc250hsa_set_os_status((int32_t)status);
+        return result;
+    }
+    require_paging_fence(fence, resident.PagingFenceValue);
+    c->heap = heap;
+    return BC250HSA_OK;
+}
+
+/* One child: backing in the carve-out while the local budget holds it, in write-combined system
+ * memory otherwise or when the carve-out refuses it, then the mapping at `at`. The status of the
+ * last heap tried is the answer, so a refusal of system memory is never hidden behind the
+ * carve-out's out-of-memory. */
+static bc250hsa_status aggregate_child(struct bc250hsa_device* dev, bc250hsa_alloc_child* c,
+                                       uint64_t at, uint32_t gem_flags, uint64_t* fence)
+{
+    D3DDDI_MAPGPUVIRTUALADDRESS map;
+    NTSTATUS                    status;
+    bc250hsa_status             result = BC250HSA_ENOMEM;
+
+    if (local_budget_allows(dev, c->bytes)) {
+        result = child_backing(dev, c, BC250HSA_HEAP_VRAM, gem_flags, fence);
+    }
+    if (result != BC250HSA_OK) {
+        if (c->handle != 0u) {
+            return result;   /* a handle that could not be destroyed: no second heap */
+        }
+        result = child_backing(dev, c, BC250HSA_HEAP_GTT, gem_flags | BC250HSA_GEM_CPU_GTT_USWC,
+                               fence);
+        if (result != BC250HSA_OK) {
+            return result;
+        }
+    }
+
+    memset(&map, 0, sizeof(map));
+    map.hPagingQueue = dev->paging_queue;
+    map.BaseAddress = at;
+    map.hAllocation = c->handle;
+    map.OffsetInPages = 0;
+    map.SizeInPages = c->bytes / 4096u;
+    map.Protection.Write = 1;
+    status = D3DKMTMapGpuVirtualAddress(&map);
+    if (!NT_SUCCESS(status)) {
+        return allocation_status("MapGpuVirtualAddress", status);
+    }
+    c->va = map.VirtualAddress;
+    require_paging_fence(fence, map.PagingFenceValue);
+    if (map.VirtualAddress != at) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "aggregate child mapped at 0x%llx, not at the requested 0x%llx",
+                     (unsigned long long)map.VirtualAddress, (unsigned long long)at);
+        bc250hsa_set_os_status((int32_t)STATUS_CONFLICTING_ADDRESSES);
+        return BC250HSA_EOS;
+    }
+    return BC250HSA_OK;
+}
+
+static bc250hsa_status aggregate_lock(struct bc250hsa_device* dev, bc250hsa_alloc_record* r)
+{
+    uint32_t i;
+    for (i = 0; i < r->child_count; ++i) {
+        bc250hsa_alloc_child* c = &r->children[i];
+        D3DKMT_LOCK2          lock;
+        NTSTATUS              status;
+        memset(&lock, 0, sizeof(lock));
+        lock.hDevice = dev->device;
+        lock.hAllocation = c->handle;
+        status = D3DKMTLock2(&lock);
+        if (!NT_SUCCESS(status)) {
+            bc250hsa_log(BC250HSA_LOG_WARN, "Lock2 of aggregate child %u failed 0x%08lx",
+                         (unsigned)i, (unsigned long)status);
+            return bc250hsa_os_status("Lock2", status);
+        }
+        c->host = lock.pData;
+    }
+    r->cpu_access = 1u;
+    return BC250HSA_OK;
+}
+
+static void aggregate_zero(bc250hsa_alloc_record* r)
+{
+    uint32_t i;
+    for (i = 0; i < r->child_count; ++i) {
+        memset(r->children[i].host, 0, (size_t)r->children[i].bytes);
+    }
+    bc250hsa_write_barrier();
+}
+
+static bc250hsa_status alloc_aggregate(struct bc250hsa_device* dev, uint64_t bytes,
+                                       uint64_t alignment, uint32_t flags, uint32_t gem_flags,
+                                       bc250hsa_mem* out)
+{
+    bc250hsa_allocation_plan        plan;
+    bc250hsa_alloc_record*          record;
+    D3DDDI_RESERVEGPUVIRTUALADDRESS reserve;
+    NTSTATUS                        status;
+    bc250hsa_status                 result;
+    uint64_t                        logical = 0u;
+    uint64_t                        fence = 0u;
+    uint32_t                        i;
+    const uint64_t                  last = dev->va_window_end - 1u;
+
+    memset(out, 0, sizeof(*out));
+    if (!bc250hsa_plan_allocation(bytes, alignment, dev->va_window_start, last,
+                                  g_aggregate_child_cap, &plan)) {
+        /* A request that a large enough window would hold is out of address space; anything
+         * else (an overflow, a bad alignment) is a parameter error. No Windows call ran. */
+        bc250hsa_allocation_plan unbounded;
+        if (bc250hsa_plan_allocation(bytes, alignment, 0u, UINT64_MAX, g_aggregate_child_cap,
+                                     &unbounded)) {
+            bc250hsa_log(BC250HSA_LOG_INFO,
+                         "device-local allocation of %llu bytes does not fit the GPU address"
+                         " window", (unsigned long long)bytes);
+            return BC250HSA_ENOMEM;
+        }
+        return BC250HSA_EINVAL;
+    }
+
+    record = (bc250hsa_alloc_record*)calloc(1, sizeof(*record));
+    if (record == NULL) {
+        return BC250HSA_ENOMEM;
+    }
+    record->children = (bc250hsa_alloc_child*)calloc(plan.child_count, sizeof(*record->children));
+    if (record->children == NULL) {
+        free(record);
+        return BC250HSA_ENOMEM;
+    }
+    record->kind = BC250HSA_RECORD_AGGREGATE;
+    record->flags = flags;
+    record->bytes = plan.bytes;
+    record->child_count = plan.child_count;
+    record->child_stride = plan.child_bytes;
+
+    memset(&reserve, 0, sizeof(reserve));
+    reserve.hAdapter = dev->adapter;
+    reserve.MinimumAddress = dev->va_window_start;
+    reserve.MaximumAddress = dev->va_window_end;
+    reserve.Size = plan.reservation_bytes;
+    status = D3DKMTReserveGpuVirtualAddress(&reserve);
+    if (!NT_SUCCESS(status)) {
+        result = allocation_status("ReserveGpuVirtualAddress", status);
+        record_dispose(record);
+        return result;
+    }
+    record->reserve_base = reserve.VirtualAddress;
+    record->reserve_bytes = plan.reservation_bytes;
+    if (!bc250hsa_plan_base(&plan, reserve.VirtualAddress, dev->va_window_start, last,
+                            &logical)) {
+        bc250hsa_log(BC250HSA_LOG_ERROR,
+                     "GPU address reservation at 0x%llx is outside the window or the request",
+                     (unsigned long long)reserve.VirtualAddress);
+        bc250hsa_set_os_status((int32_t)STATUS_CONFLICTING_ADDRESSES);
+        record_abandon(dev, record, 1);
+        return BC250HSA_EOS;
+    }
+    record->va = logical;
+
+    result = BC250HSA_OK;
+    for (i = 0; i < plan.child_count && result == BC250HSA_OK; ++i) {
+        bc250hsa_alloc_child* c = &record->children[i];
+        if (!bc250hsa_plan_child(&plan, i, &c->offset, &c->bytes)) {
+            result = BC250HSA_EINVAL;
+            break;
+        }
+        result = aggregate_child(dev, c, logical + c->offset, gem_flags, &fence);
+    }
+    {
+        /* Every paging operation that was accepted completes before anything is published or
+         * released: an unmapped page under a running paging operation is not recoverable on
+         * this part (fact M53). A wait that fails keeps everything owned. */
+        const bc250hsa_status waited = bc250hsa_wait_paging_fence(dev, fence);
+        if (waited != BC250HSA_OK) {
+            record_abandon(dev, record, 0);
+            memset(out, 0, sizeof(*out));
+            return result != BC250HSA_OK ? result : waited;
+        }
+    }
+    if (result == BC250HSA_OK && (flags & BC250HSA_MEM_MAPPABLE) != 0u) {
+        result = aggregate_lock(dev, record);
+    }
+    if (result == BC250HSA_OK && (flags & BC250HSA_MEM_ZERO) != 0u) {
+        if (record->cpu_access) {
+            aggregate_zero(record);
+        } else {
+            result = BC250HSA_EUNSUPPORTED;
+        }
+    }
+    if (result != BC250HSA_OK) {
+        bc250hsa_log(BC250HSA_LOG_INFO,
+                     "aggregate allocation of %llu bytes in %u children failed (%s)",
+                     (unsigned long long)plan.bytes, (unsigned)plan.child_count,
+                     bc250hsa_status_string(result));
+        log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, "local");
+        log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, "non-local");
+        record_abandon(dev, record, 1);
+        memset(out, 0, sizeof(*out));
+        return result;
+    }
+
+    memset(out, 0, sizeof(*out));
+    out->va = record->va;
+    out->bytes = record->bytes;
+    out->flags = flags;
+    out->opaque = record;
+    bc250hsa_device_lock(dev);
+    record_insert(dev, record);
+    LeaveCriticalSection(&dev->lock);
+    return BC250HSA_OK;
+}
+
 bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint64_t alignment,
                                uint32_t flags, bc250hsa_mem* out)
 {
@@ -384,14 +788,13 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
     if (alignment > phys_alignment) {
         phys_alignment = alignment;
     }
+    /* A size that the rounding below would wrap is a parameter error, before any call. */
+    if (bytes > UINT64_MAX - (phys_alignment - 1u) - 4095u) {
+        return BC250HSA_EINVAL;
+    }
     phys_bytes = bc250hsa_align_up_u64(bytes, phys_alignment);
     if (phys_bytes % 4096u != 0u) {
         phys_bytes = bc250hsa_align_up_u64(phys_bytes, 4096u);
-    }
-
-    record = (bc250hsa_alloc_record*)calloc(1, sizeof(*record));
-    if (record == NULL) {
-        return BC250HSA_ENOMEM;
     }
 
     if (wants_host_mapping(flags) || (flags & BC250HSA_MEM_MAPPABLE) != 0u) {
@@ -401,6 +804,17 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
     }
     if ((flags & BC250HSA_MEM_HOST_WC) != 0u) {
         gem_flags |= BC250HSA_GEM_CPU_GTT_USWC;
+    }
+
+    /* Only device-local memory is split. A host-visible or executable range keeps its one
+     * allocation and its one real host mapping, and VidMm decides about its size. */
+    if (is_device_local(flags) && phys_bytes > g_aggregate_child_cap) {
+        return alloc_aggregate(dev, bytes, phys_alignment, flags, gem_flags, out);
+    }
+
+    record = (bc250hsa_alloc_record*)calloc(1, sizeof(*record));
+    if (record == NULL) {
+        return BC250HSA_ENOMEM;
     }
 
     if (!is_device_local(flags)) {
@@ -418,7 +832,9 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
                  * fetch reads from the GPU VA regardless of where the physical pages sit,
                  * and VRAM may have space when the non-local budget is full. The loader
                  * writes the ELF through the host mapping that Lock2 provides. */
-                destroy_allocation(dev, record);
+                if (record_release(dev, record) != BC250HSA_OK) {
+                    goto failed;
+                }
                 memset(record, 0, sizeof(*record));
                 result = create_resident(dev, record, phys_bytes, phys_alignment, flags,
                                          BC250HSA_HEAP_VRAM, gem_flags);
@@ -442,7 +858,9 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
                                      BC250HSA_HEAP_VRAM, gem_flags);
         }
         if (result != BC250HSA_OK) {
-            destroy_allocation(dev, record);
+            if (record_release(dev, record) != BC250HSA_OK) {
+                goto failed;
+            }
             memset(record, 0, sizeof(*record));
             bc250hsa_log(BC250HSA_LOG_INFO,
                          "device-local allocation of %llu bytes is placed in system memory: the "
@@ -487,8 +905,7 @@ bc250hsa_status bc250hsa_alloc(struct bc250hsa_device* dev, uint64_t bytes, uint
     return BC250HSA_OK;
 
 failed:
-    destroy_allocation(dev, record);
-    free(record);
+    record_abandon(dev, record, 1);
     memset(out, 0, sizeof(*out));
     return result;
 }
@@ -496,6 +913,7 @@ failed:
 bc250hsa_status bc250hsa_free(struct bc250hsa_device* dev, bc250hsa_mem* mem)
 {
     bc250hsa_alloc_record* record;
+    bc250hsa_status        status;
 
     if (dev == NULL || mem == NULL) {
         return BC250HSA_EINVAL;
@@ -508,10 +926,22 @@ bc250hsa_status bc250hsa_free(struct bc250hsa_device* dev, bc250hsa_mem* mem)
     /* A dispatch of an open batch may name this range. Section 8.1 of the interface
      * makes every call that changes such memory a flush point. */
     (void)bc250hsa_batch_submit_locked(dev);
+    record->retiring = 1u;
+    LeaveCriticalSection(&dev->lock);
+    /* The record leaves the device list only when everything it owns is released. A release
+     * that failed part way keeps the rest owned and the record retiring: every copy refuses it,
+     * and a second bc250hsa_free with the same handle continues where this one stopped. */
+    status = record_release(dev, record);
+    if (status != BC250HSA_OK) {
+        bc250hsa_log(BC250HSA_LOG_WARN, "free of the allocation at 0x%llx stopped (%s); the"
+                                        " rest stays owned for a later free",
+                     (unsigned long long)mem->va, bc250hsa_status_string(status));
+        return status;
+    }
+    bc250hsa_device_lock(dev);
     record_remove(dev, record);
     LeaveCriticalSection(&dev->lock);
-    destroy_allocation(dev, record);
-    free(record);
+    record_dispose(record);
     memset(mem, 0, sizeof(*mem));
     return BC250HSA_OK;
 }
@@ -529,7 +959,15 @@ bc250hsa_status bc250hsa_map(struct bc250hsa_device* dev, bc250hsa_mem* mem, voi
     if (record == NULL) {
         return BC250HSA_EINVAL;
     }
+    if (record->retiring) {
+        return BC250HSA_EINVAL;
+    }
     if (is_device_local(mem->flags) && (mem->flags & BC250HSA_MEM_MAPPABLE) == 0u) {
+        return BC250HSA_EUNSUPPORTED;
+    }
+    /* An aggregate has no contiguous host view to give (BD-117). Its child views stay with
+     * the record, and bc250hsa_memory_access says that the copies below reach them. */
+    if (is_aggregate(record)) {
         return BC250HSA_EUNSUPPORTED;
     }
     /* A flush point of section 8.1: a caller that maps a range reads or writes it next,
@@ -582,48 +1020,236 @@ void bc250hsa_write_barrier(void)
     MemoryBarrier();
 }
 
-bc250hsa_status bc250hsa_copy_to_device(struct bc250hsa_device* dev, const bc250hsa_mem* dst,
-                                        uint64_t dst_offset, const void* src, uint64_t bytes)
+/* The host processor's view of an allocation, for the copies and the fill below. A single
+ * allocation has one view, the mapping in the caller's handle. An aggregate has one per child,
+ * held by the record from the allocation to the release (BD-117). */
+static const bc250hsa_alloc_record* record_of(const bc250hsa_mem* mem)
 {
-    if (dev == NULL || dst == NULL || src == NULL) {
+    return (const bc250hsa_alloc_record*)mem->opaque;
+}
+
+static uint32_t access_of(const bc250hsa_mem* mem)
+{
+    const bc250hsa_alloc_record* r = record_of(mem);
+    if (is_aggregate(r)) {
+        return r->cpu_access ? BC250HSA_ACCESS_SCATTER : BC250HSA_ACCESS_NONE;
+    }
+    return mem->host != NULL ? BC250HSA_ACCESS_DIRECT : BC250HSA_ACCESS_NONE;
+}
+
+/* The size the host processor may reach: the record's for an aggregate, so that a handle
+ * whose size a caller changed cannot reach past the last child. */
+static uint64_t extent_of(const bc250hsa_mem* mem)
+{
+    const bc250hsa_alloc_record* r = record_of(mem);
+    return is_aggregate(r) ? r->bytes : mem->bytes;
+}
+
+/* The contiguous host bytes at `offset`: a pointer and how many bytes of the same view follow
+ * it. 0 when no view holds that byte. */
+static int host_span(const bc250hsa_mem* mem, uint64_t offset, uint8_t** ptr, uint64_t* len)
+{
+    const bc250hsa_alloc_record* r = record_of(mem);
+    if (is_aggregate(r)) {
+        const bc250hsa_alloc_child* c;
+        uint64_t                    index;
+        uint64_t                    within;
+        if (!r->cpu_access || r->child_stride == 0u) {
+            return 0;
+        }
+        index = offset / r->child_stride;
+        if (index >= r->child_count) {
+            return 0;
+        }
+        c = &r->children[index];
+        if (offset < c->offset || c->host == NULL) {
+            return 0;
+        }
+        within = offset - c->offset;
+        if (within >= c->bytes) {
+            return 0;
+        }
+        *ptr = (uint8_t*)c->host + within;
+        *len = c->bytes - within;
+        return 1;
+    }
+    if (mem->host == NULL || offset >= mem->bytes) {
+        return 0;
+    }
+    *ptr = (uint8_t*)mem->host + offset;
+    *len = mem->bytes - offset;
+    return 1;
+}
+
+/* The checks every host-processor call below makes first, in this order: the arguments, an
+ * allocation whose free has started, a view, the range by subtraction. */
+static bc250hsa_status cpu_target(const bc250hsa_mem* mem, uint64_t offset, uint64_t bytes)
+{
+    const bc250hsa_alloc_record* r = record_of(mem);
+    uint64_t                     extent;
+    if (r != NULL && r->retiring) {
         return BC250HSA_EINVAL;
     }
-    if (dst->host == NULL) {
+    if (access_of(mem) == BC250HSA_ACCESS_NONE) {
         /* A copy engine and a copy kernel are later work, named in the design:
          * node 1 is the copy engine and is not a user-mode queue. */
         return BC250HSA_EUNSUPPORTED;
     }
-    if (dst_offset > dst->bytes || bytes > dst->bytes - dst_offset) {
+    extent = extent_of(mem);
+    if (offset > extent || bytes > extent - offset) {
         return BC250HSA_EINVAL;
+    }
+    return BC250HSA_OK;
+}
+
+/* Moves `bytes` between one allocation and a flat host buffer, one view at a time. */
+static bc250hsa_status walk_flat(const bc250hsa_mem* mem, uint64_t offset, uint8_t* flat,
+                                 uint64_t bytes, int to_device)
+{
+    while (bytes != 0u) {
+        uint8_t* view = NULL;
+        uint64_t len = 0u;
+        uint64_t piece;
+        if (!host_span(mem, offset, &view, &len)) {
+            return BC250HSA_EUNSUPPORTED;
+        }
+        piece = len < bytes ? len : bytes;
+        if (to_device) {
+            memcpy(view, flat, (size_t)piece);
+        } else {
+            memcpy(flat, view, (size_t)piece);
+        }
+        offset += piece;
+        flat += piece;
+        bytes -= piece;
+    }
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_memory_access(struct bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                       uint32_t* access)
+{
+    const bc250hsa_alloc_record* r;
+    if (dev == NULL || mem == NULL || access == NULL || mem->opaque == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    r = record_of(mem);
+    if (r->retiring) {
+        return BC250HSA_EINVAL;
+    }
+    *access = access_of(mem);
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_copy_to_device(struct bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                        uint64_t dst_offset, const void* src, uint64_t bytes)
+{
+    bc250hsa_status status;
+    if (dev == NULL || dst == NULL || src == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    status = cpu_target(dst, dst_offset, bytes);
+    if (status != BC250HSA_OK) {
+        return status;
     }
     /* A flush point: a dispatch of an open batch may read this range, and in the order
      * of the caller it reads what was there before this copy (section 8.1). The caller
      * still owns the wait; this call only makes sure the work it asked for first is on
      * its way to the device. */
     (void)bc250hsa_flush(dev, NULL);
-    memcpy((uint8_t*)dst->host + dst_offset, src, (size_t)bytes);
+    status = walk_flat(dst, dst_offset, (uint8_t*)(uintptr_t)src, bytes, 1);
     bc250hsa_write_barrier();
-    return BC250HSA_OK;
+    return status;
 }
 
 bc250hsa_status bc250hsa_copy_from_device(struct bc250hsa_device* dev, void* dst,
                                           const bc250hsa_mem* src, uint64_t src_offset,
                                           uint64_t bytes)
 {
+    bc250hsa_status status;
     if (dev == NULL || dst == NULL || src == NULL) {
         return BC250HSA_EINVAL;
     }
-    if (src->host == NULL) {
-        return BC250HSA_EUNSUPPORTED;
-    }
-    if (src_offset > src->bytes || bytes > src->bytes - src_offset) {
-        return BC250HSA_EINVAL;
+    status = cpu_target(src, src_offset, bytes);
+    if (status != BC250HSA_OK) {
+        return status;
     }
     /* The same flush point in the other direction: this copy reads what the work the
      * caller already asked for wrote. The wait stays the caller's. */
     (void)bc250hsa_flush(dev, NULL);
-    memcpy(dst, (const uint8_t*)src->host + src_offset, (size_t)bytes);
-    return BC250HSA_OK;
+    return walk_flat(src, src_offset, (uint8_t*)dst, bytes, 0);
+}
+
+bc250hsa_status bc250hsa_copy_device_cpu(struct bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                         uint64_t dst_offset, const bc250hsa_mem* src,
+                                         uint64_t src_offset, uint64_t bytes)
+{
+    bc250hsa_status status;
+    if (dev == NULL || dst == NULL || src == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    status = cpu_target(dst, dst_offset, bytes);
+    if (status == BC250HSA_OK) {
+        status = cpu_target(src, src_offset, bytes);
+    }
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    (void)bc250hsa_flush(dev, NULL);
+    /* Each piece ends at the nearer end of a view on either side, so the two grids of child
+     * views can differ. Overlapping ranges are undefined, as HIP leaves them; memmove only
+     * keeps a piece that overlaps itself well defined. */
+    while (bytes != 0u) {
+        uint8_t* to = NULL;
+        uint8_t* from = NULL;
+        uint64_t to_len = 0u;
+        uint64_t from_len = 0u;
+        uint64_t piece;
+        if (!host_span(dst, dst_offset, &to, &to_len) ||
+            !host_span(src, src_offset, &from, &from_len)) {
+            status = BC250HSA_EUNSUPPORTED;
+            break;
+        }
+        piece = to_len < from_len ? to_len : from_len;
+        if (piece > bytes) {
+            piece = bytes;
+        }
+        memmove(to, from, (size_t)piece);
+        dst_offset += piece;
+        src_offset += piece;
+        bytes -= piece;
+    }
+    bc250hsa_write_barrier();
+    return status;
+}
+
+bc250hsa_status bc250hsa_fill_device_cpu(struct bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                         uint64_t dst_offset, uint8_t value, uint64_t bytes)
+{
+    bc250hsa_status status;
+    if (dev == NULL || dst == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    status = cpu_target(dst, dst_offset, bytes);
+    if (status != BC250HSA_OK) {
+        return status;
+    }
+    (void)bc250hsa_flush(dev, NULL);
+    while (bytes != 0u) {
+        uint8_t* view = NULL;
+        uint64_t len = 0u;
+        uint64_t piece;
+        if (!host_span(dst, dst_offset, &view, &len)) {
+            status = BC250HSA_EUNSUPPORTED;
+            break;
+        }
+        piece = len < bytes ? len : bytes;
+        memset(view, (int)value, (size_t)piece);
+        dst_offset += piece;
+        bytes -= piece;
+    }
+    bc250hsa_write_barrier();
+    return status;
 }
 
 /* --------------------------------------------------------------------------

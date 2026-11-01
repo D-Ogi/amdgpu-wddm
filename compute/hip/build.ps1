@@ -314,8 +314,11 @@ $testExtra = @{ 'test_pm4.c' = @($kmdEmitter) }
 # test_copy_lifecycle.c includes kmt_memory.c and submit.c whole, with the kernel calls replaced
 # by a fake driver that runs DMA_DATA packets at retirement: the ownership rules of the GPU
 # copy (bc250hsa.h section 5.1, the receipt) through the code that runs on unit A.
+# test_allocation_plan.c and test_aggregate_alloc.c are BD-117: the child plan of an allocation above
+# the VidMm limit of one allocation, and the aggregate path of kmt_memory.c over the same fake driver.
 $tests = @('test_loader.c', 'test_unbundle.c', 'test_kernarg.c', 'test_descriptor.c', 'test_pm4.c',
-    'test_vadd_oracle.c', 'test_submit_journal.c', 'test_copy_lifecycle.c')
+    'test_vadd_oracle.c', 'test_submit_journal.c', 'test_copy_lifecycle.c', 'test_allocation_plan.c',
+    'test_aggregate_alloc.c')
 foreach ($t in $tests) {
     $exe = Join-Path $Out ([IO.Path]::ChangeExtension($t, 'exe'))
     $extra = if ($testExtra.ContainsKey($t)) { $testExtra[$t] } else { @() }
