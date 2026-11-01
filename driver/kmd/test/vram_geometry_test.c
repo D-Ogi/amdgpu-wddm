@@ -25,6 +25,7 @@ typedef int BOOLEAN;
 #define BC250_GART_WINDOW (2ull<<20)
 #define BC250_GART_SCRATCH_OFFSET 4096ull
 #define BC250_VIDMM_GIANT_PAGE_BYTES (1024ull*1024*1024)
+#define BC250_TABLE_BUDGET_CAP (64ull*1024*1024)
 #define GuardLog(...) ((void)0)
 #define RtlZeroMemory(p,n) memset(p,0,n)
 /* vram.c publishes the active board memory size for the board memory card while it sets the geometry.
