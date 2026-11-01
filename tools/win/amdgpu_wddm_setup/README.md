@@ -146,6 +146,11 @@ against the real engine (plan and dry run). Every release package carries the wi
 last step of the build is `tools/release/test-setup-exe.ps1`: the exe just built is packed around a package of its
 own, reads it back, and refuses nine damaged, doctored or empty exes.
 
+`test-bd163-controls.ps1` (quick gate `setup-bd163-controls`) shows that the unit tests see BD-163, the empty
+`%ProgramData%\amdgpu-wddm\setup` that a single-file setup left behind. It builds the unit tests three times: as they
+are, with `Payload.Cleanup` that keeps the root, and with a root permission list without the creating account. The
+two mutations must fail. Nothing in `%ProgramData%` is touched, so a folder left on the building PC hides nothing.
+
 The icon of the window, and of the release's single setup file, is
 `tools/win/amdgpu_wddm_control/art/icon/nagi.ico`, the icon of the control application as well. `build.ps1` passes
 it to the compiler (`/win32icon`) and stops when the file is missing. The same file is embedded as the resource
