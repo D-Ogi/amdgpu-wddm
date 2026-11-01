@@ -6,9 +6,10 @@
 
 facts prints shell assignments (shlex-quoted, nothing else on stdout) for run-game.sh: the profile as run.py's own
 loader reads it, the session's API, default seconds, the game's process names (main and renderers), the router rule,
-the registry values and benchmark world timing of the API, the app's Steam EULA, and the triplet the session stages. The triplet is run-m157.sh's (its adapter default, SESSION_ENGINE, SESSION_ICD)
-unless SESSION_ADAPTER, SESSION_ENGINE or SESSION_ICD are set; GP_ACCEPTED=1 when all three equal the accepted
-triplet of lab-baseline.json (a session in place, as run-m157.sh's default). Witcher 3 is refused: its sessions
+the registry values and benchmark world timing of the API, the app's Steam EULA, and the triplet the session stages.
+The published manifest supplies the defaults. Explicit SESSION_ADAPTER/SHELL/ENGINE/ICD selections are checked;
+final DriverStore acceptance refuses a differing candidate. A current installed admission is required.
+GP_ACCEPTED=1 names the accepted triplet of lab-baseline.json. Witcher 3 is refused: its sessions
 belong to run-m157.sh.
 
 dry stages the attempt as the session would (run.py Stage with the inputs and environment that run-game.sh ->
@@ -37,8 +38,6 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 ROOT = Path(os.environ.get('BC250_ROOT') or REPO.parent)
 LIVE_KIT = ROOT / 'scratch/m15/native-caps001'
-# The Witcher 3 session script names the session triplet; run-game.sh follows it.
-M157 = LIVE_KIT / 'run-m157.sh'
 # The client run-game-trial.sh passes to trial.py (staged only for client trials; a game trial ignores it).
 CLIENT = ROOT / 'scratch/m15/interactive-client018/build/amdgpu_wddm_d3d12_queue.exe'
 POWERSHELL = Path(os.environ.get('SystemRoot', r'C:\Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
@@ -61,27 +60,20 @@ def load_run(kit):
     return module
 
 
-def session_triplet():
-    """(adapter, shell, engine, icd): run-m157.sh's defaults unless SESSION_ADAPTER/SESSION_ENGINE/SESSION_ICD."""
-    text = M157.read_text(encoding='utf-8')
-    found = {}
-    for key, pattern in (('adapter', r'adapter="\$\{SESSION_ADAPTER:-(adapter[0-9]{3})\}"'),
-                         ('engine', r'^SESSION_ENGINE=(\S+) \\$'), ('icd', r'^SESSION_ICD=(\S+) \\$')):
-        match = re.search(pattern, text, re.M)
-        found[key] = match.group(1) if match else ''
-    adapter = os.environ.get('SESSION_ADAPTER') or found['adapter']
-    engine = os.environ.get('SESSION_ENGINE') or found['engine']
-    icd = os.environ.get('SESSION_ICD') or found['icd']
-    if not (adapter and engine and icd):
-        raise SystemExit('run-m157.sh no longer names its adapter, SESSION_ENGINE and SESSION_ICD as session.py '
-                         'reads them: set SESSION_ADAPTER, SESSION_ENGINE and SESSION_ICD')
-    if not re.fullmatch('adapter[0-9]{3}', adapter):
-        raise SystemExit('SESSION_ADAPTER must be adapterNNN')
-    paths = [ROOT / 'scratch/m15' / adapter / 'amdgpu_wddm_d3d12.dll', Path(engine), Path(icd)]
-    for path in paths:
-        if not path.is_file():
-            raise SystemExit('session artifact missing: ' + str(path))
-    return [adapter] + [path.resolve() for path in paths]
+def session_triplet(kit=None):
+    """Manifest defaults with explicit candidate overrides; no remote operation."""
+    kit = kit or LIVE_KIT
+    spec = importlib.util.spec_from_file_location('session_baseline_contract', kit / 'baseline_contract.py')
+    contract = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(contract)
+    try:
+        baseline_path = os.environ.get('BC250_FINAL_BASELINE') or None
+        baseline = contract.load_baseline(kit, ROOT, baseline_path)
+        adapter, paths, _, accepted = contract.triplet(baseline, ROOT, os.environ)
+        contract.require(accepted, 'Final DriverStore session needs the published triplet; use diagnostic admission for a candidate')
+        return [adapter] + paths
+    except (OSError, ValueError, RuntimeError, KeyError) as error:
+        raise SystemExit('REFUSED: ' + str(error))
 
 
 def resolve(args):
@@ -100,9 +92,12 @@ def resolve(args):
     api = args.api or profile['api']
     if api not in profile['apis']:
         raise SystemExit('API %s is not in profile %s (%s)' % (api, profile['id'], ','.join(profile['apis'])))
-    adapter, shell, engine, icd = session_triplet()
+    adapter, shell, engine, icd = session_triplet(kit.resolve())
     hashes = [digest(path) for path in (shell, engine, icd)]
-    accepted = run.d3d12_accepted(run.lab_baseline())
+    baseline = run.lab_baseline()
+    accepted = run.d3d12_accepted(baseline)
+    if run.FINAL_BASELINE:
+        profile = run.final_installed.profile(run.resolve_release_witness(profile, baseline), baseline)
     in_place = all(h == accepted[name] for h, name in zip(hashes, run.D3D12_NAMES))
     return kit.resolve(), run, profile, api, dict(adapter=adapter, shell=shell, engine=engine, icd=icd, hashes=hashes,
                                                   in_place=in_place)
@@ -134,12 +129,14 @@ def facts(args):
 def dry(args):
     if not re.fullmatch('[0-9]{3}', args.n):
         raise SystemExit('N: three digits')
-    kit, _, profile, api, triplet = resolve(args)
+    kit, run, profile, api, triplet = resolve(args)
     out = Path(args.out).resolve()
     attempt = 'native-caps' + args.n
     seconds = args.seconds or profile['session']['default_seconds']
     # The session's Stage environment, nothing inherited from this shell's BC250_* variables.
     env = {k: v for k, v in os.environ.items() if not k.startswith('BC250_')}
+    if run.FINAL_BASELINE:
+        env['BC250_FINAL_BASELINE'] = str(run.LAB_BASELINE)
     env.update(BC250_STAGE_DRY_DIR=str(out), BC250_TRIAL_GAME='1', BC250_TRIAL_GAME_PROFILE=profile['id'],
                BC250_TRIAL_GAME_API=api, BC250_TRIAL_GAME_SECONDS=str(seconds), BC250_TRIAL_INTERACTIVE='1',
                BC250_TRIAL_DWM='gpu')
