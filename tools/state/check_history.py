@@ -12,6 +12,11 @@ user loses the settings (BD-262). This gate reads one commit of the repository, 
   identity of driver/state/catalog.json at the tag is the catalog at the commit or a file of the history. A user
   can uninstall any of those releases before the install of this one.
 
+Without --version the gate checks every published tester tag: a tree is the source of the next release, and that
+release is above every published one. The tree gate of quick.ps1 runs this way, so a catalog change after a release
+fails at once, not only at the build of the next release (BD-229: the tester.35 catalog was missing for two days).
+build_release_set.py passes the version of each row.
+
 No tag below the release version is a failure: a checkout without its tags cannot prove the history. A tag without
 driver/state/catalog.json is from before the state store and needs no history. Exit 1 on any failure.
 """
@@ -51,7 +56,8 @@ def catalog_at(repo, rev):
 
 
 def check(repo, commit, version):
-    """(failures, lines) for one commit of the repository and the version of the release that builds it."""
+    """(failures, lines) for one commit of the repository and the version of the release that builds it. A version
+    of None is the next release: every published tester tag is below it."""
     failures, lines = [], []
     code, text = git(repo, 'rev-parse', '--verify', f'{commit}^{{commit}}')
     if code:
@@ -74,11 +80,13 @@ def check(repo, commit, version):
         else:
             history.add(identity)
     lines.append(f'{commit[:8]}: catalog {current[:8]}, history {", ".join(sorted(h[:8] for h in history)) or "empty"}')
-    below = numbers(version)
+    below = numbers(version) if version is not None else None
     code, text = git(repo, 'tag', '--list', 'v*-tester.*')
-    tags = sorted((t for t in text.split() if TAG.match(t) and numbers(t) < below), key=lambda t: (numbers(t), t))
+    tags = sorted((t for t in text.split() if TAG.match(t) and (below is None or numbers(t) < below)),
+                  key=lambda t: (numbers(t), t))
     if not tags:
-        failures.append(f'no tag v*-tester.* below {version} in {repo}: fetch the tags, then run again')
+        failures.append(f'no tag v*-tester.* below {version or "the next release"} in {repo}: fetch the tags, '
+                        'then run again')
         return failures, lines
     without = []
     for tag in tags:
@@ -102,22 +110,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     p.add_argument('--repo', default=str(Path(__file__).resolve().parents[2]))
     p.add_argument('--commit', default='HEAD')
-    p.add_argument('--version', help='the version of the release; default: the highest of tools/release/release-*.json')
+    p.add_argument('--version', help='the version of the release; default: the next release, above every '
+                   'published tester tag')
     a = p.parse_args()
-    version = a.version
-    if not version:
-        manifests = sorted(Path(a.repo, 'tools/release').glob('release-*.json'))
-        versions = [json.loads(m.read_text(encoding='utf-8')).get('version') for m in manifests]
-        versions = [v for v in versions if isinstance(v, str) and re.match(r'^\d+\.\d+\.\d+\.\d+', v)]
-        if not versions:
-            raise SystemExit('state-history: no release manifest names a version; pass --version')
-        version = max(versions, key=numbers)
-    failures, lines = check(a.repo, a.commit, version)
+    if a.version:
+        numbers(a.version)
+    failures, lines = check(a.repo, a.commit, a.version or None)
     for line in lines:
         print(line)
     for f in failures:
         print('FAIL ' + f)
-    print(f'state-history {version}: {"FAIL" if failures else "PASS"}')
+    print(f'state-history {a.version or "next release"}: {"FAIL" if failures else "PASS"}')
     return 1 if failures else 0
 
 

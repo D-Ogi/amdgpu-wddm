@@ -3,7 +3,8 @@
 Positive: the tags of the earlier releases hold the tester.32 and tester.33 catalogs, and driver/state/history holds
 them; a tag from before the state store needs nothing. Negative controls: the tester.33 or the tester.32 history file
 removed, a history file whose contents are another catalog, a history file with a name that is not a catalog
-identity, and a checkout without tags.
+identity, a checkout without tags, and the default version (the next release) against a tree that lost the history
+of the newest tag (BD-229).
 """
 import json
 import os
@@ -25,6 +26,7 @@ ENV = dict(os.environ, GIT_AUTHOR_NAME="probe", GIT_AUTHOR_EMAIL="probe@example.
            GIT_COMMITTER_NAME="probe", GIT_COMMITTER_EMAIL="probe@example.com", GIT_CONFIG_NOSYSTEM="1")
 T33 = "55ac2dcef76b92b5c52faf145d4a38e3fd31a77ed43b366bab38e33f3d6d1bf9"
 T32 = "49c220dc550899786b5fe743513dafe78b5acb5f24be5a848f66777744a3bb73"
+T35 = "c8fe2e0df8094ab6003beff572c8f58ca7edbf4ccf4016d2bc874384fb7aa326"
 HISTORY = ROOT / "driver" / "state" / "history"
 
 
@@ -124,6 +126,24 @@ class StateHistoryGate(unittest.TestCase):
         self.assertEqual(failures, [])
         self.assertTrue(any("is the current catalog" in l for l in lines), lines)
 
+    def test_default_checks_every_tag(self):
+        # BD-229: the tree after the tester.33 release changes the catalog and loses the tester.33 history. With the
+        # version of tester.33 (the highest manifest), the tag of tester.33 is not below it and the gap passes; the
+        # default (the next release) checks that tag too and fails.
+        (self.state / "history" / f"{T33}.json").unlink()
+        self.commit("catalog changed after tester.33, no history file")
+        failures, _ = self.run_check("0.7.216.105-tester.33")
+        self.assertEqual(failures, [])
+        failures, lines = self.run_check(None)
+        self.assertEqual(len(failures), 1, failures)
+        self.assertIn(f"v0.7.216.105-tester.33: catalog {T33} is not in driver/state/history", failures[0])
+        self.assertTrue(any(l.startswith("v0.7.216.104-tester.32: catalog 49c220dc is in") for l in lines), lines)
+
+    def test_default_passes_with_the_history(self):
+        failures, lines = self.run_check(None)
+        self.assertEqual(failures, [])
+        self.assertTrue(any(l.startswith("v0.7.216.105-tester.33: catalog 55ac2dce is in") for l in lines), lines)
+
     def test_no_tags(self):
         for tag in git(self.dir, "tag", "--list").split():
             git(self.dir, "tag", "-d", tag)
@@ -135,6 +155,7 @@ class ThisTree(unittest.TestCase):
     def test_history_files_named_by_identity(self):
         names = sorted(f.name for f in HISTORY.glob("*.json"))
         self.assertIn(f"{T33}.json", names)
+        self.assertIn(f"{T35}.json", names)
         for f in HISTORY.glob("*.json"):
             self.assertEqual(g.identity_of(json.loads(f.read_text(encoding="utf-8"))) + ".json", f.name)
 

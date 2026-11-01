@@ -260,13 +260,15 @@ int main(void)
     CHECK(Run(L"prepare",tx)==ERROR_ACCESS_DENIED);CHECK(freeze==0 && publish==0);
     Reset(AMDGPU_TRANSFER_FRESH);remove_error=ERROR_INVALID_DATA;
     CHECK(Run(L"prepare",tx)==ERROR_INVALID_DATA);CHECK(publish==0 && !removal_moves);
-    // The uninstall of an earlier release (0.7.216.105, 0.7.216.104, 0.7.216.102) left a record of its own catalog. The
-    // install reads it by setting name into a record of this catalog: the settings stay, settings that the earlier
-    // catalog does not have stay absent, and the record is not moved aside. The 0.7.216.102 catalog has CpuTune at
-    // another index, so a read by index gives another value.
-    {static const char *const earlier[]={"55ac2dce","49c220dc","f9c68061"};UINT k;
-     for(k=0;k<3;k++) {
-        Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord(earlier[k],removed);CHECK(removed_bytes!=0);
+    // The uninstall of an earlier release left a record of its own catalog. The install reads it by setting name into
+    // a record of this catalog: the settings stay, settings that the earlier catalog does not have stay absent, and
+    // the record is not moved aside. The 0.7.216.102 catalog has CpuTune at another index, so a read by index gives
+    // another value. Every catalog of driver/state/history is read, and the catalogs of the released packages
+    // 0.7.216.102 to 0.7.216.107 must be there (BD-229: the 0.7.216.107 catalog was missing after a catalog change).
+    {static const char *const released[]={"f9c68061","49c220dc","55ac2dce","e823502b","c8fe2e0d"};UINT k;
+     for(k=0;k<sizeof(released)/sizeof(released[0]);k++)CHECK(EarlierRecord(released[k],removed)!=0);
+     for(k=0;k<AMDGPU_STATE_HISTORY_COUNT;k++) {
+        Reset(AMDGPU_TRANSFER_FRESH);removed_bytes=EarlierRecord(StateHistory[k].catalog,removed);CHECK(removed_bytes!=0);
         remove_error=ERROR_UNSUPPORTED_TYPE;
         CHECK(!Run(L"prepare",L"02020202020202020202020202020202"));CHECK(publish==1 && !removal_moves && removal_keeps==1 && !removal_own);
         CHECK(!AmdgpuTransferCheck(saved,saved_bytes,&h));CHECK(h.origin==AMDGPU_TRANSFER_ARCHIVE && h.board_kind==AMDGPU_BOARD_UNPROVEN);
