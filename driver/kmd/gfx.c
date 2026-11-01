@@ -33,6 +33,7 @@
 //
 // Registers only through g_MmioGfxAllow: what amdgpu itself read or wrote on unit A in these steps (E03 trace).
 #include "bc250kmd.h"
+#include "bc250_dma.h"         // BD-029 step 3: typed DMA addresses for SDMA PTE consumers
 #include "lab_gate.h"          // BD-167: GfxEscape/GfxFenceEscape are the lab-only user GFX/FENCE submit entries
 #include "bc250_fence_order.h"
 #include "hang_recovery.h"
@@ -2835,7 +2836,7 @@ static NTSTATUS SdmaPteStartupControl(BC250_DEVICE* Device,BC250_GFX* gfx,
     UCHAR* destination=(UCHAR*)gfx->SdmaCopyDst.cpu;
     u64 sourcePhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaCopySrc.mc);
     u64 destinationPhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaCopyDst.mc);
-    u64 systemPhys=(u64)MmGetPhysicalAddress(sourceB).QuadPart;
+    u64 systemPhys=(u64)Bc250LegacyDmaAddress(sourceB);
     u64 marker=bc250_sdma_fence_addr(adev,BC250_PAGING_MARKER_SLOT);
     u64 fence=bc250_sdma_fence_addr(adev,2);
     unsigned trial,i,words,length,seq,arrived,waited;
@@ -2846,7 +2847,7 @@ static NTSTATUS SdmaPteStartupControl(BC250_DEVICE* Device,BC250_GFX* gfx,
     (void)Device;
     if(gfx->SdmaCopyIb.size<4*PAGE_SIZE || !marker || !fence)return STATUS_INVALID_DEVICE_STATE;
     for(i=0;i<4;i++) {
-        u64 physical=(u64)MmGetPhysicalAddress((UCHAR*)gfx->SdmaCopyIb.cpu+i*PAGE_SIZE).QuadPart;
+        u64 physical=(u64)Bc250LegacyDmaAddress((UCHAR*)gfx->SdmaCopyIb.cpu+i*PAGE_SIZE);
         WRITE_REGISTER_ULONG64(&tables[3*512+4+i],physical|bc250_pte_vm_flags(1,1,1,1));
     }
     for(trial=0;trial<3;trial++) {
@@ -2952,8 +2953,8 @@ static NTSTATUS SdmaVaStartupControl(BC250_DEVICE* Device)
     if (result || !gfx->SdmaVaTables.cpu || !gfx->SdmaVaData.cpu) {status=STATUS_INSUFFICIENT_RESOURCES;goto Done;}
     rootPhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaVaTables.mc);
     sourcePhys=amdgpu_gmc_vram_mc2pa(adev,gfx->SdmaCopySrc.mc);
-    systemPhys=(u64)MmGetPhysicalAddress(gfx->SdmaVaData.cpu).QuadPart;
-    ibPhys=(u64)MmGetPhysicalAddress(gfx->SdmaCopyIb.cpu).QuadPart;
+    systemPhys=(u64)Bc250LegacyDmaAddress(gfx->SdmaVaData.cpu);
+    ibPhys=(u64)Bc250LegacyDmaAddress(gfx->SdmaCopyIb.cpu);
     fenceAddr=bc250_sdma_fence_addr(adev,2);
     if (!fenceAddr) {status=STATUS_INVALID_DEVICE_STATE;goto Done;}
     tables=(u64*)gfx->SdmaVaTables.cpu;ib=(u32*)gfx->SdmaCopyIb.cpu;
