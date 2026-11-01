@@ -1,0 +1,37 @@
+CTX  alloc                  -> ctx_id 1
+BO   ib         4096 bytes  -> handle 1    mmap offset 0x0001008cb000 va 0x0000000000200000 flags 0xe
+BO   vram    16777216 bytes  -> handle 2    VRAM va 0x0000000000400000
+BO   dst        4096 bytes  -> handle 3    mmap offset 0x0001018cc000 va 0x0000000001400000 flags 0x6
+[  1.025] pattern written through the CPU mapping
+[  1.025] FENCE start 10 (sdma0) --- Last signaled fence 0x0000014a Last emitted
+[  1.025] FENCE start 11 (sdma1) --- Last signaled fence 0x00000033 Last emitted
+[  1.025] RING 0-start sdma0 bytes 8204 rptr 368 wptr 368 swptr 368
+[  1.025] RING 0-start sdma1 bytes 8204 rptr 1824 wptr 1824 swptr 1824
+[  1.025] SUBMIT resident copy 4096 bytes 0x13ff000 -> 0x1400000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 471.129743 ---
+CS   accepted               -> seq_no 1
+--- wait returned after 0.000 s, status 0 (completed) ---
+[  1.025] WAIT resident busy=0
+[  1.025] CHECK resident copy matches=True
+[  1.026] RING 1-resident sdma0 bytes 8204 rptr 368 wptr 368 swptr 368
+[  1.026] RING 1-resident sdma1 bytes 8204 rptr 1888 wptr 1888 swptr 1888
+[  1.029] EVICT amdgpu_evict_vram -> 0 in 0.004 s
+[  1.029] FENCE evicted 10 (sdma0) --- Last signaled fence 0x0000018b Last emitted
+[  1.029] FENCE evicted 11 (sdma1) --- Last signaled fence 0x00000035 Last emitted
+[  1.030] RING 2-evicted sdma0 bytes 8204 rptr 416 wptr 416 swptr 416
+[  1.030] RING 2-evicted sdma1 bytes 8204 rptr 1888 wptr 1888 swptr 1888
+[  1.030] SUBMIT restore copy 4096 bytes 0x13ff000 -> 0x1400000
+CS   ip_type 2 ring 0 ib_bytes 28 chunks 2 bo_handles 3 ib_flags 0x0
+--- submit at monotonic 471.134229 ---
+CS   accepted               -> seq_no 2
+--- wait returned after 0.001 s, status 0 (completed) ---
+[  1.031] WAIT restore busy=0
+[  1.121] CHECK after round trip: gpu copy matches=True whole BO through CPU matches=True
+[  1.121] FENCE restored 10 (sdma0) --- Last signaled fence 0x000001b8 Last emitted
+[  1.121] FENCE restored 11 (sdma1) --- Last signaled fence 0x00000039 Last emitted
+[  1.121] RING 3-restored sdma0 bytes 8204 rptr 1856 wptr 1856 swptr 1856
+[  1.121] RING 3-restored sdma1 bytes 8204 rptr 2032 wptr 2032 swptr 2032
+CTX  free                   -> ok
+[  1.123] L26_RESULT rc 0
+native exit 0
