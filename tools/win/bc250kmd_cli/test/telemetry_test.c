@@ -15,7 +15,17 @@
 #endif
 #define BC250_CONTROL_API
 #define BC250_DEFAULT_HWID L"fixture"
+// The pasted block is one part of bc250kmd_cli.c. Functions outside that part read the name tables of the oc commands
+// that it declares, so nothing in this file reads them. clang-cl reports that under /W4, cl does not.
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-const-variable"
+#pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#endif
 // ACTUAL_TELEMETRY
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 static int escapeMode, escapeCalls, statsMode, statsCalls, adapterMode, curveMode, cpuMode;
 static int escapeHardware = -1;         // the flag the last escape asked for: 0 software, 1 HardwareAccess
 static unsigned escapeSize;

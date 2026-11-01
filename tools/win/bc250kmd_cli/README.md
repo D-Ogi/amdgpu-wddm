@@ -175,9 +175,12 @@ pwsh tools\win\bc250kmd_cli\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget -Out
 python -m unittest discover -s tools/win/bc250kmd_cli
 ```
 
-Headers and import libraries come from the SDK NuGet packages, the compiler from the installed Visual Studio:
-the same flow as `tools\win\bc250rd\build.ps1`, without the driver and the signing. On the target it lives in
-`C:\BC250\kmd\`.
+Headers and import libraries come from the SDK NuGet packages. The compiler is clang-cl of LLVM 23.1.4 with
+lld-link, selected through `tools\build\umd-compiler.ps1`. The build uses x86-64-v3 and `/Brepro`, and records
+the compiler version in `compiler.json`. `-Compiler msvc` needs a concrete `-MsvcReason`.
+The C runtime comes from Visual Studio. `-VsInstall` selects that installation, followed by `BC250_VS_INSTALL`
+when the parameter is absent. Without either, discovery requires the x86/x64 C++ tools.
+The command builds no driver and signs no file. On the target the CLI lives in `C:\BC250\kmd\`.
 
 ## Release and lab flavours
 

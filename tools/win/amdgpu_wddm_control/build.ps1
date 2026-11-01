@@ -68,7 +68,8 @@ param(
     # default (tools\build\umd-compiler.ps1), and lld-link of the same LLVM links its objects. -Compiler
     # msvc builds with cl.exe and needs a concrete -MsvcReason (compiler policy).
     [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
-    [string]$MsvcReason = ''
+    [string]$MsvcReason = '',
+    [string]$VsInstall = ''
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
@@ -76,11 +77,12 @@ if ($Lab) { $Flavour = 'lab' } elseif ($Flavour -eq 'lab') { $Lab = $true }
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = (Resolve-Path (Join-Path $here '..\..\..')).Path
-$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-$csc = Join-Path $vs 'MSBuild\Current\Bin\Roslyn\csc.exe'
-$msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName 'bin\Hostx64\x64\cl.exe'
 . (Join-Path $repo 'tools\build\umd-compiler.ps1')
+$tool = Resolve-Bc250Toolchain $VsInstall 'x64'
+$vs = $tool.VsInstall
+$csc = Join-Path $vs 'MSBuild\Current\Bin\Roslyn\csc.exe'
+$msvc = Get-Item -LiteralPath $tool.Msvc
+$cl = $tool.Cl
 $fx = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319"
 $sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
 $sdkLib = Join-Path $Kits 'microsoft.windows.sdk.cpp.x64\c'
@@ -102,7 +104,7 @@ $pure += 'SingleInstance.cs', 'LaunchSequence.cs' | ForEach-Object { Join-Path $
 
 # Build the capability fixture from the actual provider and shipping shim tables, without adapter access.
 $providerOut = Join-Path $obj 'board-provider'
-& (Join-Path $repo 'driver\kmd\test\run_board_provider.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out $providerOut
+& (Join-Path $repo 'driver\kmd\test\run_board_provider.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out $providerOut -VsInstall $vs
 $env:AMDGPU_WDDM_BOARD_FIXTURE = Join-Path $providerOut 'board-caps.bin'
 $unknownBoardFixture = Join-Path $providerOut 'board-unknown.bin'
 $unknownBoard = New-Object byte[] 768
@@ -139,7 +141,9 @@ $unitArgs = @($repo) + @(if ($StartConfirmCore) { (Resolve-Path $StartConfirmCor
 if ($LASTEXITCODE -ne 0) { throw 'unit tests failed' }
 
 # The actual exported native request code must reject absent/malformed board admission before mutation.
-& (Join-Path $repo 'tools\win\bc250kmd_cli\test-telemetry.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out (Join-Path $obj 'native-controls')
+# The test compiles that code with the compiler of this build.
+& (Join-Path $repo 'tools\win\bc250kmd_cli\test-telemetry.ps1') -Root (Split-Path (Split-Path $Kits -Parent) -Parent) -Out (Join-Path $obj 'native-controls') `
+    -Compiler $Compiler -MsvcReason $MsvcReason -VsInstall $vs
 
 # 2. bc250control.dll, the same translation unit and flags as tools\win\bc250kmd_cli\build.ps1.
 $env:INCLUDE = ''; $env:LIB = ''
@@ -217,7 +221,7 @@ Remove-Item "$Out\bc250control.exp", "$Out\bc250control.lib" -ErrorAction Silent
 # The raw diagnostic verbs of the CLI against a fake adapter, in the flavour of this build (BD-167, test-verbs.ps1):
 # a lab CLI must reach the escape of each handler, a release CLI must answer "unknown command" and open no adapter.
 & (Join-Path $repo 'tools\win\bc250kmd_cli\test-verbs.ps1') -Kits $Kits -Out (Join-Path $obj 'verbs') -KitVersion $KitVersion `
-    -Lab:$Lab | ForEach-Object { Write-Host $_ }
+    -Lab:$Lab -Compiler $Compiler -MsvcReason $MsvcReason -VsInstall $vs | ForEach-Object { Write-Host $_ }
 
 # 2b. bc250kmd_cli.exe from the same translation unit and the same flags, without BC250_CONTROL_DLL: the release ships
 # the CLI and the DLL of one build, so the CLI has every command the DLL's source has (tester.10 shipped a CLI of the

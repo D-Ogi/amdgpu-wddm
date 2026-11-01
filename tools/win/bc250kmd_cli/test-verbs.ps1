@@ -10,34 +10,36 @@ param(
     [Parameter(Mandatory)][string]$Out,
     [string]$KitVersion = '10.0.26100.0',
     [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
-    [switch]$Lab
+    [switch]$Lab,
+    # The compiler of the CLI that the caller builds (clang-cl through tools\build\umd-compiler.ps1). msvc needs a reason.
+    [ValidateSet('clang-cl', 'msvc')][string]$Compiler = 'clang-cl',
+    [string]$MsvcReason = '',
+    [string]$VsInstall = ''
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = (Resolve-Path (Join-Path $here '..\..\..')).Path
-$sdk = Join-Path $Kits 'microsoft.windows.sdk.cpp\c'
-$sdkLib = Join-Path $Kits "microsoft.windows.sdk.cpp.$Arch\c"
-$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-$msvc = Get-ChildItem (Join-Path $vs 'VC\Tools\MSVC') -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = Join-Path $msvc.FullName "bin\Hostx64\$Arch\cl.exe"
+$Kits = [IO.Path]::GetFullPath($Kits)
+. (Join-Path $repo 'tools\build\umd-compiler.ps1')
 $labDefine = @(if ($Lab) { '/DAMDGPU_WDDM_LAB_FLAVOUR=1' })
-$includes = @("/I$(Join-Path $msvc.FullName 'include')", "/I$sdk\Include\$KitVersion\ucrt", "/I$sdk\Include\$KitVersion\um",
-    "/I$sdk\Include\$KitVersion\shared")
 # The build scripts call this file in their own process, so the variables it changes are put back at the end.
-$saved = @{ TEMP = $env:TEMP; TMP = $env:TMP; INCLUDE = $env:INCLUDE; LIB = $env:LIB }
+$saved = @{ TEMP = $env:TEMP; TMP = $env:TMP; INCLUDE = $env:INCLUDE; LIB = $env:LIB; PATH = $env:PATH; CL = $env:CL; _CL_ = $env:_CL_ }
 try {
     # The directory must exist: cl given a TEMP that does not reports D8018 or D8050 and names no path at all.
     $env:TEMP = Join-Path $Out 'tmp'; $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Force $Out, $env:TEMP | Out-Null
-    $env:INCLUDE = ''; $env:LIB = ''
-    $stateObjects = @(& "$repo\tools\state\build-objects.ps1" -Compiler $cl -Out "$Out\state" `
-        -Flags (@('/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS') + $includes))
-    & $cl @labDefine @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS') @includes @("/Fo$Out\verbs_test.obj",
-        "/Fe$Out\verbs_test.exe", (Join-Path $here 'verbs_test.c')) @stateObjects @('/link',
-        "/LIBPATH:$(Join-Path $msvc.FullName "lib\$Arch")", "/LIBPATH:$sdkLib\ucrt\$Arch", "/LIBPATH:$sdkLib\um\$Arch",
-        'gdi32.lib', 'setupapi.lib', 'advapi32.lib', 'onecore.lib', 'uuid.lib') |
+    $tool = Set-Bc250ToolEnvironment $Kits $Arch $KitVersion $VsInstall
+    $cc = Resolve-Bc250UmdCompiler (Split-Path (Split-Path $Kits -Parent) -Parent) $Compiler $MsvcReason $Out $Arch $tool.Cl
+    # build-objects.ps1 runs the compiler itself: clang-cl reads CL and _CL_ as Invoke-Bc250UmdCompiler says.
+    if ($Compiler -eq 'clang-cl') { $env:CL = $null; $env:_CL_ = $null }
+    $stateObjects = @(& "$repo\tools\state\build-objects.ps1" -Compiler $cc -Out "$Out\state" `
+        -Flags (Get-Bc250ToolFlags $Compiler @('/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS') $Arch @($repo)))
+    $flags = Get-Bc250ToolFlags $Compiler ($labDefine + @('/nologo', '/W4', '/WX', '/Od', '/MT', '/D_CRT_SECURE_NO_WARNINGS')) $Arch @($repo)
+    # A folder for /Fo: clang-cl takes an object file name only for one input, and the state objects are inputs too.
+    Invoke-Bc250UmdCompiler $cc @flags @("/Fo$Out\", "/Fe$Out\verbs_test.exe", (Join-Path $here 'verbs_test.c')) `
+        @stateObjects @('/link', 'gdi32.lib', 'setupapi.lib', 'advapi32.lib', 'onecore.lib', 'uuid.lib') |
         ForEach-Object { if ($_ -notmatch '^\s*$|^Microsoft|^Copyright|^\S+\.c$') { "  $_" } }
-    if ($LASTEXITCODE -ne 0) { throw "cl failed on verbs_test.c ($LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { throw "$Compiler failed on verbs_test.c ($LASTEXITCODE)" }
     & "$Out\verbs_test.exe" 2>&1 | ForEach-Object { "  $_" }
     if ($LASTEXITCODE -ne 0) { throw "verbs_test.c failed ($(if ($Lab) { 'lab' } else { 'release' }) flavour)" }
 } finally {

@@ -1,11 +1,13 @@
 # CPU-only tests; the production provider operates on a mocked device, never hardware.
 param([Parameter(Mandatory)][string]$Root, [string]$Out = "$Root\scratch\device-separation\provider-host",
-      [ValidateSet("none","admission")][string]$Mutation="none")
+      [ValidateSet("none","admission")][string]$Mutation="none",[string]$VsInstall='')
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
-$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-$msvc = Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
-$cl = "$($msvc.FullName)\bin\Hostx64\x64\cl.exe"
+# This is KMD code: keep the MSVC compiler, but honor the caller's selected VC installation.
+. "$repo\tools\build\umd-compiler.ps1"
+$tool = Resolve-Bc250Toolchain $VsInstall 'x64'
+$msvc = Get-Item -LiteralPath $tool.Msvc
+$cl = $tool.Cl
 $sdk = "$Root\toolchain\nuget\microsoft.windows.sdk.cpp\c"
 $libs = "$Root\toolchain\nuget\microsoft.windows.sdk.cpp.x64\c"
 New-Item -ItemType Directory -Force $Out | Out-Null

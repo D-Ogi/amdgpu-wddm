@@ -1,4 +1,5 @@
-param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\telemetry-client-tests", [switch]$BypassBoardAdmission)
+param([string]$Root=$(if ($env:BC250_ROOT) { $env:BC250_ROOT } else { (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path }),[string]$Out="$Root\scratch\build\telemetry-client-tests", [switch]$BypassBoardAdmission,
+      [ValidateSet('clang-cl','msvc')][string]$Compiler='clang-cl',[string]$MsvcReason='',[string]$VsInstall='')
 $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path;$env:TEMP=Join-Path $Out 'tmp';$env:TMP=$env:TEMP
 # The directory must exist: cl given a TEMP that does not reports D8018 or D8050 and names no path at all.
@@ -16,12 +17,18 @@ if ($BypassBoardAdmission) {
 $template=Get-Content "$repo\tools\win\bc250kmd_cli\test\telemetry_test.c" -Raw
 [IO.File]::WriteAllText("$Out\test.c",$template.Replace('// ACTUAL_TELEMETRY',$actual))
 Copy-Item "$repo\driver\kmd\bc250kmd_escape.h" "$Out\bc250kmd_escape.h" -Force
-$vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
-$msvc=Get-ChildItem "$vs\VC\Tools\MSVC" -Directory | Sort-Object Name | Select-Object -Last 1
-$sdk=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp\c';$libs=Join-Path $Root 'toolchain\nuget\microsoft.windows.sdk.cpp.x64\c'
-& "$($msvc.FullName)\bin\Hostx64\x64\cl.exe" /nologo /TC /W4 /WX /O2 /MT "/I$($msvc.FullName)\include" "/I$sdk\Include\10.0.26100.0\ucrt" "/I$sdk\Include\10.0.26100.0\um" "/I$sdk\Include\10.0.26100.0\shared" "/Fo$Out\" "/Fe$Out\telemetry_test.exe" "$Out\test.c" /link "/LIBPATH:$($msvc.FullName)\lib\x64" "/LIBPATH:$libs\ucrt\x64" "/LIBPATH:$libs\um\x64"
-if($LASTEXITCODE -ne 0){throw 'Telemetry client test build failed'}
-& "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Root -Out "$Out\provider"
+# The compiler of the shipped CLI and control DLL (clang-cl through tools\build\umd-compiler.ps1); -Compiler msvc
+# needs -MsvcReason. The board provider below is KMD code, which the WDK compiler builds: it stays on cl.
+. "$repo\tools\build\umd-compiler.ps1"
+$saved=$env:INCLUDE,$env:LIB,$env:PATH
+try {
+  $tool=Set-Bc250ToolEnvironment "$Root\toolchain\nuget" 'x64' '10.0.26100.0' $VsInstall
+  $cc=Resolve-Bc250UmdCompiler $Root $Compiler $MsvcReason $Out 'x64' $tool.Cl
+  $flags=Get-Bc250ToolFlags $Compiler @('/nologo','/TC','/W4','/WX','/O2','/MT') 'x64' @($repo)
+  Invoke-Bc250UmdCompiler $cc @flags "/Fo$Out\" "/Fe$Out\telemetry_test.exe" "$Out\test.c"
+  if($LASTEXITCODE -ne 0){throw 'Telemetry client test build failed'}
+} finally { $env:INCLUDE,$env:LIB,$env:PATH=$saved }
+& "$repo\driver\kmd\test\run_board_provider.ps1" -Root $Root -Out "$Out\provider" -VsInstall $tool.VsInstall
 $result = @(& "$Out\telemetry_test.exe" "$Out\provider\board-caps.bin")
 $code = $LASTEXITCODE
 $result | Set-Content "$Out\result.txt"
