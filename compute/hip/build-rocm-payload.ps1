@@ -24,7 +24,9 @@ param(
     [Parameter(Mandatory = $true)][string]$Version,
     [ValidateSet('release', 'lab')][string]$Flavour = 'release',
     [Parameter(Mandatory = $true)][string]$Bc250hsaLib,
-    [Parameter(Mandatory = $true)][string]$TheRockInput
+    [Parameter(Mandatory = $true)][string]$TheRockInput,
+    [string]$PreviousPayloadManifest = '',
+    [string]$PreviousPayloadSha256 = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,6 +48,8 @@ foreach ($need in @('include\hip\hip_runtime_api.h', 'imp-hip.tsv')) {
 if (-not (Test-Path -LiteralPath $Bc250hsaLib)) { throw "-Bc250hsaLib $Bc250hsaLib does not exist" }
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path -LiteralPath $Out).Path
+& $shell -NoProfile -File (Join-Path $PSScriptRoot '..\..\tools\release\test-rocm-files.ps1') -Out $Out
+if ($LASTEXITCODE -ne 0) { throw "test-rocm-files.ps1 exited $LASTEXITCODE" }
 Write-Host "TheRock $($rock.therock), $Flavour flavour, version $Version"
 
 $common = @('-Compiler', $Compiler, '-Root', $Root)
@@ -66,9 +70,9 @@ if ($LASTEXITCODE -ne 0) { throw "build-blaslt-front.ps1 exited $LASTEXITCODE" }
 $payload = Join-Path $Out 'rocm'
 & $shell -NoProfile -File (Join-Path $PSScriptRoot 'make-rocm-payload.ps1') -Face (Join-Path $face 'amdhip64_7.dll') `
     -AmdFace $amdFace -FrontRecord (Join-Path $front 'blaslt-front.json') -TheRock $rock.therock -Out $payload `
-    -Version $Version -Flavour $Flavour
+    -Version $Version -Flavour $Flavour -PreviousPayloadManifest $PreviousPayloadManifest -PreviousPayloadSha256 $PreviousPayloadSha256
 if ($LASTEXITCODE -ne 0) { throw "make-rocm-payload.ps1 exited $LASTEXITCODE" }
-foreach ($f in @('amdhip64_7.dll', 'libhipblaslt.dll', 'attach-rocm-venv.ps1', 'payload.json')) {
+foreach ($f in @('amdhip64_7.dll', 'libhipblaslt.dll', 'attach-rocm-venv.ps1', 'rocm-files.ps1', 'payload.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $payload $f))) { throw "make-rocm-payload.ps1 left no $payload\$f" }
 }
 

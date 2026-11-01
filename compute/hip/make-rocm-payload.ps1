@@ -24,7 +24,9 @@ param(
     [Parameter(Mandatory = $true)][string]$TheRock,
     [Parameter(Mandatory = $true)][string]$Out,
     [string]$Version = '',
-    [ValidateSet('release', 'lab')][string]$Flavour = 'release'
+    [ValidateSet('release', 'lab')][string]$Flavour = 'release',
+    [string]$PreviousPayloadManifest = '',
+    [string]$PreviousPayloadSha256 = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +43,20 @@ $faceSha = Sha $Face
 $amdFaceSha = Sha $AmdFace
 if ($faceSha -eq $amdFaceSha) { throw "-Face $Face has the bytes of AMD's DLL ($amdFaceSha), so it is not our face" }
 $attach = Join-Path $PSScriptRoot 'attach-rocm-venv.ps1'
+# A pinned prior package manifest supplies restore history. A venv record is never a source.
+$previous = $null
+if ($PreviousPayloadManifest -or $PreviousPayloadSha256) {
+    if (-not $PreviousPayloadManifest -or $PreviousPayloadSha256 -notmatch '^[a-fA-F0-9]{64}$') { throw 'previous payload needs a path and its approved SHA256' }
+    if ((Sha $PreviousPayloadManifest) -ne $PreviousPayloadSha256) { throw 'previous payload manifest hash mismatch' }
+    $previous = Get-Content -LiteralPath $PreviousPayloadManifest -Raw | ConvertFrom-Json
+    if ($previous.schema -notin @(1, 2)) { throw 'unsupported previous payload schema' }
+    foreach ($part in @('face', 'blaslt_front')) {
+        $p = $previous.$part
+        $hashes = @($p.amd_sha256)
+        if ($p.PSObject.Properties['restore_amd_sha256']) { $hashes += @($p.restore_amd_sha256) }
+        foreach ($hash in $hashes) { if ([string]$hash -notmatch '^[a-fA-F0-9]{64}$') { throw 'invalid previous AMD restore hash' } }
+    }
+}
 New-Item -ItemType Directory -Force $Out | Out-Null
 $Out = (Resolve-Path -LiteralPath $Out).Path
 foreach ($src in @($Face, $front, $attach)) {
@@ -50,6 +66,7 @@ foreach ($src in @($Face, $front, $attach)) {
 Copy-Item -LiteralPath $Face -Destination (Join-Path $Out 'amdhip64_7.dll') -Force
 Copy-Item -LiteralPath $front -Destination (Join-Path $Out 'libhipblaslt.dll') -Force
 Copy-Item -LiteralPath $attach -Destination $Out -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\..\tools\release\installer\rocm-files.ps1') -Destination $Out -Force
 if ((Sha (Join-Path $Out 'amdhip64_7.dll')) -ne $faceSha -or (Sha (Join-Path $Out 'libhipblaslt.dll')) -ne $record.front.sha256) {
     throw "a copy into $Out does not have the bytes of its source"
 }
@@ -71,6 +88,15 @@ $manifest = [ordered]@{
         file = 'libhipblaslt.dll'; amd_sha256 = $record.amd_blaslt.sha256; build_sha256 = (Sha (Join-Path $Out 'libhipblaslt.dll'))
         amd_exports = $record.amd_blaslt.exports; served_names = @($record.served_names)
     }
+}
+if ($null -ne $previous) {
+    foreach ($part in @('face', 'blaslt_front')) {
+        $p = $previous.$part
+        $hashes = @($p.amd_sha256)
+        if ($p.PSObject.Properties['restore_amd_sha256']) { $hashes += @($p.restore_amd_sha256) }
+        $manifest[$part]['restore_amd_sha256'] = @($hashes | ForEach-Object { ([string]$_).ToLowerInvariant() } | Sort-Object -Unique)
+    }
+    $manifest['previous_payload_sha256'] = $PreviousPayloadSha256.ToLowerInvariant()
 }
 [IO.File]::WriteAllText((Join-Path $Out 'payload.json'), ($manifest | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding($false)))
 Get-ChildItem -LiteralPath $Out -File | ForEach-Object { Write-Host ('  {0}  {1}' -f (Sha $_.FullName), $_.Name) }

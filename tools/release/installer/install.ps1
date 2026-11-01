@@ -96,6 +96,7 @@ $package = Split-Path -Parent $here
 . (Join-Path $here 'state-reader.ps1')
 . (Join-Path $here 'legacy-rollback.ps1')
 . (Join-Path $here 'app-profiles.ps1')
+. (Join-Path $here 'rocm-venvs.ps1')
 $enginePackage=$package
 $engineHere=$here
 $legacyRollback=[bool]$RollbackPackage
@@ -1572,6 +1573,12 @@ foreach ($d in $dirs) {
 # The HIP runtime (experimental) works without a step of the tester's: its folder goes at the end of the machine PATH,
 # once (common.ps1, Get-HipPathEntry). A package without tools\hip leaves PATH alone.
 if (Test-Path -LiteralPath (Join-Path $package 'payload\tools\hip')) {
+    # Reapply the current payload to registered venvs after its files are copied.
+    # In-use or incompatible venvs retain their entry and a warning for a later retry.
+    $rocmPayload = Join-Path $InstallRoot 'tools\hip\rocm'
+    if ($script:DryRunMode) { $rocmPayload = Join-Path $package 'payload\tools\hip\rocm' }
+    $rocmUpdate = @(Invoke-RocmVenvAttach -Payload $rocmPayload)
+    Set-StateValue $state 'rocm_venv_update' $rocmUpdate
     $hipEntry = Get-HipPathEntry $InstallRoot
     if (Test-PathEntry (Get-MachinePath).value $hipEntry) { Write-Info "the machine PATH holds $hipEntry already: kept" }
     else {

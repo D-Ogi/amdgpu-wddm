@@ -148,7 +148,7 @@ try {
             Check ($r.code -eq 3 -and $r.text -match 'TheRock|another TheRock build' -and (State) -eq $before) "${tag}: $(if ($mode) { $mode[0] } else { 'attach' }) with another AMD build is refused and changes nothing (exit $($r.code))"
         }
         $r = Run @('-Check')
-        Check ($r.code -eq 3 -and $r.text -match 'not the one this payload names') "${tag}: -Check names another AMD build (exit $($r.code))"
+        Check ($r.code -eq 3 -and $r.text -match 'another TheRock build') "${tag}: -Check names another AMD build (exit $($r.code))"
         Copy-Item $amdLtFile $liveLt -Force
 
         # A kit3 venv: the face attached by lab-setup.ps1, the front not yet.
@@ -157,7 +157,7 @@ try {
         $r = Run @('-Check')
         Check ($r.code -eq 3 -and $r.text -match 'partly attached') "${tag}: -Check on a kit3 venv says partly attached (exit $($r.code))"
         $r = Run @()
-        Check ($r.code -eq 0 -and $r.text -match 'HIP runtime face: already attached' -and (State) -eq $attached) "${tag}: attach of a kit3 venv adds the front (exit $($r.code))"
+        Check ($r.code -eq 0 -and $r.text -match 'face: already attached' -and (State) -eq $attached) "${tag}: attach of a kit3 venv adds the front (exit $($r.code))"
 
         # An upgrade of the release: the venv holds our DLLs of the payload before, payload-b is the payload now.
         $r = Run @('-Check') $payloadB
@@ -173,7 +173,16 @@ try {
         $r = Run @() $payloadC
         Check ($r.code -eq 3 -and $r.text -match 'another TheRock build' -and (State) -eq $before) "${tag}: attach of a payload for another build over an attached venv is refused (exit $($r.code))"
         $r = Run @('-Detach') $payloadC
-        Check ($r.code -eq 0 -and (State) -eq $detached) "${tag}: -Detach with that payload puts back the AMD DLLs the record names (exit $($r.code))"
+        Check ($r.code -eq 3 -and (State) -eq $before) "${tag}: a venv record cannot authorize AMD hashes absent from the trusted payload (exit $($r.code))"
+        # The release can authorize a previous TheRock build through its immutable payload history.
+        $historyPath = Join-Path $payloadC 'payload.json'
+        $originalHistory = [IO.File]::ReadAllText($historyPath)
+        $history = $originalHistory | ConvertFrom-Json
+        $history.blaslt_front | Add-Member -NotePropertyName restore_amd_sha256 -NotePropertyValue @($amdLt)
+        [IO.File]::WriteAllText($historyPath, ($history | ConvertTo-Json -Depth 4))
+        $r = Run @('-Detach') $payloadC
+        Check ($r.code -eq 0 -and (State) -eq $detached) "${tag}: trusted package history permits detach after TheRock version change"
+        [IO.File]::WriteAllText($historyPath, $originalHistory)
 
         # Schema 1: the payload file must have the hash that payload.json names.
         Write-Bytes (Join-Path $payload1 'front.dll') 'a front of another build'
@@ -194,9 +203,35 @@ try {
         $notADir = Join-Path $Work "file-$tag"
         Write-Bytes $notADir 'a file'
         $r = Run @() $payload $venv (Join-Path $notADir 'list')
-        Check ($r.code -eq 0 -and (State) -eq $attached -and $r.text -match 'not recorded for the uninstaller') "${tag}: attach without a writable list warns and still attaches (exit $($r.code))"
+        Check ($r.code -ne 0 -and (State) -eq $detached) "${tag}: attach without a writable list refuses before DLL changes (exit $($r.code))"
         $r = Run @('-Detach') $payload $venv (Join-Path $notADir 'list')
-        Check ($r.code -eq 0 -and (State) -eq $detached) "${tag}: -Detach without a writable list (exit $($r.code))"
+        Check ($r.code -eq 3 -and (State) -eq $detached) "${tag}: -Detach refuses a non-directory list ancestor (exit $($r.code))"
+
+        # No writable target may be a hard link, including metadata and the uninstaller entry.
+        $r = Run @()
+        foreach ($targetFile in @($liveFace, $keptFace, $liveLt, $keptLt, $record, @(Entries)[0].FullName)) {
+            $alias = Join-Path $Work "hardlink-$tag"
+            New-Item -ItemType HardLink -Path $alias -Target $targetFile | Out-Null
+            $before = State
+            $aliasBefore = Sha $alias
+            $r = Run @('-Detach')
+            Check ($r.code -eq 3 -and $r.text -match 'hard link' -and (State) -eq $before -and (Sha $alias) -eq $aliasBefore) "${tag}: hardlinked $([IO.Path]::GetFileName($targetFile)) is refused without writes"
+            Remove-Item -LiteralPath $alias
+        }
+        $r = Run @('-Detach')
+        Check ($r.code -eq 0 -and (State) -eq $detached) "${tag}: positive detach after hardlink controls"
+
+        # An attacker-controlled record cannot turn arbitrary retained bytes into AMD's DLL.
+        $r = Run @()
+        Write-Bytes $keptLt 'untrusted restore bytes'
+        $forged = Get-Content -LiteralPath $record -Raw | ConvertFrom-Json
+        $forged.blaslt_front.amd_sha256 = Sha $keptLt
+        [IO.File]::WriteAllText($record, ($forged | ConvertTo-Json -Depth 4))
+        $before = State
+        $r = Run @('-Detach')
+        Check ($r.code -eq 3 -and (State) -eq $before) "${tag}: forged record cannot authorize unknown restore bytes"
+        Copy-Item $amdLtFile $keptLt -Force
+        $r = Run @('-Detach')
 
         # A junction on the path: refused before any change, for the venv itself and for a directory inside it.
         $realCore = Join-Path $Work "real-core-$tag"

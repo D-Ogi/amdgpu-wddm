@@ -55,6 +55,10 @@ if ($lab.Count) { Write-Warn2 "a development-lab installation ($($lab -join ', '
 # Inventory must succeed before the first change. A failed read is not an empty driver store.
 try { $pkgs = @(Get-OurDriverPackages) }
 catch { Write-Fail "Driver-store inventory could not be read. No removal was started: $($_.Exception.Message)"; exit 6 }
+Write-Step 'TheRock Python environments'
+# Fail before driver or package removal. A refused/unfinished detach still needs the installed runtime.
+$rocmRemoval = @(Invoke-RocmVenvDetach -Payload (Join-Path $root 'tools\hip\rocm'))
+Assert-RocmVenvRemovalComplete $rocmRemoval
 $removalDevice=$null
 if($pkgs.Count -or ($state -and $state.driver_state_removal)) {
     $devices=@(Get-Bc250Device)
@@ -299,11 +303,6 @@ Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey
     # SCM owns S and Parameters lifetime. The verified protected final archive and
     # independent original board record remain under DriverData after deletion.
 } | Out-Null
-
-Write-Step 'TheRock Python environments'
-# Each venv that attach-rocm-venv.ps1 attached to our HIP runtime gets AMD's DLLs back, while the attach step is still
-# in the install root (rocm-venvs.ps1). A venv that is gone is skipped with a log line.
-Invoke-RocmVenvDetach -Payload (Join-Path $root 'tools\hip\rocm') | Out-Null
 
 Write-Step 'Files'
 if ($state -and $state.PSObject.Properties['adl_path_entries'] -and @($state.adl_path_entries).Count) {
