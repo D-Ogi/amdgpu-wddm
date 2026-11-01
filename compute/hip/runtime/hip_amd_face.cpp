@@ -41,7 +41,7 @@ const bc250hip::Allocation* host_allocation(const void* ptr, uint64_t* offset) {
     const unsigned char* want = static_cast<const unsigned char*>(ptr);
     for (const auto& entry : state().va_by_host) {
         const auto found = state().by_va.find(entry.second);
-        if (found == state().by_va.end()) {
+        if (found == state().by_va.end() || found->second.retiring) {
             continue;
         }
         const bc250hsa_mem& mem = found->second.mem;

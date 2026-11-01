@@ -167,10 +167,17 @@ struct FaceCounters {
 // last fence value one of them left with the device (bc250hsa_op_receipt, also when its wait
 // failed). They change under the process lock only. They are mutable because the table hands
 // out const pointers, and neither of them is part of what the allocation holds.
+//
+// cpu_access is what bc250hsa_memory_access answered when the allocation was made: a direct
+// mapping in mem.host, the host views of a split allocation that only layer 1's host-processor
+// calls reach (BD-117), or none. retiring is set when a hipFree started; a free that layer 1
+// could not finish keeps the entry, every lookup skips it, and a second hipFree tries again.
 struct Allocation {
     bc250hsa_mem     mem{};
     mutable int      pins = 0;
     mutable uint64_t busy_fence = 0;
+    uint32_t         cpu_access = BC250HSA_ACCESS_NONE;
+    bool             retiring = false;
 };
 
 // A kernel argument buffer of the pool. The buffer stays in the pool after the launch and is
@@ -264,6 +271,9 @@ struct State {
     std::unordered_map<const void*, ModuleFunction*> module_functions;
     FaceCounters                            face;
     std::map<uint64_t, Allocation>          by_va;         // ordered, for a range lookup
+    // Retiring entries whose GPU address layer 1 already gave back, so that a new allocation
+    // took the same address. Layer 1 keeps what they still own until the device closes.
+    std::vector<Allocation>                 retired;
     std::unordered_map<const void*, uint64_t> va_by_host;
     std::vector<KernargBuffer>              kernargs;
     // The dense arena in front of the pool. BC250_HIP_KERNARG_ARENA=0 (lab flavour only) turns

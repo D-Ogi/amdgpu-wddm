@@ -86,6 +86,8 @@ typedef struct mock_allocation {
     bc250hsa_mem mem;
     uint32_t     in_use;
     uint64_t     busy_fence;
+    int          scatter;   /* BD-117: no host view to hand out, the host-processor calls reach it */
+    int          retiring;  /* a free failed part way: everything but a second free refuses it */
 } mock_allocation;
 
 /* The arena of bc250hsa_mock_set_host_arena. While g_arena is set, every allocation takes its
@@ -611,6 +613,12 @@ uint32_t bc250hsa_target_alias_get(void) { return g_target_alias; }
  * Memory
  * ---------------------------------------------------------------------------------------- */
 
+/* BD-117 aggregates (bc250hsa_mock_set_scatter_min) and a free that stops part way
+ * (bc250hsa_mock_set_free_fail). */
+static uint64_t g_scatter_min;
+static uint32_t g_free_fail;
+static uint32_t g_cpu_walks;
+
 static int mock_no_map(void) {
 #if defined(_MSC_VER)
     size_t needed = 0;
@@ -693,6 +701,9 @@ static bc250hsa_status alloc_locked(bc250hsa_device* dev, uint64_t bytes, uint64
     dev->allocations[slot].mem = *out;
     dev->allocations[slot].in_use = 0u;
     dev->allocations[slot].busy_fence = 0u;
+    dev->allocations[slot].scatter = g_scatter_min != 0u && flags == BC250HSA_MEM_MAPPABLE &&
+                                     aligned_bytes >= g_scatter_min;
+    dev->allocations[slot].retiring = 0;
     dev->live_allocations++;
     dev->live_bytes += aligned_bytes;
 
@@ -729,6 +740,13 @@ static bc250hsa_status free_locked(bc250hsa_device* dev, bc250hsa_mem* mem) {
     mock_retire_due(dev);
     if (allocation->in_use != 0u || allocation->busy_fence > dev->retired) {
         g_free_violations++;
+    }
+    if (g_free_fail != 0u) {
+        /* A release that stops part way: the allocation stays, retiring, for a second free. */
+        g_free_fail--;
+        allocation->retiring = 1;
+        g_os_status = (int32_t)0xC0000022;
+        return BC250HSA_EOS;
     }
     {
         bc250hsa_mock_record* record = record_new(BC250HSA_MOCK_FREE);
@@ -770,6 +788,15 @@ static bc250hsa_status map_locked(bc250hsa_device* dev, bc250hsa_mem* mem, void*
     }
     if (mem->flags == BC250HSA_MEM_DEVICE) {
         return BC250HSA_EUNSUPPORTED;
+    }
+    {
+        const mock_allocation* a = allocation_of(dev, mem);
+        if (a != NULL && a->retiring) {
+            return BC250HSA_EINVAL;
+        }
+        if (a != NULL && a->scatter) {
+            return BC250HSA_EUNSUPPORTED;   /* an aggregate has no contiguous host view */
+        }
     }
     if (mock_no_map()) {
         /* The answer of open question 1 of the design may be no. This path lets the test run
@@ -832,11 +859,17 @@ static bc250hsa_status copy_locked(bc250hsa_device* dev, const bc250hsa_mem* mem
     if (allocation == NULL) {
         return BC250HSA_EINVAL;
     }
-    if (mem->host == NULL && allocation->mem.host == NULL) {
+    if (allocation->retiring) {
+        return BC250HSA_EINVAL;
+    }
+    if (mem->host == NULL && allocation->mem.host == NULL && !allocation->scatter) {
         return BC250HSA_EUNSUPPORTED;
     }
     if (offset > allocation->mem.bytes || bytes > allocation->mem.bytes - offset) {
         return BC250HSA_EINVAL;
+    }
+    if (allocation->scatter) {
+        g_cpu_walks++;
     }
     base = (unsigned char*)allocation->raw + offset;
     if (to_device) {
@@ -878,6 +911,100 @@ bc250hsa_status bc250hsa_copy_from_device(bc250hsa_device* dev, void* dst,
                                           const bc250hsa_mem* src, uint64_t src_offset,
                                           uint64_t bytes) {
     return mock_copy(dev, src, src_offset, dst, bytes, 0);
+}
+
+void bc250hsa_mock_set_scatter_min(uint64_t bytes) {
+    mock_lock();
+    g_scatter_min = bytes;
+    mock_unlock();
+}
+
+void bc250hsa_mock_set_free_fail(uint32_t count) {
+    mock_lock();
+    g_free_fail = count;
+    mock_unlock();
+}
+
+uint32_t bc250hsa_mock_cpu_walks(void) { return g_cpu_walks; }
+
+bc250hsa_status bc250hsa_memory_access(bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                       uint32_t* access) {
+    mock_allocation* allocation;
+    bc250hsa_status  result = BC250HSA_OK;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || mem == NULL || access == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    allocation = allocation_of(dev, mem);
+    if (allocation == NULL || allocation->retiring) {
+        result = BC250HSA_EINVAL;
+    } else if (allocation->scatter) {
+        *access = BC250HSA_ACCESS_SCATTER;
+    } else {
+        *access = mem->host != NULL ? BC250HSA_ACCESS_DIRECT : BC250HSA_ACCESS_NONE;
+    }
+    mock_unlock();
+    return result;
+}
+
+/* The host-processor view of one allocation for the two calls below, with the checks of
+ * kmt_memory.c cpu_target in the same order. */
+static bc250hsa_status cpu_view_locked(bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                       uint64_t offset, uint64_t bytes, unsigned char** out) {
+    mock_allocation* allocation = allocation_of(dev, mem);
+    if (allocation == NULL || allocation->retiring) {
+        return BC250HSA_EINVAL;
+    }
+    if (mem->host == NULL && allocation->mem.host == NULL && !allocation->scatter) {
+        return BC250HSA_EUNSUPPORTED;
+    }
+    if (offset > allocation->mem.bytes || bytes > allocation->mem.bytes - offset) {
+        return BC250HSA_EINVAL;
+    }
+    if (allocation->scatter) {
+        g_cpu_walks++;
+    }
+    *out = (unsigned char*)allocation->raw + offset;
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_copy_device_cpu(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                         uint64_t dst_offset, const bc250hsa_mem* src,
+                                         uint64_t src_offset, uint64_t bytes) {
+    unsigned char*  to = NULL;
+    unsigned char*  from = NULL;
+    bc250hsa_status result;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || dst == NULL || src == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    result = cpu_view_locked(dev, dst, dst_offset, bytes, &to);
+    if (result == BC250HSA_OK) {
+        result = cpu_view_locked(dev, src, src_offset, bytes, &from);
+    }
+    if (result == BC250HSA_OK) {
+        mock_batch_submit_locked(dev);   /* a flush point of section 8.1 */
+        memmove(to, from, (size_t)bytes);
+    }
+    mock_unlock();
+    return result;
+}
+
+bc250hsa_status bc250hsa_fill_device_cpu(bc250hsa_device* dev, const bc250hsa_mem* dst,
+                                         uint64_t dst_offset, uint8_t value, uint64_t bytes) {
+    unsigned char*  to = NULL;
+    bc250hsa_status result;
+    if (dev == NULL || dev->magic != MOCK_DEVICE_MAGIC || dst == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    mock_lock();
+    result = cpu_view_locked(dev, dst, dst_offset, bytes, &to);
+    if (result == BC250HSA_OK) {
+        mock_batch_submit_locked(dev);
+        memset(to, (int)value, (size_t)bytes);
+    }
+    mock_unlock();
+    return result;
 }
 
 /* ------------------------------------------------------------------------------------------
@@ -2999,6 +3126,9 @@ void bc250hsa_mock_reset(void) {
     g_gpu_fault_when = BC250HSA_MOCK_FAULT_NONE;
     g_gpu_fault_status = BC250HSA_OK;
     g_gpu_delay_ms = 0u;
+    g_scatter_min = 0u;
+    g_free_fail = 0u;
+    g_cpu_walks = 0u;
     mock_unlock();
 }
 
