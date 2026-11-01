@@ -28,4 +28,16 @@ int main(){
     }
     SetEnvironmentVariableA(name,nullptr);
     std::puts("PASS flip chain size: the output's size unless a valid smaller <width>x<height> is named; no GPU calls");
+    // BD-224: the present period. Absent, 0, or anything that is not a number from 0 to 2000 gives 0.
+    const char* period="AMDGPU_WDDM_D3D12_FLIP_PERIOD_MS_TEST";
+    SetEnvironmentVariableA(period,nullptr);
+    assert(flip_period_from(period)==0);
+    const struct { const char* text; UINT ms; } periods[]={{"0",0},{"200",200},{"1",1},{"2000",2000},{"2001",0},
+        {"-200",0},{"200ms",0},{" 200",0},{"",0},{"99999999999999",0}};
+    for(const auto& p:periods){
+        SetEnvironmentVariableA(period,p.text);
+        assert(flip_period_from(period)==p.ms);
+    }
+    SetEnvironmentVariableA(period,nullptr);
+    std::puts("PASS flip present period: 0 to 2000 ms, anything else is 0; no GPU calls");
 }

@@ -454,6 +454,16 @@ HRESULT set_raytracing_tier12_commands(DeviceContext* context, bool on) noexcept
     return S_OK;
 }
 
+HRESULT set_overlay_format_hook(DeviceContext* context, OverlayFormatHook hook) noexcept {
+    if (!context) {
+        log_refusal("set_overlay_format_hook: refused (no context)");
+        return E_INVALIDARG;
+    }
+    context->overlay_format = hook;
+    log_line("overlay format hook %s", hook ? "set" : "cleared");
+    return S_OK;
+}
+
 // ---- Context --------------------------------------------------------------------------------------------------
 namespace {
 template <class T> void release_ref(T*& p) noexcept {

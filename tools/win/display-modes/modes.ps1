@@ -5,16 +5,18 @@
 # so a restart always comes back to the registry mode, and the tool itself goes back to it when the hold ends.
 #
 #   modes.ps1 -List                                   the modes Windows offers, the current and the registry mode
-#   modes.ps1 -Width 1920 -Height 1080 [-Fixed default|stretch|center] [-HoldSeconds 20]
+#   modes.ps1 -Width 1920 -Height 1080 [-Frequency 100] [-Fixed default|stretch|center] [-HoldSeconds 20]
 #   modes.ps1 -Revert                                 back to the registry mode now
 #
 # -Fixed is DEVMODE.dmDisplayFixedOutput: default lets the driver choose (aspect ratio on this driver), stretch and
-# center ask for the VidPN scaling of the same name. -Out FILE appends every line to FILE too.
+# center ask for the VidPN scaling of the same name. -Frequency is DEVMODE.dmDisplayFrequency in Hz (BD-177: the
+# 100 Hz EDID mode of the LG FHD); 0 lets Windows keep or choose the rate. -Out FILE appends every line to FILE too.
 param(
     [switch]$List,
     [switch]$Revert,
     [int]$Width = 0,
     [int]$Height = 0,
+    [ValidateRange(0, 500)][int]$Frequency = 0,
     [ValidateSet('default', 'stretch', 'center')][string]$Fixed = 'default',
     [ValidateRange(1, 60)][int]$HoldSeconds = 20,
     [string]$Out = ''
@@ -55,7 +57,7 @@ public static class Bc250Modes {
 '@
 
 $ENUM_CURRENT = -1; $ENUM_REGISTRY = -2
-$DM_PELSWIDTH = 0x80000; $DM_PELSHEIGHT = 0x100000; $DM_DISPLAYFIXEDOUTPUT = 0x20000000
+$DM_PELSWIDTH = 0x80000; $DM_PELSHEIGHT = 0x100000; $DM_DISPLAYFREQUENCY = 0x400000; $DM_DISPLAYFIXEDOUTPUT = 0x20000000
 $fixedValue = @{ default = 0; stretch = 1; center = 2 }[$Fixed]
 
 function Say([string]$line) {
@@ -97,10 +99,14 @@ $d.dmPelsWidth = $Width
 $d.dmPelsHeight = $Height
 $d.dmDisplayFixedOutput = $fixedValue
 $d.dmFields = $DM_PELSWIDTH -bor $DM_PELSHEIGHT -bor $DM_DISPLAYFIXEDOUTPUT
+if ($Frequency -gt 0) {
+    $d.dmDisplayFrequency = $Frequency
+    $d.dmFields = $d.dmFields -bor $DM_DISPLAYFREQUENCY
+}
 try {
     # Flags 0: dynamic only, the registry keeps its mode (DISP_CHANGE_SUCCESSFUL = 0, BADMODE = -2, FAILED = -1).
     $r = [Bc250Modes]::Set($d)
-    Say "set ${Width}x${Height} fixed-output $Fixed ($fixedValue): ChangeDisplaySettingsEx = $r; current $(Text (Mode $ENUM_CURRENT))"
+    Say "set ${Width}x${Height} $Frequency Hz fixed-output $Fixed ($fixedValue): ChangeDisplaySettingsEx = $r; current $(Text (Mode $ENUM_CURRENT))"
     if ($r -eq 0) {
         Say "hold $HoldSeconds s"
         Start-Sleep -Seconds $HoldSeconds

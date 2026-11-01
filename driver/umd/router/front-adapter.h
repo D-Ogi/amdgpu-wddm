@@ -83,6 +83,19 @@ inline bool FrontOverlayAdmitted(const bc250_scanout_caps &caps)
     return (caps.flags & BC250_SCANOUT_CAPS_MPO) && (caps.flags & BC250_SCANOUT_CAPS_DIRECT_FLIP);
 }
 
+// BD-223 (docs/design/mpo.md, gate 2): the format bit the compositor's device adds for an overlay plane. The hosted
+// frontend never sets D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY (Mesa d3d10umd Device.cpp, CheckFormatSupport), so
+// without it no format of DWM's device is a format for a plane. The bit goes to a format that plane 0 can scan out
+// under this trailer, only while the kernel driver admits an overlay plane: the shared rule
+// bc250_scanout_mpo_format, which the D3D12 shell calls too. A pure function of the trailer, so that the host gate
+// drives the production rule (CheckFormatSupport13).
+inline UINT FrontOverlayFormatSupport(const bc250_scanout_caps &caps, unsigned int format)
+{
+    return bc250_scanout_mpo_format(&caps, amdgpu_wddm_surface_format_by_dxgi(format))
+               ? (UINT)D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY
+               : 0u;
+}
+
 // The multiplane-overlay present of the hosted driver (Mesa d3d10umd DxgiFns.cpp). That driver publishes
 // the D3D10.0 DXGI table, which has no such entry, so the front resolves the export by name.
 typedef HRESULT(APIENTRY *HostedPresentMpoFn)(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY *);
@@ -242,6 +255,11 @@ void Refuse(Device *device, const char *entry, volatile LONG *once);
 // the first occurrence of each entry; the call is NOT refused, because a refused draw path is a dead
 // desktop and the dropped semantics are ones a 10_0 pipeline does not use.
 void Dropped(Device *device, const char *entry, const char *what, volatile LONG *once);
+// BD-223: the answer of a multiplane-overlay caps entry: its HRESULT, the planes it reported and the trailer flags
+// it read. Logged when it differs from the entry's last answer, so equal answers write one line, and each change of
+// the trailer or of the request writes one more. `last` is the entry's own word, 0 before the first answer.
+void CapsAnswer(Device *device, const char *entry, volatile LONG *last, HRESULT hr, unsigned int planes,
+                unsigned int trailer);
 // A create entry that did not create the object. Every pfnCreate* of this DDI returns VOID, so the runtime
 // learns of a failure through pfnSetErrorCb alone: told, it treats the handle as invalid and does NOT call
 // the matching Destroy* (ref/ddi-display/d3d10umddi.md:745). Not told, it calls that Destroy*, which is a

@@ -15,11 +15,12 @@ typedef unsigned long ULONG;
 #define FAN_SETTING_PROFILE L"FanProfile"
 #define FAN_SETTING_POINTS L"FanCurvePoints"
 #define FAN_SETTING_BOOST L"FanLoadBoost"
+#define FAN_SETTING_RISE_CONFIRM L"FanRiseConfirm"
 #define AMDGPU_STATE_GROUP_FAN 4
 static const wchar_t *g_FanCurveSetting[BC250_FAN_POINTS_MAX]={
     L"FanCurve0",L"FanCurve1",L"FanCurve2",L"FanCurve3",L"FanCurve4",L"FanCurve5",L"FanCurve6",L"FanCurve7"};
-static NTSTATUS queryStatus[12];
-static ULONG data[12];
+static NTSTATUS queryStatus[13];
+static ULONG data[13];
 static unsigned groupEnabled = 1;
 static unsigned DriverStateGroupEnabled(unsigned group)
 { return group == AMDGPU_STATE_GROUP_FAN && groupEnabled; }
@@ -30,8 +31,9 @@ static NTSTATUS GuardQuerySetting(const wchar_t *name,ULONG *value)
     else if(!wcscmp(name,FAN_SETTING_PROFILE))i=1;
     else if(!wcscmp(name,FAN_SETTING_POINTS))i=2;
     else if(!wcscmp(name,FAN_SETTING_BOOST))i=11;
+    else if(!wcscmp(name,FAN_SETTING_RISE_CONFIRM))i=12;
     else {for(i=0;i<8;i++)if(!wcscmp(name,g_FanCurveSetting[i]))break;i+=3;}
-    if(i>=12)return STATUS_DATA_ERROR;
+    if(i>=13)return STATUS_DATA_ERROR;
     if(NT_SUCCESS(queryStatus[i]))*value=data[i];
     return queryStatus[i];
 }
@@ -39,11 +41,11 @@ static NTSTATUS GuardQuerySetting(const wchar_t *name,ULONG *value)
 static unsigned checks,failed;
 #define CHECK(x) do{checks++;if(!(x)){failed++;printf("FAIL line %d: %s\n",__LINE__,#x);}}while(0)
 static void Reset(void)
-{unsigned i;memset(data,0,sizeof(data));for(i=0;i<12;i++)queryStatus[i]=STATUS_OBJECT_NAME_NOT_FOUND;
- queryStatus[11]=0;data[11]=1;groupEnabled=1;}
+{unsigned i;memset(data,0,sizeof(data));for(i=0;i<13;i++)queryStatus[i]=STATUS_OBJECT_NAME_NOT_FOUND;
+ queryStatus[11]=queryStatus[12]=0;data[11]=1;groupEnabled=1;}
 int main(void)
 {
-    struct bc250_fan_request choice;ULONG points,boost;unsigned i;
+    struct bc250_fan_request choice;ULONG points,boost,rise;unsigned i;
     Reset();CHECK(FanReadChoice(&choice,&points)==STATUS_OBJECT_NAME_NOT_FOUND);
     queryStatus[0]=STATUS_ACCESS_DENIED;CHECK(FanReadChoice(&choice,&points)==STATUS_ACCESS_DENIED);
     Reset();queryStatus[0]=0;data[0]=BC250_FAN_MODE_CURVE;
@@ -65,16 +67,23 @@ int main(void)
     data[0]=BC250_FAN_MODE_FIXED;CHECK(FanReadChoice(&choice,&points)==STATUS_DATA_ERROR);
     data[0]=BC250_FAN_MODE_COUNT;CHECK(FanReadChoice(&choice,&points)==STATUS_DATA_ERROR);
     data[0]=BC250_FAN_MODE_BOARD;CHECK(FanReadChoice(&choice,&points)==0);
-    Reset();CHECK(FanReadConfiguredChoice(&choice,&points,&boost)==STATUS_OBJECT_NAME_NOT_FOUND && boost==1);
+    Reset();CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_OBJECT_NAME_NOT_FOUND && boost==1 && !rise);
     queryStatus[0]=0;data[0]=BC250_FAN_MODE_CURVE;
-    CHECK(FanReadConfiguredChoice(&choice,&points,&boost)==0 && boost==1);
+    CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==0 && boost==1 && !rise);
     queryStatus[11]=STATUS_ACCESS_DENIED;
-    CHECK(FanReadConfiguredChoice(&choice,&points,&boost)==STATUS_ACCESS_DENIED && boost==0);
+    CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_ACCESS_DENIED && boost==0);
     queryStatus[11]=STATUS_OBJECT_NAME_NOT_FOUND;
-    CHECK(FanReadConfiguredChoice(&choice,&points,&boost)==STATUS_DATA_ERROR);
+    CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_DATA_ERROR);
     queryStatus[11]=0;data[11]=0;
-    CHECK(FanReadConfiguredChoice(&choice,&points,&boost)==0 && boost==0);
-    groupEnabled=0;CHECK(FanReadConfiguredChoice(&choice,&points,&boost)==STATUS_DATA_ERROR);
+    CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==0 && boost==0);
+    data[12]=1;CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==0 && rise==1);
+    data[12]=2;CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_DATA_ERROR);
+    data[12]=0;queryStatus[12]=STATUS_ACCESS_DENIED;
+    CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_ACCESS_DENIED);
+    queryStatus[12]=STATUS_OBJECT_NAME_NOT_FOUND;
+    CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_DATA_ERROR);
+    queryStatus[12]=0;
+    groupEnabled=0;CHECK(FanReadConfiguredChoice(&choice,&points,&boost,&rise)==STATUS_DATA_ERROR);
     printf("fan stored choice: %u checks, %u failures\n",checks,failed);
     return failed?1:0;
 }

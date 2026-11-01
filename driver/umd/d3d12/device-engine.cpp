@@ -65,6 +65,18 @@ HRESULT vk_result(VkResult result) noexcept {
     default:return E_FAIL;
     }
 }
+// BD-223 R1: the kernel driver's current trailer decides which formats may be overlay planes. Do not use the
+// copy from OpenAdapter: a failed query or an absent trailer must remove the bit, including after a mode change.
+BOOL APIENTRY overlay_format(void* shell,DXGI_FORMAT format) {
+    const auto* device=static_cast<const Device*>(shell);
+    if(!device || !device->adapter)return FALSE;
+    const auto& adapter=*device->adapter;
+    const auto caps=query_scanout_caps(adapter.runtime,adapter.callbacks.pfnQueryAdapterInfoCb);
+    return bc250_scanout_mpo_format(&caps,amdgpu_wddm_surface_format_by_dxgi(static_cast<unsigned>(format)))?TRUE:FALSE;
+}
+HRESULT configure_overlay_formats(engine_ddi::DeviceContext* context) noexcept {
+    return engine_ddi::set_overlay_format_hook(context,overlay_format);
+}
 }
 class DeviceEngine final {
     friend class DeviceEngineScope;
@@ -369,6 +381,8 @@ public:
                        adopt};
         result=engine_ddi::create_device_context(&context,&context_);stage("DeviceContext",result);
         if(result!=S_OK)return result;
+        result=configure_overlay_formats(context_);stage("OverlayFormats",result);
+        if(result!=S_OK)return result;
         // Raytracing tier 1.2 in the slots, where the engine device has it; the caps half is in adapter-caps.cpp, and
         // in a lab build the experiment raytracing-tier12-off turns both off (a release build has no switch).
         result=engine_ddi::set_raytracing_tier12_commands(context_,!ddi_raytracing_tier12_off());
@@ -577,6 +591,9 @@ DeviceEngineScope::~DeviceEngineScope() noexcept {
     hosted_.reset();runtime_.reset();current_=previous_;
 }
 #ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+HRESULT host_test_configure_overlay_formats(engine_ddi::DeviceContext* context) noexcept {
+    return configure_overlay_formats(context);
+}
 void host_test_report_list_error(Device& device,D3D12DDI_HRTCOMMANDLIST list,HRESULT hr) noexcept {
     DeviceEngine::report_list_error(&device,list,hr);
 }

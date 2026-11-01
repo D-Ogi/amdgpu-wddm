@@ -440,6 +440,19 @@ static __inline ULONG WddmRecordKind(unsigned long Version)
 #define BC250_WDDM_SCALED_PLANE_MPO_VSYNC 0x2ul
 #define BC250_WDDM_SCALED_PLANE_TWO_PLANES 0x4ul
 #define BC250_WDDM_SCALED_PLANE_MASK 0x7ul
+
+// The multiplane-overlay bits of the caps trailer for these LabScaledPlane bits. DRIVERCAPS MaxOverlayPlanes is
+// bc250_scanout_mpo_planes of the same word, so the kernel and the compositor's front report one plane count.
+// TWO_PLANES sets MPO_PLANE1: in the arms of 2026-10-29 it changed MaxOverlayPlanes alone, and the front said 1.
+static unsigned int WddmMpoFlags(ULONG ScaledPlane)
+{
+    unsigned int flags = 0;
+    if (ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) {
+        flags |= BC250_SCANOUT_CAPS_MPO;
+        if (ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) flags |= BC250_SCANOUT_CAPS_MPO_PLANE1;
+    }
+    return flags;
+}
 #endif
 
 typedef struct _BC250_WDDM {
@@ -5011,11 +5024,11 @@ static NTSTATUS WddmDriverCaps(_In_ const BC250_DEVICE* Device, _In_ const DXGKA
     caps->SupportSurpriseRemoval = FALSE;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     // BD-223: MaxOverlayPlanes counts the primary, so 1 is plane 0 alone (LabScaledPlane bit 2 asks 2, a lab
-    // question; Check still refuses a second plane). WDDM 2.0 has no MPO immediate-flip cap.
+    // question; Check still refuses a second plane). The count is the trailer's (WddmMpoFlags), which the front
+    // reports too. WDDM 2.0 has no MPO immediate-flip cap.
     if (Device->Wddm && (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK)) {
         caps->SupportMultiPlaneOverlay = TRUE;
-        caps->MaxOverlayPlanes =
-            (((BC250_WDDM*)Device->Wddm)->ScaledPlane & BC250_WDDM_SCALED_PLANE_TWO_PLANES) ? 2u : 1u;
+        caps->MaxOverlayPlanes = bc250_scanout_mpo_planes(WddmMpoFlags(((BC250_WDDM*)Device->Wddm)->ScaledPlane));
     }
 #endif
     caps->InterruptMessageNumber = 0;                   // the INF asks for one MSI message, so it is message 0 (M38)
@@ -5379,11 +5392,14 @@ static NTSTATUS Bc250WddmQueryAdapterInfo(_In_ const HANDLE hAdapter, _In_ const
             // R10G10B10A2) only after the firmware's format was captured at WddmStart, which ran before this.
             // BD-197: and only while the flip path programs them, which is the rule of DcnPlaneFormatsOpen.
             if (DcnPlaneFormatsOpen(device)) scanout.flags |= BC250_SCANOUT_CAPS_PLANE_FORMATS;
+            // BD-223 step R3: this parser admits the scan-out record of a displayable surface
+            // (surface_resource_private.h). A version answer, so both flavours say it, and only with DIRECT_FLIP.
+            if (scanout.flags & BC250_SCANOUT_CAPS_DIRECT_FLIP) scanout.flags |= BC250_SCANOUT_CAPS_DISPLAYABLE;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
             // BD-223 (docs/design/mpo.md): the user-mode half of the MPO contract follows DRIVERCAPS
-            // SupportMultiPlaneOverlay (WddmDriverCaps). MPO_PLANE1 stays clear: LabScaledPlane bit 2 reports
-            // two planes as a lab question, but no second pipe scans out yet.
-            if (wddm->ScaledPlane & BC250_WDDM_SCALED_PLANE_CHECK) scanout.flags |= BC250_SCANOUT_CAPS_MPO;
+            // SupportMultiPlaneOverlay (WddmDriverCaps), with the same plane count: MPO_PLANE1 goes with
+            // LabScaledPlane bit 2, which reports two planes as a lab question while no second pipe scans out.
+            scanout.flags |= WddmMpoFlags(wddm->ScaledPlane);
 #endif
             scanout.post_width = (unsigned int)DisplaySourceWidth(device);
             scanout.post_height = (unsigned int)DisplaySourceHeight(device);

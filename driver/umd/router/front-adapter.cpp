@@ -118,6 +118,21 @@ void Dropped(Device *device, const char *entry, const char *what, volatile LONG 
     LogPrintf(log, "bc250d3d_front %s dropped %s\n", entry, what);
 }
 
+void CapsAnswer(Device *device, const char *entry, volatile LONG *last, HRESULT hr, unsigned int planes,
+                unsigned int trailer)
+{
+    // One word per answer: bit 30 always (so that no answer is the 0 of "never answered"), bit 29 success, bit 28
+    // E_INVALIDARG (the other failure is DXGI_ERROR_UNSUPPORTED), bits 24 to 27 the planes and bits 0 to 23 the
+    // trailer flags (the trailer defines five).
+    const LONG key = (LONG)(0x40000000u | (SUCCEEDED(hr) ? 0x20000000u : 0u) |
+                            (hr == E_INVALIDARG ? 0x10000000u : 0u) | ((planes & 0xFu) << 24) |
+                            (trailer & 0xFFFFFFu));
+    if (InterlockedExchange(last, key) == key) return;
+    const Log *log = device && device->adapter ? &device->adapter->log : FallbackLog();
+    LogPrintf(log, "bc250d3d_front dxgi caps answer %s hr=%08lx planes=%u trailer=0x%08x\n", entry,
+              (unsigned long)hr, planes, trailer);
+}
+
 void CreateFailed(Device *device)
 {
     if (!device || !device->um || !device->um->pfnSetErrorCb) return;

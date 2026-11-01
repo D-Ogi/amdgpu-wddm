@@ -33,6 +33,9 @@ typedef struct _BC250_DPM_SNAP {
     ULONG ZoneSteps, ZoneTicks, ZoneLeadGaps, ZoneIdleHolds;
     LONG ZoneLeadMc;
     BOOLEAN ZoneLeadOk;
+    // BD-281, driver log only: this start's rate rule and high-clock zone thresholds (0: the rule is off by setting)
+    // and Gov's counters. The log summary names the rules from these after the ring overwrote the start lines.
+    ULONG RateMcPerS, RateFromMc, HighMc, HighMHz, RateSteps, RateLevels, HighSteps, HighHolds;
     // 0.7.207, the idle state. IdleMHz is the point in force, 0 when the state is off for this start
     // (bc250_dpm_idle_mhz: DpmIdleMHz 0, a refused setting, or a point the firmware refused).
     ULONG IdleMHz, IdleHoldMs, IdleBusyPermille;
@@ -115,6 +118,9 @@ typedef struct _BC250_DPM_STATE {
     // alone like Gov. The cap it decides goes to the CPU surface through Device->Cpu.JointWantMHz.
     BOOLEAN JointOn;
     struct bc250_joint Joint;
+    // BD-281: the word of this start's start line for both rules, "on" or why they are off. A string literal, written
+    // under Lock by DpmStart before the governor thread exists, read by DpmLogSummary.
+    const char* BurstState;
 } BC250_DPM_STATE;
 
 // The submit path (gfx.c SubmitIbLocked, after the IB is committed): the ring went, or stays, busy.

@@ -63,9 +63,17 @@
 // (bc250_scanout_mpo_geometry). The kernel driver's check is the authority for every plane configuration:
 // the user-mode caps below are advisory, and a configuration the kernel driver refuses is composed by DWM.
 #define BC250_SCANOUT_CAPS_MPO 0x8u
-// The kernel driver also scans out an overlay plane on a second pipe (MaxOverlayPlanes 2). No kernel driver
-// sets it yet; until one does, the user-mode MaxPlanes is 1.
+// The kernel driver reports two planes for the source (DXGK_DRIVERCAPS MaxOverlayPlanes 2), so the user-mode
+// MaxPlanes is 2 as well (bc250_scanout_mpo_planes). Without it both counts are 1. The lab kernel driver sets it
+// with LabScaledPlane bit 2 as a lab question: its check still refuses a second plane, and DWM composes such a
+// set. A release kernel driver sets it only when an overlay plane on a second pipe scans out (MPO step S3).
 #define BC250_SCANOUT_CAPS_MPO_PLANE1 0x10u
+// BD-223 step R3: the kernel driver admits the E26R scan-out record of a displayable surface, SCANOUT with
+// BC250_SURFACE_RESOURCE_DISPLAYABLE in place of PRIMARY (driver/kmd/surface_resource_private.h), and places such
+// an allocation as a scan-out surface. It is the version answer of the record parser, so both flavours set it,
+// and only with DIRECT_FLIP. A kernel driver without it refuses the record and with it the whole create, so a
+// shell writes the record only while the bit is set (bc250_scanout_displayable_open).
+#define BC250_SCANOUT_CAPS_DISPLAYABLE 0x20u
 
 // The plane limits that the user-mode multiplane-overlay caps report and that the shells apply to a scan-out
 // primary smaller than the source mode. They are the kernel driver's stage limits (driver/kmd/dcn_plane.h):
@@ -136,4 +144,43 @@ static __inline int bc250_scanout_mpo_geometry(const struct bc250_scanout_caps* 
     if (!bc250_scanout_mpo_side(width, caps->post_width) || !bc250_scanout_mpo_side(height, caps->post_height))
         return 0;
     return width <= caps->post_width || width <= BC250_MPO_MAX_SHRINK_WIDTH;
+}
+
+// BD-223: the planes of the source, one count for both halves of the contract. The kernel driver reports it as
+// DXGK_DRIVERCAPS MaxOverlayPlanes, and the compositor's front as MaxPlanes and the group's NumPlanes. 0 without
+// BC250_SCANOUT_CAPS_MPO (no multiplane overlay), 2 with BC250_SCANOUT_CAPS_MPO_PLANE1, else 1 (plane 0 alone).
+// The lab arms of 2026-10-29 had 2 in the kernel and 1 in the front: the two counts disagreed, and dxgkrnl made
+// no check call.
+static __inline unsigned int bc250_scanout_mpo_planes(unsigned int flags)
+{
+    if (!(flags & BC250_SCANOUT_CAPS_MPO)) return 0u;
+    return (flags & BC250_SCANOUT_CAPS_MPO_PLANE1) ? 2u : 1u;
+}
+
+// BD-223 (docs/design/mpo.md, gate 2): may a format of this row carry the multiplane-overlay format bit on this
+// start? The bit is D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY for the compositor's device and
+// D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY for a D3D12 device (both 0x8000). Only while the kernel driver answers
+// the overlay check (BC250_SCANOUT_CAPS_MPO, which it sets only with DIRECT_FLIP), and only for a row that plane 0
+// scans out under this trailer (bc250_scanout_format_admitted). The compositor's front and the D3D12 shell both
+// call it, so their format answers cannot disagree. A null caps or row is "no".
+static __inline int bc250_scanout_mpo_format(const struct bc250_scanout_caps* caps,
+    const AMDGPU_WDDM_SURFACE_FORMAT* row)
+{
+    if (!caps || !row) return 0;
+    if (!(caps->flags & BC250_SCANOUT_CAPS_MPO) || !(caps->flags & BC250_SCANOUT_CAPS_DIRECT_FLIP)) return 0;
+    return bc250_scanout_format_admitted(row, caps->flags);
+}
+
+// BD-223 step R3: may a shell ask for the scan-out placement of a displayable surface with no primary descriptor?
+// Three bits, all from this trailer: DIRECT_FLIP (this start flips a client surface at all), DISPLAYABLE (the
+// kernel driver's parser admits the record) and MPO (the kernel driver answers the multiplane-overlay check). MPO
+// is needed because the overlay present is the only route of such a surface to a plane: a DirectFlip pair needs
+// two managed primaries of one video present source, and a displayable surface has none. Without MPO the request
+// would cost the surface its aperture placement and its CPU mapping, and no flip would follow. The geometry,
+// format and pitch clauses stay the shared rule's (bc250_scanout_primary_rule). A null or foreign caps is "no".
+static __inline int bc250_scanout_displayable_open(const struct bc250_scanout_caps* caps)
+{
+    const unsigned int need = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_DISPLAYABLE | BC250_SCANOUT_CAPS_MPO;
+    if (!caps || caps->magic != BC250_SCANOUT_CAPS_MAGIC || caps->version != BC250_SCANOUT_CAPS_VERSION) return 0;
+    return (caps->flags & need) == need;
 }

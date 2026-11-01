@@ -91,6 +91,8 @@ public:
     bool entered() const noexcept {return hosted_.entered();}
 };
 #ifdef AMDGPU_WDDM_D3D12_HOST_TEST
+// The same configuration as DeviceEngine::open; the test calls the installed hook with a runtime query double.
+HRESULT host_test_configure_overlay_formats(engine_ddi::DeviceContext*) noexcept;
 // Calls the production ShellHooks list-error boundary, including its device-error fallback.
 void host_test_report_list_error(Device&,D3D12DDI_HRTCOMMANDLIST,HRESULT) noexcept;
 // Host tests only, never in the driver build: an owner of the device without the engine device. It

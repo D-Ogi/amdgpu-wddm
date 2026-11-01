@@ -160,6 +160,29 @@ int main(void)
         }
         for (r = BC250_PLANE_FORMAT_ARGB8888; r < BC250_PLANE_FORMATS; r++) CHECK(reached[r] != 0);
         CHECK(!bc250_scanout_format_admitted(NULL, BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        // BD-223 gate 2: the overlay format bit of both shells is the scan-out rule under MPO and DIRECT_FLIP, and
+        //     nothing without either of them.
+        for (r = 0; r < count; r++) {
+            struct bc250_scanout_caps mpo = {BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION,
+                                             BC250_SCANOUT_CAPS_BYTES, planes | BC250_SCANOUT_CAPS_MPO, 1920u, 1200u};
+            struct bc250_scanout_caps alone = mpo, noflip = mpo, plain = mpo;
+            alone.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO;
+            noflip.flags = BC250_SCANOUT_CAPS_PLANE_FORMATS | BC250_SCANOUT_CAPS_MPO;
+            plain.flags = planes;
+            CHECK(bc250_scanout_mpo_format(&mpo, &rows[r]) == bc250_scanout_format_admitted(&rows[r], mpo.flags));
+            CHECK(bc250_scanout_mpo_format(&alone, &rows[r]) ==
+                  (amdgpu_wddm_surface_admit(&rows[r], AMDGPU_WDDM_SURFACE_FIRMWARE_PLANE) != 0));
+            CHECK(!bc250_scanout_mpo_format(&noflip, &rows[r]) && !bc250_scanout_mpo_format(&plain, &rows[r]));
+            CHECK(!bc250_scanout_mpo_format(NULL, &rows[r]));
+        }
+        {
+            const struct bc250_scanout_caps mpo = {BC250_SCANOUT_CAPS_MAGIC, BC250_SCANOUT_CAPS_VERSION,
+                BC250_SCANOUT_CAPS_BYTES, planes | BC250_SCANOUT_CAPS_MPO, 1920u, 1200u};
+            CHECK(!bc250_scanout_mpo_format(&mpo, NULL));
+            CHECK(bc250_scanout_mpo_format(&mpo, amdgpu_wddm_surface_format_by_dxgi(87u)));   // B8G8R8A8_UNORM
+            CHECK(bc250_scanout_mpo_format(&mpo, amdgpu_wddm_surface_format_by_dxgi(28u)));   // R8G8B8A8_UNORM
+            CHECK(!bc250_scanout_mpo_format(&mpo, amdgpu_wddm_surface_format_by_dxgi(24u)));  // R10G10B10A2_UNORM
+        }
         // The encodings decode back to themselves, and the names cover every id.
         for (r = 1; r < BC250_PLANE_FORMATS; r++) {
             const BC250_PLANE_ENCODING* e = Bc250PlaneEncoding(r);
@@ -396,6 +419,36 @@ int main(void)
         CHECK(!bc250_scanout_mpo_geometry(&flip, 1920u, 1080u));   // no MPO bit
         CHECK(!bc250_scanout_mpo_geometry(&lone, 1920u, 1080u));   // MPO without DIRECT_FLIP is no trailer
         CHECK(!bc250_scanout_mpo_geometry(NULL, 1920u, 1080u));
+        // The plane count of both halves (DXGK_DRIVERCAPS MaxOverlayPlanes and the front's MaxPlanes): 0 without
+        // MPO, 1 for plane 0 alone, 2 with the pipe 1 plane. MPO_PLANE1 alone is no multiplane overlay.
+        CHECK(bc250_scanout_mpo_planes(0u) == 0u && bc250_scanout_mpo_planes(BC250_SCANOUT_CAPS_DIRECT_FLIP) == 0u);
+        CHECK(bc250_scanout_mpo_planes(BC250_SCANOUT_CAPS_MPO_PLANE1 | BC250_SCANOUT_CAPS_DIRECT_FLIP) == 0u);
+        CHECK(bc250_scanout_mpo_planes(mpo.flags) == 1u);
+        CHECK(bc250_scanout_mpo_planes(mpo.flags | BC250_SCANOUT_CAPS_MPO_PLANE1) == 2u);
+        // BD-223 step R3: a displayable surface asks only with DIRECT_FLIP, DISPLAYABLE and MPO together. The other
+        // bits do not matter, and a trailer of another magic or version is no trailer.
+        {
+            unsigned int bits;
+            struct bc250_scanout_caps shown = mpo;
+            typedef char displayable_bit[(BC250_SCANOUT_CAPS_DISPLAYABLE == 0x20u &&
+                !(BC250_SCANOUT_CAPS_DISPLAYABLE & (BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_PLANE_FORMATS |
+                    BC250_SCANOUT_CAPS_SOURCE_MODE_10BIT | BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_MPO_PLANE1)))
+                ? 1 : -1];
+            (void)sizeof(displayable_bit);
+            for (bits = 0u; bits < 0x40u; ++bits) {
+                const unsigned int need = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO |
+                                          BC250_SCANOUT_CAPS_DISPLAYABLE;
+                shown.flags = bits;
+                CHECK(bc250_scanout_displayable_open(&shown) == ((bits & need) == need));
+            }
+            shown.flags = BC250_SCANOUT_CAPS_DIRECT_FLIP | BC250_SCANOUT_CAPS_MPO | BC250_SCANOUT_CAPS_DISPLAYABLE;
+            CHECK(bc250_scanout_displayable_open(&shown));
+            shown.magic ^= 1u;
+            CHECK(!bc250_scanout_displayable_open(&shown));
+            shown.magic ^= 1u; shown.version += 1u;
+            CHECK(!bc250_scanout_displayable_open(&shown));
+            CHECK(!bc250_scanout_displayable_open(NULL));
+        }
         // The shells' rule: the new geometry turns the geometry clause only, and every other clause stays.
         CHECK(bc250_scanout_primary_rule(&mpo, 0, 1, bgra, 1920u, 1080u, 7680u, 0) ==
               BC250_SCANOUT_PRIMARY_ADMITTED);

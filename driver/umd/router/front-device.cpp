@@ -521,6 +521,31 @@ VOID APIENTRY CheckMultisampleQualityLevels13(D3D10DDI_HDEVICE hDevice, DXGI_FOR
     dev->hosted.pfnCheckMultisampleQualityLevels(hDevice, format, sampleCount, numQualityLevels);
 }
 
+// BD-223 (docs/design/mpo.md, gate 2): the hosted answer, plus D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY for a
+// format of a plane while the kernel driver admits an overlay plane (FrontOverlayFormatSupport). Only the WDDM 1.3
+// table has this body: multiplane overlay starts at WDDM 1.3, and the D3D11_1 table keeps the hosted entry itself.
+// The trailer is read only for a row of the scan-out table, so the other formats cost no adapter query.
+VOID APIENTRY CheckFormatSupport13(D3D10DDI_HDEVICE hDevice, DXGI_FORMAT format, UINT *formatCaps)
+{
+    FRONT_DEVICE(hDevice, )
+    dev->hosted.pfnCheckFormatSupport(hDevice, format, formatCaps);
+    if (!formatCaps || *formatCaps == D3D10_DDI_FORMAT_SUPPORT_NOT_SUPPORTED) return;
+    if (!amdgpu_wddm_surface_admit(amdgpu_wddm_surface_format_by_dxgi((unsigned)format),
+                                   AMDGPU_WDDM_SURFACE_SCANOUT_PRIMARY))
+        return;
+    bc250_scanout_caps caps;
+    if (FAILED(ReadScanoutCaps(dev->adapter, &caps))) return;
+    const UINT overlay = FrontOverlayFormatSupport(caps, (unsigned)format);
+    *formatCaps |= overlay;
+    if (overlay) {
+        static volatile LONG once = 0;
+        if (InterlockedCompareExchange(&once, 1, 0) == 0)
+            LogPrintf(dev->adapter ? &dev->adapter->log : nullptr,
+                      "bc250d3d_front check_format_support adds MULTIPLANE_OVERLAY fmt=%u caps=%08x trailer=0x%08x\n",
+                      (unsigned)format, *formatCaps, caps.flags);
+    }
+}
+
 SIZE_T APIENTRY CalcPrivateResourceSize(D3D10DDI_HDEVICE hDevice,
                                         CONST D3D11DDIARG_CREATERESOURCE *args)
 {
@@ -1307,8 +1332,9 @@ void FillDeviceFuncs(D3D11_1DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNCS &ho
 
 // BD-223: the WDDM 1.3 table. Its head is the D3D11_1 table, member for member (front-adapter.h holds the
 // layout), so the D3D11_1 fill is the head and the review of its 155 entries carries over. Two members of the
-// head changed signature and get their own bodies; the nine appended members are seven tiled-resource
-// refusals, GetMipPacking (a refusal that writes its outputs) and the two marker entries.
+// head changed signature and get their own bodies, and pfnCheckFormatSupport gets the overlay format bit
+// (CheckFormatSupport13); the nine appended members are seven tiled-resource refusals, GetMipPacking (a refusal
+// that writes its outputs) and the two marker entries.
 void FillDeviceFuncs13(D3DWDDM1_3DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNCS &hosted)
 {
     if (!out) return;
@@ -1318,6 +1344,7 @@ void FillDeviceFuncs13(D3DWDDM1_3DDI_DEVICEFUNCS *out, const D3D10DDI_DEVICEFUNC
     memcpy(out, &head, sizeof(head));
     out->pfnRelocateDeviceFuncs = RelocateDeviceFuncs13;
     out->pfnCheckMultisampleQualityLevels = CheckMultisampleQualityLevels13;
+    out->pfnCheckFormatSupport = CheckFormatSupport13;
     // 155 .. 163  the WDDM 1.3 entries
     out->pfnUpdateTileMappings = UpdateTileMappings;
     out->pfnCopyTileMappings = CopyTileMappings;

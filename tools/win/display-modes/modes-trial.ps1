@@ -6,6 +6,7 @@
 #   modes-trial.ps1 -Arguments '-List'
 #   modes-trial.ps1 -Arguments '-Width 1920 -Height 1080 -HoldSeconds 30'
 #   modes-trial.ps1 -Arguments '-Width 1920 -Height 1080 -Fixed stretch -HoldSeconds 20'
+#   modes-trial.ps1 -Arguments '-Width 1920 -Height 1080 -Frequency 100 -HoldSeconds 20'
 #   modes-trial.ps1 -Arguments '-Revert'
 param(
     [Parameter(Mandatory)][string]$Arguments,

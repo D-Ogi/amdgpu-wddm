@@ -39,10 +39,19 @@ The gates that can stop DWM before the Check, in the order of the next lab work 
 1. The caps answer of the front. In arms 5 and 7 the caps trailer was `0x0000000b`, without
    `BC250_SCANOUT_CAPS_MPO_PLANE1`. Thus `pfnGetMultiplaneOverlayCaps` and `pfnGetMultiplaneOverlayGroupCaps` said
    1 plane while the KMD said `MaxOverlayPlanes` 2. The front logs a refusal but not an answer, so the log does not
-   tell if DWM asked these entries. The next arm makes the two counts agree and logs each caps answer once.
-2. The format support of the chain. The D3D12 engine never reports `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY`
-   (`format-list.py` excludes it with `DISPLAY`). The hosted D3D11 UMD of DWM must report it for the formats of
-   plane 0 as well. That is not checked yet.
+   tell if DWM asked these entries. Code (branch `t36/f3-display`, BD-223 gate 1): the lab KMD sets `MPO_PLANE1`
+   with `LabScaledPlane` bit 2, and both halves take the plane count from `bc250_scanout_mpo_planes` of the same
+   trailer bits. Each caps entry writes one front log line per changed answer: `dxgi caps answer <entry> hr=<hr>
+   planes=<n> trailer=<flags>`. Lab arm A1 in [The next lab arms](#the-next-lab-arms).
+2. The format support of the chain. The static D3D12 format table excludes
+   `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` with `DISPLAY`. The hosted D3D11 UMD of DWM never reports
+   `D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` (Mesa `d3d10umd` `Device.cpp`, `CheckFormatSupport`). Code (same
+   branch, the DWM half): the WDDM 1.3 table of the front adds the bit to the hosted answer for each format that
+   plane 0 scans out under the trailer (`FrontOverlayFormatSupport`), only while the trailer has `MPO`. The first
+   addition writes `check_format_support adds MULTIPLANE_OVERLAY fmt=<n>`. The D3D12 shell now installs an engine
+   hook that queries the adapter for each format check. Both paths use `bc250_scanout_mpo_format`. They require
+   `DIRECT_FLIP`, `MPO` and an admitted plane-0 format. An absent or failed query clears the D3D12 bit, as does
+   the release trailer without `MPO`. The engine and shell host tests pass. The lab gate is still open (step R1).
 3. YUV in the group caps. The Microsoft minimum asks for one plane with YUV formats and both BT.601 and BT.709
    ([multiplane-overlay-hardware-requirements.md](https://learn.microsoft.com/windows-hardware/drivers/display/multiplane-overlay-hardware-requirements)).
    The group caps report RGB only. That is step S4.
@@ -74,16 +83,20 @@ post-composition caps) needs `WDDMVersion` 2.2 or later and is out of scope.
 ### The caps trailer
 
 The KMD publishes the MPO state in the scan-out caps trailer (`driver/contract/bc250_scanout_caps.h`). The trailer
-keeps version 1 and 24 bytes. Two flags are new:
+keeps version 1 and 24 bytes. Three flags are new:
 
 | Flag | Value | Meaning |
 | --- | --- | --- |
 | `BC250_SCANOUT_CAPS_MPO` | `0x8` | This start reports `SupportMultiPlaneOverlay` and answers the two MPO DDIs. Set only with `BC250_SCANOUT_CAPS_DIRECT_FLIP` |
-| `BC250_SCANOUT_CAPS_MPO_PLANE1` | `0x10` | The KMD also scans out an overlay plane on pipe 1 (`MaxOverlayPlanes` 2). No KMD sets it yet |
+| `BC250_SCANOUT_CAPS_MPO_PLANE1` | `0x10` | The KMD reports two planes for the source (`MaxOverlayPlanes` 2). Set only with `MPO` |
+| `BC250_SCANOUT_CAPS_DISPLAYABLE` | `0x20` | The KMD record parser admits the scan-out record of a displayable surface (step R3). Set in both flavours, only with `DIRECT_FLIP` |
 
 The lab KMD sets `MPO` while `LabScaledPlane` bit 0 is on (the bits are in [scaled-flip.md](scaled-flip.md)).
-`LabScaledPlane` bit 2 reports `MaxOverlayPlanes` 2 to dxgkrnl as a lab question, but it does not set
-`MPO_PLANE1`, because no second pipe scans out. The release KMD sets neither flag.
+`LabScaledPlane` bit 2 also sets `MPO_PLANE1`: the KMD reports `MaxOverlayPlanes` 2 to dxgkrnl as a lab question,
+and the front reports 2 planes as well. The KMD check still refuses a second plane, because no second pipe scans
+out, and DWM then composes. Both counts come from one function, `bc250_scanout_mpo_planes` (`WddmMpoFlags` in
+`wddm.c` gives the trailer bits). The release KMD sets neither flag. A release KMD sets `MPO_PLANE1` only at step
+S3.
 
 ### What the UMD reports
 
@@ -100,6 +113,7 @@ table, as before BD-223. The caps come from constants in the same header, not fr
 | Group `MaxShrinkFactor` | `BC250_MPO_MAX_SHRINK_MILLI` / 1000 (4.0 from step S2) |
 | Group `OverlayCaps` | `RGB`, `BILINEAR_FILTER` and `HIGH_FILTER`. `YUV` only when a KMD stage admits a YUV plane |
 | Group `StereoCaps` | 0 |
+| `pfnCheckFormatSupport` (WDDM 1.3 table only) | The hosted answer, plus `D3D11_1DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` for a format that `bc250_scanout_format_admitted` admits under the trailer |
 
 The caps are advisory. The KMD check refuses every configuration outside its stage, and DWM then composes. A KMD
 that changes a limit changes the constant in the same commit. `scanout_admit_test.c` fails the build when the
@@ -142,12 +156,29 @@ Stage S1 refused 1280x720 on the 1920x1200 mode with verdict `pitch`. Step S2 ad
 clocks that run and its VSTARTUP and VUPDATE offset are the ones of OTG0 (verdict `global-sync` otherwise). The
 shells have no pitch rule of their own.
 
-Known limit of tester.34: a D3D11 borderless or windowed flip-model chain is a `DISPLAYABLE_SURFACE` without
-`pPrimaryDesc`, and the surface record refuses `SCANOUT` without `PRIMARY` (`surface_resource_private.h`). Such a
-chain cannot reach a plane, and DWM composes it. A D3D12 chain always has a `PRIMARY` heap. Tester.34 keeps the
-record rule as it is: MPO is a lab-flavour feature and is off by default there. A record rule for displayable
-surfaces (scan-out with a displayable bit in place of `PRIMARY`, with no video present source) is work for a later
-release.
+A D3D11 borderless or windowed flip-model chain is a `DISPLAYABLE_SURFACE` without `pPrimaryDesc`. Before step R3
+the surface record refused `SCANOUT` without `PRIMARY` (`surface_resource_private.h`), so such a chain could not
+reach a plane, and DWM composed it (the known limit of tester.34). A D3D12 chain always has a `PRIMARY` heap.
+
+Step R3 adds the record rule for these buffers:
+
+- The E26R v3 access bit `BC250_SURFACE_RESOURCE_DISPLAYABLE` (`0x10`) says why a surface with no `PRIMARY` asks for
+  scan-out. The KMD parser admits it only next to `SCANOUT`, never next to `PRIMARY` or `CPU_READ`, and only in
+  v3. The bit `0x8` is not used, because it is the v4 `NO_CPU_ACCESS` bit.
+- The KMD places such an allocation as a scan-out primary: local segment, physical access, 4 KiB alignment
+  (`WddmGdiScanoutPolicy`). It advertises the rule with `BC250_SCANOUT_CAPS_DISPLAYABLE`. That is a version answer
+  of the parser, so both flavours set it. A KMD before R3 refuses the record, and with it the create.
+- The D3D11 shell asks only when `bc250_scanout_displayable_open` holds: `DIRECT_FLIP`, `DISPLAYABLE` and `MPO`
+  together. `MPO` is necessary because the MPO present is the only route of such a buffer to a plane. A DirectFlip
+  pair needs two managed primaries of one video present source (`PFND3D11_1DDI_CHECKDIRECTFLIPSUPPORT`), and the
+  front refuses the buffer with `primary`. The buffer has no `ModeDesc`, so the committed mode, or with `MPO` a
+  geometry that plane 0 can scale to it, is its only admitted geometry. The format, pitch, `DwmForceCpu` and
+  desktop-route clauses are the same as for a primary.
+- An admitted buffer gets `SCANOUT | DISPLAYABLE`. The compositor's opener takes it, and the front finds it
+  scannable. Every other answer keeps the composed record, as before.
+
+The release trailer has no `MPO` until step R6, so in the release flavour the shell does not ask and R3 changes
+nothing there yet.
 
 ### When UNSUPPORTED ends
 
@@ -252,7 +283,7 @@ control for this sequence.
   pipe is from the plan, and the DISPCLK must fit as for one plane.
 - The check of two planes: `LayerIndex` order, the source crop and the clip.
 - The flip state of each plane: the address, the present ID and the vsync report.
-- `MPO_PLANE1` and `MaxOverlayPlanes` 2 in the lab flavour.
+- `MPO_PLANE1` and `MaxOverlayPlanes` 2 without `LabScaledPlane` bit 2, when plane 1 scans out.
 
 ## Steps
 
@@ -265,6 +296,52 @@ control for this sequence.
 | S5 | The caps in the release flavour | The lead's lab gates pass on the release bytes |
 
 A trial is at most three minutes, a game session at most 20 minutes.
+
+## The next lab arms
+
+The arms use the kit pattern of the 2026-10-29 arms (`run-s2c.sh`: the KMD and router candidates swapped in, one
+restart per selector). Split each selector into two trials: the native client, then the 1280x720 `STRETCH` client.
+Each client runs for 45 s. Collect the KMD and front logs within the same trial. The candidates are the lab
+flavour of the KMD and of the x64 router at the same commit of
+`t36/f3-display`. The hosted zink UMD of tester.35 already exports `Bc250PresentMultiplaneOverlay`.
+
+| Arm | Selector | Read | Pass |
+| --- | --- | --- | --- |
+| A1-0 | 0 | Front log: `level=d3d11_1`, no `dxgi caps answer` line. KMD: native client scan-out flips | The native chain scans out (about 1500 of 1550 flips), as on 2026-10-29 |
+| A1-1 | 1 | `dxgi caps answer pfnGetMultiplaneOverlayCaps hr=00000000 planes=1`. The `check_format_support adds MULTIPLANE_OVERLAY` line. Any `wddm: MPO check` line | The front and the KMD both say 1 plane. One DWM per start |
+| A1-5 | 5 | The same lines with `planes=2` and trailer bit `0x10`. Any `wddm: MPO check` line and the check counters | The front and the KMD both say 2 planes. One DWM per start, no DWM event, no underflow |
+
+Each trial has a 180 s deadline from its first command after boot. Stop the client by 120 s and use the remaining
+time for collection and cleanup. Do not use the old kit's combined 185 s arm. No restart is needed between the
+native and scaled trials of one selector. A1 has a result in each case:
+
+- A `wddm: MPO check` line in arm 1 or 5: the caps or the format bit was the gate. Record the plane set that DWM
+  sends (the count, the source and destination of each plane, the layer order). Then run A2.
+- No check call in any arm: gate 1 and the DWM half of gate 2 are not the cause. The next steps are R1 and gate 3.
+
+A2 is the acceptance arm of the Cyberpunk 2077 symptom. It is a game session (at most 20 minutes) after A1 found
+check calls. Use the kit with `--arms '5' --hold` (or the selector that A1 found), then the benchmark of the
+2026-10-22 runs (`pt-run.ps1 -Demo cp2077-bench -CpProfile linux-high -Width 1920 -Height 1080 -Fullscreen
+-PresentMon <PresentMon-2.6.0-x64.exe> -Seconds 420`), then `--restore`. The thermal stop of game sessions applies
+(Tctl 87 C for 10 s, or 89 C at once), with the camera fire watch.
+
+| Read | Baseline (2026-10-22, 1920x1080 on 1920x1200) | Pass |
+| --- | --- | --- |
+| PresentMon `PresentMode` | All presents `Composed: Flip` | Most presents `Hardware: Independent Flip` or `Hardware Composed: Independent Flip` |
+| Present-to-display p50 | 49.4 ms (29.3 ms at 1920x1200, independent flip) | Near the 1920x1200 value |
+| Frames never shown | 222 | Near 0 |
+| KMD | No MPO line | `wddm: MPO check` lines with the game chain and the scaled plane sets, HUBP0 underflow clear |
+
+## Remaining code steps
+
+| Step | What | When |
+| --- | --- | --- |
+| R1 | The D3D12 half of gate 2 is implemented. The production shell hook queries the current adapter trailer and the engine adds `D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY` only for admitted plane-0 formats. Engine replay and shell integration tests pass, including absent, invalid and failed queries and the release trailer without MPO. Build the shell with its matching engine library | Lab gate: if A1 has no check call |
+| R2 | The check of a covered plane: a set of two planes where the top plane is opaque and covers the whole output. Plane 0 scans out the top plane, and the flip reports the covered plane as done at each vsync | When the A1 log has such a set from DWM |
+| R3 | The record rule of a displayable surface: a D3D11 borderless or windowed flip-model chain with scan-out and no `PRIMARY` ([The scan-out surface](#the-scan-out-surface)). The code and the host tests are on `t36/f3-display` (GDI admission, scan-out admission, firmware metadata, shared surface, router and D3D11 shell tests) | Lab gate: a D3D11 flip-model window (Terminal, Settings) on the lab flavour with `MPO` gives `SCANOUT \| DISPLAYABLE` records and `wddm: MPO check` lines |
+| R4 | Step S3, plane 1 on pipe 1 ([What S3 adds to the driver](#what-s3-adds-to-the-driver)) | After A2 |
+| R5 | Step S4 and gate 3: YUV in the group caps | After R4 and the NV12 lab measurement |
+| R6 | Step S5: the caps in the release flavour | The lead's lab gates on the release bytes |
 
 ## Prior work
 

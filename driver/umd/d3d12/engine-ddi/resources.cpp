@@ -1568,6 +1568,10 @@ void APIENTRY check_format_support(D3D12DDI_HDEVICE device, DXGI_FORMAT format, 
     *out = ddi_format_support(c, s);
     if (format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM && !(s.Support1 & D3D12_FORMAT_SUPPORT1_TEXTURE2D))
         *out = D3D12DDI_FORMAT_SUPPORT_NOT_SUPPORTED;
+    // BD-223 R1: the multiplane-overlay bit is the shell's (set_overlay_format_hook), outside the format list, and
+    // only on an answer that already has support bits.
+    else if (*out && c->overlay_format && c->overlay_format(c->hooks.shell, format))
+        *out |= D3D12DDI_FORMAT_SUPPORT_MULTIPLANE_OVERLAY;
     if (g_format_answers.insert(static_cast<uint32_t>(format))) {
         // A stored format's line names the view format the engine was asked about.
         char view[32] = "";

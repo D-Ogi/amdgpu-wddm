@@ -168,31 +168,40 @@ static Device *DxgiDevice(DXGI_DDI_HDEVICE hDevice)
     return DeviceOf(device);
 }
 
-// True when the device's kernel driver admits an overlay plane now, with the trailer it read.
-static bool OverlayAdmitted(DXGI_DDI_HDEVICE hDevice, bc250_scanout_caps *caps)
+// True when the device's kernel driver admits an overlay plane now, with the trailer it read and the device's
+// record (null for a handle the front does not know).
+static bool OverlayAdmitted(DXGI_DDI_HDEVICE hDevice, bc250_scanout_caps *caps, Device **device)
 {
     memset(caps, 0, sizeof(*caps));
     Device *dev = DxgiDevice(hDevice);
+    *device = dev;
     if (!dev || FAILED(ReadScanoutCaps(dev->adapter, caps))) return false;
     return FrontOverlayAdmitted(*caps);
 }
 
-// The planes a start offers: plane 0 always, and the overlay plane on pipe 1 when the kernel driver has it.
+// The planes a start offers: the kernel driver's own count (DXGK_DRIVERCAPS MaxOverlayPlanes), from the same
+// trailer bits. The arms of 2026-10-29 had 2 in the kernel driver and 1 here, and dxgkrnl made no check call.
 static UINT OverlayPlanes(const bc250_scanout_caps &caps)
 {
-    return (caps.flags & BC250_SCANOUT_CAPS_MPO_PLANE1) ? 2u : 1u;
+    return bc250_scanout_mpo_planes(caps.flags);
 }
 
+// Each caps entry logs its answer when the answer changes (CapsAnswer, front-adapter.cpp). DWM asks these
+// entries again at each composition rebuild, and a trial must see whether it asked at all and what it got.
 HRESULT APIENTRY GetMultiplaneOverlayCaps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYCAPS *args)
 {
+    static volatile LONG last = 0;
     if (!args) return E_INVALIDARG;
     bc250_scanout_caps caps;
-    if (!OverlayAdmitted(args->hDevice, &caps)) {
+    Device *dev;
+    if (!OverlayAdmitted(args->hDevice, &caps, &dev)) {
         FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayCaps: the kernel driver admits no overlay plane");
+        CapsAnswer(dev, "pfnGetMultiplaneOverlayCaps", &last, DXGI_ERROR_UNSUPPORTED, 0, caps.flags);
         return DXGI_ERROR_UNSUPPORTED;
     }
     args->MultiplaneOverlayCaps.MaxPlanes = OverlayPlanes(caps);
     args->MultiplaneOverlayCaps.NumCapabilityGroups = 1;
+    CapsAnswer(dev, "pfnGetMultiplaneOverlayCaps", &last, S_OK, args->MultiplaneOverlayCaps.MaxPlanes, caps.flags);
     return S_OK;
 }
 
@@ -233,13 +242,20 @@ HRESULT APIENTRY PresentMultiplaneOverlay(DXGI_DDI_ARG_PRESENTMULTIPLANEOVERLAY 
 // and no stereo.
 HRESULT APIENTRY GetMultiplaneOverlayGroupCaps(DXGI_DDI_ARG_GETMULTIPLANEOVERLAYGROUPCAPS *args)
 {
+    static volatile LONG last = 0;
     if (!args) return E_INVALIDARG;
     bc250_scanout_caps caps;
-    if (!OverlayAdmitted(args->hDevice, &caps)) {
+    Device *dev;
+    if (!OverlayAdmitted(args->hDevice, &caps, &dev)) {
         FRONT_DXGI_REFUSE_ONCE("dxgi pfnGetMultiplaneOverlayGroupCaps: the kernel driver admits no overlay plane");
+        CapsAnswer(dev, "pfnGetMultiplaneOverlayGroupCaps", &last, DXGI_ERROR_UNSUPPORTED, 0, caps.flags);
         return DXGI_ERROR_UNSUPPORTED;
     }
-    if (args->GroupIndex != 0) return E_INVALIDARG;
+    if (args->GroupIndex != 0) {
+        CapsAnswer(dev, "pfnGetMultiplaneOverlayGroupCaps", &last, E_INVALIDARG, 0, caps.flags);
+        return E_INVALIDARG;
+    }
+    CapsAnswer(dev, "pfnGetMultiplaneOverlayGroupCaps", &last, S_OK, OverlayPlanes(caps), caps.flags);
     DXGI_DDI_MULTIPLANE_OVERLAY_GROUP_CAPS &group = args->MultiplaneOverlayGroupCaps;
     group.NumPlanes = OverlayPlanes(caps);
     group.MaxStretchFactor = (float)BC250_MPO_MAX_STRETCH_MILLI / 1000.0f;

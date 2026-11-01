@@ -176,5 +176,26 @@ int main() {
     check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
     request.cpu_read=false; request.texture={};
     check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeScanout);
+    // BD-223 step R3: a scan-out displayable surface with no primary descriptor. The v3 record carries
+    // SCANOUT|DISPLAYABLE (0x14) and no PRIMARY, the allocation is not a primary, and the kernel driver's parser
+    // admits the record. The torn intents are refused before the callback: the bit missing from the record,
+    // PRIMARY next to it, DISPLAYABLE without SCANOUT, and a cached CPU reader.
+    expectAccess=BC250_SURFACE_RESOURCE_SCANOUT|BC250_SURFACE_RESOURCE_DISPLAYABLE; expectPrimary=false;
+    request.primary=false; request.displayable=true; request.scanout=true; request.cpu_read=false;
+    request.texture={BC250_SURFACE_RESOURCE_MAGIC,3,1,expectAccess,64,16,1,1,87,1,0,0,40,0,0,0};
+    check(Bc250SurfaceResourceScanout(&request.texture,sizeof(request.texture)));
+    check(allocate_runtime_surface(device,request,surface)==S_OK && deallocate_runtime_surface(device,surface)==S_OK);
+    const unsigned beforeDisplayable=allocates;
+    request.texture.Access=BC250_SURFACE_RESOURCE_SCANOUT;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.texture.Access=expectAccess|BC250_SURFACE_RESOURCE_PRIMARY;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.texture.Access=BC250_SURFACE_RESOURCE_DISPLAYABLE; request.scanout=false;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG);
+    request.scanout=true; request.cpu_read=true; request.texture.Access=expectAccess|BC250_SURFACE_RESOURCE_CPU_READ;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeDisplayable);
+    // A scan-out request that is neither a primary nor displayable is still refused.
+    request.cpu_read=false; request.displayable=false; request.texture.Access=expectAccess;
+    check(allocate_runtime_surface(device,request,surface)==E_INVALIDARG && allocates==beforeDisplayable);
     std::cout << "PASS runtime surface allocation ABI, domain, failure retention, resource-handle close and the scan-out record\n";
 }

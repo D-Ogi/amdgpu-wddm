@@ -47,6 +47,9 @@ param(
     # The swap chain's size, "<width>x<height>" (interactive-flip.h, flip_chain_from): a smaller chain that DXGI
     # stretches over the output, the shape of a game below the panel mode (BD-223). Empty keeps the output's size.
     [ValidatePattern('^([0-9]{2,5}x[0-9]{2,5})?$')][string]$Chain = '',
+    # The shortest time between two presents in ms (interactive-flip.h, flip_period_from). 200 is the 5 presents a
+    # second of BD-224's title screen. 0 presents each frame when it is ready.
+    [ValidateRange(0, 2000)][int]$PeriodMs = 0,
     # The interactive account the client runs as, and the task that carries it.
     [string]$User = 'bc250',
     [string]$TaskName = 'Scanout flip trial',
@@ -410,6 +413,7 @@ $lines += "set AMDGPU_WDDM_D3D12_FLIP_FRAMES=$Frames"
 $lines += "set AMDGPU_WDDM_D3D12_FLIP_BUFFERS=$Buffers"
 if ($Format) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_FORMAT=$Format" }
 if ($Chain) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_CHAIN=$Chain" }
+if ($PeriodMs) { $lines += "set AMDGPU_WDDM_D3D12_FLIP_PERIOD_MS=$PeriodMs" }
 foreach ($pair in $ClientEnvironment) {
     if ($pair -notmatch '^[A-Za-z_][A-Za-z0-9_]*=') { throw "ClientEnvironment entry is not NAME=VALUE: $pair" }
     $lines += "set $pair"
@@ -515,6 +519,7 @@ $trialResult = [pscustomobject]@{
     buffers      = $Buffers
     format       = $(if ($Format) { [int]$Format } else { 87 })
     chain        = $(if ($Chain) { $Chain } else { 'output' })
+    period_ms    = $PeriodMs
     task_state   = $taskState
     exit_code    = $exit
     session      = if (Test-Path -LiteralPath $session) { Get-Content -LiteralPath $session -Raw | ConvertFrom-Json } else { $null }

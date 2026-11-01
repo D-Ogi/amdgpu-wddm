@@ -41,6 +41,8 @@
 #define FAN_SETTING_PROFILE L"FanProfile"
 #define FAN_SETTING_POINTS L"FanCurvePoints"
 #define FAN_SETTING_BOOST L"FanLoadBoost"
+// BD-143 candidate, default 0: two rise windows. The setting is read only at the start.
+#define FAN_SETTING_RISE_CONFIRM L"FanRiseConfirm"
 
 static const PCWSTR g_FanCurveSetting[BC250_FAN_POINTS_MAX] = {
     L"FanCurve0", L"FanCurve1", L"FanCurve2", L"FanCurve3",
@@ -485,7 +487,7 @@ void FanStart(BC250_DEVICE* Device)
     BC250_FAN_OWNER* owner = &Device->Fan;
     struct bc250_fan_request start;
     BOOLEAN stored, setting;
-    ULONG points = 0, gate, boost = 0;
+    ULONG points = 0, gate, boost = 0, riseConfirm = 0;
     NTSTATUS choiceStatus;
     KIRQL irql;
 
@@ -496,7 +498,7 @@ void FanStart(BC250_DEVICE* Device)
     else if (!Device->Hwmon.IdPinned && Device->Hwmon.Identity.customer_id != BC250_FAN_CUSTOMER_UNIT_A)
         gate = BC250_FAN_GATE_CHIP;
     else gate = BC250_FAN_GATE_OK;
-    choiceStatus = FanReadConfiguredChoice(&start, &points, &boost);
+    choiceStatus = FanReadConfiguredChoice(&start, &points, &boost, &riseConfirm);
     stored = NT_SUCCESS(choiceStatus);
     if (!stored && choiceStatus != STATUS_OBJECT_NAME_NOT_FOUND) {
         gate = BC250_FAN_GATE_SETTING;
@@ -505,6 +507,7 @@ void FanStart(BC250_DEVICE* Device)
     bc250_fan_init(&owner->Ctl, gate == BC250_FAN_GATE_OK, stored ? &start : NULL);
     // The load feed-forward (rule 10), on unless this start's registry says otherwise.
     bc250_fan_load_boost(&owner->Ctl, boost == 1);
+    bc250_fan_rise_confirm(&owner->Ctl, riseConfirm == 1);
     KeAcquireSpinLock(&owner->SnapLock, &irql);
     owner->Stored = stored;
     owner->StoredMode = stored ? start.mode : 0u;
@@ -537,6 +540,7 @@ void FanStart(BC250_DEVICE* Device)
         GuardLog("fan: control on: mode %s profile %s", bc250_fan_mode_name(owner->Ctl.mode),
                  bc250_fan_profile_name(owner->Ctl.profile));
         GuardLog("fan: load boost %s (FanLoadBoost)", owner->Ctl.boost_enabled ? "on" : "off");
+        GuardLog("fan: rise confirmation %s (FanRiseConfirm)", owner->Ctl.rise_confirm ? "on" : "off");
         GuardLog("fan: restore record %s, bugcheck callback %s",
                  owner->Ctl.restore.valid ? "kept" : "taken at the first change",
                  owner->BugCheckRegistered ? "on" : "REFUSED");

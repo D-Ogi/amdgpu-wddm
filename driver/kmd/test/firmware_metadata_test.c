@@ -10,6 +10,8 @@
 #include "../../contract/bc250_scanout_caps.h"
 // BD-247: the trailer closes DirectFlip while the path is rotated.
 #include "../display_rotation.h"
+// BD-223 step R3: the record parser's version answer rides along with every DirectFlip flag, in both flavours.
+#define FLIP_SHOWN (BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_DISPLAYABLE)
 typedef long NTSTATUS;
 typedef unsigned long ULONG;
 typedef long LONG;
@@ -237,7 +239,7 @@ int main(int argc,char**argv)
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
         CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && scanout.version==BC250_SCANOUT_CAPS_VERSION &&
-              scanout.size==sizeof(scanout) && scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+              scanout.size==sizeof(scanout) && scanout.flags==FLIP_SHOWN);
         CHECK(scanout.post_width==1920 && scanout.post_height==1200);
         // BD-247: a rotated path clears the DirectFlip flag, so the shells compose; the identity and the values
         // that pin no rotation keep it.
@@ -248,14 +250,15 @@ int main(int argc,char**argv)
             memset(extended,0xA5,sizeof(extended));
             CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
             memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-            CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && !(scanout.flags&BC250_SCANOUT_CAPS_DIRECT_FLIP));
+            CHECK(scanout.magic==BC250_SCANOUT_CAPS_MAGIC && !(scanout.flags&BC250_SCANOUT_CAPS_DIRECT_FLIP) &&
+                  !(scanout.flags&BC250_SCANOUT_CAPS_DISPLAYABLE));
         }
         CHECK(trailerLines==1);
         d.Rotation=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(scanout.flags==FLIP_SHOWN);
         CHECK(trailerLines==2);
         d.Rotation=0;
         // Display modes: with a smaller source mode committed, the trailer carries that mode, the geometry
@@ -276,7 +279,7 @@ int main(int argc,char**argv)
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS));
+        CHECK(scanout.flags==(FLIP_SHOWN|BC250_SCANOUT_CAPS_PLANE_FORMATS));
         // BD-197: the branch asks DcnPlaneFormatsOpen, the flip path's own rule (dcn.c's, extracted), once per
         // query. Whether the connector is enabled is not a question here: one that still shows its inherited mode
         // takes the extended formats (0.7.216.62 to 0.7.216.103 withheld them for every enabled connector, so DWM
@@ -288,36 +291,36 @@ int main(int argc,char**argv)
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+        CHECK(scanout.flags==(FLIP_SHOWN|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
               planeFormatQuestions==1);
         d.Modeset.InheritedFixed=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+        CHECK(scanout.flags==(FLIP_SHOWN|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
               planeFormatQuestions==2);
         d.RuntimePostValid=0;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP && planeFormatQuestions==3);
+        CHECK(scanout.flags==FLIP_SHOWN && planeFormatQuestions==3);
         d.Modeset.InheritedFixed=0;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(scanout.flags==FLIP_SHOWN);
         d.RuntimeDisplayChanged=0;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+        CHECK(scanout.flags==(FLIP_SHOWN|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
               planeFormatQuestions==5);
         // The fixed inherited pipe alone (a scaled source mode on the inherited timing) is ARGB8888 only.
         d.Modeset.InheritedFixed=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(scanout.flags==FLIP_SHOWN);
         d.Modeset.InheritedFixed=0;
         wddm->DirectFlipHandshake=0;
         memset(extended,0xA5,sizeof(extended));
@@ -327,13 +330,13 @@ int main(int argc,char**argv)
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==BC250_SCANOUT_CAPS_DIRECT_FLIP);
+        CHECK(scanout.flags==FLIP_SHOWN);
         // Both together: a committed mode and the captured format.
         d.SourceWidth=1920;d.SourceHeight=1080;d.DcnPlaneFormats=1;
         memset(extended,0xA5,sizeof(extended));
         CHECK(QueryCaps(&d,&extendedQuery)==STATUS_SUCCESS);
         memcpy(&scanout,extended+BC250_SCANOUT_CAPS_OFFSET,sizeof(scanout));
-        CHECK(scanout.flags==(BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
+        CHECK(scanout.flags==(FLIP_SHOWN|BC250_SCANOUT_CAPS_PLANE_FORMATS) &&
               scanout.post_width==1920 && scanout.post_height==1080);
         d.SourceWidth=0;d.SourceHeight=0;d.DcnPlaneFormats=0;
         memcpy(&identity,extended+BC250_ADAPTER_IDENTITY_OFFSET,sizeof(identity));

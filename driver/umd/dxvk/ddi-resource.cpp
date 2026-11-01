@@ -200,9 +200,11 @@ HRESULT convert_runtime_resource(const D3D11DDIARG_CREATERESOURCE &input,HANDLE 
     if (r.primary || r.displayable) {
         const UINT mode_width=input.pPrimaryDesc ? input.pPrimaryDesc->ModeDesc.Width : 0;
         const UINT mode_height=input.pPrimaryDesc ? input.pPrimaryDesc->ModeDesc.Height : 0;
+        // BD-223 step R3: a displayable buffer with no descriptor is decided too, while the trailer opens it; an
+        // admitted one gets SCANOUT | DISPLAYABLE and keeps Access without PRIMARY.
         const ScanoutPrimaryDecision decision=scanout_primary_decide(scanout,r.primary,r.vidpn_source,
-            UINT(d.Format),d.Width,d.Height,pitch,mode_width,mode_height);
-        if (decision.admitted) { r.scanout=true; r.texture.Access|=BC250_SURFACE_RESOURCE_SCANOUT; }
+            UINT(d.Format),d.Width,d.Height,pitch,mode_width,mode_height,r.displayable);
+        if (decision.admitted) { r.scanout=true; r.texture.Access|=UINT(scanout_primary_record_access(decision)); }
         scanout_primary_note(decision,scanout,r.displayable,r.vidpn_source,UINT(d.Format),d.Width,d.Height,pitch,
                              mode_width,mode_height);
     }

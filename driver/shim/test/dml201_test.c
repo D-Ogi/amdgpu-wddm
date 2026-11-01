@@ -35,7 +35,13 @@ int main(void)
     bad=i;bad.PitchPixels=1919;CHECK(Bc250Dml201Plan(&bad,workspace,size,&again)==BC250_DML201_INVALID);
     bad=i;bad.DchubRefClockKhz=0;CHECK(Bc250Dml201Plan(&bad,workspace,size,&again)==BC250_DML201_INVALID);
     bad=i;bad.DentistVcoKhz=0;CHECK(Bc250Dml201Plan(&bad,workspace,size,&again)==BC250_DML201_INVALID);
-    bad=i;bad.VTotal=1090;CHECK(Bc250Dml201Plan(&bad,workspace,size,&again)==BC250_DML201_INVALID);
+    /* BD-177: a short vertical blank is not an input error. Upstream reads min_vblank_lines (30) only in
+     * dml20_rq_dlg_get_dlg_params, which warns and continues; the plan decides whether the prefetch fits. 1090
+     * leaves 10 lines, 1088 leaves 8, under the 4 + 5 lines of front porch and sync: that is an input error. */
+    bad=i;bad.VTotal=1090;status=Bc250Dml201Plan(&bad,workspace,size,&again);
+    printf("1080p vtotal 1090: status=%d valid=%u vstartup=%u\n",status,again.Valid,again.VStartup);
+    CHECK(status!=BC250_DML201_INVALID);CHECK(status!=0 || (again.Valid && again.VStartup<10));
+    bad=i;bad.VTotal=1088;CHECK(Bc250Dml201Plan(&bad,workspace,size,&again)==BC250_DML201_INVALID);
     bad=i;bad.Output=2;CHECK(Bc250Dml201Plan(&bad,workspace,size,&again)==BC250_DML201_INVALID);
     CHECK(Bc250Dml201Plan(&i,workspace,size-1,&again)==BC250_DML201_INVALID);
     CHECK(Bc250Dml201Plan(&i,(char*)workspace+1,size,&again)==BC250_DML201_INVALID);

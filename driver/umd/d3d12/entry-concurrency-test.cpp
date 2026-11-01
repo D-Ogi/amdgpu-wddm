@@ -11,6 +11,7 @@
 #include "device-state.h"
 #include "heap-import.h"
 #include "ddi-entry.h"
+#include "engine-ddi/internal.h"
 #include <bc250_host_bootstrap.h>
 #include <d3dkmthk.h>
 #include <atomic>
@@ -424,8 +425,65 @@ void reported_errors(Device& device,Device& other){
     std::puts("PASS error boundaries: production list/device callbacks admit failure codes, preserve device loss, "
               "route a missing list callback once, and refuse absent/foreign authority");
 }
+// BD-223 R1: the production shell installs the real engine hook and asks the adapter callback, not the cached
+// OpenAdapter trailer. An absent, invalid or failed answer must not leak the previous positive answer.
+bc250_scanout_caps overlay_caps{BC250_SCANOUT_CAPS_MAGIC,BC250_SCANOUT_CAPS_VERSION,
+    BC250_SCANOUT_CAPS_BYTES,BC250_SCANOUT_CAPS_DIRECT_FLIP|BC250_SCANOUT_CAPS_PLANE_FORMATS|BC250_SCANOUT_CAPS_MPO,
+    1920,1200};
+unsigned overlay_queries{};
+bool overlay_missing{},overlay_failed{};
+HRESULT APIENTRY overlay_query(HANDLE adapter,const D3DDDICB_QUERYADAPTERINFO* request){
+    assert(adapter==handle<HANDLE>(0x1234));
+    assert(request && request->PrivateDriverDataSize>=BC250_SCANOUT_CAPS_TOTAL);
+    ++overlay_queries;
+    if(!overlay_missing)std::memcpy(static_cast<unsigned char*>(request->pPrivateDriverData)+BC250_SCANOUT_CAPS_OFFSET,
+                                  &overlay_caps,sizeof(overlay_caps));
+    return overlay_failed?E_FAIL:S_OK;
+}
+void overlay_formats(){
+    engine_ddi::DeviceContext context;
+    assert(!context.overlay_format && host_test_configure_overlay_formats(nullptr)==E_INVALIDARG);
+    assert(host_test_configure_overlay_formats(&context)==S_OK && context.overlay_format);
+    Device device{};Adapter adapter{};
+    context.hooks.shell=&device;
+    const auto ask=[&](DXGI_FORMAT format){return context.overlay_format(context.hooks.shell,format);};
+    assert(!context.overlay_format(nullptr,DXGI_FORMAT_B8G8R8A8_UNORM));
+    assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    device.adapter=&adapter;
+    // A positive stale copy cannot replace the current runtime query.
+    adapter.contract.scanout=overlay_caps;
+    assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    adapter.runtime={handle<HANDLE>(0x1234)};
+    assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    adapter.callbacks.pfnQueryAdapterInfoCb=overlay_query;
+    const auto good=overlay_caps;
+    assert(ask(DXGI_FORMAT_B8G8R8A8_UNORM) && ask(DXGI_FORMAT_R8G8B8A8_UNORM));
+    assert(!ask(DXGI_FORMAT_R10G10B10A2_UNORM) && !ask(DXGI_FORMAT_NV12) && !ask(DXGI_FORMAT_UNKNOWN));
+    overlay_missing=true;assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));overlay_missing=false;
+    overlay_failed=true;assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));overlay_failed=false;
+    for(unsigned field=0;field<5;++field){
+        overlay_caps=good;
+        switch(field){
+        case 0:overlay_caps.magic=0;break;
+        case 1:++overlay_caps.version;break;
+        case 2:--overlay_caps.size;break;
+        case 3:overlay_caps.post_width=0;break;
+        case 4:overlay_caps.post_height=0;break;
+        }
+        assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    }
+    overlay_caps=good;overlay_caps.flags&=~BC250_SCANOUT_CAPS_MPO; // release KMD
+    assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    overlay_caps=good;overlay_caps.flags&=~BC250_SCANOUT_CAPS_DIRECT_FLIP;
+    assert(!ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    overlay_caps=good;assert(ask(DXGI_FORMAT_B8G8R8A8_UNORM));
+    assert(overlay_queries==15);
+    std::puts("PASS overlay formats: production hook installed, current adapter queried, invalid/absent/failed "
+              "trailers and release without MPO refused, BGRA/RGBA only");
+}
 }
 int main(){
+    overlay_formats();
     Adapter adapter{};adapter.contract.luid=UINT64_C(0x0000000100000042);
     Device device{},other{};
     for(Device* d:{&device,&other}){

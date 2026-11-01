@@ -79,6 +79,17 @@ static VOID APIENTRY FakeCheckMultisampleQualityLevels(D3D10DDI_HDEVICE, DXGI_FO
     Note(line);
     if (levels) *levels = 7;
 }
+// BD-223 gate 2: the hosted format question. The answer 7 (sample, render target, blend) has no overlay bit, as the
+// Mesa frontend's has none; the bit in a front answer is then the front's. R10G10B10_XR_BIAS_A2 is NOT_SUPPORTED, as
+// the Mesa frontend answers for a format it only creates.
+static VOID APIENTRY FakeCheckFormatSupport(D3D10DDI_HDEVICE, DXGI_FORMAT format, UINT *caps)
+{
+    char line[64];
+    _snprintf_s(line, sizeof(line), _TRUNCATE, "check-format format=%d", (int)format);
+    Note(line);
+    if (caps)
+        *caps = format == DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM ? (UINT)D3D10_DDI_FORMAT_SUPPORT_NOT_SUPPORTED : 7u;
+}
 static VOID APIENTRY FakeClearRenderTargetView(D3D10DDI_HDEVICE, D3D10DDI_HRENDERTARGETVIEW view, FLOAT color[4])
 {
     char line[128];
@@ -130,6 +141,7 @@ extern "C" __declspec(dllexport) void FakeDeviceFuncs(D3D10DDI_DEVICEFUNCS *out)
     out->pfnFlush = FakeFlush;
     out->pfnRelocateDeviceFuncs = FakeRelocateDeviceFuncs;
     out->pfnCheckMultisampleQualityLevels = FakeCheckMultisampleQualityLevels;
+    out->pfnCheckFormatSupport = FakeCheckFormatSupport;
     out->pfnClearRenderTargetView = FakeClearRenderTargetView;
     out->pfnClearDepthStencilView = FakeClearDepthStencilView;
     out->pfnCreateResource = FakeCreateResource;

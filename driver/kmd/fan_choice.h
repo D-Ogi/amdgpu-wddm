@@ -36,13 +36,18 @@ static NTSTATUS FanReadChoice(struct bc250_fan_request* Start, ULONG* Points)
 
 // Resolve the final setting before ownership is enabled. A late query failure
 // can close the group after the earlier device-start validation succeeded.
-static NTSTATUS FanReadConfiguredChoice(struct bc250_fan_request* Start, ULONG* Points, ULONG* Boost)
+static NTSTATUS FanReadConfiguredChoice(struct bc250_fan_request* Start, ULONG* Points, ULONG* Boost,
+                                       ULONG* RiseConfirm)
 {
     NTSTATUS choice = FanReadChoice(Start, Points), status;
     *Boost = 0;
+    *RiseConfirm = 0;
     if (!NT_SUCCESS(choice) && choice != STATUS_OBJECT_NAME_NOT_FOUND) return choice;
     status = GuardQuerySetting(FAN_SETTING_BOOST, Boost);
     if (!NT_SUCCESS(status)) return status == STATUS_OBJECT_NAME_NOT_FOUND ? STATUS_DATA_ERROR : status;
+    status = GuardQuerySetting(FAN_SETTING_RISE_CONFIRM, RiseConfirm);
+    if (!NT_SUCCESS(status)) return status == STATUS_OBJECT_NAME_NOT_FOUND ? STATUS_DATA_ERROR : status;
+    if (*RiseConfirm > 1u) return STATUS_DATA_ERROR;
     if (!DriverStateGroupEnabled(AMDGPU_STATE_GROUP_FAN)) return STATUS_DATA_ERROR;
     return choice;
 }

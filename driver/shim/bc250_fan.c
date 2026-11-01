@@ -169,6 +169,7 @@ static void forget_rise(struct bc250_fan_ctl *ctl)
 	ctl->rise_mc = 0;
 	ctl->rise_ref_mc = 0;
 	ctl->rise_ms = 0;
+	ctl->rise_streak = 0;
 }
 
 void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_fan_request *start)
@@ -216,6 +217,12 @@ void bc250_fan_load_boost(struct bc250_fan_ctl *ctl, int enabled)
 		 * walks the fan down, as it does at the end of a boost that ran its course. */
 		forget_boost(ctl);
 	}
+}
+
+void bc250_fan_rise_confirm(struct bc250_fan_ctl *ctl, int enabled)
+{
+	ctl->rise_confirm = enabled ? 1u : 0u;
+	forget_rise(ctl);
 }
 
 int bc250_fan_renew(struct bc250_fan_ctl *ctl, unsigned int lease_ms)
@@ -558,6 +565,7 @@ static void track_rise(struct bc250_fan_ctl *ctl, unsigned int dt)
 	 * later the step is. The 1 ms is the marker of an open window, so that the next step adds its own dt instead
 	 * of opening a second one; a window therefore measures a whole BC250_FAN_BOOST_RISE_MS. */
 	if (ctl->rise_ms == 0u || dt > BC250_FAN_BOOST_STEP_MAX_MS) {
+		ctl->rise_streak = 0;
 		ctl->rise_ref_mc = ctl->guard_mc;
 		ctl->rise_ms = 1u;
 		return;
@@ -566,6 +574,13 @@ static void track_rise(struct bc250_fan_ctl *ctl, unsigned int dt)
 	if (ctl->rise_ms < BC250_FAN_BOOST_RISE_MS)
 		return;
 	ctl->rise_mc = ctl->guard_mc - ctl->rise_ref_mc;
+	/* BD-143 candidate: count closed windows, not the ticks that read the same latched rise. */
+	if (ctl->rise_mc >= BC250_FAN_BOOST_RISE_MC) {
+		if (ctl->rise_streak < 2u)
+			ctl->rise_streak++;
+	} else {
+		ctl->rise_streak = 0;
+	}
 	ctl->rise_valid = 1;
 	ctl->rise_ref_mc = ctl->guard_mc;
 	ctl->rise_ms = 1u;
@@ -585,7 +600,8 @@ static unsigned int heavy_load(const struct bc250_fan_ctl *ctl, const struct bc2
 		why |= BC250_FAN_BOOST_WHY_BUSY;
 	if (in->power_valid && in->socket_mw >= BC250_FAN_BOOST_POWER_MW)
 		why |= BC250_FAN_BOOST_WHY_POWER;
-	if (ctl->rise_valid && ctl->rise_mc >= BC250_FAN_BOOST_RISE_MC)
+	if (ctl->rise_valid && ctl->rise_mc >= BC250_FAN_BOOST_RISE_MC &&
+	    (!ctl->rise_confirm || ctl->rise_streak >= 2u))
 		why |= BC250_FAN_BOOST_WHY_RISE;
 	return why;
 }
