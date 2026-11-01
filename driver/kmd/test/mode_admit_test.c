@@ -60,11 +60,15 @@ int main(void)
     // DP reads 0x11 0x0A 0x84 (DPCD 1.1, HBR, four lanes, enhanced framing).
     static const unsigned char hbr2[16]={0x12,DP_LINK_BW_5_4,0xc4,0x01},lenovo[16]={0x11,DP_LINK_BW_2_7,0x84,0x01};
     // The LG FHD behind the passive DP-to-HDMI adapter (TMDS): 174.5 MHz total 2080x1119 sets on unit A (BD-195
-    // evidence); 228.8 MHz total 2080x1100 is its preferred 100 Hz timing, refused on unit A (BD-177). The sync
-    // placement is reconstructed; the totals are measured. With the real display plan the 20 lines of vertical
-    // blanking are under DCN 2.0.1's min_vblank_lines (30, dcn201_resource.c), so the plan refuses the input before
-    // any prefetch exists: Plan's check is dml-call, not the optc-vstartup-blank of BD-177's fixture.
+    // evidence); 228.8 MHz total 2080x1100 is its preferred 100 Hz timing, refused on unit A up to tester.35 (BD-177).
+    // The sync placement is reconstructed; the totals are measured. The refusal was our own input check: the plan
+    // refused any vertical blanking under DCN 2.0.1's min_vblank_lines (30). Upstream reads that value only in
+    // dml20_rq_dlg_get_dlg_params, which prints a warning and continues, and its timing check
+    // (optc201_validate_timing) asks for 3 lines. Without our check the display plan decides: the prefetch fits
+    // in the 20 lines, and the OPTC gate passes. lgShort keeps the same geometry with 3 lines of blanking, the
+    // OPTC minimum: no prefetch fits there, so the plan itself refuses it before the OPTC gate.
     static const BC250_TARGET_TIMING lg75={174500,1920,160,48,32,1080,39,3,5,0x1a},lg100={228800,1920,160,48,32,1080,20,3,5,0x1a};
+    static const BC250_TARGET_TIMING lgShort={225264,1920,160,48,32,1080,3,1,1,0x1a};
     static BC250_EDID_INFO info;static BC250_TARGET_TIMING targets[BC250_EDID_MAX_MODES];
     RESULT r;unsigned i,n,ok;
     workspace=malloc(Bc250Dml201WorkspaceSize());CHECK(workspace!=NULL);if(!workspace)return 1;
@@ -97,7 +101,9 @@ int main(void)
     printf("Lenovo: %u of %u EDID targets admitted\n",ok,n);
     printf("LG FHD behind the passive adapter (TMDS)\n");
     r=admit(&lg75,hbr2,0);CHECK(admitted(&r));
-    r=admit(&lg100,hbr2,0);CHECK(r.Dml==BC250_DML201_INVALID && !r.Plan.Valid && !admitted(&r));
+    r=admit(&lg100,hbr2,0);CHECK(admitted(&r));
+    CHECK(r.Plan.VStartup<lg100.VBlank && r.Plan.DispClockKhz>=lg100.PixelClockKhz);
+    r=admit(&lgShort,hbr2,0);CHECK(r.Optc<0 && !admitted(&r));
     // GitHub #45: the first rate for six pixel clocks on every rate and lane count a sink can name. Each value is
     // the lowest of HBR, HBR2 and HBR3 under the sink's maximum whose capacity (rate x 27 MHz x lanes x 8/10 / 24
     // bits) carries the clock, RBR only on an RBR sink, 0 when none does. Written out by hand, not computed.

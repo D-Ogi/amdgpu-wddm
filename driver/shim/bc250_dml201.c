@@ -51,6 +51,9 @@ static int validScale(const BC250_DML201_INPUT *i)
     return 1;
 }
 
+/* BD-177: the vertical blank has no minimum here. dcn201_ip.min_vblank_lines (30) is not a limit upstream:
+ * dml20_rq_dlg_get_dlg_params only prints a warning about it, and optc201_validate_timing asks for 3 lines,
+ * which Bc250OptcTimingReason checks. The plan itself refuses a blank that the prefetch does not fit in. */
 static int validInput(const BC250_DML201_INPUT *i, int single)
 {
     unsigned int width;
@@ -63,7 +66,6 @@ static int validInput(const BC250_DML201_INPUT *i, int single)
         i->HSyncWidth > i->HTotal - i->HActive - i->HFrontPorch ||
         i->VFrontPorch >= i->VTotal - i->VActive ||
         i->VSyncWidth > i->VTotal - i->VActive - i->VFrontPorch ||
-        i->VTotal - i->VActive < dcn201_ip.min_vblank_lines ||
         (single && (i->PitchPixels < width || i->PitchPixels > 16384 || (i->PitchPixels & 63))) ||
         i->PixelClockKhz < 10000 || i->PixelClockKhz > 1200000 ||
         i->DchubRefClockKhz < 40000 || i->DchubRefClockKhz > 60000 ||
