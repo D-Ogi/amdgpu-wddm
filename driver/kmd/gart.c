@@ -18,6 +18,7 @@
 #include "bc250kmd.h"
 #include "bc250kmd_escape.h"
 #include "bc250_gmc.h"
+#include "bc250_dma.h"
 #include "lab_gate.h"          // BD-167: GartEscape() is the lab-only user entry to the GART diagnostic
 
 #define BC250_GART_TAG 'gC2B'
@@ -483,7 +484,7 @@ NTSTATUS GartStart(_Inout_ BC250_DEVICE* Device)
         return STATUS_SUCCESS;
     }
     RtlZeroMemory(gart->DummyPage, PAGE_SIZE);
-    gart->DummyPhysical = MmGetPhysicalAddress(gart->DummyPage);
+    gart->DummyPhysical.QuadPart = (LONGLONG)Bc250DmaAddress(gart->DummyPage);
     Device->Gart = gart;
     GuardLog("gart: ready, dummy page at 0x%llX", gart->DummyPhysical.QuadPart);
     return STATUS_SUCCESS;

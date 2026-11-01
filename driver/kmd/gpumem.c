@@ -23,6 +23,7 @@
 #include "bc250_gart.h"
 #include "paging_window.h"
 #include "bc250_shim.h"
+#include "bc250_dma.h"
 
 #define BC250_GPUMEM_TAG 'mG2B'
 #define BC250_GPUMEM_POOL_BELOW     BC250_VRAM_POOL_BELOW   // the VRAM pool starts 32 MB below the end of VRAM
@@ -358,7 +359,7 @@ int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev)
     if (adev->gmc.gart_size<BC250_GPUMEM_GTT_LIMIT ||
         BC250_GPUMEM_GTT_LIMIT/PAGE_SIZE>BC250_GPUMEM_TABLE_LENGTH/sizeof(ULONGLONG)) return -22;
     // Same retained contiguous nonpaged allocations and identity-DMA contract
-    // as bc250_shim_mem_alloc. This is not support for IOMMU remapping.
+    // as bc250_shim_mem_alloc. Bc250DmaAddress marks the IOMMU boundary (BD-029).
     for (i=0;i<BC250_GPUMEM_MAX;i++) {
         const BC250_GPUMEM_ENTRY* entry=&mem->Entries[i];
         physical[i]=0;
@@ -369,7 +370,7 @@ int GpuMemRebuildRetainedGtt(struct amdgpu_device* adev)
             (entry->GartOffset&(PAGE_SIZE-1)) || entry->GartOffset>BC250_GPUMEM_GTT_LIMIT ||
             entry->Size>BC250_GPUMEM_GTT_LIMIT-entry->GartOffset ||
             entry->Mc!=adev->gmc.gart_start+entry->GartOffset) return -22;
-        physical[i]=(ULONGLONG)MmGetPhysicalAddress(entry->Cpu).QuadPart;
+        physical[i]=Bc250DmaAddress(entry->Cpu);
     }
     mem->TlbDirty=TRUE;
     result=bc250_gart_unbind(adev,0,(unsigned)(BC250_GPUMEM_GTT_LIMIT/PAGE_SIZE),mem->Table);
@@ -453,7 +454,8 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
     else if (domain == BC250_MEM_GTT)
     {
         ULONGLONG at = (mem->GttNext + align - 1) & ~((ULONGLONG)align - 1);
-        PHYSICAL_ADDRESS low, high, boundary, physical;
+        PHYSICAL_ADDRESS low, high, boundary;
+        BC250_DMA_ADDR dmaBase;
         ULONGLONG dma[16];
         ULONG page, pages = rounded / PAGE_SIZE, chunk;
         int failed = 0;
@@ -470,12 +472,12 @@ int bc250_shim_mem_alloc(struct amdgpu_device* adev, enum bc250_mem_domain domai
         boundary.QuadPart = 0;
         entry->Cpu = MmAllocateContiguousNodeMemory(rounded, low, high, boundary, PAGE_READWRITE, MM_ANY_NODE_OK);
         if (entry->Cpu == NULL) return -12;
-        physical = MmGetPhysicalAddress(entry->Cpu);
+        dmaBase = Bc250DmaAddress(entry->Cpu);
         // A PLAN gets memory to build its rings and MQDs in, but the GART table is live hardware state: not written.
         for (page = 0; page < pages && !sequence->Plan; page += chunk)
         {
             chunk = min(pages - page, RTL_NUMBER_OF(dma));
-            for (i = 0; i < chunk; i++) dma[i] = (ULONGLONG)physical.QuadPart + (ULONGLONG)(page + i) * PAGE_SIZE;
+            for (i = 0; i < chunk; i++) dma[i] = dmaBase + (ULONGLONG)(page + i) * PAGE_SIZE;
             if (bc250_gart_bind(adev, at + (ULONGLONG)page * PAGE_SIZE, chunk, dma, mem->Table) != 0)
             {
                 failed = -22;

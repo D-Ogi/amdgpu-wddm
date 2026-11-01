@@ -23,6 +23,8 @@ static unsigned checks,failures,binds,unbinds,barriers,failBind;
 #define CHECK(x) do{checks++;if(!(x)){failures++;printf("FAIL %u: %s\n",__LINE__,#x);}}while(0)
 static BC250_GPUMEM*MemOf(struct amdgpu_device*a,BC250_SEQUENCE**s){(void)a;*s=&modelSequence;return &memory;}
 static PHYSICAL_ADDRESS MmGetPhysicalAddress(void*p){PHYSICAL_ADDRESS a={(long long)(uintptr_t)p};return a;}
+typedef unsigned long long BC250_DMA_ADDR;
+static BC250_DMA_ADDR Bc250DmaAddress(void*p){return (BC250_DMA_ADDR)MmGetPhysicalAddress(p).QuadPart;}
 static void KeMemoryBarrier(void){barriers++;}
 // Deliberately simple independent PTE oracle: binder API arguments/ownership,
 // not AMD encoding. Actual AMD PTE encoding is tested by the existing shim suite.
