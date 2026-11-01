@@ -21,6 +21,7 @@ $package = Split-Path -Parent $here
 if ($RestoreSystemTuning -and $KeepSystemTuning) { throw 'Choose either -RestoreSystemTuning or -KeepSystemTuning.' }
 . (Join-Path $here 'components.ps1')
 . (Join-Path $here 'state-lifecycle.ps1')
+. (Join-Path $here 'rocm-venvs.ps1')
 $script:DryRunMode = [bool]$DryRun
 # Host tests only: a dry run can read its installer state from a test folder (as install.ps1).
 if ($DryRun -and $env:AMDGPU_WDDM_TEST_STATE_DIR) {
@@ -299,6 +300,11 @@ Invoke-Change "remove the bc250kmd service entry and its settings in $serviceKey
     # independent original board record remain under DriverData after deletion.
 } | Out-Null
 
+Write-Step 'TheRock Python environments'
+# Each venv that attach-rocm-venv.ps1 attached to our HIP runtime gets AMD's DLLs back, while the attach step is still
+# in the install root (rocm-venvs.ps1). A venv that is gone is skipped with a log line.
+Invoke-RocmVenvDetach -Payload (Join-Path $root 'tools\hip\rocm') | Out-Null
+
 Write-Step 'Files'
 if ($state -and $state.PSObject.Properties['adl_path_entries'] -and @($state.adl_path_entries).Count) {
     Invoke-Change 'remove the recorded ADL directories from machine PATH' {
@@ -426,6 +432,7 @@ if (Test-Path -LiteralPath $controlData) { Write-Info "kept: $controlData (the c
 Write-Step 'What is left of this release'
 $footprint = @(Get-ReleaseFootprint -InstallRoot $root -State $state -MftKeys @(Get-MftRegistrationKeysPresent -ClassesKey $script:ClassesKey))
 $footprint += @(Get-ComponentFootprint $state ([bool]$RemoveModels))
+$footprint += @(Get-RocmVenvFootprint)
 foreach ($f in $footprint) {
     $mark = 'gone'
     if (-not $f.known) { $mark = 'UNKNOWN' } elseif ($f.present -and $f.kept) { $mark = 'kept' } elseif ($f.present) { $mark = 'LEFT' }
