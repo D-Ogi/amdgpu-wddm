@@ -656,9 +656,9 @@ HRESULT local_signature(ID3D12Device* device, int kind, ComPtr<ID3D12RootSignatu
 // collection binds; the shader configuration {4, 4}; the pipeline configuration (depth 1); a state object
 // configuration with ALLOW_LOCAL_DEPENDENCIES_ON_EXTERNAL_DEFINITIONS; a second library that exports Entry3 only; a
 // local root signature (a table of u1-u4) associated with Entry3. No global root signature. Expected (the test, from
-// native drivers): the collection is created and has no identifier for main. The link: the collection and a local
-// root signature with a root UAV at u0, with no association (a default for every export). Expected: identifiers for
-// main and Entry3.
+// native drivers): the collection is created, has no identifier for main and has one for Entry3. The link: the
+// collection and a local root signature with a root UAV at u0, with no association (a default for every export).
+// Expected: identifiers for main and Entry3, Entry3's the same as in the collection.
 HRESULT vkd3d_deferred_case(ID3D12Device5* device) {
     ComPtr<ID3D12RootSignature> rs, rs_alt;
     HRESULT hr = local_signature(device, 0, rs);
@@ -688,12 +688,17 @@ HRESULT vkd3d_deferred_case(ID3D12Device5* device) {
     ComPtr<ID3D12StateObject> collection, pipeline;
     hr = api_create(device, "COLLECTION vkd3d-deferred", D3D12_STATE_OBJECT_TYPE_COLLECTION, s, collection);
     if (FAILED(hr)) return hr;
-    int missing = identifiers(collection.Get(), "collection", {}, {L"main"});
-    // The test leaves Entry3's identifier in the collection open (a todo): printed, not counted.
+    // Entry3 has no unresolved reference, so the collection must give its identifier (DXR spec, GetShaderIdentifier;
+    // the test's line 3779, a todo only on platforms other than Windows).
+    int missing = identifiers(collection.Get(), "collection", {L"Entry3"}, {L"main"});
+    std::vector<uint8_t> entry3_in_collection(D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+    bool entry3_known = false;
     ComPtr<ID3D12StateObjectProperties> properties;
     if (SUCCEEDED(collection.As(&properties)))
-        printf("api collection GetShaderIdentifier Entry3: %s (either answer)\n",
-               properties->GetShaderIdentifier(L"Entry3") ? "found" : "null");
+        if (const void* id = properties->GetShaderIdentifier(L"Entry3")) {
+            std::memcpy(entry3_in_collection.data(), id, entry3_in_collection.size());
+            entry3_known = true;
+        }
     const D3D12_EXISTING_COLLECTION_DESC existing{collection.Get(), 0, nullptr};
     const D3D12_LOCAL_ROOT_SIGNATURE local{rs.Get()};
     const std::vector<D3D12_STATE_SUBOBJECT> p{{D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION, &existing},
@@ -702,6 +707,14 @@ HRESULT vkd3d_deferred_case(ID3D12Device5* device) {
                     pipeline);
     if (FAILED(hr)) return hr;
     missing += identifiers(pipeline.Get(), "link", {L"main", L"Entry3"});
+    // The link keeps the identifier that the collection gave for Entry3.
+    ComPtr<ID3D12StateObjectProperties> link_properties;
+    if (entry3_known && SUCCEEDED(pipeline.As(&link_properties))) {
+        const void* id = link_properties->GetShaderIdentifier(L"Entry3");
+        const bool same = id && !std::memcmp(id, entry3_in_collection.data(), entry3_in_collection.size());
+        printf("api link Entry3 identifier the same as in the collection: %s\n", same ? "yes" : "no");
+        missing += same ? 0 : 1;
+    }
     return missing ? E_FAIL : S_OK;
 }
 } // namespace
