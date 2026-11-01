@@ -580,7 +580,7 @@ typedef struct BC250_BOARD_MEMORY_PROVIDER {
     void (*Probe)(BC250_DEVICE*, BC250_ESCAPE_BOARD_MEMORY_PROBE*, BOOLEAN, ULONG);
 } BC250_BOARD_MEMORY_PROVIDER;
 const BC250_BOARD_MEMORY_PROVIDER* BoardMemoryProvider(BC250_DEVICE* Device);
-void HardwareInfoWrite(BC250_DEVICE* Device);
+void HardwareInfoWrite(BC250_DEVICE* Device, const UCHAR* VbiosBytes, ULONG VbiosLength);
 void BoardMemoryIdentityClear(BC250_DEVICE* Device);
 void BoardMemoryIdentityCapture(BC250_DEVICE* Device);
 void BoardMemoryInitialize(BC250_DEVICE* Device);

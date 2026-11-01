@@ -90,6 +90,7 @@ try {
  Check 'doclint' { & python "$repo\tools\quality\doclint.py" --root $repo --out "$Out\doclint" }
  # Status maps and release tool controls run in Full (required by build-release.ps1), not KmdPackage.
  Check 'status-map' { & python "$repo\tools\quality\kmd_status_profile.py" --repo $repo --profile $Profile --kits $Kits --out "$Out\status-map"; if($LASTEXITCODE -eq 0){ & python -m unittest discover -s "$repo\tools\docs" -p 'test_*.py' } }
+ Check 'chip-table' { & python "$repo\tools\hwinfo\gen_chip_table.py" --linux-src (Join-Path $Workspace 'ref\linux-src') --check "$repo\driver\kmd\chip_table_gen.h" }
  # Its deadline is 1200 s in gate-inputs.json. It had 300 s, lost five suites to that, and was given 600 s; 600 s
  # was not enough either, and this is the measurement that says so. 62 Python unit tests: 109 s run alone on an
  # idle machine, 144.8 s to 339.5 s over the 30 full suites recorded in this lane (five of the early ones died at

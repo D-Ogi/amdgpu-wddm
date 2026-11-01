@@ -2,6 +2,10 @@
 // Written once per start, after the board identity and VRAM are known.
 #include "bc250kmd.h"
 #include <ntstrsafe.h>
+#include "chip_table_gen.h"
+
+#define ATOM_STRING_COUNT_OFFSET 0x2fu
+#define ATOM_STRING_START_OFFSET 0x6eu
 
 static NTSTATUS WriteString(HANDLE Key, PCWSTR Name, PCWSTR Value)
 {
@@ -11,19 +15,27 @@ static NTSTATUS WriteString(HANDLE Key, PCWSTR Name, PCWSTR Value)
                          (ULONG)((wcslen(Value) + 1) * sizeof(WCHAR)));
 }
 
-// The CHIP_CYAN_SKILLFISH rows of amdgpu's pciidlist (drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c). Other devices
-// get the hexadecimal fallback: a codename table typed from memory gave wrong names.
-static PCWSTR ChipName(USHORT DeviceId)
+static PCWSTR VbiosPartNumber(const UCHAR *Rom, ULONG Length,
+                              WCHAR *Buffer, SIZE_T Count)
 {
-    switch (DeviceId) {
-    case 0x13DB: case 0x13F9: case 0x13FA: case 0x13FB: case 0x13FC: case 0x13FE: case 0x143F:
-        return L"Cyan Skillfish";
-    default:
-        return NULL;
+    USHORT strOff;
+    SIZE_T i;
+    if (Length < ATOM_STRING_START_OFFSET + 2) return NULL;
+    if (Rom[ATOM_STRING_COUNT_OFFSET] == 0) return NULL;
+    strOff = (USHORT)Rom[ATOM_STRING_START_OFFSET] |
+             ((USHORT)Rom[ATOM_STRING_START_OFFSET + 1] << 8);
+    if (strOff == 0 || strOff >= Length) return NULL;
+    for (i = 0; i < Count - 1 && strOff + i < Length; i++) {
+        UCHAR ch = Rom[strOff + (USHORT)i];
+        if (ch < ' ' || ch > 'z') break;
+        Buffer[i] = ch;
     }
+    if (i == 0) return NULL;
+    Buffer[i] = L'\0';
+    return Buffer;
 }
 
-void HardwareInfoWrite(BC250_DEVICE* Device)
+void HardwareInfoWrite(BC250_DEVICE* Device, const UCHAR* VbiosBytes, ULONG VbiosLength)
 {
     HANDLE key;
     NTSTATUS status;
@@ -31,7 +43,9 @@ void HardwareInfoWrite(BC250_DEVICE* Device)
     ULONG memorySize;
     ULONGLONG qwMemorySize;
     WCHAR adapter[64];
+    WCHAR biosStr[128];
     PCWSTR chip;
+    PCWSTR bios;
     UCHAR pci[4] = {0};
     ULONG pciBytes = 0;
     USHORT deviceId = 0;
@@ -51,7 +65,7 @@ void HardwareInfoWrite(BC250_DEVICE* Device)
             deviceId = (USHORT)pci[0] | ((USHORT)pci[1] << 8);
     }
 
-    chip = ChipName(deviceId);
+    chip = ChipTableLookup(deviceId);
     if (chip)
         RtlStringCchPrintfW(adapter, RTL_NUMBER_OF(adapter), L"AMD %s", chip);
     else if (deviceId)
@@ -59,10 +73,12 @@ void HardwareInfoWrite(BC250_DEVICE* Device)
     else
         RtlStringCchPrintfW(adapter, RTL_NUMBER_OF(adapter), L"AMD Radeon");
 
+    bios = VbiosPartNumber(VbiosBytes, VbiosLength, biosStr, RTL_NUMBER_OF(biosStr));
+
     (void)WriteString(key, L"HardwareInformation.AdapterString", adapter);
     (void)WriteString(key, L"HardwareInformation.ChipType", chip ? chip : L"AMD ASIC");
     (void)WriteString(key, L"HardwareInformation.DacType", L"Internal");
-    (void)WriteString(key, L"HardwareInformation.BiosString", L"AMDGPU-WDDM");
+    (void)WriteString(key, L"HardwareInformation.BiosString", bios ? bios : L"AMDGPU-WDDM");
 
     qwMemorySize = Device->VramLength;
     memorySize = qwMemorySize > MAXULONG ? MAXULONG : (ULONG)qwMemorySize;
@@ -72,5 +88,5 @@ void HardwareInfoWrite(BC250_DEVICE* Device)
     (void)ZwSetValueKey(key, &valueName, 0, REG_QWORD, &qwMemorySize, sizeof(qwMemorySize));
 
     ZwClose(key);
-    GuardLog("hwinfo: %S memory %llu", adapter, qwMemorySize);
+    GuardLog("hwinfo: %S bios %S memory %llu", adapter, bios ? bios : L"(none)", qwMemorySize);
 }

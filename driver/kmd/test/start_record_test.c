@@ -467,7 +467,15 @@ static NTSTATUS DcnBeginStartVisibility(BC250_DEVICE* d, BOOLEAN* touched)
 static void HwmonStart(BC250_DEVICE* d) { (void)d; }
 static NTSTATUS SmuOwnerStart(ULONG* s, void* mmio) { (void)s; (void)mmio; return smuStatus; }
 static void VramStart(BC250_DEVICE* d) { (void)d; }
-static void HardwareInfoWrite(BC250_DEVICE* d) { (void)d; }
+// The VBIOS capture around HardwareInfoWrite (BD-245): the fixture has no firmware, so the capture fails and the
+// start takes the no-VBIOS path. Only the fields that StartDevice reads are modelled.
+typedef enum { BC250_ATOM_OK, BC250_ATOM_ARGUMENT, BC250_ATOM_IO } BC250_ATOM_STATUS;
+typedef struct { struct { const UCHAR* Bytes; ULONG Length; } Image; } BC250_ATOM_FIRMWARE;
+static NTSTATUS AtomFirmwareCapture(BC250_DEVICE* d, BC250_ATOM_FIRMWARE* f, BC250_ATOM_STATUS* why)
+{ (void)d; (void)f; *why = BC250_ATOM_IO; return STATUS_UNSUCCESSFUL; }
+static void AtomFirmwareRelease(BC250_ATOM_FIRMWARE* f) { (void)f; }
+static void HardwareInfoWrite(BC250_DEVICE* d, const UCHAR* bytes, ULONG length)
+{ (void)d; (void)bytes; (void)length; }
 static void GartStart(BC250_DEVICE* d) { (void)d; }
 static void PspStart(BC250_DEVICE* d) { (void)d; }
 static void GpuMemStart(BC250_DEVICE* d) { (void)d; }

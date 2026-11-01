@@ -1,6 +1,7 @@
 // Device life cycle, the one child (the monitor output), power. M3: no MMIO, no interrupt (ADR 0006).
 #include "bc250kmd.h"
 #include "adapter_owner.h"
+#include "atom_firmware.h"
 #include "hdmi_link.h"
 #include "state_kernel.h"
 
@@ -210,7 +211,15 @@ NTSTATUS Bc250StartDevice(_In_ const PVOID MiniportDeviceContext, _In_ PDXGK_STA
         }
     }
     VramStart(device);      // same rule
-    HardwareInfoWrite(device);
+    {
+        BC250_ATOM_FIRMWARE fw = {0};
+        BC250_ATOM_STATUS fwReason = BC250_ATOM_ARGUMENT;
+        if (NT_SUCCESS(AtomFirmwareCapture(device, &fw, &fwReason)))
+            HardwareInfoWrite(device, fw.Image.Bytes, fw.Image.Length);
+        else
+            HardwareInfoWrite(device, NULL, 0);
+        AtomFirmwareRelease(&fw);
+    }
     status=ConnectorBufferPrepare(device);
     GuardLog("connector: handoff reservation status %08lX",(ULONG)status);
     // The hardware pointer's two surfaces, after the handoff buffer and before WddmStart lays out the segments. Never

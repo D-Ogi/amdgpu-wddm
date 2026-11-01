@@ -125,14 +125,30 @@ static int FindQword(const wchar_t* name, ULONGLONG* out) {
 
 static void ResetReg(void) { regCount = 0; memset(regValues, 0, sizeof(regValues)); }
 
+// Build a minimal fake VBIOS image with a part number in the ATOM string area.
+// OFFSET_TO_GET_ATOMBIOS_NUMBER_OF_STRINGS = 0x2f
+// OFFSET_TO_GET_ATOMBIOS_STRING_START = 0x6e
+static void BuildFakeVbios(UCHAR *buf, ULONG size, const char *partNumber)
+{
+    ULONG i;
+    USHORT strOff = 0x80;
+    memset(buf, 0, size);
+    buf[0x2f] = 1;
+    buf[0x6e] = (UCHAR)(strOff & 0xFF);
+    buf[0x6f] = (UCHAR)(strOff >> 8);
+    for (i = 0; partNumber[i] && strOff + i < size - 1; i++)
+        buf[strOff + i] = (UCHAR)partNumber[i];
+}
+
 int main(void)
 {
     BC250_DEVICE dev;
     const wchar_t *s;
     ULONG mem32; ULONGLONG mem64;
     int pdo = 1;
+    UCHAR fakeVbios[256];
 
-    // Case 1: BC-250 (device 0x13FE), 8 GiB VRAM
+    // Case 1: BC-250 (device 0x13FE, Cyan Skillfish), 8 GiB VRAM, with VBIOS
     ResetReg();
     memset(&dev, 0, sizeof(dev));
     dev.PhysicalDeviceObject = &pdo;
@@ -142,7 +158,8 @@ int main(void)
     pciDeviceId = 0x13FE;
     pciReadStatus = STATUS_SUCCESS;
     openKeyStatus = STATUS_SUCCESS;
-    HardwareInfoWrite(&dev);
+    BuildFakeVbios(fakeVbios, sizeof(fakeVbios), "113-AMDRBN-003");
+    HardwareInfoWrite(&dev, fakeVbios, sizeof(fakeVbios));
     CHECK(regCount == 6);
     s = FindStringValue(L"HardwareInformation.AdapterString");
     CHECK(s && !wcscmp(s, L"AMD Cyan Skillfish"));
@@ -151,44 +168,95 @@ int main(void)
     s = FindStringValue(L"HardwareInformation.DacType");
     CHECK(s && !wcscmp(s, L"Internal"));
     s = FindStringValue(L"HardwareInformation.BiosString");
-    CHECK(s && !wcscmp(s, L"AMDGPU-WDDM"));
+    CHECK(s && !wcscmp(s, L"113-AMDRBN-003"));
     CHECK(FindDword(L"HardwareInformation.MemorySize", &mem32) && mem32 == MAXULONG);
     CHECK(FindQword(L"HardwareInformation.qwMemorySize", &mem64) && mem64 == (8ull << 30));
 
-    // Case 2: unknown device ID -> fallback name
+    // Case 2: Navi 10 (device 0x731F, from pciidlist), no VBIOS
+    ResetReg();
+    pciDeviceId = 0x731F;
+    dev.VramLength = 4ull << 30;
+    HardwareInfoWrite(&dev, NULL, 0);
+    s = FindStringValue(L"HardwareInformation.AdapterString");
+    CHECK(s && !wcscmp(s, L"AMD Navi 10"));
+    s = FindStringValue(L"HardwareInformation.ChipType");
+    CHECK(s && !wcscmp(s, L"Navi 10"));
+    s = FindStringValue(L"HardwareInformation.BiosString");
+    CHECK(s && !wcscmp(s, L"AMDGPU-WDDM"));
+
+    // Case 3: Renoir (device 0x1638, from pciidlist), with VBIOS
+    ResetReg();
+    pciDeviceId = 0x1638;
+    dev.VramLength = 2ull << 30;
+    BuildFakeVbios(fakeVbios, sizeof(fakeVbios), "113-RAVEN-001");
+    HardwareInfoWrite(&dev, fakeVbios, sizeof(fakeVbios));
+    s = FindStringValue(L"HardwareInformation.AdapterString");
+    CHECK(s && !wcscmp(s, L"AMD Renoir"));
+    s = FindStringValue(L"HardwareInformation.ChipType");
+    CHECK(s && !wcscmp(s, L"Renoir"));
+    s = FindStringValue(L"HardwareInformation.BiosString");
+    CHECK(s && !wcscmp(s, L"113-RAVEN-001"));
+
+    // Case 4: Phoenix (device 0x15BF, NOT in pciidlist), with VBIOS
+    ResetReg();
+    pciDeviceId = 0x15BF;
+    dev.VramLength = 4ull << 30;
+    BuildFakeVbios(fakeVbios, sizeof(fakeVbios), "113-PHXGENERIC-001");
+    HardwareInfoWrite(&dev, fakeVbios, sizeof(fakeVbios));
+    s = FindStringValue(L"HardwareInformation.AdapterString");
+    CHECK(s && !wcscmp(s, L"AMD Radeon (15BF)"));
+    s = FindStringValue(L"HardwareInformation.ChipType");
+    CHECK(s && !wcscmp(s, L"AMD ASIC"));
+    s = FindStringValue(L"HardwareInformation.BiosString");
+    CHECK(s && !wcscmp(s, L"113-PHXGENERIC-001"));
+
+    // Case 5: unknown device ID, no VBIOS
     ResetReg();
     pciDeviceId = 0xBEEF;
     dev.VramLength = 4ull << 30;
-    HardwareInfoWrite(&dev);
+    HardwareInfoWrite(&dev, NULL, 0);
     s = FindStringValue(L"HardwareInformation.AdapterString");
     CHECK(s && !wcscmp(s, L"AMD Radeon (BEEF)"));
     s = FindStringValue(L"HardwareInformation.ChipType");
     CHECK(s && !wcscmp(s, L"AMD ASIC"));
+    s = FindStringValue(L"HardwareInformation.BiosString");
+    CHECK(s && !wcscmp(s, L"AMDGPU-WDDM"));
     CHECK(FindDword(L"HardwareInformation.MemorySize", &mem32) && mem32 == MAXULONG);
     CHECK(FindQword(L"HardwareInformation.qwMemorySize", &mem64) && mem64 == (4ull << 30));
 
-    // Case 3: no PCI read callback -> "AMD Radeon"
+    // Case 6: no PCI read callback
     ResetReg();
     dev.Dxgk.DxgkCbReadDeviceSpace = NULL;
     dev.VramLength = 0;
-    HardwareInfoWrite(&dev);
+    HardwareInfoWrite(&dev, NULL, 0);
     s = FindStringValue(L"HardwareInformation.AdapterString");
     CHECK(s && !wcscmp(s, L"AMD Radeon"));
     CHECK(FindDword(L"HardwareInformation.MemorySize", &mem32) && mem32 == 0);
 
-    // Case 4: IoOpenDeviceRegistryKey fails -> no writes, no crash
+    // Case 7: IoOpenDeviceRegistryKey fails
     ResetReg();
     openKeyStatus = (NTSTATUS)-1;
     dev.Dxgk.DxgkCbReadDeviceSpace = FakeReadDeviceSpace;
-    HardwareInfoWrite(&dev);
+    HardwareInfoWrite(&dev, NULL, 0);
     CHECK(regCount == 0);
 
-    // Case 5: NULL PDO -> no crash
+    // Case 8: NULL PDO
     ResetReg();
     dev.PhysicalDeviceObject = NULL;
     openKeyStatus = STATUS_SUCCESS;
-    HardwareInfoWrite(&dev);
+    HardwareInfoWrite(&dev, NULL, 0);
     CHECK(regCount == 0);
+
+    // Case 9: VBIOS too short for string area
+    ResetReg();
+    dev.PhysicalDeviceObject = &pdo;
+    pciDeviceId = 0x13FE;
+    {
+        UCHAR tiny[32] = {0};
+        HardwareInfoWrite(&dev, tiny, sizeof(tiny));
+    }
+    s = FindStringValue(L"HardwareInformation.BiosString");
+    CHECK(s && !wcscmp(s, L"AMDGPU-WDDM"));
 
     printf("%u checks, %u failures\n", checks, failures);
     return failures ? 1 : 0;

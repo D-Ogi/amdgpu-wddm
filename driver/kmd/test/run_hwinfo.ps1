@@ -3,7 +3,8 @@ $ErrorActionPreference='Stop'
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $env:TEMP=Join-Path $Root 'scratch\tmp';$env:TMP=$env:TEMP
 New-Item -ItemType Directory -Force $Out | Out-Null
-$source=(Get-Content (Join-Path $repo 'driver\kmd\hwinfo.c') -Raw).Replace('#include "bc250kmd.h"','').Replace('#include <ntstrsafe.h>','')
+$chipTable=(Get-Content (Join-Path $repo 'driver\kmd\chip_table_gen.h') -Raw)
+$source=(Get-Content (Join-Path $repo 'driver\kmd\hwinfo.c') -Raw).Replace('#include "bc250kmd.h"','').Replace('#include <ntstrsafe.h>','').Replace('#include "chip_table_gen.h"',$chipTable)
 $source=$source.Replace('WCHAR ','wchar_t ').Replace('sizeof(WCHAR)','sizeof(wchar_t)').Replace('RTL_NUMBER_OF','_countof').Replace('RtlStringCchPrintfW','_snwprintf')
 $template=Get-Content (Join-Path $PSScriptRoot 'hwinfo_test.c') -Raw
 [IO.File]::WriteAllText((Join-Path $Out 'actual.c'),$template.Replace('/* ACTUAL_HWINFO */',$source))
