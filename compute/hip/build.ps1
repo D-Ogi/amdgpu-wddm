@@ -331,6 +331,9 @@ foreach ($t in $tests) {
 # The step-1 tool.
 Invoke-Cl ($common + @("/Fo$objDir\", "/Fe$Out\hipprobe.exe", (Join-Path $toolDir 'hipprobe.c')) +
     $allObjects + @('/link') + $link + @('gdi32.lib')) 'hipprobe'
+# The lab check of BD-117: one device-local allocation above the VidMm limit of one allocation.
+Invoke-Cl ($common + @("/Fo$objDir\", "/Fe$Out\bigallocprobe.exe", (Join-Path $toolDir 'bigallocprobe.c')) +
+    $allObjects + @('/link') + $link + @('gdi32.lib')) 'bigallocprobe'
 
 if (-not $SkipTests) {
     $failures = 0
@@ -355,6 +358,11 @@ if (-not $SkipTests) {
     & "$Out\hipprobe.exe" --selftest --target-alias gfx1011 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 1) { Write-Host "  FAIL hipprobe --target-alias gfx1011 is not a usage error ($LASTEXITCODE)"; $failures++ }
     & "$Out\hipprobe.exe" --help | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+    $probeHelp = @(& "$Out\bigallocprobe.exe" --help)
+    $probeHelp | Select-Object -First 1 | ForEach-Object { Write-Host "  $_" }
+    if ($LASTEXITCODE -ne 0) { Write-Host "  FAIL bigallocprobe --help ($LASTEXITCODE)"; $failures++ }
+    & "$Out\bigallocprobe.exe" --bytes 4096 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 1) { Write-Host "  FAIL bigallocprobe accepts a size below the child limit ($LASTEXITCODE)"; $failures++ }
 
     # ------------------------------------------------------------------------------------------
     # The negative control of the fake kernel driver (scratch\hip-gpu-copy\CONTRACT.md deviation
@@ -424,7 +432,7 @@ if (-not $SkipTests) {
 }
 
 Write-Host "  artifacts in $Out (bc250hsa.lib's hash belongs to this directory, see above)"
-foreach ($f in (@('bc250hsa.lib', 'hipprobe.exe') + ($tests | ForEach-Object { [IO.Path]::ChangeExtension($_, 'exe') }))) {
+foreach ($f in (@('bc250hsa.lib', 'hipprobe.exe', 'bigallocprobe.exe') + ($tests | ForEach-Object { [IO.Path]::ChangeExtension($_, 'exe') }))) {
     $item = Get-Item (Join-Path $Out $f)
     $hash = (Get-FileHash -Algorithm SHA256 $item.FullName).Hash
     '{0,9}  {1}  sha256 {2}' -f $item.Length, $item.Name, $hash
