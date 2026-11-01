@@ -1,0 +1,16 @@
+{
+  "utc": "20261101T050818Z",
+  "remote_mutations": false,
+  "files": [
+    {
+      "name": "live-20261101T050818Z-grubenv",
+      "sha256": "a84b680136f6d8168acd34f147adbc83f388525e3dea99c4630492250b587263",
+      "bytes": 1024
+    },
+    {
+      "name": "live-20261101T050818Z-grub.cfg",
+      "sha256": "621acc90efe4d40ed005fb97379718d90d53ac7a9318183593e3ecbf1e1628fd",
+      "bytes": 2300
+    }
+  ]
+}

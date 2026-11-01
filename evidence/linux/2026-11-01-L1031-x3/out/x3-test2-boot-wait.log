@@ -1,0 +1,6 @@
+Sun Nov  1 01:07:06 UTC 2026
+boot-wait 65s: windows down (other host key; no answer; no answer; refused; refused; no answer), linux down (no answer; no answer; refused; refused; refused; no answer)
+boot-wait 96s: windows up, boot 2026-11-01T01:08:04Z
+BOOT UP windows boot 2026-11-01T01:08:04Z after 96s
+
+[exited with code 0]
