@@ -1062,8 +1062,8 @@ static void missing_power(void)
 }
 
 /* BD-143, a witness for the field report "100 % fan with a short screen refresh every couple of minutes" (tester.29,
- * guard 41 C, GPU idle at 500 MHz). It is not a test of a fix: it records what the policy of rule 10 does with a
- * short burst that heats the chip and not the GPU, for example a desktop restart or a background task on the CPU.
+ * guard 41 C, GPU idle at 500 MHz). Compare the default policy with the default-off confirmation candidate for a
+ * modeled short burst that heats the chip and not the GPU, such as a desktop restart or a background CPU task.
  * The guard rises from 41 C by a peak of 3 to 8 C in two steps and falls back in three. The GPU stays idle and the
  * socket under 85 W. The rise window is 3 s, so the step at which the spike starts (its phase) decides what a
  * window sees: each spike runs at the three phases of the window. */
@@ -1073,8 +1073,9 @@ static void field_spike(void)
 	struct ec_mock ec;
 	struct bc250_hwmon_io io;
 	struct bc250_fan_ctl ctl;
-	unsigned int peak, phase, i;
+	unsigned int peak, phase, i, confirm;
 
+	for (confirm = 0; confirm <= 1u; confirm++) {
 	for (peak = 3u; peak <= 8u; peak++) {
 		unsigned int full[3] = { 0, 0, 0 };
 
@@ -1084,6 +1085,8 @@ static void field_spike(void)
 					       41000 + (top - 41000) / 3, 41000 };
 
 			start(&ec, &io, &ctl);
+			CHECK(ctl.rise_confirm == 0u);
+			bc250_fan_rise_confirm(&ctl, (int)confirm);
 			for (i = 0; i < 70u; i++) {
 				const unsigned int at = i - (3u + phase);
 				const int mc = i >= 3u + phase && at < 5u ? shape[at] : 41000;
@@ -1094,16 +1097,78 @@ static void field_spike(void)
 			}
 			/* The spike is over long before the end of the trace: no boost, and the duty is off full speed. */
 			CHECK(!ctl.boost && ctl.applied_pct < 100u);
+			if (confirm) CHECK(full[phase] == 0u && ctl.boosts == 0u);
+			else CHECK(full[phase] == ((peak >= 6u || phase == 2u || (peak == 5u && phase == 1u)) ? 41u : 0u));
 		}
-		printf("BD-143 spike of %u C at an idle GPU: full speed for %u / %u / %u s at the three phases\n", peak,
+		printf("BD-143 confirm %u spike of %u C at an idle GPU: full speed for %u / %u / %u s at the three phases\n", confirm, peak,
 		       full[0], full[1], full[2]);
 	}
+	}
 #endif
+}
+
+static void confirmed_rise(void)
+{
+	struct ec_mock ec;
+	struct bc250_hwmon_io io;
+	struct bc250_fan_ctl ctl;
+	struct bc250_fan_input in;
+	unsigned int i, kind;
+	const int separated[] = {41000,42000,43000,44000,44000,44000,44000,45000,46000,47000,47000};
+
+	start(&ec, &io, &ctl);
+	bc250_fan_rise_confirm(&ctl, 1);
+	/* A latched first window is read on several ticks; none of those ticks is a second window. */
+	for (i = 0; i <= 6u; i++) {
+		CHECK(load_tick(&io, &ec, &ctl, 41000 + (int)i * 1000, 30, 500, 50000) == 0);
+		CHECK(!ctl.boost && ctl.applied_pct < 100u);
+	}
+	CHECK(ctl.rise_streak == 2u);
+	CHECK(load_tick(&io, &ec, &ctl, 48000, 30, 500, 50000) == 0);
+	CHECK(ctl.boost && ctl.boost_why == BC250_FAN_BOOST_WHY_RISE && ctl.applied_pct == 100u);
+	CHECK(bc250_fan_handback(&io, &ctl, BC250_FAN_REASON_STOP) == 0);
+	CHECK(!ctl.rise_streak && !ctl.rise_valid && !ctl.boost);
+
+	start(&ec, &io, &ctl);
+	bc250_fan_rise_confirm(&ctl, 1);
+	for (i = 0; i < sizeof(separated) / sizeof(separated[0]); i++) {
+		CHECK(load_tick(&io, &ec, &ctl, separated[i], 30, 500, 50000) == 0);
+		CHECK(!ctl.boost);
+	}
+	/* A missing guard or a late tick cannot join windows across a gap. */
+	for (kind = 0; kind < 2u; kind++) {
+		start(&ec, &io, &ctl);
+		bc250_fan_rise_confirm(&ctl, 1);
+		for (i = 0; i <= 3u; i++) CHECK(load_tick(&io, &ec, &ctl, 41000 + (int)i * 1000, 30, 500, 50000) == 0);
+		CHECK(ctl.rise_streak == 1u);
+		in = load_input(&ec, 44000, 30, 500, 50000);
+		if (kind) in.dt_ms = BC250_FAN_BOOST_STEP_MAX_MS + 1u;
+		else in.tctl_valid = 0;
+		CHECK(bc250_fan_tick(&io, &ctl, &in) == 0);
+		CHECK(!ctl.rise_streak && !ctl.boost);
+	}
+	/* Busy alone and power alone still engage after two seconds, without temperature confirmation. */
+	for (kind = 0; kind < 2u; kind++) {
+		start(&ec, &io, &ctl);
+		bc250_fan_rise_confirm(&ctl, 1);
+		for (i = 0; i < 2u; i++)
+			CHECK(load_tick(&io, &ec, &ctl, 60000, kind ? 30u : 990u, 1500, kind ? 112000u : 50000u) == 0);
+		CHECK(ctl.boost && ctl.applied_pct == 100u && !ctl.rise_streak);
+		CHECK(ctl.boost_why == (kind ? BC250_FAN_BOOST_WHY_POWER : BC250_FAN_BOOST_WHY_BUSY));
+	}
+	/* Thermal protection is outside the candidate, even with the whole load feed-forward disabled. */
+	start(&ec, &io, &ctl);
+	bc250_fan_rise_confirm(&ctl, 1);
+	bc250_fan_load_boost(&ctl, 0);
+	CHECK(load_tick(&io, &ec, &ctl, 87000, 0, 500, 50000) == 0);
+	CHECK(ctl.emergency && ctl.applied_pct == 100u && !ctl.boost);
+	CHECK(clean_writes(&ec));
 }
 
 int main(void)
 {
 	field_spike();
+	confirmed_rise();
 	missing_power();
 	curves();
 	requests();

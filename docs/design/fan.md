@@ -416,6 +416,11 @@ What the feed-forward never does:
 
 A quiet profile gets the boost as well. A user who wants the curve and nothing else sets `FanLoadBoost` 0.
 
+The BD-143 candidate `FanRiseConfirm` defaults to 0. At 1, the rise signal needs two consecutive 3 s windows,
+each with a rise of at least 3 C. A cooler window, a missing guard, a long step or a give-back clears the count.
+The GPU busy and socket power signals keep their thresholds. The curve, doubt and 87 C emergency rules stay
+independent of this setting. Host tests reject the modeled CPU-only spikes. The field cause still needs a lab check.
+
 ### The exit paths
 
 Each exit path calls `bc250_fan_handback()` with its reason, through `driver/kmd/fan.c`. The give-back
@@ -449,6 +454,7 @@ All are `REG_DWORD` under `Services\bc250kmd\Parameters`.
 | `FanProfile` | with `FanMode` 1: 1 Standard (also when absent), 2 Quiet, 3 Performance, 0 custom |
 | `FanCurvePoints`, `FanCurve0` to `FanCurve7` | with `FanProfile` 0: the point count (2 to 8) and each point as `(degrees C << 8) \| percent` |
 | `FanLoadBoost` | 1 (also when absent) runs the load feed-forward. 0, and any other value, leaves the duty to the curve alone |
+| `FanRiseConfirm` | 0 by default. 1 requires two rise windows for the BD-143 candidate. Applies at the next start |
 
 The INF writes `EnableFanControl` only. The control application's own check box writes `FanLoadBoost`
 (0 for off, and it removes the value for on). The driver writes the stored choice when a request carries

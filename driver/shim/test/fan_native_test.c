@@ -102,6 +102,7 @@ static void Fresh(int enable)
     NativeSetSetting(L"EnableHwmon", 1);
     /* The state store resolves the catalog default before this binding reads it. */
     NativeSetSetting(L"FanLoadBoost", 1);
+    NativeSetSetting(L"FanRiseConfirm", 0);
     if (enable >= 0) NativeSetSetting(L"EnableFanControl", (ULONG)enable);
 }
 
@@ -757,8 +758,32 @@ static void telemetry_width(void)
     FanStop(&device, BC250_FAN_REASON_STOP);
 }
 
+static void rise_confirmation(void)
+{
+    Fresh(1);
+    Start();
+    CHECK(!device.Fan.Ctl.rise_confirm && native_log_has("rise confirmation off (FanRiseConfirm)"));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    Fresh(1);
+    NativeSetSetting(L"FanRiseConfirm", 1);
+    Start();
+    CHECK(device.Fan.Ctl.rise_confirm && native_log_has("rise confirmation on (FanRiseConfirm)"));
+    SecondLoad(70000, 990, 1500, 112000);
+    SecondLoad(70000, 990, 1500, 112000);
+    CHECK(device.Fan.Ctl.boost && ec_peek8(&native_ec, TARGET1) == 255u);
+    FanStop(&device, BC250_FAN_REASON_STOP);
+    CHECK(AtRest() && CleanWrites(0));
+    Fresh(1);
+    NativeSetSetting(L"FanRiseConfirm", 2);
+    Start();
+    CHECK(!device.Fan.Enabled && !Held());
+    CHECK(native_log_has("stored choice unreadable or invalid"));
+    FanStop(&device, BC250_FAN_REASON_STOP);
+}
+
 int main(void)
 {
+    rise_confirmation();
     gate();
     exit_paths();
     escape();

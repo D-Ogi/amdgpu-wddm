@@ -2602,6 +2602,30 @@
     },
     {
       "path": "",
+      "name": "FanRiseConfirm",
+      "kind": "setting",
+      "type": "dword",
+      "min": 0,
+      "max": 1,
+      "allowed": [
+        0,
+        1
+      ],
+      "max_bytes": 4,
+      "factory": null,
+      "code": 0,
+      "legacy_absent": null,
+      "group": "fan",
+      "access": "admin",
+      "readable": "user",
+      "apply": "next-start",
+      "migration": "raw-once",
+      "source": [
+        "driver/kmd/fan.c"
+      ]
+    },
+    {
+      "path": "",
       "name": "HangBugcheckSeconds",
       "kind": "setting",
       "type": "dword",

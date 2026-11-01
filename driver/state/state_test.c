@@ -26,6 +26,21 @@ int main(int argc,char **argv)
     const AMDGPU_STATE_SPEC *s;
     CHECK(AmdgpuStateSchema()==2 && strlen(AmdgpuStateCatalogId())==64 && AmdgpuStateCount()>=177);
     CHECK(AmdgpuStateAt(AmdgpuStateCount())==0);
+    // BD-143: absence keeps the candidate off; only an explicit 1 enables it. A corrupt value is not absence.
+    {
+        FIXTURE candidate={{AMDGPU_STATE_ABSENT,AMDGPU_STATE_ABSENT},{4,4},{4,4},{0,0}};
+        const AMDGPU_STATE_SPEC *rise=AmdgpuStateFind("","FanRiseConfirm");
+        CHECK(rise && rise->group==AMDGPU_STATE_GROUP_FAN && rise->access==AMDGPU_STATE_ADMIN &&
+              rise->code_present && rise->code==0 && !rise->factory_present);
+        CHECK(Query("FanRiseConfirm",AMDGPU_STATE_QUERY_EFFECTIVE,&candidate,&v,&out)==0 &&
+              out==0 && v.source==AMDGPU_STATE_CODE);
+        candidate.result[0]=AMDGPU_STATE_OK;candidate.number[0]=1;
+        CHECK(Query("FanRiseConfirm",AMDGPU_STATE_QUERY_EFFECTIVE,&candidate,&v,&out)==0 && out==1);
+        candidate.number[0]=2;
+        CHECK(Query("FanRiseConfirm",AMDGPU_STATE_QUERY_EFFECTIVE,&candidate,&v,&out)==AMDGPU_STATE_RANGE);
+        candidate.number[0]=0;
+        CHECK(Query("FanRiseConfirm",AMDGPU_STATE_QUERY_EFFECTIVE,&candidate,&v,&out)==0 && out==0);
+    }
     CHECK(Query("CpuTune",AMDGPU_STATE_QUERY_EFFECTIVE,&f,&v,&out)==0 && out==1 && reads==2 && v.source==AMDGPU_STATE_FACTORY);
     CHECK(Query("CpuTune",AMDGPU_STATE_QUERY_OVERRIDE,&f,&v,&out)==AMDGPU_STATE_ABSENT && reads==1 && !v.bytes);
     f.result[0]=AMDGPU_STATE_OK;f.number[0]=0;

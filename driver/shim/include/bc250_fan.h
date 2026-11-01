@@ -99,6 +99,9 @@
  * there is a guard temperature and a duty of ours. A doubt about the reading, and every give-back, throw the
  * measured rise away and open a new window, because a latched "3 C in 3 s" that nothing can refresh would call
  * every step of a cold and idle chip heavy.
+ * BD-143 candidate FanRiseConfirm (off by default): the rise signal needs two consecutive closed windows at
+ * the threshold. A cooler window, a missing guard, a long step or a give-back clears that count. Busy and power
+ * signals still use the original account, and the curve, doubt and emergency rules are independent of it.
  *
  * The boost engages only while the driver holds the fan. It is a duty, and the duty is the board's whenever the
  * fan is: before the first take-over, and in the 30 s after a doubt gave the fan back. The account keeps running
@@ -309,6 +312,8 @@ struct bc250_fan_ctl {
 	unsigned int		rise_ms;	/* into that window */
 	int			rise_mc;	/* the rise of the window that closed last */
 	unsigned int		rise_valid;	/* a window has closed since the start */
+	unsigned int		rise_confirm;	/* FanRiseConfirm: require two windows, default 0 */
+	unsigned int		rise_streak;	/* consecutive threshold windows, saturated at 2 */
 	unsigned int		doubt_ms, held_back, clean_ms, retakes;
 	unsigned int		stopped_samples;
 	unsigned int		fault, fault_retry_ms;
@@ -329,6 +334,9 @@ void bc250_fan_init(struct bc250_fan_ctl *ctl, int enabled, const struct bc250_f
  * unless this says otherwise; switching it off also ends a boost that holds now, and the slope rule then takes
  * the duty down. */
 void bc250_fan_load_boost(struct bc250_fan_ctl *ctl, int enabled);
+
+/* BD-143 candidate setting, after init and before the first tick. Does not change the curve or thermal limits. */
+void bc250_fan_rise_confirm(struct bc250_fan_ctl *ctl, int enabled);
 
 /* Checks a request and resolves its curve. enum bc250_fan_error. */
 int bc250_fan_request_check(const struct bc250_fan_request *request, struct bc250_fan_curve *resolved);
