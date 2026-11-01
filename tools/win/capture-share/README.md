@@ -62,7 +62,7 @@ until `PeerExit` timed out, and `elapsed_ms` carried three extra seconds. BD-075
 | `ipc` | two processes | The harness alone. It creates the peer process, the pipe and a duplicated event handle. It creates no device. |
 | `capdry` | one process | The capture oracle alone, with no capture. It builds a synthetic desktop texture and copies the window image into it. The region compare must find the image, report a 3,2 displacement as `shift=-3,-2` and name a stale image. Both 8-bit channel orders. |
 | `dda` | two processes | Desktop Duplication. The producer shows image A in a borderless window. The D3D11 consumer acquires frames and compares the window rectangle. Then the producer switches to image B and the consumer must see B. A window appears, so this cell needs `--interactive-ok`. |
-| `wgc` | two processes | The same oracle through Windows.Graphics.Capture, with `GraphicsCaptureItem` from the window handle and a free-threaded frame pool. This cell also needs `--interactive-ok`. `--wgc-item monitor` makes the item from the monitor that holds the window and reads the window's place in the monitor frame. `--producer-window app` makes the producer an activated taskbar window in place of a `WS_EX_NOACTIVATE` one. |
+| `wgc` | two processes | The same oracle through Windows.Graphics.Capture, with `GraphicsCaptureItem` from the window handle and a free-threaded frame pool. This cell also needs `--interactive-ok`. |
 
 ### How a cell can tell a real wait from luck
 
@@ -84,6 +84,57 @@ because the D3D12 driver matched the storage format alone and refused the view. 
 while `--format` had two values. The image oracles compare the bytes, so an sRGB run compares the same
 numbers as its linear twin.
 
+## A8 shared-import sampling oracle
+
+`a8sample` uses two D3D11 runtime devices and the existing bounded peer protocol.
+The producer checks `D3D11_OPTIONS.ExtendedResourceSharing` before creating A8.
+Microsoft's [extended sharing contract](https://learn.microsoft.com/en-us/windows/win32/direct3d11/direct3d-11-1-features#extended-support-for-shared-texture2d-resources)
+explicitly includes A8_UNORM when this capability is true, and permits an SRV-only
+default texture. Without that capability this cell returns `skip`, exit 5. It
+does not manufacture private KMT/runtime records or assume all shared formats work.
+
+The producer uploads one byte per A8 pixel using a 256-byte-aligned source pitch
+(768 bytes at width 704), obtains the legacy handle, and completes its GPU event
+before publishing it. The peer opens that resource, point-samples a shader into
+RGBA8, then copies that render target into a readback texture. The CPU oracle
+compares every pixel/channel against separately calculated expected values.
+A8 alpha values are 0, 1, 127, 128, 254 and 255, with a phase that varies by row
+and iteration. The shader outputs `(a,1-a,r+g+b,a)` so a wrong A8 swizzle is visible.
+The BGRA control uses distinct R/B and a row-varying green channel. Three complete
+create/open/sample/close cycles run in each invocation. Producer ownership remains
+alive until the consumer acknowledges GPU completion and release of its import.
+
+```
+capshare.exe --cell a8sample --format a8 --size 704x640 --handle kmt --bound 60 --peer-exe capshare-peer.exe --out a8.txt --json a8.json --stderr a8-stderr.txt
+```
+
+Run the same cell with `--format bgra8` as the positive control and A8 at
+`--size 701x639` to cross row/height alignment boundaries. `--inject alpha-red`
+deliberately reads red instead of alpha; A8 must then produce `mismatch`, exit 1.
+`--self-test` includes an explicitly CPU-only check of the pattern/oracle pair.
+The regular GPU cell is headless and does not change desktop settings.
+
+The normal watchdog has a 500 ms grace interval before a separate hard-stop
+thread terminates the process without logging, IPC, verdict locks or driver
+cleanup. Both peer launch and stderr relaunch require successful kill-on-close
+job setup before resuming a child. `--cell ipc --inject watchdog-log-lock`
+holds the parent's log lock indefinitely and must exit 3 at the hard bound;
+the JSON verdict may be absent. The IPC-only `launcher-job-fail` (with `--stderr`)
+and `peer-job-fail` injections call job assignment with an invalid handle and
+must exit 2 with the suspended child reaped. These are harness controls, not GPU
+fault tests. External supervision remains necessary for an OS/kernel hang.
+
+Use the per-image router to select the producer and peer routes. A Zink acceptance
+run needs a GPU producer and a confirmed Zink peer; a pass on another driver only
+validates the client. Logs include process creation FILETIME and loaded paths with
+disk SHA256 for the executable and relevant UMD/runtime modules. These hashes are
+not hashes of loaded memory. Preserve the exact module/source manifest externally.
+
+This cell does not map the imported default resource: that API operation is not
+admitted for a default shared texture. Readback maps a separate staging texture,
+so success does not prove Zink's imported-image map branch or staging WRITE path.
+It also does not prove physical desktop output, input, or freedom from black flashes.
+
 ## Build
 
 ```powershell
@@ -92,8 +143,8 @@ pwsh tools\win\capture-share\build.ps1 -Kits $env:BC250_ROOT\toolchain\nuget
 
 The build takes headers and import libraries from the SDK NuGet packages under `-Kits`, with the C++/WinRT
 projection that the `wgc` cell needs. The compiler is clang-cl of LLVM 23.1.4 with lld-link
-(`tools\build\umd-compiler.ps1`): x86-64-v3, C++20, `/W4 /WX`, x64, `/MT`, `/Brepro`. Two output folders give the
-same bytes. The C runtime comes from Visual Studio. `-VsInstall` selects that installation, followed by
+(`tools\build\umd-compiler.ps1`): x86-64-v3, C++20, `/W4 /WX`, x64, `/MT`, `/Brepro`.
+The C runtime comes from Visual Studio. `-VsInstall` selects that installation, followed by
 `BC250_VS_INSTALL` when the parameter is absent. Without either, discovery requires the x86/x64 C++ tools.
 `-Compiler msvc` builds with its cl and link and needs `-MsvcReason`.
 `-Out` defaults to `<workspace>\scratch\build\capture-share`. Temporary files of the compiler stay under
@@ -105,14 +156,14 @@ same bytes. The C runtime comes from Visual Studio. `-VsInstall` selects that in
 pwsh -NoProfile -File tools\win\capture-share\host-validate.ps1
 ```
 
-The script runs the 35 headless checks and compares each verdict with the expected one. It runs the self-test, the
+The script runs the 34 headless checks and compares each verdict with the expected one. It runs the self-test, the
 harness cell, both controls, the oracle check, every keyed-mutex, shared-texture and fence cell, the two sRGB
 cells, four negative controls with `--inject skip-wait`, and the interlock check that `dda` and `wgc` refuse to
 start without `--interactive-ok`. It opens no window. It writes `<Out>\<stamp>\summary.txt` with one line for
 each run.
 
-A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01, all 34 on
-2026-10-06, and all 35 on 2026-11-01. That result proves the client and the oracles. It says nothing about unit A.
+A development PC with a working graphics driver ran all 32 checks as expected on 2026-10-01, and all 34 on
+2026-10-06. That result proves the client and the oracles. It says nothing about unit A.
 
 ## Run it on the lab
 
@@ -183,16 +234,3 @@ the kit expects, in `evidence/windows/2026-10-06-BD075-shared-resources-lab/`. R
 run on any route, and they need `--interactive-ok` in the lab's interactive session. The shared rows ran on the
 candidate D3D12 shell of `bd075/d3d12-shared-real`, so they need one confirmation pass on the installed release.
 The kit still prints no release name, CU count or composition route in its summary.
-
-On 2026-10-31 the capture cells ran on unit A (BD-084, 22631, the GPU desktop route): `dda` passed, and `wgc`
-stopped at `CreateForWindow` with `E_INVALIDARG`. The same bytes passed `wgc` on a development PC with 26200 and
-another driver. Three `wgc` runs in one session separate the two causes, with no restart:
-
-| Run | Options | What a pass shows |
-|---|---|---|
-| 1 | (none) | The window item works. This repeats the failed run. |
-| 2 | `--producer-window app` | A failure of run 1 with a pass here is the window rule of the OS build, not the driver. |
-| 3 | `--wgc-item monitor` | The compositor's capture path works on this route, with no window rule. |
-
-If runs 1 and 2 fail and run 3 passes, the window item of this OS build refuses our window. If run 3 also fails,
-the capture path of the route is the cause.

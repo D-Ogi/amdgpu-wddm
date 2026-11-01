@@ -17,12 +17,13 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <atomic>
 
 using Microsoft::WRL::ComPtr;
 
 // ------------------------------------------------------------------------------------------------ cells
 enum class Api { D3D11, D3D12 };
-enum class Kind { Keyed, Shared, Fence, LocalWait, Ipc, CapDry, Dda, Wgc };
+enum class Kind { Keyed, Shared, Fence, LocalWait, Ipc, CapDry, Dda, Wgc, AlphaSample };
 
 struct CellInfo {
     const char *name;
@@ -48,6 +49,9 @@ struct Options {
     // before it releases a key. km12to11 reads poison where the CPU-synchronised s12to11 passes, and that wait is
     // the one difference between the two protocols. A pass with this flag is a measurement, not a fix.
     bool creatorFinish = false;
+    bool alphaRed = false; // a8sample negative control: sample red instead of alpha
+    bool watchdogLogLock = false; // IPC-only timeout control; hold the parent's logging lock
+    bool launcherJobFail = false, peerJobFail = false; // IPC-only actual invalid-handle job API controls
     unsigned delayCopies = 128, delaySize = 2048, gateMs = 300;
     bool producerGdi = false;
     // BD-084: the WGC window item failed on 22631 with E_INVALIDARG and passed on 26200. These two switches split
@@ -150,7 +154,7 @@ struct Ipc {
 extern Ipc g_ipc;
 
 struct Peer {
-    HANDLE process = nullptr, job = nullptr;
+    std::atomic<HANDLE> process{nullptr}, job{nullptr};
     DWORD pid = 0;
 };
 extern Peer g_peerProcess;
@@ -228,5 +232,8 @@ int RunCapDry();
 int RunCaptureParent(const CellInfo &cell);
 int RunProducerPeer(const CellInfo &cell);
 int RunSelfTest();
+int RunAlphaSampleParent();
+int RunAlphaSamplePeer();
+bool AlphaOracleSelfTest();
 bool CompareFrame(ID3D11Device *dev, ID3D11DeviceContext *ctx, ID3D11Texture2D *tex, const RECT &rect, Pattern p,
                   int tolerance, Check &c);

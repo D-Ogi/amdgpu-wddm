@@ -60,7 +60,7 @@ $flags = if ($Compiler -eq 'clang-cl') {
 
 # BD-268: compile and link in -Out with paths relative to it, so the PDB, and with it the PDB GUID and the PE time
 # stamp of the /Brepro link, do not depend on the output directory.
-$sources = 'main.cpp', 'common.cpp', 'sides.cpp', 'cells.cpp', 'capture.cpp' | ForEach-Object { Join-Path $here $_ }
+$sources = 'main.cpp', 'common.cpp', 'sides.cpp', 'cells.cpp', 'capture.cpp', 'alpha-sample.cpp' | ForEach-Object { Join-Path $here $_ }
 Push-Location -LiteralPath $Out
 try {
     Invoke-Bc250UmdCompiler $cc @flags '/Foobj\' '/Fecapshare.exe' @sources '/link' '/Brepro' '/SUBSYSTEM:WINDOWS' '/DEBUG' `

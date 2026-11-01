@@ -42,7 +42,10 @@ static const char *Usage =
     "  --json <file>          verdict as JSON (default result.json)\n"
     "  --stderr <file>        relaunch with stdout/stderr redirected to <file> (UMD diagnostics)\n"
     "  --size <W>x<H>         texture/window size (default 256x256)\n"
-    "  --format <name>        bgra8 (default), rgba8, bgra8-srgb, rgba8-srgb\n"
+    "  --format <name>        bgra8 (default), rgba8, bgra8-srgb, rgba8-srgb; a8 for a8sample only\n"
+    "  --inject alpha-red     a8sample negative control: shader reads red instead of alpha\n"
+    "  --inject watchdog-log-lock  ipc-only control; hold log lock until independent hard stop\n"
+    "  --inject launcher-job-fail|peer-job-fail  ipc-only controls of failed job assignment\n"
     "  --adapter auto|<index> (default: the first hardware adapter)\n"
     "  --peer-exe <path>      executable of the peer (default: this one; relative to this one's folder)\n"
     "  --sync cpu|fence       s-cells: CPU waits (default) or a shared fence\n"
@@ -112,8 +115,12 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             g_opt.creatorFinish = true;
         } else if (a == L"--inject") {
             if (!next(v)) return false;
-            if (wcscmp(v, L"skip-wait")) return error = "--inject must be skip-wait", false;
-            g_opt.skipWait = true;
+            if (!wcscmp(v, L"alpha-red")) g_opt.alphaRed = true;
+            else if (!wcscmp(v, L"watchdog-log-lock")) g_opt.watchdogLogLock = true;
+            else if (!wcscmp(v, L"launcher-job-fail")) g_opt.launcherJobFail = true;
+            else if (!wcscmp(v, L"peer-job-fail")) g_opt.peerJobFail = true;
+            else if (!wcscmp(v, L"skip-wait")) g_opt.skipWait = true;
+            else return error = "--inject must be skip-wait or alpha-red", false;
         } else if (a == L"--relaunched") {
             g_opt.relaunched = true;
         } else if (!next(v)) {
@@ -142,6 +149,7 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
             else if (!wcscmp(v, L"rgba8")) g_opt.format = DXGI_FORMAT_R8G8B8A8_UNORM;
             else if (!wcscmp(v, L"bgra8-srgb")) g_opt.format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
             else if (!wcscmp(v, L"rgba8-srgb")) g_opt.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            else if (!wcscmp(v, L"a8")) g_opt.format = DXGI_FORMAT_A8_UNORM;
             else return error = "--format must be bgra8, rgba8, bgra8-srgb or rgba8-srgb", false;
         } else if (a == L"--adapter") {
             g_opt.adapter = v;
@@ -221,12 +229,25 @@ static bool Parse(int argc, wchar_t **argv, std::string &error, std::vector<std:
     }
     const CellInfo *cell = FindCell(g_opt.cell);
     if (!cell) return error = "unknown or missing --cell '" + g_opt.cell + "'", false;
+    if (g_opt.watchdogLogLock && cell->kind != Kind::Ipc)
+        return error = "watchdog-log-lock requires --cell ipc", false;
+    if ((g_opt.launcherJobFail || g_opt.peerJobFail) && cell->kind != Kind::Ipc)
+        return error = "job failure controls require --cell ipc", false;
+    if (g_opt.launcherJobFail && g_opt.stderrPath.empty())
+        return error = "launcher-job-fail requires --stderr", false;
     if ((g_opt.x == INT_MIN) != (g_opt.y == INT_MIN)) return error = "--x and --y go together", false;
     if (g_opt.kmt && (cell->creator != Api::D3D11 || cell->opener != Api::D3D11 ||
-                      (cell->kind != Kind::Keyed && cell->kind != Kind::Shared)))
+                      (cell->kind != Kind::Keyed && cell->kind != Kind::Shared && cell->kind != Kind::AlphaSample)))
         return error = "--handle kmt applies to km11 and s11to11 only (D3D12 opens NT handles only)", false;
     if (g_opt.skipWait && cell->kind != Kind::Fence && !(cell->kind == Kind::Shared && g_opt.syncFence))
         return error = "--inject skip-wait applies to the f-cells and to the s-cells with --sync fence", false;
+    if (g_opt.format == DXGI_FORMAT_A8_UNORM && cell->kind != Kind::AlphaSample)
+        return error = "a8 requires --cell a8sample", false;
+    if (g_opt.alphaRed && (cell->kind != Kind::AlphaSample || g_opt.format != DXGI_FORMAT_A8_UNORM))
+        return error = "alpha-red requires a8sample --format a8", false;
+    if (cell->kind == Kind::AlphaSample && (!g_opt.kmt || g_opt.syncFence ||
+        (g_opt.format != DXGI_FORMAT_A8_UNORM && g_opt.format != DXGI_FORMAT_B8G8R8A8_UNORM)))
+        return error = "a8sample requires --handle kmt --sync cpu and --format a8|bgra8", false;
     // Only KeyedParent honours it, so every other cell would accept the flag and measure nothing while its name
     // in a trial's log said otherwise (BD-075 review, 2026-10-06).
     if (g_opt.creatorFinish && cell->kind != Kind::Keyed)
@@ -269,19 +290,27 @@ static int Launch()
     line.push_back(0);
     PROCESS_INFORMATION pi = {};
     HANDLE job = CreateJobObjectW(nullptr, nullptr);
-    if (job) {
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION li = {};
-        li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof(li));
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION li = {};
+    li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (!job || !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof(li))) {
+        if (job) CloseHandle(job);
+        DeleteProcThreadAttributeList(si.lpAttributeList); CloseHandle(err);
+        return 2;
     }
     const BOOL ok = CreateProcessW(g_opt.self.c_str(), line.data(), nullptr, nullptr, TRUE,
                                    EXTENDED_STARTUPINFO_PRESENT | CREATE_SUSPENDED | CREATE_NO_WINDOW, nullptr, nullptr,
                                    &si.StartupInfo, &pi);
     DeleteProcThreadAttributeList(si.lpAttributeList);
     CloseHandle(err);
-    if (!ok) return -1;
-    if (job) AssignProcessToJobObject(job, pi.hProcess);
-    ResumeThread(pi.hThread);
+    if (!ok) { CloseHandle(job); return 2; }
+    if (!AssignProcessToJobObject(g_opt.launcherJobFail ? nullptr : job, pi.hProcess) || ResumeThread(pi.hThread) == static_cast<DWORD>(-1)) {
+        const DWORD error = GetLastError();
+        TerminateProcess(pi.hProcess, 2); const DWORD reaped = WaitForSingleObject(pi.hProcess, 1000);
+        LogOpen(g_opt.out, true, false);
+        Log("LAUNCH job failure child_pid=%lu error=%lu reaped=%u (child never resumed)", pi.dwProcessId, error, reaped == WAIT_OBJECT_0);
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess); CloseHandle(job);
+        return 2;
+    }
     CloseHandle(pi.hThread);
     const DWORD waited = WaitForSingleObject(pi.hProcess, Remaining(g_opt.t0 + g_opt.boundS * 1000ull + 5000));
     DWORD code = 3;
@@ -296,6 +325,7 @@ static int Launch()
         code = (DWORD)VerdictEmit();
     }
     CloseHandle(pi.hProcess);
+    CloseHandle(job);
     return (int)code;
 }
 
@@ -318,6 +348,7 @@ static int Run()
     if (g_opt.peer) {
         switch (cell->kind) {
         case Kind::Ipc: return RunIpcPeer();
+        case Kind::AlphaSample: return RunAlphaSamplePeer();
         case Kind::Dda:
         case Kind::Wgc: return RunProducerPeer(*cell);
         default: return RunTwoProcessPeer(*cell);
@@ -335,6 +366,7 @@ static int Run()
         case Kind::LocalWait: RunLocalWait(*cell); break;
         case Kind::Ipc: RunIpcParent(); break;
         case Kind::CapDry: RunCapDry(); break;
+        case Kind::AlphaSample: RunAlphaSampleParent(); break;
         case Kind::Dda:
         case Kind::Wgc: RunCaptureParent(*cell); break;
         }

@@ -56,6 +56,7 @@ std::string FormatText(DXGI_FORMAT f)
     case DXGI_FORMAT_B8G8R8A8_TYPELESS: return "B8G8R8A8_TYPELESS";
     case DXGI_FORMAT_B8G8R8X8_UNORM: return "B8G8R8X8_UNORM";
     case DXGI_FORMAT_R8G8B8A8_UNORM: return "R8G8B8A8_UNORM";
+    case DXGI_FORMAT_A8_UNORM: return "A8_UNORM";
     case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return "R8G8B8A8_UNORM_SRGB";
     case DXGI_FORMAT_R8G8B8A8_TYPELESS: return "R8G8B8A8_TYPELESS";
     case DXGI_FORMAT_R10G10B10A2_UNORM: return "R10G10B10A2_UNORM";
@@ -227,11 +228,26 @@ static DWORD WINAPI WatchdogThread(LPVOID)
     return 0;
 }
 
+// A separate last-resort deadline must never call logging, verdict, ODS, IPC or
+// driver cleanup. The ordinary watchdog gets 500ms to write its normal verdict.
+static DWORD WINAPI HardStopThread(LPVOID)
+{
+    const auto deadline = g_opt.deadline + 500;
+    while (Remaining(deadline)) Sleep(std::min<DWORD>(Remaining(deadline), 100));
+    KillPeer();
+    TerminateProcess(GetCurrentProcess(), 3);
+    return 0;
+}
+
 void StartWatchdog(void (*onTimeout)())
 {
     g_onTimeout = onTimeout;
+    HANDLE hard = CreateThread(nullptr, 0, HardStopThread, nullptr, 0, nullptr);
+    if (!hard) { TerminateProcess(GetCurrentProcess(), 3); return; }
+    CloseHandle(hard);
     HANDLE t = CreateThread(nullptr, 0, WatchdogThread, nullptr, 0, nullptr);
-    if (t) CloseHandle(t);
+    if (!t) { TerminateProcess(GetCurrentProcess(), 3); return; }
+    CloseHandle(t);
 }
 
 // ------------------------------------------------------------------------------------------------ pattern oracle
@@ -837,6 +853,7 @@ static std::wstring FormatOption(DXGI_FORMAT f)
 {
     switch (f) {
     case DXGI_FORMAT_R8G8B8A8_UNORM: return L"rgba8";
+    case DXGI_FORMAT_A8_UNORM: return L"a8";
     case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB: return L"bgra8-srgb";
     case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB: return L"rgba8-srgb";
     default: return L"bgra8";
@@ -865,6 +882,7 @@ static std::wstring PeerArgs()
     if (g_opt.x != INT_MIN) a += L" --x " + std::to_wstring(g_opt.x) + L" --y " + std::to_wstring(g_opt.y);
     if (g_opt.simultaneous) a += L" --simultaneous";
     if (g_opt.skipWait) a += L" --inject skip-wait";
+    if (g_opt.alphaRed) a += L" --inject alpha-red";
     if (g_opt.interactiveOk) a += L" --interactive-ok";
     a += L" --t0 " + std::to_wstring(g_opt.t0);
     // The peer stops 1.5 s ahead of the parent, so that its own timeout report still reaches the parent.
@@ -932,21 +950,39 @@ bool SpawnPeer(std::string &error)
     }
     // The peer dies with this process (kill on job close), whatever ends it.
     g_peerProcess.job = CreateJobObjectW(nullptr, nullptr);
-    if (g_peerProcess.job) {
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION li = {};
-        li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(g_peerProcess.job, JobObjectExtendedLimitInformation, &li, sizeof(li));
-        if (!AssignProcessToJobObject(g_peerProcess.job, pi.hProcess))
-            Log("PEER job assignment failed error=%lu (the peer still stops at its own bound)", GetLastError());
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION li = {};
+    li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (!g_peerProcess.job || !SetInformationJobObject(g_peerProcess.job, JobObjectExtendedLimitInformation, &li, sizeof(li)) ||
+        !AssignProcessToJobObject(g_opt.peerJobFail ? nullptr : g_peerProcess.job.load(), pi.hProcess)) {
+        error = "peer job setup failed error=" + std::to_string(GetLastError());
+        TerminateProcess(pi.hProcess, 2); const DWORD reaped = WaitForSingleObject(pi.hProcess, 1000);
+        Log("PEER job failure child_pid=%lu reaped=%u (child never resumed)", pi.dwProcessId, reaped == WAIT_OBJECT_0);
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess);
+        CloseHandle(toPeerWrite); CloseHandle(fromPeerRead);
+        if (g_peerProcess.job) CloseHandle(g_peerProcess.job);
+        g_peerProcess.job = nullptr;
+        return false;
     }
-    ResumeThread(pi.hThread);
+    if (ResumeThread(pi.hThread) == static_cast<DWORD>(-1)) {
+        error = "peer ResumeThread failed";
+        TerminateProcess(pi.hProcess, 2); WaitForSingleObject(pi.hProcess, 1000);
+        CloseHandle(pi.hThread); CloseHandle(pi.hProcess); CloseHandle(g_peerProcess.job);
+        g_peerProcess.job = nullptr; CloseHandle(toPeerWrite); CloseHandle(fromPeerRead);
+        return false;
+    }
     CloseHandle(pi.hThread);
     g_peerProcess.process = pi.hProcess;
     g_peerProcess.pid = pi.dwProcessId;
     g_opt.ipcIn = fromPeerRead;
     g_opt.ipcOut = toPeerWrite;
     Log("PEER started pid=%lu exe=%s", pi.dwProcessId, Narrow(exe).c_str());
-    return g_ipc.Start();
+    if (!g_ipc.Start()) return false;
+    if (g_opt.watchdogLogLock) {
+        Log("CONTROL holding parent log lock; peer/job active; hard stop must end this process");
+        AcquireSRWLockExclusive(&g_logLock);
+        Sleep(INFINITE);
+    }
+    return true;
 }
 
 HANDLE DupToPeer(HANDLE h)
@@ -971,8 +1007,8 @@ DWORD PeerExit(DWORD waitMs)
 
 void KillPeer()
 {
+    if (g_peerProcess.process) TerminateProcess(g_peerProcess.process, 9);
     if (g_peerProcess.job) TerminateJobObject(g_peerProcess.job, 9);
-    else if (g_peerProcess.process) TerminateProcess(g_peerProcess.process, 9);
 }
 
 void VerdictFromPeer(const std::string &msg, const char *stage)
@@ -1075,6 +1111,7 @@ std::string RouteTag(std::string *umds)
         const std::string name = Lower(Narrow(m.szModule));
         if (name == "amdgpu_wddm_d3d11.dll") tag("gpu11");
         if (name == "bc250d3d.dll") tag("cpu11");
+        if (name == "bc250d3d_zink.dll") tag("zink11");
         if (name == "amdgpu_wddm_d3d12.dll") tag("d3d12");
         if (name == "nvwgf2umx.dll" || name == "nvldumdx.dll") tag("nvidia");
         if (name == "d3d10warp.dll") tag("warp");
@@ -1250,6 +1287,8 @@ void DbwinStop()
 
 // ------------------------------------------------------------------------------------------------ cell table
 static const CellInfo g_cells[] = {
+    {"a8sample", Kind::AlphaSample, Api::D3D11, Api::D3D11, true,
+     "A8 or BGRA shared import, GPU sampling into RGBA and independent readback; --handle kmt"},
     {"km11", Kind::Keyed, Api::D3D11, Api::D3D11, true,
      "D3D11 shared texture -> D3D11 OpenSharedResource1 in the peer, keyed mutex handshake (--handle kmt: legacy handle)"},
     {"km12to11", Kind::Keyed, Api::D3D12, Api::D3D11, true,

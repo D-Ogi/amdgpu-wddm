@@ -700,6 +700,7 @@ int RunSelfTest()
         c.note = detail;
         VerdictCheck('A', c);
     };
+    record("alpha-oracle-cpu-only", AlphaOracleSelfTest(), "not-a-GPU-measurement");
     auto image = [](Pattern p, int w, int h, bool opaque) {
         Image img;
         img.w = w;
