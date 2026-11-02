@@ -18,12 +18,17 @@
 # elevated PowerShell start, about 2 s on an idle lab and up to 10 s beside a running game. Here a command costs none
 # of that. The held session also keeps working while sshd accepts no new connection (BD-051 affects only new ones).
 # The session ends at -Seconds (at most 1230, the game-session bound plus its closure), on a QUIT line, or when the
-# host closes the connection. Only scripts in -Dir with a plain name run; the request cannot name a path.
-param([int]$Seconds = 900, [Parameter(Mandatory)][string]$Dir, [switch]$Tcp)
+# host closes the connection. It also ends when no first line (with -Tcp: no connection and line) comes in
+# -FirstLineSeconds (30): the host then gave up this attempt and stopped its ssh. Only scripts in -Dir with a plain name run; the request cannot name a path.
+param([int]$Seconds = 900, [Parameter(Mandatory)][string]$Dir, [switch]$Tcp, [int]$FirstLineSeconds = 30)
 $ErrorActionPreference = 'Stop'
 $Seconds = [Math]::Min([Math]::Max($Seconds, 10), 1230)
 $Dir = [IO.Path]::GetFullPath($Dir)
 $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
+# The host sends its first line (or opens its connection) at once. Without it the host has given up this attempt and
+# may not reach this process any more: end soon, not at -Seconds (bd108-p1 showed a stdin that delivers nothing).
+$firstBy = [DateTime]::UtcNow.AddSeconds([Math]::Min([Math]::Max($FirstLineSeconds, 2), 60))
+$gotAny = $false
 $utf8 = New-Object Text.UTF8Encoding $false
 $stdout = New-Object IO.StreamWriter([Console]::OpenStandardOutput(), $utf8)
 $stdout.NewLine = "`n"
@@ -39,7 +44,7 @@ if ($Tcp) {
     $stdout.WriteLine("@@CHANNEL READY pid $PID bound $Seconds s tcp $($listener.LocalEndpoint.Port) $token")
     # One connection that names the token; any other one is closed. The listener stops once it is found.
     $accept = $listener.AcceptTcpClientAsync()
-    while (-not $client -and [DateTime]::UtcNow -lt $deadline) {
+    while (-not $client -and [DateTime]::UtcNow -lt $deadline -and [DateTime]::UtcNow -lt $firstBy) {
         if (-not $accept.Wait(500)) { continue }
         $c = $accept.Result
         $r = New-Object IO.StreamReader($c.GetStream(), $utf8)
@@ -66,7 +71,11 @@ function Send([string]$Text) { $out.WriteLine($Text) }
 $pending = $in.ReadLineAsync()
 while ([DateTime]::UtcNow -lt $deadline) {
     # A bounded wait, so that the deadline holds while no request comes.
-    if (-not $pending.Wait(500)) { continue }
+    if (-not $pending.Wait(500)) {
+        if (-not $gotAny -and [DateTime]::UtcNow -gt $firstBy) { break }
+        continue
+    }
+    $gotAny = $true
     $line = $pending.Result
     if ($null -eq $line -or $line -eq 'QUIT') { break }
     $pending = $in.ReadLineAsync()

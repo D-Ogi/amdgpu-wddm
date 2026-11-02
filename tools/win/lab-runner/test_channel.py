@@ -227,16 +227,21 @@ sys.exit(p.returncode)
 '''
 
 STANDIN = r'''"""A far end that answers the handshake and then fails in one way: 'early' ends 1 s after its PONG, 'drop' ends at
-the first request, 'mute' never confirms a request."""
+the first request, 'mute' never confirms a request, 'oneline' answers its first line and no other (the synchronous
+reader of bd108-p1 variant C on the lab)."""
 import os, sys, threading
 from datetime import datetime, timezone
 mode = sys.argv[1]
+seen = False
 def say(s):
     sys.stdout.write(s + '\n')
     sys.stdout.flush()
 say('@@CHANNEL READY pid 1 bound 60 s')
 for line in sys.stdin:
     line = line.strip()
+    if mode == 'oneline' and seen:
+        continue
+    seen = True
     if line.startswith('PING '):
         say('@@PONG ' + line[5:] + ' ' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
         if mode == 'early':
@@ -341,12 +346,12 @@ class SelfChecks(unittest.TestCase):
         # transport, and every request goes through it. The first far end received only PING and QUIT, so nothing
         # ran late.
         b = channel.Broker('game-held', 60, self.host_argv(hold=True), local_push, str(self.lab), self.scripts,
-                           tcp=(self.host_argv('-Tcp', hold=True), channel.direct_connect))
+                           tcp=(self.host_argv('-Tcp', hold=True), channel.direct_connect), order=['stdin', 'tcp'])
         self.assertIn(' tcp ', b.start())
         self.assertEqual(b.transport, 'tcp')
         self.assertEqual(b.attempts[0]['transport'], 'stdin')
-        self.assertIn('no PONG', b.attempts[0]['failed'])
-        self.assertIn('pong_s', b.attempts[1])
+        self.assertEqual(b.attempts[0]['failed'], 'PONG 1 of 2: no answer in 6 s')
+        self.assertEqual(len(b.attempts[1]['pong_s']), 2)
         self.assertLess(abs(b.clock['offset_s']), 1)
         t, result = self.serve(b)
         for k in range(3):
@@ -360,6 +365,64 @@ class SelfChecks(unittest.TestCase):
         rows = (b.dir / 'stamps.tsv').read_text(encoding='utf-8').splitlines()
         self.assertEqual([r.split('\t')[-1] for r in rows], ['0', '0', '0'])
 
+    def test_one_line_stdin_moves_to_tcp(self):
+        # bd108-p1 variant C: the far end gets its first line and no other. One PONG would pass, the second does not.
+        b = channel.Broker('game-oneline', 60, self.standin('oneline'), local_push, str(self.lab), self.scripts,
+                           tcp=(self.host_argv('-Tcp'), channel.direct_connect), order=['stdin', 'tcp'])
+        b.start()
+        self.assertEqual(b.attempts[0]['failed'], 'PONG 2 of 2: no answer in 6 s')
+        self.assertEqual(len(b.attempts[0]['pong_s']), 1)
+        self.assertEqual(b.transport, 'tcp')
+        t, result = self.serve(b)
+        self.assertEqual(channel.call('game-oneline', 'echo.ps1', {'Text': 'c'})['lines'][0], 'echo c')
+        channel.main(['stop', 'game-oneline'])
+        t.join(20)
+
+    def test_far_end_without_a_first_line_ends_soon(self):
+        # A failed attempt's ssh ends at once, and the far end may not hear it: with no first line (stdin) or no
+        # connection (tcp) in -FirstLineSeconds, it ends by itself, long before its 60 s bound.
+        local_push([str(channel.HOST_SCRIPT)], str(self.lab))
+        for extra in ((), ('-Tcp',)):
+            p = subprocess.Popen(self.host_argv('-FirstLineSeconds', '3', *extra), stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE)
+            start = time.monotonic()
+            try:
+                out = p.stdout.read().decode('utf-8')
+                p.wait(20)
+            finally:
+                if p.poll() is None:
+                    p.kill()
+                    p.wait(10)
+                p.stdin.close()
+                p.stdout.close()
+            elapsed = time.monotonic() - start
+            self.assertIn('@@CHANNEL END', out, extra)
+            self.assertLess(elapsed, 15, extra)
+            self.assertGreater(elapsed, 2, extra)
+
+    def test_failed_attempt_costs_no_wait(self):
+        # tcp refused: its ssh is not given 10 s to hear a QUIT it cannot read; the stdin attempt follows at once.
+        def refuse(port):
+            raise ConnectionRefusedError('refused in the test')
+        b = channel.Broker('game-quick', 60, self.host_argv(), local_push, str(self.lab), self.scripts,
+                           tcp=(self.host_argv('-Tcp'), refuse))
+        start = time.monotonic()
+        b.start()
+        self.addCleanup(b.close)
+        self.assertEqual(b.transport, 'stdin')
+        self.assertLess(time.monotonic() - start, 8)
+
+    def test_tcp_is_the_first_transport(self):
+        b = channel.Broker('game-first', 60, self.host_argv(), local_push, str(self.lab), self.scripts,
+                           tcp=(self.host_argv('-Tcp'), channel.direct_connect))
+        b.start()
+        self.assertEqual((b.transport, [a['transport'] for a in b.attempts]), ('tcp', ['tcp']))
+        t, result = self.serve(b)
+        self.assertEqual(channel.call('game-first', 'echo.ps1', {'Text': 'f'})['exit'], 0)
+        channel.main(['stop', 'game-first'])
+        t.join(20)
+        self.assertEqual(result.get('reason'), 'stop')
+
     def test_no_transport_is_no_channel(self):
         def refuse(port):
             raise ConnectionRefusedError('refused in the test')
@@ -367,7 +430,7 @@ class SelfChecks(unittest.TestCase):
                            tcp=(self.host_argv('-Tcp'), refuse))
         with self.assertRaises(RuntimeError) as e:
             b.start()
-        self.assertIn('stdin: no PONG', str(e.exception))
+        self.assertIn('stdin: PONG 1 of 2: no answer', str(e.exception))
         self.assertIn('tcp: ConnectionRefusedError', str(e.exception))
         rec = channel.read_json(b.dir / 'broker.json')
         self.assertEqual(rec['state'], 'ended')
@@ -518,7 +581,7 @@ class LabCommandLine(unittest.TestCase):
         self.assertEqual(tcp[-1], command + ' -Tcp')
         self.assertIn('ExitOnForwardFailure=yes', tcp)
         self.assertRegex(tcp[tcp.index('-D') + 1], r'^127\.0\.0\.1:\d+$')
-        self.assertEqual(b.order, ['stdin', 'tcp'])
+        self.assertEqual(b.order, ['tcp', 'stdin'])
 
 
 class InpFallback(unittest.TestCase):

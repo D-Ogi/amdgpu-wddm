@@ -22,10 +22,11 @@ broker read the reply. The local files live under <BC250_ROOT>\\scratch\\m15\\ga
 repository (BC250_CHANNEL_DIR names another directory).
 
 Self-checks (bd108-k2, 2026-11-02: no request line came through the session's stdin in 90 s, while the far end's
-output came at once). The broker sends no request before the far end answers a PING (PONG_S). It tries the
-transports in order, each in its own ssh session: 'stdin' (the session's own stdin and stdout) and 'tcp' (one TCP
-connection to a listener on the lab's loopback, through the same ssh connection with ssh -D, so the session's stdin
-is not used). When no transport answers, the broker records 'ended' and every caller takes its own path. A request
+output came at once; in bd108-p1 a synchronous PowerShell reader of that stdin got one line and then none, an
+asynchronous one got none). The broker sends no request before the far end answers two PINGs, one after the other
+(PONG_S each). It tries the transports in order, each in its own ssh session: 'tcp' (one TCP connection to a
+listener on the lab's loopback, through the same ssh connection with ssh -D, so the session's stdin is not used),
+then 'stdin' (the session's own stdin and stdout). When no transport answers, the broker records 'ended' and every caller takes its own path. A request
 that the far end does not confirm (@@GOT) in GOT_S ends the session, and the far end refuses a request that comes
 after its limit, so a held request never acts late. A request whose client has gone or whose time is over is dropped
 before it is sent. The PONG also gives the offset of the lab clock (broker.json 'clock'): the two machines' stamps
@@ -55,7 +56,9 @@ REPLY_TIMEOUT = 150         # one request; control-exec.ps1 waits up to its own 
 READY_S = 45                # the far end's READY line after the ssh start
 PONG_S = 6                  # the handshake; on this PC the answer takes milliseconds
 GOT_S = 10                  # the far end confirms a request at once, before its script runs
-TRANSPORTS = ('stdin', 'tcp')
+PINGS = 2                   # the handshake proves that more than one line comes through
+# tcp first: on the lab no PowerShell reader got more than one line through the session's stdin (bd108-p1).
+TRANSPORTS = ('tcp', 'stdin')
 
 
 def utc():
@@ -293,6 +296,7 @@ class Broker:
         self.proc = None
         self.sock = None
         self.ended = True
+        self.live = False
         self.errlog = None
         self.transport = None
         self.attempts = []
@@ -335,7 +339,7 @@ class Broker:
     def _open(self, kind):
         info = {'transport': kind, 'utc': utc()}
         t0 = time.monotonic()
-        self.ended = False
+        self.ended, self.live, self.writer, self.sock = False, False, None, None
         self.proc = subprocess.Popen(self.argv if kind == 'stdin' else self.tcp[0], stdin=subprocess.PIPE,
                                      stdout=subprocess.PIPE, stderr=self.errlog)
         self.ctl = Lines(self.proc.stdout)
@@ -359,24 +363,36 @@ class Broker:
                 self.writer = SocketWriter(self.sock)
                 self.data = Lines(self.sock.makefile('rb'))
                 self._send(f'HELLO {m.group(2)}')
-            nonce = uuid.uuid4().hex[:16]
-            a = time.time()
-            self._send(f'PING {nonce}')
         except OSError as e:
             info['failed'] = f'{type(e).__name__}: {e}'
             return info
-        deadline = time.monotonic() + PONG_S
-        while True:
-            line = self.data.get(deadline)
-            if line is None:
-                info['failed'] = 'the far end ended before its PONG' if self.data.closed else f'no PONG in {PONG_S} s'
+        # Two PINGs, one after the other: on the lab a synchronous reader of the session's stdin got its first line
+        # and then no other, not even at the end of stdin (bd108-p1 variant C, 2026-11-02). One answer proves little.
+        info['pong_s'] = []
+        for n in range(1, PINGS + 1):
+            nonce = uuid.uuid4().hex[:16]
+            a = time.time()
+            try:
+                self._send(f'PING {nonce}')
+            except OSError as e:
+                info['failed'] = f'PING {n} of {PINGS}: {type(e).__name__}: {e}'
                 return info
-            m = re.match(rf'^@@PONG {nonce} (\S+)$', line)
-            if m:
-                b = time.time()
-                self.clock = {'offset_s': round(epoch_of(m.group(1)) - (a + b) / 2, 3), 'rtt_s': round(b - a, 3)}
-                info['pong_s'] = round(b - a, 3)
-                return info
+            deadline = time.monotonic() + PONG_S
+            while True:
+                line = self.data.get(deadline)
+                if line is None:
+                    why = 'the far end ended' if self.data.closed else f'no answer in {PONG_S} s'
+                    info['failed'] = f'PONG {n} of {PINGS}: {why}'
+                    return info
+                m = re.match(rf'^@@PONG {nonce} (\S+)$', line)
+                if m:
+                    break
+            b = time.time()
+            info['pong_s'].append(round(b - a, 3))
+            # The last PONG gives the lab clock offset, from the middle of its round trip.
+            self.clock = {'offset_s': round(epoch_of(m.group(1)) - (a + b) / 2, 3), 'rtt_s': round(b - a, 3)}
+        self.live = True
+        return info
 
     def _send(self, text):
         self.writer.write((text + '\n').encode('utf-8'))
@@ -489,21 +505,28 @@ class Broker:
         return reason
 
     def _shut(self):
-        """Ends the current far end: QUIT, the end of its input, then a kill after 10 s."""
+        """Ends the current far end: QUIT, the end of its input, then a kill after 10 s. A far end that failed its
+        handshake cannot hear QUIT, so its ssh ends at once (the far end ends by itself in -FirstLineSeconds)."""
         if self.proc is None or self.ended:
             return
         self.ended = True
-        try:
-            if self.proc.poll() is None:
-                self._send('QUIT')
-                self.writer.close()
-        except (OSError, ValueError, AttributeError):
-            pass
-        try:
-            self.proc.stdin.close()
-            self.proc.wait(timeout=10)
-        except (OSError, subprocess.TimeoutExpired, ValueError):
-            pass
+        if self.live:
+            try:
+                if self.proc.poll() is None:
+                    self._send('QUIT')
+                    self.writer.close()
+            except (OSError, ValueError, AttributeError):
+                pass
+            try:
+                self.proc.stdin.close()
+                self.proc.wait(timeout=10)
+            except (OSError, subprocess.TimeoutExpired, ValueError):
+                pass
+        else:
+            try:
+                self.proc.stdin.close()
+            except (OSError, ValueError):
+                pass
         if self.proc.poll() is None:
             self.proc.kill()
             self.proc.wait(timeout=10)
