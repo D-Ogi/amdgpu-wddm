@@ -759,7 +759,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "b1c96e7eb2748c929612623d8d729533a58b3997",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -803,7 +803,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "b1c96e7eb2748c929612623d8d729533a58b3997",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -847,7 +847,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "b1c96e7eb2748c929612623d8d729533a58b3997",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
@@ -891,7 +891,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "b1c96e7eb2748c929612623d8d729533a58b3997",
       "tree": "shared",
       "recipe": "tools/build/build-umd-dxvk.ps1",
       "args": [
