@@ -90,6 +90,15 @@ static BC250_WDDM adapter;
 static BOOLEAN g_ApertureOffered;
 static BC250_WDDM *WddmOf(HANDLE h){return h ? &adapter : NULL;}
 static BOOLEAN WddmFirstCalls(BC250_WDDM *w,int call){(void)w;(void)call;return FALSE;}
+/* BD-289: the scan-out mutex (dcn.c DcnScanoutLock) as a depth count on this one thread; the mapping rule itself is
+   scanout_map.h, compiled here as in dcn.c (its concurrency is scanout_lock_test.c's). */
+#include "scanout_map.h"
+#define UNREFERENCED_PARAMETER(x) ((void)(x))
+#define NT_ASSERT(x) CHECK(x)
+static unsigned lock_depth,lock_takes;
+static void DcnScanoutLock(BC250_DEVICE *d){(void)d;lock_depth++;lock_takes++;}
+static void DcnScanoutUnlock(BC250_DEVICE *d){(void)d;CHECK(lock_depth>0);lock_depth--;}
+static BOOLEAN DcnScanoutLockHeld(const BC250_DEVICE *d){(void)d;return lock_depth>0;}
 /* ACTUAL_SOURCE */
 /* Standard GDI surfaces: the DDI's blob is the LB7A prefix plus the GDI trailer, laid out by gdi_private.h, and it
    must be exactly what the KMD's own admission (WddmSurfaceAdmitted) later accepts from the UMD's OpenResource. */
@@ -235,6 +244,8 @@ int main(void){
   CHECK(*(ULONG*)(buffer+64+(SIZE_T)(heights[i]-1)*pitches[i]+(widths[i]-1)*4)==0xfffffffful);
   CHECK(*(ULONG*)(buffer+64+(SIZE_T)128*pitches[i]+(widths[i]-128)*4)==0xff00aa55ul);
   if(pitches[i]>widths[i]*4)for(y=0;y<heights[i];y++)CHECK(buffer[64+(SIZE_T)y*pitches[i]+widths[i]*4]==0xcd);
+  /* BD-289: DcnScanoutMapping asserts the scan-out mutex, which its caller (WddmPresentBlit) holds for the blit. */
+  DcnScanoutLock(&d);
   CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));CHECK(length==bytes && pitch==pitches[i]);
   {unsigned count=maps;CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));CHECK(count==maps);}
   d.DcnScanoutSeedAddress=d.DcnCurrentAddress;d.DcnCurrentPitch+=256;
@@ -256,7 +267,9 @@ int main(void){
   /* BD-223: a scaled plane 0 is smaller than the source mode, so the copy of the source mode's size gets no mapping. */
   d.DcnPlaneScaled=1;CHECK(!DcnScanoutMapping(&d,&mapping,&length,&pitch));CHECK(!mapping && !length && !pitch);
   d.DcnPlaneScaled=0;CHECK(DcnScanoutMapping(&d,&mapping,&length,&pitch));
-  DcnUnmapScanout(&d);
+  DcnScanoutUnlock(&d);
+  /* DcnUnmapScanout takes the mutex itself and leaves it as it found it. */
+  {unsigned taken=lock_takes;DcnUnmapScanout(&d);CHECK(lock_takes==taken+1 && !lock_depth && !d.DcnScanoutMap);}
   // Firmware pitch is wider than destination; last row must still be copied.
   {SIZE_T srcsize=d.FramebufferLength;UCHAR *src=malloc(srcsize);UCHAR *dst=malloc((SIZE_T)bytes+128);int exact=1;
    if(!src || !dst)return 2;

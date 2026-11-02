@@ -225,6 +225,7 @@ typedef struct _BC250_WDDM_KIND {
 // the ring's eight-dword IB granule. A buffer below it is not translated at all.
 #define BC250_GDI_MIN_DWORDS 16u
 #include "../contract/bc250_scanout_caps.h"  // the trailer that publishes this start's scan-out answer
+#include "bd289_probe.h"             // BD-289: the lab-flavour probes of the present blit's source mapping
 // The two numbers gdi_batch.h's input bound is written with. sizeof(RECT) is the stride of the
 // sub-rectangle array, and ColorFill is the smallest command that can carry one at all - the other
 // five arguments are larger, and the one smaller command, Escape, carries no sub-rectangle ("Driver
@@ -4033,6 +4034,9 @@ void WddmSummary(_In_ BC250_DEVICE* Device)
         GuardLog("wddm summary: the full table is not running (EnableFullWddm closed, or no pool at the start)");
         return;
     }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289ProbeSummary();            // BD-289: the counters and the bd289 ring first, before the block fills
+#endif
     ConnectorLinkLogOpen(Device);
     DcnLogVsyncSnapshot(Device);
     DpmLogSummary(Device);
@@ -9028,6 +9032,19 @@ static int WddmPresentTranslate(void* Context, unsigned long long Va,
     return result;
 }
 
+// BD-289: release the blit source mapping. The release flavour always unmaps. In the lab flavour a probed present
+// (bd289_probe.h) keeps the VA when the probe found its PTEs already released or mapped elsewhere: a second
+// MmUnmapIoSpace would release PTEs this present no longer owns, and the lab would lose the log in a new fault.
+static void WddmUnmapBlitSource(_In_ const UCHAR* Map, SIZE_T Length, BOOLEAN Probed)
+{
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    if (Probed && !Bd289ProbeEnd()) return;
+#else
+    UNREFERENCED_PARAMETER(Probed);
+#endif
+    MmUnmapIoSpace((void*)Map, Length);
+}
+
 static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
     BC250_DEVICE* device = Context->Device;
@@ -9052,6 +9069,7 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
     UCHAR* dst;                          // where the copy lands: Device->Framebuffer, or the flipped surface below
     SIZE_T dstLength;
     BOOLEAN toFlip = FALSE, mapFailed = FALSE;    // for the counters and the log line at the end
+    BOOLEAN probed = FALSE;                        // BD-289: the lab flavour's probe holds this present's source
     PVOID destinationMap = NULL;
     BOOLEAN destinationPrimary = FALSE, destinationRedFirst = FALSE;
     UINT dstPitch = post->Pitch, dstWidth = DisplaySourceWidth(device), dstHeight = DisplaySourceHeight(device);
@@ -9138,6 +9156,10 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
         if (InterlockedIncrement(&wddm->BlitSkips) <= BC250_WDDM_LOG_CALLS) GuardLog("wddm: blit skipped: no mapping for 0x%llX", first);
         return;
     }
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    probed = Bd289ProbeBegin(map, (SIZE_T)alloc->Size, first,
+                             VramMappingProtection(device, first, (SIZE_T)alloc->Size, PAGE_READONLY));
+#endif
 
     // Where the picture goes (2026-09-22, ADR 0011 consequences, facts M100): Device->Framebuffer - the POST
     // framebuffer - only until a flip has actually moved HUBP0 off it. Once VidPnFlipEnabled and DcnDiverged
@@ -9154,7 +9176,11 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
         SIZE_T flipLength = 0;
         ULONG flipPitch=0;
 
-        if (DcnScanoutMapping(device, &flipMap, &flipLength, &flipPitch))
+        BOOLEAN mapped = DcnScanoutMapping(device, &flipMap, &flipLength, &flipPitch);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        if (probed) (void)Bd289ProbeStep(BD289_STEP_SCANOUT);
+#endif
+        if (mapped)
         {
             dst = (UCHAR*)flipMap;
             dstLength = flipLength;
@@ -9184,15 +9210,18 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
         {
             InterlockedIncrement(&wddm->BlitSkips);
             GuardLog("wddm: blit refused destination geometry, mapping or overlap");
-            MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
+            WddmUnmapBlitSource(map, (SIZE_T)alloc->Size, probed);
             return;
         }
         physical.QuadPart = (LONGLONG)dstFirst;
         destinationMap = VramMapCpuRange(device,physical,(SIZE_T)d->Size,PAGE_READWRITE);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+        if (probed) (void)Bd289ProbeStep(BD289_STEP_DEST);
+#endif
         if (destinationMap == NULL)
         {
             InterlockedIncrement(&wddm->BlitSkips);
-            MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
+            WddmUnmapBlitSource(map, (SIZE_T)alloc->Size, probed);
             return;
         }
         dst = (UCHAR*)destinationMap;
@@ -9269,6 +9298,11 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
     }
     dx = Present->SrcRect.left - Present->DstRect.left;
     dy = Present->SrcRect.top - Present->DstRect.top;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-289 diagnostic, not a fix: a source that is no longer mapped is not read, so that the lab keeps the
+    // probe's log lines instead of the 0x0A of 2026-11-02.
+    if (probed && !Bd289ProbeStep(BD289_STEP_COPY)) count = 0;
+#endif
     for (i = 0; i < count; i++)
     {
         if (verbose && i < 4)
@@ -9310,7 +9344,7 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
         }
     }
     if (destinationMap != NULL) MmUnmapIoSpace(destinationMap, dstLength);
-    MmUnmapIoSpace((void*)map, (SIZE_T)alloc->Size);
+    WddmUnmapBlitSource(map, (SIZE_T)alloc->Size, probed);
     InterlockedIncrement(&wddm->Blits);
     InterlockedExchange(&wddm->BlitRowsLast, (LONG)rows);
     if ((LONG)rows > wddm->BlitRowsMax) InterlockedExchange(&wddm->BlitRowsMax, (LONG)rows);
@@ -9337,10 +9371,29 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
 // high-IRQL Present calls retain the original no-copy result.
 static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
-    BOOLEAN owned=ConnectorIsEnabled(Context->Device) && KeGetCurrentIrql()==PASSIVE_LEVEL;
+    BOOLEAN passive=KeGetCurrentIrql()==PASSIVE_LEVEL;
+    BOOLEAN owned=ConnectorIsEnabled(Context->Device) && passive;
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitArrive();              // BD-289 r3: blits on their way, before any lock
+#endif
     if (owned) ConnectorOperationAcquire(Context->Device);
+    // BD-289: one CPU blit at a time owns the flip target mapping, in every case, connector or not. Without it two
+    // blits after a flip could both release the old mapping, and the second MmUnmapIoSpace released the PTEs of
+    // the other blit's new source mapping (0x0A of 2026-11-02). Above PASSIVE_LEVEL WddmPresentBlitOwned refuses
+    // before it maps anything, so it needs no lock there.
+    if (passive) DcnScanoutLock(Context->Device);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitEnter(passive);        // blits inside, and whether this one holds the scan-out mutex
+#endif
     WddmPresentBlitOwned(Context,Present);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitLeave();
+#endif
+    if (passive) DcnScanoutUnlock(Context->Device);
     if (owned) ConnectorOperationRelease(Context->Device);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289BlitDepart();
+#endif
 }
 
 // One STATUS_INVALID_PARAMETER of WddmBuildGpuPresent. The lab flavour counts it by the check that returned it; the first
