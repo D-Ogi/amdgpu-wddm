@@ -411,9 +411,9 @@ the whole description.
 - Direct3D 11 applications and games run on the GPU, and so do the components of Windows and the packaged
   Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
-  rendering): the processes of the logon and lock screens, a program whose image the router cannot resolve, a
-  program you put in the `Deny` list, a program you set to processor rendering in Nagi Control App, and
-  `PickerHost.exe`, `SecHealthUI.exe` and `SearchHost.exe`, which the driver keeps there by itself. `PickerHost.exe` is the program
+  rendering): the processes of the logon and lock screens, a program you put in the `Deny` list, and a program
+  you set to processor rendering in Nagi Control App. The driver also keeps `PickerHost.exe`, `SecHealthUI.exe`
+  and `SearchHost.exe` there by itself. `PickerHost.exe` is the program
   behind the Windows firewall notification window ("Windows Security") and behind the file open and save windows.
   That firewall window stayed white and empty on the GPU route. `SecHealthUI.exe` is the Windows Security app. On
   the GPU route, the desktop compositor (DWM) stopped and started again about every 7 seconds while its window was
@@ -421,7 +421,9 @@ the whole description.
   seconds while you typed in it. So the driver sends these three programs to the processor. An entry in the `Allow`
   list puts a program back on the GPU, these three included. `Mode` `allowlist` gives the
   behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
-  `Allow`. Use the Direct3D 12 mode of a game if it has one.
+  `Allow`. A program on the CPU route gets Direct3D feature level 10_0 only. A program that needs feature level
+  11_0 or higher does not start there. This is a known limit of the CPU route, not a defect. Use the Direct3D 12
+  mode of a game if it has one.
 - Direct3D 9 applications run on the GPU through D3D9On12, the Direct3D 9 layer of Windows on top of our Direct3D 12
   driver. The installer writes `<>` in the Direct3D 9 entry of `UserModeDriverName`, and Windows then loads
   `d3d9on12.dll` by itself. Windows 11 24H2 and 25H2 do not start a GPU whose Direct3D 9 entry is empty.

@@ -4,8 +4,8 @@
 // an extended "\\?\" prefix, 8.3 short names or a junction into the Windows directory all defeat a plain prefix
 // test. Both sides are therefore opened and resolved to their final normalized path
 // (GetFinalPathNameByHandleW, "\\?\C:\..." form) before IsWindowsComponentPath compares them. A path that cannot
-// be resolved is Unknown, never a definite "not a component": the policy keeps an Unknown image on the CPU UMD
-// in gpu-default mode unless Allow names it.
+// be resolved is Unknown, never a definite "not a component". The route line reports the answer; since the BD-088
+// decision of 2026-11-02 the route does not depend on it (an Unknown image takes the GPU UMD under gpu-default).
 #pragma once
 #include <windows.h>
 #include "router-policy.h"

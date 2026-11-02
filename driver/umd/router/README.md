@@ -13,8 +13,9 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   the CPU UMD, at FL 10_0 (BD-088), because Notepad, Calculator and Task Manager failed on the GPU UMD (BD-061, fixed
   by the shared A8, FP16 and RGB10A2 surfaces of the D3D11 shell and verified on b20). Image and Windows directory
   are compared as final resolved paths (`router-identity.h`), so `\\?\` prefixes, 8.3 names and junctions read as
-  one form; an image or directory that cannot be resolved stays on the CPU UMD unless `Allow` names it (reason
-  `app-component-unknown`);
+  one form. The route line gives the result as `component=yes`, `no` or `unknown`. The route does not use it: an
+  image or directory that cannot be resolved also takes the GPU UMD. Until 2026-11-02 such an image stayed on the
+  CPU UMD (reason `app-component-unknown`); BD-088 removed that route;
 - under `gpu-default` the router also carries a built-in default `Deny` list of its own (`IsCpuOnlyDialogHost` in
   `router-policy.h`, reason `app-dialog-host`): the images whose window the application GPU UMD was measured not
   to show. It holds `PickerHost.exe`, the File Picker UI Host, which serves the Windows firewall notification

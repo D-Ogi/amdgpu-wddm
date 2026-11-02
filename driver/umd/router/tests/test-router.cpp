@@ -121,33 +121,32 @@ static void PolicyTests()
               c.exe ? c.exe : L"(null)", (int)c.mode, c.e102, c.gpu, AppReasonName(d.reason));
     }
 
-    // Windows components take the GPU UMD under gpu-default since train b20 (BD-061 verified, BD-088); Deny and the
-    // protected list still win.
+    // Windows components take the GPU UMD under gpu-default since train b20 (BD-061 verified, BD-088), and since
+    // 2026-11-02 so does an image whose path cannot be resolved (since BD-088 the CPU route is empty):
+    // the decision has no component input. Deny and the protected list still win.
     const wchar_t allowDx[] = L"dxdiag.exe\0";
-    // Unknown (an unresolvable image or Windows directory) stays on the CPU UMD unless Allow names the image.
     const Component Y = Component::Yes, N = Component::No, U = Component::Unknown;
-    struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; AppRoute route; AppReason reason; };
+    struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; AppRoute route; AppReason reason; };
     const CompCase comp[] = {
-        {L"notepad.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
-        {L"dxdiag.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
-        {L"game.exe", Gd, allowDx, nullptr, N, AppRoute::Gpu, AppReason::Default},
-        {L"witcher3.exe", Gd, allowDx, deny, N, AppRoute::Cpu, AppReason::Denied},
-        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", Y, AppRoute::Cpu, AppReason::Denied},
-        {L"logonui.exe", Gd, protectedAllowed, nullptr, Y, AppRoute::Cpu, AppReason::Protected},
-        {L"notepad.exe", Al, allowDx, nullptr, Y, AppRoute::Cpu, AppReason::NotAllowed},
-        {L"dxdiag.exe", Al, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Allowed},
-        {L"game.exe", Gd, allowDx, nullptr, U, AppRoute::Cpu, AppReason::ComponentUnknown},
-        {L"dxdiag.exe", Gd, allowDx, nullptr, U, AppRoute::Gpu, AppReason::Default},
-        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", U, AppRoute::Cpu, AppReason::Denied},
-        {L"logonui.exe", Gd, protectedAllowed, nullptr, U, AppRoute::Cpu, AppReason::Protected},
-        {L"game.exe", Al, L"game.exe\0", nullptr, U, AppRoute::Gpu, AppReason::Allowed},
+        {L"notepad.exe", Gd, allowDx, nullptr, AppRoute::Gpu, AppReason::Default},
+        {L"dxdiag.exe", Gd, allowDx, nullptr, AppRoute::Gpu, AppReason::Default},
+        {L"game.exe", Gd, allowDx, nullptr, AppRoute::Gpu, AppReason::Default},
+        {L"game.exe", Gd, nullptr, nullptr, AppRoute::Gpu, AppReason::Default},
+        {L"witcher3.exe", Gd, allowDx, deny, AppRoute::Cpu, AppReason::Denied},
+        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", AppRoute::Cpu, AppReason::Denied},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, AppRoute::Cpu, AppReason::Protected},
+        {L"notepad.exe", Al, allowDx, nullptr, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"dxdiag.exe", Al, allowDx, nullptr, AppRoute::Gpu, AppReason::Allowed},
+        {L"game.exe", Al, L"game.exe\0", nullptr, AppRoute::Gpu, AppReason::Allowed},
     };
     for (const CompCase &c : comp) {
-        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component});
-        CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%d got %s",
-              c.exe, (int)c.mode, (int)c.component, AppReasonName(d.reason));
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true});
+        CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d got %s",
+              c.exe, (int)c.mode, AppReasonName(d.reason));
     }
-
+    // The route line names the classification; the names are part of the log format.
+    CHECK(!strcmp(ComponentName(Y), "yes") && !strcmp(ComponentName(N), "no") && !strcmp(ComponentName(U), "unknown"),
+          "component names %s %s %s", ComponentName(Y), ComponentName(N), ComponentName(U));
     // RenderOnCpu (the per-application graphics setting): the CPU UMD after the protected list and before Deny. It
     // never widens the GPU route: the mode, the protected list and the GPU UMD path keep their answers.
     struct CpuCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool e102, gpu, cpu; AppRoute route; AppReason reason; };
@@ -165,7 +164,7 @@ static void PolicyTests()
         {L"notepad.exe", Gd, nullptr, nullptr, true, false, true, AppRoute::Cpu, AppReason::RenderOnCpu},
     };
     for (const CpuCase &c : cpu) {
-        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, Component::No, c.cpu});
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, c.cpu});
         CHECK(d.route == c.route && d.reason == c.reason, "render-on-cpu exe=%ls mode=%d cpu=%d got %s",
               c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
     }
@@ -231,56 +230,56 @@ static void PolicyTests()
     const wchar_t allowSearch[] = L"other.exe\0SEARCHHOST.EXE\0";
     const wchar_t denySearch[] = L"searchhost.exe\0";
     const wchar_t denySecHealth[] = L"sechealthui.exe\0";
-    struct DialogCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; bool cpu;
+    struct DialogCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; bool cpu;
                         AppRoute route; AppReason reason; };
     const DialogCase dialogs[] = {
-        {L"PickerHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"pickerhost.exe", Gd, nullptr, nullptr, N, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"PICKERHOST.EXE", Gd, allowDx, deny, Y, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"PickerHost.exe", Gd, nullptr, nullptr, U, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"PickerHost.exe", Gd, nullptr, nullptr, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"pickerhost.exe", Gd, nullptr, nullptr, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"PICKERHOST.EXE", Gd, allowDx, deny, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"PickerHost.exe", Gd, nullptr, nullptr, false, AppRoute::Cpu, AppReason::DialogHost},
         // Allowlist mode answers first and keeps its own reason: the built-in list adds nothing there, because
         // every unlisted image is already on the CPU UMD.
-        {L"PickerHost.exe", Al, allowDx, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
-        {L"PickerHost.exe", Al, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"PickerHost.exe", Al, allowDx, nullptr, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"PickerHost.exe", Al, nullptr, nullptr, false, AppRoute::Cpu, AppReason::NotAllowed},
         // Allow lifts it; a registry Deny entry and RenderOnCpu still answer first, with their own reason.
-        {L"PickerHost.exe", Gd, allowPicker, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"PickerHost.exe", Al, allowPicker, nullptr, Y, false, AppRoute::Gpu, AppReason::Allowed},
-        {L"PickerHost.exe", Gd, allowPicker, denyPicker, Y, false, AppRoute::Cpu, AppReason::Denied},
-        {L"PickerHost.exe", Gd, allowPicker, nullptr, Y, true, AppRoute::Cpu, AppReason::RenderOnCpu},
-        {L"PickerHost.exe", AppMode::Cpu, allowPicker, nullptr, Y, false, AppRoute::Cpu, AppReason::ModeCpu},
+        {L"PickerHost.exe", Gd, allowPicker, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"PickerHost.exe", Al, allowPicker, nullptr, false, AppRoute::Gpu, AppReason::Allowed},
+        {L"PickerHost.exe", Gd, allowPicker, denyPicker, false, AppRoute::Cpu, AppReason::Denied},
+        {L"PickerHost.exe", Gd, allowPicker, nullptr, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"PickerHost.exe", AppMode::Cpu, allowPicker, nullptr, false, AppRoute::Cpu, AppReason::ModeCpu},
         // Negative controls: the match is the exact base name, so a neighbouring image keeps the GPU route. Each of
         // these fails if the built-in list ever becomes a prefix or substring test.
-        {L"picker.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"xpickerhost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"PickerHost.exe.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"pickerhost", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"picker.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"xpickerhost.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"PickerHost.exe.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"pickerhost", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
         // SecHealthUI.exe (BD-168 class), a Windows component below SystemApps: the same answers as PickerHost.exe.
-        {L"SecHealthUI.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"SECHEALTHUI.EXE", Gd, allowDx, deny, U, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"SecHealthUI.exe", Al, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
-        {L"SecHealthUI.exe", Gd, allowSecHealth, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"SecHealthUI.exe", Al, allowSecHealth, nullptr, Y, false, AppRoute::Gpu, AppReason::Allowed},
-        {L"SecHealthUI.exe", Gd, allowSecHealth, denySecHealth, Y, false, AppRoute::Cpu, AppReason::Denied},
-        {L"SecHealthUI.exe", Gd, allowSecHealth, nullptr, Y, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"SecHealthUI.exe", Gd, nullptr, nullptr, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SECHEALTHUI.EXE", Gd, allowDx, deny, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SecHealthUI.exe", Al, nullptr, nullptr, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"SecHealthUI.exe", Gd, allowSecHealth, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"SecHealthUI.exe", Al, allowSecHealth, nullptr, false, AppRoute::Gpu, AppReason::Allowed},
+        {L"SecHealthUI.exe", Gd, allowSecHealth, denySecHealth, false, AppRoute::Cpu, AppReason::Denied},
+        {L"SecHealthUI.exe", Gd, allowSecHealth, nullptr, true, AppRoute::Cpu, AppReason::RenderOnCpu},
         // Its neighbours of the same package family keep the GPU route.
-        {L"SecurityHealthSystray.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"SecurityHealthHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"SecurityHealthSystray.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"SecurityHealthHost.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
         // SearchHost.exe (BD-168 class, GitHub #44), below SystemApps: the same answers. Allow lifts it.
-        {L"SearchHost.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"SEARCHHOST.EXE", Gd, allowDx, deny, U, false, AppRoute::Cpu, AppReason::DialogHost},
-        {L"SearchHost.exe", Al, nullptr, nullptr, Y, false, AppRoute::Cpu, AppReason::NotAllowed},
-        {L"SearchHost.exe", Gd, allowSearch, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"SearchHost.exe", Al, allowSearch, nullptr, Y, false, AppRoute::Gpu, AppReason::Allowed},
-        {L"SearchHost.exe", Gd, allowSearch, denySearch, Y, false, AppRoute::Cpu, AppReason::Denied},
-        {L"SearchHost.exe", Gd, allowSearch, nullptr, Y, true, AppRoute::Cpu, AppReason::RenderOnCpu},
+        {L"SearchHost.exe", Gd, nullptr, nullptr, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SEARCHHOST.EXE", Gd, allowDx, deny, false, AppRoute::Cpu, AppReason::DialogHost},
+        {L"SearchHost.exe", Al, nullptr, nullptr, false, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"SearchHost.exe", Gd, allowSearch, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"SearchHost.exe", Al, allowSearch, nullptr, false, AppRoute::Gpu, AppReason::Allowed},
+        {L"SearchHost.exe", Gd, allowSearch, denySearch, false, AppRoute::Cpu, AppReason::Denied},
+        {L"SearchHost.exe", Gd, allowSearch, nullptr, true, AppRoute::Cpu, AppReason::RenderOnCpu},
         // The older search image and the indexer keep the GPU route.
-        {L"SearchApp.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
-        {L"SearchIndexer.exe", Gd, nullptr, nullptr, Y, false, AppRoute::Gpu, AppReason::Default},
+        {L"SearchApp.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
+        {L"SearchIndexer.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
     };
     for (const DialogCase &c : dialogs) {
-        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component, c.cpu});
-        CHECK(d.route == c.route && d.reason == c.reason, "dialog-host exe=%ls mode=%d comp=%d cpu=%d got %s",
-              c.exe, (int)c.mode, (int)c.component, c.cpu, AppReasonName(d.reason));
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.cpu});
+        CHECK(d.route == c.route && d.reason == c.reason, "dialog-host exe=%ls mode=%d cpu=%d got %s",
+              c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
     }
     CHECK(!strcmp(AppReasonName(AppReason::DialogHost), "app-dialog-host"), "reason name %s",
           AppReasonName(AppReason::DialogHost));
@@ -2437,7 +2436,8 @@ static void Child(const std::string &s)
         CHECK(o.hr == S_OK && o.tag == CpuTag10, "OpenAdapter10 hr=%08lx tag=%llu", o.hr, (unsigned long long)o.tag);
         CHECK(!Loaded(L"fail\\fake-fail.dll"), "the other bitness's UMD path was loaded");
         std::string log = AppLog();
-        CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") && Has(log, "cpu_source=registry"), "route log: %s", log.c_str());
+        CHECK(Has(log, "route=gpu reason=app-default fallback=0 gpu_hr=00000000") && Has(log, "cpu_source=registry") &&
+              Has(log, "component=no"), "route log: %s", log.c_str());
 #ifndef _WIN64
     } else if (s == "route-wow-default-cpu-beside-router") {
         // 32-bit router without CpuUmdPathWow: bc250d3d.dll next to the router (router-wow holds the CPU double).

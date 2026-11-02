@@ -85,7 +85,6 @@ enum class AppReason {
     Denied,       // listed in Deny (both modes; Deny wins over Allow)
     DialogHost,   // gpu-default, on the router's built-in default Deny list (IsCpuOnlyDialogHost below), not in Allow
     NotAllowed,   // allowlist mode and not listed in Allow
-    ComponentUnknown, // gpu-default mode, the image or the Windows directory could not be resolved, not in Allow
     D3d10Entry,   // OpenAdapter10: the application GPU UMD exports OpenAdapter10_2 only. No Windows 11 runtime calls
                   // this entry while OpenAdapter10_2 is exported, the D3D10.0 runtime included: a D3D10.0
                   // application arrives at OpenAdapter10_2 and is decided like any other (BD-081, measured
@@ -96,6 +95,7 @@ enum class AppReason {
 };
 
 // Whether the process image is a Windows component (IsWindowsComponentPath on resolved paths, router-identity.h).
+// The route line reports it (component=yes|no|unknown); the decision does not use it (BD-088, see below).
 enum class Component { No, Yes, Unknown };
 
 struct AppInputs {
@@ -105,7 +105,6 @@ struct AppInputs {
     const wchar_t *deny;   // REG_MULTI_SZ block or nullptr
     bool entry_10_2;       // the call is OpenAdapter10_2 (D3D10.1/D3D11 runtimes)
     bool gpu_umd_set;      // GpuUmdPath is an absolute path
-    Component component = Component::No; // ClassifyComponent (router-identity.h) of the process image
     bool render_on_cpu = false; // RenderOnCpu of HKLM\SOFTWARE\amdgpu-wddm\Graphics (app-settings.h) is 1
 };
 
@@ -162,9 +161,12 @@ inline bool IsCpuOnlyDialogHost(const wchar_t *exe_base)
 // on the directory name, not a publisher check. Until train b20, gpu-default kept such images on the CPU UMD (FL
 // 10_0, BD-088) because Notepad, Calculator and Task Manager failed on the application GPU UMD (BD-061,
 // 2026-10-04). The shared A8/FP16/RGB10A2 surfaces of the D3D11 shell fixed that (verified on b20), so a component
-// now takes the GPU UMD like any other image; only an image whose path cannot be resolved (Component::Unknown)
-// stays on the CPU UMD. The router passes final resolved paths (router-identity.h), so "\\?\", 8.3 and junction
-// spellings reach this test as one form.
+// now takes the GPU UMD like any other image. Until 2026-11-02 an image whose path could not be resolved
+// (Component::Unknown) stayed on the CPU UMD under gpu-default (reason app-component-unknown). Since that day (BD-088)
+// the CPU route is empty: such an image also takes the GPU UMD, and only the user's own Deny and
+// RenderOnCpu entries, the protected list and the built-in default Deny list keep an image on the CPU UMD. The router
+// still classifies the image for its route line. It passes final resolved paths (router-identity.h), so "\\?\", 8.3
+// and junction spellings reach this test as one form.
 // Prefix tests are case-insensitive and end at a path separator, so "C:\Windows2" or "C:\Windows.old" do not match.
 inline bool HasDirPrefix(const wchar_t *path, const wchar_t *dir)
 {
@@ -216,11 +218,19 @@ inline AppDecision DecideApp(const AppInputs &in)
     // test answers under gpu-default only.
     if (IsCpuOnlyDialogHost(in.exe_base) && !InList(in.exe_base, in.allow))
         return {AppRoute::Cpu, AppReason::DialogHost};
-    if (in.mode == AppMode::GpuDefault && in.component == Component::Unknown && !InList(in.exe_base, in.allow))
-        return {AppRoute::Cpu, AppReason::ComponentUnknown};
     if (!in.entry_10_2) return {AppRoute::Cpu, AppReason::D3d10Entry};
     if (!in.gpu_umd_set) return {AppRoute::Cpu, AppReason::GpuUmdUnset};
     return {AppRoute::Gpu, in.mode == AppMode::Allowlist ? AppReason::Allowed : AppReason::Default};
+}
+
+inline const char *ComponentName(Component c)
+{
+    switch (c) {
+    case Component::No: return "no";
+    case Component::Yes: return "yes";
+    case Component::Unknown: return "unknown";
+    }
+    return "invalid";
 }
 
 inline const char *AppModeName(AppMode m)
@@ -245,7 +255,6 @@ inline const char *AppReasonName(AppReason r)
     case AppReason::Denied: return "app-denied";
     case AppReason::DialogHost: return "app-dialog-host";
     case AppReason::NotAllowed: return "app-not-allowed";
-    case AppReason::ComponentUnknown: return "app-component-unknown";
     case AppReason::D3d10Entry: return "app-d3d10-entry";
     case AppReason::GpuUmdUnset: return "app-gpu-umd-unset";
     case AppReason::Allowed: return "app-allowed";
