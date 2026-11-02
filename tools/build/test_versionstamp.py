@@ -306,8 +306,13 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn(name, table["built"], f"{row['path']}: not in the 'built' list of {vs.TABLE.name}")
             shipped.setdefault(script, set()).add(name)
         self.assertGreater(len(shipped), 8, "the recipe names too few builds: the reading above went wrong")
+        # A recipe that leaves the stamp to the script it calls, with that script. The recipe must still name it.
+        stamped_by = {"compute/hip/build-rocm-payload.ps1": "compute/hip/make-rocm-payload.ps1"}
         for script, names in sorted(shipped.items()):
             text = (repo / script).read_text(encoding="utf-8", errors="replace")
+            if script in stamped_by:
+                self.assertIn(Path(stamped_by[script]).name, text, f"{script} does not call {stamped_by[script]}")
+                text = (repo / stamped_by[script]).read_text(encoding="utf-8", errors="replace")
             self.assertTrue(any(mark in text for mark in ("Set-Bc250VersionStamp", "version-stamp.ps1",
                                                           "rc-header")),
                             f"{script} ships {', '.join(sorted(names))} and writes no version resource")
