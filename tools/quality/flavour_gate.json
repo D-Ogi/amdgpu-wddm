@@ -4298,6 +4298,16 @@
    "name": "BC250_SPLIT_BATCH",
    "where": "mesa-wddm src/amd/vulkan/radv_bc250.c (hosted ICD)",
    "reason": "not an environment input: bc250_split_batch is the NIR label of the split-batch setup shader (both flavours), and BC250_SPLIT_BATCH is the tag of the lab split-batch trace, which the release flavour compiles out"
+  },
+  {
+   "name": "BC250_DXVK_ENGINE_FUNCS",
+   "where": "bc250-win driver/umd/dxvk (shell-engine ABI record; ddi-device-create.h)",
+   "reason": "not an environment input: the C type name of the shell-engine interface record (driver/umd/dxvk engine ABI header, used in ddi-device-create.h), which the D3D11 shell carries in both flavours only as text of a function signature: std::source_location::function_name() of the DDI entry and status notes (ddi-entry.h, ddi-status-note.h) names the parameter types of create_ddi_device"
+  },
+  {
+   "name": "BC250_DXVK_SHELL_SERVICES",
+   "where": "bc250-win driver/umd/dxvk (shell services record of the engine ABI; ddi-adapter.cpp, ddi-device-create.h)",
+   "reason": "not an environment input: the C type name of the shell services record that the shell gives the engine (driver/umd/dxvk engine ABI header, used in ddi-device-create.h), which the D3D11 shell carries in both flavours only as text of a function signature: std::source_location::function_name() of the DDI entry and status notes (ddi-entry.h, ddi-status-note.h) names the parameter types of create_ddi_device"
   }
  ],
  "package": {
