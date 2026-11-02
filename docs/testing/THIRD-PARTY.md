@@ -26,7 +26,8 @@ and NOTICE in the package root).
 | `tools\amdgpu_wddm_d3d12caps.exe` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`tools/win/d3d12caps`) |
 | `kmd\amdgpu-state.bin`, `tools\amdgpu-state-installer.exe`, `tools\state-reader.ps1` | amdgpu-wddm `driver/state` and `tools/release/installer`: the state file from the kernel driver build at `aac4b053cef681addc4a67c2913d0cff7706a6a3`, the state installer at `aac4b053cef681addc4a67c2913d0cff7706a6a3` |
 | `tools\d3d11bench.exe` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`tools/win/d3d11bench`) |
-| `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
+| `tools\hip\amdhip64.dll`, `tools\hip\vadd.exe`, `tools\hip\bc250hipblas.dll` | amdgpu-wddm `6115ab3527d2e79ae0287dd91d003e9def8dc375` (`compute/hip`: the runtime and the sample, and `compute/hipblas`), experimental |
+| `tools\hip\rocm\amdhip64_7.dll`, `tools\hip\rocm\libhipblaslt.dll`, `tools\hip\rocm\attach-rocm-venv.ps1`, `tools\hip\rocm\rocm-files.ps1`, `tools\hip\rocm\payload.json` | amdgpu-wddm `6115ab3527d2e79ae0287dd91d003e9def8dc375` (`compute/hip`, `tools/release/installer`: the AMD ABI face, hipBLASLt front and venv attach step), experimental |
 | `control\amdgpu_wddm_control.exe` | amdgpu-wddm `aac4b053cef681addc4a67c2913d0cff7706a6a3` (`tools/win/amdgpu_wddm_control`) |
 | `tools\start-confirm.ps1`, `tools\start-confirm-core.ps1`, `tools\dwm-session.ps1`, `tools\release-witness.ps1`, `installer\*`, `*.cmd`, `cert\amdgpu-wddm-release.cer`, `kmd\bc250kmd.cat` | amdgpu-wddm (this release) |
 

@@ -3115,7 +3115,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
       "tree": "worktree",
       "recipe": "compute/hip/build-runtime.ps1",
       "args": [
@@ -3164,7 +3164,106 @@
       ],
       "inputs": {
         "layer1": {
-          "workspace": "scratch/t35/release/hip-layer1"
+          "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+        }
+      }
+    },
+    {
+      "id": "extra-rocm-release",
+      "component": "tool",
+      "flavour": "release",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+      "tree": "worktree",
+      "recipe": "compute/hip/build-rocm-payload.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "release",
+        "-Root",
+        "{root}",
+        "-Bc250hsaLib",
+        "{input:layer1}/bc250hsa.lib",
+        "-TheRockInput",
+        "{input:therock}",
+        "-PreviousPayloadManifest",
+        "{input:history}/payload.json",
+        "-PreviousPayloadSha256",
+        "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "rocm/amdhip64_7.dll",
+          "path": "payload/tools/hip/rocm/amdhip64_7.dll",
+          "authenticode": true
+        },
+        {
+          "file": "rocm/libhipblaslt.dll",
+          "path": "payload/tools/hip/rocm/libhipblaslt.dll",
+          "authenticode": true
+        },
+        {
+          "file": "rocm/attach-rocm-venv.ps1",
+          "path": "payload/tools/hip/rocm/attach-rocm-venv.ps1"
+        },
+        {
+          "file": "rocm/payload.json",
+          "path": "payload/tools/hip/rocm/payload.json"
+        },
+        {
+          "file": "rocm/rocm-files.ps1",
+          "path": "payload/tools/hip/rocm/rocm-files.ps1"
+        }
+      ],
+      "keep": [
+        "front/blaslt-front.json",
+        "front/test_blaslt_front.txt",
+        "test_blaslt_front_stamped.txt",
+        "face/amd-headers.json",
+        "face/parallel-test/result.json"
+      ],
+      "tests": [
+        {
+          "name": "rocm-attach",
+          "run": "compute/hip/tests/host/test-attach-rocm-venv.ps1",
+          "args": [
+            "-Work",
+            "{testout}/attach"
+          ],
+          "pass": "^test-attach-rocm-venv: \\d+ PASS, 0 FAIL$"
+        },
+        {
+          "name": "rocm-installer",
+          "run": "tools/release/test-rocm-venvs.ps1",
+          "args": [
+            "-Out",
+            "{testout}/installer"
+          ],
+          "pass": "^test-rocm-venvs: \\d+ checks passed$"
+        }
+      ],
+      "inputs": {
+        "layer1": {
+          "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+        },
+        "therock": {
+          "workspace": "scratch/t36/f11-rocm/rocm-input"
+        },
+        "history": {
+          "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
         }
       }
     },
@@ -3279,7 +3378,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
       "tree": "worktree",
       "recipe": "compute/hip/build-runtime.ps1",
       "args": [
@@ -3328,7 +3427,106 @@
       ],
       "inputs": {
         "layer1": {
-          "workspace": "scratch/t35/release/hip-layer1"
+          "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+        }
+      }
+    },
+    {
+      "id": "extra-rocm-lab",
+      "component": "tool",
+      "flavour": "lab",
+      "arch": "x64",
+      "repo": "amdgpu-wddm",
+      "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+      "tree": "worktree",
+      "recipe": "compute/hip/build-rocm-payload.ps1",
+      "args": [
+        "-Kits",
+        "{root}/toolchain/nuget",
+        "-Out",
+        "{out}",
+        "-Compiler",
+        "clang-cl",
+        "-Version",
+        "{version}",
+        "-Flavour",
+        "lab",
+        "-Root",
+        "{root}",
+        "-Bc250hsaLib",
+        "{input:layer1}/bc250hsa.lib",
+        "-TheRockInput",
+        "{input:therock}",
+        "-PreviousPayloadManifest",
+        "{input:history}/payload.json",
+        "-PreviousPayloadSha256",
+        "1d212df471d25b1e41c92f0d123a81abf8524ac8778e3c59fc2f837a37605bc2"
+      ],
+      "compiler": "clang-cl",
+      "kind": "user",
+      "deterministic": false,
+      "disk_peak_gb": 0.5,
+      "unverified": "The host tests pass; cross-directory byte-identical rebuilds are not claimed.",
+      "outputs": [
+        {
+          "file": "rocm/amdhip64_7.dll",
+          "path": "payload/tools/hip/rocm/amdhip64_7.dll",
+          "authenticode": true
+        },
+        {
+          "file": "rocm/libhipblaslt.dll",
+          "path": "payload/tools/hip/rocm/libhipblaslt.dll",
+          "authenticode": true
+        },
+        {
+          "file": "rocm/attach-rocm-venv.ps1",
+          "path": "payload/tools/hip/rocm/attach-rocm-venv.ps1"
+        },
+        {
+          "file": "rocm/payload.json",
+          "path": "payload/tools/hip/rocm/payload.json"
+        },
+        {
+          "file": "rocm/rocm-files.ps1",
+          "path": "payload/tools/hip/rocm/rocm-files.ps1"
+        }
+      ],
+      "keep": [
+        "front/blaslt-front.json",
+        "front/test_blaslt_front.txt",
+        "test_blaslt_front_stamped.txt",
+        "face/amd-headers.json",
+        "face/parallel-test/result.json"
+      ],
+      "tests": [
+        {
+          "name": "rocm-attach",
+          "run": "compute/hip/tests/host/test-attach-rocm-venv.ps1",
+          "args": [
+            "-Work",
+            "{testout}/attach"
+          ],
+          "pass": "^test-attach-rocm-venv: \\d+ PASS, 0 FAIL$"
+        },
+        {
+          "name": "rocm-installer",
+          "run": "tools/release/test-rocm-venvs.ps1",
+          "args": [
+            "-Out",
+            "{testout}/installer"
+          ],
+          "pass": "^test-rocm-venvs: \\d+ checks passed$"
+        }
+      ],
+      "inputs": {
+        "layer1": {
+          "workspace": "scratch/t36/f11-rocm/release/hip-layer1-6115ab35"
+        },
+        "therock": {
+          "workspace": "scratch/t36/f11-rocm/rocm-input"
+        },
+        "history": {
+          "workspace": "scratch/t36/f11-rocm/tmp/kit8-qwen-split"
         }
       }
     }
