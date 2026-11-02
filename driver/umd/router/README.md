@@ -20,10 +20,10 @@ driver of its own. At every `OpenAdapter10` / `OpenAdapter10_2` call it picks on
   `router-policy.h`, reason `app-dialog-host`): the images whose window the application GPU UMD was measured not
   to show. It holds `PickerHost.exe`, the File Picker UI Host, which serves the Windows firewall notification
   dialog and the modern file open and save dialogs. That firewall notification stayed an empty white window for
-  two minutes on the GPU route (BD-126, 2026-10-12 on tester.28). It also holds `SecHealthUI.exe`, the Windows
-  Security app: opening it on the GPU route made DWM crash in a loop, about every 7 s (`dwmcore.dll` 0x8898008D),
-  until its window closed, and with the image in `Deny` it opened and worked (BD-168 class, 2026-10-20 on
-  tester.31v2, 26100). Users open it to turn Smart App Control off. It also holds `SearchHost.exe`, the Start
+  two minutes on the GPU route (BD-126, 2026-10-12 on tester.28). `SecHealthUI.exe`, the Windows Security app,
+  was on the list from tester.31v3 to tester.35, because opening it on the GPU route made DWM crash in a loop (BD-168
+  class, 2026-10-20 on tester.31v2). With the BD-168 fix in the desktop zink it opened and painted on the GPU route
+  with no DWM restart (2026-11-02), so it is off the list. The list also holds `SearchHost.exe`, the Start
   menu search: typing in it on the GPU route made DWM crash every 3 to 7 s, and with the image in `Deny` there was
   no crash (BD-168 class, GitHub #44, tester.32 on 26300). The function name and the reason name come
   from the first entry. It names one image per measured failure and never a

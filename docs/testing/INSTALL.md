@@ -412,14 +412,15 @@ the whole description.
   Microsoft applications. The value `Mode` in `HKLM\SOFTWARE\amdgpu-wddm\AppRouter` holds `gpu-default`, and the
   `Allow` and `Deny` lists beside it are empty in a new install. These programs stay on the CPU route (software
   rendering): the processes of the logon and lock screens, a program you put in the `Deny` list, and a program
-  you set to processor rendering in Nagi Control App. The driver also keeps `PickerHost.exe`, `SecHealthUI.exe`
-  and `SearchHost.exe` there by itself. `PickerHost.exe` is the program
+  you set to processor rendering in Nagi Control App. The driver also keeps `PickerHost.exe` and `SearchHost.exe`
+  there by itself. `PickerHost.exe` is the program
   behind the Windows firewall notification window ("Windows Security") and behind the file open and save windows.
-  That firewall window stayed white and empty on the GPU route. `SecHealthUI.exe` is the Windows Security app. On
-  the GPU route, the desktop compositor (DWM) stopped and started again about every 7 seconds while its window was
-  open. `SearchHost.exe` is the Start menu search. On the GPU route, DWM stopped and started again every few
-  seconds while you typed in it. So the driver sends these three programs to the processor. An entry in the `Allow`
-  list puts a program back on the GPU, these three included. `Mode` `allowlist` gives the
+  That firewall window stayed white and empty on the GPU route. `SearchHost.exe` is the Start menu search. On the
+  GPU route, the desktop compositor (DWM) stopped and started again every few seconds while you typed in it. So the
+  driver sends these two programs to the processor. The Windows Security app (`SecHealthUI.exe`) runs on the GPU
+  again: the earlier releases kept it on the processor, because DWM stopped and started again while its window was
+  open, and the fix of that DWM fault removes the need. An entry in the `Allow` list puts a program back on the GPU,
+  these two included. `Mode` `allowlist` gives the
   behaviour of the earlier releases: the CPU route for every program, and the GPU only for the programs in
   `Allow`. A program on the CPU route gets Direct3D feature level 10_0 only. A program that needs feature level
   11_0 or higher does not start there. This is a known limit of the CPU route, not a defect. Use the Direct3D 12

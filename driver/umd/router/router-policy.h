@@ -136,10 +136,10 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 //    "PickerHost.exe D3D11 GPU" (BD-126). This entry changes the route and nothing else: whether that dialog
 //    paints on the CPU UMD is not measured yet, the CPU UMD offers FL 10_0 only (BD-088), so content that demands
 //    FL 11_0 gets no device there, and every window of this image moves with it, the file dialogs included.
-//  - SecHealthUI.exe, the Windows Security app. On 2026-10-20 (tester.31v2 on 26100, gpu-default) opening it made
-//    DWM crash in a loop, about every 7 s (dwmcore.dll 0x8898008D), until its window closed; with the image in the
-//    registry Deny list it opened and worked with no crash (BD-168 class). Users open it to turn Smart App Control
-//    off. Like the entry above, this one routes around a failure that is not diagnosed yet.
+//  SecHealthUI.exe, the Windows Security app, was on this list from tester.31v3 to tester.35: on 2026-10-20 (tester.31v2
+//  on 26100) opening it on the GPU UMD made DWM crash in a loop (dwmcore.dll 0x8898008D, the BD-168 class). It is
+//  off the list since 2026-11-02: with the BD-168 fix in the desktop zink (1BD064AD), the app opened on the GPU
+//  route and painted its window, and DWM kept the same process (lab run 20261102T041155Z, BD-088 kit).
 //  - SearchHost.exe, the Start menu search. On 2026-10-28 a tester (GitHub #44, tester.32 on 26300, 1080p59 over a
 //    DP-to-HDMI adapter) reported that typing in the search made DWM crash every 3 to 7 s (48 times in 8 minutes,
 //    dwmcore.dll 0x8898008D, the BD-168 class). The A/B of that tester: with the image in the registry Deny list,
@@ -155,7 +155,7 @@ inline bool IsProtectedApp(const wchar_t *exe_base)
 // allowlist, "not listed in Allow" answer before it and keep their own reasons.
 inline bool IsCpuOnlyDialogHost(const wchar_t *exe_base)
 {
-    static const wchar_t list[] = L"pickerhost.exe\0sechealthui.exe\0searchhost.exe\0";
+    static const wchar_t list[] = L"pickerhost.exe\0searchhost.exe\0";
     return InList(exe_base, list);
 }
 
