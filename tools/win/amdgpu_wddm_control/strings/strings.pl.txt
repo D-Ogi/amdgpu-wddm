@@ -1397,6 +1397,7 @@ rocm.failed|mt|c2b2ce13|Operacja nie powiodła się (kod wyjścia {0}).
 rocm.state.attached|mt|ac6d9b76|Podłączono
 rocm.state.detached|mt|13438579|Odłączono
 rocm.state.refused|mt|c1ebc781|Wymaga uwagi
+rocm.state.missing|mt|50b45e7c|Nie znaleziono środowiska
 rocm.state.recovery|mt|4f222673|Wymagane przywracanie
 rocm.state.error|mt|cf91d056|Nie można odczytać
 rocm.state.unknown|mt|d16948e7|Nie sprawdzono

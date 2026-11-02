@@ -73,7 +73,7 @@ namespace AmdgpuWddmControl
                     var state = Ui.Label(stateText, null, stateColor, card.Inner);
 
                     var buttons = Ui.WrapRow(card.Inner);
-                    if (v.State != "attached" && v.State != "recovery")
+                    if (v.State != "attached" && v.State != "recovery" && v.State != "missing")
                     {
                         var attach = Ui.Button(Strings.T("rocm.attach"), (s, e) => RunRocmAttach(venv.Path), true);
                         attach.Enabled = !_rocmActing;

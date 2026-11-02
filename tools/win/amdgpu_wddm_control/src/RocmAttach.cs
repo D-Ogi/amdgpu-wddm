@@ -189,6 +189,7 @@ namespace AmdgpuWddmControl
             if (last.Contains("CHECK attached")) return "attached";
             if (last.Contains("CHECK detached")) return "detached";
             if (last.Contains("RECOVERY REQUIRED:")) return "recovery";
+            if (last.Contains("MISSING:")) return "missing";
             if (last.Contains("REFUSED:")) return "refused";
             return "unknown";
         }

@@ -1395,6 +1395,7 @@ rocm.failed|mt|c2b2ce13|작업이 실패했습니다 (종료 코드 {0}).
 rocm.state.attached|mt|ac6d9b76|연결됨
 rocm.state.detached|mt|13438579|분리됨
 rocm.state.refused|mt|c1ebc781|주의 필요
+rocm.state.missing|mt|50b45e7c|환경을 찾을 수 없음
 rocm.state.recovery|mt|4f222673|복구 필요
 rocm.state.error|mt|cf91d056|읽을 수 없음
 rocm.state.unknown|mt|d16948e7|확인되지 않음

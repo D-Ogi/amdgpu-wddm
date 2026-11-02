@@ -1395,6 +1395,7 @@ rocm.failed|mt|c2b2ce13|操作が失敗しました（終了コード {0}）。
 rocm.state.attached|mt|ac6d9b76|接続済み
 rocm.state.detached|mt|13438579|切断済み
 rocm.state.refused|mt|c1ebc781|対応が必要
+rocm.state.missing|mt|50b45e7c|環境が見つかりません
 rocm.state.recovery|mt|4f222673|復旧が必要です
 rocm.state.error|mt|cf91d056|読み取れません
 rocm.state.unknown|mt|d16948e7|未確認

@@ -1414,6 +1414,7 @@ rocm.failed|src|-|The operation did not succeed (exit {0}).
 rocm.state.attached|src|-|Attached
 rocm.state.detached|src|-|Detached
 rocm.state.refused|src|-|Needs attention
+rocm.state.missing|src|-|Environment not found
 rocm.state.recovery|src|-|Recovery required
 rocm.state.error|src|-|Could not read
 rocm.state.unknown|src|-|Not checked
