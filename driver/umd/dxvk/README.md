@@ -390,6 +390,11 @@ What the new entries do:
   Reclaim2 refuses with a status other than removal. Every success returns S_OK: d3d11.dll removes the
   device for any other status of these entries, success codes included (Reason 6). Each reclaim that
   leaves the plain path writes one `BC250 BD-283` line with both callback answers and the fence.
+- Each Offer, Reclaim and Trim writes one `BC250 residency:` line with the entry, the number of resources and kernel
+  allocations, the discarded count and the status. The lines have a budget of 64 at the start, then 8 in each
+  minute. Engine info lines have a budget of 256 at the start, then 16 in each minute. A fixed budget was spent at
+  the start of a shell host, so its later TrimMemory lines were lost (BD-283). `tools/win/offer-reclaim` is the
+  oracle client of this path.
 - `Present1` and `PresentMultiplaneOverlay1` behave as their DXGI 1.4 forms: one surface goes to the
   DXGI 1.2 Present, the rotation hint is a hint and is not taken, and an overlay present is refused.
 - The four shader-cache entries are unreachable. The adapter answers `D3DWDDM2_2DDICAPS_SHADERCACHE`

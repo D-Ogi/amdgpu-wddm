@@ -31,6 +31,7 @@
 #include "../recent-launch/recent-launch.h"
 #include "ddi-format.h"
 #include "ddi-resource-status.h"
+#include "diagnostics.h"
 #include <cstring>
 #include <d3d9.h>
 #include <cstdlib>
@@ -1388,6 +1389,20 @@ int main() {
             privateStatus!=DXGI_DDI_RESIDENCY_FULLY_RESIDENT || owner.runtime().domain.entered()) fail(__LINE__);
         mixedReclaim.Resources=1; kept[0]=9;
         if (resourceTable.pfnReclaimResources(&mixedReclaim)!=S_OK || reclaimCalls!=reclaims+1 || kept[0]) fail(__LINE__);
+    }
+    // BD-283 follow-up: the line allowance of a long-lived process. Start-up lines first, then a few in each minute,
+    // and the next line let through carries the count of the lines the minute limit skipped.
+    {
+        LineAllowance a{3,2}; unsigned skipped=9; bool last=true;
+        if (!a.take(5,skipped,last) || skipped || last || !a.take(5,skipped,last) || last ||
+            !a.take(5,skipped,last) || !last) fail(__LINE__);                    // the third is the last start-up line
+        if (!a.take(5,skipped,last) || skipped || last || !a.take(5,skipped,last) || skipped) fail(__LINE__);
+        if (a.take(5,skipped,last) || a.take(5,skipped,last) || a.take(5,skipped,last)) fail(__LINE__);
+        if (!a.take(6,skipped,last) || skipped!=3 || last) fail(__LINE__);       // a new minute reports the three
+        if (!a.take(6,skipped,last) || skipped || a.take(6,skipped,last)) fail(__LINE__);
+        if (!a.take(9,skipped,last) || skipped!=1) fail(__LINE__);               // hours later, still lines
+        LineAllowance none{0,0};
+        if (none.take(1,skipped,last) || none.take(2,skipped,last)) fail(__LINE__);
     }
     // BD-283, trim -> reuse: a hidden ShellExperienceHost offers its surfaces, and the first Reclaim when it is shown
     // again got E_FAIL from the synchronous ReclaimAllocationsCb; d3d11.dll removed the device for it, Reason 6

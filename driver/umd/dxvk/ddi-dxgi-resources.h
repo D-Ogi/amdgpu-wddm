@@ -14,6 +14,10 @@ template<typename Submit> HRESULT offer_after_submit(RuntimeDevice &runtime,
     return runtime.KTCallbacks.pfnOfferAllocationsCb(runtime.hDevice,&request);
 }
 void install_dxgi_resource_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &);
+// BD-283: one line for each Offer, Reclaim and Trim of the device (entry, counts, status), so that the order of a
+// hide, its Trim and Offer, the Reclaim at the next show and a device mark can be read from the log of a host that
+// runs for hours. 64 lines at the start, then 8 in each minute (LineAllowance, diagnostics.h); a printf format.
+void residency_note(const char *format,...) noexcept;
 // The two resource entries that the DXGI 1.6.1 table replaces: OfferResources1, which adds the offer
 // flags, and ReclaimResources1, which reports a result per resource in place of a discarded flag. Every
 // other resource entry of that table is the one above, at the same offset (ddi-wddm22.cpp).

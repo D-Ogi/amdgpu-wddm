@@ -46,17 +46,48 @@ inline void device_life_note(std::atomic_uint &budget,const char *format,...) no
     OutputDebugStringA(text);
     amdgpu_wddm_log::print("%s",text);
 }
+// A line budget for a process that lives for hours: `startup` lines, then `perMinute` lines in each minute. take()
+// gets the minute from the caller (GetTickCount64()/60000), so a host test can move it. BD-283: a fixed budget of
+// 256 engine info lines was spent at the start of a ShellExperienceHost, and its TrimMemory lines, which come at
+// each hide, were lost. The count of lines that the minute limit skipped goes to the next line let through.
+class LineAllowance {
+public:
+    constexpr LineAllowance(unsigned startup,unsigned perMinute) noexcept : startup_(startup),per_minute_(perMinute) {}
+    // True when the line may go out. `skipped`: lines lost to the minute limit since the last line let through.
+    // `lastStartup`: this line is the last of the start-up budget.
+    bool take(ULONGLONG minute,unsigned &skipped,bool &lastStartup) noexcept {
+        skipped=0; lastStartup=false;
+        unsigned left=startup_.load(std::memory_order_relaxed);
+        while(left && !startup_.compare_exchange_weak(left,left-1,std::memory_order_relaxed)){}
+        if(left) { lastStartup=left==1; return true; }
+        ULONGLONG seen=minute_.load(std::memory_order_relaxed);
+        // Two threads at a minute change can each let one line more through: a bound, not an exact count.
+        if(seen!=minute && minute_.compare_exchange_strong(seen,minute,std::memory_order_relaxed))
+            used_.store(0,std::memory_order_relaxed);
+        if(used_.fetch_add(1,std::memory_order_relaxed)>=per_minute_) {
+            skipped_.fetch_add(1,std::memory_order_relaxed); return false;
+        }
+        skipped=skipped_.exchange(0,std::memory_order_relaxed);
+        return true;
+    }
+private:
+    std::atomic_uint startup_;
+    const unsigned per_minute_;
+    std::atomic<ULONGLONG> minute_{~0ull};
+    std::atomic_uint used_{0},skipped_{0};
+};
 inline void APIENTRY engine_diagnostic(void *,UINT32 level,const char *message) noexcept {
     if(!message || level<1 || level>3)return;
     if(level==3){
         // Info lines only on the AMDGPU_WDDM_LOG sink, when the process asked for one (d3d12/stdio-log.h): DXVK's
         // "Effective configuration" there shows the options of the per-application settings. Bounded apart from
-        // the errors and warnings below.
+        // the errors and warnings below: 256 at the start, then 16 in each minute.
         if(!amdgpu_wddm_log::enabled())return;
-        static std::atomic_uint info{256};
-        unsigned left=info.load(std::memory_order_relaxed);
-        while(left && !info.compare_exchange_weak(left,left-1,std::memory_order_relaxed)){}
-        if(left)amdgpu_wddm_log::print("M14 engine info: %.1024s%s\n",message,left==1?" [info limit reached]":"");
+        static LineAllowance info{256,16};
+        unsigned skipped=0; bool last=false;
+        if(!info.take(GetTickCount64()/60000,skipped,last))return;
+        if(skipped)amdgpu_wddm_log::print("M14 engine info: %u lines skipped by the limit of 16 a minute\n",skipped);
+        amdgpu_wddm_log::print("M14 engine info: %.1024s%s\n",message,last?" [start-up info budget spent, then 16 a minute]":"");
         return;
     }
     // No adapter userdata: even a quarantined device can log after CloseAdapter.

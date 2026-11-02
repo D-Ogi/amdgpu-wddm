@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 #include "ddi-dxgi-resources.h"
 #include "runtime-surface-allocation.h"
+#include "diagnostics.h"
 #include <algorithm>
 #include <atomic>
 #include <climits>
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
 namespace bc250::umd {
@@ -70,11 +72,13 @@ HRESULT allocation_batch(DeviceOwner &owner,const DXGI_DDI_HRESOURCE *resources,
 }
 HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
     if (!args) { dxgi_entry_note("OfferResources",E_INVALIDARG); return E_INVALIDARG; }
-    return entry("OfferResources",args->hDevice,[&](DeviceOwner &owner) {
+    UINT kernel=0;
+    const HRESULT status=entry("OfferResources",args->hDevice,[&](DeviceOwner &owner) {
         if (args->Priority<D3DDDI_OFFER_PRIORITY_LOW || args->Priority>D3DDDI_OFFER_PRIORITY_AUTO)
             return E_INVALIDARG;
         std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
         HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
+        kernel=UINT(handles.size());
         if (FAILED(hr) || handles.empty()) return hr;
         return offer_after_submit(owner.runtime(),handles.data(),UINT(handles.size()),args->Priority,[&]() -> HRESULT {
             if (!owner.context() || !owner.device()) return E_FAIL;
@@ -87,6 +91,9 @@ HRESULT APIENTRY offer(DXGI_DDI_ARG_OFFERRESOURCES *args) {
             return status();
         });
     });
+    residency_note("BC250 residency: OfferResources resources=%u kernel=%u priority=%u returns %08X\n",args->Resources,
+        kernel,unsigned(args->Priority),unsigned(status));
+    return status;
 }
 // BD-283: one line for each reclaim that did not take the plain path, the answers of both callbacks and the fence in
 // it, 16 for each process. The line is written for a recovered reclaim too (Reclaim2 refused, the synchronous
@@ -150,19 +157,25 @@ HRESULT reclaim_allocations(DeviceOwner &owner,const char *name,std::vector<D3DK
 }
 HRESULT APIENTRY reclaim(DXGI_DDI_ARG_RECLAIMRESOURCES *args) {
     if (!args) { dxgi_entry_note("ReclaimResources",E_INVALIDARG); return E_INVALIDARG; }
-    return entry("ReclaimResources",args->hDevice,[&](DeviceOwner &owner) {
+    UINT kernel=0,lost=0;
+    const HRESULT status=entry("ReclaimResources",args->hDevice,[&](DeviceOwner &owner) {
         std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
         HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
+        kernel=UINT(handles.size());
         if (FAILED(hr)) return hr;
         std::vector<BOOL> discarded(handles.size(),FALSE);
         if (!handles.empty()) {
             hr=reclaim_allocations(owner,"ReclaimResources",handles,discarded);
             if (FAILED(hr)) return hr;
         }
+        lost=UINT(std::count(discarded.begin(),discarded.end(),TRUE));
         if (args->pDiscarded)
             for (UINT i=0;i<args->Resources;++i) args->pDiscarded[i]=slot[i]==UINT_MAX ? FALSE : discarded[slot[i]];
         return hr;
     });
+    residency_note("BC250 residency: ReclaimResources resources=%u kernel=%u discarded=%u returns %08X\n",
+        args->Resources,kernel,lost,unsigned(status));
+    return status;
 }
 // DXGI 1.6.1 (BD-099). OfferResources1 adds D3DDDI_OFFER_FLAGS, whose one flag is AllowDecommit: the
 // kernel may then give the pages back and the resource comes back without its contents, which Reclaim
@@ -186,21 +199,27 @@ HRESULT APIENTRY offer_resources1(DXGI_DDI_ARG_OFFERRESOURCES1 *args) {
 // engine-private resource is a hint only, as in the batch helper above, so it reports OK.
 HRESULT APIENTRY reclaim_resources1(DXGI_DDI_ARG_RECLAIMRESOURCES1 *args) {
     if (!args) { dxgi_entry_note("ReclaimResources1",E_INVALIDARG); return E_INVALIDARG; }
-    return entry("ReclaimResources1",args->hDevice,[&](DeviceOwner &owner) {
+    UINT kernel=0,lost=0;
+    const HRESULT status=entry("ReclaimResources1",args->hDevice,[&](DeviceOwner &owner) {
         std::vector<D3DKMT_HANDLE> handles; std::vector<UINT> slot;
         HRESULT hr=allocation_batch(owner,args->pResources,args->Resources,handles,slot);
+        kernel=UINT(handles.size());
         if (FAILED(hr)) return hr;
         std::vector<BOOL> discarded(handles.size(),FALSE);
         if (!handles.empty()) {
             hr=reclaim_allocations(owner,"ReclaimResources1",handles,discarded);
             if (FAILED(hr)) return hr;
         }
+        lost=UINT(std::count(discarded.begin(),discarded.end(),TRUE));
         if (args->pResults)
             for (UINT i=0;i<args->Resources;++i)
                 args->pResults[i]=slot[i]!=UINT_MAX && discarded[slot[i]] ?
                     D3DDDI_RECLAIM_RESULT_DISCARDED : D3DDDI_RECLAIM_RESULT_OK;
         return hr;
     });
+    residency_note("BC250 residency: ReclaimResources1 resources=%u kernel=%u discarded=%u returns %08X\n",
+        args->Resources,kernel,lost,unsigned(status));
+    return status;
 }
 HRESULT APIENTRY display_mode(DXGI_DDI_ARG_SETDISPLAYMODE *args) {
     if (!args) { dxgi_entry_note("SetDisplayMode",E_INVALIDARG); return E_INVALIDARG; }
@@ -297,6 +316,21 @@ HRESULT APIENTRY resolve(DXGI_DDI_ARG_RESOLVESHAREDRESOURCE *args) {
         return FAILED(hr) ? hr : S_OK;
     });
 }
+}
+void residency_note(const char *format,...) noexcept {
+    static LineAllowance allowance{64,8};
+    unsigned skipped=0; bool last=false;
+    if (!allowance.take(GetTickCount64()/60000,skipped,last)) return;
+    char text[256];
+    if (skipped) {
+        std::snprintf(text,sizeof(text),"BC250 residency: %u lines skipped by the limit of 8 a minute\n",skipped);
+        OutputDebugStringA(text); amdgpu_wddm_log::print("%s",text);
+    }
+    va_list args;
+    va_start(args,format);
+    std::vsnprintf(text,sizeof(text),format,args);
+    va_end(args);
+    OutputDebugStringA(text); amdgpu_wddm_log::print("%s",text);
 }
 void install_dxgi_resource_ddi(DXGI1_2_DDI_BASE_FUNCTIONS &table) {
     table.pfnOfferResources=offer;
