@@ -87,6 +87,92 @@ static HRESULT APIENTRY destroy_sync(HANDLE device, CONST D3DDDICB_DESTROYSYNCHR
 }
 void test_present_bridge();
 void test_runtime_present();
+// BD-179: the adapter check of the host status. A scripted adapter list: the LUIDs it has, whether the enumeration
+// fails, and the handles it opened and the test closed.
+static UINT64 adapter_list[2]; static unsigned adapter_count; static bool adapter_enum_fails;
+static unsigned adapter_enums, adapter_opened, adapter_closed;
+// The entry takes a pointer to const and writes NumAdapters all the same (d3dkmthk.h, 10.0.26100).
+static NTSTATUS APIENTRY enum_adapters(const D3DKMT_ENUMADAPTERS2 *in) {
+    auto *e=const_cast<D3DKMT_ENUMADAPTERS2 *>(in);
+    ++adapter_enums;
+    if (adapter_enum_fails) return static_cast<NTSTATUS>(0xc0000001u);
+    require(e->pAdapters && e->NumAdapters>=adapter_count);
+    for (unsigned i=0;i<adapter_count;++i) {
+        e->pAdapters[i]={}; e->pAdapters[i].hAdapter=0x100+i; ++adapter_opened;
+        std::memcpy(&e->pAdapters[i].AdapterLuid,&adapter_list[i],sizeof(UINT64));
+    }
+    e->NumAdapters=adapter_count; return 0;
+}
+static NTSTATUS APIENTRY close_adapter(const D3DKMT_CLOSEADAPTER *c) {
+    require(c->hAdapter>=0x100 && c->hAdapter<0x100+adapter_count); ++adapter_closed; return 0;
+}
+static void test_adapter_presence() {
+    const AdapterPresenceKmt kmt{enum_adapters,close_adapter};
+    const UINT64 luid=0x8582, restarted=0x3a8fa1;
+    const auto status=[](HostBridge &b) { return host_dispatch(&b,BC250_HOST_CHECK_STATUS,nullptr); };
+    const auto due=[](HostBridge &b) { b.adapter_next_check_ms=0; };
+    {
+        // The case of the BD-179 dump: the check sees the adapter, a restart replaces it by one with a new LUID,
+        // and the next check latches the loss. The loss is the proof that the device's work ended.
+        RuntimeDevice d; d.hDevice=&identity; HostBridge b{}; b.device=&d; b.adapter_kmt=&kmt;
+        (void)host_descriptor(b,luid);
+        require(b.adapter_luid==luid);
+        RuntimeDomain::Scope scope(d.domain);
+        ddi_entry_class=DdiErrorClass::nothing;
+        adapter_list[0]=luid; adapter_count=1; adapter_enum_fails=false; adapter_enums=adapter_opened=adapter_closed=0;
+        require(status(b)==0 && b.adapter_state==kAdapterSeen && adapter_enums==1);
+        // Within kAdapterCheckMs the list is not read again.
+        adapter_list[0]=restarted;
+        require(status(b)==0 && adapter_enums==1 && !b.device_lost);
+        // A failed enumeration is no evidence.
+        due(b); adapter_enum_fails=true;
+        require(status(b)==0 && adapter_enums==2 && b.adapter_state==kAdapterSeen && !b.device_lost);
+        due(b); adapter_enum_fails=false;
+        require(!kernel_ended_device_work(b));
+        require(status(b)==static_cast<int32_t>(0xc00002b6u) && adapter_enums==3 && b.device_lost && adapter_left(b));
+        require(kernel_ended_device_work(b) && settle_device_work(b,0));
+        // The state stays: the list is not read again, every status reports the loss.
+        due(b);
+        require(status(b)<0 && adapter_enums==3);
+        require(adapter_opened==adapter_closed && adapter_opened==2); // the failed enumeration opened none
+        const DeviceLossRecord loss=last_device_loss();
+        require(!std::strcmp(loss.reason,"the adapter of this device left the system"));
+    }
+    {
+        // A LUID that the list never had (a wrong LUID, a list that this process cannot read) never arms the check.
+        RuntimeDevice d; d.hDevice=&identity; HostBridge b{}; b.device=&d; b.adapter_kmt=&kmt;
+        (void)host_descriptor(b,luid);
+        RuntimeDomain::Scope scope(d.domain);
+        adapter_list[0]=restarted; adapter_count=1; adapter_enums=0;
+        for (int i=0;i<3;++i) { due(b); require(status(b)==0); }
+        require(adapter_enums==3 && b.adapter_state==kAdapterUnchecked && !b.device_lost && !kernel_ended_device_work(b));
+    }
+    {
+        // An adapter that stays: no loss, ever; two adapters in the list, both handles closed.
+        RuntimeDevice d; d.hDevice=&identity; HostBridge b{}; b.device=&d; b.adapter_kmt=&kmt;
+        (void)host_descriptor(b,luid);
+        RuntimeDomain::Scope scope(d.domain);
+        adapter_list[0]=restarted; adapter_list[1]=luid; adapter_count=2; adapter_enums=adapter_opened=adapter_closed=0;
+        for (int i=0;i<3;++i) { due(b); require(status(b)==0); }
+        require(adapter_enums==3 && b.adapter_state==kAdapterSeen && !b.device_lost && adapter_opened==adapter_closed);
+    }
+    {
+        // A bridge without a LUID (no hosted instance yet) makes no kernel call.
+        RuntimeDevice d; d.hDevice=&identity; HostBridge b{}; b.device=&d; b.adapter_kmt=&kmt;
+        RuntimeDomain::Scope scope(d.domain);
+        adapter_enums=0;
+        require(status(b)==0 && adapter_enums==0);
+    }
+    // The probe alone: a complete list with the LUID, without it, a failed one, and no entries.
+    adapter_list[0]=luid; adapter_count=1; adapter_enum_fails=false;
+    require(probe_adapter_presence(luid,kmt)==AdapterPresence::present);
+    require(probe_adapter_presence(restarted,kmt)==AdapterPresence::gone);
+    adapter_enum_fails=true;
+    require(probe_adapter_presence(luid,kmt)==AdapterPresence::unknown);
+    adapter_enum_fails=false;
+    require(probe_adapter_presence(luid,AdapterPresenceKmt{})==AdapterPresence::unknown);
+    require(probe_adapter_presence(0,kmt)==AdapterPresence::unknown);
+}
 int main() {
     test_present_bridge();
     test_runtime_present();
@@ -299,7 +385,8 @@ int main() {
         require(bc250_host_fence_valid(&host,5,"sync value",3) && !reporting.device_lost);
         require(!bc250_host_fence_valid(&host,UINT64_MAX,"sync value",3) && reporting.device_lost);
     }
-    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, teardown\n";
+    test_adapter_presence();
+    std::cout << "PASS runtime bridge: allocation outputs, context translation, submission, sparse update, mapped destroy to Deallocate, worker denial, host-lost class, adapter check, teardown\n";
 }
 
 
