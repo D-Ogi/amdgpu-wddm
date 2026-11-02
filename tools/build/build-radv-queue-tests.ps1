@@ -1,7 +1,10 @@
+# The hosted queue and CPU fence wait tests of a built WDDM2 winsys: radv-queue-tests.py in the Visual Studio
+# environment of the build's architecture.
 param(
     [Parameter(Mandatory)][string]$Source,
     [Parameter(Mandatory)][string]$Build,
     [Parameter(Mandatory)][string]$OutputDir,
+    [ValidateSet('x64', 'x86')][string]$Arch = 'x64',
     [string]$VsInstall
 )
 $ErrorActionPreference = 'Stop'
@@ -14,7 +17,7 @@ try {
     $tmp = "$OutputDir-tmp"
     $env:TEMP = $tmp
     $env:TMP = $tmp
-    $null = Import-VsDevEnvironment $VsInstall $tmp
+    $null = Import-VsDevEnvironment $VsInstall $tmp $Arch
     python "$PSScriptRoot\radv-queue-tests.py" --source $Source --build $Build --output $OutputDir
     if ($LASTEXITCODE) { throw 'RADV queue tests failed; see output directory.' }
 } finally {
