@@ -1834,7 +1834,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "088a15881c6115549956743b8d9bfda1a1f15e10",
+      "commit": "63fd611f283c94929215c0282d6e4538c694ca7d",
       "base": "088a15881c6115549956743b8d9bfda1a1f15e10",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1872,7 +1872,7 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36)."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f)."
     },
     {
       "id": "cpu-x64-rel",
@@ -2032,7 +2032,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "088a15881c6115549956743b8d9bfda1a1f15e10",
+      "commit": "63fd611f283c94929215c0282d6e4538c694ca7d",
       "base": "088a15881c6115549956743b8d9bfda1a1f15e10",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -2071,7 +2071,7 @@
           "path": "payload/desktop/bc250d3d_zink.dll"
         }
       ],
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36)."
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f)."
     },
     {
       "id": "cpu-x64-lab",
