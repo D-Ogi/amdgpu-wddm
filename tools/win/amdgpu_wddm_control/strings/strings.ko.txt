@@ -1379,3 +1379,24 @@ oc.state.unclean|mt|bf3d28b8|컴퓨터가 예기치 않게 멈춰서 더 높은 
 oc.note.lowered|mt|9f9534fd|저장된 값 중 일부가 새 한도보다 높습니다. 위 목록처럼 앱이 새 한도로 낮춥니다.
 plan.line.cpu-clock|mt|56bf9d8a|프로세서 최고 속도: {0} MHz.
 plan.line.cpu-uv|mt|0babddfe|프로세서 전압: {0}단계 낮게.
+
+# ---- ROCm / HIP venv attach (RocmAttach.cs, MainForm.Rocm.cs) ----
+rocm.title|mt|b6198d0f|ROCm / PyTorch
+rocm.intro|mt|ae2500b5|드라이버의 HIP 런타임을 TheRock Python 환경에 연결하여 PyTorch가 이 GPU를 사용하도록 합니다.
+rocm.therock|mt|876e09a9|TheRock용으로 빌드된 페이로드
+rocm.checking|mt|5acf7f39|환경 상태를 확인하는 중...
+rocm.no-venvs|mt|87249b61|연결된 Python 환경이 없습니다. 아래 버튼으로 선택하세요.
+rocm.attach|mt|d406ade2|연결
+rocm.detach|mt|74bc1174|분리
+rocm.browse|mt|44816dc3|Python 환경 선택...
+rocm.browse.description|mt|7fa3e190|TheRock Python 환경을 선택하세요 (Lib\site-packages가 포함된 폴더)
+rocm.refresh|mt|0e916101|새로고침
+rocm.failed|mt|c2b2ce13|작업이 실패했습니다 (종료 코드 {0}).
+rocm.state.attached|mt|ac6d9b76|연결됨
+rocm.state.detached|mt|13438579|분리됨
+rocm.state.refused|mt|c1ebc781|주의 필요
+rocm.state.missing|mt|50b45e7c|환경을 찾을 수 없음
+rocm.state.recovery|mt|4f222673|복구 필요
+rocm.state.error|mt|cf91d056|읽을 수 없음
+rocm.state.unknown|mt|d16948e7|확인되지 않음
+search.rocm.payload|mt|b6198d0f|ROCm / PyTorch

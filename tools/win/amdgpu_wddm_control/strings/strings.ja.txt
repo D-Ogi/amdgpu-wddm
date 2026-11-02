@@ -1379,3 +1379,24 @@ oc.state.unclean|mt|bf3d28b8|コンピューターが予期せず停止したた
 oc.note.lowered|mt|9f9534fd|保存されている値の一部が新しい上限を超えています。上の一覧のとおり、アプリはそれらを新しい上限まで下げます。
 plan.line.cpu-clock|mt|56bf9d8a|プロセッサーの最高速度: {0} MHz。
 plan.line.cpu-uv|mt|0babddfe|プロセッサーの電圧: {0} 段階低く。
+
+# ---- ROCm / HIP venv attach (RocmAttach.cs, MainForm.Rocm.cs) ----
+rocm.title|mt|b6198d0f|ROCm / PyTorch
+rocm.intro|mt|ae2500b5|ドライバーのHIPランタイムをTheRock Python環境に接続し、PyTorchがこのGPUを使用できるようにします。
+rocm.therock|mt|876e09a9|TheRock用に構築されたペイロード
+rocm.checking|mt|5acf7f39|環境の状態を確認しています...
+rocm.no-venvs|mt|87249b61|接続済みのPython環境が見つかりません。下のボタンで選択してください。
+rocm.attach|mt|d406ade2|接続
+rocm.detach|mt|74bc1174|切断
+rocm.browse|mt|44816dc3|Python環境を選択...
+rocm.browse.description|mt|7fa3e190|TheRock Python環境を選択してください（Lib\site-packagesを含むフォルダー）
+rocm.refresh|mt|0e916101|更新
+rocm.failed|mt|c2b2ce13|操作が失敗しました（終了コード {0}）。
+rocm.state.attached|mt|ac6d9b76|接続済み
+rocm.state.detached|mt|13438579|切断済み
+rocm.state.refused|mt|c1ebc781|対応が必要
+rocm.state.missing|mt|50b45e7c|環境が見つかりません
+rocm.state.recovery|mt|4f222673|復旧が必要です
+rocm.state.error|mt|cf91d056|読み取れません
+rocm.state.unknown|mt|d16948e7|未確認
+search.rocm.payload|mt|b6198d0f|ROCm / PyTorch

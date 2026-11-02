@@ -1398,3 +1398,24 @@ oc.state.unclean|src|-|The higher limits were turned off after an unexpected sto
 oc.note.lowered|src|-|Some of your saved values are above the new limits. The app lowers them to the new limits, as the list above shows.
 plan.line.cpu-clock|src|-|Highest processor speed: {0} MHz.
 plan.line.cpu-uv|src|-|Processor voltage: {0} steps lower.
+
+# ---- ROCm / HIP venv attach (RocmAttach.cs, MainForm.Rocm.cs) ----
+rocm.title|src|-|ROCm / PyTorch
+rocm.intro|src|-|Attach the driver's HIP runtime to a TheRock Python environment so that PyTorch uses this GPU.
+rocm.therock|src|-|Payload built for TheRock
+rocm.checking|src|-|Reading the state of the environments...
+rocm.no-venvs|src|-|No attached Python environments found. Use the button below to choose one.
+rocm.attach|src|-|Attach
+rocm.detach|src|-|Detach
+rocm.browse|src|-|Choose a Python environment...
+rocm.browse.description|src|-|Choose a TheRock Python environment (the folder that contains Lib\site-packages)
+rocm.refresh|src|-|Refresh
+rocm.failed|src|-|The operation did not succeed (exit {0}).
+rocm.state.attached|src|-|Attached
+rocm.state.detached|src|-|Detached
+rocm.state.refused|src|-|Needs attention
+rocm.state.missing|src|-|Environment not found
+rocm.state.recovery|src|-|Recovery required
+rocm.state.error|src|-|Could not read
+rocm.state.unknown|src|-|Not checked
+search.rocm.payload|src|-|ROCm / PyTorch

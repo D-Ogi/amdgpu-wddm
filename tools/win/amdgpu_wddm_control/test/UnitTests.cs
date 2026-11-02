@@ -1277,6 +1277,12 @@ static partial class UnitTests
                 Check(System.Text.RegularExpressions.Regex.IsMatch(text, @"if \(!job\.Take\(game\)\)\s*\{\s*try \{ game\.Kill\(\); \}"),
                     "static check: the benchmark's Kill() is the game that could not join its job object");
             }
+            else if (name == "RocmAttach.cs")
+            {
+                Equal(1, k, "static check: RocmAttach.cs kills only its bounded script child");
+                Check(text.Contains("using (var process = Process.Start(start))") && text.Contains("try { process.Kill(); }") &&
+                    !text.Contains("GetProcessById") && !text.Contains("GetProcesses"), "static check: ROCm attach child handle belongs to this invocation");
+            }
             else Equal(0, k, "static check: " + name + " calls no Kill()");
             if (name == "RecoveryActions.cs")
             {
@@ -1303,7 +1309,7 @@ static partial class UnitTests
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(5, kills, "static check: own bounded diagnostic, tuning and start window children, and the benchmark's own game");
+        Equal(6, kills, "static check: own bounded diagnostic, tuning, ROCm and start window children, and the benchmark's own game");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
@@ -1313,6 +1319,38 @@ static partial class UnitTests
         var form = File.ReadAllText(Path.Combine(dir, "MainForm.cs"));
         Check(!form.Contains("restart-compositor") && !form.Contains("OperatorEscape") && !form.Contains("--accept-bd060"), "static check: the window never offers the escape");
         Check(File.ReadAllText(Path.Combine(dir, "Native.cs")).Contains("ExitWindowsEx(EwxReboot, "), "static check: the restart is ExitWindowsEx EWX_REBOOT without force");
+    }
+
+    static void RocmParseTests()
+    {
+        // Exit 0, -Check attached (attach-rocm-venv.ps1 line 142: Stop-With 0 'CHECK attached')
+        Equal("attached", RocmAttach.ParseState("ROCM-ATTACH face: attached\r\nROCM-ATTACH blaslt_front: attached\r\nROCM-ATTACH CHECK attached\r\n"), "ROCm: CHECK attached");
+        // Exit 0, -Check detached (line 141: Stop-With 0 'CHECK detached')
+        Equal("detached", RocmAttach.ParseState("ROCM-ATTACH face: detached\r\nROCM-ATTACH blaslt_front: detached\r\nROCM-ATTACH CHECK detached\r\n"), "ROCm: CHECK detached");
+        // Exit 3, -Check partly attached (line 144 throws, caught at line 186: Say "REFUSED: $message")
+        Equal("refused", RocmAttach.ParseState("ROCM-ATTACH face: attached\r\nROCM-ATTACH blaslt_front: detached\r\nROCM-ATTACH REFUSED: CHECK: partly attached or not registered; attach again or -Detach\r\n"), "ROCm: CHECK partly attached");
+        // Exit 3, -Check earlier payload (line 143 throws, caught at line 186)
+        Equal("refused", RocmAttach.ParseState("ROCM-ATTACH face: earlier\r\nROCM-ATTACH REFUSED: CHECK: an earlier payload is attached; attach again or -Detach\r\n"), "ROCm: CHECK earlier payload");
+        // Exit 2 via Stop-With (line 82: Stop-With 2 "MISSING: $manifestPath")
+        Equal("missing", RocmAttach.ParseState("ROCM-ATTACH MISSING: C:\\install\\tools\\hip\\rocm\\payload.json\r\n"), "ROCm: MISSING via Stop-With");
+        // Exit 2 via catch (line 185: DirectoryNotFoundException, line 186: Say "REFUSED: $message")
+        Equal("refused", RocmAttach.ParseState("ROCM-ATTACH REFUSED: Could not find a part of the path 'C:\\venv\\Lib\\site-packages\\_rocm_sdk_core\\bin'.\r\n"), "ROCm: MISSING via catch");
+        // Exit 4, DLL in use (line 184: $why.Message contains 'IN USE:', line 186: Say "REFUSED: ...")
+        Equal("refused", RocmAttach.ParseState("ROCM-ATTACH face: attached\r\nROCM-ATTACH REFUSED: IN USE: amdhip64_7.dll\r\n"), "ROCm: DLL in use");
+        // Exit 3, generic refusal (line 183: $exitCode = 3, line 186: Say "REFUSED: ...")
+        Equal("refused", RocmAttach.ParseState("ROCM-ATTACH REFUSED: another TheRock build is attached\r\n"), "ROCm: generic refusal");
+        // Exit 5, RECOVERY REQUIRED (line 188: Say "RECOVERY REQUIRED: $message")
+        Equal("recovery", RocmAttach.ParseState("ROCM-ATTACH RECOVERY REQUIRED: could not restore amdhip64_7.dll\r\n"), "ROCm: RECOVERY REQUIRED");
+        // Empty or garbage output
+        Equal("unknown", RocmAttach.ParseState(""), "ROCm: empty output");
+        Equal("unknown", RocmAttach.ParseState(null), "ROCm: null output");
+        Equal("unknown", RocmAttach.ParseState("some random text\r\n"), "ROCm: no ROCM-ATTACH line");
+        // Exit 0, attach success (line 178: Say "ATTACHED (record $record)")
+        var attach = RocmAttach.ParseActionResult("ROCM-ATTACH face: attached\r\nROCM-ATTACH blaslt_front: attached\r\nROCM-ATTACH recorded for the uninstaller: abc.json\r\nROCM-ATTACH ATTACHED (record C:\\venv\\bc250-rocm-attach.json)\r\n");
+        Check(attach.Contains("ATTACHED"), "ROCm: ParseActionResult finds ATTACHED");
+        // Exit 0, detach success (line 155: Say 'DETACHED')
+        var detach = RocmAttach.ParseActionResult("ROCM-ATTACH face: detached\r\nROCM-ATTACH blaslt_front: detached\r\nROCM-ATTACH DETACHED\r\n");
+        Check(detach.Contains("DETACHED"), "ROCm: ParseActionResult finds DETACHED");
     }
 
     static int Main(string[] args)
@@ -1371,6 +1409,7 @@ static partial class UnitTests
         UpdateTests(args[0]);
         CrashTests(args[0]);
         GuiTests(args[0]);
+        RocmParseTests();
         OracleTests();
         if (args.Length == 2) Console.WriteLine("confirmation rule compared with " + args[1]);
         Console.WriteLine(_passed + " checks passed, " + _failed + " failed");

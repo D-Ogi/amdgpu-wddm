@@ -89,8 +89,19 @@ namespace AmdgpuWddmControl
             if (args.Length == 2 && args[0] == "--smoke-perf") return SmokePerf(args[1]);
             if (args.Length == 2 && args[0] == "--smoke-notice") return SmokeNotice(args[1]);
             if (args.Length == 1 && args[0] == "--start-notice") return StartNoticeRun();
-            if ((args.Length == 4 || args.Length == 6 && args[4] == "--board-fixture") && args[0] == "--smoke-scroll" && args[2] == "--fixture")
-                return SmokeScroll(args[1], args[3], args.Length == 6 ? args[5] : null);
+            if (args.Length >= 4 && args[0] == "--smoke-scroll" && args[2] == "--fixture")
+            {
+                string bf = null; var wa = default(System.Drawing.Size);
+                int si = 4;
+                while (si + 1 < args.Length)
+                {
+                    if (args[si] == "--board-fixture") bf = args[++si];
+                    else if (args[si] == "--work-area") wa = ParseSize(args[++si]);
+                    else break;
+                    si++;
+                }
+                if (si == args.Length) return SmokeScroll(args[1], args[3], bf, wa);
+            }
             if (args.Length == 1 && args[0] == "--recovery")
             {
                 Kmd.Blocked = true;
@@ -387,13 +398,13 @@ namespace AmdgpuWddmControl
 
         // The place a rebuild of the same page keeps (F1 of the b23 lab round), without a window. Findings go to
         // <file>; an empty file is a pass.
-        static int SmokeScroll(string path, string fixture, string boardFixture = null)
+        static int SmokeScroll(string path, string fixture, string boardFixture, System.Drawing.Size workArea)
         {
             try
             {
                 if (boardFixture != null) BoardCapabilities.Replace(BoardCapabilities.Parse(File.ReadAllBytes(boardFixture)));
                 string findings;
-                using (var form = new MainForm(true, new AppPrefs(new MemoryPrefStore())))
+                using (var form = new MainForm(true, new AppPrefs(new MemoryPrefStore()), workArea))
                 {
                     form.CreateControlTree();
                     form.UseFixture(new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<RecoverySnapshot>(File.ReadAllText(fixture)));

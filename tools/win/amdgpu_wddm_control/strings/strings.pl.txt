@@ -1381,3 +1381,24 @@ oc.state.unclean|mt|bf3d28b8|Wyższe limity zostały wyłączone po nieoczekiwan
 oc.note.lowered|mt|9f9534fd|Niektóre zapisane wartości są wyższe niż nowe limity. Aplikacja obniża je do nowych limitów, jak pokazuje lista powyżej.
 plan.line.cpu-clock|mt|56bf9d8a|Maksymalne taktowanie procesora: {0} MHz.
 plan.line.cpu-uv|mt|0babddfe|Napięcie procesora: o {0} stopni niżej.
+
+# ---- ROCm / HIP venv attach (RocmAttach.cs, MainForm.Rocm.cs) ----
+rocm.title|mt|b6198d0f|ROCm / PyTorch
+rocm.intro|mt|ae2500b5|Podłącz sterownik HIP do środowiska Python TheRock, aby PyTorch korzystał z tego GPU.
+rocm.therock|mt|876e09a9|Payload zbudowany dla TheRock
+rocm.checking|mt|5acf7f39|Odczytywanie stanu środowisk...
+rocm.no-venvs|mt|87249b61|Nie znaleziono podłączonych środowisk Python. Użyj przycisku poniżej, aby wybrać.
+rocm.attach|mt|d406ade2|Podłącz
+rocm.detach|mt|74bc1174|Odłącz
+rocm.browse|mt|44816dc3|Wybierz środowisko Python...
+rocm.browse.description|mt|7fa3e190|Wybierz środowisko Python TheRock (folder zawierający Lib\site-packages)
+rocm.refresh|mt|0e916101|Odśwież
+rocm.failed|mt|c2b2ce13|Operacja nie powiodła się (kod wyjścia {0}).
+rocm.state.attached|mt|ac6d9b76|Podłączono
+rocm.state.detached|mt|13438579|Odłączono
+rocm.state.refused|mt|c1ebc781|Wymaga uwagi
+rocm.state.missing|mt|50b45e7c|Nie znaleziono środowiska
+rocm.state.recovery|mt|4f222673|Wymagane przywracanie
+rocm.state.error|mt|cf91d056|Nie można odczytać
+rocm.state.unknown|mt|d16948e7|Nie sprawdzono
+search.rocm.payload|mt|b6198d0f|ROCm / PyTorch
