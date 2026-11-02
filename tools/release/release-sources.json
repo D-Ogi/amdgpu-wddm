@@ -101,7 +101,7 @@
     "d3d11_engine": "Current tester.36 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_icd": "Current tester.35 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "desktop_umd": "Current tester.36 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 63fd611f283c94929215c0282d6e4538c694ca7d; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 63fd611f283c94929215c0282d6e4538c694ca7d; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "vulkan_icd": "Current tester.36 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm cf063d0c702bbda9670f10e34209fa6140fb5aea; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm cf063d0c702bbda9670f10e34209fa6140fb5aea; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "vulkan_icd": "Current tester.36 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 0a4e807077528ff4050350961f09bc329a063f4a; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 0a4e807077528ff4050350961f09bc329a063f4a; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.35 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/control/bc250control.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/bc250control.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.36 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 9b9cbe11ac482f4a1dea534bc0f890b70f006fca; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm 9b9cbe11ac482f4a1dea534bc0f890b70f006fca; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 429d327e4ebb76c2e064c58b1489742cb62c6c15; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm 429d327e4ebb76c2e064c58b1489742cb62c6c15; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 17de7ab1ce68069b25c29c3e734b8a3cbd74734c; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 17de7ab1ce68069b25c29c3e734b8a3cbd74734c; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "mft_h264": "Current tester.35 payload sources. release payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/mft/amdgpu_wddm_mft_h264.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -1120,11 +1120,11 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/release/system-x64-rel/vulkan_radeon.dll",
-      "sha256": "5D1BB21A62D3C52F2B58AE70622FD0CE757DECF5C3265FC97BB5B5C01EC3B343",
+      "source": "scratch/t36/f4-dxil/sys-set-r1/artifacts/release/system-x64-rel/vulkan_radeon.dll",
+      "sha256": "428FC4D5CE50CD13D44E7C4DE65C27B8B9E1B10D4D8FA480117CB8A38F65265C",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf063d0c702bbda9670f10e34209fa6140fb5aea",
+        "commit": "0a4e807077528ff4050350961f09bc329a063f4a",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1160,11 +1160,11 @@
     {
       "component": "vulkan-icd",
       "path": "payload/vulkan/vulkan_radeon.dll",
-      "source": "scratch/t36/f4-dxil/d3d11-set-r2/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
-      "sha256": "CEC060CDF8D14503604666F95F4B18D475577C89765DA7E321D36A19A467DDEC",
+      "source": "scratch/t36/f4-dxil/sys-set-r1/artifacts/lab/system-x64-lab/vulkan_radeon.dll",
+      "sha256": "35C1DD649D27DF71FB330887D4F9FD3DA5CBC9B201CEC3B832384367E3F760F2",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "cf063d0c702bbda9670f10e34209fa6140fb5aea",
+        "commit": "0a4e807077528ff4050350961f09bc329a063f4a",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -1194,7 +1194,7 @@
         ],
         "output": "src/amd/vulkan/vulkan_radeon.dll"
       },
-      "size": 18600960,
+      "size": 18600448,
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
@@ -2732,7 +2732,7 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/t36/f4-dxil/gl-set-r2/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
+      "source": "scratch/t36/f4-dxil/gl-set-r3/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
       "sha256": "9D7A14B4DFF303BF9B8AAA9E0D4A938B5708F7BE612AEA9703307D12F21926F7",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
@@ -2773,7 +2773,7 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/t36/f4-dxil/gl-set-r2/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
+      "source": "scratch/t36/f4-dxil/gl-set-r3/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
       "sha256": "FA3C8D40C81E6A75E8150EB9E45C0F42A6A99F1A72F2E82306D562213B31CF03",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
