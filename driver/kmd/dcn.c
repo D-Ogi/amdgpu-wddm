@@ -20,6 +20,7 @@
 #include "../shim/bc250_dcn201_pipe.h"
 #include "../shim/bc250_optc.h"      // BD-223 stage S2: the global sync of a plane
 #include "dcn_plane.h"               // BD-223 stage S2: the verdicts of DcnPlaneCheck
+#include "bd289_probe.h"             // BD-289: the lab-flavour probes of the present blit's source mapping
 #include <ntstrsafe.h>
 
 void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN_OBSERVE* Data,
@@ -2537,7 +2538,16 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
         return TRUE;
     }
 
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    // BD-289 diagnostic (bd289_probe.h): the old flip target mapping on every remap, and the blit source's
+    // mapping state right after this unmap.
+    Bd289ProbeRemap(Device->DcnScanoutMap, Device->DcnScanoutMapAddress, Device->DcnScanoutMapLength,
+                    target, (SIZE_T)bytes);
+#endif
     DcnUnmapScanout(Device);            // the old target, if any, is not what HUBP0 reads any more
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    (void)Bd289ProbeStep(BD289_STEP_UNMAP);
+#endif
 
     // Re-validated here, not trusted from the flip that set DcnCurrentAddress (review 16's own standard: a
     // privileged CPU mapping earns its own bounds check at the point it is made). AddressAllowed is the exact
@@ -2553,6 +2563,10 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     length = (SIZE_T)bytes;
     phys.QuadPart = (LONGLONG)target;
     Device->DcnScanoutMap = VramMapCpuRange(Device,phys,length,PAGE_READWRITE);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+    Bd289ProbeRemapped(Device->DcnScanoutMap);
+    (void)Bd289ProbeStep(BD289_STEP_REMAP);
+#endif
     if (Device->DcnScanoutMap == NULL)
     {
         if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
