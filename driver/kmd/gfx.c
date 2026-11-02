@@ -1363,11 +1363,21 @@ static unsigned int GfxWaveStop(void* Context)
     return 0;
 }
 
+// GRBM_GFX_INDEX is write-only for readback on this part: it reads 0 before the driver, after amdgpu's init
+// (docs/prior-art-vs-hardware.md) and after our own broadcast write (BD-180 A6/A8, tester.36 A7 and 3DMark
+// dumps: "requested 0xE0000000 read 1 value 0x00000000"). amdgpu never reads it back. A readback check of that
+// register therefore fails on every capture and quarantined sampling for the rest of the device start. Only a
+// failed write proves a lost restore of it; SQ_IND_INDEX reads back and keeps its check.
 static NTSTATUS GfxWaveRestore(BC250_DEVICE* Device, ULONG Offset, ULONG Value)
 {
     ULONG readback = 0;
     BOOLEAN read = FALSE;
     NTSTATUS status = GfxWaveWrite(Device, Offset, Value);
+    if (NT_SUCCESS(status) && Offset == BC250_REG_GC_GRBM_GFX_INDEX) {
+        GuardLog("waves: restore reg 0x%05lX wrote 0x%08lX (write-only readback) status 0x%08lX",
+                 Offset, Value, (ULONG)status);
+        return status;
+    }
     if (NT_SUCCESS(status)) {
         status = MmioGfxRead(Device, Offset, &readback);
         read = NT_SUCCESS(status);

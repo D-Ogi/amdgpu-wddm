@@ -1250,6 +1250,8 @@ int main(){
    const auto defaults=ImportReleasePolicy::from_switches();
    assert(defaults.progress_gate && defaults.quarantine_depth==3 && defaults.quarantine_count_cap==64 &&
           defaults.quarantine_age_ms==250 && defaults.quarantine_byte_cap==(64ull<<20) && defaults.holds());
+   // tester.36: the shipped default keeps the lifetime residency hold (3DMark CPG fault on an evicted import).
+   assert(defaults.residency_hold);
    assert(!ImportReleasePolicy::off().holds());
   }
   assert(surfaces==15+scanout_block_composed);  // 13, and the two primary forms of BD-133's X8 copy surface

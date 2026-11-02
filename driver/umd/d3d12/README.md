@@ -255,8 +255,16 @@ driver handle creation DDIs as resident during creation" (DirectX-Specs
 A reference the import kept for the heap's whole life made an application's
 `Evict` a no-op (BD-052). The same sentence of the specification asks for
 `DXGK_CONTEXTINFO_CAPS::DriverManagesResidency` on context creation, which the
-kernel driver sets for every user-mode context (`driver/kmd/wddm.c`). The switch
-`import-residency-hold-on` restores the old lifetime hold for a bisect.
+kernel driver sets for every user-mode context (`driver/kmd/wddm.c`).
+
+**tester.36 state:** both halves are off again. The import keeps its residency
+reference for the heap's whole life, and the kernel driver sets
+`DriverManagesResidency` to 0. With the hand-back, VidMm paged out an import in
+the same paging batch that created it, and a CP write to it faulted (the 3DMark
+0x116 of 2026-11-02, paging journal records 23798-23811). The switch
+`import-residency-release-on` turns the hand-back on for a lab arm. The fix
+limits the hand-back to the allocations that a runtime object makes resident.
+`import-residency-hold-on` is still accepted and changes nothing.
 
 After the creation DDI the residency of the heap is the runtime's, and a
 `pfnMakeResident` makes exactly one residency operation: the mandated callback,
