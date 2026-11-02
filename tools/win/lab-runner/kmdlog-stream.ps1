@@ -14,17 +14,15 @@ $cli=Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -
 $file=New-Object IO.FileStream($out,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,4096,[IO.FileOptions]::WriteThrough)
 $encoding=New-Object Text.UTF8Encoding($false)
 function Put([string]$text){$b=$encoding.GetBytes(('{0:HH:mm:ss.fff} {1}' -f [DateTime]::UtcNow,$text)+"`n");$file.Write($b,0,$b.Length);$file.Flush($true)}
-# The installed release's bc250kmd_cli.exe is the only KMD client (2026-10-08: the harness needs nothing
-# from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
-function Resolve-KmdClient([string]$Release,[string]$Form){
- if(!$Release -or !(Test-Path -LiteralPath $Release)){throw "No release KMD client '$Release' (HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe)"}
- $ErrorActionPreference='Continue'
- $usage=try{& $Release 2>&1|Out-String}catch{''}
- if($usage.Contains($Form)){return $Release}
- throw "The release KMD client $Release does not list '$Form'"
-}
-$clock=try{Resolve-KmdClient $cli 'clock read'}catch{Put ('lost clock client: '+$_.Exception.Message);$cli}
-Put ('clock client '+$clock)
+# The installed release's bc250kmd_cli.exe and bc250control.dll are the only KMD clients (2026-10-08: the harness
+# needs nothing from the old lab directories).
+# BD-051: the loop below reads the clock and the log ring in this process, through the release bc250control.dll
+# (kmd-reader.ps1, staged beside this script), with the same escapes and the same text as "bc250kmd_cli clock read"
+# and "bc250kmd_cli log N". No process starts in the loop: a loop that started the CLI every 0.5 s ran beside the sshd
+# accept stall of session 427. Each reading is bounded to 2 s, as Run-Bounded bounds the one CLI run before the loop.
+# Without the reader the loop writes no KMD lines and says so once; it never falls back to a process per reading.
+$reader=$null
+try{. (Join-Path $d 'kmd-reader.ps1');$reader=Initialize-KmdReader;Put ('clock reader '+$reader.DllPath)}catch{Put ('lost reader: '+$_.Exception.Message+'; no clock and no log lines in this stream')}
 # One bounded run of a console tool: its output, or $null with a loss record when it did not end in time.
 function Run-Bounded([string]$exe,[string]$arguments,[string]$tag){
  $psi=New-Object Diagnostics.ProcessStartInfo
@@ -179,15 +177,19 @@ try{
   if($next -ge 0){Put ('log lines so far '+$next)}
  }
  while($timer.Elapsed.TotalSeconds -lt $streamLimit -and !(Test-Path -LiteralPath (Join-Path $d 'kmdlog.stop'))){
-  if($next -lt 0){
+  if(!$reader){
+   # No reader: nothing to read the KMD with in this loop (written once above).
+  }elseif($next -lt 0){
    # The summary above did not answer: the header alone, through GET_LOG, which needs no adapter synchronization.
    # The same line ("log N lines since this driver load") stands at the head of both commands' first page.
-   $first=Run-Bounded $cli 'log 0' 'log header'
+   $first=Read-KmdLog -From 0
+   if(!$first){Put ('lost log header: '+(Get-KmdReaderLoss))}
    if($first -and $first -match 'log\s+(\d+) lines since'){$next=[int64]$Matches[1];Put ('log lines so far '+$next)}
   }else{
    # The newest lines matter most before a stop (068 lost them to a cap that kept the oldest): one write
    # per interval, the newest 600 lines, the number left out stated first.
-   $text=Run-Bounded $cli ('log '+$next) 'log'
+   $text=Read-KmdLog -From ([uint32]$next)
+   if(!$text){Put ('lost log: '+(Get-KmdReaderLoss))}
    if($text){
     $fresh=New-Object Collections.Generic.List[string]
     foreach($line in ($text -split "`r?`n")){
@@ -207,8 +209,7 @@ try{
    }
   }
   if($tick % 4 -eq 0){
-   $c=Run-Bounded $clock 'clock read' 'clock'
-   if($c){Put ('clock '+$c.Trim())}
+   if($reader){$c=Read-KmdClock;if($c.Ok){Put ('clock '+$c.Line)}else{Put ('lost clock: '+$c.Reason)}}
    # Process counters from the process table, not from WMI: no call here can wait on a service.
    try{
     foreach($counter in $counters){

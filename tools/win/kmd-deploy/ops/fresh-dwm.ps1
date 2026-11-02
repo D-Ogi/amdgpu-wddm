@@ -6,9 +6,16 @@
 $ErrorActionPreference = 'Stop'
 # The installed release is the only KMD client (2026-10-08); InstallRoot is what its installer wrote.
 $cli = Join-Path ([string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction Stop).InstallRoot) 'tools\bc250kmd_cli.exe'
+# BD-051: the health reads go through kmd-reader.ps1 in this process; push it beside this script (target.py ps does).
+# A CLI start every second inside the ssh session was one half of the sshd accept stall. The confirm, a write done
+# once, still starts bc250kmd_cli.
+$reader = Join-Path $PSScriptRoot 'kmd-reader.ps1'
+if (-not (Test-Path -LiteralPath $reader)) { throw 'kmd-reader.ps1 is not beside this script' }
+. $reader
+$null = Initialize-KmdReader
 function Read-Health {
-    $t = & $cli health read | Out-String
-    if ($LASTEXITCODE -ne 0) { throw 'Health read failed' }
+    $t = Read-KmdHealth -TimeoutMs 2000
+    if ($null -eq $t) { throw "Health read failed: $(Get-KmdReaderLoss)" }
     if ($t -notmatch 'flags=(\d+) generation=(\d+) epoch=(\d+) completed=(\d+) age_ms=(\d+) ready_ms=(\d+)') { throw 'Health line unreadable' }
     # age_ms is UINT64_MAX until the first completion after an invalidation (start_health.c:166).
     [pscustomobject]@{ flags = [int]$Matches[1]; generation = $Matches[2]; epoch = $Matches[3]; completed = [UInt64]$Matches[4]

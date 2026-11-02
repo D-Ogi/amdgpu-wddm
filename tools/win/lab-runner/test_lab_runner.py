@@ -181,7 +181,15 @@ class LogStream(unittest.TestCase):
         self.assertGreater(at, 0, 'the polling loop of kmdlog-stream.ps1 was not found')
         self.assertNotIn('log summary', STREAM[at:],
                          'no LOG_SUMMARY escape from the stream loop: it runs every 500 ms of a game session')
-        self.assertIn("Run-Bounded $cli 'log 0' 'log header'", STREAM[at:])
+        self.assertIn("Read-KmdLog -From 0", STREAM[at:])
+
+    def test_the_loop_starts_no_process(self):
+        # BD-051: the clock and the log ring come from the in-process reader; the CLI runs once, before the loop.
+        at = STREAM.find(STREAM_LOOP)
+        self.assertNotIn('Run-Bounded', STREAM[at:], 'a process start in the stream loop (BD-051)')
+        self.assertIn("Read-KmdLog -From ([uint32]$next)", STREAM[at:])
+        self.assertIn('Read-KmdClock', STREAM[at:])
+        self.assertIn(". (Join-Path $d 'kmd-reader.ps1')", STREAM[:at])
 
     def test_one_summary_before_the_loop(self):
         at = STREAM.find(STREAM_LOOP)

@@ -55,12 +55,14 @@ function Get-AvailableMemoryMiB {
  return [long][Math]::Floor([double]$os.FreePhysicalMemory/1024)
 }
 # The KMD's own temperature; -1 means unreadable, never a temperature (066 and 067 read -1 from the other tool).
-# The release client (tester.10 on): HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe; "clock read"
-# goes to the client Resolve-KmdClient names, resolved at the first reading.
-# No Release key (the offline dry run on the development PC): no release client; Resolve-KmdClient refuses and
-# Temp-Now goes on to the overlay.
+# BD-051: the reading is "clock read" of the release client, sent in this process through the release bc250control.dll
+# (kmd-reader.ps1, staged beside this script; the same escape and the same line as bc250kmd_cli). The watch loop reads
+# the temperature every one to three seconds for the whole session, and a loop that starts a process each round is one
+# half of the sshd accept stall. The reader loads at the first reading. No Release key (the offline dry run on the
+# development PC), no DLL or no kmd-reader.ps1: no reader, and Temp-Now goes on to the overlay.
 $releaseRoot=[string](Get-ItemProperty 'HKLM:\SOFTWARE\amdgpu-wddm\Release' -Name InstallRoot -ErrorAction SilentlyContinue).InstallRoot
-$script:ReleaseCli=if($releaseRoot){Join-Path $releaseRoot 'tools\bc250kmd_cli.exe'}else{''}
+$script:KmdReaderState='not loaded'
+if(Test-Path -LiteralPath (Join-Path $d 'kmd-reader.ps1')){. (Join-Path $d 'kmd-reader.ps1')}else{$script:KmdReaderState='lost: kmd-reader.ps1 is not staged beside this script'}
 # BD-167: the flavour of the installed package, from InstallRoot\manifest.json (build-release.ps1 -Flavour). A release
 # package has no lookup of AMDGPU_WDDM_D3D12_EXPERIMENT, RADV_PERFTEST, MESA_SPIRV_FAIL_DUMP_PATH or
 # VKD3D_SHADER_DUMP_PATH; 'lab', and 'legacy' (a package from before the field, every lookup present), keep them.
@@ -72,16 +74,12 @@ function Get-DriverFlavour{
  $f=try{[string](Get-Content -LiteralPath $m -Raw|ConvertFrom-Json).flavour}catch{''}
  if($f){$f}else{'legacy'}
 }
-# The installed release's bc250kmd_cli.exe is the only KMD client (2026-10-08: the harness needs nothing
-# from the old lab directories). A missing client, or a query form its usage does not list, is an error that says so.
-function Resolve-KmdClient([string]$Release,[string]$Form){
- if(!$Release -or !(Test-Path -LiteralPath $Release)){throw "No release KMD client '$Release' (HKLM\SOFTWARE\amdgpu-wddm\Release InstallRoot\tools\bc250kmd_cli.exe)"}
- $ErrorActionPreference='Continue'
- $usage=try{& $Release 2>&1|Out-String}catch{''}
- if($usage.Contains($Form)){return $Release}
- throw "The release KMD client $Release does not list '$Form'"
+# The installed release's bc250control.dll (beside its bc250kmd_cli.exe) is the only KMD client (2026-10-08: the
+# harness needs nothing from the old lab directories). The first reading loads it; a failure is recorded once.
+function Open-KmdReader{
+ if($script:KmdReaderState -ne 'not loaded'){return}
+ try{$null=Initialize-KmdReader;$script:KmdReaderState='loaded'}catch{$script:KmdReaderState='lost: '+$_.Exception.Message}
 }
-$script:ClockCli=''
 # Since the KMD fix of BD-062 (issue 7) "clock read" answers a non-elevated caller as well, which is what this
 # runtime is: the console user. Up to 0.7.216 it got STATUS_ACCESS_DENIED and no temperature at all. The
 # overlay's telemetry (GET /telemetry, the KMD temperature it samples elevated, at most 10 s old) stays as the
@@ -93,9 +91,9 @@ $script:ClockCli=''
 # an overlay number: 'clock-read', 'overlay' or 'none'. Every note that prints a temperature prints this.
 $script:TempSource='none'
 function Temp-Overlay{try{$t=Invoke-RestMethod http://127.0.0.1:2250/telemetry -TimeoutSec 2;if($t.available -and $null -ne $t.temperatureC -and $null -ne $t.ageSeconds -and [double]$t.ageSeconds -le 10){$script:TempSource='overlay';return [double]$t.temperatureC}}catch{};$script:TempSource='none';return -1}
-function Temp-Now{try{if(!$script:ClockCli){$script:ClockCli=Resolve-KmdClient $script:ReleaseCli 'clock read'};$raw=& $script:ClockCli clock read 2>&1|Out-String;if($raw -match 'temperature_mc=(\d+)'){$script:TempSource='clock-read';return [double]$Matches[1]/1000}}catch{};return Temp-Overlay}
-# What a note says about a reading: the source, and for the client the client itself.
-function Temp-Where{if($script:TempSource -eq 'clock-read'){return 'clock-read '+$script:ClockCli};return $script:TempSource}
+function Temp-Now{try{Open-KmdReader;if($script:KmdReaderState -eq 'loaded'){$c=Read-KmdClock;if($c.Ok){$script:TempSource='clock-read';return [double]$c.TemperatureMc/1000}}}catch{};return Temp-Overlay}
+# What a note says about a reading: the source, and for the client the DLL that answered (or why there is none).
+function Temp-Where{if($script:TempSource -eq 'clock-read'){return 'clock-read '+$script:KmdReader.DllPath};if($script:KmdReaderState -ne 'loaded'){return $script:TempSource+' (reader '+$script:KmdReaderState+')'};return $script:TempSource}
 $result=[ordered]@{launched=$false;pid=0;session=0;exe_sha256='';exe_version='';elapsed_seconds=0;has_exited=$false;exit_code=$null;bounded_stop=$false;stop_reason='';last_title='';responding_last=$null;peak_ws_mb=0;peak_threads=0;screenshots=0;modules=@{};shadow_dlls=@();settings=@{};saves=@{};errors=@()}
 $child=$null;$debugger=$null;$settingsBefore=@{};$gamePids=@()
 $result.launch='direct';$result.launch_chain=@();$result.launch_seconds=0;$result.app_profile=''
