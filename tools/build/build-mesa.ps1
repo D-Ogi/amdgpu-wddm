@@ -100,7 +100,10 @@ param(
     # (default <BC250_ROOT>\toolchain\llvm-23.1.4-win64).
     [string]$ClangToolchain,
     # Named changes from the 'variants' of mesa-configs.json, added to the option set (Add-MesonVariants, common.ps1).
-    [string[]]$Variant = @()
+    [string[]]$Variant = @(),
+    # Build and run the named meson test suites after the build. The script adds -Dbuild-tests=true to the
+    # option set and runs meson test for each suite. A test failure fails the build.
+    [string[]]$BuildTests = @()
 )
 # One flavour, two names: -Lab is BD-167's and -Flavour is BD-166's, and the release passes the one it knows.
 # Without this line a caller that passes one knob alone ships a release-flavour binary stamped lab, or the reverse.
@@ -139,6 +142,7 @@ if ($forkFlavour -eq 'release' -and $recipeConfig.PSObject.Properties['release_o
 if ($forkFlavour -eq 'lab' -and $recipeConfig.PSObject.Properties['lab_options']) {
   $options += @($recipeConfig.lab_options | Where-Object { $_ })
 }
+if ($BuildTests.Count) { $options += '-Dbuild-tests=true' }
 # The compiler's own arguments and the variants, if any: additions that leave the recorded set as it is.
 $Variant = @($Variant | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $options = Add-MesonVariants $options $configsFile $Compiler $Variant
@@ -429,6 +433,31 @@ try {
     }
     $recipe['artifacts'] = $artifacts
     if ($stamped.Count) { $recipe['stamp'] = [ordered]@{ version = $Version; flavour = $Flavour } }
+
+    # -BuildTests: run the named meson test suites. A failure stops the build.
+    if ($BuildTests.Count) {
+        Write-Host "running meson tests: $($BuildTests -join ', ')"
+        $testArgs = @('-m', 'mesonbuild.mesonmain', 'test', '-C', $Build, '--print-errorlogs')
+        $testArgs += $BuildTests
+        $testResult = Invoke-Capture $pythonExe $testArgs
+        $testLog = Join-Path $Build 'meson-logs\testlog.txt'
+        $recipe['tests'] = [ordered]@{
+            suites   = $BuildTests
+            exit     = $testResult.Code
+            log      = if (Test-Path -LiteralPath $testLog) { $testLog } else { $null }
+            stdout   = $testResult.Out
+            stderr   = $testResult.Err
+        }
+        Write-Recipe $recipePath $recipe
+        if ($testResult.Code -ne 0) {
+            Write-Host $testResult.Out
+            if ($testResult.Err) { Write-Host $testResult.Err }
+            throw "meson test failed (exit $($testResult.Code)) for suites: $($BuildTests -join ', ')"
+        }
+        Write-Host "meson tests passed: $($BuildTests -join ', ')"
+        Write-Host $testResult.Out
+    }
+
     $recipe.status = 'built'
     Write-Recipe $recipePath $recipe
     foreach ($t in $artifacts.Keys) { '{0}  {1}' -f $artifacts[$t].sha256, $t }
