@@ -205,10 +205,11 @@ function Send-Helper([string]$Word) {
     $n = $script:cmdNumber
     Set-Content -LiteralPath (Join-Path $dir "cmd-$n.txt") -Value $Word -Encoding ascii
     $result = Join-Path $dir "result-$n.json"
-    # The helper answers in about 10 s at most: two 2 s WM_NULL checks, UI Automation given up after 6 s.
-    $until = [DateTime]::UtcNow.AddSeconds(15)
+    # The helper answers in about 12 s, and in 23 s at most when Task Manager replaces its window (topmost-helper.ps1).
+    # 20 s covers each case that the two lab runs of 2026-11-02 showed.
+    $until = [DateTime]::UtcNow.AddSeconds(20)
     while (-not (Test-Path -LiteralPath $result) -and [DateTime]::UtcNow -lt $until) { Start-Sleep -Milliseconds 200 }
-    if (-not (Test-Path -LiteralPath $result)) { $script:bad += "helper: no answer to '$Word' in 15 s"; return $null }
+    if (-not (Test-Path -LiteralPath $result)) { $script:bad += "helper: no answer to '$Word' in 20 s"; return $null }
     return Get-Content -LiteralPath $result -Raw | ConvertFrom-Json
 }
 
@@ -216,7 +217,8 @@ function Step([string]$Name, [string]$From, [string]$To, $Answer) {
     $d = Get-Delta $script:snapshots[$From] $script:snapshots[$To]
     $how = if ($Answer) {
         " method=$($Answer.method) hung=$($Answer.hung) option=$($Answer.option) setwindowpos=$($Answer.setwindowpos)" +
-        " error=$($Answer.win32_error) topmost=$($Answer.topmost) band=$($Answer.band) ms=$($Answer.ms)"
+        " error=$($Answer.win32_error) topmost=$($Answer.topmost) band=$($Answer.band) pid=$($Answer.pid) replaced=$(@($Answer.replaced).Count)" +
+        " wm_null_error=$($Answer.wm_null_error) hung_app=$($Answer.hung_app) ms=$($Answer.ms)"
     } else { '' }
     $line = '{0,-3} {1,6:N1}s dwm={2}{3} {4}' -f $Name, $script:clock.Elapsed.TotalSeconds, $script:dwmSeen.Count, $how, (Format-Delta $d)
     $line
@@ -278,9 +280,9 @@ try {
         $answer = Send-Helper 'off'; Watch-Dwm $OffSeconds; Read-Summary 's3'; Step 'A3' 's2' 's3' $answer
     } else { $snapshots['s3'] = $snapshots['s1'] }
 
-    # Arm B needs its dwell times, two helper answers (15 s each at most), the client's receipt (12 s) and the quit
+    # Arm B needs its dwell times, two helper answers (20 s each at most), the client's receipt (12 s) and the quit
     # (about 16 s). When slow helper answers in arm A leave less than that, arm B is skipped, not squeezed.
-    $needB = 8 + $OnSeconds + $OffSeconds + 2 * 15 + 12 + 16
+    $needB = 8 + $OnSeconds + $OffSeconds + 2 * 20 + 12 + 16
     if ($armList -contains 'B' -and $clock.Elapsed.TotalSeconds + $needB -gt $BoundSeconds) {
         $armList = @($armList | Where-Object { $_ -ne 'B' })
         $bad += "arm B skipped: $([int]$clock.Elapsed.TotalSeconds) s used, it needs $needB s of $BoundSeconds"
