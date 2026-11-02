@@ -10,6 +10,12 @@ One arm is one bounded run of one staged program on unit A. These three files ar
 
 The offline tests are `../tests/lab/test-arm-bounds.ps1`, and `../build.ps1` runs them.
 
+A kit that stages `tools/win/kmdread/kmd-reader.ps1` beside `armlib.ps1` gets the in-process clock
+read as the default sampler: the arm then starts no `bc250kmd_cli` process for a sample (BD-051).
+Without that file, or when the reader does not load, the bounded CLI sampler below stays. The
+`sampler` field of the report says which one ran. The reader tests of `tools/win/kmdread` test
+both cases on a fake driver.
+
 ## What the supervisor guarantees
 
 1. **One deadline, cleanup inside it.** The bound is at most 180 s, which is the project's limit for
