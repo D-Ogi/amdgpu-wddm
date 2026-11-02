@@ -3174,7 +3174,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+      "commit": "c434348f41daa358e896483116b486b5bbf9e271",
       "tree": "worktree",
       "recipe": "compute/hip/build-rocm-payload.ps1",
       "args": [
@@ -3437,7 +3437,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "6115ab3527d2e79ae0287dd91d003e9def8dc375",
+      "commit": "c434348f41daa358e896483116b486b5bbf9e271",
       "tree": "worktree",
       "recipe": "compute/hip/build-rocm-payload.ps1",
       "args": [
