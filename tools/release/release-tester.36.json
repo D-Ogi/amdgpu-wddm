@@ -935,7 +935,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "5f8ab3ed5e7af3fc93393bcca20b03e05798d943",
+      "commit": "a3b5f408b9f295255ca6b99b9f42ebc91627378e",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1033,7 +1033,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "5f8ab3ed5e7af3fc93393bcca20b03e05798d943",
+      "commit": "a3b5f408b9f295255ca6b99b9f42ebc91627378e",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1101,7 +1101,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "a58779800778b1ece6c8b549991f0b70e24a673e",
+      "commit": "8b4215c37bcc9ef58bf77ff4d9064df03939a676",
       "base": "9d8168c994752cd5c6fda8ae485022849c751e7d",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1165,7 +1165,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "b064e507db050e62904e1bf72b89ac8bb485d738",
+      "commit": "fce8f953c28e7b4da0bd485f3b3eddf266e6edf1",
       "base": "5dea8835db0f53f81a4c6af0e483d5ab7449220f",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1367,7 +1367,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "5f8ab3ed5e7af3fc93393bcca20b03e05798d943",
+      "commit": "a3b5f408b9f295255ca6b99b9f42ebc91627378e",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1481,7 +1481,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "5f8ab3ed5e7af3fc93393bcca20b03e05798d943",
+      "commit": "a3b5f408b9f295255ca6b99b9f42ebc91627378e",
       "base": "7def507b03541117ce0f48482f3f4022263ad763",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1550,7 +1550,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "a58779800778b1ece6c8b549991f0b70e24a673e",
+      "commit": "8b4215c37bcc9ef58bf77ff4d9064df03939a676",
       "base": "9d8168c994752cd5c6fda8ae485022849c751e7d",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
@@ -1615,7 +1615,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "mesa-amdgpu-wddm",
-      "commit": "b064e507db050e62904e1bf72b89ac8bb485d738",
+      "commit": "fce8f953c28e7b4da0bd485f3b3eddf266e6edf1",
       "base": "5dea8835db0f53f81a4c6af0e483d5ab7449220f",
       "recipe": "tools/build/build-mesa.ps1",
       "args": [
