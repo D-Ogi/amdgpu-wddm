@@ -241,9 +241,10 @@ CPU UMD. The value 0 never moves an application off the CPU UMD that the `AppRou
 Under `gpu-default` the router also applies a built-in default `Deny` list of its own (`IsCpuOnlyDialogHost` in
 `router-policy.h`): the images whose window the application GPU UMD was measured not to show. It holds
 `PickerHost.exe`, the File Picker UI Host, which serves the Windows firewall notification dialog and the modern
-file open and save dialogs (BD-126), `SecHealthUI.exe`, the Windows Security app, which made DWM crash in a loop
-on the GPU route (BD-168 class), and `SearchHost.exe`, the Start menu search, which made DWM crash while the user
-typed in it (BD-168 class, GitHub #44). The route log line gives the reason `app-dialog-host`. An entry in `Allow`
+file open and save dialogs (BD-126), and `SearchHost.exe`, the Start menu search, which made DWM crash while the
+user typed in it (BD-168 class, GitHub #44). `SecHealthUI.exe`, the Windows Security app, was on the list from
+tester.31v3 to tester.35, because of a DWM crash loop of the BD-168 class. With the BD-168 fix it opened and painted
+on the GPU route (2026-11-02), so it is off the list. The route log line gives the reason `app-dialog-host`. An entry in `Allow`
 lifts the built-in list for that image, because `Allow` names an image and a built-in default does not. An entry
 in `Deny`, the protected list, `RenderOnCpu` and, under `allowlist`, "not listed in `Allow`" answer before it and
 keep their own reasons. The list moves the route only: every window of the image moves with it, and a program on

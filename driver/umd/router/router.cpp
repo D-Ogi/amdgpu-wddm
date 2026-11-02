@@ -463,10 +463,11 @@ static const char *InstallFront(const Config &c, const char *entry, D3D10DDIARG_
 }
 
 // The application line: the same leading fields, gpu_hr in place of hosted_hr, then the AppRouter state, then the
-// RenderOnCpu setting ("unset" or <value>/<source>).
+// RenderOnCpu setting ("unset" or <value>/<source>), then whether the image is a Windows component (yes, no, or unknown
+// when its path or the Windows directory cannot be resolved; reported only, the route does not depend on it).
 static void ReportApp(const Config &c, const AppConfig &a, const wchar_t *exe, const char *entry, const AppDecision &d,
                       HRESULT gpuHr, bool fellBack, const wchar_t *module, HRESULT hr,
-                      const amdgpu_wddm::app_settings::Value &renderOnCpu)
+                      const amdgpu_wddm::app_settings::Value &renderOnCpu, Component component)
 {
     char setting[48] = "unset";
     if (renderOnCpu.set())
@@ -475,10 +476,10 @@ static void ReportApp(const Config &c, const AppConfig &a, const wchar_t *exe, c
     char line[2048];
     int n = _snprintf_s(line, _TRUNCATE,
         "bc250d3d_router pid=%lu exe=%ls entry=%s route=%s reason=%s fallback=%u gpu_hr=%08lx hr=%08lx module=%ls "
-        "app_mode=%s mode_source=%s gpu_source=%s cpu_source=%s render_on_cpu=%s\n",
+        "app_mode=%s mode_source=%s gpu_source=%s cpu_source=%s render_on_cpu=%s component=%s\n",
         GetCurrentProcessId(), exe, entry, d.route == AppRoute::Gpu && !fellBack ? "gpu" : "cpu",
         AppReasonName(d.reason), fellBack ? 1u : 0u, (unsigned long)gpuHr, (unsigned long)hr, module,
-        AppModeName(a.mode), a.mode_source, a.gpu_source, c.cpu_source, setting);
+        AppModeName(a.mode), a.mode_source, a.gpu_source, c.cpu_source, setting, ComponentName(component));
     if (n < 0) n = (int)strlen(line);
     WriteRouteLine(a.log_directory[0] ? a.log_directory : c.log_directory, exe, line, n);
 }
@@ -524,7 +525,7 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     const bool entry_10_2 = !strcmp(entry, "OpenAdapter10_2");
     wchar_t windows[PathChars];
     const UINT wn = GetSystemWindowsDirectoryW(windows, PathChars);
-    if (!wn || wn >= PathChars) windows[0] = 0; // ClassifyComponent: Unknown, which keeps gpu-default on the CPU UMD
+    if (!wn || wn >= PathChars) windows[0] = 0; // ClassifyComponent: Unknown (reported on the route line only)
     const Component component = ClassifyComponent(image, windows);
     // Read at every call, as the AppRouter key is (the shells read the other settings once per process).
     namespace as = amdgpu_wddm::app_settings;
@@ -537,12 +538,12 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     if (d.route == AppRoute::Gpu) {
         gpuHr = TryGpu(a.gpu, entry, args, tableBytes);
         if (SUCCEEDED(gpuHr)) {
-            ReportApp(c, a, exe, entry, d, gpuHr, false, a.gpu, gpuHr, renderOnCpu);
+            ReportApp(c, a, exe, entry, d, gpuHr, false, a.gpu, gpuHr, renderOnCpu, component);
             return gpuHr;
         }
     }
     const HRESULT hr = ForwardCpu(c, entry, args);
-    ReportApp(c, a, exe, entry, d, gpuHr, d.route == AppRoute::Gpu, c.cpu, hr, renderOnCpu);
+    ReportApp(c, a, exe, entry, d, gpuHr, d.route == AppRoute::Gpu, c.cpu, hr, renderOnCpu, component);
     return hr;
 }
 
