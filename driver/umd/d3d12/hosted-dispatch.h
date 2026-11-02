@@ -6,6 +6,7 @@
 #include <bc250_host_bootstrap.h>
 #include <atomic>
 
+namespace bc250::umd {struct AdapterPresenceKmt;}
 namespace native12 {
 // Exact operation/argument ABI comes from the Mesa header used by this build.
 // Hooks return HRESULT (not NTSTATUS), synchronously in the entered DDI scope.
@@ -84,6 +85,18 @@ class HostedDispatch final {
     HRESULT internal_queue(uint32_t op,void* argument) noexcept;
     std::atomic<bool> lost_{false};
     std::atomic<bool> active_{true};
+    // BD-179: the check that the adapter of this device is still in the system (../dxvk/adapter-presence.h). A PnP
+    // restart of the display device stops the adapter and starts a new one with a new LUID, and the kernel ends no
+    // wait on a fence of the old adapter. descriptor() sets the LUID. The host status reads the kernel's adapter list
+    // at most once in kAdapterCheckMs; the check arms only when it first finds the adapter, so a LUID that the list
+    // never had reports no loss. adapter_state_ is one of AdapterCheck.
+    enum AdapterCheck : unsigned {kAdapterUnchecked=0,kAdapterSeen=1,kAdapterLeft=2};
+    static constexpr ULONGLONG kAdapterCheckMs=500;
+    std::atomic<UINT64> adapter_luid_{0};
+    std::atomic<ULONGLONG> adapter_next_check_ms_{0};
+    std::atomic<unsigned> adapter_state_{kAdapterUnchecked};
+    const bc250::umd::AdapterPresenceKmt* adapter_kmt_{};  // null: the entries of gdi32.dll
+    bool adapter_left() noexcept;
     // BD-201: VA ranges a refused DestroyAllocation2 left behind, written under lock_ and read without it.
     // Cumulative, never decremented: once the runtime may have handed a range out, the bridge cannot know
     // it back, and a later successful retry of that destroy does not undo the event.
@@ -131,6 +144,12 @@ public:
     // unresolved allocation/reservation/context/paging/sync count; does not claim OS allocation reclamation.
     unsigned discard_metadata() noexcept;
     bool lost() const noexcept {return lost_.load();}
+    // BD-179: the adapter of this device left the system after the check had seen it there.
+    bool adapter_gone() const noexcept {return adapter_state_.load(std::memory_order_acquire)==kAdapterLeft;}
+    // BD-179: the kernel entries of the adapter check. Only the tests set them, before the first host call.
+    void set_adapter_presence_kmt(const bc250::umd::AdapterPresenceKmt* kmt) noexcept {adapter_kmt_=kmt;}
+    // BD-179, tests only: the next host status reads the adapter list, without the wait of kAdapterCheckMs.
+    void adapter_check_due() noexcept {adapter_next_check_ms_.store(0,std::memory_order_relaxed);}
     // BD-201 accounting of the VA the bridge stopped owning because a DestroyAllocation2 was refused. The
     // allocation handles behind them are still counted by discard_metadata at teardown.
     unsigned lost_va_ranges() const noexcept {return lost_ranges_.load(std::memory_order_relaxed);}

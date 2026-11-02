@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "hosted-dispatch.h"
 #include <d3dkmthk.h>
+#include "../dxvk/adapter-presence.h"
 #include <new>
 #include <cstring>
 #include <cstdio>
@@ -337,7 +338,41 @@ bool HostedDispatch::worker_admits(uint32_t op) noexcept {
     default:return false;
     }
 }
+// BD-179: true when the adapter of this device left the system after the check had seen it there. One thread reads
+// the adapter list at most once in kAdapterCheckMs; every other call reads only the state. A gone adapter was
+// stopped, and the stop resets it (DxgkDdiStopDevice, nc-dispmprt-dxgkddi_stop_device.md at windows-driver-docs-ddi
+// 7515063), so no work of this device runs any more and none of its fences will move.
+bool HostedDispatch::adapter_left() noexcept {
+    const UINT64 luid=adapter_luid_.load(std::memory_order_relaxed);
+    if(!luid)return false;
+    const unsigned before=adapter_state_.load(std::memory_order_acquire);
+    if(before==kAdapterLeft)return true;
+    const ULONGLONG now=GetTickCount64();
+    ULONGLONG due=adapter_next_check_ms_.load(std::memory_order_relaxed);
+    if(now<due || !adapter_next_check_ms_.compare_exchange_strong(due,now+kAdapterCheckMs,std::memory_order_relaxed))
+        return false;
+    using bc250::umd::AdapterPresence;
+    const AdapterPresence presence=bc250::umd::probe_adapter_presence(luid,
+        adapter_kmt_?*adapter_kmt_:bc250::umd::system_adapter_presence_kmt());
+    if(presence==AdapterPresence::present){
+        unsigned unchecked=kAdapterUnchecked;
+        (void)adapter_state_.compare_exchange_strong(unchecked,kAdapterSeen,std::memory_order_acq_rel);
+        return false;
+    }
+    if(presence!=AdapterPresence::gone || before!=kAdapterSeen)return false;
+    adapter_state_.store(kAdapterLeft,std::memory_order_release);
+    // One line in both flavours, as the D3D11 shell writes (BD-179): the loss has no other trace in a release build.
+    static std::atomic<unsigned> notes{16};
+    if(notes.fetch_sub(1,std::memory_order_relaxed)>0){
+        char line[160];
+        std::snprintf(line,sizeof(line),"amdgpu_wddm_d3d12 BD-179: the adapter of this device left the system: luid=%llx "
+            "thread=%lu\n",static_cast<unsigned long long>(luid),static_cast<unsigned long>(GetCurrentThreadId()));
+        OutputDebugStringA(line);
+    }
+    return true;
+}
 bc250_host HostedDispatch::descriptor(uint64_t luid,void* identity) noexcept {
+    adapter_luid_.store(luid,std::memory_order_relaxed);
     bc250_host host{};host.sType=BC250_HOST_STYPE;host.version=BC250_HOST_VERSION;
     host.size=sizeof(host);host.adapter_luid=luid;host.identity=identity;
     host.userdata=this;host.dispatch=dispatch;return host;
@@ -475,7 +510,11 @@ HRESULT HostedDispatch::operation(uint32_t op,void* argument) noexcept {
         for(auto sync=syncs_;sync && !removed;sync=sync->next)if(!sync->busy && sync->cpu && *sync->cpu==UINT64_MAX)removed=true;
         ReleaseSRWLockShared(&lock_);
         if(removed)return remove_device();
-        return lost()?D3DDDIERR_DEVICEREMOVED:S_OK;
+        if(lost())return D3DDDIERR_DEVICEREMOVED;
+        // BD-179: the fences of a stopped adapter never read the lost-device value, so the fence reads above never
+        // see that loss. The hosted ICD asks this status between the slices of its CPU fence wait.
+        if(adapter_left())return remove_device();
+        return S_OK;
     }
     if(op==BC250_HOST_REPORT_LOST)return remove_device();
     if(!argument)return E_INVALIDARG;

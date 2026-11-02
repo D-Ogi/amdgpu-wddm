@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 #include "hosted-dispatch.h"
 #include <d3dkmthk.h>
+#include "../dxvk/adapter-presence.h"
 #include <cassert>
+#include <cstring>
 #include <functional>
 #include <thread>
 #include <utility>
@@ -90,6 +92,87 @@ static HRESULT APIENTRY reuse_free(HANDLE device,const D3DDDICB_FREEGPUVIRTUALAD
  return S_OK;
 }
 static VOID APIENTRY reuse_removed(D3D12DDI_HRTDEVICE device,HRESULT result){assert(device.handle==device_handle && result==D3DDDIERR_DEVICEREMOVED);++reuse_errors;}
+// BD-179: the adapter check of the host status. A scripted adapter list: the LUIDs it has, whether the enumeration
+// fails, and the handles it opened and the test closed. The case of the dump: the devices of the old adapter had LUID
+// 0x8582, the devices made after the restart 0x3a8fa1.
+static UINT64 adapter_list[2];static unsigned adapter_count;static bool adapter_enum_fails;
+static unsigned adapter_enums,adapter_opened,adapter_closed;
+// The entry takes a pointer to const and writes NumAdapters all the same (d3dkmthk.h, 10.0.26100).
+static NTSTATUS APIENTRY enum_adapters(const D3DKMT_ENUMADAPTERS2* in){
+ auto e=const_cast<D3DKMT_ENUMADAPTERS2*>(in);++adapter_enums;
+ if(adapter_enum_fails)return static_cast<NTSTATUS>(0xc0000001u);
+ assert(e->pAdapters && e->NumAdapters>=adapter_count);
+ for(unsigned i=0;i<adapter_count;++i){
+  e->pAdapters[i]={};e->pAdapters[i].hAdapter=0x100+i;++adapter_opened;
+  std::memcpy(&e->pAdapters[i].AdapterLuid,&adapter_list[i],sizeof(UINT64));
+ }
+ e->NumAdapters=adapter_count;return 0;
+}
+static NTSTATUS APIENTRY close_adapter(const D3DKMT_CLOSEADAPTER* c){
+ assert(c->hAdapter>=0x100 && c->hAdapter<0x100+adapter_count);++adapter_closed;return 0;
+}
+static void test_adapter_presence(bc250::umd::RuntimeDomain& domain,const D3D12DDI_CORELAYER_DEVICECALLBACKS_0062& um,
+                                  const D3DDDI_DEVICECALLBACKS& kt){
+ static const bc250::umd::AdapterPresenceKmt kmt{enum_adapters,close_adapter};
+ const UINT64 luid=0x8582,restarted=0x3a8fa1;
+ auto status=[](HostedDispatch& d){return HostedDispatch::dispatch(&d,BC250_HOST_CHECK_STATUS,nullptr);};
+ bc250::umd::RuntimeDomain::Scope scope(domain);
+ {
+  // The case of the dump: the check sees the adapter, a restart replaces it by one with a new LUID, and the next check
+  // removes the device, with one error callback.
+  HostedDispatch b(domain,{device_handle},um,kt);b.set_adapter_presence_kmt(&kmt);
+  (void)b.descriptor(luid,&b);
+  adapter_list[0]=luid;adapter_count=1;adapter_enum_fails=false;adapter_enums=adapter_opened=adapter_closed=0;
+  const unsigned reported=errors;
+  assert(status(b)==0 && adapter_enums==1 && !b.adapter_gone());
+  // Within kAdapterCheckMs the list is not read again.
+  adapter_list[0]=restarted;
+  assert(status(b)==0 && adapter_enums==1 && !b.lost());
+  // A failed enumeration is no evidence.
+  b.adapter_check_due();adapter_enum_fails=true;
+  assert(status(b)==0 && adapter_enums==2 && !b.adapter_gone() && !b.lost());
+  b.adapter_check_due();adapter_enum_fails=false;
+  assert(status(b)<0 && adapter_enums==3 && b.lost() && b.adapter_gone() && errors==reported+1);
+  // The loss stays: the list is not read again, every status reports it, and no second callback.
+  b.adapter_check_due();
+  assert(status(b)<0 && adapter_enums==3 && errors==reported+1);
+  assert(adapter_opened==adapter_closed && adapter_opened==2); // the failed enumeration opened none
+  assert(b.discard_metadata()==0);
+ }
+ {
+  // A LUID that the list never had (a wrong LUID, a list that this process cannot read) never arms the check.
+  HostedDispatch b(domain,{device_handle},um,kt);b.set_adapter_presence_kmt(&kmt);
+  (void)b.descriptor(luid,&b);
+  adapter_list[0]=restarted;adapter_count=1;adapter_enums=0;
+  for(int i=0;i<3;++i){b.adapter_check_due();assert(status(b)==0);}
+  assert(adapter_enums==3 && !b.adapter_gone() && !b.lost());
+ }
+ {
+  // An adapter that stays: no loss, ever; two adapters in the list, both handles closed.
+  HostedDispatch b(domain,{device_handle},um,kt);b.set_adapter_presence_kmt(&kmt);
+  (void)b.descriptor(luid,&b);
+  adapter_list[0]=restarted;adapter_list[1]=luid;adapter_count=2;adapter_enums=adapter_opened=adapter_closed=0;
+  for(int i=0;i<3;++i){b.adapter_check_due();assert(status(b)==0);}
+  assert(adapter_enums==3 && !b.lost() && adapter_opened==adapter_closed && adapter_opened==6);
+ }
+ {
+  // A dispatch without a LUID (no descriptor yet) makes no kernel call.
+  HostedDispatch b(domain,{device_handle},um,kt);b.set_adapter_presence_kmt(&kmt);
+  adapter_enums=0;
+  assert(status(b)==0 && adapter_enums==0);
+ }
+ {
+  // A deferred-replay worker that finds the gone adapter: lost at once, the error callback comes from the DDI thread.
+  HostedDispatch b(domain,{device_handle},um,kt);b.set_adapter_presence_kmt(&kmt);
+  (void)b.descriptor(luid,&b);
+  adapter_list[0]=luid;adapter_count=1;adapter_enums=0;
+  const unsigned reported=errors;
+  assert(status(b)==0 && adapter_enums==1);
+  adapter_list[0]=restarted;b.adapter_check_due();
+  {HostedDispatch::WorkerScope worker(b);assert(status(b)<0 && b.lost() && b.adapter_gone() && errors==reported);}
+  b.report_deferred_removal();assert(errors==reported+1);
+ }
+}
 int main(){
  static_assert(BC250_HOST_VERSION==5 && sizeof(bc250_host)==(sizeof(void*)==8?56:40));
  D3D12DDI_CORELAYER_DEVICECALLBACKS_0062 um{};um.pfnAllocateCb=allocate;um.pfnDeallocateCb=deallocate;um.pfnCreateContextVirtualCb=wrong_native_queue;um.pfnSetErrorCb=removed;
@@ -481,7 +564,8 @@ int main(){
   assert(on(BC250_HOST_DESTROY_QUEUE_CONTEXT,&end)==0 && context_destroys==destroyed+1);
   assert(ordering.discard_metadata()==0);
  }
- std::puts("PASS hosted dispatch: native allocation/paging/VA/lock, pending residency, internal full-width context token, "
+ test_adapter_presence(domain,um,kt);
+ std::puts("PASS hosted dispatch: BD-179 adapter check, native allocation/paging/VA/lock, pending residency, internal full-width context token, "
            "cleanup retries, destroy of a mapped allocation with its retry and the lost range of a refused one, scope, "
            "loss, a fence at UINT64_MAX that proves no retirement, address reuse inside a free and inside a destroy, "
            "replay worker scope, imported-heap error propagation, CPU signal with AllowFenceRewind, "
