@@ -80,7 +80,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -126,7 +126,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "driver/kmd/build.ps1",
       "args": [
@@ -1137,7 +1137,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The x86 system Vulkan row 17de7ab1 is the tester.34 wow64 line 9d8168c9 with the single-file disk cache on Windows (BD-216, 17de7ab1), and the x64 system row 5dea8835 is the tester.34 system line de66c413 with the same change. The tester.34 x86 line 9d8168c9 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system line de66c413 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): the async compute threadgroup workaround on GFX1013 (x86 c0c1f240, x64 1f3f6938), the gfx1013 lowering of signed packed 4x8 dot products ported from dmorazasanchez/bc250-fsr4 v3 (x86 0f49b0ee to 8c452da1, x64 7ffc66ef to 67d3864e), driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
+          "pair_skew": "The x86 system Vulkan row 8b4215c3 is the tester.35 wow64 line 17de7ab1 with the BD-200 timeline wait fix (27ea1698), the BD-203 external buffer report (a840b31a), the BD-287 upload pad (a5877980), the BD-179 stopped-adapter fence wait (a52627c7) and its WoW64 host test (8b4215c3). The x64 system row fce8f953 is the tester.35 system line 5dea8835 with the same BD-200, BD-203, BD-287 and BD-179 changes (615121c0, 6db68699, 0a4e8070, fce8f953). Only the x64 row has the BD-202 live BO budget (c52af544), the BD-206 GDI present worker (8ef83ef7 to 407d95b6) and the unified APU heap of BD-028 (f21279b9, c7474d7b, b064e507). The x86 line has no unified-heap commit. The tester.35 pair before that: The x86 system Vulkan row 17de7ab1 is the tester.34 wow64 line 9d8168c9 with the single-file disk cache on Windows (BD-216, 17de7ab1), and the x64 system row 5dea8835 is the tester.34 system line de66c413 with the same change. The tester.34 x86 line 9d8168c9 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system line de66c413 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): the async compute threadgroup workaround on GFX1013 (x86 c0c1f240, x64 1f3f6938), the gfx1013 lowering of signed packed 4x8 dot products ported from dmorazasanchez/bc250-fsr4 v3 (x86 0f49b0ee to 8c452da1, x64 7ffc66ef to 67d3864e), driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
         }
       ],
       "tests": [
@@ -1587,7 +1587,7 @@
         {
           "file": "src/amd/vulkan/vulkan_radeon.dll",
           "path": "payload/wow64/vulkan/vulkan_radeon.dll",
-          "pair_skew": "The x86 system Vulkan row 17de7ab1 is the tester.34 wow64 line 9d8168c9 with the single-file disk cache on Windows (BD-216, 17de7ab1), and the x64 system row 5dea8835 is the tester.34 system line de66c413 with the same change. The tester.34 x86 line 9d8168c9 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system line de66c413 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): the async compute threadgroup workaround on GFX1013 (x86 c0c1f240, x64 1f3f6938), the gfx1013 lowering of signed packed 4x8 dot products ported from dmorazasanchez/bc250-fsr4 v3 (x86 0f49b0ee to 8c452da1, x64 7ffc66ef to 67d3864e), driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
+          "pair_skew": "The x86 system Vulkan row 8b4215c3 is the tester.35 wow64 line 17de7ab1 with the BD-200 timeline wait fix (27ea1698), the BD-203 external buffer report (a840b31a), the BD-287 upload pad (a5877980), the BD-179 stopped-adapter fence wait (a52627c7) and its WoW64 host test (8b4215c3). The x64 system row fce8f953 is the tester.35 system line 5dea8835 with the same BD-200, BD-203, BD-287 and BD-179 changes (615121c0, 6db68699, 0a4e8070, fce8f953). Only the x64 row has the BD-202 live BO budget (c52af544), the BD-206 GDI present worker (8ef83ef7 to 407d95b6) and the unified APU heap of BD-028 (f21279b9, c7474d7b, b064e507). The x86 line has no unified-heap commit. The tester.35 pair before that: The x86 system Vulkan row 17de7ab1 is the tester.34 wow64 line 9d8168c9 with the single-file disk cache on Windows (BD-216, 17de7ab1), and the x64 system row 5dea8835 is the tester.34 system line de66c413 with the same change. The tester.34 x86 line 9d8168c9 is the tester.33 wow64 line 20d7c8c9 with the BD-254 preamble and gather-slot fixes (cbe8dc03, f9191318, 771c666b), the BD-201 BO lifetime host test (d58067a4 to e7fb7053) and the fixes it shares with the x64 system line de66c413 (tester.33 line ad130cc2 with the same BD-201 test, 85486b52 to 874d30b2): the async compute threadgroup workaround on GFX1013 (x86 c0c1f240, x64 1f3f6938), the gfx1013 lowering of signed packed 4x8 dot products ported from dmorazasanchez/bc250-fsr4 v3 (x86 0f49b0ee to 8c452da1, x64 7ffc66ef to 67d3864e), driconf regular expressions on Windows, the process name at any path length, machine-profile driconf files, the per-application graphics settings, no GDS access without a GDS partition (BD-119), debugging variables read only in the lab flavour and the zstd 1.5.7 wrap. Only the x86 row reads MemoryOverflow and the WSI route switch in the 64-bit registry view (the x64 row reads that view natively). Only the x64 row has the compute-node border colour fix (3a5e0436) and the BD-212 fix that keeps the progress fence of a queue that goes with unretired work (fa4fadf7); the x64 row gets the instruction-prefetch padding (e92476c8) that the x86 line has had since before tester.33 (b3e45baf). The x86 settings reader uses the GDI-only WSI: MaxFrameLatency applies only to other GPUs on the DXGI path, and VSync 0 only skips the DWM wait. The x86 build does not port the x64 DXGI present or compute work."
         }
       ],
       "tests": [
@@ -2234,7 +2234,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2267,7 +2267,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2300,7 +2300,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2346,7 +2346,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2380,7 +2380,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2413,7 +2413,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-router.ps1",
       "args": [
@@ -2446,7 +2446,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2492,7 +2492,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/win/amdgpu_wddm_control/build.ps1",
       "args": [
@@ -2526,7 +2526,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "driver/state/installer-build.ps1",
       "args": [
@@ -2560,7 +2560,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "driver/state/installer-build.ps1",
       "args": [
@@ -2874,7 +2874,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-adl.ps1",
       "args": [
@@ -2908,7 +2908,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-adl.ps1",
       "args": [
@@ -2942,7 +2942,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-adl.ps1",
       "args": [
@@ -2976,7 +2976,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "shared",
       "recipe": "tools/build/build-umd-adl.ps1",
       "args": [
@@ -3010,7 +3010,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "worktree",
       "recipe": "tools/win/d3d12caps/build.ps1",
       "args": [
@@ -3045,7 +3045,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "worktree",
       "recipe": "tools/win/d3d11bench/build.ps1",
       "args": [
@@ -3080,7 +3080,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "worktree",
       "recipe": "driver/umd/mft-h264/build.ps1",
       "args": [
@@ -3273,7 +3273,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "worktree",
       "recipe": "tools/win/d3d12caps/build.ps1",
       "args": [
@@ -3308,7 +3308,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "worktree",
       "recipe": "tools/win/d3d11bench/build.ps1",
       "args": [
@@ -3343,7 +3343,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "amdgpu-wddm",
-      "commit": "aac4b053cef681addc4a67c2913d0cff7706a6a3",
+      "commit": "8b93ad86ce61e80821a385741687448ace9dd3e4",
       "tree": "worktree",
       "recipe": "driver/umd/mft-h264/build.ps1",
       "args": [
