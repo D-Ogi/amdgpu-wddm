@@ -180,15 +180,16 @@ namespace AmdgpuWddmControl
             }
         }
 
-        public static string ParseState(string checkOutput)
+        public static string ParseState(string output)
         {
-            if (string.IsNullOrEmpty(checkOutput)) return "unknown";
-            var lines = checkOutput.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (string.IsNullOrEmpty(output)) return "unknown";
+            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             var last = lines.LastOrDefault(l => l.StartsWith("ROCM-ATTACH ", StringComparison.Ordinal));
             if (last == null) return "unknown";
             if (last.Contains("CHECK attached")) return "attached";
             if (last.Contains("CHECK detached")) return "detached";
-            if (last.Contains("CHECK REFUSED")) return "refused";
+            if (last.Contains("RECOVERY REQUIRED:")) return "recovery";
+            if (last.Contains("REFUSED:")) return "refused";
             return "unknown";
         }
 

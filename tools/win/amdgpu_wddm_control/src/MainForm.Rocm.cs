@@ -33,7 +33,7 @@ namespace AmdgpuWddmControl
                 foreach (var path in paths)
                 {
                     var r = RocmAttach.Check(payload.Directory, path);
-                    results[path] = r.ExitCode == 0 ? RocmAttach.ParseState(r.Output) : "error";
+                    results[path] = r.ExitCode >= 0 ? RocmAttach.ParseState(r.Output) : "error";
                 }
                 return results;
             })).ContinueWith(task =>
@@ -73,13 +73,13 @@ namespace AmdgpuWddmControl
                     var state = Ui.Label(stateText, null, stateColor, card.Inner);
 
                     var buttons = Ui.WrapRow(card.Inner);
-                    if (v.State != "attached")
+                    if (v.State != "attached" && v.State != "recovery")
                     {
                         var attach = Ui.Button(Strings.T("rocm.attach"), (s, e) => RunRocmAttach(venv.Path), true);
                         attach.Enabled = !_rocmActing;
                         buttons.Controls.Add(attach);
                     }
-                    if (v.State == "attached" || v.State == "refused")
+                    if (v.State == "attached" || v.State == "refused" || v.State == "recovery")
                     {
                         var detach = Ui.Button(Strings.T("rocm.detach"), (s, e) => RunRocmDetach(venv.Path));
                         detach.Enabled = !_rocmActing;
