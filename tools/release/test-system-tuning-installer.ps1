@@ -125,6 +125,9 @@ $decline = Join-Path $outRoot ('decline-' + [Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory((Join-Path $decline 'installer'))
 foreach ($name in 'uninstall.ps1','system-tuning.ps1','components.ps1','state-lifecycle.ps1') { Copy-Item -LiteralPath (Join-Path $PSScriptRoot "installer\$name") -Destination (Join-Path $decline "installer\$name") }
 [IO.File]::WriteAllText((Join-Path $decline 'installer\mft-h264.ps1'), '# empty fixture')
+# No attached TheRock venv: the ROCm detach finds nothing, and no venv list of this PC is read (test-rocm-venvs.ps1
+# tests the real file).
+[IO.File]::WriteAllText((Join-Path $decline 'installer\rocm-venvs.ps1'), 'function Invoke-RocmVenvDetach { param($Payload) }; function Assert-RocmVenvRemovalComplete($Rows) { }; function Get-RocmVenvFootprint { @() }')
 $fakeCommon = @'
 $script:SoftwareKey='HKLM:\SOFTWARE\unused-test-key'
 $script:StateDir=Join-Path $PSScriptRoot 'state-fixture'
@@ -132,6 +135,7 @@ function Set-StateDirAccess { }
 function Test-IsAdmin { $true }
 function Read-InstallState { [pscustomobject]@{install_root=$PSScriptRoot} }
 function Write-Info($s) { }
+function Write-Step($s) { }
 function Write-Fail($s) { Write-Output ('FAIL: ' + $s) }
 function Get-LabInstallPaths { @() }
 function Get-OurDriverPackages { @() }
