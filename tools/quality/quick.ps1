@@ -481,6 +481,9 @@ Check 'escape-admission-admit-fence' { & pwsh -NoProfile -File "$repo\driver\kmd
  Check 'vidpn-flip-lab' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab" -Lab }
  Check 'vidpn-flip-lab-controls' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_vidpn_flip.ps1" -Root $Workspace -Out "$Out\vidpn-flip-lab-controls" -Lab -Mutation all }
  Check 'scanout-admit' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_admit.ps1" -Root $Workspace -Out "$Out\scanout-admit" -Kits "$Kits" }
+ # BD-289: the flip target mapping under the scan-out mutex; the nolock control passes only when the model faults.
+ Check 'scanout-lock' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_lock.ps1" -Root $Workspace -Out "$Out\scanout-lock" }
+ Check 'scanout-lock-nolock-control' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_scanout_lock.ps1" -Root $Workspace -Out "$Out\scanout-lock-nolock-control" -Mutation nolock }
  Check 'dpaudio' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_dpaudio.ps1" -Root $Workspace -Out "$Out\dpaudio" -Kits "$Kits" }
  Check 'modeset' { & pwsh -NoProfile -File "$repo\driver\kmd\test\run_modeset.ps1" -Root $Workspace -Out "$Out\modeset" -Kits "$Kits" }
  # BD-223: the scaler, MPC, surface and colour helpers, the DC types and the latch probe are gates of their own. Inside

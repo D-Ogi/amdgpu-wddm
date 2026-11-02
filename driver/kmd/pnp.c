@@ -39,6 +39,7 @@ NTSTATUS Bc250AddDevice(_In_ const PDEVICE_OBJECT PhysicalDeviceObject, _Outptr_
     ConnectorInitialize(device);
     ExInitializeFastMutex(&device->GartLock);
     KeInitializeMutex(&device->PspSessionLock,0);
+    KeInitializeMutex(&device->DcnScanoutLock,0);      // BD-289: the flip target mapping of the CPU present blit
     ExInitializePushLock(&device->GfxPagingLock);
     KeInitializeSpinLock(&device->GfxAccessLock);
     KeInitializeEvent(&device->GfxAccessDrained, NotificationEvent, TRUE);

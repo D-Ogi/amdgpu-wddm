@@ -21,6 +21,7 @@
 #include "../shim/bc250_optc.h"      // BD-223 stage S2: the global sync of a plane
 #include "dcn_plane.h"               // BD-223 stage S2: the verdicts of DcnPlaneCheck
 #include "bd289_probe.h"             // BD-289: the lab-flavour probes of the present blit's source mapping
+#include "scanout_map.h"             // BD-289: the flip target mapping and its rule, shared with a host test
 #include <ntstrsafe.h>
 
 void DcnObserve(_Inout_ BC250_DEVICE* Device, _Inout_ BC250_ESCAPE_DCN_OBSERVE* Data,
@@ -2512,13 +2513,64 @@ void DcnVsyncFromVector(_Inout_ BC250_DEVICE* Device)
 // \"IRQL\""), so the remap happens lazily there instead, on the next present after a flip - a comparison
 // against Device->DcnScanoutMapAddress on every other present, and the actual MmMapIoSpaceEx only when it
 // changed.
+// The operations of scanout_map.h on this device. Allowed re-validates the target here, not trusted from the flip
+// that set DcnCurrentAddress (review 16's own standard: a privileged CPU mapping earns its own bounds check at the
+// point it is made). AddressAllowed is the exact rule DcnFlipSourceAddress already refused this address against,
+// over dcn_translate.c's DcnAddressFits - never a second, hand-typed range.
+typedef struct DCN_SCANOUT_OPS_CONTEXT {
+    BC250_DEVICE* Device;
+    ULONG Pitch;
+} DCN_SCANOUT_OPS_CONTEXT;
+
+static void* DcnOpsMap(void* Context, unsigned long long Physical, size_t Length)
+{
+    DCN_SCANOUT_OPS_CONTEXT* c = (DCN_SCANOUT_OPS_CONTEXT*)Context;
+    PHYSICAL_ADDRESS phys;
+    phys.QuadPart = (LONGLONG)Physical;
+    return VramMapCpuRange(c->Device, phys, (SIZE_T)Length, PAGE_READWRITE);
+}
+
+static void DcnOpsUnmap(void* Context, void* Mapping, size_t Length)
+{
+    UNREFERENCED_PARAMETER(Context);
+    MmUnmapIoSpace(Mapping, (SIZE_T)Length);
+}
+
+static int DcnOpsAllowed(void* Context, unsigned long long Physical)
+{
+    DCN_SCANOUT_OPS_CONTEXT* c = (DCN_SCANOUT_OPS_CONTEXT*)Context;
+    return AddressAllowed(c->Device, Physical, c->Pitch, DisplaySourceWidth(c->Device), DisplaySourceHeight(c->Device))
+               ? 1 : 0;
+}
+
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
+static void DcnOpsBeforeRemap(void* Context, void* OldMapping, unsigned long long OldPhysical, size_t OldLength,
+                              unsigned long long NewPhysical, size_t NewLength)
+{
+    UNREFERENCED_PARAMETER(Context);
+    Bd289ProbeRemap(OldMapping, OldPhysical, (SIZE_T)OldLength, NewPhysical, (SIZE_T)NewLength);
+}
+
+static void DcnOpsAfterUnmap(void* Context)
+{
+    UNREFERENCED_PARAMETER(Context);
+    (void)Bd289ProbeStep(BD289_STEP_UNMAP);
+}
+
+static void DcnOpsAfterMap(void* Context, void* NewMapping)
+{
+    UNREFERENCED_PARAMETER(Context);
+    Bd289ProbeRemapped(NewMapping);
+    (void)Bd289ProbeStep(BD289_STEP_REMAP);
+}
+#endif
+
 BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length, _Out_ ULONG* Pitch)
 {
     LONG generation=InterlockedCompareExchange(&Device->DcnSurfaceSequence,0,0);
     ULONGLONG target,bytes;
     ULONG pitch,format;
     BOOLEAN diverged;
-    PHYSICAL_ADDRESS phys;
     SIZE_T length;
     *Mapping=NULL;*Length=0;*Pitch=0;
     if (generation&1) return FALSE;
@@ -2532,49 +2584,45 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     if (InterlockedCompareExchange(&Device->DcnSurfaceSequence,0,0)!=generation || !diverged ||
         format!=BC250_PLANE_FORMAT_ARGB8888 || Device->DcnPlaneScaled ||
         !DcnSurfaceBytes(DisplaySourceWidth(Device),DisplaySourceHeight(Device),pitch,&bytes)) return FALSE;
-    if (Device->DcnScanoutMap && Device->DcnScanoutMapAddress==target && Device->DcnScanoutMapLength==bytes)
+    // BD-289: the state below and the mapping it gives belong to the holder of the scan-out mutex, which the
+    // caller (WddmPresentBlit) holds for the whole blit, so that no other blit can release this mapping while the
+    // caller copies into it, and no two blits can release the old one twice (scanout_map.h).
+    NT_ASSERT(DcnScanoutLockHeld(Device));
     {
-        *Mapping=Device->DcnScanoutMap;*Length=Device->DcnScanoutMapLength;*Pitch=pitch;
-        return TRUE;
-    }
-
+        DCN_SCANOUT_OPS_CONTEXT c = { Device, pitch };
+        BC250_SCANOUT_MAP_OPS ops = { &c, DcnOpsMap, DcnOpsUnmap, DcnOpsAllowed, NULL, NULL, NULL };
+        int result;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    // BD-289 diagnostic (bd289_probe.h): the old flip target mapping on every remap, and the blit source's
-    // mapping state right after this unmap.
-    Bd289ProbeRemap(Device->DcnScanoutMap, Device->DcnScanoutMapAddress, Device->DcnScanoutMapLength,
-                    target, (SIZE_T)bytes);
+        // BD-289 diagnostic (bd289_probe.h): the old flip target mapping on every remap, and the blit source's
+        // mapping state right after the unmap and after the new map.
+        ops.BeforeRemap = DcnOpsBeforeRemap;
+        ops.AfterUnmap = DcnOpsAfterUnmap;
+        ops.AfterMap = DcnOpsAfterMap;
 #endif
-    DcnUnmapScanout(Device);            // the old target, if any, is not what HUBP0 reads any more
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    (void)Bd289ProbeStep(BD289_STEP_UNMAP);
-#endif
-
-    // Re-validated here, not trusted from the flip that set DcnCurrentAddress (review 16's own standard: a
-    // privileged CPU mapping earns its own bounds check at the point it is made). AddressAllowed is the exact
-    // rule DcnFlipSourceAddress already refused this address against, over dcn_translate.c's DcnAddressFits -
-    // never a second, hand-typed range.
-    if (!AddressAllowed(Device,target,pitch,DisplaySourceWidth(Device),DisplaySourceHeight(Device)))
-    {
-        if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
-            GuardLog("dcnflip: scanout mapping refused: 0x%llX is no longer inside the carve-out", target);
-        return FALSE;
+        result = ScanoutMapSelect(&Device->DcnScanoutMap, &Device->DcnScanoutMapAddress, &Device->DcnScanoutMapLength,
+                                  target, (size_t)bytes, &ops);
+        if (result == BC250_SCANOUT_MAP_CACHED)
+        {
+            *Mapping=Device->DcnScanoutMap;*Length=Device->DcnScanoutMapLength;*Pitch=pitch;
+            return TRUE;
+        }
+        // The old target, if any, is not what HUBP0 reads any more, and the next one is not the one the firmware
+        // picture was copied into.
+        Device->DcnScanoutSeedAddress = 0;
+        length = (SIZE_T)bytes;
+        if (result == BC250_SCANOUT_MAP_REFUSED)
+        {
+            if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
+                GuardLog("dcnflip: scanout mapping refused: 0x%llX is no longer inside the carve-out", target);
+            return FALSE;
+        }
+        if (result == BC250_SCANOUT_MAP_FAILED)
+        {
+            if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
+                GuardLog("dcnflip: scanout mapping failed: 0x%llX, %lu bytes", target, (ULONG)length);
+            return FALSE;
+        }
     }
-
-    length = (SIZE_T)bytes;
-    phys.QuadPart = (LONGLONG)target;
-    Device->DcnScanoutMap = VramMapCpuRange(Device,phys,length,PAGE_READWRITE);
-#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    Bd289ProbeRemapped(Device->DcnScanoutMap);
-    (void)Bd289ProbeStep(BD289_STEP_REMAP);
-#endif
-    if (Device->DcnScanoutMap == NULL)
-    {
-        if (InterlockedIncrement(&Device->DcnScanoutMapFailed) <= BC250_DCN_LOG_CALLS)
-            GuardLog("dcnflip: scanout mapping failed: 0x%llX, %lu bytes", target, (ULONG)length);
-        return FALSE;
-    }
-    Device->DcnScanoutMapAddress = target;
-    Device->DcnScanoutMapLength = length;
     if (InterlockedIncrement(&Device->DcnScanoutRemaps) <= BC250_DCN_LOG_CALLS)
         GuardLog("dcnflip: scanout mapping: 0x%llX, %lu bytes", target, (ULONG)length);
     *Mapping = Device->DcnScanoutMap;
@@ -2583,14 +2631,34 @@ BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _O
     return TRUE;
 }
 
-// Unmap, if mapped, and zero the three fields either way - called from WddmStop and, idempotently, from
-// DcnStop above. Not a DDI: PASSIVE_LEVEL only (MmUnmapIoSpace), same as its only real caller, WddmPresentBlit,
-// by way of DcnScanoutMapping above.
+// Unmap, if mapped, and zero the fields either way - called from WddmStop and, idempotently, from DcnStop above.
+// Not a DDI: PASSIVE_LEVEL only (MmUnmapIoSpace and the scan-out mutex). It takes the scan-out mutex itself
+// (BD-289), so that a stop never releases a mapping a blit still copies into; the mutex is recursive for its owner.
 void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device)
 {
-    if (Device->DcnScanoutMap != NULL) MmUnmapIoSpace(Device->DcnScanoutMap, Device->DcnScanoutMapLength);
-    Device->DcnScanoutMap = NULL;
-    Device->DcnScanoutMapAddress = 0;
-    Device->DcnScanoutMapLength = 0;
+    DCN_SCANOUT_OPS_CONTEXT c = { Device, 0 };
+    BC250_SCANOUT_MAP_OPS ops = { &c, DcnOpsMap, DcnOpsUnmap, DcnOpsAllowed, NULL, NULL, NULL };
+    DcnScanoutLock(Device);
+    ScanoutMapRelease(&Device->DcnScanoutMap, &Device->DcnScanoutMapAddress, &Device->DcnScanoutMapLength, &ops);
     Device->DcnScanoutSeedAddress = 0;       // the next target is not the one the firmware picture was copied into
+    DcnScanoutUnlock(Device);
+}
+
+// BD-289: the scan-out mutex. A KMUTEX, not a fast mutex: the blit it guards checks that it runs at PASSIVE_LEVEL
+// (WddmPresentBlitOwned), and a KMUTEX keeps the IRQL there. Order: after the connector operation mutex, which
+// WddmPresentBlit takes first.
+void DcnScanoutLock(_Inout_ BC250_DEVICE* Device)
+{
+    NT_ASSERT(KeGetCurrentIrql() <= APC_LEVEL);
+    (void)KeWaitForSingleObject(&Device->DcnScanoutLock, Executive, KernelMode, FALSE, NULL);
+}
+
+void DcnScanoutUnlock(_Inout_ BC250_DEVICE* Device)
+{
+    KeReleaseMutex(&Device->DcnScanoutLock, FALSE);
+}
+
+BOOLEAN DcnScanoutLockHeld(_In_ const BC250_DEVICE* Device)
+{
+    return Device->DcnScanoutLock.OwnerThread == KeGetCurrentThread();
 }

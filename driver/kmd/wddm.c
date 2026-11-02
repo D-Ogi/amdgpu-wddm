@@ -9371,18 +9371,25 @@ static void WddmPresentBlitOwned(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXG
 // high-IRQL Present calls retain the original no-copy result.
 static void WddmPresentBlit(_In_ BC250_WDDM_OBJECT* Context, _In_ const DXGKARG_PRESENT* Present)
 {
-    BOOLEAN owned=ConnectorIsEnabled(Context->Device) && KeGetCurrentIrql()==PASSIVE_LEVEL;
+    BOOLEAN passive=KeGetCurrentIrql()==PASSIVE_LEVEL;
+    BOOLEAN owned=ConnectorIsEnabled(Context->Device) && passive;
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     Bd289BlitArrive();              // BD-289 r3: blits on their way, before any lock
 #endif
     if (owned) ConnectorOperationAcquire(Context->Device);
+    // BD-289: one CPU blit at a time owns the flip target mapping, in every case, connector or not. Without it two
+    // blits after a flip could both release the old mapping, and the second MmUnmapIoSpace released the PTEs of
+    // the other blit's new source mapping (0x0A of 2026-11-02). Above PASSIVE_LEVEL WddmPresentBlitOwned refuses
+    // before it maps anything, so it needs no lock there.
+    if (passive) DcnScanoutLock(Context->Device);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
-    Bd289BlitEnter(owned);          // blits inside, and whether this one holds a lock
+    Bd289BlitEnter(passive);        // blits inside, and whether this one holds the scan-out mutex
 #endif
     WddmPresentBlitOwned(Context,Present);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     Bd289BlitLeave();
 #endif
+    if (passive) DcnScanoutUnlock(Context->Device);
     if (owned) ConnectorOperationRelease(Context->Device);
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     Bd289BlitDepart();

@@ -396,6 +396,9 @@ typedef struct _BC250_DEVICE {
     // by wddm.c's WddmPresentBlit, PASSIVE_LEVEL only - never DcnFlipSourceAddress itself, which may run above
     // DISPATCH_LEVEL and must never call MmMapIoSpaceEx/MmUnmapIoSpace (see dcn.c). NULL/0 whenever nothing is
     // mapped: gate closed, no flip yet, DcnDiverged clear, or the last mapping attempt failed.
+    // BD-289: the four fields below and the mapping belong to the holder of DcnScanoutLock (dcn.c, scanout_map.h).
+    // WddmPresentBlit holds it for the whole CPU blit, DcnUnmapScanout for the release. Initialised at AddDevice.
+    KMUTEX DcnScanoutLock;
     PVOID DcnScanoutMap;
     ULONGLONG DcnScanoutMapAddress;      // the physical address DcnScanoutMap corresponds to
     SIZE_T DcnScanoutMapLength;
@@ -1039,8 +1042,13 @@ void DcnVsyncFromVector(_Inout_ BC250_DEVICE* Device);
 // DcnUnmapScanout tears the mapping down; called from WddmStop and, idempotently, from DcnStop
 // (docs/design/vidpn-flip.md section 8's stop order has WddmStop run first, so DcnStop's own call finds it
 // already NULL in the ordinary case).
+// BD-289: DcnScanoutMapping requires the caller to hold the scan-out mutex (DcnScanoutLock) and to keep it while it
+// uses *Mapping. DcnUnmapScanout takes the mutex itself. PASSIVE_LEVEL (APC_LEVEL at most for the mutex).
 BOOLEAN DcnScanoutMapping(_Inout_ BC250_DEVICE* Device, _Out_ PVOID* Mapping, _Out_ SIZE_T* Length, _Out_ ULONG* Pitch);
 void DcnUnmapScanout(_Inout_ BC250_DEVICE* Device);
+void DcnScanoutLock(_Inout_ BC250_DEVICE* Device);
+void DcnScanoutUnlock(_Inout_ BC250_DEVICE* Device);
+BOOLEAN DcnScanoutLockHeld(_In_ const BC250_DEVICE* Device);
 
 // sequence.c
 void SequenceBegin(_Out_ BC250_SEQUENCE* Sequence, _In_ BC250_DEVICE* Device, BOOLEAN Plan,
