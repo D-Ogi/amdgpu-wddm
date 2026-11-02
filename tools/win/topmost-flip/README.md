@@ -36,6 +36,15 @@ does not answer is hung: the helper does not call UI Automation or `SetWindowPos
 At the start, the window gets 10 s to answer. If it does not, the trial prints `taskmgr ui hung` and continues
 with the flip client only. UI Automation runs in its own runspace and stops after 6 s (`-UiaSeconds`).
 
+Task Manager can replace its window when the option changes. In two lab runs on 2026-11-02, the window handle
+was not valid (Win32 error 1400) immediately after the toggle, and the next window belonged to a Taskmgr process
+with a new id. Thus the helper does not keep a window handle from one command to the next. Before each command and
+after each toggle, it examines the handle with `IsWindow`. If the window is gone, the helper finds the
+`TaskManagerWindow` of the Taskmgr process that runs now. The answer gives each change in `replaced` (the old
+and the new process id and window), and `topmost` and `band` are of the window after the toggle. Only a window
+that exists and does not answer `WM_NULL` is hung. The step line also gives `wm_null_error` and `hung_app`
+(`IsHungAppWindow`). At `quit`, each Taskmgr window gets `WM_CLOSE`.
+
 Each step line gives the deltas of the counters that tell the causes apart:
 
 | Delta | Meaning |
