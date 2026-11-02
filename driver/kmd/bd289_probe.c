@@ -6,6 +6,7 @@
 #if defined(AMDGPU_WDDM_LAB_FLAVOUR)
 
 #define BD289_REMAP_LINES 24            // 4 lines a probe with a remap: the first 6 such probes
+#define BD289_SUM_LINES 80              // 2 lines a summary: 40 summaries
 
 typedef struct {
     volatile LONG Busy;                 // 1 while a present holds the probe
@@ -31,7 +32,7 @@ typedef struct {
 static BD289_PROBE g_Probe;
 static volatile LONG g_Probes, g_BusySkips, g_Remaps, g_ProbeRemaps, g_PhysOverlaps, g_VaOverlaps, g_Foreign;
 static volatile LONG g_Lost[BD289_STEPS], g_UnmapKept, g_CopySkipped;
-static volatile LONG g_InfoLines, g_RemapLines, g_LostLines;
+static volatile LONG g_InfoLines, g_RemapLines, g_LostLines, g_SumLines;
 
 static BOOLEAN Budget(volatile LONG* Used, LONG Lines, LONG Limit)
 {
@@ -178,9 +179,9 @@ BOOLEAN Bd289ProbeEnd(void)
     lost = g_Probe.LostAt != BD289_STEPS;
     index = g_Probe.Index;
     if (!safe) InterlockedIncrement(&g_UnmapKept);
-    if (lost) write = Budget(&g_LostLines, 6, BD289_LOST_LINES);
+    if (lost) write = Budget(&g_LostLines, 4, BD289_LOST_LINES);
     else if (g_Probe.Remapped) write = Budget(&g_RemapLines, 4, BD289_REMAP_LINES);
-    else write = (index <= 4 || (index & (index - 1)) == 0) && Budget(&g_InfoLines, 4, BD289_INFO_LINES);
+    else write = (index <= 4 || (index & (index - 1)) == 0) && Budget(&g_InfoLines, 2, BD289_INFO_LINES);
     if (write)
     {
         const BD289_PROBE* p = &g_Probe;
@@ -197,8 +198,10 @@ BOOLEAN Bd289ProbeEnd(void)
                      p->RemapIndex, (void*)p->NewMap, p->NewPhysical, (ULONGLONG)p->NewLength,
                      (ULONG)p->PhysOverlap, (ULONG)p->VaOverlap);
         }
-        Summary();
     }
+    // The counters, with every group written and every 1024 probes, from a budget of their own, so that a late read
+    // of the log still finds counters close to the end of the run.
+    if ((write || (index & 1023) == 0) && Budget(&g_SumLines, 2, BD289_SUM_LINES)) Summary();
     g_Probe.Owner = NULL;
     KeMemoryBarrier();
     InterlockedExchange(&g_Probe.Busy, 0);
