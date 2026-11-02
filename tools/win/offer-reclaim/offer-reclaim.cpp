@@ -198,8 +198,9 @@ int main(int argc,char **argv) {
     }
     bool all=true; for (Case &k:cases) { judge(k); all=all && k.pass; }
     char name[256]{}; WideCharToMultiByte(CP_UTF8,0,ad.Description,-1,name,sizeof(name),nullptr,nullptr);
-    std::fprintf(f,"{\"tool\":\"offer-reclaim\",\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\",\"cycles\":%u,"
-        "\"d3d11_umd\":\"%s\",\"engine\":\"%s\",\"pass\":%s,\"cases\":[",name,ad.VendorId,ad.DeviceId,cycles,
+    std::fprintf(f,"{\"tool\":\"offer-reclaim\",\"pid\":%lu,\"adapter\":\"%s\",\"vendor\":\"%04X\",\"device\":\"%04X\","
+        "\"cycles\":%u,\"d3d11_umd\":\"%s\",\"engine\":\"%s\",\"pass\":%s,\"cases\":[",GetCurrentProcessId(),name,
+        ad.VendorId,ad.DeviceId,cycles,
         module_path(L"amdgpu_wddm_d3d11.dll").c_str(),module_path(L"amdgpu_wddm_dxvk.dll").c_str(),all?"true":"false");
     for (size_t i=0;i<cases.size();++i) write_case(f,cases[i],i==0);
     std::fprintf(f,"\n]}\n"); std::fclose(f);
