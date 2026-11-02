@@ -38,7 +38,7 @@
       "submodules": {
         "subprojects/dxbc-spirv": "dxbc-spirv"
       },
-      "base": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
     },
     "dxbc-spirv": {
       "url": "https://github.com/D-Ogi/dxbc-spirv",
@@ -425,7 +425,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -500,7 +500,7 @@
           "pass": "^PASSED: 0 failure"
         }
       ],
-      "base": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
     },
     {
       "id": "dxvk-x86-rel",
@@ -508,7 +508,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -583,7 +583,7 @@
           "pass": "^PASSED: 0 failure"
         }
       ],
-      "base": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
     },
     {
       "id": "dxvk-x64-lab",
@@ -591,7 +591,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "dxvk",
-      "commit": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -667,7 +667,7 @@
           "pass": "^PASSED: 0 failure"
         }
       ],
-      "base": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
     },
     {
       "id": "dxvk-x86-lab",
@@ -675,7 +675,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "dxvk",
-      "commit": "b54b940277ae8148d2a3caaba9b2bd08e37caf68",
+      "commit": "54ecf2192ec5b48fa4a6367e184c8072d5229829",
       "tree": "clone",
       "recipe": "tools/build/build-dxvk.ps1",
       "args": [
@@ -751,7 +751,7 @@
           "pass": "^PASSED: 0 failure"
         }
       ],
-      "base": "86ca97b2eedaf4554a6c8db11b598ce58d04e643"
+      "base": "b54b940277ae8148d2a3caaba9b2bd08e37caf68"
     },
     {
       "id": "d3d11-x64-rel",
@@ -2594,7 +2594,7 @@
       "flavour": "release",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+      "commit": "83548b4bf065daeb62b46e6e4008e91a3f23ca2c",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2664,7 +2664,7 @@
       "flavour": "lab",
       "arch": "x64",
       "repo": "vkd3d-proton",
-      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+      "commit": "83548b4bf065daeb62b46e6e4008e91a3f23ca2c",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2734,7 +2734,7 @@
       "flavour": "release",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+      "commit": "83548b4bf065daeb62b46e6e4008e91a3f23ca2c",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
@@ -2804,7 +2804,7 @@
       "flavour": "lab",
       "arch": "x86",
       "repo": "vkd3d-proton",
-      "commit": "47cf677139bb3f9b1e6e199d5a85dfa33a373076",
+      "commit": "83548b4bf065daeb62b46e6e4008e91a3f23ca2c",
       "tree": "clone",
       "recipe": "tools/build/build-vkd3d.ps1",
       "args": [
