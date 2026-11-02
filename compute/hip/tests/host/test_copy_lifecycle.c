@@ -78,6 +78,8 @@ typedef struct fake_alloc {
     int           live;
     int           va_live;
     int           sparse;    /* backing is reserved address space, committed on demand */
+    int           local_resident;      /* counted in g_local_usage until destroyed */
+    int           nonlocal_resident;   /* counted in g_nonlocal_usage until destroyed */
 } fake_alloc;
 
 typedef struct fake_packet {
@@ -152,6 +154,10 @@ static int      g_error_next;       /* the next submission puts the device in it
 /* The local segment group: its budget and what this process uses of it (0 budget: no limit),
  * and a VidMm that refuses residency in the carve-out. MustSucceed puts the device in error. */
 static uint64_t g_local_budget, g_local_usage;
+/* The non-local group (BD-117). VidMm accepts a residency past this budget and fails it later on
+ * the paging queue, so the fake accepts it as well and counts it: no case may make one. */
+static uint64_t g_nonlocal_budget, g_nonlocal_usage;
+static uint32_t g_nonlocal_overcommits;
 static int      g_vram_resident_fail;
 static uint32_t g_must_succeed;
 
@@ -554,6 +560,13 @@ NTSTATUS APIENTRY FakeMakeResident(D3DDDI_MAKERESIDENT* resident)
             return STATUS_NO_MEMORY;
         }
         g_local_usage += a->bytes;
+        a->local_resident = 1;
+    } else if (a != NULL && a->heap == BC250HSA_HEAP_GTT) {
+        if (g_nonlocal_budget != 0u && g_nonlocal_usage + a->bytes > g_nonlocal_budget) {
+            ++g_nonlocal_overcommits;
+        }
+        g_nonlocal_usage += a->bytes;
+        a->nonlocal_resident = 1;
     }
     return STATUS_SUCCESS;
 }
@@ -562,7 +575,8 @@ NTSTATUS APIENTRY FakeQueryVideoMemoryInfo(D3DKMT_QUERYVIDEOMEMORYINFO* query)
 {
     CHECK(query->hAdapter == g_dev->adapter);
     if (query->MemorySegmentGroup != D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL) {
-        query->Budget = UINT64_MAX;
+        query->Budget = g_nonlocal_budget != 0u ? g_nonlocal_budget : UINT64_MAX;
+        query->CurrentUsage = g_nonlocal_usage;
         return STATUS_SUCCESS;
     }
     query->Budget = g_local_budget != 0u ? g_local_budget : UINT64_MAX;
@@ -636,6 +650,11 @@ NTSTATUS APIENTRY FakeDestroyAllocation2(const D3DKMT_DESTROYALLOCATION2* destro
         EnterCriticalSection(&g_fake);
         if (outstanding(a->va, a->bytes)) { ++g_violations; }
         LeaveCriticalSection(&g_fake);
+        /* A case that reset the counters with this allocation live counts from zero. */
+        if (a->local_resident) { g_local_usage -= a->bytes < g_local_usage ? a->bytes : g_local_usage; }
+        if (a->nonlocal_resident) {
+            g_nonlocal_usage -= a->bytes < g_nonlocal_usage ? a->bytes : g_nonlocal_usage;
+        }
         backing_release(a);
         memset(a, 0, sizeof(*a));
     }
@@ -925,6 +944,7 @@ static void dev_init(struct bc250hsa_device* d)
     g_register_fail_at = 0u; g_event_fail_at = 0u;
     g_context_fail = 0; g_error_next = 0; g_device_error = 0; g_error_pending = 0;
     g_local_budget = 0u; g_local_usage = 0u; g_vram_resident_fail = 0;
+    g_nonlocal_budget = 0u; g_nonlocal_usage = 0u; g_nonlocal_overcommits = 0u;
     g_exec_state = D3DKMT_DEVICEEXECUTION_ACTIVE;
     memset(g_reservations, 0, sizeof(g_reservations));
     g_reserves = g_reservation_frees = g_bad_frees = g_bad_destroys = g_locks = 0u;

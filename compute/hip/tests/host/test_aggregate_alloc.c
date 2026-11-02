@@ -593,12 +593,64 @@ static void case_planner_refusals(void)
     dev_finish(&d, 0);
 }
 
+/* The budgets of the 8 GiB carve-out that unit A measured at the BD-117 trace. */
+#define TRACE_LOCAL_BUDGET    7482638336ull
+#define TRACE_NONLOCAL_BUDGET 3733582234ull
+
+/* A request above both budgets, a request that only the per-child check can refuse, and the
+ * request that fits: no residency past a budget, ever. */
+static void case_budget_gate(void)
+{
+    struct bc250hsa_device d;
+    bc250hsa_mem           m;
+    uint32_t               creates;
+
+    printf("aggregate: the local and non-local budgets\n");
+    /* The PyTorch request is the total of both budgets plus 256 MiB: out of memory before any
+     * Windows call. */
+    dev_init(&d);
+    g_local_budget = TRACE_LOCAL_BUDGET;
+    g_nonlocal_budget = TRACE_NONLOCAL_BUDGET;
+    creates = g_creates;
+    memset(&m, 0xa5, sizeof(m));
+    CHECK(bc250hsa_alloc(&d, 11484656026ull, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_ENOMEM);
+    CHECK(m.opaque == NULL && m.va == 0u);
+    CHECK(g_creates == creates && g_reserves == 0u && live_allocs() == 0u);
+    CHECK(g_nonlocal_overcommits == 0u && d.allocations == NULL);
+    /* 6 GiB fits the carve-out: two children, both in VRAM. */
+    CHECK(bc250hsa_alloc(&d, 6ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
+    check_shape(&m, 6ull << 30, 2u, 0xFFFC0000ull);
+    CHECK(rec(&m)->children[0].heap == BC250HSA_HEAP_VRAM);
+    CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_VRAM);
+    CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
+    dev_finish(&d, 0);
+
+    /* 8 GiB under a 6 GiB carve-out and 3 GiB of system memory: the sum holds it, but the
+     * second child fits neither group. It is refused, and nothing stays. */
+    dev_init(&d);
+    g_local_budget = 6ull << 30;
+    g_nonlocal_budget = 3ull << 30;
+    CHECK(bc250hsa_alloc(&d, 8ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_ENOMEM);
+    CHECK(m.opaque == NULL && live_allocs() == 0u && live_reservations() == 0u);
+    CHECK(g_nonlocal_overcommits == 0u && d.allocations == NULL);
+    /* With 5 GiB of system memory the same request takes the second child from it. */
+    g_nonlocal_budget = 5ull << 30;
+    CHECK(bc250hsa_alloc(&d, 8ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
+    CHECK(rec(&m)->children[0].heap == BC250HSA_HEAP_VRAM);
+    CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_GTT);
+    CHECK(g_nonlocal_overcommits == 0u);
+    CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
+    CHECK(live_allocs() == 0u && live_reservations() == 0u);
+    dev_finish(&d, 0);
+}
+
 int main(void)
 {
     InitializeCriticalSection(&g_fake);
     bc250hsa_set_log(print_log, NULL, BC250HSA_LOG_INFO);
     case_planner_refusals();
     case_pytorch_request();
+    case_budget_gate();
     case_scatter_walkers();
     case_device_only();
     case_construction_failures();

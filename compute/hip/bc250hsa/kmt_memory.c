@@ -376,6 +376,30 @@ static int local_budget_allows(struct bc250hsa_device* dev, uint64_t bytes)
     return query.CurrentUsage <= query.Budget && bytes <= query.Budget - query.CurrentUsage;
 }
 
+/* The bytes of one segment group that this process may still make resident, and 0 when the
+ * query fails. */
+static int budget_left(struct bc250hsa_device* dev, D3DKMT_MEMORY_SEGMENT_GROUP group,
+                       uint64_t* left)
+{
+    D3DKMT_QUERYVIDEOMEMORYINFO query;
+
+    if (!query_budget(dev, group, &query)) {
+        return 0;
+    }
+    *left = query.CurrentUsage <= query.Budget ? query.Budget - query.CurrentUsage : 0u;
+    return 1;
+}
+
+/* The same rule for system memory, which an aggregate child takes once the carve-out is full
+ * (BD-117). VidMm accepts a residency past the non-local budget too and fails it later on the
+ * paging queue, so a child past it is refused here. A query that fails answers yes. */
+static int non_local_budget_allows(struct bc250hsa_device* dev, uint64_t bytes)
+{
+    uint64_t left = 0u;
+
+    return !budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, &left) || bytes <= left;
+}
+
 /* CreateAllocation2, MapGpuVirtualAddress and MakeResident of one allocation on one heap,
  * and the paging fence wait. On a failure the record holds what was made, and the caller
  * destroys it.
@@ -573,6 +597,12 @@ static bc250hsa_status aggregate_child(struct bc250hsa_device* dev, bc250hsa_all
         if (c->handle != 0u) {
             return result;   /* a handle that could not be destroyed: no second heap */
         }
+        if (!non_local_budget_allows(dev, c->bytes)) {
+            bc250hsa_log(BC250HSA_LOG_INFO,
+                         "aggregate child of %llu bytes fits neither the local nor the non-local"
+                         " budget", (unsigned long long)c->bytes);
+            return BC250HSA_ENOMEM;
+        }
         result = child_backing(dev, c, BC250HSA_HEAP_GTT, gem_flags | BC250HSA_GEM_CPU_GTT_USWC,
                                fence);
         if (result != BC250HSA_OK) {
@@ -662,6 +692,24 @@ static bc250hsa_status alloc_aggregate(struct bc250hsa_device* dev, uint64_t byt
             return BC250HSA_ENOMEM;
         }
         return BC250HSA_EINVAL;
+    }
+    {
+        /* A request above what both segment groups still hold is out of memory before any
+         * Windows call: HIP reports such a request as out of memory (the BD-117 trace asks for
+         * the total plus 256 MiB and expects that), and children made first would only be
+         * paging work to undo. A query that fails leaves the answer to the children. */
+        uint64_t local = 0u;
+        uint64_t non_local = 0u;
+        if (budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, &local) &&
+            budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, &non_local) &&
+            local <= UINT64_MAX - non_local && plan.bytes > local + non_local) {
+            bc250hsa_log(BC250HSA_LOG_INFO,
+                         "device-local allocation of %llu bytes exceeds the %llu local and %llu"
+                         " non-local bytes left in the budget",
+                         (unsigned long long)plan.bytes, (unsigned long long)local,
+                         (unsigned long long)non_local);
+            return BC250HSA_ENOMEM;
+        }
     }
 
     record = (bc250hsa_alloc_record*)calloc(1, sizeof(*record));

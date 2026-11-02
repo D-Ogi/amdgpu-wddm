@@ -13,6 +13,8 @@
  *   4. a GPU copy moves a range across a child boundary into another one, when the coherence
  *      control of layer 1 admits a GPU copy into this memory (else it says that it skipped);
  *   5. the free succeeds, and an allocation of the same size afterwards succeeds as well;
+ * With --expect-oom the size lies above the local and non-local budgets, which it prints
+ * first: step 1 must then answer BC250HSA_ENOMEM, and steps 2 to 5 do not run.
  *   6. a request far above the memory of the part fails as BC250HSA_ENOMEM, and a small
  *      allocation and a kernel afterwards still work.
  *
@@ -313,6 +315,7 @@ static void usage(void)
     printf("  --co <file>       the code object with vadd (default <data>/m16_kernels.gfx1013.co)\n");
     printf("  --wait-total <ms> the bound of one wait (default 20000)\n");
     printf("  --no-oom          leave out step 6\n");
+    printf("  --expect-oom      the size is above the budget: step 1 must answer ENOMEM\n");
     printf("\nExit codes: 0 pass, 1 usage, 2 host failure, 3 timeout, 4 device lost,"
            " 5 a step failed, 6 adapter failure.\n");
 }
@@ -337,6 +340,7 @@ int main(int argc, char** argv)
     size_t               file_bytes = 0;
     int                  verbose = 0;
     int                  oom = 1;
+    int                  expect_oom = 0;
     int                  i;
     double               t0;
     char                 detail[200];
@@ -345,6 +349,7 @@ int main(int argc, char** argv)
         if (strcmp(argv[i], "--help") == 0) { usage(); return EXIT_OK; }
         if (strcmp(argv[i], "--verbose") == 0) { verbose = 1; continue; }
         if (strcmp(argv[i], "--no-oom") == 0) { oom = 0; continue; }
+        if (strcmp(argv[i], "--expect-oom") == 0) { expect_oom = 1; continue; }
         if (strcmp(argv[i], "--bytes") == 0 && i + 1 < argc) {
             bytes = _strtoui64(argv[++i], NULL, 0);
             continue;
@@ -416,11 +421,38 @@ int main(int argc, char** argv)
         return EXIT_HOST;
     }
 
-    /* 1. The allocation. */
+    {
+        bc250hsa_memory_budget budget;
+        memset(&budget, 0, sizeof(budget));
+        budget.struct_bytes = (uint32_t)sizeof(budget);
+        if (bc250hsa_memory_budget_read(p.dev, &budget) == BC250HSA_OK) {
+            printf("budget: local %llu used %llu, non-local %llu used %llu (valid 0x%x)\n",
+                   (unsigned long long)budget.local_budget, (unsigned long long)budget.local_used,
+                   (unsigned long long)budget.non_local_budget,
+                   (unsigned long long)budget.non_local_used, budget.valid);
+        } else {
+            printf("budget: the query failed\n");
+        }
+        fflush(stdout);
+    }
+
+    /* 1. The allocation. With --expect-oom the request is above the budget, and the step
+     * passes only when layer 1 refuses it as out of memory; steps 2 to 5 then do not run. */
     memset(&big, 0, sizeof(big));
     t0 = now_ms();
     status = bc250hsa_alloc(p.dev, bytes, 0u, BC250HSA_MEM_MAPPABLE, &big);
-    step_status("alloc", status, now_ms() - t0);
+    if (expect_oom) {
+        snprintf(detail, sizeof(detail), "%s (ntstatus 0x%08lx); ENOMEM expected",
+                 bc250hsa_status_string(status), (unsigned long)bc250hsa_last_os_status());
+        step("alloc-above-budget", status == BC250HSA_ENOMEM, detail, now_ms() - t0);
+        if (status == BC250HSA_OK) {
+            bc250hsa_free(p.dev, &big);
+        }
+        memset(&big, 0, sizeof(big));
+        status = BC250HSA_ENOMEM;
+    } else {
+        step_status("alloc", status, now_ms() - t0);
+    }
     if (status == BC250HSA_OK) {
         status = bc250hsa_memory_access(p.dev, &big, &access);
         snprintf(detail, sizeof(detail), "%s, access %u (2 is scatter), va 0x%llx, host %p",
