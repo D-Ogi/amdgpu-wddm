@@ -249,6 +249,12 @@ class Broker:
             if line == '@@BAD request line':
                 out.append('error: the far end refused the request line')
                 break
+            got = re.match(rf'^@@GOT {rid} (\S+)$', line)
+            if got:
+                # The far end has the request (a far end before 2026-11-02 sends no such line): a reply that then
+                # does not come is a script that hangs, not a request lost on the way (bd108-k2).
+                stamps['lab_got'] = got.group(1)
+                continue
             if line == f'@@BEGIN {rid}':
                 inside = True
                 continue
@@ -337,9 +343,13 @@ def main(argv):
         if len(argv) < 4:
             raise SystemExit(__doc__)
         b = lab_broker(name, argv[2], [Path(s).resolve() for s in argv[3:]])
-        print(f'{utc()} {b.start()}', flush=True)
+        # Each line is stamped when its step has ended: an f-string evaluates utc() before the call inside it, which
+        # gave the end of a 90 s session the time of its start (bd108-k2, 2026-11-02).
+        ready = b.start()
+        print(f'{utc()} {ready}', flush=True)
         print(f'{utc()} channel {name} serving for {b.seconds} s; requests in {b.dir}', flush=True)
-        print(f'{utc()} channel {name} ended: {b.serve()}', flush=True)
+        reason = b.serve()
+        print(f'{utc()} channel {name} ended: {reason}', flush=True)
         return 0
     if cmd == 'status':
         rec = serving(name)

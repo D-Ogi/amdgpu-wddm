@@ -4,6 +4,8 @@ The far end is the real channel-host.ps1 under the local Windows PowerShell 5.1,
 way the broker starts ssh: its stdin and stdout are the pipes. No network and no lab. Run:
     python -m unittest discover -s tools/win/lab-runner -p "test_channel.py"
 """
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -13,6 +15,7 @@ import tempfile
 import threading
 import time
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -69,6 +72,8 @@ class HeldChannel(unittest.TestCase):
         rep = channel.call('game-test', 'echo.ps1', {'Text': 'za\u017c\u00f3\u0142\u0107 1;2 "q"'})
         self.assertEqual(rep['exit'], 0)
         self.assertEqual(rep['lines'], ['echo za\u017c\u00f3\u0142\u0107 1;2 "q"', 'host line'])
+        # The far end confirms the request before the script runs; the GOT line is a stamp, not a reply line.
+        self.assertEqual(rep['stamps']['lab_got'], rep['stamps']['lab_received'])
         self.assertEqual(channel.call('game-test', 'echo.ps1', {'Code': 3})['exit'], 3)
         rep = channel.call('game-test', 'echo.ps1', {'Fail': True})
         self.assertEqual(rep['exit'], 1)
@@ -142,6 +147,8 @@ class HeldChannel(unittest.TestCase):
         # The broker gives up the request and does not send it again.
         self.assertIsNone(rep['exit'])
         self.assertEqual(rep['lines'], ['error: the far end ended or did not answer in time'])  # killed in the sleep
+        # The far end had confirmed it: the request reached the script, which is what bd108-k2 could not tell.
+        self.assertRegex(rep['stamps'].get('lab_got', ''), r'^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$')
         t.join(20)
         self.assertEqual(result.get('reason'), 'far end ended')
         self.assertIsNone(channel.serving('game-drop'))
@@ -193,6 +200,36 @@ class HeldChannel(unittest.TestCase):
         self.assertIsNone(channel.call('game-none', 'echo.ps1', {}))
         with self.assertRaises(ValueError):
             channel.channel_dir('../x')
+
+
+class ServeLog(unittest.TestCase):
+    """The serve log of channel.main: each line carries the time its step ended (bd108-k2 read a 90 s session as one
+    that ended 2 s after READY, because utc() ran before the call in the same f-string)."""
+
+    def test_ended_line_has_the_end_time(self):
+        class Fake:
+            seconds, dir = 90, Path('x')
+
+            def start(self):
+                time.sleep(0.2)
+                return '@@CHANNEL READY pid 1 bound 90 s'
+
+            def serve(self):
+                time.sleep(0.4)
+                return 'stop'
+        original = channel.lab_broker
+        channel.lab_broker = lambda name, seconds, scripts: Fake()
+        out = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out):
+                channel.main(['serve', 'game-log', '90', 'echo.ps1'])
+        finally:
+            channel.lab_broker = original
+        lines = out.getvalue().splitlines()
+        stamp = [datetime.strptime(line.split()[0], '%Y-%m-%dT%H:%M:%S.%fZ') for line in lines]
+        self.assertIn('@@CHANNEL READY', lines[0])
+        self.assertTrue(lines[2].endswith('ended: stop'), lines)
+        self.assertGreaterEqual((stamp[2] - stamp[1]).total_seconds(), 0.35, lines)
 
 
 class LabCommandLine(unittest.TestCase):

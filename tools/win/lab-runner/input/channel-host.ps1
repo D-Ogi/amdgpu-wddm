@@ -2,7 +2,8 @@
 # the held control channel (BD-108). It reads one request per line on stdin, runs a script that channel.py staged in
 # -Dir, in this process, and writes the output between two marker lines:
 #   in:   REQ <id> <base64 of {"script": "input-exec.ps1", "params": {"Session": "game-rottr", ...}}>
-#   out:  @@BEGIN <id>
+#   out:  @@GOT <id> <UTC when the request came>   (flushed at once, before the script runs)
+#         @@BEGIN <id>
 #         ...the script's output, one line per record...
 #         @@END <id> <exit code> <UTC when the request came> <UTC when the script ended>
 # Why. One command used to cost three ssh connections (target.py ps: a directory, the push, the run) and an elevated
@@ -33,6 +34,9 @@ while ([DateTime]::UtcNow -lt $deadline) {
     if ($line -notmatch '^REQ ([0-9a-f]{32}) ([A-Za-z0-9+/=]+)$') { Send "@@BAD request line"; $out.Flush(); continue }
     $id = $Matches[1]; $body = $Matches[2]
     $received = Utc
+    # At once, before the script runs: the host can then tell a request that never came from a script that hangs.
+    Send "@@GOT $id $received"
+    $out.Flush()
     Send "@@BEGIN $id"
     $code = 0
     try {
