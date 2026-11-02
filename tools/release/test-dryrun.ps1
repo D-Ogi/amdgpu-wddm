@@ -196,7 +196,7 @@ Check ($r2.text -match 'shortcuts: Start menu entry, Start menu repair entry; le
 Check ($r2.text -notmatch 'would: desktop shortcut') 'no desktop icon is written in that run'
 Check (($r2.text -match 'wallpaper: not set \(-NoWallpaper\)') -and ($r2.text -match 'Release: Wallpaper = 0, WallpaperStamp = ')) 'the run asked for no wallpaper records 0 and says so'
 Check ($r2.text -match 'start screen: no picture on the start screen \(-NoBootLogo\)') 'the run asked for no start-screen picture says so'
-Check ($r2.text -match 'would: HKLM:\\SYSTEM\\CurrentControlSet\\Services\\bc250kmd\\Parameters: BootLogo = 0') 'the run asked for no start-screen picture writes BootLogo = 0'
+Check ($r2.text -match 'would: driver state: BootLogo = 0') 'the run asked for no start-screen picture writes BootLogo = 0 into the driver state'
 Check ($r2.text -match 'Dry run complete' -and $r2.text -notmatch 'doing:') 'that walk-through changed nothing either'
 
 'registry defaults on upgrade (test-registry-defaults.ps1 under 5.1, HKCU scratch key)'

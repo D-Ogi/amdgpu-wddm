@@ -131,6 +131,8 @@ $footprintBlock = Test-UninstallBlock $startFootprint[0].Extent.StartOffset $uni
 
 function Write-Info { param($Text) }
 function Write-Log { param($Text) }
+# The footprint block also lists the ROCm venvs (rocm-venvs.ps1, which this test does not load): none here.
+function Get-RocmVenvFootprint { @() }
 function Write-Fail { param($Text) $script:reportedFailures += $Text }
 function Write-Warn2 { param($Text) $script:reportedWarnings += $Text }
 function Write-Host { param($Object, $ForegroundColor) }
