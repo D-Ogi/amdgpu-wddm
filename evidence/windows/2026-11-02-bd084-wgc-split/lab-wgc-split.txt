@@ -1,0 +1,25 @@
+K2 hashes PASS C:\BC250\tmp\capshare\capshare.exe D73BF20927E77B7A5157339B596AE8BEF3072ECBF4EF1D70FC7F6F8855EFCD85
+K2 hashes PASS C:\BC250\tmp\k2\clprobe.exe 1A4520C591C053CB960621F897650CCB74D49B5DB7769187A495CE4F11B2186D
+K2 hashes PASS C:\BC250\tmp\capshare\capshare-peer.exe D73BF20927E77B7A5157339B596AE8BEF3072ECBF4EF1D70FC7F6F8855EFCD85
+K2 hashes INFO C:\BC250\tmp\capshare\lab-capshare-run.ps1 43E6C7E7ADE0E9074AB955A2BCE58B7ADD17488AC2C57546DCB4FC6DC828B413
+K2 hashes INFO C:\BC250\tmp\k2\o77-task.ps1 A0E1F909A1B761E064B3E1B22A63F7BD7C6565A8BF9F709E213E4E700D9F57D6
+K2 hashes INFO C:\BC250\tmp\k2\k2-pack-user.ps1 ADBC40DEC017DA559F26D1DEF767FD49904B92B9AC32A6B8F98FCC4914990EAC
+K2 hashes INFO C:\BC250\tmp\k2\k2-cap-user.ps1 6DB9FD1ECC67DF7216DC21824E91B5985107751059F312B2035B2BE63FDAE00F
+CAPSHARE cell=wgc start=20261102T112653Z bound=100 extra='' session=1 user=bc250
+CAPSHARE exe sha256=D73BF20927E77B7A5157339B596AE8BEF3072ECBF4EF1D70FC7F6F8855EFCD85
+CAPSHARE cmd: C:\BC250\tmp\capshare\capshare.exe --cell wgc --interactive-ok --bound 100 --format bgra8 --peer-exe C:\BC250\tmp\capshare\capshare-peer.exe --out C:\BC250\tmp\capshare\wgc-20261102T112653Z.txt --json C:\BC250\tmp\capshare\wgc-20261102T112653Z.json --stderr C:\BC250\tmp\capshare\wgc-20261102T112653Z-err.txt --dbwin dwm.exe
+CAPSHARE exit=2 end=11:26:56Z
+CAPSHARE A   1047 VERDICT cell=wgc result=fail side=A stage=wgc-init call=IGraphicsCaptureItemInterop::CreateForWindow hr=0x80070057 at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:d3d12 fl=A:12_1,B:12_1 checks=- elapsed_ms=1047 decided_ms=969 note=Could_not_capture_the_given_window. window=48,48,256x256 producer=d3d12 producer_window=noactivate wgc_item=window peer_exit=0x00000000 dbwin_recorded=0
+CAPSHARE log C:\BC250\tmp\capshare\wgc-20261102T112653Z.txt lines 163
+CAPSHARE cell=wgc start=20261102T112702Z bound=100 extra='--producer-window app' session=1 user=bc250
+CAPSHARE exe sha256=D73BF20927E77B7A5157339B596AE8BEF3072ECBF4EF1D70FC7F6F8855EFCD85
+CAPSHARE cmd: C:\BC250\tmp\capshare\capshare.exe --cell wgc --interactive-ok --bound 100 --format bgra8 --peer-exe C:\BC250\tmp\capshare\capshare-peer.exe --out C:\BC250\tmp\capshare\wgc-20261102T112702Z.txt --json C:\BC250\tmp\capshare\wgc-20261102T112702Z.json --stderr C:\BC250\tmp\capshare\wgc-20261102T112702Z-err.txt --dbwin dwm.exe --producer-window app
+CAPSHARE exit=0 end=11:27:04Z
+CAPSHARE A   1094 VERDICT cell=wgc result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:d3d12 fl=A:12_1,B:12_1 checks=A:A=pass,A:B=pass elapsed_ms=1094 decided_ms=1047 note=- window=48,48,256x256 producer=d3d12 producer_window=app wgc_item=window frames=4 mismatched_frames=2 a_at_ms=1000 b_at_ms=1047 peer_exit=0x00000000 dbwin_recorded=0
+CAPSHARE log C:\BC250\tmp\capshare\wgc-20261102T112702Z.txt lines 176
+CAPSHARE cell=wgc start=20261102T112710Z bound=100 extra='--wgc-item monitor' session=1 user=bc250
+CAPSHARE exe sha256=D73BF20927E77B7A5157339B596AE8BEF3072ECBF4EF1D70FC7F6F8855EFCD85
+CAPSHARE cmd: C:\BC250\tmp\capshare\capshare.exe --cell wgc --interactive-ok --bound 100 --format bgra8 --peer-exe C:\BC250\tmp\capshare\capshare-peer.exe --out C:\BC250\tmp\capshare\wgc-20261102T112710Z.txt --json C:\BC250\tmp\capshare\wgc-20261102T112710Z.json --stderr C:\BC250\tmp\capshare\wgc-20261102T112710Z-err.txt --dbwin dwm.exe --wgc-item monitor
+CAPSHARE exit=0 end=11:27:12Z
+CAPSHARE A   1110 VERDICT cell=wgc result=pass side=- stage=- call=- hr=- at=- got=- want=- diff=0/0 max_delta=0 content=- gate=- route=A:gpu11,B:d3d12 fl=A:12_1,B:12_1 checks=A:A=pass,A:B=pass elapsed_ms=1110 decided_ms=1016 note=- window=48,48,256x256 producer=d3d12 producer_window=noactivate wgc_item=monitor frames=3 mismatched_frames=1 a_at_ms=985 b_at_ms=1016 peer_exit=0x00000000 dbwin_recorded=0
+CAPSHARE log C:\BC250\tmp\capshare\wgc-20261102T112710Z.txt lines 177
