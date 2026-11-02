@@ -2,6 +2,7 @@
 #include "ddi-wddm2.h"
 #include "ddi-table.h"
 #include "ddi-dxgi-table.h"
+#include "ddi-dxgi-resources.h"
 #include "ddi-srv.h"
 #include "ddi-rtv.h"
 #include "ddi-dsv.h"
@@ -97,6 +98,7 @@ BOOL APIENTRY flush(D3D10DDI_HDEVICE h,UINT contextType,UINT flags) {
     enter_context(h,[&](ID3D11DeviceContext4 &) {
         auto *engine=owner(h).engine4();
         const HRESULT hr=engine ? engine->TrimMemory() : E_UNEXPECTED;
+        residency_note("BC250 residency: Trim returns %08X\n",unsigned(hr));
         if (FAILED(hr)) report_ddi_error(owner(h),hr); else trimmed=TRUE;
     });
     return trimmed;
