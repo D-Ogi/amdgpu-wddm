@@ -205,6 +205,7 @@ $listener = New-Object Net.HttpListener
 $listener.Prefixes.Add('http://+:8722/lab/')
 $listener.Start()
 Log 'listening on 8722 (protocol v2)'
+# spawn-loop-ok: one job for each authenticated request, and no process between requests
 while ($listener.IsListening) {
     $ctx = $listener.GetContext()
     $code = 200; $out = $null; $action = '-'; $raw = $null

@@ -24,6 +24,7 @@ kill_game() {
 }
 {
   echo "guard-http $(date -u +%H:%M:%S) for $secs s"
+  # spawn-loop-ok: one emergency-channel request every 30 s from this PC, no ssh session on the lab
   while [ "$(date +%s)" -lt "$end" ]; do
     line=$(read_dpm); t=$(echo "$line" | grep -o '[0-9.]* C busy' | grep -o '^[0-9.]*')
     echo "$(date -u +%H:%M:%S) $line"
