@@ -145,6 +145,34 @@ static bool Bc250DeviceLostResult(HRESULT hr)
    return device_lost_status(hr);
 }
 
+// BD-179: TRUE when the adapter of this device left the system after the check had seen it there (adapter-presence.h).
+// One thread reads the adapter list at most once in kAdapterCheckMs; every other call reads only the state.
+static bool Bc250AdapterLeft(HostBridge *s)
+{
+   if (!s->adapter_luid) return false;
+   std::atomic_ref<unsigned> state(s->adapter_state);
+   const unsigned before=state.load(std::memory_order_acquire);
+   if (before==kAdapterLeft) return true;
+   std::atomic_ref<ULONGLONG> next(s->adapter_next_check_ms);
+   const ULONGLONG now=GetTickCount64();
+   ULONGLONG due=next.load(std::memory_order_relaxed);
+   if (now<due || !next.compare_exchange_strong(due,now+kAdapterCheckMs,std::memory_order_relaxed)) return false;
+   const AdapterPresence presence=probe_adapter_presence(s->adapter_luid,
+      s->adapter_kmt ? *s->adapter_kmt : system_adapter_presence_kmt());
+   if (presence==AdapterPresence::present) {
+      unsigned unchecked=kAdapterUnchecked;
+      (void)state.compare_exchange_strong(unchecked,kAdapterSeen,std::memory_order_acq_rel);
+      return false;
+   }
+   if (presence!=AdapterPresence::gone || before!=kAdapterSeen) return false;
+   state.store(kAdapterLeft,std::memory_order_release);
+   static std::atomic_uint notes{16};
+   device_life_note(notes,"BC250 BD-179: the adapter of this device left the system: luid=%llx runtime=%p identity=%p "
+      "thread=%lu\n",(unsigned long long)s->adapter_luid,s->device ? s->device->hDevice : nullptr,
+      s->device ? s->device->host_identity() : nullptr,(unsigned long)GetCurrentThreadId());
+   return true;
+}
+
 static HRESULT Bc250HostStatus(HostBridge *s)
 {
    // A loss already latched still needs its report when a check-type entry swallowed the first one.
@@ -159,6 +187,7 @@ static HRESULT Bc250HostStatus(HostBridge *s)
       return Bc250HostLost(s,"present fence reads the lost-device value");
    if (s->device->pagingFence && *s->device->pagingFence==UINT64_MAX)
       return Bc250HostLost(s,"paging fence reads the lost-device value");
+   if (Bc250AdapterLeft(s)) return Bc250HostLost(s,"the adapter of this device left the system");
    return S_OK;
 }
 

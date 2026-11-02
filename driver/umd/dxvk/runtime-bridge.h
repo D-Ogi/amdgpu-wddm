@@ -7,6 +7,8 @@
 #include <d3d10umddi.h>
 #include "runtime-domain.h"
 #include "host-bootstrap.h"
+#include "adapter-presence.h"
+#include <atomic>
 namespace bc250::umd {
 struct RuntimeDevice {
     RuntimeDomain domain;
@@ -67,7 +69,25 @@ struct HostBridge {
    HostFence fences[kHostFenceRecords];
    // Monitored fences that got no record because every record was in use.
    unsigned fences_unrecorded;
+   // BD-179: the LUID of the adapter that runs this device (host_descriptor sets it), and the check that the
+   // adapter is still in the system (adapter-presence.h). adapter_state is one of AdapterCheck; the check runs at
+   // most once in kAdapterCheckMs, from the host status. Several threads read and write both fields, always through
+   // std::atomic_ref: the bridge stays a plain structure that a close can reset with an assignment.
+   UINT64 adapter_luid;
+   ULONGLONG adapter_next_check_ms;
+   unsigned adapter_state;
+   // The kernel entries of the check; null means those of gdi32.dll. Only the tests set it.
+   const AdapterPresenceKmt *adapter_kmt;
 };
+// BD-179: the states of the adapter check. The check is armed only when it first finds the adapter of the device in
+// the list: a LUID that the list never had (a wrong LUID, a list that this process cannot read) never reports a loss.
+enum AdapterCheck : unsigned { kAdapterUnchecked=0, kAdapterSeen=1, kAdapterLeft=2 };
+inline constexpr ULONGLONG kAdapterCheckMs=500;
+// BD-179: TRUE when the adapter of this device left the system after the check had seen it.
+inline bool adapter_left(const HostBridge &bridge) {
+   return std::atomic_ref<unsigned>(const_cast<unsigned &>(bridge.adapter_state)).load(std::memory_order_acquire)==
+          kAdapterLeft;
+}
 // Latch a loss whose status the caller already carries: the entry that got it reports it through its
 // own error class, so the bridge must not report it a second time.
 inline void latch_device_lost(HostBridge &bridge) { bridge.device_lost=true; bridge.lost_reported=true; }
@@ -75,7 +95,12 @@ inline void latch_device_lost(HostBridge &bridge) { bridge.device_lost=true; bri
 // fence or a progress fence of the hosted ICD) reads the lost-device value, which only the kernel writes, and only
 // when it ends the device's work. A latched loss alone is not this proof: a refused submission or a wait that
 // timed out also latches one while earlier work can still run.
+// BD-179: the adapter of the device left the system (adapter_left) is the other proof. The kernel stopped that
+// adapter, and the stop resets it (adapter-presence.h), so no work of the device runs. The fences of such a device
+// never read the lost-device value, and without this proof each device of the old adapter would stay kept until
+// kKeptDeviceLimit refused every new device of the process, also on the new adapter.
 inline bool kernel_ended_device_work(const HostBridge &bridge) {
+   if (adapter_left(bridge)) return true;
    if (bridge.present_cpu && *(const volatile UINT64 *)bridge.present_cpu==UINT64_MAX) return true;
    for (const auto &p:bridge.progress)
       if (p.cpu_address && *(const volatile UINT64 *)p.cpu_address==UINT64_MAX) return true;
@@ -142,6 +167,7 @@ inline bc250_host host_descriptor(HostBridge &bridge, uint64_t adapter_luid) {
     host.version = BC250_HOST_VERSION;
     host.size = sizeof(host);
     host.adapter_luid = adapter_luid;
+    bridge.adapter_luid = adapter_luid;
     host.identity = bridge.device->host_identity();
     host.userdata = &bridge;
     host.dispatch = host_dispatch;
