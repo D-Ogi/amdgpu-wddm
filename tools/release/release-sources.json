@@ -100,7 +100,7 @@
     "d3d11_shell": "Current tester.35 payload sources. release payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_engine": "Current tester.36 payload sources. release payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "d3d11_icd": "Current tester.35 payload sources. release payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9. File rows retain exact recipes, hashes, dependencies and validation limits.",
-    "desktop_umd": "Current tester.35 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 088a15881c6115549956743b8d9bfda1a1f15e10; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 088a15881c6115549956743b8d9bfda1a1f15e10; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
+    "desktop_umd": "Current tester.36 payload sources. release payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 63fd611f283c94929215c0282d6e4538c694ca7d; lab payload/desktop/bc250d3d_zink.dll: mesa-amdgpu-wddm 63fd611f283c94929215c0282d6e4538c694ca7d; release payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; lab payload/desktop/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 038cb72013baf4ebd6c22dc2440b9dda88ffaf97; release payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "vulkan_icd": "Current tester.36 payload sources. release payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm cf063d0c702bbda9670f10e34209fa6140fb5aea; lab payload/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm cf063d0c702bbda9670f10e34209fa6140fb5aea; shared payload/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "control": "Current tester.35 payload sources. release payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/amdgpu_wddm_control.exe: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/control/bc250control.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/control/bc250control.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3. File rows retain exact recipes, hashes, dependencies and validation limits.",
     "wow64": "Current tester.36 payload sources. release payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/wow64/desktop/bc250d3d_router.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; lab payload/wow64/desktop/bc250d3d.dll: mesa-amdgpu-wddm 6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9; release payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; lab payload/wow64/d3d11/amdgpu_wddm_d3d11.config: amdgpu-wddm 97b0f39ebc04f8c23c1b2110b9ee0d15034713f6; release payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; lab payload/wow64/d3d11/amdgpu_wddm_dxvk.dll: dxvk 54ecf2192ec5b48fa4a6367e184c8072d5229829; release payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d11/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; lab payload/wow64/d3d12/amdgpu_wddm_d3d12.dll: amdgpu-wddm aac4b053cef681addc4a67c2913d0cff7706a6a3; release payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; lab payload/wow64/d3d12/amdgpu_wddm_vkd3d.dll: vkd3d-proton 83548b4bf065daeb62b46e6e4008e91a3f23ca2c; release payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; lab payload/wow64/d3d12/amdgpu_wddm_radv.dll: mesa-amdgpu-wddm 68fc203599c1ce0b7143fee6e41f9a552b2dacf9; release payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 17de7ab1ce68069b25c29c3e734b8a3cbd74734c; lab payload/wow64/vulkan/vulkan_radeon.dll: mesa-amdgpu-wddm 17de7ab1ce68069b25c29c3e734b8a3cbd74734c; shared payload/wow64/vulkan/radeon_icd.json: amdgpu-wddm df9be61439d03a667e8874e82e0ca67554589eee. File rows retain exact recipes, hashes, dependencies and validation limits.",
@@ -528,11 +528,11 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/t35/release/set/artifacts/release/zink-x64-rel/bc250d3d_zink.dll",
-      "sha256": "1E39D6AA6AC5EC1430909E4E3714F9646FFB2E7E2711154ACEDB77D47B9C10C5",
+      "source": "scratch/t36/f4-dxil/zink-set/artifacts/release/zink-x64-rel/bc250d3d_zink.dll",
+      "sha256": "F670D8EB8B4323018D8DFB40E94C95CDEBF2B08397E5FD8D4C2106F12DBB120D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "088a15881c6115549956743b8d9bfda1a1f15e10",
+        "commit": "63fd611f283c94929215c0282d6e4538c694ca7d",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -557,23 +557,23 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
       },
       "size": 11807744,
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36).",
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f).",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "release"
     },
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d_zink.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/zink-x64-lab/bc250d3d_zink.dll",
-      "sha256": "D20A28C042416134E3912C65B4E51E0AB8478B18EA41CFB09F3D3E4B1A39466C",
+      "source": "scratch/t36/f4-dxil/zink-set/artifacts/lab/zink-x64-lab/bc250d3d_zink.dll",
+      "sha256": "8C05765E93C0F99001C562CC9FA5160C89DFCBF5711C7E2F084B606FD848D8D5",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "088a15881c6115549956743b8d9bfda1a1f15e10",
+        "commit": "63fd611f283c94929215c0282d6e4538c694ca7d",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -599,12 +599,12 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/gallium/targets/d3d10umd/bc250d3d_zink.dll"
       },
-      "size": 13354496,
-      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36).",
+      "size": 13355520,
+      "role": "The hosted zink D3D11 UMD that puts DWM on the GPU: the tester.33 zink line 411f70e4 with the Windows driconf fixes (regular expressions dcdb8e34, sections with an invalid pattern c9d89897, a build check of the static table 842a4b78), the process name at any path length (fab253b9) and debugging settings read only in the lab flavour (66f7ef36), with BD-168: OpenResource imports an opened allocation without a resource of its own and names the failed step (9031a372), and zink stages the images that forbid a direct CPU map (63fd611f).",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
     },
