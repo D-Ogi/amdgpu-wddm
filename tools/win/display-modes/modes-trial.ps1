@@ -10,11 +10,28 @@
 #   modes-trial.ps1 -Arguments '-Revert'
 param(
     [Parameter(Mandatory)][string]$Arguments,
-    [string]$User = "$env:USERDOMAIN\$env:USERNAME",
+    [string]$User = '',
     [string]$Work = 'C:\BC250\tmp\display-modes',
     [ValidateRange(10, 170)][int]$TimeoutSeconds = 120
 )
 $ErrorActionPreference = 'Stop'
+# The task principal is the console user's SID when -User is empty. The old default "$env:USERDOMAIN\$env:USERNAME"
+# is WORKGROUP\bc250 in the lab's SSH session, which Register-ScheduledTask refuses (0x80070534, kit f3k2-r1). A SID
+# does not depend on that domain part or on the language of the account names.
+function ConsoleUserSid {
+    $name = [string](Get-CimInstance Win32_ComputerSystem).UserName
+    if ($name) {
+        try { return ([Security.Principal.NTAccount]$name).Translate([Security.Principal.SecurityIdentifier]).Value } catch { }
+    }
+    $shell = Get-CimInstance Win32_Process -Filter "Name='explorer.exe'" | Where-Object { $_.SessionId -ne 0 } | Select-Object -First 1
+    if ($shell) {
+        $owner = Invoke-CimMethod -InputObject $shell -MethodName GetOwnerSid
+        if ($owner.ReturnValue -eq 0 -and $owner.Sid) { return [string]$owner.Sid }
+    }
+    return ''
+}
+if (-not $User) { $User = ConsoleUserSid }
+if (-not $User) { throw 'no console user: nobody is logged on at the console' }
 $task = 'DisplayModesTrial'
 New-Item -ItemType Directory -Force $Work | Out-Null
 $worker = Join-Path $Work 'modes.ps1'
