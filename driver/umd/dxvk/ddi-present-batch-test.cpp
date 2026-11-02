@@ -165,7 +165,8 @@ void test_present_batches(){
     // The first source must remain alive until the single batch Present retires,
     // even though only the last source was translated for the callback.
     RuntimeTexture first{};first.texture=static_cast<ID3D11Texture2D *>(resources[0].object);
-    first.image.image=reinterpret_cast<VkImage>(uintptr_t(123));first.image.memory=reinterpret_cast<VkDeviceMemory>(uintptr_t(124));
+    // A non-dispatchable handle is a uint64_t on x86, so a C-style cast is the portable spelling.
+    first.image.image=(VkImage)(uintptr_t(123));first.image.memory=(VkDeviceMemory)(uintptr_t(124));
     RuntimeImageDispatch vk{};vk.destroy=releaseImage;vk.memory.free=releaseMemory;
     auto imported=texture_import_dispatch(engine);imported.release=releaseTexture;
     retiringResource=resources[0].object;presentCpu=0;refuseRetire=true;order.clear();
