@@ -202,13 +202,265 @@ class HeldChannel(unittest.TestCase):
             channel.channel_dir('../x')
 
 
+RELAY = r'''"""Holds its stdin until EOF and then gives it to the child; the child's output passes at once. The suspected
+behaviour of the lab's ssh session in bd108-k2 (2026-11-02)."""
+import subprocess, sys, threading
+p = subprocess.Popen(sys.argv[1:], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+def out():
+    while True:
+        d = p.stdout.read1(4096)
+        if not d:
+            return
+        sys.stdout.buffer.write(d)
+        sys.stdout.buffer.flush()
+t = threading.Thread(target=out)
+t.start()
+data = sys.stdin.buffer.read()
+try:
+    p.stdin.write(data)
+    p.stdin.close()
+except OSError:
+    pass
+p.wait()
+t.join()
+sys.exit(p.returncode)
+'''
+
+STANDIN = r'''"""A far end that answers the handshake and then fails in one way: 'early' ends 1 s after its PONG, 'drop' ends at
+the first request, 'mute' never confirms a request."""
+import os, sys, threading
+from datetime import datetime, timezone
+mode = sys.argv[1]
+def say(s):
+    sys.stdout.write(s + '\n')
+    sys.stdout.flush()
+say('@@CHANNEL READY pid 1 bound 60 s')
+for line in sys.stdin:
+    line = line.strip()
+    if line.startswith('PING '):
+        say('@@PONG ' + line[5:] + ' ' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z')
+        if mode == 'early':
+            threading.Timer(1.0, os._exit, args=(0,)).start()
+        continue
+    if line.startswith('REQ '):
+        if mode == 'drop':
+            sys.exit(0)
+        continue
+    if line == 'QUIT':
+        break
+'''
+
+
+@unittest.skipUnless(POWERSHELL, 'needs Windows PowerShell 5.1 as the far end')
+class SelfChecks(unittest.TestCase):
+    """The broker's checks of its own path (bd108-k2: no request line reached the far end through the session's stdin
+    in 90 s, four requests stayed behind, and later commands went the per-call way without a word)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='bc250-chself-', dir=os.environ.get('BC250_TEST_TMP')))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        os.environ['BC250_CHANNEL_DIR'] = str(self.tmp / 'host')
+        self.addCleanup(os.environ.pop, 'BC250_CHANNEL_DIR', None)
+        self.lab = self.tmp / 'lab'
+        src = self.tmp / 'src'
+        src.mkdir()
+        (src / 'echo.ps1').write_text(ECHO, encoding='utf-8-sig')
+        (self.tmp / 'relay.py').write_text(RELAY, encoding='utf-8')
+        (self.tmp / 'standin.py').write_text(STANDIN, encoding='utf-8')
+        self.scripts = [src / 'echo.ps1']
+
+    def host_argv(self, *extra, hold=False):
+        argv = [POWERSHELL, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(self.lab / 'channel-host.ps1'),
+                '-Seconds', '60', '-Dir', str(self.lab), *extra]
+        return [sys.executable, '-u', str(self.tmp / 'relay.py'), *argv] if hold else argv
+
+    def standin(self, mode):
+        return [sys.executable, '-u', str(self.tmp / 'standin.py'), mode]
+
+    def serve(self, b):
+        result = {}
+        t = threading.Thread(target=lambda: result.update(reason=b.serve()), daemon=True)
+        t.start()
+        self.addCleanup(b.close)
+        return t, result
+
+    def test_far_end_that_ends_early(self):
+        # The far end answers the handshake and ends 1 s later, with no request: the broker sees it within a second
+        # and says so in broker.json; a later caller takes its own path at once.
+        b = channel.Broker('game-early', 60, self.standin('early'), local_push, str(self.lab), self.scripts)
+        b.start()
+        t, result = self.serve(b)
+        t.join(10)
+        self.assertEqual(result.get('reason'), 'far end ended')
+        rec = channel.read_json(b.dir / 'broker.json')
+        self.assertEqual(rec['state'], 'ended')
+        self.assertLess(channel.epoch_of(rec['ended']) - b.started, 8)
+        start = time.monotonic()
+        self.assertIsNone(channel.call('game-early', 'echo.ps1', {}))
+        self.assertLess(time.monotonic() - start, 1)
+
+    def test_far_end_that_ends_at_a_request(self):
+        # The far end ends when the first request comes; a second request waits behind it. The first gets an error
+        # and is not sent again; the second was never sent, so its caller takes its own path (None).
+        b = channel.Broker('game-dropped', 60, self.standin('drop'), local_push, str(self.lab), self.scripts)
+        b.start()
+        out = {}
+        first = threading.Thread(target=lambda: out.update(a=channel.call('game-dropped', 'echo.ps1', {'Text': 'a'})))
+        first.start()
+        time.sleep(0.2)
+        second = threading.Thread(target=lambda: out.update(b=channel.call('game-dropped', 'echo.ps1', {'Text': 'b'})))
+        second.start()
+        time.sleep(0.2)
+        t, result = self.serve(b)
+        first.join(20)
+        second.join(20)
+        t.join(20)
+        self.assertEqual(result.get('reason'), 'far end ended')
+        self.assertIsNone(out['a']['exit'])
+        self.assertEqual(out['a']['lines'], ['error: the far end ended or did not answer in time'])
+        self.assertIsNone(out['b'])
+        self.assertEqual(list(b.dir.glob('req-*.json')), [])
+
+    def test_unconfirmed_request_ends_the_session(self):
+        original = channel.GOT_S
+        channel.GOT_S = 1
+        self.addCleanup(setattr, channel, 'GOT_S', original)
+        b = channel.Broker('game-mute', 60, self.standin('mute'), local_push, str(self.lab), self.scripts)
+        b.start()
+        t, result = self.serve(b)
+        start = time.monotonic()
+        rep = channel.call('game-mute', 'echo.ps1', {})
+        self.assertLess(time.monotonic() - start, 5)
+        self.assertIsNone(rep['exit'])
+        self.assertIn('did not confirm the request in 1 s', rep['lines'][0])
+        t.join(15)
+        self.assertEqual(result.get('reason'), 'far end did not confirm a request')
+
+    def test_held_stdin_moves_to_tcp(self):
+        # The session's stdin comes only at its end: the handshake fails over stdin, the broker opens the tcp
+        # transport, and every request goes through it. The first far end received only PING and QUIT, so nothing
+        # ran late.
+        b = channel.Broker('game-held', 60, self.host_argv(hold=True), local_push, str(self.lab), self.scripts,
+                           tcp=(self.host_argv('-Tcp', hold=True), channel.direct_connect))
+        self.assertIn(' tcp ', b.start())
+        self.assertEqual(b.transport, 'tcp')
+        self.assertEqual(b.attempts[0]['transport'], 'stdin')
+        self.assertIn('no PONG', b.attempts[0]['failed'])
+        self.assertIn('pong_s', b.attempts[1])
+        self.assertLess(abs(b.clock['offset_s']), 1)
+        t, result = self.serve(b)
+        for k in range(3):
+            rep = channel.call('game-held', 'echo.ps1', {'Text': str(k)})
+            self.assertEqual((rep['exit'], rep['lines'][0]), (0, f'echo {k}'))
+        rec = channel.serving('game-held')
+        self.assertEqual((rec['transport'], [a['transport'] for a in rec['attempts']]), ('tcp', ['stdin', 'tcp']))
+        channel.main(['stop', 'game-held'])
+        t.join(20)
+        self.assertEqual(result.get('reason'), 'stop')
+        rows = (b.dir / 'stamps.tsv').read_text(encoding='utf-8').splitlines()
+        self.assertEqual([r.split('\t')[-1] for r in rows], ['0', '0', '0'])
+
+    def test_no_transport_is_no_channel(self):
+        def refuse(port):
+            raise ConnectionRefusedError('refused in the test')
+        b = channel.Broker('game-none2', 60, self.host_argv(hold=True), local_push, str(self.lab), self.scripts,
+                           tcp=(self.host_argv('-Tcp'), refuse))
+        with self.assertRaises(RuntimeError) as e:
+            b.start()
+        self.assertIn('stdin: no PONG', str(e.exception))
+        self.assertIn('tcp: ConnectionRefusedError', str(e.exception))
+        rec = channel.read_json(b.dir / 'broker.json')
+        self.assertEqual(rec['state'], 'ended')
+        self.assertIsNone(channel.call('game-none2', 'echo.ps1', {}))
+
+    def test_stale_requests_are_dropped(self):
+        b = channel.Broker('game-stale', 60, self.host_argv(), local_push, str(self.lab), self.scripts)
+        b.start()
+        gone = subprocess.Popen([sys.executable, '-c', 'pass'])
+        gone.wait()
+        rids = {'gone': uuid_hex(), 'late': uuid_hex()}
+        channel.write_json(b.dir / f"req-{rids['gone']}.json", {'id': rids['gone'], 'script': 'echo.ps1', 'params': {},
+                                                               'pid': gone.pid, 'expires': time.time() + 60})
+        channel.write_json(b.dir / f"req-{rids['late']}.json", {'id': rids['late'], 'script': 'echo.ps1', 'params': {},
+                                                               'pid': os.getpid(), 'expires': time.time() - 1})
+        t, result = self.serve(b)
+        for key, why in (('gone', 'the client has gone'), ('late', 'expired')):
+            path = b.dir / f'rep-{rids[key]}.json'
+            end = time.monotonic() + 10
+            while not path.exists() and time.monotonic() < end:
+                time.sleep(0.02)
+            rep = channel.read_json(path)
+            self.assertIsNone(rep['exit'])
+            self.assertIn(why, rep['lines'][0])
+        self.assertEqual(channel.call('game-stale', 'echo.ps1', {'Text': 'x'})['exit'], 0)
+        channel.main(['stop', 'game-stale'])
+        t.join(20)
+        rows = [r.split('\t') for r in (b.dir / 'stamps.tsv').read_text(encoding='utf-8').splitlines()]
+        self.assertEqual(sorted(r[-1] for r in rows), ['0', 'dropped', 'dropped'])
+
+    def test_far_end_refuses_a_late_request(self):
+        # A lab clock 60 s behind the broker's estimate: the request's limit has passed when it comes, so the far end
+        # does not run it.
+        b = channel.Broker('game-lateness', 60, self.host_argv(), local_push, str(self.lab), self.scripts)
+        b.start()
+        b.clock['offset_s'] -= 60
+        t, result = self.serve(b)
+        rep = channel.call('game-lateness', 'echo.ps1', {'Text': 'never'})
+        self.assertEqual(rep['exit'], 1)
+        self.assertIn('refused: the request came', rep['lines'][-1])
+        self.assertNotIn('echo never', rep['lines'])
+        channel.main(['stop', 'game-lateness'])
+        t.join(20)
+
+    def test_tcp_listener_wants_the_token(self):
+        local_push([str(channel.HOST_SCRIPT)], str(self.lab))
+        p = subprocess.Popen(self.host_argv('-Tcp'), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+
+        def cleanup():
+            if p.poll() is None:
+                p.kill()
+            p.wait(10)
+            p.stdin.close()
+            p.stdout.close()
+        self.addCleanup(cleanup)
+        ready = p.stdout.readline().decode('utf-8')
+        port, token = ready.split()[-2:]
+        wrong = channel.direct_connect(int(port))
+        wrong.sendall(b'HELLO ' + b'0' * 32 + b'\n')
+        wrong.settimeout(10)
+        self.assertEqual(wrong.recv(100), b'')  # closed without a word
+        wrong.close()
+        right = channel.direct_connect(int(port))
+        right.sendall(f'HELLO {token}\nPING abc\nQUIT\n'.encode())
+        lines = Lines_of(right)
+        self.assertTrue(lines[0].startswith('@@PONG abc '), lines)
+        p.wait(20)
+
+
+def uuid_hex():
+    import uuid
+    return uuid.uuid4().hex
+
+
+def Lines_of(sock):
+    sock.settimeout(20)
+    data = b''
+    while True:
+        part = sock.recv(4096)
+        if not part:
+            break
+        data += part
+    sock.close()
+    return data.decode('utf-8').splitlines()
+
+
 class ServeLog(unittest.TestCase):
     """The serve log of channel.main: each line carries the time its step ended (bd108-k2 read a 90 s session as one
     that ended 2 s after READY, because utc() ran before the call in the same f-string)."""
 
     def test_ended_line_has_the_end_time(self):
         class Fake:
-            seconds, dir = 90, Path('x')
+            seconds, dir, transport, clock = 90, Path('x'), 'stdin', None
 
             def start(self):
                 time.sleep(0.2)
@@ -258,10 +510,15 @@ class LabCommandLine(unittest.TestCase):
             else:
                 sys.modules['target'] = real
         remote = 'C:\\BC250\\tmp\\channel\\game-x'
-        self.assertEqual(b.argv, ['ssh', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4', 'lab',
-                                  f'powershell -NoProfile -ExecutionPolicy Bypass -File "{remote}\\channel-host.ps1" '
-                                  f'-Seconds 1230 -Dir "{remote}"'])
+        command = f'powershell -NoProfile -ExecutionPolicy Bypass -File "{remote}\\channel-host.ps1" -Seconds 1230 -Dir "{remote}"'
+        self.assertEqual(b.argv, ['ssh', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4', 'lab', command])
         self.assertEqual((b.seconds, b.remote_dir), (1230, remote))
+        # The tcp transport: the same command with -Tcp, through a SOCKS listener of the same ssh connection.
+        tcp = b.tcp[0]
+        self.assertEqual(tcp[-1], command + ' -Tcp')
+        self.assertIn('ExitOnForwardFailure=yes', tcp)
+        self.assertRegex(tcp[tcp.index('-D') + 1], r'^127\.0\.0\.1:\d+$')
+        self.assertEqual(b.order, ['stdin', 'tcp'])
 
 
 class InpFallback(unittest.TestCase):
