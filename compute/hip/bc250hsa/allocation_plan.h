@@ -72,6 +72,53 @@ static inline int bc250hsa_plan_child(const bc250hsa_allocation_plan* p, uint32_
     return 1;
 }
 
+/* The bytes of the local budget that the layout leaves free for later small allocations
+ * (rings, code objects, kernel arguments), and for the page rounding of VidMm's usage count. */
+#define BC250HSA_ALLOCATION_LOCAL_RESERVE UINT64_C(0x4000000)
+
+typedef struct bc250hsa_child_layout {
+    uint64_t offset;
+    uint64_t bytes;
+    uint32_t carve_out;   /* 1: the carve-out first; 0: system memory only */
+} bc250hsa_child_layout;
+
+/* The children of a plan under a local budget (BD-117). Children of the plan's size go to the
+ * carve-out while the local bytes left, less the reserve, hold them; the first child that does
+ * not fit is cut to what is left, rounded down to the granularity, and every child after it goes
+ * to system memory. A cut child is the only one off the plan's size, so the count is at most
+ * child_count + 1, which capacity must hold. local_left is UINT64_MAX when the budget is not
+ * known: then every child has the plan's size and tries the carve-out first. *system_bytes is the
+ * sum of the children for system memory. Returns the count, or 0 for a bad argument. */
+static inline uint32_t bc250hsa_plan_layout(const bc250hsa_allocation_plan* p, uint64_t local_left,
+                                            bc250hsa_child_layout* out, uint32_t capacity,
+                                            uint64_t* system_bytes)
+{
+    uint64_t room, at = 0u, system = 0u;
+    uint32_t n = 0u;
+    if (p == NULL || out == NULL || system_bytes == NULL || p->child_bytes == 0u ||
+        p->bytes == 0u || p->bytes % BC250HSA_ALLOCATION_GRANULARITY != 0u ||
+        p->child_bytes % BC250HSA_ALLOCATION_GRANULARITY != 0u) { return 0u; }
+    room = local_left > BC250HSA_ALLOCATION_LOCAL_RESERVE
+               ? local_left - BC250HSA_ALLOCATION_LOCAL_RESERVE : 0u;
+    room &= ~(BC250HSA_ALLOCATION_GRANULARITY - 1u);
+    while (at < p->bytes) {
+        uint64_t size = p->bytes - at < p->child_bytes ? p->bytes - at : p->child_bytes;
+        uint32_t carve_out = 1u;
+        if (room < size) {
+            if (room != 0u) { size = room; } else { carve_out = 0u; }
+        }
+        if (n >= capacity) { return 0u; }
+        out[n].offset = at;
+        out[n].bytes = size;
+        out[n].carve_out = carve_out;
+        if (carve_out) { room -= size; } else { system += size; }
+        at += size;
+        ++n;
+    }
+    *system_bytes = system;
+    return n;
+}
+
 static inline int bc250hsa_plan_base(const bc250hsa_allocation_plan* p, uint64_t reservation,
                              uint64_t minimum, uint64_t maximum, uint64_t* logical)
 {

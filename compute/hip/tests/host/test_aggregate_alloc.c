@@ -65,17 +65,20 @@ static uint32_t access(struct bc250hsa_device* d, const bc250hsa_mem* m)
     return a;
 }
 
-/* The construction invariants of one published aggregate. */
-static void check_shape(const bc250hsa_mem* m, uint64_t want_bytes, uint32_t want_children,
-                        uint64_t stride)
+/* The construction invariants of one published aggregate. Every child has the plan's size
+ * `stride` but the last one and the one the layout cut at the edge of the carve-out, which is
+ * followed by a child for system memory. bc250hsa_memory_part_get reports each child. */
+static void check_shape_dev(struct bc250hsa_device* d, const bc250hsa_mem* m, uint64_t want_bytes,
+                            uint32_t want_children, uint64_t stride)
 {
     const bc250hsa_alloc_record* r = rec(m);
     uint64_t                     at = 0u;
     uint32_t                     i;
+    bc250hsa_memory_part         part;
     CHECK(r != NULL && r->kind == BC250HSA_RECORD_AGGREGATE && !r->retiring);
     if (r == NULL) { return; }
     CHECK(m->bytes == want_bytes && r->bytes == want_bytes);
-    CHECK(r->child_count == want_children && r->child_stride == stride);
+    CHECK(r->child_count == want_children);
     CHECK(m->host == NULL && m->va == r->va);
     CHECK(r->reserve_base != 0u && m->va >= r->reserve_base);
     CHECK(m->va - r->reserve_base + m->bytes <= r->reserve_bytes);
@@ -83,15 +86,45 @@ static void check_shape(const bc250hsa_mem* m, uint64_t want_bytes, uint32_t wan
     for (i = 0; i < r->child_count; i++) {
         const bc250hsa_alloc_child* c = &r->children[i];
         const fake_alloc*           a = alloc_by_handle(c->handle);
+        const int                   cut = i + 1u < r->child_count && c->carve_out &&
+                                          !r->children[i + 1u].carve_out;
         CHECK(c->offset == at);
         CHECK(c->bytes != 0u && c->bytes <= stride && c->bytes % 0x40000u == 0u);
-        CHECK(i + 1u == r->child_count || c->bytes == stride);
+        CHECK(i + 1u == r->child_count || c->bytes == stride || cut);
         CHECK(c->va == m->va + c->offset);
         CHECK(a != NULL && a->va == c->va && a->va_live && a->bytes == c->bytes);
         CHECK(a != NULL && a->heap == c->heap);
+        if (d != NULL) {
+            memset(&part, 0xa5, sizeof(part));
+            CHECK(bc250hsa_memory_part_get(d, m, i, &part) == BC250HSA_OK);
+            CHECK(part.offset == c->offset && part.bytes == c->bytes && part.reserved == 0u);
+            CHECK(part.carve_out == (c->heap == BC250HSA_HEAP_VRAM ? 1u : 0u));
+        }
         at += c->bytes;
     }
     CHECK(at == want_bytes);
+    if (d != NULL) {
+        CHECK(bc250hsa_memory_part_get(d, m, r->child_count, &part) == BC250HSA_EINVAL);
+    }
+}
+
+static void check_shape(const bc250hsa_mem* m, uint64_t want_bytes, uint32_t want_children,
+                        uint64_t stride)
+{
+    check_shape_dev(NULL, m, want_bytes, want_children, stride);
+}
+
+/* The child that holds byte `off`, searched without the layout's rules. */
+static const bc250hsa_alloc_child* child_at(const bc250hsa_mem* m, uint64_t off)
+{
+    const bc250hsa_alloc_record* r = rec(m);
+    uint32_t                     i;
+    for (i = 0; i < r->child_count; i++) {
+        if (off >= r->children[i].offset && off - r->children[i].offset < r->children[i].bytes) {
+            return &r->children[i];
+        }
+    }
+    return NULL;
 }
 
 /* Commits the pages of [host, host + bytes) of a sparse backing before a case touches them. */
@@ -123,8 +156,10 @@ static void case_pytorch_request(void)
     bc250hsa_mem           m;
     const uint64_t         request = 11484656026ull;
     const uint64_t         aligned = (request + 0x3FFFFu) & ~0x3FFFFull;
+    /* 0x17C000000 is the edge of the carve-out under the 6 GiB budget: 6 GiB less the reserve. */
     const uint64_t         probes[] = { 0u, 0xFFFC0000ull - 3u, 0xFFFC0000ull * 2u - 5u,
-                                        0x100000000ull + 17u, aligned - 16u };
+                                        0x100000000ull + 17u, 0x17C000000ull - 5u,
+                                        0x17C000000ull + 0xFFFC0000ull - 7u, aligned - 16u };
     uint8_t                want[16], got[16];
     uint32_t               i, j, creates, budgeted;
     void*                  host = NULL;
@@ -134,25 +169,31 @@ static void case_pytorch_request(void)
         dev_init(&d);
         creates = g_creates;
         if (budgeted) {
-            g_local_budget = 6ull << 30;   /* child 0 fits, then the carve-out is full */
+            /* child 0 fits, child 1 is cut at the edge of the carve-out, and the rest is two
+             * children of system memory */
+            g_local_budget = g_local_usage + (6ull << 30);
         }
         memset(&m, 0xa5, sizeof(m));
         CHECK(bc250hsa_alloc(&d, request, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
-        check_shape(&m, aligned, 3u, 0xFFFC0000ull);
-        CHECK(g_creates - creates == 3u && g_reserves == 1u && g_must_succeed == 0u);
+        check_shape_dev(&d, &m, aligned, budgeted ? 4u : 3u, 0xFFFC0000ull);
+        CHECK(g_creates - creates == (budgeted ? 4u : 3u));
+        CHECK(g_reserves == 1u && g_must_succeed == 0u);
         CHECK(m.va % 0x40000u == 0u);
         CHECK(access(&d, &m) == BC250HSA_ACCESS_SCATTER);
         CHECK(bc250hsa_map(&d, &m, &host) == BC250HSA_EUNSUPPORTED && host == NULL);
         CHECK(bc250hsa_unmap(&d, &m) == BC250HSA_OK && rec(&m)->cpu_access == 1u);
         if (budgeted) {
             CHECK(rec(&m)->children[0].heap == BC250HSA_HEAP_VRAM);
-            CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_GTT);
+            CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_VRAM);
+            CHECK(rec(&m)->children[1].bytes == 0x17C000000ull - 0xFFFC0000ull);
             CHECK(rec(&m)->children[2].heap == BC250HSA_HEAP_GTT);
+            CHECK(rec(&m)->children[3].heap == BC250HSA_HEAP_GTT);
+            CHECK(g_local_usage <= g_local_budget);
         } else {
             for (i = 0; i < 3u; i++) { CHECK(rec(&m)->children[i].heap == BC250HSA_HEAP_VRAM); }
         }
-        /* Writes and reads that cross both child boundaries, one above 4 GiB, and the last
-         * bytes of the range. */
+        /* Writes and reads that cross the child boundaries of both layouts, one above 4 GiB,
+         * and the last bytes of the range. */
         for (i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
             commit_range(&m, probes[i], sizeof(want));
             for (j = 0; j < sizeof(want); j++) { want[j] = next_byte(); }
@@ -162,11 +203,13 @@ static void case_pytorch_request(void)
             CHECK(memcmp(want, got, sizeof(want)) == 0);
         }
         /* The child view under a probe holds the byte at its own offset, so a walker that
-         * wrote everything into the first child would fail here. */
-        {
-            const uint64_t              off = 0x100000000ull + 17u;
-            const bc250hsa_alloc_child* c2 = &rec(&m)->children[off / 0xFFFC0000ull];
-            CHECK(off / 0xFFFC0000ull == 1u && off >= c2->offset);
+         * wrote everything into the first child, or found a child by a uniform stride, would
+         * fail here. */
+        for (i = 0; i < sizeof(probes) / sizeof(probes[0]); i++) {
+            const uint64_t              off = probes[i] + 15u;
+            const bc250hsa_alloc_child* c2 = child_at(&m, off);
+            CHECK(c2 != NULL && c2->host != NULL);
+            if (c2 == NULL || c2->host == NULL) { continue; }
             CHECK(bc250hsa_copy_from_device(&d, got, &m, off, 1u) == BC250HSA_OK);
             CHECK(((const uint8_t*)c2->host)[off - c2->offset] == got[0]);
         }
@@ -519,6 +562,10 @@ static void case_release_failures(void)
             CHECK(memcmp(&m, &copy, sizeof(m)) == 0);   /* the caller keeps its handle */
             CHECK(record_count(&d) == 1u && rec(&m)->retiring == 1u);
             CHECK(bc250hsa_memory_access(&d, &m, &a) == BC250HSA_EINVAL);
+            {
+                bc250hsa_memory_part part;
+                CHECK(bc250hsa_memory_part_get(&d, &m, 0u, &part) == BC250HSA_EINVAL);
+            }
             CHECK(bc250hsa_copy_to_device(&d, &m, 0u, &b, 1u) == BC250HSA_EINVAL);
             CHECK(bc250hsa_copy_from_device(&d, &b, &m, 0u, 1u) == BC250HSA_EINVAL);
             CHECK(bc250hsa_fill_device_cpu(&d, &m, 0u, 0u, 1u) == BC250HSA_EINVAL);
@@ -585,6 +632,13 @@ static void case_planner_refusals(void)
     /* Exactly the cap is one allocation; one byte more is an aggregate of two. */
     CHECK(bc250hsa_alloc(&d, 0xFFFC0000ull, 0u, BC250HSA_MEM_DEVICE, &m) == BC250HSA_OK);
     CHECK(rec(&m)->kind == BC250HSA_RECORD_SINGLE && g_reserves == 0u);
+    {
+        bc250hsa_memory_part part;
+        CHECK(bc250hsa_memory_part_get(&d, &m, 0u, &part) == BC250HSA_OK);
+        CHECK(part.offset == 0u && part.bytes == 0xFFFC0000ull && part.carve_out == 1u);
+        CHECK(bc250hsa_memory_part_get(&d, &m, 1u, &part) == BC250HSA_EINVAL);
+        CHECK(bc250hsa_memory_part_get(&d, &m, 0u, NULL) == BC250HSA_EINVAL);
+    }
     CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
     CHECK(bc250hsa_alloc(&d, 0xFFFC0001ull, 0u, BC250HSA_MEM_DEVICE, &m) == BC250HSA_OK);
     check_shape(&m, 0xFFFC0000ull + 0x40000u, 2u, 0xFFFC0000ull);
@@ -625,20 +679,69 @@ static void case_budget_gate(void)
     CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
     dev_finish(&d, 0);
 
-    /* 8 GiB under a 6 GiB carve-out and 3 GiB of system memory: the sum holds it, but the
-     * second child fits neither group. It is refused, and nothing stays. */
+    /* 8 GiB under a 6 GiB carve-out and 3 GiB of system memory: the second child is cut at the
+     * edge of the carve-out, and the 2214592512 bytes after it fit system memory. */
     dev_init(&d);
-    g_local_budget = 6ull << 30;
+    g_local_budget = g_local_usage + (6ull << 30);
+    g_nonlocal_budget = g_nonlocal_usage + (3ull << 30);
+    CHECK(bc250hsa_alloc(&d, 8ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
+    check_shape_dev(&d, &m, 8ull << 30, 3u, 0xFFFC0000ull);
+    CHECK(rec(&m)->children[0].heap == BC250HSA_HEAP_VRAM);
+    CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_VRAM);
+    CHECK(rec(&m)->children[2].heap == BC250HSA_HEAP_GTT);
+    CHECK(rec(&m)->children[2].bytes == (8ull << 30) - 0x17C000000ull);
+    CHECK(g_local_usage <= g_local_budget && g_nonlocal_overcommits == 0u);
+    CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
+    CHECK(live_allocs() == 0u && live_reservations() == 0u);
+    /* With 2 GiB of system memory the rest does not fit: refused before any Windows call. */
+    g_nonlocal_budget = g_nonlocal_usage + (2ull << 30);
+    creates = g_creates;
+    CHECK(bc250hsa_alloc(&d, 8ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_ENOMEM);
+    CHECK(m.opaque == NULL && g_creates == creates && live_allocs() == 0u);
+    CHECK(live_reservations() == 0u && g_nonlocal_overcommits == 0u && d.allocations == NULL);
+    dev_finish(&d, 0);
+
+    /* The carve-out refuses residency inside its budget: the first child then needs system
+     * memory that the non-local budget does not hold, and the child check refuses it. */
+    dev_init(&d);
+    g_local_budget = g_local_usage + (6ull << 30);
     g_nonlocal_budget = 3ull << 30;
+    g_vram_resident_fail = 1;
     CHECK(bc250hsa_alloc(&d, 8ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_ENOMEM);
     CHECK(m.opaque == NULL && live_allocs() == 0u && live_reservations() == 0u);
     CHECK(g_nonlocal_overcommits == 0u && d.allocations == NULL);
-    /* With 5 GiB of system memory the same request takes the second child from it. */
-    g_nonlocal_budget = 5ull << 30;
-    CHECK(bc250hsa_alloc(&d, 8ull << 30, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
+    g_vram_resident_fail = 0;
+    dev_finish(&d, 0);
+
+    /* The reserve stays free, and a child the layout gave to system memory goes there even when
+     * the carve-out would still hold it: four children of 256 KiB, room for two. */
+    dev_init(&d);
+    g_aggregate_child_cap = 0x40000u;
+    g_local_budget = g_local_usage + BC250HSA_ALLOCATION_LOCAL_RESERVE + 0x80000u;
+    CHECK(bc250hsa_alloc(&d, 0x100000u, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
+    g_aggregate_child_cap = BC250HSA_ALLOCATION_CHILD_MAX;
+    check_shape_dev(&d, &m, 0x100000u, 4u, 0x40000u);
     CHECK(rec(&m)->children[0].heap == BC250HSA_HEAP_VRAM);
-    CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_GTT);
-    CHECK(g_nonlocal_overcommits == 0u);
+    CHECK(rec(&m)->children[1].heap == BC250HSA_HEAP_VRAM);
+    CHECK(rec(&m)->children[2].heap == BC250HSA_HEAP_GTT);
+    CHECK(rec(&m)->children[3].heap == BC250HSA_HEAP_GTT);
+    CHECK(g_local_budget - g_local_usage == BC250HSA_ALLOCATION_LOCAL_RESERVE);
+    CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
+    dev_finish(&d, 0);
+
+    /* Budgets near the 12 GiB carve-out (Windows keeps 3816 MiB): the PyTorch request takes
+     * two whole children and a cut one from the carve-out, and 352059392 bytes of system memory,
+     * well inside a non-local budget that a whole third child of 2895380480 bytes would pass. */
+    dev_init(&d);
+    g_local_budget = g_local_usage + 11200000000ull;
+    g_nonlocal_budget = g_nonlocal_usage + 1800000000ull;
+    CHECK(bc250hsa_alloc(&d, 11484656026ull, 0u, BC250HSA_MEM_MAPPABLE, &m) == BC250HSA_OK);
+    check_shape_dev(&d, &m, 11484790784ull, 4u, 0xFFFC0000ull);
+    CHECK(rec(&m)->children[2].heap == BC250HSA_HEAP_VRAM);
+    CHECK(rec(&m)->children[3].heap == BC250HSA_HEAP_GTT);
+    CHECK(rec(&m)->children[3].bytes == 352059392ull);
+    CHECK(g_local_usage <= g_local_budget && g_nonlocal_overcommits == 0u);
+    CHECK(g_local_budget - g_local_usage >= BC250HSA_ALLOCATION_LOCAL_RESERVE);
     CHECK(bc250hsa_free(&d, &m) == BC250HSA_OK);
     CHECK(live_allocs() == 0u && live_reservations() == 0u);
     dev_finish(&d, 0);

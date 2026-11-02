@@ -494,6 +494,7 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
     }
     record->bytes = phys_bytes;
     record->flags = flags;
+    record->heap = heap;
 
     memset(&map, 0, sizeof(map));
     map.hPagingQueue = dev->paging_queue;
@@ -537,7 +538,9 @@ static bc250hsa_status create_resident(struct bc250hsa_device* dev, bc250hsa_all
  * VidMm refuses one allocation above 0xFFFF0000 bytes with STATUS_INVALID_PARAMETER, whatever
  * the budget. A device-local allocation above the child cap is therefore one GPU address
  * reservation, filled from its aligned logical base by children of at most the cap, each one
- * an ordinary allocation of the winsys blob mapped at exactly its offset. Kernels and the GPU
+ * an ordinary allocation of the winsys blob mapped at exactly its offset. bc250hsa_plan_layout
+ * sizes the children from the local budget: the child at the edge of the carve-out is cut to
+ * fit, so that only the rest goes to system memory. Kernels and the GPU
  * copy see one contiguous range. The host processor sees one view per child and reaches them
  * through the walkers below; there is no contiguous host view, and bc250hsa_map refuses one.
  *
@@ -579,10 +582,10 @@ static bc250hsa_status child_backing(struct bc250hsa_device* dev, bc250hsa_alloc
     return BC250HSA_OK;
 }
 
-/* One child: backing in the carve-out while the local budget holds it, in write-combined system
- * memory otherwise or when the carve-out refuses it, then the mapping at `at`. The status of the
- * last heap tried is the answer, so a refusal of system memory is never hidden behind the
- * carve-out's out-of-memory. */
+/* One child: backing in the carve-out when the layout put it there and the local budget still
+ * holds it, in write-combined system memory otherwise or when the carve-out refuses it, then the
+ * mapping at `at`. The status of the last heap tried is the answer, so a refusal of system memory
+ * is never hidden behind the carve-out's out-of-memory. */
 static bc250hsa_status aggregate_child(struct bc250hsa_device* dev, bc250hsa_alloc_child* c,
                                        uint64_t at, uint32_t gem_flags, uint64_t* fence)
 {
@@ -590,7 +593,7 @@ static bc250hsa_status aggregate_child(struct bc250hsa_device* dev, bc250hsa_all
     NTSTATUS                    status;
     bc250hsa_status             result = BC250HSA_ENOMEM;
 
-    if (local_budget_allows(dev, c->bytes)) {
+    if (c->carve_out && local_budget_allows(dev, c->bytes)) {
         result = child_backing(dev, c, BC250HSA_HEAP_VRAM, gem_flags, fence);
     }
     if (result != BC250HSA_OK) {
@@ -670,11 +673,16 @@ static bc250hsa_status alloc_aggregate(struct bc250hsa_device* dev, uint64_t byt
 {
     bc250hsa_allocation_plan        plan;
     bc250hsa_alloc_record*          record;
+    bc250hsa_child_layout*          layout;
     D3DDDI_RESERVEGPUVIRTUALADDRESS reserve;
     NTSTATUS                        status;
     bc250hsa_status                 result;
     uint64_t                        logical = 0u;
     uint64_t                        fence = 0u;
+    uint64_t                        local = UINT64_MAX;
+    uint64_t                        non_local = 0u;
+    uint64_t                        system_bytes = 0u;
+    uint32_t                        count;
     uint32_t                        i;
     const uint64_t                  last = dev->va_window_end - 1u;
 
@@ -693,39 +701,64 @@ static bc250hsa_status alloc_aggregate(struct bc250hsa_device* dev, uint64_t byt
         }
         return BC250HSA_EINVAL;
     }
-    {
-        /* A request above what both segment groups still hold is out of memory before any
-         * Windows call: HIP reports such a request as out of memory (the BD-117 trace asks for
-         * the total plus 256 MiB and expects that), and children made first would only be
-         * paging work to undo. A query that fails leaves the answer to the children. */
-        uint64_t local = 0u;
-        uint64_t non_local = 0u;
-        if (budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, &local) &&
-            budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, &non_local) &&
-            local <= UINT64_MAX - non_local && plan.bytes > local + non_local) {
-            bc250hsa_log(BC250HSA_LOG_INFO,
-                         "device-local allocation of %llu bytes exceeds the %llu local and %llu"
-                         " non-local bytes left in the budget",
-                         (unsigned long long)plan.bytes, (unsigned long long)local,
-                         (unsigned long long)non_local);
-            return BC250HSA_ENOMEM;
-        }
+    /* The layout fills the carve-out up to the local budget, with the child at its edge cut to
+     * fit, and puts the rest in system memory: the PyTorch request of the BD-117 trace on the
+     * 12 GiB carve-out needs a few hundred MiB of system memory this way, and a whole 2.7 GiB
+     * child without the cut. A local query that fails gives children of the plan's size that
+     * try the carve-out first, as before. */
+    if (!budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, &local)) {
+        local = UINT64_MAX;
+    }
+    if (plan.child_count == UINT32_MAX) {
+        return BC250HSA_EINVAL;
+    }
+    layout = (bc250hsa_child_layout*)calloc((size_t)plan.child_count + 1u, sizeof(*layout));
+    if (layout == NULL) {
+        return BC250HSA_ENOMEM;
+    }
+    count = bc250hsa_plan_layout(&plan, local, layout, plan.child_count + 1u, &system_bytes);
+    if (count == 0u) {
+        free(layout);
+        return BC250HSA_EINVAL;
+    }
+    /* What the layout gives system memory must fit the non-local budget, or the request is out
+     * of memory before any Windows call: HIP reports such a request as out of memory (the trace
+     * asks for both budgets plus 256 MiB and expects that), and VidMm accepts a residency past
+     * that budget and fails it later on the paging queue, which errors the device. A query that
+     * fails leaves the answer to the children. */
+    if (system_bytes != 0u &&
+        budget_left(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, &non_local) &&
+        system_bytes > non_local) {
+        bc250hsa_log(BC250HSA_LOG_INFO,
+                     "device-local allocation of %llu bytes exceeds the %llu local and %llu"
+                     " non-local bytes left in the budget (%llu bytes for system memory)",
+                     (unsigned long long)plan.bytes, (unsigned long long)local,
+                     (unsigned long long)non_local, (unsigned long long)system_bytes);
+        free(layout);
+        return BC250HSA_ENOMEM;
     }
 
     record = (bc250hsa_alloc_record*)calloc(1, sizeof(*record));
     if (record == NULL) {
+        free(layout);
         return BC250HSA_ENOMEM;
     }
-    record->children = (bc250hsa_alloc_child*)calloc(plan.child_count, sizeof(*record->children));
+    record->children = (bc250hsa_alloc_child*)calloc(count, sizeof(*record->children));
     if (record->children == NULL) {
+        free(layout);
         free(record);
         return BC250HSA_ENOMEM;
     }
     record->kind = BC250HSA_RECORD_AGGREGATE;
     record->flags = flags;
     record->bytes = plan.bytes;
-    record->child_count = plan.child_count;
-    record->child_stride = plan.child_bytes;
+    record->child_count = count;
+    for (i = 0; i < count; ++i) {
+        record->children[i].offset = layout[i].offset;
+        record->children[i].bytes = layout[i].bytes;
+        record->children[i].carve_out = layout[i].carve_out;
+    }
+    free(layout);
 
     memset(&reserve, 0, sizeof(reserve));
     reserve.hAdapter = dev->adapter;
@@ -752,12 +785,8 @@ static bc250hsa_status alloc_aggregate(struct bc250hsa_device* dev, uint64_t byt
     record->va = logical;
 
     result = BC250HSA_OK;
-    for (i = 0; i < plan.child_count && result == BC250HSA_OK; ++i) {
+    for (i = 0; i < count && result == BC250HSA_OK; ++i) {
         bc250hsa_alloc_child* c = &record->children[i];
-        if (!bc250hsa_plan_child(&plan, i, &c->offset, &c->bytes)) {
-            result = BC250HSA_EINVAL;
-            break;
-        }
         result = aggregate_child(dev, c, logical + c->offset, gem_flags, &fence);
     }
     {
@@ -784,7 +813,7 @@ static bc250hsa_status alloc_aggregate(struct bc250hsa_device* dev, uint64_t byt
     if (result != BC250HSA_OK) {
         bc250hsa_log(BC250HSA_LOG_INFO,
                      "aggregate allocation of %llu bytes in %u children failed (%s)",
-                     (unsigned long long)plan.bytes, (unsigned)plan.child_count,
+                     (unsigned long long)plan.bytes, (unsigned)count,
                      bc250hsa_status_string(result));
         log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_LOCAL, "local");
         log_budget(dev, D3DKMT_MEMORY_SEGMENT_GROUP_NON_LOCAL, "non-local");
@@ -1100,16 +1129,24 @@ static int host_span(const bc250hsa_mem* mem, uint64_t offset, uint8_t** ptr, ui
     const bc250hsa_alloc_record* r = record_of(mem);
     if (is_aggregate(r)) {
         const bc250hsa_alloc_child* c;
-        uint64_t                    index;
+        uint32_t                    lo = 0u;
+        uint32_t                    hi;
         uint64_t                    within;
-        if (!r->cpu_access || r->child_stride == 0u) {
+        if (!r->cpu_access || r->child_count == 0u) {
             return 0;
         }
-        index = offset / r->child_stride;
-        if (index >= r->child_count) {
-            return 0;
+        /* The last child whose offset is at or below `offset`: the children are in offset order,
+         * and their sizes differ where the layout cut one. */
+        hi = r->child_count - 1u;
+        while (lo < hi) {
+            const uint32_t mid = lo + (hi - lo + 1u) / 2u;
+            if (r->children[mid].offset <= offset) {
+                lo = mid;
+            } else {
+                hi = mid - 1u;
+            }
         }
-        c = &r->children[index];
+        c = &r->children[lo];
         if (offset < c->offset || c->host == NULL) {
             return 0;
         }
@@ -1186,6 +1223,37 @@ bc250hsa_status bc250hsa_memory_access(struct bc250hsa_device* dev, const bc250h
         return BC250HSA_EINVAL;
     }
     *access = access_of(mem);
+    return BC250HSA_OK;
+}
+
+bc250hsa_status bc250hsa_memory_part_get(struct bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                         uint32_t index, bc250hsa_memory_part* out)
+{
+    const bc250hsa_alloc_record* r;
+    if (dev == NULL || mem == NULL || out == NULL || mem->opaque == NULL) {
+        return BC250HSA_EINVAL;
+    }
+    r = record_of(mem);
+    if (r->retiring) {
+        return BC250HSA_EINVAL;
+    }
+    memset(out, 0, sizeof(*out));
+    if (is_aggregate(r)) {
+        const bc250hsa_alloc_child* c;
+        if (index >= r->child_count) {
+            return BC250HSA_EINVAL;
+        }
+        c = &r->children[index];
+        out->offset = c->offset;
+        out->bytes = c->bytes;
+        out->carve_out = c->heap == BC250HSA_HEAP_VRAM ? 1u : 0u;
+        return BC250HSA_OK;
+    }
+    if (index != 0u) {
+        return BC250HSA_EINVAL;
+    }
+    out->bytes = mem->bytes;
+    out->carve_out = r->heap == BC250HSA_HEAP_VRAM ? 1u : 0u;
     return BC250HSA_OK;
 }
 

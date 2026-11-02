@@ -45,7 +45,7 @@ extern "C" {
  * that reports another major value. bc250hsa_abi_version() returns the value that the
  * library was built with. */
 #define BC250HSA_ABI_VERSION_MAJOR 1u
-#define BC250HSA_ABI_VERSION_MINOR 11u  /* 1.1 added section 8.1, batching;
+#define BC250HSA_ABI_VERSION_MINOR 12u  /* 1.1 added section 8.1, batching;
                                          * 1.2 added section 7.1, the AQL dispatch packet
                                          * that ENABLE_SGPR_DISPATCH_PTR needs;
                                          * 1.3 adds fixed-private scratch PM4 environments;
@@ -74,7 +74,10 @@ extern "C" {
                                          * 1.11 adds aggregate device memory:
                                          * bc250hsa_memory_access,
                                          * bc250hsa_copy_device_cpu and
-                                         * bc250hsa_fill_device_cpu (section 5) */
+                                         * bc250hsa_fill_device_cpu (section 5);
+                                         * 1.12 adds bc250hsa_memory_part_get, and
+                                         * the parts of a split allocation follow
+                                         * the local budget (section 5) */
 
 uint32_t bc250hsa_abi_version_major(void);
 uint32_t bc250hsa_abi_version_minor(void);
@@ -432,6 +435,22 @@ void bc250hsa_write_barrier(void);
 
 bc250hsa_status bc250hsa_memory_access(bc250hsa_device* dev, const bc250hsa_mem* mem,
                                        uint32_t* access);
+
+/* The parts of an allocation, for diagnostics (1.12). Part `index` of a split allocation is one
+ * VidMm allocation: its offset from mem->va, its size, and 1 in carve_out when it is in the
+ * carve-out, 0 when it is in system memory. The parts are in offset order and fill the range
+ * without a gap; the library sizes them from the local budget, so they need not be equal. An
+ * allocation that is not split has one part. An index past the last part, and an allocation
+ * whose free started, give BC250HSA_EINVAL. */
+typedef struct bc250hsa_memory_part {
+    uint64_t offset;
+    uint64_t bytes;
+    uint32_t carve_out;
+    uint32_t reserved;
+} bc250hsa_memory_part;
+
+bc250hsa_status bc250hsa_memory_part_get(bc250hsa_device* dev, const bc250hsa_mem* mem,
+                                         uint32_t index, bc250hsa_memory_part* out);
 
 /* Host to device and device to host copies through the host mapping or the host views of a
  * split allocation. They refuse an allocation with neither, with BC250HSA_EUNSUPPORTED: a copy

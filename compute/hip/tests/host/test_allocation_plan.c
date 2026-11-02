@@ -39,6 +39,56 @@ int main(void)
     CHECK(bc250hsa_plan_child(&p,4u,&offset,&bytes) && offset==0x100000u && bytes==0x40000u);
     CHECK(!bc250hsa_plan_allocation(1u,0u,UINT64_MAX,UINT64_MAX,0x40000u,&p));
     CHECK(!bc250hsa_plan_allocation(UINT64_MAX-0x3ffffu,0x8000000000000000ull,0u,UINT64_MAX,0x40000u,&p));
+    /* The layout under a local budget: every size against budgets around each child edge. */
+    {
+        static const uint64_t lefts[] = {0u, 1u, BC250HSA_ALLOCATION_LOCAL_RESERVE,
+            BC250HSA_ALLOCATION_LOCAL_RESERVE + 0x3ffffu, BC250HSA_ALLOCATION_LOCAL_RESERVE + 0x40000u,
+            0xfffc0000ull, 0xfffc0000ull + BC250HSA_ALLOCATION_LOCAL_RESERVE,
+            0xfffc0000ull + BC250HSA_ALLOCATION_LOCAL_RESERVE + 0x40000u,
+            7482638336ull, 11200000000ull, 0x400000000ull, UINT64_MAX};
+        bc250hsa_child_layout l[16];
+        unsigned k;
+        for(s=0;s<sizeof(sizes)/sizeof(sizes[0]);++s) {
+            CHECK(bc250hsa_plan_allocation(sizes[s],0u,lo,hi,BC250HSA_ALLOCATION_CHILD_MAX,&p));
+            for(k=0;k<sizeof(lefts)/sizeof(lefts[0]);++k) {
+                uint64_t covered=0, sys=0, local=0, sys_sum=UINT64_MAX;
+                uint64_t room = lefts[k] > BC250HSA_ALLOCATION_LOCAL_RESERVE
+                    ? (lefts[k]-BC250HSA_ALLOCATION_LOCAL_RESERVE) & ~0x3ffffull : 0u;
+                uint32_t n = bc250hsa_plan_layout(&p,lefts[k],l,p.child_count+1u,&sys_sum);
+                unsigned cut = 0, seen_sys = 0;
+                CHECK(n>=p.child_count && n<=p.child_count+1u);
+                for(i=0;i<n;++i) {
+                    CHECK(l[i].offset==covered && l[i].bytes>0u && l[i].bytes<=0xfffc0000ull);
+                    CHECK(l[i].bytes%0x40000u==0u);
+                    if(l[i].carve_out) { CHECK(!seen_sys); local+=l[i].bytes; }
+                    else { seen_sys=1; sys+=l[i].bytes; }
+                    if(l[i].bytes!=0xfffc0000ull && covered+l[i].bytes!=p.bytes) { ++cut; CHECK(l[i].carve_out); }
+                    covered+=l[i].bytes;
+                }
+                CHECK(covered==p.bytes && sys==sys_sum && cut<=1u);
+                /* the carve-out takes all the room it can: everything when it fits, else the room */
+                CHECK(local==(room>=p.bytes ? p.bytes : room));
+                if(n!=0u) { CHECK(bc250hsa_plan_layout(&p,lefts[k],l,n-1u,&sys_sum)==0u); }
+            }
+        }
+        /* The PyTorch request of the BD-117 trace under budgets near the 12 GiB carve-out:
+         * two whole children, a cut one, and a small rest for system memory. */
+        CHECK(bc250hsa_plan_allocation(11484656026ull,0u,lo,hi,BC250HSA_ALLOCATION_CHILD_MAX,&p));
+        {
+            uint64_t sys=0;
+            const uint64_t room=(11200000000ull-BC250HSA_ALLOCATION_LOCAL_RESERVE)&~0x3ffffull;
+            CHECK(bc250hsa_plan_layout(&p,11200000000ull,l,16u,&sys)==4u);
+            CHECK(l[0].carve_out && l[1].carve_out && l[2].carve_out && !l[3].carve_out);
+            CHECK(l[2].bytes==room-2u*0xfffc0000ull && sys==p.bytes-room && l[3].bytes==sys);
+            /* The same request on the 8 GiB carve-out leaves more than its 3733582234 non-local
+             * bytes for system memory: the cut second child, then one rest of 4069261312. */
+            CHECK(bc250hsa_plan_layout(&p,7482638336ull,l,16u,&sys)==3u);
+            CHECK(sys==4069261312ull && l[1].carve_out && !l[2].carve_out);
+        }
+        CHECK(bc250hsa_plan_layout(NULL,0u,l,16u,&offset)==0u);
+        CHECK(bc250hsa_plan_layout(&p,0u,NULL,16u,&offset)==0u);
+        CHECK(bc250hsa_plan_layout(&p,0u,l,16u,NULL)==0u);
+    }
     printf("allocation plan: %u checks, %u failures\n",checks,failures);
     return failures?1:0;
 }
