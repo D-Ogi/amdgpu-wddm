@@ -4141,6 +4141,11 @@
    "reason": "the LIBRARY name of the engine DLL's export directory; not a lookup"
   },
   {
+   "name": "BC250LT_GET_COUNTERS",
+   "where": "bc250-win compute/hip/blaslt/hipblaslt_front.cpp (bc250lt_get_counters), the export of libhipblaslt.dll",
+   "reason": "an export name of the front's own ABI: it copies the call counters that both flavours keep, and reads no setting; not a lookup"
+  },
+  {
    "name": "BC250_DXVK_DEVICE_CREATE_INFO",
    "where": "dxvk src/ddi/bc250_dxvk_engine.h",
    "reason": "a structure name of the engine ABI in the engine's symbols; not a lookup"
