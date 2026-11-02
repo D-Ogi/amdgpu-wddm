@@ -178,6 +178,10 @@ static VkCommandPool pool;
 static VkFence fence;
 static uint32_t fenceTimeoutMs = 10000;
 static uint32_t shift;  /* --negative-control: record the operation 4 bytes late, so every case must fail */
+static int caseFilterOp = -1;   /* --case OP:SIZE:OFF */
+static uint32_t caseFilterSize, caseFilterOff;
+static int caseSkipOp = -1;     /* --skip-case OP:SIZE:OFF */
+static uint32_t caseSkipSize, caseSkipOff;
 static LARGE_INTEGER qpcFreq;
 static HANDLE deadlineEvent;
 static uint32_t deadlineSec = 60;
@@ -629,7 +633,8 @@ static void Usage(FILE *out, int code)
     fprintf(out,
             "usage: vkfillcheck [--icd DLL | --manifest JSON] [--device N] [--any-device] [--list-devices]\n"
             "                   [--placement host|local|both] [--queue-family N] [--quick] [--only-fail]\n"
-            "                   [--negative-control] [--deadline SEC] [--fence-timeout-ms N] [--help]\n"
+            "                   [--negative-control] [--case OP:SIZE:OFF] [--skip-case OP:SIZE:OFF]\n"
+            "                   [--deadline SEC] [--fence-timeout-ms N] [--help]\n"
             "\n"
             "  --icd DLL           load this ICD DLL directly (absolute path), without the Vulkan loader.\n"
             "                      This is the lab path: an elevated process ignores VK_DRIVER_FILES, and\n"
@@ -645,6 +650,9 @@ static void Usage(FILE *out, int code)
             "  --only-fail         print only the cases that fail.\n"
             "  --negative-control  record every operation 4 bytes late. Every case must then fail, half of\n"
             "                      them in the guard after the range, and the exit code must be 1.\n"
+            "  --case OP:SIZE:OFF  run only the case matching this operation, size and destination offset.\n"
+            "  --skip-case OP:SIZE:OFF  skip the matching case (use to exclude a known TDR).\n"
+            "                      OP is one of fill, update, copy, copy-parts, fill-whole.\n"
             "  --deadline SEC      end the run after this many seconds (default 60, at most 170).\n"
             "  --fence-timeout-ms  how long to wait for one submission (default 10000).\n"
             "\n"
@@ -688,6 +696,23 @@ int main(int argc, char **argv)
         if (!strcmp(a, "--quick")) { quick = 1; continue; }
         if (!strcmp(a, "--negative-control")) { shift = 4; continue; }
         if (i + 1 >= argc) Usage(stderr, 2);
+        if (!strcmp(a, "--case") || !strcmp(a, "--skip-case")) {
+            int isSkip = !strcmp(a, "--skip-case");
+            const char *spec = argv[++i];
+            char opBuf[16] = { 0 };
+            unsigned sz = 0, off = 0;
+            int j = 0;
+            while (spec[j] && spec[j] != ':' && j < 15) { opBuf[j] = spec[j]; j++; }
+            if (spec[j] != ':') Usage(stderr, 2);
+            if (sscanf(spec + j + 1, "%u:%u", &sz, &off) != 2) Usage(stderr, 2);
+            int found = -1;
+            for (int k = 0; k < OP_COUNT; k++)
+                if (!strcmp(opBuf, kOpNames[k])) { found = k; break; }
+            if (found < 0) { fprintf(stderr, "vkfillcheck: unknown op '%s'\n", opBuf); Usage(stderr, 2); }
+            if (isSkip) { caseSkipOp = found; caseSkipSize = sz; caseSkipOff = off; }
+            else { caseFilterOp = found; caseFilterSize = sz; caseFilterOff = off; }
+            continue;
+        }
         if (!strcmp(a, "--icd")) icdPath = argv[++i];
         else if (!strcmp(a, "--manifest")) manifestPath = argv[++i];
         else if (!strcmp(a, "--device")) deviceIndex = (uint32_t)strtoul(argv[++i], NULL, 10);
@@ -881,6 +906,8 @@ int main(int argc, char **argv)
     printf("matrix        guard %u bytes, window up to %u, %u destination placement(s)%s\n", GUARD,
            MAX_OFF + MAX_SIZE + GUARD, (uint32_t)(placeLast - placeFirst + 1), quick ? ", --quick" : "");
     if (shift) printf("negative control: every operation is recorded %u bytes late, every case must fail\n", shift);
+    if (caseFilterOp >= 0) printf("case filter: %s:%u:%u\n", kOpNames[caseFilterOp], caseFilterSize, caseFilterOff);
+    if (caseSkipOp >= 0) printf("skip case: %s:%u:%u\n", kOpNames[caseSkipOp], caseSkipSize, caseSkipOff);
 
     for (int place = placeFirst; place <= placeLast; place++) {
         for (uint32_t g = 0; g < GROUP_COUNT; g++) {
@@ -912,6 +939,16 @@ int main(int argc, char **argv)
                             c.off = grp->offs[o];
                             c.var = grp->vars[x];
                             c.place = place;
+                            if (caseFilterOp >= 0 &&
+                                (c.op != caseFilterOp || c.size != caseFilterSize || c.off != caseFilterOff)) {
+                                index++;
+                                continue;
+                            }
+                            if (caseSkipOp >= 0 &&
+                                c.op == caseSkipOp && c.size == caseSkipSize && c.off == caseSkipOff) {
+                                index++;
+                                continue;
+                            }
                             result = RunCase(&c, &f, index++, onlyFail);
                             opTotal[op]++;
                             if (result == CASE_PASS) { passed++; opPass[op]++; }
