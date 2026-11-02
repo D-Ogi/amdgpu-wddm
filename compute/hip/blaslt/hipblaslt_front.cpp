@@ -37,9 +37,11 @@
 // rocBLAS call on a thread, the wrapped names of that thread only forward, so that rocBLAS gets AMD's
 // answers and no call can return to this front.
 //
-// BC250_BLASLT_FRONT=0 in the environment turns serving off (every call forwards), for comparison
-// and rollback. BC250_BLASLT_LOG=1 writes one line to stderr at the first served heuristic per
-// transpose pair, at AMD's first refusal, and at each refused or failed served matmul.
+// Lab flavour only (AMDGPU_WDDM_LAB_FLAVOUR): BC250_BLASLT_FRONT=0 in the environment turns serving
+// off (every call forwards), for comparison and rollback. BC250_BLASLT_LOG=1 writes one line to
+// stderr at the first served heuristic per transpose pair, at AMD's first refusal, and at each
+// refused or failed served matmul. The release flavour reads no environment variable: it serves,
+// and it does not log (BD-167).
 //
 // Wrapped names: hipblasLtDestroy (frees the rocBLAS handle of a hipBLASLt handle);
 // hipblasLtMatmulDescCreate, hipblasLtMatmulDescDestroy and hipblasLtMatmulDescSetAttribute, and
@@ -122,6 +124,7 @@ bool g_serving = true;
 bool g_log = false;
 
 BOOL CALLBACK read_settings(PINIT_ONCE, PVOID, PVOID*) {
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     char value[8] = {};
     DWORD n = GetEnvironmentVariableA("BC250_BLASLT_FRONT", value, sizeof(value));
     if (n > 0 && n < sizeof(value) && std::strcmp(value, "0") == 0) {
@@ -129,6 +132,7 @@ BOOL CALLBACK read_settings(PINIT_ONCE, PVOID, PVOID*) {
     }
     n = GetEnvironmentVariableA("BC250_BLASLT_LOG", value, sizeof(value));
     g_log = n > 0 && n < sizeof(value) && std::strcmp(value, "0") != 0;
+#endif
     return TRUE;
 }
 

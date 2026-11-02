@@ -1422,6 +1422,26 @@
    }
   },
   {
+   "name": "BC250_BLASLT_FRONT",
+   "where": "bc250-win compute/hip/blaslt/hipblaslt_front.cpp (read_settings)",
+   "does": "measurement arm: 0 turns serving off, so every hipBLASLt call forwards to AMD's library",
+   "lab": {
+    "every": [
+     "libhipblaslt.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_BLASLT_LOG",
+   "where": "bc250-win compute/hip/blaslt/hipblaslt_front.cpp (read_settings)",
+   "does": "diagnostic: 1 writes the served, refused and failed calls of the front to stderr",
+   "lab": {
+    "every": [
+     "libhipblaslt.dll"
+    ]
+   }
+  },
+  {
    "name": "BC250_HIP_BATCH",
    "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
    "does": "measurement arm: 0 turns dispatch batching off",
