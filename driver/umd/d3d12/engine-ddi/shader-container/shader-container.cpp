@@ -346,6 +346,35 @@ Result ValidateSignature(const SignatureView& view, SigRole role, const ProgramI
     return {};
 }
 
+// BD-286: an older dxc writes a mesh vertex array without a struct (`out vertices float4 v[4] : SV_POSITION`) as
+// one metadata element with the semantic indices {0, 1, 2, 3} on one row, and its OSG1 repeats that row once per
+// index. The runtime passes the repeated rows as DDI entries. They are equal in every field, and MetadataNames
+// gives each of them the name of the one element, so a DXIL signature keeps the first of them only; dxc 1.8.2502
+// writes one entry for the same source. An entry that shares only some components with another stays refused by
+// ValidateSignature. A geometry output is not merged (BuildContainer). Returns true when it dropped an entry; *out
+// then holds the merged entries.
+bool MergeRepeatedEntries(const SignatureView& view, std::vector<Entry>* out)
+{
+    out->clear();
+    if (!view.count || !view.entries)
+        return false;
+    bool dropped = false;
+    for (UINT i = 0; i < view.count; i++)
+    {
+        const Entry& e = view.entries[i];
+        bool repeat = e.Register != Registerless && std::any_of(out->begin(), out->end(), [&](const Entry& o) {
+            return o.Register == e.Register && o.Mask == e.Mask && o.Stream == e.Stream
+                && o.SystemValue == e.SystemValue && o.RegisterComponentType == e.RegisterComponentType
+                && o.MinPrecision == e.MinPrecision;
+        });
+        if (repeat)
+            dropped = true;
+        else
+            out->push_back(e);
+    }
+    return dropped;
+}
+
 struct Named
 {
     Entry entry;
@@ -838,6 +867,26 @@ Result BuildContainer(const ProgramDesc& desc, Container* container)
     {
         if (Result r = CheckDxilProgram(desc.code, program, desc.slot); !r)
             return r;
+
+        // Repeated rows of one DXIL element (MergeRepeatedEntries) become one entry; the merged signatures have no
+        // repeats, so the second pass does not merge again. Not the output of a geometry program: when the runtime
+        // gives every entry stream 0, rows of different streams on the same register look the same, and
+        // DeriveOutputStreams below tells them apart.
+        std::vector<Entry> input, output, patchConstant;
+        bool mergedInput = MergeRepeatedEntries(desc.input, &input);
+        bool mergedOutput = program.type != U(D3D10_SB_GEOMETRY_SHADER) && MergeRepeatedEntries(desc.output, &output);
+        bool mergedPatch = MergeRepeatedEntries(desc.patchConstant, &patchConstant);
+        if (mergedInput || mergedOutput || mergedPatch)
+        {
+            ProgramDesc merged = desc;
+            if (mergedInput)
+                merged.input = { input.data(), UINT(input.size()) };
+            if (mergedOutput)
+                merged.output = { output.data(), UINT(output.size()) };
+            if (mergedPatch)
+                merged.patchConstant = { patchConstant.data(), UINT(patchConstant.size()) };
+            return BuildContainer(merged, container);
+        }
     }
     else
     {
@@ -975,16 +1024,20 @@ Result BuildMeshLinkContainer(const Container& source, const SignatureView& inpu
         return Fail(Status::Unsupported, "mesh pipeline linkage of program kind " + std::to_string(program.type));
     if (Result r = CheckDxilProgram(reinterpret_cast<const UINT*>(part), program, Slot::Standard); !r)
         return r;
-    if (Result r = ValidateSignature(input, SigRole::Input, program, "input"); !r)
+    // The pixel program's entries are the runtime's, which may repeat a row of one element (MergeRepeatedEntries).
+    std::vector<Entry> inputMerged, outputMerged;
+    SignatureView in = MergeRepeatedEntries(input, &inputMerged) ? SignatureView{ inputMerged.data(), UINT(inputMerged.size()) } : input;
+    SignatureView out = MergeRepeatedEntries(output, &outputMerged) ? SignatureView{ outputMerged.data(), UINT(outputMerged.size()) } : output;
+    if (Result r = ValidateSignature(in, SigRole::Input, program, "input"); !r)
         return r;
-    if (Result r = ValidateSignature(output, SigRole::Output, program, "output"); !r)
+    if (Result r = ValidateSignature(out, SigRole::Output, program, "output"); !r)
         return r;
 
     dxil::Signatures signatures;
     if (Result r = ReadDxilSignatures(part, partSize, &signatures); !r)
         return r;
-    std::vector<Named> inputNames = NameSignature(input.entries, input.count, false);
-    std::vector<Named> outputNames = NameSignature(output.entries, output.count, true);
+    std::vector<Named> inputNames = NameSignature(in.entries, in.count, false);
+    std::vector<Named> outputNames = NameSignature(out.entries, out.count, true);
     MetadataNames(signatures.input, inputNames);
     MetadataNames(signatures.output, outputNames);
 
