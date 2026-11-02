@@ -369,6 +369,7 @@ namespace AmdgpuWddmControl
             _explainId = null;
             ShowPage(page, anchor, true);
             if (page == "system") ReadSystemTuning();
+            if (page == "graphics") RefreshRocmStates();
         }
 
         void GoBack()
@@ -380,6 +381,7 @@ namespace AmdgpuWddmControl
             _explainId = null;
             ShowPage(p.Page, null, true);
             if (p.Page == "system") ReadSystemTuning();
+            if (p.Page == "graphics") RefreshRocmStates();
             _content.AutoScrollPosition = new Point(0, p.Scroll);
         }
 
@@ -625,6 +627,7 @@ namespace AmdgpuWddmControl
             _recentState = r.Recent.State;
             _bench = r.Bench;
             _benchHistory = r.BenchHistory;
+            InitRocm();
             ReadDriverCard(!_smoke && !ReadOnlyProbe);
             ComputeStatus();
             ShowPage(_page, null, false);

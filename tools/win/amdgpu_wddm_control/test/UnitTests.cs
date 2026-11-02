@@ -1277,6 +1277,12 @@ static partial class UnitTests
                 Check(System.Text.RegularExpressions.Regex.IsMatch(text, @"if \(!job\.Take\(game\)\)\s*\{\s*try \{ game\.Kill\(\); \}"),
                     "static check: the benchmark's Kill() is the game that could not join its job object");
             }
+            else if (name == "RocmAttach.cs")
+            {
+                Equal(1, k, "static check: RocmAttach.cs kills only its bounded script child");
+                Check(text.Contains("using (var process = Process.Start(start))") && text.Contains("try { process.Kill(); }") &&
+                    !text.Contains("GetProcessById") && !text.Contains("GetProcesses"), "static check: ROCm attach child handle belongs to this invocation");
+            }
             else Equal(0, k, "static check: " + name + " calls no Kill()");
             if (name == "RecoveryActions.cs")
             {
@@ -1303,7 +1309,7 @@ static partial class UnitTests
             foreach (var l in text.Split('\n').Where(x => x.Contains("\"dwm\"")))
                 Check(l.Contains("GetProcessesByName(\"dwm\")"), "static check: " + name + " only reads the dwm process: " + l.Trim());
         }
-        Equal(5, kills, "static check: own bounded diagnostic, tuning and start window children, and the benchmark's own game");
+        Equal(6, kills, "static check: own bounded diagnostic, tuning, ROCm and start window children, and the benchmark's own game");
         var rules = File.ReadAllText(Path.Combine(dir, "Recovery.cs"));
         Check(rules.Contains("if (!operatorAccepted)") && System.Text.RegularExpressions.Regex.Matches(rules, @"RestartCompositor = true").Count == 1,
             "static check: only the accepted escape plans a DWM stop");
