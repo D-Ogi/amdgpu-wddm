@@ -5,7 +5,9 @@
  * reservation (kmt_memory.c, alloc_aggregate). This tool checks on unit A what the host tests
  * can only check against a fake kernel driver:
  *
- *   1. the allocation succeeds and answers BC250HSA_ACCESS_SCATTER;
+ *   1. the allocation succeeds and answers BC250HSA_ACCESS_SCATTER, and its parts
+ *      (bc250hsa_memory_part_get) fill the range without a gap; each part is printed with its
+ *      heap, because the layout cuts the child at the edge of the local budget;
  *   2. the host walkers write and read back bytes on both sides of every child boundary, at
  *      the 4 GiB and 8 GiB lines and at the last byte;
  *   3. a kernel (vadd of the committed fixture) reads two ranges that cross child boundaries
@@ -372,9 +374,10 @@ int main(int argc, char** argv)
     if (verbose) {
         bc250hsa_set_log(log_sink, NULL, 2u);
     }
-    printf("bigallocprobe: %llu bytes, %llu children of at most 0x%llx bytes\n",
+    printf("bigallocprobe: %llu bytes, at least %llu children of at most 0x%llx bytes, ABI %u.%u\n",
            (unsigned long long)bytes, (unsigned long long)children,
-           (unsigned long long)BC250HSA_ALLOCATION_CHILD_MAX);
+           (unsigned long long)BC250HSA_ALLOCATION_CHILD_MAX,
+           (unsigned)bc250hsa_abi_version_major(), (unsigned)bc250hsa_abi_version_minor());
 
     memset(&p, 0, sizeof(p));
     memset(&params, 0, sizeof(params));
@@ -462,16 +465,64 @@ int main(int argc, char** argv)
     }
 
     if (status == BC250HSA_OK && access == BC250HSA_ACCESS_SCATTER) {
-        uint64_t k;
-        const uint64_t a_off = BC250HSA_ALLOCATION_CHILD_MAX - 2u * MIB;
-        const uint64_t b_off = children > 2u ? 2u * BC250HSA_ALLOCATION_CHILD_MAX - 2u * MIB
-                                             : BC250HSA_ALLOCATION_CHILD_MAX + 8u * MIB;
-        const uint64_t c_off = big.bytes - 4u * MIB - 64u * 1024u;
+        /* The parts as layer 1 made them: their sizes follow the local budget, so the child
+         * boundaries come from bc250hsa_memory_part_get, not from multiples of the cap. */
+        uint64_t             bound[32];
+        uint32_t             nb = 0u;
+        uint32_t             k;
+        uint64_t             a_off = 0u;
+        uint64_t             b_off;
+        uint64_t             in_carve_out = 0u;
+        uint64_t             next = 0u;
+        int                  parts_ok = 1;
+        const uint64_t       c_off = big.bytes - 4u * MIB - 64u * 1024u;
+        bc250hsa_memory_part part;
+        for (k = 0; k < 32u; k++) {
+            status = bc250hsa_memory_part_get(p.dev, &big, k, &part);
+            if (status != BC250HSA_OK) {
+                break;
+            }
+            printf("part %u: offset 0x%llx, %llu bytes, %s\n", (unsigned)k,
+                   (unsigned long long)part.offset, (unsigned long long)part.bytes,
+                   part.carve_out ? "carve-out" : "system memory");
+            if (part.carve_out) {
+                in_carve_out += part.bytes;
+            }
+            parts_ok = parts_ok && part.offset == next && part.bytes != 0u;
+            next = part.offset + part.bytes;
+            if (k > 0u) {
+                bound[nb++] = part.offset;
+            }
+        }
+        children = k;
+        snprintf(detail, sizeof(detail), "%llu parts, %llu bytes in the carve-out, %llu in system"
+                 " memory", (unsigned long long)children, (unsigned long long)in_carve_out,
+                 (unsigned long long)(big.bytes - in_carve_out));
+        step("parts", parts_ok && next == big.bytes && children >= 2u && k < 32u &&
+                          status == BC250HSA_EINVAL, detail, 0.0);
+        status = BC250HSA_OK;
+        /* a crosses a boundary that leaves room for b and c after it; b crosses a later one when
+         * there is one apart from both, else it lies 8 MiB past a's boundary. */
+        for (k = 0; k < nb; k++) {
+            if (bound[k] >= 2u * MIB && bound[k] + 10u * MIB <= c_off) {
+                a_off = bound[k] - 2u * MIB;
+                break;
+            }
+        }
+        b_off = a_off + 8u * MIB;
+        for (k = 0; k < nb; k++) {
+            if (bound[k] >= a_off + 6u * MIB && bound[k] + 2u * MIB <= c_off) {
+                b_off = bound[k] - 2u * MIB;
+                break;
+            }
+        }
+        printf("ranges: a 0x%llx, b 0x%llx, c 0x%llx, 4 MiB each\n", (unsigned long long)a_off,
+               (unsigned long long)b_off, (unsigned long long)c_off);
 
         /* 2. Every child boundary, the 4 GiB and 8 GiB lines, the first and the last bytes. */
         at[count++] = 0u;
-        for (k = 1; k < children && count < 28u; k++) {
-            at[count++] = k * BC250HSA_ALLOCATION_CHILD_MAX - PROBE_BYTES / 2u;
+        for (k = 0; k < nb && count < 28u; k++) {
+            at[count++] = bound[k] - PROBE_BYTES / 2u;
         }
         if ((UINT64_C(4) << 30) + PROBE_BYTES < big.bytes) {
             at[count++] = (UINT64_C(4) << 30) - PROBE_BYTES / 2u;
