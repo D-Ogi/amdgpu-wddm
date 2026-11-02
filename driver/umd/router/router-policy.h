@@ -95,7 +95,7 @@ enum class AppReason {
 };
 
 // Whether the process image is a Windows component (IsWindowsComponentPath on resolved paths, router-identity.h).
-// The route line reports it (component=yes|no|unknown); the decision does not use it (BD-088, see below).
+// The route line reports it (component=yes|no|unknown); the decision does not depend on it (BD-088, see below).
 enum class Component { No, Yes, Unknown };
 
 struct AppInputs {
@@ -105,6 +105,9 @@ struct AppInputs {
     const wchar_t *deny;   // REG_MULTI_SZ block or nullptr
     bool entry_10_2;       // the call is OpenAdapter10_2 (D3D10.1/D3D11 runtimes)
     bool gpu_umd_set;      // GpuUmdPath is an absolute path
+    // ClassifyComponent (router-identity.h) of the process image. Reported on the route line only: since 2026-11-02
+    // (BD-088) no value of it changes the decision, Unknown included.
+    Component component = Component::No;
     bool render_on_cpu = false; // RenderOnCpu of HKLM\SOFTWARE\amdgpu-wddm\Graphics (app-settings.h) is 1
 };
 

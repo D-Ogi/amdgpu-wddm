@@ -962,7 +962,7 @@ help.setting.fsr4|src|-|Lets a game that includes FSR 4 use it. Only games that 
 help.setting.vk-present|src|-|How Vulkan games show their frames, for all games at once. Fast (flip) is the default: the graphics card copies each frame, and a game in full screen goes straight to the screen. Compatible copies each frame through the processor. It is slower, but it works where Fast (flip) does not. If a Vulkan game shows a black or frozen picture, choose Compatible.
 help.setting.vk-memory|src|-|What a DirectX 11 or DirectX 12 game gets when the video memory is full, for one game or for all games. It does not apply to Vulkan games. "Use system memory" keeps the game running, but slower. "Report out of memory" tells the game, so that it can lower its settings.
 help.setting.sm|src|-|The highest shader model the driver reports to a DirectX 12 game. 6.8 is the default. Some games fail with a newer shader model; for such a game, choose 6.7 or 6.6.
-help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower and does not offer full DirectX 11, so most games made after 2012 (for example Counter-Strike 2) do not start with it. Use it only as a last resort for an older game that fails on the graphics chip.
+help.setting.cpu-render|src|-|Runs this game's DirectX 11 on the processor instead of the graphics chip. This is much slower and gives only Direct3D feature level 10_0, so most games made after 2012 (for example Counter-Strike 2) do not start with it. This is a known limit of the processor path. Use it only as a last resort for an older game that fails on the graphics chip.
 gfx.choice.app|src|-|Application decides
 gfx.choice.inherit|src|-|Same as all games: {0}
 gfx.choice.inherit-short|src|-|Same as all games
@@ -993,7 +993,7 @@ gfx.origin.stored|src|-|Stored for all games.
 gfx.origin.global|src|-|From the settings for all games: {0}.
 gfx.note.overlay|src|-|Works in DirectX 11 games for now.
 gfx.note.fsr4|src|-|Only for games that include FSR 4. Games with anti-cheat protection are excluded.
-gfx.note.cpu-render|src|-|Much slower, and most games made after 2012 do not start with it. A last resort for an older DirectX 11 game that fails on the graphics chip.
+gfx.note.cpu-render|src|-|Much slower, and only Direct3D feature level 10_0: most games made after 2012 do not start with it. A last resort for an older DirectX 11 game that fails on the graphics chip.
 gfx.note.vk-present|src|-|If a Vulkan game shows a black or frozen picture, choose Compatible. A game where Fast (flip) does not work uses Compatible by itself.
 gfx.note.sm|src|-|Some games fail with a newer shader model. Choose a lower one only for such a game.
 gfx.global.title|src|-|Settings for all games

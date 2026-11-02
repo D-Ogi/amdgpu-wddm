@@ -532,7 +532,7 @@ static HRESULT ForwardApp(const Config &c, const wchar_t *image, const wchar_t *
     as::Settings settings;
     as::resolve(exe, as::system_sources(), settings);
     const as::Value renderOnCpu = settings[as::Setting::RenderOnCpu];
-    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0,
+    const AppDecision d = DecideApp({exe, a.mode, a.allow, a.deny, entry_10_2, a.gpu[0] != 0, component,
                                      as::render_on_cpu(settings)});
     HRESULT gpuHr = S_FALSE; // not tried
     if (d.route == AppRoute::Gpu) {

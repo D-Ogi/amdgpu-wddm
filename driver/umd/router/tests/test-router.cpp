@@ -122,29 +122,37 @@ static void PolicyTests()
     }
 
     // Windows components take the GPU UMD under gpu-default since train b20 (BD-061 verified, BD-088), and since
-    // 2026-11-02 so does an image whose path cannot be resolved (since BD-088 the CPU route is empty):
-    // the decision has no component input. Deny and the protected list still win.
+    // 2026-11-02 so does an image whose path or the Windows directory cannot be resolved (Component::Unknown): since
+    // BD-088 the CPU route is empty. The classification is still an input, so these rows prove that
+    // no value of it changes the answer. Deny and the protected list still win.
     const wchar_t allowDx[] = L"dxdiag.exe\0";
     const Component Y = Component::Yes, N = Component::No, U = Component::Unknown;
-    struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; AppRoute route; AppReason reason; };
+    struct CompCase { const wchar_t *exe; AppMode mode; const wchar_t *allow, *deny; Component component; AppRoute route; AppReason reason; };
     const CompCase comp[] = {
-        {L"notepad.exe", Gd, allowDx, nullptr, AppRoute::Gpu, AppReason::Default},
-        {L"dxdiag.exe", Gd, allowDx, nullptr, AppRoute::Gpu, AppReason::Default},
-        {L"game.exe", Gd, allowDx, nullptr, AppRoute::Gpu, AppReason::Default},
-        {L"game.exe", Gd, nullptr, nullptr, AppRoute::Gpu, AppReason::Default},
-        {L"witcher3.exe", Gd, allowDx, deny, AppRoute::Cpu, AppReason::Denied},
-        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", AppRoute::Cpu, AppReason::Denied},
-        {L"logonui.exe", Gd, protectedAllowed, nullptr, AppRoute::Cpu, AppReason::Protected},
-        {L"notepad.exe", Al, allowDx, nullptr, AppRoute::Cpu, AppReason::NotAllowed},
-        {L"dxdiag.exe", Al, allowDx, nullptr, AppRoute::Gpu, AppReason::Allowed},
-        {L"game.exe", Al, L"game.exe\0", nullptr, AppRoute::Gpu, AppReason::Allowed},
+        {L"notepad.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
+        {L"dxdiag.exe", Gd, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Default},
+        {L"game.exe", Gd, allowDx, nullptr, N, AppRoute::Gpu, AppReason::Default},
+        {L"witcher3.exe", Gd, allowDx, deny, N, AppRoute::Cpu, AppReason::Denied},
+        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", Y, AppRoute::Cpu, AppReason::Denied},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, Y, AppRoute::Cpu, AppReason::Protected},
+        {L"notepad.exe", Al, allowDx, nullptr, Y, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"dxdiag.exe", Al, allowDx, nullptr, Y, AppRoute::Gpu, AppReason::Allowed},
+        // An unresolved image: the GPU UMD under gpu-default, with or without an Allow entry (BD-088 step 1; until
+        // 2026-11-02 the first two rows gave the CPU UMD with reason app-component-unknown).
+        {L"game.exe", Gd, allowDx, nullptr, U, AppRoute::Gpu, AppReason::Default},
+        {L"game.exe", Gd, nullptr, nullptr, U, AppRoute::Gpu, AppReason::Default},
+        {L"dxdiag.exe", Gd, allowDx, nullptr, U, AppRoute::Gpu, AppReason::Default},
+        {L"dxdiag.exe", Gd, allowDx, L"dxdiag.exe\0", U, AppRoute::Cpu, AppReason::Denied},
+        {L"logonui.exe", Gd, protectedAllowed, nullptr, U, AppRoute::Cpu, AppReason::Protected},
+        {L"PickerHost.exe", Gd, nullptr, nullptr, U, AppRoute::Cpu, AppReason::DialogHost},
+        {L"game.exe", Al, nullptr, nullptr, U, AppRoute::Cpu, AppReason::NotAllowed},
+        {L"game.exe", Al, L"game.exe\0", nullptr, U, AppRoute::Gpu, AppReason::Allowed},
     };
     for (const CompCase &c : comp) {
-        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true});
-        CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d got %s",
-              c.exe, (int)c.mode, AppReasonName(d.reason));
-    }
-    // The route line names the classification; the names are part of the log format.
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.component});
+        CHECK(d.route == c.route && d.reason == c.reason, "component exe=%ls mode=%d comp=%s got %s",
+              c.exe, (int)c.mode, ComponentName(c.component), AppReasonName(d.reason));
+    }    // The route line names the classification; the names are part of the log format.
     CHECK(!strcmp(ComponentName(Y), "yes") && !strcmp(ComponentName(N), "no") && !strcmp(ComponentName(U), "unknown"),
           "component names %s %s %s", ComponentName(Y), ComponentName(N), ComponentName(U));
     // RenderOnCpu (the per-application graphics setting): the CPU UMD after the protected list and before Deny. It
@@ -164,7 +172,7 @@ static void PolicyTests()
         {L"notepad.exe", Gd, nullptr, nullptr, true, false, true, AppRoute::Cpu, AppReason::RenderOnCpu},
     };
     for (const CpuCase &c : cpu) {
-        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, c.cpu});
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, c.e102, c.gpu, Component::No, c.cpu});
         CHECK(d.route == c.route && d.reason == c.reason, "render-on-cpu exe=%ls mode=%d cpu=%d got %s",
               c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
     }
@@ -277,7 +285,7 @@ static void PolicyTests()
         {L"SearchIndexer.exe", Gd, nullptr, nullptr, false, AppRoute::Gpu, AppReason::Default},
     };
     for (const DialogCase &c : dialogs) {
-        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, c.cpu});
+        AppDecision d = DecideApp({c.exe, c.mode, c.allow, c.deny, true, true, Component::No, c.cpu});
         CHECK(d.route == c.route && d.reason == c.reason, "dialog-host exe=%ls mode=%d cpu=%d got %s",
               c.exe, (int)c.mode, c.cpu, AppReasonName(d.reason));
     }
