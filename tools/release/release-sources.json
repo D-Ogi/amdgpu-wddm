@@ -611,8 +611,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/t35/release/set/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
-      "sha256": "81C05999458AA88E5C478B53E91036EA8DBF168A2B43645DC0129A1FF6015D6E",
+      "source": "scratch/t36/f4-dxil/stale-set/artifacts/release/desktop-x64-rel/amdgpu_wddm_radv.dll",
+      "sha256": "840C4BAA804B22E9971CEDCFA56C217CCF68707F3D489A92C6EFCFB836CF929A",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "038cb72013baf4ebd6c22dc2440b9dda88ffaf97",
@@ -640,7 +640,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -651,8 +651,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/amdgpu_wddm_radv.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
-      "sha256": "2CC84029AB9E79E87DEF1BBB0C7E3AD184F8D4A2C6CDCF47C1187C43DCF602EE",
+      "source": "scratch/t36/f4-dxil/stale-set/artifacts/lab/desktop-x64-lab/amdgpu_wddm_radv.dll",
+      "sha256": "62C4856F5444DEA5FD2412552832E032DE760F62309BFBAD4C1C286240B17019",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "038cb72013baf4ebd6c22dc2440b9dda88ffaf97",
@@ -681,7 +681,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/amd/vulkan/amdgpu_wddm_radv.dll"
       },
@@ -692,8 +692,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/t35/release/set/artifacts/release/cpu-x64-rel/bc250d3d.dll",
-      "sha256": "155FB4748133EDADFFC222BBAB4944F1CEB7741863760E71ED7FA45109AE75D1",
+      "source": "scratch/t36/f4-dxil/stale-set/artifacts/release/cpu-x64-rel/bc250d3d.dll",
+      "sha256": "3BF4929F8EA9A3A843328103DCF364176F9D5277A48EF6237F41E2B0E89B3F8D",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
@@ -723,7 +723,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "inputs": {
           "llvm": {
@@ -740,8 +740,8 @@
     {
       "component": "desktop-umd",
       "path": "payload/desktop/bc250d3d.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/cpu-x64-lab/bc250d3d.dll",
-      "sha256": "7B6E630B97DD34C9EF4A6396ED64BEC7A4551E5C1827DC2DA5D6EB2FF11F2DBE",
+      "source": "scratch/t36/f4-dxil/stale-set/artifacts/lab/cpu-x64-lab/bc250d3d.dll",
+      "sha256": "C06994CB39521DB5D36C825842AADFF0A752A6FBB5E88CB948DFCF3E97ADF423",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
@@ -772,7 +772,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "inputs": {
           "llvm": {
@@ -1269,8 +1269,8 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/t35/release/set/artifacts/release/cpu-x86-rel/bc250d3d.dll",
-      "sha256": "AA1D7689835CE17FC03709E419D0A0160612147BB4C51BBA1CE8A129D245AADE",
+      "source": "scratch/t36/f4-dxil/stale-set/artifacts/release/cpu-x86-rel/bc250d3d.dll",
+      "sha256": "2696C3F68801C7FCA5A43DFA6B091D5EA011B413962808D920FF9B8710CAD1EB",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
@@ -1300,7 +1300,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "inputs": {
           "llvm": {
@@ -1317,8 +1317,8 @@
     {
       "component": "desktop-umd-wow64",
       "path": "payload/wow64/desktop/bc250d3d.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/cpu-x86-lab/bc250d3d.dll",
-      "sha256": "4C51001074ACB5C1A9C2ADEDFAED6A3100B27DFC5736BAAE42CDCFDB67DD4553",
+      "source": "scratch/t36/f4-dxil/stale-set/artifacts/lab/cpu-x86-lab/bc250d3d.dll",
+      "sha256": "878151E62E2C2ED5C3A2E4D7C9E746C74A24BDABC460221DA706334F1C40E9DF",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
         "commit": "6b3e9b300f8c5ee952b4358dc1416aa583c1fcb9",
@@ -1349,7 +1349,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "inputs": {
           "llvm": {
