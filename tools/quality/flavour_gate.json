@@ -1422,6 +1422,26 @@
    }
   },
   {
+   "name": "BC250_BLASLT_FRONT",
+   "where": "bc250-win compute/hip/blaslt/hipblaslt_front.cpp (read_settings)",
+   "does": "measurement arm: 0 turns serving off, so every hipBLASLt call forwards to AMD's library",
+   "lab": {
+    "every": [
+     "libhipblaslt.dll"
+    ]
+   }
+  },
+  {
+   "name": "BC250_BLASLT_LOG",
+   "where": "bc250-win compute/hip/blaslt/hipblaslt_front.cpp (read_settings)",
+   "does": "diagnostic: 1 writes the served, refused and failed calls of the front to stderr",
+   "lab": {
+    "every": [
+     "libhipblaslt.dll"
+    ]
+   }
+  },
+  {
    "name": "BC250_HIP_BATCH",
    "where": "bc250-win compute/hip/runtime/hip_device.cpp (apply_batch_policy)",
    "does": "measurement arm: 0 turns dispatch batching off",
@@ -4119,6 +4139,11 @@
    "name": "AMDGPU_WDDM_DXVK",
    "where": "dxvk src/ddi/amdgpu_wddm_dxvk.def",
    "reason": "the LIBRARY name of the engine DLL's export directory; not a lookup"
+  },
+  {
+   "name": "BC250LT_GET_COUNTERS",
+   "where": "bc250-win compute/hip/blaslt/hipblaslt_front.cpp (bc250lt_get_counters), the export of libhipblaslt.dll",
+   "reason": "an export name of the front's own ABI: it copies the call counters that both flavours keep, and reads no setting; not a lookup"
   },
   {
    "name": "BC250_DXVK_DEVICE_CREATE_INFO",

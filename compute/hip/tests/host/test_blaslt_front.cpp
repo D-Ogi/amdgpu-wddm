@@ -324,10 +324,16 @@ int child_disabled(const std::wstring& dir) {
     hipblasLtMatmulHeuristicResult_t r;
     int count = 0;
     const hipblasStatus_t st = heuristic(api, h, b, &r, &count);
+    const Counters c = counters(api);
+#if defined(AMDGPU_WDDM_LAB_FLAVOUR)
     check(st == HIPBLAS_STATUS_INVALID_VALUE && count == 0,
           "BC250_BLASLT_FRONT=0: the heuristic of a served problem is AMD's answer (invalid value, no algo)");
-    const Counters c = counters(api);
     check(c.heuristic_served == 0 && c.heuristic_amd_refused == 0, "BC250_BLASLT_FRONT=0: the front serves nothing");
+#else
+    // The release flavour reads no environment variable (BD-167): the front still serves.
+    check(st == HIPBLAS_STATUS_SUCCESS && count == 1, "release: BC250_BLASLT_FRONT=0 is ignored, the heuristic is served");
+    check(c.heuristic_served == 1, "release: BC250_BLASLT_FRONT=0 is ignored, the front serves");
+#endif
     release(api, &b);
     api.destroy(h);
     return g_failures == 0 ? 0 : 1;
