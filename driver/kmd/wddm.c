@@ -5658,7 +5658,9 @@ static NTSTATUS Bc250WddmCreateContext(_In_ const HANDLE hDevice, _Inout_ DXGKAR
     // GFX/compute/SDMA contexts; RADV explicitly makes its native/hosted BOs resident, and the D3D11
     // runtime-surface bridge does the same for its imports. This is not inferred from allocation-list
     // size. The separate kernel GDI/VidMm path keeps the flag clear.
-    pCreateContext->ContextInfo.Caps.DriverManagesResidency = umd ? 1 : 0;
+    // tester.36: back to 0 for every context, as in tester.35, together with the UMD import hold (heap-import.cpp,
+    // the 3DMark CPG fault on an evicted allocation). The flag returns with the per-object residency fix.
+    pCreateContext->ContextInfo.Caps.DriverManagesResidency = 0;
     // Matches DRIVERCAPS.MemoryManagementCaps.PagingNode above: node 1 once the gate names it the paging node,
     // node 0 (today's answer) otherwise.
     pCreateContext->ContextInfo.PagingCompanionNodeId = (nodeCount > BC250_WDDM_NODE_COPY) ? BC250_WDDM_NODE_COPY : BC250_WDDM_NODE_3D;

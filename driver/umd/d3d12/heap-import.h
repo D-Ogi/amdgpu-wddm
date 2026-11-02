@@ -67,7 +67,7 @@ struct ImportReleasePolicy {
     bool holds() const noexcept {return progress_gate || quarantine_depth;}
     static ImportReleasePolicy off() noexcept {return {};}
     // The driver's defaults, with the experiment switches of ddi-trace.h applied: import-progress-gate-off
-    // and import-quarantine-off (both default on), and import-residency-hold-on (default off).
+    // and import-quarantine-off (both default on), and import-residency-release-on (default off: the hold is on).
     static ImportReleasePolicy from_switches() noexcept;
 };
 // A linear primary's release reached the shell outside the DDI of its runtime resource. No runtime

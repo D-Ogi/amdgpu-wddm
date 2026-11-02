@@ -105,7 +105,11 @@ ImportReleasePolicy ImportReleasePolicy::from_switches() noexcept {
     if(ddi_experiment("import-quarantine-off")){
         policy.quarantine_depth=0;policy.quarantine_count_cap=0;policy.quarantine_age_ms=0;policy.quarantine_byte_cap=0;
     }
-    if(ddi_experiment("import-residency-hold-on"))policy.residency_hold=true;
+    // tester.36: the hold is the default again. The hand-back of BD-052 let VidMm evict an import in the paging
+    // batch that created it, and a CP write to it 7 ms later faulted (3DMark 0x116, KMD paging journal records
+    // 23798-23811 of boot-20261102T232052Z). It stays as the opt-in arm until the hand-back is limited to
+    // allocations that a runtime object makes resident. import-residency-hold-on is still accepted (a no-op).
+    policy.residency_hold=!ddi_experiment("import-residency-release-on");
     return policy;
 }
 RuntimeHeapImports::RuntimeHeapImports(Device& d,bc250::umd::RuntimeDomain& domain,
