@@ -167,7 +167,8 @@ static NTSTATUS MmioGfxRead(const BC250_DEVICE* d, ULONG offset, ULONG* value)
 {
     NTSTATUS status = mmio_event(d, 'R', offset, 0);
     if (!NT_SUCCESS(status)) return status;
-    *value = offset == BC250_REG_GC_GRBM_GFX_INDEX ? model.Grbm : model.SqIndex;
+    /* GRBM_GFX_INDEX reads 0 on this part whatever was written (hardware fact, gfx.c GfxWaveRestore). */
+    *value = offset == BC250_REG_GC_GRBM_GFX_INDEX ? 0u : model.SqIndex;
     if (model.Accesses == model.MismatchAt) *value ^= 1;
     if (model.Accesses == model.PoisonAt) *value = MAXULONG;
     return status;
@@ -445,12 +446,12 @@ static void test_sampling_admission(void)
     CHECK(!model.Accesses && !model.ShimCalls && device.WaveRegisterAccess == 1);
     GfxWaveSampleEnd(&device);
 
-    /* A failed GRBM restore quarantines banked sampling until a new start.
-     * A verified GRBM restore plus SQ-index failure does not poison sampling. */
-    reset(); model.MismatchAt = 4;
-    CHECK(capture() == STATUS_DEVICE_DATA_ERROR);
+    /* A failed GRBM restore write quarantines banked sampling until a new start.
+     * A written GRBM restore plus SQ-index failure does not poison sampling. */
+    reset(); model.FailAt = 3;
+    CHECK(capture() == STATUS_MOCK_FAULT);
     CHECK(device.WaveRegisterAccess == -1 && !GfxWaveSampleBegin(&device));
-    CHECK(strstr(model.Logs[0], "requested") != NULL && strstr(model.Logs[0], "read 1 value") != NULL);
+    CHECK(strstr(model.Logs[0], "requested") != NULL && strstr(model.Logs[0], "read 0 value") != NULL);
     accesses = model.Accesses;
     model.LockCount = 0;
     CHECK(GfxCaptureWaves(&device, &testSnapshot) == STATUS_DEVICE_DATA_ERROR);
@@ -458,7 +459,7 @@ static void test_sampling_admission(void)
     CHECK(!model.Shared && !model.Mutex && testAdev.backend == &oldBackend);
     GfxWaveSamplingReset(&device);
     CHECK(GfxWaveSampleBegin(&device)); GfxWaveSampleEnd(&device);
-    reset(); model.MismatchAt = 6;
+    reset(); model.MismatchAt = 5;
     CHECK(capture() == STATUS_DEVICE_DATA_ERROR && device.WaveRegisterAccess == 0);
     CHECK(GfxWaveSampleBegin(&device)); GfxWaveSampleEnd(&device);
 }
@@ -479,22 +480,25 @@ static void test_global_write_filter(void)
 int main(void)
 {
     unsigned i;
+    /* BD-180 point 2: GRBM_GFX_INDEX reads 0 after the broadcast restore on this part, and the model does
+     * the same. A capture must still succeed and leave sampling open; the old readback check quarantined it. */
     reset(); CHECK(capture() == STATUS_SUCCESS);
-    CHECK(model.Accesses == 6 && model.ShimCalls == 1);
+    CHECK(device.WaveRegisterAccess == 0 && GfxWaveSampleBegin(&device)); GfxWaveSampleEnd(&device);
+    CHECK(model.Accesses == 5 && model.ShimCalls == 1);
     CHECK(testSnapshot.Header.Flags == BC250_WAVE_COMPLETE && testSnapshot.Header.WaveCount == 2);
     CHECK(model.Grbm == bc250_gfx_wave_broadcast_value() && model.SqIndex == entryIndex);
     cleanup_order(2);
 
     /* Every access can fail, including the bank change inside the shim and each
      * cleanup write/read. Cleanup cannot be short-circuited by the sequence. */
-    for (i = 1; i <= 6; i++) {
+    for (i = 1; i <= 5; i++) {
         reset(); model.FailAt = i;
         CHECK(capture() == STATUS_MOCK_FAULT);
         CHECK(testSnapshot.Header.Flags & BC250_WAVE_READ_ERROR);
-        CHECK(device.WaveRegisterAccess == ((i == 3 || i == 4) ? -1 : 0));
+        CHECK(device.WaveRegisterAccess == (i == 3 ? -1 : 0));
         if (i == 1) {
             CHECK(model.ShimCalls == 0 && testSnapshot.Header.WaveCount == 0);
-            CHECK(model.Accesses == 3);
+            CHECK(model.Accesses == 2);
             CHECK(model.Events[1].Kind == 'W' && model.Events[1].Offset == BC250_REG_GC_GRBM_GFX_INDEX);
         } else {
             cleanup_order(2);
@@ -502,14 +506,14 @@ int main(void)
             CHECK(testSnapshot.Waves[0].Raw[Bc250WavePcLo] == 0x123400u);
         }
     }
-    for (i = 4; i <= 6; i += 2) {
+    for (i = 5; i <= 5; i++) {
         reset(); model.MismatchAt = i;
         CHECK(capture() == STATUS_DEVICE_DATA_ERROR);
         CHECK(testSnapshot.Header.Flags & BC250_WAVE_READ_ERROR); cleanup_order(2);
     }
     reset(); model.PoisonAt = 1;
     CHECK(capture() == STATUS_DEVICE_DATA_ERROR && model.ShimCalls == 0);
-    CHECK(model.Accesses == 3 && testSnapshot.Header.WaveCount == 0);
+    CHECK(model.Accesses == 2 && testSnapshot.Header.WaveCount == 0);
 
     reset(); model.ShimMode = ShimFault;
     CHECK(capture() == STATUS_MOCK_FAULT); cleanup_order(2);
