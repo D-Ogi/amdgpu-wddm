@@ -69,14 +69,16 @@ foreach ($exe in $built) {
     if ($LASTEXITCODE -ne 2) { throw "usage check failed for $exe ($LASTEXITCODE)" }
     & $exe --expect neither 2>$null | Out-Null
     if ($LASTEXITCODE -ne 2) { throw "usage check of --expect failed for $exe ($LASTEXITCODE)" }
+    & $exe --readback 6 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 2) { throw "usage check of --readback failed for $exe ($LASTEXITCODE)" }
 }
 
 # The self-test needs a Vulkan device of any vendor. Without one the build still succeeds and says so.
 if (-not $SkipSelfTest) {
     foreach ($exe in $built) {
         $name = Split-Path -Leaf $exe
-        Write-Host "  self-test $name : --any-device"
-        & $exe --any-device | ForEach-Object { Write-Host "    $_" }
+        Write-Host "  self-test $name : --any-device --expect-cached --readback 1024"
+        & $exe --any-device --expect-cached --readback 1024 | ForEach-Object { Write-Host "    $_" }
         if ($LASTEXITCODE -eq 3) { Write-Host "  self-test skipped for ${name}: no usable Vulkan device on this PC"; continue }
         if ($LASTEXITCODE -ne 0) { throw "self-test failed for $name ($LASTEXITCODE)" }
     }

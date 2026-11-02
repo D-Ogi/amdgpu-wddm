@@ -17,6 +17,14 @@
  * checks the layout above, so that one run can fail by itself; a comparison between two ICDs (the same T
  * on both) is the caller's job, from the "total" line.
  *
+ * --expect-cached checks that the device has a HOST_VISIBLE | HOST_CACHED memory type, the type that a CPU
+ * readback asks for (a D3D12 WRITE_BACK heap through the hosted heap import has no other route). Upstream
+ * RADV drops every GTT memory type in the unified layout, and the cached types are GTT types; the Windows
+ * build keeps them in the unified heap (mesa radv/wddm "keep the host-cached memory types in the unified APU
+ * heap"). --readback KIB is the positive control of that type: a buffer in it is filled by the GPU
+ * (vkCmdFillBuffer, then a second fill of its upper half), and the CPU reads every dword back through the
+ * mapping.
+ *
  * The ICD comes from --icd (the DLL is loaded directly through vk_icdGetInstanceProcAddr, with no Vulkan
  * loader, no manifest and no registry entry) or from the loader. Direct loading is what the lab needs: an
  * elevated process ignores VK_DRIVER_FILES and VK_ICD_FILENAMES (same route as tools\win\vkfillcheck).
@@ -43,7 +51,11 @@
     X(vkGetPhysicalDeviceMemoryProperties) X(vkGetPhysicalDeviceMemoryProperties2) \
     X(vkGetPhysicalDeviceQueueFamilyProperties) X(vkEnumerateDeviceExtensionProperties) X(vkCreateDevice) \
     X(vkGetDeviceProcAddr)
-#define DEVICE_FUNCS(X) X(vkDestroyDevice) X(vkAllocateMemory) X(vkFreeMemory)
+#define DEVICE_FUNCS(X) X(vkDestroyDevice) X(vkAllocateMemory) X(vkFreeMemory) X(vkGetDeviceQueue) \
+    X(vkCreateBuffer) X(vkDestroyBuffer) X(vkGetBufferMemoryRequirements) X(vkBindBufferMemory) X(vkMapMemory) \
+    X(vkUnmapMemory) X(vkInvalidateMappedMemoryRanges) X(vkCreateCommandPool) X(vkDestroyCommandPool) \
+    X(vkAllocateCommandBuffers) X(vkBeginCommandBuffer) X(vkEndCommandBuffer) X(vkCmdFillBuffer) \
+    X(vkCmdPipelineBarrier) X(vkQueueSubmit) X(vkCreateFence) X(vkDestroyFence) X(vkWaitForFences)
 
 #define DECLARE(f) static PFN_##f f;
 INSTANCE_FUNCS(DECLARE)
@@ -140,17 +152,133 @@ static void Read(VkPhysicalDevice phys, Query *q)
     vkGetPhysicalDeviceMemoryProperties2(phys, &q->props);
 }
 
+/* The first HOST_VISIBLE | HOST_CACHED type that bits allows, or UINT32_MAX. */
+static uint32_t CachedType(const VkPhysicalDeviceMemoryProperties *mp, uint32_t bits)
+{
+    const VkMemoryPropertyFlags want = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    for (uint32_t i = 0; i < mp->memoryTypeCount; i++)
+        if ((bits & (1u << i)) && (mp->memoryTypes[i].propertyFlags & want) == want) return i;
+    return UINT32_MAX;
+}
+
+#define FILL_LOW 0x5A5AC3C3u
+#define FILL_HIGH 0x0F1E2D3Cu
+#define CPU_STAMP 0xDEADBEEFu
+
+/* GPU fill of a buffer in the cached type, then a CPU read of every dword. Returns the number of failures. */
+static int Readback(const VkPhysicalDeviceMemoryProperties *mp, uint32_t kib)
+{
+    const VkDeviceSize size = (VkDeviceSize)kib << 10, half = size / 2;
+    VkBufferCreateInfo bci = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+    VkMemoryAllocateInfo mai = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+    VkCommandPoolCreateInfo pci = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+    VkCommandBufferAllocateInfo cai = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+    VkCommandBufferBeginInfo cbi = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+    VkFenceCreateInfo fci = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+    VkSubmitInfo si = { .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO };
+    VkMemoryBarrier transfer = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+                                 .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                                 .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT };
+    VkMemoryBarrier host = { .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+                             .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, .dstAccessMask = VK_ACCESS_HOST_READ_BIT };
+    VkMappedMemoryRange range = { .sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, .size = VK_WHOLE_SIZE };
+    VkMemoryRequirements req;
+    VkBuffer buffer;
+    VkDeviceMemory memory;
+    VkCommandPool pool;
+    VkCommandBuffer cmd;
+    VkFence fence;
+    VkQueue queue;
+    VkResult wait;
+    uint32_t type, *words, bad = 0, firstBad = UINT32_MAX;
+    int failures = 0;
+
+    bci.size = size;
+    bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    VK(vkCreateBuffer(dev, &bci, NULL, &buffer));
+    vkGetBufferMemoryRequirements(dev, buffer, &req);
+    type = CachedType(mp, req.memoryTypeBits);
+    if (type == UINT32_MAX) {
+        printf("FAIL          readback: no HOST_VISIBLE | HOST_CACHED type for a transfer buffer (type bits 0x%X)\n",
+               req.memoryTypeBits);
+        vkDestroyBuffer(dev, buffer, NULL);
+        return 1;
+    }
+    mai.allocationSize = req.size;
+    mai.memoryTypeIndex = type;
+    VK(vkAllocateMemory(dev, &mai, NULL, &memory));
+    VK(vkBindBufferMemory(dev, buffer, memory, 0));
+    VK(vkMapMemory(dev, memory, 0, VK_WHOLE_SIZE, 0, (void **)&words));
+    /* A CPU stamp first, so that a stale mapping (no GPU write seen) can not pass. */
+    for (VkDeviceSize i = 0; i < size / 4; i++) words[i] = CPU_STAMP;
+
+    pci.queueFamilyIndex = 0;
+    VK(vkCreateCommandPool(dev, &pci, NULL, &pool));
+    cai.commandPool = pool;
+    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cai.commandBufferCount = 1;
+    VK(vkAllocateCommandBuffers(dev, &cai, &cmd));
+    cbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VK(vkBeginCommandBuffer(cmd, &cbi));
+    vkCmdFillBuffer(cmd, buffer, 0, size, FILL_LOW);
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &transfer, 0,
+                         NULL, 0, NULL);
+    vkCmdFillBuffer(cmd, buffer, half, size - half, FILL_HIGH);
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &host, 0, NULL, 0,
+                         NULL);
+    VK(vkEndCommandBuffer(cmd));
+    VK(vkCreateFence(dev, &fci, NULL, &fence));
+    vkGetDeviceQueue(dev, 0, 0, &queue);
+    si.commandBufferCount = 1;
+    si.pCommandBuffers = &cmd;
+    VK(vkQueueSubmit(queue, 1, &si, fence));
+    wait = vkWaitForFences(dev, 1, &fence, VK_TRUE, 10ull * 1000 * 1000 * 1000);
+    if (wait != VK_SUCCESS) {
+        printf("FAIL          readback: the fill did not complete in 10 s (VkResult %d)\n", (int)wait);
+        failures++;
+    } else {
+        if (!(mp->memoryTypes[type].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) {
+            range.memory = memory;
+            VK(vkInvalidateMappedMemoryRanges(dev, 1, &range));
+        }
+        for (VkDeviceSize i = 0; i < size / 4; i++) {
+            const uint32_t want = i < half / 4 ? FILL_LOW : FILL_HIGH;
+            if (words[i] != want) {
+                if (firstBad == UINT32_MAX) firstBad = (uint32_t)i;
+                bad++;
+            }
+        }
+        printf("readback      %u KiB type %u heap %u flags 0x%03X: %u of %llu dwords wrong", kib, type,
+               mp->memoryTypes[type].heapIndex, mp->memoryTypes[type].propertyFlags, bad,
+               (unsigned long long)(size / 4));
+        if (bad) printf(" (first at dword %u: 0x%08X)", firstBad, words[firstBad]);
+        printf("\n");
+        if (bad) {
+            printf("FAIL          readback: the CPU does not read what the GPU wrote\n");
+            failures++;
+        } else printf("readback      PASS\n");
+    }
+    vkDestroyFence(dev, fence, NULL);
+    vkDestroyCommandPool(dev, pool, NULL);
+    vkUnmapMemory(dev, memory);
+    vkDestroyBuffer(dev, buffer, NULL);
+    vkFreeMemory(dev, memory, NULL);
+    return failures;
+}
+
 static void Usage(FILE *out, int code)
 {
     fprintf(out,
             "usage: vkheapcheck [--icd DLL] [--device N] [--any-device] [--expect split|unified]\n"
-            "                   [--alloc-mib N] [--deadline SEC] [--help]\n"
+            "                   [--expect-cached] [--readback KIB] [--alloc-mib N] [--deadline SEC] [--help]\n"
             "\n"
             "  --icd DLL           load this ICD DLL directly (absolute path), without the Vulkan loader.\n"
             "  --device N          use the physical device at index N instead of searching for the BC-250.\n"
             "  --any-device        accept a device that is not a BC-250 (needed on a development PC).\n"
             "  --expect split      two heaps, one DEVICE_LOCAL of align(2T/3) (RADV APU default before BD-028).\n"
             "  --expect unified    one DEVICE_LOCAL heap (radv_enable_unified_heap_on_apu).\n"
+            "  --expect-cached     a HOST_VISIBLE | HOST_CACHED memory type (CPU readback) must exist.\n"
+            "  --readback KIB      GPU fill of a KIB KiB buffer in that type, CPU check of every dword (4..65536).\n"
             "  --alloc-mib N       budget control: allocate N MiB of DEVICE_LOCAL memory (default 256, 0 = off).\n"
             "  --deadline SEC      end the run after this many seconds (default 30, 5..170).\n"
             "\n"
@@ -161,8 +289,8 @@ static void Usage(FILE *out, int code)
 int main(int argc, char **argv)
 {
     const char *icdPath = NULL, *expect = NULL;
-    uint32_t deviceIndex = UINT32_MAX, allocMib = 256;
-    int anyDevice = 0, failures = 0;
+    uint32_t deviceIndex = UINT32_MAX, allocMib = 256, readbackKib = 0;
+    int anyDevice = 0, expectCached = 0, failures = 0;
     HMODULE library;
     VkInstance instance;
     VkApplicationInfo app = { .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO };
@@ -184,12 +312,16 @@ int main(int argc, char **argv)
         const char *a = argv[i];
         if (!strcmp(a, "--help") || !strcmp(a, "-h")) Usage(stdout, 0);
         if (!strcmp(a, "--any-device")) { anyDevice = 1; continue; }
+        if (!strcmp(a, "--expect-cached")) { expectCached = 1; continue; }
         if (i + 1 >= argc) Usage(stderr, 2);
         if (!strcmp(a, "--icd")) icdPath = argv[++i];
         else if (!strcmp(a, "--device")) deviceIndex = (uint32_t)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--alloc-mib")) allocMib = (uint32_t)strtoul(argv[++i], NULL, 10);
         else if (!strcmp(a, "--deadline")) deadlineSec = (uint32_t)strtoul(argv[++i], NULL, 10);
-        else if (!strcmp(a, "--expect")) {
+        else if (!strcmp(a, "--readback")) {
+            readbackKib = (uint32_t)strtoul(argv[++i], NULL, 10);
+            if (readbackKib < 4 || readbackKib > 65536 || readbackKib % 4) Usage(stderr, 2);
+        } else if (!strcmp(a, "--expect")) {
             expect = argv[++i];
             if (strcmp(expect, "split") && strcmp(expect, "unified")) Usage(stderr, 2);
         } else Usage(stderr, 2);
@@ -335,24 +467,37 @@ int main(int argc, char **argv)
                       (unsigned long long)want);
     }
 
-    if (allocMib && hasBudget && dlIndex != UINT32_MAX) {
+    if (expectCached) {
+        const uint32_t c = CachedType(mp, UINT32_MAX);
+        if (c == UINT32_MAX) {
+            printf("FAIL          expect cached: no HOST_VISIBLE | HOST_CACHED memory type\n");
+            failures++;
+        } else printf("expect        cached: PASS (type %u heap %u flags 0x%03X)\n", c, mp->memoryTypes[c].heapIndex,
+                      mp->memoryTypes[c].propertyFlags);
+    }
+
+    if ((allocMib && hasBudget && dlIndex != UINT32_MAX) || readbackKib) {
         float priority = 1.0f;
         VkDeviceQueueCreateInfo qci = { .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO };
         VkDeviceCreateInfo dci = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
         const char *budgetExt = VK_EXT_MEMORY_BUDGET_EXTENSION_NAME;
-        VkMemoryAllocateInfo mai = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-        VkDeviceMemory memory = VK_NULL_HANDLE;
-        uint32_t type = UINT32_MAX;
-        uint64_t grew;
         qci.queueFamilyIndex = 0;
         qci.queueCount = 1;
         qci.pQueuePriorities = &priority;
         dci.queueCreateInfoCount = 1;
         dci.pQueueCreateInfos = &qci;
-        dci.enabledExtensionCount = 1;
+        dci.enabledExtensionCount = hasBudget ? 1 : 0;
         dci.ppEnabledExtensionNames = &budgetExt;
         VK(vkCreateDevice(phys[deviceIndex], &dci, NULL, &dev));
         DEVICE_FUNCS(LOAD_DEVICE)
+    }
+    if (readbackKib) failures += Readback(mp, readbackKib);
+
+    if (allocMib && hasBudget && dlIndex != UINT32_MAX) {
+        VkMemoryAllocateInfo mai = { .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        uint32_t type = UINT32_MAX;
+        uint64_t grew;
         for (uint32_t i = 0; i < mp->memoryTypeCount && type == UINT32_MAX; i++)
             if (mp->memoryTypes[i].heapIndex == dlIndex &&
                 (mp->memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))
@@ -374,8 +519,8 @@ int main(int argc, char **argv)
             failures++;
         }
         vkFreeMemory(dev, memory, NULL);
-        vkDestroyDevice(dev, NULL);
     }
+    if (dev) vkDestroyDevice(dev, NULL);
     vkDestroyInstance(instance, NULL);
     SetEvent(deadlineEvent);
     printf("result        %s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
