@@ -2732,11 +2732,11 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/t35/release/set/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
-      "sha256": "55267C144FFB32699A19D0F6DFF58DE5667DDA8FC699F090C9EE6846DDBD7920",
+      "source": "scratch/t36/f4-dxil/gl-set-r2/artifacts/release/gl-x64-rel/amdgpu_wddm_gl.dll",
+      "sha256": "9D7A14B4DFF303BF9B8AAA9E0D4A938B5708F7BE612AEA9703307D12F21926F7",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "1226ec984d45b17f6730de84b2b7e98073b679cd",
+        "commit": "7906871a9d179648d6278c209d94a20904dd6500",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -2761,7 +2761,7 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/gallium/targets/wgl/amdgpu_wddm_gl.dll"
       },
@@ -2773,11 +2773,11 @@
     {
       "component": "opengl-icd",
       "path": "payload/opengl/amdgpu_wddm_gl.dll",
-      "source": "scratch/t35/release/set/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
-      "sha256": "D57C875F65928EEC28B5A13C1EDF2EE459AF8DB51F7A828A0295708609D03095",
+      "source": "scratch/t36/f4-dxil/gl-set-r2/artifacts/lab/gl-x64-lab/amdgpu_wddm_gl.dll",
+      "sha256": "FA3C8D40C81E6A75E8150EB9E45C0F42A6A99F1A72F2E82306D562213B31CF03",
       "built_from": {
         "repo": "mesa-amdgpu-wddm",
-        "commit": "1226ec984d45b17f6730de84b2b7e98073b679cd",
+        "commit": "7906871a9d179648d6278c209d94a20904dd6500",
         "recipe_commit": "0e8ebe818b3dede203be6f6b1354f57b47ec1806",
         "recipe": "tools/build/build-mesa.ps1",
         "args": [
@@ -2803,11 +2803,11 @@
           "-Variant",
           "release,isa",
           "-Version",
-          "0.7.216.107-tester.35"
+          "0.7.216.108-tester.36"
         ],
         "output": "src/gallium/targets/wgl/amdgpu_wddm_gl.dll"
       },
-      "size": 18931200,
+      "size": 18931712,
       "role": "OpenGL ICD for 64-bit applications (BD-076): the tester.33 OpenGL line e0d424ff with the Windows driconf fixes (regular expressions bd7a5452, sections with an invalid pattern 8b184803, a build check of the static table 8cd482a7), the process name at any path length (557e06af), driver options read from the environment only in the lab flavour (de70a080) and the zstd 1.5.7 wrap for the disk cache (08e8ebfd). x64 only: opengl_icd.architectures registers x64 alone.",
       "unverified": "No second clean build of this commit has confirmed these bytes yet, so the row claims no bit-identical rebuild; a build-release-set rebuild that matches them is that confirmation.",
       "flavour": "lab"
