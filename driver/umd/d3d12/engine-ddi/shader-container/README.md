@@ -44,6 +44,19 @@ of a mesh pipeline (`BuildMeshLinkContainer`), every entry therefore takes the n
 `dx.entryPoints` metadata, matched to the entry by register row, first component and stream. An entry with no
 element in the metadata keeps its synthetic name.
 
+A DXIL signature can repeat one row (BD-286). An older dxc writes a mesh vertex array without a struct
+(`out vertices float4 v[4] : SV_POSITION`) as one metadata element with the semantic indices 0 to 3 on one row,
+and its `OSG1` has one row for each index, all on register 0 with the same mask. The runtime passes these rows as
+DDI entries. Eight of the 14 mesh programs of the vkd3d-proton mesh tests have such rows, and no other program of
+its committed test shaders has them. dxc 1.8.2502 writes one row for the same source. For a DXIL program,
+`BuildContainer` and `BuildMeshLinkContainer` drop an entry only when the metadata proves that it repeats one
+element: an earlier entry is equal in register, mask, stream, system value, component type and minimum precision,
+and an element of one row on that register, on exactly those components and of that stream has more semantic
+indices than the number of earlier equal entries. The metadata names all of them alike, so the chunk gets one row.
+The merge runs once. Equal entries without that proof (two elements, or more entries than indices), and an entry
+that shares only some components with another entry, are still refused. Geometry outputs are not merged, because
+the runtime can give all their entries stream 0. DXBC entries are not merged: fxc writes no repeated rows.
+
 A DXIL program on `Slot::Standard` is named from its metadata in the same way. Only the inputs of a vertex program
 keep the synthetic names, because `InputLayoutSemantic` gives those names to the input layout. Stream output needs
 the metadata names. dxil-spirv reports each output to the stream-output remapper by its metadata name, and the
@@ -112,6 +125,17 @@ The gate records compiler identity, DXC hashes, exact shader arguments, source h
 width and system-value cases. The comparison includes names, indices, system values, component types, registers,
 masks, streams and minimum precision. It excludes read/write usage masks because the reconstruction deliberately
 uses conservative masks.
+
+The same script builds `test/mesh-repeat-test.cpp` and runs it on `test/hlsl/mesh-repeat.hlsl` (`ms_6_5` and
+`ps_6_5`, and `gs_6_5` with two streams). It first checks the rule on its own with entries and elements made in the
+test: four equal entries of an element with four indices become one, and a fifth entry, an element with one
+index, two elements on the same components, an element on other components, of another stream or of two rows, and
+registerless entries are all kept. For each mesh and pixel program it then passes the rows as the runtime does.
+The rebuilt chunks must have the original registered rows without the repeats, and four more copies of row 0
+than the metadata proves, or a copy of row 0 with fewer components, must be refused. The rows of the geometry
+program on stream 0 must all be kept. `--ms-any` and `--ps-any` run the same checks on other containers, for
+example the compiled shaders of a test suite. `--any` builds any DXIL program on its own slot and fails on an
+"overlaps entry" refusal.
 
 `test/shader-container-test.cpp`, run by `scratch\m15\shader-container\build-run.ps1` (outside the repo) with the
 D3D12 shell's flags (`/std:c++20 /W4 /WX`), on the development PC through the Vulkan loader, no window:

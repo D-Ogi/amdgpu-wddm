@@ -153,9 +153,16 @@ size_t LibraryPayloadDwords(const UINT* payload);
 // for a DXIL program that is not a library. On failure the container is left empty.
 Result BuildLibraryContainer(const UINT* payload, size_t capacity, Container* container);
 
-namespace dxil { struct Signatures; }
+namespace dxil { struct Signatures; struct Element; }
 // Non-library SM6+ state-object exports. Rebuilds signature chunks with the names and types in DXIL metadata.
 Result BuildGenericContainer(const UINT* payload, size_t capacity, Container* container, dxil::Signatures* metadata);
+
+// BD-286: the entries of one DXIL signature without the repeated rows that the program's metadata (elements) proves
+// to be one element of one row with more than one semantic index, as an older dxc writes a mesh vertex array without
+// a struct. BuildContainer and BuildMeshLinkContainer call it; exposed for test/mesh-repeat-test.cpp. Returns true
+// when it dropped an entry; *out then holds the remaining entries in their order.
+bool MergeRepeatedSignatureEntries(const SignatureView& view, const std::vector<dxil::Element>& elements,
+        std::vector<D3D12DDIARG_SIGNATURE_ENTRY_0012>* out);
 
 struct Semantic
 {

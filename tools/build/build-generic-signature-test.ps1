@@ -69,4 +69,19 @@ try {
     & $exe @accepted
     if($LASTEXITCODE){throw 'generic signature comparison failed'}
     Write-Host 'PASS 23 fixtures / 46 raw+container reconstructions and 4 explicit DXC width-rejection controls'
+
+    # BD-286: repeated rows of one DXIL element (mesh vertex arrays of an older dxc) merge; a partial overlap does not.
+    $meshExe=Join-Path $OutputDir 'mesh-repeat-test.exe'
+    & $compiler @flags "$src/test/mesh-repeat-test.cpp" "$src/shader-container.cpp" "$src/dxil-metadata.cpp" "/Fo$OutputDir/" "/Fe$meshExe"
+    if($LASTEXITCODE){throw 'mesh repeat test build failed'}
+    $meshSource=Join-Path $src 'test/hlsl/mesh-repeat.hlsl'
+    $meshArgs=@()
+    foreach($item in @(@('ms','MSMain','--ms'),@('ps','PSMain','--ps'),@('gs','GSMain','--gs'))) {
+        $output=Join-Path $OutputDir ('mesh-repeat-'+$item[0]+'.cso')
+        & $dxc -T ($item[0]+'_6_5') -E $item[1] -Fo $output $meshSource
+        if($LASTEXITCODE){throw "DXC failed: mesh-repeat $($item[0])"}
+        $meshArgs+=@($item[2],$output)
+    }
+    & $meshExe @meshArgs
+    if($LASTEXITCODE){throw 'mesh repeat test failed'}
 } finally { Restore-ProcessEnvironment $saved }
