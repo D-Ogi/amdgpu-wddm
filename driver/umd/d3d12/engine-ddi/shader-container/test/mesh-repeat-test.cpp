@@ -1,24 +1,29 @@
 // SPDX-License-Identifier: MIT
 // Offline gate for BD-286: a DXIL signature whose rows repeat one element on one register. No engine or GPU.
 //
-// An older dxc writes `out vertices float4 v[4] : SV_POSITION` as one metadata element with the semantic indices
-// {0, 1, 2, 3} and one OSG1 row per index, all on register 0 with the same mask; the runtime passes those rows as
-// DDI entries. BuildContainer and BuildMeshLinkContainer must keep the first row of such a run and still refuse
-// an entry that shares only some components with another.
+// An older dxc writes `out vertices float4 v[4] : SV_POSITION` as one metadata element of one row with the semantic
+// indices {0, 1, 2, 3} and one OSG1 row per index, all on register 0 with the same mask; the runtime passes those
+// rows as DDI entries. BuildContainer and BuildMeshLinkContainer must keep the first row of such a run, because the
+// metadata proves it is one element, and refuse equal entries that the metadata does not prove and an entry that
+// shares only some components with another.
 //
 // The DDI form is this test's model of the runtime (as in shader-container-test.cpp): one entry per signature row,
 // the system value from the row, SV_Target and other names without a tokenized-format value as UNDEFINED.
 //
-// Usage: mesh-repeat-test [--ms <mesh.cso>]... [--ps <pixel.cso>]...
-//   --ms  the original container of a mesh program; its own rows, then its rows with a copy of row 0 appended,
-//         must give OSG1 = the original registered rows without repeats and PSG1 = the original registered rows.
-//   --ps  the original container of a pixel program of a mesh pipeline; its input rows with a copy of row 0
-//         appended must give ISG1 = the original registered rows without repeats.
+// Usage: mesh-repeat-test [--ms <mesh.cso>]... [--ps <pixel.cso>]... [--gs <geometry.cso>]... [--any <cso>]...
+//   --ms  the original container of a mesh program: its rows as the runtime passes them must give OSG1 = the
+//         original registered rows without repeats (the SDK dxc form unchanged) and PSG1 = the original registered
+//         rows; four more copies of row 0 and a copy of row 0 on fewer components must be refused.
+//   --ps  the original container of a pixel program of a mesh pipeline: its input rows must give ISG1 = the
+//         original registered rows; four more copies of row 0 and a partial copy must be refused.
+//   --any a DXIL program on its own slot (sweep): an "overlaps entry" refusal fails, other refusals are notes,
+//         DXBC containers and libraries are skipped.
 //   --ms-any, --ps-any  the same, but a program without such rows is skipped, not failed (for a sweep over the
 //         programs of a test suite).
 //   --gs  a geometry program with two streams of one layout: with every DDI stream 0 its rows are equal, and the
 //         rebuilt OSG1 must still have every original row (no merge).
 #include "../shader-container.h"
+#include "../dxil-metadata.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -204,25 +209,32 @@ void Mesh(const char* path, bool required)
         return sc::BuildContainer(d, c);
     };
 
-    std::vector<Entry> repeated = output;
-    repeated.push_back(output[0]);
-    struct { const char* name; const std::vector<Entry>* entries; } variants[] = {
-        { "rows as the runtime passes them", &output },
-        { "rows with a copy of row 0 appended", &repeated },
-    };
-    for (const auto& v : variants)
     {
         sc::Container c;
-        const sc::Result r = build(*v.entries, &c);
-        Check(bool(r), what + v.name + ": BuildContainer" + (r ? "" : " refused: " + r.detail));
-        if (!r)
-            continue;
-        const Parsed rebuilt = Parse(c.bytes);
-        Check(rebuilt.osg == expected, what + v.name + ": OSG1 = the original rows without repeats ("
-                + std::to_string(rebuilt.osg.size()) + " of " + std::to_string(expected.size()) + ")");
-        Check(rebuilt.psg == Registered(original.psg), what + v.name + ": PSG1 = the original registered PSG1 rows");
-        Check(c.output.size() == expected.size(), what + v.name + ": container output entries without repeats");
-        Check(rebuilt.program == original.program, what + v.name + ": DXIL part unchanged");
+        const sc::Result r = build(output, &c);
+        Check(bool(r), what + "rows as the runtime passes them: BuildContainer" + (r ? "" : " refused: " + r.detail));
+        if (r)
+        {
+            const Parsed rebuilt = Parse(c.bytes);
+            Check(rebuilt.osg == expected, what + "OSG1 = the original rows without repeats ("
+                    + std::to_string(rebuilt.osg.size()) + " of " + std::to_string(expected.size()) + ", first "
+                    + (rebuilt.osg.empty() ? std::string("none") : rebuilt.osg[0].name + std::to_string(rebuilt.osg[0].index)) + ")");
+            Check(rebuilt.psg == Registered(original.psg), what + "PSG1 = the original registered PSG1 rows");
+            Check(c.output.size() == expected.size(), what + "container output entries without repeats");
+            Check(rebuilt.program == original.program, what + "DXIL part unchanged");
+        }
+    }
+
+    // One copy more than the metadata proves: two entries on the same components with no element of that many
+    // indices, so two different elements would get one name. Refused.
+    std::vector<Entry> repeated = output;
+    for (UINT i = 0; i < 4; i++)
+        repeated.push_back(output[0]);
+    {
+        sc::Container c;
+        const sc::Result r = build(repeated, &c);
+        Check(r.status == sc::Status::InvalidArgument, what + "four copies of row 0 more than the metadata proves are refused ("
+                + (r ? std::string("accepted") : r.detail) + ")");
     }
 
     if (OneComponent(output[0]))
@@ -251,14 +263,21 @@ void Pixel(const char* path, bool required)
     source.bytes = bytes;
     source.dxil = true;
 
-    std::vector<Entry> repeated = input;
-    repeated.push_back(input[0]);
     sc::Container c;
-    sc::Result r = sc::BuildMeshLinkContainer(source, { repeated.data(), UINT(repeated.size()) },
+    sc::Result r = sc::BuildMeshLinkContainer(source, { input.data(), UINT(input.size()) },
             { output.data(), UINT(output.size()) }, &c);
-    Check(bool(r), what + "input rows with a copy of row 0 appended: BuildMeshLinkContainer" + (r ? "" : " refused: " + r.detail));
+    Check(bool(r), what + "input rows as the runtime passes them: BuildMeshLinkContainer" + (r ? "" : " refused: " + r.detail));
     if (r)
         Check(Parse(c.bytes).isg == WithoutRepeats(original.isg), what + "ISG1 = the original rows without repeats");
+
+    // A copy of row 0 that the metadata does not prove (the element has one index): refused.
+    std::vector<Entry> repeated = input;
+    for (UINT i = 0; i < 4; i++)
+        repeated.push_back(input[0]);
+    r = sc::BuildMeshLinkContainer(source, { repeated.data(), UINT(repeated.size()) },
+            { output.data(), UINT(output.size()) }, &c);
+    Check(r.status == sc::Status::InvalidArgument, what + "pixel input copies of row 0 that the metadata does not prove are refused ("
+            + (r ? std::string("accepted") : r.detail) + ")");
 
     if (OneComponent(input[0]))
     {
@@ -302,6 +321,132 @@ void Geometry(const char* path)
         Check(Parse(c.bytes).osg == Registered(original.osg), what + "OSG1 = every original row, streams derived");
 }
 
+// The merge rule on its own, with metadata elements as an older dxc and the SDK dxc write them. The SDK dxc of this
+// gate cannot write the older form, so the end-to-end case of the exact older bytes is a sweep (--ms-any) over the
+// compiled shaders of a test suite.
+void Rule()
+{
+    auto element = [](const char* name, std::vector<uint32_t> indices, uint32_t rows, int32_t row, int32_t col,
+            uint32_t cols, uint32_t stream = 0) {
+        engine_ddi::shader_container::dxil::Element e;
+        e.name = name;
+        e.indices = std::move(indices);
+        e.rows = rows;
+        e.startRow = row;
+        e.startCol = col;
+        e.cols = cols;
+        e.stream = stream;
+        return e;
+    };
+    auto entry = [](UINT reg, BYTE mask, BYTE stream = 0) {
+        Entry e = {};
+        e.SystemValue = D3D10_SB_NAME_POSITION;
+        e.Register = reg;
+        e.Mask = mask;
+        e.Stream = stream;
+        e.RegisterComponentType = D3D10_SB_REGISTER_COMPONENT_FLOAT32;
+        return e;
+    };
+    struct Case
+    {
+        const char* what;
+        std::vector<engine_ddi::shader_container::dxil::Element> elements;
+        std::vector<Entry> entries;
+        size_t expected;
+    };
+    const auto oldForm = element("SV_Position", { 0, 1, 2, 3 }, 1, 0, 0, 4);
+    const std::vector<Case> cases = {
+        { "older dxc: one row, indices 0 to 3, four equal entries -> one", { oldForm },
+            { entry(0, 0xf), entry(0, 0xf), entry(0, 0xf), entry(0, 0xf) }, 1 },
+        { "older dxc: a fifth equal entry has no index -> kept", { oldForm },
+            { entry(0, 0xf), entry(0, 0xf), entry(0, 0xf), entry(0, 0xf), entry(0, 0xf) }, 2 },
+        { "SDK dxc: one index, two equal entries -> both kept", { element("SV_Position", { 0 }, 1, 0, 0, 4) },
+            { entry(0, 0xf), entry(0, 0xf) }, 2 },
+        { "two elements on the same components -> both kept",
+            { element("TEXCOORD", { 0 }, 1, 1, 0, 4), element("COLOR", { 0 }, 1, 1, 0, 4) },
+            { entry(1, 0xf), entry(1, 0xf) }, 2 },
+        { "element on other components than the entries -> kept", { element("TEXCOORD", { 0, 1 }, 1, 0, 0, 2) },
+            { entry(0, 0xf), entry(0, 0xf) }, 2 },
+        { "element of another stream -> kept", { element("TEXCOORD", { 0, 1 }, 1, 0, 0, 4, 1) },
+            { entry(0, 0xf), entry(0, 0xf) }, 2 },
+        { "element of two rows -> kept", { element("TEXCOORD", { 0, 1 }, 2, 0, 0, 4) },
+            { entry(0, 0xf), entry(0, 0xf) }, 2 },
+        { "registerless entries -> kept", { oldForm }, { entry(~0u, 0x1), entry(~0u, 0x1) }, 2 },
+        { "no repeat -> unchanged", { oldForm }, { entry(0, 0xf), entry(1, 0x3) }, 2 },
+    };
+    for (const Case& c : cases)
+    {
+        std::vector<Entry> out;
+        const bool dropped = sc::MergeRepeatedSignatureEntries({ c.entries.data(), UINT(c.entries.size()) }, c.elements, &out);
+        const size_t got = dropped ? out.size() : c.entries.size();
+        Check(got == c.expected && dropped == (c.expected < c.entries.size()),
+                std::string("rule: ") + c.what + " (" + std::to_string(got) + ")");
+    }
+}
+
+// Sweep: any DXIL program on its own slot with its rows as the runtime passes them. An "overlaps entry" refusal is a
+// failure (the BD-286 class); another refusal is printed as a note. DXBC containers and DXIL libraries are skipped.
+struct SweepCounts
+{
+    unsigned accepted = 0, overlap = 0, other = 0, skipped = 0;
+};
+SweepCounts g_sweep;
+
+void Any(const char* path)
+{
+    const Bytes bytes = Load(path);
+    bool dxil = false;
+    if (bytes.size() >= 32 && !std::memcmp(bytes.data(), "DXBC", 4))
+        for (uint32_t i = 0; i < Rd32(bytes, 28); i++)
+        {
+            const size_t off = Rd32(bytes, 32 + 4ull * i);
+            dxil = dxil || (off + 4 <= bytes.size() && !std::memcmp(bytes.data() + off, "DXIL", 4));
+        }
+    if (!dxil)
+    {
+        g_sweep.skipped++;
+        return;
+    }
+    const Parsed original = Parse(bytes);
+    const uint32_t kind = (original.program[0] >> 16) & 0xffffu;
+    if (kind > 5 && kind != sc::kDxilProgramKindMesh && kind != sc::kDxilProgramKindAmplification)
+    {
+        g_sweep.skipped++;
+        return;
+    }
+    const std::vector<Entry> input = ToDdi(original.isg), output = ToDdi(original.osg), patch = ToDdi(original.psg);
+    sc::ProgramDesc d;
+    d.code = original.program.data();
+    d.codeCapacity = original.program.size();
+    d.slot = kind == sc::kDxilProgramKindMesh ? sc::Slot::Mesh
+        : kind == sc::kDxilProgramKindAmplification ? sc::Slot::Amplification : sc::Slot::Standard;
+    if (d.slot != sc::Slot::Amplification)
+    {
+        d.input = { input.data(), UINT(input.size()) };
+        d.output = { output.data(), UINT(output.size()) };
+        d.patchConstant = { patch.data(), UINT(patch.size()) };
+    }
+    sc::Container c;
+    const sc::Result r = sc::BuildContainer(d, &c);
+    const std::string what = std::string(path) + " (kind " + std::to_string(kind) + ")";
+    if (r)
+    {
+        g_sweep.accepted++;
+        const Parsed rebuilt = Parse(c.bytes);
+        Check(rebuilt.osg == WithoutRepeats(original.osg), what + ": OSG1 = the original rows without repeats");
+    }
+    else if (r.detail.find("overlaps entry") != std::string::npos)
+    {
+        g_sweep.overlap++;
+        Check(false, what + ": refused: " + r.detail);
+    }
+    else
+    {
+        g_sweep.other++;
+        std::printf("note  %s: refused: %s\n", what.c_str(), r.detail.c_str());
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -313,6 +458,7 @@ int main(int argc, char** argv)
     }
     try
     {
+        Rule();
         for (int i = 1; i + 1 < argc; i += 2)
         {
             if (!std::strcmp(argv[i], "--ms") || !std::strcmp(argv[i], "--ms-any"))
@@ -321,6 +467,8 @@ int main(int argc, char** argv)
                 Pixel(argv[i + 1], !std::strcmp(argv[i], "--ps"));
             else if (!std::strcmp(argv[i], "--gs"))
                 Geometry(argv[i + 1]);
+            else if (!std::strcmp(argv[i], "--any"))
+                Any(argv[i + 1]);
             else
                 throw std::runtime_error(std::string("unknown argument ") + argv[i]);
         }
@@ -330,6 +478,9 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "FAIL %s\n", e.what());
         return 1;
     }
+    if (g_sweep.accepted + g_sweep.overlap + g_sweep.other + g_sweep.skipped)
+        std::printf("sweep: %u accepted, %u refused with an overlap, %u refused otherwise, %u skipped (DXBC or library)\n",
+                g_sweep.accepted, g_sweep.overlap, g_sweep.other, g_sweep.skipped);
     std::printf("%s (%u checks, %u failed); no GPU or rendering claim\n", g_failures ? "FAILED" : "PASSED", g_checks,
             g_failures);
     return g_failures ? 1 : 0;
